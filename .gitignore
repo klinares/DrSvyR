@@ -1,0 +1,22 @@
+.Renviron
+.Rhistory
+.RData
+.Rproj.user/
+renv/library/
+renv/staging/
+
+# Analyst data and outputs live in the work folder, never here.
+*.sav
+*.dta
+*.parquet
+*.rds
+output/
+cache/
+data/
+
+# Demo outputs, not the demo inputs
+demo/results/
+demo/cache/
+demo/decisions/
+demo/dict/
+demo/output/
