@@ -47,10 +47,12 @@ repo_root <- function() {
 #   analyst machine that is a theoretical risk rather than a live one, and
 #   resolving it would mean walking to the nearest existing ancestor on every
 #   write.
-# The guard is gone. Where outputs go is the analyst's decision, and this was
-#   the one place in the tool that overrode it rather than advising. Kept as a
-#   function so every call site still works.
 assert_outside_repo <- function(path) {
+  if (fs::path_has_parent(fs::path_abs(path), repo_root())) {
+    stop("Refusing to write inside the repository: ", path, "\n",
+         "Outputs belong in the work folder. If this path came from a config, ",
+         "the work folder is probably unset.", call. = FALSE)
+  }
   invisible(path)
 }
 
@@ -73,10 +75,10 @@ scaffold_work_folder <- function(path) {
 
   if (!fs::dir_exists(path))
     stop("No such folder: ", path, call. = FALSE)
+  if (fs::path_has_parent(path, repo_root()))
+    stop("The work folder cannot sit inside the repository.\n",
+         "Choose a folder outside ", repo_root(), call. = FALSE)
 
-  # The write probe stays. It catches a folder chosen by mistake at selection
-  #   rather than after the first stage has tried to write to it, which is a
-  #   different problem from where the folder sits.
   probe = fs::path(path, ".wise_write_probe")
   ok = try(fs::file_create(probe), silent = TRUE)
   if (inherits(ok, "try-error"))

@@ -1,7 +1,7 @@
 # ui_data.R for DrSvyR
 # Screens 1 to 4: project, design, items, domains.
 
-# Merged from: 
+# Merged from:
 #   mod_project.R
 #   mod_design.R
 #   mod_items.R
@@ -12,10 +12,16 @@
 # mod_project.R for WISE repo
 # Stage 1: choose the work folder and read the survey file.
 
-# The analyst creates one folder and drops the data file and the technical
-#   report into it. Everything else is scaffolded here, because requiring a
-#   correctly pre-built folder tree is a whole category of failure that looks
-#   like a bug in the workflow.
+# Two separate things, and they were previously one. The work folder is where
+#   outputs, the decision log and cached fits are written, and it has to sit
+#   outside the repository. The survey file is only ever read, so where it
+#   lives is not a safety question at all and it may sit anywhere, including
+#   inside the repository.
+
+# Collapsing them meant the file picker could only see files in the work
+#   folder, so the only way to reach the demonstration data was to nominate the
+#   repository as a work folder -- which the guard then refused, correctly, with
+#   a message about outputs that had nothing to do with what was being asked.
 
 mod_project_ui <- function(id) {
   ns <- NS(id)
@@ -64,6 +70,26 @@ mod_project_server <- function(id, state) {
 
     observeEvent(input$use, {
       req(nzchar(input$path))
+
+      # The guard in core.R is the enforcement and stays the only thing that
+      #   actually decides. This tests the same condition purely to say
+      #   something useful, because the generic refusal reads as "you cannot
+      #   use the demo data" when what it means is "outputs cannot go there".
+      if (fs::path_has_parent(fs::path_abs(input$path), repo_root())) {
+        showNotification(
+          tags$div(
+            tags$strong("That is the work folder, not the survey file."),
+            tags$p("Outputs, the decision log and cached fits are written to ",
+                   "the work folder, so it has to sit outside the repository. ",
+                   "Something like ", tags$code("D:/work/my_project"), "."),
+            tags$p("The survey file is only read, so it can stay where it is ",
+                   "-- including the ", tags$code("demo/"), " folder in this ",
+                   "repository. Set a work folder first and it will be offered ",
+                   "in the file list below.")),
+          type = "error", duration = NULL)
+        return()
+      }
+
       res <- try(scaffold_work_folder(input$path), silent = TRUE)
 
       if (inherits(res, "try-error")) {
@@ -99,28 +125,97 @@ mod_project_server <- function(id, state) {
       transmute(f, kind, file = fs::path_rel(file, state$work_dir))
     })
 
-    # Only data files are offered. A folder with no .sav or .dta is the common
-    #   case of an analyst who has not copied the file in yet, and saying so is
-    #   more useful than an empty dropdown.
+    # ---- where the survey file may come from -------------------------------
+
+    # The demonstration data ships with the tool so a live demonstration runs
+    #   from a clean clone. Listed here rather than copied out, because reading
+    #   it changes nothing on disk and a copy would be one more thing to keep
+    #   in step.
+    demo_data_files <- function() {
+      d <- fs::path(repo_root(), "demo")
+      if (!fs::dir_exists(d)) return(character(0))
+      as.character(fs::dir_ls(d, recurse = TRUE, type = "file",
+                              regexp = "[.](sav|dta)$"))
+    }
+
+    browsed <- reactiveVal(character(0))
+
+    observeEvent(input$browse_file, {
+      if (!rstudioapi::isAvailable()) {
+        showNotification(
+          paste("Copy the file into the work folder and press Use this folder",
+                "again."), type = "warning")
+        return()
+      }
+      f <- try(rstudioapi::selectFile(caption = "Choose the survey file"),
+               silent = TRUE)
+      if (inherits(f, "try-error") || is.null(f) || !nzchar(f)) return()
+
+      # Checked here rather than relying on the dialog's own filter, whose
+      #   behaviour varies by platform.
+      if (!(fs::path_ext(f) %in% c("sav", "dta"))) {
+        showNotification("Choose a .sav or .dta file.", type = "warning")
+        return()
+      }
+      browsed(as.character(fs::path_abs(f)))
+    })
+
+    # Where each file came from is part of the choice rather than decoration:
+    #   an analyst's own file and a demonstration file can share a name, and
+    #   running the wrong one is not an error anything downstream would catch.
+    data_choices <- reactive({
+      wf <- if (is.null(state$work_dir)) character(0)
+            else as.character(filter(found(), kind == "data")$file)
+      dm <- demo_data_files()
+      br <- browsed()
+
+      paths <- unique(c(br, wf, dm))
+      if (!length(paths)) return(character(0))
+
+      origin <- if_else(paths %in% wf, "work folder",
+                        if_else(paths %in% dm, "demo", "browsed"))
+      set_names(paths, paste0(fs::path_file(paths), "  (", origin, ")"))
+    })
+
     output$file_picker <- renderUI({
-      f <- found()
-      data_files <- filter(f, kind == "data")$file
-      if (!length(data_files))
-        return(tags$p(class = "text-danger",
-                      "No .sav or .dta file found. Copy the survey file into ",
-                      "the folder and press Use this folder again."))
+      req(state$work_dir)
+      ch <- data_choices()
+
       tagList(
-        selectInput(ns("data_file"), "Survey file",
-                    choices = set_names(data_files,
-                                        fs::path_file(data_files)),
-                    width = "100%"),
-        actionButton(ns("read"), "Read file", class = "btn-primary"))
+        tags$hr(),
+        tags$h4("Survey file"),
+        tags$p(class = "text-muted",
+               "The file is only read, never written to, so it can live ",
+               "anywhere: the work folder, the demonstration folder that ",
+               "ships with the tool, or any other folder on this machine."),
+
+        if (!length(ch))
+          tags$p(class = "text-danger",
+                 "No .sav or .dta found. Browse for one, or copy it into the ",
+                 "work folder and press Use this folder again.")
+        else
+          selectInput(ns("data_file"), NULL, choices = ch, width = "100%"),
+
+        actionButton(ns("browse_file"), "Browse for a file"),
+        if (length(ch))
+          actionButton(ns("read"), "Read file", class = "btn-primary"))
     })
 
     observeEvent(input$read, {
       req(input$data_file)
+      f <- input$data_file
+
+      # A path can go stale between being listed and being read -- a browsed
+      #   file on a drive that has since been disconnected is the ordinary
+      #   case now that the file need not sit in the work folder.
+      if (!fs::file_exists(f)) {
+        showNotification(paste0("That file is no longer there: ", f),
+                         type = "error", duration = NULL)
+        return()
+      }
+
       withProgress(message = "Reading survey file", value = 0.3, {
-        raw <- try(read_survey(input$data_file), silent = TRUE)
+        raw <- try(read_survey(f), silent = TRUE)
         if (inherits(raw, "try-error")) {
           showNotification(conditionMessage(attr(raw, "condition")),
                            type = "error", duration = NULL)
@@ -128,7 +223,7 @@ mod_project_server <- function(id, state) {
         }
         setProgress(0.7, message = "Building codebook")
         state$format <- survey_format(raw)
-        state$data_file <- input$data_file
+        state$data_file <- f
         state$raw <- raw
         state$codebook <- build_codebook(raw)
         state$design_dat <- NULL       # a new file invalidates the design
@@ -144,6 +239,10 @@ mod_project_server <- function(id, state) {
                " respondents, ",
                tags$strong(ncol(state$raw)), " variables, format ",
                tags$strong(state$format), "."),
+        # Shown in full, because the file may now sit outside the work folder
+        #   and which file produced the numbers is the first thing anyone
+        #   reconstructing the analysis will need.
+        tags$p(class = "text-muted", "Read from: ", tags$code(state$data_file)),
         if (identical(state$format, "stata"))
           tags$p(class = "text-warning",
                  "Stata files carry extended missing values as tagged NAs, ",

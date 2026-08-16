@@ -20,3 +20,9 @@ demo/cache/
 demo/decisions/
 demo/dict/
 demo/output/
+
+# Work-folder output, when the repository is the work folder
+/cache/
+/decisions/
+/dict/
+/output/
