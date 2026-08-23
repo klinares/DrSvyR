@@ -109,6 +109,20 @@ score_cfa <- function(state) {
     idx = which(fr$in_analysis)
     p1 = lavPredict(fit, method = "Bartlett")
     p2 = lavPredict(fit, method = "regression")
+
+    # The rows lavaan used and the rows in_analysis marks are assumed to be
+    #   the same set, in the same order. They are today. If lavaan ever drops
+    #   a case -- a weight it will not take, a stratum it cannot use -- the
+    #   assignment below fails with a message about replacement lengths that
+    #   names nothing, halfway through a long run. Checked here, where the
+    #   message can say what actually disagreed.
+    if (nrow(p1) != length(idx) || nrow(p2) != length(idx))
+      stop("lavaan returned scores for ", nrow(p1), " cases but ",
+           length(idx), " were selected for the measurement model. The ",
+           "estimation sample and the item frame disagree, so scores cannot ",
+           "be aligned to respondents. Check the design variables on the ",
+           "analysis frame before trusting anything downstream.", call. = FALSE)
+
     FS[idx, ] = as.matrix(p1)
     FSr[idx, ] = as.matrix(p2)
   }
@@ -133,19 +147,34 @@ score_cfa <- function(state) {
 #   the total survey error framework flags.
 #______________________________________________________________________________
 
+# Two ways to end up without a score, and they mean different things. Too few
+#   answers is item nonresponse, which the minimum-items rule governs and which
+#   the analyst set. A respondent who was in the measurement model and still
+#   came back without a score is one the estimator could not place -- rare, and
+#   never a random rare: in the factor arm they sit at the floor or the ceiling
+#   of nearly every item, which is to say at the extremes of the thing being
+#   measured. Reporting that as an unexplained shortfall in a total understates
+#   a small selection on the construct.
 score_coverage <- function(scored, arm, n_items) {
   reached = if (identical(arm, "lca")) !is.na(scored$segment) else scored$scored
+  in_model = scored$in_analysis
 
-  tibble::tibble(
+  out = tibble::tibble(
     group = c("In the file",
               "Fitted the measurement model",
               "Scored",
-              "Not scored"),
+              "Not scored: too few answers",
+              "Not scored: the model returned none"),
     n = c(nrow(scored),
-          sum(scored$in_analysis),
+          sum(in_model),
           sum(reached),
-          sum(!reached))) |>
+          sum(!reached & !in_model),
+          sum(!reached & in_model))) |>
     dplyr::mutate(percent = round(100 * n / nrow(scored), 1))
+
+  # A reason that did not apply is noise; the three headline rows always stay
+  #   so the table has the same shape whether or not anything went wrong.
+  dplyr::filter(out, n > 0 | !startsWith(group, "Not scored"))
 }
 
 # Assignment quality against how many items a respondent answered. If the mean
@@ -269,9 +298,13 @@ domains_lca <- function(state, tick = NULL) {
       dplyr::mutate(nn = sum(n), p = n / nn,
                     se = sqrt(pmax(p * (1 - p), 0) / nn)) |>
       dplyr::ungroup() |>
-      dplyr::transmute(variable = v, level, segment, p, se,
-                       lo = pmax(0, p - 1.96 * se), hi = pmin(1, p + 1.96 * se))
+      dplyr::transmute(variable = v, level, segment, p, se)
   }) |> purrr::list_rbind()
+
+  # 1.96 rather than the design t: this row is a binomial standard error on a
+  #   plain cross-tab and carries no design degrees of freedom. The logit
+  #   construction is the same one used for every other probability here.
+  naive = dplyr::bind_cols(naive, share_ci(naive$p, naive$se, 1.96))
 
   if (!is.null(tick)) tick("design-based")
 
@@ -290,8 +323,8 @@ domains_lca <- function(state, tick = NULL) {
                    se = as.numeric(as.matrix(vals[, K + seq_len(K)])))
   }) |>
     purrr::list_rbind() |>
-    dplyr::filter(!is.na(level)) |>
-    dplyr::mutate(lo = pmax(0, p - crit * se), hi = pmin(1, p + crit * se))
+    dplyr::filter(!is.na(level))
+  design = dplyr::bind_cols(design, share_ci(design$p, design$se, crit))
 
   if (!is.null(tick)) tick("corrected")
 
@@ -325,10 +358,16 @@ domains_lca <- function(state, tick = NULL) {
   se = sqrt(diag(V))
   stopifnot(length(est) == nrow(meta))
 
+  # Not truncated. The correction can legitimately place a share outside
+  #   [0, 1] and clipping it to the boundary would report a number the
+  #   estimator did not produce. Those rows come back flagged and the report
+  #   marks them, which is what the reference workflow does.
   corrected = meta |>
-    dplyr::mutate(p = as.numeric(est), se = as.numeric(se),
-                  lo = p - crit * se, hi = p + crit * se) |>
-    dplyr::select(variable, level, segment, p, se, lo, hi)
+    dplyr::mutate(p = as.numeric(est), se = as.numeric(se))
+  corrected = dplyr::bind_cols(
+    corrected, share_ci(corrected$p, corrected$se, crit,
+                        transform = FALSE, truncate = FALSE)) |>
+    dplyr::select(variable, level, segment, p, se, lo, hi, boundary)
 
   # Wald contrasts run on the design-based estimator deliberately. Modal
   #   assignment attenuates differences, so a pair resolved there separates
@@ -351,7 +390,11 @@ domains_lca <- function(state, tick = NULL) {
          dplyr::mutate(naive, estimator = "Unweighted"),
          dplyr::mutate(design, estimator = "Design-based"),
          dplyr::mutate(corrected, estimator = "Corrected")) |>
-         dplyr::mutate(estimator = factor(
+         # The quantity here is a share, so 0 and 1 mean something and a value
+         #   outside them is worth marking. In the factor arm it is a mean on a
+         #   scale centred at zero, where a negative number is ordinary.
+         dplyr::mutate(share = TRUE,
+                       estimator = factor(
            estimator, levels = c("Unweighted", "Design-based", "Corrected"))),
        wald = list(est = w_est, V = w_V, meta = meta, df = degf(rep_des)),
        values_header = "Share of each level falling in each segment:")
@@ -397,8 +440,11 @@ domains_cfa <- function(state, tick = NULL) {
       }) |> purrr::list_rbind()
     }) |>
       purrr::list_rbind() |>
+      # A factor-score mean is unbounded and centred on the population
+      #   average, so a Wald interval is the correct one and there is nothing
+      #   to transform. boundary is carried so the two arms share a shape.
       dplyr::mutate(lo = p - crit * se, hi = p + crit * se,
-                    estimator = label)
+                    boundary = FALSE, estimator = label)
   }
 
   if (!is.null(tick)) tick("unweighted")
@@ -416,7 +462,8 @@ domains_cfa <- function(state, tick = NULL) {
     dplyr::mutate(idx = dplyr::row_number())
 
   list(dom = dplyr::bind_rows(naive, design, corrected) |>
-         dplyr::mutate(estimator = factor(
+         dplyr::mutate(share = FALSE,
+                       estimator = factor(
            estimator, levels = c("Unweighted", "Design-based", "Corrected"))),
        wald = NULL,
        values_header = "Mean position of each level on the factor:")
@@ -630,10 +677,23 @@ wise_table <- function(df, caption = NULL, size = 9) {
 # The three estimators as columns rather than rows. A reader compares them
 #   across a row, which is also three times fewer rows on the page.
 domain_wide <- function(dom, variable, labels) {
+  # Older result objects predate these columns. Absent means nothing to mark,
+  #   which is the safe default in both directions.
+  if (!"boundary" %in% names(dom)) dom$boundary = FALSE
+  if (!"share" %in% names(dom)) dom$share = FALSE
+
   dom |>
     dplyr::filter(variable == !!variable) |>
     dplyr::mutate(Group = labels[segment],
-                  cell = sprintf("%.3f [%.3f, %.3f]", p, lo, hi)) |>
+                  # Only where the quantity is a share. A factor score of
+                  #   -0.094 is the population average less 0.094 and there is
+                  #   nothing out of range about it; marking those as though
+                  #   they had left [0, 1] tells the reader something false.
+                  outside = dplyr::coalesce(share, FALSE) &
+                            (dplyr::coalesce(boundary, FALSE) |
+                             lo < 0 | hi > 1),
+                  cell = sprintf("%.3f [%.3f, %.3f]%s", p, lo, hi,
+                                 dplyr::if_else(outside, "\u2020", ""))) |>
     dplyr::select(Group, Level = level, estimator, cell) |>
     tidyr::pivot_wider(names_from = estimator, values_from = cell) |>
     dplyr::arrange(Group, Level)
@@ -711,6 +771,11 @@ segment_evidence <- function(state, k, n = 3L) {
 #   nothing about how well the model worked is not one you can act on either.
 #   Generated from the numbers rather than written by a model, so the wording
 #   cannot drift and cannot overstate.
+# A report is a document somebody publishes from, and "1 contribute little" or
+#   "2 round(s)" is the kind of thing a reader notices before the finding.
+n_verb <- function(n, singular, plural)
+  paste0(n, " ", if (n == 1L) singular else plural)
+
 diagnostic_sentences <- function(state) {
   lca = identical(state$cfg$arm, "lca")
   d = state$model$diag
@@ -728,17 +793,40 @@ diagnostic_sentences <- function(state) {
 
     weak = d$discrimination$item[!is.na(d$discrimination$flag)]
     out = c(out, if (length(weak))
-      paste0("Of the ", length(state$cfg$items), " questions, ", length(weak),
-             " contribute little to telling the segments apart (",
+      paste0("Of the ", length(state$cfg$items), " questions, ",
+             n_verb(length(weak), "contributes", "contribute"),
+             " little to telling the segments apart (",
              paste(weak, collapse = ", "), ").")
       else paste0("All ", length(state$cfg$items),
                   " questions contribute to telling the segments apart."))
   } else {
+    # The reference report prints these and this one did not, which for a
+    #   factor model is the first thing a reader looks for. Reported with the
+    #   caveat rather than as a verdict: the conventional targets were derived
+    #   under simple random sampling and this is a clustered weighted sample.
+    fm = d$fit
+    if (!is.null(fm) && nrow(fm)) {
+      g = function(nm) {
+        v = fm$value[fm$measure == nm]
+        if (length(v)) v[1] else NA_real_
+      }
+      four = c(g("cfi.scaled"), g("tli.scaled"), g("rmsea.scaled"), g("srmr"))
+      if (all(is.finite(four)))
+        out = c(out, sprintf(
+          paste("Robust CFI %.3f, TLI %.3f, RMSEA %.3f, SRMR %.3f.",
+                "Conventional targets are CFI and TLI above 0.95, RMSEA below",
+                "0.06 and SRMR below 0.08, but those were derived under simple",
+                "random sampling and RMSEA in particular penalises large",
+                "samples, so they are guidance to read alongside the loading",
+                "pattern rather than a pass mark."),
+          four[1], four[2], four[3], four[4]))
+    }
+
     weak = unique(d$loadings$item[!is.na(d$loadings$flag)])
     out = c(out, if (length(weak))
-      paste0("Of the ", length(state$cfg$items), " questions, ", length(weak),
-             " track their scale only weakly (", paste(weak, collapse = ", "),
-             ").")
+      paste0("Of the ", length(state$cfg$items), " questions, ",
+             n_verb(length(weak), "tracks", "track"),
+             " their scale only weakly (", paste(weak, collapse = ", "), ").")
       else paste0("All ", length(state$cfg$items),
                   " questions track their scale strongly."))
   }
@@ -756,6 +844,11 @@ diagnostic_sentences <- function(state) {
 #   have not tested. The last column is the one that makes the document
 #   trustworthy: a methods paper with no untested claims is either very short
 #   or not telling you something.
+# Arm-filtered throughout. Unfiltered, the factor report claimed a poLCA check
+#   and a three-step classification correction it never ran, and the class
+#   report claimed Bartlett scores and a lavPredict agreement that belong to
+#   the other arm. A table of what was verified is worth nothing if it lists
+#   verifications of something else.
 status_table <- function(state) {
   lca = identical(state$cfg$arm, "lca")
 
@@ -766,21 +859,21 @@ status_table <- function(state) {
     "Verified",
     "One stratified jackknife replicate set drives the measurement model, the domain estimates and the corrections. Recomputed here, not carried over.",
 
-    "The unweighted class model reproduces an independent implementation",
-    "Verified elsewhere",
-    "Checked against poLCA in the reference implementation. Not re-run by this app.",
+    if (lca) "The unweighted class model reproduces an independent implementation" else NA_character_,
+    if (lca) "Verified elsewhere" else NA_character_,
+    if (lca) "Checked against poLCA in the reference implementation. Not re-run by this app." else NA_character_,
 
-    "Factor scores for partial responders match lavaan where both are defined",
-    "Verified",
-    "The closed form agrees with lavPredict to machine precision on complete cases.",
+    if (!lca) "Factor scores for partial responders match lavaan where both are defined" else NA_character_,
+    if (!lca) "Verified" else NA_character_,
+    if (!lca) "The closed form agrees with lavPredict to machine precision on complete cases." else NA_character_,
 
-    "Three-step estimation with a classification-error correction",
-    "Established",
-    "Bolck, Croon and Hagenaars; Vermunt (2010); Bakk and colleagues.",
+    if (lca) "Three-step estimation with a classification-error correction" else NA_character_,
+    if (lca) "Established" else NA_character_,
+    if (lca) "Bolck, Croon and Hagenaars; Vermunt (2010); Bakk and colleagues." else NA_character_,
 
-    "Bartlett scores where the latent variable is the outcome",
-    "Established",
-    "Skrondal and Laake (2001).",
+    if (!lca) "Bartlett scores where the latent variable is the outcome" else NA_character_,
+    if (!lca) "Established" else NA_character_,
+    if (!lca) "Skrondal and Laake (2001)." else NA_character_,
 
     "Replication rather than linearisation for variance",
     "Our choice",
@@ -802,9 +895,9 @@ status_table <- function(state) {
     "Untested",
     "Measurement invariance is assumed, not tested. A real group difference and a difference in how a question is understood are indistinguishable in these tables.",
 
-    "Domain intervals hold the measurement model fixed",
-    "Untested here",
-    "Standard three-step practice. Propagating step-one uncertainty widens them; the reference implementation measured that at roughly a factor of two on one demographic.",
+    if (lca) "Domain intervals hold the measurement model fixed" else NA_character_,
+    if (lca) "Untested here" else NA_character_,
+    if (lca) "Standard three-step practice. Propagating step-one uncertainty widens them; the reference implementation measured that at roughly a factor of two on one demographic." else NA_character_,
 
     # All three cells share one condition. Guarding them separately produced a
     #   row with a claim and a blank status whenever the factor arm ran under
@@ -993,10 +1086,18 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
   add(blk("h2", "How they differ across groups"))
   add(blk("p", paste(
     "Each quantity is reported three ways. Unweighted ignores the survey",
-    "design. Design-based accounts for it. Corrected additionally removes the",
-    "flattening that placing people into groups introduces. The gap from the",
-    "first to the second is what ignoring the design costs; the gap from the",
-    "second to the third is what the placement costs.")))
+    "design. Design-based accounts for it.",
+    if (lca)
+      paste("Corrected additionally removes the flattening that placing",
+            "people into groups introduces. The gap from the first to the",
+            "second is what ignoring the design costs; the gap from the second",
+            "to the third is what the placement costs.")
+    else
+      paste("Corrected reports the Bartlett score rather than the regression",
+            "score. Regression scores are shrunk toward the population average",
+            "by the scale's reliability, which pulls group means together; the",
+            "gap from the second column to the third is what that shrinkage",
+            "was costing."))))
 
   purrr::walk(cfg$aux, function(v) {
     add(blk("h3", v))
@@ -1033,7 +1134,8 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
     "The analyst chose ", state$dimension,
     if (lca) " segments" else " factors",
     ", recorded before any interpretation of the evidence was offered, and ",
-    "reached over ", iteration_count() + 1, " round(s) of fitting. ",
+    "reached over ", n_verb(iteration_count() + 1L, "round", "rounds"),
+    " of fitting. ",
     diagnostic_sentences(state))))
   add(blk("table",
           state$coverage |>
@@ -1108,6 +1210,17 @@ build_report <- function(state, summary_text = NULL, not_answered = NULL) {
                               style = "heading 1")
   doc = officer::body_add_par(
     doc, paste("Every quantity in the report with its 95 per cent interval.",
+               if (lca)
+                 paste("Intervals on a share are formed on the logit scale,",
+                       "which keeps them inside 0 to 1 without truncation. A",
+                       "dagger marks a corrected cell whose estimate or",
+                       "interval falls outside that range: the correction",
+                       "permits it, and clipping to the boundary would report",
+                       "a number the estimator did not produce.")
+               else
+                 paste("Positions are on the factor scale, centred so that",
+                       "zero is the population average. A negative value means",
+                       "below average and is not a problem in itself."),
                "Diagnostic tables and the record of how the specification was",
                "reached are in the CSV files supplied alongside."),
     style = "Normal")
@@ -1181,10 +1294,15 @@ report_caveats <- function(state) {
   n_round = iteration_count()
 
   c(
+    # iteration_count() counts refits, not removals. Saying "items were
+    #   removed" put a claim in the report that a re-run at the same battery
+    #   makes false, which is the kind of thing a reader checks first.
     if (n_round > 0)
-      paste0("Items were removed and the model refitted ", n_round,
-             " time(s). Fit statistics after a specification search are ",
-             "optimistic."),
+      paste0("The specification was revised and the model refitted ",
+             n_verb(n_round, "time", "times"),
+             ". Fit statistics computed after a search over ",
+             "specifications are optimistic, because the specification was ",
+             "chosen partly on this sample."),
 
     if (isFALSE(state$labels_edited))
       paste("Every drafted name was accepted without editing. The names are",
@@ -1210,6 +1328,20 @@ report_caveats <- function(state) {
       paste("Only respondents who answered every item could be scored. People",
             "who skip items are not a random slice of the sample, so the",
             "domain estimates condition on complete response."),
+
+    # Named rather than left as an arithmetic gap in the coverage table.
+    local({
+      k = state$coverage$n[startsWith(state$coverage$group,
+                                      "Not scored: the model")]
+      if (!length(k) || k == 0) NULL else
+        paste0(n_verb(k, "respondent", "respondents"),
+               " answered every item and still could not be given a score. ",
+               "The estimator cannot place a response pattern that sits at ",
+               "the extreme of nearly every item, so these are not a random ",
+               "few: they are among the most positive or most negative in ",
+               "the file, and the estimates rest on a sample with them ",
+               "removed.")
+    }),
 
     paste("Where two levels are not reported as separating, the data do not",
           "resolve them. That is not the same as saying they are alike."),

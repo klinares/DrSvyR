@@ -1,10 +1,10 @@
-# app.R for WISE repo
-# Entry point. Open wise.Rproj in RStudio and click Run App.
+# app.R for DrSvyR
+# Entry point. Open the .Rproj in this folder in RStudio and click Run App.
 
 # One folder of R code, sourced flat and alphabetically. Load order does not
-#   matter because every file defines functions rather than calling them, with
-#   one exception: zz_llm.R supersedes four functions that also live in
-#   engine_05_prompts_label.R, and the zz_ prefix is what makes it load last.
+#   matter: every file in R/ defines functions and never calls them. That is
+#   the rule that makes the flat source safe, and it is why app.R and
+#   setup_renv.R live here rather than in R/ -- both do things.
 
 # The engine calls survey, lavaan, viridis, furrr, knitr and kableExtra by bare
 #   name, so they are attached rather than referenced with ::.
@@ -20,7 +20,20 @@ library(furrr)
 library(knitr)
 library(kableExtra)
 
+# Every path below is relative to the repository root, so a session started
+#   somewhere else fails later and in a way that describes anything but the
+#   cause. Checked here, where the message can name it.
+if (!dir.exists("R"))
+  stop("Cannot see the R/ folder from ", getwd(), ".\n",
+       "Open the .Rproj in the repository folder and run the app from there.",
+       call. = FALSE)
+
 walk(list.files("R", full.names = TRUE, pattern = "[.][Rr]$"), source)
+
+# Shiny serves static files from www/ and nowhere else, so a figure referenced
+#   from README.md as figures/... would render on GitHub and 404 in the Help
+#   tab. Mapping the folder makes one path work in both places.
+if (dir.exists("figures")) addResourcePath("figures", "figures")
 
 
 # One state object, passed to every module. Modules read from it and write to
@@ -80,12 +93,26 @@ new_state <- function() {
     report_not_answered = NULL,
     report_html   = NULL,
     outputs       = NULL,
+
+    # The methodologist panel. proposals is every staged action and what the
+    #   analyst did with it; pending_proposal is the one awaiting a decision.
+    proposals         = NULL,
+    pending_proposal  = NULL,
+
     goto          = NULL)
 }
 
-WISE_TABS <- c("1. Project", "2. Design", "3. Items", "4. Domains",
+# Start here is first so it is where the app opens. An analyst landing on
+#   "1. Project" with no orientation has to work out what the tool is from a
+#   folder picker, and a guide sitting thirteenth in the list is one nobody
+#   reads. Methodologist sits outside the numbered sequence for the opposite
+#   reason: it is not a stage to be completed but an adviser available at any
+#   of them.
+WISE_TABS <- c("Start here",
+               "1. Project", "2. Design", "3. Items", "4. Domains",
                "5. Review", "6. Search", "7. Model", "8. Names",
-               "9. Scoring", "10. Results", "11. Outputs", "Help")
+               "9. Scoring", "10. Results", "11. Outputs",
+               "Methodologist")
 
 
 ui <- page_fluid(
@@ -99,6 +126,13 @@ ui <- page_fluid(
                style = "margin:0;")),
     div(style = "margin-left:auto;", input_dark_mode(id = "dark_mode"))),
   
+  # Markdown rendered by includeMarkdown() carries no sizing, so a figure comes
+  #   through at its natural pixel width and overflows the panel. Scoped to the
+  #   tab content, so it constrains the Help figures without reaching the
+  #   header above them.
+  tags$head(tags$style(HTML(
+    ".tab-content img { max-width: 100%; height: auto; }"))),
+
   tags$hr(),
   
   navlistPanel(
@@ -106,21 +140,26 @@ ui <- page_fluid(
     widths = c(3, 9),
     well = FALSE,
     
-    tabPanel(WISE_TABS[1], mod_project_ui("project")),
-    tabPanel(WISE_TABS[2], mod_design_ui("design")),
-    tabPanel(WISE_TABS[3], mod_items_ui("items")),
-    tabPanel(WISE_TABS[4], mod_recode_ui("recode")),
-    tabPanel(WISE_TABS[5], mod_config_ui("config")),
-    tabPanel(WISE_TABS[6], mod_search_ui("search")),
-    tabPanel(WISE_TABS[7], mod_model_ui("model")),
-    tabPanel(WISE_TABS[8], mod_labels_ui("labels")),
-    tabPanel(WISE_TABS[9], mod_score_ui("score")),
-    tabPanel(WISE_TABS[10], mod_domains_ui("domains")),
-    tabPanel(WISE_TABS[11], mod_report_ui("report")),
-    
-    # The README rendered in place rather than linked out, so the guide is
-    #   available with no network and cannot drift from the version installed.
-    tabPanel(WISE_TABS[12], includeMarkdown("README.md"))
+    # help.md rather than README.md. One document cannot serve both a reader
+    #   deciding whether to trust the tool and an analyst who has it open and
+    #   needs to start; they want opposite things. Rendered in place rather
+    #   than linked out, so it needs no network and cannot drift from the
+    #   version installed.
+    tabPanel(WISE_TABS[1], includeMarkdown("help.md")),
+
+    tabPanel(WISE_TABS[2], mod_project_ui("project")),
+    tabPanel(WISE_TABS[3], mod_design_ui("design")),
+    tabPanel(WISE_TABS[4], mod_items_ui("items")),
+    tabPanel(WISE_TABS[5], mod_recode_ui("recode")),
+    tabPanel(WISE_TABS[6], mod_config_ui("config")),
+    tabPanel(WISE_TABS[7], mod_search_ui("search")),
+    tabPanel(WISE_TABS[8], mod_model_ui("model")),
+    tabPanel(WISE_TABS[9], mod_labels_ui("labels")),
+    tabPanel(WISE_TABS[10], mod_score_ui("score")),
+    tabPanel(WISE_TABS[11], mod_domains_ui("domains")),
+    tabPanel(WISE_TABS[12], mod_report_ui("report")),
+
+    tabPanel(WISE_TABS[13], mod_chat_ui("chat"))
   )
 )
 
@@ -151,6 +190,21 @@ server <- function(input, output, session) {
   mod_score_server("score", state)
   mod_domains_server("domains", state)
   mod_report_server("report", state)
+
+  # "Why did this respondent not get a score" cannot be answered from the
+  #   console, because state lives in here and nowhere else. On request, a
+  #   plain snapshot is left in the global environment when the session ends
+  #   -- a copy, not the reactiveValues object, so nothing typed afterwards
+  #   can write back into a run. Enable with options(drsvyr.debug = TRUE)
+  #   before runApp().
+  if (isTRUE(getOption("drsvyr.debug")))
+    session$onSessionEnded(function()
+      assign("state", isolate(reactiveValuesToList(state)),
+             envir = globalenv()))
+
+  # Handed the current tab rather than inferring the stage from whatever state
+  #   happens to hold, so it answers about where the analyst actually is.
+  mod_chat_server("chat", state, reactive(input$stage))
 }
 
 

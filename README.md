@@ -15,21 +15,7 @@ You do not need to write any R. You do need to know your survey.
 The tool has an AI methodologist in it. It is worth being exact about what that
 means, because the obvious reading — an AI that does the analysis — is wrong.
 
-```mermaid
-flowchart LR
-    P["<b>PROTOCOL</b><br/>coded, auditable<br/>not arguable"]
-    R["<b>REFLEXES</b><br/>trained, immediate<br/>no authority"]
-    A["<b>THE ANALYST</b><br/>every judgement call<br/>signed and recorded"]
-
-    P -->|"produces every number"| A
-    R -->|"explains what they mean"| A
-    A -->|"decides"| OUT["The analysis"]
-
-    style P fill:#1f6f54,stroke:#0d4634,color:#fff
-    style R fill:#2c5f8a,stroke:#183c58,color:#fff
-    style A fill:#8a5a1f,stroke:#583a13,color:#fff
-    style OUT fill:#3a3a3a,stroke:#222,color:#fff
-```
+![Protocol, reflexes, and the analyst](figures/fig_protocol.png)
 
 **Protocol** is what the workflow does regardless of anyone's opinion. A stratum
 with one sampling unit halts the analysis. The classification table is rebuilt
@@ -78,26 +64,7 @@ defaults often are not.
 
 ## The workflow
 
-```mermaid
-flowchart TD
-    S1["1 Project<br/><i>read the file</i>"] --> S2["2 Design<br/><i>confirm the sample</i>"]
-    S2 --> S3["3 Items<br/><i>choose the battery</i>"]
-    S3 --> S4["4 Domains<br/><i>collapse the groups</i>"]
-    S4 --> S5["5 Review<br/><i>approve the plan</i>"]
-    S5 --> S6["6 Search<br/><i>how many?</i>"]
-    S6 --> S7["7 Model<br/><i>fit and diagnose</i>"]
-    S7 -->|"one return"| S3
-    S7 --> S8["8 Names<br/><i>what are they?</i>"]
-    S8 --> S9["9 Scoring<br/><i>everyone the model can reach</i>"]
-    S9 --> S10["10 Results<br/><i>across the domains</i>"]
-    S10 --> S11["11 Outputs<br/><i>report, data, tables</i>"]
-
-    style S2 fill:#8a5a1f,stroke:#583a13,color:#fff
-    style S3 fill:#8a5a1f,stroke:#583a13,color:#fff
-    style S4 fill:#8a5a1f,stroke:#583a13,color:#fff
-    style S6 fill:#8a5a1f,stroke:#583a13,color:#fff
-    style S8 fill:#8a5a1f,stroke:#583a13,color:#fff
-```
+![The eleven stages](figures/fig_stages.png)
 
 Amber steps are the ones you decide. Nothing runs until you press a button.
 

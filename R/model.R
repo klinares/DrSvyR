@@ -614,6 +614,72 @@ diagnose_cfa <- function(fit, cfg, top_mi = 12L) {
 #   standard error.
 #______________________________________________________________________________
 
+# Intervals for a probability are formed on the logit scale by the delta
+#   method rather than as p +/- t se. Since d logit(p)/dp = 1/{p(1-p)},
+#
+#     se_logit(p) = se(p) / {p(1-p)},   CI = logit^-1( logit(p) +/- t se_logit )
+#
+#   which keeps the interval inside (0, 1) without truncation and improves
+#   coverage near the boundary. A Wald interval on a proportion is symmetric by
+#   construction, and the sampling distribution of a proportion is not: near 0
+#   or 1 it under-covers and can run outside the range the quantity is even
+#   defined on. This is what the reference workflow does and what the app now
+#   matches.
+#
+# Two cases must not be transformed. An estimate within BOUNDARY_TOL of 0 or 1
+#   has no meaningful logit-scale standard error. And a BCH-corrected share can
+#   legitimately sit outside [0, 1] -- the correction permits it and truncating
+#   would misstate it -- so those keep a Wald interval, untruncated, and are
+#   returned flagged rather than silently mixed in with the rest.
+
+# Intervals on a share are formed on the logit scale by the delta method
+#   rather than as p +/- t se. Since d logit(p)/dp = 1/{p(1-p)},
+#
+#     se_logit(p) = se(p) / {p(1-p)},   CI = logit^-1( logit(p) +/- t se_logit )
+#
+#   which keeps the interval inside (0, 1) without truncation and improves
+#   coverage near the boundary. A Wald interval on a proportion is symmetric by
+#   construction and the sampling distribution of a proportion is not: near 0
+#   or 1 it under-covers and can run outside the range the quantity is defined
+#   on. This is what the reference workflow does, and matching it is why the
+#   two now agree on more than the point estimates.
+
+# transform = FALSE is not a convenience. Two quantities here must not be
+#   transformed. A BCH-corrected share can legitimately sit outside [0, 1] --
+#   the correction permits it and clipping would misstate it -- and where such
+#   a share is small with a large standard error the delta method degenerates:
+#   at p = 0.008 with se = 0.030 the logit interval is [0.000, 0.937], which is
+#   arithmetically correct and useless to a reader. The reference reports those
+#   cells as an estimate and a standard error for exactly that reason. They
+#   keep a Wald interval, untruncated, and come back flagged so the table can
+#   mark them.
+
+BOUNDARY_TOL <- 1e-3
+
+share_ci <- function(p, se, crit, transform = TRUE, truncate = TRUE) {
+
+  # An estimate at or within BOUNDARY_TOL of a boundary has no meaningful
+  #   logit-scale standard error, and neither does a missing one.
+  edge = !(is.finite(p) & is.finite(se)) |
+         p <= BOUNDARY_TOL | p >= 1 - BOUNDARY_TOL
+  use = transform & !edge
+
+  # Clamped before the transform so the unused arm cannot produce Inf:
+  #   ifelse() evaluates both arms whatever the condition says.
+  pc = pmin(pmax(p, BOUNDARY_TOL), 1 - BOUNDARY_TOL)
+  half = crit * se / (pc * (1 - pc))
+
+  w_lo = if (truncate) pmax(0, p - crit * se) else p - crit * se
+  w_hi = if (truncate) pmin(1, p + crit * se) else p + crit * se
+
+  tibble::tibble(
+    lo = ifelse(use, stats::plogis(stats::qlogis(pc) - half), w_lo),
+    hi = ifelse(use, stats::plogis(stats::qlogis(pc) + half), w_hi),
+    boundary = if (transform) edge
+               else !is.finite(p) | p < 0 | p > 1)
+}
+
+
 # The model is refitted inside every replicate, warm-started from the
 #   full-sample solution and aligned back to it. Warm-starting is what makes
 #   this affordable -- one EM run per replicate rather than two hundred -- and
@@ -655,10 +721,9 @@ measurement_se_lca <- function(cfg, dat, fit, des, rep_des) {
   shares = tibble::tibble(
     group = seq_len(K),
     share = fit$pi,
-    se = se[seq_len(n_pi)]) |>
-    dplyr::mutate(lo = pmax(0, share - crit * se),
-                  hi = pmin(1, share + crit * se),
-                  dplyr::across(c(share, se, lo, hi), \(x) round(x, 3)))
+    se = se[seq_len(n_pi)])
+  shares = dplyr::bind_cols(shares, share_ci(shares$share, shares$se, crit)) |>
+    dplyr::mutate(dplyr::across(c(share, se, lo, hi), \(x) round(x, 3)))
 
   # rho is stored item by item, each a cats x K matrix in column order, so the
   #   offsets have to be walked in the same order they were flattened.
@@ -672,16 +737,18 @@ measurement_se_lca <- function(cfg, dat, fit, des, rep_des) {
                     prob = as.vector(fit$rho[[j]]),
                     se = as.vector(m))
   }) |>
-    purrr::list_rbind() |>
-    dplyr::mutate(lo = pmax(0, prob - crit * se),
-                  hi = pmin(1, prob + crit * se),
-                  dplyr::across(c(prob, se, lo, hi), \(x) round(x, 3)))
+    purrr::list_rbind()
+  probs = dplyr::bind_cols(probs, share_ci(probs$prob, probs$se, crit)) |>
+    dplyr::mutate(dplyr::across(c(prob, se, lo, hi), \(x) round(x, 3)))
 
   profile = tidyr::expand_grid(group = seq_len(K), item = cfg$items) |>
     dplyr::mutate(value = est[(n_pi + n_rho + 1):length(est)],
-                  se = se[(n_pi + n_rho + 1):length(se)]) |>
-    dplyr::mutate(lo = pmax(0, value - crit * se),
-                  hi = pmin(1, value + crit * se))
+                  se = se[(n_pi + n_rho + 1):length(se)])
+  # The plotted profile value is a rescaled expected response, not a
+  #   probability, but it is bounded in [0, 1] by construction and the same
+  #   argument applies: a symmetric interval on it can leave the range.
+  profile = dplyr::bind_cols(profile,
+                             share_ci(profile$value, profile$se, crit))
 
   list(shares = shares, probs = probs, profile = profile,
        replicates = ncol(weights(rep_des, "analysis")))
