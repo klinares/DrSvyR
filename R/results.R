@@ -716,6 +716,15 @@ dictionary_table <- function(state) {
 #   fitted profile rather than from the drafted name. The name is a summary
 #   somebody wrote; these are the numbers it is supposed to summarise, and a
 #   reader who distrusts the first can check it against the second.
+# The variable name in parentheses exists for a battery whose items were
+#   renamed on the way in. When they were not, "b21 (b21)" reads as a mistake
+#   in a document somebody is about to circulate.
+item_label <- function(item, variable) {
+  if (identical(as.character(item), as.character(variable)))
+    as.character(item)
+  else paste0(item, " (", variable, ")")
+}
+
 segment_evidence <- function(state, k, n = 3L) {
   lca = identical(state$cfg$arm, "lca")
   dict = state$item_frame$dictionary
@@ -745,8 +754,8 @@ segment_evidence <- function(state, k, n = 3L) {
 
     purrr::map_chr(seq_len(nrow(top)), function(i) {
       d = dplyr::filter(dict, item == top$item[i])
-      sprintf("%s (%s) — answers %s than average on “%s”",
-              top$item[i], d$variable,
+      sprintf("%s — answers %s than average on “%s”",
+              item_label(top$item[i], d$variable),
               if (top$gap[i] > 0) "notably higher" else "notably lower",
               d$question)
     })
@@ -759,10 +768,14 @@ segment_evidence <- function(state, k, n = 3L) {
       dplyr::arrange(dplyr::desc(abs(loading))) |>
       head(n)
 
+    # Only the first of these is the closest. Saying so about all three reads
+    #   as three superlatives that cannot all be true.
     purrr::map_chr(seq_len(nrow(top)), function(i) {
       d = dplyr::filter(dict, item == top$item[i])
-      sprintf("%s (%s) tracks it most closely, at %.2f — “%s”",
-              top$item[i], d$variable, top$loading[i], d$question)
+      sprintf("%s %s at %.2f — “%s”",
+              item_label(top$item[i], d$variable),
+              if (i == 1L) "tracks the scale most closely," else "also tracks it,",
+              top$loading[i], d$question)
     })
   }
 }
@@ -925,6 +938,19 @@ prompt_report_summary <- function(state) {
                           function(r, v) paste0(v, ": ", r$finding))
   q = state$question %||% ""
 
+  # A model asked to summarise findings it was not given will summarise
+  #   whatever else it was handed. That is how the coverage table arrived in a
+  #   report as "the groups considered" -- not a finding, and not something
+  #   anyone can act on. With nothing to summarise, it is asked to say so
+  #   rather than to fill the space.
+  if (!length(reads))
+    return(stringr::str_glue(
+      "No domain has been read yet, so there are no findings to summarise.\n\n",
+      "Return only this JSON, no prose and no markdown fences:\n",
+      '{{"summary": "No domain findings have been written yet, so there is ',
+      'nothing to summarise. Read the domains, then rebuild the report.", ',
+      '"not_answered": ""}}'))
+
   stringr::str_glue(
     "ANALYST CONTEXT\n{state$context %||% ''}\n\n",
     "{if (nzchar(q)) paste0('RESEARCH QUESTION\\n  ', q, '\\n\\n') else ''}",
@@ -939,11 +965,13 @@ prompt_report_summary <- function(state) {
     "First, a summary of at most 150 words: what was measured, what the groups",
     " are, and which findings are worth their attention. ",
     "{if (nzchar(q)) 'Lead with whatever bears on the research question. ' else ''}",
-    "\n\nSecond, at most three sentences on what this analysis does not",
-    " answer",
+    "\n\nSecond, at most three sentences on what this analysis structurally",
+    " cannot answer",
     "{if (nzchar(q)) ' -- in particular, which parts of the research question the data do not speak to' else ''}",
-    ". Be specific: name the comparison or the quantity that is out of reach,",
-    " not a general caution.\n\n",
+    ". Name a comparison across time or place the data do not contain, a",
+    " causal claim, or a quantity no model here estimates. Do not name",
+    " anything that could be computed from the tables above, and do not give",
+    " a general caution.\n\n",
     "Draw only on what is above. Do not add a finding that is not in the list,",
     " do not reorder a finding out of existence, do not use causal language,",
     " and do not describe anything as significant.\n\n",
@@ -1165,7 +1193,115 @@ marginal_table <- function(marg, variable) {
 
 # ---- renderers --------------------------------------------------------------
 
+# Word output needs officer and flextable, and flextable needs Rtools to build
+#   on a mirror that carries no binary for it. An analyst cannot install
+#   Rtools. So the deliverable that always works is a self-contained HTML file:
+#   one document, every figure embedded as a data URI, no external stylesheet
+#   and no network. Word opens it directly if a .docx is what somebody wants.
+
+# The block list is rendered a third way rather than rebuilt. Anything else
+#   would drift from what was reviewed on screen.
+
+REPORT_CSS <- "
+:root {
+  --bs-secondary-bg: #efefef;
+  --bs-border-color: #b0b0b0;
+  --bs-secondary-color: #5a5a5a;
+}
+body { max-width: 46rem; margin: 2.5rem auto; padding: 0 1.25rem;
+       font-family: Calibri, Carlito, Helvetica, Arial, sans-serif;
+       font-size: 11.5pt; line-height: 1.55; color: #1a1a1a; }
+h3 { font-size: 1.45rem; margin: 0 0 0.2rem; }
+h4 { font-size: 1.15rem; margin: 1.9rem 0 0.4rem; }
+h5 { font-size: 1rem;    margin: 1.3rem 0 0.3rem; }
+p  { margin: 0.5rem 0; }
+img { max-width: 100%; height: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 9.5pt;
+        margin: 0.6rem 0 1.1rem; }
+th { text-align: left; font-weight: 600; border-bottom: 1.5px solid #444;
+     padding: 4px 8px; }
+td { border-bottom: 1px solid #ddd; padding: 4px 8px; vertical-align: top; }
+hr { border: 0; border-top: 1px solid var(--bs-border-color); margin: 2.4rem 0; }
+"
+
+# Bootstrap is not available outside the app, so the variables report_html()
+#   styles against are defined above rather than the styles being rewritten.
+#   The screen preview and the saved file stay the same document.
+
+html_table <- function(df)
+  shiny::HTML(knitr::kable(df, format = "html", table.attr = "class='t'"))
+
+report_appendices <- function(state) {
+  lca = identical(state$cfg$arm, "lca")
+  labs = state$labels$Label
+
+  shiny::tagList(
+    shiny::tags$hr(),
+    shiny::tags$h3("Appendix A. Full estimates"),
+    shiny::tags$p(paste(
+      "Every quantity in the report with its 95 per cent interval.",
+      if (lca)
+        paste("Intervals on a share are formed on the logit scale, which keeps",
+              "them inside 0 to 1 without truncation. A dagger marks a",
+              "corrected cell whose estimate or interval falls outside that",
+              "range: the correction permits it, and clipping to the boundary",
+              "would report a number the estimator did not produce.")
+      else
+        paste("Positions are on the factor scale, centred so that zero is the",
+              "population average. A negative value means below average and is",
+              "not a problem in itself."),
+      "Diagnostic tables and the record of how the specification was reached",
+      "are in the CSV files supplied alongside.")),
+
+    purrr::map(state$cfg$aux, function(v) shiny::tagList(
+      shiny::tags$h4(v),
+      html_table(domain_wide(state$domains$dom, v, labs)))),
+
+    shiny::tags$hr(),
+    shiny::tags$h3("Appendix B. What was tested"),
+    shiny::tags$p(paste(
+      "What was checked, what rests on the literature, what was a choice, and",
+      "what has not been tested. The last of these is the column to read",
+      "first.")),
+    html_table(status_table(state)))
+}
+
+build_report_html <- function(state, summary_text = NULL,
+                              not_answered = NULL) {
+  doc = shiny::tagList(
+    report_html(state, summary_text, not_answered),
+    report_appendices(state))
+
+  path = wise_path("output", state$cfg$arm, "report.html")
+
+  writeLines(c(
+    "<!doctype html>",
+    "<html lang=\"en\"><head>",
+    "<meta charset=\"utf-8\">",
+    paste0("<title>DrSvyR report -- ",
+           fs::path_file(state$data_file), "</title>"),
+    "<style>", REPORT_CSS, "</style>",
+    "</head><body>",
+    as.character(doc),
+    "</body></html>"), path, useBytes = TRUE)
+
+  path
+}
+
 build_report <- function(state, summary_text = NULL, not_answered = NULL) {
+  # Named rather than left to fail inside officer:: with a namespace error an
+  #   analyst cannot act on. flextable in particular needs Rtools where the
+  #   mirror carries no binary, which is not something an analyst can install.
+  missing = c("officer", "flextable")[
+    !vapply(c("officer", "flextable"), requireNamespace, logical(1),
+            quietly = TRUE)]
+  if (length(missing))
+    stop("Word output needs ", paste(missing, collapse = " and "),
+         ", which ", if (length(missing) > 1) "are" else "is",
+         " not installed here. Use the HTML report instead: it carries the ",
+         "same content, opens in Word, and needs nothing beyond what the app ",
+         "already uses.", call. = FALSE)
+
   lca = identical(state$cfg$arm, "lca")
   labs = state$labels$Label
   doc = officer::read_docx()
