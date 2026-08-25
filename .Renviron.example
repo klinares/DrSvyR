@@ -1,4 +1,0 @@
-WISE_LLM_BASE_URL=https://openrouter.ai/api/v1
-WISE_LLM_MODEL_PM=meta-llama/llama-4-maverick
-WISE_LLM_MODEL_WORKER=meta-llama/llama-3.1-70b-instruct
-WISE_LLM_API_KEY=
