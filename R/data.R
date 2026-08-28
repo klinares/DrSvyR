@@ -149,8 +149,28 @@ nominate_design <- function(codebook) {
 #______________________________________________________________________________
 
 # map is a named character vector: c(id = , strata = , psu = , weight = ).
-#   unclass() strips the labelled class so the values are plain numbers; the
-#   labels are kept in the codebook, which is where they belong.
+
+# An identifier names a unit; it is not a quantity. Coercing one with
+#   as.numeric() turns a PSU coded "xc321" into NA without stopping, and a
+#   design built on a column of NAs draws its variance from nothing. So the
+#   three identifier columns keep whatever type identifies the unit, and only
+#   the weight -- the one column that has to be arithmetic -- is coerced.
+
+# unclass() still strips the labelled class, so a labelled numeric arrives as
+#   a plain number and a file that ran before this change produces the
+#   identical design after it. A number stored as text does too. A factor is
+#   read by its labels rather than its codes, because the label is what the
+#   analyst recognises and the code is an artefact of how it was stored.
+design_key <- function(x) {
+  if (is.factor(x)) return(as.character(x))
+  v = unclass(x)
+  if (is.numeric(v)) return(as.numeric(v))
+  v = trimws(as.character(v))
+  v[!nzchar(v)] = NA_character_
+  num = suppressWarnings(as.numeric(v))
+  if (any(is.na(num) & !is.na(v))) v else num
+}
+
 build_design_frame <- function(raw, map) {
   need = c("id", "strata", "psu", "weight")
   missing = setdiff(need, names(map))
@@ -163,11 +183,19 @@ build_design_frame <- function(raw, map) {
     stop("Named in the design map but not in the data: ",
          paste(absent, collapse = ", "), call. = FALSE)
 
+  src = raw[[map[["weight"]]]]
+  wt = suppressWarnings(as.numeric(unclass(src)))
+  if (any(is.na(wt) & !is.na(src)))
+    stop("The weight variable '", map[["weight"]], "' holds values that are ",
+         "not numbers, so it cannot be used as a weight. Check that the ",
+         "column nominated as the weight is the weight itself and not a ",
+         "label carrying one.", call. = FALSE)
+
   tibble::tibble(
-    id     = as.numeric(unclass(raw[[map[["id"]]]])),
-    strata = as.numeric(unclass(raw[[map[["strata"]]]])),
-    psu    = as.numeric(unclass(raw[[map[["psu"]]]])),
-    wt     = as.numeric(unclass(raw[[map[["weight"]]]])))
+    id     = design_key(raw[[map[["id"]]]]),
+    strata = design_key(raw[[map[["strata"]]]]),
+    psu    = design_key(raw[[map[["psu"]]]]),
+    wt     = wt)
 }
 
 
@@ -180,8 +208,13 @@ build_design_frame <- function(raw, map) {
 #   name carrying a weight's label; the partition settled it where neither the
 #   name nor the label could.
 partition_identical <- function(raw, a, b) {
-  ka = as.integer(factor(as.numeric(unclass(raw[[a]]))))
-  kb = as.integer(factor(as.numeric(unclass(raw[[b]]))))
+  ka = as.integer(factor(design_key(raw[[a]])))
+  kb = as.integer(factor(design_key(raw[[b]])))
+  # Two columns that are entirely missing cut the sample the same way only in
+  #   the sense that neither cuts it at all. Calling them interchangeable
+  #   would hide one behind the other in the picker, which is how a character
+  #   PSU used to disappear before it was ever nominated.
+  if (all(is.na(ka)) || all(is.na(kb))) return(FALSE)
   identical(ka, kb)
 }
 
@@ -346,6 +379,55 @@ detect_na_codes <- function(raw, variables) {
     purrr::list_rbind() |>
     dplyr::count(code, response, source, name = "n_items") |>
     dplyr::arrange(dplyr::desc(n_items))
+}
+
+
+# A code is detected across the whole candidate set and then applied to every
+#   item in the battery, which is right when the code means the same thing on
+#   all of them and destroys data when it does not. 8 is "no aplica" on one
+#   item and a point on a nought-to-ten scale on another; ticking it blanks
+#   the scale answers, and they then read as item nonresponse for the rest of
+#   the workflow -- a measurement error dressed as a coverage problem, with
+#   nothing anywhere to say it happened.
+
+# So the count is put in front of the analyst before they tick the box. A
+#   substantive use is a value label on some item that is neither declared
+#   user-missing on that item nor written like a nonresponse label. Anything
+#   with a non-zero count here wants a look before it is treated as missing.
+na_code_conflicts <- function(raw, variables, codes = NULL) {
+  hits = purrr::map(variables, function(v) {
+    x = raw[[v]]
+    lab = attr(x, "labels", exact = TRUE)
+    if (!length(lab)) return(NULL)
+
+    val = suppressWarnings(as.numeric(unname(lab)))
+    nm = names(lab)
+    declared = suppressWarnings(as.numeric(attr(x, "na_values", exact = TRUE)))
+
+    substantive = !is.na(val) & !(val %in% declared) &
+      !grepl(NA_LABEL_PATTERNS, tolower(nm))
+    if (!is.null(codes)) substantive = substantive & val %in% as.numeric(codes)
+    if (!any(substantive)) return(NULL)
+
+    tibble::tibble(variable = v, code = val[substantive],
+                   response = nm[substantive])
+  }) |>
+    purrr::compact() |>
+    purrr::list_rbind()
+
+  # compact() first: list_rbind() over a list that is entirely NULL returns
+  #   NULL rather than a zero-row tibble, and nrow(NULL) is NULL, which turns
+  #   the guard below into an error instead of an answer.
+  if (is.null(hits) || !nrow(hits))
+    return(tibble::tibble(code = numeric(0), n_substantive = integer(0),
+                          example = character(0)))
+
+  split(hits, hits$code) |>
+    purrr::map(function(d) tibble::tibble(
+      code = d$code[1],
+      n_substantive = nrow(d),
+      example = paste0(d$variable[1], ': "', d$response[1], '"'))) |>
+    purrr::list_rbind()
 }
 
 

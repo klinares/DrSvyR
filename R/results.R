@@ -194,8 +194,8 @@ assignment_quality <- function(scored, arm) {
 
 plot_assignment_quality <- function(q) {
   ggplot2::ggplot(q, ggplot2::aes(n_items_answered, mean_certainty)) +
-    ggplot2::geom_line(linewidth = 0.8, colour = viridis::viridis(1)) +
-    ggplot2::geom_point(ggplot2::aes(size = n), colour = viridis::viridis(1)) +
+    ggplot2::geom_line(linewidth = 0.9, colour = wise_accent()) +
+    ggplot2::geom_point(ggplot2::aes(size = n), colour = wise_accent()) +
     ggplot2::scale_y_continuous(limits = c(0, 1)) +
     ggplot2::scale_size(name = "Respondents") +
     ggplot2::labs(x = "Items answered", y = "Certainty of assignment",
@@ -280,6 +280,7 @@ domain_marginals <- function(scored, aux, rep_des) {
 
 domains_lca <- function(state, tick = NULL) {
   cfg = state$cfg
+  init_parallel(cfg)
   scored = dplyr::filter(state$scored, !is.na(segment))
   des = state$score_design$des
   rep_des = state$score_design$rep_des
@@ -377,6 +378,8 @@ domains_lca <- function(state, tick = NULL) {
   #   replicates. Only the weights move.
   Z_fixed = outer(modal_fixed, seq_len(K), "==") + 0
 
+  if (!is.null(tick)) tick("contrasts")
+
   wald_theta = function(w_rep) {
     unlist(purrr::map(M_list, function(M)
       as.vector(t(crossprod(M, w_rep * Z_fixed) /
@@ -413,7 +416,9 @@ domains_lca <- function(state, tick = NULL) {
 
 domains_cfa <- function(state, tick = NULL) {
   cfg = state$cfg
+  init_parallel(cfg)
   scored = dplyr::filter(state$scored, scored)
+  des = state$score_design$des
   rep_des = state$score_design$rep_des
   facs = state$labels$target
   crit = qt(0.975, degf(rep_des))
@@ -443,7 +448,12 @@ domains_cfa <- function(state, tick = NULL) {
       # A factor-score mean is unbounded and centred on the population
       #   average, so a Wald interval is the correct one and there is nothing
       #   to transform. boundary is carried so the two arms share a shape.
-      dplyr::mutate(lo = p - crit * se, hi = p + crit * se,
+      # 1.96 on the unweighted row rather than the design t. That row exists
+      #   to show what someone ignoring the design would report, and someone
+      #   ignoring the design has no design degrees of freedom to use. The
+      #   class arm already does this; the two arms now agree.
+      dplyr::mutate(lo = p - (if (weighted) crit else 1.96) * se,
+                    hi = p + (if (weighted) crit else 1.96) * se,
                     boundary = FALSE, estimator = label)
   }
 
@@ -461,11 +471,76 @@ domains_cfa <- function(state, tick = NULL) {
     purrr::list_rbind() |>
     dplyr::mutate(idx = dplyr::row_number())
 
+  # The replicate covariance between domain means, so pairs can be tested
+  #   rather than read off overlapping intervals. svyby gives a standard error
+  #   per cell and no covariance between cells, and a difference needs the
+  #   covariance: without it the only available rule is non-overlapping
+  #   intervals, which is stricter than a test and leaves real differences
+  #   unlisted. Writing the whole domain vector as one function of the weights
+  #   is what makes the covariance fall out of the replicates.
+
+  # The class arm has had this since the beginning and the validated CFA
+  #   report computes it too; this arm was the one place the app was behind
+  #   its own reference workflow, and its reports were describing a Wald test
+  #   that had not run.
+
+  # Regression scores, matching the design-based row. Deliberate: they are
+  #   shrunk toward the grand mean, so a pair that resolves here separates
+  #   despite the shrinkage and the Bartlett column can only widen it.
+  if (!is.null(tick)) tick("contrasts")
+
+  fn_cols = paste0(facs, "_reg")
+  S = as.matrix(scored[, fn_cols, drop = FALSE])
+  S_ok = !is.na(S)
+  S_filled = ifelse(S_ok, S, 0)
+
+  # Indicators are a property of the respondents, not of the replicate
+  #   weights, so they are built once. Levels come from the factor rather than
+  #   from the observed values, so a level nobody in the scored frame occupies
+  #   still holds its place in the vector and meta stays aligned.
+  M_list = purrr::map(cfg$aux, function(v) {
+    M = outer(as.character(scored[[v]]), levels(scored[[v]]), "==") + 0
+    M[is.na(M)] = 0
+    M
+  })
+
+  # Column-major order out of t(): every factor for level one, then every
+  #   factor for level two. That is the order meta was built in above, and the
+  #   check below confirms it against svyby rather than trusting it.
+  # The denominator counts only respondents with a score on that factor, which
+  #   is what svyby's na.rm = TRUE does. An empty level divides zero by zero
+  #   and comes back NaN; it carries no test and nothing else is affected.
+  wald_theta = function(w_rep) {
+    unlist(purrr::map(M_list, function(M)
+      as.vector(t(crossprod(M, w_rep * S_filled) /
+                  crossprod(M, w_rep * S_ok)))),
+      use.names = FALSE)
+  }
+
+  w_est = wald_theta(weights(des, "sampling"))
+
+  # Same quantity svyby computed, by a different route. Agreement is what
+  #   licenses indexing the covariance by meta$idx; a silent transposition
+  #   here would test the wrong pairs and look entirely plausible doing it.
+  chk = meta |>
+    dplyr::mutate(p_theta = w_est) |>
+    dplyr::inner_join(dplyr::select(design, variable, level, segment, p),
+                      by = c("variable", "level", "segment"))
+  gap = suppressWarnings(max(abs(chk$p_theta - chk$p), na.rm = TRUE))
+  if (nrow(chk) < nrow(design) || !is.finite(gap) || gap > 1e-6)
+    stop("The domain contrasts do not reproduce the design-based means ",
+         "(largest gap ", signif(gap, 3), " over ", nrow(chk), " of ",
+         nrow(design), " cells). The contrast vector and the estimate table ",
+         "are not in the same order, so no pairwise test can be trusted.",
+         call. = FALSE)
+
+  w_V = replicate_variance(rep_des, wald_theta, w_est)
+
   list(dom = dplyr::bind_rows(naive, design, corrected) |>
          dplyr::mutate(share = FALSE,
                        estimator = factor(
            estimator, levels = c("Unweighted", "Design-based", "Corrected"))),
-       wald = NULL,
+       wald = list(est = w_est, V = w_V, meta = meta, df = degf(rep_des)),
        values_header = "Mean position of each level on the factor:")
 }
 
@@ -504,12 +579,12 @@ plot_domain <- function(dom, variable, labels, arm) {
 
   p +
     ggplot2::geom_errorbar(ggplot2::aes(xmin = lo, xmax = hi),
-                           orientation = "y", width = 0.3, linewidth = 0.7,
-                           position = ggplot2::position_dodge(width = 0.6)) +
-    ggplot2::geom_point(size = 2.6,
-                        position = ggplot2::position_dodge(width = 0.6)) +
+                           orientation = "y", width = 0.35, linewidth = 0.8,
+                           position = ggplot2::position_dodge(width = 0.65)) +
+    ggplot2::geom_point(size = 3.2,
+                        position = ggplot2::position_dodge(width = 0.65)) +
     ggplot2::facet_wrap(~ group, scales = "free_x") +
-    ggplot2::scale_colour_viridis_d(name = NULL, end = 0.8) +
+    wise_colour(name = NULL) +
     ggplot2::labs(
       x = if (lca) "Share of the level falling in this group"
           else "Position on the factor, relative to the population average",
@@ -521,9 +596,7 @@ plot_domain <- function(dom, variable, labels, arm) {
         "Bars are 95% intervals. The unweighted row ignores the survey design",
         "and its interval is not to be believed; it is shown so the",
         "difference is visible.")) +
-    wise_theme(base_size = 13) +
-    ggplot2::theme(strip.text = ggplot2::element_text(
-      face = "bold", size = ggplot2::rel(1.0)))
+    wise_theme()
 }
 
 
@@ -551,6 +624,17 @@ plot_domain <- function(dom, variable, labels, arm) {
 #   instead of it. Cross-tabulating a modal assignment on its own reintroduces
 #   exactly the attenuation the corrected column removes, and the variable
 #   label says so, because that is the one place a reader will look.
+
+# Identifiers are compared as text throughout. They arrive as labelled doubles,
+#   plain integers or character strings depending on the file, and the only
+#   thing that has to be true is that the same respondent produces the same key
+#   on both sides of a join. format() rather than as.character() because
+#   as.character(100000) is "1e+05" on some values and "100000" on others.
+id_key <- function(x) {
+  x = unclass(x)
+  if (is.numeric(x)) format(x, scientific = FALSE, trim = TRUE)
+  else as.character(x)
+}
 
 export_data <- function(state, format = c("sav", "dta")) {
   format = match.arg(format)
@@ -585,11 +669,43 @@ export_data <- function(state, format = c("sav", "dta")) {
                          dplyr::all_of(facs))
   }
 
+  # The identifier is joined on as text, not coerced to a number. A file whose
+  #   id is "xc321" rather than 321 would otherwise become NA on one side of
+  #   this join, every row would fail to match, and the delivered file would
+  #   come back with empty score columns and no error anywhere.
   out = state$raw |>
-    dplyr::mutate(.wise_id = as.numeric(unclass(
-      state$raw[[state$design_map[["id"]]]]))) |>
-    dplyr::left_join(dplyr::rename(new_cols, .wise_id = id), by = ".wise_id") |>
-    dplyr::select(-.wise_id)
+    dplyr::mutate(.wise_id = id_key(state$raw[[state$design_map[["id"]]]])) |>
+    dplyr::left_join(
+      dplyr::mutate(dplyr::rename(new_cols, .wise_id = id),
+                    .wise_id = id_key(.wise_id)),
+      by = ".wise_id")
+
+  # Checked rather than assumed. A join that matched nothing is the silent
+  #   version of this failure, and it looks exactly like a run where nobody
+  #   could be scored.
+  # Counted from the keys rather than from a column of the joined frame. A
+  #   survey file that already has a variable called "segment" makes dplyr
+  #   suffix both sides to .x and .y, out[["segment"]] is then NULL, and a
+  #   check meant to catch a failed join would have halted a good run.
+  matched = sum(id_key(state$raw[[state$design_map[["id"]]]]) %in%
+                  id_key(new_cols$id))
+
+  if (matched == 0L && nrow(new_cols) > 0L)
+    stop("No respondent in the delivered file matched a scored record. The ",
+         "identifier in the survey file and the one carried through scoring ",
+         "do not agree, so nothing can be joined back. Check the id variable ",
+         "chosen on the Design screen.", call. = FALSE)
+
+  # The same collision affects the delivered columns themselves: if the source
+  #   file already carries a name this workflow adds, both survive as .x and
+  #   .y. Named rather than silently delivered.
+  clash = intersect(setdiff(names(new_cols), "id"), names(state$raw))
+  if (length(clash))
+    warning("The survey file already has ", paste(clash, collapse = ", "),
+            ". Those columns appear twice in the delivered file, suffixed .x ",
+            "for yours and .y for the ones added here.", call. = FALSE)
+
+  out = dplyr::select(out, -.wise_id)
 
   path = wise_path("output", arm,
                    paste0(fs::path_ext_remove(fs::path_file(state$data_file)),
@@ -908,9 +1024,15 @@ status_table <- function(state) {
     "Untested",
     "Measurement invariance is assumed, not tested. A real group difference and a difference in how a question is understood are indistinguishable in these tables.",
 
-    if (lca) "Domain intervals hold the measurement model fixed" else NA_character_,
-    if (lca) "Untested here" else NA_character_,
-    if (lca) "Standard three-step practice. Propagating step-one uncertainty widens them; the reference implementation measured that at roughly a factor of two on one demographic." else NA_character_,
+    # True in both arms, by different routes, and gated to one of them by an
+    #   earlier edit of mine. The class arm holds the posteriors and the modal
+    #   assignment at their full-sample values; the factor arm computes the
+    #   scores once and treats them as data. Neither propagates step-one
+    #   uncertainty, and both sets of intervals are optimistic for that reason.
+    "Domain intervals hold the measurement model fixed",
+    "Untested here",
+    if (lca) "Standard three-step practice. The classification table is recomputed in every replicate, but the posteriors and the modal assignment are not. Propagating step-one uncertainty widens the intervals; the reference implementation measured that at roughly a factor of two on one demographic."
+    else "Factor scores are computed once from the fitted model and then treated as data, so the sampling variability of the loadings does not enter these intervals. Propagating it would widen them.",
 
     # All three cells share one condition. Guarding them separately produced a
     #   row with a claim and a blank status whenever the factor arm ran under
@@ -1125,7 +1247,9 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
             "score. Regression scores are shrunk toward the population average",
             "by the scale's reliability, which pulls group means together; the",
             "gap from the second column to the third is what that shrinkage",
-            "was costing."))))
+            "was costing. Bartlett scores carry more error variance in",
+            "exchange, so part of the extra width in that column is noise",
+            "rather than the design."))))
 
   purrr::walk(cfg$aux, function(v) {
     add(blk("h3", v))
@@ -1145,15 +1269,30 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
             paste0(v, ": composition of the population")))
   })
 
-  add(blk("box", paste(
+  # domain_separations() uses the replicate covariance where it has one and
+  #   falls back to non-overlapping intervals where it does not. Both arms
+  #   carry it now, so the first branch is what runs; the second is kept
+  #   because the fallback is still reachable and a report that describes a
+  #   test which did not run is worse than one that describes a weaker rule.
+  add(blk("box", if (!is.null(state$domains$wald)) paste(
     "Technical. Pairs are separated by a design-based Wald test on the",
     "difference, using the replicate covariance between the two estimates and",
     "Holm-adjusted within each domain. The tests run on the design-based",
-    "column: placement attenuates differences, so a pair resolved there",
-    "separates despite the attenuation and the corrected column can only widen",
-    "it. The replicate covariance has rank at most the number of replicates, so",
-    "a joint test across more dimensions than there are replicates is not",
-    "available.")))
+    "column:", if (lca) "placement attenuates differences"
+               else "the regression scores are shrunk toward the average",
+    "so a pair resolved there separates despite that, and the corrected",
+    "column can only widen it. The replicate covariance has rank at most the",
+    "number of replicates, so a joint test across more dimensions than there",
+    "are replicates is not available.")
+    else paste(
+    "Technical. Pairs are separated when their 95 percent design-based",
+    "intervals do not overlap, read from the design-based column. That is a",
+    "stricter rule than a test of the difference: two intervals can overlap",
+    "while the difference between them still clears its own interval, so",
+    "some real differences are left unlisted. It is used here because the",
+    "replicate covariance between the domain estimates was not available for",
+    "this run, and a test needs the covariance, not just the two standard",
+    "errors.")))
 
   # ---- confidence -----------------------------------------------------------
 
@@ -1451,9 +1590,16 @@ report_caveats <- function(state) {
              "narrower than they should be and are a lower bound."),
 
     if (lca)
-      paste("Domain intervals hold the measurement model fixed: uncertainty in",
-            "the model itself is not propagated into them. This is standard",
-            "three-step practice and it makes those intervals optimistic."),
+      paste("Domain intervals hold the measurement model fixed: the",
+            "classification table is recomputed in every replicate, but the",
+            "posteriors and the assignment are not. Uncertainty in the",
+            "measurement model itself is not propagated, which is standard",
+            "three-step practice and makes these intervals optimistic.")
+    else
+      paste("Domain intervals hold the measurement model fixed: each",
+            "respondent's score is computed once from the fitted model and",
+            "then treated as data, so the sampling variability of the loadings",
+            "does not enter these intervals. That makes them optimistic."),
 
     if (!lca && identical(state$cfg$estimator, "ML"))
       paste("Answer categories were treated as a continuous scale. This is an",

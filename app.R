@@ -6,19 +6,29 @@
 #   the rule that makes the flat source safe, and it is why app.R and
 #   setup_renv.R live here rather than in R/ -- both do things.
 
-# The engine calls survey, lavaan, viridis, furrr, knitr and kableExtra by bare
-#   name, so they are attached rather than referenced with ::.
+# The engine calls survey, lavaan, viridis, furrr and knitr by bare name, so
+#   they are attached rather than referenced with ::. kableExtra is not: its
+#   only user was lca_table(), which nothing calls, and it needs Rtools on a
+#   mirror without a binary for it.
 
 library(shiny)
 library(bslib)
-library(tidyverse)
+
+# The tidyverse meta-package is deliberately not attached. Installing it drags
+#   in a large set this project never touches -- googledrive, googlesheets4,
+#   httr, rvest, xml2, broom, modelr, dbplyr, reprex -- and on a curated mirror
+#   every one of those is another package to get approved. The nine below are
+#   what library(tidyverse) would have attached, and nothing else.
+library(dplyr); library(purrr); library(tibble); library(tidyr)
+library(stringr); library(ggplot2); library(readr)
+library(forcats); library(lubridate)
+
 library(haven)
 library(survey)
 library(lavaan)
 library(viridis)
 library(furrr)
 library(knitr)
-library(kableExtra)
 
 # Every path below is relative to the repository root, so a session started
 #   somewhere else fails later and in a way that describes anything but the
@@ -96,8 +106,11 @@ new_state <- function() {
 
     # The methodologist panel. proposals is every staged action and what the
     #   analyst did with it; pending_proposal is the one awaiting a decision.
+    #   key_version is a counter, never a key: it exists so a change of key
+    #   discards any conversation holding the previous one.
     proposals         = NULL,
     pending_proposal  = NULL,
+    key_version       = 0L,
 
     goto          = NULL)
 }
@@ -145,7 +158,9 @@ ui <- page_fluid(
     #   needs to start; they want opposite things. Rendered in place rather
     #   than linked out, so it needs no network and cannot drift from the
     #   version installed.
-    tabPanel(WISE_TABS[1], includeMarkdown("help.md")),
+    tabPanel(WISE_TABS[1],
+             includeMarkdown("help.md"),
+             mod_key_ui("key")),
 
     tabPanel(WISE_TABS[2], mod_project_ui("project")),
     tabPanel(WISE_TABS[3], mod_design_ui("design")),
@@ -167,12 +182,10 @@ ui <- page_fluid(
 server <- function(input, output, session) {
   state <- new_state()
   
-  # Plots read the mode from an option rather than taking it as an argument.
-  #   Correct for one analyst on one machine; on a shared server this has to
-  #   become session state or one user's setting will follow another's plots.
-  observe({
-    options(wise.dark = identical(input$dark_mode, "dark"))
-  })
+  # Figures are theme-neutral, so nothing here has to know which mode is in
+  #   use. That is what makes them safe on a server: the option this used to
+  #   set was process-wide and would have followed one analyst into another's
+  #   plots.
   
   observeEvent(state$goto, {
     updateNavlistPanel(session, "stage", selected = state$goto)
@@ -205,6 +218,7 @@ server <- function(input, output, session) {
   # Handed the current tab rather than inferring the stage from whatever state
   #   happens to hold, so it answers about where the analyst actually is.
   mod_chat_server("chat", state, reactive(input$stage))
+  mod_key_server("key", state)
 }
 
 

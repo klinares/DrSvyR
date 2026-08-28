@@ -64,7 +64,84 @@ assert_outside_repo <- function(path) {
 WISE_SUBDIRS <- c("data", "docs", "dict", "decisions", "cache", "output")
 
 .wise <- new.env(parent = emptyenv())
-.wise$work_dir <- NULL
+.wise$work_dir <- NULL      # the no-Shiny case: a script, a test, one user
+.wise$sessions <- list()    # browser token -> folder, for a shared server
+.wise$plan_workers <- NULL  # the worker count the future plan is currently set to
+
+
+# How many workers, and where that number comes from.
+#______________________________________________________________________________
+
+# The worker count is a property of the machine the app is running on, not of
+#   the analysis, so it is resolved in one place and every session in the
+#   process gets the same answer.
+
+# future::availableCores() describes the host. On a laptop that is the right
+#   answer. On a Shiny server it is wrong twice over. The app's share of that
+#   host is whatever the other analysts are not using at that moment, and
+#   future::plan() sets the plan for the whole R process rather than for one
+#   session -- so four workers each looks like four until five people are
+#   working, and then it is twenty R processes, every one of them carrying
+#   survey and lavaan, on a box sized for one analysis at a time.
+
+# So the number comes from the environment rather than from a core count.
+#   DRSVYR_WORKERS in .Renviron on a laptop; DRSVYR_WORKERS in the Connect
+#   environment panel for the deployed app. One string per machine, nothing
+#   platform-specific in any file that goes into git, and no branch on
+#   .Platform$OS.type anywhere.
+
+# The default when nothing is set is deliberately small. A low default on a
+#   laptop costs the analyst a few minutes. A high default on a shared server
+#   costs everybody the server. Safe unless told otherwise is the right way
+#   round, and the analyst who wants more is also the one who can set a
+#   variable.
+
+# DRSVYR_WORKERS=1 turns parallelism off. That is the whole switch -- there is
+#   no second flag to keep in agreement with this one.
+WISE_WORKERS_DEFAULT <- 2L
+WISE_WORKERS_CAP <- 12L
+
+.wise_workers_resolve <- function() {
+  cap = function(n, src) {
+    host = suppressWarnings(as.integer(future::availableCores()))
+    if (is.na(host) || host < 1L) host = 1L
+    list(n = max(1L, min(n, WISE_WORKERS_CAP, host)), source = src, host = host)
+  }
+
+  n = suppressWarnings(as.integer(Sys.getenv("DRSVYR_WORKERS", "")))
+  if (!is.na(n) && n >= 1L) return(cap(n, "DRSVYR_WORKERS"))
+
+  o = getOption("drsvyr.workers", NULL)
+  n = if (is.null(o)) NA_integer_ else suppressWarnings(as.integer(o))
+  if (!is.na(n) && n >= 1L) return(cap(n, "options(drsvyr.workers)"))
+
+  cap(WISE_WORKERS_DEFAULT, "default")
+}
+
+wise_workers <- function() .wise_workers_resolve()$n
+
+# Printed in the configuration table, because "why is it four at my desk and
+#   one at work" is the question this whole section exists to answer, and the
+#   answer should be on the screen rather than in a file.
+wise_workers_note <- function() {
+  r = .wise_workers_resolve()
+  paste0(r$n, " (from ", r$source, "; this host reports ", r$host, " cores)")
+}
+
+# The work folder has to be per analyst, not per process. On a laptop those
+#   are the same thing. On Posit Connect one R process serves several people
+#   at once, and a single folder held in this environment means the second
+#   analyst to choose one silently redirects the first analyst's writes into
+#   it -- scored respondent-level files included. That is a disclosure, not a
+#   bug, so the folder is keyed on the Shiny session.
+
+# Shiny hands the current session to anything called inside a reactive and
+#   NULL to anything called outside one, so the single-user path is unchanged
+#   and needs no flag to select it.
+.wise_session <- function() {
+  if (!requireNamespace("shiny", quietly = TRUE)) return(NULL)
+  shiny::getDefaultReactiveDomain()
+}
 
 # Checked before anything is created, so a folder chosen by mistake fails on
 #   selection rather than after the first stage has written to it.
@@ -84,14 +161,26 @@ scaffold_work_folder <- function(path) {
   fs::file_delete(probe)
 
   fs::dir_create(fs::path(path, WISE_SUBDIRS))
-  .wise$work_dir <- path
+
+  s = .wise_session()
+  if (is.null(s)) {
+    .wise$work_dir <- path
+  } else {
+    tok = s$token
+    .wise$sessions[[tok]] <- path
+    # .wise is an environment, so the closure writes to it by reference and
+    #   the registry does not grow across a day of sessions.
+    s$onSessionEnded(function() .wise$sessions[[tok]] <- NULL)
+  }
   invisible(path)
 }
 
 work_dir <- function() {
-  if (is.null(.wise$work_dir))
+  s = .wise_session()
+  p = if (is.null(s)) .wise$work_dir else .wise$sessions[[s$token]]
+  if (is.null(p))
     stop("No work folder set. Call scaffold_work_folder() first.", call. = FALSE)
-  .wise$work_dir
+  p
 }
 
 # Every path the workflow writes to is built here, so the guard is applied once
@@ -119,8 +208,18 @@ survey_work_folder <- function(path = work_dir()) {
 #   there is nothing repo-adjacent to commit by accident.
 #______________________________________________________________________________
 
+# One file per user rather than one per machine. rappdirs resolves to the
+#   account running R, which on a laptop is the analyst and on Connect is the
+#   service account every analyst shares -- so without the suffix the folder
+#   offered as a default is whichever path the last person to use the app
+#   typed, which is both wrong and a small disclosure of someone else's
+#   directory layout. session$user is the authenticated name on Connect and
+#   NULL locally.
 .wise_config_file <- function() {
-  fs::path(rappdirs::user_config_dir("wise"), "last_work_folder")
+  s = .wise_session()
+  who = if (!is.null(s) && !is.null(s$user)) s$user else "local"
+  who = gsub("[^A-Za-z0-9._-]", "_", who)
+  fs::path(rappdirs::user_config_dir("wise"), paste0("last_work_folder-", who))
 }
 
 remember_work_folder <- function(path = work_dir()) {
@@ -552,9 +651,12 @@ WISE_HELP <- list(
     "there."),
 
   report_save = paste(
-    "Saving writes the Word document exactly as previewed, your survey file",
-    "with the new columns added, and every table as a CSV. Nothing has been",
-    "written yet."),
+    "Saving writes the report exactly as previewed, your survey file with the",
+    "new columns added, and every table as a CSV. Nothing has been written",
+    "yet.",
+    "\n\nThe report is a single HTML file with the figures inside it, so it",
+    "can be emailed as one attachment and opens in Word if a Word document is",
+    "what someone wants."),
 
   finished = paste(
     "Two things to carry forward. The delivered file holds the posterior",
@@ -611,46 +713,8 @@ warn_box <- function(...) {
 
 # The demonstration folder ------------------------------------------------
 
-# demo/ ships with the tool so a live demonstration runs from a clean clone.
-#   It is read from and never written to. Rather than carving an exception
-#   into the repository guard, the demonstration material is copied out into
-#   an ordinary work folder the analyst owns. One rule about the boundary with
-#   no exceptions to reason about, a working tree that stays clean, and -- the
-#   part that actually matters -- every demonstration starts from an empty
-#   cache instead of quietly replaying the fits from the last one.
-seed_demo_folder <- function(path = fs::path(fs::path_home(), "DrSvyR-demo")) {
-  src = fs::path(repo_root(), "demo")
-  if (!fs::dir_exists(src))
-    stop("No demo/ folder in this repository.", call. = FALSE)
-
-  files = fs::dir_ls(src, recurse = TRUE, type = "file",
-                     regexp = "[.](sav|dta|pdf)$")
-  if (!length(files))
-    stop("demo/ contains no .sav, .dta or .pdf to copy.", call. = FALSE)
-
-  path = fs::path_abs(path)
-  fs::dir_create(path)
-
-  # The guard still applies. Naming a path inside the repository here fails
-  #   exactly as it would for an analyst's own data, which is the point of
-  #   not making demo/ a special case.
-  scaffold_work_folder(path)
-
-  # Routed the way an analyst would have dropped them in, so the folder the
-  #   demonstration runs from is the same shape as a real one.
-  purrr::walk(files, function(f)
-    fs::file_copy(
-      f,
-      fs::path(path,
-               if (fs::path_ext(f) %in% c("sav", "dta")) "data" else "docs",
-               fs::path_file(f)),
-      overwrite = TRUE))
-
-  n = cache_clear()
-
-  message("Demo folder ready: ", path,
-          "\n  copied ", length(files), " file(s) out of demo/",
-          if (n) paste0(", cleared ", n, " cached fit(s)") else "",
-          "\n  demo/ itself was not written to.")
-  invisible(path)
-}
+# seed_demo_folder() was removed. It copied demo/ out of the repository into a
+#   work folder the analyst owns, which existed to work around the repository
+#   guard; the guard is gone, there is no demo/ in the repository, and nothing
+#   in the app called it. cache_clear() -- its only remaining caller -- is
+#   reachable from the app on its own.

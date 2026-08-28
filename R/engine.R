@@ -36,76 +36,42 @@
 
 # ---- engine_01_tables_plots --------------------------------------------
 
-# Section 1 holds the look of the output: theme, tables, line wrapping, 
-#   and the raw-data plot. Used by both reports.
+# Section 1 holds the parallel plan and the raw-data plot.
 #______________________________________________________________________________
 
-theme_lca <- function(base_size = 11) {
-  theme_minimal(base_size = base_size) +
-    theme(panel.grid.minor = element_blank(),
-          panel.grid.major.x = element_blank(),
-          strip.text = element_text(face = "bold", size = rel(0.85)),
-          plot.title = element_blank(),
-          legend.position = "bottom",
-          legend.title = element_text(face = "bold", size = rel(0.85)),
-          plot.caption = element_text(hjust = 0, size = rel(0.78), 
-                                      color = "grey30"))
-}
+# theme_lca(), wrap_text(), fit_widths() and lca_table() were removed. The
+#   three table helpers served the Quarto reports and reached kableExtra,
+#   which needs Rtools to install and so cannot be assumed on a locked-down
+#   mirror; the app writes HTML through build_report_html() instead and calls
+#   none of them. theme_lca() went because plot_item_stack() below was the one
+#   plot in the project still using it, at base_size 11 against wise_theme()'s
+#   14, and with plot.title blanked -- so the title this function is handed
+#   was never drawn. One theme, applied everywhere, is the point.
 
-# Wrap long lines before printing. 
-# Verbatim output does not wrap on its own and the overflow is clipped; 
-# fixing that in the preamble would be LaTeX-only, so it is done here 
-#   instead and holds for LaTeX, Typst, HTML, and docx alike. 
-# Existing newlines and leading indentation are preserved, so structured 
-#   text keeps its shape and only overlong lines are broken.
+# multisession on both platforms, deliberately. multicore forks, which is far
+#   cheaper than starting a fresh R process, and it is tempting on the Linux
+#   server for exactly that reason -- but forking out of a Shiny process is
+#   unsafe: the child inherits the parent's connections and reactive context,
+#   and future refuses to do it in several contexts for that reason. Windows
+#   cannot fork at all. One plan that behaves the same on the laptop and on
+#   the server is worth more here than the startup cost it saves.
 
-wrap_text <- function(x, width = 88L) {
-  strsplit(paste(x, collapse = "\n"), "\n", fixed = TRUE)[[1]] |>
-    map_chr(function(line) {
-      if (nchar(line) <= width) return(line)
-      pad = str_extract(line, "^[ ]*")
-      strwrap(str_squish(line), width = width,
-              prefix = paste0(pad, "  "), initial = pad) |>
-        paste(collapse = "\n")
-    }) |>
-    paste(collapse = "\n")
-}
-
-# Every table goes through here, so pagination and styling are set in one place
-# With other format, including Typst, it emits a markdown pipe table, which
-# Quarto renders natively and paginates on its own. 
-# widths is ignored in that path because column sizing is the renderer's 
-#   job there, so it is a LaTeX hint rather than a requirement and 
-#   nothing breaks if it is absent.
-
-fit_widths <- function(n_col, first = 2, total = 44) {
-  share = total / (n_col - 1 + first)
-  paste0(round(c(first * share, rep(share, n_col - 1)), 1), "em")
-}
-
-lca_table <- function(df, ..., caption = NULL, widths = NULL, font_size = 8) {
-  if (!is_latex_output())
-    return(knitr::kable(df, format = "pipe", caption = caption, ...))
-  if (!is.null(caption))
-    caption = str_replace_all(caption, "([#$%&_{}])", "\\\\\\1")
-  out = kable(df, format = "latex", longtable = TRUE, booktabs = TRUE,
-                      linesep = "", caption = caption, ...) |>
-    kable_styling(latex_options = c("repeat_header", "hold_position"),
-                              font_size = font_size)
-  if (is.null(widths)) return(out)
-  reduce(seq_along(widths), function(tbl, i) {
-    if (nzchar(widths[i])) kableExtra::column_spec(tbl, i, width = widths[i]) else tbl
-  }, .init = out)
-}
-
+# future::plan() sets the plan for the whole R process, and on a server one
+#   process serves several analysts. Calling it on every fit tore the worker
+#   pool down and rebuilt it underneath whoever was already running. Because
+#   every session now resolves the same number from the same environment
+#   variable, the plan they all want is identical, and this becomes a no-op
+#   after the first call rather than a fight.
 init_parallel <- function(cfg) {
-  if (isTRUE(cfg$parallel)) {
-    future::plan(future::multisession,
-                 workers = cfg$workers %||% max(1L, future::availableCores() - 1L))
-  } else {
-    future::plan(future::sequential)
-  }
-  invisible(NULL)
+  want = if (isTRUE(cfg$parallel)) max(1L, as.integer(cfg$workers %||% 1L)) else 1L
+
+  if (identical(.wise$plan_workers, want)) return(invisible(want))
+
+  if (want <= 1L) future::plan(future::sequential)
+  else future::plan(future::multisession, workers = want)
+
+  .wise$plan_workers <- want
+  invisible(want)
 }
 
 plot_item_stack <- function(df, items, title, show_missing = TRUE) {
@@ -124,9 +90,12 @@ plot_item_stack <- function(df, items, title, show_missing = TRUE) {
     scale_fill_manual(name = "Response",
                       values = c(set_names(viridis(length(lev)), lev),
                                  Missing = "grey75")) +
-    labs(x = NULL, y = "Proportion", title = title) +
-    theme_lca() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    labs(x = NULL, y = "Proportion", title = title,
+         caption = paste("Unweighted: this is the achieved sample, not the",
+                         "population. The weighted picture is the one every",
+                         "estimate later in the workflow reports.")) +
+    wise_theme() +
+    wise_rotate_x()
 }
 
 
@@ -232,16 +201,12 @@ align_to <- function(fit, ref) {
 #   so sequential and parallel plans return identical results
 start_seeds <- function(cfg, K) as.integer(cfg$seed + 1000L * K + seq_len(cfg$n_starts))
 
-fit_lca <- function(df, w, cats, items, K, seeds, ref = NULL,
-                    maxit = 800L, tol = 1e-8) {
-  inp = make_inputs(df, items, cats)
-  cands = map(seeds, function(s) {
-    set.seed(s)
-    em_run(inp$Y, inp$OH, cats, w, K, maxit = maxit, tol = tol)
-  })
-  best = cands[[which.max(map_dbl(cands, "ll"))]]
-  if (is.null(ref)) best else align_to(best, ref)
-}
+# fit_lca() ran the whole start set in one sequential fold and rebuilt the
+#   inputs on every call. model.R's best_of_starts() runs the identical EM on
+#   the identical seeds, splits the starts across workers, and shares one set
+#   of inputs; taking the best of the block maxima is the same fit as taking
+#   the best of the starts. Two functions that fit the model is one too many
+#   to keep in agreement, so this one went and the parallel one stayed.
 
 df_k <- function(K, cats) (K - 1) + K * sum(cats - 1)
 
@@ -533,43 +498,40 @@ prompt_segment_label <- function(fit, k, dictionary, items, context = NULL) {
     'JSON (one object): {{"label": "...", "description": "..."}}')
 }
 
-lca_chat <- function(cfg, persona = persona_lca) {
-  p = ellmer::params(temperature = 0, seed = cfg$seed)
-  if (is.null(cfg$compass_base_url)) {
-    ellmer::chat_openrouter(model = cfg$llm_model,
-                            system_prompt = persona, params = p)
-  } else {
-    if (!nzchar(Sys.getenv("OPENAI_API_KEY")))
-      Sys.setenv(OPENAI_API_KEY = Sys.getenv("COMPASS_API_KEY"))
-    ellmer::chat_openai(base_url = cfg$compass_base_url, model = cfg$llm_model,
-                        system_prompt = persona, params = p)
-  }
-}
+# The chat object, the JSON reader and the per-segment labelling loop used to
+#   live here. They now live in llm.R, and the copies here were removed rather
+#   than left in place for three reasons.
 
-# Some models wrap valid JSON despite rule 4, so pull the object out by pattern.
-parse_json_block <- function(txt, pattern = "(?s)\\{.*\\}") {
-  m = regmatches(txt, regexpr(pattern, txt, perl = TRUE))
-  if (length(m) == 0) stop("No JSON found in the model reply:\n", txt)
-  jsonlite::fromJSON(m, simplifyVector = FALSE)
-}
+# The first is a key. This file's chat builder wrote the analyst's key into the
+#   R process with Sys.setenv(OPENAI_API_KEY = ...). On a laptop that is
+#   untidy; on a Connect server it is a disclosure, because the process is
+#   shared and the variable outlives the session that set it. llm.R holds the
+#   key in a session-scoped registry that is discarded when the browser tab
+#   closes, and that is the only place a key should ever be.
 
-label_segments_llm <- function(fit, dictionary, items, cfg) {
-  map(seq_along(fit$pi), function(k) {
-    obj = parse_json_block(
-      lca_chat(cfg)$chat(prompt_segment_label(fit, k, dictionary, items,
-                                              cfg$survey_context), echo = FALSE))
-    tibble(K = k,
-           Label = pluck(obj, "label", .default = NA_character_),
-           Description = pluck(obj, "description", .default = NA_character_))
-  }) |>
-    list_rbind()
-}
+# The second is a name. parse_json_block() was defined here and again in
+#   llm.R. R sourced both, the second silently replaced the first, and which
+#   one ran depended on the alphabet. Two definitions of one name is a
+#   coin-flip dressed as code.
+
+# The third is that nothing called any of it. The app labels segments through
+#   model.R, which calls llm_json(). Dead code that looks live is what an
+#   auditor reads by mistake.
 
 # Per-segment isolation has one blind spot: two neighbors can draft the same
 #   label, since neither call saw the other. 
 # One closing call edits only the labels  that collide, and runs only when 
 #   this mechanical check fires.
 labels_collide <- function(labels) {
+  # One name has nothing to collide with, and combn() will not enumerate the
+  #   pairs of a single element -- it stops with "n < m". Because t() is an S4
+  #   generic once Matrix is loaded, that surfaces as "error in evaluating the
+  #   argument 'x' in selecting a method for function 't'", which names neither
+  #   this function nor the cause. A one-factor CFA is exactly this case: the
+  #   class arm always has at least two segments, so nothing reached it until
+  #   the factor arm did.
+  if (length(labels) < 2L) return(FALSE)
+
   ws = map(str_squish(tolower(labels)), function(s) unique(strsplit(s, " ")[[1]]))
   pr = t(combn(length(labels), 2L))
   any(map_dbl(seq_len(nrow(pr)), function(i) {
@@ -593,40 +555,11 @@ prompt_harmonize <- function(lab) {
     'JSON (one array, all segments): [{{"class": 1, "label": "..."}}, ...]')
 }
 
-harmonize_labels <- function(lab, cfg) {
-  if (!labels_collide(lab$Label)) return(lab)
-  arr = parse_json_block(lca_chat(cfg)$chat(prompt_harmonize(lab), echo = FALSE),
-                          "(?s)\\[.*\\]")
-  new_lab = map(arr, function(x) tibble(K = as.integer(x$class),
-                                         new = as.character(x$label))) |>
-    list_rbind()
-  lab |>
-    left_join(new_lab, by = "K") |>
-    mutate(Label = coalesce(new, Label)) |>
-    select(-new)
-}
-
-# lca_dir/segment_labels.csv is used when it exists, otherwise the model 
-#   drafts once and writes it. Editing that file is taking over the naming.
-get_segment_labels <- function(fit, dictionary, items, cfg,
-                               cache = file.path(cfg$lca_dir, "segment_labels.csv")) {
-  need = c("K", "Label", "Description")
-
-  if (file.exists(cache)) {
-    lab = read_csv(cache, show_col_types = FALSE)
-    if (!all(need %in% names(lab)) || nrow(lab) != length(fit$pi))
-      stop(cache, " does not match this model (needs ", length(fit$pi),
-           " rows and columns K, Label, Description). Delete or fix it.")
-    return(lab |> arrange(K) |> select(all_of(need)))
-  }
-
-  lab = label_segments_llm(fit, dictionary, items, cfg) |>
-    mutate(Label_draft = Label) |>
-    harmonize_labels(cfg)
-  write_csv(lab, cache)
-  select(lab, all_of(need))
-}
-
+# harmonize_labels() and get_segment_labels() were the batch-script entry
+#   points into the labelling step, and both went through the chat builder
+#   removed above. The app's path is model.R's label_dimensions(), which runs
+#   the same prompt through llm_json() and writes nothing to disk. Names are
+#   the analyst's to edit in the app, not a CSV's to cache.
 
 # The loading table, one line per item, sorted so the analyst and the model 
 #   read the strongest indicators first.
@@ -736,11 +669,20 @@ wcor <- function(w, items, data) {
 efa_loadings <- function(f, salient = 0.40) {
   fit = as_fit(f)
   if(inherits(fit, "try-error")) return(NULL)
-  L = unclass(lavInspect(fit, "std")$lambda)
+  std = lavInspect(fit, "std")
+  L = unclass(std$lambda)
+  # geomin is an oblique rotation, so the factors correlate and communality is
+  #   diag(L Phi L'), not the sum of squared loadings. Summing the squares
+  #   understates it whenever the factors are positively correlated, which
+  #   flags items as "low communality" that share plenty with the battery.
+  #   Phi is the standardised factor covariance, i.e. their correlation.
+  Phi = unclass(std$psi)
+  h2_item = diag(L %*% Phi %*% t(L))
   as_tibble(L, rownames = "item") |>
     pivot_longer(-item, names_to = "factor", values_to = "loading") |>
     group_by(item) |>
-    mutate(n_salient = sum(abs(loading) >= salient), h2 = sum(loading^2)) |>
+    mutate(n_salient = sum(abs(loading) >= salient),
+           h2 = h2_item[[dplyr::first(item)]]) |>
     ungroup() |>
     mutate(flag = case_when(n_salient == 0 ~ "loads nowhere",
                             n_salient > 1 ~ "cross-loads",

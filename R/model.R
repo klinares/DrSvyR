@@ -45,6 +45,29 @@ WISE_FIXED <- list(
   n_pa = 100L,
   parallel = TRUE)
 
+# state$model and state$measure are arm-shaped and share no columns. The class
+#   arm's fit is a plain list of pi and rho, its diagnostics carry
+#   discrimination and bivariate residuals, and its measure carries shares and
+#   profiles. The factor arm's fit is a lavaan object, its diagnostics carry
+#   loadings and modification indices, and its measure carries loadings and
+#   factor correlations.
+
+# Rendering one against the other does not degrade into a blank panel. It
+#   errors -- lavInspect on a list, mutate on NULL -- and Shiny renders every
+#   output that is in the DOM whether the analyst is looking at that panel or
+#   not, so both arms' outputs run on every change.
+
+# The arm is stamped on the object and read back from it, rather than read from
+#   state$cfg. Two reasons. The configuration is cleared when the analyst drops
+#   an item, and a gate written as !identical(state$cfg$arm, "lca") is TRUE
+#   against a NULL configuration -- it opens when it does not know, which is
+#   the opposite of what a guard is for. And the configuration can be changed
+#   to the other arm while a fitted model from the first one is still sitting
+#   in state, which is the sequence that produced the errors this exists to
+#   stop: fit the class model, run its variance, switch to the factor arm,
+#   approve, and every factor output renders against a class model.
+arm_is <- function(x, arm) identical(x[["arm"]], arm)
+
 build_cfg <- function(state) {
   fr = state$item_frame
   arm = state$arm
@@ -60,9 +83,10 @@ build_cfg <- function(state) {
       complete_cases = all(fr$in_analysis == (fr$n_answered == length(fr$items))),
       seed = WISE_FIXED$seed,
       parallel = WISE_FIXED$parallel,
-      # Four where the machine has them, fewer where it does not. Hardcoding
-      #   four oversubscribes a two-core server and everything gets slower.
-      workers = min(4L, max(1L, future::availableCores() - 1L)),
+      # Resolved from the environment rather than from the host's core count,
+      #   so the laptop and the Shiny server can differ without either of them
+      #   needing a different copy of this file. See wise_workers() in core.R.
+      workers = wise_workers(),
       survey_context = state$context %||% "",
       out_dir = wise_path("output", arm)),
 
@@ -141,7 +165,7 @@ config_summary <- function(state, cfg) {
                  levels(state$demo_dat[[nm]])[1]))) |> purrr::list_rbind(),
 
     row("Fixed", "Random seed", cfg$seed),
-    row("Fixed", "Parallel workers", cfg$workers),
+    row("Fixed", "Parallel workers", wise_workers_note()),
     if (identical(cfg$arm, "lca"))
       row("Fixed", "Starts per model", cfg$n_starts) else NULL,
     row("Fixed", "Output folder", cfg$out_dir))
@@ -323,6 +347,7 @@ search_lca <- function(cfg, dat, tick = NULL) {
 #   obtained from data with the same dimensions and no structure. Retaining
 #   components above that reference is a ranking rule, not a test.
 search_cfa <- function(cfg, dat, tick = NULL) {
+  init_parallel(cfg)
   w = dat$wt
   n = nrow(dat)
   p = length(cfg$items)
@@ -405,8 +430,7 @@ plot_profiles <- function(fit, items, title = NULL) {
     ggplot2::scale_y_continuous(limits = c(0, 1)) +
     ggplot2::scale_colour_viridis_d(name = NULL) +
     ggplot2::labs(x = NULL, y = "Position on the item", title = title) +
-    theme_lca() +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+    wise_theme() + wise_rotate_x()
 }
 
 plot_bic <- function(stats) {
@@ -420,7 +444,7 @@ plot_bic <- function(stats) {
     ggplot2::scale_colour_viridis_d(name = NULL, end = 0.7) +
     ggplot2::labs(x = "Number of groups", y = NULL,
                   caption = "Lower is better. A flattening curve says the extra groups are buying little.") +
-    theme_lca()
+    wise_theme()
 }
 
 plot_scree <- function(eig) {
@@ -435,7 +459,7 @@ plot_scree <- function(eig) {
       labels = c(eigenvalue = "Observed", reference = "No structure")) +
     ggplot2::labs(x = "Component", y = "Eigenvalue",
                   caption = "Components above the reference line carry more than noise would.") +
-    theme_lca()
+    wise_theme()
 }
 
 
@@ -693,6 +717,7 @@ share_ci <- function(p, se, crit, transform = TRUE, truncate = TRUE) {
 #   quantity inside the replicate function avoids it.
 
 measurement_se_lca <- function(cfg, dat, fit, des, rep_des) {
+  init_parallel(cfg)
   inp = make_inputs(dat, cfg$items, cfg$cats)
   K = length(fit$pi)
   ref = fit[c("pi", "rho")]
@@ -758,6 +783,7 @@ measurement_se_lca <- function(cfg, dat, fit, des, rep_des) {
 #   marker method rather than std.lv, because lavaan starts cold on each refit
 #   and a flipped sign would land in the variance as an enormous fake deviation.
 measurement_se_cfa <- function(cfg, dat, fit, factors, des, rep_des) {
+  init_parallel(cfg)
   ordered = identical(cfg$estimator %||% "WLSMV", "WLSMV")
   ref = unclass(lavInspect(fit, "std")$lambda)
 
@@ -847,14 +873,13 @@ plot_profiles_ci <- function(profile, labels = NULL, title = NULL) {
     ggplot2::geom_line(linewidth = 0.8) +
     ggplot2::geom_point(size = 1.6) +
     ggplot2::scale_y_continuous(limits = c(0, 1)) +
-    ggplot2::scale_colour_viridis_d(name = NULL) +
-    ggplot2::scale_fill_viridis_d(name = NULL) +
+    wise_colour(name = NULL) +
+    wise_fill(name = NULL) +
     ggplot2::labs(x = NULL, y = "Position on the item", title = title,
                   caption = paste("Bands are 95% design-based intervals.",
                                   "Where they overlap, the groups are not",
                                   "separated on that item.")) +
-    wise_theme() +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+    wise_theme() + wise_rotate_x()
 }
 
 plot_loadings_ci <- function(load) {
@@ -863,9 +888,9 @@ plot_loadings_ci <- function(load) {
     ggplot2::ggplot(ggplot2::aes(loading, item, colour = factor)) +
     ggplot2::geom_vline(xintercept = 0.4, linetype = 2, colour = "grey60") +
     ggplot2::geom_errorbar(ggplot2::aes(xmin = lo, xmax = hi),
-                           orientation = "y", width = 0.2) +
-    ggplot2::geom_point(size = 2.4) +
-    ggplot2::scale_colour_viridis_d(name = NULL, end = 0.8) +
+                           orientation = "y", width = 0.25, linewidth = 0.7) +
+    ggplot2::geom_point(size = 3.2) +
+    wise_colour(name = NULL) +
     ggplot2::labs(x = "Standardised loading", y = NULL,
                   caption = paste("Bars are 95% design-based intervals.",
                                   "The dashed line is the conventional 0.40,",

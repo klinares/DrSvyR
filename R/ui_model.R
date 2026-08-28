@@ -138,6 +138,20 @@ mod_config_server <- function(id, state) {
       }
 
       state$cfg <- cf
+
+      # A model fitted under the previous configuration is not this
+      #   configuration's model, and one fitted under the other arm is not even
+      #   the same shape. Leaving it in state is what let a class model reach
+      #   the factor panels. Refitting is cheap: the cache is keyed on the
+      #   specification and the data, so an unchanged configuration comes back
+      #   without re-running anything.
+      state$model <- NULL
+      state$model_key <- NULL
+      state$model_dat <- NULL
+      state$model_accepted <- NULL
+      state$measure <- NULL
+      state$diag_reading <- NULL
+
       state$cfg_paths <- paths
       showNotification("Configuration written. Continue to Search.",
                        type = "message", duration = NULL)
@@ -427,7 +441,8 @@ mod_model_server <- function(id, state) {
       cfg <- state$cfg
       dat <- bind_cols(state$design_dat,
                        state$item_frame$item_dat)[state$item_frame$in_analysis, ]
-      key <- model_key(cfg, cfg$items, state$dimension)
+      # dat, not just the specification: the cached fit belongs to this file.
+      key <- model_key(cfg, cfg$items, state$dimension, dat)
 
       res <- try(withProgress(message = "Fitting", value = 0.4, {
         if (identical(cfg$arm, "lca")) {
@@ -449,7 +464,10 @@ mod_model_server <- function(id, state) {
                          type = "error", duration = NULL)
         return()
       }
-      state$model <- res
+      # The arm travels with the object. Every panel that renders part of a
+      #   model asks the model which arm it came from, rather than asking the
+      #   configuration, which can be cleared or changed underneath it.
+      state$model <- c(res, list(arm = cfg$arm))
       state$model_key <- key
       state$model_dat <- dat
       state$diag_reading <- NULL
@@ -466,10 +484,23 @@ mod_model_server <- function(id, state) {
       cfg <- state$cfg
       dat <- state$model_dat
 
+      # Which estimator runs is decided by the model in hand, not by the
+      #   configuration. They can disagree -- approving the other arm after a
+      #   fit leaves the old model in state -- and when they do, branching on
+      #   the configuration hands a class fit to the factor estimator.
+      if (!arm_is(state$model, cfg$arm)) {
+        showNotification(
+          paste0("The fitted model is a ", toupper(state$model$arm %||% "?"),
+                 " model and the configuration now says ", toupper(cfg$arm),
+                 ". Fit the model again before running the variance step."),
+          type = "error", duration = NULL)
+        return()
+      }
+
       res <- try(withProgress(message = "Refitting in every replicate",
                               value = 0.2, {
         des <- build_rep_design(dat, cfg)
-        if (identical(cfg$arm, "lca"))
+        if (arm_is(state$model, "lca"))
           measurement_se_lca(cfg, dat, state$model$fit, des$des, des$rep_des)
         else
           measurement_se_cfa(cfg, dat, state$model$fit, state$model$factors,
@@ -481,14 +512,17 @@ mod_model_server <- function(id, state) {
                          type = "error", duration = NULL)
         return()
       }
-      state$measure <- res
+      state$measure <- c(res, list(arm = state$model$arm))
     })
 
     # ---- results -----------------------------------------------------------
 
     output$body <- renderUI({
       req(state$model)
-      lca <- identical(state$cfg$arm, "lca")
+      # The model's own arm, not the configuration's. This panel decides which
+      #   of the two shapes to lay out, and the configuration can already be
+      #   pointing at the other one.
+      lca <- arm_is(state$model, "lca")
       health <- state$model$health
       tagList(
         # Shown before anything is read off the fit. A model that did not
@@ -562,7 +596,7 @@ mod_model_server <- function(id, state) {
 
     output$variance_out <- renderUI({
       req(state$measure)
-      if (identical(state$cfg$arm, "lca"))
+      if (arm_is(state$measure, "lca"))
         tagList(
           tags$p(class = "text-muted",
                  "From ", state$measure$replicates,
@@ -594,71 +628,96 @@ mod_model_server <- function(id, state) {
                     tableOutput(ns("corr_tbl"))))
     })
 
+    # Every panel below asks two questions before it renders: is this object
+    #   from my arm, and is the thing I am about to draw actually there. Both
+    #   are needed. The arm check alone would pass a factor model whose
+    #   modification indices came back as a try-error; the presence check alone
+    #   would pass a class model's shares to a factor panel that wanted
+    #   loadings and got NULL. req() stops the output cleanly either way, so a
+    #   stale panel goes blank instead of throwing.
+
     output$prof_ci <- renderPlot({
-      req(state$measure)
+      req(arm_is(state$measure, "lca"), state$measure$profile)
       plot_profiles_ci(state$measure$profile,
                        labels = state$labels$Label,
                        title = paste0(state$dimension, " groups"))
     }, bg = "transparent")
 
     output$shares_ci <- renderTable({
-      req(state$measure)
+      req(arm_is(state$measure, "lca"), state$measure$shares)
       state$measure$shares |>
         transmute(Group = group, Share = share, SE = se,
                   `95% interval` = paste0("[", lo, ", ", hi, "]"))
     }, width = "100%")
 
     output$load_ci <- renderPlot({
-      req(state$measure)
+      req(arm_is(state$measure, "cfa"), state$measure$loadings)
       plot_loadings_ci(state$measure$loadings)
     }, bg = "transparent")
 
     output$load_ci_tbl <- renderTable({
-      req(state$measure)
+      req(arm_is(state$measure, "cfa"), state$measure$loadings)
       state$measure$loadings |>
         transmute(Factor = factor, Item = item, Loading = loading, SE = se,
                   `95% interval` = paste0("[", lo, ", ", hi, "]"))
     }, width = "100%")
 
     output$corr_tbl <- renderTable({
-      req(state$measure$correlations)
+      req(arm_is(state$measure, "cfa"), state$measure$correlations)
       state$measure$correlations |>
         transmute(Between = paste(a, "and", b), r = r, SE = se,
                   `95% interval` = paste0("[", lo, ", ", hi, "]"))
     }, width = "100%")
 
+    # The correlations are the measure's, so they are only passed when the
+    #   measure belongs to this model. Otherwise the diagram draws from the
+    #   model alone, which is what it does before the variance step has run.
     output$diagram <- renderPlot({
-      req(state$model, !identical(state$cfg$arm, "lca"))
-      plot_cfa_diagram(state$model$fit,
-                       correlations = state$measure$correlations)
+      req(arm_is(state$model, "cfa"), state$model$fit)
+      plot_cfa_diagram(
+        state$model$fit,
+        correlations = if (arm_is(state$measure, "cfa"))
+          state$measure$correlations)
     }, bg = "transparent")
 
     output$disc_plot <- renderPlot({
-      req(state$model, identical(state$cfg$arm, "lca"))
+      req(arm_is(state$model, "lca"), state$model$diag$discrimination)
       plot_discrimination(state$model$diag$discrimination)
     }, bg = "transparent")
 
-    output$factors <- renderPrint({ req(state$model); state$model$factors })
-    output$disc  <- renderTable({ req(state$model)
+    output$factors <- renderPrint({
+      req(arm_is(state$model, "cfa"), state$model$factors)
+      state$model$factors })
+    output$disc  <- renderTable({
+      req(arm_is(state$model, "lca"), state$model$diag$discrimination)
       state$model$diag$discrimination |> mutate(flag = coalesce(flag, "")) },
       width = "100%")
-    output$bvr   <- renderTable({ req(state$model); state$model$diag$bvr },
+    output$bvr   <- renderTable({
+      req(arm_is(state$model, "lca"), state$model$diag$bvr)
+      state$model$diag$bvr },
       width = "100%")
-    output$ratio <- renderTable({ req(state$model); state$model$diag$ratio },
+    output$ratio <- renderTable({
+      req(arm_is(state$model, "lca"), state$model$diag$ratio)
+      state$model$diag$ratio },
       width = "100%")
-    output$load  <- renderTable({ req(state$model)
+    output$load  <- renderTable({
+      req(arm_is(state$model, "cfa"), state$model$diag$loadings)
       state$model$diag$loadings |> mutate(flag = coalesce(flag, "")) },
       width = "100%")
-    output$fitm  <- renderTable({ req(state$model); state$model$diag$fit },
+    output$fitm  <- renderTable({
+      req(arm_is(state$model, "cfa"), state$model$diag$fit)
+      state$model$diag$fit },
       width = "100%")
-    output$mi    <- renderTable({ req(state$model); state$model$diag$mi },
+    output$mi    <- renderTable({
+      req(arm_is(state$model, "cfa"), state$model$diag$mi)
+      state$model$diag$mi },
       width = "100%")
 
     observeEvent(input$read, {
       req(state$model)
       withProgress(message = "Reading", value = 0.5, {
         res <- try(llm_json(
-          prompt_diagnostics(state$model$diag, state$cfg$arm, state$dimension,
+          prompt_diagnostics(state$model$diag, state$model$arm, state$dimension,
                              state$context %||% ""),
           role = "pm", system_prompt = persona_pm,
           validate = validate_fields("reading")), silent = TRUE)
@@ -724,7 +783,13 @@ mod_model_server <- function(id, state) {
       #   rather than left to look current. The domains survive: they do not
       #   depend on which items are in the battery.
       state$model <- NULL
+      state$model_key <- NULL
+      state$model_dat <- NULL
       state$model_accepted <- NULL
+      # The measure belongs to the model that has just been invalidated. It was
+      #   left behind here, and a stale measure is what fed NULL into the
+      #   interval panels while the configuration was NULL beside it.
+      state$measure <- NULL
       state$dimension <- NULL
       state$search <- NULL
       state$search_reading <- NULL
@@ -898,8 +963,8 @@ mod_labels_server <- function(id, state) {
     # ---- editor ------------------------------------------------------------
 
     output$editor <- renderUI({
-      req(state$labels)
-      lca <- identical(state$cfg$arm, "lca")
+      req(state$labels, state$model)
+      lca <- arm_is(state$model, "lca")
       lab <- state$labels
 
       rows <- map(seq_len(nrow(lab)), function(i) {
@@ -929,7 +994,8 @@ mod_labels_server <- function(id, state) {
     # Outputs are created per target when the labels arrive, since the number
     #   of them is not known until the model is fitted.
     observeEvent(state$labels, {
-      lca <- identical(state$cfg$arm, "lca")
+      req(state$model)
+      lca <- arm_is(state$model, "lca")
       walk(seq_len(nrow(state$labels)), function(i) {
         if (lca) {
           output[[paste0("prof_", i)]] <- renderPlot({
@@ -939,14 +1005,17 @@ mod_labels_server <- function(id, state) {
             # With the replicate refit done, the band is shown: a name should
             #   describe a shape the data actually resolves, not one the point
             #   estimates happen to trace.
-            one <- if (!is.null(state$measure))
+            # arm_is rather than a NULL test, for the same reason as every
+            #   other panel: a measure from the other arm has no profile and
+            #   the filter would run on NULL.
+            one <- if (arm_is(state$measure, "lca"))
               filter(state$measure$profile, group == i)
             else
               filter(profile_frame(fit, state$cfg$items),
                      group == paste0("Group ", i)) |>
                 mutate(lo = NA_real_, hi = NA_real_)
 
-            cap <- if (!is.null(state$measure))
+            cap <- if (arm_is(state$measure, "lca"))
               sprintf("%.0f%% of the population [%.0f, %.0f]",
                       100 * state$measure$shares$share[i],
                       100 * state$measure$shares$lo[i],
@@ -967,7 +1036,7 @@ mod_labels_server <- function(id, state) {
         } else {
           output[[paste0("load_", i)]] <- renderTable({
             fn <- state$labels$target[i]
-            if (!is.null(state$measure))
+            if (arm_is(state$measure, "cfa"))
               state$measure$loadings |>
                 filter(factor == fn) |>
                 arrange(desc(abs(loading))) |>

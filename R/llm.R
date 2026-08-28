@@ -16,41 +16,68 @@
 #   on the next pull. Moving to a different endpoint is a commit, not a dozen
 #   people editing a dotfile.
 
-WISE_LLM <- list(
+# Two deployments, two endpoints. Home reaches OpenRouter; work reaches the
+#   OpenAI API and nothing else. Rather than editing six fields before each
+#   deploy -- which is how a work key ends up pointed at a home endpoint --
+#   both are written out and one line chooses.
 
-  # "openrouter" uses ellmer's own OpenRouter client, which handles auth from
-  #   the environment. "compatible" uses chat_openai_compatible() against
-  #   base_url with an explicit credentials function. Both go through
-  #   llm_chat(), so nothing downstream knows which is in use.
-  provider = "openrouter",
+WISE_LLM_PROFILE <- "openrouter"      # <- "openrouter" or "openai"
 
-  base_url = "https://openrouter.ai/api/v1",
+WISE_LLM_PROFILES <- list(
 
-  # The one variable an analyst sets in .Renviron. Named for the provider
-  #   because it changes together with the endpoint rather than with the
-  #   analyst.
-  key_var = "OPENROUTER_API_KEY",
+  openrouter = list(
+    # ellmer's own OpenRouter client, which reads the key from the environment
+    #   and sets the headers itself.
+    provider = "openrouter",
+    base_url = "https://openrouter.ai/api/v1",
+    key_var  = "OPENROUTER_API_KEY",
 
-  # The project manager reads the workflow and writes prose: the design brief,
-  #   the search narration, the diagnostics, the report sections.
-  pm = "meta-llama/llama-4-maverick",
+    pm          = "meta-llama/llama-4-maverick",
+    worker      = "meta-llama/llama-3.1-70b-instruct",
+    pm_fallback = "openai/gpt-5.4-nano",
 
-  # The worker does one bounded job many times over: one label per segment or
-  #   factor. Split from the project manager to keep the call quota available
-  #   for the work that needs the larger model.
-  worker = "meta-llama/llama-3.1-70b-instruct",
+    # Where the key comes from. "server" uses key_var from the environment;
+    #   "analyst" ignores the environment entirely and requires a key pasted
+    #   into the app. On a shared server "analyst" is what stops a stray
+    #   environment variable being spent by people who never knew it was there.
+    key_source = "server",
+    timeout    = 120),
 
-  # Tried once when the project manager fails after its retries. A different
-  #   provider is the point: a fallback on the same endpoint does not survive
-  #   the failure mode it exists for. It is also a much smaller model, so a
-  #   run that used it says so in the report rather than passing thinner prose
-  #   off as the primary model's considered view.
-  pm_fallback = "openai/gpt-5.4-nano",
+  openai = list(
+    # chat_openai_compatible() against the OpenAI endpoint. The credentials
+    #   closure is what lets a per-analyst key work at all, so this is the
+    #   branch a server deployment takes.
+    provider = "compatible",
+    base_url = "https://api.openai.com/v1",
+    key_var  = "OPENAI_API_KEY",
 
-  # Seconds. Long enough for a report section, short enough that an analyst
-  #   watching a spinner learns something has gone wrong.
-  timeout = 120
+    # TODO -- fill these in from the models your organisation actually exposes.
+    #   Do not take them from anywhere else: what a key can reach is an
+    #   account property, and a name that is wrong fails on the first call.
+    #   ellmer may list them for you; otherwise your API console will.
+    #
+    #   pm     reads the analysis and writes prose. The larger model.
+    #   worker names one segment or factor, many times over. The smaller and
+    #          cheaper one, split off so the prose work keeps its quota.
+    pm          = "TODO-pm-model",
+    worker      = "TODO-worker-model",
+
+    # A fallback on the same endpoint does not survive the failure it exists
+    #   for. With one provider available it only helps when a single model is
+    #   unavailable rather than the endpoint, which is worth little -- set it
+    #   to a smaller model or accept that it adds nothing here.
+    pm_fallback = "TODO-fallback-model",
+
+    key_source = "server",
+    timeout    = 120)
 )
+
+WISE_LLM <- WISE_LLM_PROFILES[[WISE_LLM_PROFILE]]
+
+if (is.null(WISE_LLM))
+  stop("WISE_LLM_PROFILE is '", WISE_LLM_PROFILE, "', which is not one of: ",
+       paste(names(WISE_LLM_PROFILES), collapse = ", "), call. = FALSE)
+
 
 # ---- zz_llm ------------------------------------------------------------
 
@@ -74,10 +101,39 @@ WISE_LLM <- list(
 #   analysis and writes prose, the worker labels one segment or factor.
 #______________________________________________________________________________
 
+# getDefaultReactiveDomain() is the current Shiny session inside any reactive,
+#   and NULL outside one -- so a script keeps the environment behaviour it has
+#   always had and nothing below changes for a desktop run.
+llm_session_key <- function() {
+  s = shiny::getDefaultReactiveDomain()
+  if (is.null(s)) return(NULL)
+  k = .llm_state$keys[[s$token]]
+  if (is.null(k) || !nzchar(k)) NULL else k
+}
+
+llm_set_session_key <- function(key) {
+  s = shiny::getDefaultReactiveDomain()
+  if (is.null(s)) stop("No session to attach a key to.", call. = FALSE)
+  .llm_state$keys[[s$token]] <- key
+  invisible(TRUE)
+}
+
+llm_clear_session_key <- function(token) {
+  .llm_state$keys[[token]] <- NULL
+  invisible(TRUE)
+}
+
 llm_api_key <- function() {
-  key = Sys.getenv(WISE_LLM$key_var)
+  # In "analyst" mode the environment is not consulted at all. That is the
+  #   point: a key set on a shared server would otherwise be picked up by an
+  #   analyst who never supplied one, and spent without anyone noticing.
+  from_env = if (identical(WISE_LLM$key_source %||% "server", "server"))
+    Sys.getenv(WISE_LLM$key_var) else ""
+
+  key = llm_session_key() %||% from_env
   if (!nzchar(key))
-    stop(WISE_LLM$key_var, " is not set. Run usethis::edit_r_environ(), add\n",
+    stop(WISE_LLM$key_var, " is not set. Either paste a key on the Start here ",
+         "tab, or run usethis::edit_r_environ(), add\n",
          "  ", WISE_LLM$key_var, "=your-key\n",
          "save, and restart R.", call. = FALSE)
   key
@@ -102,7 +158,12 @@ llm_model <- function(role) {
 llm_chat <- function(model, system_prompt = NULL, seed = NULL) {
   p = ellmer::params(temperature = 0, seed = seed)
 
-  if (identical(WISE_LLM$provider, "openrouter")) {
+  # ellmer's OpenRouter client reads the key from the process environment, so
+  #   it cannot carry a per-session one. When an analyst has typed a key, the
+  #   compatible client is used instead and the key travels in the closure.
+  #   With no typed key this is exactly the path it has always taken.
+  if (is.null(llm_session_key()) &&
+      identical(WISE_LLM$provider, "openrouter")) {
     # ellmer's own client reads the key from the environment and sets the
     #   headers itself, so there is nothing to get wrong here.
     ellmer::chat_openrouter(model = model, system_prompt = system_prompt,
@@ -110,8 +171,9 @@ llm_chat <- function(model, system_prompt = NULL, seed = NULL) {
   } else {
     # credentials must be a function; api_key is deprecated as of ellmer 0.4.0.
     key = llm_api_key()
+    url = WISE_LLM$base_url
     ellmer::chat_openai_compatible(
-      base_url = WISE_LLM$base_url,
+      base_url = url,
       model = model,
       credentials = function() list(Authorization = paste("Bearer", key)),
       system_prompt = system_prompt,
@@ -130,6 +192,14 @@ llm_chat <- function(model, system_prompt = NULL, seed = NULL) {
 #   it and the count survives being read from a background process.
 
 .llm_state <- new.env(parent = emptyenv())
+
+# Keys typed into the app, one slot per Shiny session. On a server each analyst
+#   supplies their own and it lives here for the length of their session only:
+#   never written to disk, never in the decision log, never in state (which is
+#   exported), and never through Sys.setenv(), which would leak it to every
+#   other session in the process.
+.llm_state$keys <- list()
+
 .llm_state$calls <- 0L
 .llm_state$retries <- 0L
 .llm_state$fallbacks <- 0L
@@ -245,7 +315,21 @@ validate_fields <- function(need) {
 #   would make the key sensitive to floating-point noise and force a redraft
 #   after a no-op re-run.
 
-model_key <- function(cfg, items, dimension) {
+# The data is hashed alongside the specification, and it has to be. A fit is
+#   determined by both, and a key made of the specification alone matches
+#   across datasets that happen to share variable names and category counts --
+#   two waves of the same survey, the same instrument in a second country.
+#   Run the second one in a work folder that already holds the first and the
+#   cache returns the first wave's model, the app scores the second wave's
+#   respondents with it, and the report describes the wrong fit. There is no
+#   symptom: the numbers are plausible, the diagnostics are clean, and nothing
+#   in the output says which file the parameters came from. Labels are keyed
+#   the same way and would carry over with it.
+
+# unclass() on each column because the hash has to depend on the values and
+#   not on a label attribute or a tibble class that a different reader might
+#   have attached; without it the key churns and the cache never hits.
+model_key <- function(cfg, items, dimension, data) {
   digest::digest(list(
     items = sort(items),
     dimension = dimension,
@@ -253,6 +337,7 @@ model_key <- function(cfg, items, dimension) {
     min_items = cfg$min_items,
     estimator = cfg$estimator,
     seed = cfg$seed,
-    n_starts = cfg$n_starts))
+    n_starts = cfg$n_starts,
+    data = digest::digest(lapply(data, unclass))))
 }
 

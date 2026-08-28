@@ -467,23 +467,49 @@ mod_items_server <- function(id, state) {
       detect_na_codes(state$raw, candidate_items(state$codebook)$variable)
     })
 
+    # A ticked code is blanked on every item in the battery, not only on the
+    #   items that gave it a nonresponse label. Where the same number is a real
+    #   answer somewhere else -- 8 as "no aplica" on one item and as a point on
+    #   a nought-to-ten scale on another -- ticking it turns those answers into
+    #   missing, and they read as item nonresponse from there on with nothing
+    #   to say otherwise. The last column is the count, so the decision is made
+    #   with it rather than after it.
+    na_clash <- reactive({
+      req(state$raw, state$codebook)
+      na_code_conflicts(state$raw, candidate_items(state$codebook)$variable,
+                        na_candidates()$code)
+    })
+
     output$na_table <- renderTable({
       req(state$design_dat)
       na_candidates() |>
+        left_join(na_clash(), by = "code") |>
         transmute(Code = code, Response = response, Source = source,
-                  `Items affected` = n_items)
+                  `Items affected` = n_items,
+                  `Also a real answer` = if_else(
+                    is.na(n_substantive), "—",
+                    paste0(n_substantive, " item(s), e.g. ", example)))
     })
 
     output$na_confirm <- renderUI({
       req(state$design_dat)
       cand <- na_candidates()
+      clash <- na_clash()
       tagList(
         checkboxGroupInput(ns("na_codes"), NULL,
                            choices = set_names(cand$code,
                                                paste0(cand$code, " — ", cand$response)),
                            selected = cand$code, inline = TRUE),
         tags$p(class = "text-muted",
-               "Unchecking a code keeps it as a substantive answer category."))
+               "Unchecking a code keeps it as a substantive answer category."),
+        if (nrow(clash))
+          warn_box(
+            "Codes ", paste(clash$code, collapse = ", "), " carry a real ",
+            "answer label on at least one other item (",
+            paste(clash$example, collapse = "; "), "). Leaving them ticked ",
+            "blanks those answers as well, and the workflow will read them ",
+            "as item nonresponse. Untick any code that is only missing on ",
+            "some of the items, or choose a battery that does not mix them."))
     })
 
     # ---- items -------------------------------------------------------------

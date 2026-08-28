@@ -186,6 +186,18 @@ mod_chat_server <- function(id, state, stage = reactive(NULL)) {
     turns <- reactiveVal(0L)
     reset_note <- reactiveVal(NULL)
 
+    # The key is captured in a closure by the chat object, so dropping it from
+    #   the registry does not remove it from a conversation already holding
+    #   one. The object is discarded whenever the key changes -- which is also
+    #   correct on its own terms, since a new key may be a different account.
+    observeEvent(state$key_version, {
+      if (is.null(chat())) return()
+      chat(NULL); turns(0L)
+      say("system", paste(
+        "The API key changed, so this conversation was discarded rather than",
+        "continued against a key it was not started with."), "note")
+    }, ignoreInit = TRUE, ignoreNULL = TRUE)
+
     # The stage name drives which reflexes are in scope. Taken from the tab the
     #   analyst is on rather than inferred from what state happens to hold, so
     #   the model is answering about where they are.
@@ -431,6 +443,111 @@ mod_chat_server <- function(id, state, stage = reactive(NULL)) {
         body, "",
         if (length(decided)) c("## Proposals", "", decided) else NULL), f),
         silent = TRUE)
+    })
+  })
+}
+
+
+# ---- the API key --------------------------------------------------------
+
+# On a server the analyst has no .Renviron to edit, so the key is typed here
+#   and held for the length of their session only. It is never written to disk,
+#   never enters state (which is exported), never reaches the decision log or
+#   the methodologist transcript, and is dropped when the session ends.
+
+# The field is masked, but masking is a courtesy: the value crosses the network
+#   in the request body. This panel assumes the app is served over HTTPS.
+
+# WHERE TO GET A KEY -- replace the placeholder text below with the real
+#   instructions for your deployment before handing this to anyone.
+KEY_INSTRUCTIONS <- list(
+  where = "TODO: name the provider and the page to open, e.g. 'Sign in at <URL> and open Settings -> Keys'.",
+  create = "TODO: how to create a key, and which permissions or spending limit to set.",
+  models = "TODO: which models the key must be able to reach, and anything to enable first.",
+  cost   = "TODO: who pays, and what to do when the quota runs out.")
+
+
+mod_key_ui <- function(id) {
+  ns <- NS(id)
+  tagList(
+    tags$hr(),
+    tags$h4("Your API key"),
+    uiOutput(ns("status")),
+
+    passwordInput(ns("key"), NULL, width = "100%",
+                  placeholder = "Paste your key here"),
+    actionButton(ns("save"), "Use this key", class = "btn-primary"),
+    actionButton(ns("clear"), "Forget it"),
+
+    tags$div(
+      style = paste("background: var(--bs-secondary-bg);",
+                    "border-left: 3px solid var(--bs-border-color);",
+                    "color: var(--bs-body-color);",
+                    "padding: 8px 12px; margin: 12px 0;",
+                    "font-size: 90%; white-space: pre-line;"),
+      tags$p(tags$strong("Where to get one")),
+      tags$p(KEY_INSTRUCTIONS$where),
+      tags$p(KEY_INSTRUCTIONS$create),
+      tags$p(KEY_INSTRUCTIONS$models),
+      tags$p(KEY_INSTRUCTIONS$cost),
+      tags$p(tags$em(
+        "The key is kept for this session only. It is not saved anywhere, it ",
+        "is not written into your results, and closing the tab discards it. ",
+        "The analysis itself runs without a key -- you lose the drafted names ",
+        "and the written sections, not the estimates."))))
+}
+
+
+mod_key_server <- function(id, state) {
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+    token <- session$token
+    set <- reactiveVal(0L)
+
+    observeEvent(input$save, {
+      k <- trimws(input$key %||% "")
+      if (!nzchar(k)) {
+        showNotification("Nothing pasted.", type = "warning")
+        return()
+      }
+      llm_set_session_key(k)
+      updateTextInput(session, "key", value = "")
+      set(set() + 1L)
+      state$key_version <- (state$key_version %||% 0L) + 1L
+      showNotification("Key accepted for this session.", type = "message")
+    })
+
+    observeEvent(input$clear, {
+      llm_clear_session_key(token)
+      updateTextInput(session, "key", value = "")
+      set(set() + 1L)
+      state$key_version <- (state$key_version %||% 0L) + 1L
+      showNotification("Key forgotten.", type = "message")
+    })
+
+    # Dropped when the tab closes rather than left in the registry for the
+    #   lifetime of the R process.
+    session$onSessionEnded(function() llm_clear_session_key(token))
+
+    output$status <- renderUI({
+      set()
+      mine <- !is.null(llm_session_key())
+      env <- identical(WISE_LLM$key_source %||% "server", "server") &&
+             nzchar(Sys.getenv(WISE_LLM$key_var))
+
+      if (mine)
+        tags$p(class = "text-success",
+               "A key you supplied is in use for this session.")
+      else if (env)
+        tags$p(class = "text-muted",
+               "Using the key configured on this machine. Paste your own ",
+               "below to use it instead for this session.")
+      else
+        warn_box(tags$div(
+          "No key is set, so the methodologist and the drafted names are ",
+          "unavailable. Everything else works: the model still fits, the ",
+          "estimates and their margins are unaffected, and the report is ",
+          "written with generic names and no prose."))
     })
   })
 }
