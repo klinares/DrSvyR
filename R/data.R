@@ -9,7 +9,7 @@
 
 # ---- stage_00_read -----------------------------------------------------
 
-# 00_read.R for WISE repo
+# 00_read.R for DrSvyR
 # Stage 00: read the survey file and describe what is in it.
 
 #   1. Reading
@@ -128,7 +128,7 @@ nominate_design <- function(codebook) {
 
 # ---- stage_01_design ---------------------------------------------------
 
-# 01_design.R for WISE repo
+# 01_design.R for DrSvyR
 # Stage 01: build the design frame and confirm the specification.
 
 #   1. The design frame
@@ -322,7 +322,7 @@ assert_design_ok <- function(checks) {
 
 # ---- stage_02_items ----------------------------------------------------
 
-# stage_02_items.R for WISE repo
+# stage_02_items.R for DrSvyR
 # Stage 3: nonresponse codes, item selection, and the arm diagnostic.
 
 #   1. Nonresponse codes
@@ -794,7 +794,7 @@ prompt_battery_suitability <- function(diag, summary_tbl, context) {
 
 # ---- stage_03_recode ---------------------------------------------------
 
-# stage_03_recode.R for WISE repo
+# stage_03_recode.R for DrSvyR
 # Stage 4: collapse the demographic and attitudinal domains.
 
 #   1. Candidates and observed levels

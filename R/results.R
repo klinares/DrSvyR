@@ -53,8 +53,8 @@ score_lca <- function(state) {
 #   of nearly every item, which is to say at the extremes of the thing being
 #   measured. Reporting that as an unexplained shortfall in a total understates
 #   a small selection on the construct.
-score_coverage <- function(scored, arm, n_items) {
-  reached = if (identical(arm, "lca")) !is.na(scored$segment) else scored$scored
+score_coverage <- function(scored, n_items) {
+  reached = !is.na(scored$segment)
   in_model = scored$in_analysis
 
   out = tibble::tibble(
@@ -78,9 +78,7 @@ score_coverage <- function(scored, arm, n_items) {
 # Assignment quality against how many items a respondent answered. If the mean
 #   falls sharply at the low end, the floor is set too low and those scores are
 #   carrying more error than the rest.
-assignment_quality <- function(scored, arm) {
-  if (!identical(arm, "lca")) return(NULL)
-
+assignment_quality <- function(scored) {
   scored |>
     dplyr::filter(!is.na(segment)) |>
     dplyr::group_by(n_items_answered) |>
@@ -106,9 +104,7 @@ plot_assignment_quality <- function(q) {
 # Where the groups sit, unweighted and design-weighted. The first thing the
 #   analyst sees after scoring, and the first place weighting visibly does
 #   something.
-group_shares <- function(scored, arm, labels, rep_des) {
-  if (!identical(arm, "lca")) return(NULL)
-
+group_shares <- function(scored, labels, rep_des) {
   raw = scored |>
     dplyr::filter(!is.na(segment)) |>
     dplyr::count(segment, name = "n") |>
@@ -208,18 +204,31 @@ domains_lca <- function(state, tick = NULL) {
   if (!is.null(tick)) tick("design-based")
 
   # svyby splits the design by the domain and runs svymean of the segment
-  #   factor inside each level. Columns are read by position because svyby's
-  #   naming for a factor outcome varies by version.
+  #   factor inside each level.
+  #
+  #   Read through coef() and SE() rather than by column position. svyby names
+  #   its standard-error columns after the expression it was given, so a
+  #   positional read depends on a layout survey does not promise: it would
+  #   return a number of the right shape from the wrong column, and a column
+  #   count check cannot see that because the count is right either way.
+  #
+  #   SE() on a multi-outcome svyby returns a data frame of levels by outcomes,
+  #   not a vector, so it needs as.matrix() before as.numeric(). That unrolls
+  #   column-major, which is the order coef() uses -- level varies fastest,
+  #   segment slowest -- and is why the two line up. Checked against the
+  #   positional read this replaces: identical estimates and identical
+  #   standard errors.
   design = purrr::map(cfg$aux, function(v) {
-    sb = as.data.frame(survey::svyby(~ factor(segment), reformulate(v), rep_des,
-                                     survey::svymean, na.rm = TRUE))
-    vals = sb[, -1, drop = FALSE]
-    stopifnot(ncol(vals) == 2 * K)
+    sb = survey::svyby(~ factor(segment), reformulate(v), rep_des,
+                       survey::svymean, na.rm = TRUE)
+    lv = as.character(sb[[v]])
+    est = as.numeric(stats::coef(sb))
+    se = as.numeric(as.matrix(survey::SE(sb)))
+    stopifnot(length(est) == length(lv) * K, length(se) == length(est))
     tibble::tibble(variable = v,
-                   level = rep(as.character(sb[[1]]), times = K),
-                   segment = rep(seq_len(K), each = nrow(sb)),
-                   p = as.numeric(as.matrix(vals[, seq_len(K)])),
-                   se = as.numeric(as.matrix(vals[, K + seq_len(K)])))
+                   level = rep(lv, times = K),
+                   segment = rep(seq_len(K), each = length(lv)),
+                   p = est, se = se)
   }) |>
     purrr::list_rbind() |>
     dplyr::filter(!is.na(level))
@@ -386,10 +395,8 @@ id_key <- function(x) {
 export_data <- function(state, format = c("sav", "dta")) {
   format = match.arg(format)
   cfg = state$cfg
-  arm = cfg$arm
 
-  new_cols = if (identical(arm, "lca")) {
-    state$scored |>
+  new_cols = state$scored |>
       dplyr::select(id, segment, max_posterior, n_items_answered,
                     dplyr::starts_with("post_segment")) |>
       dplyr::mutate(
@@ -407,14 +414,6 @@ export_data <- function(state, format = c("sav", "dta")) {
         n_items_answered = haven::labelled(
           as.integer(n_items_answered),
           label = "Items answered in the battery"))
-  } else {
-    facs = state$labels$target
-    state$scored |>
-      dplyr::select(id, dplyr::all_of(c(facs, paste0(facs, "_reg"))),
-                    n_items_answered) |>
-      dplyr::rename_with(function(x) paste0("score_", x),
-                         dplyr::all_of(facs))
-  }
 
   # The identifier is joined on as text, not coerced to a number. A file whose
   #   id is "xc321" rather than 321 would otherwise become NA on one side of
@@ -454,7 +453,7 @@ export_data <- function(state, format = c("sav", "dta")) {
 
   out = dplyr::select(out, -.wise_id)
 
-  path = wise_path("output", arm,
+  path = wise_path("output",
                    paste0(fs::path_ext_remove(fs::path_file(state$data_file)),
                           "_wise.", format))
 
@@ -485,7 +484,7 @@ export_data <- function(state, format = c("sav", "dta")) {
 #______________________________________________________________________________
 
 export_tables <- function(state) {
-  d = wise_path("output", state$cfg$arm)
+  d = wise_path("output")
   w = function(x, nm) {
     if (is.null(x) || !nrow(x)) return(NULL)
     p = fs::path(d, paste0(nm, ".csv"))
@@ -588,76 +587,55 @@ item_label <- function(item, variable) {
 #   item in a battery inverts that sentence and nothing in the output shows
 #   it. Quoting the category cannot invert.
 segment_evidence <- function(state, k, n = 3L) {
-  lca = TRUE
   dict = state$item_frame$dictionary
 
-  if (lca) {
-    prof = if (!is.null(state$measure))
-      dplyr::filter(state$measure$profile, group == k)
-    else
-      dplyr::filter(profile_frame(state$model$fit, state$cfg$items),
-                    group == paste0("Group ", k)) |>
-        dplyr::rename(item = item, value = value)
+  prof = if (!is.null(state$measure))
+    dplyr::filter(state$measure$profile, group == k)
+  else
+    dplyr::filter(profile_frame(state$model$fit, state$cfg$items),
+                  group == paste0("Group ", k)) |>
+      dplyr::rename(item = item, value = value)
 
-    # Distinctiveness, not level: an item where this group sits where everyone
-    #   else does says nothing about who they are.
-    all_prof = if (!is.null(state$measure)) state$measure$profile
-               else profile_frame(state$model$fit, state$cfg$items) |>
-                 dplyr::mutate(group = as.integer(gsub("\\D", "", group)))
-    avg = all_prof |>
-      dplyr::group_by(item) |>
-      dplyr::summarise(mid = mean(value), .groups = "drop")
+  # Distinctiveness, not level: an item where this group sits where everyone
+  #   else does says nothing about who they are.
+  all_prof = if (!is.null(state$measure)) state$measure$profile
+             else profile_frame(state$model$fit, state$cfg$items) |>
+               dplyr::mutate(group = as.integer(gsub("\\D", "", group)))
+  avg = all_prof |>
+    dplyr::group_by(item) |>
+    dplyr::summarise(mid = mean(value), .groups = "drop")
 
-    top = prof |>
-      dplyr::left_join(avg, by = "item") |>
-      dplyr::mutate(gap = value - mid) |>
-      dplyr::arrange(dplyr::desc(abs(gap))) |>
-      head(n)
+  top = prof |>
+    dplyr::left_join(avg, by = "item") |>
+    dplyr::mutate(gap = value - mid) |>
+    dplyr::arrange(dplyr::desc(abs(gap))) |>
+    head(n)
 
-    # profile_frame() rescales each item's expected response to 0..1, so the
-    #   category is recovered by putting it back on the 1..C scale.
-    category_at <- function(value, responses) {
-      if (!length(responses) || anyNA(value)) return(NA_character_)
-      idx = max(1L, min(length(responses),
-                        round(1 + value * (length(responses) - 1))))
-      responses[[idx]]
-    }
-
-    purrr::map_chr(seq_len(nrow(top)), function(i) {
-      d = dplyr::filter(dict, item == top$item[i])
-      resp = tryCatch(d$responses[[1]], error = function(e) character(0))
-      here = category_at(top$value[i], resp)
-      typical = category_at(top$mid[i], resp)
-
-      if (is.na(here) || is.na(typical))
-        sprintf("%s — stands apart from the other segments on “%s”",
-                item_label(top$item[i], d$variable), d$question)
-      else if (identical(here, typical))
-        sprintf("%s — sits at “%s” on “%s” like the others, but further from the middle",
-                item_label(top$item[i], d$variable), here, d$question)
-      else
-        sprintf("%s — answers “%s” on “%s”, where the other segments average “%s”",
-                item_label(top$item[i], d$variable), here, d$question, typical)
-    })
-  } else {
-    fn = state$labels$target[k]
-    src = if (!is.null(state$measure)) state$measure$loadings
-          else state$model$diag$loadings
-    top = src |>
-      dplyr::filter(factor == fn) |>
-      dplyr::arrange(dplyr::desc(abs(loading))) |>
-      head(n)
-
-    # Only the first of these is the closest. Saying so about all three reads
-    #   as three superlatives that cannot all be true.
-    purrr::map_chr(seq_len(nrow(top)), function(i) {
-      d = dplyr::filter(dict, item == top$item[i])
-      sprintf("%s %s at %.2f — “%s”",
-              item_label(top$item[i], d$variable),
-              if (i == 1L) "tracks the scale most closely," else "also tracks it,",
-              top$loading[i], d$question)
-    })
+  # profile_frame() rescales each item's expected response to 0..1, so the
+  #   category is recovered by putting it back on the 1..C scale.
+  category_at <- function(value, responses) {
+    if (!length(responses) || anyNA(value)) return(NA_character_)
+    idx = max(1L, min(length(responses),
+                      round(1 + value * (length(responses) - 1))))
+    responses[[idx]]
   }
+
+  purrr::map_chr(seq_len(nrow(top)), function(i) {
+    d = dplyr::filter(dict, item == top$item[i])
+    resp = tryCatch(d$responses[[1]], error = function(e) character(0))
+    here = category_at(top$value[i], resp)
+    typical = category_at(top$mid[i], resp)
+
+    if (is.na(here) || is.na(typical))
+      sprintf("%s — stands apart from the other segments on “%s”",
+              item_label(top$item[i], d$variable), d$question)
+    else if (identical(here, typical))
+      sprintf("%s — sits at “%s” on “%s” like the others, but further from the middle",
+              item_label(top$item[i], d$variable), here, d$question)
+    else
+      sprintf("%s — answers “%s” on “%s”, where the other segments average “%s”",
+              item_label(top$item[i], d$variable), here, d$question, typical)
+  })
 }
 
 # The diagnostics, compressed. An analyst wants the results; a report that says
@@ -673,55 +651,23 @@ diagnostic_sentences <- function(state) {
   d = state$model$diag
   out = character(0)
 
-  if (lca) {
-    e = d$entropy
-    out = c(out, sprintf(
-      paste("The %d segments separate respondents %s: on a scale where 1 would",
-            "mean everyone falls unambiguously into one group, this model",
-            "scores %.2f."),
-      state$dimension,
-      if (e >= 0.8) "sharply" else if (e >= 0.6) "reasonably well"
-      else "only loosely", e))
+  e = d$entropy
+  out = c(out, sprintf(
+    paste("The %d segments separate respondents %s: on a scale where 1 would",
+          "mean everyone falls unambiguously into one group, this model",
+          "scores %.2f."),
+    state$dimension,
+    if (e >= 0.8) "sharply" else if (e >= 0.6) "reasonably well"
+    else "only loosely", e))
 
-    weak = d$discrimination$item[!is.na(d$discrimination$flag)]
-    out = c(out, if (length(weak))
-      paste0("Of the ", length(state$cfg$items), " questions, ",
-             n_verb(length(weak), "contributes", "contribute"),
-             " little to telling the segments apart (",
-             paste(weak, collapse = ", "), ").")
-      else paste0("All ", length(state$cfg$items),
-                  " questions contribute to telling the segments apart."))
-  } else {
-    # The reference report prints these and this one did not, which for a
-    #   factor model is the first thing a reader looks for. Reported with the
-    #   caveat rather than as a verdict: the conventional targets were derived
-    #   under simple random sampling and this is a clustered weighted sample.
-    fm = d$fit
-    if (!is.null(fm) && nrow(fm)) {
-      g = function(nm) {
-        v = fm$value[fm$measure == nm]
-        if (length(v)) v[1] else NA_real_
-      }
-      four = c(g("cfi.scaled"), g("tli.scaled"), g("rmsea.scaled"), g("srmr"))
-      if (all(is.finite(four)))
-        out = c(out, sprintf(
-          paste("Robust CFI %.3f, TLI %.3f, RMSEA %.3f, SRMR %.3f.",
-                "Conventional targets are CFI and TLI above 0.95, RMSEA below",
-                "0.06 and SRMR below 0.08, but those were derived under simple",
-                "random sampling and RMSEA in particular penalises large",
-                "samples, so they are guidance to read alongside the loading",
-                "pattern rather than a pass mark."),
-          four[1], four[2], four[3], four[4]))
-    }
-
-    weak = unique(d$loadings$item[!is.na(d$loadings$flag)])
-    out = c(out, if (length(weak))
-      paste0("Of the ", length(state$cfg$items), " questions, ",
-             n_verb(length(weak), "tracks", "track"),
-             " their scale only weakly (", paste(weak, collapse = ", "), ").")
-      else paste0("All ", length(state$cfg$items),
-                  " questions track their scale strongly."))
-  }
+  weak = d$discrimination$item[!is.na(d$discrimination$flag)]
+  out = c(out, if (length(weak))
+    paste0("Of the ", length(state$cfg$items), " questions, ",
+           n_verb(length(weak), "contributes", "contribute"),
+           " little to telling the segments apart (",
+           paste(weak, collapse = ", "), ").")
+    else paste0("All ", length(state$cfg$items),
+                " questions contribute to telling the segments apart."))
 
   if (!is.null(state$measure$failed) && state$measure$failed > 0)
     out = c(out, sprintf(
@@ -1133,7 +1079,7 @@ build_report_html <- function(state, summary_text = NULL,
     report_html(state, summary_text, not_answered),
     report_appendices(state))
 
-  path = wise_path("output", state$cfg$arm, "report.html")
+  path = wise_path("output", "report.html")
 
   writeLines(c(
     "<!doctype html>",

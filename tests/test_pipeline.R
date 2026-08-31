@@ -235,5 +235,116 @@ check("a segment at the top of a reverse-coded scale is named, not ranked",
         category_at(0.0, responses) == "Muy satisfecho(a)",
       "top of the code scale = least satisfied")
 
+
+cat("\n== nothing reads a symbol its scope does not define ==\n")
+# The failure this catches: removing a helper leaves the call behind, and R
+#   only notices when that line runs -- which for a report builder is after a
+#   ten-minute fit. persona_cfa and the orphaned `lca` flag were both found
+#   this way, not by reading.
+reads <- function(x) {
+  out <- character(0)
+  rec <- function(x) {
+    if (is.name(x)) out <<- c(out, as.character(x))
+    else if (is.call(x)) {
+      f <- x[[1]]
+      if (is.name(f) && as.character(f) %in% c("$", "@")) {
+        try(rec(x[[2]]), silent = TRUE); return(invisible(NULL))
+      }
+      for (y in as.list(x)[-1]) if (!missing(y)) try(rec(y), silent = TRUE)
+    } else if (is.pairlist(x)) {
+      for (y in as.list(x)) if (!missing(y)) try(rec(y), silent = TRUE)
+    }
+  }
+  rec(x); unique(out)
+}
+gone <- c("persona_cfa", "prompt_factor_label", "format_factor_block",
+          "assign_factors", "factor_scores", "score_cfa", "domains_cfa",
+          "search_cfa", "fit_final_cfa", "diagnose_cfa", "cfa_health",
+          "measurement_se_cfa", "plot_cfa_diagram", "fit_efa", "efa_loadings",
+          "fit_cfa", "cfa_syntax", "check_factors", "as_fit", "build_report",
+          "recode_values")
+env <- new.env()
+for (f in c(list.files("R", full.names = TRUE), "app.R"))
+  suppressWarnings(try(eval(parse(f), env), silent = TRUE))
+called <- unique(unlist(map(ls(env), function(nm) {
+  f <- get(nm, env); if (is.function(f)) reads(body(f)) else character(0)
+})))
+still <- intersect(gone, called)
+check("no live code calls a removed function",
+      !length(still),
+      if (length(still)) paste("still called:", paste(still, collapse = ", ")) else "")
+
+cat("\n== the search stays cheap ==\n")
+srch_body <- paste(deparse(body(search_lca)), collapse = " ")
+check("the search computes no bivariate residuals",
+      !str_detect(srch_body, "bvr_pairs"))
+check("the search computes no item discrimination",
+      !str_detect(srch_body, "item_discrimination"))
+check("those belong to the fit step instead",
+      str_detect(paste(deparse(body(diagnose_lca)), collapse = " "),
+                 "bvr_pairs") &&
+        str_detect(paste(deparse(body(diagnose_lca)), collapse = " "),
+                   "item_discrimination"))
+
+cat("\n== svyby is read through its accessors, not by column position ==\n")
+dom_body <- paste(deparse(body(domains_lca)), collapse = " ")
+check("domain shares come from coef() and SE()",
+      str_detect(dom_body, "coef\\(sb\\)") && str_detect(dom_body, "SE\\(sb\\)"))
+check("no positional slice of an svyby result survives",
+      !str_detect(dom_body, "vals\\[, seq_len\\(K\\)\\]"))
+
+cat("\n== the reply budget is set, and truncation says so ==\n")
+llm_src <- paste(readLines("R/llm.R", warn = FALSE), collapse = "\n")
+check("a token budget is named rather than left to the provider",
+      str_detect(llm_src, "WISE_LLM_MAX_TOKENS") &&
+        str_detect(llm_src, "max_tokens = max_tokens"))
+check("a cut-off reply is diagnosed as cut off",
+      str_detect(llm_src, "cut off before the JSON object closed"))
+
+cat("\n== one output folder, not one per arm ==\n")
+all_src <- paste(unlist(map(list.files("R", full.names = TRUE),
+                            readLines, warn = FALSE)), collapse = "\n")
+check("nothing writes into an arm subfolder",
+      !str_detect(all_src, 'wise_path\\("output", (arm|cfg\\$arm|state\\$cfg\\$arm)'))
+
+
+cat("\n== the two documents describe the tool that exists ==\n")
+help_md <- paste(readLines("help.md", warn = FALSE), collapse = "\n")
+readme <- paste(readLines("README.md", warn = FALSE), collapse = "\n")
+
+check("help.md does not promise a second model",
+      !str_detect(help_md, "or a single underlying scale") &&
+        !str_detect(help_md, "finds either"))
+check("help.md says what happens when the battery is a continuum",
+      str_detect(help_md, "does not fit one"))
+check("help.md documents the item proposal",
+      str_detect(help_md, fixed("What else might belong here?")))
+check("neither document tells the analyst to run renv",
+      !str_detect(paste(help_md, readme), "renv::restore"))
+check("neither document points at a demo folder that is not shipped",
+      !str_detect(paste(help_md, readme), "demo/` holds|Point the app at"))
+check("both name the tool DrSvyR, not WISE",
+      !str_detect(paste(help_md, readme), "\\bWISE\\b"))
+
+# help.md is rendered by includeMarkdown() from the app's own directory, and a
+#   figure it references that is not there renders as a broken image on the
+#   first screen an analyst sees.
+figs <- unlist(str_extract_all(help_md, "figures/[A-Za-z0-9_.-]+"))
+if (dir.exists("figures")) {
+  check("every figure help.md references is present in figures/",
+        all(file.exists(figs)), paste(figs, collapse = ", "))
+} else {
+  cat("  --    figures/ is not in this checkout; skipped\n")
+}
+
+cat("\n== the repository guard is where the comment says it is ==\n")
+ui_src <- paste(readLines("R/ui_data.R", warn = FALSE), collapse = "\n")
+core_src <- paste(readLines("R/core.R", warn = FALSE), collapse = "\n")
+check("the work folder guard lives in the UI and says so",
+      str_detect(ui_src, "path_has_parent\\(fs::path_abs\\(input\\$path\\), repo_root\\(\\)\\)") &&
+        str_detect(ui_src, "This is the enforcement"))
+check("scaffold_work_folder does not claim to enforce it",
+      !str_detect(core_src, "repo_root\\(\\)"))
+
 cat(sprintf("\n%d passed, %d failed\n", pass, fail))
 if (fail > 0) quit(status = 1)

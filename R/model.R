@@ -9,7 +9,7 @@
 
 # ---- stage_04_config ---------------------------------------------------
 
-# stage_04_config.R for WISE repo
+# stage_04_config.R for DrSvyR
 # Stage 5: assemble the analysis specification and write it out.
 
 #   1. Building the configuration
@@ -41,31 +41,14 @@ WISE_FIXED <- list(
   #   the optimiser rather than the models.
   n_starts = 200L,
   K_range = 2:10,
-  k_range = 1:4,
-  n_pa = 100L,
   parallel = TRUE)
 
-# state$model and state$measure are arm-shaped and share no columns. The class
-#   arm's fit is a plain list of pi and rho, its diagnostics carry
-#   discrimination and bivariate residuals, and its measure carries shares and
-#   profiles. The factor arm's fit is a lavaan object, its diagnostics carry
-#   loadings and modification indices, and its measure carries loadings and
-#   factor correlations.
-
-# Rendering one against the other does not degrade into a blank panel. It
-#   errors -- lavInspect on a list, mutate on NULL -- and Shiny renders every
-#   output that is in the DOM whether the analyst is looking at that panel or
-#   not, so both arms' outputs run on every change.
-
-# The arm is stamped on the object and read back from it, rather than read from
-#   state$cfg. Two reasons. The configuration is cleared when the analyst drops
-#   an item, and a gate written as !identical(state$cfg$arm, "lca") is TRUE
-#   against a NULL configuration -- it opens when it does not know, which is
-#   the opposite of what a guard is for. And the configuration can be changed
-#   to the other arm while a fitted model from the first one is still sitting
-#   in state, which is the sequence that produced the errors this exists to
-#   stop: fit the class model, run its variance, switch to the factor arm,
-#   approve, and every factor output renders against a class model.
+# The model is stamped with what produced it and read back from that stamp
+#   rather than from state$cfg. The configuration is cleared when the analyst
+#   drops an item, and a gate written against state$cfg opens when it does not
+#   know, which is the opposite of what a guard is for. Kept as a one-line
+#   predicate because it is what stops a stale fit from being rendered against
+#   a configuration it did not come from.
 arm_is <- function(x, arm) identical(x[["arm"]], arm)
 
 build_cfg <- function(state) {
@@ -88,7 +71,7 @@ build_cfg <- function(state) {
       #   needing a different copy of this file. See wise_workers() in core.R.
       workers = wise_workers(),
       survey_context = state$context %||% "",
-      out_dir = wise_path("output", arm)),
+      out_dir = wise_path("output")),
 
     list(K_range = WISE_FIXED$K_range,
          K_force = NULL,
@@ -185,7 +168,7 @@ write_cfg <- function(cfg, path) {
     paste0("  ", nm, " = ", paste(deparse(v), collapse = "\n    ")))
 
   writeLines(c(
-    "# cfg.R -- written by WISE. Do not edit by hand.",
+    "# cfg.R -- written by DrSvyR. Do not edit by hand.",
     "# Re-running the analysis from this file reproduces what the app did.",
     paste0("# Written ", format(Sys.time(), "%Y-%m-%d %H:%M")),
     "",
@@ -227,17 +210,15 @@ write_data_dict <- function(state, cfg, path) {
 
 # ---- stage_05_search ---------------------------------------------------
 
-# stage_05_search.R for WISE repo
-# Stage 6: search over the number of groups or factors.
+# Stage 6: search over the number of groups.
 
-#   1. The class search
-#   2. The factor search
-#   3. What the analyst looks at
-#   4. Prompt
+#   1. The search
+#   2. What the analyst looks at
+#   3. Prompt
 
-# Neither arm selects the dimension. Each renders the evidence, stops, and waits
-#   for a number. That decision is recorded with the evidence that was in front
-#   of the analyst when they made it.
+# The search does not select the number of groups. It renders the evidence,
+#   stops, and waits for a number. That decision is recorded with the evidence
+#   that was in front of the analyst when they made it.
 
 # Requires: dplyr, purrr, tibble, ggplot2, tidyr
 
@@ -424,7 +405,7 @@ prompt_search_narration <- function(stats, chosen, arm, context) {
 
 # ---- stage_06_model ----------------------------------------------------
 
-# stage_06_model.R for WISE repo
+# stage_06_model.R for DrSvyR
 # Stage 7: fit at the chosen dimension and diagnose it.
 
 #   1. The class model
@@ -732,7 +713,7 @@ prompt_diagnostics <- function(diag, arm, dimension, context) {
 
 # ---- stage_07_labels ---------------------------------------------------
 
-# stage_07_labels.R for WISE repo
+# stage_07_labels.R for DrSvyR
 # Stage 8: draft names for what the model found.
 
 #   1. What the model is shown
@@ -779,7 +760,7 @@ draft_labels <- function(state, tick = NULL) {
   #   abandoned under a two-factor model leaves rows named f1 and f2 that a
   #   three-factor model would happily reuse, and f1 does not mean the same
   #   thing in the two.
-  partial = wise_path("output", cfg$arm,
+  partial = wise_path("output",
                       paste0("labels.partial.", substr(state$model_key, 1, 12),
                              ".csv"))
 
@@ -795,15 +776,9 @@ draft_labels <- function(state, tick = NULL) {
     if (key %in% done$target) return(dplyr::filter(done, target == key))
     if (!is.null(tick)) tick(key)
 
-    prompt = if (identical(cfg$arm, "lca"))
-      prompt_segment_label(fit, k, dict, cfg$items, cfg$survey_context)
-    else
-      prompt_factor_label(fit, dict, k, scale_desc = NULL,
-                          context = cfg$survey_context)
+    prompt = prompt_segment_label(fit, k, dict, cfg$items, cfg$survey_context)
 
-    persona = if (identical(cfg$arm, "lca")) persona_lca else persona_cfa
-
-    obj = llm_json(prompt, role = "worker", system_prompt = persona,
+    obj = llm_json(prompt, role = "worker", system_prompt = persona_lca,
                    validate = validate_fields(c("label", "description")),
                    seed = cfg$seed)
 
@@ -858,7 +833,7 @@ resolve_collisions <- function(labels, cfg) {
 #   previous run's names attach silently to groups that are no longer the ones
 #   they described.
 
-label_file <- function(cfg) wise_path("output", cfg$arm, "labels.csv")
+label_file <- function(cfg) wise_path("output", "labels.csv")
 
 write_labels <- function(labels, cfg, key, edited = FALSE) {
   labels |>

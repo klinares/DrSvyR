@@ -7,7 +7,7 @@
 
 # ---- zz_llm_config -----------------------------------------------------
 
-# llm_config.R for WISE repo
+# llm_config.R for DrSvyR
 # Endpoint, key variable and models. Committed to the repository deliberately.
 
 # The analyst's .Renviron holds one line and nothing else. Everything below is
@@ -78,10 +78,18 @@ if (is.null(WISE_LLM))
   stop("WISE_LLM_PROFILE is '", WISE_LLM_PROFILE, "', which is not one of: ",
        paste(names(WISE_LLM_PROFILES), collapse = ", "), call. = FALSE)
 
+# The reply budget, in tokens. Every prompt in this app asks for a JSON object,
+#   so a reply cut short is not a shorter answer but no answer at all. The
+#   longest thing asked for is a domain reading: a finding and a caution over
+#   five demographic levels. 1500 leaves room for that with margin; the label
+#   prompts use a fraction of it and cost nothing extra for the headroom, since
+#   this is a cap and not a target.
+WISE_LLM_MAX_TOKENS <- 1500L
+
 
 # ---- zz_llm ------------------------------------------------------------
 
-# llm.R for WISE repo
+# llm.R for DrSvyR
 # Every model call in the workflow goes through this file.
 
 #   1. Client construction
@@ -155,8 +163,17 @@ llm_model <- function(role) {
 #   ignored where it does not, so it is a convenience rather than the
 #   reproducibility mechanism; the freeze file is that.
 
-llm_chat <- function(model, system_prompt = NULL, seed = NULL) {
-  p = ellmer::params(temperature = 0, seed = seed)
+llm_chat <- function(model, system_prompt = NULL, seed = NULL,
+                     max_tokens = WISE_LLM_MAX_TOKENS) {
+  # max_tokens is set rather than left to the provider. Without it the reply is
+  #   cut wherever the endpoint's default falls, and because every prompt here
+  #   asks for JSON, a cut lands mid-object: the text has an opening brace and
+  #   no closing one, the extractor finds nothing, and the error says no JSON
+  #   was found, which is true and useless. Naming a budget large enough for
+  #   the longest reply the app asks for removes the failure; naming the
+  #   truncation in the error, below, removes the misdiagnosis if a provider
+  #   caps it lower anyway.
+  p = ellmer::params(temperature = 0, seed = seed, max_tokens = max_tokens)
 
   # ellmer's OpenRouter client reads the key from the process environment, so
   #   it cannot carry a per-session one. When an analyst has typed a key, the
@@ -225,9 +242,29 @@ llm_reset_count <- function() {
 #   the object is pulled out by pattern rather than parsed from the whole reply.
 parse_json_block <- function(txt, pattern = "(?s)\\{.*\\}") {
   m = regmatches(txt, regexpr(pattern, txt, perl = TRUE))
-  if (length(m) == 0) stop("No JSON found in the model reply:\n", txt,
-                           call. = FALSE)
-  jsonlite::fromJSON(m, simplifyVector = FALSE)
+
+  if (length(m) == 0) {
+    # A truncated reply and a reply that never contained JSON fail the same
+    #   regex and are different problems. An opening brace with no closing one
+    #   is the model having been cut off mid-object, which no amount of
+    #   retrying the same prompt will fix; it needs a larger token budget or a
+    #   shorter answer. Saying so is the difference between a fixable error
+    #   and three identical retries.
+    truncated = grepl("\\{", txt) && !grepl("\\}\\s*$", trimws(txt))
+    stop(if (truncated)
+      paste0("The model reply was cut off before the JSON object closed, so ",
+             "there is nothing to parse. The reply ran to ", nchar(txt),
+             " characters. Raise WISE_LLM_MAX_TOKENS, or shorten what the ",
+             "prompt asks for. Retrying will not help.\n\n", txt)
+      else paste0("No JSON found in the model reply:\n", txt),
+      call. = FALSE)
+  }
+
+  obj = try(jsonlite::fromJSON(m, simplifyVector = FALSE), silent = TRUE)
+  if (inherits(obj, "try-error"))
+    stop("The model reply contained something brace-shaped that is not valid ",
+         "JSON:\n", m, call. = FALSE)
+  obj
 }
 
 # The distinction that matters is whether a second attempt could plausibly

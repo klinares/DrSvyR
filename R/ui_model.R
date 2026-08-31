@@ -9,7 +9,7 @@
 
 # ---- mod_config --------------------------------------------------------
 
-# mod_config.R for WISE repo
+# mod_config.R for DrSvyR
 # Stage 5: review the specification and commit to it.
 
 # The last point at which anything can be changed cheaply. After this the model
@@ -172,7 +172,7 @@ mod_config_server <- function(id, state) {
 
 # ---- mod_search --------------------------------------------------------
 
-# mod_search.R for WISE repo
+# mod_search.R for DrSvyR
 # Stage 6: choose the number of groups or factors.
 
 # Order of presentation is the whole design here. The evidence and the profiles
@@ -204,17 +204,12 @@ mod_search_server <- function(id, state) {
     output$runner <- renderUI({
       req(state$cfg)
       cfg <- state$cfg
-      n_fits <- if (identical(cfg$arm, "lca")) length(cfg$K_range)
-                else length(cfg$k_range)
       tagList(
         tags$h4("Search"),
         help_box("search"),
-        tags$p(n_fits, " models will be fitted",
-               if (identical(cfg$arm, "lca"))
-                 paste0(", each from ", cfg$n_starts,
-                        " random starts across ", cfg$workers, " workers")
-               else "",
-               ". The screen will not respond while it runs."),
+        tags$p(length(cfg$K_range), " models will be fitted, each from ",
+               cfg$n_starts, " random starts across ", cfg$workers,
+               " workers. The screen will not respond while it runs."),
         actionButton(ns("run"), "Run the search", class = "btn-primary"))
     })
 
@@ -391,7 +386,7 @@ mod_search_server <- function(id, state) {
 
 # ---- mod_model ---------------------------------------------------------
 
-# mod_model.R for WISE repo
+# mod_model.R for DrSvyR
 # Stage 7: the fitted model and what it does not account for.
 
 # One return is permitted from here to Items. The limit is not about the
@@ -737,7 +732,7 @@ mod_model_server <- function(id, state) {
 
 # ---- mod_labels --------------------------------------------------------
 
-# mod_labels.R for WISE repo
+# mod_labels.R for DrSvyR
 # Stage 8: name what the model found.
 
 # The profile sits beside every name, because the check the analyst is being
@@ -857,7 +852,7 @@ mod_labels_server <- function(id, state) {
 
       # Part files from abandoned runs go too. They are keyed to the model, so
       #   only the ones that cannot apply here are removed.
-      parts <- fs::dir_ls(wise_path("output", state$cfg$arm),
+      parts <- fs::dir_ls(wise_path("output"),
                           regexp = "labels[.]partial[.].*[.]csv$",
                           fail = FALSE)
       keep <- paste0("labels.partial.", substr(state$model_key, 1, 12), ".csv")

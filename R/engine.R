@@ -12,7 +12,7 @@
 
 # ---- engine_00_utils ---------------------------------------------------
 
-# source_code.R for WISE repo
+# source_code.R for DrSvyR
 # Engine for both arms of the workflow. Holds no analysis-specific state:
 #   everything arrives as an argument. Sourced before the method config.
 
@@ -459,7 +459,10 @@ rules_label <- paste(
   "   distinguishes nothing.",
   "7. Prefer the concrete over the evaluative. 'Renting, food-insecure' names",
   "   answers; 'struggling' rates people.",
-  "8. Return only valid JSON: no prose before or after, no markdown fences.",
+  "8. Keep the description to two sentences. A description that runs longer",
+  "   than the reply budget is cut mid-object and the whole answer is lost,",
+  "   so length here is not a matter of style.",
+  "9. Return only valid JSON: no prose before or after, no markdown fences.",
   sep = "\n")
 
 # Domain rules are stricter because the reader will act on them. 

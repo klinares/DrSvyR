@@ -9,7 +9,7 @@
 
 # ---- project -----------------------------------------------------------
 
-# project.R for WISE repo
+# project.R for DrSvyR
 # Where the workflow is allowed to read and write, and what gets cached.
 
 #   1. The repository boundary
@@ -293,7 +293,7 @@ cache_clear <- function(stage = NULL) {
 
 # ---- logging -----------------------------------------------------------
 
-# logging.R for WISE repo
+# logging.R for DrSvyR
 # The decision log.
 
 # Every choice the analyst makes is written to the work folder as it is made,
@@ -367,7 +367,7 @@ iteration_count <- function() {
 
 # ---- help_text ---------------------------------------------------------
 
-# help_text.R for WISE repo
+# help_text.R for DrSvyR
 # Every instruction the analyst reads, in one place.
 
 # Kept together rather than scattered through the modules so the wording can be

@@ -2,10 +2,10 @@
 
 Survey data usually gets read one question at a time. This tool asks a
 different question: taken together, what does a battery of related answers say
-about the people who gave them? It finds either a small number of distinct
-types of respondent, or a single underlying scale people have more or less of.
-It places every respondent it can reach, and it compares those placements
-across the groups you care about.
+about the people who gave them? It looks for a small number of distinct types
+of respondent — people who answer the set in recognisably different ways — and
+places every respondent it can reach in the type their answers fit best. Then
+it compares those placements across the groups you care about.
 
 Every margin of error it reports comes from how the sample was actually drawn.
 That is the point of the tool. Software that assumes people were sampled
@@ -18,7 +18,9 @@ the weights are accounted for.
 You need a SPSS or Stata file, and you need to know which variables in it carry
 the respondent identifier, the stratum, the sampling unit and the weight. You
 also need a folder for the tool to write into — everything it produces goes
-there, and nothing is ever written back into the file you started with.
+there, and nothing is ever written back into the file you started with. That
+folder has to sit outside the tool's own repository, and the tool will say so
+if you point it at one inside.
 
 Your respondents never leave your machine. The language model in this tool sees
 only figures the tool has already computed: how many people answered a
@@ -35,9 +37,36 @@ that something has gone wrong. The single loop runs from Model back to Items:
 if the fitted model tells you the battery was wrong, you can go back and change
 it once.
 
-Give yourself a few minutes at Search and at Model. Those two fit the model
-two hundred times over from different starting points, which is what makes the
+Give yourself a few minutes at Search and at Model. Those two fit the model two
+hundred times over from different starting points, which is what makes the
 answer reproducible, and it is the slow part.
+
+## When this is the wrong tool, and how you find out
+
+Some batteries do not work the way this one assumes. If everyone sits somewhere
+on a single scale from low to high — differing in how much rather than in which
+— then what describes them is a factor model, and this tool does not fit one.
+Ask it anyway and you get groups ordered low to high that look like a finding
+and are an artefact of the model.
+
+So the Items screen computes the evidence and the methodologist reads it before
+you go any further. Where your battery looks like one continuum it says so
+plainly and names what would fit instead. Nothing stops you continuing; the
+verdict goes into the report either way.
+
+## Help choosing the battery
+
+Once you have written your research question and picked at least three items,
+**What else might belong here?** hands the methodologist your question, the
+items you chose, and the wording of every other variable in the file, and asks
+which ones cover something your battery misses. It has read no respondent's
+answers and is told so.
+
+Each suggestion then comes back with numbers the tool computed from your data —
+how many categories it has, how many people skipped it, how concentrated the
+answers are, and how much it has in common with the items you already chose.
+The reasoning sits next to the figures that test it. Nothing is added for you:
+if a suggestion looks right, put it in the battery yourself.
 
 ## What the tool decides, and what you decide
 
@@ -65,8 +94,8 @@ what was verified, what rests on published method, what was a judgement call,
 and what has not been tested at all. That last column is the one to read first.
 
 The work folder holds the rest: a decision log of what was chosen and when, the
-tables behind every figure as CSV, and a copy of the analysis specification you
-can re-run without this app.
+tables behind every figure as CSV, and `cfg.R`, a copy of the analysis
+specification you can re-run without this app.
 
 ---
 

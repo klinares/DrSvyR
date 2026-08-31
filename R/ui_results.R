@@ -8,7 +8,7 @@
 
 # ---- mod_score ---------------------------------------------------------
 
-# mod_score.R for WISE repo
+# mod_score.R for DrSvyR
 # Stage 9: score respondents and say who was reached.
 
 # No model call here. Nothing on this screen is a matter of interpretation.
@@ -55,11 +55,9 @@ mod_score_server <- function(id, state) {
         des <- build_rep_design(sc[reached, ], state$cfg)
 
         list(scored = sc, design = des,
-             coverage = score_coverage(sc, state$cfg$arm,
-                                       length(state$cfg$items)),
-             quality = assignment_quality(sc, state$cfg$arm),
-             shares = group_shares(sc, state$cfg$arm, state$labels,
-                                   des$rep_des))
+             coverage = score_coverage(sc, length(state$cfg$items)),
+             quality = assignment_quality(sc),
+             shares = group_shares(sc, state$labels, des$rep_des))
       }), silent = TRUE)
 
       if (inherits(res, "try-error")) {
@@ -134,7 +132,7 @@ mod_score_server <- function(id, state) {
 
 # ---- mod_domains -------------------------------------------------------
 
-# mod_domains.R for WISE repo
+# mod_domains.R for DrSvyR
 # Stage 10: how the groups or scores are distributed across the domains.
 
 # The model reads these tables only after R has decided which differences the
@@ -321,7 +319,7 @@ mod_domains_server <- function(id, state) {
 
 # ---- mod_report --------------------------------------------------------
 
-# mod_report.R for WISE repo
+# mod_report.R for DrSvyR
 # Stage 11: review the report, then save everything.
 
 # The analyst reads the report here before any file is written. Preview and

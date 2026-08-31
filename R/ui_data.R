@@ -9,7 +9,7 @@
 
 # ---- mod_project -------------------------------------------------------
 
-# mod_project.R for WISE repo
+# mod_project.R for DrSvyR
 # Stage 1: choose the work folder and read the survey file.
 
 # Two separate things, and they were previously one. The work folder is where
@@ -71,10 +71,11 @@ mod_project_server <- function(id, state) {
     observeEvent(input$use, {
       req(nzchar(input$path))
 
-      # The guard in core.R is the enforcement and stays the only thing that
-      #   actually decides. This tests the same condition purely to say
-      #   something useful, because the generic refusal reads as "you cannot
-      #   use the demo data" when what it means is "outputs cannot go there".
+      # This is the enforcement, not a friendly duplicate of one. core.R used
+      #   to refuse a repository path inside scaffold_work_folder(); that guard
+      #   was removed and only the write probe remains there, so if this check
+      #   goes the app will happily write outputs, cached fits and the decision
+      #   log into the clone.
       if (fs::path_has_parent(fs::path_abs(input$path), repo_root())) {
         showNotification(
           tags$div(
@@ -82,10 +83,10 @@ mod_project_server <- function(id, state) {
             tags$p("Outputs, the decision log and cached fits are written to ",
                    "the work folder, so it has to sit outside the repository. ",
                    "Something like ", tags$code("D:/work/my_project"), "."),
-            tags$p("The survey file is only read, so it can stay where it is ",
-                   "-- including the ", tags$code("demo/"), " folder in this ",
-                   "repository. Set a work folder first and it will be offered ",
-                   "in the file list below.")),
+            tags$p("The survey file is only read, never written to, so it can ",
+                   "stay wherever it already is -- including inside this ",
+                   "repository. Set a work folder first and you will be able ",
+                   "to browse for it.")),
           type = "error", duration = NULL)
         return()
       }
@@ -255,7 +256,7 @@ mod_project_server <- function(id, state) {
 
 # ---- mod_design --------------------------------------------------------
 
-# mod_design.R for WISE repo
+# mod_design.R for DrSvyR
 # Stage 2: confirm the complex design and check the specification.
 
 # Nominations are suggestions for a dropdown, never selections. The variable
@@ -387,7 +388,7 @@ mod_design_server <- function(id, state) {
 
 # ---- mod_items ---------------------------------------------------------
 
-# mod_items.R for WISE repo
+# mod_items.R for DrSvyR
 # Stage 3: explore the candidate items and choose an arm.
 
 # The analyst designed the questionnaire, so item content is their call and the
@@ -773,7 +774,7 @@ mod_items_server <- function(id, state) {
 
 # ---- mod_recode --------------------------------------------------------
 
-# mod_recode.R for WISE repo
+# mod_recode.R for DrSvyR
 # Stage 4: collapse the demographic and attitudinal domains.
 
 # One control per observed category. Typing the same group name against two
