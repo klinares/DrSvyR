@@ -55,7 +55,7 @@ SURV_ACTIONS <- c(
 
 # Fields:
 #   stage      where in the workflow it can fire
-#   arm        "lca", "cfa", or "both"
+#   arm        kept for the rule table's shape; every rule here is "both"
 #   evidence   the exact names the app computes; a proposal may cite no others
 #   threshold  the number, or NA where there deliberately is none
 #   sourced    TRUE where the threshold comes from the reference material,
@@ -157,16 +157,16 @@ SURV_REFLEXES <- list(
       threshold = 1, sourced = TRUE,
       source = "arm_diagnostics(): mixed formats across unrelated domains point away from one continuum. A household can own a computer and still have run short of food.",
       actions = c("none"),
-      claim = "The battery mixes response formats across domains that need not sit on one scale, which points toward distinct types rather than degrees of one thing.",
-      caution = "Mixed formats alone do not settle the arm."),
+      claim = "The battery mixes response formats across domains that need not sit on one scale, which points toward distinct types rather than degrees of one thing. That is the case this tool fits.",
+      caution = "Mixed formats alone do not settle it."),
 
-  rfx("arm_ordinal_as_continuous", "arm", "cfa",
-      evidence = c("min_categories", "estimator"),
-      threshold = 5, sourced = TRUE,
-      source = "Project rule stated in the estimator block: below five categories the continuous treatment is not an approximation but wrong; at five or more it is one most methodologists accept.",
-      actions = c("flag_for_report", "change_estimator"),
-      claim = "Treating these scales as continuous is an approximation taken so that partial responders can be scored. Whether the loadings agree with the ordered treatment on this battery has not been checked here.",
-      caution = "State it as a recorded trade-off, not as a neutral default."),
+  rfx("arm_looks_like_one_continuum", "arm", "both",
+      evidence = c("eigen_ratio", "var_explained_1"),
+      threshold = NA_real_, sourced = TRUE,
+      source = "arm_diagnostics(): a large first eigenvalue relative to the second, with one response format throughout, points at a single continuum rather than distinct kinds of respondent.",
+      actions = c("flag_for_report"),
+      claim = "This battery looks like one continuum. A class model fitted to a continuum returns groups ordered low to high, which reads like a finding and is an artefact of the model rather than a property of the respondents.",
+      caution = "The model that fits this is a weighted confirmatory factor analysis, which this tool does not run. Say so and name it; do not offer a setting that would make this tool fit it, because there is none."),
 
   # ---- model, class arm -----------------------------------------------------
 
@@ -202,36 +202,10 @@ SURV_REFLEXES <- list(
       claim = "A segment holding less than five per cent of the population is below the floor set for this analysis. Domain estimates within it rest on few respondents and their intervals will be wide.",
       caution = "Read the rule against the lower end of the replicate interval, not the point estimate: a share of 0.06 whose interval reaches 0.03 has not cleared five per cent, it has failed to be measured precisely enough to say. The binding constraint is usually not the segment itself but the segment crossed with a domain level, which is smaller again."),
 
-  # ---- model, factor arm ----------------------------------------------------
-
-  rfx("cfa_inadmissible", "model", "cfa",
-      evidence = "problems",
-      threshold = NA_real_, sourced = TRUE,
-      source = "cfa_health(): non-convergence, an information matrix that will not invert, or a standardised loading outside [-1, 1].",
-      actions = c("revisit_design", "change_k"),
-      claim = "This solution is not admissible. The numbers print and the plots draw, but the parameters are not a unique solution and nothing should be read off them.",
-      caution = "This is a stop, not a caveat. Do not interpret loadings from an inadmissible fit."),
-
-  rfx("cfa_weak_loading", "model", "cfa",
-      evidence = c("loading", "h2"),
-      threshold = 0.4, sourced = FALSE,
-      source = "Conventions set in diagnose_cfa(): |loading| < 0.4 loads weakly, communality < 0.3 shares little with the battery.",
-      actions = c("flag_for_report"),
-      claim = "This item loads weakly on its factor, so the factor score is telling you little about how this respondent answered it.",
-      caution = "Do not propose dropping the item, and do not propose freeing anything to improve its loading."),
-
-  rfx("cfa_fit_below_convention", "model", "cfa",
-      evidence = c("cfi.scaled", "tli.scaled", "rmsea.scaled", "srmr"),
-      threshold = NA_real_, sourced = TRUE,
-      source = "CFA report: conventional targets are CFI and TLI above 0.95, RMSEA below 0.06, SRMR below 0.08. Module2 Lecture 1 gives CFI above 0.9 or 0.95.",
-      actions = c("flag_for_report"),
-      claim = "One or more fit indices sit below the conventional target. Read them alongside the loading pattern rather than instead of it.",
-      caution = "These targets were derived under simple random sampling and RMSEA in particular penalises large samples. They are guidance, not thresholds, and this is a clustered weighted sample. Never report a fit index as pass or fail."),
-
   rfx("replicates_failed", "model", "both",
       evidence = c("replicates_failed", "replicates"),
       threshold = 0, sourced = TRUE,
-      source = "measurement_se_cfa(): lavaan starts cold on every replicate, so convergence is counted rather than assumed and a failed replicate is dropped with a note rather than treated as a zero deviation.",
+      source = "measurement_se_lca(): every replicate is a fresh weighted EM refit, so convergence is counted rather than assumed and a failed replicate is disclosed rather than dropped quietly.",
       actions = c("flag_for_report"),
       claim = "Some replicate refits did not converge and were dropped. The intervals on the measurement model are narrower than they should be and are a lower bound.",
       caution = "Dropping a replicate removes a deviation from the spread, which can only narrow the interval. Never present these margins as correct."),
@@ -515,7 +489,7 @@ reflex_evidence <- function(state, stage) {
       var_explained_1 = col(state$arm_diag, "var_explained_1"),
       n_formats       = col(state$arm_diag, "n_formats"),
       min_categories  = col(state$arm_diag, "min_categories"),
-      estimator       = state$cfg$estimator %||% state$estimator),
+      min_categories_ok = TRUE),
 
     model = list(
       entropy           = state$model$diag$entropy,
@@ -545,7 +519,6 @@ reflex_evidence <- function(state, stage) {
     report = list(
       aux        = state$cfg$aux,
       arm        = state$cfg$arm %||% state$arm,
-      estimator  = state$cfg$estimator %||% state$estimator,
       iterations = iteration_count()),
 
     list())

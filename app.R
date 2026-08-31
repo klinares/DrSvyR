@@ -68,6 +68,7 @@ new_state <- function() {
     na_codes      = NULL,
     item_frame    = NULL,
     item_summary  = NULL,
+    item_suggestions = NULL,
     arm_diag      = NULL,
     arm_advice    = NULL,
     arm           = NULL,
@@ -130,12 +131,12 @@ WISE_TABS <- c("Start here",
 
 ui <- page_fluid(
   theme = bs_theme(version = 5, preset = "flatly"),
-  title = "WISE",
+  title = "DrSvyR",
   
   div(
     style = "display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;",
-    div(tags$h2("WISE", style = "margin:0;"),
-        tags$p(tags$em("Weighted Inference for Survey Estimation"),
+    div(tags$h2("DrSvyR", style = "margin:0;"),
+        tags$p(tags$em("Design-based segmentation for survey data"),
                style = "margin:0;")),
     div(style = "margin-left:auto;", input_dark_mode(id = "dark_mode"))),
   

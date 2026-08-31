@@ -63,6 +63,11 @@ assert_outside_repo <- function(path) {
 
 WISE_SUBDIRS <- c("data", "docs", "dict", "decisions", "cache", "output")
 
+# How a design check reports itself in the interface. A named vector rather
+#   than a recode verb, because the tidyverse spelling for this has changed
+#   twice and both spellings warn on some version the analyst may be running.
+WISE_STATUS_LABEL <- c(ok = "", warn = "warn", stop = "STOP")
+
 .wise <- new.env(parent = emptyenv())
 .wise$work_dir <- NULL      # the no-Shiny case: a script, a test, one user
 .wise$sessions <- list()    # browser token -> folder, for a shared server
@@ -322,7 +327,7 @@ log_decision <- function(which, heading, decision, evidence = NULL,
   f = log_path(which)
   if (!fs::file_exists(f)) {
     cat("# ", tools::toTitleCase(gsub("_", " ", which)), "\n\n",
-        "Written by WISE as decisions are made. Do not edit; it is the record ",
+        "Written by DrSvyR as decisions are made. Do not edit; it is the record ",
         "of what was chosen and why.\n", sep = "", file = f)
   }
 
@@ -405,45 +410,36 @@ WISE_HELP <- list(
     "belong together."),
 
   arm_intro = paste(
-    "Two different models answer two different questions about the same",
-    "battery. Which one fits is a property of the data, not a preference,",
-    "so say what you expect and then check it against the evidence."),
+    "This tool finds distinct groups: people who fall into types that answer",
+    "in different patterns. One group might agree with items A and B and",
+    "reject C, while another does the reverse. Each respondent gets a group.",
+    "\n\nWhether your battery works that way is a property of the data, so it",
+    "is worth checking before going further."),
 
   arm_choice = paste(
-    "Distinct groups: people fall into types that answer in different",
-    "patterns. One group might agree with items A and B and reject C, while",
-    "another does the reverse. The result is a group label for each person.",
-    "\n\nDegrees of one thing: everyone sits somewhere on a single scale, from",
-    "low to high. People differ in how much, not in which. The result is a",
-    "score for each person."),
+    "Some batteries do not work that way. If everyone sits somewhere on a",
+    "single scale from low to high -- differing in how much rather than in",
+    "which -- then a factor model describes them and this one does not. Fit",
+    "classes to a continuum and you get groups ordered low to high that look",
+    "like a finding and are an artefact of the model.",
+    "\n\nThe evidence below says which case you are in. Nothing here stops",
+    "you continuing; it tells you what to expect if you do."),
 
   arm_evidence = paste(
     "The eigenvalues describe how much of the pattern in the answers a single",
     "underlying scale can account for. A large first value relative to the",
-    "second points toward one continuum. Values closer together point toward",
-    "several distinct patterns. Mixed response formats across unrelated topics",
-    "also point away from a single scale. There is no threshold that settles",
-    "it, which is why the next step is to ask."),
+    "second points toward one continuum, which is the case this tool does not",
+    "fit. Values closer together point toward several distinct patterns, which",
+    "is the case it does. Mixed response formats across unrelated topics also",
+    "point away from a single scale. There is no threshold that settles it,",
+    "which is why the next step is to ask."),
 
   arm_ask = paste(
-    "The methodologist reads the numbers above and your stated goal, and gives",
-    "an opinion once. It cannot see your data and it does not decide. Whatever",
-    "you choose is what runs, and a disagreement is recorded in the report."),
-
-  estimator = paste(
-    "Your questions have ordered answer categories, and there are two ways to",
-    "treat them.",
-    "\n\nAs ordered categories is the more exact description of what the",
-    "respondent actually did. Its cost is coverage: the method can only give a",
-    "score to someone who answered every question in the battery, so anyone",
-    "who skipped one gets nothing.",
-    "\n\nAs a continuous scale treats the rungs of the ladder as evenly spaced,",
-    "which they are not quite. Its benefit is that a respondent who answered",
-    "most of the questions can still be scored from those. Since people who",
-    "skip questions are not a random slice of the sample, that coverage is",
-    "worth something.",
-    "\n\nThis option only appears when the scales have five or more points. On",
-    "a yes/no question the approximation would not be defensible."),
+    "The methodologist reads the numbers above and gives an opinion once. It",
+    "cannot see your data and it does not decide. Where it judges the battery",
+    "to be one continuum it will say so and name the model that fits it,",
+    "which is not one this tool runs. The verdict is recorded in the report",
+    "whichever way you go."),
 
   domains_pick = paste(
     "Choose the background variables you want to compare across -- age, sex,",
@@ -524,17 +520,6 @@ WISE_HELP <- list(
     "threshold, and an item at the bottom of a ranking is not thereby a bad",
     "item -- something has to be last. Whether an item belongs is a question",
     "about the question, which is yours and not the model's."),
-
-  cfa_diagram = paste(
-    "The measurement model as a picture. Each factor is on the left, each",
-    "question on the right, and a line joins them when the question tracks",
-    "that factor. Thicker and darker means it tracks it more strongly.",
-    "\n\nWhat to look for: a question with only thin lines is not measuring",
-    "much of anything here, and a question with thick lines to two factors is",
-    "measuring both, which usually means it is asking about two things.",
-    "\n\nThe curve on the left joining the factors is how far the two things",
-    "they measure travel together. Near zero means they are separate; near one",
-    "means they are close enough that one factor might describe both."),
 
   measurement_variance = paste(
     "Every number above is an estimate from a sample, so every one of them has",
@@ -622,14 +607,6 @@ WISE_HELP <- list(
     "honest interval is than the one standard software would have given you.",
     "Where it is around two, a difference that looked significant under the",
     "defaults needs to be twice as large before it really is."),
-
-  factor_scale = paste(
-    "A factor score has no natural units, so it is centred: zero is the",
-    "average across the population, positive is above it, negative is below.",
-    "Half the groups will be negative and that carries no bad news.",
-    "\n\nWhat matters is the distance between groups, not the sign. Read a",
-    "difference of 0.2 as a fifth of a standard deviation, and read it against",
-    "the interval around it before treating it as real."),
 
   resolved = paste(
     "Which pairs of levels actually separate, worked out here rather than by",

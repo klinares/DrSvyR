@@ -90,17 +90,10 @@ build_cfg <- function(state) {
       survey_context = state$context %||% "",
       out_dir = wise_path("output", arm)),
 
-    if (identical(arm, "lca"))
-      list(K_range = WISE_FIXED$K_range,
-           K_force = NULL,
-           n_starts = WISE_FIXED$n_starts,
-           min_items = fr$min_items)
-    else
-      list(k_range = WISE_FIXED$k_range,
-           n_pa = WISE_FIXED$n_pa,
-           n_factors = NULL,
-           cfa_factors = NULL,
-           estimator = state$estimator %||% "WLSMV"))
+    list(K_range = WISE_FIXED$K_range,
+         K_force = NULL,
+         n_starts = WISE_FIXED$n_starts,
+         min_items = fr$min_items))
 
   fs::dir_create(cfg$out_dir)
   cfg
@@ -143,21 +136,14 @@ config_summary <- function(state, cfg) {
                if (cfg$complete_cases) " (answered every item)"
                else paste0(" (answered at least ", fr$min_items, ")"))),
 
-    row("Model", "Arm", if (identical(cfg$arm, "lca"))
-          "Latent class -- distinct groups" else "Factor -- one continuum"),
-    row("Model", "Advice followed",
+    row("Model", "Model", "Latent class -- distinct groups"),
+    row("Model", "Battery suits it",
         if (is.null(state$arm_advice)) "not asked"
-        else if (identical(state$arm_advice$recommendation, cfg$arm)) "yes"
-        else "no -- analyst chose otherwise"),
+        else if (isTRUE(state$arm_advice$recommend_cfa))
+          "no -- the methodologist judged this battery one continuum"
+        else "yes"),
     row("Model", "Range searched",
-        if (identical(cfg$arm, "lca"))
-          paste0(min(cfg$K_range), " to ", max(cfg$K_range), " groups")
-        else paste0(min(cfg$k_range), " to ", max(cfg$k_range), " factors")),
-    if (identical(cfg$arm, "cfa"))
-      row("Model", "Answer scales treated as",
-          if (identical(cfg$estimator, "ML"))
-            "continuous — partial responders scored"
-          else "ordered categories — complete responders only") else NULL,
+        paste0(min(cfg$K_range), " to ", max(cfg$K_range), " groups")),
 
     purrr::imap(state$demo_specs, function(s, nm)
       row("Domains", nm,
@@ -166,8 +152,7 @@ config_summary <- function(state, cfg) {
 
     row("Fixed", "Random seed", cfg$seed),
     row("Fixed", "Parallel workers", wise_workers_note()),
-    if (identical(cfg$arm, "lca"))
-      row("Fixed", "Starts per model", cfg$n_starts) else NULL,
+    row("Fixed", "Starts per model", cfg$n_starts),
     row("Fixed", "Output folder", cfg$out_dir))
 }
 
@@ -278,6 +263,17 @@ write_data_dict <- function(state, cfg, path) {
 # The inputs are built once and shared. make_inputs() is not free, and calling
 #   it inside every start repeated it a thousand times over.
 
+# Split the starting seeds into one block per worker. cut() refuses a single
+#   interval -- cut(x, 1) is an error, not a no-op -- so a one-worker machine
+#   would otherwise take out the whole search at its first call. One worker is
+#   not exotic: it is what a single-core container gives, and what an
+#   administrator sets with DRSVYR_WORKERS=1 on a shared server.
+seed_blocks <- function(seeds, n_blocks) {
+  if (n_blocks <= 1L) return(list(seeds))
+  split(seeds, cut(seq_along(seeds), n_blocks, labels = FALSE))
+}
+
+
 best_of_starts <- function(inp, cats, w, K, seeds, maxit = 800L, tol = 1e-8) {
   cands = purrr::map(seeds, function(s) {
     set.seed(s)
@@ -303,7 +299,7 @@ search_lca <- function(cfg, dat, tick = NULL) {
   fits = purrr::map(cfg$K_range, function(K) {
     if (!is.null(tick)) tick(K)
     seeds = start_seeds(cfg, K)
-    blocks = split(seeds, cut(seq_along(seeds), n_blocks, labels = FALSE))
+    blocks = seed_blocks(seeds, n_blocks)
     parts = furrr::future_map(
       blocks, function(sd) best_of_starts(inp, cfg$cats, w, K, sd),
       .options = furrr::furrr_options(seed = NULL))
@@ -339,64 +335,6 @@ search_lca <- function(cfg, dat, tick = NULL) {
 }
 
 
-# Section 2 is the factor search: how many dimensions the correlation matrix
-#   will carry, and whether the structure reproduces.
-#______________________________________________________________________________
-
-# Parallel analysis compares each observed eigenvalue against the distribution
-#   obtained from data with the same dimensions and no structure. Retaining
-#   components above that reference is a ranking rule, not a test.
-search_cfa <- function(cfg, dat, tick = NULL) {
-  init_parallel(cfg)
-  w = dat$wt
-  n = nrow(dat)
-  p = length(cfg$items)
-
-  R = wcor(w, cfg$items, dat)
-  obs = eigen(R, only.values = TRUE)$values
-
-  set.seed(cfg$seed)
-  sim = purrr::map(seq_len(cfg$n_pa), function(i) {
-    X = matrix(stats::rnorm(n * p), n, p)
-    eigen(stats::cor(X), only.values = TRUE)$values
-  })
-  ref = apply(do.call(rbind, sim), 2, stats::quantile, 0.95)
-
-  eig = tibble::tibble(
-    component = seq_len(p),
-    eigenvalue = round(obs, 3),
-    reference = round(ref, 3),
-    retain = obs > ref)
-
-  fits = purrr::map(cfg$k_range, function(k) {
-    if (!is.null(tick)) tick(k)
-    fit_efa(k, w, cfg$items, dat)
-  }) |> rlang::set_names(as.character(cfg$k_range))
-
-  stats = purrr::imap(fits, function(f, k) {
-    fit = as_fit(f)
-    if (inherits(fit, "try-error"))
-      return(tibble::tibble(factors = as.integer(k), flag = "did not converge"))
-    m = try(lavaan::fitMeasures(fit,
-              c("cfi.scaled", "tli.scaled", "rmsea.scaled", "srmr")),
-            silent = TRUE)
-    if (inherits(m, "try-error"))
-      return(tibble::tibble(factors = as.integer(k), flag = "no fit measures"))
-    L = efa_loadings(f)
-    tibble::tibble(
-      factors = as.integer(k),
-      CFI = round(unname(m[["cfi.scaled"]]), 3),
-      TLI = round(unname(m[["tli.scaled"]]), 3),
-      RMSEA = round(unname(m[["rmsea.scaled"]]), 3),
-      SRMR = round(unname(m[["srmr"]]), 3),
-      problem_items = sum(!is.na(L$flag[!duplicated(L$item)])),
-      flag = NA_character_)
-  }) |>
-    purrr::list_rbind()
-
-  list(stats = stats, eigen = eig, fits = fits,
-       suggested = sum(eig$retain))
-}
 
 
 # Section 3 is what the analyst reads. The statistics support the reading; the
@@ -510,8 +448,7 @@ fit_final_lca <- function(cfg, dat, K) {
   w = dat$wt
 
   seeds = start_seeds(cfg, K)
-  blocks = split(seeds, cut(seq_along(seeds), max(1L, cfg$workers),
-                            labels = FALSE))
+  blocks = seed_blocks(seeds, max(1L, cfg$workers))
   parts = furrr::future_map(
     blocks, function(sd) best_of_starts(inp, cfg$cats, w, K, sd),
     .options = furrr::furrr_options(seed = NULL))
@@ -557,80 +494,9 @@ diagnose_lca <- function(fit, cfg, dat, top_pairs = 12L) {
 }
 
 
-# Section 2 is the factor arm. The item-to-factor assignment comes from the
-#   exploratory fit at the chosen number: each item goes to the factor it loads
-#   on most strongly. Shown to the analyst rather than applied silently, since
-#   an item that belongs nowhere in particular is a finding.
-#______________________________________________________________________________
 
-assign_factors <- function(efa_fit, items) {
-  L = unclass(lavInspect(as_fit(efa_fit), "std")$lambda)
-  best = colnames(L)[apply(abs(L), 1, which.max)]
-  split(rownames(L), best)[unique(best)]
-}
 
-fit_final_cfa <- function(cfg, dat, factors) {
-  check_factors(factors, cfg$items)
-  fit_cfa(dat$wt, cfg$items, dat, factors, free = NULL,
-          ordered = identical(cfg$estimator %||% "WLSMV", "WLSMV"))
-}
 
-# Whether the fit can be believed at all, checked before anything is read off
-#   it. A model that did not converge, or whose information matrix will not
-#   invert, has parameters that are not a unique solution: the numbers print,
-#   the plots draw, and nothing about them is trustworthy. lavaan says so in a
-#   console warning that an analyst will not see.
-cfa_health <- function(fit) {
-  converged = isTRUE(try(lavInspect(fit, "converged"), silent = TRUE))
-  se_ok = !inherits(try(suppressWarnings(lavInspect(fit, "se")), silent = TRUE),
-                    "try-error")
-  se_finite = if (se_ok) {
-    s = suppressWarnings(lavInspect(fit, "se"))
-    all(is.finite(unlist(s)))
-  } else FALSE
-
-  # A standardised loading outside [-1, 1] is not a strong loading; it is a
-  #   sign the solution is inadmissible.
-  lam = try(unclass(lavInspect(fit, "std")$lambda), silent = TRUE)
-  admissible = !inherits(lam, "try-error") && all(abs(lam) <= 1.001, na.rm = TRUE)
-
-  problems = c(
-    if (!converged) "the optimiser did not find a solution",
-    if (!se_finite) paste("standard errors could not be computed -- the",
-                          "information matrix would not invert, which usually",
-                          "means the model is not identified"),
-    if (!admissible) "at least one standardised loading is outside -1 to 1")
-
-  list(ok = length(problems) == 0, problems = problems)
-}
-
-diagnose_cfa <- function(fit, cfg, top_mi = 12L) {
-  L = as_tibble(unclass(lavInspect(fit, "std")$lambda), rownames = "item") |>
-    tidyr::pivot_longer(-item, names_to = "factor", values_to = "loading") |>
-    dplyr::group_by(item) |>
-    dplyr::mutate(h2 = sum(loading^2)) |>
-    dplyr::ungroup() |>
-    dplyr::filter(abs(loading) > 0.05) |>
-    dplyr::mutate(dplyr::across(c(loading, h2), \(x) round(x, 3))) |>
-    dplyr::mutate(flag = dplyr::case_when(
-      abs(loading) < 0.4 ~ "loads weakly",
-      h2 < 0.3 ~ "shares little with the battery",
-      TRUE ~ NA_character_))
-
-  mi = try(lavaan::modificationIndices(fit, sort. = TRUE, maximum.number = top_mi),
-           silent = TRUE)
-  measures = try(lavaan::fitMeasures(
-    fit, c("cfi.scaled", "tli.scaled", "rmsea.scaled", "srmr")), silent = TRUE)
-
-  list(
-    loadings = L,
-    mi = if (inherits(mi, "try-error")) NULL else
-      tibble::as_tibble(mi) |>
-        dplyr::transmute(lhs, op, rhs, mi = round(mi, 1), epc = round(epc, 3)),
-    fit = if (inherits(measures, "try-error")) NULL else
-      tibble::tibble(measure = names(measures),
-                     value = round(unname(measures), 3)))
-}
 
 
 # Section 2b is the point of the workflow: design-based uncertainty on the
@@ -779,84 +645,6 @@ measurement_se_lca <- function(cfg, dat, fit, des, rep_des) {
        replicates = ncol(weights(rep_des, "analysis")))
 }
 
-# The factor arm refits lavaan inside every replicate. Sign is anchored by the
-#   marker method rather than std.lv, because lavaan starts cold on each refit
-#   and a flipped sign would land in the variance as an enormous fake deviation.
-measurement_se_cfa <- function(cfg, dat, fit, factors, des, rep_des) {
-  init_parallel(cfg)
-  ordered = identical(cfg$estimator %||% "WLSMV", "WLSMV")
-  ref = unclass(lavInspect(fit, "std")$lambda)
-
-  # The correlation between factors is estimated in the same pass. It is a
-  #   parameter of the model and usually the first one anybody asks about, and
-  #   under a complex design its interval is wider than default software says
-  #   for the same reason every other interval here is.
-  facs = colnames(ref)
-  pairs = if (length(facs) > 1) t(utils::combn(facs, 2)) else NULL
-  psi_of = function(m) if (is.null(pairs)) numeric(0)
-    else purrr::map2_dbl(pairs[, 1], pairs[, 2], function(a, b) m[a, b])
-
-  psi_ref = unclass(lavInspect(fit, "std")$psi)
-  n_lam = length(ref)
-
-  n_out = n_lam + (if (is.null(pairs)) 0L else nrow(pairs))
-
-  # A replicate that did not converge still returns a fitted object, and its
-  #   parameters are NaN rather than absent. Left alone they propagate into the
-  #   variance and every interval comes back NA. Convergence is checked, and a
-  #   result carrying any NaN is discarded whether lavaan admitted the failure
-  #   or not.
-  theta = function(w_rep) {
-    f = suppressWarnings(try(
-      fit_cfa(w_rep, cfg$items, dat, factors, free = NULL, ordered = ordered),
-      silent = TRUE))
-    if (inherits(f, "try-error")) return(rep(NA_real_, n_out))
-    ok = isTRUE(try(lavInspect(f, "converged"), silent = TRUE))
-    if (!ok) return(rep(NA_real_, n_out))
-    s = lavInspect(f, "std")
-    v = c(as.vector(unclass(s$lambda)), psi_of(unclass(s$psi)))
-    if (anyNA(v)) rep(NA_real_, n_out) else v
-  }
-
-  est = c(as.vector(ref), psi_of(psi_ref))
-
-  # The replicate loop is written out here rather than handed to
-  #   replicate_variance(), so the number of failures is visible. It matters:
-  #   the scale factor assumes every replicate contributed, so dropping some
-  #   understates the variance rather than merely widening it.
-  Wm = weights(rep_des, type = "analysis")
-  Theta = do.call(rbind, furrr::future_map(
-    seq_len(ncol(Wm)), function(r) theta(Wm[, r]),
-    .options = furrr::furrr_options(seed = NULL)))
-
-  ok = complete.cases(Theta)
-  n_failed = sum(!ok)
-  if (n_failed >= ncol(Wm))
-    stop("The model did not converge in any replicate. No design-based ",
-         "intervals can be produced for this specification.", call. = FALSE)
-
-  d = sweep(Theta[ok, , drop = FALSE], 2, est, "-")
-  V = rep_des$scale * crossprod(d * sqrt(rep_des$rscales[ok]))
-  se = sqrt(diag(V))
-  crit = qt(0.975, degf(rep_des))
-
-  loadings = tidyr::expand_grid(factor = facs, item = rownames(ref)) |>
-    dplyr::arrange(factor, item) |>
-    dplyr::mutate(loading = as.vector(ref), se = se[seq_len(n_lam)]) |>
-    dplyr::filter(abs(loading) > 0.05) |>
-    dplyr::mutate(lo = loading - crit * se, hi = loading + crit * se,
-                  dplyr::across(c(loading, se, lo, hi), \(x) round(x, 3)))
-
-  correlations = if (is.null(pairs)) NULL else
-    tibble::tibble(a = pairs[, 1], b = pairs[, 2],
-                   r = psi_of(psi_ref),
-                   se = se[n_lam + seq_len(nrow(pairs))]) |>
-      dplyr::mutate(lo = pmax(-1, r - crit * se), hi = pmin(1, r + crit * se),
-                    dplyr::across(c(r, se, lo, hi), \(x) round(x, 3)))
-
-  list(loadings = loadings, correlations = correlations,
-       replicates = ncol(Wm), failed = n_failed)
-}
 
 # The profile plot with its intervals. Without them the picture invites an
 #   analyst to read a separation the data may not carry, which is exactly the
@@ -972,10 +760,7 @@ prompt_diagnostics <- function(diag, arm, dimension, context) {
 #   unchanged from the reports, so a label drafted here and a label drafted
 #   there are drafted the same way.
 
-label_targets <- function(state) {
-  if (identical(state$cfg$arm, "lca")) seq_along(state$model$fit$pi)
-  else colnames(unclass(lavInspect(state$model$fit, "std")$lambda))
-}
+label_targets <- function(state) seq_along(state$model$fit$pi)
 
 
 # Section 2 drafts one name at a time, writing each as it arrives.

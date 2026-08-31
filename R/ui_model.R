@@ -227,15 +227,12 @@ mod_search_server <- function(id, state) {
       cfg <- state$cfg
       dat <- bind_cols(state$design_dat,
                        state$item_frame$item_dat)[state$item_frame$in_analysis, ]
-      grid <- if (identical(cfg$arm, "lca")) cfg$K_range else cfg$k_range
+      grid <- cfg$K_range
 
       withProgress(message = "Fitting", value = 0, {
         tick <- function(k) incProgress(1 / length(grid),
                                         detail = paste("size", k))
-        res <- try(
-          if (identical(cfg$arm, "lca")) search_lca(cfg, dat, tick)
-          else search_cfa(cfg, dat, tick),
-          silent = TRUE)
+        res <- try(search_lca(cfg, dat, tick), silent = TRUE)
       })
 
       if (inherits(res, "try-error")) {
@@ -445,18 +442,9 @@ mod_model_server <- function(id, state) {
       key <- model_key(cfg, cfg$items, state$dimension, dat)
 
       res <- try(withProgress(message = "Fitting", value = 0.4, {
-        if (identical(cfg$arm, "lca")) {
-          fit <- cached("fit", key, function() fit_final_lca(cfg, dat, state$dimension))
-          setProgress(0.7, message = "Diagnosing")
-          list(fit = fit, diag = diagnose_lca(fit, cfg, dat), factors = NULL)
-        } else {
-          factors <- assign_factors(
-            state$search$fits[[as.character(state$dimension)]], cfg$items)
-          fit <- cached("fit", key, function() fit_final_cfa(cfg, dat, factors))
-          setProgress(0.7, message = "Diagnosing")
-          list(fit = fit, diag = diagnose_cfa(fit, cfg), factors = factors,
-               health = cfa_health(fit))
-        }
+        fit <- cached("fit", key, function() fit_final_lca(cfg, dat, state$dimension))
+        setProgress(0.7, message = "Diagnosing")
+        list(fit = fit, diag = diagnose_lca(fit, cfg, dat), factors = NULL)
       }), silent = TRUE)
 
       if (inherits(res, "try-error")) {
@@ -500,11 +488,7 @@ mod_model_server <- function(id, state) {
       res <- try(withProgress(message = "Refitting in every replicate",
                               value = 0.2, {
         des <- build_rep_design(dat, cfg)
-        if (arm_is(state$model, "lca"))
-          measurement_se_lca(cfg, dat, state$model$fit, des$des, des$rep_des)
-        else
-          measurement_se_cfa(cfg, dat, state$model$fit, state$model$factors,
-                             des$des, des$rep_des)
+        measurement_se_lca(cfg, dat, state$model$fit, des$des, des$rep_des)
       }), silent = TRUE)
 
       if (inherits(res, "try-error")) {
@@ -541,12 +525,7 @@ mod_model_server <- function(id, state) {
 
         tags$hr(),
         tags$h4("The measurement model"),
-        if (lca) plotOutput(ns("profiles"), height = "380px")
-        else tagList(
-          help_box("cfa_diagram"),
-          plotOutput(ns("diagram"), height = "560px"),
-          tags$h5("Which items belong to which factor"),
-          verbatimTextOutput(ns("factors"))),
+        plotOutput(ns("profiles"), height = "380px"),
 
         tags$hr(),
         tags$h4("How precise are these?"),
@@ -562,7 +541,7 @@ mod_model_server <- function(id, state) {
         tags$hr(),
         tags$h4("What the model accounts for"),
         help_box("diagnostics"),
-        if (lca) tagList(
+        tagList(
           tags$p(tags$strong("Separation: "),
                  round(state$model$diag$entropy, 3),
                  tags$span(class = "text-muted",
@@ -573,12 +552,7 @@ mod_model_server <- function(id, state) {
           tags$h5("Pairs the model accounts for least well"),
           tableOutput(ns("bvr")),
           tags$h5("Level against pattern"),
-          tableOutput(ns("ratio")))
-        else tagList(
-          tags$h5("Loadings"), tableOutput(ns("load")),
-          tags$h5("Fit"), tableOutput(ns("fitm")),
-          tags$h5("Pairs the model accounts for least well"),
-          tableOutput(ns("mi"))),
+          tableOutput(ns("ratio"))),
 
         tags$hr(),
         actionButton(ns("read")," What do these say?"),
@@ -596,36 +570,13 @@ mod_model_server <- function(id, state) {
 
     output$variance_out <- renderUI({
       req(state$measure)
-      if (arm_is(state$measure, "lca"))
-        tagList(
-          tags$p(class = "text-muted",
-                 "From ", state$measure$replicates,
-                 " jackknife replicates, one refit each."),
-          plotOutput(ns("prof_ci"), height = "400px"),
-          tags$h5("Group sizes"),
-          tableOutput(ns("shares_ci")))
-      else
-        tagList(
-          tags$p(class = "text-muted",
-                 "From ",
-                 state$measure$replicates - (state$measure$failed %||% 0L),
-                 " of ", state$measure$replicates,
-                 " jackknife replicates, one refit each."),
-          if ((state$measure$failed %||% 0L) > 0)
-            warn_box(
-              tags$strong(state$measure$failed, " replicate refits did not ",
-                          "converge and were dropped."),
-              tags$div(
-                "Every replicate is meant to contribute, so the intervals ",
-                "below are narrower than they should be rather than merely ",
-                "noisier. Treat them as a lower bound. A handful is common; ",
-                "a large share usually means the model is asking more of the ",
-                "battery than it can carry.")),
-          plotOutput(ns("load_ci"), height = "400px"),
-          tableOutput(ns("load_ci_tbl")),
-          if (!is.null(state$measure$correlations))
-            tagList(tags$h5("Correlation between the factors"),
-                    tableOutput(ns("corr_tbl"))))
+      tagList(
+        tags$p(class = "text-muted",
+               "From ", state$measure$replicates,
+               " jackknife replicates, one refit each."),
+        plotOutput(ns("prof_ci"), height = "400px"),
+        tags$h5("Group sizes"),
+        tableOutput(ns("shares_ci")))
     })
 
     # Every panel below asks two questions before it renders: is this object
@@ -650,44 +601,11 @@ mod_model_server <- function(id, state) {
                   `95% interval` = paste0("[", lo, ", ", hi, "]"))
     }, width = "100%")
 
-    output$load_ci <- renderPlot({
-      req(arm_is(state$measure, "cfa"), state$measure$loadings)
-      plot_loadings_ci(state$measure$loadings)
-    }, bg = "transparent")
-
-    output$load_ci_tbl <- renderTable({
-      req(arm_is(state$measure, "cfa"), state$measure$loadings)
-      state$measure$loadings |>
-        transmute(Factor = factor, Item = item, Loading = loading, SE = se,
-                  `95% interval` = paste0("[", lo, ", ", hi, "]"))
-    }, width = "100%")
-
-    output$corr_tbl <- renderTable({
-      req(arm_is(state$measure, "cfa"), state$measure$correlations)
-      state$measure$correlations |>
-        transmute(Between = paste(a, "and", b), r = r, SE = se,
-                  `95% interval` = paste0("[", lo, ", ", hi, "]"))
-    }, width = "100%")
-
-    # The correlations are the measure's, so they are only passed when the
-    #   measure belongs to this model. Otherwise the diagram draws from the
-    #   model alone, which is what it does before the variance step has run.
-    output$diagram <- renderPlot({
-      req(arm_is(state$model, "cfa"), state$model$fit)
-      plot_cfa_diagram(
-        state$model$fit,
-        correlations = if (arm_is(state$measure, "cfa"))
-          state$measure$correlations)
-    }, bg = "transparent")
-
     output$disc_plot <- renderPlot({
       req(arm_is(state$model, "lca"), state$model$diag$discrimination)
       plot_discrimination(state$model$diag$discrimination)
     }, bg = "transparent")
 
-    output$factors <- renderPrint({
-      req(arm_is(state$model, "cfa"), state$model$factors)
-      state$model$factors })
     output$disc  <- renderTable({
       req(arm_is(state$model, "lca"), state$model$diag$discrimination)
       state$model$diag$discrimination |> mutate(flag = coalesce(flag, "")) },
@@ -699,18 +617,6 @@ mod_model_server <- function(id, state) {
     output$ratio <- renderTable({
       req(arm_is(state$model, "lca"), state$model$diag$ratio)
       state$model$diag$ratio },
-      width = "100%")
-    output$load  <- renderTable({
-      req(arm_is(state$model, "cfa"), state$model$diag$loadings)
-      state$model$diag$loadings |> mutate(flag = coalesce(flag, "")) },
-      width = "100%")
-    output$fitm  <- renderTable({
-      req(arm_is(state$model, "cfa"), state$model$diag$fit)
-      state$model$diag$fit },
-      width = "100%")
-    output$mi    <- renderTable({
-      req(arm_is(state$model, "cfa"), state$model$diag$mi)
-      state$model$diag$mi },
       width = "100%")
 
     observeEvent(input$read, {
@@ -1036,14 +942,7 @@ mod_labels_server <- function(id, state) {
         } else {
           output[[paste0("load_", i)]] <- renderTable({
             fn <- state$labels$target[i]
-            if (arm_is(state$measure, "cfa"))
-              state$measure$loadings |>
-                filter(factor == fn) |>
-                arrange(desc(abs(loading))) |>
-                transmute(Item = item, Loading = loading,
-                          `95% interval` = paste0("[", lo, ", ", hi, "]"))
-            else
-              state$model$diag$loadings |>
+            state$model$diag$loadings |>
                 filter(factor == fn) |>
                 arrange(desc(abs(loading))) |>
                 transmute(Item = item, Loading = loading)

@@ -348,9 +348,14 @@ mod_design_server <- function(id, state) {
       req(state$design_checks)
       state$design_checks |>
         transmute(Check = check, Value = value,
-                  Status = recode_values(status,
-                                         "ok" ~ "", "warn" ~ "warn",
-                                         "stop" ~ "STOP"),
+                  # A named lookup rather than a dplyr recode verb. This one
+                  #   line has now been written three ways: recode_values()
+                  #   does not exist before dplyr 1.2.0, and case_match() is
+                  #   deprecated from 1.2.0 onward, so either choice warns or
+                  #   fails on half the installed base. Indexing a named vector
+                  #   is base R, is not going to be deprecated, and reads at
+                  #   least as clearly.
+                  Status = unname(WISE_STATUS_LABEL[status]),
                   Note = note)
     }, width = "100%")
 
@@ -524,7 +529,95 @@ mod_items_server <- function(id, state) {
                        options = list(placeholder = "Choose the items")),
         checkboxInput(ns("complete"), "Fit on item-complete cases only",
                       value = TRUE),
-        actionButton(ns("build"), "Summarise", class = "btn-primary"))
+        actionButton(ns("build"), "Summarise", class = "btn-primary"),
+        actionButton(ns("propose"), "What else might belong here?"),
+        uiOutput(ns("suggestions")))
+    })
+
+    # The model reads every question wording in the file at once, which is the
+    #   one thing it can do that an analyst an hour into a codebook cannot. It
+    #   proposes; R scores each proposal against the battery before the analyst
+    #   sees it; the analyst adds nothing they did not choose to add.
+    observeEvent(input$propose, {
+      if (length(input$items) < 3) {
+        showNotification("Choose at least three items first.", type = "message")
+        return()
+      }
+      if (!nzchar(state$question %||% "")) {
+        showNotification(
+          paste("Write the research question on the Project tab first. Without",
+                "it there is nothing to judge an item against."),
+          type = "message", duration = NULL)
+        return()
+      }
+
+      withProgress(message = "Reading the codebook", value = 0.4, {
+        cand <- candidate_items(state$codebook)
+        chosen <- dplyr::filter(cand, variable %in% input$items)
+
+        res <- try(llm_json(
+          prompt_item_suggestions(state$question, chosen, cand,
+                                  state$context %||% ""),
+          role = "pm", system_prompt = persona_pm,
+          validate = validate_fields("suggestions")), silent = TRUE)
+
+        if (inherits(res, "try-error")) {
+          showNotification(conditionMessage(attr(res, "condition")),
+                           type = "error", duration = NULL)
+          return()
+        }
+
+        sug <- res$suggestions
+        if (!length(sug)) {
+          state$item_suggestions <- tibble(variable = character(0))
+          showNotification(
+            "The methodologist proposes nothing: it reads the battery as already covering the question.",
+            type = "message")
+          return()
+        }
+
+        setProgress(0.7, message = "Scoring the suggestions")
+        tbl <- tibble(
+          variable = map_chr(sug, function(s) s$variable %||% NA_character_),
+          facet = map_chr(sug, function(s) s$facet %||% NA_character_),
+          reasoning = map_chr(sug, function(s) s$reasoning %||% NA_character_))
+
+        ev <- evaluate_suggestions(tbl$variable, state$raw, input$items,
+                                   state$design_dat,
+                                   as.numeric(input$na_codes))
+        state$item_suggestions <- left_join(tbl, ev, by = "variable")
+      })
+    })
+
+    output$suggestions <- renderUI({
+      req(state$item_suggestions)
+      s <- state$item_suggestions
+      if (!nrow(s)) return(advice_box(
+        tags$p("The methodologist proposes no further items for this question.")))
+
+      advice_box(
+        tags$p(tags$strong("Proposed by the methodologist, scored by R.")),
+        tags$p(class = "text-muted",
+               "The reasoning comes from the question wording alone — it has ",
+               "seen no answers. The numbers beside it are computed from your ",
+               "data. Shares with battery is the mean absolute correlation ",
+               "with the items you chose: low is not disqualifying for this ",
+               "model, since an item that separates a group the others miss ",
+               "is exactly an item that correlates weakly with them."),
+        tags$ul(pmap(s, function(variable, facet, reasoning, n_categories,
+                                missing_pct, modal_pct, mean_abs_r, note) {
+          tags$li(
+            tags$strong(variable), " — ", facet,
+            tags$div(class = "text-muted", reasoning),
+            tags$div(
+              sprintf("%s categories · %s%% missing · %s%% give the modal answer · shares with battery %s",
+                      n_categories, missing_pct, modal_pct,
+                      if (is.na(mean_abs_r)) "not computable" else mean_abs_r)),
+            if (!is.na(note)) tags$div(class = "text-warning", note))
+        })),
+        tags$p(class = "text-muted",
+               "Nothing has been added. Put any of these into the battery ",
+               "above yourself, then press Summarise again."))
     })
 
     # Every failure here is a statement about the battery the analyst chose --
@@ -540,6 +633,7 @@ mod_items_server <- function(id, state) {
                 silent = TRUE)
       if (inherits(fr, "try-error")) {
         state$item_frame <- NULL; state$item_summary <- NULL
+        state$item_suggestions <- NULL
         state$arm_diag <- NULL; state$arm_advice <- NULL
         showNotification(conditionMessage(attr(fr, "condition")),
                          type = "error", duration = NULL)
@@ -601,55 +695,15 @@ mod_items_server <- function(id, state) {
       tagList(
         help_box("arm_choice"),
 
-        tags$h5("What the answers suggest"),
+        tags$h5("Does this battery suit the model this tool fits?"),
         help_box("arm_evidence"),
         tableOutput(ns("arm_tbl")),
 
-        tags$h5("What do you expect?"),
-        radioButtons(
-          ns("preference"), NULL,
-          choiceNames = list(
-            tags$span(tags$strong("Distinct groups."),
-                      " People fall into types that answer in different",
-                      " patterns. Each respondent gets a group."),
-            tags$span(tags$strong("Degrees of one thing."),
-                      " Everyone sits on a single scale from low to high.",
-                      " Each respondent gets a score.")),
-          choiceValues = list("lca", "cfa")),
-
         help_box("arm_ask"),
         actionButton(ns("ask"), "Ask the methodologist"),
-        actionButton(ns("commit"), "Use this and continue", class = "btn-primary"),
-        uiOutput(ns("arm_advice")),
-        uiOutput(ns("estimator_block")))
-    })
-
-    # Offered only where the response scales justify it. Treating a two- or
-    #   three-category item as continuous is not an approximation, it is wrong;
-    #   at five or more the approximation is one most methodologists would
-    #   accept, and it is the difference between scoring everyone and scoring
-    #   only complete responders.
-    output$estimator_block <- renderUI({
-      req(state$arm_diag)
-      if (!identical(input$preference, "cfa")) return(NULL)
-      if (state$arm_diag$min_categories < 5) return(NULL)
-
-      tagList(
-        tags$hr(),
-        tags$h5("How should the answer scales be treated?"),
-        help_box("estimator"),
-        radioButtons(
-          ns("estimator"), NULL,
-          choiceNames = list(
-            tags$span(tags$strong("As ordered categories."),
-                      " More exact. Only respondents who answered every",
-                      " question can be given a score."),
-            tags$span(tags$strong("As a continuous scale."),
-                      " An approximation. Respondents who skipped some",
-                      " questions can still be scored from the ones they",
-                      " answered.")),
-          choiceValues = list("WLSMV", "ML"),
-          selected = state$estimator %||% "WLSMV"))
+        actionButton(ns("commit"), "Use this battery and continue",
+                     class = "btn-primary"),
+        uiOutput(ns("arm_advice")))
     })
 
     output$arm_tbl <- renderTable({
@@ -661,16 +715,18 @@ mod_items_server <- function(id, state) {
                   `Explained by one scale %` = var_explained_1)
     }, width = "100%")
 
-    # The model reads R's numbers and the stated goal, and argues once. It never
-    #   overrides: pressing Use this arm is what settles it.
+    # The model reads R's numbers and says whether the battery suits a class
+    #   model. It cannot switch the tool to something else, so where the
+    #   evidence points at one continuum its job is to say so plainly and name
+    #   the alternative rather than to offer a choice this app cannot honour.
     observeEvent(input$ask, {
       req(state$arm_diag, state$item_summary)
       withProgress(message = "Asking", value = 0.5, {
         res <- try(llm_json(
-          prompt_arm_recommendation(state$arm_diag, state$item_summary,
-                                    input$preference, state$context %||% ""),
+          prompt_battery_suitability(state$arm_diag, state$item_summary,
+                                     state$context %||% ""),
           role = "pm", system_prompt = persona_pm,
-          validate = validate_fields(c("recommendation", "reasoning"))),
+          validate = validate_fields(c("verdict", "reasoning"))),
           silent = TRUE)
         if (inherits(res, "try-error")) {
           showNotification(conditionMessage(attr(res, "condition")),
@@ -684,31 +740,33 @@ mod_items_server <- function(id, state) {
     output$arm_advice <- renderUI({
       req(state$arm_advice)
       a <- state$arm_advice
-      agrees <- isTRUE(a$agrees_with_preference)
+      continuum <- isTRUE(a$recommend_cfa)
       advice_box(
         tags$p(tags$strong(
-          if (agrees) "The methodologist agrees with you."
-          else "The methodologist disagrees with you.")),
+          if (continuum)
+            "This battery looks like one continuum, which this tool does not fit."
+          else "This battery suits the model this tool fits.")),
         tags$p(a$reasoning),
+        if (continuum) tags$p(
+          "A weighted confirmatory factor analysis is the right model here: ",
+          "fit it with ", tags$code("lavaan::cfa()"), " using ",
+          tags$code("estimator = \"WLSMV\""), " and ",
+          tags$code("sampling.weights"), ", and take the standard errors from ",
+          "the same stratified jackknife this tool uses rather than from the ",
+          "default output. Segments fitted to a continuum come out as an ",
+          "ordered staircase that reads like a finding and is an artefact of ",
+          "the model."),
         tags$p(class = "text-muted",
-               "Your choice is what runs. A disagreement is recorded in the ",
-               "report either way."))
+               "This is advice, not a gate. You can continue either way, and ",
+               "the verdict is recorded in the report."))
     })
 
     observeEvent(input$commit, {
-      req(input$preference, state$item_frame)
-      state$arm <- input$preference
-      state$estimator <- if (identical(input$preference, "cfa"))
-        (input$estimator %||% "WLSMV") else NULL
+      req(state$item_frame)
+      state$arm <- "lca"
 
-      showNotification(
-        paste0("Set to ",
-               if (identical(input$preference, "lca")) "distinct groups"
-               else paste0("one continuum, items treated as ",
-                           if (identical(state$estimator, "ML"))
-                             "a continuous scale" else "ordered categories"),
-               "."),
-        type = "message")
+      showNotification("Battery accepted. Continue to Review.",
+                       type = "message")
     })
   })
 }

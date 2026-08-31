@@ -8,7 +8,6 @@
 #   engine_03_design_variance.R
 #   engine_04_lca_predict.R
 #   engine_05_prompts_label.R
-#   engine_06_cfa.R
 #   engine_07_domain_read.R
 
 # ---- engine_00_utils ---------------------------------------------------
@@ -314,9 +313,13 @@ bvr_pairs <- function(df, w, items, fit) {
 #   than replicate construction, so continuing would  understate variance 
 #   in the strata with least information.
 build_rep_design <- function(dat, cfg) {
+  # dplyr::count by name: matrixStats also exports count(), it is in this
+  #   project's dependency list, and attaching it after dplyr masks the one
+  #   meant here. The failure is a vctrs message about a list, several frames
+  #   from anything that names a design.
   lonely = dat |>
     distinct(.data[[cfg$strata]], .data[[cfg$psu]]) |>
-    count(.data[[cfg$strata]], name = "n_psu") |>
+    dplyr::count(.data[[cfg$strata]], name = "n_psu") |>
     filter(n_psu < 2)
 
   if (nrow(lonely) > 0) {
@@ -353,7 +356,18 @@ bch_weights <- function(post, modal, w) {
   K = ncol(post)
   num = crossprod(w * post, outer(modal, seq_len(K), `==`) + 0)
   D = sweep(num, 1, rowSums(num), "/")
-  solve(D)[modal, , drop = FALSE]
+
+  # A segment that takes no modal assignments inside a replicate makes D
+  #   singular. Left to solve() that arrives as a LAPACK message naming a
+  #   matrix position, which tells the analyst nothing. Named here it says
+  #   what it means: the segment is too small to survive deleting one unit.
+  Dinv = try(solve(D), silent = TRUE)
+  if (inherits(Dinv, "try-error"))
+    stop("The classification table is singular, so the bias correction has ",
+         "no inverse to apply. A segment took no modal assignments in one ",
+         "replicate, which means it is too small to survive deleting a ",
+         "sampling unit. Refit with fewer segments.", call. = FALSE)
+  Dinv[modal, , drop = FALSE]
 }
 
 
@@ -414,20 +428,12 @@ persona_lca <- paste(
   "high probability. You interpret a segment strictly from these",
   "probabilities and the item wording, never from outside assumptions.")
 
-persona_cfa <- paste(
-  "You are a senior survey methodologist who reads confirmatory factor",
-  "analysis (CFA) measurement models. A factor is a single continuum running",
-  "from low to high, and each item is a fallible measurement of it. An item's",
-  "standardized loading says how strongly that item tracks the factor: near 1",
-  "means the item almost is the factor, near 0 means it carries something",
-  "else. You name the factor from the items that load on it most strongly and",
-  "the wording of those items, never from outside assumptions. A high loading",
-  "tells you the item belongs, not which end of the scale is which; the item",
-  "wording tells you that.")
-
-# Same rules for both arms. Rule 4 is the one that keeps output parseable and
-#    rule 3 is the one that stops a diffuse profile from being written up as 
-# if it were sharp.
+# Rule 4 keeps a diffuse profile from being written up as if it were sharp,
+#   rule 6 keeps the set of names readable as a set, and rules 7 and 8 exist
+#   because a run produced "Discontented, Anti-Gay, Poor" alongside four other
+#   labels beginning "Discontented". Both are failures of the same kind: a name
+#   is a heading in somebody's report, and it has to describe how a group
+#   answered rather than judge who they are.
 rules_label <- paste(
   "RULES:",
   "1. Use only the numbers and item wording shown. Survey context only",
@@ -440,7 +446,20 @@ rules_label <- paste(
   "3. Anchor every statement to the items that stand out most.",
   "4. If nothing stands out, say the profile is diffuse rather than inventing",
   "   a theme.",
-  "5. Return only valid JSON: no prose before or after, no markdown fences.",
+  "5. Name the segment for how it answered, not for what its members are.",
+  "   Describe positions and circumstances, never character, worth or identity.",
+  "   Write the neutral form of any contested topic: a segment that disapproved",
+  "   of same-sex marriage is one that answered low on that question, not an",
+  "   'anti-gay' segment. Nothing that would embarrass the analyst as a heading",
+  "   in a published table.",
+  "6. The label has to identify this segment among the others in the same",
+  "   model. Do not open two labels with the same word, and do not build a set",
+  "   in which one adjective appears throughout: a reader scanning the list",
+  "   sees the first word first, and a column of names that all begin alike",
+  "   distinguishes nothing.",
+  "7. Prefer the concrete over the evaluative. 'Renting, food-insecure' names",
+  "   answers; 'struggling' rates people.",
+  "8. Return only valid JSON: no prose before or after, no markdown fences.",
   sep = "\n")
 
 # Domain rules are stricter because the reader will act on them. 
@@ -522,23 +541,41 @@ prompt_segment_label <- function(fit, k, dictionary, items, context = NULL) {
 #   label, since neither call saw the other. 
 # One closing call edits only the labels  that collide, and runs only when 
 #   this mechanical check fires.
-labels_collide <- function(labels) {
+labels_collide <- function(labels, overlap = 0.5, repeats = 3L) {
   # One name has nothing to collide with, and combn() will not enumerate the
   #   pairs of a single element -- it stops with "n < m". Because t() is an S4
   #   generic once Matrix is loaded, that surfaces as "error in evaluating the
   #   argument 'x' in selecting a method for function 't'", which names neither
-  #   this function nor the cause. A one-factor CFA is exactly this case: the
-  #   class arm always has at least two segments, so nothing reached it until
-  #   the factor arm did.
-  if (length(labels) < 2L) return(FALSE)
+  #   this function nor the cause.
+  if (length(labels) < 2L || anyNA(labels)) return(FALSE)
 
-  ws = map(str_squish(tolower(labels)), function(s) unique(strsplit(s, " ")[[1]]))
+  words = map(str_squish(tolower(labels)),
+              function(s) unique(strsplit(s, "[ ,]+")[[1]]))
+
+  # Two labels that share most of their words.
   pr = t(combn(length(labels), 2L))
-  any(map_dbl(seq_len(nrow(pr)), function(i) {
-    a = ws[[pr[i, 1]]]
-    b = ws[[pr[i, 2]]]
+  pairwise = any(map_dbl(seq_len(nrow(pr)), function(i) {
+    a = words[[pr[i, 1]]]
+    b = words[[pr[i, 2]]]
+    if (!length(a) || !length(b)) return(0)
     length(intersect(a, b)) / length(union(a, b))
-  }) >= 0.5)
+  }) >= overlap)
+
+  # A word that opens several labels at once. On a real run five of eight
+  #   segments began "Discontented" and this function returned FALSE: each
+  #   pair shared one word out of three or four, scoring about 0.25, well
+  #   under the pairwise threshold. Nothing was wrong with the threshold --
+  #   the shape of the problem was different. A reader scanning a contents
+  #   list sees the first word, so a first word used three times or more is a
+  #   collision however little else the labels share.
+  first = map_chr(words, function(w) if (length(w)) w[[1]] else NA_character_)
+  leading = any(table(first[!is.na(first)]) >= repeats)
+
+  # The same word everywhere, wherever it sits. "Segment" in every label is
+  #   not distinguishing anything either.
+  common = length(reduce(words, intersect)) > 0
+
+  pairwise || leading || common
 }
 
 prompt_harmonize <- function(lab) {
@@ -547,10 +584,16 @@ prompt_harmonize <- function(lab) {
     "DRAFT LABELS FOR THE SEGMENTS OF ONE LATENT CLASS ANALYSIS (LCA) MODEL\n",
     "{paste(rows, collapse = '\n')}\n\n",
     "TASK\n",
-    "Some labels are too similar to tell apart. Edit ONLY the labels that ",
-    "overlap, as little as possible, so every label is distinct; anchor each ",
-    "edit to that segment's own description. Keep every non-overlapping label ",
+    "These labels do not tell the segments apart. Edit as few of them as ",
+    "possible so that every label is distinct; anchor each edit to that ",
+    "segment's own description, and keep any label that is already distinct ",
     "verbatim. Do not change any description. Labels stay 2 to 5 words.\n\n",
+    "Two labels can fail to distinguish in more than one way. They may share ",
+    "most of their words; they may open with the same word, which is what a ",
+    "reader scanning a list sees first; or one word may run through every ",
+    "label in the set, in which case it is carrying no information and the ",
+    "labels have to be rebuilt around what differs rather than what is ",
+    "common. Fix whichever applies here.\n\n",
     "{rules_label}\n",
     'JSON (one array, all segments): [{{"class": 1, "label": "..."}}, ...]')
 }
@@ -561,93 +604,15 @@ prompt_harmonize <- function(lab) {
 #   the same prompt through llm_json() and writes nothing to disk. Names are
 #   the analyst's to edit in the app, not a CSV's to cache.
 
-# The loading table, one line per item, sorted so the analyst and the model 
-#   read the strongest indicators first.
-format_factor_block <- function(fit, dictionary, factor_name = "f") {
-  L = as_tibble(unclass(lavInspect(fit, "std")$lambda), rownames = "item") |>
-    pivot_longer(-item, names_to = "factor", values_to = "loading") |>
-    filter(factor == factor_name) |>
-    arrange(desc(abs(loading)))
-  lines = map_chr(seq_len(nrow(L)), function(i) {
-    d = filter(dictionary, item == L$item[i])
-    str_glue('  {L$item[i]} loading {sprintf("%.2f", L$loading[i])} "{d$question}"')
-  })
-  str_glue("FACTOR {factor_name}, items ordered by loading:\n",
-           paste(lines, collapse = "\n"))
-}
-
-prompt_factor_label <- function(fit, dictionary, factor_name = "f",
-                                scale_desc = NULL, context = NULL) {
-  ctx = if(!is.null(context) && nzchar(context)) str_glue("SURVEY CONTEXT\n{context}\n\n") else ""
-  sc = if(!is.null(scale_desc)) str_glue("RESPONSE SCALE\n{scale_desc}\n\n") else ""
-  str_glue(
-    "{ctx}{sc}",
-    "ONE FACTOR FROM A CONFIRMATORY FACTOR ANALYSIS (CFA)\n",
-    "{format_factor_block(fit, dictionary, factor_name)}\n\n",
-    "TASK\n",
-    "Name what this factor measures, in two to five words, and describe it in ",
-    "one or two sentences. Lean on the items with the largest loadings. State ",
-    "which end of the scale is high using the response scale above, since the ",
-    "loadings do not tell you that.\n\n",
-    "{rules_label}\n",
-    'JSON (one object): {{"label": "...", "description": "...", "high_end": "..."}}')
-}
+# format_factor_block() and prompt_factor_label() went with the archived arm.
+#   They are in archive/cfa_arm.R; nothing in the class model drafts a name
+#   from loadings.
 
 
 
-# ---- engine_06_cfa -----------------------------------------------------
 
-# Section 6 is the CFA arm: a design-weighted correlation matrix, EFA over a
-#   range of factor counts, and the CFA itself. 
-# Model syntax is built from the item vector it is handed, 
-#   so there is no second item list to keep in sync.
-#______________________________________________________________________________
 
-# lavaan's efa() hands back an efaList, which is a list of fits rather than a
-#   fit. lavInspect and fitMeasures choke on it, so unwrap first.
-as_fit <- function(f) {
-  if(inherits(f, "efaList")) f[[1]] else f
-}
 
-# Builds the model string. factors is a named list of item vectors, one per
-#   factor, and the names carry through to the output. 
-# NULL gives one factor  over everything passed. 
-# free takes residual covariances or constraints as character strings, e.g. 
-#   "armed_forces ~~ police" for a pair the modification indices
-#   flag, or "g ~~ 0*support" to make a bifactor orthogonal.
-cfa_syntax <- function(items, factors = NULL, free = NULL) {
-  spec = if(is.null(factors)) paste("f =~", paste(items, collapse = " + "))
-         else imap_chr(factors, function(it, nm) paste(nm, "=~", paste(it, collapse = " + ")))
-  paste(c(spec, free), collapse = "\n  ")
-}
-
-# Marker method rather than std.lv. 
-# Fixing the first loading anchors the sign as well as the scale, and that 
-#   matters because lavaan starts cold on every replicate refit; a sign flip 
-#   would land in the variance as a huge fake deviation. 
-# Same trick as align_to() in the LCA arm, different mechanism.
-fit_cfa <- function(w, items, data, factors = NULL, free = NULL, ordered = TRUE) {
-  d = mutate(data, .w = w)
-  if(ordered) {
-    cfa(cfa_syntax(items, factors, free), data = d, ordered = items,
-        estimator = "WLSMV", sampling.weights = ".w")
-  } else {
-    cfa(cfa_syntax(items, factors, free),
-        data = mutate(d, across(all_of(items), as.numeric)),
-        estimator = "ML", sampling.weights = ".w", missing = "ml")
-  }
-}
-
-# Every item named in the factor spec has to be in the analysis set, or lavaan
-#   fails somewhere unhelpful. 
-# Usually this fires because an item was added to cfa_drop and not removed 
-#   from cfa_factors.
-check_factors <- function(factors, items) {
-  missing = setdiff(unlist(factors), items)
-  if(length(missing)) stop("cfa_factors names items not in cfa_items: ",
-                           paste(missing, collapse = ", "))
-  invisible(TRUE)
-}
 
 
 
@@ -657,47 +622,29 @@ wcor <- function(w, items, data) {
   d = mutate(data, .w = w)
   out = try(lavCor(select(d, all_of(items), .w), ordered = items,
                    sampling.weights = ".w", output = "cor"), silent = TRUE)
-  if(!inherits(out, "try-error")) return(as.matrix(out))
+
+  if (!inherits(out, "try-error")) {
+    R = as.matrix(out)
+    # A different lavaan version that kept the weight column would return a
+    #   matrix one row larger, and every eigenvalue read from it would be a
+    #   number about the wrong thing.
+    if (!identical(colnames(R), items))
+      stop("lavCor returned a matrix over ", paste(colnames(R), collapse = ", "),
+           " rather than over the items. Check the lavaan version before ",
+           "reading anything computed from it.", call. = FALSE)
+    return(R)
+  }
+
+  # Falling back changes the estimator, so it says so: polychoric and Pearson
+  #   correlations are not interchangeable and their eigenvalues differ.
+  warning("lavCor refused these arguments, so the correlations below are ",
+          "weighted Pearson rather than polychoric.", call. = FALSE)
   cov2cor(as.matrix(svyvar(reformulate(items),
                            svydesign(ids = ~1, weights = ~.w, data = d),
                            na.rm = TRUE)))
 }
 
-# Which items load where, at the usual 0.40 cutoff, plus the flags worth acting
-#   on: an item that loads nowhere, one that loads on two factors, and one 
-#   whose communality says it shares almost nothing with the battery.
-efa_loadings <- function(f, salient = 0.40) {
-  fit = as_fit(f)
-  if(inherits(fit, "try-error")) return(NULL)
-  std = lavInspect(fit, "std")
-  L = unclass(std$lambda)
-  # geomin is an oblique rotation, so the factors correlate and communality is
-  #   diag(L Phi L'), not the sum of squared loadings. Summing the squares
-  #   understates it whenever the factors are positively correlated, which
-  #   flags items as "low communality" that share plenty with the battery.
-  #   Phi is the standardised factor covariance, i.e. their correlation.
-  Phi = unclass(std$psi)
-  h2_item = diag(L %*% Phi %*% t(L))
-  as_tibble(L, rownames = "item") |>
-    pivot_longer(-item, names_to = "factor", values_to = "loading") |>
-    group_by(item) |>
-    mutate(n_salient = sum(abs(loading) >= salient),
-           h2 = h2_item[[dplyr::first(item)]]) |>
-    ungroup() |>
-    mutate(flag = case_when(n_salient == 0 ~ "loads nowhere",
-                            n_salient > 1 ~ "cross-loads",
-                            h2 < 0.30 ~ "low communality",
-                            TRUE ~ NA_character_))
-}
 
-# The search fit. Same estimator and weighting as fit_cfa, so the exploratory
-#   pass and the confirmatory model are on the same footing.
-fit_efa <- function(k, w, items, data) {
-  d = mutate(data, .w = w)
-  try(efa(data = select(d, all_of(items), .w), nfactors = k, ordered = items,
-          estimator = "WLSMV", sampling.weights = ".w", rotation = "geomin"),
-      silent = TRUE)
-}
 
 
 
@@ -728,7 +675,7 @@ pick_estimator <- function(dom, est) {
 #   result gets read and written up. Levels under min_n are marked rather than
 #   dropped so the model can see they exist and still be told to leave them
 #   alone. values_header names what the numbers are, because the class arm
-#   reports shares and the factor arm reports mean positions. est names the
+#   reports shares. est names the
 #   estimator whose rows are shown, rather than taking one by position.
 format_domain_block <- function(
     dom, marg, variable, labels = NULL, min_n = 30,
@@ -742,7 +689,11 @@ format_domain_block <- function(
     dd = filter(d, segment == k)
     cells = map_chr(seq_len(nrow(dd)), function(i) {
       n_lv = m$n[m$level == dd$level[i]]
-      flag = if(length(n_lv) && n_lv < min_n) " [too small]" else ""
+      # A level the marginals did not count gives n_lv of length zero or NA.
+      #   Neither is evidence that the level is small, and `if (NA)` is an
+      #   error rather than a FALSE, so both carry no flag instead of halting.
+      flag = if (length(n_lv) == 1 && !is.na(n_lv) && n_lv < min_n)
+        " [too small]" else ""
       sprintf("%s %.2f [%.2f, %.2f]%s", dd$level[i], dd$p[i], dd$lo[i],
               dd$hi[i], flag)
     })

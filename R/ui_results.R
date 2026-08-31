@@ -37,21 +37,13 @@ mod_score_server <- function(id, state) {
       tagList(
         tags$h4("Score respondents"),
         help_box("scoring"),
-        if (identical(state$cfg$arm, "cfa") &&
-            !identical(state$cfg$estimator, "ML"))
-          tags$p(class = "text-warning",
-                 "Items are treated as ordered categories, so only ",
-                 "respondents who answered every one can be scored. ",
-                 "Treating them as continuous would reach more people at ",
-                 "the cost of an approximation."),
         actionButton(ns("run"), "Score", class = "btn-primary"))
     })
 
     observeEvent(input$run, {
       req(state$labels)
       res <- try(withProgress(message = "Scoring", value = 0.4, {
-        sc <- if (identical(state$cfg$arm, "lca")) score_lca(state)
-              else score_cfa(state)
+        sc <- score_lca(state)
 
         setProgress(0.75, message = "Building the design")
         # The design is rebuilt on the scored frame rather than reused. Case
@@ -184,8 +176,7 @@ mod_domains_server <- function(id, state) {
         # Four steps in both arms now that the factor arm computes its
         #   contrasts too: unweighted, design-based, corrected, contrasts.
         tick <- function(what) incProgress(1 / 4, detail = what)
-        out <- if (identical(state$cfg$arm, "lca")) domains_lca(state, tick)
-               else domains_cfa(state, tick)
+        out <- domains_lca(state, tick)
         out$marg <- domain_marginals(
           if (identical(state$cfg$arm, "lca"))
             filter(state$scored, !is.na(segment)) else filter(state$scored, scored),
@@ -216,7 +207,6 @@ mod_domains_server <- function(id, state) {
         tags$hr(),
         selectInput(ns("which"), "Domain", choices = state$cfg$aux,
                     width = "40%"),
-        if (identical(state$cfg$arm, "cfa")) help_box("factor_scale"),
         plotOutput(ns("plot"), height = "540px"),
         tags$h5("Differences the analysis resolves"),
         help_box("resolved"),
@@ -263,8 +253,7 @@ mod_domains_server <- function(id, state) {
 
     output$plot <- renderPlot({
       req(state$domains, input$which)
-      plot_domain(state$domains$dom, input$which, state$labels$Label,
-                  state$cfg$arm)
+      plot_domain(state$domains$dom, input$which, state$labels$Label)
     }, bg = "transparent")
 
     output$resolved <- renderText({
@@ -443,21 +432,15 @@ mod_report_server <- function(id, state) {
         incProgress(0.3, detail = "report")
 
         # HTML is the report. It is self-contained, every figure is embedded,
-        #   it opens in Word, and it needs neither officer nor flextable --
-        #   which need Rtools on a mirror that has no binary for them, and so
-        #   cannot be assumed on a server.
+        #   it opens in Word, and it needs no package beyond the ones the
+        #   analysis already uses.
         rep <- build_report_html(state, state$report_summary,
                                  state$report_not_answered)
-
-        word <- if (all(vapply(c("officer", "flextable"), requireNamespace,
-                               logical(1), quietly = TRUE)))
-          build_report(state, state$report_summary, state$report_not_answered)
-        else NULL
 
         incProgress(0.4, detail = "data file")
         dat <- export_data(state, input$format)
         incProgress(0.3, detail = "tables")
-        c(rep, word, dat, unlist(export_tables(state)))
+        c(rep, dat, unlist(export_tables(state)))
       }), silent = TRUE)
 
       if (inherits(res, "try-error")) {
