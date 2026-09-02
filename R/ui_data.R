@@ -754,11 +754,17 @@ mod_recode_server <- function(id, state) {
       }) |> set_names(names(loaded()))
     })
 
+    # choices is a named list, not a named character vector. An update message
+    #   is serialised to JSON on its way to the browser, and jsonlite turns a
+    #   named atomic vector into an object only under keep_vec_names, which it
+    #   warns about on every call and has said it will stop supporting. A list
+    #   is what it asks for and produces the same dropdown.
     observe({
       iwalk(group_names(), function(ch, nm) {
         if (!length(ch)) return()
+        opts <- stats::setNames(as.list(c("", ch)), c("choose one", ch))
         updateSelectInput(session, paste0("ref_", nm),
-                          choices = c("choose one" = "", ch),
+                          choices = opts,
                           selected = isolate(input[[paste0("ref_", nm)]]) %||% "")
       })
     })

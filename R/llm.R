@@ -227,25 +227,89 @@ repair_json_quotes <- function(txt) {
   paste(ch, collapse = "")
 }
 
+# The other half of the same failure: the model omits the quote that ends the
+#   last value and the parser runs off the end. What came back was
+#   {"summary": "... with 'Black' as the reference.}  -- a closing brace, and no
+#   closing quote before it. Telling a small model to avoid double quotes
+#   inside a value makes this more likely, not less, so the rule and the repair
+#   have to travel together.
+
+# One scan, used twice: once to find out whether the text ends inside a string
+#   and what brackets are still open, and again after the quote is put back.
+json_scan <- function(txt) {
+  ch = strsplit(txt, "", fixed = TRUE)[[1]]
+  purrr::reduce(ch, function(s, c1) {
+    if (s$esc) { s$esc = FALSE; return(s) }
+    if (s$ins) {
+      if (identical(c1, "\\")) s$esc = TRUE
+      else if (identical(c1, "\"")) s$ins = FALSE
+      return(s)
+    }
+    if (identical(c1, "\"")) { s$ins = TRUE; return(s) }
+    if (c1 %in% c("{", "[")) s$open = c(s$open, c1)
+    else if (c1 %in% c("}", "]") && length(s$open))
+      s$open = s$open[-length(s$open)]
+    s
+  }, .init = list(ins = FALSE, esc = FALSE, open = character(0)))
+}
+
+repair_json_close <- function(txt) {
+  st = json_scan(txt)
+
+  # The quote goes before whatever closing braces the model did write, not
+  #   after them. Appended at the end instead, the brace lands inside the value
+  #   and the summary ends with a stray character.
+  if (isTRUE(st$ins)) {
+    at = regexpr("[[:space:]}\\]]*$", txt)
+    txt = if (at > 0)
+      paste0(substr(txt, 1, at - 1L), "\"", substr(txt, at, nchar(txt)))
+    else paste0(txt, "\"")
+    st = json_scan(txt)
+  }
+
+  if (!length(st$open)) return(txt)
+  paste0(txt, paste(rev(ifelse(st$open == "{", "}", "]")), collapse = ""))
+}
+
 # Some models wrap valid JSON in prose or fences despite being told not to, so
 #   the object is pulled out by pattern rather than parsed from the whole reply.
+
+# Where there is no closing brace at all, everything from the first one is
+#   taken and repair_json_close() finishes it. The alternative is "No JSON
+#   found" on a reply that is entirely there apart from its last character.
+json_candidate <- function(txt, pattern) {
+  m = regmatches(txt, regexpr(pattern, txt, perl = TRUE))
+  if (length(m)) return(m)
+  i = regexpr("\\{", txt)
+  if (i < 0) return(character(0))
+  substr(txt, i, nchar(txt))
+}
 
 # The reply is carried into the error. "Request failed after 3 attempts" with
 #   nothing else is a message an analyst can act on only by asking someone to
 #   reproduce it.
 parse_json_block <- function(txt, pattern = "(?s)\\{.*\\}") {
-  m = regmatches(txt, regexpr(pattern, txt, perl = TRUE))
-  if (length(m) == 0) stop("No JSON found in the model reply:\n", txt,
-                           call. = FALSE)
+  m = json_candidate(txt, pattern)
+  if (!length(m)) stop("No JSON found in the model reply:\n", txt,
+                       call. = FALSE)
 
   obj = try(jsonlite::fromJSON(m, simplifyVector = FALSE), silent = TRUE)
   if (!inherits(obj, "try-error")) return(obj)
 
-  fixed = repair_json_quotes(m)
-  if (!identical(fixed, m)) {
-    obj2 = try(jsonlite::fromJSON(fixed, simplifyVector = FALSE), silent = TRUE)
-    if (!inherits(obj2, "try-error")) return(obj2)
-  }
+  # Three repairs, in the order that makes each one meaningful. A stray quote
+  #   inside a value changes where the scan thinks the strings start and end,
+  #   so closing before escaping would close the wrong string; and a reply can
+  #   need both.
+  done = purrr::compact(purrr::map(
+    list(repair_json_quotes(m),
+         repair_json_close(m),
+         repair_json_close(repair_json_quotes(m))),
+    function(fixed) {
+      if (identical(fixed, m)) return(NULL)
+      r = try(jsonlite::fromJSON(fixed, simplifyVector = FALSE), silent = TRUE)
+      if (inherits(r, "try-error")) NULL else r
+    }))
+  if (length(done)) return(done[[1]])
 
   stop("The model reply is not valid JSON and could not be repaired.\n",
        conditionMessage(attr(obj, "condition")), "\n--- reply ---\n",
@@ -267,10 +331,15 @@ parse_json_block <- function(txt, pattern = "(?s)\\{.*\\}") {
 #   live in engine.R, which is shared by copy with the reference workflow and
 #   has no business knowing how this app parses a reply. Repairing a stray
 #   quote afterwards works; not producing one is cheaper.
+# Worded so it cannot be read as "avoid quotes". The first version said only
+#   "no double quotes inside a value" and the model dropped the quote that
+#   ends the value as well, which is a worse failure than the one it fixed.
 JSON_QUOTE_RULE <- paste(
-  "Use no double-quote character anywhere inside a JSON value. Where you need",
-  "to quote a response label or a phrase, use single quotes: 'Nada', never",
-  "\"Nada\". Do not add any text before or after the JSON object.")
+  "Return exactly one JSON object and nothing before or after it.",
+  "Every key and every string value must both open AND close with a double",
+  "quote -- including the last value in the object.",
+  "Inside a value, use single quotes for any quoted word: 'Nada', not",
+  "\"Nada\". Do not put a line break inside a value.")
 
 llm_json <- function(prompt, role = "worker", system_prompt = NULL,
                      validate = NULL, pattern = "(?s)\\{.*\\}", seed = NULL,

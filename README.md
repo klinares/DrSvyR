@@ -1,6 +1,6 @@
 # DrSvyR
 
-#  ![](images/clipboard-2542862929.jpeg){width="280"}
+# ![](images/clipboard-2542862929.jpeg)
 
 **A survey methodologist you can consult, working on data you already have.**
 
