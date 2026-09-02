@@ -9,7 +9,6 @@
 
 # ---- stage_00_read -----------------------------------------------------
 
-# 00_read.R for DrSvyR
 # Stage 00: read the survey file and describe what is in it.
 
 #   1. Reading
@@ -87,7 +86,7 @@ build_codebook <- function(dat) {
 }
 
 # A variable with response labels and few distinct values is a candidate item
-#   for either arm. This narrows several hundred columns to a few dozen before
+#   as a battery item. This narrows several hundred columns to a few dozen before
 #   the analyst or the model looks at anything, and it is a filter rather than
 #   a decision: everything it excludes stays available in the full codebook.
 candidate_items <- function(codebook, max_categories = 10L) {
@@ -128,7 +127,6 @@ nominate_design <- function(codebook) {
 
 # ---- stage_01_design ---------------------------------------------------
 
-# 01_design.R for DrSvyR
 # Stage 01: build the design frame and confirm the specification.
 
 #   1. The design frame
@@ -277,7 +275,7 @@ design_checks <- function(design_dat) {
 
     row("Non-positive weights", sum(w <= 0, na.rm = TRUE),
         if (any(w <= 0, na.rm = TRUE)) "stop" else "ok",
-        "Zero-weight cases are excluded by lavaan and retained by survey."),
+        "A zero weight contributes nothing and is not the same as a missing one."),
 
     row("Duplicate ids", sum(duplicated(design_dat$id)),
         if (anyDuplicated(design_dat$id)) "warn" else "ok",
@@ -322,14 +320,12 @@ assert_design_ok <- function(checks) {
 
 # ---- stage_02_items ----------------------------------------------------
 
-# stage_02_items.R for DrSvyR
-# Stage 3: nonresponse codes, item selection, and the arm diagnostic.
+# Stage 3: nonresponse codes and item selection.
 
 #   1. Nonresponse codes
 #   2. The item frame
 #   3. What the analyst looks at
-#   4. The arm diagnostic
-#   5. Prompts
+#   4. Prompts
 
 # Requires: dplyr, purrr, tibble, stringr, ggplot2
 
@@ -569,175 +565,17 @@ plot_items <- function(frame, title = "Response distribution") {
 }
 
 
-# Section 4 is the arm diagnostic. It answers whether respondents differ in how
-#   much or in which, and it runs before either arm is fitted so the choice is
-#   informed rather than asserted.
-#______________________________________________________________________________
-
-# Two cheap signals from the weighted correlation matrix alone. A dominant first
-#   eigenvalue says one continuum, which a factor model describes with far fewer
-#   parameters. Mixed response formats across unrelated domains point the other
-#   way: a household can own a computer and still have run short of food, and
-#   no single continuum holds that.
-
-# The level-to-pattern ratio is the sharper diagnostic but needs a fitted LCA,
-#   so it is a confirmation after the class arm is chosen rather than an input
-#   to choosing.
-arm_diagnostics <- function(frame, design_dat) {
-  keep = frame$in_analysis
-  d = frame$item_dat[keep, , drop = FALSE]
-  w = design_dat$wt[keep]
-
-  if (nrow(d) < 50L)
-    stop("Too few respondents (", nrow(d), ") to describe the battery's ",
-         "structure.", call. = FALSE)
-
-  R = wcor(w, frame$items, d)
-  ev = eigen(R, only.values = TRUE)$values
-
-  tibble::tibble(
-    n_items = length(frame$items),
-    n_formats = dplyr::n_distinct(frame$cats),
-    min_categories = min(frame$cats),
-    max_categories = max(frame$cats),
-    eigen_1 = round(ev[1], 2),
-    eigen_2 = round(ev[2], 2),
-    eigen_ratio = round(ev[1] / ev[2], 2),
-    var_explained_1 = round(100 * ev[1] / sum(ev), 1))
-}
-
-
-# Section 5 hands the diagnostics to the model. R computes every number here;
-#   the model reads them alongside the analyst's stated goal and argues once.
-#   It does not decide, and it cannot switch the tool to a model it does not
-#   run: where the battery looks like one continuum its job is to say so and
-#   name the alternative.
+# Section 4 hands the battery to the model. R computes every number; the model
+#   reads them alongside the analyst's stated goal and argues once. It does not
+#   decide, and the analyst's choice stands either way.
 #______________________________________________________________________________
 
 persona_pm <- paste(
-  "You are a senior survey methodologist with training in psychometrics,",
-  "advising an analyst who designed the questionnaire and knows the subject",
-  "matter, but does not fit latent variable models. Write plainly and briefly.",
-  "Explain what a number means for their decision rather than defining the",
-  "statistic. Never recommend dropping an item and never choose a model; those",
-  "are the analyst's calls.")
-
-
-# Section 5a proposes items the analyst did not pick.
-#______________________________________________________________________________
-
-# The one place a language model has an advantage over the analyst is breadth:
-#   it can read three hundred question wordings at once and notice that the
-#   battery has no item covering a facet the research question implies. The
-#   analyst knows the subject matter far better, but has been reading the
-#   codebook for an hour and has stopped seeing it.
-#
-# So the model proposes and never adds. Every suggestion is scored against the
-#   battery by evaluate_suggestions() before the analyst sees it, and the
-#   numbers sit beside the reasoning: a variable that reads as a perfect fit
-#   and correlates with nothing in the battery is a variable the model was
-#   wrong about, and the analyst can see that without knowing what a polychoric
-#   correlation is.
-prompt_item_suggestions <- function(question, chosen, candidates, context) {
-  chosen_rows = stringr::str_glue_data(
-    chosen, "  {variable} ({n_responses} categories): {label}")
-  pool = dplyr::filter(candidates, !variable %in% chosen$variable)
-  pool_rows = stringr::str_glue_data(
-    pool, "  {variable} ({n_responses} categories): {label}")
-
-  stringr::str_glue(
-    "RESEARCH QUESTION\n{question}\n\n",
-    "SURVEY CONTEXT\n{context}\n\n",
-    "ITEMS THE ANALYST HAS CHOSEN\n{paste(chosen_rows, collapse = '\n')}\n\n",
-    "OTHER VARIABLES AVAILABLE IN THIS FILE\n",
-    "{paste(pool_rows, collapse = '\n')}\n\n",
-    "TASK\nThe analyst is fitting a latent class model: it looks for a small",
-    " number of kinds of respondent, each with its own way of answering the",
-    " set. Judge the chosen battery against the research question and name up",
-    " to five variables from the pool that would strengthen it.\n\n",
-    "  Prefer a variable that covers a facet of the research question the",
-    " chosen items miss entirely. A battery that asks four ways about the same",
-    " facet buys less than one that reaches a second.\n",
-    "  Say for each one which facet it adds and why the chosen items do not",
-    " already reach it.\n",
-    "  A class model treats response categories as unordered, so an item does",
-    " not need to run in the same direction as the others, or share their",
-    " response format, to belong.\n",
-    "  Propose nothing if the battery already covers the question. An empty",
-    " list is a legitimate answer and a better one than five weak suggestions.",
-    "\n\nRULES:\n",
-    "1. Only variables from the pool above, named exactly as they appear.\n",
-    "2. Never propose removing a chosen item.\n",
-    "3. Judge from the wording. You have not seen a single respondent's",
-    "   answers, and you have no evidence about how any variable behaves.\n",
-    "4. Do not claim a variable will improve fit, separation or entropy. You",
-    "   cannot know that; the numbers shown to the analyst will settle it.\n",
-    "5. Return only valid JSON, no prose and no markdown fences.\n\n",
-    '{{"suggestions": [{{"variable": "...", "facet": "...", "reasoning": "..."}}]}}')
-}
-
-
-# What R can say about a proposed item that the model cannot.
-#
-#   Two things decide whether a suggestion is usable, and neither is visible in
-#   the question wording. Whether the item varies at all: a variable answered
-#   the same way by 97 per cent of respondents separates nobody from anybody,
-#   however well it reads. And whether it belongs with the battery: the mean
-#   absolute polychoric correlation with the chosen items, computed on the
-#   design weights, says whether it shares any structure with them.
-#
-#   Reported rather than enforced. A low correlation is the interesting case
-#   for a class model, not a disqualifying one -- an item that separates a
-#   group the others miss is exactly an item that correlates weakly with them
-#   -- so the number goes next to the model's reasoning and the analyst reads
-#   both.
-evaluate_suggestions <- function(proposed, raw, chosen_items, design_dat,
-                                 na_codes = numeric(0)) {
-  if (!length(proposed)) return(NULL)
-
-  code <- function(v) {
-    x = as.numeric(unclass(raw[[v]]))
-    dplyr::if_else(x %in% na_codes, NA_real_, x)
-  }
-
-  base = purrr::map(chosen_items, code) |> rlang::set_names(chosen_items) |>
-    tibble::as_tibble()
-
-  purrr::map(proposed, function(v) {
-    if (!v %in% names(raw))
-      return(tibble::tibble(variable = v, n_categories = NA_integer_,
-                            missing_pct = NA_real_, modal_pct = NA_real_,
-                            mean_abs_r = NA_real_,
-                            note = "not a variable in this file"))
-    x = code(v)
-    obs = x[!is.na(x)]
-    tab = if (length(obs)) table(obs) else integer(0)
-
-    d = dplyr::mutate(base, .new = x)
-    ok = stats::complete.cases(d)
-    r = if (sum(ok) > 50L && length(unique(obs)) > 1L) {
-      m = try(wcor(design_dat$wt[ok], c(chosen_items, ".new"), d[ok, ]),
-              silent = TRUE)
-      if (inherits(m, "try-error")) NA_real_
-      else mean(abs(m[".new", chosen_items]))
-    } else NA_real_
-
-    tibble::tibble(
-      variable = v,
-      n_categories = length(tab),
-      missing_pct = round(100 * mean(is.na(x)), 1),
-      modal_pct = if (length(tab)) round(100 * max(tab) / sum(tab), 1) else NA_real_,
-      mean_abs_r = round(r, 2),
-      note = dplyr::case_when(
-        length(tab) < 2 ~ "one answer only; separates nobody",
-        length(tab) && max(tab) / sum(tab) > 0.9 ~ "almost everyone gives the same answer",
-        mean(is.na(x)) > 0.2 ~ "answered by fewer than four in five",
-        is.na(r) ~ "too few joint responses to relate it to the battery",
-        r < 0.1 ~ "shares little with the chosen items; may reach a group they miss, or nothing",
-        .default = NA_character_))
-  }) |>
-    purrr::list_rbind()
-}
+  "You are a senior survey methodologist advising an analyst who designed the",
+  "questionnaire and knows the subject matter, but does not fit latent variable",
+  "models. Write plainly and briefly. Explain what a number means for their",
+  "decision rather than defining the statistic. Never recommend dropping an",
+  "item and never choose a model; those are the analyst's calls.")
 
 prompt_battery_proposal <- function(candidates, context) {
   rows = stringr::str_glue_data(
@@ -753,71 +591,6 @@ prompt_battery_proposal <- function(candidates, context) {
     "Return only valid JSON, no prose and no markdown fences:\n",
     '{{"batteries": [{{"name": "...", "variables": ["..."], "rationale": "..."}}]}}')
 }
-
-# This tool fits one model. The question is therefore not which of two models
-#   to use, but whether the battery in front of the analyst is one this model
-#   describes honestly -- and if it is not, to say so and name the alternative
-#   rather than offer a choice the app cannot honour.
-prompt_battery_suitability <- function(diag, summary_tbl, context) {
-  flagged = dplyr::filter(summary_tbl, !is.na(flag))
-  flag_lines = if (nrow(flagged))
-    stringr::str_glue_data(flagged, "  {item}: {flag} (modal category {modal_pct}%)")
-    else "  none"
-
-  stringr::str_glue(
-    "ANALYST CONTEXT\n{context}\n\n",
-    "BATTERY STRUCTURE\n",
-    "  {diag$n_items} items, {diag$n_formats} distinct response format(s), ",
-    "{diag$min_categories} to {diag$max_categories} categories.\n",
-    "  First eigenvalue {diag$eigen_1}, second {diag$eigen_2}, ratio ",
-    "{diag$eigen_ratio}. The first component accounts for ",
-    "{diag$var_explained_1}% of the variance.\n\n",
-    "ITEMS FLAGGED FOR VARIATION OR NONRESPONSE\n{paste(flag_lines, collapse = '\n')}\n\n",
-    "TASK\nThis tool fits a latent class model: it asks which answers a",
-    " respondent favours and returns a segment. It does not fit a factor model.",
-    " Judge from the numbers above whether this battery is one a class model",
-    " describes honestly, or whether it looks instead like a single continuum",
-    " on which respondents differ only in how much.\n\n",
-    "  A large first eigenvalue relative to the second, one response format",
-    " throughout, and items about one topic all point toward a continuum.\n",
-    "  Eigenvalues close together, mixed response formats, and items spanning",
-    " unrelated topics all point toward distinct kinds of respondent.\n\n",
-    "Answer in three or four sentences using these numbers. Set recommend_cfa",
-    " to true only where the evidence points at a continuum; where it does,",
-    " say plainly that segments fitted to a continuum come out as an ordered",
-    " staircase that reads like a finding and is an artefact of the model. Do",
-    " not recommend removing any item, and do not soften a clear verdict.\n\n",
-    "Return only valid JSON, no prose and no markdown fences:\n",
-    '{{"verdict": "suits a class model" or "looks like one continuum", ',
-    '"reasoning": "...", "recommend_cfa": true or false}}')
-}
-
-# ---- stage_03_recode ---------------------------------------------------
-
-# stage_03_recode.R for DrSvyR
-# Stage 4: collapse the demographic and attitudinal domains.
-
-#   1. Candidates and observed levels
-#   2. Applying a specification
-#   3. The audit
-#   4. Prompt
-
-# The demographic recodes are the one place where a mistake is silent: nothing
-#   fails, no statistic looks wrong, and every later table is quietly about the
-#   wrong people. So an unmatched source label halts, and the audit showing what
-#   became what is a table the analyst reads once per dataset rather than an
-#   object buried in the session.
-
-# Requires: dplyr, purrr, tibble, stringr, haven
-
-
-# Section 1 finds what can be collapsed and shows how people actually answered.
-#______________________________________________________________________________
-
-# Two kinds of variable arrive here. One carries response labels and is
-#   collapsed by mapping labels onto groups. The other is a number -- age is the
-#   usual case -- and is collapsed by cutting it into bands. They need different
-#   controls, so the kind is decided here rather than in the interface.
 demo_candidates <- function(codebook, max_categories = 30L) {
   codebook |>
     dplyr::filter(n_distinct > 1, !is.na(label)) |>
@@ -899,12 +672,25 @@ build_demo_frame <- function(raw, specs, na_codes = numeric(0)) {
       cut = apply_cut(raw[[s$source]], s$breaks, s$labels, na_codes),
       stop("Unknown recode kind: ", s$kind, call. = FALSE))
 
-    # Levels in order of size, with the analyst's reference first. Contrasts in
-    #   the reports are read against the first level, so this is a decision
-    #   rather than a formatting choice.
-    lv = names(sort(table(val), decreasing = TRUE))
-    if (!is.null(s$reference) && s$reference %in% lv)
-      lv = c(s$reference, setdiff(lv, s$reference))
+    # Levels in the order the source variable declares them: for a mapping,
+    #   the order of the underlying codes (observed_levels() sorts on code);
+    #   for a cut, the order of the bands. That is the reader's order on
+    #   anything ordinal -- least to most education, worst to best -- and it is
+    #   arbitrary but stable on anything nominal.
+
+    # Frequency order was the previous rule and it scrambled every ordinal
+    #   variable in the report: an education table running incomplete-primary,
+    #   complete-secondary, incomplete-secondary is unreadable and the figure
+    #   is worse.
+
+    # The reference is no longer hoisted to the front. Nothing computes against
+    #   it -- every pair is tested against every other pair -- so hoisting only
+    #   bought a display convention, and it cost the ordering. It is recorded
+    #   in the spec and read from there.
+    lv = switch(s$kind,
+      map = unique(unname(s$map[!is.na(s$map) & nzchar(s$map)])),
+      cut = s$labels)
+    lv = intersect(lv, unique(val[!is.na(val)]))
     factor(val, levels = lv)
   })
 
@@ -963,4 +749,3 @@ prompt_demo_grouping <- function(variable, label, levels_tbl, context) {
     "Return only valid JSON, no prose and no markdown fences:\n",
     '{{"groups": [{{"source": "...", "group": "..."}}]}}')
 }
-

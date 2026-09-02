@@ -8,7 +8,6 @@
 
 # ---- mod_score ---------------------------------------------------------
 
-# mod_score.R for DrSvyR
 # Stage 9: score respondents and say who was reached.
 
 # No model call here. Nothing on this screen is a matter of interpretation.
@@ -42,23 +41,22 @@ mod_score_server <- function(id, state) {
 
     observeEvent(input$run, {
       req(state$labels)
-      res <- try(withProgress(message = "Scoring", value = 0.4, {
-        sc <- score_lca(state)
+      res <- wise_try(withProgress(message = "Scoring", value = 0.4, {
+        sc <- score_respondents(state)
 
         setProgress(0.75, message = "Building the design")
         # The design is rebuilt on the scored frame rather than reused. Case
         #   exclusions can create singleton strata the released file does not
         #   have, and that has to fail here rather than silently contribute
         #   zero variance later.
-        reached <- if (identical(state$cfg$arm, "lca")) !is.na(sc$segment)
-                   else sc$scored
+        reached <- !is.na(sc$segment)
         des <- build_rep_design(sc[reached, ], state$cfg)
 
         list(scored = sc, design = des,
              coverage = score_coverage(sc, length(state$cfg$items)),
              quality = assignment_quality(sc),
              shares = group_shares(sc, state$labels, des$rep_des))
-      }), silent = TRUE)
+      }), "Scoring respondents")
 
       if (inherits(res, "try-error")) {
         showNotification(conditionMessage(attr(res, "condition")),
@@ -86,24 +84,21 @@ mod_score_server <- function(id, state) {
 
     output$body <- renderUI({
       req(state$coverage)
-      lca <- identical(state$cfg$arm, "lca")
       tagList(
         tags$hr(),
         tags$h4("Who was reached"),
         tableOutput(ns("coverage")),
 
-        if (lca) tagList(
-          tags$hr(),
-          tags$h4("Where the groups sit"),
-          help_box("shares"),
-          tableOutput(ns("shares")),
+        tags$hr(),
+        tags$h4("Where the groups sit"),
+        help_box("shares"),
+        tableOutput(ns("shares")),
 
-          tags$hr(),
-          tags$h4("How certain the assignments are"),
-          help_box("quality"),
-          plotOutput(ns("quality_plot"), height = "300px"),
-          tableOutput(ns("quality")))
-        else NULL)
+        tags$hr(),
+        tags$h4("How certain the assignments are"),
+        help_box("quality"),
+        plotOutput(ns("quality_plot"), height = "300px"),
+        tableOutput(ns("quality")))
     })
 
     output$coverage <- renderTable({
@@ -132,7 +127,6 @@ mod_score_server <- function(id, state) {
 
 # ---- mod_domains -------------------------------------------------------
 
-# mod_domains.R for DrSvyR
 # Stage 10: how the groups or scores are distributed across the domains.
 
 # The model reads these tables only after R has decided which differences the
@@ -170,17 +164,15 @@ mod_domains_server <- function(id, state) {
 
     observeEvent(input$run, {
       req(state$scored)
-      res <- try(withProgress(message = "Estimating", value = 0, {
-        # Four steps in both arms now that the factor arm computes its
-        #   contrasts too: unweighted, design-based, corrected, contrasts.
+      res <- wise_try(withProgress(message = "Estimating", value = 0, {
+        # Four steps: unweighted, design-based, corrected, contrasts.
         tick <- function(what) incProgress(1 / 4, detail = what)
-        out <- domains_lca(state, tick)
+        out <- domain_estimates(state, tick)
         out$marg <- domain_marginals(
-          if (identical(state$cfg$arm, "lca"))
-            filter(state$scored, !is.na(segment)) else filter(state$scored, scored),
+          filter(state$scored, !is.na(segment)),
           state$cfg$aux, state$score_design$rep_des)
         out
-      }), silent = TRUE)
+      }), "Estimating the domains")
 
       if (inherits(res, "try-error")) {
         showNotification(conditionMessage(attr(res, "condition")),
@@ -203,8 +195,14 @@ mod_domains_server <- function(id, state) {
         tableOutput(ns("gap")),
 
         tags$hr(),
-        selectInput(ns("which"), "Domain", choices = state$cfg$aux,
-                    width = "40%"),
+        # Named for the analyst, valued by the variable name, so the picker
+        #   reads and everything downstream still keys on the column.
+        selectInput(ns("which"), "Domain",
+                    choices = rlang::set_names(
+                      state$cfg$aux,
+                      purrr::map_chr(state$cfg$aux,
+                                     function(v) aux_heading(state$cfg, v))),
+                    width = "60%"),
         plotOutput(ns("plot"), height = "540px"),
         tags$h5("Differences the analysis resolves"),
         help_box("resolved"),
@@ -251,7 +249,8 @@ mod_domains_server <- function(id, state) {
 
     output$plot <- renderPlot({
       req(state$domains, input$which)
-      plot_domain(state$domains$dom, input$which, state$labels$Label)
+      plot_domain(state$domains$dom, input$which, state$labels$Label,
+                  aux_levels(state, input$which))
     }, bg = "transparent")
 
     output$resolved <- renderText({
@@ -278,14 +277,15 @@ mod_domains_server <- function(id, state) {
       reads <- list()
       withProgress(message = "Reading", value = 0, {
         walk(state$cfg$aux, function(v) {
-          incProgress(1 / length(state$cfg$aux), detail = v)
+          incProgress(1 / length(state$cfg$aux), detail = aux_label(state$cfg, v))
           res <- try(llm_json(
             prompt_domain_read(
               state$domains$dom, state$domains$marg, v,
               labels = state$labels$Label,
               context = state$context %||% "",
               values_header = state$domains$values_header,
-              est = "Design-based", wald = state$domains$wald),
+              est = "Design-based", wald = state$domains$wald,
+              var_label = aux_label(state$cfg, v)),
             role = "pm", system_prompt = persona_pm,
             validate = validate_fields(c("finding", "caution"))), silent = TRUE)
           if (inherits(res, "try-error")) {
@@ -319,7 +319,6 @@ mod_domains_server <- function(id, state) {
 
 # ---- mod_report --------------------------------------------------------
 
-# mod_report.R for DrSvyR
 # Stage 11: review the report, then save everything.
 
 # The analyst reads the report here before any file is written. Preview and
@@ -370,11 +369,11 @@ mod_report_server <- function(id, state) {
       summary_text <- NULL; not_answered <- NULL
 
       if (isTRUE(input$summarise)) {
-        s <- try(withProgress(message = "Writing the summary", value = 0.5, {
+        s <- wise_try(withProgress(message = "Writing the summary", value = 0.5, {
           llm_json(prompt_report_summary(state), role = "pm",
                    system_prompt = persona_pm,
                    validate = validate_fields(c("summary", "not_answered")))
-        }), silent = TRUE)
+        }), "Writing the summary")
         if (inherits(s, "try-error"))
           showNotification(paste("Summary skipped:",
                                  conditionMessage(attr(s, "condition"))),
@@ -385,9 +384,9 @@ mod_report_server <- function(id, state) {
       state$report_summary <- summary_text
       state$report_not_answered <- not_answered
 
-      html <- try(withProgress(message = "Rendering", value = 0.6, {
+      html <- wise_try(withProgress(message = "Rendering", value = 0.6, {
         report_html(state, summary_text, not_answered)
-      }), silent = TRUE)
+      }), "Rendering the report")
 
       if (inherits(html, "try-error")) {
         showNotification(conditionMessage(attr(html, "condition")),
@@ -426,20 +425,26 @@ mod_report_server <- function(id, state) {
 
     observeEvent(input$save, {
       req(state$report_html)
-      res <- try(withProgress(message = "Writing", value = 0, {
+      res <- wise_try(withProgress(message = "Writing", value = 0, {
         incProgress(0.3, detail = "report")
 
         # HTML is the report. It is self-contained, every figure is embedded,
-        #   it opens in Word, and it needs no package beyond the ones the
-        #   analysis already uses.
+        #   it opens in Word, and it needs neither officer nor flextable --
+        #   which need Rtools on a mirror that has no binary for them, and so
+        #   cannot be assumed on a server.
         rep <- build_report_html(state, state$report_summary,
                                  state$report_not_answered)
+
+        word <- if (all(vapply(c("officer", "flextable"), requireNamespace,
+                               logical(1), quietly = TRUE)))
+          build_report(state, state$report_summary, state$report_not_answered)
+        else NULL
 
         incProgress(0.4, detail = "data file")
         dat <- export_data(state, input$format)
         incProgress(0.3, detail = "tables")
-        c(rep, dat, unlist(export_tables(state)))
-      }), silent = TRUE)
+        c(rep, word, dat, unlist(export_tables(state)))
+      }), "Writing the Word report")
 
       if (inherits(res, "try-error")) {
         showNotification(conditionMessage(attr(res, "condition")),

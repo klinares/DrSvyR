@@ -9,7 +9,6 @@
 
 # ---- mod_config --------------------------------------------------------
 
-# mod_config.R for DrSvyR
 # Stage 5: review the specification and commit to it.
 
 # The last point at which anything can be changed cheaply. After this the model
@@ -32,7 +31,6 @@ mod_config_server <- function(id, state) {
       missing <- c(
         if (is.null(state$design_dat)) "the design",
         if (is.null(state$item_frame)) "a battery",
-        if (is.null(state$arm)) "an arm",
         if (is.null(state$demo_dat)) "the domains")
       if (length(missing))
         tags$p(class = "text-muted",
@@ -40,7 +38,7 @@ mod_config_server <- function(id, state) {
     })
 
     cfg <- reactive({
-      req(state$design_dat, state$item_frame, state$arm, state$demo_dat)
+      req(state$design_dat, state$item_frame, state$demo_dat)
       build_cfg(state)
     })
 
@@ -103,13 +101,29 @@ mod_config_server <- function(id, state) {
       cf <- cfg()
       stamp <- format(Sys.time(), "%Y-%m-%d %H:%M")
 
-      paths <- try({
-        p1 <- write_cfg(cf, wise_path("output", cf$arm, "cfg.R"))
+      # The Design screen prints STOP against a specification that cannot
+      #   produce honest standard errors, and until now that was all it did --
+      #   assert_design_ok() existed and nothing called it, so a zero weight
+      #   was announced and then carried into every estimate downstream. A
+      #   singleton stratum stopped later, in build_rep_design(); a
+      #   non-positive weight stopped nowhere at all. This is the choke point:
+      #   nothing runs before a configuration is approved.
+      blocked <- wise_try(assert_design_ok(state$design_checks),
+                          "Approving the configuration")
+      if (inherits(blocked, "try-error")) {
+        showNotification(conditionMessage(attr(blocked, "condition")),
+                         type = "error", duration = NULL)
+        state$goto <- WISE_TABS[3]
+        return()
+      }
+
+      paths <- wise_try({
+        p1 <- write_cfg(cf, wise_path("output", "cfg.R"))
         p2 <- write_data_dict(state, cf, wise_path("dict", "data-dict.yaml"))
 
         log_decision("scope", "Analysis configured",
                      decision = paste0(
-                       "Arm: ", toupper(cf$arm), ". Battery of ",
+                       "Battery of ",
                        length(cf$items), " items, fitted on ",
                        sum(state$item_frame$in_analysis), " respondents. ",
                        length(cf$aux), " domains."),
@@ -129,7 +143,7 @@ mod_config_server <- function(id, state) {
                      evidence = log_table(state$recode_audit), stamp = stamp)
 
         c(p1, p2)
-      }, silent = TRUE)
+      }, "Writing the configuration")
 
       if (inherits(paths, "try-error")) {
         showNotification(conditionMessage(attr(paths, "condition")),
@@ -140,9 +154,9 @@ mod_config_server <- function(id, state) {
       state$cfg <- cf
 
       # A model fitted under the previous configuration is not this
-      #   configuration's model, and one fitted under the other arm is not even
-      #   the same shape. Leaving it in state is what let a class model reach
-      #   the factor panels. Refitting is cheap: the cache is keyed on the
+      #   configuration's model. Leaving it in state means a panel can render
+      #   parameters from a battery the analyst has already changed. Refitting
+      #   is cheap: the cache is keyed on the
       #   specification and the data, so an unchanged configuration comes back
       #   without re-running anything.
       state$model <- NULL
@@ -172,8 +186,7 @@ mod_config_server <- function(id, state) {
 
 # ---- mod_search --------------------------------------------------------
 
-# mod_search.R for DrSvyR
-# Stage 6: choose the number of groups or factors.
+# Stage 6: choose the number of groups.
 
 # Order of presentation is the whole design here. The evidence and the profiles
 #   come first, the analyst commits to a number, and only then does the model
@@ -208,8 +221,11 @@ mod_search_server <- function(id, state) {
         tags$h4("Search"),
         help_box("search"),
         tags$p(length(cfg$K_range), " models will be fitted, each from ",
-               cfg$n_starts, " random starts across ", cfg$workers,
-               " workers. The screen will not respond while it runs."),
+               cfg$n_starts, " random starts. All ", cfg$n_starts,
+               " run for ", cfg$n_short, " iterations; the best ",
+               cfg$n_keep, " are then taken to convergence. ",
+               "The screen will not respond while it runs."),
+
         actionButton(ns("run"), "Run the search", class = "btn-primary"))
     })
 
@@ -222,12 +238,10 @@ mod_search_server <- function(id, state) {
       cfg <- state$cfg
       dat <- bind_cols(state$design_dat,
                        state$item_frame$item_dat)[state$item_frame$in_analysis, ]
-      grid <- cfg$K_range
-
       withProgress(message = "Fitting", value = 0, {
-        tick <- function(k) incProgress(1 / length(grid),
+        tick <- function(k) incProgress(1 / length(cfg$K_range),
                                         detail = paste("size", k))
-        res <- try(search_lca(cfg, dat, tick), silent = TRUE)
+        res <- wise_try(search_sizes(cfg, dat, tick), "The search")
       })
 
       if (inherits(res, "try-error")) {
@@ -236,6 +250,10 @@ mod_search_server <- function(id, state) {
         return()
       }
       state$search <- res
+      # What this search is a search of. The fit step compares it against the
+      #   battery and file in front of it then, and refuses a search that has
+      #   since gone stale.
+      state$search_key <- model_key(cfg, cfg$items, 0L, dat)
       state$dimension <- NULL
       state$search_reading <- NULL
     })
@@ -244,31 +262,19 @@ mod_search_server <- function(id, state) {
 
     output$evidence <- renderUI({
       req(state$search)
-      if (identical(state$cfg$arm, "lca")) {
-        tagList(
-          tags$hr(),
-          tags$h4("What the criteria say"),
-          plotOutput(ns("bic"), height = "300px"),
-          tableOutput(ns("stats")),
-          tags$hr(),
-          tags$h4("What the groups look like"),
-          help_box("profiles"),
-          uiOutput(ns("profile_picker")),
-          plotOutput(ns("profiles"), height = "380px"))
-      } else {
-        tagList(
-          tags$hr(),
-          tags$h4("How many dimensions the answers carry"),
-          plotOutput(ns("scree"), height = "300px"),
-          tableOutput(ns("eigen")),
-          tags$hr(),
-          tags$h4("Fit at each number of factors"),
-          tableOutput(ns("stats")))
-      }
+      tagList(
+        tags$hr(),
+        tags$h4("What the criteria say"),
+        plotOutput(ns("bic"), height = "300px"),
+        tableOutput(ns("stats")),
+        tags$hr(),
+        tags$h4("What the groups look like"),
+        help_box("profiles"),
+        uiOutput(ns("profile_picker")),
+        plotOutput(ns("profiles"), height = "380px"))
     })
 
     output$bic <- renderPlot({ req(state$search); plot_bic(state$search$stats) })
-    output$scree <- renderPlot({ req(state$search); plot_scree(state$search$eigen) })
 
     output$stats <- renderTable({
       req(state$search)
@@ -276,16 +282,8 @@ mod_search_server <- function(id, state) {
         mutate(flag = coalesce(flag, ""))
     }, width = "100%")
 
-    output$eigen <- renderTable({
-      req(state$search)
-      state$search$eigen |>
-        transmute(Component = component, Eigenvalue = eigenvalue,
-                  `No structure` = reference,
-                  Retain = if_else(retain, "yes", ""))
-    }, width = "100%")
-
     output$profile_picker <- renderUI({
-      req(state$search, identical(state$cfg$arm, "lca"))
+      req(state$search)
       ks <- state$cfg$K_range
       radioButtons(ns("show_k"), "Show the profiles for", inline = TRUE,
                    choices = ks, selected = ks[min(3, length(ks))])
@@ -303,11 +301,10 @@ mod_search_server <- function(id, state) {
     output$chooser <- renderUI({
       req(state$search)
       cfg <- state$cfg
-      grid <- if (identical(cfg$arm, "lca")) cfg$K_range else cfg$k_range
+      grid <- cfg$K_range
       tagList(
         tags$hr(),
-        tags$h4(if (identical(cfg$arm, "lca")) "How many groups?"
-                else "How many factors?"),
+        tags$h4("How many groups?"),
         help_box("dimension_choice"),
         numericInput(ns("dim"), NULL, value = NA, width = "120px",
                      min = min(grid), max = max(grid), step = 1),
@@ -317,7 +314,7 @@ mod_search_server <- function(id, state) {
     observeEvent(input$commit, {
       req(state$search, !is.na(input$dim))
       cfg <- state$cfg
-      grid <- if (identical(cfg$arm, "lca")) cfg$K_range else cfg$k_range
+      grid <- cfg$K_range
       if (!input$dim %in% grid) {
         showNotification(paste0("Choose a number between ", min(grid), " and ",
                                 max(grid), "."), type = "warning")
@@ -328,11 +325,9 @@ mod_search_server <- function(id, state) {
 
       log_decision(
         "dimension",
-        paste0(if (identical(cfg$arm, "lca")) "Number of groups: "
-               else "Number of factors: ", state$dimension),
+        paste0("Number of groups: ", state$dimension),
         decision = paste0(
-          "The analyst chose ", state$dimension,
-          if (identical(cfg$arm, "lca")) " groups" else " factors",
+          "The analyst chose ", state$dimension, " groups",
           ", before any interpretation of the evidence was offered."),
         evidence = log_table(state$search$stats))
 
@@ -360,7 +355,7 @@ mod_search_server <- function(id, state) {
       withProgress(message = "Reading", value = 0.5, {
         res <- try(llm_json(
           prompt_search_narration(state$search$stats, state$dimension,
-                                  state$cfg$arm, state$context %||% ""),
+                                  state$context %||% ""),
           role = "pm", system_prompt = persona_pm,
           validate = validate_fields("reading")), silent = TRUE)
         if (inherits(res, "try-error")) {
@@ -386,7 +381,6 @@ mod_search_server <- function(id, state) {
 
 # ---- mod_model ---------------------------------------------------------
 
-# mod_model.R for DrSvyR
 # Stage 7: the fitted model and what it does not account for.
 
 # One return is permitted from here to Items. The limit is not about the
@@ -421,11 +415,11 @@ mod_model_server <- function(id, state) {
       tagList(
         tags$h4("Fit the model"),
         help_box("final_model"),
-        tags$p("Fitting ", tags$strong(state$dimension),
-               if (identical(state$cfg$arm, "lca"))
-                 paste0(" groups from ", state$cfg$n_starts, " starts.")
-               else " factors."),
-        actionButton(ns("run"), "Fit", class = "btn-primary"))
+        tags$p("The search already fitted ", tags$strong(state$dimension),
+               " groups from ", state$cfg$n_starts,
+               " starts. This reads that model and works out what it does ",
+               "and does not account for."),
+        actionButton(ns("run"), "Diagnose this model", class = "btn-primary"))
     })
 
     observeEvent(input$run, {
@@ -433,24 +427,54 @@ mod_model_server <- function(id, state) {
       cfg <- state$cfg
       dat <- bind_cols(state$design_dat,
                        state$item_frame$item_dat)[state$item_frame$in_analysis, ]
-      # dat, not just the specification: the cached fit belongs to this file.
+      # The search already fitted this. Two hundred starts at every size in
+      #   K_range, and the analyst chose a size from that range -- so the model
+      #   at the chosen size is sitting in state$search$fits, produced by the
+      #   identical call on the identical data. Refitting it recomputed a known
+      #   answer and made the analyst wait for it.
+
+      # What the refit was quietly providing was protection against a stale
+      #   search: the battery can be rebuilt on the Items screen without
+      #   state$search being cleared, and the refit would then have been on the
+      #   new data. That is not the rescue it looks like. If the search is
+      #   stale then so is the table the analyst read the number off, and a
+      #   correct fit at a number chosen from the wrong evidence is worse than
+      #   a stop. So it stops.
+      search_key <- model_key(cfg, cfg$items, 0L, dat)
+      if (!identical(search_key, state$search_key)) {
+        showNotification(
+          paste("The battery or the file has changed since the search ran, so",
+                "the criteria you chose this number from no longer describe",
+                "this analysis. Run the search again."),
+          type = "error", duration = NULL)
+        return()
+      }
+
+      fit <- state$search$fits[[as.character(state$dimension)]]
+      if (is.null(fit)) {
+        showNotification(
+          paste0("The search holds no fit at ", state$dimension, " groups. ",
+                 "Run the search again."), type = "error", duration = NULL)
+        return()
+      }
+
+      # The diagnostics are the work that is left, and they are not free --
+      #   the bivariate residuals are one weighted two-way table per pair of
+      #   items. Computed for the chosen size only, which is why the search
+      #   does not compute them for all nine.
       key <- model_key(cfg, cfg$items, state$dimension, dat)
 
-      res <- try(withProgress(message = "Fitting", value = 0.4, {
-        fit <- cached("fit", key, function() fit_final_lca(cfg, dat, state$dimension))
-        setProgress(0.7, message = "Diagnosing")
-        list(fit = fit, diag = diagnose_lca(fit, cfg, dat), factors = NULL)
-      }), silent = TRUE)
+      res <- wise_try(withProgress(message = "Diagnosing", value = 0.4, {
+        list(fit = fit,
+             diag = cached("diag", key, function() diagnose_model(fit, cfg, dat)))
+      }), "Diagnosing the model")
 
       if (inherits(res, "try-error")) {
         showNotification(conditionMessage(attr(res, "condition")),
                          type = "error", duration = NULL)
         return()
       }
-      # The arm travels with the object. Every panel that renders part of a
-      #   model asks the model which arm it came from, rather than asking the
-      #   configuration, which can be cleared or changed underneath it.
-      state$model <- c(res, list(arm = cfg$arm))
+      state$model <- res
       state$model_key <- key
       state$model_dat <- dat
       state$diag_reading <- NULL
@@ -467,57 +491,25 @@ mod_model_server <- function(id, state) {
       cfg <- state$cfg
       dat <- state$model_dat
 
-      # Which estimator runs is decided by the model in hand, not by the
-      #   configuration. They can disagree -- approving the other arm after a
-      #   fit leaves the old model in state -- and when they do, branching on
-      #   the configuration hands a class fit to the factor estimator.
-      if (!arm_is(state$model, cfg$arm)) {
-        showNotification(
-          paste0("The fitted model is a ", toupper(state$model$arm %||% "?"),
-                 " model and the configuration now says ", toupper(cfg$arm),
-                 ". Fit the model again before running the variance step."),
-          type = "error", duration = NULL)
-        return()
-      }
-
-      res <- try(withProgress(message = "Refitting in every replicate",
+      res <- wise_try(withProgress(message = "Refitting in every replicate",
                               value = 0.2, {
         des <- build_rep_design(dat, cfg)
-        measurement_se_lca(cfg, dat, state$model$fit, des$des, des$rep_des)
-      }), silent = TRUE)
+        measurement_se(cfg, dat, state$model$fit, des$des, des$rep_des)
+      }), "Estimating the uncertainty")
 
       if (inherits(res, "try-error")) {
         showNotification(conditionMessage(attr(res, "condition")),
                          type = "error", duration = NULL)
         return()
       }
-      state$measure <- c(res, list(arm = state$model$arm))
+      state$measure <- res
     })
 
     # ---- results -----------------------------------------------------------
 
     output$body <- renderUI({
       req(state$model)
-      # The model's own arm, not the configuration's. This panel decides which
-      #   of the two shapes to lay out, and the configuration can already be
-      #   pointing at the other one.
-      lca <- arm_is(state$model, "lca")
-      health <- state$model$health
       tagList(
-        # Shown before anything is read off the fit. A model that did not
-        #   identify still draws a diagram and prints a table, and nothing
-        #   downstream would say otherwise.
-        if (!is.null(health) && !health$ok)
-          warn_box(
-            tags$strong("This model did not fit cleanly."),
-            tags$ul(map(health$problems, tags$li)),
-            tags$div(
-              "The numbers below print, but they are not a unique solution ",
-              "and should not be reported. Usually this means the battery is ",
-              "being asked to support more factors than it can, or that two ",
-              "items are nearly the same question. Go back and fit fewer ",
-              "factors, or remove an item.")),
-
         tags$hr(),
         tags$h4("The measurement model"),
         plotOutput(ns("profiles"), height = "380px"),
@@ -536,18 +528,18 @@ mod_model_server <- function(id, state) {
         tags$hr(),
         tags$h4("What the model accounts for"),
         help_box("diagnostics"),
-        tagList(
-          tags$p(tags$strong("Separation: "),
-                 round(state$model$diag$entropy, 3),
-                 tags$span(class = "text-muted",
-                           " — how cleanly people fall into one group.")),
-          tags$h5("How far each item separates the groups"),
-          plotOutput(ns("disc_plot"), height = "340px"),
-          tableOutput(ns("disc")),
-          tags$h5("Pairs the model accounts for least well"),
-          tableOutput(ns("bvr")),
-          tags$h5("Level against pattern"),
-          tableOutput(ns("ratio"))),
+        tags$p(tags$strong("Separation: "),
+               round(state$model$diag$entropy, 3),
+               tags$span(class = "text-muted",
+                         " — how cleanly people fall into one group.")),
+        tags$h5("How far each item separates the groups"),
+        plotOutput(ns("disc_plot"), height = "340px"),
+        tableOutput(ns("disc")),
+        tags$h5("Pairs the model accounts for least well"),
+        tableOutput(ns("bvr")),
+        tags$h5("Level against pattern"),
+        help_box("level_pattern"),
+        tableOutput(ns("ratio")),
 
         tags$hr(),
         actionButton(ns("read")," What do these say?"),
@@ -574,51 +566,47 @@ mod_model_server <- function(id, state) {
         tableOutput(ns("shares_ci")))
     })
 
-    # Every panel below asks two questions before it renders: is this object
-    #   from my arm, and is the thing I am about to draw actually there. Both
-    #   are needed. The arm check alone would pass a factor model whose
-    #   modification indices came back as a try-error; the presence check alone
-    #   would pass a class model's shares to a factor panel that wanted
-    #   loadings and got NULL. req() stops the output cleanly either way, so a
-    #   stale panel goes blank instead of throwing.
+    # Every panel below requires the thing it is about to draw, not just the
+    #   object that would contain it. state$measure is NULL until the variance
+    #   step has run and one of its tables can come back NULL on its own, so
+    #   req() on the container alone lets mutate() run on NULL and throw where
+    #   the traceback names a renderTable rather than a cause.
 
     output$prof_ci <- renderPlot({
-      req(arm_is(state$measure, "lca"), state$measure$profile)
+      req(state$measure$profile)
       plot_profiles_ci(state$measure$profile,
                        labels = state$labels$Label,
                        title = paste0(state$dimension, " groups"))
     }, bg = "transparent")
 
     output$shares_ci <- renderTable({
-      req(arm_is(state$measure, "lca"), state$measure$shares)
+      req(state$measure$shares)
       state$measure$shares |>
         transmute(Group = group, Share = share, SE = se,
                   `95% interval` = paste0("[", lo, ", ", hi, "]"))
     }, width = "100%")
 
     output$disc_plot <- renderPlot({
-      req(arm_is(state$model, "lca"), state$model$diag$discrimination)
+      req(state$model$diag$discrimination)
       plot_discrimination(state$model$diag$discrimination)
     }, bg = "transparent")
 
     output$disc  <- renderTable({
-      req(arm_is(state$model, "lca"), state$model$diag$discrimination)
+      req(state$model$diag$discrimination)
       state$model$diag$discrimination |> mutate(flag = coalesce(flag, "")) },
       width = "100%")
     output$bvr   <- renderTable({
-      req(arm_is(state$model, "lca"), state$model$diag$bvr)
-      state$model$diag$bvr },
+      req(state$model$diag$bvr); state$model$diag$bvr },
       width = "100%")
     output$ratio <- renderTable({
-      req(arm_is(state$model, "lca"), state$model$diag$ratio)
-      state$model$diag$ratio },
+      req(state$model$diag$ratio); state$model$diag$ratio },
       width = "100%")
 
     observeEvent(input$read, {
       req(state$model)
       withProgress(message = "Reading", value = 0.5, {
         res <- try(llm_json(
-          prompt_diagnostics(state$model$diag, state$model$arm, state$dimension,
+          prompt_diagnostics(state$model$diag, state$dimension,
                              state$context %||% ""),
           role = "pm", system_prompt = persona_pm,
           validate = validate_fields("reading")), silent = TRUE)
@@ -677,8 +665,7 @@ mod_model_server <- function(id, state) {
         paste0("Round ", iteration_count() + 1, ": removed ",
                paste(drop, collapse = ", ")),
         decision = input$why,
-        evidence = log_table(if (identical(state$cfg$arm, "lca"))
-          state$model$diag$discrimination else state$model$diag$loadings))
+        evidence = log_table(state$model$diag$discrimination))
 
       # Everything downstream of the battery is invalid now, so it is cleared
       #   rather than left to look current. The domains survive: they do not
@@ -693,6 +680,7 @@ mod_model_server <- function(id, state) {
       state$measure <- NULL
       state$dimension <- NULL
       state$search <- NULL
+      state$search_key <- NULL
       state$search_reading <- NULL
       state$diag_reading <- NULL
       state$cfg <- NULL
@@ -702,7 +690,7 @@ mod_model_server <- function(id, state) {
         HTML(paste0(
           "<b>Recorded.</b> Three steps from here:<br>",
           "1. <b>Items</b> — remove ", paste(drop, collapse = ", "),
-          " from the battery and press Summarise, then Use this arm.<br>",
+          " from the battery and press Summarise.<br>",
           "2. <b>Review</b> — approve the configuration again.<br>",
           "3. <b>Search</b> — run it again and choose a number.<br>",
           "Your domains are unaffected and do not need redoing.")),
@@ -717,13 +705,10 @@ mod_model_server <- function(id, state) {
       log_decision(
         "dimension", "Model accepted",
         decision = paste0(state$dimension,
-                          if (identical(state$cfg$arm, "lca")) " groups"
-                          else " factors",
+                          " groups",
                           " accepted after ", iteration_count(),
                           " round(s) of item removal."),
-        evidence = if (identical(state$cfg$arm, "lca"))
-          log_table(state$model$diag$discrimination)
-          else log_table(state$model$diag$loadings))
+        evidence = log_table(state$model$diag$discrimination))
       showNotification("Accepted. Continue to Labels.", type = "message",
                        duration = NULL)
     })
@@ -732,7 +717,6 @@ mod_model_server <- function(id, state) {
 
 # ---- mod_labels --------------------------------------------------------
 
-# mod_labels.R for DrSvyR
 # Stage 8: name what the model found.
 
 # The profile sits beside every name, because the check the analyst is being
@@ -818,12 +802,12 @@ mod_labels_server <- function(id, state) {
         }
       }
 
-      res <- try(withProgress(message = "Drafting", value = 0, {
+      res <- wise_try(withProgress(message = "Drafting", value = 0, {
         tick <- function(k) incProgress(1 / n_targets(), detail = k)
         drafted <- draft_labels(state, tick)
         setProgress(0.95, message = "Checking for duplicates")
         resolve_collisions(drafted, cfg)
-      }), silent = TRUE)
+      }), "Drafting the names")
 
       if (inherits(res, "try-error")) {
         showNotification(conditionMessage(attr(res, "condition")),
@@ -865,7 +849,6 @@ mod_labels_server <- function(id, state) {
 
     output$editor <- renderUI({
       req(state$labels, state$model)
-      lca <- arm_is(state$model, "lca")
       lab <- state$labels
 
       rows <- map(seq_len(nrow(lab)), function(i) {
@@ -878,8 +861,7 @@ mod_labels_server <- function(id, state) {
                    textAreaInput(ns(paste0("desc_", i)), NULL, rows = 4,
                                  value = lab$Description[i], width = "100%")),
             column(7,
-                   if (lca) plotOutput(ns(paste0("prof_", i)), height = "220px")
-                   else tableOutput(ns(paste0("load_", i))))))
+                   plotOutput(ns(paste0("prof_", i)), height = "220px"))))
       })
 
       tagList(
@@ -896,53 +878,39 @@ mod_labels_server <- function(id, state) {
     #   of them is not known until the model is fitted.
     observeEvent(state$labels, {
       req(state$model)
-      lca <- arm_is(state$model, "lca")
       walk(seq_len(nrow(state$labels)), function(i) {
-        if (lca) {
-          output[[paste0("prof_", i)]] <- renderPlot({
-            fit <- state$model$fit
-            col <- viridis::viridis(1)
+        output[[paste0("prof_", i)]] <- renderPlot({
+          fit <- state$model$fit
+          col <- viridis::viridis(1)
 
-            # With the replicate refit done, the band is shown: a name should
-            #   describe a shape the data actually resolves, not one the point
-            #   estimates happen to trace.
-            # arm_is rather than a NULL test, for the same reason as every
-            #   other panel: a measure from the other arm has no profile and
-            #   the filter would run on NULL.
-            one <- if (arm_is(state$measure, "lca"))
-              filter(state$measure$profile, group == i)
-            else
-              filter(profile_frame(fit, state$cfg$items),
-                     group == paste0("Group ", i)) |>
-                mutate(lo = NA_real_, hi = NA_real_)
+          # With the replicate refit done, the band is shown: a name should
+          #   describe a shape the data actually resolves, not one the point
+          #   estimates happen to trace.
+          one <- if (!is.null(state$measure$profile))
+            filter(state$measure$profile, group == i)
+          else
+            filter(profile_frame(fit, state$cfg$items),
+                   group == paste0("Group ", i)) |>
+              mutate(lo = NA_real_, hi = NA_real_)
 
-            cap <- if (arm_is(state$measure, "lca"))
-              sprintf("%.0f%% of the population [%.0f, %.0f]",
-                      100 * state$measure$shares$share[i],
-                      100 * state$measure$shares$lo[i],
-                      100 * state$measure$shares$hi[i])
-            else paste0(round(100 * fit$pi[i]), "% of respondents")
+          cap <- if (!is.null(state$measure$shares))
+            sprintf("%.0f%% of the population [%.0f, %.0f]",
+                    100 * state$measure$shares$share[i],
+                    100 * state$measure$shares$lo[i],
+                    100 * state$measure$shares$hi[i])
+          else paste0(round(100 * fit$pi[i]), "% of respondents")
 
-            p <- ggplot(one, aes(item, value, group = 1))
-            if (!all(is.na(one$lo)))
-              p <- p + geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.18,
-                                   fill = col, colour = NA)
-            p + geom_line(linewidth = 0.8, colour = col) +
-              geom_point(size = 1.8, colour = col) +
-              scale_y_continuous(limits = c(0, 1)) +
-              labs(x = NULL, y = NULL, caption = cap) +
-              wise_theme() +
-              theme(axis.text.x = element_text(angle = 45, hjust = 1))
-          }, bg = "transparent")
-        } else {
-          output[[paste0("load_", i)]] <- renderTable({
-            fn <- state$labels$target[i]
-            state$model$diag$loadings |>
-                filter(factor == fn) |>
-                arrange(desc(abs(loading))) |>
-                transmute(Item = item, Loading = loading)
-          }, width = "100%")
-        }
+          p <- ggplot(one, aes(item, value, group = 1))
+          if (!all(is.na(one$lo)))
+            p <- p + geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.18,
+                                 fill = col, colour = NA)
+          p + geom_line(linewidth = 0.8, colour = col) +
+            geom_point(size = 1.8, colour = col) +
+            scale_y_continuous(limits = c(0, 1)) +
+            labs(x = NULL, y = NULL, caption = cap) +
+            wise_theme() +
+            theme(axis.text.x = element_text(angle = 45, hjust = 1))
+        }, bg = "transparent")
       })
     })
 
@@ -978,7 +946,7 @@ mod_labels_server <- function(id, state) {
     output$saved <- renderUI({
       req(state$labels_edited)
       tags$p(class = "text-muted",
-             "Saved to ", tags$code("output/", state$cfg$arm, "/labels.csv"),
+             "Saved to ", tags$code("output/labels.csv"),
              ". Editing that file by hand is also a way to take over naming; ",
              "deleting it triggers a redraft.")
     })

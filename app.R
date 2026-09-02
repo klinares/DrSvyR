@@ -6,7 +6,7 @@
 #   the rule that makes the flat source safe, and it is why app.R and
 #   setup_renv.R live here rather than in R/ -- both do things.
 
-# The engine calls survey, lavaan, viridis, furrr and knitr by bare name, so
+# The engine calls survey, viridis, furrr and knitr by bare name, so
 #   they are attached rather than referenced with ::. kableExtra is not: its
 #   only user was lca_table(), which nothing calls, and it needs Rtools on a
 #   mirror without a binary for it.
@@ -25,7 +25,6 @@ library(forcats); library(lubridate)
 
 library(haven)
 library(survey)
-library(lavaan)
 library(viridis)
 library(furrr)
 library(knitr)
@@ -38,7 +37,41 @@ if (!dir.exists("R"))
        "Open the .Rproj in the repository folder and run the app from there.",
        call. = FALSE)
 
-walk(list.files("R", full.names = TRUE, pattern = "[.][Rr]$"), source)
+# Exactly one LLM file. The two endpoint variants define the same function
+#   names, so if both were in R/ the alphabet would decide which endpoint the
+#   app talks to and nothing would say so. The other variant lives at the
+#   repository root, unsourced, until it is swapped in.
+llm_files <- list.files("R", pattern = "^llm.*[.][Rr]$")
+if (length(llm_files) != 1L)
+  stop("R/ contains ", length(llm_files), " LLM files (",
+       paste(llm_files, collapse = ", "), "). Exactly one belongs there.\n",
+       "Keep R/llm.R for the endpoint you are using and move the other to ",
+       "the repository root.", call. = FALSE)
+
+# Every file in R/ defines and never runs. That is the rule which makes the
+#   flat alphabetical source safe, and until now it was only a comment.
+#   check_globals.R sources R/ itself, so a copy of it left in R/ is sourced by
+#   the loop below, sources R/ again, and the app dies at startup with
+#   "evaluation nested too deeply: infinite recursion" -- a message that names
+#   nothing and points nowhere. Checked here, where it can name the file.
+r_files <- list.files("R", full.names = TRUE, pattern = "[.][Rr]$")
+
+walk(r_files, function(f) {
+  runs <- purrr::keep(as.list(parse(f)), function(x)
+    !(is.call(x) && as.character(x[[1]])[1] %in% c("<-", "=", "<<-")))
+  if (length(runs))
+    stop(f, " has ", length(runs), " top-level statement(s) that run when it ",
+         "is sourced:\n  ",
+         paste(substr(vapply(runs, function(x)
+           paste(deparse(x), collapse = " "), character(1)), 1, 60),
+           collapse = "\n  "),
+         "\nFiles in R/ may only define. Scripts -- setup.R, ",
+         "check_globals.R, make_llm_openai.R -- belong at the repository ",
+         "root. One that sources R/ recurses until R gives up.",
+         call. = FALSE)
+})
+
+walk(r_files, source)
 
 # Shiny serves static files from www/ and nowhere else, so a figure referenced
 #   from README.md as figures/... would render on GitHub and 404 in the Help
@@ -68,11 +101,6 @@ new_state <- function() {
     na_codes      = NULL,
     item_frame    = NULL,
     item_summary  = NULL,
-    item_suggestions = NULL,
-    arm_diag      = NULL,
-    arm_advice    = NULL,
-    arm           = NULL,
-    estimator     = NULL,
     demo_specs    = NULL,
     demo_dat      = NULL,
     demo_counts   = NULL,
@@ -81,6 +109,7 @@ new_state <- function() {
     cfg_paths     = NULL,
     config_readback = NULL,
     search        = NULL,
+    search_key    = NULL,
     dimension     = NULL,
     search_reading = NULL,
     model         = NULL,
@@ -136,7 +165,8 @@ ui <- page_fluid(
   div(
     style = "display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;",
     div(tags$h2("DrSvyR", style = "margin:0;"),
-        tags$p(tags$em("Design-based segmentation for survey data"),
+        tags$p(tags$em("A survey methodologist you can consult, working on ",
+                       "data you already have."),
                style = "margin:0;")),
     div(style = "margin-left:auto;", input_dark_mode(id = "dark_mode"))),
   

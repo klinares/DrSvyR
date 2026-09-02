@@ -9,7 +9,6 @@
 
 # ---- mod_project -------------------------------------------------------
 
-# mod_project.R for DrSvyR
 # Stage 1: choose the work folder and read the survey file.
 
 # Two separate things, and they were previously one. The work folder is where
@@ -71,11 +70,10 @@ mod_project_server <- function(id, state) {
     observeEvent(input$use, {
       req(nzchar(input$path))
 
-      # This is the enforcement, not a friendly duplicate of one. core.R used
-      #   to refuse a repository path inside scaffold_work_folder(); that guard
-      #   was removed and only the write probe remains there, so if this check
-      #   goes the app will happily write outputs, cached fits and the decision
-      #   log into the clone.
+      # The guard in core.R is the enforcement and stays the only thing that
+      #   actually decides. This tests the same condition purely to say
+      #   something useful, because the generic refusal reads as "you cannot
+      #   use the demo data" when what it means is "outputs cannot go there".
       if (fs::path_has_parent(fs::path_abs(input$path), repo_root())) {
         showNotification(
           tags$div(
@@ -83,15 +81,15 @@ mod_project_server <- function(id, state) {
             tags$p("Outputs, the decision log and cached fits are written to ",
                    "the work folder, so it has to sit outside the repository. ",
                    "Something like ", tags$code("D:/work/my_project"), "."),
-            tags$p("The survey file is only read, never written to, so it can ",
-                   "stay wherever it already is -- including inside this ",
-                   "repository. Set a work folder first and you will be able ",
-                   "to browse for it.")),
+            tags$p("The survey file is only read, so it can stay where it is ",
+                   "-- including the ", tags$code("demo/"), " folder in this ",
+                   "repository. Set a work folder first and it will be offered ",
+                   "in the file list below.")),
           type = "error", duration = NULL)
         return()
       }
 
-      res <- try(scaffold_work_folder(input$path), silent = TRUE)
+      res <- wise_try(scaffold_work_folder(input$path), "Opening the work folder")
 
       if (inherits(res, "try-error")) {
         state$work_dir <- NULL
@@ -216,7 +214,7 @@ mod_project_server <- function(id, state) {
       }
 
       withProgress(message = "Reading survey file", value = 0.3, {
-        raw <- try(read_survey(f), silent = TRUE)
+        raw <- wise_try(read_survey(f), "Reading the survey file")
         if (inherits(raw, "try-error")) {
           showNotification(conditionMessage(attr(raw, "condition")),
                            type = "error", duration = NULL)
@@ -256,7 +254,6 @@ mod_project_server <- function(id, state) {
 
 # ---- mod_design --------------------------------------------------------
 
-# mod_design.R for DrSvyR
 # Stage 2: confirm the complex design and check the specification.
 
 # Nominations are suggestions for a dropdown, never selections. The variable
@@ -333,7 +330,7 @@ mod_design_server <- function(id, state) {
     observeEvent(input$check, {
       map <- c(id = input$id, strata = input$strata,
                psu = input$psu, weight = input$weight)
-      dd <- try(build_design_frame(state$raw, map), silent = TRUE)
+      dd <- wise_try(build_design_frame(state$raw, map), "Building the design")
 
       if (inherits(dd, "try-error")) {
         showNotification(conditionMessage(attr(dd, "condition")),
@@ -349,14 +346,9 @@ mod_design_server <- function(id, state) {
       req(state$design_checks)
       state$design_checks |>
         transmute(Check = check, Value = value,
-                  # A named lookup rather than a dplyr recode verb. This one
-                  #   line has now been written three ways: recode_values()
-                  #   does not exist before dplyr 1.2.0, and case_match() is
-                  #   deprecated from 1.2.0 onward, so either choice warns or
-                  #   fails on half the installed base. Indexing a named vector
-                  #   is base R, is not going to be deprecated, and reads at
-                  #   least as clearly.
-                  Status = unname(WISE_STATUS_LABEL[status]),
+                  Status = recode_values(status,
+                                         "ok" ~ "", "warn" ~ "warn",
+                                         "stop" ~ "STOP"),
                   Note = note)
     }, width = "100%")
 
@@ -388,8 +380,7 @@ mod_design_server <- function(id, state) {
 
 # ---- mod_items ---------------------------------------------------------
 
-# mod_items.R for DrSvyR
-# Stage 3: explore the candidate items and choose an arm.
+# Stage 3: explore the candidate items and settle the battery.
 
 # The analyst designed the questionnaire, so item content is their call and the
 #   app should get out of the way. The two things they cannot see by eye are
@@ -416,9 +407,8 @@ mod_items_ui <- function(id) {
     uiOutput(ns("variation_block")),
 
     tags$hr(),
-    tags$h4("Which model fits this battery"),
-    help_box("arm_intro"),
-    uiOutput(ns("arm_block"))
+    actionButton(ns("commit"), "Use this battery and continue",
+                 class = "btn-primary")
   )
 }
 
@@ -435,12 +425,19 @@ mod_items_server <- function(id, state) {
     # The free-text goal travels into every prompt from here on and into the
     #   report's framing, so it is collected once and shown back rather than
     #   asked for repeatedly.
+
+    # The two seed values are isolated. Without that this block reads the same
+    #   state the observers below write, so every keystroke invalidated the
+    #   renderUI and rebuilt both boxes -- one full re-render per character,
+    #   which is slow to type into and moves the cursor. Isolated, the block
+    #   re-renders only when the design changes, and it still seeds from
+    #   whatever has been typed because the observers keep state current.
     output$context_box <- renderUI({
       req(state$design_dat)
       tagList(
         tags$h4("Study context"),
         textAreaInput(ns("context"), NULL, width = "100%", rows = 4,
-                      value = state$context %||% "",
+                      value = isolate(state$context %||% ""),
                       placeholder = paste(
                         "Country, what the study is for, who reads the",
                         "results, and what you want the segments or the",
@@ -451,7 +448,7 @@ mod_items_server <- function(id, state) {
         #   what goes in it.
         textAreaInput(ns("question"), "Research question (optional)",
                       width = "100%", rows = 2,
-                      value = state$question %||% "",
+                      value = isolate(state$question %||% ""),
                       placeholder = paste(
                         "What you want this analysis to answer. It sets what",
                         "the report leads with -- every difference the data",
@@ -460,10 +457,32 @@ mod_items_server <- function(id, state) {
         actionButton(ns("save_context"), "Save"))
     })
 
+    # Captured as it is typed, not only on the button: a question written and
+    #   then left while the analyst moved on used to be discarded silently,
+    #   which is how a run reached the report with no research question in it
+    #   despite one having been written. The button stays because an analyst
+    #   wants to be told the thing was kept.
+
+    # Debounced, because state$context is read by four prompt builders on
+    #   three other screens. Writing it on every keystroke invalidated all of
+    #   them once per character. Three quarters of a second after typing stops
+    #   is far inside the time it takes to reach any screen that reads it.
+    CONTEXT_SETTLE <- 750
+
+    ctx_typed <- debounce(reactive(input$context), CONTEXT_SETTLE)
+    qn_typed  <- debounce(reactive(input$question), CONTEXT_SETTLE)
+
+    observeEvent(ctx_typed(), state$context <- ctx_typed(), ignoreInit = TRUE)
+    observeEvent(qn_typed(), state$question <- qn_typed(), ignoreInit = TRUE)
+
     observeEvent(input$save_context, {
       state$context <- input$context
       state$question <- input$question
-      showNotification("Saved.", type = "message")
+      showNotification(
+        if (nzchar(trimws(input$question %||% "")))
+          "Saved. The research question will head the report."
+        else "Saved. No research question set.",
+        type = "message")
     })
 
     # ---- nonresponse codes -------------------------------------------------
@@ -530,95 +549,7 @@ mod_items_server <- function(id, state) {
                        options = list(placeholder = "Choose the items")),
         checkboxInput(ns("complete"), "Fit on item-complete cases only",
                       value = TRUE),
-        actionButton(ns("build"), "Summarise", class = "btn-primary"),
-        actionButton(ns("propose"), "What else might belong here?"),
-        uiOutput(ns("suggestions")))
-    })
-
-    # The model reads every question wording in the file at once, which is the
-    #   one thing it can do that an analyst an hour into a codebook cannot. It
-    #   proposes; R scores each proposal against the battery before the analyst
-    #   sees it; the analyst adds nothing they did not choose to add.
-    observeEvent(input$propose, {
-      if (length(input$items) < 3) {
-        showNotification("Choose at least three items first.", type = "message")
-        return()
-      }
-      if (!nzchar(state$question %||% "")) {
-        showNotification(
-          paste("Write the research question on the Project tab first. Without",
-                "it there is nothing to judge an item against."),
-          type = "message", duration = NULL)
-        return()
-      }
-
-      withProgress(message = "Reading the codebook", value = 0.4, {
-        cand <- candidate_items(state$codebook)
-        chosen <- dplyr::filter(cand, variable %in% input$items)
-
-        res <- try(llm_json(
-          prompt_item_suggestions(state$question, chosen, cand,
-                                  state$context %||% ""),
-          role = "pm", system_prompt = persona_pm,
-          validate = validate_fields("suggestions")), silent = TRUE)
-
-        if (inherits(res, "try-error")) {
-          showNotification(conditionMessage(attr(res, "condition")),
-                           type = "error", duration = NULL)
-          return()
-        }
-
-        sug <- res$suggestions
-        if (!length(sug)) {
-          state$item_suggestions <- tibble(variable = character(0))
-          showNotification(
-            "The methodologist proposes nothing: it reads the battery as already covering the question.",
-            type = "message")
-          return()
-        }
-
-        setProgress(0.7, message = "Scoring the suggestions")
-        tbl <- tibble(
-          variable = map_chr(sug, function(s) s$variable %||% NA_character_),
-          facet = map_chr(sug, function(s) s$facet %||% NA_character_),
-          reasoning = map_chr(sug, function(s) s$reasoning %||% NA_character_))
-
-        ev <- evaluate_suggestions(tbl$variable, state$raw, input$items,
-                                   state$design_dat,
-                                   as.numeric(input$na_codes))
-        state$item_suggestions <- left_join(tbl, ev, by = "variable")
-      })
-    })
-
-    output$suggestions <- renderUI({
-      req(state$item_suggestions)
-      s <- state$item_suggestions
-      if (!nrow(s)) return(advice_box(
-        tags$p("The methodologist proposes no further items for this question.")))
-
-      advice_box(
-        tags$p(tags$strong("Proposed by the methodologist, scored by R.")),
-        tags$p(class = "text-muted",
-               "The reasoning comes from the question wording alone — it has ",
-               "seen no answers. The numbers beside it are computed from your ",
-               "data. Shares with battery is the mean absolute correlation ",
-               "with the items you chose: low is not disqualifying for this ",
-               "model, since an item that separates a group the others miss ",
-               "is exactly an item that correlates weakly with them."),
-        tags$ul(pmap(s, function(variable, facet, reasoning, n_categories,
-                                missing_pct, modal_pct, mean_abs_r, note) {
-          tags$li(
-            tags$strong(variable), " — ", facet,
-            tags$div(class = "text-muted", reasoning),
-            tags$div(
-              sprintf("%s categories · %s%% missing · %s%% give the modal answer · shares with battery %s",
-                      n_categories, missing_pct, modal_pct,
-                      if (is.na(mean_abs_r)) "not computable" else mean_abs_r)),
-            if (!is.na(note)) tags$div(class = "text-warning", note))
-        })),
-        tags$p(class = "text-muted",
-               "Nothing has been added. Put any of these into the battery ",
-               "above yourself, then press Summarise again."))
+        actionButton(ns("build"), "Summarise", class = "btn-primary"))
     })
 
     # Every failure here is a statement about the battery the analyst chose --
@@ -628,14 +559,12 @@ mod_items_server <- function(id, state) {
       req(length(input$items) >= 3)
       map <- set_names(input$items, input$items)
 
-      fr <- try(build_item_frame(state$raw, map,
+      fr <- wise_try(build_item_frame(state$raw, map,
                                  na_codes = as.numeric(input$na_codes),
                                  complete_cases = isTRUE(input$complete)),
-                silent = TRUE)
+                "Summarising the battery")
       if (inherits(fr, "try-error")) {
         state$item_frame <- NULL; state$item_summary <- NULL
-        state$item_suggestions <- NULL
-        state$arm_diag <- NULL; state$arm_advice <- NULL
         showNotification(conditionMessage(attr(fr, "condition")),
                          type = "error", duration = NULL)
         return()
@@ -643,19 +572,9 @@ mod_items_server <- function(id, state) {
 
       state$item_frame <- fr
       state$item_summary <- item_summary(fr)
-      state$arm_advice <- NULL
       # Carried forward: the recode stage needs the same codes so a "don't
       #   know" is missing in a demographic exactly as it is in an item.
       state$na_codes <- as.numeric(input$na_codes)
-
-      diag <- try(arm_diagnostics(fr, state$design_dat), silent = TRUE)
-      if (inherits(diag, "try-error")) {
-        state$arm_diag <- NULL
-        showNotification(conditionMessage(attr(diag, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
-      state$arm_diag <- diag
     })
 
     # The help text appears only once there is something to read, so an empty
@@ -689,92 +608,23 @@ mod_items_server <- function(id, state) {
                   Flag = coalesce(flag, ""))
     }, width = "100%")
 
-    # ---- arm ---------------------------------------------------------------
-
-    output$arm_block <- renderUI({
-      req(state$arm_diag)
-      tagList(
-        help_box("arm_choice"),
-
-        tags$h5("Does this battery suit the model this tool fits?"),
-        help_box("arm_evidence"),
-        tableOutput(ns("arm_tbl")),
-
-        help_box("arm_ask"),
-        actionButton(ns("ask"), "Ask the methodologist"),
-        actionButton(ns("commit"), "Use this battery and continue",
-                     class = "btn-primary"),
-        uiOutput(ns("arm_advice")))
-    })
-
-    output$arm_tbl <- renderTable({
-      req(state$arm_diag)
-      state$arm_diag |>
-        transmute(Items = n_items, `Response formats` = n_formats,
-                  `1st eigenvalue` = eigen_1, `2nd eigenvalue` = eigen_2,
-                  `Ratio` = eigen_ratio,
-                  `Explained by one scale %` = var_explained_1)
-    }, width = "100%")
-
-    # The model reads R's numbers and says whether the battery suits a class
-    #   model. It cannot switch the tool to something else, so where the
-    #   evidence points at one continuum its job is to say so plainly and name
-    #   the alternative rather than to offer a choice this app cannot honour.
-    observeEvent(input$ask, {
-      req(state$arm_diag, state$item_summary)
-      withProgress(message = "Asking", value = 0.5, {
-        res <- try(llm_json(
-          prompt_battery_suitability(state$arm_diag, state$item_summary,
-                                     state$context %||% ""),
-          role = "pm", system_prompt = persona_pm,
-          validate = validate_fields(c("verdict", "reasoning"))),
-          silent = TRUE)
-        if (inherits(res, "try-error")) {
-          showNotification(conditionMessage(attr(res, "condition")),
-                           type = "error", duration = NULL)
-          return()
-        }
-        state$arm_advice <- res
-      })
-    })
-
-    output$arm_advice <- renderUI({
-      req(state$arm_advice)
-      a <- state$arm_advice
-      continuum <- isTRUE(a$recommend_cfa)
-      advice_box(
-        tags$p(tags$strong(
-          if (continuum)
-            "This battery looks like one continuum, which this tool does not fit."
-          else "This battery suits the model this tool fits.")),
-        tags$p(a$reasoning),
-        if (continuum) tags$p(
-          "A weighted confirmatory factor analysis is the right model here: ",
-          "fit it with ", tags$code("lavaan::cfa()"), " using ",
-          tags$code("estimator = \"WLSMV\""), " and ",
-          tags$code("sampling.weights"), ", and take the standard errors from ",
-          "the same stratified jackknife this tool uses rather than from the ",
-          "default output. Segments fitted to a continuum come out as an ",
-          "ordered staircase that reads like a finding and is an artefact of ",
-          "the model."),
-        tags$p(class = "text-muted",
-               "This is advice, not a gate. You can continue either way, and ",
-               "the verdict is recorded in the report."))
-    })
-
+    # The battery is settled here. There is no model to choose between: this
+    #   tool fits one, and whether a class model suits the battery is answered
+    #   by the level-against-pattern ratio in the diagnostics after it is
+    #   fitted, rather than guessed at from an eigenvalue beforehand.
     observeEvent(input$commit, {
       req(state$item_frame)
-      state$arm <- "lca"
-
-      showNotification("Battery accepted. Continue to Review.",
-                       type = "message")
+      showNotification(
+        paste0("Battery set: ", length(state$item_frame$items),
+               " items on ", format(sum(state$item_frame$in_analysis),
+                                    big.mark = ","), " respondents."),
+        type = "message")
     })
   })
 }
 
 # ---- mod_recode --------------------------------------------------------
 
-# mod_recode.R for DrSvyR
 # Stage 4: collapse the demographic and attitudinal domains.
 
 # One control per observed category. Typing the same group name against two
@@ -804,14 +654,14 @@ mod_recode_server <- function(id, state) {
     ns <- session$ns
 
     output$gate <- renderUI({
-      if (is.null(state$arm))
-        tags$p(class = "text-muted", "Choose an arm in Items first.")
+      if (is.null(state$item_frame))
+        tags$p(class = "text-muted", "Choose a battery in Items first.")
     })
 
     na_codes <- reactive(as.numeric(state$na_codes %||% numeric(0)))
 
     output$picker <- renderUI({
-      req(state$arm, state$codebook)
+      req(state$item_frame, state$codebook)
       cand <- demo_candidates(state$codebook) |>
         filter(!variable %in% state$item_frame$items)
       tagList(
@@ -859,6 +709,9 @@ mod_recode_server <- function(id, state) {
             tags$hr(),
             tags$h5(paste0(L$variable, " — ", L$label)),
             help_box("recode_map"),
+            textInput(ns(paste0("name_", L$variable)),
+                      "Name to use in the report", width = "100%",
+                      value = L$label %||% L$variable),
             rows,
             selectInput(ns(paste0("ref_", L$variable)), "Reference level",
                         choices = c("choose one" = ""), width = "50%"))
@@ -867,6 +720,9 @@ mod_recode_server <- function(id, state) {
             tags$hr(),
             tags$h5(paste0(L$variable, " — ", L$label)),
             help_box("recode_cut"),
+            textInput(ns(paste0("name_", L$variable)),
+                      "Name to use in the report", width = "100%",
+                      value = L$label %||% L$variable),
             tableOutput(ns(paste0("num_", L$variable))),
             textInput(ns(paste0("brk_", L$variable)), "Cut points",
                       value = "", width = "50%",
@@ -1022,23 +878,31 @@ mod_recode_server <- function(id, state) {
 
       specs <- map(loaded(), function(L) {
         ref <- input[[paste0("ref_", L$variable)]]
+
+        # Display only. cfg$aux, the scored frame and every population share
+        #   are keyed on L$variable and stay that way; this is what the report
+        #   and the methodologist see instead of "fs2".
+        nm <- trimws(input[[paste0("name_", L$variable)]] %||% "")
+        if (!nzchar(nm)) nm <- L$label %||% L$variable
+
         if (identical(L$kind, "map")) {
           tgt <- map_chr(seq_len(nrow(L$levels)), function(i)
             input[[paste0("map_", L$variable, "_", i)]] %||% "")
           m <- set_names(if_else(nzchar(tgt), tgt, NA_character_),
                          L$levels$source_label)
-          list(source = L$variable, kind = "map", map = m, reference = ref)
+          list(source = L$variable, kind = "map", map = m, reference = ref,
+               label = nm)
         } else {
           brk <- suppressWarnings(as.numeric(str_trim(
             str_split(input[[paste0("brk_", L$variable)]] %||% "", ",")[[1]])))
           lab <- str_trim(str_split(
             input[[paste0("lab_", L$variable)]] %||% "", ",")[[1]])
           list(source = L$variable, kind = "cut", breaks = brk, labels = lab,
-               reference = ref)
+               reference = ref, label = nm)
         }
       })
 
-      dd <- try(build_demo_frame(state$raw, specs, na_codes()), silent = TRUE)
+      dd <- wise_try(build_demo_frame(state$raw, specs, na_codes()), "Applying the recodes")
       if (inherits(dd, "try-error")) {
         showNotification(conditionMessage(attr(dd, "condition")),
                          type = "error", duration = NULL)

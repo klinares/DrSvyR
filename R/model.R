@@ -9,7 +9,6 @@
 
 # ---- stage_04_config ---------------------------------------------------
 
-# stage_04_config.R for DrSvyR
 # Stage 5: assemble the analysis specification and write it out.
 
 #   1. Building the configuration
@@ -35,32 +34,51 @@
 #   what was fixed is visible rather than buried in a function default.
 WISE_FIXED <- list(
   seed = 2026L,
+
   # Two hundred throughout, search and final fit alike. A weighted mixture
   #   likelihood has local maxima that a smaller start set finds inconsistently,
   #   and a search that ranks sizes on inconsistently located maxima is ranking
   #   the optimiser rather than the models.
   n_starts = 200L,
+
+  # Every one of those two hundred is tried, but not all the way. Most random
+  #   starts declare themselves within a few dozen iterations: on this
+  #   battery the median run converges in about 145 iterations and the worst
+  #   takes 609, and the expensive ones are overwhelmingly the ones heading
+  #   somewhere worse. So all n_starts run for n_short iterations, the best
+  #   n_keep of them are carried to convergence from where they reached, and
+  #   the rest are dropped.
+
+  # This is the design Mplus calls STARTS = 200 20 and it is not a shortcut:
+  #   the full start set is still tried at every size, which is the whole of
+  #   the argument above. Measured on a 2,400-respondent battery of twelve
+  #   four-category items it finds the identical maximum at every size from
+  #   two to seven groups, to six decimal places, in about a third of the
+  #   time.
+  n_short = 30L,
+  n_keep = 20L,
+
   K_range = 2:10,
   parallel = TRUE)
 
-# The model is stamped with what produced it and read back from that stamp
-#   rather than from state$cfg. The configuration is cleared when the analyst
-#   drops an item, and a gate written against state$cfg opens when it does not
-#   know, which is the opposite of what a guard is for. Kept as a one-line
-#   predicate because it is what stops a stale fit from being rendered against
-#   a configuration it did not come from.
-arm_is <- function(x, arm) identical(x[["arm"]], arm)
-
 build_cfg <- function(state) {
   fr = state$item_frame
-  arm = state$arm
 
-  cfg = c(
-    list(
-      arm = arm,
+  cfg = list(
       items = fr$items,
       cats = fr$cats,
       aux = names(state$demo_dat),
+
+      # Display names, keyed by the same variable names as aux. Nothing is
+      #   computed from these: every estimate, every population share and
+      #   every by-formula is built from aux itself. See aux_label() in core.R.
+      aux_labels = purrr::map_chr(
+        rlang::set_names(names(state$demo_dat)),
+        function(v) {
+          s = state$demo_specs[[v]]
+          as.character(s$label %||% v)
+        }),
+
       strata = "strata", psu = "psu", weight = "wt", id = "id",
       na_codes = state$na_codes,
       complete_cases = all(fr$in_analysis == (fr$n_answered == length(fr$items))),
@@ -71,12 +89,18 @@ build_cfg <- function(state) {
       #   needing a different copy of this file. See wise_workers() in core.R.
       workers = wise_workers(),
       survey_context = state$context %||% "",
-      out_dir = wise_path("output")),
+      research_question = state$question %||% "",
 
-    list(K_range = WISE_FIXED$K_range,
-         K_force = NULL,
-         n_starts = WISE_FIXED$n_starts,
-         min_items = fr$min_items))
+      # No method level in the path any more. Anything an earlier version
+      #   wrote to output/lca/ stays where it is; nothing writes there again.
+      out_dir = wise_path("output"),
+
+      K_range = WISE_FIXED$K_range,
+      K_force = NULL,
+      n_starts = WISE_FIXED$n_starts,
+      n_short = WISE_FIXED$n_short,
+      n_keep = WISE_FIXED$n_keep,
+      min_items = fr$min_items)
 
   fs::dir_create(cfg$out_dir)
   cfg
@@ -119,19 +143,23 @@ config_summary <- function(state, cfg) {
                if (cfg$complete_cases) " (answered every item)"
                else paste0(" (answered at least ", fr$min_items, ")"))),
 
-    row("Model", "Model", "Latent class -- distinct groups"),
-    row("Model", "Battery suits it",
-        if (is.null(state$arm_advice)) "not asked"
-        else if (isTRUE(state$arm_advice$recommend_cfa))
-          "no -- the methodologist judged this battery one continuum"
-        else "yes"),
     row("Model", "Range searched",
         paste0(min(cfg$K_range), " to ", max(cfg$K_range), " groups")),
 
+    # The question is on the record here as well as in the report, because the
+    #   configuration table is what the analyst approves and what the decision
+    #   log keeps. A question written after the results are known is a question
+    #   chosen to fit them.
+    row("Model", "Research question",
+        if (nzchar(cfg$research_question %||% "")) cfg$research_question
+        else "not set"),
+
+    # The name the report will use is a decision like any other, so it is on
+    #   the sheet the analyst approves rather than discovered in the output.
     purrr::imap(state$demo_specs, function(s, nm)
-      row("Domains", nm,
+      row("Domains", paste0(nm, " shown as \u201c", s$label %||% nm, "\u201d"),
           paste0(nlevels(state$demo_dat[[nm]]), " groups, reference ",
-                 levels(state$demo_dat[[nm]])[1]))) |> purrr::list_rbind(),
+                 s$reference %||% "not set"))) |> purrr::list_rbind(),
 
     row("Fixed", "Random seed", cfg$seed),
     row("Fixed", "Parallel workers", wise_workers_note()),
@@ -198,7 +226,8 @@ write_data_dict <- function(state, cfg, path) {
           name = nm,
           source = s$source,
           role = "domain",
-          reference = levels(state$demo_dat[[nm]])[1],
+          description = s$label %||% nm,
+          reference = s$reference %||% levels(state$demo_dat[[nm]])[1],
           values = as.list(levels(state$demo_dat[[nm]])))),
         purrr::imap(state$design_map, function(v, role) list(
           name = role, source = v, role = "design"))))),
@@ -216,9 +245,9 @@ write_data_dict <- function(state, cfg, path) {
 #   2. What the analyst looks at
 #   3. Prompt
 
-# The search does not select the number of groups. It renders the evidence,
-#   stops, and waits for a number. That decision is recorded with the evidence
-#   that was in front of the analyst when they made it.
+# Nothing here selects the number of groups. The search renders the evidence,
+#   stops, and waits for a number. That decision is recorded with the evidence that was in front
+#   of the analyst when they made it.
 
 # Requires: dplyr, purrr, tibble, ggplot2, tidyr
 
@@ -244,26 +273,64 @@ write_data_dict <- function(state, cfg, path) {
 # The inputs are built once and shared. make_inputs() is not free, and calling
 #   it inside every start repeated it a thousand times over.
 
-# Split the starting seeds into one block per worker. cut() refuses a single
-#   interval -- cut(x, 1) is an error, not a no-op -- so a one-worker machine
-#   would otherwise take out the whole search at its first call. One worker is
-#   not exotic: it is what a single-core container gives, and what an
-#   administrator sets with DRSVYR_WORKERS=1 on a shared server.
-seed_blocks <- function(seeds, n_blocks) {
-  if (n_blocks <= 1L) return(list(seeds))
-  split(seeds, cut(seq_along(seeds), n_blocks, labels = FALSE))
-}
-
-
-best_of_starts <- function(inp, cats, w, K, seeds, maxit = 800L, tol = 1e-8) {
-  cands = purrr::map(seeds, function(s) {
+# Stage one. Every seed, run only far enough to tell a promising basin from a
+#   hopeless one. The fits are returned whole rather than as log-likelihoods,
+#   because stage two restarts from these parameters rather than from the
+#   seed, which is what makes the second stage cheap.
+short_starts <- function(inp, cats, w, K, seeds, short, tol = 1e-8) {
+  purrr::map(seeds, function(s) {
     set.seed(s)
-    em_run(inp$Y, inp$OH, cats, w, K, maxit = maxit, tol = tol)
+    em_run(inp$Y, inp$OH, cats, w, K, maxit = short, tol = tol)
   })
-  cands[[which.max(purrr::map_dbl(cands, "ll"))]]
 }
 
-search_lca <- function(cfg, dat, tick = NULL) {
+# Stage two. The survivors, carried to convergence from where stage one left
+#   them. No seed is drawn here: the starting parameters come from stage one,
+#   so the random number generator is never touched and the result does not
+#   depend on how the work was divided.
+finish_starts <- function(inp, cats, w, K, inits, maxit = 800L, tol = 1e-8) {
+  purrr::map(inits, function(init)
+    em_run(inp$Y, inp$OH, cats, w, K, init = init[c("pi", "rho")],
+           maxit = maxit, tol = tol))
+}
+
+# Which of stage one's fits are worth finishing. Chosen across the whole start
+#   set rather than within each worker's block: the best twenty of two hundred
+#   is one answer, while the best twenty of each of four blocks of fifty is a
+#   different one, and the machine's core count must not decide which model
+#   the analyst is shown.
+pick_survivors <- function(fits, keep) {
+  ll = purrr::map_dbl(fits, "ll")
+  fits[order(ll, decreasing = TRUE)[seq_len(min(keep, length(ll)))]]
+}
+
+# The two stages run one after the other, each spread across the workers. Two
+#   dispatches per size rather than one, which costs a second of serialising
+#   the item matrices and saves minutes of fitting.
+best_of_starts <- function(inp, cats, w, K, seeds, cfg,
+                           maxit = 800L, tol = 1e-8) {
+  n_blocks = max(1L, cfg$workers %||% 1L)
+  short = cfg$n_short %||% WISE_FIXED$n_short
+  keep = cfg$n_keep %||% WISE_FIXED$n_keep
+
+  first = furrr::future_map(
+    in_blocks(seeds, n_blocks),
+    function(sd) short_starts(inp, cats, w, K, sd, short, tol),
+    .options = furrr::furrr_options(seed = NULL)) |>
+    purrr::list_flatten()
+
+  live = pick_survivors(first, keep)
+
+  parts = furrr::future_map(
+    in_blocks(live, n_blocks),
+    function(ii) finish_starts(inp, cats, w, K, ii, maxit, tol),
+    .options = furrr::furrr_options(seed = NULL)) |>
+    purrr::list_flatten()
+
+  parts[[which.max(purrr::map_dbl(parts, "ll"))]]
+}
+
+search_sizes <- function(cfg, dat, tick = NULL) {
   w = dat$wt
   n = nrow(dat)
   scale = n / sum(w)
@@ -275,16 +342,13 @@ search_lca <- function(cfg, dat, tick = NULL) {
   #   maxima that a smaller set finds inconsistently, and a search that ranks
   #   sizes on inconsistently located maxima ranks the optimiser rather than
   #   the models.
-  n_blocks = max(1L, cfg$workers)
-
+  # The sizes run one after another rather than all at once, so the progress
+  #   bar can say which size is being fitted. Flattening them into a single
+  #   dispatch would balance the workers slightly better and cost the analyst
+  #   the only indication that a five-minute wait is progressing.
   fits = purrr::map(cfg$K_range, function(K) {
     if (!is.null(tick)) tick(K)
-    seeds = start_seeds(cfg, K)
-    blocks = seed_blocks(seeds, n_blocks)
-    parts = furrr::future_map(
-      blocks, function(sd) best_of_starts(inp, cfg$cats, w, K, sd),
-      .options = furrr::furrr_options(seed = NULL))
-    parts[[which.max(purrr::map_dbl(parts, "ll"))]]
+    best_of_starts(inp, cfg$cats, w, K, start_seeds(cfg, K), cfg)
   }) |> rlang::set_names(as.character(cfg$K_range))
 
   stats = purrr::imap(fits, function(fit, k) {
@@ -316,17 +380,9 @@ search_lca <- function(cfg, dat, tick = NULL) {
 }
 
 
-
-
-# Section 3 is what the analyst reads. The statistics support the reading; the
-#   profiles are the reading. An analyst who designed the questionnaire can
-#   judge whether two groups describe the same people, and that is the judgement
-#   the dimension choice actually turns on.
+# Section 2 is what the analyst looks at: the response profile of each group
+#   at each candidate size, on one scale so the shapes can be compared.
 #______________________________________________________________________________
-
-# Expected response per item, rescaled so a binary and a seven-point item span
-#   the same range. Without that the picture is dominated by response format
-#   rather than by how the groups differ.
 profile_frame <- function(fit, items, labels = NULL) {
   K = length(fit$pi)
   purrr::map(seq_len(K), function(k)
@@ -362,37 +418,17 @@ plot_bic <- function(stats) {
     ggplot2::scale_x_continuous(breaks = stats$K) +
     ggplot2::scale_colour_viridis_d(name = NULL, end = 0.7) +
     ggplot2::labs(x = "Number of groups", y = NULL,
-                  caption = "Lower is better. A flattening curve says the extra groups are buying little.") +
+                  caption = fig_caption(
+                    "Lower is better. A flattening curve says the extra",
+                    "groups are buying little.")) +
     wise_theme()
 }
 
-plot_scree <- function(eig) {
-  eig |>
-    tidyr::pivot_longer(c(eigenvalue, reference), names_to = "series",
-                        values_to = "value") |>
-    ggplot2::ggplot(ggplot2::aes(component, value, colour = series)) +
-    ggplot2::geom_line(linewidth = 0.8) +
-    ggplot2::geom_point(size = 2) +
-    ggplot2::scale_x_continuous(breaks = eig$component) +
-    ggplot2::scale_colour_viridis_d(name = NULL, end = 0.7,
-      labels = c(eigenvalue = "Observed", reference = "No structure")) +
-    ggplot2::labs(x = "Component", y = "Eigenvalue",
-                  caption = "Components above the reference line carry more than noise would.") +
-    wise_theme()
-}
-
-
-# Section 4 hands the evidence to the model -- after the analyst has committed
-#   to a number. Shown first, the model's reading becomes the analyst's: an
-#   anchor is not undone by a warning that it is one.
-#______________________________________________________________________________
-
-prompt_search_narration <- function(stats, chosen, arm, context) {
+prompt_search_narration <- function(stats, chosen, context) {
   stringr::str_glue(
     "ANALYST CONTEXT\n{context}\n\n",
     "SEARCH EVIDENCE\n{log_table(stats)}\n\n",
-    "THE ANALYST HAS CHOSEN\n  {chosen} ",
-    "{if (arm == 'lca') 'groups' else 'factors'}\n\n",
+    "THE ANALYST HAS CHOSEN\n  {chosen} groups\n\n",
     "TASK\nIn four or five sentences, tell the analyst what this evidence says",
     " about the number they chose. Say where the criteria point, whether they",
     " agree with each other, and what the analyst is trading away if the",
@@ -405,11 +441,10 @@ prompt_search_narration <- function(stats, chosen, arm, context) {
 
 # ---- stage_06_model ----------------------------------------------------
 
-# stage_06_model.R for DrSvyR
 # Stage 7: fit at the chosen dimension and diagnose it.
 
-#   1. The class model
-#   2. The factor model
+#   1. The model
+#   2. Intervals on it
 #   3. Prompt
 
 # The search ranked sizes. This fits the one the analyst chose, from the full
@@ -420,21 +455,19 @@ prompt_search_narration <- function(stats, chosen, arm, context) {
 # Requires: dplyr, purrr, tibble, ggplot2, tidyr
 
 
-# Section 1 is the class arm.
+# Section 1 fits at the chosen number of groups.
 #______________________________________________________________________________
 
-fit_final_lca <- function(cfg, dat, K) {
+# Not called by the app. The app takes its fit from the search, which already
+#   ran this exact call at this exact K -- see the fit step in ui_model.R. This
+#   is the entry point for a script working from the written cfg.R, where
+#   there is no search object to take a fit out of.
+fit_final <- function(cfg, dat, K) {
   init_parallel(cfg)
   inp = make_inputs(dat, cfg$items, cfg$cats)
   w = dat$wt
 
-  seeds = start_seeds(cfg, K)
-  blocks = seed_blocks(seeds, max(1L, cfg$workers))
-  parts = furrr::future_map(
-    blocks, function(sd) best_of_starts(inp, cfg$cats, w, K, sd),
-    .options = furrr::furrr_options(seed = NULL))
-
-  parts[[which.max(purrr::map_dbl(parts, "ll"))]]
+  best_of_starts(inp, cfg$cats, w, K, start_seeds(cfg, K), cfg)
 }
 
 # Response probabilities as the analyst reads them: one row per item and
@@ -456,7 +489,7 @@ profile_table <- function(fit, cfg, dictionary, labels = NULL) {
     purrr::list_rbind()
 }
 
-diagnose_lca <- function(fit, cfg, dat, top_pairs = 12L) {
+diagnose_model <- function(fit, cfg, dat, top_pairs = 12L) {
   w = dat$wt
   list(
     entropy = entropy_R2(fit$post, w, length(fit$pi)),
@@ -475,56 +508,16 @@ diagnose_lca <- function(fit, cfg, dat, top_pairs = 12L) {
 }
 
 
-
-
-
-
-
-# Section 2b is the point of the workflow: design-based uncertainty on the
-#   measurement model itself, from the same replicates that drive every other
-#   standard error.
+# Section 2 puts intervals on everything the analyst reads, from the same
+#   replicate design that produces every other standard error here.
 #______________________________________________________________________________
 
-# Intervals for a probability are formed on the logit scale by the delta
-#   method rather than as p +/- t se. Since d logit(p)/dp = 1/{p(1-p)},
-#
-#     se_logit(p) = se(p) / {p(1-p)},   CI = logit^-1( logit(p) +/- t se_logit )
-#
-#   which keeps the interval inside (0, 1) without truncation and improves
-#   coverage near the boundary. A Wald interval on a proportion is symmetric by
-#   construction, and the sampling distribution of a proportion is not: near 0
-#   or 1 it under-covers and can run outside the range the quantity is even
-#   defined on. This is what the reference workflow does and what the app now
-#   matches.
-#
-# Two cases must not be transformed. An estimate within BOUNDARY_TOL of 0 or 1
-#   has no meaningful logit-scale standard error. And a BCH-corrected share can
-#   legitimately sit outside [0, 1] -- the correction permits it and truncating
-#   would misstate it -- so those keep a Wald interval, untruncated, and are
-#   returned flagged rather than silently mixed in with the rest.
-
-# Intervals on a share are formed on the logit scale by the delta method
-#   rather than as p +/- t se. Since d logit(p)/dp = 1/{p(1-p)},
-#
-#     se_logit(p) = se(p) / {p(1-p)},   CI = logit^-1( logit(p) +/- t se_logit )
-#
-#   which keeps the interval inside (0, 1) without truncation and improves
-#   coverage near the boundary. A Wald interval on a proportion is symmetric by
-#   construction and the sampling distribution of a proportion is not: near 0
-#   or 1 it under-covers and can run outside the range the quantity is defined
-#   on. This is what the reference workflow does, and matching it is why the
-#   two now agree on more than the point estimates.
-
-# transform = FALSE is not a convenience. Two quantities here must not be
-#   transformed. A BCH-corrected share can legitimately sit outside [0, 1] --
-#   the correction permits it and clipping would misstate it -- and where such
-#   a share is small with a large standard error the delta method degenerates:
-#   at p = 0.008 with se = 0.030 the logit interval is [0.000, 0.937], which is
-#   arithmetically correct and useless to a reader. The reference reports those
-#   cells as an estimate and a standard error for exactly that reason. They
-#   keep a Wald interval, untruncated, and come back flagged so the table can
-#   mark them.
-
+# How close to 0 or 1 an estimate has to be before the logit transform stops
+#   being worth doing. An estimate at a boundary has no logit-scale standard
+#   error at all, and one merely near it has a delta-method interval that is
+#   arithmetically correct and useless to a reader: at p = 0.008 with se =
+#   0.030 the logit interval is [0.000, 0.937]. Those cells keep a Wald
+#   interval, untruncated, and come back flagged so the table can mark them.
 BOUNDARY_TOL <- 1e-3
 
 share_ci <- function(p, se, crit, transform = TRUE, truncate = TRUE) {
@@ -535,7 +528,7 @@ share_ci <- function(p, se, crit, transform = TRUE, truncate = TRUE) {
          p <= BOUNDARY_TOL | p >= 1 - BOUNDARY_TOL
   use = transform & !edge
 
-  # Clamped before the transform so the unused arm cannot produce Inf:
+  # Clamped before the transform so a boundary estimate cannot produce Inf:
   #   ifelse() evaluates both arms whatever the condition says.
   pc = pmin(pmax(p, BOUNDARY_TOL), 1 - BOUNDARY_TOL)
   half = crit * se / (pc * (1 - pc))
@@ -563,7 +556,7 @@ share_ci <- function(p, se, crit, transform = TRUE, truncate = TRUE) {
 #   for the probabilities would need a delta method; computing the plotted
 #   quantity inside the replicate function avoids it.
 
-measurement_se_lca <- function(cfg, dat, fit, des, rep_des) {
+measurement_se <- function(cfg, dat, fit, des, rep_des) {
   init_parallel(cfg)
   inp = make_inputs(dat, cfg$items, cfg$cats)
   K = length(fit$pi)
@@ -625,15 +618,23 @@ measurement_se_lca <- function(cfg, dat, fit, des, rep_des) {
   list(shares = shares, probs = probs, profile = profile,
        replicates = ncol(weights(rep_des, "analysis")))
 }
+# Five segment names in one horizontal legend is wider than the page, and
+#   ggplot crops such a legend at both ends rather than wrapping it: the report
+#   showed three of five entries, the first and last cut off mid-word. The row
+#   count is computed from the names actually being drawn.
 
-
-# The profile plot with its intervals. Without them the picture invites an
-#   analyst to read a separation the data may not carry, which is exactly the
-#   error the workflow exists to prevent.
-plot_profiles_ci <- function(profile, labels = NULL, title = NULL) {
+# The caption went the same way -- one line of text longer than the device,
+#   clipped at the right, ending mid-sentence. It is not a caption any more.
+#   The report renders the block caption as ordinary text under the image,
+#   where it wraps, and the on-screen panel has the same sentence in its help
+#   box.
+plot_profiles_ci <- function(profile, labels = NULL, title = NULL,
+                             width = FIG_WIDTH_IN) {
   d = profile |>
     dplyr::mutate(group = if (is.null(labels)) paste0("Group ", group)
                           else labels[group])
+
+  rows = legend_rows(unique(d$group), width)
 
   ggplot2::ggplot(d, ggplot2::aes(item, value, group = group, colour = group,
                                   fill = group)) +
@@ -644,38 +645,21 @@ plot_profiles_ci <- function(profile, labels = NULL, title = NULL) {
     ggplot2::scale_y_continuous(limits = c(0, 1)) +
     wise_colour(name = NULL) +
     wise_fill(name = NULL) +
-    ggplot2::labs(x = NULL, y = "Position on the item", title = title,
-                  caption = paste("Bands are 95% design-based intervals.",
-                                  "Where they overlap, the groups are not",
-                                  "separated on that item.")) +
+    # Both guides take the same shape or the colour and fill legends refuse to
+    #   merge and the figure grows a second copy of itself.
+    ggplot2::guides(colour = ggplot2::guide_legend(nrow = rows, byrow = TRUE),
+                    fill = ggplot2::guide_legend(nrow = rows, byrow = TRUE)) +
+    ggplot2::labs(x = NULL, y = "Position on the item", title = title) +
     wise_theme() + wise_rotate_x()
 }
 
-plot_loadings_ci <- function(load) {
-  load |>
-    dplyr::mutate(item = factor(item, levels = rev(unique(item)))) |>
-    ggplot2::ggplot(ggplot2::aes(loading, item, colour = factor)) +
-    ggplot2::geom_vline(xintercept = 0.4, linetype = 2, colour = "grey60") +
-    ggplot2::geom_errorbar(ggplot2::aes(xmin = lo, xmax = hi),
-                           orientation = "y", width = 0.25, linewidth = 0.7) +
-    ggplot2::geom_point(size = 3.2) +
-    wise_colour(name = NULL) +
-    ggplot2::labs(x = "Standardised loading", y = NULL,
-                  caption = paste("Bars are 95% design-based intervals.",
-                                  "The dashed line is the conventional 0.40,",
-                                  "which is a convention and not a test.")) +
-    wise_theme()
+# What the figure needs vertically once the legend is allowed to wrap.
+plot_profiles_height <- function(labels, width = FIG_WIDTH_IN) {
+  max(4.0, min(7.5, 3.9 + 0.32 * legend_rows(labels, width)))
 }
 
-
-# Section 3 hands the diagnostics over. Every one of them ranks rather than
-#   tests, and the model is told so: a ranking read as a test is how an item
-#   gets dropped for being merely last.
-#______________________________________________________________________________
-
-prompt_diagnostics <- function(diag, arm, dimension, context) {
-  body = if (identical(arm, "lca"))
-    stringr::str_glue(
+prompt_diagnostics <- function(diag, dimension, context) {
+  body = stringr::str_glue(
       "GROUP SIZES\n{log_table(diag$shares)}\n\n",
       "SEPARATION\n  Weighted relative entropy {round(diag$entropy, 3)}. ",
       "This is how cleanly respondents fall into one group rather than ",
@@ -687,17 +671,11 @@ prompt_diagnostics <- function(diag, arm, dimension, context) {
       "  Well under 1 means the groups differ mainly in how high they answer ",
       "overall, which one continuum would describe with far fewer numbers. ",
       "Near or above 1 means they reorder the items.")
-  else
-    stringr::str_glue(
-      "LOADINGS\n{log_table(diag$loadings)}\n\n",
-      "{if (!is.null(diag$fit)) paste0('FIT\\n', log_table(diag$fit), '\\n\\n') else ''}",
-      "{if (!is.null(diag$mi)) paste0('PAIRS THE MODEL ACCOUNTS FOR LEAST WELL\\n', log_table(diag$mi)) else ''}")
 
   stringr::str_glue(
     "ANALYST CONTEXT\n{context}\n\n",
-    "THE MODEL\n  {dimension} ",
-    "{if (arm == 'lca') 'groups' else 'factors'}, already chosen by the ",
-    "analyst.\n\n{body}\n\n",
+    "THE MODEL\n  {dimension} groups, already chosen by the analyst.",
+    "\n\n{body}\n\n",
     "TASK\nIn five or six sentences, tell the analyst what these numbers say",
     " about the model they fitted. Cover how cleanly it separates people,",
     " which items are carrying the distinction and which are contributing",
@@ -713,7 +691,6 @@ prompt_diagnostics <- function(diag, arm, dimension, context) {
 
 # ---- stage_07_labels ---------------------------------------------------
 
-# stage_07_labels.R for DrSvyR
 # Stage 8: draft names for what the model found.
 
 #   1. What the model is shown
@@ -733,7 +710,7 @@ prompt_diagnostics <- function(diag, arm, dimension, context) {
 
 
 # Section 1 assembles what the worker sees: the response probabilities or the
-#   loadings, and the question wording. Never a respondent record, never a
+#   probabilities, and the question wording. Never a respondent record, never a
 #   standard error, never a fit statistic.
 #______________________________________________________________________________
 
@@ -757,9 +734,9 @@ draft_labels <- function(state, tick = NULL) {
   dict = state$item_frame$dictionary
 
   # The part file carries the model key in its name. Without it, a run
-  #   abandoned under a two-factor model leaves rows named f1 and f2 that a
-  #   three-factor model would happily reuse, and f1 does not mean the same
-  #   thing in the two.
+  #   abandoned at four groups leaves rows named 1 to 4 that a five-group
+  #   model would happily reuse, and group 1 does not mean the same thing in
+  #   the two.
   partial = wise_path("output",
                       paste0("labels.partial.", substr(state$model_key, 1, 12),
                              ".csv"))
@@ -776,7 +753,8 @@ draft_labels <- function(state, tick = NULL) {
     if (key %in% done$target) return(dplyr::filter(done, target == key))
     if (!is.null(tick)) tick(key)
 
-    prompt = prompt_segment_label(fit, k, dict, cfg$items, cfg$survey_context)
+    prompt = prompt_segment_label(fit, k, dict, cfg$items,
+                                  cfg$survey_context)
 
     obj = llm_json(prompt, role = "worker", system_prompt = persona_lca,
                    validate = validate_fields(c("label", "description")),

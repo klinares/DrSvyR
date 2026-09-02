@@ -29,6 +29,67 @@
 WISE_INK   <- "#767676"
 WISE_GRID  <- "#88888855"
 
+
+# ---- making text fit inside a figure ------------------------------------
+
+# ggplot clips. A facet strip label wider than its panel is cut off mid-word, a
+#   horizontal legend wider than the device is cropped at both ends, and a
+#   caption longer than the device is cut off at the right. None of the three
+#   wraps and none of them shrinks, and all three were happening in the
+#   report: segment names truncated above every panel, a five-entry legend
+#   showing three entries, a caption ending mid-sentence.
+
+# There is no way to ask ggplot how wide a panel will be before it is drawn, so
+#   this predicts it from the width the report renders at. The constants were
+#   measured off the rendered PNGs at 150 dpi rather than guessed: an axis
+#   label runs about 0.090 inches per character at 11pt, a bold strip label
+#   about 0.068 at the reduced size these figures use. They are deliberately
+#   generous -- a strip wrapped one word early costs a line, a strip wrapped one
+#   word late loses the word.
+FIG_WIDTH_IN    <- 6.4    # what the report renders at; the Word copy is 6.0
+FIG_Y_CHAR_IN   <- 0.090
+FIG_STRIP_CHAR_IN <- 0.068
+FIG_KEY_IN      <- 0.35   # one legend key plus the gap after it
+
+# Characters that fit across one facet panel, given what the y axis is
+#   spending on its own labels.
+panel_wrap <- function(y_labels, ncol, width = FIG_WIDTH_IN) {
+  y_in = if (!length(y_labels)) 0 else
+    max(nchar(unlist(strsplit(as.character(y_labels), "\n")))) * FIG_Y_CHAR_IN
+  # Five per cent held back. Without it the widest case lands within a
+  #   thirtieth of an inch of the panel edge, and a strip that wraps one word
+  #   early costs a line while one that wraps one word late loses the word.
+  usable = 0.95 * max(1.2, width - y_in - 0.60)
+  chars = floor((usable / max(1L, as.integer(ncol))) / FIG_STRIP_CHAR_IN)
+  as.integer(max(10L, min(40L, chars)))
+}
+
+# Rows a horizontal legend needs. One row is what ggplot does and one row is
+#   what it clips.
+legend_rows <- function(labels, width = FIG_WIDTH_IN) {
+  if (!length(labels)) return(1L)
+  need = sum(nchar(as.character(labels))) * FIG_Y_CHAR_IN +
+         length(labels) * FIG_KEY_IN
+  as.integer(max(1L, min(4L, ceiling(need / max(2, width - 0.4)))))
+}
+
+# A caption is one text element and ggplot draws it on one line however long it
+#   is, so anything past the device edge is simply gone. Every caption in this
+#   file and the three others goes through here.
+FIG_CAPTION_CHARS <- 78L
+
+fig_caption <- function(...)
+  stringr::str_wrap(paste(...), width = FIG_CAPTION_CHARS)
+
+# How many lines a set of labels takes once wrapped, which is what a figure's
+#   height has to make room for.
+wrap_lines <- function(labels, width) {
+  if (!length(labels)) return(1L)
+  as.integer(max(vapply(
+    strsplit(stringr::str_wrap(as.character(labels), width), "\n"),
+    length, integer(1))))
+}
+
 wise_theme <- function(base_size = 14) {
   theme_minimal(base_size = base_size) +
     theme(
@@ -38,7 +99,7 @@ wise_theme <- function(base_size = 14) {
       legend.key        = element_rect(fill = NA, colour = NA),
 
       # Both directions by default. Half these figures are horizontal -- the
-      #   domain estimates, the loadings, the discrimination plot -- and on
+      #   domain estimates, the profiles, the discrimination plot -- and on
       #   those the x gridlines are the ones you read a value against.
       #   Blanking them removed the reference lines from exactly the plots
       #   that need them. Categorical-x plots blank them in wise_rotate_x().
@@ -81,14 +142,7 @@ wise_rotate_x <- function(angle = 45)
         plot.margin = margin(10, 16, 16, 10))
 
 
-
-
-# ---- discrimination -----------------------------------------------------
-
-# Discrimination against range. They answer different questions and a battery
-#   of mixed formats needs both: discrimination is sensitive to shape and
-#   treats categories as unordered, which is what the model does; range is what
-#   an analyst reads off a profile plot.
+# ---- the factor diagram -------------------------------------------------
 
 plot_discrimination <- function(disc) {
   disc |>
@@ -104,8 +158,9 @@ plot_discrimination <- function(disc) {
     scale_x_continuous(limits = c(0, 1)) +
     wise_colour(name = NULL) +
     labs(x = NULL, y = NULL,
-         caption = paste("Both are bounded at 0 and 1. An item low on both is",
-                         "carrying little; one high on a single measure is",
-                         "worth reading, not dropping.")) +
+         caption = fig_caption(
+           "Both are bounded at 0 and 1. An item low on both is carrying",
+           "little; one high on a single measure is worth reading, not",
+           "dropping.")) +
     wise_theme()
 }

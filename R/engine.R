@@ -1,36 +1,20 @@
 # engine.R for DrSvyR
-# The estimation engine. Never edited per dataset; everything arrives as an argument.
+# The estimation engine. Never edited per dataset; everything arrives as an
+#   argument, and nothing here reads the analyst's configuration directly.
 
-# Merged from: 
-#   engine_00_utils.R
-#   engine_01_tables_plots.R
-#   engine_02_lca_em.R
-#   engine_03_design_variance.R
-#   engine_04_lca_predict.R
-#   engine_05_prompts_label.R
-#   engine_07_domain_read.R
+#   1. The parallel plan and the raw-data plot
+#   2. The weighted EM, label alignment, and the fit diagnostics
+#   3. The replicate design and variance from it
+#   4. Scoring respondents from a fitted model
+#   5. Prompts for naming the segments
+#   6. Turning the domain table into a short read
 
-# ---- engine_00_utils ---------------------------------------------------
-
-# source_code.R for DrSvyR
-# Engine for both arms of the workflow. Holds no analysis-specific state:
-#   everything arrives as an argument. Sourced before the method config.
-
-#   1. Plotting and tables            SHARED
-#   2. Weighted EM and diagnostics    LCA
-#   3. Design and replicate variance  SHARED
-#   4. Prediction                     LCA
-#   5. LLM labeling                   SHARED
-#   6. Weighted EFA and CFA           CFA
-
-# Sections 1, 3 and 5 serve both arms. Nothing in 2 or 4 is called by the CFA
-#   report, and nothing in 6 is called by the LCA report, so the two can be
-#   edited independently.
-
-# Data cleaning lives in survey_data_read.R and the two method configs.
+# The tool fits one model: a latent class analysis on complex survey data,
+#   weighted, with every standard error coming from the survey's own replicate
+#   design. The factor-analytic arm that used to sit alongside this has been
+#   removed -- along with lavaan, which nothing here now needs.
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
-
 
 
 # ---- engine_01_tables_plots --------------------------------------------
@@ -61,6 +45,22 @@
 #   every session now resolves the same number from the same environment
 #   variable, the plan they all want is identical, and this becomes a no-op
 #   after the first call rather than a fight.
+# Splitting a start set across workers. split(x, cut(seq_along(x), b)) is the
+#   obvious way to write this and is wrong twice over: cut(x, 1) stops with
+#   "invalid number of intervals", so DRSVYR_WORKERS=1 -- the documented way
+#   to run without parallelism -- crashed the search before it began; and
+#   cutting three items into four intervals yields an empty block and an
+#   unbalanced one, which is the ordinary case once the survivors of a first
+#   pass are being divided.
+
+# This returns exactly min(blocks, length(x)) pieces, none empty, sizes
+#   differing by at most one.
+in_blocks <- function(x, blocks) {
+  b = max(1L, min(as.integer(blocks), length(x)))
+  if (b <= 1L) return(list(x))
+  unname(split(x, ceiling(seq_along(x) / (length(x) / b))))
+}
+
 init_parallel <- function(cfg) {
   want = if (isTRUE(cfg$parallel)) max(1L, as.integer(cfg$workers %||% 1L)) else 1L
 
@@ -90,13 +90,16 @@ plot_item_stack <- function(df, items, title, show_missing = TRUE) {
                       values = c(set_names(viridis(length(lev)), lev),
                                  Missing = "grey75")) +
     labs(x = NULL, y = "Proportion", title = title,
-         caption = paste("Unweighted: this is the achieved sample, not the",
-                         "population. The weighted picture is the one every",
-                         "estimate later in the workflow reports.")) +
+         # Wrapped inline rather than through the app's fig_caption(), which
+         #   lives in plots.R -- this file is shared by copy with the reference
+         #   workflow and must not depend on anything the app adds.
+         caption = str_wrap(paste(
+           "Unweighted: this is the achieved sample, not the population. The",
+           "weighted picture is the one every estimate later in the workflow",
+           "reports."), 78)) +
     wise_theme() +
     wise_rotate_x()
 }
-
 
 
 # ---- engine_02_lca_em --------------------------------------------------
@@ -300,11 +303,10 @@ bvr_pairs <- function(df, w, items, fit) {
 }
 
 
-
 # ---- engine_03_design_variance -----------------------------------------
 
-# Section 3 builds the replicate design and computes variance from it. 
-# Both arms use this, which is the point: one design, every standard error.
+# Section 3 builds the replicate design and computes variance from it.
+# One design, and every standard error in the workflow comes off it.
 #______________________________________________________________________________
 
 # Stratified jackknife design. 
@@ -313,13 +315,9 @@ bvr_pairs <- function(df, w, items, fit) {
 #   than replicate construction, so continuing would  understate variance 
 #   in the strata with least information.
 build_rep_design <- function(dat, cfg) {
-  # dplyr::count by name: matrixStats also exports count(), it is in this
-  #   project's dependency list, and attaching it after dplyr masks the one
-  #   meant here. The failure is a vctrs message about a list, several frames
-  #   from anything that names a design.
   lonely = dat |>
     distinct(.data[[cfg$strata]], .data[[cfg$psu]]) |>
-    dplyr::count(.data[[cfg$strata]], name = "n_psu") |>
+    count(.data[[cfg$strata]], name = "n_psu") |>
     filter(n_psu < 2)
 
   if (nrow(lonely) > 0) {
@@ -356,27 +354,15 @@ bch_weights <- function(post, modal, w) {
   K = ncol(post)
   num = crossprod(w * post, outer(modal, seq_len(K), `==`) + 0)
   D = sweep(num, 1, rowSums(num), "/")
-
-  # A segment that takes no modal assignments inside a replicate makes D
-  #   singular. Left to solve() that arrives as a LAPACK message naming a
-  #   matrix position, which tells the analyst nothing. Named here it says
-  #   what it means: the segment is too small to survive deleting one unit.
-  Dinv = try(solve(D), silent = TRUE)
-  if (inherits(Dinv, "try-error"))
-    stop("The classification table is singular, so the bias correction has ",
-         "no inverse to apply. A segment took no modal assignments in one ",
-         "replicate, which means it is too small to survive deleting a ",
-         "sampling unit. Refit with fewer segments.", call. = FALSE)
-  Dinv[modal, , drop = FALSE]
+  solve(D)[modal, , drop = FALSE]
 }
-
 
 
 # ---- engine_04_lca_predict ---------------------------------------------
 
-# Section 4 scores respondents from a fitted LCA, including those who skipped
-#   items. 
-# LCA only; the CFA scores with lavPredict.
+# Section 4 scores respondents from a fitted model, including those who
+#   skipped items. Local independence is what makes that possible: a missing
+#   answer drops out of the product rather than disqualifying the respondent.
 #______________________________________________________________________________
 
 # Posterior segment membership for any respondents carrying the item columns.
@@ -401,11 +387,10 @@ predict_segments <- function(df, fit, items, min_items) {
 }
 
 
-
 # ---- engine_05_prompts_label -------------------------------------------
 
 # Section 5 drafts names for whatever the latent variable turned out to be.
-# Shared: the prompt takes a parameter table, so segments or loadings both work.
+# The prompt takes a parameter table, so it reads whatever the fit produced.
 #______________________________________________________________________________
 # One call per segment. 
 # A joint prompt confuses near-neighbor segments, because a forced one-to-one 
@@ -427,13 +412,6 @@ persona_lca <- paste(
   "that segment gives each answer. A segment leans toward the answers with",
   "high probability. You interpret a segment strictly from these",
   "probabilities and the item wording, never from outside assumptions.")
-
-# Rule 4 keeps a diffuse profile from being written up as if it were sharp,
-#   rule 6 keeps the set of names readable as a set, and rules 7 and 8 exist
-#   because a run produced "Discontented, Anti-Gay, Poor" alongside four other
-#   labels beginning "Discontented". Both are failures of the same kind: a name
-#   is a heading in somebody's report, and it has to describe how a group
-#   answered rather than judge who they are.
 rules_label <- paste(
   "RULES:",
   "1. Use only the numbers and item wording shown. Survey context only",
@@ -446,23 +424,7 @@ rules_label <- paste(
   "3. Anchor every statement to the items that stand out most.",
   "4. If nothing stands out, say the profile is diffuse rather than inventing",
   "   a theme.",
-  "5. Name the segment for how it answered, not for what its members are.",
-  "   Describe positions and circumstances, never character, worth or identity.",
-  "   Write the neutral form of any contested topic: a segment that disapproved",
-  "   of same-sex marriage is one that answered low on that question, not an",
-  "   'anti-gay' segment. Nothing that would embarrass the analyst as a heading",
-  "   in a published table.",
-  "6. The label has to identify this segment among the others in the same",
-  "   model. Do not open two labels with the same word, and do not build a set",
-  "   in which one adjective appears throughout: a reader scanning the list",
-  "   sees the first word first, and a column of names that all begin alike",
-  "   distinguishes nothing.",
-  "7. Prefer the concrete over the evaluative. 'Renting, food-insecure' names",
-  "   answers; 'struggling' rates people.",
-  "8. Keep the description to two sentences. A description that runs longer",
-  "   than the reply budget is cut mid-object and the whole answer is lost,",
-  "   so length here is not a matter of style.",
-  "9. Return only valid JSON: no prose before or after, no markdown fences.",
+  "5. Return only valid JSON: no prose before or after, no markdown fences.",
   sep = "\n")
 
 # Domain rules are stricter because the reader will act on them. 
@@ -544,41 +506,22 @@ prompt_segment_label <- function(fit, k, dictionary, items, context = NULL) {
 #   label, since neither call saw the other. 
 # One closing call edits only the labels  that collide, and runs only when 
 #   this mechanical check fires.
-labels_collide <- function(labels, overlap = 0.5, repeats = 3L) {
+labels_collide <- function(labels) {
   # One name has nothing to collide with, and combn() will not enumerate the
   #   pairs of a single element -- it stops with "n < m". Because t() is an S4
   #   generic once Matrix is loaded, that surfaces as "error in evaluating the
   #   argument 'x' in selecting a method for function 't'", which names neither
-  #   this function nor the cause.
-  if (length(labels) < 2L || anyNA(labels)) return(FALSE)
+  #   this function nor the cause. K is always at least two here, so the guard
+  #   is insurance rather than a live path.
+  if (length(labels) < 2L) return(FALSE)
 
-  words = map(str_squish(tolower(labels)),
-              function(s) unique(strsplit(s, "[ ,]+")[[1]]))
-
-  # Two labels that share most of their words.
+  ws = map(str_squish(tolower(labels)), function(s) unique(strsplit(s, " ")[[1]]))
   pr = t(combn(length(labels), 2L))
-  pairwise = any(map_dbl(seq_len(nrow(pr)), function(i) {
-    a = words[[pr[i, 1]]]
-    b = words[[pr[i, 2]]]
-    if (!length(a) || !length(b)) return(0)
+  any(map_dbl(seq_len(nrow(pr)), function(i) {
+    a = ws[[pr[i, 1]]]
+    b = ws[[pr[i, 2]]]
     length(intersect(a, b)) / length(union(a, b))
-  }) >= overlap)
-
-  # A word that opens several labels at once. On a real run five of eight
-  #   segments began "Discontented" and this function returned FALSE: each
-  #   pair shared one word out of three or four, scoring about 0.25, well
-  #   under the pairwise threshold. Nothing was wrong with the threshold --
-  #   the shape of the problem was different. A reader scanning a contents
-  #   list sees the first word, so a first word used three times or more is a
-  #   collision however little else the labels share.
-  first = map_chr(words, function(w) if (length(w)) w[[1]] else NA_character_)
-  leading = any(table(first[!is.na(first)]) >= repeats)
-
-  # The same word everywhere, wherever it sits. "Segment" in every label is
-  #   not distinguishing anything either.
-  common = length(reduce(words, intersect)) > 0
-
-  pairwise || leading || common
+  }) >= 0.5)
 }
 
 prompt_harmonize <- function(lab) {
@@ -587,83 +530,13 @@ prompt_harmonize <- function(lab) {
     "DRAFT LABELS FOR THE SEGMENTS OF ONE LATENT CLASS ANALYSIS (LCA) MODEL\n",
     "{paste(rows, collapse = '\n')}\n\n",
     "TASK\n",
-    "These labels do not tell the segments apart. Edit as few of them as ",
-    "possible so that every label is distinct; anchor each edit to that ",
-    "segment's own description, and keep any label that is already distinct ",
+    "Some labels are too similar to tell apart. Edit ONLY the labels that ",
+    "overlap, as little as possible, so every label is distinct; anchor each ",
+    "edit to that segment's own description. Keep every non-overlapping label ",
     "verbatim. Do not change any description. Labels stay 2 to 5 words.\n\n",
-    "Two labels can fail to distinguish in more than one way. They may share ",
-    "most of their words; they may open with the same word, which is what a ",
-    "reader scanning a list sees first; or one word may run through every ",
-    "label in the set, in which case it is carrying no information and the ",
-    "labels have to be rebuilt around what differs rather than what is ",
-    "common. Fix whichever applies here.\n\n",
     "{rules_label}\n",
     'JSON (one array, all segments): [{{"class": 1, "label": "..."}}, ...]')
 }
-
-# harmonize_labels() and get_segment_labels() were the batch-script entry
-#   points into the labelling step, and both went through the chat builder
-#   removed above. The app's path is model.R's label_dimensions(), which runs
-#   the same prompt through llm_json() and writes nothing to disk. Names are
-#   the analyst's to edit in the app, not a CSV's to cache.
-
-# format_factor_block() and prompt_factor_label() went with the archived arm.
-#   They are in archive/cfa_arm.R; nothing in the class model drafts a name
-#   from loadings.
-
-
-
-
-
-
-
-
-
-# Weighted polychoric correlations, falling back to weighted Pearson if 
-#  lavCor turns down the arguments. Feeds the eigenvalue search.
-wcor <- function(w, items, data) {
-  d = mutate(data, .w = w)
-  out = try(lavCor(select(d, all_of(items), .w), ordered = items,
-                   sampling.weights = ".w", output = "cor"), silent = TRUE)
-
-  if (!inherits(out, "try-error")) {
-    R = as.matrix(out)
-    # A different lavaan version that kept the weight column would return a
-    #   matrix one row larger, and every eigenvalue read from it would be a
-    #   number about the wrong thing.
-    if (!identical(colnames(R), items))
-      stop("lavCor returned a matrix over ", paste(colnames(R), collapse = ", "),
-           " rather than over the items. Check the lavaan version before ",
-           "reading anything computed from it.", call. = FALSE)
-    return(R)
-  }
-
-  # Falling back changes the estimator, so it says so: polychoric and Pearson
-  #   correlations are not interchangeable and their eigenvalues differ.
-  warning("lavCor refused these arguments, so the correlations below are ",
-          "weighted Pearson rather than polychoric.", call. = FALSE)
-  cov2cor(as.matrix(svyvar(reformulate(items),
-                           svydesign(ids = ~1, weights = ~.w, data = d),
-                           na.rm = TRUE)))
-}
-
-
-
-
-
-
-# ---- engine_07_domain_read ---------------------------------------------
-
-# Section 7 turns the domain table into a short read for the analyst. 
-# This is the step that says where to look. The analyst resolves which 
-# differences clear the interval before anything is sent, so the model 
-# translates a verdict rather than reaching one.
-#______________________________________________________________________________
-
-# The prompt is built from the three-estimator domain frame, and the rows 
-# that drive it are named rather than taken by position. 
-# A frame that has already  been filtered somewhere upstream cannot be 
-# translated honestly, so it halts.
 pick_estimator <- function(dom, est) {
   if(!"estimator" %in% names(dom))
     stop("dom has no estimator column. Pass the full three-estimator domain ",
@@ -677,13 +550,16 @@ pick_estimator <- function(dom, est) {
 # Lays one demographic out segment by segment, because that is the way the
 #   result gets read and written up. Levels under min_n are marked rather than
 #   dropped so the model can see they exist and still be told to leave them
-#   alone. values_header names what the numbers are, because the class arm
-#   reports shares. est names the
-#   estimator whose rows are shown, rather than taking one by position.
+#   alone. values_header names what the numbers are. est names the estimator
+#   whose rows are shown, rather than taking one by position.
+# var_label is what the variable is called in prose; it defaults to the
+#   variable name, so an older caller is unaffected. Only the wording changes:
+#   every row is still selected on `variable`.
 format_domain_block <- function(
     dom, marg, variable, labels = NULL, min_n = 30,
     values_header = "Share of each level falling in each segment:",
-    est = "Design-based") {
+    est = "Design-based", var_label = NULL) {
+  var_label = var_label %||% variable
   d = pick_estimator(dom, est) |> filter(variable == !!variable)
   m = filter(marg, variable == !!variable)
   segs = sort(unique(d$segment))
@@ -692,11 +568,7 @@ format_domain_block <- function(
     dd = filter(d, segment == k)
     cells = map_chr(seq_len(nrow(dd)), function(i) {
       n_lv = m$n[m$level == dd$level[i]]
-      # A level the marginals did not count gives n_lv of length zero or NA.
-      #   Neither is evidence that the level is small, and `if (NA)` is an
-      #   error rather than a FALSE, so both carry no flag instead of halting.
-      flag = if (length(n_lv) == 1 && !is.na(n_lv) && n_lv < min_n)
-        " [too small]" else ""
+      flag = if(length(n_lv) && n_lv < min_n) " [too small]" else ""
       sprintf("%s %.2f [%.2f, %.2f]%s", dd$level[i], dd$p[i], dd$lo[i],
               dd$hi[i], flag)
     })
@@ -704,7 +576,7 @@ format_domain_block <- function(
   })
   shares = map_chr(seq_len(nrow(m)), function(i)
     sprintf("%s %d%% (n = %d)", m$level[i], round(100 * m$weighted[i]), m$n[i]))
-  str_glue("{variable} in the population: {paste(shares, collapse = ', ')}\n",
+  str_glue("{var_label} in the population: {paste(shares, collapse = ', ')}\n",
            "{values_header}\n",
            paste(lines, collapse = "\n"))
 }
@@ -734,7 +606,7 @@ format_estimator_shift <- function(dom, variable, labels = NULL) {
 #   on its difference clears alpha after Holm adjustment within the 
 #   demographic, using the replicate covariance between the two estimates. 
 # Without it, the old rule applies: intervals that miss each other, which is 
-# more conservative than a test and is kept as the fallback for the factor arm.
+# more conservative than a test and is kept as the fallback.
 domain_separations <- function(dom, variable, labels = NULL,
                                est = "Design-based", wald = NULL,
                                alpha = 0.05) {
@@ -783,19 +655,21 @@ domain_separations <- function(dom, variable, labels = NULL,
 prompt_domain_read <- function(
     dom, marg, variable, labels = NULL, context = NULL, min_n = 30,
     values_header = "Share of each level falling in each segment:",
-    est = "Design-based", wald = NULL) {
+    est = "Design-based", wald = NULL, var_label = NULL) {
+  var_label = var_label %||% variable
   ctx = if(!is.null(context) && nzchar(context)) str_glue("SURVEY CONTEXT\n{context}\n\n") else ""
   str_glue(
     "{ctx}",
     "COMPOSITION OF THE POPULATION AND OF EACH GROUP\n",
-    "{format_domain_block(dom, marg, variable, labels, min_n, values_header, est)}\n\n",
+    "{format_domain_block(dom, marg, variable, labels, min_n, values_header, est, var_label)}\n\n",
     "DIFFERENCES THE ANALYSIS RESOLVED\n",
     "{domain_separations(dom, variable, labels, est, wald)}\n\n",
     "WHAT THE SURVEY DESIGN CHANGES\n",
     "{format_estimator_shift(dom, variable, labels)}\n\n",
     "TASK\n",
     "Write two or three sentences telling an analyst what this variable shows ",
-    "and where to look. Name only the differences listed above. In the caution ",
+    "and where to look. Call it \"{var_label}\" and never use a variable code. ",
+    "Name only the differences listed above. In the caution ",
     "field, say what accounting for the survey design changed: whether it moved ",
     "any estimate enough to matter and whether it made the intervals wider or ",
     "narrower.\n\n",

@@ -7,9 +7,8 @@
 #   4. The report
 
 
-#   1. The class arm
-#   2. The factor arm
-#   3. Coverage and assignment quality
+#   1. Scoring
+#   2. Coverage and assignment quality
 
 # The measurement model is fitted on people who answered every item. Scoring
 #   extends past that, because item nonresponse is not random and restricting
@@ -24,7 +23,7 @@
 #   the items they did answer, gated by how many that was.
 #______________________________________________________________________________
 
-score_lca <- function(state) {
+score_respondents <- function(state) {
   cfg = state$cfg
   fr = state$item_frame
 
@@ -36,23 +35,8 @@ score_lca <- function(state) {
 }
 
 
-
-
-
-# Section 3 says who was reached and how well. Respondents scored from fewer
-#   items carry more classification error: a processing error whose magnitude
-#   depends on an item nonresponse error, which is the correlated-error case
-#   the total survey error framework flags.
+# Section 2 says who was reached and how well.
 #______________________________________________________________________________
-
-# Two ways to end up without a score, and they mean different things. Too few
-#   answers is item nonresponse, which the minimum-items rule governs and which
-#   the analyst set. A respondent who was in the measurement model and still
-#   came back without a score is one the estimator could not place -- rare, and
-#   never a random rare: in the factor arm they sit at the floor or the ceiling
-#   of nearly every item, which is to say at the extremes of the thing being
-#   measured. Reporting that as an unexplained shortfall in a total understates
-#   a small selection on the construct.
 score_coverage <- function(scored, n_items) {
   reached = !is.na(scored$segment)
   in_model = scored$in_analysis
@@ -95,9 +79,9 @@ plot_assignment_quality <- function(q) {
     ggplot2::scale_y_continuous(limits = c(0, 1)) +
     ggplot2::scale_size(name = "Respondents") +
     ggplot2::labs(x = "Items answered", y = "Certainty of assignment",
-                  caption = paste("A sharp fall at the low end means those",
-                                  "respondents are being placed on too little",
-                                  "information.")) +
+                  caption = fig_caption(
+                    "A sharp fall at the low end means those respondents are",
+                    "being placed on too little information.")) +
     wise_theme()
 }
 
@@ -120,12 +104,10 @@ group_shares <- function(scored, labels, rep_des) {
 }
 
 
-
 #   1. Marginals
-#   2. The class arm: three estimators
-#   3. The factor arm: three estimators
-#   4. Which differences the analysis resolves
-#   5. Plots
+#   2. Three estimators
+#   3. Which differences the analysis resolves
+#   4. Plots
 
 # Each domain quantity is reported three ways so the two corrections can be read
 #   separately. Unweighted ignores the design. Design-based applies the weights
@@ -158,8 +140,8 @@ domain_marginals <- function(scored, aux, rep_des) {
 }
 
 
-# Section 2 is the class arm. The quantity is the share of each domain level
-#   falling in each segment.
+# Section 2 estimates the share of each domain level falling in each segment,
+#   three ways.
 #______________________________________________________________________________
 
 # Modal assignment is an error-prone measurement of true segment, and
@@ -172,7 +154,7 @@ domain_marginals <- function(scored, aux, rep_des) {
 #   replicate, so the intervals carry the design variance of the classification
 #   table and the cross-tab together rather than treating the first as known.
 
-domains_lca <- function(state, tick = NULL) {
+domain_estimates <- function(state, tick = NULL) {
   cfg = state$cfg
   init_parallel(cfg)
   scored = dplyr::filter(state$scored, !is.na(segment))
@@ -204,37 +186,39 @@ domains_lca <- function(state, tick = NULL) {
   if (!is.null(tick)) tick("design-based")
 
   # svyby splits the design by the domain and runs svymean of the segment
-  #   factor inside each level.
-  #
-  #   Read through coef() and SE() rather than by column position. svyby names
-  #   its standard-error columns after the expression it was given, so a
-  #   positional read depends on a layout survey does not promise: it would
-  #   return a number of the right shape from the wrong column, and a column
-  #   count check cannot see that because the count is right either way.
-  #
-  #   SE() on a multi-outcome svyby returns a data frame of levels by outcomes,
-  #   not a vector, so it needs as.matrix() before as.numeric(). That unrolls
-  #   column-major, which is the order coef() uses -- level varies fastest,
-  #   segment slowest -- and is why the two line up. Checked against the
-  #   positional read this replaces: identical estimates and identical
-  #   standard errors.
+  #   factor inside each level. Columns are read by position because svyby's
+  #   naming for a factor outcome varies by version.
   design = purrr::map(cfg$aux, function(v) {
-    sb = survey::svyby(~ factor(segment), reformulate(v), rep_des,
-                       survey::svymean, na.rm = TRUE)
-    lv = as.character(sb[[v]])
-    est = as.numeric(stats::coef(sb))
-    se = as.numeric(as.matrix(survey::SE(sb)))
-    stopifnot(length(est) == length(lv) * K, length(se) == length(est))
+    sb = as.data.frame(survey::svyby(~ factor(segment), reformulate(v), rep_des,
+                                     survey::svymean, na.rm = TRUE))
+    vals = sb[, -1, drop = FALSE]
+    check_dims(ncol(vals), 2 * K,
+               paste0("svyby output for '", v, "'"),
+               paste("Expected one estimate and one standard error per",
+                     "segment. A segment with no respondents in this domain,",
+                     "or a survey version that names its columns differently,",
+                     "would do this."))
     tibble::tibble(variable = v,
-                   level = rep(lv, times = K),
-                   segment = rep(seq_len(K), each = length(lv)),
-                   p = est, se = se)
+                   level = rep(as.character(sb[[1]]), times = K),
+                   segment = rep(seq_len(K), each = nrow(sb)),
+                   p = as.numeric(as.matrix(vals[, seq_len(K)])),
+                   se = as.numeric(as.matrix(vals[, K + seq_len(K)])))
   }) |>
     purrr::list_rbind() |>
     dplyr::filter(!is.na(level))
   design = dplyr::bind_cols(design, share_ci(design$p, design$se, crit))
 
   if (!is.null(tick)) tick("corrected")
+
+  # The posterior columns are named from state$dimension while the frame was
+  #   written by whatever model last scored. If those disagree the subset
+  #   fails on a name rather than a dimension, which says nothing useful.
+  missing_post = setdiff(post_cols, names(scored))
+  if (length(missing_post))
+    stop("The scored frame has no ", paste(missing_post, collapse = ", "),
+         ". It was scored under a different number of groups than the ",
+         K, " now selected. Score again before estimating domains.",
+         call. = FALSE)
 
   P_fixed = as.matrix(scored[, post_cols, drop = FALSE])
   modal_fixed = as.integer(scored$segment)
@@ -248,8 +232,17 @@ domains_lca <- function(state, tick = NULL) {
   # The indicator matrix for each domain is a property of the respondents, not
   #   of the replicate weights, so it is built once rather than eighty-four
   #   times. Same matrices, same answer, a fraction of the allocation.
+  # levels() is NULL on anything that is not a factor, and outer(x, NULL)
+  #   silently yields a matrix with no columns. crossprod() then returns a
+  #   0-row result, the estimate vector comes back short, and the failure
+  #   surfaces several functions later as a dimension error naming neither the
+  #   variable nor the cause. Checked here, where the message can name both.
   M_list = purrr::map(cfg$aux, function(v) {
-    M = outer(as.character(scored[[v]]), levels(scored[[v]]), "==") + 0
+    lv = levels(scored[[v]])
+    check_dims(length(lv) > 0, TRUE, paste0("Domain variable '", v, "'"),
+               paste("It is not a factor in the scored frame, so it has no",
+                     "levels to estimate over. Re-apply the recodes."))
+    M = outer(as.character(scored[[v]]), lv, "==") + 0
     M[is.na(M)] = 0
     M
   })
@@ -262,9 +255,12 @@ domains_lca <- function(state, tick = NULL) {
   }
 
   est = theta(weights(des, "sampling"))
+  check_dims(length(est), nrow(meta),
+             "The corrected domain estimates",
+             paste("The estimate vector and the label table are not the same",
+                   "length, so no cell can be trusted to name its own level."))
   V = replicate_variance(rep_des, theta, est)
   se = sqrt(diag(V))
-  stopifnot(length(est) == nrow(meta))
 
   # Not truncated. The correction can legitimately place a share outside
   #   [0, 1] and clipping it to the boundary would report a number the
@@ -300,9 +296,9 @@ domains_lca <- function(state, tick = NULL) {
          dplyr::mutate(naive, estimator = "Unweighted"),
          dplyr::mutate(design, estimator = "Design-based"),
          dplyr::mutate(corrected, estimator = "Corrected")) |>
-         # The quantity here is a share, so 0 and 1 mean something and a value
-         #   outside them is worth marking. In the factor arm it is a mean on a
-         #   scale centred at zero, where a negative number is ordinary.
+         # The quantity is a share, so 0 and 1 mean something and a value
+         #   outside them is worth marking. share is carried rather than
+         #   assumed, because the dagger logic in the report reads it.
          dplyr::mutate(share = TRUE,
                        estimator = factor(
            estimator, levels = c("Unweighted", "Design-based", "Corrected"))),
@@ -311,13 +307,8 @@ domains_lca <- function(state, tick = NULL) {
 }
 
 
-
-
-# Section 4 works out which pairs of levels the analysis actually resolves,
-#   here rather than by the model. With the replicate covariance available it
-#   is a design-based Wald test on the difference, Holm-adjusted within the
-#   domain. Without it, the fallback is intervals that do not overlap, which is
-#   more conservative than a test.
+# Section 3 works out which pairs of levels the analysis actually resolves,
+#   here rather than by the model.
 #______________________________________________________________________________
 
 resolved_pairs <- function(res, variable, labels, alpha = 0.05) {
@@ -329,13 +320,52 @@ resolved_pairs <- function(res, variable, labels, alpha = 0.05) {
 # Section 5
 #______________________________________________________________________________
 
-# A factor score is centred so that zero is the population average, which means
-#   half the group means are negative and none of that is a problem. The axis
-#   has to say so: a table of negative numbers with no anchor reads as an error.
-plot_domain <- function(dom, variable, labels, arm) {
+# Level names run long -- "Terciaria o universitaria o superior incompleta" is
+#   forty-seven characters -- and an unwrapped axis label eats the panel it is
+#   labelling. With one facet per segment there is only a couple of inches of
+#   panel to begin with, so the figure came out truncated in the HTML and worse
+#   in Word. Wrapped here rather than by widening the image, because the image
+#   width is set by the page.
+
+# level_order is the factor order the analyst declared. Without it ggplot sorts
+#   a character column alphabetically, so the figure and the table beneath it
+#   disagreed about the order of the same six categories. Reversed, because a
+#   discrete y axis builds from the bottom and the table reads from the top.
+# Level names run long and segment names run longer. Three things were being
+#   clipped here and the axis was only one of them: the y labels, the facet
+#   strip above each panel, and the tick labels of adjacent panels colliding
+#   with each other. All three are geometry, not style, so all three are
+#   computed from the width the figure will actually be drawn at rather than
+#   set to a number that happened to work once.
+
+# level_order is the factor order the analyst declared. Without it ggplot sorts
+#   a character column alphabetically, so the figure and the table beneath it
+#   disagreed about the order of the same six categories. Reversed, because a
+#   discrete y axis builds from the bottom and the table reads from the top.
+# Eighteen, not twenty-six. Every character the y axis spends comes straight
+#   off the panels, and the panels are what the strip label has to fit into: at
+#   26 the education labels left 1.3 inches a panel and the segment names
+#   wrapped to three lines; at 18 they leave 1.6 and wrap to two. A y label on
+#   two short lines costs less than a strip on three.
+DOMAIN_Y_WRAP <- 18L
+
+domain_facet_cols <- function(n_groups) min(3L, max(1L, as.integer(n_groups)))
+
+plot_domain <- function(dom, variable, labels, level_order = NULL,
+                        width = FIG_WIDTH_IN) {
   d = dom |>
     dplyr::filter(variable == !!variable) |>
     dplyr::mutate(group = labels[segment])
+
+  ord = level_order %||% sort(unique(d$level))
+  ord = ord[ord %in% d$level]
+  y_lab = stringr::str_wrap(ord, DOMAIN_Y_WRAP)
+  d = dplyr::mutate(
+    d, level = factor(stringr::str_wrap(level, DOMAIN_Y_WRAP),
+                      levels = rev(y_lab)))
+
+  ncol = domain_facet_cols(dplyr::n_distinct(d$group))
+  strip = panel_wrap(y_lab, ncol, width)
 
   ggplot2::ggplot(d, ggplot2::aes(p, level, colour = estimator)) +
     ggplot2::geom_errorbar(ggplot2::aes(xmin = lo, xmax = hi),
@@ -343,19 +373,49 @@ plot_domain <- function(dom, variable, labels, arm) {
                            position = ggplot2::position_dodge(width = 0.65)) +
     ggplot2::geom_point(size = 3.2,
                         position = ggplot2::position_dodge(width = 0.65)) +
-    ggplot2::facet_wrap(~ group, scales = "free_x") +
+    ggplot2::facet_wrap(~ group, scales = "free_x", ncol = ncol,
+                        labeller = ggplot2::label_wrap_gen(width = strip)) +
     wise_colour(name = NULL) +
-    ggplot2::labs(
-      x = "Share of the level falling in this group",
-      y = NULL,
-      caption = paste(
-        "Bars are 95% intervals. The unweighted row ignores the survey design",
-        "and its interval is not to be believed; it is shown so the",
-        "difference is visible.")) +
-    wise_theme()
+    # Three breaks, not four. With free x scales the last tick of one panel and
+    #   the first of the next printed on top of each other -- "0.30|0.18" as one
+    #   run of digits. Fewer breaks and a full line of panel spacing.
+    ggplot2::scale_x_continuous(n.breaks = 3) +
+    ggplot2::guides(
+      colour = ggplot2::guide_legend(nrow = legend_rows(
+        levels(factor(d$estimator)), width))) +
+    ggplot2::labs(x = "Share of the level falling in this group", y = NULL) +
+    wise_theme(base_size = 12) +
+    ggplot2::theme(
+      strip.text = ggplot2::element_text(size = ggplot2::rel(0.78)),
+      axis.text.x = ggplot2::element_text(size = ggplot2::rel(0.85)),
+      panel.spacing.x = ggplot2::unit(1, "lines"))
 }
 
+# The old height was 4.4 inches whatever the figure held, so a domain with two
+#   levels wasted half the page and one with six squashed every interval into
+#   the same quarter inch. Rows of facets times the space the levels actually
+#   need, plus a line for every extra line a wrapped strip label takes, plus
+#   whatever the legend needs once it is allowed more than one row.
+plot_domain_height <- function(dom, variable, labels, level_order = NULL,
+                               width = FIG_WIDTH_IN) {
+  lv = unique(dom$level[dom$variable == variable])
+  ord = level_order %||% lv
+  y_lab = stringr::str_wrap(ord[ord %in% lv], DOMAIN_Y_WRAP)
+  n_lv = length(y_lab)
 
+  n_groups = length(labels)
+  ncol = domain_facet_cols(n_groups)
+  rows = ceiling(n_groups / ncol)
+  strip_lines = wrap_lines(labels, panel_wrap(y_lab, ncol, width))
+
+  # A level whose label wrapped to two lines needs the room for both.
+  y_lines = wrap_lines(ord[ord %in% lv], DOMAIN_Y_WRAP)
+
+  h = rows * (n_lv * (0.26 + 0.14 * y_lines) + 0.45 + 0.26 * strip_lines) +
+      0.5 + 0.30 * legend_rows(c("Unweighted", "Design-based", "Corrected"),
+                               width)
+  max(3.0, min(9.0, h))
+}
 
 #   1. The delivered data file
 #   2. Tables
@@ -367,7 +427,7 @@ plot_domain <- function(dom, variable, labels, arm) {
 #   a report that is source material for someone writing to policymakers, not a
 #   finished argument.
 
-# Requires: haven, readr, dplyr, purrr, fs
+# Requires: haven, readr, dplyr, purrr, officer, flextable, fs
 
 
 # Section 1 delivers the data.
@@ -396,7 +456,8 @@ export_data <- function(state, format = c("sav", "dta")) {
   format = match.arg(format)
   cfg = state$cfg
 
-  new_cols = state$scored |>
+  new_cols = {
+    state$scored |>
       dplyr::select(id, segment, max_posterior, n_items_answered,
                     dplyr::starts_with("post_segment")) |>
       dplyr::mutate(
@@ -414,6 +475,7 @@ export_data <- function(state, format = c("sav", "dta")) {
         n_items_answered = haven::labelled(
           as.integer(n_items_answered),
           label = "Items answered in the battery"))
+  }
 
   # The identifier is joined on as text, not coerced to a number. A file whose
   #   id is "xc321" rather than 321 would otherwise become NA on one side of
@@ -492,21 +554,29 @@ export_tables <- function(state) {
     p
   }
 
+  # A label column rather than a renamed one. Whoever pastes this into a deck
+  #   wants the words; whoever joins it back to the survey file needs the
+  #   variable, and replacing it would break that join silently.
+  labelled = function(x) {
+    if (is.null(x) || !nrow(x) || !"variable" %in% names(x)) return(x)
+    dplyr::relocate(
+      dplyr::mutate(x, label = purrr::map_chr(variable, function(v)
+        aux_label(state$cfg, v))),
+      label, .after = variable)
+  }
+
   purrr::compact(list(
-    w(state$domains$dom, "domain_estimates"),
-    w(state$domains$marg, "domain_marginals"),
+    w(labelled(state$domains$dom), "domain_estimates"),
+    w(labelled(state$domains$marg), "domain_marginals"),
     w(state$labels, "labels"),
     w(state$coverage, "scoring_coverage"),
     w(state$shares, "group_shares"),
     w(state$quality, "assignment_quality"),
     w(state$design_checks, "design_checks"),
     w(state$recode_audit, "recode_audit"),
-    w(if (identical(state$cfg$arm, "lca")) state$measure$shares
-      else state$measure$loadings, "measurement_model"),
-    w(if (identical(state$cfg$arm, "lca")) state$measure$probs
-      else state$measure$correlations, "measurement_detail")))
+    w(state$measure$shares, "measurement_model"),
+    w(state$measure$probs, "measurement_detail")))
 }
-
 
 
 # Section 3 builds the document.
@@ -524,10 +594,24 @@ export_tables <- function(state) {
 # autofit() sizes columns to their content and lets the table run off the page.
 #   set_table_properties(width = 1) sizes it to the available width instead,
 #   which is what stops the truncation.
+wise_table <- function(df, caption = NULL, size = 9) {
+  ft = flextable::flextable(df)
+  ft = flextable::fontsize(ft, size = size, part = "all")
+  ft = flextable::bold(ft, part = "header")
+  ft = flextable::theme_booktabs(ft)
+  ft = flextable::padding(ft, padding.top = 2, padding.bottom = 2, part = "all")
+  ft = flextable::valign(ft, valign = "top", part = "all")
+  ft = flextable::set_table_properties(ft, layout = "autofit", width = 1)
+  if (!is.null(caption)) ft = flextable::set_caption(ft, caption)
+  ft
+}
 
 # The three estimators as columns rather than rows. A reader compares them
 #   across a row, which is also three times fewer rows on the page.
-domain_wide <- function(dom, variable, labels) {
+# level_order is the analyst's declared order. Arranging on the character
+#   column sorted it alphabetically, so Appendix A listed an ordinal variable
+#   in a different order from the figure and the table in the body.
+domain_wide <- function(dom, variable, labels, level_order = NULL) {
   # Older result objects predate these columns. Absent means nothing to mark,
   #   which is the safe default in both directions.
   if (!"boundary" %in% names(dom)) dom$boundary = FALSE
@@ -536,7 +620,7 @@ domain_wide <- function(dom, variable, labels) {
   dom |>
     dplyr::filter(variable == !!variable) |>
     dplyr::mutate(Group = labels[segment],
-                  # Only where the quantity is a share. A factor score of
+                  # Only where the quantity is a share. A value of
                   #   -0.094 is the population average less 0.094 and there is
                   #   nothing out of range about it; marking those as though
                   #   they had left [0, 1] tells the reader something false.
@@ -545,9 +629,14 @@ domain_wide <- function(dom, variable, labels) {
                              lo < 0 | hi > 1),
                   cell = sprintf("%.3f [%.3f, %.3f]%s", p, lo, hi,
                                  dplyr::if_else(outside, "\u2020", ""))) |>
-    dplyr::select(Group, Level = level, estimator, cell) |>
+    dplyr::select(segment, Group, Level = level, estimator, cell) |>
     tidyr::pivot_wider(names_from = estimator, values_from = cell) |>
-    dplyr::arrange(Group, Level)
+    dplyr::mutate(Level = factor(
+      Level, levels = if (is.null(level_order)) sort(unique(Level))
+                      else level_order[level_order %in% Level])) |>
+    dplyr::arrange(segment, Level) |>
+    dplyr::mutate(Level = as.character(Level)) |>
+    dplyr::select(-segment)
 }
 
 # Tables and figures refer to items by their variable name, because that is
@@ -576,16 +665,6 @@ item_label <- function(item, variable) {
   else paste0(item, " (", variable, ")")
 }
 
-# Which questions place this segment furthest from the others, and where on
-#   each scale it sits.
-#
-#   The direction is named by quoting the response category rather than by
-#   saying "higher" or "lower". A numerically higher code is not reliably the
-#   answer a reader would call higher: pn4 runs from 1 = Muy satisfecho to
-#   4 = Muy insatisfecho, so "answers higher than average on Satisfaccion con
-#   democracia" means less satisfied and reads as more. Every reverse-coded
-#   item in a battery inverts that sentence and nothing in the output shows
-#   it. Quoting the category cannot invert.
 segment_evidence <- function(state, k, n = 3L) {
   dict = state$item_frame$dictionary
 
@@ -611,30 +690,12 @@ segment_evidence <- function(state, k, n = 3L) {
     dplyr::arrange(dplyr::desc(abs(gap))) |>
     head(n)
 
-  # profile_frame() rescales each item's expected response to 0..1, so the
-  #   category is recovered by putting it back on the 1..C scale.
-  category_at <- function(value, responses) {
-    if (!length(responses) || anyNA(value)) return(NA_character_)
-    idx = max(1L, min(length(responses),
-                      round(1 + value * (length(responses) - 1))))
-    responses[[idx]]
-  }
-
   purrr::map_chr(seq_len(nrow(top)), function(i) {
     d = dplyr::filter(dict, item == top$item[i])
-    resp = tryCatch(d$responses[[1]], error = function(e) character(0))
-    here = category_at(top$value[i], resp)
-    typical = category_at(top$mid[i], resp)
-
-    if (is.na(here) || is.na(typical))
-      sprintf("%s — stands apart from the other segments on “%s”",
-              item_label(top$item[i], d$variable), d$question)
-    else if (identical(here, typical))
-      sprintf("%s — sits at “%s” on “%s” like the others, but further from the middle",
-              item_label(top$item[i], d$variable), here, d$question)
-    else
-      sprintf("%s — answers “%s” on “%s”, where the other segments average “%s”",
-              item_label(top$item[i], d$variable), here, d$question, typical)
+    sprintf("%s — answers %s than average on “%s”",
+            item_label(top$item[i], d$variable),
+            if (top$gap[i] > 0) "notably higher" else "notably lower",
+            d$question)
   })
 }
 
@@ -682,14 +743,10 @@ diagnostic_sentences <- function(state) {
 #   have not tested. The last column is the one that makes the document
 #   trustworthy: a methods paper with no untested claims is either very short
 #   or not telling you something.
-# Arm-filtered throughout. Unfiltered, the factor report claimed a poLCA check
-#   and a three-step classification correction it never ran, and the class
-#   report claimed Bartlett scores and a lavPredict agreement that belong to
-#   the other arm. A table of what was verified is worth nothing if it lists
-#   verifications of something else.
+# Every row is a claim about this analysis and how far it was checked.
+#   Nothing here is aspirational: a claim that was not verified says so, and a
+#   claim that does not apply is absent rather than blank.
 status_table <- function(state) {
-  lca = identical(state$cfg$arm, "lca")
-
   tibble::tribble(
     ~Claim, ~Status, ~Basis,
 
@@ -697,15 +754,13 @@ status_table <- function(state) {
     "Verified",
     "One stratified jackknife replicate set drives the measurement model, the domain estimates and the corrections. Recomputed here, not carried over.",
 
-    "The unweighted class model reproduces an independent implementation",
+    "The unweighted model reproduces an independent implementation",
     "Verified elsewhere",
     "Checked against poLCA in the reference implementation. Not re-run by this app.",
-
 
     "Three-step estimation with a classification-error correction",
     "Established",
     "Bolck, Croon and Hagenaars; Vermunt (2010); Bakk and colleagues.",
-
 
     "Replication rather than linearisation for variance",
     "Our choice",
@@ -715,7 +770,6 @@ status_table <- function(state) {
     "Our choice",
     "It cannot take the replicate scaling. Collapsing strata is a decision for a methodologist, not a default.",
 
-
     "Item removal is capped at one round",
     "Our choice",
     "Diagnostics rank rather than test, and an unbounded loop selects a battery to fit rather than to measure.",
@@ -724,6 +778,10 @@ status_table <- function(state) {
     "Untested",
     "Measurement invariance is assumed, not tested. A real group difference and a difference in how a question is understood are indistinguishable in these tables.",
 
+    # The posteriors and the modal assignment are held at their full-sample
+    #   values. Only the classification table is rebuilt inside each replicate,
+    #   so step-one uncertainty does not reach these intervals and they are
+    #   optimistic for that reason.
     "Domain intervals hold the measurement model fixed",
     "Untested here",
     "Standard three-step practice. The classification table is recomputed in every replicate, but the posteriors and the modal assignment are not. Propagating step-one uncertainty widens the intervals; the reference implementation measured that at roughly a factor of two on one demographic."
@@ -740,8 +798,13 @@ status_table <- function(state) {
 #   keeps the framing honest.
 
 prompt_report_summary <- function(state) {
+  # Keyed on the variable, headed by the label. The summary used to name
+  #   variables the report never defines -- "differ by fs2, idio2, edre" -- and
+  #   the codebook table covers the battery only, so nothing on the page said
+  #   what those were.
   reads = purrr::imap_chr(state$domain_reads %||% list(),
-                          function(r, v) paste0(v, ": ", r$finding))
+                          function(r, v) paste0(aux_label(state$cfg, v),
+                                                ": ", r$finding))
   q = state$question %||% ""
 
   # A model asked to summarise findings it was not given will summarise
@@ -786,7 +849,6 @@ prompt_report_summary <- function(state) {
 }
 
 
-
 # ---- blocks -----------------------------------------------------------------
 
 # type: h1 h2 h3 p bullet tick box table plot
@@ -795,8 +857,6 @@ blk <- function(type, value, caption = NULL, height = 4.2)
 
 report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
   cfg = state$cfg
-  arm = cfg$arm
-  lca = identical(arm, "lca")
   labs = state$labels$Label
   b = list()
   add = function(x) b[[length(b) + 1]] <<- x
@@ -823,43 +883,48 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
   add(blk("h2", "What was done"))
   add(blk("p", paste0(
     "Respondents answered ", length(cfg$items), " related questions. ",
-    if (lca) paste0(
-      "Rather than read each question separately, the analysis asks whether ",
-      "people fall into a small number of recognisable types, each with its ",
-      "own way of answering the set. It found ", state$dimension,
-      ". Every respondent is placed in the type their answers fit best.")
-    else paste0(
-      "The analysis asks whether those answers reflect ", state$dimension,
-      " underlying thing(s) that people have more or less of, and gives each ",
-      "respondent a position on it. Zero is the population average."))))
+    "Rather than read each question separately, the analysis asks whether ",
+    "people fall into a small number of recognisable types, each with its ",
+    "own way of answering the set. It found ", state$dimension,
+    ". Every respondent is placed in the type their answers fit best.")))
   add(blk("p", paste0(
     "Respondents were not selected one at a time. They were drawn in clusters ",
     "within ", dplyr::n_distinct(state$design_dat$strata), " strata, from ",
     dplyr::n_distinct(state$design_dat$psu), " sampling units, and weighted so ",
     "the figures describe the population rather than the people who happened ",
-    "to answer. Every margin of error here is calculated from that design. ",
-    "Software that assumes independent sampling reports margins roughly half ",
-    "as wide, so a difference that looks decisive under those defaults may not ",
-    "survive.")))
+    "to answer. Every margin of error here is calculated from that design.")))
+
+  # Stated as a measured ratio, and read three ways because all three happen.
+  ratio = design_width_ratio(state$domains$dom)
+  if (!is.na(ratio))
+    add(blk("p", paste(
+      "On this survey and these quantities, accounting for the design changed",
+      "the width of a typical interval by a factor of",
+      paste0(sprintf("%.2f", ratio), "."),
+      if (ratio >= 1.15)
+        paste("Software assuming independent sampling would report margins",
+              "materially narrower than these, and a difference that does not",
+              "survive here would look decisive there.")
+      else if (ratio <= 0.95)
+        paste("The design-based intervals are the narrower ones here, which",
+              "stratification can do. The naive column is not a substitute",
+              "for them either way: it is not estimating the same quantity.")
+      else
+        paste("The design is doing little to these particular numbers, which",
+              "is a fact about this comparison rather than a general one, and",
+              "not a reason to compute them the other way."),
+      "This is a ratio of interval widths and not a design effect: the two",
+      "columns differ in estimator, in variance method and in critical value",
+      "at once.")))
 
   add(blk("box", paste0(
     "Technical. ",
-    if (lca)
-      paste0("A latent class model fitted by weighted EM under a ",
-             "design-weighted pseudo-likelihood, from ", cfg$n_starts,
-             " random starts at each candidate size, best log-likelihood ",
-             "retained. Information criteria rescale the log-likelihood to the ",
-             "sum-to-n scale. Segment order is aligned across fits by response ",
-             "profile, so parameters are comparable across replicates.")
-    else
-      paste0("A confirmatory factor model fitted by ",
-             if (identical(cfg$estimator, "ML"))
-               "maximum likelihood with full-information treatment of missing data"
-             else "WLSMV on design-weighted polychoric correlations",
-             ", with the item-to-factor assignment taken from the exploratory ",
-             "solution at the chosen number and shown below. Loadings are ",
-             "anchored by the marker method so a sign flip cannot enter the ",
-             "variance."),
+    "A latent class model fitted by weighted EM under a ",
+    "design-weighted pseudo-likelihood, from ", cfg$n_starts,
+    " random starts at each candidate size, best log-likelihood ",
+    "retained. Information criteria rescale the log-likelihood to the ",
+    "sum-to-n scale. Segment order is aligned across fits by response ",
+    "profile, so parameters are comparable across replicates.",
     " Variance throughout is a stratified jackknife over the ",
     dplyr::n_distinct(state$design_dat$psu),
     " primary sampling units. The measurement model is refitted inside every ",
@@ -878,24 +943,24 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
   add(blk("h2", "The segments"))
 
   if (!is.null(state$measure)) {
-    add(blk("plot",
-            plot_profiles_ci(state$measure$profile, labs),
-            "Each segment's position on every question, with 95% intervals",
-            4.4))
+    add(blk("plot", plot_profiles_ci(state$measure$profile, labs),
+            paste("Each segment's position on every question. Bands are 95 per",
+                  "cent design-based intervals; where two bands overlap, the",
+                  "data do not separate those segments on that item."),
+            plot_profiles_height(labs)))
   }
 
   purrr::walk(seq_along(labs), function(k) {
     add(blk("h3", labs[k]))
 
-    est = if (lca && !is.null(state$measure))
+    est = if (!is.null(state$measure))
       sprintf("An estimated %.1f%% of the population [%.1f%% to %.1f%%].",
               100 * state$measure$shares$share[k],
               100 * state$measure$shares$lo[k],
               100 * state$measure$shares$hi[k])
-    else if (lca)
+    else
       sprintf("An estimated %.0f%% of respondents.",
               100 * state$model$fit$pi[k])
-    else ""
 
     add(blk("p", paste(state$labels$Description[k], est)))
     purrr::walk(segment_evidence(state, k), function(t) add(blk("tick", t)))
@@ -907,8 +972,8 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
     if (isTRUE(state$labels_edited)) "edited by the analyst"
     else "accepted by the analyst without editing",
     ". Nothing computed depends on them. The supporting points above are the ",
-    "questions on which each segment departs furthest from the average across segments",
-    ", taken from the fitted model rather than from the name.")))
+    "questions on which each segment departs furthest from the average across ",
+    "segments, taken from the fitted model rather than from the name.")))
 
   # ---- domains --------------------------------------------------------------
 
@@ -916,13 +981,22 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
   add(blk("p", paste(
     "Each quantity is reported three ways. Unweighted ignores the survey",
     "design. Design-based accounts for it.",
-    paste("Corrected additionally removes the flattening that placing",
-          "people into groups introduces. The gap from the first to the",
-          "second is what ignoring the design costs; the gap from the second",
-          "to the third is what the placement costs."))))
+    "Corrected additionally removes the flattening that placing people into",
+    "groups introduces. The gap from the first to the second is what ignoring",
+    "the design costs; the gap from the second to the third is what the",
+    "placement costs.")))
+
+  # Said once. It used to be the caption inside every domain figure, which on
+  #   six domains is the same three lines printed six times and a shorter panel
+  #   each time it was printed.
+  add(blk("p", paste(
+    "In every figure below, bars are 95 per cent intervals and each panel is",
+    "one segment. The unweighted row ignores the survey design and its",
+    "interval is not to be believed; it is shown so the difference is",
+    "visible.")))
 
   purrr::walk(cfg$aux, function(v) {
-    add(blk("h3", v))
+    add(blk("h3", aux_heading(cfg, v)))
     if (!is.null(state$domain_reads[[v]])) {
       add(blk("p", state$domain_reads[[v]]$finding))
       add(blk("p", paste("What accounting for the design changed:",
@@ -933,10 +1007,16 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
                   t = trimws(t)
                   if (nzchar(t) && !grepl("^Criterion", t)) add(blk("tick", t))
                 })
-    add(blk("plot", plot_domain(state$domains$dom, v, labs),
-            paste0(v, ": three estimators, with 95% intervals"), 4.4))
+
+    # The declared factor order, so the figure and the table under it agree.
+    ord = aux_levels(state, v) %||%
+          unique(state$domains$marg$level[state$domains$marg$variable == v])
+
+    add(blk("plot", plot_domain(state$domains$dom, v, labs, ord),
+            aux_label(cfg, v),
+            plot_domain_height(state$domains$dom, v, labs, ord)))
     add(blk("table", marginal_table(state$domains$marg, v),
-            paste0(v, ": composition of the population")))
+            paste0("Composition of the population: ", aux_label(cfg, v))))
   })
 
   # domain_separations() uses the replicate covariance where it has one and
@@ -948,7 +1028,7 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
     "Technical. Pairs are separated by a design-based Wald test on the",
     "difference, using the replicate covariance between the two estimates and",
     "Holm-adjusted within each domain. The tests run on the design-based",
-    "column:", "placement attenuates differences",
+    "column: placement attenuates differences,",
     "so a pair resolved there separates despite that, and the corrected",
     "column can only widen it. The replicate covariance has rank at most the",
     "number of replicates, so a joint test across more dimensions than there",
@@ -966,18 +1046,36 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
   # ---- confidence -----------------------------------------------------------
 
   add(blk("h2", "How far to trust this"))
+  # "reached over 1 round of fitting" read as "more than one round" and meant
+  #   the opposite. Two sentences rather than one template.
+  n_fit = iteration_count() + 1L
   add(blk("p", paste0(
-    "The analyst chose ", state$dimension,
-    if (lca) " segments" else " factors",
-    ", recorded before any interpretation of the evidence was offered, and ",
-    "reached over ", n_verb(iteration_count() + 1L, "round", "rounds"),
-    " of fitting. ",
+    "The analyst chose ", state$dimension, " segments",
+    ", recorded before any interpretation of the evidence was offered. ",
+    if (n_fit <= 1L) "The battery was fitted once and not revised. "
+    else paste0("The specification was arrived at over ",
+                n_verb(n_fit, "round", "rounds"), " of fitting. "),
     diagnostic_sentences(state))))
   add(blk("table",
           state$coverage |>
             dplyr::transmute(Respondents = group,
                              n = format(n, big.mark = ","), `%` = percent),
           "Who these estimates rest on"))
+
+  # Scoring more people than were fitted looks like an error and is the point
+  #   of the method, so it is said rather than left to be noticed.
+  fitted_n = state$coverage$n[state$coverage$group ==
+                                "Fitted the measurement model"]
+  scored_n = state$coverage$n[state$coverage$group == "Scored"]
+  if (length(fitted_n) && length(scored_n) && scored_n > fitted_n)
+    add(blk("box", paste(
+      "Technical. More respondents are scored than were used to fit. The",
+      "measurement model is estimated on those who answered the whole",
+      "battery; scoring then reaches anyone who answered enough of it,",
+      "because under local independence a skipped item contributes nothing to",
+      "that respondent's likelihood rather than disqualifying them. The",
+      "difference is", format(scored_n - fitted_n, big.mark = ","),
+      "respondents.")))
 
   if (!is.null(not_answered) && nzchar(not_answered)) {
     add(blk("h2", "What this does not answer"))
@@ -1001,10 +1099,11 @@ marginal_table <- function(marg, variable) {
 
 # ---- renderers --------------------------------------------------------------
 
-# One report format: a self-contained HTML file with every figure embedded as
-#   a data URI, no external stylesheet and no network. Word opens it directly
-#   if a .docx is what somebody wants, which is why the officer and flextable
-#   path was removed rather than kept as a second thing to maintain.
+# Word output needs officer and flextable, and flextable needs Rtools to build
+#   on a mirror that carries no binary for it. An analyst cannot install
+#   Rtools. So the deliverable that always works is a self-contained HTML file:
+#   one document, every figure embedded as a data URI, no external stylesheet
+#   and no network. Word opens it directly if a .docx is what somebody wants.
 
 # The block list is rendered a third way rather than rebuilt. Anything else
 #   would drift from what was reviewed on screen.
@@ -1039,7 +1138,6 @@ html_table <- function(df)
   shiny::HTML(knitr::kable(df, format = "html", table.attr = "class='t'"))
 
 report_appendices <- function(state) {
-  lca = identical(state$cfg$arm, "lca")
   labs = state$labels$Label
 
   shiny::tagList(
@@ -1047,22 +1145,18 @@ report_appendices <- function(state) {
     shiny::tags$h3("Appendix A. Full estimates"),
     shiny::tags$p(paste(
       "Every quantity in the report with its 95 per cent interval.",
-      if (lca)
-        paste("Intervals on a share are formed on the logit scale, which keeps",
-              "them inside 0 to 1 without truncation. A dagger marks a",
-              "corrected cell whose estimate or interval falls outside that",
-              "range: the correction permits it, and clipping to the boundary",
-              "would report a number the estimator did not produce.")
-      else
-        paste("Positions are on the factor scale, centred so that zero is the",
-              "population average. A negative value means below average and is",
-              "not a problem in itself."),
+      paste("Intervals on a share are formed on the logit scale, which keeps",
+            "them inside 0 to 1 without truncation. A dagger marks a",
+            "corrected cell whose estimate or interval falls outside that",
+            "range: the correction permits it, and clipping to the boundary",
+            "would report a number the estimator did not produce."),
       "Diagnostic tables and the record of how the specification was reached",
       "are in the CSV files supplied alongside.")),
 
     purrr::map(state$cfg$aux, function(v) shiny::tagList(
-      shiny::tags$h4(v),
-      html_table(domain_wide(state$domains$dom, v, labs)))),
+      shiny::tags$h4(aux_heading(state$cfg, v)),
+      html_table(domain_wide(state$domains$dom, v, labs,
+                             aux_levels(state, v))))),
 
     shiny::tags$hr(),
     shiny::tags$h3("Appendix B. What was tested"),
@@ -1095,6 +1189,100 @@ build_report_html <- function(state, summary_text = NULL,
   path
 }
 
+build_report <- function(state, summary_text = NULL, not_answered = NULL) {
+  # Named rather than left to fail inside officer:: with a namespace error an
+  #   analyst cannot act on. flextable in particular needs Rtools where the
+  #   mirror carries no binary, which is not something an analyst can install.
+  missing = c("officer", "flextable")[
+    !vapply(c("officer", "flextable"), requireNamespace, logical(1),
+            quietly = TRUE)]
+  if (length(missing))
+    stop("Word output needs ", paste(missing, collapse = " and "),
+         ", which ", if (length(missing) > 1) "are" else "is",
+         " not installed here. Use the HTML report instead: it carries the ",
+         "same content, opens in Word, and needs nothing beyond what the app ",
+         "already uses.", call. = FALSE)
+
+  labs = state$labels$Label
+  doc = officer::read_docx()
+
+  # Boxes are shaded paragraphs with a rule above and below. Word has no first
+  #   class text box that survives a template change, and a shaded block reads
+  #   the same and cannot break the flow of the document.
+  box_fmt = officer::fp_par(
+    shading.color = "#EFEFEF",
+    border.top = officer::fp_border(color = "#B0B0B0", width = 1),
+    border.bottom = officer::fp_border(color = "#B0B0B0", width = 1),
+    padding = 6)
+
+  purrr::walk(report_blocks(state, summary_text, not_answered), function(x) {
+    doc <<- switch(
+      x$type,
+      h1     = officer::body_add_par(doc, x$value, style = "heading 1"),
+      h2     = officer::body_add_par(doc, x$value, style = "heading 2"),
+      h3     = officer::body_add_par(doc, x$value, style = "heading 3"),
+      p      = officer::body_add_par(doc, x$value, style = "Normal"),
+      bullet = officer::body_add_par(doc, paste0("• ", x$value),
+                                     style = "Normal"),
+      tick   = officer::body_add_par(doc, paste0("✓ ", x$value),
+                                     style = "Normal"),
+      box    = officer::body_add_fpar(
+        doc, officer::fpar(officer::ftext(x$value,
+                                          officer::fp_text(font.size = 9,
+                                                           italic = TRUE)),
+                           fp_p = box_fmt)),
+      table  = flextable::body_add_flextable(doc, wise_table(x$value, x$caption)),
+      # 6.0 rather than 6.4. read_docx()'s default template is A4 in some
+      #   locales, whose text width with one-inch margins is 6.27 inches, and
+      #   a 6.4-inch image on it is cropped at the right margin with no
+      #   warning. Height is capped so a tall figure does not run off the page
+      #   instead.
+      plot   = officer::body_add_gg(doc, value = x$value, width = 6.0,
+                                    height = min(x$height, 7.5), res = 200),
+      doc)
+    if (identical(x$type, "plot") && !is.null(x$caption))
+      doc <<- officer::body_add_par(doc, x$caption, style = "Normal")
+  })
+
+  # ---- appendices -----------------------------------------------------------
+
+  doc = officer::body_add_break(doc)
+  doc = officer::body_add_par(doc, "Appendix A. Full estimates",
+                              style = "heading 1")
+  doc = officer::body_add_par(
+    doc, paste("Every quantity in the report with its 95 per cent interval.",
+               paste("Intervals on a share are formed on the logit scale,",
+                     "which keeps them inside 0 to 1 without truncation. A",
+                     "dagger marks a corrected cell whose estimate or",
+                     "interval falls outside that range: the correction",
+                     "permits it, and clipping to the boundary would report",
+                     "a number the estimator did not produce."),
+
+               "Diagnostic tables and the record of how the specification was",
+               "reached are in the CSV files supplied alongside."),
+    style = "Normal")
+  purrr::walk(state$cfg$aux, function(v) {
+    doc <<- officer::body_add_par(doc, aux_heading(state$cfg, v),
+                                  style = "heading 2")
+    doc <<- flextable::body_add_flextable(
+      doc, wise_table(domain_wide(state$domains$dom, v, labs,
+                                  aux_levels(state, v)), NULL, 8))
+  })
+
+  doc = officer::body_add_break(doc)
+  doc = officer::body_add_par(doc, "Appendix B. What was tested",
+                              style = "heading 1")
+  doc = officer::body_add_par(
+    doc, paste("What was checked, what rests on the literature, what was a",
+               "choice, and what has not been tested. The last of these is the",
+               "column to read first."),
+    style = "Normal")
+  doc = flextable::body_add_flextable(doc, wise_table(status_table(state), NULL, 8))
+
+  path = wise_path("output", "report.docx")
+  print(doc, target = path)
+  path
+}
 
 report_html <- function(state, summary_text = NULL, not_answered = NULL) {
   purrr::map(report_blocks(state, summary_text, not_answered), function(x) {
@@ -1138,10 +1326,35 @@ plot_data_uri <- function(g, width, height, res = 150) {
 }
 
 
+# What the design actually cost, measured on this run rather than asserted.
+
+# The report used to say that software assuming independent sampling reports
+#   margins "roughly half as wide". On the reference data that sentence was
+#   wrong by a factor of two in its own appendix: the median design-based
+#   interval was the same width as the naive one and four cells in ten were
+#   narrower. A general claim about survey data is not a finding about this
+#   survey, and a reader who checks it and finds it false stops believing the
+#   rest.
+
+# It is a ratio of interval widths, not a design effect: the two columns
+#   differ in estimator, in variance method and in critical value at the same
+#   time. Reported as what it is.
+design_width_ratio <- function(dom) {
+  if (is.null(dom) || !nrow(dom)) return(NA_real_)
+  base = dplyr::transmute(dplyr::filter(dom, estimator == "Unweighted"),
+                          variable, level, segment, w0 = hi - lo)
+  desg = dplyr::transmute(dplyr::filter(dom, estimator == "Design-based"),
+                          variable, level, segment, w1 = hi - lo)
+  j = dplyr::inner_join(base, desg, by = c("variable", "level", "segment"))
+  r = j$w1 / j$w0
+  r = r[is.finite(r) & r > 0]
+  if (!length(r)) NA_real_ else stats::median(r)
+}
+
+
 # Assembled from what actually happened in this run rather than a fixed list,
 #   so a caveat that does not apply is absent and one that does is specific.
 report_caveats <- function(state) {
-  lca = identical(state$cfg$arm, "lca")
   n_round = iteration_count()
 
   c(
@@ -1165,27 +1378,11 @@ report_caveats <- function(state) {
              "were dropped. The intervals on the measurement model are ",
              "narrower than they should be and are a lower bound."),
 
-    if (lca)
-      paste("Domain intervals hold the measurement model fixed: the",
-            "classification table is recomputed in every replicate, but the",
-            "posteriors and the assignment are not. Uncertainty in the",
-            "measurement model itself is not propagated, which is standard",
-            "three-step practice and makes these intervals optimistic.")
-    else
-      paste("Domain intervals hold the measurement model fixed: each",
-            "respondent's score is computed once from the fitted model and",
-            "then treated as data, so the sampling variability of the loadings",
-            "does not enter these intervals. That makes them optimistic."),
-
-    if (!lca && identical(state$cfg$estimator, "ML"))
-      paste("Answer categories were treated as a continuous scale. This is an",
-            "approximation, taken so that respondents who skipped some items",
-            "could still be scored."),
-
-    if (!lca && !identical(state$cfg$estimator, "ML"))
-      paste("Only respondents who answered every item could be scored. People",
-            "who skip items are not a random slice of the sample, so the",
-            "domain estimates condition on complete response."),
+    paste("Domain intervals hold the measurement model fixed: the",
+          "classification table is recomputed in every replicate, but the",
+          "posteriors and the assignment are not. Uncertainty in the",
+          "measurement model itself is not propagated, which is standard",
+          "three-step practice and makes these intervals optimistic."),
 
     # Named rather than left as an arithmetic gap in the coverage table.
     local({

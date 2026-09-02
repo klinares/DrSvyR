@@ -1,11 +1,14 @@
-# llm.R for DrSvyR -- OpenRouter endpoint
+# llm.R for DrSvyR -- OpenAI-compatible endpoint
 # Endpoint, models, and every model call in the workflow.
 
-# THIS IS THE HOME VARIANT. It reaches OpenRouter through ellmer's own client
-#   and knows nothing about any other provider. The work variant that reaches
-#   an OpenAI-compatible endpoint is llm-openai.R at the repository root;
-#   exactly one of the two belongs in R/ at a time, and app.R stops if it
-#   finds both.
+# THIS IS THE WORK VARIANT. It reaches one OpenAI-compatible endpoint through
+#   ellmer's chat_openai_compatible() and knows nothing about any other
+#   provider. The home variant that reaches OpenRouter is R/llm.R; exactly one
+#   of the two belongs in R/ at a time, and app.R stops if it finds both.
+
+# Generated from R/llm.R by make_llm_openai.R. Edit R/llm.R and re-run that
+#   script rather than editing this file, or the two will drift apart in ways
+#   that only show up on the machine you edited least recently.
 
 # ---- configuration -----------------------------------------------------
 
@@ -16,22 +19,36 @@
 #   line: the key.
 
 WISE_LLM <- list(
-  base_url = "https://openrouter.ai/api/v1",
-  key_var  = "OPENROUTER_API_KEY",
+  base_url = "https://api.openai.com/v1",
+  key_var  = "OPENAI_API_KEY",
 
-  pm          = "meta-llama/llama-4-maverick",
-  worker      = "meta-llama/llama-3.1-70b-instruct",
-  pm_fallback = "openai/gpt-5.4-nano",
+  # TODO -- fill these in from the models your organisation actually exposes.
+  #   Do not take them from anywhere else: what a key can reach is an account
+  #   property, and a name that is wrong fails on the first call.
+  #
+  #   pm     reads the analysis and writes prose. The larger model.
+  #   worker names one segment, many times over. The smaller and cheaper one,
+  #          split off so the prose work keeps its quota.
+  pm     = "TODO-pm-model",
+  worker = "TODO-worker-model",
+
+  # A fallback on the same endpoint does not survive the failure it exists
+  #   for. With one provider it helps only when a single model is unavailable
+  #   rather than the endpoint. Set it to a smaller model, or leave it equal
+  #   to pm and accept that it adds nothing here.
+  pm_fallback = "TODO-fallback-model",
 
   # "server" reads key_var from the environment. "analyst" ignores the
-  #   environment entirely and requires a key pasted into the app.
+  #   environment entirely and requires a key pasted into the app -- which on
+  #   a shared server is what stops a stray environment variable being spent
+  #   by people who never knew it was there.
   key_source = "server",
   timeout    = 120,
 
   # A reply cut off by the token ceiling is not a parse failure the analyst can
-  #   do anything about: the JSON simply stops mid-string. The naming and
-  #   reading prompts carry response labels and item wording, so the replies
-  #   are longer than a default of a few hundred tokens allows.
+  #   do anything about: the JSON simply stops mid-string. Raise it if your
+  #   endpoint bills by the call rather than the token and the replies are
+  #   still being truncated.
   max_tokens = 4000)
 
 # ---- zz_llm ------------------------------------------------------------
@@ -123,17 +140,14 @@ llm_chat <- function(model, system_prompt = NULL, seed = NULL) {
             "truncated mid-JSON.", call. = FALSE)
   p = do.call(ellmer::params, args)
 
-  # ellmer's OpenRouter client reads the key from the process environment, so
-  #   it cannot carry a per-session one. When an analyst has typed a key, the
-  #   compatible client is used instead and the key travels in the closure.
-  #   With no typed key this is exactly the path it has always taken.
-  if (is.null(llm_session_key()) &&
-      identical(WISE_LLM$provider, "openrouter")) {
-    # ellmer's own client reads the key from the environment and sets the
-    #   headers itself, so there is nothing to get wrong here.
-    ellmer::chat_openrouter(model = model, system_prompt = system_prompt,
-                            params = p, echo = "none")
-  } else {
+  # One endpoint, one client. credentials must be a function; api_key is
+  #   deprecated as of ellmer 0.4.0. The closure is also what lets a key typed
+  #   into the app work at all, since it never reaches the process
+  #   environment, and it is why this variant needs no branch: there is
+  #   nothing to fall back to.
+  {
+    key = llm_api_key()
+    url = WISE_LLM$base_url
     # credentials must be a function; api_key is deprecated as of ellmer 0.4.0.
     key = llm_api_key()
     url = WISE_LLM$base_url

@@ -9,7 +9,6 @@
 
 # ---- project -----------------------------------------------------------
 
-# project.R for DrSvyR
 # Where the workflow is allowed to read and write, and what gets cached.
 
 #   1. The repository boundary
@@ -47,10 +46,19 @@ repo_root <- function() {
 #   analyst machine that is a theoretical risk rather than a live one, and
 #   resolving it would mean walking to the nearest existing ancestor on every
 #   write.
-# The guard is gone. Where outputs go is the analyst's decision, and this was
-#   the one place in the tool that overrode it rather than advising. Kept as a
-#   function so every call site still works.
+# Outputs never land inside the clone. The work folder holds the decision log,
+#   the cached fits, the scored survey file and the report, and a git status
+#   that lists respondent-level data is one `git add .` away from a disclosure
+#   no .gitignore is asked about. The refusal is here rather than only in the
+#   screen that picks the folder, because wise_path() is the single place every
+#   write is built.
 assert_outside_repo <- function(path) {
+  p = fs::path_abs(path)
+  if (fs::path_has_parent(p, repo_root()))
+    stop("That path is inside the repository: ", p, "\n",
+         "The work folder holds your outputs and your scored data. Choose a ",
+         "folder outside ", repo_root(), " -- something like D:/work/",
+         "my_project.", call. = FALSE)
   invisible(path)
 }
 
@@ -62,11 +70,6 @@ assert_outside_repo <- function(path) {
 #______________________________________________________________________________
 
 WISE_SUBDIRS <- c("data", "docs", "dict", "decisions", "cache", "output")
-
-# How a design check reports itself in the interface. A named vector rather
-#   than a recode verb, because the tidyverse spelling for this has changed
-#   twice and both spellings warn on some version the analyst may be running.
-WISE_STATUS_LABEL <- c(ok = "", warn = "warn", stop = "STOP")
 
 .wise <- new.env(parent = emptyenv())
 .wise$work_dir <- NULL      # the no-Shiny case: a script, a test, one user
@@ -87,31 +90,26 @@ WISE_STATUS_LABEL <- c(ok = "", warn = "warn", stop = "STOP")
 #   future::plan() sets the plan for the whole R process rather than for one
 #   session -- so four workers each looks like four until five people are
 #   working, and then it is twenty R processes, every one of them carrying
-#   survey and lavaan, on a box sized for one analysis at a time.
+#   survey and the model, on a box sized for one analysis at a time.
 
-# So the number comes from the environment rather than from a core count.
-#   DRSVYR_WORKERS in .Renviron on a laptop; DRSVYR_WORKERS in the Connect
-#   environment panel for the deployed app. One string per machine, nothing
-#   platform-specific in any file that goes into git, and no branch on
-#   .Platform$OS.type anywhere.
+# So the machine is asked what it has, and one is left for the session itself
+#   so the screen keeps responding. availableCores() reads a container's CPU
+#   quota where there is one, which is what a Connect deployment usually has,
+#   and falls back to the physical count where there is not.
 
-# The default when nothing is set is deliberately small. A low default on a
-#   laptop costs the analyst a few minutes. A high default on a shared server
-#   costs everybody the server. Safe unless told otherwise is the right way
-#   round, and the analyst who wants more is also the one who can set a
-#   variable.
-
-# DRSVYR_WORKERS=1 turns parallelism off. That is the whole switch -- there is
-#   no second flag to keep in agreement with this one.
-WISE_WORKERS_DEFAULT <- 2L
+# DRSVYR_WORKERS overrides it. That is the lever for a shared server, where
+#   the honest number is not "what this host has" but "what this host has
+#   divided by how many analysts are on it" -- something no code can work out
+#   for itself. DRSVYR_WORKERS=1 turns parallelism off entirely; there is no
+#   second flag to keep in agreement with this one.
 WISE_WORKERS_CAP <- 12L
 
 .wise_workers_resolve <- function() {
-  cap = function(n, src) {
-    host = suppressWarnings(as.integer(future::availableCores()))
-    if (is.na(host) || host < 1L) host = 1L
+  host = suppressWarnings(as.integer(future::availableCores()))
+  if (is.na(host) || host < 1L) host = 1L
+
+  cap = function(n, src)
     list(n = max(1L, min(n, WISE_WORKERS_CAP, host)), source = src, host = host)
-  }
 
   n = suppressWarnings(as.integer(Sys.getenv("DRSVYR_WORKERS", "")))
   if (!is.na(n) && n >= 1L) return(cap(n, "DRSVYR_WORKERS"))
@@ -120,17 +118,18 @@ WISE_WORKERS_CAP <- 12L
   n = if (is.null(o)) NA_integer_ else suppressWarnings(as.integer(o))
   if (!is.na(n) && n >= 1L) return(cap(n, "options(drsvyr.workers)"))
 
-  cap(WISE_WORKERS_DEFAULT, "default")
+  cap(host - 1L, "cores available")
 }
 
 wise_workers <- function() .wise_workers_resolve()$n
 
-# Printed in the configuration table, because "why is it four at my desk and
-#   one at work" is the question this whole section exists to answer, and the
-#   answer should be on the screen rather than in a file.
+# Recorded in the configuration table rather than shown on the screen. It is
+#   provenance for the decision log -- the same specification on a different
+#   machine used a different number of workers and reached the same answer --
+#   not something an analyst has to act on.
 wise_workers_note <- function() {
   r = .wise_workers_resolve()
-  paste0(r$n, " (from ", r$source, "; this host reports ", r$host, " cores)")
+  paste0(r$n, " of ", r$host, " cores")
 }
 
 # The work folder has to be per analyst, not per process. On a laptop those
@@ -152,6 +151,11 @@ wise_workers_note <- function() {
 #   selection rather than after the first stage has written to it.
 scaffold_work_folder <- function(path) {
   path = fs::path_abs(path)
+
+  # Checked here as well as in wise_path(), because this is where the folder
+  #   is adopted. Refusing at the first write instead would leave the analyst
+  #   several screens in before anything said so.
+  assert_outside_repo(path)
 
   if (!fs::dir_exists(path))
     stop("No such folder: ", path, call. = FALSE)
@@ -244,6 +248,110 @@ last_work_folder <- function() {
 }
 
 
+
+# What a domain variable is called on the page
+#______________________________________________________________________________
+
+# The variable name is the key and stays the key: cfg$aux, the scored frame,
+#   svyby's by-formula and the indicator matrices are all built from it, and a
+#   population share computed against a display name would be computed against
+#   nothing. So the label is resolved at the moment of rendering and never
+#   substituted into the data.
+
+# Defaults to the variable name, so a configuration written before labels
+#   existed reads exactly as it did.
+aux_label <- function(cfg, v) {
+  labs = cfg$aux_labels %||% character(0)
+  lab = if (v %in% names(labs)) as.character(labs[[v]]) else NA_character_
+  if (is.na(lab) || !nzchar(lab)) v else lab
+}
+
+# Headings carry both, because a reader needs the words and a methodologist
+#   re-running this needs the column. Prose carries the label alone.
+aux_heading <- function(cfg, v) {
+  lab = aux_label(cfg, v)
+  if (identical(lab, v)) v else paste0(lab, " (", v, ")")
+}
+
+# The order the analyst declared, or NULL where there is nothing to declare it
+#   from. Every table and figure of a domain reads it from here, so they cannot
+#   disagree about the order of the same categories.
+aux_levels <- function(state, v) {
+  d = state$demo_dat
+  if (is.null(d) || !v %in% names(d)) NULL else levels(d[[v]])
+}
+
+
+# Errors that say where they came from
+#______________________________________________________________________________
+
+# try(expr, silent = TRUE) keeps the message and throws the call stack away.
+#   That is why a failure in a results panel could report "non-conformable
+#   arguments" and nothing else -- true, unhelpful, and impossible to place
+#   without rerunning the whole session under a debugger.
+
+# A calling handler runs at the moment the error is signalled, while the stack
+#   is still standing, so the stack is captured there and the condition is let
+#   through to tryCatch to unwind as usual. The app's own functions are the
+#   ones in the global environment after R/ is sourced, so the deepest frame
+#   that is one of ours is the place worth naming; everything below it is
+#   dplyr or survey internals that mean nothing to an analyst.
+
+# The returned object is shaped exactly like try()'s, so every existing call
+#   site keeps working and simply gets a better message.
+wise_try <- function(expr, what = "This step") {
+  trace = NULL
+
+  res = tryCatch(
+    withCallingHandlers(
+      expr,
+      error = function(e) {
+        trace <<- vapply(sys.calls(), function(cl)
+          tryCatch(deparse(cl[[1]])[1], error = function(...) NA_character_),
+          character(1))
+      }),
+    error = function(e) e)
+
+  if (!inherits(res, "condition")) return(res)
+
+  ours = if (is.null(trace)) character(0)
+         else trace[!is.na(trace) & trace %in% ls(globalenv())]
+  where = if (length(ours)) ours[length(ours)] else NA_character_
+
+  msg = conditionMessage(res)
+  res$message = paste0(
+    what, " failed",
+    if (!is.na(where)) paste0(" in ", where, "()") else "",
+    ": ", msg)
+
+  # The full stack goes to the work folder rather than into a notification an
+  #   analyst cannot copy out of. Wrapped because a failure before the folder
+  #   is chosen must not turn into a second failure about logging the first.
+  try({
+    p = fs::path(work_dir(), "errors.log")
+    cat(format(Sys.time(), "%Y-%m-%d %H:%M:%S"), " | ", res$message, "\n",
+        if (length(trace)) paste0("  ", rev(trace), collapse = "\n") else "",
+        "\n\n", sep = "", file = p, append = TRUE)
+  }, silent = TRUE)
+
+  invisible(structure(paste0("Error: ", res$message, "\n"),
+                      class = "try-error", condition = res))
+}
+
+# Named dimension checks, so a mismatch reports the two things that disagreed
+#   rather than "non-conformable arguments". Used at the points where a matrix
+#   built from the respondents meets one built from the estimates: that is
+#   where a domain level with no respondents, or a segment count that moved
+#   under a refit, actually shows up.
+check_dims <- function(n, expected, what, detail = NULL) {
+  if (!isTRUE(n == expected))
+    stop(what, ": expected ", expected, " but got ", n, ".",
+         if (!is.null(detail)) paste0(" ", detail) else "",
+         call. = FALSE)
+  invisible(TRUE)
+}
+
+
 # Section 4 caches the expensive stages. The analyst's loop is drop an item,
 #   refit, look, repeat: without caching, every pass re-runs the replicate
 #   design and the whole dimension search, neither of which changed.
@@ -282,7 +390,7 @@ cached <- function(stage, key, compute) {
 
 # Cached fits are keyed, so a stale one is never read -- but they accumulate
 #   across an iterating session and each holds a fitted model. Called from the
-#   app when the analyst finishes an arm.
+#   app when the analyst finishes a run.
 cache_clear <- function(stage = NULL) {
   files = fs::dir_ls(wise_path("cache"), glob = "*.rds")
   if (!is.null(stage))
@@ -293,7 +401,6 @@ cache_clear <- function(stage = NULL) {
 
 # ---- logging -----------------------------------------------------------
 
-# logging.R for DrSvyR
 # The decision log.
 
 # Every choice the analyst makes is written to the work folder as it is made,
@@ -327,8 +434,8 @@ log_decision <- function(which, heading, decision, evidence = NULL,
   f = log_path(which)
   if (!fs::file_exists(f)) {
     cat("# ", tools::toTitleCase(gsub("_", " ", which)), "\n\n",
-        "Written by DrSvyR as decisions are made. Do not edit; it is the record ",
-        "of what was chosen and why.\n", sep = "", file = f)
+        "Written by DrSvyR as decisions are made. Do not edit; it is the ",
+        "record of what was chosen and why.\n", sep = "", file = f)
   }
 
   cat("\n## ", heading, "\n",
@@ -367,7 +474,6 @@ iteration_count <- function() {
 
 # ---- help_text ---------------------------------------------------------
 
-# help_text.R for DrSvyR
 # Every instruction the analyst reads, in one place.
 
 # Kept together rather than scattered through the modules so the wording can be
@@ -408,38 +514,6 @@ WISE_HELP <- list(
     "item it overlaps least with. A zero means the two were asked of different",
     "people -- a split ballot -- and no model can relate them however well they",
     "belong together."),
-
-  arm_intro = paste(
-    "This tool finds distinct groups: people who fall into types that answer",
-    "in different patterns. One group might agree with items A and B and",
-    "reject C, while another does the reverse. Each respondent gets a group.",
-    "\n\nWhether your battery works that way is a property of the data, so it",
-    "is worth checking before going further."),
-
-  arm_choice = paste(
-    "Some batteries do not work that way. If everyone sits somewhere on a",
-    "single scale from low to high -- differing in how much rather than in",
-    "which -- then a factor model describes them and this one does not. Fit",
-    "classes to a continuum and you get groups ordered low to high that look",
-    "like a finding and are an artefact of the model.",
-    "\n\nThe evidence below says which case you are in. Nothing here stops",
-    "you continuing; it tells you what to expect if you do."),
-
-  arm_evidence = paste(
-    "The eigenvalues describe how much of the pattern in the answers a single",
-    "underlying scale can account for. A large first value relative to the",
-    "second points toward one continuum, which is the case this tool does not",
-    "fit. Values closer together point toward several distinct patterns, which",
-    "is the case it does. Mixed response formats across unrelated topics also",
-    "point away from a single scale. There is no threshold that settles it,",
-    "which is why the next step is to ask."),
-
-  arm_ask = paste(
-    "The methodologist reads the numbers above and gives an opinion once. It",
-    "cannot see your data and it does not decide. Where it judges the battery",
-    "to be one continuum it will say so and name the model that fits it,",
-    "which is not one this tool runs. The verdict is recorded in the report",
-    "whichever way you go."),
 
   domains_pick = paste(
     "Choose the background variables you want to compare across -- age, sex,",
@@ -514,6 +588,17 @@ WISE_HELP <- list(
     "this screen does not refit and the group numbering cannot shift under",
     "your labels."),
 
+  level_pattern = paste(
+    "How much of the difference between groups is level and how much is",
+    "pattern. Each item's expected answer is put on a 0-to-1 scale first, so a",
+    "binary item and a seven-point item contribute the same possible spread.",
+    "A ratio well under 1 says the groups differ mainly in how high they",
+    "answer overall -- that is a continuum, and a class model is cutting it",
+    "into slices rather than finding types. Near or above 1 says the groups",
+    "reorder the items, which is structure no single scale holds. This is the",
+    "number to look at before reporting groups as though they were kinds of",
+    "people."),
+
   diagnostics = paste(
     "These say how well the model accounts for the answers people gave.",
     "\n\nEvery one of them ranks items or pairs. None is a test, none has a",
@@ -526,10 +611,12 @@ WISE_HELP <- list(
     "a margin. Getting an honest margin under a complex design means refitting",
     "the whole model many times over -- once for each replicate of the sample",
     "-- and seeing how far the answer moves.",
-    "\n\nThis is the reason the tool exists. Standard software would report a",
-    "margin roughly half this size, because it assumes people were picked one",
-    "at a time and independently, and yours were not. Differences that look",
-    "real under that assumption often are not.",
+    "\n\nThis is the reason the tool exists. Standard software computes that",
+    "margin as if people had been picked one at a time and independently, and",
+    "yours were not. How much difference that makes is a property of this",
+    "survey and of the quantity being estimated, not a constant: the report",
+    "states the factor it came to on your data. Where it is large, a",
+    "difference that looks real under the independence assumption is not.",
     "\n\nWhat to do with it: where two groups' bands overlap on an item, the",
     "data do not separate them on that item, whatever the lines appear to do."),
 

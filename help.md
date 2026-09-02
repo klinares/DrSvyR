@@ -20,7 +20,10 @@ the respondent identifier, the stratum, the sampling unit and the weight. You
 also need a folder for the tool to write into — everything it produces goes
 there, and nothing is ever written back into the file you started with. That
 folder has to sit outside the tool's own repository, and the tool will say so
-if you point it at one inside.
+if you point it at one inside: your scored data and your decision log should
+never end up somewhere a `git add .` can reach them. Your survey file itself
+can stay wherever it already is, including inside the repository; it is only
+ever read.
 
 Your respondents never leave your machine. The language model in this tool sees
 only figures the tool has already computed: how many people answered a
@@ -37,36 +40,16 @@ that something has gone wrong. The single loop runs from Model back to Items:
 if the fitted model tells you the battery was wrong, you can go back and change
 it once.
 
-Give yourself a few minutes at Search and at Model. Those two fit the model two
-hundred times over from different starting points, which is what makes the
-answer reproducible, and it is the slow part.
+**Search is the slow screen.** It fits every candidate number of groups from
+two hundred different starting points, which is what makes the answer
+reproducible rather than a property of where the algorithm happened to begin.
+Two hundred short runs are taken far enough to tell the promising starts from
+the poor ones, and only the best twenty are run to convergence. Give it a few
+minutes and leave it alone.
 
-## When this is the wrong tool, and how you find out
-
-Some batteries do not work the way this one assumes. If everyone sits somewhere
-on a single scale from low to high — differing in how much rather than in which
-— then what describes them is a factor model, and this tool does not fit one.
-Ask it anyway and you get groups ordered low to high that look like a finding
-and are an artefact of the model.
-
-So the Items screen computes the evidence and the methodologist reads it before
-you go any further. Where your battery looks like one continuum it says so
-plainly and names what would fit instead. Nothing stops you continuing; the
-verdict goes into the report either way.
-
-## Help choosing the battery
-
-Once you have written your research question and picked at least three items,
-**What else might belong here?** hands the methodologist your question, the
-items you chose, and the wording of every other variable in the file, and asks
-which ones cover something your battery misses. It has read no respondent's
-answers and is told so.
-
-Each suggestion then comes back with numbers the tool computed from your data —
-how many categories it has, how many people skipped it, how concentrated the
-answers are, and how much it has in common with the items you already chose.
-The reasoning sits next to the figures that test it. Nothing is added for you:
-if a suggestion looks right, put it in the battery yourself.
+Model is quick, because it does not fit anything. The size you chose was
+already fitted during the search and that is the fit you are shown; the time
+there goes on the replicate intervals.
 
 ## What the tool decides, and what you decide
 
@@ -88,14 +71,22 @@ it explains.
 ## When something does not look right
 
 Every screen carries a short explanation of what it is showing and why it
-matters, so the first place to look is the screen you are on. Beyond that, the
-report the tool writes has an appendix called *What was tested*, which lists
-what was verified, what rests on published method, what was a judgement call,
-and what has not been tested at all. That last column is the one to read first.
+matters, so the first place to look is the screen you are on.
 
-The work folder holds the rest: a decision log of what was chosen and when, the
-tables behind every figure as CSV, and `cfg.R`, a copy of the analysis
-specification you can re-run without this app.
+If a step fails, the message on screen names the function it failed in, and the
+full stack is appended to **`errors.log`** at the top of your work folder. That
+file is what to send when you ask for help: the message alone rarely says where
+a number went wrong, and the log does.
+
+Beyond that, the report the tool writes has an appendix called *What was
+tested*, which lists what was verified, what rests on published method, what
+was a judgement call, and what has not been tested at all. That last column is
+the one to read first.
+
+The rest of the work folder holds `decisions/`, a log of what was chosen and
+when; `output/`, with the report, every table as CSV, your data back with
+segment membership added, and `cfg.R`, a copy of the analysis specification you
+can re-run without this app; and `cache/`, which you can delete at any time.
 
 ---
 

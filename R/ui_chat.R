@@ -51,7 +51,6 @@ pm_tokens <- function(chat) {
 #   catalogue is the single place any of it changes and the version in force is
 #   the version stamped in the report.
 pm_system <- function(state, stage_key) {
-  arm = state$cfg$arm %||% state$arm
 
   paste(
     persona_pm,
@@ -60,7 +59,7 @@ pm_system <- function(state, stage_key) {
     "When the analyst changes the specification you will be told; take it into",
     "account rather than referring to the model that no longer exists.",
     "",
-    reflex_prompt(stage = stage_key, arm = arm),
+    reflex_prompt(stage = stage_key),
     "",
     "HOW TO ANSWER",
     "Answer in plain prose, briefly. Explain what a number means for the",
@@ -206,7 +205,7 @@ mod_chat_server <- function(id, state, stage = reactive(NULL)) {
       dplyr::case_when(
         grepl("Design", s)  ~ "design",
         grepl("Items", s)   ~ "items",
-        grepl("Review", s)  ~ "arm",
+        grepl("Review", s)  ~ "config",
         grepl("Search|Model|Names", s) ~ "model",
         grepl("Domains|Scoring|Results", s) ~ "domains",
         grepl("Outputs", s) ~ "report",
@@ -231,18 +230,15 @@ mod_chat_server <- function(id, state, stage = reactive(NULL)) {
     observeEvent(state$model_key, {
       if (is.null(chat())) return()
       note <- paste0(
-        "SPECIFICATION CHANGED. The analyst refitted. Arm: ",
-        state$cfg$arm %||% state$arm, ". Dimension: ", state$dimension,
-        ". Items: ", length(state$cfg$items),
+        "SPECIFICATION CHANGED. The analyst refitted. Groups: ",
+        state$dimension, ". Items: ", length(state$cfg$items),
         ". Numbers you were given earlier no longer describe the current ",
         "model; use the ones supplied from here on. Acknowledge in one ",
         "sentence.")
       res <- pm_say(chat(), note)
       turns(turns() + 1L)
       say("system", paste("Specification changed -- refitted at",
-                          state$dimension,
-                          if (identical(state$cfg$arm %||% state$arm, "lca"))
-                            "segments." else "factors."), "note")
+                          state$dimension, "segments."), "note")
       if (res$ok) say("assistant", res$text)
     }, ignoreInit = TRUE, ignoreNULL = TRUE)
 
