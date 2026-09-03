@@ -40,7 +40,6 @@ SURV_ACTIONS <- c(
   flag_for_report   = "Record this in the report's limitations or status table.",
   revisit_design    = "Re-examine the design specification before continuing.",
   change_k          = "Consider a different number of segments or factors.",
-  change_estimator  = "Consider treating the scales differently (WLSMV / ML).",
   merge_levels      = "Consider collapsing categories of a domain variable.",
   suppress_estimate = "Consider marking a cell as too imprecise to report.",
   none              = "Say it and stop. No action follows.")
@@ -142,33 +141,7 @@ SURV_REFLEXES <- list(
       claim = "One in five or more did not answer this item. Under item-complete fitting it removes those respondents from the model entirely, and who is removed is unlikely to be random.",
       caution = "The relevant question is whether the item-complete sample still represents the population, not whether the model fits better without the item."),
 
-  # ---- arm ------------------------------------------------------------------
-
-  rfx("arm_one_dominant_dimension", "arm", "both",
-      evidence = c("eigen_ratio", "var_explained_1"),
-      threshold = NA_real_, sourced = FALSE,
-      source = "No cutoff is set. The CFA report reads eigenvalues against a random-data threshold at the effective sample size rather than against a fixed rule.",
-      actions = c("none"),
-      claim = "The first eigenvalue dominates the second, which is what a single underlying continuum looks like. That is evidence for the factor arm, alongside what you know about the questions.",
-      caution = "There is no threshold here. Do not invent one, and do not choose the arm -- the analyst states their expectation first and it stands."),
-
-  rfx("arm_mixed_response_formats", "arm", "both",
-      evidence = "n_formats",
-      threshold = 1, sourced = TRUE,
-      source = "arm_diagnostics(): mixed formats across unrelated domains point away from one continuum. A household can own a computer and still have run short of food.",
-      actions = c("none"),
-      claim = "The battery mixes response formats across domains that need not sit on one scale, which points toward distinct types rather than degrees of one thing. That is the case this tool fits.",
-      caution = "Mixed formats alone do not settle it."),
-
-  rfx("arm_looks_like_one_continuum", "arm", "both",
-      evidence = c("eigen_ratio", "var_explained_1"),
-      threshold = NA_real_, sourced = TRUE,
-      source = "arm_diagnostics(): a large first eigenvalue relative to the second, with one response format throughout, points at a single continuum rather than distinct kinds of respondent.",
-      actions = c("flag_for_report"),
-      claim = "This battery looks like one continuum. A class model fitted to a continuum returns groups ordered low to high, which reads like a finding and is an artefact of the model rather than a property of the respondents.",
-      caution = "The model that fits this is a weighted confirmatory factor analysis, which this tool does not run. Say so and name it; do not offer a setting that would make this tool fit it, because there is none."),
-
-  # ---- model, class arm -----------------------------------------------------
+  # ---- model -----------------------------------------------------
 
   rfx("lca_entropy_low", "model", "lca",
       evidence = "entropy",
@@ -205,7 +178,7 @@ SURV_REFLEXES <- list(
   rfx("replicates_failed", "model", "both",
       evidence = c("replicates_failed", "replicates"),
       threshold = 0, sourced = TRUE,
-      source = "measurement_se_lca(): every replicate is a fresh weighted EM refit, so convergence is counted rather than assumed and a failed replicate is disclosed rather than dropped quietly.",
+      source = "measurement_se(): every replicate is a fresh weighted EM refit. One that hits maxit without meeting the tolerance is counted and KEPT in the variance, never dropped -- dropping a deviation could only narrow the spread, whereas keeping it leaves the interval biased in a direction nobody can sign, which is the thing to state rather than hide.",
       actions = c("flag_for_report"),
       claim = "Some replicate refits did not converge and were dropped. The intervals on the measurement model are narrower than they should be and are a lower bound.",
       caution = "Dropping a replicate removes a deviation from the spread, which can only narrow the interval. Never present these margins as correct."),
@@ -239,9 +212,9 @@ SURV_REFLEXES <- list(
   # ---- report ---------------------------------------------------------------
 
   rfx("invariance_untested", "report", "both",
-      evidence = c("aux", "arm"),
+      evidence = c("aux"),
       threshold = NA_real_, sourced = TRUE,
-      source = "SURV632: metric invariance equalises loadings, scalar invariance additionally equalises intercepts and is the level required to compare latent means across groups. Not tested in this workflow.",
+      source = "SURV632 develops this for factor models, where metric invariance equalises loadings and scalar invariance additionally equalises intercepts. The analogue for a latent class model is homogeneity of the item-response probabilities across groups, and the BCH correction needs the stronger form of it: the classification error rates have to be the same in every domain, since one pooled table is inverted for all of them. Neither is tested in this workflow.",
       actions = c("flag_for_report"),
       claim = "Comparing a latent quantity across groups assumes the battery measures the same thing the same way in each. Scalar invariance is the level that assumption requires and it has not been tested here, so a difference between groups may reflect measurement rather than the construct.",
       caution = "This applies to every domain comparison in the report, not only to the ones that look interesting. It is a standing limitation, not a finding."),
@@ -401,12 +374,26 @@ validate_proposal <- function(obj, observed, tol = 1e-8) {
            "cited.", call. = FALSE)
     got = suppressWarnings(as.numeric(e$value))
     want = suppressWarnings(as.numeric(observed[[f]]))
-    same = if (is.na(got) || is.na(want))
-      identical(as.character(e$value), as.character(observed[[f]]))
-    else isTRUE(abs(got - want) < tol)
+    # any(), not isTRUE(). Most of what reflex_evidence() supplies is a vector
+    #   -- one discrimination per item, one share per segment, one estimate per
+    #   cell -- and pm_evidence_block() shows the model that whole list and
+    #   asks it to cite one number out of it. isTRUE() on a length-n logical is
+    #   FALSE whatever the values are, so every proposal citing an item-level,
+    #   segment-level or cell-level figure was rejected as fabricated and only
+    #   the handful of scalar fields could pass. That left the panel inert at
+    #   the Items, Model and Domains stages, which is most of it.
+    # The citation now has to match SOME number this tool computed for that
+    #   field. That is weaker than matching a named cell, and the honest next
+    #   step is to supply these fields named and require field plus key -- a
+    #   change to the prompt contract, not a bug fix.
+    same = if (all(is.na(got)) || all(is.na(want)))
+      any(as.character(e$value) == as.character(observed[[f]]), na.rm = TRUE)
+    else any(abs(got - want) < tol, na.rm = TRUE)
     if (!same)
-      stop("Cited ", f, " = ", e$value, " but the value computed here is ",
-           observed[[f]], ".", call. = FALSE)
+      stop("Cited ", f, " = ", e$value, " but no value computed here for that ",
+           "field matches it. Computed: ",
+           paste(utils::head(observed[[f]], 10), collapse = ", "), ".",
+           call. = FALSE)
   })
 
   invisible(TRUE)
@@ -442,12 +429,6 @@ reflex_evidence <- function(state, stage) {
   # fitMeasures() is requested in a fixed order, but read back by name rather
   #   than by position so that changing that call cannot silently relabel the
   #   values a proposal is then validated against.
-  fitm = function(nm) {
-    f = state$model$diag$fit
-    if (is.null(f) || !"measure" %in% names(f)) return(NULL)
-    v = f$value[f$measure == nm]
-    if (!length(v)) NULL else v
-  }
 
   # The population share of each segment with its replicate interval. That is
   #   the quantity a minimum-share rule should be read against; the model's own
@@ -484,12 +465,6 @@ reflex_evidence <- function(state, stage) {
       modal_pct   = col(state$item_summary, "modal_pct"),
       missing_pct = col(state$item_summary, "missing_pct")),
 
-    arm = list(
-      eigen_ratio     = col(state$arm_diag, "eigen_ratio"),
-      var_explained_1 = col(state$arm_diag, "var_explained_1"),
-      n_formats       = col(state$arm_diag, "n_formats"),
-      min_categories  = col(state$arm_diag, "min_categories"),
-      min_categories_ok = TRUE),
 
     model = list(
       entropy           = state$model$diag$entropy,
@@ -498,13 +473,6 @@ reflex_evidence <- function(state, stage) {
       share_lo          = col(shares, "lo"),
       discrimination    = col(state$model$diag$discrimination, "discrimination"),
       bvr               = col(state$model$diag$bvr, "bvr"),
-      problems          = state$model$health$problems,
-      loading           = col(state$model$diag$loadings, "loading"),
-      h2                = col(state$model$diag$loadings, "h2"),
-      cfi.scaled        = fitm("cfi.scaled"),
-      tli.scaled        = fitm("tli.scaled"),
-      rmsea.scaled      = fitm("rmsea.scaled"),
-      srmr              = fitm("srmr"),
       replicates_failed = state$measure$failed,
       replicates        = state$measure$replicates),
 
@@ -518,7 +486,6 @@ reflex_evidence <- function(state, stage) {
 
     report = list(
       aux        = state$cfg$aux,
-      arm        = state$cfg$arm %||% state$arm,
       iterations = iteration_count()),
 
     list())

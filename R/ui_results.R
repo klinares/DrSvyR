@@ -45,17 +45,27 @@ mod_score_server <- function(id, state) {
         sc <- score_respondents(state)
 
         setProgress(0.75, message = "Building the design")
-        # The design is rebuilt on the scored frame rather than reused. Case
-        #   exclusions can create singleton strata the released file does not
-        #   have, and that has to fail here rather than silently contribute
-        #   zero variance later.
+        # Built on the WHOLE scored frame, including the respondents the model
+        #   could not place, and carried with an index that says which rows the
+        #   estimates run over.
+        # It used to be rebuilt on sc[reached, ]. That drops any PSU whose
+        #   respondents all went unscored, which changes n_h, the
+        #   n_h / (n_h - 1) scaling and the degrees of freedom, and it
+        #   manufactured singleton strata the released file does not have and
+        #   then halted on them. SURV701 is explicit: subset the design, not
+        #   the data. A zero-weight row and an absent row contribute
+        #   identically to a ratio estimator, so nothing is lost by keeping
+        #   them.
         reached <- !is.na(sc$segment)
-        des <- build_rep_design(sc[reached, ], state$cfg)
+        des <- build_rep_design(sc, state$cfg)
+        des$keep <- reached
 
         list(scored = sc, design = des,
              coverage = score_coverage(sc, length(state$cfg$items)),
              quality = assignment_quality(sc),
-             shares = group_shares(sc, state$labels, des$rep_des))
+             shares = group_shares(sc[reached, ], state$labels,
+                                   subset(des$rep_des, !is.na(segment)),
+                                   state$model$fit$pi))
       }), "Scoring respondents")
 
       if (inherits(res, "try-error")) {
@@ -111,8 +121,10 @@ mod_score_server <- function(id, state) {
     output$shares <- renderTable({
       req(state$shares)
       state$shares |>
-        transmute(Group = group, n = n, Unweighted = unweighted,
-                  Weighted = weighted, SE = se)
+        transmute(Group = group, n = n,
+                  `Assigned share` = assigned,
+                  `Model prevalence` = prevalence,
+                  Gap = gap)
     }, width = "100%")
 
     output$quality <- renderTable({ req(state$quality); state$quality },
@@ -168,9 +180,14 @@ mod_domains_server <- function(id, state) {
         # Four steps: unweighted, design-based, corrected, contrasts.
         tick <- function(what) incProgress(1 / 4, detail = what)
         out <- domain_estimates(state, tick)
+        # The whole frame and the whole design, with keep saying which rows
+        #   the segment estimates rest on. The composition of the population
+        #   is a property of the population; estimating it among the people
+        #   the model could place is exactly the quantity item nonresponse
+        #   distorts, and the report called that result "in the population".
         out$marg <- domain_marginals(
-          filter(state$scored, !is.na(segment)),
-          state$cfg$aux, state$score_design$rep_des)
+          state$scored, state$cfg$aux, state$score_design$rep_des,
+          state$score_design$keep)
         out
       }), "Estimating the domains")
 
@@ -419,8 +436,8 @@ mod_report_server <- function(id, state) {
                      choices = c("SPSS (.sav)" = "sav", "Stata (.dta)" = "dta"),
                      selected = if (identical(state$format, "stata")) "dta"
                                 else "sav"),
-        actionButton(ns("save"), "Save the report and all outputs",
-                     class = "btn-primary"))
+        actionButton(ns("save"), "Prepare the outputs", class = "btn-primary"),
+        uiOutput(ns("download_ui")))
     })
 
     observeEvent(input$save, {
@@ -428,23 +445,16 @@ mod_report_server <- function(id, state) {
       res <- wise_try(withProgress(message = "Writing", value = 0, {
         incProgress(0.3, detail = "report")
 
-        # HTML is the report. It is self-contained, every figure is embedded,
-        #   it opens in Word, and it needs neither officer nor flextable --
-        #   which need Rtools on a mirror that has no binary for them, and so
-        #   cannot be assumed on a server.
+        # HTML is the report. Self-contained, every figure embedded, every
+        #   table inside it and downloadable as CSV from it. It needs no
+        #   Rtools-built package, which is what makes it deployable at all.
         rep <- build_report_html(state, state$report_summary,
                                  state$report_not_answered)
 
-        word <- if (all(vapply(c("officer", "flextable"), requireNamespace,
-                               logical(1), quietly = TRUE)))
-          build_report(state, state$report_summary, state$report_not_answered)
-        else NULL
-
         incProgress(0.4, detail = "data file")
         dat <- export_data(state, input$format)
-        incProgress(0.3, detail = "tables")
-        c(rep, word, dat, unlist(export_tables(state)))
-      }), "Writing the Word report")
+        c(rep, dat)
+      }), "Writing the outputs")
 
       if (inherits(res, "try-error")) {
         showNotification(conditionMessage(attr(res, "condition")),
@@ -457,8 +467,37 @@ mod_report_server <- function(id, state) {
         "labels", "Outputs written",
         decision = paste0(length(res), " files written."),
         evidence = paste(paste0("- ", fs::path_file(res)), collapse = "\n"))
-      showNotification("Saved.", type = "message", duration = NULL)
+      showNotification("Ready. Use Download to take it away.",
+                       type = "message", duration = NULL)
     })
+
+    # The one way anything leaves this session.
+
+    # There is no folder the analyst can open: the work folder is temporary and
+    #   is deleted when they close the tab. Everything written is collected
+    #   here, and if they do not press this they leave with nothing -- which is
+    #   the trade for the app being able to run somewhere they have no
+    #   filesystem at all.
+    output$download_ui <- renderUI({
+      req(state$outputs)
+      tagList(
+        downloadButton(ns("download"), "Download everything (.zip)",
+                       class = "btn-success"),
+        tags$p(class = "text-muted",
+               "The report opens in a browser and carries every table, every \
+               figure, the decision log and the specification inside it, and \
+               will hand any table back as CSV. The archive also holds your \
+               survey file with segments added, the specification as a \
+               runnable script, and the decision log as markdown."))
+    })
+
+    output$download <- downloadHandler(
+      filename = function()
+        paste0("drsvyr_", fs::path_ext_remove(fs::path_file(
+          state$data_file %||% "survey")), "_",
+          format(Sys.Date(), "%Y%m%d"), ".zip"),
+      content = function(file) bundle_outputs(file),
+      contentType = "application/zip")
 
     output$written <- renderUI({
       req(state$outputs)

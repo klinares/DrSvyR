@@ -22,7 +22,7 @@
 #   -- lives in a folder the analyst owns, outside the repository. Nothing in
 #   the workflow writes to the repository at run time.
 
-# Requires: fs, digest, rappdirs, purrr, tibble
+# Requires: fs, digest, purrr, tibble
 
 
 # Section 1 keeps outputs off the repository. .gitignore prevents committing,
@@ -102,7 +102,19 @@ WISE_SUBDIRS <- c("data", "docs", "dict", "decisions", "cache", "output")
 #   divided by how many analysts are on it" -- something no code can work out
 #   for itself. DRSVYR_WORKERS=1 turns parallelism off entirely; there is no
 #   second flag to keep in agreement with this one.
-WISE_WORKERS_CAP <- 12L
+# Four, and it is a ceiling rather than a target. The deployment is a shared
+#   Linux server with sixteen dedicated cores: at four workers each, three
+#   analysts searching at once come to twelve and the box still has headroom
+#   for the sessions themselves. Twelve was a laptop number and would let one
+#   analyst take the whole machine.
+# This does not change what the search produces. The two-stage start set picks
+#   its survivors across the whole set rather than within each parallel block,
+#   so the worker count changes how long the search takes and nothing else.
+#   That invariant is the reason this can be tuned for a server without
+#   anybody's results moving, and it is worth re-checking at 1, 2 and 4
+#   workers -- parameters, not just the log-likelihood -- after any change to
+#   the search.
+WISE_WORKERS_CAP <- 4L
 
 .wise_workers_resolve <- function() {
   host = suppressWarnings(as.integer(future::availableCores()))
@@ -198,6 +210,102 @@ wise_path <- function(...) {
   assert_outside_repo(fs::path(work_dir(), ...))
 }
 
+# The work folder, made rather than chosen.
+
+# It used to be a path the analyst typed. On a shared server there is no such
+#   path: the analyst has no filesystem to point at, and the one the server has
+#   belongs to every other session at once. So the folder is a temporary one
+#   per session, with the same layout as before, and the analyst receives its
+#   contents as one archive from the Outputs screen.
+# Everything downstream still goes through wise_path(), so this is the only
+#   place that had to change. Nothing else knows where it is writing.
+open_session_folder <- function() {
+  path = fs::path(tempfile("drsvyr_"))
+  fs::dir_create(fs::path(path, WISE_SUBDIRS))
+  s = .wise_session()
+  if (is.null(s)) {
+    .wise$work_dir <- path
+  } else {
+    tok = s$token
+    .wise$sessions[[tok]] <- path
+    # Deleted when the session ends, not merely forgotten. A forgotten folder
+    #   is respondent data left on a shared server with nobody's name on it.
+    s$onSessionEnded(function() {
+      .wise$sessions[[tok]] <- NULL
+      try(fs::dir_delete(path), silent = TRUE)
+    })
+  }
+  invisible(path)
+}
+
+# The demonstration survey, wherever it ended up. system.file() finds it once
+#   this is a package; the demo/ folder is the fallback while it is not.
+demo_survey_path <- function() {
+  p = system.file("extdata", package = "drsvyr")
+  cand = if (nzchar(p)) fs::dir_ls(p, regexp = "[.](sav|zsav|dta)$", fail = FALSE)
+         else character(0)
+  if (!length(cand)) {
+    d = fs::path(repo_root(), "demo")
+    cand = if (fs::dir_exists(d))
+      fs::dir_ls(d, regexp = "[.](sav|zsav|dta)$", fail = FALSE) else character(0)
+  }
+  if (length(cand)) as.character(cand[[1]]) else NULL
+}
+
+# Everything the analyst leaves with, in one file.
+
+# ZIP, not tar.gz, and the reason is where the file is opened rather than where
+#   it is made. It is built on a Linux server and double-clicked on a Windows
+#   desktop by someone who has never opened a terminal. Windows Explorer has
+#   opened .zip natively since XP; .tar.gz it either cannot open at all or
+#   unpacks in two steps, leaving the analyst holding a .tar and a question.
+
+# zip::zip(), not utils::zip(). utils::zip() shells out to whatever R_ZIPCMD
+#   points at, which is absent on a Windows box without Rtools and not
+#   guaranteed in a slim conda environment either. zip:: carries its own
+#   compressor, so there is nothing on the PATH to be missing, and it writes
+#   forward-slash paths so the archive is portable both ways.
+
+# What travels, and what does not:
+#   report.html   every table, every figure, the decision log and the
+#                 specification, all inside one file that opens in a browser.
+#   *_wise.sav    the survey back with segments added. The only thing here
+#                 the report cannot be.
+#   cfg.R         the specification as a file you can source, which is not
+#                 the same as the specification as text in a tab.
+#   decisions/    the log as markdown. Also inside the report; kept because an
+#                 audit trail should survive without a browser.
+#   errors.log    only when something failed.
+#   cache/        never. Fitted models keyed to this data, rebuildable, the
+#                 largest thing here, and useless without the app.
+#   the CSVs      no longer written. Every one of them was a copy of a table
+#                 the report already carries, and the report will hand any of
+#                 them back as CSV on a button.
+bundle_outputs <- function(con) {
+  root = work_dir()
+
+  files = fs::path_rel(
+    fs::dir_ls(root, recurse = TRUE, type = "file", all = FALSE), root)
+  files = as.character(files)
+  files = files[!grepl("^cache/", files)]
+  # An empty errors.log means nothing went wrong, and shipping it invites the
+  #   analyst to open a file with nothing in it and wonder what they missed.
+  files = files[!(basename(files) == "errors.log" &
+                    fs::file_size(fs::path(root, files)) == 0)]
+
+  if (!length(files))
+    stop("Nothing has been written yet. Prepare the outputs first.",
+         call. = FALSE)
+
+  if (!requireNamespace("zip", quietly = TRUE))
+    stop("The zip package is needed to build the download and is not ",
+         "installed here.", call. = FALSE)
+
+  zip::zip(zipfile = con, files = files, root = root, mode = "cherry-pick")
+  invisible(con)
+}
+
+
 # What the analyst actually dropped in. Extensions rather than fixed names,
 #   and the whole folder rather than just data/, because an analyst who put the
 #   file at the top level is not wrong -- they just have not read the layout.
@@ -213,39 +321,9 @@ survey_work_folder <- function(path = work_dir()) {
 }
 
 
-# Section 3 remembers the folder between sessions, outside the repository so
-#   there is nothing repo-adjacent to commit by accident.
-#______________________________________________________________________________
-
-# One file per user rather than one per machine. rappdirs resolves to the
-#   account running R, which on a laptop is the analyst and on Connect is the
-#   service account every analyst shares -- so without the suffix the folder
-#   offered as a default is whichever path the last person to use the app
-#   typed, which is both wrong and a small disclosure of someone else's
-#   directory layout. session$user is the authenticated name on Connect and
-#   NULL locally.
-.wise_config_file <- function() {
-  s = .wise_session()
-  who = if (!is.null(s) && !is.null(s$user)) s$user else "local"
-  who = gsub("[^A-Za-z0-9._-]", "_", who)
-  fs::path(rappdirs::user_config_dir("wise"), paste0("last_work_folder-", who))
-}
-
-remember_work_folder <- function(path = work_dir()) {
-  fs::dir_create(fs::path_dir(.wise_config_file()))
-  writeLines(as.character(path), .wise_config_file())
-  invisible(path)
-}
-
 # Returns NULL rather than erroring when there is nothing remembered or the
 #   folder has since moved, so the app can offer it as a default and fall back
 #   to asking.
-last_work_folder <- function() {
-  f = .wise_config_file()
-  if (!fs::file_exists(f)) return(NULL)
-  p = readLines(f, warn = FALSE)[1]
-  if (!length(p) || !nzchar(p) || !fs::dir_exists(p)) NULL else p
-}
 
 
 
@@ -652,10 +730,18 @@ WISE_HELP <- list(
     "counts below say how many of each."),
 
   shares = paste(
-    "The size of each group, counted two ways. Unweighted is the share of",
-    "respondents. Weighted is the share of the population they represent. A",
-    "gap between them means the groups are not evenly spread across the design",
-    "-- which is the whole reason the weights exist."),
+    "A check on the scoring, not the figure to report. Assigned share is the",
+    "weighted share of respondents placed in each segment. Model prevalence is",
+    "the size of the segment in the population, estimated as a parameter of",
+    "the model rather than by counting people into bins, and that is the one",
+    "that belongs in a write-up: it is on the Segments tab of the report with",
+    "its interval.",
+    "\n\nThe gap is what to read here. Placing each respondent in their most",
+    "likely segment flattens the differences between segments, so the assigned",
+    "shares sit closer to even than the prevalences do. A large gap and a low",
+    "entropy are the same finding twice: the segments overlap, and assignment",
+    "is losing information the model has. That loss is what the corrected",
+    "column in the domain tables puts back."),
 
   quality = paste(
     "How confidently each respondent was placed, against how many items they",

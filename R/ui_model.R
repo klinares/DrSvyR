@@ -493,8 +493,18 @@ mod_model_server <- function(id, state) {
 
       res <- wise_try(withProgress(message = "Refitting in every replicate",
                               value = 0.2, {
-        des <- build_rep_design(dat, cfg)
-        measurement_se(cfg, dat, state$model$fit, des$des, des$rep_des)
+        # Built on the WHOLE frame and restricted with an index, never
+        #   rebuilt on the item-complete rows. Rebuilding drops any PSU that
+        #   contributed no complete responder, which changes n_h, the
+        #   n_h / (n_h - 1) scaling and the degrees of freedom -- the
+        #   conditional subpopulation approach SURV701 warns against. It also
+        #   gave this table a different degf from the domain table while the
+        #   report said both came from one replicate set.
+        full <- state$design_dat |>
+          dplyr::bind_cols(state$item_frame$item_dat)
+        keep <- state$item_frame$in_analysis
+        des <- build_rep_design(full, cfg)
+        measurement_se(cfg, dat, state$model$fit, des$rep_des, keep)
       }), "Estimating the uncertainty")
 
       if (inherits(res, "try-error")) {

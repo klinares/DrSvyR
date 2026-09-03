@@ -85,23 +85,40 @@ plot_assignment_quality <- function(q) {
     wise_theme()
 }
 
-# Where the groups sit, unweighted and design-weighted. The first thing the
-#   analyst sees after scoring, and the first place weighting visibly does
-#   something.
-group_shares <- function(scored, labels, rep_des) {
+# A scoring check, and never an estimate.
+
+# What an analyst reports as the size of a segment is the model prevalence:
+#   pi_k from the design-weighted pseudo-likelihood, with an interval that
+#   comes from refitting in every replicate. That is a population quantity and
+#   its interval carries the uncertainty in where the segments are.
+# This table is a different thing. It is the share of respondents ASSIGNED to
+#   each segment, which treats the boundaries as known and counts people into
+#   bins. It used to carry a standard error, printed beside a weighted share,
+#   which is indistinguishable on screen from the estimate an analyst should be
+#   quoting and is roughly a third as wide. The standard error is gone for that
+#   reason: there is no interval here to quote, because this is not the
+#   estimand.
+# The gap is what the table is for. Modal assignment flattens differences, so
+#   the assigned share sits closer to uniform than the model prevalence does,
+#   and the size of that gap is the classification error the BCH correction
+#   later removes from the domain estimates. Large gaps and low entropy are the
+#   same finding seen twice.
+group_shares <- function(scored, labels, rep_des, prevalence) {
   raw = scored |>
     dplyr::filter(!is.na(segment)) |>
-    dplyr::count(segment, name = "n") |>
-    dplyr::mutate(unweighted = round(n / sum(n), 3))
+    dplyr::count(segment, name = "n")
 
   m = survey::svymean(~ factor(segment), rep_des, na.rm = TRUE)
 
   raw |>
-    dplyr::mutate(weighted = round(as.numeric(coef(m)), 3),
-                  se = round(as.numeric(survey::SE(m)), 3),
-                  group = labels$Label[segment]) |>
-    dplyr::select(segment, group, n, unweighted, weighted, se)
+    dplyr::mutate(
+      assigned = round(as.numeric(coef(m)), 3),
+      prevalence = round(as.numeric(prevalence), 3),
+      gap = round(assigned - prevalence, 3),
+      group = labels$Label[segment]) |>
+    dplyr::select(segment, group, n, assigned, prevalence, gap)
 }
+
 
 
 #   1. Marginals
@@ -122,19 +139,41 @@ group_shares <- function(scored, labels, rep_des) {
 # Section 1
 #______________________________________________________________________________
 
-domain_marginals <- function(scored, aux, rep_des) {
+# The composition of the population, and separately the number of respondents
+#   the segment estimates for that level actually rest on.
+
+# These were one number before. weighted came off a design built on scored
+#   respondents only, n came off the whole frame, and the report printed the
+#   pair as "X in the population". Neither half was what the label said: a
+#   composition estimated among the people the model could place is exactly the
+#   quantity item nonresponse distorts, and a count over everyone overstates
+#   what a domain estimate rests on.
+# So weighted is now estimated on the full design -- that is the population
+#   composition, and the label is true of it -- and the count is split into n
+#   (everyone at that level) and n_scored (those carrying the estimates). The
+#   small-cell flag reads n_scored; see format_domain_block().
+domain_marginals <- function(dat, aux, rep_des, keep = NULL) {
+  if (is.null(keep)) keep = rep(TRUE, nrow(dat))
   purrr::map(aux, function(v) {
     m = survey::svymean(reformulate(v), rep_des, na.rm = TRUE)
-    raw = scored |>
+    raw = dat |>
       dplyr::filter(!is.na(.data[[v]])) |>
       dplyr::count(.data[[v]], name = "n") |>
       rlang::set_names(c("level", "n"))
+    got = dat[keep, , drop = FALSE] |>
+      dplyr::filter(!is.na(.data[[v]])) |>
+      dplyr::count(.data[[v]], name = "n_scored") |>
+      rlang::set_names(c("level", "n_scored"))
     tibble::tibble(variable = v,
                    level = stringr::str_remove(names(coef(m)), paste0("^", v)),
                    weighted = as.numeric(coef(m)),
                    se = as.numeric(survey::SE(m))) |>
       dplyr::left_join(dplyr::mutate(raw, level = as.character(level)),
-                       by = "level")
+                       by = "level") |>
+      dplyr::left_join(dplyr::mutate(got, level = as.character(level)),
+                       by = "level") |>
+      dplyr::mutate(n = dplyr::coalesce(n, 0L),
+                    n_scored = dplyr::coalesce(n_scored, 0L))
   }) |>
     purrr::list_rbind()
 }
@@ -157,20 +196,60 @@ domain_marginals <- function(scored, aux, rep_des) {
 domain_estimates <- function(state, tick = NULL) {
   cfg = state$cfg
   init_parallel(cfg)
-  scored = dplyr::filter(state$scored, !is.na(segment))
-  des = state$score_design$des
+
+  # rep_des is the replicate set built on the WHOLE frame; keep picks out the
+  #   respondents the model could place. Restricting the weights rather than
+  #   rebuilding the design on the survivors is the unconditional subpopulation
+  #   approach, and it is what makes the degrees of freedom below the degrees
+  #   of freedom of the sample that was drawn rather than of whoever happened
+  #   to answer enough items.
   rep_des = state$score_design$rep_des
+  keep = state$score_design$keep
+  scored = state$scored[keep, , drop = FALSE]
+
   K = state$dimension
   crit = qt(0.975, degf(rep_des))
   post_cols = paste0("post_segment", seq_len(K))
 
+  # Levels are re-dropped here, and this is the second of the two places they
+  #   have to be. build_demo_frame() sets them over the whole file; restricting
+  #   to the respondents the model could place can empty one, and levels() does
+  #   not notice. An empty level then exists in the corrected arm as 0/0, is
+  #   omitted by svyby without a word, and is missing from the naive count --
+  #   three tables, three level sets, and format_estimator_shift()'s inner join
+  #   dropping the difference silently.
+  # The universe is what is OBSERVED after the restriction, never what the
+  #   source file declares. A category the file remembers and the data does not
+  #   have is not a category.
+  scored = dplyr::mutate(scored,
+                         dplyr::across(dplyr::all_of(cfg$aux), droplevels))
+
+  # levels() is NULL on anything that is not a factor, and outer(x, NULL)
+  #   silently yields a matrix with no columns, so the estimate vector comes
+  #   back short and the failure surfaces several functions later as a
+  #   dimension error naming neither the variable nor the cause. Checked here,
+  #   where the message can name it.
+  meta = purrr::map(cfg$aux, function(v) {
+    lv = levels(scored[[v]])
+    check_dims(length(lv) > 0, TRUE, paste0("Domain variable '", v, "'"),
+               paste("It is not a factor in the scored frame, so it has no",
+                     "levels to estimate over. Re-apply the recodes."))
+    tidyr::expand_grid(level = lv, segment = seq_len(K)) |>
+      dplyr::mutate(variable = v)
+  }) |>
+    purrr::list_rbind() |>
+    dplyr::mutate(idx = dplyr::row_number())
+
   # Unweighted: a plain cross-tab with binomial standard errors, as if the
   #   respondents had been drawn independently.
   naive = purrr::map(cfg$aux, function(v) {
+    grid = dplyr::filter(meta, variable == v) |>
+      dplyr::select(level, segment)
     scored |>
       dplyr::filter(!is.na(.data[[v]])) |>
       dplyr::count(level = as.character(.data[[v]]), segment, name = "n") |>
-      tidyr::complete(level, segment = seq_len(K), fill = list(n = 0L)) |>
+      dplyr::right_join(grid, by = c("level", "segment")) |>
+      dplyr::mutate(n = dplyr::coalesce(n, 0L)) |>
       dplyr::group_by(level) |>
       dplyr::mutate(nn = sum(n), p = n / nn,
                     se = sqrt(pmax(p * (1 - p), 0) / nn)) |>
@@ -185,11 +264,20 @@ domain_estimates <- function(state, tick = NULL) {
 
   if (!is.null(tick)) tick("design-based")
 
+  # .segf is built on the design with its levels declared, rather than
+  #   ~factor(segment) inside svyby. factor() derives levels from what it is
+  #   handed, so a domain level in which only one segment appears produced a
+  #   one-level factor and R threw "contrasts can be applied only to factors
+  #   with 2 or more levels" from inside survey, naming nothing. Declared here,
+  #   the column count is 2K by construction.
+  rep_des = update(rep_des, .segf = factor(segment, levels = seq_len(K)))
+
   # svyby splits the design by the domain and runs svymean of the segment
   #   factor inside each level. Columns are read by position because svyby's
   #   naming for a factor outcome varies by version.
   design = purrr::map(cfg$aux, function(v) {
-    sb = as.data.frame(survey::svyby(~ factor(segment), reformulate(v), rep_des,
+    lv = levels(scored[[v]])
+    sb = as.data.frame(survey::svyby(~ .segf, reformulate(v), rep_des,
                                      survey::svymean, na.rm = TRUE))
     vals = sb[, -1, drop = FALSE]
     check_dims(ncol(vals), 2 * K,
@@ -198,14 +286,30 @@ domain_estimates <- function(state, tick = NULL) {
                      "segment. A segment with no respondents in this domain,",
                      "or a survey version that names its columns differently,",
                      "would do this."))
-    tibble::tibble(variable = v,
+    # The row check the column check never covered. svyby omits a level with
+    #   no rows left after na.rm and says nothing about it, so a level that
+    #   emptied out between the recode and here would reach the report as a
+    #   phantom in the other two arms and a gap in this one.
+    check_dims(nrow(sb), length(lv),
+               paste0("svyby rows for '", v, "'"),
+               paste("A level was dropped between the recode and the",
+                     "estimate. This usually means every respondent at that",
+                     "level went unscored. Check the coverage table."))
+    got = tibble::tibble(variable = v,
                    level = rep(as.character(sb[[1]]), times = K),
                    segment = rep(seq_len(K), each = nrow(sb)),
                    p = as.numeric(as.matrix(vals[, seq_len(K)])),
-                   se = as.numeric(as.matrix(vals[, K + seq_len(K)])))
+                   se = as.numeric(as.matrix(vals[, K + seq_len(K)]))) |>
+      dplyr::filter(!is.na(level))
+    # Laid on the shared grid. With the two checks above this join can no
+    #   longer fill anything, which is the point: it is a guard that the three
+    #   estimators are on one level universe, not a device for papering over
+    #   the case where they are not.
+    dplyr::filter(meta, variable == v) |>
+      dplyr::select(variable, level, segment) |>
+      dplyr::left_join(got, by = c("variable", "level", "segment"))
   }) |>
-    purrr::list_rbind() |>
-    dplyr::filter(!is.na(level))
+    purrr::list_rbind()
   design = dplyr::bind_cols(design, share_ci(design$p, design$se, crit))
 
   if (!is.null(tick)) tick("corrected")
@@ -223,12 +327,6 @@ domain_estimates <- function(state, tick = NULL) {
   P_fixed = as.matrix(scored[, post_cols, drop = FALSE])
   modal_fixed = as.integer(scored$segment)
 
-  meta = purrr::map(cfg$aux, function(v)
-    tidyr::expand_grid(level = levels(scored[[v]]), segment = seq_len(K)) |>
-      dplyr::mutate(variable = v)) |>
-    purrr::list_rbind() |>
-    dplyr::mutate(idx = dplyr::row_number())
-
   # The indicator matrix for each domain is a property of the respondents, not
   #   of the replicate weights, so it is built once rather than eighty-four
   #   times. Same matrices, same answer, a fraction of the allocation.
@@ -236,30 +334,41 @@ domain_estimates <- function(state, tick = NULL) {
   #   silently yields a matrix with no columns. crossprod() then returns a
   #   0-row result, the estimate vector comes back short, and the failure
   #   surfaces several functions later as a dimension error naming neither the
-  #   variable nor the cause. Checked here, where the message can name both.
+  #   variable nor the cause. Checked in the meta block above, where the
+  #   message can name the variable.
   M_list = purrr::map(cfg$aux, function(v) {
-    lv = levels(scored[[v]])
-    check_dims(length(lv) > 0, TRUE, paste0("Domain variable '", v, "'"),
-               paste("It is not a factor in the scored frame, so it has no",
-                     "levels to estimate over. Re-apply the recodes."))
-    M = outer(as.character(scored[[v]]), lv, "==") + 0
+    M = outer(as.character(scored[[v]]), levels(scored[[v]]), "==") + 0
     M[is.na(M)] = 0
     M
   })
 
+  # attr "ok" marks a replicate whose classification table was too close to
+  #   singular for its inverse to mean anything. It is counted and kept, not
+  #   dropped -- see replicate_variance(). What it means here is not what it
+  #   means in measurement_se(), which is why each caller names it.
   theta = function(w_rep) {
-    wU = w_rep * bch_weights(P_fixed, modal_fixed, w_rep)
-    unlist(purrr::map(M_list, function(M)
+    B = bch_weights(P_fixed, modal_fixed, w_rep)
+    wU = w_rep * B
+    out = unlist(purrr::map(M_list, function(M)
       as.vector(t(crossprod(M, wU) / as.numeric(crossprod(M, w_rep))))),
       use.names = FALSE)
+    structure(out, ok = isTRUE(attr(B, "rcond") >= BCH_RCOND_MIN))
   }
 
-  est = theta(weights(des, "sampling"))
+  est = theta(scored[[cfg$weight]])
+  if (!isTRUE(attr(est, "ok")))
+    stop("The classification table is too close to singular to invert on the ",
+         "full sample (reciprocal condition number below ", BCH_RCOND_MIN,
+         "). That happens when a segment took almost no modal assignments. ",
+         "The corrected estimator cannot be computed here; the design-based ",
+         "one can.", call. = FALSE)
+
   check_dims(length(est), nrow(meta),
              "The corrected domain estimates",
              paste("The estimate vector and the label table are not the same",
                    "length, so no cell can be trusted to name its own level."))
-  V = replicate_variance(rep_des, theta, est)
+  rv = replicate_variance(rep_des, theta, as.numeric(est), keep = keep)
+  V = rv$V
   se = sqrt(diag(V))
 
   # Not truncated. The correction can legitimately place a share outside
@@ -273,10 +382,19 @@ domain_estimates <- function(state, tick = NULL) {
                         transform = FALSE, truncate = FALSE)) |>
     dplyr::select(variable, level, segment, p, se, lo, hi, boundary)
 
-  # Wald contrasts run on the design-based estimator deliberately. Modal
-  #   assignment attenuates differences, so a pair resolved there separates
-  #   despite the classification error, and the corrected column can only
-  #   widen it.
+  # Wald contrasts run on the design-based estimator, and the report now says
+  #   so beside the list of resolved pairs.
+  # The old comment justified this by claiming modal assignment attenuates
+  #   differences so the corrected column "can only widen" a resolved pair.
+  #   That does not follow. BCH inflates the point difference and inflates the
+  #   variance -- the inverse classification table has diagonal entries above
+  #   one and off-diagonal entries that are routinely negative -- so the ratio
+  #   of the two is not signed in general. Whether the uncorrected test is the
+  #   conservative one is an empirical property of this D, not of the method,
+  #   and it is not asserted anywhere any more.
+  # It stays on the design-based estimator because that estimator's covariance
+  #   is the one the analyst can also see the intervals for, so a reader can
+  #   check the test against a table in front of them.
   # Both the domain indicators and the assignment indicator are fixed across
   #   replicates. Only the weights move.
   Z_fixed = outer(modal_fixed, seq_len(K), "==") + 0
@@ -289,8 +407,9 @@ domain_estimates <- function(state, tick = NULL) {
                   as.numeric(crossprod(M, w_rep))))),
       use.names = FALSE)
   }
-  w_est = wald_theta(weights(des, "sampling"))
-  w_V = replicate_variance(rep_des, wald_theta, w_est)
+  w_est = wald_theta(scored[[cfg$weight]])
+  w_rv = replicate_variance(rep_des, wald_theta, w_est, keep = keep)
+  w_V = w_rv$V
 
   list(dom = dplyr::bind_rows(
          dplyr::mutate(naive, estimator = "Unweighted"),
@@ -303,6 +422,15 @@ domain_estimates <- function(state, tick = NULL) {
                        estimator = factor(
            estimator, levels = c("Unweighted", "Design-based", "Corrected"))),
        wald = list(est = w_est, V = w_V, meta = meta, df = degf(rep_des)),
+       # unstable is the number of replicates in which the classification table
+       #   was too ill-conditioned to invert meaningfully. They are kept in the
+       #   variance and disclosed rather than dropped; see replicate_variance().
+       unstable = rv$failed,
+       travel_ratio = rv$travel_ratio,
+       n_wild = rv$n_wild,
+       replicates = rv$replicates,
+       degf = as.integer(degf(rep_des)),
+       tested_on = "Design-based",
        values_header = "Share of each level falling in each segment:")
 }
 
@@ -427,7 +555,7 @@ plot_domain_height <- function(dom, variable, labels, level_order = NULL,
 #   a report that is source material for someone writing to policymakers, not a
 #   finished argument.
 
-# Requires: haven, readr, dplyr, purrr, officer, flextable, fs
+# Requires: haven, readr, dplyr, purrr, fs
 
 
 # Section 1 delivers the data.
@@ -537,73 +665,6 @@ export_data <- function(state, format = c("sav", "dta")) {
   else haven::write_dta(out, path)
 
   path
-}
-
-
-# Section 2 writes the tables. Excel's CSV reader assumes the system codepage
-#   unless there is a byte order mark, so accented response labels arrive as
-#   mojibake and the analyst concludes the pipeline is broken.
-#______________________________________________________________________________
-
-export_tables <- function(state) {
-  d = wise_path("output")
-  w = function(x, nm) {
-    if (is.null(x) || !nrow(x)) return(NULL)
-    p = fs::path(d, paste0(nm, ".csv"))
-    readr::write_excel_csv(x, p)
-    p
-  }
-
-  # A label column rather than a renamed one. Whoever pastes this into a deck
-  #   wants the words; whoever joins it back to the survey file needs the
-  #   variable, and replacing it would break that join silently.
-  labelled = function(x) {
-    if (is.null(x) || !nrow(x) || !"variable" %in% names(x)) return(x)
-    dplyr::relocate(
-      dplyr::mutate(x, label = purrr::map_chr(variable, function(v)
-        aux_label(state$cfg, v))),
-      label, .after = variable)
-  }
-
-  purrr::compact(list(
-    w(labelled(state$domains$dom), "domain_estimates"),
-    w(labelled(state$domains$marg), "domain_marginals"),
-    w(state$labels, "labels"),
-    w(state$coverage, "scoring_coverage"),
-    w(state$shares, "group_shares"),
-    w(state$quality, "assignment_quality"),
-    w(state$design_checks, "design_checks"),
-    w(state$recode_audit, "recode_audit"),
-    w(state$measure$shares, "measurement_model"),
-    w(state$measure$probs, "measurement_detail")))
-}
-
-
-# Section 3 builds the document.
-#______________________________________________________________________________
-
-# One document, two audiences. The main flow reads for a manager: what was
-#   asked, what was found, how far to trust it. Technical detail sits in boxes
-#   a manager can skip and a survey statistician will want. Everything
-#   exhaustive is in the appendices.
-
-# Written once as a list of blocks and rendered twice -- to the screen for
-#   review and to Word for keeping. If the two were built separately they would
-#   drift, and what was approved would not be what was saved.
-
-# autofit() sizes columns to their content and lets the table run off the page.
-#   set_table_properties(width = 1) sizes it to the available width instead,
-#   which is what stops the truncation.
-wise_table <- function(df, caption = NULL, size = 9) {
-  ft = flextable::flextable(df)
-  ft = flextable::fontsize(ft, size = size, part = "all")
-  ft = flextable::bold(ft, part = "header")
-  ft = flextable::theme_booktabs(ft)
-  ft = flextable::padding(ft, padding.top = 2, padding.bottom = 2, part = "all")
-  ft = flextable::valign(ft, valign = "top", part = "all")
-  ft = flextable::set_table_properties(ft, layout = "autofit", width = 1)
-  if (!is.null(caption)) ft = flextable::set_caption(ft, caption)
-  ft
 }
 
 # The three estimators as columns rather than rows. A reader compares them
@@ -752,7 +813,15 @@ status_table <- function(state) {
 
     "Every standard error comes from the survey design",
     "Verified",
-    "One stratified jackknife replicate set drives the measurement model, the domain estimates and the corrections. Recomputed here, not carried over.",
+    "One stratified jackknife replicate set drives the measurement model, the domain estimates and the corrections. Built on the whole frame and restricted with an index, so both stages carry the same replicates and the same degrees of freedom.",
+
+    "Replicate refits are warm-started from the full-sample solution",
+    "Our choice",
+    "Each replicate restarts at the fitted model rather than from fresh random starts. That tracks the mode instead of searching for it, so the interval expresses design variance around this solution and not uncertainty about which solution the likelihood should have found.",
+
+    "The pairs reported as separated were tested on the design-based column",
+    "Our choice",
+    "The corrected column is the one displayed. Correcting for classification error changes the difference and its standard error together, so neither test is guaranteed to be the conservative one; the design-based column is used because its intervals are printed and the test can be checked against them.",
 
     "The unweighted model reproduces an independent implementation",
     "Verified elsewhere",
@@ -1028,9 +1097,12 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
     "Technical. Pairs are separated by a design-based Wald test on the",
     "difference, using the replicate covariance between the two estimates and",
     "Holm-adjusted within each domain. The tests run on the design-based",
-    "column: placement attenuates differences,",
-    "so a pair resolved there separates despite that, and the corrected",
-    "column can only widen it. The replicate covariance has rank at most the",
+    "column, whose intervals are printed here, so the test can be checked",
+    "against a table the reader has in front of them. It is not a claim that",
+    "the design-based test is the conservative one: correcting for",
+    "classification error moves the difference and its standard error at once,",
+    "and the ratio of the two is not signed in general.",
+    "The replicate covariance has rank at most the",
     "number of replicates, so a joint test across more dimensions than there",
     "are replicates is not available.")
     else paste(
@@ -1099,14 +1171,6 @@ marginal_table <- function(marg, variable) {
 
 # ---- renderers --------------------------------------------------------------
 
-# Word output needs officer and flextable, and flextable needs Rtools to build
-#   on a mirror that carries no binary for it. An analyst cannot install
-#   Rtools. So the deliverable that always works is a self-contained HTML file:
-#   one document, every figure embedded as a data URI, no external stylesheet
-#   and no network. Word opens it directly if a .docx is what somebody wants.
-
-# The block list is rendered a third way rather than rebuilt. Anything else
-#   would drift from what was reviewed on screen.
 
 REPORT_CSS <- "
 :root {
@@ -1167,122 +1231,7 @@ report_appendices <- function(state) {
     html_table(status_table(state)))
 }
 
-build_report_html <- function(state, summary_text = NULL,
-                              not_answered = NULL) {
-  doc = shiny::tagList(
-    report_html(state, summary_text, not_answered),
-    report_appendices(state))
 
-  path = wise_path("output", "report.html")
-
-  writeLines(c(
-    "<!doctype html>",
-    "<html lang=\"en\"><head>",
-    "<meta charset=\"utf-8\">",
-    paste0("<title>DrSvyR report -- ",
-           fs::path_file(state$data_file), "</title>"),
-    "<style>", REPORT_CSS, "</style>",
-    "</head><body>",
-    as.character(doc),
-    "</body></html>"), path, useBytes = TRUE)
-
-  path
-}
-
-build_report <- function(state, summary_text = NULL, not_answered = NULL) {
-  # Named rather than left to fail inside officer:: with a namespace error an
-  #   analyst cannot act on. flextable in particular needs Rtools where the
-  #   mirror carries no binary, which is not something an analyst can install.
-  missing = c("officer", "flextable")[
-    !vapply(c("officer", "flextable"), requireNamespace, logical(1),
-            quietly = TRUE)]
-  if (length(missing))
-    stop("Word output needs ", paste(missing, collapse = " and "),
-         ", which ", if (length(missing) > 1) "are" else "is",
-         " not installed here. Use the HTML report instead: it carries the ",
-         "same content, opens in Word, and needs nothing beyond what the app ",
-         "already uses.", call. = FALSE)
-
-  labs = state$labels$Label
-  doc = officer::read_docx()
-
-  # Boxes are shaded paragraphs with a rule above and below. Word has no first
-  #   class text box that survives a template change, and a shaded block reads
-  #   the same and cannot break the flow of the document.
-  box_fmt = officer::fp_par(
-    shading.color = "#EFEFEF",
-    border.top = officer::fp_border(color = "#B0B0B0", width = 1),
-    border.bottom = officer::fp_border(color = "#B0B0B0", width = 1),
-    padding = 6)
-
-  purrr::walk(report_blocks(state, summary_text, not_answered), function(x) {
-    doc <<- switch(
-      x$type,
-      h1     = officer::body_add_par(doc, x$value, style = "heading 1"),
-      h2     = officer::body_add_par(doc, x$value, style = "heading 2"),
-      h3     = officer::body_add_par(doc, x$value, style = "heading 3"),
-      p      = officer::body_add_par(doc, x$value, style = "Normal"),
-      bullet = officer::body_add_par(doc, paste0("• ", x$value),
-                                     style = "Normal"),
-      tick   = officer::body_add_par(doc, paste0("✓ ", x$value),
-                                     style = "Normal"),
-      box    = officer::body_add_fpar(
-        doc, officer::fpar(officer::ftext(x$value,
-                                          officer::fp_text(font.size = 9,
-                                                           italic = TRUE)),
-                           fp_p = box_fmt)),
-      table  = flextable::body_add_flextable(doc, wise_table(x$value, x$caption)),
-      # 6.0 rather than 6.4. read_docx()'s default template is A4 in some
-      #   locales, whose text width with one-inch margins is 6.27 inches, and
-      #   a 6.4-inch image on it is cropped at the right margin with no
-      #   warning. Height is capped so a tall figure does not run off the page
-      #   instead.
-      plot   = officer::body_add_gg(doc, value = x$value, width = 6.0,
-                                    height = min(x$height, 7.5), res = 200),
-      doc)
-    if (identical(x$type, "plot") && !is.null(x$caption))
-      doc <<- officer::body_add_par(doc, x$caption, style = "Normal")
-  })
-
-  # ---- appendices -----------------------------------------------------------
-
-  doc = officer::body_add_break(doc)
-  doc = officer::body_add_par(doc, "Appendix A. Full estimates",
-                              style = "heading 1")
-  doc = officer::body_add_par(
-    doc, paste("Every quantity in the report with its 95 per cent interval.",
-               paste("Intervals on a share are formed on the logit scale,",
-                     "which keeps them inside 0 to 1 without truncation. A",
-                     "dagger marks a corrected cell whose estimate or",
-                     "interval falls outside that range: the correction",
-                     "permits it, and clipping to the boundary would report",
-                     "a number the estimator did not produce."),
-
-               "Diagnostic tables and the record of how the specification was",
-               "reached are in the CSV files supplied alongside."),
-    style = "Normal")
-  purrr::walk(state$cfg$aux, function(v) {
-    doc <<- officer::body_add_par(doc, aux_heading(state$cfg, v),
-                                  style = "heading 2")
-    doc <<- flextable::body_add_flextable(
-      doc, wise_table(domain_wide(state$domains$dom, v, labs,
-                                  aux_levels(state, v)), NULL, 8))
-  })
-
-  doc = officer::body_add_break(doc)
-  doc = officer::body_add_par(doc, "Appendix B. What was tested",
-                              style = "heading 1")
-  doc = officer::body_add_par(
-    doc, paste("What was checked, what rests on the literature, what was a",
-               "choice, and what has not been tested. The last of these is the",
-               "column to read first."),
-    style = "Normal")
-  doc = flextable::body_add_flextable(doc, wise_table(status_table(state), NULL, 8))
-
-  path = wise_path("output", "report.docx")
-  print(doc, target = path)
-  path
-}
 
 report_html <- function(state, summary_text = NULL, not_answered = NULL) {
   purrr::map(report_blocks(state, summary_text, not_answered), function(x) {

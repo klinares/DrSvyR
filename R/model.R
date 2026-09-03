@@ -556,28 +556,53 @@ share_ci <- function(p, se, crit, transform = TRUE, truncate = TRUE) {
 #   for the probabilities would need a delta method; computing the plotted
 #   quantity inside the replicate function avoids it.
 
-measurement_se <- function(cfg, dat, fit, des, rep_des) {
+# rep_des is the replicate set built on the WHOLE frame; keep is a logical
+#   index into its rows picking out the respondents the model was fitted on,
+#   and dat is those same rows in the same order. Rebuilding the design on dat
+#   instead would drop any PSU that contributed no item-complete respondent and
+#   silently change the scaling and the degrees of freedom -- the conditional
+#   subpopulation approach SURV701 warns against. See build_rep_design().
+measurement_se <- function(cfg, dat, fit, rep_des, keep) {
   init_parallel(cfg)
   inp = make_inputs(dat, cfg$items, cfg$cats)
   K = length(fit$pi)
   ref = fit[c("pi", "rho")]
 
+  if (sum(keep) != nrow(dat))
+    stop("keep selects ", sum(keep), " rows but dat has ", nrow(dat),
+         ". They must be the same respondents in the same order, or every ",
+         "replicate is weighting the wrong people.", call. = FALSE)
+
   # The index grid for the profile quantities is the same in every replicate.
   #   Built here, walked there.
   prof_grid = tidyr::expand_grid(k = seq_len(K), j = seq_along(cfg$items))
 
+  prof_of = function(f) purrr::map2_dbl(prof_grid$k, prof_grid$j, function(k, j) {
+    r = f$rho[[j]]
+    (sum(seq_len(nrow(r)) * r[, k]) - 1) / (nrow(r) - 1)
+  })
+
+  theta_vec = function(f)
+    c(f$pi, unlist(purrr::map(f$rho, as.vector), use.names = FALSE), prof_of(f))
+
+  # maxit matches the full-sample fit. It was 500 here and 800 there for no
+  #   stated reason, which is a difference in how hard two halves of the same
+  #   estimate are tried.
   theta = function(w_rep) {
-    f = align_to(em_run(inp$Y, inp$OH, cfg$cats, w_rep, K, init = ref,
-                        maxit = 500L, tol = 1e-8), fit)
-    prof = purrr::map2_dbl(prof_grid$k, prof_grid$j, function(k, j) {
-      r = f$rho[[j]]
-      (sum(seq_len(nrow(r)) * r[, k]) - 1) / (nrow(r) - 1)
-    })
-    c(f$pi, unlist(purrr::map(f$rho, as.vector), use.names = FALSE), prof)
+    raw = em_run(inp$Y, inp$OH, cfg$cats, w_rep, K, init = ref,
+                 maxit = 800L, tol = 1e-8)
+    structure(theta_vec(align_to(raw, fit)), ok = isTRUE(raw$converged))
   }
 
-  est = theta(weights(des, "sampling"))
-  se = sqrt(diag(replicate_variance(rep_des, theta, est)))
+  # The centre of the replicate spread is the full-sample fit itself, not a
+  #   warm-started refit of it. The refit converged back to the same place, so
+  #   this changes no number materially -- but it removes a whole EM run, and
+  #   it removes the state in which shares and probs were read off fit while
+  #   the profile was read off the refit and the two could disagree in the
+  #   last decimal of the same table.
+  est = theta_vec(fit)
+  rv = replicate_variance(rep_des, theta, est, keep = keep)
+  se = sqrt(diag(rv$V))
 
   n_pi = K
   n_rho = sum(cfg$cats) * K
@@ -606,6 +631,9 @@ measurement_se <- function(cfg, dat, fit, des, rep_des) {
   probs = dplyr::bind_cols(probs, share_ci(probs$prob, probs$se, crit)) |>
     dplyr::mutate(dplyr::across(c(prob, se, lo, hi), \(x) round(x, 3)))
 
+  # est is now theta_vec(fit), so this block, the shares block and the probs
+  #   block are all reading the same fitted model rather than two of them
+  #   reading it and one reading a refit.
   profile = tidyr::expand_grid(group = seq_len(K), item = cfg$items) |>
     dplyr::mutate(value = est[(n_pi + n_rho + 1):length(est)],
                   se = se[(n_pi + n_rho + 1):length(se)])
@@ -615,8 +643,21 @@ measurement_se <- function(cfg, dat, fit, des, rep_des) {
   profile = dplyr::bind_cols(profile,
                              share_ci(profile$value, profile$se, crit))
 
+  # failed is the number of replicate refits that hit maxit without meeting the
+  #   convergence tolerance. They are kept in the variance and counted here,
+  #   and the report says so. Dropping them would remove a deviation from the
+  #   spread and could only narrow the interval; keeping them leaves it biased
+  #   in a direction nobody can sign, which is worse to hide and better to
+  #   state. Nothing downstream reads this except the report and the reflex
+  #   that discloses it.
+  # degf travels with the estimates so the domain stage can check that it is
+  #   working off the same replicate set, which is what the report claims.
   list(shares = shares, probs = probs, profile = profile,
-       replicates = ncol(weights(rep_des, "analysis")))
+       replicates = rv$replicates,
+       failed = rv$failed,
+       travel_ratio = rv$travel_ratio,
+       n_wild = rv$n_wild,
+       degf = as.integer(degf(rep_des)))
 }
 # Five segment names in one horizontal legend is wider than the page, and
 #   ggplot crops such a legend at both ends rather than wrapping it: the report

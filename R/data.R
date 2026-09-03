@@ -600,13 +600,53 @@ demo_candidates <- function(codebook, max_categories = 30L) {
     dplyr::arrange(variable)
 }
 
+# Every code that means "no answer" for THIS variable: the global list the
+#   analyst ticked at the Items stage, plus whatever the file declares for this
+#   column specifically.
+# The global list is assembled by detect_na_codes() over the BATTERY candidate
+#   variables and nothing else, so a demographic whose refusal code is 888888
+#   while the battery's is 8 was never covered by it. read_survey() uses
+#   user_na = TRUE, which keeps user-missing values live on purpose, so those
+#   codes arrived at the recode screen as ordinary labelled categories, were
+#   given group names, and became levels of a perfectly valid factor. One
+#   question with four real answers came out with ten.
+# na_range is read as well as na_values. SPSS declares "9990 THRU HIGHEST" as a
+#   range rather than a list, and reading only na_values misses every code in
+#   it.
+demo_na_codes <- function(x, na_codes = numeric(0)) {
+  v        = suppressWarnings(as.numeric(unclass(x)))
+  declared = suppressWarnings(as.numeric(attr(x, "na_values", exact = TRUE)))
+  rng      = suppressWarnings(as.numeric(attr(x, "na_range",  exact = TRUE)))
+
+  in_range = if (length(rng) == 2L && all(is.finite(rng)))
+    unique(v[!is.na(v) & v >= min(rng) & v <= max(rng)]) else numeric(0)
+
+  unique(c(as.numeric(na_codes), declared[!is.na(declared)], in_range))
+}
+
+# The one place a domain variable becomes a factor. Its categories are the
+#   values present in the data, in the order the source declares them.
+# A level the file remembers and the data does not have is not a category: it
+#   is a row that the corrected arm estimates as 0/0, svyby omits without a
+#   word, and the report prints as a phantom group. droplevels() after the
+#   factor() is belt and braces -- intersect() should have removed them
+#   already, and if it has not, this is where it shows rather than three
+#   screens later.
+domain_factor <- function(val, lv) {
+  lv = intersect(lv, unique(val[!is.na(val)]))
+  if (!length(lv))
+    stop("No level survived the recode: every value was mapped to blank or to ",
+         "a nonresponse code.", call. = FALSE)
+  droplevels(factor(val, levels = lv))
+}
+
 # Labels with their counts, in code order. The count is the point: a category
 #   holding eleven people will produce an estimate no reader should act on, and
 #   that is visible here and nowhere later.
 observed_levels <- function(raw, variable, na_codes = numeric(0)) {
   x = raw[[variable]]
   v = as.numeric(unclass(x))
-  keep = !(v %in% na_codes)
+  keep = !(v %in% demo_na_codes(x, na_codes))
 
   tibble::tibble(
     code = v[keep],
@@ -618,8 +658,9 @@ observed_levels <- function(raw, variable, na_codes = numeric(0)) {
 # For a numeric variable there are no labels to show, so the distribution is
 #   what the analyst reads before choosing cut points.
 numeric_summary <- function(raw, variable, na_codes = numeric(0)) {
-  v = as.numeric(unclass(raw[[variable]]))
-  v = v[!(v %in% na_codes) & !is.na(v)]
+  x = raw[[variable]]
+  v = as.numeric(unclass(x))
+  v = v[!(v %in% demo_na_codes(x, na_codes)) & !is.na(v)]
   tibble::tibble(n = length(v), min = min(v), q25 = stats::quantile(v, .25),
                  median = stats::median(v), q75 = stats::quantile(v, .75),
                  max = max(v))
@@ -643,7 +684,7 @@ numeric_summary <- function(raw, variable, na_codes = numeric(0)) {
 apply_map <- function(x, map, na_codes) {
   v = as.numeric(unclass(x))
   src = as.character(haven::as_factor(x))
-  src[v %in% na_codes] = NA_character_
+  src[v %in% demo_na_codes(x, na_codes)] = NA_character_
 
   known = src %in% names(map) | is.na(src)
   unmatched = unique(src[!known])
@@ -661,7 +702,7 @@ apply_map <- function(x, map, na_codes) {
 
 apply_cut <- function(x, breaks, labels, na_codes) {
   v = as.numeric(unclass(x))
-  v[v %in% na_codes] = NA_real_
+  v[v %in% demo_na_codes(x, na_codes)] = NA_real_
   as.character(cut(v, breaks = breaks, labels = labels))
 }
 
@@ -690,8 +731,7 @@ build_demo_frame <- function(raw, specs, na_codes = numeric(0)) {
     lv = switch(s$kind,
       map = unique(unname(s$map[!is.na(s$map) & nzchar(s$map)])),
       cut = s$labels)
-    lv = intersect(lv, unique(val[!is.na(val)]))
-    factor(val, levels = lv)
+    domain_factor(val, lv)
   })
 
   tibble::as_tibble(cols)

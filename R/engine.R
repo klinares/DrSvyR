@@ -153,6 +153,21 @@ em_run <- function(Y, OH, cats, w, K, init = NULL, maxit = 800L, tol = 1e-8) {
 
   out = reduce(seq_len(maxit), step, .init = st0)
   out$converged = out$done
+
+  # step() computes post and ll from the parameters it was HANDED and returns
+  #   them beside the parameters it produced, so out$post was one M-step behind
+  #   out$pi and out$rho. At convergence the gap is below tol and nothing
+  #   noticed; on a run that stopped at maxit it is a posterior that is not the
+  #   E-step of the model being reported, and entropy, the bivariate residuals
+  #   and the BCH classification table are all read off it. One more E-step
+  #   settles it.
+  # out$ll is deliberately left where it was. It is what pick_survivors() ranks
+  #   the short starts on and what BIC is formed from, and moving it by an
+  #   epsilon would change which twenty of two hundred starts are finished --
+  #   which could change the reported maximum and break parity with the
+  #   reference reports for no methodological gain. The lag it carries is
+  #   smaller than the convergence tolerance wherever the number is used.
+  out$post = posterior_of(out$pi, out$rho, Y)
   out
 }
 
@@ -261,18 +276,38 @@ item_discrimination <- function(fit, items) {
 #   with far fewer parameters. 
 # Near or above 1 says they reorder the items, which is structure no single 
 #   factor can hold.
+
+# Both dispersions are weighted by segment size and computed about a weighted
+#   centre. Unweighted, sd_level is the spread of K numbers in which a segment
+#   holding four per cent of the population counts as much as one holding
+#   forty, so the ratio moved with the size of the smallest segment rather than
+#   with the shape of the battery. Weighting also puts the two halves on one
+#   convention: both are now population quantities rather than one population
+#   and one sample statistic.
+# The ratio is descriptive and comparable within a battery, not across
+#   batteries: the pattern residuals are constrained to sum to zero within a
+#   segment, so their spread depends on the number of items. Nothing selects on
+#   it and no threshold is attached to it.
 level_pattern_ratio <- function(fit, items) {
   K = length(fit$pi)
+  pi_k = fit$pi
   d = map(seq_len(K), function(k)
-    tibble(segment = k, item = items,
+    tibble(segment = k, share = pi_k[k], item = items,
            m = map_dbl(fit$rho, function(r)
              (sum(seq_len(nrow(r)) * r[, k]) - 1) / (nrow(r) - 1)))) |>
     list_rbind() |>
     group_by(segment) |>
     mutate(level = mean(m)) |>
     ungroup()
-  lev = distinct(d, segment, level)$level
-  tibble(sd_level = sd(lev), sd_pattern = sd(d$m - d$level)) |>
+
+  wsd = function(x, wt) {
+    wt = wt / sum(wt)
+    sqrt(sum(wt * (x - sum(wt * x))^2))
+  }
+
+  lev = distinct(d, segment, share, level)
+  tibble(sd_level = wsd(lev$level, lev$share),
+         sd_pattern = wsd(d$m - d$level, d$share)) |>
     mutate(ratio = sd_pattern / sd_level)
 }
 
@@ -294,7 +329,21 @@ bvr_pairs <- function(df, w, items, fit) {
     ok = !is.na(df[[items[a]]]) & !is.na(df[[items[b]]])
     obs = as.matrix(xtabs(w ~ factor(df[[items[a]]], seq_len(nrow(fit$rho[[a]]))) +
                              factor(df[[items[b]]], seq_len(nrow(fit$rho[[b]]))))) / sum(w[ok])
-    exp_p = fit$rho[[a]] %*% (fit$pi * t(fit$rho[[b]]))
+
+    # The same conditioning has to be applied to the other side of the
+    #   comparison, and until now it was not. obs is the distribution among the
+    #   respondents who answered BOTH items; fit$pi is the segment distribution
+    #   in the whole analysis frame. Subtracting one from the other charges the
+    #   pair for who answered it, and reports item nonresponse as local
+    #   dependence. The mixing proportions are therefore re-estimated on the
+    #   pairwise-complete rows from the posteriors already in hand.
+    # Under item-complete fitting ok is every row and this reduces exactly to
+    #   fit$pi, because the EM sets pi = colSums(w * post) / sum(w). So nothing
+    #   moves on a complete-case run and the reference reports still match.
+    pi_ok = if (all(ok)) fit$pi
+            else colSums(w[ok] * fit$post[ok, , drop = FALSE]) / sum(w[ok])
+
+    exp_p = fit$rho[[a]] %*% (pi_ok * t(fit$rho[[b]]))
     tibble(item_a = items[a], item_b = items[b],
            bvr = 0.5 * sum(abs(obs - exp_p)))
   }) |>
@@ -314,6 +363,24 @@ bvr_pairs <- function(df, w, items, fit) {
 #   replicate scaling, and survey.lonely.psu governs linearization rather 
 #   than replicate construction, so continuing would  understate variance 
 #   in the strata with least information.
+
+# This is built on the WHOLE analysis frame, never on a case-excluded subset.
+#   Physically subsetting the data and rebuilding is the conditional
+#   subpopulation approach: it drops PSUs, changes n_h and therefore the
+#   n_h / (n_h - 1) scaling, and changes the degrees of freedom, so the
+#   interval is no longer the design variance of a domain in the sample that
+#   was actually drawn. SURV701 states the rule directly -- subset the design,
+#   not the data -- and names dropped PSUs and singleton SECUs as the failure
+#   mode. Every consumer here takes the full design and passes a `keep` index;
+#   see replicate_variance() and subset() for the two ways that is done.
+
+# mse = TRUE, explicitly. survey's default is getOption("survey.replicates.mse"),
+#   which is FALSE, and svrVar() then centres the replicate spread on the mean
+#   of the replicates. replicate_variance() below centres on the full-sample
+#   estimate, which is the JRR formula in SURV701. Left at the default the two
+#   halves of this workflow would report standard errors from two different
+#   estimators and the report would compare their widths as though they were
+#   one.
 build_rep_design <- function(dat, cfg) {
   lonely = dat |>
     distinct(.data[[cfg$strata]], .data[[cfg$psu]]) |>
@@ -328,20 +395,65 @@ build_rep_design <- function(dat, cfg) {
 
   des = svydesign(ids = reformulate(cfg$psu), strata = reformulate(cfg$strata),
                    weights = reformulate(cfg$weight), data = dat, nest = TRUE)
-  list(des = des, rep_des = as.svrepdesign(des, type = "JKn"))
+  list(des = des, rep_des = as.svrepdesign(des, type = "JKn", mse = TRUE))
 }
 
-# Same estimator survey::withReplicates uses,
-#    V = scale * sum_r rscale_r (theta_r - theta_hat)(theta_r - theta_hat)',
-#    but the expensive part (one refit per replicate) is mapped, not looped.
-replicate_variance <- function(rep_des, theta_fun, theta_hat) {
+
+# V = scale * sum_r rscale_r (theta_r - theta_hat)(theta_r - theta_hat)', the
+#   delete-one JRR form in SURV701, centred on the full-sample estimate. That
+#   is survey::withReplicates only when the design carries mse = TRUE, which is
+#   why build_rep_design() sets it rather than leaving it at survey's default.
+#   The expensive part (one refit per replicate) is mapped, not looped.
+
+# keep is a logical index into the rows of the FULL design. Restricting the
+#   replicate weights to those rows, rather than rebuilding the design on those
+#   rows, is the unconditional subpopulation approach: the replicate structure,
+#   the n_h / (n_h - 1) scaling and the degrees of freedom all stay those of
+#   the sample that was drawn. For a ratio estimator, and for the weighted EM,
+#   a zero-weight row and an absent row contribute identically, so restricting
+#   the rows here and carrying zeros are the same computation at lower cost.
+
+# theta_fun may mark a replicate by setting attr(x, "ok") to FALSE. Such a
+#   replicate is COUNTED AND KEPT, not dropped: dropping a deviation can only
+#   narrow the spread, whereas keeping it leaves the variance biased in an
+#   unsigned direction and the count says so. The caller names what "not ok"
+#   meant, because it is not the same thing in every use.
+replicate_variance <- function(rep_des, theta_fun, theta_hat, keep = NULL) {
   Wm = weights(rep_des, type = "analysis")
-  Theta = do.call(rbind, future_map(seq_len(ncol(Wm)),
-                                     function(r) theta_fun(Wm[, r]),
-                                     .options = furrr_options(seed = NULL)))
+
+  if (!is.null(keep)) {
+    if (length(keep) != nrow(Wm))
+      stop("The keep index has ", length(keep), " entries but the replicate ",
+           "weights have ", nrow(Wm), " rows. It must index the full design ",
+           "the replicate set was built on, not an already-subset frame.",
+           call. = FALSE)
+    Wm = Wm[keep, , drop = FALSE]
+  }
+
+  reps = future_map(seq_len(ncol(Wm)), function(r) theta_fun(Wm[, r]),
+                    .options = furrr_options(seed = NULL))
+
+  bad = sum(map_lgl(reps, function(x) isFALSE(attr(x, "ok"))))
+  Theta = do.call(rbind, map(reps, as.numeric))
+
   d = sweep(Theta, 2, theta_hat, "-")
-  rep_des$scale * crossprod(d * sqrt(rep_des$rscales))
+  travel = sqrt(rowSums(d^2))
+
+  list(V = rep_des$scale * crossprod(d * sqrt(rep_des$rscales)),
+       replicates = ncol(Wm),
+       failed = bad,
+       # Two numbers, not a function and a table. A replicate can sit far
+       #   from the full-sample estimate for two reasons that call for
+       #   opposite responses: the parameter is genuinely weakly identified,
+       #   which small segments and modest separation both do, or one refit
+       #   landed in a different configuration and align_to() matched it
+       #   anyway. A heavy right tail says the second. Nothing is ever dropped
+       #   on the strength of this; it is reported so a wide interval can be
+       #   attributed rather than guessed at.
+       travel_ratio = max(travel) / stats::median(travel),
+       n_wild = sum(travel > 5 * stats::median(travel)))
 }
+
 
 # Modal assignment is an error-prone measurement of true segment, and cross
 #    tabbing it against anything pulls the association toward the marginal. 
@@ -350,11 +462,21 @@ replicate_variance <- function(rep_des, theta_fun, theta_hat) {
 #   replaced by row W of its inverse. 
 # Entries can come out negative, which is a property of the correction rather 
 # than a fault, and rows still sum to one because D's rows do.
+
+# How well conditioned D has to be before its inverse is worth anything. An
+#   exactly singular table stops the run because solve() refuses it; a
+#   near-singular one -- a segment that took very few assignments -- does not,
+#   and the correction it produces is unstable rather than wrong-looking. The
+#   reciprocal condition number is attached to every call so the caller can
+#   count the replicates where it fell through this floor and disclose them,
+#   which is the only honest treatment available: there is nothing to repair.
+BCH_RCOND_MIN <- 1e-8
+
 bch_weights <- function(post, modal, w) {
   K = ncol(post)
   num = crossprod(w * post, outer(modal, seq_len(K), `==`) + 0)
   D = sweep(num, 1, rowSums(num), "/")
-  solve(D)[modal, , drop = FALSE]
+  structure(solve(D)[modal, , drop = FALSE], rcond = rcond(D))
 }
 
 
@@ -451,6 +573,12 @@ rules_domain <- paste(
   "   pair, say the data do not separate them; do not say they are equal or",
   "   similar, since an unresolved pair may differ by more than this sample",
   "   can detect.",
+  "9. The differences listed were tested on the estimator named beside them,",
+  "   which is not always the estimator whose numbers are printed. Do not",
+  "   claim a tested difference is larger or smaller under the other one, and",
+  "   do not describe either as the conservative reading; whether correcting",
+  "   for classification error strengthens or weakens a contrast depends on",
+  "   the correction, and neither direction is guaranteed.",
   sep = "\n")
 
 # dictionary supplies the question wording and the response labels, in the 
@@ -562,20 +690,37 @@ format_domain_block <- function(
   var_label = var_label %||% variable
   d = pick_estimator(dom, est) |> filter(variable == !!variable)
   m = filter(marg, variable == !!variable)
+  # n_scored is what domain_marginals() supplies now. The fallback keeps an
+  #   older marginal frame -- a cached one, or one built by a script off cfg.R
+  #   -- working rather than failing on a column name.
+  n_basis = if("n_scored" %in% names(m)) m$n_scored else m$n
   segs = sort(unique(d$segment))
   lines = map_chr(segs, function(k) {
     nm = if(is.null(labels)) paste0("Segment ", k) else labels[k]
     dd = filter(d, segment == k)
     cells = map_chr(seq_len(nrow(dd)), function(i) {
-      n_lv = m$n[m$level == dd$level[i]]
-      flag = if(length(n_lv) && n_lv < min_n) " [too small]" else ""
+      # The count a small-cell flag has to be read against is the number of
+      #   respondents the estimate rests on, which is the scored count, not
+      #   everyone in the file at that level. Where the two differ it is item
+      #   nonresponse that separates them, and flagging on the larger of the
+      #   two says a cell is adequate on the strength of respondents who
+      #   contributed nothing to it.
+      n_lv = n_basis[m$level == dd$level[i]]
+      flag = if(length(n_lv) && !is.na(n_lv) && n_lv < min_n) " [too small]" else ""
       sprintf("%s %.2f [%.2f, %.2f]%s", dd$level[i], dd$p[i], dd$lo[i],
               dd$hi[i], flag)
     })
     str_glue("  {nm}\n      {paste(cells, collapse = ', ')}")
   })
   shares = map_chr(seq_len(nrow(m)), function(i)
-    sprintf("%s %d%% (n = %d)", m$level[i], round(100 * m$weighted[i]), m$n[i]))
+    sprintf("%s %d%% (scored n = %d)", m$level[i], round(100 * m$weighted[i]),
+            n_basis[i]))
+  # "In the population" is now true of this line: the marginal is a weighted
+  #   estimate over the whole design, not over the respondents the model could
+  #   place. The count beside it is the scored count, and it is labelled as
+  #   such, because the two answer different questions and running them
+  #   together is what let a composition estimated on scored respondents be
+  #   read as the composition of the population.
   str_glue("{var_label} in the population: {paste(shares, collapse = ', ')}\n",
            "{values_header}\n",
            paste(lines, collapse = "\n"))
@@ -642,8 +787,10 @@ domain_separations <- function(dom, variable, labels = NULL,
       filter(p_adj < alpha) |>
       arrange(segment, p_adj)
     crit_line = paste0("  Criterion: pairwise design-based tests on the ",
-                       "replicate covariance, Holm-adjusted within this ",
-                       "demographic.")
+                       "replicate covariance of the ", est, " estimator, ",
+                       "Holm-adjusted within this demographic. The estimates ",
+                       "printed above may come from a different estimator; ",
+                       "where they do, this line says which was tested.")
   }
   if(nrow(hits) == 0)
     return(paste(crit_line, "  None: no pair of levels is resolved.", sep = "\n"))
