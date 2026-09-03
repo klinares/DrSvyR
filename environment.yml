@@ -1,0 +1,95 @@
+# DrSvyR runtime environment.
+#
+# Two jobs, and it is worth being clear which is which:
+#   - on the Linux server, IT builds this once and the app runs inside it;
+#   - on a Windows desktop, an analyst builds it with launch.sh and gets the
+#     same versions the server has.
+# Neither route needs Rtools or a compiler. Every package below has a
+# conda-forge binary for linux-64 and win-64.
+#
+# conda-forge only, and strictly. Mixing the defaults channel with conda-forge
+#   is the single most common way an R environment breaks: the two build
+#   against different toolchains, and the resulting segfault names no package.
+#   nodefaults is not decoration.
+#
+# VERIFY BEFORE YOU TRUST THIS. It is assembled from what the code calls, and
+#   the availability of each package on conda-forge has NOT been checked from
+#   inside this file's authoring environment. Run:
+#       conda env create -f environment.yml -n drsvyr-check --dry-run
+#   and fix what the solver refuses. r-ellmer is the one to check first: it is
+#   the newest package here and the reason renv was ruled out.
+
+name: drsvyr
+
+channels:
+  - conda-forge
+  - nodefaults
+
+dependencies:
+  # ---- R itself ------------------------------------------------------------
+  # Pinned to a minor version, not an exact build. Too loose and the server and
+  #   the desktop drift; too tight and the solver cannot find a working set for
+  #   one platform or the other.
+  - r-base=4.4
+
+  # ---- the app shell -------------------------------------------------------
+  - r-shiny
+  - r-bslib
+
+  # ---- tidyverse members actually used -------------------------------------
+  # The tidyverse meta-package is deliberately absent. It pulls googledrive,
+  #   googlesheets4, httr, rvest, xml2, broom, modelr, dbplyr and reprex, none
+  #   of which this code touches, and on a curated internal mirror every one of
+  #   those is another package somebody has to approve.
+  - r-dplyr
+  - r-purrr
+  - r-tibble
+  - r-tidyr
+  - r-stringr
+  - r-ggplot2
+  - r-readr
+  - r-forcats
+  - r-lubridate
+  - r-rlang
+
+  # ---- survey methodology --------------------------------------------------
+  # r-survey carries the replicate designs and svyby; r-haven reads SPSS and
+  #   Stata with user_na = TRUE, which is what keeps the declared nonresponse
+  #   codes visible instead of silently NA.
+  - r-survey
+  - r-haven
+  - r-janitor
+
+  # ---- estimation ----------------------------------------------------------
+  # r-clue is solve_LSAP, which aligns segment order across replicate refits.
+  #   Without it the jackknife averages parameters that do not refer to the
+  #   same segments and the variance is meaningless rather than merely wrong.
+  - r-clue
+  - r-matrixstats
+
+  # ---- parallel search -----------------------------------------------------
+  - r-future
+  - r-furrr
+
+  # ---- output --------------------------------------------------------------
+  # r-zip builds the download. Its compressor is bundled, so unlike
+  #   utils::zip() there is no external binary on the PATH to be missing --
+  #   which there would be, on a Windows desktop without Rtools.
+  # officer and flextable are NOT here. The Word report is gone; those two were
+  #   the only packages in this project that needed Rtools.
+  - r-zip
+  - r-knitr
+  - r-base64enc
+  - r-viridis
+  - r-jsonlite
+  - r-yaml
+  - r-digest
+  - r-fs
+  - r-here
+
+  # ---- the language model --------------------------------------------------
+  # Optional at runtime: every call is guarded, and the app runs without prose
+  #   if this is absent. It is here because the internal CRAN mirror carries a
+  #   version too old to work, which is the reason this environment exists at
+  #   all rather than renv.
+  - r-ellmer
