@@ -64,6 +64,24 @@ fi
 
 conda activate "${ENV_NAME}"
 
+# ---- 2b. install the package itself ----------------------------------------
+# The environment supplies the dependencies; the package is installed into it
+#   from this checkout. Reinstalled whenever the source is newer than what is
+#   installed, so a git pull is enough to update -- the analyst never runs
+#   R CMD INSTALL themselves.
+NEED_INSTALL=1
+if R --quiet --no-save -e "q(status = !requireNamespace('drsvyr', quietly = TRUE))" >/dev/null 2>&1; then
+  NEWEST=$(find "${HERE}/R" "${HERE}/DESCRIPTION" -newer \
+    "$(R --quiet --no-save -e "cat(system.file('DESCRIPTION', package='drsvyr'))" 2>/dev/null | tail -1)" \
+    2>/dev/null | head -1)
+  [ -z "${NEWEST}" ] && NEED_INSTALL=0
+fi
+if [ "${NEED_INSTALL}" = "1" ]; then
+  say "Installing DrSvyR into the environment."
+  R CMD INSTALL "${HERE}" \
+    || die "The package could not be installed. Send the output above for help."
+fi
+
 # ---- 3. the API key --------------------------------------------------------
 # Absent is not fatal. Every model call is guarded and the analysis runs
 #   without prose, so the app starts and says so rather than refusing.
@@ -90,7 +108,6 @@ fi
 #   changes behaviour on the ones where the automatic open would have failed
 #   anyway.
 say "Starting DrSvyR. Leave this window open; closing it stops the app."
-cd "${HERE}"
 R --quiet --no-save -e "
   # browseURL() on Linux shells out with wait = FALSE, so it returns
   #   immediately -- before the opener it launched has had any chance to
@@ -108,6 +125,6 @@ R --quiet --no-save -e "
     try(utils::browseURL(url), silent = TRUE)
     invisible(NULL)
   }
-  shiny::runApp('.', port = ${PORT}, host = '127.0.0.1',
-                launch.browser = open_browser)
+  drsvyr::run_drsvyr(port = ${PORT}, host = '127.0.0.1',
+                     launch.browser = open_browser)
 "
