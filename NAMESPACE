@@ -63,6 +63,13 @@ importFrom(bslib, page_fluid)
 importFrom(bslib, bs_theme)
 importFrom(bslib, input_dark_mode)
 
+# Used once, to probe a port before runApp() is trusted with it. See the
+#   comment in run_drsvyr(). httpuv is already a hard dependency of shiny, so
+#   this declares a call that was implicitly available rather than adding a
+#   new one.
+importFrom(httpuv, startServer)
+importFrom(httpuv, stopServer)
+
 # stats::filter and stats::lag are masked by dplyr under library() too, so the
 #   code already means the dplyr ones. Named here so the intent is recorded
 #   rather than left to import order.

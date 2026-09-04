@@ -65,22 +65,19 @@ fi
 conda activate "${ENV_NAME}"
 
 # ---- 2b. install the package itself ----------------------------------------
-# The environment supplies the dependencies; the package is installed into it
-#   from this checkout. Reinstalled whenever the source is newer than what is
-#   installed, so a git pull is enough to update -- the analyst never runs
-#   R CMD INSTALL themselves.
-NEED_INSTALL=1
-if R --quiet --no-save -e "q(status = !requireNamespace('drsvyr', quietly = TRUE))" >/dev/null 2>&1; then
-  NEWEST=$(find "${HERE}/R" "${HERE}/DESCRIPTION" -newer \
-    "$(R --quiet --no-save -e "cat(system.file('DESCRIPTION', package='drsvyr'))" 2>/dev/null | tail -1)" \
-    2>/dev/null | head -1)
-  [ -z "${NEWEST}" ] && NEED_INSTALL=0
-fi
-if [ "${NEED_INSTALL}" = "1" ]; then
-  say "Installing DrSvyR into the environment."
-  R CMD INSTALL "${HERE}" \
-    || die "The package could not be installed. Send the output above for help."
-fi
+# Always reinstalled, unconditionally. There used to be a check here that
+#   tried to skip this when nothing had changed -- comparing file timestamps
+#   against the installed DESCRIPTION's mtime, itself read via a nested R call
+#   inside a find -newer inside a command substitution. It was exactly the
+#   kind of clever that fails silently: a stray warning on either R call
+#   corrupted the comparison, the script exited with no error and no server
+#   started, and the only symptom was a shell prompt returning early.
+# R CMD INSTALL on a pure-R package with no compiled code takes a few seconds.
+#   That cost, paid on every launch, buys a script with one thing to get wrong
+#   instead of four.
+say "Installing DrSvyR into the environment."
+R CMD INSTALL "${HERE}" \
+  || die "The package could not be installed. Send the output above for help."
 
 # ---- 3. the API key --------------------------------------------------------
 # Absent is not fatal. Every model call is guarded and the analysis runs

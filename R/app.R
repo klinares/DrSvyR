@@ -250,7 +250,33 @@ run_drsvyr <- function(port = getOption("drsvyr.port", 7817L),
                                                  300 * 1024^2))
   on.exit(options(old), add = TRUE)
 
-  shinyApp(app_ui(), app_server,
-           options = list(port = port, host = host,
-                          launch.browser = launch.browser))
+  # The port is probed before it is used, rather than tried and caught on
+  #   failure. An earlier version wrapped runApp() itself in tryCatch and
+  #   matched the error text for "already in use" -- and that failed in
+  #   practice, because the R-level condition was "Failed to create server"
+  #   with no mention of the port; the more specific text is written directly
+  #   to stderr by httpuv's C++ layer and never reaches the R condition object
+  #   at all. Matching internal wording that isn't guaranteed to stay the same
+  #   is the wrong foundation for this.
+  # httpuv::startServer() on a trivial handler is the same bind call runApp()
+  #   would make, stopped immediately after it succeeds. If it throws, the
+  #   port was taken; nothing else can be wrong with a one-line handler, so
+  #   any error here is treated as exactly that. This is the ordinary shape of
+  #   an analyst's session, not an edge case: close the browser tab, leave the
+  #   terminal running, run this again tomorrow, and the port from yesterday
+  #   is still held. Ten tries is generous for a stray previous session.
+  free = NULL
+  for (p in seq(port, port + 9L)) {
+    probe = tryCatch(startServer(host, p, list()), error = function(e) NULL)
+    if (!is.null(probe)) { stopServer(probe); free = p; break }
+    if (p == port) cat("Port ", port, " is already in use -- trying another.\n",
+                       sep = "")
+  }
+  if (is.null(free))
+    stop("Ports ", port, " through ", port + 9L, " are all in use. Close ",
+         "whatever else is running, or set options(drsvyr.port = ...) to a ",
+         "different range.", call. = FALSE)
+
+  runApp(shinyApp(app_ui(), app_server), port = free, host = host,
+        launch.browser = launch.browser)
 }
