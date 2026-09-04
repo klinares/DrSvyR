@@ -26,3 +26,11 @@ demo/output/
 /decisions/
 /dict/
 /output/
+.Rhistory
+.Rproj.user/
+*.tar.gz
+*.Rcheck/
+.Rproj.user/
+.Rhistory
+*.tar.gz
+*.Rcheck/

@@ -304,10 +304,10 @@ mod_chat_server <- function(id, state, stage = reactive(NULL)) {
       tagList(
         tags$p(class = "text-muted",
                tags$strong(turns()), " turn(s)",
-               if (!is.na(tk)) paste0(" · ", format(tk, big.mark = ","),
+               if (!is.na(tk)) paste0(" \u00b7 ", format(tk, big.mark = ","),
                                       " tokens") else "",
-               " · stage: ", tags$code(stage_key()),
-               " · reflexes v", SURV_REFLEXES_VERSION),
+               " \u00b7 stage: ", tags$code(stage_key()),
+               " \u00b7 reflexes v", SURV_REFLEXES_VERSION),
         if (long) warn_box(
           tags$div("This conversation is long. Every turn resends the whole ",
                    "history, so the cost per answer is still growing. Nothing ",
@@ -353,8 +353,8 @@ mod_chat_server <- function(id, state, stage = reactive(NULL)) {
           tags$p(p$claim),
           tags$p(class = "text-muted",
                  "Reflex ", tags$code(p$reflex_id),
-                 " · evidence ", tags$code(ev),
-                 " · threshold ",
+                 " \u00b7 evidence ", tags$code(ev),
+                 " \u00b7 threshold ",
                  tags$code(if (is.na(r$threshold)) "none set"
                            else as.character(r$threshold)),
                  if (!r$sourced) " (this project's convention, not a standard)"
@@ -428,14 +428,14 @@ mod_chat_server <- function(id, state, stage = reactive(NULL)) {
                             "Note"), ".** ", m$text))
 
       decided <- purrr::map_chr(state$proposals %||% list(), function(d)
-        paste0("- ", d$time, " · ", d$reflex_id, " · ", d$action, " · ",
+        paste0("- ", d$time, " \u00b7 ", d$reflex_id, " \u00b7 ", d$action, " \u00b7 ",
                toupper(d$decision),
-               if (nzchar(d$reason)) paste0(" — ", d$reason) else ""))
+               if (nzchar(d$reason)) paste0(" \u2014 ", d$reason) else ""))
 
       try(writeLines(c(
         paste0("# Methodologist transcript"), "",
         paste0("Reflex catalogue v", SURV_REFLEXES_VERSION,
-               " · DrSvyR v", WISE_VERSION), "",
+               " \u00b7 DrSvyR v", WISE_VERSION), "",
         body, "",
         if (length(decided)) c("## Proposals", "", decided) else NULL), f),
         silent = TRUE)

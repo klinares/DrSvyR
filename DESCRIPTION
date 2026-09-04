@@ -1,0 +1,49 @@
+Package: drsvyr
+Title: Latent Class Segmentation for Complex Survey Data
+Version: 0.1.0
+Authors@R:
+    person("Kevin", "Linares", role = c("aut", "cre"),
+           email = "kevin.linares@example.org")
+Description: A Shiny application that fits a weighted latent class model to a
+    battery of survey items on complex survey data, with every standard error
+    derived from the survey's own stratified jackknife replicate design.
+    Segment prevalences, item-response probabilities and domain estimates are
+    all design-based; domain estimates additionally carry a BCH three-step
+    correction for classification error. The analyst supplies an SPSS or Stata
+    file, makes every substantive choice themselves, and leaves with a
+    self-contained report and their data with segment membership added. A
+    language model drafts prose at four points and never touches a number.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends:
+    R (>= 4.4)
+Imports:
+    base64enc,
+    bslib,
+    clue,
+    digest,
+    dplyr,
+    fs,
+    furrr,
+    future,
+    ggplot2,
+    haven,
+    janitor,
+    jsonlite,
+    knitr,
+    markdown,
+    matrixStats,
+    purrr,
+    readr,
+    rlang,
+    shiny,
+    stringr,
+    survey,
+    tibble,
+    tidyr,
+    viridis,
+    yaml,
+    zip
+Suggests:
+    ellmer
+RoxygenNote: 7.3.2

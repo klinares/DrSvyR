@@ -30,7 +30,13 @@ dependencies:
   # Pinned to a minor version, not an exact build. Too loose and the server and
   #   the desktop drift; too tight and the solver cannot find a working set for
   #   one platform or the other.
-  - r-base=4.4
+  # 4.5, not 4.6, and r-ellmer is what decides it. conda-forge rebuilds the
+  #   whole r-* stack against each new R on its own schedule, and ellmer -- the
+  #   newest package here -- has builds for r43, r44 and r45 but not r46 yet.
+  #   Asking for 4.6 makes the environment unsolvable, not merely newer.
+  #   Re-test with `conda search -c conda-forge r-ellmer` before bumping; when
+  #   an r46 build appears, this can move.
+  - r-base=4.5
 
   # ---- the app shell -------------------------------------------------------
   - r-shiny
@@ -48,8 +54,6 @@ dependencies:
   - r-stringr
   - r-ggplot2
   - r-readr
-  - r-forcats
-  - r-lubridate
   - r-rlang
 
   # ---- survey methodology --------------------------------------------------
@@ -79,6 +83,11 @@ dependencies:
   #   the only packages in this project that needed Rtools.
   - r-zip
   - r-knitr
+  # shiny::includeMarkdown() needs this at runtime even though nothing in R/
+  #   calls markdown:: directly -- a namespace audit of the app's own source
+  #   cannot see it, because the dependency is Shiny's, not this project's.
+  #   Found by actually running the built environment, not by static analysis.
+  - r-markdown
   - r-base64enc
   - r-viridis
   - r-jsonlite

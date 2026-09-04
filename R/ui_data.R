@@ -396,7 +396,7 @@ mod_items_server <- function(id, state) {
         transmute(Code = code, Response = response, Source = source,
                   `Items affected` = n_items,
                   `Also a real answer` = if_else(
-                    is.na(n_substantive), "—",
+                    is.na(n_substantive), "\u2014",
                     paste0(n_substantive, " item(s), e.g. ", example)))
     })
 
@@ -407,7 +407,7 @@ mod_items_server <- function(id, state) {
       tagList(
         checkboxGroupInput(ns("na_codes"), NULL,
                            choices = set_names(cand$code,
-                                               paste0(cand$code, " — ", cand$response)),
+                                               paste0(cand$code, " \u2014 ", cand$response)),
                            selected = cand$code, inline = TRUE),
         tags$p(class = "text-muted",
                "Unchecking a code keeps it as a substantive answer category."),
@@ -429,7 +429,7 @@ mod_items_server <- function(id, state) {
       tagList(
         selectizeInput(ns("items"), "Battery", multiple = TRUE, width = "100%",
                        choices = set_names(cand$variable,
-                                           paste0(cand$variable, " — ", cand$label)),
+                                           paste0(cand$variable, " \u2014 ", cand$label)),
                        options = list(placeholder = "Choose the items")),
         checkboxInput(ns("complete"), "Fit on item-complete cases only",
                       value = TRUE),
@@ -553,7 +553,7 @@ mod_recode_server <- function(id, state) {
         help_box("domains_pick"),
         selectizeInput(ns("vars"), NULL, multiple = TRUE, width = "100%",
                        choices = set_names(cand$variable,
-                                           paste0(cand$variable, " — ", cand$label)),
+                                           paste0(cand$variable, " \u2014 ", cand$label)),
                        options = list(placeholder = "Choose the demographics")),
         actionButton(ns("load"), "Show categories"))
     })
@@ -591,7 +591,7 @@ mod_recode_server <- function(id, state) {
           })
           tagList(
             tags$hr(),
-            tags$h5(paste0(L$variable, " — ", L$label)),
+            tags$h5(paste0(L$variable, " \u2014 ", L$label)),
             help_box("recode_map"),
             textInput(ns(paste0("name_", L$variable)),
                       "Name to use in the report", width = "100%",
@@ -602,7 +602,7 @@ mod_recode_server <- function(id, state) {
         } else {
           tagList(
             tags$hr(),
-            tags$h5(paste0(L$variable, " — ", L$label)),
+            tags$h5(paste0(L$variable, " \u2014 ", L$label)),
             help_box("recode_cut"),
             textInput(ns(paste0("name_", L$variable)),
                       "Name to use in the report", width = "100%",
@@ -809,7 +809,7 @@ mod_recode_server <- function(id, state) {
                if (length(specs) != 1) "s" else "", " applied. ",
                if (small > 0)
                  paste0(small, " group", if (small != 1) "s are" else " is",
-                        " too small to report — check the table below. ")
+                        " too small to report \u2014 check the table below. ")
                else "",
                "Read the audit, then continue to Dictionary."),
         type = if (small > 0) "warning" else "message", duration = NULL)

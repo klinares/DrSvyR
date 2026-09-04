@@ -541,7 +541,7 @@ mod_model_server <- function(id, state) {
         tags$p(tags$strong("Separation: "),
                round(state$model$diag$entropy, 3),
                tags$span(class = "text-muted",
-                         " — how cleanly people fall into one group.")),
+                         " \u2014 how cleanly people fall into one group.")),
         tags$h5("How far each item separates the groups"),
         plotOutput(ns("disc_plot"), height = "340px"),
         tableOutput(ns("disc")),
@@ -699,10 +699,10 @@ mod_model_server <- function(id, state) {
       showNotification(
         HTML(paste0(
           "<b>Recorded.</b> Three steps from here:<br>",
-          "1. <b>Items</b> — remove ", paste(drop, collapse = ", "),
+          "1. <b>Items</b> \u2014 remove ", paste(drop, collapse = ", "),
           " from the battery and press Summarise.<br>",
-          "2. <b>Review</b> — approve the configuration again.<br>",
-          "3. <b>Search</b> — run it again and choose a number.<br>",
+          "2. <b>Review</b> \u2014 approve the configuration again.<br>",
+          "3. <b>Search</b> \u2014 run it again and choose a number.<br>",
           "Your domains are unaffected and do not need redoing.")),
         type = "message", duration = NULL)
 

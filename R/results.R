@@ -753,7 +753,7 @@ segment_evidence <- function(state, k, n = 3L) {
 
   purrr::map_chr(seq_len(nrow(top)), function(i) {
     d = dplyr::filter(dict, item == top$item[i])
-    sprintf("%s — answers %s than average on “%s”",
+    sprintf("%s \u2014 answers %s than average on \u201c%s\u201d",
             item_label(top$item[i], d$variable),
             if (top$gap[i] > 0) "notably higher" else "notably lower",
             d$question)
@@ -932,9 +932,9 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
 
   add(blk("h1", "Segments in the population, and how they differ"))
   add(blk("p", paste0(
-    fs::path_file(state$data_file), " · ",
-    format(Sys.Date(), "%d %B %Y"), " · ",
-    format(nrow(state$raw), big.mark = ","), " respondents · ",
+    fs::path_file(state$data_file), " \u00b7 ",
+    format(Sys.Date(), "%d %B %Y"), " \u00b7 ",
+    format(nrow(state$raw), big.mark = ","), " respondents \u00b7 ",
     "DrSvyR v", WISE_VERSION)))
 
   if (nzchar(state$question %||% "")) {
@@ -1241,9 +1241,9 @@ report_html <- function(state, summary_text = NULL, not_answered = NULL) {
       h2     = shiny::tags$h4(x$value, style = "margin-top:1.5em;"),
       h3     = shiny::tags$h5(x$value, style = "margin-top:1.1em;"),
       p      = shiny::tags$p(x$value, style = "white-space:pre-line;"),
-      bullet = shiny::tags$p(paste0("• ", x$value),
+      bullet = shiny::tags$p(paste0("\u2022 ", x$value),
                              style = "margin:0.1em 0 0.1em 1em;"),
-      tick   = shiny::tags$p(paste0("✓ ", x$value),
+      tick   = shiny::tags$p(paste0("\u2713 ", x$value),
                              style = "margin:0.1em 0 0.1em 1em;"),
       box    = shiny::tags$div(
         style = paste("background: var(--bs-secondary-bg);",

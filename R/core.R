@@ -36,8 +36,22 @@
 #   current. Bump it when anything that changes a result changes.
 WISE_VERSION <- "1.0"
 
+# Where this code is living, which is what the write guard below is protecting.
+
+# here::here() used to answer this, and in a package it answers the wrong
+#   question. It resolves the user's PROJECT root -- wherever they happen to
+#   have opened R -- not where drsvyr is. An installed package sits in the
+#   library and the analyst may be sitting anywhere, so the guard was either
+#   comparing against an unrelated directory or, if they had opened R inside a
+#   project containing the temp folder, refusing legitimate writes.
+# It also required a dependency that DESCRIPTION does not declare, which
+#   R CMD check reports and which is the reason this surfaced at all.
+# system.file() answers the real question when installed. getwd() is the
+#   fallback for running from a source checkout, which is the only situation
+#   where the old behaviour was ever right.
 repo_root <- function() {
-  fs::path_real(here::here())
+  p = system.file(package = "drsvyr")
+  fs::path_real(if (nzchar(p)) p else getwd())
 }
 
 # Lexical normalisation rather than resolution, because the target usually does
@@ -55,10 +69,11 @@ repo_root <- function() {
 assert_outside_repo <- function(path) {
   p = fs::path_abs(path)
   if (fs::path_has_parent(p, repo_root()))
-    stop("That path is inside the repository: ", p, "\n",
-         "The work folder holds your outputs and your scored data. Choose a ",
-         "folder outside ", repo_root(), " -- something like D:/work/",
-         "my_project.", call. = FALSE)
+    stop("That path is inside the installed package: ", p, "\n",
+         "Outputs, the decision log and scored respondent data belong in the ",
+         "session's own folder, never in the library. This is a bug rather ",
+         "than something to configure -- work folders are created under ",
+         "tempdir() and cannot normally land here.", call. = FALSE)
   invisible(path)
 }
 
@@ -244,8 +259,13 @@ demo_survey_path <- function() {
   p = system.file("extdata", package = "drsvyr")
   cand = if (nzchar(p)) fs::dir_ls(p, regexp = "[.](sav|zsav|dta)$", fail = FALSE)
          else character(0)
+
+  # Running from a source checkout rather than an installed package, where
+  #   system.file() returns "". inst/ is only collapsed into the package root
+  #   at install time, so before that the same file sits one level deeper.
+  #   This used to look in demo/, which the conversion emptied.
   if (!length(cand)) {
-    d = fs::path(repo_root(), "demo")
+    d = fs::path(getwd(), "inst", "extdata")
     cand = if (fs::dir_exists(d))
       fs::dir_ls(d, regexp = "[.](sav|zsav|dta)$", fail = FALSE) else character(0)
   }

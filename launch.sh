@@ -74,10 +74,40 @@ Start here tab to enable them for this session, or set OPENROUTER_API_KEY."
 fi
 
 # ---- 4. start --------------------------------------------------------------
-# launch.browser is TRUE so the analyst gets a tab rather than a URL to copy,
-#   and the port is fixed so a bookmark keeps working. host stays on loopback:
-#   this is the desktop route, and binding to 0.0.0.0 would put respondent data
-#   on the office network. The server deployment does not use this script.
+# launch.browser opens a tab automatically wherever that is possible, so a
+#   desktop analyst never has to know a URL exists. It is not TRUE, though:
+#   Shiny's default there is utils::browseURL(), which throws
+#   "'browser' must be a non-empty character string" and takes the whole
+#   session down whenever nothing is registered to open one -- which is
+#   ordinary and expected inside WSL2, since a Linux subsystem with no desktop
+#   of its own has no browser to hand the URL to and no bridge to Windows'
+#   unless something has been configured for it. A closed browser is not a
+#   reason to lose a server that started correctly.
+# A function is passed instead: try the real opener, and if that fails for any
+#   reason -- WSL2 with nothing configured, a locked-down desktop, a headless
+#   box -- print the URL and keep the server running. This is not
+#   WSL-specific; it is the right fallback on every platform, and it only
+#   changes behaviour on the ones where the automatic open would have failed
+#   anyway.
 say "Starting DrSvyR. Leave this window open; closing it stops the app."
 cd "${HERE}"
-R --quiet --no-save -e "shiny::runApp('.', port = ${PORT}, host = '127.0.0.1', launch.browser = TRUE)"
+R --quiet --no-save -e "
+  # browseURL() on Linux shells out with wait = FALSE, so it returns
+  #   immediately -- before the opener it launched has had any chance to
+  #   fail. There is no reliable way to detect success from here: this was
+  #   tried with both error/warning handlers and an exit-status check, and
+  #   neither caught the WSL2 case where xdg-open exists but has nothing
+  #   registered behind it.
+  # So detection is abandoned rather than attempted unreliably. The URL is
+  #   always printed, and opening a browser is attempted as a bonus on top of
+  #   that guarantee rather than as the only way the analyst learns it.
+  open_browser <- function(url) {
+    cat('\nDrSvyR is running at:\n\n    ', url, '\n\n',
+       'Open that address in a browser if one did not open automatically.\n\n',
+       sep = '')
+    try(utils::browseURL(url), silent = TRUE)
+    invisible(NULL)
+  }
+  shiny::runApp('.', port = ${PORT}, host = '127.0.0.1',
+                launch.browser = open_browser)
+"

@@ -1,0 +1,32 @@
+# Everything here stays in the repository and out of the built package.
+
+# The conda route. Analysts and IT use these; the package does not.
+^environment\.yml$
+^launch\.sh$
+
+# Documentation for humans, not for R.
+^README\.md$
+^PROJECT\.md$
+^figures$
+^images$
+
+# RStudio project file.
+^.*\.Rproj$
+^\.Rproj\.user$
+
+# Scripts that the package makes obsolete. Delete them from the repository
+#   once the conversion is verified; ignored here so a half-finished
+#   conversion still builds.
+# setup.R installed packages -- conda does that now.
+# check_globals.R found undefined names -- R CMD check does that now, better.
+# make_llm_openai.R generated the second endpoint file -- there is one llm.R
+#   now, with the endpoint as an option.
+^setup\.R$
+^check_globals\.R$
+^make_llm_openai\.R$
+^llm-openai\.R$
+
+# Anything left in a working tree.
+^\.github$
+^\.git$
+^demo$
