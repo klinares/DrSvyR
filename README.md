@@ -59,34 +59,52 @@ Amber steps are the ones you decide. Nothing runs until you press a button.
 
 ------------------------------------------------------------------------
 
-## Setup, once
+## Installation
 
-1.  **Clone this repository** and open `DrSvyR.Rproj` in RStudio.
-2.  **Install the packages**: `source("setup.R")`. It installs only what is missing, and the file records why each package is there and why several obvious ones are deliberately absent.
-3.  **Add your API key.** `usethis::edit_r_environ()`, add one line — for the OpenRouter build, `OPENROUTER_API_KEY=your-key-here`; for the OpenAI-compatible build, `OPENAI_API_KEY=your-key-here` — save, restart R. **That is the only thing that belongs in there.** On a shared server you can instead paste a key on the Start here tab, where it lives for the length of your session, is never written to disk, and is never visible to another session.
-4.  **Create a work folder outside the repository.** Outputs, the decision log and cached fits are written there, and the app refuses a folder inside the clone — scored respondent data one `git add .` from being committed is the failure this exists to prevent. Your survey file is only ever read, so it can stay wherever it already is, including in the repository's own `demo/` folder.
+### Windows (RStudio, no conda needed)
 
-Then click **Run App**.
+1.  In the R console:
+```r
+   install.packages("remotes")
+   remotes::install_github("klinares/DrSvyR")
+```
+3. At the update prompt, choose **3: None** unless you specifically want
+   newer versions of the dependencies.
+4. Run it:
+```r
+   library(drsvyr)
+   run_drsvyr()
+```
 
-### Which LLM file
+If installation fails with a `Permission denied` error on a `.dll` file,
+close every open R/RStudio window completely (not just restart) and try
+again — Windows locks DLLs that are loaded in another running session.
 
-Two exist and they define the same function names:
+### WSL2 Ubuntu + conda (matches the deployment environment)
 
-| File           | Endpoint                       | Where it lives               |
-|------------------------|------------------------|------------------------|
-| `R/llm.R`      | OpenRouter                     | in `R/`, sourced             |
-| `llm-openai.R` | any OpenAI-compatible endpoint | repository root, not sourced |
+1. [Install Miniconda]
+2. Clone this repository:
+```bash
+   git clone git@github.com:klinares/DrSvyR.git
+   cd DrSvyR
+```
+3. Run the launcher — it builds the environment on first run and starts the
+   app every time after:
+```bash
+   chmod +x launch.sh
+   ./launch.sh
+```
 
-Exactly one belongs in `R/` at a time — with both there the alphabet would decide which endpoint the app talks to and nothing would say so, and `app.R` stops at startup if it finds more than one. To switch, swap the files.
+This route uses the exact environment (`environment.yml`) that the server
+deployment uses, so it's the best way to reproduce a problem seen at work.
 
-**`llm-openai.R` is generated.** Edit `R/llm.R`, then `source("make_llm_openai.R")`. Editing it by hand is how the two last drifted apart, and the drift was in the function that decides whether a cached fit belongs to the data in front of it.
+### Once on conda-forge
 
-### Cores
+```bash
+conda install -c conda-forge r-drsvyr
+```
 
-The search runs in parallel. By default it takes one fewer than the cores the machine reports, capped at twelve — so a Windows desktop and a Linux server each use what they have without either being told a number about the other. To override, put `DRSVYR_WORKERS=6` in `.Renviron`, or set `options(drsvyr.workers = 6)`. On a shared server, leave it alone.
-
-The worker count changes how long the search takes and **not** what it produces. If you change anything in the search, re-check that: identical parameters, not just an identical log-likelihood, at one, two, four and seven workers.
-
+*(not yet available — see PROJECT.md for submission status)*
 ------------------------------------------------------------------------
 
 ## What you get
