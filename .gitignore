@@ -5,11 +5,20 @@
 renv/library/
 renv/staging/
 
-# Analyst data and outputs live in the work folder, never here.
+# Analyst data and outputs live in the work folder, never here -- with one
+#   exception. inst/extdata/ is not an analyst's work folder; it is the
+#   demonstration survey this package ships and installs deliberately. *.sav
+#   above excluded it too, silently, and the file was never on GitHub despite
+#   every local test showing it present -- system.file() was finding a copy
+#   that predated the ignore rule, still sitting on disk, not a copy that came
+#   from the repository. A fresh clone had nothing.
 *.sav
 *.dta
 *.parquet
 *.rds
+!inst/extdata/*.sav
+!inst/extdata/*.dta
+
 output/
 cache/
 data/
@@ -26,10 +35,8 @@ demo/output/
 /decisions/
 /dict/
 /output/
-.Rhistory
-.Rproj.user/
-*.tar.gz
-*.Rcheck/
+
+# Package build/check artefacts
 .Rproj.user/
 .Rhistory
 *.tar.gz
