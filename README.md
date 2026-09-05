@@ -61,63 +61,47 @@ Amber steps are the ones you decide. Nothing runs until you press a button.
 
 ## Installation
 
-### Windows (RStudio, no conda needed)
+One command, from any R console:
 
-1.  In the R console:
 ```r
-   install.packages("remotes")
-   remotes::install_github("klinares/DrSvyR")
+install.packages("remotes")
+remotes::install_github("klinares/DrSvyR")
 ```
-3. At the update prompt, choose **3: None** unless you specifically want
-   newer versions of the dependencies.
-4. Run it:
+
+If a prompt asks whether to update other packages, choose **None** unless you specifically want newer versions of something already on your machine.
+
+Then run it:
+
 ```r
-   library(drsvyr)
-   run_drsvyr()
+library(drsvyr)
+run_drsvyr()
 ```
 
-If installation fails with a `Permission denied` error on a `.dll` file,
-close every open R/RStudio window completely (not just restart) and try
-again — Windows locks DLLs that are loaded in another running session.
+That is the whole installation. `drsvyr` has no compiled code and every dependency it needs is on CRAN, so there is nothing else to set up first — no Rtools, no conda, no separate environment.
 
-### WSL2 Ubuntu + conda (matches the deployment environment)
+**If installation fails with `Permission denied` on a `.dll` file:** close every open R and RStudio window completely, not just restart the session, and try again. Windows will not overwrite a DLL that another running session still has loaded.
 
-1. [Install Miniconda]
-2. Clone this repository:
-```bash
-   git clone git@github.com:klinares/DrSvyR.git
-   cd DrSvyR
-```
-3. Run the launcher — it builds the environment on first run and starts the
-   app every time after:
-```bash
-   chmod +x launch.sh
-   ./launch.sh
+**The AI Survey Methodologist is optional and installs separately.** It needs the `ellmer` package, which is deliberately not installed automatically — on some internal mirrors the available version is broken, and pulling it in by default would make an otherwise-working install fail for a feature most of the analysis does not need. Without it, DrSvyR runs exactly as described above; the model drafts nothing, and the analyst does everything the model would otherwise draft. To enable it:
+
+```r
+install.packages("ellmer")
 ```
 
-This route uses the exact environment (`environment.yml`) that the server
-deployment uses, so it's the best way to reproduce a problem seen at work.
+then set an API key as described inside the app's Start Here screen.
 
-### Once on conda-forge
-
-```bash
-conda install -c conda-forge r-drsvyr
-```
-
-*(not yet available — see PROJECT.md for submission status)*
 ------------------------------------------------------------------------
 
 ## What you get
 
-In your work folder:
+Everything is delivered as a single archive, downloaded from the Outputs screen when the analysis is done:
 
-- `output/report.html` — the findings, the groups and what they mean, the distribution across your domains, and the caveats attached to the numbers they belong to. Self-contained, every figure embedded, opens in Word if a document is what somebody wants. Reviewed on screen before anything is written. A `.docx` is written as well **if** `officer` and `flextable` happen to be installed; neither is required and neither is in `setup.R`.
-- `output/<yourfile>_wise.sav` (or `.dta`) — your survey file back, with segment membership added, plus the posterior columns needed to use it correctly.
-- `output/*.csv` — every table, ready to paste.
-- `output/cfg.R` — the analysis specification, re-runnable without this app.
-- `decisions/` — each choice you made and the evidence you had when you made it.
-- `errors.log` — every failed step, with the function it failed in and the stack below it. This is the file to send when something goes wrong.
-- `cache/` — fitted models keyed to the specification and the data. Safe to delete.
+- **`report.html`** — the findings, the groups and what they mean, the distribution across your domains, and the caveats attached to the numbers they belong to. Self-contained: every figure and every table is embedded in the one file, and any table can be exported to CSV from inside it. Reviewed on screen before it is written.
+- **`<yourfile>_wise.sav`** (or `.dta`) — your survey file back, with segment membership added, plus the posterior columns needed to use it correctly.
+- **`cfg.R`** — the analysis specification, re-runnable without this app.
+- **`decisions/`** — each choice you made and the evidence you had when you made it, also shown inside the report.
+- **`errors.log`** — included only if something failed. Names the function it failed in and the stack below it; this is the file to send when something goes wrong.
+
+Nothing is written to your machine outside that one download. The app keeps no files between sessions.
 
 ------------------------------------------------------------------------
 
@@ -137,19 +121,8 @@ The list a methodologist should audit. Each of these is enforced in code, and no
 | Names are keyed to the specification that produced them | Change the battery and the saved names refuse to load rather than reattach to different groups |
 | Item removal is capped at one round, and the count is printed in the report | Fit statistics after a specification search are optimistic, and a reader cannot discount what they are not told |
 | Failed replicates are counted and disclosed | Dropping them understates variance rather than merely widening it |
-| The work folder cannot be inside the repository | `wise_path()` builds every write and refuses one under the repository root, so scored respondent data cannot end up somewhere a `git add .` reaches |
 | The model shown is the model the search fitted, or the run stops | A refit that silently disagreed with the criteria the size was chosen from would be undetectable |
 | `svyby` output is read by position, and the column count is checked first | Its naming for a factor outcome varies by version, so reading by name is the fragile option here; `check_dims()` refuses a table that is not one estimate and one standard error per segment |
-
-------------------------------------------------------------------------
-
-## Checking it without running it
-
-`source("check_globals.R")` from the repository root, after any deletion.
-
-It sources `R/`, walks every function, and lists every name the code uses that nothing in `R/` defines and no attached package exports. A deleted top-level constant is invisible to `parse()`, invisible to a call-graph walk, and shows up only when the one line that reads it happens to run — which is how `BOUNDARY_TOL` went missing and surfaced three screens later as *"object 'BOUNDARY_TOL' not found"*.
-
-It also refuses to run if a script has been left in `R/`. Everything in `R/` defines and never runs; `app.R`, `setup.R`, `check_globals.R` and `make_llm_openai.R` all *do* things and belong at the root. A script in `R/` is sourced at every startup, and one that sources `R/` itself takes the app down with *"evaluation nested too deeply: infinite recursion"* — a message that names nothing. `app.R` checks for this too, and names the file.
 
 ------------------------------------------------------------------------
 
