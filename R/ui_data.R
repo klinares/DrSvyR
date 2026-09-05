@@ -811,7 +811,7 @@ mod_recode_server <- function(id, state) {
                  paste0(small, " group", if (small != 1) "s are" else " is",
                         " too small to report \u2014 check the table below. ")
                else "",
-               "Read the audit, then continue to Dictionary."),
+               "Read the audit, then continue to 5. Review."),
         type = if (small > 0) "warning" else "message", duration = NULL)
     })
 

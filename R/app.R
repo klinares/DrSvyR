@@ -98,6 +98,7 @@ new_state <- function() {
     question      = NULL,
     report_summary = NULL,
     report_not_answered = NULL,
+    report_classification = NULL,
     report_html   = NULL,
     outputs       = NULL,
 
@@ -122,13 +123,18 @@ WISE_TABS <- c("Start here",
                "1. Project", "2. Design", "3. Items", "4. Domains",
                "5. Review", "6. Search", "7. Model", "8. Names",
                "9. Scoring", "10. Results", "11. Outputs",
-               "Methodologist")
+               "AI Survey Methodologist")
 
 
 app_ui <- function() page_fluid(
   theme = bs_theme(version = 5, preset = "flatly"),
   title = "DrSvyR",
-  
+
+  # First child, so it sits above the header and above whichever tab is open.
+  #   One banner rather than one per tab: this is one page with tabs inside
+  #   it, not many pages.
+  classification_banner(),
+
   div(
     style = "display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;",
     div(tags$h2("DrSvyR", style = "margin:0;"),

@@ -675,7 +675,7 @@ WISE_HELP <- list(
     "interpretation is offered."),
 
   search_reading = paste(
-    "Now that your choice is recorded, the methodologist will read the",
+    "Now that your choice is recorded, the AI Survey Methodologist will read the",
     "evidence and say what it supports. It cannot change what was logged. If",
     "it changes your mind, enter a different number -- both are recorded, and",
     "that is the honest record of how the decision was reached."),
@@ -815,15 +815,14 @@ WISE_HELP <- list(
     "The report is source material, not a finished argument: tables you can",
     "lift, findings you can quote, and the caveats attached to the numbers",
     "they belong to rather than collected at the back.",
-    "\n\nYou also get your survey file back with the new columns added, and",
-    "every table as a CSV. The caveats are assembled from what actually",
-    "happened in this run, so one that does not apply to you will not be",
-    "there."),
+    "\n\nEvery table is inside the report, and each one has a button that",
+    "saves it as a CSV. You also get your survey file back with the new",
+    "columns added. The caveats are assembled from what actually happened in",
+    "this run, so one that does not apply to you will not be there."),
 
   report_save = paste(
-    "Saving writes the report exactly as previewed, your survey file with the",
-    "new columns added, and every table as a CSV. Nothing has been written",
-    "yet.",
+    "Saving writes the report exactly as previewed and your survey file with",
+    "the new columns added. Nothing has been written yet.",
     "\n\nThe report is a single HTML file with the figures inside it, so it",
     "can be emailed as one attachment and opens in Word if a Word document is",
     "what someone wants."),

@@ -25,8 +25,8 @@ never end up somewhere a `git add .` can reach them. Your survey file itself
 can stay wherever it already is, including inside the repository; it is only
 ever read.
 
-Your respondents never leave your machine. The language model in this tool sees
-only figures the tool has already computed: how many people answered a
+Your respondents never leave your machine. The AI Survey Methodologist in this
+tool sees only figures the tool has already computed: how many people answered a
 question, how far apart two groups are, how large a segment is. It never sees a
 respondent record, and it never sees your data file.
 
@@ -62,7 +62,8 @@ are yours. Each one is recorded along with the evidence that was in front of you
 when you made it, so the report can say not just what was found but how it came
 to be looked for.
 
-There is a methodologist on its own tab, and it remembers the whole session. It
+There is an AI Survey Methodologist on its own tab, and it remembers the whole
+session. It
 reads the numbers this tool computed and will argue with you about them. It can
 propose an action; it cannot take one. You accept or you reject, and when you
 reject it you say why — that sentence goes into the record beside the decision

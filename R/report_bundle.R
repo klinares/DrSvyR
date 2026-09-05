@@ -267,7 +267,9 @@ dl_button <- function(key, label = "Download CSV")
   paste0("<button class=dl data-dl=\"", key, "\">", label, "</button>")
 
 build_report_html <- function(state, summary_text = NULL,
-                              not_answered = NULL) {
+                              not_answered = NULL,
+                              classification = getOption(
+                                "drsvyr.classification", "UNCLASSIFIED")) {
   tabs = report_tables(state)
 
   # One long-format table for anyone who would rather read a single file than
@@ -455,7 +457,14 @@ build_report_html <- function(state, summary_text = NULL,
     paste0("<title>DrSvyR report -- ", fs::path_file(state$data_file),
            "</title>"),
     "<style>", REPORT_CSS, REPORT_TAB_CSS, "</style>",
-    "</head><body><div class=wrap>",
+    "</head><body>",
+    # Outside the width-limited wrap so it spans the page. The analyst sets
+    #   this on the Outputs screen; it is written into the file, because the
+    #   report is opened later, elsewhere, by people who never saw this app.
+    paste0("<div style=\"background:#b40404;color:#fff;text-align:center;",
+           "font-weight:700;letter-spacing:0.06em;padding:5px 0;",
+           "font-size:13px;\">", html_escape(classification), "</div>"),
+    "<div class=wrap>",
     "<header><h1>Segments in the population, and how they differ</h1>",
     paste0("<div class=meta>", fs::path_file(state$data_file), " &middot; ",
            format(Sys.Date(), "%d %B %Y"), " &middot; ",

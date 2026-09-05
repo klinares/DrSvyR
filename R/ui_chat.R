@@ -154,7 +154,7 @@ PM_ACTION_TAB <- c(
 mod_chat_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    tags$h4("Methodologist"),
+    tags$h4("AI Survey Methodologist"),
     tags$p(class = "text-muted",
            "One conversation for the whole session. It is told when the ",
            "specification changes and it remembers what you have discussed. ",
@@ -251,7 +251,7 @@ mod_chat_server <- function(id, state, stage = reactive(NULL)) {
       say("user", msg)
       updateTextAreaInput(session, "msg", value = "")
 
-      withProgress(message = "Asking the methodologist", value = 0.5, {
+      withProgress(message = "Asking the AI Survey Methodologist", value = 0.5, {
         res <- pm_say(ensure_chat(),
                       paste0(pm_evidence_block(state, sk), "\n\n", msg))
 
@@ -540,7 +540,7 @@ mod_key_server <- function(id, state) {
                "below to use it instead for this session.")
       else
         warn_box(tags$div(
-          "No key is set, so the methodologist and the drafted names are ",
+          "No key is set, so the AI Survey Methodologist and the drafted names are ",
           "unavailable. Everything else works: the model still fits, the ",
           "estimates and their margins are unaffected, and the report is ",
           "written with generic names and no prose."))

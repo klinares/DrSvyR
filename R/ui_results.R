@@ -88,7 +88,7 @@ mod_score_server <- function(id, state) {
           res$coverage$n[2], "."),
         evidence = log_table(res$coverage))
 
-      showNotification("Scored. Continue to Domains.", type = "message",
+      showNotification("Scored. Continue to 10. Results.", type = "message",
                        duration = NULL)
     })
 
@@ -372,8 +372,13 @@ mod_report_server <- function(id, state) {
                  "No research question was set on the Items tab, so the ",
                  "report is ordered by domain."),
         checkboxInput(ns("summarise"),
-                      "Have the methodologist write the summary (1 call)",
+                      "Have the AI Survey Methodologist write the summary (1 call)",
                       value = TRUE),
+        # Written into the report file itself. The report outlives this
+        #   session and is read elsewhere, so its marking has to travel with
+        #   it rather than come from the running app.
+        textInput(ns("classification"), "Classification marking for the report",
+                  value = getOption("drsvyr.classification", "UNCLASSIFIED")),
         actionButton(ns("build"), "Build the report", class = "btn-primary"),
         actionButton(ns("edit_names"), "Edit the names"),
         tags$p(class = "text-muted",
@@ -400,6 +405,7 @@ mod_report_server <- function(id, state) {
 
       state$report_summary <- summary_text
       state$report_not_answered <- not_answered
+      state$report_classification <- input$classification
 
       html <- wise_try(withProgress(message = "Rendering", value = 0.6, {
         report_html(state, summary_text, not_answered)
@@ -449,7 +455,8 @@ mod_report_server <- function(id, state) {
         #   table inside it and downloadable as CSV from it. It needs no
         #   Rtools-built package, which is what makes it deployable at all.
         rep <- build_report_html(state, state$report_summary,
-                                 state$report_not_answered)
+                                 state$report_not_answered,
+                                 classification = state$report_classification)
 
         incProgress(0.4, detail = "data file")
         dat <- export_data(state, input$format)
