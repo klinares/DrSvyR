@@ -274,7 +274,10 @@ mod_search_server <- function(id, state) {
         plotOutput(ns("profiles"), height = "380px"))
     })
 
-    output$bic <- renderPlot({ req(state$search); plot_bic(state$search$stats) })
+    output$bic <- renderPlot({
+      req(state$search)
+      plot_bic(state$search$stats)
+    }, bg = "white")
 
     output$stats <- renderTable({
       req(state$search)
@@ -294,7 +297,7 @@ mod_search_server <- function(id, state) {
       fit <- state$search$fits[[as.character(input$show_k)]]
       plot_profiles(fit, state$cfg$items,
                     paste0(input$show_k, " groups"))
-    })
+    }, bg = "white")
 
     # ---- the choice --------------------------------------------------------
 
@@ -563,7 +566,7 @@ mod_model_server <- function(id, state) {
       req(state$model)
       plot_profiles(state$model$fit, state$cfg$items,
                     paste0(state$dimension, " groups"))
-    })
+    }, bg = "white")
 
     output$variance_out <- renderUI({
       req(state$measure)
@@ -587,7 +590,7 @@ mod_model_server <- function(id, state) {
       plot_profiles_ci(state$measure$profile,
                        labels = state$labels$Label,
                        title = paste0(state$dimension, " groups"))
-    }, bg = "transparent")
+    }, bg = "white")
 
     output$shares_ci <- renderTable({
       req(state$measure$shares)
@@ -599,7 +602,7 @@ mod_model_server <- function(id, state) {
     output$disc_plot <- renderPlot({
       req(state$model$diag$discrimination)
       plot_discrimination(state$model$diag$discrimination)
-    }, bg = "transparent")
+    }, bg = "white")
 
     output$disc  <- renderTable({
       req(state$model$diag$discrimination)
@@ -920,7 +923,7 @@ mod_labels_server <- function(id, state) {
             labs(x = NULL, y = NULL, caption = cap) +
             wise_theme() +
             theme(axis.text.x = element_text(angle = 45, hjust = 1))
-        }, bg = "transparent")
+        }, bg = "white")
       })
     })
 
