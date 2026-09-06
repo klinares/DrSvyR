@@ -109,7 +109,28 @@ llm_model <- function(role) {
 #   ignored where it does not, so it is a convenience rather than the
 #   reproducibility mechanism; the freeze file is that.
 
+# ellmer is a suggested dependency, not a required one: the analysis, the
+#   estimates and the report all work without it. curl is checked too, and
+#   separately, because it is ellmer's HTTP layer rather than ellmer itself --
+#   without this the failure surfaces as "there is no package called 'curl'"
+#   from somewhere deep in a stack the analyst has no way to read.
+llm_require <- function() {
+  missing = c("ellmer", "curl")[
+    !vapply(c("ellmer", "curl"),
+            function(p) requireNamespace(p, quietly = TRUE), logical(1))]
+  if (length(missing))
+    stop("The AI Survey Methodologist needs ", paste(missing, collapse = " and "),
+         ", which ", if (length(missing) > 1) "are" else "is", " not installed. ",
+         "Everything else works without it: the model still fits, the estimates ",
+         "and their margins are unaffected, and the report is written with ",
+         "generic names and no prose. To switch it on, run install.packages(c(",
+         paste(sprintf('"%s"', missing), collapse = ", "),
+         ")) and restart R.", call. = FALSE)
+  invisible(TRUE)
+}
+
 llm_chat <- function(model, system_prompt = NULL, seed = NULL) {
+  llm_require()
   # Built by name rather than passed positionally, and max_tokens only where
   #   the installed ellmer knows the argument. An older version would take it
   #   into ... and ignore it silently, which is the worst of the three

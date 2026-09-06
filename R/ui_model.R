@@ -167,7 +167,7 @@ mod_config_server <- function(id, state) {
       state$diag_reading <- NULL
 
       state$cfg_paths <- paths
-      showNotification("Configuration written. Continue to Search.",
+      showNotification("Configuration written. Continue to 6. Search.",
                        type = "message", duration = NULL)
     })
 
@@ -347,7 +347,7 @@ mod_search_server <- function(id, state) {
         uiOutput(ns("reading_out")),
         tags$br(),
         tags$p(class = "text-muted",
-               "When you are satisfied, continue to Model."))
+               "When you are satisfied, continue to 7. Model."))
     })
 
     observeEvent(input$read, {
@@ -719,7 +719,7 @@ mod_model_server <- function(id, state) {
                           " accepted after ", iteration_count(),
                           " round(s) of item removal."),
         evidence = log_table(state$model$diag$discrimination))
-      showNotification("Accepted. Continue to Labels.", type = "message",
+      showNotification("Accepted. Continue to 8. Names.", type = "message",
                        duration = NULL)
     })
   })
@@ -947,7 +947,7 @@ mod_labels_server <- function(id, state) {
         evidence = log_table(edited))
 
       showNotification(
-        if (changed) "Saved. Continue to Scoring."
+        if (changed) "Saved. Continue to 9. Scoring."
         else paste("Saved. Every drafted name was accepted unchanged, which",
                    "the report will note."),
         type = "message", duration = NULL)
