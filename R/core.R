@@ -253,6 +253,23 @@ open_session_folder <- function() {
   invisible(path)
 }
 
+# Where inst/app/ is, whichever way this is running.
+
+# Two loading modes now, and only this function knows the difference.
+#   Installed:  system.file("app", ...) answers and everything is in the
+#               library, which is what run_drsvyr() on a laptop does.
+#   Bundle:     the branch deploys R/ and inst/ as a plain Shiny app, because
+#               reaching an internal Posit Connect from a GitHub-installed
+#               package needs network the deployment does not have. There is
+#               no installed package, so system.file() returns "" and the
+#               files sit beside app.R instead.
+# demo_survey_path() below already worked this way. This is the same fallback,
+#   named once so the app screens do not each reinvent it.
+app_file <- function(...) {
+  p = system.file("app", ..., package = "drsvyr")
+  if (nzchar(p)) fs::path(p) else fs::path(getwd(), "inst", "app", ...)
+}
+
 # The demonstration survey, wherever it ended up. system.file() finds it once
 #   this is a package; the demo/ folder is the fallback while it is not.
 demo_survey_path <- function() {

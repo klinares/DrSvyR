@@ -62,7 +62,15 @@ in_blocks <- function(x, blocks) {
 }
 
 init_parallel <- function(cfg) {
-  want = if (isTRUE(cfg$parallel)) max(1L, as.integer(cfg$workers %||% 1L)) else 1L
+  # wise_workers() rather than cfg$workers, and the difference only shows up
+  #   with more than one analyst. cfg is a snapshot taken when the
+  #   configuration was built; the plan is process-global. Two sessions
+  #   holding cfg objects that disagree would tear the worker pool down under
+  #   each other mid-search. Reading the process-level answer directly makes
+  #   that unrepresentable rather than merely unlikely. Today model.R sets
+  #   cfg$workers from this same function, so nothing changes; the moment
+  #   anything can load a saved cfg, it would.
+  want = if (isTRUE(cfg$parallel)) wise_workers() else 1L
 
   if (identical(.wise$plan_workers, want)) return(invisible(want))
 
@@ -199,6 +207,51 @@ posterior_of <- function(pi, rho, Y) {
 #   comparable across starts, fits, and replicates
 profiles_of <- function(rho) do.call(cbind, map(rho, t))
 
+# Assignment, without clue.
+
+# clue::solve_LSAP() did this in one line and cost two packages: clue itself
+#   and cluster, which clue Imports. cluster carries Priority: recommended,
+#   which is the single most common gap in a curated internal CRAN mirror --
+#   whoever built the allowlist assumed it arrives with R, and Posit Connect's
+#   restore then dies on a package nobody deliberately depends on.
+# The Hungarian algorithm is the right tool when K is large. K here is a
+#   number of latent segments an analyst typed into a box, so it is small, and
+#   exhaustive search over K! assignments is exact rather than approximate.
+#   8! is 40,320 rows of eight integers: a few milliseconds and under 3 MB.
+#   Above eight this stops rather than quietly taking minutes.
+
+# Rows are permutations. Recursive rather than iterative, so no loop: each
+#   value 1..n is placed first in turn, with the sub-permutation shifted up
+#   past it.
+perms_of <- function(n) {
+  if (n <= 1L) return(matrix(1L, 1L, 1L))
+  sub = perms_of(n - 1L)
+  unname(do.call(rbind, map(seq_len(n), function(i) {
+    s = sub
+    s[s >= i] = s[s >= i] + 1L
+    cbind(i, s)
+  })))
+}
+
+# Minimises, which is what solve_LSAP() does by default and what align_to()
+#   wants: cost is squared distance between response profiles.
+# The index block is column-major on purpose. as.vector(P) runs down column 1
+#   then column 2, and column j of P is the assignment for row j of cost, so
+#   pairing it with rep(seq_len(K), each = nrow(P)) gives cost[j, P[r, j]] in
+#   the order matrix() then reads back.
+solve_lsap_min <- function(cost) {
+  K = nrow(cost)
+  if (K == 1L) return(1L)
+  if (K > 8L)
+    stop("Label alignment is exhaustive and capped at eight segments; K = ", K,
+         " would need a Hungarian solver. Reinstate clue::solve_LSAP() if you ",
+         "genuinely need this.", call. = FALSE)
+  P = perms_of(K)
+  idx = cbind(rep(seq_len(K), each = nrow(P)), as.vector(P))
+  as.integer(P[which.min(rowSums(matrix(cost[idx], nrow = nrow(P)))), ])
+}
+
+
 align_to <- function(fit, ref) {
   K = length(fit$pi)
   Pf = profiles_of(fit$rho)
@@ -206,7 +259,7 @@ align_to <- function(fit, ref) {
   cost = outer(seq_len(K), seq_len(K),
                 Vectorize(function(a, b) sum((Pf[a, ] - Pr[b, ])^2)))
   inv = integer(K)
-  inv[as.integer(clue::solve_LSAP(cost))] = seq_len(K)
+  inv[solve_lsap_min(cost)] = seq_len(K)
   list(pi = fit$pi[inv],
        rho = map(fit$rho, function(m) m[, inv, drop = FALSE]),
        post = if (!is.null(fit$post)) fit$post[, inv, drop = FALSE] else NULL,

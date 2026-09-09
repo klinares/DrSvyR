@@ -1,11 +1,10 @@
 # llm.R for DrSvyR -- OpenRouter endpoint
 # Endpoint, models, and every model call in the workflow.
 
-# THIS IS THE HOME VARIANT. It reaches OpenRouter through ellmer's own client
-#   and knows nothing about any other provider. The work variant that reaches
-#   an OpenAI-compatible endpoint is llm-openai.R at the repository root;
-#   exactly one of the two belongs in R/ at a time, and app.R stops if it
-#   finds both.
+# There is one of these now. The old arrangement -- this file for OpenRouter,
+#   a generated llm-openai.R for the work endpoint, exactly one of them in R/
+#   at a time -- is gone, because a deployed bundle has no file to swap. See
+#   the note above WISE_LLM_DEFAULTS.
 
 # ---- configuration -----------------------------------------------------
 
@@ -15,7 +14,22 @@
 #   than a dozen people editing a dotfile. The analyst's .Renviron holds one
 #   line: the key.
 
-WISE_LLM <- list(
+# THE ENDPOINT IS RESOLVED AT RUN TIME, NOT AT BUILD TIME.
+
+# This used to be a plain list called WISE_LLM, with a companion file
+#   llm-openai.R at the repository root for the work endpoint and a rule that
+#   exactly one of the two lived in R/. That cannot survive deployment: a
+#   published bundle is an artefact, and there is no file in it to swap.
+
+# So the endpoint is configuration. The trap, and the reason this is a
+#   function rather than a list of Sys.getenv() calls: a top-level assignment
+#   in a package is evaluated when the package is BUILT and the value is baked
+#   into the lazy-load database. WISE_LLM <- list(base_url = Sys.getenv(...))
+#   would capture whatever the build machine had, silently, and the first
+#   symptom would be calls going to the wrong provider with no error.
+# Resolved on every call rather than cached, because the cost is a handful of
+#   Sys.getenv() calls against a network round trip.
+WISE_LLM_DEFAULTS <- list(
   base_url = "https://openrouter.ai/api/v1",
   key_var  = "OPENROUTER_API_KEY",
 
@@ -25,6 +39,10 @@ WISE_LLM <- list(
 
   # "server" reads key_var from the environment. "analyst" ignores the
   #   environment entirely and requires a key pasted into the app.
+  # On a shared server this should be "analyst". The argument is the one in
+  #   llm_api_key() below: a key set on the host is otherwise picked up by
+  #   analysts who never supplied one and spent without attribution, and the
+  #   endpoint's own logs cannot tell you who asked what.
   key_source = "server",
   timeout    = 120,
 
@@ -33,6 +51,21 @@ WISE_LLM <- list(
   #   reading prompts carry response labels and item wording, so the replies
   #   are longer than a default of a few hundred tokens allows.
   max_tokens = 4000)
+
+WISE_LLM_ENV <- c(
+  base_url    = "DRSVYR_LLM_BASE_URL",
+  key_var     = "DRSVYR_LLM_KEY_VAR",
+  pm          = "DRSVYR_LLM_PM",
+  worker      = "DRSVYR_LLM_WORKER",
+  pm_fallback = "DRSVYR_LLM_PM_FALLBACK",
+  key_source  = "DRSVYR_LLM_KEY_SOURCE")
+
+wise_llm <- function() {
+  set = WISE_LLM_ENV |>
+    map(function(v) Sys.getenv(v, "")) |>
+    keep(nzchar)
+  utils::modifyList(WISE_LLM_DEFAULTS, set)
+}
 
 # ---- zz_llm ------------------------------------------------------------
 
@@ -78,23 +111,25 @@ llm_clear_session_key <- function(token) {
 }
 
 llm_api_key <- function() {
+  cfg = wise_llm()
+
   # In "analyst" mode the environment is not consulted at all. That is the
   #   point: a key set on a shared server would otherwise be picked up by an
   #   analyst who never supplied one, and spent without anyone noticing.
-  from_env = if (identical(WISE_LLM$key_source %||% "server", "server"))
-    Sys.getenv(WISE_LLM$key_var) else ""
+  from_env = if (identical(cfg$key_source, "server"))
+    Sys.getenv(cfg$key_var) else ""
 
   key = llm_session_key() %||% from_env
   if (!nzchar(key))
-    stop(WISE_LLM$key_var, " is not set. Either paste a key on the Start here ",
+    stop(cfg$key_var, " is not set. Either paste a key on the Start here ",
          "tab, or run usethis::edit_r_environ(), add\n",
-         "  ", WISE_LLM$key_var, "=your-key\n",
+         "  ", cfg$key_var, "=your-key\n",
          "save, and restart R.", call. = FALSE)
   key
 }
 
 llm_model <- function(role) {
-  m = WISE_LLM[[role]]
+  m = wise_llm()[[role]]
   if (is.null(m)) stop("No model configured for role '", role, "'.", call. = FALSE)
   m
 }
@@ -137,35 +172,31 @@ llm_chat <- function(model, system_prompt = NULL, seed = NULL) {
   #   outcomes: the ceiling stays low and nothing says so.
   args = list(temperature = 0, seed = seed)
   if ("max_tokens" %in% names(formals(ellmer::params)))
-    args$max_tokens = WISE_LLM$max_tokens %||% 4000L
+    args$max_tokens = wise_llm()$max_tokens %||% 4000L
   else
     warning("This version of ellmer has no max_tokens argument, so the token ",
             "ceiling is the endpoint's default. A long reply may come back ",
             "truncated mid-JSON.", call. = FALSE)
   p = do.call(ellmer::params, args)
 
-  # ellmer's OpenRouter client reads the key from the process environment, so
-  #   it cannot carry a per-session one. When an analyst has typed a key, the
-  #   compatible client is used instead and the key travels in the closure.
-  #   With no typed key this is exactly the path it has always taken.
-  if (is.null(llm_session_key()) &&
-      identical(WISE_LLM$provider, "openrouter")) {
-    # ellmer's own client reads the key from the environment and sets the
-    #   headers itself, so there is nothing to get wrong here.
-    ellmer::chat_openrouter(model = model, system_prompt = system_prompt,
-                            params = p, echo = "none")
-  } else {
-    # credentials must be a function; api_key is deprecated as of ellmer 0.4.0.
-    key = llm_api_key()
-    url = WISE_LLM$base_url
-    ellmer::chat_openai_compatible(
-      base_url = url,
-      model = model,
-      credentials = function() list(Authorization = paste("Bearer", key)),
-      system_prompt = system_prompt,
-      params = p,
-      echo = "none")
-  }
+  # One client, and the branch that used to be here is gone rather than fixed.
+  #   It read `identical(WISE_LLM$provider, "openrouter")`, and WISE_LLM had no
+  #   provider field, so the condition was identical(NULL, "openrouter") --
+  #   always FALSE. Every call in this package has always taken the
+  #   OpenAI-compatible path; the chat_openrouter() branch was unreachable and
+  #   the comment above it described behaviour that never happened.
+  # This is also the path the work endpoint needs, so there is nothing left
+  #   for a second file to do.
+  # credentials must be a function; api_key is deprecated as of ellmer 0.4.0.
+  #   The key travels in the closure and is never written anywhere.
+  key = llm_api_key()
+  ellmer::chat_openai_compatible(
+    base_url = wise_llm()$base_url,
+    model = model,
+    credentials = function() list(Authorization = paste("Bearer", key)),
+    system_prompt = system_prompt,
+    params = p,
+    echo = "none")
 }
 
 

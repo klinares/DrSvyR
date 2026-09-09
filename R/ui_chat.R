@@ -528,8 +528,8 @@ mod_key_server <- function(id, state) {
     output$status <- renderUI({
       set()
       mine <- !is.null(llm_session_key())
-      env <- identical(WISE_LLM$key_source %||% "server", "server") &&
-             nzchar(Sys.getenv(WISE_LLM$key_var))
+      cfg <- wise_llm()
+      env <- identical(cfg$key_source, "server") && nzchar(Sys.getenv(cfg$key_var))
 
       if (mine)
         tags$p(class = "text-success",

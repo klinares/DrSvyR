@@ -2,6 +2,11 @@
 
 # ![](images/clipboard-2542862929.jpeg)
 
+> **Branch `shiny_drsvyr`.** This branch is a Shiny application, not an R
+> package. You clone it and run it; there is nothing to install and no
+> `library(drsvyr)`. If you want the package, with `remotes::install_github()`
+> and `run_drsvyr()`, that is on `main`.
+
 **A survey methodologist you can consult, working on data you already have.**
 
 Finding groups inside a battery of survey questions, with standard errors that respect how the sample was actually drawn — and a record of who decided what.
@@ -59,35 +64,85 @@ Amber steps are the ones you decide. Nothing runs until you press a button.
 
 ------------------------------------------------------------------------
 
-## Installation
+## Running it
 
-One command, from any R console:
+Clone the repository and open it. There is nothing to install and nothing to
+build: this branch *is* the app.
 
-```r
-install.packages("remotes")
-remotes::install_github("klinares/DrSvyR")
+``` r
+# once, to get the packages the app needs
+install.packages(c(
+  "shiny", "bslib", "survey", "haven", "ggplot2", "purrr", "stringr",
+  "tibble", "tidyr", "dplyr", "base64enc", "digest", "fs", "furrr",
+  "future", "janitor", "jsonlite", "knitr", "markdown", "matrixStats",
+  "readr", "rlang", "viridis", "yaml", "zip"))
+
+# every time, from the repository root
+shiny::runApp(".")
 ```
 
-If a prompt asks whether to update other packages, choose **None** unless you specifically want newer versions of something already on your machine.
+In RStudio, opening `app.R` and pressing **Run App** does the same thing.
 
-Then run it:
+`app.R` at the root attaches those packages, checks that none of the verbs it
+needs has been masked, sources `R/` and hands back the application. Everything
+in `R/` defines functions and nothing in it runs on its own, which is what
+makes sourcing the folder in alphabetical order safe.
 
-```r
-library(drsvyr)
-run_drsvyr()
+**If a package is missing, the app says which one and stops.** It does not
+start half-loaded and fail three screens later.
+
+**The AI Survey Methodologist is optional and installs separately.** It needs
+`ellmer`, deliberately left out of the list above: on some internal mirrors the
+available version is broken, and requiring it would make an otherwise-working
+setup fail over a feature the analysis does not need. Without it, everything
+here runs exactly as described; the model drafts nothing and the analyst does
+what the model would have drafted. To switch it on:
+
+``` r
+install.packages(c("ellmer", "curl"))
 ```
 
-That is the whole installation. `drsvyr` has no compiled code and every dependency it needs is on CRAN, so there is nothing else to set up first — no Rtools, no conda, no separate environment.
+then set a key on the app's **Start here** screen, or put one in your
+`.Renviron`. The endpoint, the models and the key variable are all read from
+the environment, so nothing in `R/` has to be edited to point at a different
+provider:
 
-**If installation fails with `Permission denied` on a `.dll` file:** close every open R and RStudio window completely, not just restart the session, and try again. Windows will not overwrite a DLL that another running session still has loaded.
+| Variable | What it sets |
+|---|---|
+| `DRSVYR_LLM_BASE_URL` | the endpoint |
+| `DRSVYR_LLM_KEY_VAR` | the name of the variable holding your key |
+| `DRSVYR_LLM_KEY_SOURCE` | `server` reads the key from the environment; `analyst` requires one typed into the app |
+| `DRSVYR_LLM_PM` | the model that reads the analysis and writes prose |
+| `DRSVYR_LLM_WORKER` | the model that names one segment |
+| `DRSVYR_LLM_PM_FALLBACK` | the model used when the first one fails |
+| `DRSVYR_CLASSIFICATION` | the marking shown above every screen and written into the report |
+| `DRSVYR_WORKERS` | how many cores the model search may use |
 
-**The AI Survey Methodologist is optional and installs separately.** It needs the `ellmer` package, which is deliberately not installed automatically — on some internal mirrors the available version is broken, and pulling it in by default would make an otherwise-working install fail for a feature most of the analysis does not need. Without it, DrSvyR runs exactly as described above; the model drafts nothing, and the analyst does everything the model would otherwise draft. To enable it:
+Unset, they fall back to the values in `R/llm.R` and to `UNCLASSIFIED`.
 
-```r
-install.packages("ellmer")
+------------------------------------------------------------------------
+
+## Publishing it to a server
+
+The repository is the deployable unit, so there is no build step:
+
+``` r
+rsconnect::deployApp(".", appName = "drsvyr")
 ```
 
-then set an API key as described inside the app's Start Here screen.
+Set the environment variables above from the server's own interface rather than
+committing them. Two settings on the server matter:
+
+- **Maximum connections per process: 1.** The model search is synchronous R.
+  With more than one connection sharing a process, one analyst's search freezes
+  everybody else's browser for its duration.
+- **Memory.** A `.sav` expands in memory to roughly two to four times its size
+  on disk, and the app holds the raw file, the codebook and the design frame at
+  once. The upload ceiling is 150 MB; raise it with
+  `options(drsvyr.max_upload = ...)` only on a machine with the memory for it.
+
+Nothing is written outside each analyst's own temporary folder, and that folder
+is deleted when their session ends.
 
 ------------------------------------------------------------------------
 
@@ -101,7 +156,7 @@ Everything is delivered as a single archive, downloaded from the Outputs screen 
 - **`decisions/`** — each choice you made and the evidence you had when you made it, also shown inside the report.
 - **`errors.log`** — included only if something failed. Names the function it failed in and the stack below it; this is the file to send when something goes wrong.
 
-Nothing is written to your machine outside that one download. The app keeps no files between sessions.
+Nothing is written outside that one download. The app keeps no files between sessions: the folder it works in is temporary and goes when the session does.
 
 ------------------------------------------------------------------------
 
@@ -110,7 +165,7 @@ Nothing is written to your machine outside that one download. The app keeps no f
 The list a methodologist should audit. Each of these is enforced in code, and none of them can be turned off from the interface.
 
 |  |  |
-|------------------------------------|------------------------------------|
+|----|----|
 | A stratum with one sampling unit halts the design | It cannot take the replicate scaling, and continuing would contribute zero variance from the strata carrying least information |
 | Missing or non-positive weights halt at Review | Different estimators silently disagree about who is in the sample. The Design screen prints the stop; approving a configuration is where it is refused |
 | The classification table is rebuilt inside every replicate | Holding it fixed treats classification error as known |
