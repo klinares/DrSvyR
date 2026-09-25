@@ -362,6 +362,25 @@ JSON_QUOTE_RULE <- paste(
   "Inside a value, use single quotes for any quoted word: 'Nada', not",
   "\"Nada\". Do not put a line break inside a value.")
 
+# Two failures seen from the endpoint, neither of which a parse repair can fix:
+#   1. Chat-template tokens leaking into the reply (<|end_header_id|>,
+#      <|eot_id|>, a bare "assistant" line). That is the server failing to
+#      apply the model's template; the tokens are stripped before parsing.
+#   2. The model echoing the prompt's example object, so every value is "...".
+#      It parses as valid JSON and would reach the app as a segment named
+#      "...". It is treated as a failed attempt, so it is retried.
+clean_model_reply <- function(txt) {
+  txt = gsub("<\\|[^|>]{1,40}\\|>", " ", txt, perl = TRUE)
+  txt = gsub("(?m)^\\s*(assistant|user|system)\\s*$", "", txt, perl = TRUE)
+  trimws(txt)
+}
+
+is_placeholder_reply <- function(obj) {
+  vals = unlist(obj, use.names = FALSE)
+  vals = vals[is.character(vals)]
+  !length(vals) || all(trimws(vals) %in% c("", "...", "…"))
+}
+
 llm_json <- function(prompt, role = "worker", system_prompt = NULL,
                      validate = NULL, pattern = "(?s)\\{.*\\}", seed = NULL,
                      max_times = 3L, session_cap = 10L) {
@@ -374,14 +393,15 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
            "endpoint needs attention; further attempts would spend quota ",
            "without diagnosing it.", call. = FALSE)
     .llm_state$calls <- .llm_state$calls + 1L
-    parse_json_block(llm_chat(model, system_prompt, seed)$chat(ask,
-                                                               echo = FALSE),
-                     pattern)
+    reply = clean_model_reply(
+      llm_chat(model, system_prompt, seed)$chat(ask, echo = FALSE))
+    obj = parse_json_block(reply, pattern)
+    if (is_placeholder_reply(obj))
+      stop("The model returned the example template instead of an answer:\n",
+           substr(reply, 1, 300), call. = FALSE)
+    obj
   }
 
-  # quiet = FALSE deliberately. A retry wrapper that hides why it retried is
-  #   worse than no wrapper: the analyst sees "failed after 3 attempts" and has
-  #   nothing to act on, and so does whoever they call.
   before = .llm_state$calls
   obj = try(
     purrr::insistently(function() attempt(llm_model(role)),
@@ -392,13 +412,14 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
   .llm_state$retries <- .llm_state$retries +
     max(0L, .llm_state$calls - before - 1L)
 
-  # One fallback attempt, and only for the project manager. The worker's job is
-  #   small and repeated; if it is failing, a different model is unlikely to be
-  #   the reason and the analyst should see the error.
-  if (inherits(obj, "try-error") && identical(role, "pm")) {
-    message("Project manager model failed; trying ", llm_model("pm_fallback"), ".")
+  # One fallback attempt, now for both roles. The worker used to have none on
+  #   the reasoning that a small repeated task fails for prompt reasons; the
+  #   failure seen here is the endpoint serving that model badly, which a
+  #   different model does fix.
+  if (inherits(obj, "try-error") && !is.null(WISE_LLM$pm_fallback)) {
+    message("The ", role, " model failed; trying ", llm_model("pm_fallback"), ".")
     .llm_state$fallbacks <- .llm_state$fallbacks + 1L
-    obj = attempt(llm_model("pm_fallback"))
+    obj = try(attempt(llm_model("pm_fallback")), silent = TRUE)
   }
 
   if (inherits(obj, "try-error"))

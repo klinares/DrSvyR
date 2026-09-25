@@ -624,6 +624,18 @@ demo_na_codes <- function(x, na_codes = numeric(0)) {
   unique(c(as.numeric(na_codes), declared[!is.na(declared)], in_range))
 }
 
+# Nonresponse on a domain variable is a level, not a hole.
+
+# Refused, don't know, no answer and system missing are small one at a time,
+#   so they are grouped into one level, placed last. Dropping them instead made
+#   every domain table an estimate among the people who answered that question,
+#   and the composition table a share of those people rather than of the
+#   population -- with nothing on the page to say so.
+# It covers nonresponse only. A substantive category the analyst chose to leave
+#   blank (the recode example below blanks one gender category) stays excluded:
+#   that is a decision about the domain, not a respondent declining to answer.
+NOT_STATED <- "Not stated"
+
 # The one place a domain variable becomes a factor. Its categories are the
 #   values present in the data, in the order the source declares them.
 # A level the file remembers and the data does not have is not a category: it
@@ -632,11 +644,14 @@ demo_na_codes <- function(x, na_codes = numeric(0)) {
 #   factor() is belt and braces -- intersect() should have removed them
 #   already, and if it has not, this is where it shows rather than three
 #   screens later.
+# Not stated is appended last, and only when someone is in it. An empty
+#   level is exactly the phantom this function exists to prevent.
 domain_factor <- function(val, lv) {
-  lv = intersect(lv, unique(val[!is.na(val)]))
+  lv = setdiff(intersect(lv, unique(val[!is.na(val)])), NOT_STATED)
   if (!length(lv))
     stop("No level survived the recode: every value was mapped to blank or to ",
          "a nonresponse code.", call. = FALSE)
+  if (NOT_STATED %in% val) lv = c(lv, NOT_STATED)
   droplevels(factor(val, levels = lv))
 }
 
@@ -684,7 +699,9 @@ numeric_summary <- function(raw, variable, na_codes = numeric(0)) {
 apply_map <- function(x, map, na_codes) {
   v = as.numeric(unclass(x))
   src = as.character(haven::as_factor(x))
-  src[v %in% demo_na_codes(x, na_codes)] = NA_character_
+  # System missing and every declared or ticked nonresponse code.
+  nonresp = is.na(v) | v %in% demo_na_codes(x, na_codes)
+  src[nonresp] = NA_character_
 
   known = src %in% names(map) | is.na(src)
   unmatched = unique(src[!known])
@@ -697,13 +714,38 @@ apply_map <- function(x, map, na_codes) {
   out = rep(NA_character_, length(src))
   hit = !is.na(src)
   out[hit] = unname(map[src[hit]])
+  out[!is.na(out) & !nzchar(out)] = NA_character_
+
+  # A category left blank whose label reads as nonresponse (an undeclared DK
+  #   or refusal code the analyst saw on the recode screen) is nonresponse.
+  #   Anything else left blank is the analyst excluding a real category, and
+  #   stays out.
+  undeclared = hit & is.na(out) & grepl(NA_LABEL_PATTERNS, tolower(src))
+  out[nonresp | undeclared] = NOT_STATED
   out
 }
 
+# cut() turns anything outside the breaks into NA without a word, and with
+#   right-closed intervals that includes a value sitting exactly on the lowest
+#   break. Those used to vanish from every domain table. They now stop the run
+#   with the values named, because the fix -- widen the breaks, or declare the
+#   code as nonresponse -- is the analyst's to choose.
 apply_cut <- function(x, breaks, labels, na_codes) {
   v = as.numeric(unclass(x))
-  v[v %in% demo_na_codes(x, na_codes)] = NA_real_
-  as.character(cut(v, breaks = breaks, labels = labels))
+  nonresp = is.na(v) | v %in% demo_na_codes(x, na_codes)
+  v[nonresp] = NA_real_
+  out = as.character(cut(v, breaks = breaks, labels = labels))
+
+  lost = !nonresp & is.na(out)
+  if (any(lost))
+    stop(sum(lost), " value(s) fall outside the cut points (",
+         min(breaks), ", ", max(breaks), "]: ",
+         paste(utils::head(sort(unique(v[lost])), 5), collapse = ", "),
+         ". Widen the breaks (use -Inf or Inf at the ends), or declare those ",
+         "codes as nonresponse.", call. = FALSE)
+
+  out[nonresp] = NOT_STATED
+  out
 }
 
 build_demo_frame <- function(raw, specs, na_codes = numeric(0)) {
@@ -780,8 +822,10 @@ prompt_demo_grouping <- function(variable, label, levels_tbl, context) {
     " domain in survey estimation. Combine categories that are substantively",
     " similar, and combine any category too small to estimate within -- under",
     " about thirty respondents -- into a larger one where that is defensible.",
-    " Give every observed category a group. Use an empty string for a category",
-    " that should be treated as missing rather than grouped. Group names should",
+    " Give every observed category a group. Use an empty string for don't",
+    " know, refused or no answer; those are grouped into one 'Not stated'",
+    " level automatically. Use an empty string for any other category only if",
+    " it should be left out of the comparison altogether. Group names should",
     " be short and in English.\n\n",
     "Do not suggest a reference level. Which group later comparisons are read",
     " against is a decision about how the findings will be presented, and it",

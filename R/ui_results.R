@@ -80,6 +80,16 @@ mod_score_server <- function(id, state) {
       state$quality <- res$quality
       state$shares <- res$shares
 
+      # Everything downstream was estimated from the previous scoring. Left in
+      #   place, a report could pair these scores with the old domain tables
+      #   and nothing on the page would show it.
+      state$domains <- NULL
+      state$domain_reads <- NULL
+      state$report_summary <- NULL
+      state$report_not_answered <- NULL
+      state$report_html <- NULL
+      state$outputs <- NULL
+
       log_decision(
         "labels", "Respondents scored",
         decision = paste0(
@@ -378,7 +388,7 @@ mod_report_server <- function(id, state) {
         #   session and is read elsewhere, so its marking has to travel with
         #   it rather than come from the running app.
         textInput(ns("classification"), "Classification marking for the report",
-                  value = getOption("drsvyr.classification", "UNCLASSIFIED")),
+                  value = classification_text()),
         actionButton(ns("build"), "Build the report", class = "btn-primary"),
         actionButton(ns("edit_names"), "Edit the names"),
         tags$p(class = "text-muted",

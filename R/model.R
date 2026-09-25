@@ -783,7 +783,11 @@ draft_labels <- function(state, tick = NULL) {
                              ".csv"))
 
   done = if (fs::file_exists(partial))
-    readr::read_csv(partial, show_col_types = FALSE)
+    # Read as text. readr guesses a column of 1, 2, 3 as numbers, and the
+    #   next drafted row carries target as text, so bind_rows() refuses to
+    #   combine them the moment a run resumes from a part file.
+    readr::read_csv(partial, show_col_types = FALSE,
+                    col_types = readr::cols(.default = readr::col_character()))
   else tibble::tibble(target = character(), Label = character(),
                       Description = character())
 
@@ -865,7 +869,12 @@ read_labels <- function(cfg, key, n_expected) {
   f = label_file(cfg)
   if (!fs::file_exists(f)) return(NULL)
 
-  lab = readr::read_csv(f, show_col_types = FALSE)
+  # target and model_key are identifiers, so they are read as text whatever
+  #   they look like: a key of digits guessed as a number would never match.
+  lab = readr::read_csv(f, show_col_types = FALSE,
+                        col_types = readr::cols(target = readr::col_character(),
+                                                model_key = readr::col_character(),
+                                                .default = readr::col_guess()))
   if (!all(c("target", "Label", "Description", "model_key") %in% names(lab)))
     stop(f, " is missing columns. Delete it to redraft.", call. = FALSE)
   if (nrow(lab) != n_expected)

@@ -205,6 +205,20 @@ domain_estimates <- function(state, tick = NULL) {
   #   to answer enough items.
   rep_des = state$score_design$rep_des
   keep = state$score_design$keep
+
+  # The domain columns were copied into the scored frame when scoring ran. A
+  #   recode changed after that would leave these tables describing the old
+  #   grouping while the report labels them with the new one.
+  if (!is.null(state$demo_dat)) {
+    stale = purrr::keep(cfg$aux, function(v)
+      !identical(as.character(state$scored[[v]]),
+                 as.character(state$demo_dat[[v]])))
+    if (length(stale))
+      stop("The recode for ", paste(stale, collapse = ", "), " changed after ",
+           "respondents were scored. Score again before estimating domains.",
+           call. = FALSE)
+  }
+
   scored = state$scored[keep, , drop = FALSE]
 
   K = state$dimension
@@ -421,7 +435,14 @@ domain_estimates <- function(state, tick = NULL) {
          dplyr::mutate(share = TRUE,
                        estimator = factor(
            estimator, levels = c("Unweighted", "Design-based", "Corrected"))),
-       wald = list(est = w_est, V = w_V, meta = meta, df = degf(rep_des)),
+       # Not stated is estimated and shown, but left out of the pairwise tests.
+       #   It is not a category anyone acts on, and testing it against every
+       #   other level would enlarge the Holm family and weaken the tests that
+       #   are. est and V stay whole: meta keeps its idx column, so the rows
+       #   that remain still point at the right cells.
+       wald = list(est = w_est, V = w_V,
+                   meta = dplyr::filter(meta, level != NOT_STATED),
+                   df = degf(rep_des)),
        # unstable is the number of replicates in which the classification table
        #   was too ill-conditioned to invert meaningfully. They are kept in the
        #   variance and disclosed rather than dropped; see replicate_variance().
@@ -843,6 +864,10 @@ status_table <- function(state) {
     "Our choice",
     "Diagnostics rank rather than test, and an unbounded loop selects a battery to fit rather than to measure.",
 
+    "Nonresponse on a domain is kept as its own level",
+    "Our choice",
+    "Refused, don't know and no answer are grouped as 'Not stated' and estimated like any other level on the full design, so the composition of the population sums to one over everyone. It is left out of the pairwise tests. A category the analyst blanked on purpose is still excluded.",
+
     "Each question works the same way in every group compared",
     "Untested",
     "Measurement invariance is assumed, not tested. A real group difference and a difference in how a question is understood are indistinguishable in these tables.",
@@ -1054,6 +1079,14 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
     "groups introduces. The gap from the first to the second is what ignoring",
     "the design costs; the gap from the second to the third is what the",
     "placement costs.")))
+
+  if (any(state$domains$dom$level == NOT_STATED))
+    add(blk("p", paste(
+      "Respondents who refused, said they did not know, or gave no answer to a",
+      "demographic question are kept as their own level, \u201cNot stated\u201d,",
+      "rather than dropped. Its segment mix is shown so a reader can see whether",
+      "the people who withheld an answer differ from those who gave one. It is",
+      "not included in the tests of which levels differ.")))
 
   # Said once. It used to be the caption inside every domain figure, which on
   #   six domains is the same three lines printed six times and a shorter panel
