@@ -797,13 +797,20 @@ recode_audit <- function(raw, demo_dat, specs) {
 
 # A level too small to estimate within is worth knowing before it appears in a
 #   domain table with an interval wide enough to contain everything.
+# "Not stated" is exempt from the flag. It is small by design -- the analyst
+#   chose to keep nonresponse as its own level precisely because it is small
+#   and still shifts the pooled estimates -- and it is already shown without
+#   being tested (see domain_estimates()). Flagging it would put a warning on
+#   every recode that has any nonresponse, which teaches the analyst to ignore
+#   the warning for the substantive levels too, where it matters.
 demo_counts <- function(demo_dat, min_n = 30L) {
   purrr::imap(demo_dat, function(x, nm)
     tibble::tibble(variable = nm, level = levels(x)) |>
       dplyr::mutate(n = as.integer(table(x)[level]),
                     missing = sum(is.na(x)))) |>
     purrr::list_rbind() |>
-    dplyr::mutate(flag = dplyr::if_else(n < min_n, "too small to report", NA_character_))
+    dplyr::mutate(flag = dplyr::if_else(n < min_n & level != NOT_STATED,
+                                        "too small to report", NA_character_))
 }
 
 

@@ -10,6 +10,11 @@
 ^figures$
 ^images$
 
+^build_release\.R$
+^install_drsvyr\.R$
+^shiny_app\.R$
+^dist$
+
 # RStudio project file.
 ^.*\.Rproj$
 ^\.Rproj\.user$

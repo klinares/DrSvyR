@@ -388,7 +388,7 @@ mod_report_server <- function(id, state) {
         #   session and is read elsewhere, so its marking has to travel with
         #   it rather than come from the running app.
         textInput(ns("classification"), "Classification marking for the report",
-                  value = classification_text()),
+                  value = getOption("drsvyr.classification", "UNCLASSIFIED")),
         actionButton(ns("build"), "Build the report", class = "btn-primary"),
         actionButton(ns("edit_names"), "Edit the names"),
         tags$p(class = "text-muted",

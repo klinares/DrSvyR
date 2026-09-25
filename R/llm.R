@@ -20,7 +20,12 @@ WISE_LLM <- list(
   key_var  = "OPENROUTER_API_KEY",
 
   pm          = "meta-llama/llama-4-maverick",
-  worker      = "meta-llama/llama-3.1-70b-instruct",
+  # Was meta-llama/llama-3.1-70b-instruct. In a test run on the demo survey
+  #   (September 2026) it degenerated on the naming prompt -- "1.1, 1.1, ..."
+  #   until the token limit, then a timeout -- while llama-4-maverick answered
+  #   every other call in the same session correctly. One model for both roles
+  #   also means one model's behaviour to understand.
+  worker      = "meta-llama/llama-4-maverick",
   pm_fallback = "openai/gpt-5.4-nano",
 
   # "server" reads key_var from the environment. "analyst" ignores the
@@ -32,7 +37,25 @@ WISE_LLM <- list(
   #   do anything about: the JSON simply stops mid-string. The naming and
   #   reading prompts carry response labels and item wording, so the replies
   #   are longer than a default of a few hundred tokens allows.
-  max_tokens = 4000)
+  max_tokens = 4000,
+
+  # Ceiling for the one-shot JSON calls. Their answers are a few hundred
+  #   tokens; a reply that reaches this is almost always a model repeating
+  #   itself, and at 4000 tokens that took long enough to hit the timeout
+  #   instead of failing fast and moving to the next attempt.
+  json_max_tokens = 1500,
+
+  # OpenRouter serves each open-weight model from several upstream providers
+  #   and picks one per request. That is why the same model, prompt and data
+  #   can work one week and return "assistant assistant ..." the next: a
+  #   different provider, with a broken chat template, took the request.
+  #   Every failed reply now names the provider that served it. To stop
+  #   using one, list it here, for example:
+  #     routing = list(ignore = c("ProviderName"))
+  #   or pin an order:
+  #     routing = list(order = c("ProviderA", "ProviderB"), allow_fallbacks = FALSE)
+  #   Field names follow OpenRouter's provider-routing options.
+  routing = NULL)
 
 # ---- zz_llm ------------------------------------------------------------
 
@@ -362,6 +385,82 @@ JSON_QUOTE_RULE <- paste(
   "Inside a value, use single quotes for any quoted word: 'Nada', not",
   "\"Nada\". Do not put a line break inside a value.")
 
+# The structured calls go to /chat/completions directly, not through ellmer.
+#   The chat tab still uses ellmer (llm_chat() above), because it holds a
+#   conversation over many turns. A one-shot JSON request does not need a
+#   client object, and sending it by hand gives three things ellmer does not:
+#   - The body is exactly what is written here. When a reply comes back as
+#     garbage, the request is known, so the problem is on the endpoint's side.
+#   - response_format asks for JSON mode, and require_parameters makes
+#     OpenRouter send the request only to upstream providers that honour it.
+#     A provider whose template leaks "assistant" tokens is usually one that
+#     ignores such parameters, so this routes around it.
+#   - The reply says which upstream provider served it. Failure messages
+#     include that name, so a bad provider can be added to WISE_LLM$routing.
+# seed is not sent: with require_parameters, any provider that ignores seed
+#   would be excluded, which rules out most of them. The freeze file is what
+#   makes results reproducible, not the seed (see the note above llm_chat()).
+# OpenAI's reasoning models reject temperature, so it is left off for them.
+llm_complete <- function(model, system_prompt, user, json_mode = TRUE) {
+  # Needs curl only, not ellmer.
+  if (!requireNamespace("curl", quietly = TRUE))
+    stop("The AI Survey Methodologist needs curl, which is not installed. ",
+         "Run install.packages(\"curl\") and restart R.", call. = FALSE)
+  reasoning = grepl("^openai/(gpt-5|o[0-9])", model)
+
+  send = function(strict) {
+    body = list(
+      model = model,
+      messages = purrr::compact(list(
+        if (!is.null(system_prompt))
+          list(role = "system", content = system_prompt),
+        list(role = "user", content = user))),
+      max_tokens = WISE_LLM$json_max_tokens %||% 1500L)
+    if (!reasoning) body$temperature = 0
+    if (strict) body$response_format = list(type = "json_object")
+    # Provider names go as arrays even when there is one: toJSON's
+    #   auto_unbox would send ignore = "X" as a string, which OpenRouter
+    #   rejects or ignores.
+    routing = purrr::map(WISE_LLM$routing %||% list(),
+                         function(v) if (is.character(v)) as.list(v) else v)
+    body$provider = utils::modifyList(
+      list(require_parameters = strict), routing)
+
+    h = curl::new_handle()
+    curl::handle_setheaders(h,
+      Authorization = paste("Bearer", llm_api_key()),
+      `Content-Type` = "application/json")
+    curl::handle_setopt(h,
+      postfields = jsonlite::toJSON(body, auto_unbox = TRUE),
+      timeout = WISE_LLM$timeout %||% 120)
+    res = curl::curl_fetch_memory(
+      paste0(sub("/+$", "", WISE_LLM$base_url), "/chat/completions"),
+      handle = h)
+    txt = rawToChar(res$content)
+    Encoding(txt) = "UTF-8"
+    out = tryCatch(jsonlite::fromJSON(txt, simplifyVector = FALSE),
+                   error = function(e) NULL)
+    list(status = res$status_code, out = out, raw = txt)
+  }
+
+  r = send(json_mode)
+  # No upstream provider supports JSON mode for this model. Sent again
+  #   without it, rather than failing a model that would otherwise answer.
+  if (json_mode && r$status == 404)
+    r = send(FALSE)
+
+  err = r$out$error
+  if (r$status >= 400 || is.null(r$out) || !is.null(err))
+    stop("The endpoint refused the request for ", model, " (HTTP ", r$status,
+         "): ", substr(err$message %||% r$raw, 1, 300), call. = FALSE)
+
+  choice = r$out$choices[[1]]
+  reply = choice$message$content %||% ""
+  attr(reply, "provider") = r$out$provider %||% "unknown provider"
+  attr(reply, "finish") = choice$finish_reason %||% "unknown"
+  reply
+}
+
 # Two failures seen from the endpoint, neither of which a parse repair can fix:
 #   1. Chat-template tokens leaking into the reply (<|end_header_id|>,
 #      <|eot_id|>, a bare "assistant" line). That is the server failing to
@@ -378,7 +477,7 @@ clean_model_reply <- function(txt) {
 is_placeholder_reply <- function(obj) {
   vals = unlist(obj, use.names = FALSE)
   vals = vals[is.character(vals)]
-  !length(vals) || all(trimws(vals) %in% c("", "...", "…"))
+  !length(vals) || all(trimws(vals) %in% c("", "...", "\u2026"))
 }
 
 llm_json <- function(prompt, role = "worker", system_prompt = NULL,
@@ -393,12 +492,26 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
            "endpoint needs attention; further attempts would spend quota ",
            "without diagnosing it.", call. = FALSE)
     .llm_state$calls <- .llm_state$calls + 1L
-    reply = clean_model_reply(
-      llm_chat(model, system_prompt, seed)$chat(ask, echo = FALSE))
-    obj = parse_json_block(reply, pattern)
+    raw = llm_complete(model, system_prompt, ask,
+                       json_mode = identical(pattern, "(?s)\\{.*\\}"))
+    # Who served it, on every failure. Without it the log says the model
+    #   failed, when the fault is usually one upstream provider.
+    # Put first, not last: R cuts long error messages short, and a
+    #   degenerate reply is long, so a name at the end was lost.
+    served = paste0("[", model, " via ", attr(raw, "provider"),
+                    ", finish: ", attr(raw, "finish"), "] ")
+    if (identical(attr(raw, "finish"), "length"))
+      stop(served, "The reply reached the token limit without finishing, ",
+           "which on these prompts means the model was repeating itself. ",
+           "It starts: ", substr(raw, 1, 120), call. = FALSE)
+    reply = clean_model_reply(raw)
+    obj = tryCatch(parse_json_block(reply, pattern),
+                   error = function(e)
+                     stop(served, substr(conditionMessage(e), 1, 400),
+                          call. = FALSE))
     if (is_placeholder_reply(obj))
-      stop("The model returned the example template instead of an answer:\n",
-           substr(reply, 1, 300), call. = FALSE)
+      stop(served, "The model returned the example template instead of an ",
+           "answer:\n", substr(reply, 1, 300), call. = FALSE)
     obj
   }
 
