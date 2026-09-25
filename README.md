@@ -63,28 +63,29 @@ Amber steps are the ones you decide. Nothing runs until you press a button.
 
 One command, from any R console:
 
-```r
+``` r
 install.packages("remotes")
 remotes::install_github("klinares/DrSvyR")
 ```
 
 If a prompt asks whether to update other packages, choose **None** unless you specifically want newer versions of something already on your machine.
 
-Then run it:
+Alternatively, download the zip file and install from source:
 
-```r
-library(drsvyr)
-run_drsvyr()
+1.  Download the latest zip from the [Releases page](https://github.com/klinares/DrSvyR/releases) — `drsvyr_<version>.zip`.
+2.  In R:
+
+``` r
+setwd("~/Downloads")
+unzip("drsvyr_0.1.0.zip", exdir = "drsvyr_0.1.0")
+source("drsvyr_0.1.0/install_drsvyr.R", chdir = TRUE)
 ```
 
-That is the whole installation. `drsvyr` has no compiled code and every dependency it needs is on CRAN, so there is nothing else to set up first — no Rtools, no conda, no separate environment.
+Then run it:
 
-**If installation fails with `Permission denied` on a `.dll` file:** close every open R and RStudio window completely, not just restart the session, and try again. Windows will not overwrite a DLL that another running session still has loaded.
-
-**The AI Survey Methodologist is optional and installs separately.** It needs the `ellmer` package, which is deliberately not installed automatically — on some internal mirrors the available version is broken, and pulling it in by default would make an otherwise-working install fail for a feature most of the analysis does not need. Without it, DrSvyR runs exactly as described above; the model drafts nothing, and the analyst does everything the model would otherwise draft. To enable it:
-
-```r
-install.packages("ellmer")
+``` r
+library(drsvyr)
+run_drsvyr()
 ```
 
 then set an API key as described inside the app's Start Here screen.
@@ -147,3 +148,25 @@ The reference implementation is the Quarto workflow in the [weighted_inference_s
 ## Data acknowledgment
 
 The demonstration uses the 2023 AmericasBarometer for Ecuador by the LAPOP Lab at Vanderbilt University.
+
+## Cutting a release
+
+From the repository root:
+
+``` r
+source("build_release.R")
+```
+
+Writes two files to `dist/` (gitignored, never committed to `main`): `drsvyr_<version>.tar.gz`, the plain source tarball, and `drsvyr_<version>.zip`, that tarball bundled with `install_drsvyr.R` for analysts without `remotes` (see Installation, above).
+
+`--with-deps` additionally bundles Windows binaries of every dependency, for machines that can't reach CRAN at all — build it on the R version your organization deploys, since the binaries only install on a matching major.minor version.
+
+Then tag and publish:
+
+``` r
+system("git tag v<version>")
+system("git push origin v<version>")
+system('gh release create v<version> dist/drsvyr_<version>.zip --title "v<version>" --notes "..."')
+```
+
+or attach `dist/drsvyr_<version>.zip` by hand on the Releases page. Don't commit `dist/` to `main` — every rebuild would add a new full-size binary blob to git history with no way to reclaim the space later.
