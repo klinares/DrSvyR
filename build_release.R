@@ -6,8 +6,13 @@
 #                                        dependency, for machines that cannot
 #                                        reach CRAN at all
 #
-# Output: dist/drsvyr_<version>.zip. Analysts unzip it, open R, and run
-#   source("install_drsvyr.R", chdir = TRUE)
+# Output, both in dist/:
+#   drsvyr_<version>.tar.gz  the plain source tarball -- for you, or for
+#                           install.packages(that_path, repos = NULL,
+#                           type = "source")
+#   drsvyr_<version>.zip     the tarball plus install_drsvyr.R together, for
+#                           an analyst: they unzip it, open R, and run
+#                           source("install_drsvyr.R", chdir = TRUE)
 
 # The package goes in as a tarball from R CMD build, not as a zip of the
 #   folder. R CMD build applies .Rbuildignore, so work folders, .git and any
@@ -82,11 +87,20 @@ local({
     message(nrow(got), " of ", length(all_deps), " dependencies bundled.")
   }
 
-  # ---- 3. the zip ----------------------------------------------------------
+  # ---- 3. copy the plain tarball out of tempdir() ---------------------------
+  # R CMD build only ever writes inside `stage`, which is under tempdir() --
+  #   never under the repository -- so up to here the tarball does not exist
+  #   anywhere you would think to look for it. This is the file dir() was
+  #   missing.
+  tar_out = file.path(root, "dist", basename(tarball))
+  file.copy(tarball, tar_out, overwrite = TRUE)
+
+  # ---- 4. the zip, tarball + installer together -----------------------------
   file.copy(file.path(root, "install_drsvyr.R"), stage)
   zipfile = file.path(root, "dist", paste0(pkg, "_", ver, ".zip"))
   unlink(zipfile)
   zip::zip(zipfile, files = list.files(stage, recursive = TRUE),
            root = stage)
-  message("Built ", zipfile)
+
+  message("Built:\n  ", tar_out, "\n  ", zipfile)
 })
