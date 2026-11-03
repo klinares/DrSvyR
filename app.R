@@ -45,7 +45,7 @@ library(dplyr)
 #   the app here, by name, rather than three screens later.
 APP_PACKAGES <- c(
   "base64enc", "digest", "fs", "janitor", "jsonlite", "knitr", "markdown",
-  "matrixStats", "readr", "rlang", "viridis", "yaml")
+  "matrixStats", "MetBrewer", "readr", "rlang", "viridis", "yaml")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)

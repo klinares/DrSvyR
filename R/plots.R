@@ -125,12 +125,27 @@ wise_theme <- function(base_size = 14) {
                                   margin = margin(t = 10)))
 }
 
-# Trimmed away from both ends of the scale. The darkest viridis is lost on a
-#   dark background and the lightest on a white one; the middle reads on both.
-wise_colour <- function(...) scale_colour_viridis_d(..., begin = 0.15, end = 0.85)
-wise_fill   <- function(...) scale_fill_viridis_d(..., begin = 0.15, end = 0.85)
+# Unordered groups -- segments, estimators, measures -- take MetBrewer's
+#   Demuth. Up to ten segments must stay apart under colour-vision deficiency,
+#   and trimmed viridis did not: its last greens blur together. Measured as
+#   the smallest CIELAB distance between any two colours, worst of normal,
+#   deutan, protan and tritan vision: viridis 5.8 at ten groups, Demuth 9.7,
+#   and Demuth is ahead at every size from two up.
+# Interpolated ("continuous") rather than MetBrewer's discrete picks, because
+#   that is what was measured.
+# Ordered response categories stay on viridis (plot_item_stack() in
+#   engine.R), which separates them better than any MetBrewer palette did.
+WISE_GROUP_PALETTE <- "Demuth"
 
-# One accent for single-series figures, from the same trimmed range.
+wise_group_colours <- function(n)
+  as.character(MetBrewer::met.brewer(WISE_GROUP_PALETTE, n, type = "continuous"))
+
+wise_colour <- function(...)
+  ggplot2::discrete_scale("colour", palette = wise_group_colours, ...)
+wise_fill <- function(...)
+  ggplot2::discrete_scale("fill", palette = wise_group_colours, ...)
+
+# One accent for single-series figures, from viridis's trimmed middle.
 wise_accent <- function() viridis::viridis(1, begin = 0.35)
 
 # Rotated tick labels clip against the panel edge unless the plot is given room

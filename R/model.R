@@ -386,7 +386,7 @@ plot_profiles <- function(fit, items, title = NULL) {
     ggplot2::geom_line(linewidth = 0.8) +
     ggplot2::geom_point(size = 1.6) +
     ggplot2::scale_y_continuous(limits = c(0, 1)) +
-    ggplot2::scale_colour_viridis_d(name = NULL) +
+    wise_colour(name = NULL) +
     ggplot2::labs(x = NULL, y = "Position on the item", title = title) +
     wise_theme() + wise_rotate_x()
 }
@@ -399,7 +399,7 @@ plot_bic <- function(stats) {
     ggplot2::geom_line(linewidth = 0.8) +
     ggplot2::geom_point(size = 2) +
     ggplot2::scale_x_continuous(breaks = stats$K) +
-    ggplot2::scale_colour_viridis_d(name = NULL, end = 0.7) +
+    wise_colour(name = NULL) +
     ggplot2::labs(x = "Number of groups", y = NULL,
                   caption = fig_caption(
                     "Lower is better. A flattening curve says the extra",

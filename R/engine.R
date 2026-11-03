@@ -52,7 +52,7 @@ plot_item_stack <- function(df, items, title, show_missing = TRUE) {
     ggplot(aes(item, n, fill = value)) +
     geom_col(position = "fill") +
     scale_fill_manual(name = "Response",
-                      values = c(set_names(viridis(length(lev)), lev),
+                      values = c(set_names(viridis::viridis(length(lev)), lev),
                                  Missing = "grey75")) +
     labs(x = NULL, y = "Proportion", title = title,
          # Wrapped inline rather than through the app's fig_caption(), which
