@@ -467,13 +467,15 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
 #   them out of the prompt means the app can say which field the model omitted
 #   rather than showing a parse error.
 
-# Every passage the app has a model write goes through here: the writing
-#   rules as the system prompt (persona_writer, data.R), the fields the reply
-#   must carry, and its numbers checked against the request.
-llm_write <- function(prompt, fields)
-  llm_json(prompt, role = "pm", system_prompt = persona_writer,
+# Every passage the app has a model write goes through here: the AI reflexes
+#   as the system prompt (ai_reflexes_prompt(), ai_reflexes.R), the fields the
+#   reply must carry, and its numbers checked against the request.
+llm_write <- function(prompt, fields) {
+  system = ai_reflexes_prompt()
+  llm_json(prompt, role = "pm", system_prompt = system,
            validate = validate_all(validate_fields(fields),
-                                   validate_numbers(paste(persona_writer, prompt))))
+                                   validate_numbers(paste(system, prompt))))
+}
 
 # Several checks as one: each must pass.
 validate_all <- function(...) {

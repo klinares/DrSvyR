@@ -778,8 +778,9 @@ diagnostic_sentences <- function(state) {
 
   if (!is.null(state$measure$failed) && state$measure$failed > 0)
     out = c(out, sprintf(
-      paste("%d of %d replicate refits did not converge and were dropped, so",
-            "the margins on the measurement model are a lower bound."),
+      paste("%d of %d replicate refits reached the iteration limit without",
+            "converging. They are kept in the margins on the measurement model,",
+            "and the direction of any bias from them cannot be signed."),
       state$measure$failed, state$measure$replicates))
 
   paste(out, collapse = " ")
@@ -869,6 +870,50 @@ read_domain <- function(state, v) {
     c("finding", "caution"))
 }
 
+# Everything the analysis produced, as the report writer reads it: the design
+#   and its replicates, the battery, the search, the chosen model and its
+#   checks, each segment, who could be placed, and the run's own caveats. The
+#   AI reflexes say how to use it; validate_numbers() holds the writer to it.
+model_evidence <- function(state) {
+  cfg = state$cfg; d = state$model$diag; m = state$measure
+  dict = state$item_frame$dictionary
+  block = function(title, ...) c("", title, ...)
+  items = purrr::map_chr(cfg$items, function(it)
+    paste0("  ", it, ": ", dict$question[dict$item == it][1] %||% ""))
+  segs = purrr::map_chr(seq_len(nrow(state$labels)), function(k)
+    paste0("  ", k, ". ", state$labels$Label[k], ". ",
+           state$labels$Description[k] %||% "", "\n     Stands out on: ",
+           paste(segment_evidence(state, k), collapse = "; ")))
+  ratio = design_width_ratio(state$domains$dom)
+
+  paste(c(
+    "THE SURVEY DESIGN",
+    if (!is.null(m)) sprintf(paste(
+      "  Every interval is from a stratified jackknife with %d replicates and",
+      "%d design degrees of freedom."), m$replicates, m$degf),
+    if (is.finite(ratio)) sprintf(paste(
+      "  Across the domain estimates, design-based intervals are a median %.2f",
+      "times as wide as unweighted ones."), ratio),
+    block("THE BATTERY (variable: question)", items),
+    block("THE SEARCH (one row per number of segments fitted)",
+          log_table(state$search$stats)),
+    block(sprintf("THE CHOSEN MODEL: %d segments, chosen by the analyst", state$dimension),
+          sprintf("  Relative entropy %.2f (1 = every respondent clearly in one segment).",
+                  d$entropy),
+          if (!is.null(m)) c("  Segment shares of the population, with 95% intervals:",
+                             log_table(m$shares)),
+          "  How far each question separates the segments (0 to 1):",
+          log_table(d$discrimination),
+          "  Question pairs the segments explain least well (local dependence):",
+          log_table(d$bvr),
+          "  Level against pattern (whether a single scale would do):",
+          log_table(d$ratio)),
+    block("THE SEGMENTS (names written or approved by the analyst)", segs),
+    block("WHO COULD BE PLACED", log_table(state$coverage)),
+    block("LIMITS THE REPORT ALREADY STATES", paste0("  - ", report_caveats(state)))),
+    collapse = "\n")
+}
+
 prompt_report_summary <- function(state) {
   # Keyed on the variable, headed by the label. Without it the summary names
   #   variables the report never defines -- "differ by fs2, idio2, edre" --
@@ -894,10 +939,7 @@ prompt_report_summary <- function(state) {
   stringr::str_glue(
     "ANALYST CONTEXT\n{state$context %||% ''}\n\n",
     "{if (nzchar(q)) paste0('RESEARCH QUESTION\\n  ', q, '\\n\\n') else ''}",
-    "WHAT WAS MEASURED\n  {length(state$cfg$items)} items, ",
-    "{state$dimension} segments, ",
-    "named: {paste(state$labels$Label, collapse = '; ')}\n\n",
-    "COVERAGE\n{log_table(state$coverage)}\n\n",
+    "{model_evidence(state)}\n\n",
     "FINDINGS ALREADY WRITTEN FOR EACH DOMAIN\n",
     "{paste(reads, collapse = '\n')}\n\n",
     "TASK\nWrite two things for an analyst who will use this to write for",

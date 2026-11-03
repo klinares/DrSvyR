@@ -577,34 +577,6 @@ persona_pm <- paste(
   "decision rather than defining the statistic. Never recommend dropping an",
   "item and never choose a model; those are the analyst's calls.")
 
-# The writing reflexes: one fixed set of rules for every passage the app has a
-#   model write -- the configuration read-back, the readings of the search, the
-#   diagnostics and each domain, and the report summary -- so they read the
-#   same way and claim no more than the figures they were given. Each passage
-#   is also checked by validate_numbers() (llm.R) before it is used.
-WRITING_RULES <- paste(
-  "WRITING RULES. These apply to everything you write.",
-  "1. Use only the figures, labels and wording in the request. Bring in no",
-  "   outside facts about the country, the survey or the population.",
-  "2. Quote a number exactly as it is given, or as the same figure written as",
-  "   a percentage. Never compute a new number: no differences, ratios, sums",
-  "   or averages that are not already shown.",
-  "3. Tie every statement about a group or a difference to a figure shown.",
-  "4. No causal language. Groups differ in who is in them; belonging to a",
-  "   group does not cause anything.",
-  "5. Where a difference is not shown as resolved, write that the data do not",
-  "   separate the groups. Never write that they are equal or similar.",
-  "6. Never call anything significant, and never judge a result good or bad.",
-  "7. A segment's size is the estimated share of the population, with its",
-  "   interval; do not present a count of respondents as a population figure.",
-  "8. If the figures cannot answer what is asked, say so in one sentence",
-  "   rather than filling the space.",
-  "9. Write for a reader who knows the survey but not the statistics: short",
-  "   sentences, no unexplained jargon.",
-  sep = "\n")
-
-persona_writer <- paste(persona_pm, WRITING_RULES, sep = "\n\n")
-
 demo_candidates <- function(codebook, max_categories = 30L) {
   codebook |>
     dplyr::filter(n_distinct > 1, !is.na(label)) |>

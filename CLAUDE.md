@@ -10,7 +10,7 @@ R package any more.
 |---|---|
 | `README.md` `.gitignore` | Shared by every app |
 | `svysegment/app.R` | Settings, `library()` calls, masking checks, sources `R/`, state (`new_state`), `ui`, `server`, `shinyApp(ui, server)` |
-| `svysegment/R/` | 12 files of function definitions only, plus the empty `_disable_autoload.R`: core, data, engine, llm, model, plots, report_bundle, results, ui_data, ui_help, ui_model, ui_results. Sourced flat, alphabetically, by `app.R` |
+| `svysegment/R/` | 13 files of function definitions only, plus the empty `_disable_autoload.R`: ai_reflexes, core, data, engine, llm, model, plots, report_bundle, results, ui_data, ui_help, ui_model, ui_results. Sourced flat, alphabetically, by `app.R` |
 | `svysegment/R/ui_help.R` | The "Start here" tab, in cards, and the office logo |
 | `svysegment/www/reports/` `svysegment/www/logo/` | Method report PDF and office logo. Shiny serves `www/` at the site root |
 | `svysegment/data/` | LAPOP Ecuador 2023 demo `.sav`, found by `demo_survey_path()` |
@@ -23,7 +23,7 @@ R package any more.
 - `APP_LOGO`, `APP_OFFICE`: logo file in `www/logo/` and optional office name.
 - `options(bitmapType = "cairo")`: Connect has no X11.
 - `APP_PACKAGES`: packages used as `pkg::fn()`; a missing one stops startup.
-- The LLM endpoint is `WISE_LLM` in `R/llm.R`.
+- The LLM endpoint is `WISE_LLM` in `R/llm.R`; what the writing model knows and may say is `AI_REFLEXES` in `R/ai_reflexes.R`.
 
 ## Hard rules
 

@@ -120,7 +120,47 @@ help_ui <- function() {
                   "the decisions, the evidence behind each, and the caveats with ",
                   "the numbers they belong to.")))),
 
-    help_prompt_card())
+    help_prompt_card(),
+    help_reflexes_card())
+}
+
+# ---- the AI reflexes ---------------------------------------------------------
+# AI_REFLEXES in ai_reflexes.R, shown with the sources the model never sees.
+
+help_reflexes_card <- function() {
+  item = function(r)
+    tags$li(class = "mb-2",
+      tags$strong(gsub("_", " ", r$id)), tags$span(class = "text-muted", " — ", r$when),
+      tags$div(r$say),
+      if (!is.na(r$never)) tags$div(tags$em("Never: "), r$never),
+      if (!is.na(r$source)) tags$div(class = "text-muted", "Grounded in: ", r$source))
+  bslib::card(
+    bslib::card_header("AI reflexes: the skills behind the writing"),
+    bslib::layout_columns(
+      col_widths = c(4, 8),
+      tags$div(class = "small",
+        tags$p("A language model writes well but knows nothing of this analysis, ",
+               "and on survey questions it gives confident, conventional advice ",
+               "that survey methodology often contradicts. The ",
+               b_("AI reflexes"), " are the expertise the model is given instead: ",
+               "habits a careful survey methodologist has when writing up a ",
+               "design-based segmentation, each saying when it applies, what to ",
+               "write and what never to write."),
+        tags$p("They are grounded in the JPSM coursework and the survey-analysis ",
+               "books behind the SurvAI Expert assistant, and they are the system ",
+               "prompt for every passage a model writes here: the read-back of ",
+               "your plan, the readings of the search, the checks and each group ",
+               "comparison, and the report summary. The report summary also sees ",
+               "everything the analysis produced: the design and its replicates, ",
+               "the questions, every size fitted, the chosen model's checks and ",
+               "margins, each segment, and who could be placed."),
+        tags$p("Two checks follow every draft. Its fields must be complete, and ",
+               "every number in it must appear in the figures it was given; a draft ",
+               "that cites any other number is rejected and asked for again."),
+        tags$p(class = "text-muted mb-0",
+               "Version ", AI_REFLEXES_VERSION, ". The sources shown here are not ",
+               "sent to the model, so it cannot cite them as if it had read them.")),
+      tags$ol(class = "small mb-0", purrr::map(AI_REFLEXES, item))))
 }
 
 # One link per method report found in www/reports/.
@@ -248,16 +288,10 @@ help_prompt_card <- function() {
         tags$h6("Instructions"),
         tags$pre(class = "small tf-pre", persona_lca),
         tags$h6("One segment, as sent"),
-        tags$pre(class = "small tf-pre", help_example_prompt()),
-        tags$h6("How every reading and the report summary are written"),
-        tags$p(class = "small",
-               "The other passages a model writes (the read-back of your plan, ",
-               "the readings of the search, the checks and each group ",
-               "comparison, and the report summary) all follow one fixed set of ",
-               "rules. Before any of them is shown, every number in it is checked ",
-               "against the figures it was given; a draft that cites a number it ",
-               "was not given is rejected and asked for again."),
-        tags$pre(class = "small mb-0 tf-pre", WRITING_RULES)),
+        tags$pre(class = "small mb-0 tf-pre", help_example_prompt()),
+        tags$p(class = "small mt-2 mb-0",
+               "Everything else a model writes follows the AI reflexes in the ",
+               "next card.")),
       tags$div(
         tags$h6("Models in use"),
         help_models(),
