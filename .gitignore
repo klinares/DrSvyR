@@ -9,9 +9,6 @@
 rsconnect/
 rsconnect-python/
 
-# Old package build output from before this became a set of app folders.
-dist/
-
 # Analyst data and outputs live in each app's temporary session folder, never
 #   in this repository. The one survey file that belongs here is the
 #   demonstration data an app ships with. A directory ignored outright cannot

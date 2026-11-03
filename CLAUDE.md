@@ -8,7 +8,7 @@ R package any more.
 
 | Path | What it is |
 |---|---|
-| `README.md` `LICENSE` `.gitignore` | Shared by every app |
+| `README.md` `.gitignore` | Shared by every app |
 | `svysegment/app.R` | Settings, `library()` calls, masking checks, sources `R/`, state (`new_state`), `ui`, `server`, `shinyApp(ui, server)` |
 | `svysegment/R/` | 11 files, function definitions only: core, data, engine, llm, model, plots, report_bundle, results, ui_data, ui_model, ui_results. Sourced flat, alphabetically, by `app.R` |
 | `svysegment/help.md` | The "Start here" tab |

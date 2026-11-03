@@ -41,7 +41,6 @@ that publishing creates inside an app folder is ignored by git.
 ```
 DrSvyR/
   README.md        this file
-  LICENSE
   .gitignore       shared by every app
   images/          the repository's own images (this README)
   svysegment/      one app: app.R, R/, help.md, www/, data/, README.md
@@ -53,7 +52,3 @@ Give it its own top-level folder with an `app.R` (or `ui.R` and `server.R`), its
 own README, and its own `.rscignore`. If it ships a demonstration data file,
 let that one file back in through `.gitignore` the way `svysegment` does;
 every other survey file stays out.
-
-## Licence
-
-MIT. See [LICENSE](LICENSE).
