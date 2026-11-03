@@ -1,5 +1,7 @@
 # DrSvyR
 
+<img src="images/drsvyr.jpeg" alt="DrSvyR" width="300">
+
 Shiny apps for analysing complex survey data. Each app is a self-contained
 folder that runs on its own and publishes to Posit Connect on its own.
 
@@ -41,6 +43,7 @@ DrSvyR/
   README.md        this file
   LICENSE
   .gitignore       shared by every app
+  images/          the repository's own images (this README)
   svysegment/      one app: app.R, R/, help.md, www/, data/, README.md
 ```
 
