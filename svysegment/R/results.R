@@ -1294,9 +1294,11 @@ report_caveats <- function(state) {
             "depends on them, but no one verified them against the profiles."),
 
     if (!is.null(state$measure$failed) && state$measure$failed > 0)
-      paste0(state$measure$failed, " replicate refits did not converge and ",
-             "were dropped. The intervals on the measurement model are ",
-             "narrower than they should be and are a lower bound."),
+      paste0(state$measure$failed, " replicate refits reached the iteration ",
+             "limit without meeting the convergence tolerance. They are kept ",
+             "in the variance rather than dropped, because dropping them could ",
+             "only narrow the intervals; the direction in which they bias the ",
+             "intervals on the measurement model cannot be signed."),
 
     paste("Domain intervals hold the measurement model fixed: the",
           "classification table is recomputed in every replicate, but the",
