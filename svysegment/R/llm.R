@@ -429,9 +429,15 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
     obj
   }
 
+  # insistently() reports only "Request failed after 3 attempts", so the last
+  #   attempt's own error is kept: that is the reason the analyst needs.
+  last = NULL
+  logged = function(model)
+    withCallingHandlers(attempt(model), error = function(e) last <<- e)
+
   before = .llm_state$calls
   obj = try(
-    purrr::insistently(function() attempt(llm_model(role)),
+    purrr::insistently(function() logged(llm_model(role)),
                        rate = purrr::rate_backoff(pause_base = 2,
                                                   max_times = max_times),
                        quiet = FALSE)(),
@@ -443,11 +449,11 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
   #   endpoint serving a model badly, which a different model does fix.
   if (inherits(obj, "try-error") && !is.null(WISE_LLM$pm_fallback)) {
     message("The ", role, " model failed; trying ", llm_model("pm_fallback"), ".")
-    obj = try(attempt(llm_model("pm_fallback")), silent = TRUE)
+    obj = try(logged(llm_model("pm_fallback")), silent = TRUE)
   }
 
   if (inherits(obj, "try-error"))
-    stop(conditionMessage(attr(obj, "condition")), call. = FALSE)
+    stop(conditionMessage(last %||% attr(obj, "condition")), call. = FALSE)
 
   if (!is.null(validate)) validate(obj)
   obj

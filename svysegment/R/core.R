@@ -209,6 +209,11 @@ aux_levels <- function(state, v) {
 #   that is one of ours is the place worth naming; everything below it is
 #   dplyr or survey internals that mean nothing to an analyst.
 
+# purrr and rlang wrap an error raised inside map() in one that names the
+#   index, and keep the original as $parent. The innermost error is the cause.
+root_cause <- function(e)
+  if (inherits(e$parent, "condition")) root_cause(e$parent) else e
+
 # The returned object is shaped exactly like try()'s, so every existing call
 #   site keeps working and simply gets a better message.
 wise_try <- function(expr, what = "This step") {
@@ -230,11 +235,13 @@ wise_try <- function(expr, what = "This step") {
          else trace[!is.na(trace) & trace %in% ls(globalenv())]
   where = if (length(ours)) ours[length(ours)] else NA_character_
 
-  msg = conditionMessage(res)
-  res$message = paste0(
+  # A fresh condition rather than an edited one: an rlang error prints the
+  #   whole chain it wraps, so editing its message would still show purrr's
+  #   "In index: 1. Caused by error:" ahead of the cause.
+  res = simpleError(paste0(
     what, " failed",
     if (!is.na(where)) paste0(" in ", where, "()") else "",
-    ": ", msg)
+    ": ", conditionMessage(root_cause(res))))
 
   # The full stack goes to the work folder rather than into a notification an
   #   analyst cannot copy out of. Wrapped because a failure before the folder
