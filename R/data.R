@@ -577,20 +577,6 @@ persona_pm <- paste(
   "decision rather than defining the statistic. Never recommend dropping an",
   "item and never choose a model; those are the analyst's calls.")
 
-prompt_battery_proposal <- function(candidates, context) {
-  rows = stringr::str_glue_data(
-    candidates, "  {variable} ({n_responses} categories): {label}")
-  stringr::str_glue(
-    "ANALYST CONTEXT\n{context}\n\n",
-    "CANDIDATE VARIABLES\n{paste(rows, collapse = '\n')}\n\n",
-    "TASK\nGroup these into at most four candidate batteries. A battery is a",
-    " set of items that plausibly measure one underlying thing, judged from the",
-    " question wording and the response format. Name each battery, list its",
-    " variables, and give one sentence on what it appears to measure. Leave out",
-    " variables that fit no battery.\n\n",
-    "Return only valid JSON, no prose and no markdown fences:\n",
-    '{{"batteries": [{{"name": "...", "variables": ["..."], "rationale": "..."}}]}}')
-}
 demo_candidates <- function(codebook, max_categories = 30L) {
   codebook |>
     dplyr::filter(n_distinct > 1, !is.na(label)) |>

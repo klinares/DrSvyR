@@ -44,18 +44,14 @@ library(dplyr)
 # Called as pkg::fn() in R/ and never attached. Listed so a missing one stops
 #   the app here, by name, rather than three screens later.
 APP_PACKAGES <- c(
-  "base64enc", "digest", "fs", "janitor", "jsonlite", "knitr", "markdown",
-  "matrixStats", "MetBrewer", "readr", "rlang", "viridis", "yaml")
+  "base64enc", "curl", "digest", "fs", "janitor", "jsonlite", "knitr",
+  "markdown", "matrixStats", "MetBrewer", "readr", "rlang", "viridis", "yaml")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
   if (length(missing))
     stop("Not installed, so the app cannot start: ",
          paste(missing, collapse = ", "), call. = FALSE)
-  # ellmer drafts the segment names and the written sections. Without it the
-  #   model, the estimates and the report are unchanged; only the prose is.
-  if (!requireNamespace("ellmer", quietly = TRUE))
-    message("ellmer is not installed: names and prose will not be drafted.")
 })
 
 # What a NAMESPACE used to guarantee, checked. A masked verb fails here rather

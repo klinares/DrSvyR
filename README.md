@@ -9,19 +9,18 @@ run it. Nothing is installed or built. The R package, launched with
 ```r
 install.packages(c(
   "shiny", "bslib", "survey", "haven", "ggplot2", "purrr", "stringr",
-  "tibble", "tidyr", "dplyr", "base64enc", "digest", "fs", "janitor",
-  "jsonlite", "knitr", "markdown", "matrixStats", "MetBrewer", "readr",
-  "rlang", "viridis", "yaml"))
+  "tibble", "tidyr", "dplyr", "base64enc", "curl", "digest", "fs",
+  "janitor", "jsonlite", "knitr", "markdown", "matrixStats", "MetBrewer",
+  "readr", "rlang", "viridis", "yaml"))
 
 shiny::runApp(".")      # from the repository root
 ```
 
 Or open `app.R` in RStudio and press **Run App**.
 
-Optional: `install.packages(c("ellmer", "curl"))` and an API key on the
-**Start here** screen let a language model draft segment names and written
-sections. Without them the model, the estimates and the report are identical;
-only the drafted prose is missing.
+An API key on the **Start here** screen lets a language model draft segment
+names and written sections. Without one the model, the estimates and the
+report are identical; only the drafted prose is missing.
 
 ## Publish it to Posit Connect
 

@@ -10,7 +10,7 @@ separately.
 | Path | What it is |
 |---|---|
 | `app.R` | Settings, `library()` calls, masking checks, sources `R/`, state (`new_state`), `WISE_TABS`, `ui`, `server`, `shinyApp(ui, server)` |
-| `R/` | 12 files, function definitions only: core, data, engine, llm, model, plots, reflexes, report_bundle, results, ui_data, ui_model, ui_results. Sourced flat, alphabetically, by `app.R` |
+| `R/` | 11 files, function definitions only: core, data, engine, llm, model, plots, report_bundle, results, ui_data, ui_model, ui_results. Sourced flat, alphabetically, by `app.R` |
 | `help.md` | The "Start here" tab |
 | `www/figures/` | Help images. Shiny serves `www/` at the site root, so `help.md` links them as `figures/...` |
 | `data/` | LAPOP Ecuador 2023 demo `.sav`, found by `demo_survey_path()` |

@@ -1,11 +1,10 @@
-# llm.R for DrSvyR -- OpenRouter endpoint
+# llm.R for DrSvyR
 # Endpoint, models, and every model call in the workflow.
 
-# THIS IS THE HOME VARIANT. It reaches OpenRouter through ellmer's own client
-#   and knows nothing about any other provider. The work variant that reaches
-#   an OpenAI-compatible endpoint is llm-openai.R at the repository root;
-#   exactly one of the two belongs in R/ at a time, and app.R stops if it
-#   finds both.
+# Every call is one POST to WISE_LLM$base_url/chat/completions through curl.
+#   The request shape is OpenAI's; the provider-routing fields are
+#   OpenRouter's. Pointing the app at another endpoint means changing the block
+#   below and checking that endpoint accepts or ignores those fields.
 
 # ---- configuration -----------------------------------------------------
 
@@ -61,8 +60,8 @@ WISE_LLM <- list(
 
 # Every model call in the workflow goes through this file.
 
-#   1. Client construction
-#   2. Call budget
+#   1. Keys and models
+#   2. Per-process state
 #   3. JSON calls, retry and fallback
 #   4. Freeze-file keying
 
@@ -71,11 +70,11 @@ WISE_LLM <- list(
 #   is never written anywhere: it is passed as an argument and stays local to
 #   the call. Nothing here calls Sys.setenv().
 
-# Requires: ellmer, purrr, jsonlite, digest, dplyr, tibble, readr, fs
+# Requires: curl, purrr, jsonlite, digest, dplyr, tibble, readr, fs
 
 
-# Section 1 builds the client. Two roles: the project manager reads the
-#   analysis and writes prose, the worker names one segment.
+# Section 1 finds the key and the model. Two roles: the project manager reads
+#   the analysis and writes prose, the worker names one segment.
 #______________________________________________________________________________
 
 # getDefaultReactiveDomain() is the current Shiny session inside any reactive,
@@ -122,83 +121,12 @@ llm_model <- function(role) {
   m
 }
 
-# A fresh chat object per call is deliberate, not wasteful. ellmer chat objects
-#   accumulate turns, and the per-segment naming design depends on each segment
-#   being read in isolation; a shared client would carry segment k-1 into
-#   segment k and reintroduce the confusion that reading them separately
-#   avoids. Construction is cheap.
-
-# temperature 0 throughout. seed is passed where the provider honours it and
-#   ignored where it does not, so it is a convenience rather than the
-#   reproducibility mechanism; the freeze file is that.
-
-# ellmer is a suggested dependency, not a required one: the analysis, the
-#   estimates and the report all work without it. curl is checked too, and
-#   separately, because it is ellmer's HTTP layer rather than ellmer itself --
-#   without this the failure surfaces as "there is no package called 'curl'"
-#   from somewhere deep in a stack the analyst has no way to read.
-llm_require <- function() {
-  missing = c("ellmer", "curl")[
-    !vapply(c("ellmer", "curl"),
-            function(p) requireNamespace(p, quietly = TRUE), logical(1))]
-  if (length(missing))
-    stop("The AI Survey Methodologist needs ", paste(missing, collapse = " and "),
-         ", which ", if (length(missing) > 1) "are" else "is", " not installed. ",
-         "Everything else works without it: the model still fits, the estimates ",
-         "and their margins are unaffected, and the report is written with ",
-         "generic names and no prose. To switch it on, run install.packages(c(",
-         paste(sprintf('"%s"', missing), collapse = ", "),
-         ")) and restart R.", call. = FALSE)
-  invisible(TRUE)
-}
-
-llm_chat <- function(model, system_prompt = NULL, seed = NULL) {
-  llm_require()
-  # Built by name rather than passed positionally, and max_tokens only where
-  #   the installed ellmer knows the argument. An older version would take it
-  #   into ... and ignore it silently, which is the worst of the three
-  #   outcomes: the ceiling stays low and nothing says so.
-  args = list(temperature = 0, seed = seed)
-  if ("max_tokens" %in% names(formals(ellmer::params)))
-    args$max_tokens = WISE_LLM$max_tokens %||% 4000L
-  else
-    warning("This version of ellmer has no max_tokens argument, so the token ",
-            "ceiling is the endpoint's default. A long reply may come back ",
-            "truncated mid-JSON.", call. = FALSE)
-  p = do.call(ellmer::params, args)
-
-  # ellmer's OpenRouter client reads the key from the process environment, so
-  #   it cannot carry a per-session one. When an analyst has typed a key, the
-  #   compatible client is used instead and the key travels in the closure.
-  #   With no typed key this is exactly the path it has always taken.
-  if (is.null(llm_session_key()) &&
-      identical(WISE_LLM$provider, "openrouter")) {
-    # ellmer's own client reads the key from the environment and sets the
-    #   headers itself, so there is nothing to get wrong here.
-    ellmer::chat_openrouter(model = model, system_prompt = system_prompt,
-                            params = p, echo = "none")
-  } else {
-    # credentials must be a function; api_key is deprecated as of ellmer 0.4.0.
-    key = llm_api_key()
-    url = WISE_LLM$base_url
-    ellmer::chat_openai_compatible(
-      base_url = url,
-      model = model,
-      credentials = function() list(Authorization = paste("Bearer", key)),
-      system_prompt = system_prompt,
-      params = p,
-      echo = "none")
-  }
-}
-
-
-# Section 2 counts calls. The quota is per rolling window and shared with
-#   whatever else the analyst is doing, so the count is shown in the app rather
-#   than discovered when a call fails.
+# Section 2 is per-process state: the keys analysts type, and a call count
+#   that caps retries per session so a failing endpoint is not hammered.
 #______________________________________________________________________________
 
 # An environment rather than an option, so a stray options() call cannot reset
-#   it and the count survives being read from a background process.
+#   it.
 
 .llm_state <- new.env(parent = emptyenv())
 
@@ -211,20 +139,6 @@ llm_chat <- function(model, system_prompt = NULL, seed = NULL) {
 
 .llm_state$calls <- 0L
 .llm_state$retries <- 0L
-.llm_state$fallbacks <- 0L
-
-llm_calls_used <- function() {
-  list(calls = .llm_state$calls,
-       retries = .llm_state$retries,
-       fallbacks = .llm_state$fallbacks)
-}
-
-llm_reset_count <- function() {
-  .llm_state$calls <- 0L
-  .llm_state$retries <- 0L
-  .llm_state$fallbacks <- 0L
-  invisible(NULL)
-}
 
 
 # Section 3 is the call itself.
@@ -385,10 +299,8 @@ JSON_QUOTE_RULE <- paste(
   "Inside a value, use single quotes for any quoted word: 'Nada', not",
   "\"Nada\". Do not put a line break inside a value.")
 
-# The structured calls go to /chat/completions directly, not through ellmer.
-#   The chat tab still uses ellmer (llm_chat() above), because it holds a
-#   conversation over many turns. A one-shot JSON request does not need a
-#   client object, and sending it by hand gives three things ellmer does not:
+# Every call is a one-shot JSON request sent by hand rather than through a
+#   client package, which gives three things:
 #   - The body is exactly what is written here. When a reply comes back as
 #     garbage, the request is known, so the problem is on the endpoint's side.
 #   - response_format asks for JSON mode, and require_parameters makes
@@ -397,15 +309,11 @@ JSON_QUOTE_RULE <- paste(
 #     ignores such parameters, so this routes around it.
 #   - The reply says which upstream provider served it. Failure messages
 #     include that name, so a bad provider can be added to WISE_LLM$routing.
-# seed is not sent: with require_parameters, any provider that ignores seed
-#   would be excluded, which rules out most of them. The freeze file is what
-#   makes results reproducible, not the seed (see the note above llm_chat()).
+# temperature is 0. seed is not sent: with require_parameters, any provider
+#   that ignores seed would be excluded, which rules out most of them. The
+#   freeze file is what makes results reproducible, not temperature or seed.
 # OpenAI's reasoning models reject temperature, so it is left off for them.
 llm_complete <- function(model, system_prompt, user, json_mode = TRUE) {
-  # Needs curl only, not ellmer.
-  if (!requireNamespace("curl", quietly = TRUE))
-    stop("The AI Survey Methodologist needs curl, which is not installed. ",
-         "Run install.packages(\"curl\") and restart R.", call. = FALSE)
   reasoning = grepl("^openai/(gpt-5|o[0-9])", model)
 
   send = function(strict) {
@@ -531,7 +439,6 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
   #   different model does fix.
   if (inherits(obj, "try-error") && !is.null(WISE_LLM$pm_fallback)) {
     message("The ", role, " model failed; trying ", llm_model("pm_fallback"), ".")
-    .llm_state$fallbacks <- .llm_state$fallbacks + 1L
     obj = try(attempt(llm_model("pm_fallback")), silent = TRUE)
   }
 

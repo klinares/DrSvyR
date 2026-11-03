@@ -105,43 +105,6 @@ WISE_SUBDIRS <- c("data", "docs", "dict", "decisions", "cache", "output")
   shiny::getDefaultReactiveDomain()
 }
 
-# Checked before anything is created, so a folder chosen by mistake fails on
-#   selection rather than after the first stage has written to it.
-scaffold_work_folder <- function(path) {
-  path = fs::path_abs(path)
-
-  # Checked here as well as in wise_path(), because this is where the folder
-  #   is adopted. Refusing at the first write instead would leave the analyst
-  #   several screens in before anything said so.
-  assert_outside_repo(path)
-
-  if (!fs::dir_exists(path))
-    stop("No such folder: ", path, call. = FALSE)
-
-  # The write probe stays. It catches a folder chosen by mistake at selection
-  #   rather than after the first stage has tried to write to it, which is a
-  #   different problem from where the folder sits.
-  probe = fs::path(path, ".wise_write_probe")
-  ok = try(fs::file_create(probe), silent = TRUE)
-  if (inherits(ok, "try-error"))
-    stop("Cannot write to ", path, ". Choose a folder you own.", call. = FALSE)
-  fs::file_delete(probe)
-
-  fs::dir_create(fs::path(path, WISE_SUBDIRS))
-
-  s = .wise_session()
-  if (is.null(s)) {
-    .wise$work_dir <- path
-  } else {
-    tok = s$token
-    .wise$sessions[[tok]] <- path
-    # .wise is an environment, so the closure writes to it by reference and
-    #   the registry does not grow across a day of sessions.
-    s$onSessionEnded(function() .wise$sessions[[tok]] <- NULL)
-  }
-  invisible(path)
-}
-
 work_dir <- function() {
   s = .wise_session()
   p = if (is.null(s)) .wise$work_dir else .wise$sessions[[s$token]]
@@ -193,21 +156,6 @@ demo_survey_path <- function() {
   cand = if (fs::dir_exists(d))
     fs::dir_ls(d, regexp = "[.](sav|zsav|dta)$", fail = FALSE) else character(0)
   if (length(cand)) as.character(cand[[1]]) else NULL
-}
-
-
-# What the analyst actually dropped in. Extensions rather than fixed names,
-#   and the whole folder rather than just data/, because an analyst who put the
-#   file at the top level is not wrong -- they just have not read the layout.
-survey_work_folder <- function(path = work_dir()) {
-  found = function(glob) {
-    fs::dir_ls(path, recurse = TRUE, type = "file", glob = glob) |>
-      purrr::discard(function(f) fs::path_has_parent(f, fs::path(path, "output")))
-  }
-  tibble::tibble(
-    kind = c(rep("data", length(found("*.sav")) + length(found("*.dta"))),
-             rep("document", length(found("*.pdf")))),
-    file = c(found("*.sav"), found("*.dta"), found("*.pdf")))
 }
 
 
@@ -325,13 +273,6 @@ check_dims <- function(n, expected, what, detail = NULL) {
 #   design and the whole dimension search, neither of which changed.
 #______________________________________________________________________________
 
-# The key covers only what a stage actually depends on, which is the point.
-#   Changing the item list invalidates the search and everything after it and
-#   leaves the design alone; changing the data file invalidates everything.
-cache_key <- function(...) {
-  digest::digest(list(...))
-}
-
 cache_file <- function(stage, key) {
   wise_path("cache", paste0(stage, "_", substr(key, 1, 12), ".rds"))
 }
@@ -354,17 +295,6 @@ cached <- function(stage, key, compute) {
   if (!is.null(hit)) return(hit)
   message("Running ", stage, " (no cached result for this specification).")
   cache_write(stage, key, compute())
-}
-
-# Cached fits are keyed, so a stale one is never read -- but they accumulate
-#   across an iterating session and each holds a fitted model. Called from the
-#   app when the analyst finishes a run.
-cache_clear <- function(stage = NULL) {
-  files = fs::dir_ls(wise_path("cache"), glob = "*.rds")
-  if (!is.null(stage))
-    files = files[fs::path_file(files) |> startsWith(paste0(stage, "_"))]
-  fs::file_delete(files)
-  invisible(length(files))
 }
 
 # ---- logging -----------------------------------------------------------

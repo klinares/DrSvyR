@@ -687,39 +687,6 @@ export_data <- function(state, format = c("sav", "dta")) {
   path
 }
 
-# The three estimators as columns rather than rows. A reader compares them
-#   across a row, which is also three times fewer rows on the page.
-# level_order is the analyst's declared order. Arranging on the character
-#   column sorted it alphabetically, so Appendix A listed an ordinal variable
-#   in a different order from the figure and the table in the body.
-domain_wide <- function(dom, variable, labels, level_order = NULL) {
-  # Older result objects predate these columns. Absent means nothing to mark,
-  #   which is the safe default in both directions.
-  if (!"boundary" %in% names(dom)) dom$boundary = FALSE
-  if (!"share" %in% names(dom)) dom$share = FALSE
-
-  dom |>
-    dplyr::filter(variable == !!variable) |>
-    dplyr::mutate(Group = labels[segment],
-                  # Only where the quantity is a share. A value of
-                  #   -0.094 is the population average less 0.094 and there is
-                  #   nothing out of range about it; marking those as though
-                  #   they had left [0, 1] tells the reader something false.
-                  outside = dplyr::coalesce(share, FALSE) &
-                            (dplyr::coalesce(boundary, FALSE) |
-                             lo < 0 | hi > 1),
-                  cell = sprintf("%.3f [%.3f, %.3f]%s", p, lo, hi,
-                                 dplyr::if_else(outside, "\u2020", ""))) |>
-    dplyr::select(segment, Group, Level = level, estimator, cell) |>
-    tidyr::pivot_wider(names_from = estimator, values_from = cell) |>
-    dplyr::mutate(Level = factor(
-      Level, levels = if (is.null(level_order)) sort(unique(Level))
-                      else level_order[level_order %in% Level])) |>
-    dplyr::arrange(segment, Level) |>
-    dplyr::mutate(Level = as.character(Level)) |>
-    dplyr::select(-segment)
-}
-
 # Tables and figures refer to items by their variable name, because that is
 #   what the analyst will look up in their own files. Anyone reading the report
 #   needs to be able to turn "b4" back into a question without leaving the page.
@@ -1229,39 +1196,6 @@ hr { border: 0; border-top: 1px solid var(--bs-border-color); margin: 2.4rem 0; 
 # Bootstrap is not available outside the app, so the variables report_html()
 #   styles against are defined above rather than the styles being rewritten.
 #   The screen preview and the saved file stay the same document.
-
-html_table <- function(df)
-  shiny::HTML(knitr::kable(df, format = "html", table.attr = "class='t'"))
-
-report_appendices <- function(state) {
-  labs = state$labels$Label
-
-  shiny::tagList(
-    shiny::tags$hr(),
-    shiny::tags$h3("Appendix A. Full estimates"),
-    shiny::tags$p(paste(
-      "Every quantity in the report with its 95 per cent interval.",
-      paste("Intervals on a share are formed on the logit scale, which keeps",
-            "them inside 0 to 1 without truncation. A dagger marks a",
-            "corrected cell whose estimate or interval falls outside that",
-            "range: the correction permits it, and clipping to the boundary",
-            "would report a number the estimator did not produce."),
-      "Diagnostic tables and the record of how the specification was reached",
-      "are in the CSV files supplied alongside.")),
-
-    purrr::map(state$cfg$aux, function(v) shiny::tagList(
-      shiny::tags$h4(aux_heading(state$cfg, v)),
-      html_table(domain_wide(state$domains$dom, v, labs,
-                             aux_levels(state, v))))),
-
-    shiny::tags$hr(),
-    shiny::tags$h3("Appendix B. What was tested"),
-    shiny::tags$p(paste(
-      "What was checked, what rests on the literature, what was a choice, and",
-      "what has not been tested. The last of these is the column to read",
-      "first.")),
-    html_table(status_table(state)))
-}
 
 
 

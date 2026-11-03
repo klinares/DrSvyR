@@ -431,52 +431,20 @@ prompt_search_narration <- function(stats, chosen, context) {
 
 # ---- stage_06_model ----------------------------------------------------
 
-# Stage 7: fit at the chosen dimension and diagnose it.
+# Stage 7: diagnose the chosen model and put intervals on it.
 
-#   1. The model
+#   1. Diagnostics
 #   2. Intervals on it
 #   3. Prompt
 
-# The search ranked sizes. This fits the one the analyst chose, from the full
-#   start set, and reports what the model does not account for. The diagnostics
+# The search already fitted every size from the full start set, so the
+#   analyst's choice is taken from it rather than refitted. This reports what
+#   that model does not account for. The diagnostics
 #   rank items and pairs; none of them is a test, and the model narrating them
 #   is forbidden from recommending a removal.
 
 # Requires: dplyr, purrr, tibble, ggplot2, tidyr
 
-
-# Section 1 fits at the chosen number of groups.
-#______________________________________________________________________________
-
-# Not called by the app. The app takes its fit from the search, which already
-#   ran this exact call at this exact K -- see the fit step in ui_model.R. This
-#   is the entry point for a script working from the written cfg.R, where
-#   there is no search object to take a fit out of.
-fit_final <- function(cfg, dat, K) {
-  inp = make_inputs(dat, cfg$items, cfg$cats)
-  w = dat$wt
-
-  best_of_starts(inp, cfg$cats, w, K, start_seeds(cfg, K), cfg)
-}
-
-# Response probabilities as the analyst reads them: one row per item and
-#   response, one column per group, with the wording attached.
-profile_table <- function(fit, cfg, dictionary, labels = NULL) {
-  K = length(fit$pi)
-  nm = if (is.null(labels)) paste0("Group ", seq_len(K)) else labels
-
-  purrr::map(seq_along(cfg$items), function(j) {
-    it = cfg$items[j]
-    d = dplyr::filter(dictionary, item == it)
-    rho = fit$rho[[j]]
-    tibble::tibble(
-      item = it,
-      question = d$question,
-      response = d$responses[[1]],
-      as.data.frame(round(rho, 3)) |> rlang::set_names(nm))
-  }) |>
-    purrr::list_rbind()
-}
 
 diagnose_model <- function(fit, cfg, dat, top_pairs = 12L) {
   w = dat$wt
