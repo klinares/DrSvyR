@@ -1,10 +1,10 @@
 # llm.R for DrSvyR
 # Endpoint, models, and every model call in the workflow.
 
-# Every call is one POST to WISE_LLM$base_url/chat/completions through curl.
-#   The request shape is OpenAI's; the provider-routing fields are
-#   OpenRouter's. Pointing the app at another endpoint means changing the block
-#   below and checking that endpoint accepts or ignores those fields.
+# Every call goes through ellmer::chat_anthropic() to Anthropic's Messages API
+#   at WISE_LLM$base_url: Anthropic's own API, or a work server that serves
+#   Claude behind the same API. Pointing the app elsewhere means changing the
+#   block below, nothing more.
 
 # ---- configuration -----------------------------------------------------
 
@@ -15,46 +15,35 @@
 #   line: the key.
 
 WISE_LLM <- list(
-  base_url = "https://openrouter.ai/api/v1",
-  key_var  = "OPENROUTER_API_KEY",
+  # Anthropic's public API. At work, the server's base URL, ending where
+  #   Anthropic's ends (the part before /messages).
+  base_url = "https://api.anthropic.com/v1",
+  key_var  = "ANTHROPIC_API_KEY",
 
-  pm          = "meta-llama/llama-4-maverick",
-  # Was meta-llama/llama-3.1-70b-instruct. In a test run on the demo survey
-  #   (September 2026) it degenerated on the naming prompt -- "1.1, 1.1, ..."
-  #   until the token limit, then a timeout -- while llama-4-maverick answered
-  #   every other call in the same session correctly. One model for both roles
-  #   also means one model's behaviour to understand.
-  worker      = "meta-llama/llama-4-maverick",
-  pm_fallback = "openai/gpt-5.4-nano",
+  # The model IDs exactly as the endpoint names them. Check against
+  #   ellmer::models_anthropic() or the work server's model list: a wrong ID
+  #   fails every call with "model not found". One model for both roles means
+  #   one model's behaviour to understand.
+  pm          = "claude-opus-5",
+  worker      = "claude-opus-5",
+  # Tried once after the main model's retries fail. NULL for none.
+  pm_fallback = NULL,
 
   # "server" reads key_var from the environment. "analyst" ignores the
   #   environment entirely and requires a key pasted into the app.
   key_source = "server",
   timeout    = 120,
 
-  # A reply cut off by the token ceiling is not a parse failure the analyst can
-  #   do anything about: the JSON simply stops mid-string. The naming and
-  #   reading prompts carry response labels and item wording, so the replies
-  #   are longer than a default of a few hundred tokens allows.
-  max_tokens = 4000,
+  # Ceiling for each reply. The answers are a few hundred tokens; a reply that
+  #   reaches this is almost always a model repeating itself, and is treated as
+  #   a failed attempt rather than parsed.
+  max_tokens  = 1500,
+  temperature = 0,
 
-  # Ceiling for the one-shot JSON calls. Their answers are a few hundred
-  #   tokens; a reply that reaches this is almost always a model repeating
-  #   itself, and at 4000 tokens that took long enough to hit the timeout
-  #   instead of failing fast and moving to the next attempt.
-  json_max_tokens = 1500,
-
-  # OpenRouter serves each open-weight model from several upstream providers
-  #   and picks one per request. That is why the same model, prompt and data
-  #   can work one week and return "assistant assistant ..." the next: a
-  #   different provider, with a broken chat template, took the request.
-  #   Every failed reply now names the provider that served it. To stop
-  #   using one, list it here, for example:
-  #     routing = list(ignore = c("ProviderName"))
-  #   or pin an order:
-  #     routing = list(order = c("ProviderA", "ProviderB"), allow_fallbacks = FALSE)
-  #   Field names follow OpenRouter's provider-routing options.
-  routing = NULL)
+  # Prompt caching. The AI reflexes are a long system prompt sent with every
+  #   written passage, so a five-minute cache saves cost across a session.
+  #   "none" if the endpoint rejects cache instructions.
+  cache = "5m")
 
 # ---- zz_llm ------------------------------------------------------------
 
@@ -70,7 +59,7 @@ WISE_LLM <- list(
 #   is never written anywhere: it is passed as an argument and stays local to
 #   the call. Nothing here calls Sys.setenv().
 
-# Requires: curl, purrr, jsonlite, digest, dplyr, tibble, readr, fs
+# Requires: ellmer, purrr, jsonlite, digest, dplyr, tibble, readr, fs
 
 
 # Section 1 finds the key and the model. Two roles: the project manager reads
@@ -301,80 +290,63 @@ JSON_QUOTE_RULE <- paste(
   "Inside a value, use single quotes for any quoted word: 'Nada', not",
   "\"Nada\". Do not put a line break inside a value.")
 
-# Every call is a one-shot JSON request sent by hand rather than through a
-#   client package, which gives three things:
-#   - The body is exactly what is written here. When a reply comes back as
-#     garbage, the request is known, so the problem is on the endpoint's side.
-#   - response_format asks for JSON mode, and require_parameters makes
-#     OpenRouter send the request only to upstream providers that honour it.
-#     A provider whose template leaks "assistant" tokens is usually one that
-#     ignores such parameters, so this routes around it.
-#   - The reply says which upstream provider served it. Failure messages
-#     include that name, so a bad provider can be added to WISE_LLM$routing.
-# temperature is 0. seed is not sent: with require_parameters, any provider
-#   that ignores seed would be excluded, which rules out most of them. The
-#   freeze file is what makes results reproducible, not temperature or seed.
-# OpenAI's reasoning models reject temperature, so it is left off for them.
-llm_complete <- function(model, system_prompt, user, json_mode = TRUE) {
-  reasoning = grepl("^openai/(gpt-5|o[0-9])", model)
+# One request, one fresh chat object: no history is carried from one request
+#   to the next, so each segment is named without seeing the others. ellmer
+#   speaks Anthropic's Messages API, so the request and reply shapes are
+#   Anthropic's whether the endpoint is Anthropic's or a work server's.
+# temperature and a token ceiling come from WISE_LLM. Reproducibility comes
+#   from the freeze file, not from temperature.
+# The reply is plain text; llm_json() finds and repairs the JSON in it, so a
+#   model that wraps JSON in a code fence or a sentence is still read.
+llm_complete <- function(model, system_prompt, user) {
+  key = llm_api_key()
+  old = options(ellmer_timeout_s = WISE_LLM$timeout %||% 120)
+  on.exit(options(old), add = TRUE)
 
-  send = function(strict) {
-    body = list(
-      model = model,
-      messages = purrr::compact(list(
-        if (!is.null(system_prompt))
-          list(role = "system", content = system_prompt),
-        list(role = "user", content = user))),
-      max_tokens = WISE_LLM$json_max_tokens %||% 1500L)
-    if (!reasoning) body$temperature = 0
-    if (strict) body$response_format = list(type = "json_object")
-    # Provider names go as arrays even when there is one: toJSON's
-    #   auto_unbox would send ignore = "X" as a string, which OpenRouter
-    #   rejects or ignores.
-    routing = purrr::map(WISE_LLM$routing %||% list(),
-                         function(v) if (is.character(v)) as.list(v) else v)
-    body$provider = utils::modifyList(
-      list(require_parameters = strict), routing)
+  chat = ellmer::chat_anthropic(
+    system_prompt = system_prompt,
+    model = model,
+    params = ellmer::params(temperature = WISE_LLM$temperature %||% 0,
+                            max_tokens = WISE_LLM$max_tokens %||% 1500L),
+    cache = WISE_LLM$cache %||% "5m",
+    base_url = WISE_LLM$base_url,
+    # A function, so the key travels in this closure and never through the
+    #   environment, where every session in the process could read it.
+    credentials = function() key,
+    echo = "none")
 
-    h = curl::new_handle()
-    curl::handle_setheaders(h,
-      Authorization = paste("Bearer", llm_api_key()),
-      `Content-Type` = "application/json")
-    curl::handle_setopt(h,
-      postfields = jsonlite::toJSON(body, auto_unbox = TRUE),
-      timeout = WISE_LLM$timeout %||% 120)
-    res = curl::curl_fetch_memory(
-      paste0(sub("/+$", "", WISE_LLM$base_url), "/chat/completions"),
-      handle = h)
-    txt = rawToChar(res$content)
-    Encoding(txt) = "UTF-8"
-    out = tryCatch(jsonlite::fromJSON(txt, simplifyVector = FALSE),
-                   error = function(e) NULL)
-    list(status = res$status_code, out = out, raw = txt)
-  }
+  reply = tryCatch(chat$chat(user, echo = "none"), error = function(e) {
+    # The endpoint's own explanation is in the response body ("model not
+    #   found", "credit balance too low"); httr2's message alone is just the
+    #   status. A client error (4xx other than 429) will not change on retry,
+    #   so it is classed for llm_json() to stop at once.
+    resp = e$resp %||% root_cause(e)$resp
+    status = if (is.null(resp)) NA_integer_ else httr2::resp_status(resp)
+    why = tryCatch(jsonlite::fromJSON(httr2::resp_body_string(resp))$error$message,
+                   error = function(e2) NULL) %||% conditionMessage(root_cause(e))
+    rlang::abort(paste0("The endpoint refused the request for ", model,
+                        if (!is.na(status)) paste0(" (HTTP ", status, ")"), ": ",
+                        substr(why, 1, 300)),
+                 class = if (!is.na(status) && status >= 400 && status < 500 &&
+                             status != 429) "llm_client_error")
+  })
 
-  r = send(json_mode)
-  # No upstream provider supports JSON mode for this model. Sent again
-  #   without it, rather than failing a model that would otherwise answer.
-  if (json_mode && r$status == 404)
-    r = send(FALSE)
-
-  err = r$out$error
-  if (r$status >= 400 || is.null(r$out) || !is.null(err))
-    stop("The endpoint refused the request for ", model, " (HTTP ", r$status,
-         "): ", substr(err$message %||% r$raw, 1, 300), call. = FALSE)
-
-  choice = r$out$choices[[1]]
-  reply = choice$message$content %||% ""
-  attr(reply, "provider") = r$out$provider %||% "unknown provider"
-  attr(reply, "finish") = choice$finish_reason %||% "unknown"
+  # Anthropic reports why a reply stopped; "max_tokens" means it was cut off
+  #   mid-answer. Read defensively: if this ellmer keeps it elsewhere, the
+  #   reply is still parsed and a cut-off one fails as invalid JSON.
+  turn = utils::tail(chat$get_turns(), 1)[[1]]
+  stop_reason = tryCatch(S7::prop(turn, "json")$stop_reason, error = function(e) NULL)
+  reply = as.character(reply)
+  attr(reply, "provider") = sub("^[a-z]+://([^/]+).*$", "\\1", WISE_LLM$base_url)
+  attr(reply, "finish") = if (identical(stop_reason, "max_tokens")) "length"
+                          else stop_reason %||% "unknown"
   reply
 }
 
-# Two failures seen from the endpoint, neither of which a parse repair can fix:
+# Two failures seen from endpoints, neither of which a parse repair can fix:
 #   1. Chat-template tokens leaking into the reply (<|end_header_id|>,
-#      <|eot_id|>, a bare "assistant" line). That is the server failing to
-#      apply the model's template; the tokens are stripped before parsing.
+#      <|eot_id|>, a bare "assistant" line), seen from open-weight models on
+#      a shared endpoint. Stripped before parsing; harmless otherwise.
 #   2. The model echoing the prompt's example object, so every value is "...".
 #      It parses as valid JSON and would reach the app as a segment named
 #      "...". It is treated as a failed attempt, so it is retried.
@@ -406,10 +378,8 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
            "endpoint needs attention; further attempts would spend quota ",
            "without diagnosing it.", call. = FALSE)
     .llm_state$calls <- .llm_state$calls + 1L
-    raw = llm_complete(model, system_prompt, ask,
-                       json_mode = identical(pattern, "(?s)\\{.*\\}"))
-    # Who served it, on every failure. Without it the log says the model
-    #   failed, when the fault is usually one upstream provider.
+    raw = llm_complete(model, system_prompt, ask)
+    # Which model and endpoint, and why the reply stopped, on every failure.
     # Put first, not last: R cuts long error messages short, and a
     #   degenerate reply is long, so a name at the end was lost.
     served = paste0("[", model, " via ", attr(raw, "provider"),
@@ -441,12 +411,18 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
     withCallingHandlers(attempt(model), error = function(e) last <<- e)
 
   before = .llm_state$calls
+  # A client error (bad key, unknown model, bad request) is returned rather
+  #   than raised inside the retry loop, so it is not sent three times.
   obj = try(
-    purrr::insistently(function() logged(llm_model(role)),
+    purrr::insistently(function()
+                         tryCatch(logged(llm_model(role)),
+                                  llm_client_error = function(e) e),
                        rate = purrr::rate_backoff(pause_base = 2,
                                                   max_times = max_times),
                        quiet = FALSE)(),
     silent = TRUE)
+  if (inherits(obj, "llm_client_error"))
+    obj = structure(conditionMessage(obj), class = "try-error", condition = obj)
   .llm_state$retries <- .llm_state$retries +
     max(0L, .llm_state$calls - before - 1L)
 

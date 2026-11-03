@@ -20,7 +20,7 @@ the weight.
 ```r
 install.packages(c(
   "shiny", "bslib", "survey", "haven", "ggplot2", "purrr", "stringr",
-  "tibble", "tidyr", "dplyr", "base64enc", "clue", "curl", "digest", "fs",
+  "tibble", "tidyr", "dplyr", "base64enc", "clue", "digest", "ellmer", "fs",
   "janitor", "jsonlite", "knitr", "matrixStats", "MetBrewer", "readr",
   "rlang", "viridis", "yaml"))
 

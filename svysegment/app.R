@@ -46,7 +46,7 @@ library(dplyr)
 # Called as pkg::fn() in R/ and never attached. Listed so a missing one stops
 #   the app here, by name, rather than three screens later.
 APP_PACKAGES <- c(
-  "base64enc", "clue", "curl", "digest", "fs", "janitor", "jsonlite", "knitr",
+  "base64enc", "clue", "digest", "ellmer", "fs", "janitor", "jsonlite", "knitr",
   "matrixStats", "MetBrewer", "readr", "rlang", "viridis", "yaml")
 
 local({
