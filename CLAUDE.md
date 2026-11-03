@@ -72,3 +72,8 @@ rsconnect::deployApp(".", appName = "drsvyr")
 ```
 
 Everything in the directory is uploaded unless `.rscignore` lists it.
+
+The full search (~10 min) blocks its R process. In Connect's Runtime settings
+set Max connections per process = 1 so it blocks only its own analyst, size
+Max processes to memory, and check the timeouts outlast a 10-minute search.
+ExtendedTask would need mirai (rule 3), so it is not used.
