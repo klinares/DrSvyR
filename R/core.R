@@ -98,12 +98,9 @@ WISE_SUBDIRS <- c("data", "docs", "dict", "decisions", "cache", "output")
 #   bug, so the folder is keyed on the Shiny session.
 
 # Shiny hands the current session to anything called inside a reactive and
-#   NULL to anything called outside one, so the single-user path is unchanged
-#   and needs no flag to select it.
-.wise_session <- function() {
-  if (!requireNamespace("shiny", quietly = TRUE)) return(NULL)
-  shiny::getDefaultReactiveDomain()
-}
+#   NULL to anything called outside one. The NULL case is a test script, which
+#   gets the single .wise$work_dir slot instead.
+.wise_session <- function() shiny::getDefaultReactiveDomain()
 
 work_dir <- function() {
   s = .wise_session()
@@ -252,6 +249,18 @@ wise_try <- function(expr, what = "This step") {
 
   invisible(structure(paste0("Error: ", res$message, "\n"),
                       class = "try-error", condition = res))
+}
+
+# The other half of wise_try() at every call site: TRUE, after telling the
+#   analyst why, when res failed. So a handler reads
+#   if (wise_failed(res)) return()
+#   and the notification is worded and timed the same everywhere. It stays up
+#   until dismissed, because the analyst needs to read which step failed.
+wise_failed <- function(res, prefix = NULL) {
+  if (!inherits(res, "try-error")) return(FALSE)
+  shiny::showNotification(paste0(prefix, conditionMessage(attr(res, "condition"))),
+                          type = "error", duration = NULL)
+  TRUE
 }
 
 # Named dimension checks, so a mismatch reports the two things that disagreed

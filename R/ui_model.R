@@ -78,11 +78,7 @@ mod_config_server <- function(id, state) {
                                  state$context %||% ""),
           role = "pm", system_prompt = persona_pm,
           validate = validate_fields("summary")), silent = TRUE)
-        if (inherits(res, "try-error")) {
-          showNotification(conditionMessage(attr(res, "condition")),
-                           type = "error", duration = NULL)
-          return()
-        }
+        if (wise_failed(res)) return()
         state$config_readback <- res$summary
       })
     })
@@ -101,18 +97,13 @@ mod_config_server <- function(id, state) {
       cf <- cfg()
       stamp <- format(Sys.time(), "%Y-%m-%d %H:%M")
 
-      # The Design screen prints STOP against a specification that cannot
-      #   produce honest standard errors, and until now that was all it did --
-      #   assert_design_ok() existed and nothing called it, so a zero weight
-      #   was announced and then carried into every estimate downstream. A
-      #   singleton stratum stopped later, in build_rep_design(); a
-      #   non-positive weight stopped nowhere at all. This is the choke point:
-      #   nothing runs before a configuration is approved.
+      # The choke point for the Design screen's STOP checks: a specification
+      #   that cannot produce honest standard errors (a zero or negative
+      #   weight, a singleton stratum) is refused here, before anything runs,
+      #   and the analyst is sent back to fix it.
       blocked <- wise_try(assert_design_ok(state$design_checks),
                           "Approving the configuration")
-      if (inherits(blocked, "try-error")) {
-        showNotification(conditionMessage(attr(blocked, "condition")),
-                         type = "error", duration = NULL)
+      if (wise_failed(blocked)) {
         state$goto <- WISE_TABS[3]
         return()
       }
@@ -145,11 +136,7 @@ mod_config_server <- function(id, state) {
         c(p1, p2)
       }, "Writing the configuration")
 
-      if (inherits(paths, "try-error")) {
-        showNotification(conditionMessage(attr(paths, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
+      if (wise_failed(paths)) return()
 
       state$cfg <- cf
 
@@ -244,11 +231,7 @@ mod_search_server <- function(id, state) {
         res <- wise_try(search_sizes(cfg, dat, tick), "The search")
       })
 
-      if (inherits(res, "try-error")) {
-        showNotification(conditionMessage(attr(res, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
+      if (wise_failed(res)) return()
       state$search <- res
       # What this search is a search of. The fit step compares it against the
       #   battery and file in front of it then, and refuses a search that has
@@ -361,11 +344,7 @@ mod_search_server <- function(id, state) {
                                   state$context %||% ""),
           role = "pm", system_prompt = persona_pm,
           validate = validate_fields("reading")), silent = TRUE)
-        if (inherits(res, "try-error")) {
-          showNotification(conditionMessage(attr(res, "condition")),
-                           type = "error", duration = NULL)
-          return()
-        }
+        if (wise_failed(res)) return()
         state$search_reading <- res
       })
     })
@@ -472,11 +451,7 @@ mod_model_server <- function(id, state) {
              diag = cached("diag", key, function() diagnose_model(fit, cfg, dat)))
       }), "Diagnosing the model")
 
-      if (inherits(res, "try-error")) {
-        showNotification(conditionMessage(attr(res, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
+      if (wise_failed(res)) return()
       state$model <- res
       state$model_key <- key
       state$model_dat <- dat
@@ -510,11 +485,7 @@ mod_model_server <- function(id, state) {
         measurement_se(cfg, dat, state$model$fit, des$rep_des, keep)
       }), "Estimating the uncertainty")
 
-      if (inherits(res, "try-error")) {
-        showNotification(conditionMessage(attr(res, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
+      if (wise_failed(res)) return()
       state$measure <- res
     })
 
@@ -623,11 +594,7 @@ mod_model_server <- function(id, state) {
                              state$context %||% ""),
           role = "pm", system_prompt = persona_pm,
           validate = validate_fields("reading")), silent = TRUE)
-        if (inherits(res, "try-error")) {
-          showNotification(conditionMessage(attr(res, "condition")),
-                           type = "error", duration = NULL)
-          return()
-        }
+        if (wise_failed(res)) return()
         state$diag_reading <- res
       })
     })
@@ -822,11 +789,7 @@ mod_labels_server <- function(id, state) {
         resolve_collisions(drafted, cfg)
       }), "Drafting the names")
 
-      if (inherits(res, "try-error")) {
-        showNotification(conditionMessage(attr(res, "condition")),
-                         type = "error", duration = NULL)
-        return(invisible(FALSE))
-      }
+      if (wise_failed(res)) return(invisible(FALSE))
 
       state$labels <- res$labels
       state$labels_drafted <- res$labels

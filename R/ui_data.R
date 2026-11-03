@@ -59,11 +59,7 @@ mod_project_server <- function(id, state) {
     ensure_work_dir <- function() {
       if (!is.null(state$work_dir)) return(invisible(state$work_dir))
       res <- wise_try(open_session_folder(), "Opening the work folder")
-      if (inherits(res, "try-error")) {
-        showNotification(conditionMessage(attr(res, "condition")),
-                         type = "error", duration = NULL)
-        return(invisible(NULL))
-      }
+      if (wise_failed(res)) return(invisible(NULL))
       state$work_dir <- as.character(res)
       invisible(state$work_dir)
     }
@@ -73,11 +69,7 @@ mod_project_server <- function(id, state) {
 
       withProgress(message = "Reading survey file", value = 0.3, {
         raw <- wise_try(read_survey(path), "Reading the survey file")
-        if (inherits(raw, "try-error")) {
-          showNotification(conditionMessage(attr(raw, "condition")),
-                           type = "error", duration = NULL)
-          return()
-        }
+        if (wise_failed(raw)) return()
         setProgress(0.7, message = "Building codebook")
         state$format <- survey_format(raw)
         # The name the analyst recognises, not the temporary path Shiny wrote
@@ -216,11 +208,7 @@ mod_design_server <- function(id, state) {
                psu = input$psu, weight = input$weight)
       dd <- wise_try(build_design_frame(state$raw, map), "Building the design")
 
-      if (inherits(dd, "try-error")) {
-        showNotification(conditionMessage(attr(dd, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
+      if (wise_failed(dd)) return()
       state$design_map <- map
       state$design_dat <- dd
       state$design_checks <- design_checks(dd)
@@ -447,10 +435,8 @@ mod_items_server <- function(id, state) {
                                  na_codes = as.numeric(input$na_codes),
                                  complete_cases = isTRUE(input$complete)),
                 "Summarising the battery")
-      if (inherits(fr, "try-error")) {
+      if (wise_failed(fr)) {
         state$item_frame <- NULL; state$item_summary <- NULL
-        showNotification(conditionMessage(attr(fr, "condition")),
-                         type = "error", duration = NULL)
         return()
       }
 
@@ -726,12 +712,7 @@ mod_recode_server <- function(id, state) {
             role = "pm", system_prompt = persona_pm,
             validate = validate_fields("groups")), silent = TRUE)
 
-          if (inherits(res, "try-error")) {
-            showNotification(paste0(nm, ": ",
-                                    conditionMessage(attr(res, "condition"))),
-                             type = "error", duration = NULL)
-            return()
-          }
+          if (wise_failed(res, paste0(nm, ": "))) return()
 
           proposed <- set_names(
             map_chr(res$groups, function(g) as.character(g$group %||% "")),
@@ -793,11 +774,7 @@ mod_recode_server <- function(id, state) {
       })
 
       dd <- wise_try(build_demo_frame(state$raw, specs, na_codes()), "Applying the recodes")
-      if (inherits(dd, "try-error")) {
-        showNotification(conditionMessage(attr(dd, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
+      if (wise_failed(dd)) return()
       state$demo_specs <- specs
       state$demo_dat <- dd
       state$demo_counts <- demo_counts(dd)

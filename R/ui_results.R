@@ -68,11 +68,7 @@ mod_score_server <- function(id, state) {
                                    state$model$fit$pi))
       }), "Scoring respondents")
 
-      if (inherits(res, "try-error")) {
-        showNotification(conditionMessage(attr(res, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
+      if (wise_failed(res)) return()
 
       state$scored <- res$scored
       state$score_design <- res$design
@@ -201,11 +197,7 @@ mod_domains_server <- function(id, state) {
         out
       }), "Estimating the domains")
 
-      if (inherits(res, "try-error")) {
-        showNotification(conditionMessage(attr(res, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
+      if (wise_failed(res)) return()
       state$domains <- res
       state$domain_reads <- NULL
       showNotification("Estimated. Read each domain below.", type = "message")
@@ -315,12 +307,7 @@ mod_domains_server <- function(id, state) {
               var_label = aux_label(state$cfg, v)),
             role = "pm", system_prompt = persona_pm,
             validate = validate_fields(c("finding", "caution"))), silent = TRUE)
-          if (inherits(res, "try-error")) {
-            showNotification(paste0(v, ": ",
-                                    conditionMessage(attr(res, "condition"))),
-                             type = "error", duration = NULL)
-            return()
-          }
+          if (wise_failed(res, paste0(v, ": "))) return()
           reads[[v]] <<- res
         })
       })
@@ -421,11 +408,7 @@ mod_report_server <- function(id, state) {
         report_html(state, summary_text, not_answered)
       }), "Rendering the report")
 
-      if (inherits(html, "try-error")) {
-        showNotification(conditionMessage(attr(html, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
+      if (wise_failed(html)) return()
       state$report_html <- html
     })
 
@@ -473,11 +456,7 @@ mod_report_server <- function(id, state) {
         c(report = rep, data = dat)
       }), "Writing the outputs")
 
-      if (inherits(res, "try-error")) {
-        showNotification(conditionMessage(attr(res, "condition")),
-                         type = "error", duration = NULL)
-        return()
-      }
+      if (wise_failed(res)) return()
 
       state$outputs <- res
       log_decision(
