@@ -2,7 +2,7 @@
 # The estimation engine. Never edited per dataset; everything arrives as an
 #   argument, and nothing here reads the analyst's configuration directly.
 
-#   1. The parallel plan and the raw-data plot
+#   1. The raw-data plot
 #   2. The weighted EM, label alignment, and the fit diagnostics
 #   3. The replicate design and variance from it
 #   4. Scoring respondents from a fitted model
@@ -19,7 +19,14 @@
 
 # ---- engine_01_tables_plots --------------------------------------------
 
-# Section 1 holds the parallel plan and the raw-data plot.
+# Section 1 holds the raw-data plot.
+
+# THIS ENGINE IS SEQUENTIAL. future and furrr spread the start set across
+#   worker processes; that bought wall time and nothing else, because the
+#   two-stage start set picks its survivors across the whole set rather than
+#   within a worker's block. Removing them changes no estimate. It removes two
+#   packages, every worker process outside a server's memory accounting, and
+#   the reason this app once had to install itself at startup.
 #______________________________________________________________________________
 
 # theme_lca(), wrap_text(), fit_widths() and lca_table() were removed. The
@@ -30,48 +37,6 @@
 #   plot in the project still using it, at base_size 11 against wise_theme()'s
 #   14, and with plot.title blanked -- so the title this function is handed
 #   was never drawn. One theme, applied everywhere, is the point.
-
-# multisession on both platforms, deliberately. multicore forks, which is far
-#   cheaper than starting a fresh R process, and it is tempting on the Linux
-#   server for exactly that reason -- but forking out of a Shiny process is
-#   unsafe: the child inherits the parent's connections and reactive context,
-#   and future refuses to do it in several contexts for that reason. Windows
-#   cannot fork at all. One plan that behaves the same on the laptop and on
-#   the server is worth more here than the startup cost it saves.
-
-# future::plan() sets the plan for the whole R process, and on a server one
-#   process serves several analysts. Calling it on every fit tore the worker
-#   pool down and rebuilt it underneath whoever was already running. Because
-#   every session now resolves the same number from the same environment
-#   variable, the plan they all want is identical, and this becomes a no-op
-#   after the first call rather than a fight.
-# Splitting a start set across workers. split(x, cut(seq_along(x), b)) is the
-#   obvious way to write this and is wrong twice over: cut(x, 1) stops with
-#   "invalid number of intervals", so DRSVYR_WORKERS=1 -- the documented way
-#   to run without parallelism -- crashed the search before it began; and
-#   cutting three items into four intervals yields an empty block and an
-#   unbalanced one, which is the ordinary case once the survivors of a first
-#   pass are being divided.
-
-# This returns exactly min(blocks, length(x)) pieces, none empty, sizes
-#   differing by at most one.
-in_blocks <- function(x, blocks) {
-  b = max(1L, min(as.integer(blocks), length(x)))
-  if (b <= 1L) return(list(x))
-  unname(split(x, ceiling(seq_along(x) / (length(x) / b))))
-}
-
-init_parallel <- function(cfg) {
-  want = if (isTRUE(cfg$parallel)) max(1L, as.integer(cfg$workers %||% 1L)) else 1L
-
-  if (identical(.wise$plan_workers, want)) return(invisible(want))
-
-  if (want <= 1L) future::plan(future::sequential)
-  else future::plan(future::multisession, workers = want)
-
-  .wise$plan_workers <- want
-  invisible(want)
-}
 
 plot_item_stack <- function(df, items, title, show_missing = TRUE) {
   long = df |>
@@ -430,8 +395,7 @@ replicate_variance <- function(rep_des, theta_fun, theta_hat, keep = NULL) {
     Wm = Wm[keep, , drop = FALSE]
   }
 
-  reps = future_map(seq_len(ncol(Wm)), function(r) theta_fun(Wm[, r]),
-                    .options = furrr_options(seed = NULL))
+  reps = map(seq_len(ncol(Wm)), function(r) theta_fun(Wm[, r]))
 
   bad = sum(map_lgl(reps, function(x) isFALSE(attr(x, "ok"))))
   Theta = do.call(rbind, map(reps, as.numeric))

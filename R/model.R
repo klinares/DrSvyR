@@ -58,8 +58,7 @@ WISE_FIXED <- list(
   n_short = 30L,
   n_keep = 20L,
 
-  K_range = 2:10,
-  parallel = TRUE)
+  K_range = 2:10)
 
 build_cfg <- function(state) {
   fr = state$item_frame
@@ -83,11 +82,6 @@ build_cfg <- function(state) {
       na_codes = state$na_codes,
       complete_cases = all(fr$in_analysis == (fr$n_answered == length(fr$items))),
       seed = WISE_FIXED$seed,
-      parallel = WISE_FIXED$parallel,
-      # Resolved from the environment rather than from the host's core count,
-      #   so the laptop and the Shiny server can differ without either of them
-      #   needing a different copy of this file. See wise_workers() in core.R.
-      workers = wise_workers(),
       survey_context = state$context %||% "",
       research_question = state$question %||% "",
 
@@ -162,7 +156,7 @@ config_summary <- function(state, cfg) {
                  s$reference %||% "not set"))) |> purrr::list_rbind(),
 
     row("Fixed", "Random seed", cfg$seed),
-    row("Fixed", "Parallel workers", wise_workers_note()),
+    row("Fixed", "Execution", "sequential, single core"),
     row("Fixed", "Starts per model", cfg$n_starts),
     row("Fixed", "Output folder", cfg$out_dir))
 }
@@ -304,28 +298,18 @@ pick_survivors <- function(fits, keep) {
   fits[order(ll, decreasing = TRUE)[seq_len(min(keep, length(ll)))]]
 }
 
-# The two stages run one after the other, each spread across the workers. Two
-#   dispatches per size rather than one, which costs a second of serialising
-#   the item matrices and saves minutes of fitting.
+# The two stages run one after the other: every start gets a short burst, the
+#   best few are taken to convergence. This used to dispatch each stage across
+#   workers in blocks and flatten them back in order, so one call over the
+#   whole set returns the identical list.
 best_of_starts <- function(inp, cats, w, K, seeds, cfg,
                            maxit = 800L, tol = 1e-8) {
-  n_blocks = max(1L, cfg$workers %||% 1L)
   short = cfg$n_short %||% WISE_FIXED$n_short
   keep = cfg$n_keep %||% WISE_FIXED$n_keep
 
-  first = furrr::future_map(
-    in_blocks(seeds, n_blocks),
-    function(sd) short_starts(inp, cats, w, K, sd, short, tol),
-    .options = furrr::furrr_options(seed = NULL)) |>
-    purrr::list_flatten()
-
+  first = short_starts(inp, cats, w, K, seeds, short, tol)
   live = pick_survivors(first, keep)
-
-  parts = furrr::future_map(
-    in_blocks(live, n_blocks),
-    function(ii) finish_starts(inp, cats, w, K, ii, maxit, tol),
-    .options = furrr::furrr_options(seed = NULL)) |>
-    purrr::list_flatten()
+  parts = finish_starts(inp, cats, w, K, live, maxit, tol)
 
   parts[[which.max(purrr::map_dbl(parts, "ll"))]]
 }
@@ -335,7 +319,6 @@ search_sizes <- function(cfg, dat, tick = NULL) {
   n = nrow(dat)
   scale = n / sum(w)
 
-  init_parallel(cfg)
   inp = make_inputs(dat, cfg$items, cfg$cats)
 
   # The full start set at every size. A weighted mixture likelihood has local
@@ -463,7 +446,6 @@ prompt_search_narration <- function(stats, chosen, context) {
 #   is the entry point for a script working from the written cfg.R, where
 #   there is no search object to take a fit out of.
 fit_final <- function(cfg, dat, K) {
-  init_parallel(cfg)
   inp = make_inputs(dat, cfg$items, cfg$cats)
   w = dat$wt
 
@@ -563,7 +545,6 @@ share_ci <- function(p, se, crit, transform = TRUE, truncate = TRUE) {
 #   silently change the scaling and the degrees of freedom -- the conditional
 #   subpopulation approach SURV701 warns against. See build_rep_design().
 measurement_se <- function(cfg, dat, fit, rep_des, keep) {
-  init_parallel(cfg)
   inp = make_inputs(dat, cfg$items, cfg$cats)
   K = length(fit$pi)
   ref = fit[c("pi", "rho")]

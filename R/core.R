@@ -46,13 +46,11 @@ WISE_VERSION <- "1.0"
 #   project containing the temp folder, refusing legitimate writes.
 # It also required a dependency that DESCRIPTION does not declare, which
 #   R CMD check reports and which is the reason this surfaced at all.
-# system.file() answers the real question when installed. getwd() is the
-#   fallback for running from a source checkout, which is the only situation
-#   where the old behaviour was ever right.
-repo_root <- function() {
-  p = system.file(package = "drsvyr")
-  fs::path_real(if (nzchar(p)) p else getwd())
-}
+# This is a Shiny app directory, not an installed package, and Shiny sets
+#   the working directory to the app directory before app.R runs -- under
+#   runApp(), RStudio's Run App button and Posit Connect alike. So the app
+#   folder IS getwd().
+repo_root <- function() fs::path_real(getwd())
 
 # Lexical normalisation rather than resolution, because the target usually does
 #   not exist yet -- it is about to be written. A symlink or a Windows junction
@@ -89,75 +87,8 @@ WISE_SUBDIRS <- c("data", "docs", "dict", "decisions", "cache", "output")
 .wise <- new.env(parent = emptyenv())
 .wise$work_dir <- NULL      # the no-Shiny case: a script, a test, one user
 .wise$sessions <- list()    # browser token -> folder, for a shared server
-.wise$plan_workers <- NULL  # the worker count the future plan is currently set to
 
 
-# How many workers, and where that number comes from.
-#______________________________________________________________________________
-
-# The worker count is a property of the machine the app is running on, not of
-#   the analysis, so it is resolved in one place and every session in the
-#   process gets the same answer.
-
-# future::availableCores() describes the host. On a laptop that is the right
-#   answer. On a Shiny server it is wrong twice over. The app's share of that
-#   host is whatever the other analysts are not using at that moment, and
-#   future::plan() sets the plan for the whole R process rather than for one
-#   session -- so four workers each looks like four until five people are
-#   working, and then it is twenty R processes, every one of them carrying
-#   survey and the model, on a box sized for one analysis at a time.
-
-# So the machine is asked what it has, and one is left for the session itself
-#   so the screen keeps responding. availableCores() reads a container's CPU
-#   quota where there is one, which is what a Connect deployment usually has,
-#   and falls back to the physical count where there is not.
-
-# DRSVYR_WORKERS overrides it. That is the lever for a shared server, where
-#   the honest number is not "what this host has" but "what this host has
-#   divided by how many analysts are on it" -- something no code can work out
-#   for itself. DRSVYR_WORKERS=1 turns parallelism off entirely; there is no
-#   second flag to keep in agreement with this one.
-# Four, and it is a ceiling rather than a target. The deployment is a shared
-#   Linux server with sixteen dedicated cores: at four workers each, three
-#   analysts searching at once come to twelve and the box still has headroom
-#   for the sessions themselves. Twelve was a laptop number and would let one
-#   analyst take the whole machine.
-# This does not change what the search produces. The two-stage start set picks
-#   its survivors across the whole set rather than within each parallel block,
-#   so the worker count changes how long the search takes and nothing else.
-#   That invariant is the reason this can be tuned for a server without
-#   anybody's results moving, and it is worth re-checking at 1, 2 and 4
-#   workers -- parameters, not just the log-likelihood -- after any change to
-#   the search.
-WISE_WORKERS_CAP <- 4L
-
-.wise_workers_resolve <- function() {
-  host = suppressWarnings(as.integer(future::availableCores()))
-  if (is.na(host) || host < 1L) host = 1L
-
-  cap = function(n, src)
-    list(n = max(1L, min(n, WISE_WORKERS_CAP, host)), source = src, host = host)
-
-  n = suppressWarnings(as.integer(Sys.getenv("DRSVYR_WORKERS", "")))
-  if (!is.na(n) && n >= 1L) return(cap(n, "DRSVYR_WORKERS"))
-
-  o = getOption("drsvyr.workers", NULL)
-  n = if (is.null(o)) NA_integer_ else suppressWarnings(as.integer(o))
-  if (!is.na(n) && n >= 1L) return(cap(n, "options(drsvyr.workers)"))
-
-  cap(host - 1L, "cores available")
-}
-
-wise_workers <- function() .wise_workers_resolve()$n
-
-# Recorded in the configuration table rather than shown on the screen. It is
-#   provenance for the decision log -- the same specification on a different
-#   machine used a different number of workers and reached the same answer --
-#   not something an analyst has to act on.
-wise_workers_note <- function() {
-  r = .wise_workers_resolve()
-  paste0(r$n, " of ", r$host, " cores")
-}
 
 # The work folder has to be per analyst, not per process. On a laptop those
 #   are the same thing. On Posit Connect one R process serves several people
@@ -253,22 +184,14 @@ open_session_folder <- function() {
   invisible(path)
 }
 
-# The demonstration survey, wherever it ended up. system.file() finds it once
-#   this is a package; the demo/ folder is the fallback while it is not.
+# The demonstration survey. One place to look: data/ beside app.R. It ships
+#   with the app, so a deployment that lost it is a deployment that was
+#   bundled wrong -- returning NULL makes the Project screen say so rather
+#   than fail.
 demo_survey_path <- function() {
-  p = system.file("extdata", package = "drsvyr")
-  cand = if (nzchar(p)) fs::dir_ls(p, regexp = "[.](sav|zsav|dta)$", fail = FALSE)
-         else character(0)
-
-  # Running from a source checkout rather than an installed package, where
-  #   system.file() returns "". inst/ is only collapsed into the package root
-  #   at install time, so before that the same file sits one level deeper.
-  #   This used to look in demo/, which the conversion emptied.
-  if (!length(cand)) {
-    d = fs::path(getwd(), "inst", "extdata")
-    cand = if (fs::dir_exists(d))
-      fs::dir_ls(d, regexp = "[.](sav|zsav|dta)$", fail = FALSE) else character(0)
-  }
+  d = fs::path(getwd(), "data")
+  cand = if (fs::dir_exists(d))
+    fs::dir_ls(d, regexp = "[.](sav|zsav|dta)$", fail = FALSE) else character(0)
   if (length(cand)) as.character(cand[[1]]) else NULL
 }
 

@@ -268,8 +268,7 @@ dl_button <- function(key, label = "Download CSV")
 
 build_report_html <- function(state, summary_text = NULL,
                               not_answered = NULL,
-                              classification = getOption(
-                                "drsvyr.classification", "UNCLASSIFIED")) {
+                              classification = APP_CLASSIFICATION) {
   tabs = report_tables(state)
 
   # One long-format table for anyone who would rather read a single file than

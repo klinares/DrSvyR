@@ -62,12 +62,11 @@ are yours. Each one is recorded along with the evidence that was in front of you
 when you made it, so the report can say not just what was found but how it came
 to be looked for.
 
-There is an AI Survey Methodologist on its own tab, and it remembers the whole
-session. It
-reads the numbers this tool computed and will argue with you about them. It can
-propose an action; it cannot take one. You accept or you reject, and when you
-reject it you say why — that sentence goes into the record beside the decision
-it explains.
+With an API key set below, a language model drafts the segment names and the
+written sections from the numbers this tool computed. It drafts; it does not
+decide. Every name and every sentence is yours to accept or rewrite, and without
+a key the analysis runs exactly the same — you lose the drafts, not the
+estimates.
 
 ## When something does not look right
 

@@ -195,7 +195,6 @@ domain_marginals <- function(dat, aux, rep_des, keep = NULL) {
 
 domain_estimates <- function(state, tick = NULL) {
   cfg = state$cfg
-  init_parallel(cfg)
 
   # rep_des is the replicate set built on the WHOLE frame; keep picks out the
   #   respondents the model could place. Restricting the weights rather than
@@ -1301,9 +1300,13 @@ report_html <- function(state, summary_text = NULL, not_answered = NULL) {
   })
 }
 
+# type = "cairo" explicitly, so the report never reaches for X11. A Linux
+#   server with no display has no Xlib device, and grDevices::png() would
+#   otherwise fall back to it whenever bitmapType was not already cairo.
 plot_data_uri <- function(g, width, height, res = 150) {
   f = tempfile(fileext = ".png")
-  ggplot2::ggsave(f, g, width = width, height = height, dpi = res, bg = "white")
+  ggplot2::ggsave(f, g, width = width, height = height, dpi = res, bg = "white",
+                  device = "png", type = "cairo")
   paste0("data:image/png;base64,", base64enc::base64encode(f))
 }
 
