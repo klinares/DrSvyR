@@ -5,8 +5,8 @@
 # A plain Shiny app directory, not a package, so a server can run it as is:
 #     app.R        this file: settings, state, layout, server
 #     R/           function definitions only, sourced below
-#     help.md      the Start here page
-#     www/         static files, served at the site root by Shiny itself
+#     www/         static files, served at the site root by Shiny itself:
+#                  reports/ (the method report) and logo/ (the office logo)
 #     data/        the demonstration survey
 
 
@@ -21,6 +21,11 @@ APP_CLASSIFICATION <- "UNCLASSIFIED"
 #   size in memory and the raw file, codebook and design frame coexist, so this
 #   is the number to lower first on a small server.
 APP_MAX_UPLOAD_MB <- 300
+
+# The office logo, a file in www/logo/. Until it is there a dashed placeholder
+#   box shows where it goes. The office name beside it is optional.
+APP_LOGO <- "office_logo.png"
+APP_OFFICE <- ""
 
 
 # ---- 2. packages ------------------------------------------------------------
@@ -42,7 +47,7 @@ library(dplyr)
 #   the app here, by name, rather than three screens later.
 APP_PACKAGES <- c(
   "base64enc", "clue", "curl", "digest", "fs", "janitor", "jsonlite", "knitr",
-  "markdown", "matrixStats", "MetBrewer", "readr", "rlang", "viridis", "yaml")
+  "matrixStats", "MetBrewer", "readr", "rlang", "viridis", "yaml")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
@@ -79,8 +84,8 @@ assign("APP_CLASSIFICATION", APP_CLASSIFICATION, envir = globalenv())
 
 # Cairo for every PNG: renderPlot() and the report figures alike. A Linux
 #   server with no display has no X11, and R's default bitmap device there can
-#   still be Xlib, which fails with "unable to start device PNG". plot_data_uri()
-#   in R/results.R also asks for cairo explicitly.
+#   still be Xlib, which fails with "unable to start device PNG". Where ragg is
+#   installed, ggsave() uses it instead, which needs no X11 either.
 options(bitmapType = "cairo",
         shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 
@@ -129,30 +134,20 @@ ui <- page_fluid(
     APP_CLASSIFICATION),
 
   div(
-    style = "display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;",
+    style = "display:flex; align-items:center; gap:1rem; margin:0.5rem 0;",
+    office_logo(APP_LOGO, APP_OFFICE),
     div(tags$h2("svysegment", style = "margin:0;"),
         tags$p(tags$em("Respondent types in a survey battery, compared across ",
                        "groups, with margins from the survey's own design."),
                style = "margin:0;")),
     div(style = "margin-left:auto;", input_dark_mode(id = "dark_mode"))),
 
-  # Markdown images carry no sizing; this keeps the help figures in the panel.
-  tags$head(tags$style(HTML(
-    ".tab-content img { max-width: 100%; height: auto; }"))),
-
   tags$hr(),
 
   navlistPanel(
     id = "stage", widths = c(3, 9), well = FALSE,
 
-    # help.md's images are written as figures/..., and Shiny serves www/ at
-    #   the site root, so they resolve with no resource path to register.
-    #   includeMarkdown() would also try to embed them, and warn on every
-    #   start that it cannot find them at that path; the page is the same.
-    tabPanel(WISE_TABS[1],
-             HTML(markdown::mark("help.md", output = NULL,
-                                 options = "-embed_resources")),
-             mod_key_ui("key")),
+    tabPanel(WISE_TABS[1], help_ui(), mod_key_ui("key")),
 
     tabPanel(WISE_TABS[2],  mod_project_ui("project")),
     tabPanel(WISE_TABS[3],  mod_design_ui("design")),

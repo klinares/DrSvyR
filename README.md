@@ -43,7 +43,7 @@ DrSvyR/
   README.md        this file
   .gitignore       shared by every app
   images/          the repository's own images (this README)
-  svysegment/      one app: app.R, R/, help.md, www/, data/, README.md
+  svysegment/      one app: app.R, R/, www/, data/, README.md
 ```
 
 ## Adding an app

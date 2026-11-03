@@ -21,8 +21,8 @@ the weight.
 install.packages(c(
   "shiny", "bslib", "survey", "haven", "ggplot2", "purrr", "stringr",
   "tibble", "tidyr", "dplyr", "base64enc", "clue", "curl", "digest", "fs",
-  "janitor", "jsonlite", "knitr", "markdown", "matrixStats", "MetBrewer",
-  "readr", "rlang", "viridis", "yaml"))
+  "janitor", "jsonlite", "knitr", "matrixStats", "MetBrewer", "readr",
+  "rlang", "viridis", "yaml"))
 
 shiny::runApp("svysegment")      # from the repository root
 ```
@@ -64,8 +64,9 @@ temporary and is deleted when the tab closes.
 |---|---|
 | `app.R` | Settings, packages, state, layout, server. Ends in `shinyApp(ui, server)`. |
 | `R/` | Function definitions only, sourced by `app.R`. |
-| `help.md` | The **Start here** page. |
-| `www/figures/` | Images for `help.md`. Shiny serves `www/` at the site root. |
+| `R/ui_help.R` | The **Start here** page: what the method is, how to use it, its limits, and the naming prompt. |
+| `www/reports/` | The method report (PDF), linked from Start here. Shiny serves `www/` at the site root. |
+| `www/logo/` | The office logo, `office_logo.png` unless `APP_LOGO` says otherwise. |
 | `data/` | The demonstration survey (LAPOP AmericasBarometer, Ecuador 2023). |
 
 ## Settings
@@ -74,6 +75,8 @@ At the top of `app.R`:
 
 - `APP_CLASSIFICATION`: the marking on every screen and in the report.
 - `APP_MAX_UPLOAD_MB`: the largest survey file accepted.
+- `APP_LOGO`, `APP_OFFICE`: the logo file in `www/logo/`, and an optional office
+  name beside it.
 
 The language-model endpoint, models and key variable are `WISE_LLM` in
 `R/llm.R`.
