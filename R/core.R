@@ -161,8 +161,8 @@ wise_path <- function(...) {
 # It used to be a path the analyst typed. On a shared server there is no such
 #   path: the analyst has no filesystem to point at, and the one the server has
 #   belongs to every other session at once. So the folder is a temporary one
-#   per session, with the same layout as before, and the analyst receives its
-#   contents as one archive from the Outputs screen.
+#   per session, with the same layout as before, and the analyst downloads
+#   the report and the survey with segments from the Outputs screen.
 # Everything downstream still goes through wise_path(), so this is the only
 #   place that had to change. Nothing else knows where it is writing.
 open_session_folder <- function() {
@@ -193,59 +193,6 @@ demo_survey_path <- function() {
   cand = if (fs::dir_exists(d))
     fs::dir_ls(d, regexp = "[.](sav|zsav|dta)$", fail = FALSE) else character(0)
   if (length(cand)) as.character(cand[[1]]) else NULL
-}
-
-# Everything the analyst leaves with, in one file.
-
-# ZIP, not tar.gz, and the reason is where the file is opened rather than where
-#   it is made. It is built on a Linux server and double-clicked on a Windows
-#   desktop by someone who has never opened a terminal. Windows Explorer has
-#   opened .zip natively since XP; .tar.gz it either cannot open at all or
-#   unpacks in two steps, leaving the analyst holding a .tar and a question.
-
-# zip::zip(), not utils::zip(). utils::zip() shells out to whatever R_ZIPCMD
-#   points at, which is absent on a Windows box without Rtools and not
-#   guaranteed in a slim conda environment either. zip:: carries its own
-#   compressor, so there is nothing on the PATH to be missing, and it writes
-#   forward-slash paths so the archive is portable both ways.
-
-# What travels, and what does not:
-#   report.html   every table, every figure, the decision log and the
-#                 specification, all inside one file that opens in a browser.
-#   *_wise.sav    the survey back with segments added. The only thing here
-#                 the report cannot be.
-#   cfg.R         the specification as a file you can source, which is not
-#                 the same as the specification as text in a tab.
-#   decisions/    the log as markdown. Also inside the report; kept because an
-#                 audit trail should survive without a browser.
-#   errors.log    only when something failed.
-#   cache/        never. Fitted models keyed to this data, rebuildable, the
-#                 largest thing here, and useless without the app.
-#   the CSVs      no longer written. Every one of them was a copy of a table
-#                 the report already carries, and the report will hand any of
-#                 them back as CSV on a button.
-bundle_outputs <- function(con) {
-  root = work_dir()
-
-  files = fs::path_rel(
-    fs::dir_ls(root, recurse = TRUE, type = "file", all = FALSE), root)
-  files = as.character(files)
-  files = files[!grepl("^cache/", files)]
-  # An empty errors.log means nothing went wrong, and shipping it invites the
-  #   analyst to open a file with nothing in it and wonder what they missed.
-  files = files[!(basename(files) == "errors.log" &
-                    fs::file_size(fs::path(root, files)) == 0)]
-
-  if (!length(files))
-    stop("Nothing has been written yet. Prepare the outputs first.",
-         call. = FALSE)
-
-  if (!requireNamespace("zip", quietly = TRUE))
-    stop("The zip package is needed to build the download and is not ",
-         "installed here.", call. = FALSE)
-
-  zip::zip(zipfile = con, files = files, root = root, mode = "cherry-pick")
-  invisible(con)
 }
 
 

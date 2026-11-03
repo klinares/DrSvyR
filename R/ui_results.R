@@ -470,7 +470,7 @@ mod_report_server <- function(id, state) {
 
         incProgress(0.4, detail = "data file")
         dat <- export_data(state, input$format)
-        c(rep, dat)
+        c(report = rep, data = dat)
       }), "Writing the outputs")
 
       if (inherits(res, "try-error")) {
@@ -488,33 +488,46 @@ mod_report_server <- function(id, state) {
                        type = "message", duration = NULL)
     })
 
-    # The one way anything leaves this session.
+    # The only ways anything leaves this session.
 
     # There is no folder the analyst can open: the work folder is temporary and
-    #   is deleted when they close the tab. Everything written is collected
-    #   here, and if they do not press this they leave with nothing -- which is
-    #   the trade for the app being able to run somewhere they have no
-    #   filesystem at all.
+    #   is deleted when they close the tab, so if they do not press these they
+    #   leave with nothing -- which is the trade for the app being able to run
+    #   somewhere they have no filesystem at all.
+    # Two files, each served as it is, rather than one archive. The report
+    #   carries every table, figure, the decision log and the specification;
+    #   the survey file with segments added is the only thing it cannot be.
+    #   Nothing else in the work folder is needed, so nothing needs packing,
+    #   and the server needs no zip package or zip program.
     output$download_ui <- renderUI({
       req(state$outputs)
       tagList(
-        downloadButton(ns("download"), "Download everything (.zip)",
+        downloadButton(ns("download_report"), "Download the report (.html)",
+                       class = "btn-success"),
+        downloadButton(ns("download_data"),
+                       paste0("Download the survey with segments (.",
+                              fs::path_ext(state$outputs[["data"]]), ")"),
                        class = "btn-success"),
         tags$p(class = "text-muted",
                "The report opens in a browser and carries every table, every \
                figure, the decision log and the specification inside it, and \
-               will hand any table back as CSV. The archive also holds your \
-               survey file with segments added, the specification as a \
-               runnable script, and the decision log as markdown."))
+               will hand any table back as CSV. The survey file is your data \
+               back with each respondent's segment added."))
     })
 
-    output$download <- downloadHandler(
+    output$download_report <- downloadHandler(
       filename = function()
         paste0("drsvyr_", fs::path_ext_remove(fs::path_file(
           state$data_file %||% "survey")), "_",
-          format(Sys.Date(), "%Y%m%d"), ".zip"),
-      content = function(file) bundle_outputs(file),
-      contentType = "application/zip")
+          format(Sys.Date(), "%Y%m%d"), ".html"),
+      content = function(file)
+        fs::file_copy(state$outputs[["report"]], file, overwrite = TRUE),
+      contentType = "text/html")
+
+    output$download_data <- downloadHandler(
+      filename = function() fs::path_file(state$outputs[["data"]]),
+      content = function(file)
+        fs::file_copy(state$outputs[["data"]], file, overwrite = TRUE))
 
     output$written <- renderUI({
       req(state$outputs)

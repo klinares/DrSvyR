@@ -11,7 +11,7 @@ install.packages(c(
   "shiny", "bslib", "survey", "haven", "ggplot2", "purrr", "stringr",
   "tibble", "tidyr", "dplyr", "base64enc", "digest", "fs", "janitor",
   "jsonlite", "knitr", "markdown", "matrixStats", "readr", "rlang",
-  "viridis", "yaml", "zip"))
+  "viridis", "yaml"))
 
 shiny::runApp(".")      # from the repository root
 ```

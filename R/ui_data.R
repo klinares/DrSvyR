@@ -52,7 +52,7 @@ mod_project_server <- function(id, state) {
     # A per-session temporary folder replaces it. Everything downstream still
     #   goes through wise_path(), so nothing else changed: the same layout is
     #   built, in a folder that is deleted when the session ends and handed to
-    #   the analyst as one archive from the Outputs screen before it is.
+    #   the analyst as two downloads from the Outputs screen before it is.
     # assert_outside_repo() is now trivially satisfied and stays anyway. It
     #   costs nothing and it is the guard that stops a future edit pointing
     #   this back at a real path.
@@ -134,9 +134,9 @@ mod_project_server <- function(id, state) {
         tags$p(format(nrow(state$raw), big.mark = ","), " respondents, ",
                format(ncol(state$raw), big.mark = ","), " variables."),
         tags$p(class = "text-muted",
-               "Nothing is written back to this file. Everything this tool ",
-               "produces is collected and handed to you as a single archive ",
-               "on the Outputs screen, and is deleted when you close the ",
+               "Nothing is written back to this file. The report and a copy ",
+               "of this survey with segments added are yours to download ",
+               "on the Outputs screen; everything is deleted when you close the ",
                "session."),
         tags$p("Continue to ", tags$strong("2. Design"), "."))
     })
