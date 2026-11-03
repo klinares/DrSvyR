@@ -570,12 +570,8 @@ plot_items <- function(frame, title = "Response distribution") {
 #   decide, and the analyst's choice stands either way.
 #______________________________________________________________________________
 
-persona_pm <- paste(
-  "You are a senior survey methodologist advising an analyst who designed the",
-  "questionnaire and knows the subject matter, but does not fit latent variable",
-  "models. Write plainly and briefly. Explain what a number means for their",
-  "decision rather than defining the statistic. Never recommend dropping an",
-  "item and never choose a model; those are the analyst's calls.")
+# The persona the model writes as is in www/ai_reflexes.md (ai_persona(),
+#   ai_reflexes_prompt() in ai_reflexes.R).
 
 demo_candidates <- function(codebook, max_categories = 30L) {
   codebook |>

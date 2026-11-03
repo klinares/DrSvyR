@@ -23,7 +23,7 @@ R package any more.
 - `APP_LOGO`, `APP_OFFICE`: logo file in `www/logo/` and optional office name.
 - `options(bitmapType = "cairo")`: Connect has no X11.
 - `APP_PACKAGES`: packages used as `pkg::fn()`; a missing one stops startup.
-- The LLM endpoint is `WISE_LLM` in `R/llm.R`; what the writing model knows and may say is `AI_REFLEXES` in `R/ai_reflexes.R`.
+- The LLM endpoint is `WISE_LLM` in `R/llm.R`; what the writing model knows, may say and how it words the report is `www/ai_reflexes.md` (markdown, parsed by `R/ai_reflexes.R`).
 
 ## Hard rules
 

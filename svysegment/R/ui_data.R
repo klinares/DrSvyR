@@ -711,7 +711,7 @@ mod_recode_server <- function(id, state) {
           res <- try(llm_json(
             prompt_demo_grouping(L$variable, L$label, L$levels,
                                  state$context %||% ""),
-            role = "pm", system_prompt = persona_pm,
+            role = "pm", system_prompt = ai_persona(),
             validate = validate_fields("groups")), silent = TRUE)
 
           if (wise_failed(res, paste0(nm, ": "))) return()

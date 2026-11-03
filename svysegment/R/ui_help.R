@@ -125,9 +125,10 @@ help_ui <- function() {
 }
 
 # ---- the AI reflexes ---------------------------------------------------------
-# AI_REFLEXES in ai_reflexes.R, shown with the sources the model never sees.
+# Read from www/ai_reflexes.md, shown with the sources the model never sees.
 
 help_reflexes_card <- function() {
+  rx = read_ai_reflexes()
   item = function(r)
     tags$li(class = "mb-2",
       tags$strong(gsub("_", " ", r$id)), tags$span(class = "text-muted", " — ", r$when),
@@ -154,13 +155,21 @@ help_reflexes_card <- function() {
                "everything the analysis produced: the design and its replicates, ",
                "the questions, every size fitted, the chosen model's checks and ",
                "margins, each segment, and who could be placed."),
+        tags$p("They also set the ", b_("reporting style"), ": how segments, shares, ",
+               "differences and limits are worded, with examples of what to write ",
+               "and what to avoid. The report's structure does not change; the ",
+               "words inside it follow the style."),
         tags$p("Two checks follow every draft. Its fields must be complete, and ",
                "every number in it must appear in the figures it was given; a draft ",
                "that cites any other number is rejected and asked for again."),
+        tags$p(tags$a(href = "ai_reflexes.md", target = "_blank",
+                      "Read the AI reflexes in full"), " (markdown, version ",
+               rx$version, "): the reflexes, the reporting style and its examples. ",
+               "An administrator edits that file to change them."),
         tags$p(class = "text-muted mb-0",
-               "Version ", AI_REFLEXES_VERSION, ". The sources shown here are not ",
-               "sent to the model, so it cannot cite them as if it had read them.")),
-      tags$ol(class = "small mb-0", purrr::map(AI_REFLEXES, item))))
+               "The sources shown here are not sent to the model, so it cannot ",
+               "cite them as if it had read them.")),
+      tags$ol(class = "small mb-0", purrr::map(rx$reflexes, item))))
 }
 
 # One link per method report found in www/reports/.

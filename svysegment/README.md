@@ -67,6 +67,7 @@ temporary and is deleted when the tab closes.
 | `R/ui_help.R` | The **Start here** page: what the method is, how to use it, its limits, and the naming prompt. |
 | `www/reports/` | The method report (PDF), linked from Start here. Shiny serves `www/` at the site root. |
 | `www/logo/` | The office logo, `office_logo.png` unless `APP_LOGO` says otherwise. |
+| `www/ai_reflexes.md` | The AI reflexes: what a model writing for the app knows and may say, and the reporting style with examples. Edit it to change them; it is read on every request. |
 | `data/` | The demonstration survey (LAPOP AmericasBarometer, Ecuador 2023). |
 
 ## Settings
