@@ -58,7 +58,13 @@ WISE_FIXED <- list(
   n_short = 30L,
   n_keep = 20L,
 
+  # The default range offered on the Search screen; the analyst can change it
+  #   there, up to WISE_MAX_K.
   K_range = 2:10)
+
+# Beyond twelve segments a survey battery rarely supports distinct, stable
+#   groups, and each extra size adds the longest fit of the search.
+WISE_MAX_K <- 12L
 
 build_cfg <- function(state) {
   fr = state$item_frame

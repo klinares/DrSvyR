@@ -203,11 +203,14 @@ mod_search_server <- function(id, state) {
       tagList(
         tags$h4("Search"),
         help_box("search"),
-        tags$p(length(cfg$K_range), " models will be fitted, each from ",
-               cfg$n_starts, " random starts. All ", cfg$n_starts,
-               " run for ", cfg$n_short, " iterations; the best ",
-               cfg$n_keep, " are then taken to convergence. ",
-               "The screen will not respond while it runs."),
+        sliderInput(ns("k_range"), "Numbers of segments to fit", min = 2,
+                    max = WISE_MAX_K, value = range(cfg$K_range), step = 1,
+                    width = "60%"),
+        tags$p("Each size is fitted in turn from ", cfg$n_starts,
+               " random starts. All ", cfg$n_starts, " run for ", cfg$n_short,
+               " iterations; the best ", cfg$n_keep, " are then taken to ",
+               "convergence. Larger sizes take longer, and the screen will not ",
+               "respond while it runs."),
 
         actionButton(ns("run"), "Run the search", class = "btn-primary"))
     })
@@ -217,8 +220,13 @@ mod_search_server <- function(id, state) {
     #   R process, which is why Connect runs this app with one connection per
     #   process (see the README).
     observeEvent(input$run, {
-      req(state$cfg)
+      req(state$cfg, input$k_range)
+      # The analyst's range becomes part of the configuration, so the chooser,
+      #   the model step and the report all read the sizes actually fitted.
       cfg <- state$cfg
+      cfg$K_range <- seq(input$k_range[1], input$k_range[2])
+      state$cfg <- cfg
+      write_cfg(cfg, wise_path("output", "cfg.R"))
       dat <- bind_cols(state$design_dat,
                        state$item_frame$item_dat)[state$item_frame$in_analysis, ]
       withProgress(message = "Fitting", value = 0, {
