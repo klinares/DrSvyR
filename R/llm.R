@@ -289,9 +289,8 @@ parse_json_block <- function(txt, pattern = "(?s)\\{.*\\}") {
 #   live in engine.R, which is shared by copy with the reference workflow and
 #   has no business knowing how this app parses a reply. Repairing a stray
 #   quote afterwards works; not producing one is cheaper.
-# Worded so it cannot be read as "avoid quotes". The first version said only
-#   "no double quotes inside a value" and the model dropped the quote that
-#   ends the value as well, which is a worse failure than the one it fixed.
+# Worded so it cannot be read as "avoid quotes": told only "no double quotes
+#   inside a value", a model drops the quote that ends the value as well.
 JSON_QUOTE_RULE <- paste(
   "Return exactly one JSON object and nothing before or after it.",
   "Every key and every string value must both open AND close with a double",
@@ -433,10 +432,8 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
   .llm_state$retries <- .llm_state$retries +
     max(0L, .llm_state$calls - before - 1L)
 
-  # One fallback attempt, now for both roles. The worker used to have none on
-  #   the reasoning that a small repeated task fails for prompt reasons; the
-  #   failure seen here is the endpoint serving that model badly, which a
-  #   different model does fix.
+  # One fallback attempt, for both roles. The failure this catches is an
+  #   endpoint serving a model badly, which a different model does fix.
   if (inherits(obj, "try-error") && !is.null(WISE_LLM$pm_fallback)) {
     message("The ", role, " model failed; trying ", llm_model("pm_fallback"), ".")
     obj = try(attempt(llm_model("pm_fallback")), silent = TRUE)
@@ -513,9 +510,7 @@ model_key <- function(cfg, items, dimension, data) {
 
 # ---- the key box -------------------------------------------------------
 
-# Moved here from the chat module when that tab was dropped. Everything
-#   else that drafts names or writes prose still needs a key, so the box
-#   that sets one stays on Start here.
+# On Start here, because every feature that drafts names or prose needs a key.
 
 # WHERE TO GET A KEY -- replace the placeholder text below with the real
 #   instructions for your deployment before handing this to anyone.

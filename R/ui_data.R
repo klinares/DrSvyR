@@ -45,17 +45,10 @@ mod_project_server <- function(id, state) {
 
     # The work folder is made for the analyst rather than chosen by them.
 
-    # It used to be typed in, and every output landed in it: the report, the
-    #   scored file, the decision log, the cached fits. That works on a laptop
-    #   and cannot work on a shared server, where the analyst has no filesystem
-    #   to point at and the one the server has belongs to everybody.
-    # A per-session temporary folder replaces it. Everything downstream still
-    #   goes through wise_path(), so nothing else changed: the same layout is
-    #   built, in a folder that is deleted when the session ends and handed to
-    #   the analyst as two downloads from the Outputs screen before it is.
-    # assert_outside_repo() is now trivially satisfied and stays anyway. It
-    #   costs nothing and it is the guard that stops a future edit pointing
-    #   this back at a real path.
+    # A per-session temporary folder (see open_session_folder() in core.R),
+    #   deleted when the session ends. Its contents leave as the two downloads
+    #   on the Outputs screen. assert_outside_repo() is trivially satisfied and
+    #   stays as the guard against a future edit pointing it at a real path.
     ensure_work_dir <- function() {
       if (!is.null(state$work_dir)) return(invisible(state$work_dir))
       res <- wise_try(open_session_folder(), "Opening the work folder")
@@ -98,8 +91,8 @@ mod_project_server <- function(id, state) {
       read_file(input$upload$datapath, input$upload$name)
     })
 
-    # The demonstration file ships inside the package, so it is offered rather
-    #   than uploaded. It is the only path that reads from disk.
+    # The demonstration file ships in data/ beside app.R, so it is offered
+    #   rather than uploaded. It is the only path that reads from disk.
     demo_file <- reactive(demo_survey_path())
 
     output$demo_offer <- renderUI({
@@ -329,11 +322,10 @@ mod_items_server <- function(id, state) {
         actionButton(ns("save_context"), "Save"))
     })
 
-    # Captured as it is typed, not only on the button: a question written and
-    #   then left while the analyst moved on used to be discarded silently,
-    #   which is how a run reached the report with no research question in it
-    #   despite one having been written. The button stays because an analyst
-    #   wants to be told the thing was kept.
+    # Captured as it is typed, not only on the button: otherwise a question
+    #   written and left while the analyst moved on is discarded silently, and
+    #   the report goes out with no research question. The button stays
+    #   because an analyst wants to be told the thing was kept.
 
     # Debounced, because state$context is read by four prompt builders on
     #   three other screens. Writing it on every keystroke invalidated all of

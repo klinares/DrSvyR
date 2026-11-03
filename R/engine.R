@@ -11,8 +11,7 @@
 
 # The tool fits one model: a latent class analysis on complex survey data,
 #   weighted, with every standard error coming from the survey's own replicate
-#   design. The factor-analytic arm that used to sit alongside this has been
-#   removed -- along with lavaan, which nothing here now needs.
+#   design.
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
@@ -21,22 +20,10 @@
 
 # Section 1 holds the raw-data plot.
 
-# THIS ENGINE IS SEQUENTIAL. future and furrr spread the start set across
-#   worker processes; that bought wall time and nothing else, because the
-#   two-stage start set picks its survivors across the whole set rather than
-#   within a worker's block. Removing them changes no estimate. It removes two
-#   packages, every worker process outside a server's memory accounting, and
-#   the reason this app once had to install itself at startup.
+# The engine is sequential: one R process, no workers. The two-stage start
+#   set picks its survivors across the whole set, so dividing the work could
+#   only buy wall time, never a different estimate.
 #______________________________________________________________________________
-
-# theme_lca(), wrap_text(), fit_widths() and lca_table() were removed. The
-#   three table helpers served the Quarto reports and reached kableExtra,
-#   which needs Rtools to install and so cannot be assumed on a locked-down
-#   mirror; the app writes HTML through build_report_html() instead and calls
-#   none of them. theme_lca() went because plot_item_stack() below was the one
-#   plot in the project still using it, at base_size 11 against wise_theme()'s
-#   14, and with plot.title blanked -- so the title this function is handed
-#   was never drawn. One theme, applied everywhere, is the point.
 
 plot_item_stack <- function(df, items, title, show_missing = TRUE) {
   long = df |>
@@ -179,16 +166,9 @@ align_to <- function(fit, ref) {
        converged = fit$converged %||% NA)
 }
 
-# Seeds are passed as data rather than drawn inside the worker, 
-#   so sequential and parallel plans return identical results
+# One seed per start, fixed by cfg$seed and K, so a rerun of the same
+#   specification starts from the same places.
 start_seeds <- function(cfg, K) as.integer(cfg$seed + 1000L * K + seq_len(cfg$n_starts))
-
-# fit_lca() ran the whole start set in one sequential fold and rebuilt the
-#   inputs on every call. model.R's best_of_starts() runs the identical EM on
-#   the identical seeds, splits the starts across workers, and shares one set
-#   of inputs; taking the best of the block maxima is the same fit as taking
-#   the best of the starts. Two functions that fit the model is one too many
-#   to keep in agreement, so this one went and the parallel one stayed.
 
 df_k <- function(K, cats) (K - 1) + K * sum(cats - 1)
 
@@ -296,7 +276,7 @@ bvr_pairs <- function(df, w, items, fit) {
                              factor(df[[items[b]]], seq_len(nrow(fit$rho[[b]]))))) / sum(w[ok])
 
     # The same conditioning has to be applied to the other side of the
-    #   comparison, and until now it was not. obs is the distribution among the
+    #   comparison. obs is the distribution among the
     #   respondents who answered BOTH items; fit$pi is the segment distribution
     #   in the whole analysis frame. Subtracting one from the other charges the
     #   pair for who answered it, and reports item nonresponse as local
@@ -574,25 +554,8 @@ prompt_segment_label <- function(fit, k, dictionary, items, context = NULL) {
     'JSON (one object): {{"label": "...", "description": "..."}}')
 }
 
-# The chat object, the JSON reader and the per-segment labelling loop used to
-#   live here. They now live in llm.R, and the copies here were removed rather
-#   than left in place for three reasons.
-
-# The first is a key. This file's chat builder wrote the analyst's key into the
-#   R process with Sys.setenv(OPENAI_API_KEY = ...). On a laptop that is
-#   untidy; on a Connect server it is a disclosure, because the process is
-#   shared and the variable outlives the session that set it. llm.R holds the
-#   key in a session-scoped registry that is discarded when the browser tab
-#   closes, and that is the only place a key should ever be.
-
-# The second is a name. parse_json_block() was defined here and again in
-#   llm.R. R sourced both, the second silently replaced the first, and which
-#   one ran depended on the alphabet. Two definitions of one name is a
-#   coin-flip dressed as code.
-
-# The third is that nothing called any of it. The app labels segments through
-#   model.R, which calls llm_json(). Dead code that looks live is what an
-#   auditor reads by mistake.
+# The prompts are built here; the calls are made from model.R through
+#   llm_json(), and the key never leaves llm.R's session registry.
 
 # Per-segment isolation has one blind spot: two neighbors can draft the same
 #   label, since neither call saw the other. 
@@ -644,9 +607,8 @@ pick_estimator <- function(dom, est) {
 #   dropped so the model can see they exist and still be told to leave them
 #   alone. values_header names what the numbers are. est names the estimator
 #   whose rows are shown, rather than taking one by position.
-# var_label is what the variable is called in prose; it defaults to the
-#   variable name, so an older caller is unaffected. Only the wording changes:
-#   every row is still selected on `variable`.
+# var_label is what the variable is called in prose and defaults to the
+#   variable name. Rows are always selected on `variable`.
 format_domain_block <- function(
     dom, marg, variable, labels = NULL, min_n = 30,
     values_header = "Share of each level falling in each segment:",
@@ -654,10 +616,7 @@ format_domain_block <- function(
   var_label = var_label %||% variable
   d = pick_estimator(dom, est) |> filter(variable == !!variable)
   m = filter(marg, variable == !!variable)
-  # n_scored is what domain_marginals() supplies now. The fallback keeps an
-  #   older marginal frame -- a cached one, or one built by a script off cfg.R
-  #   -- working rather than failing on a column name.
-  n_basis = if("n_scored" %in% names(m)) m$n_scored else m$n
+  n_basis = m$n_scored
   segs = sort(unique(d$segment))
   lines = map_chr(segs, function(k) {
     nm = if(is.null(labels)) paste0("Segment ", k) else labels[k]

@@ -54,8 +54,8 @@ local({
          paste(missing, collapse = ", "), call. = FALSE)
 })
 
-# What a NAMESPACE used to guarantee, checked. A masked verb fails here rather
-#   than producing a wrong table later.
+# The verbs R/ relies on, checked to be the ones meant. A masked verb fails
+#   here rather than producing a wrong table later.
 stopifnot(
   identical(filter, dplyr::filter), identical(select, dplyr::select),
   identical(count, dplyr::count),   identical(expand, tidyr::expand),

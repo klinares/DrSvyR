@@ -3,10 +3,8 @@
 #   tables in it can be downloaded as CSV without anything installed.
 
 # Why not a .docx as well. An analyst can select and copy out of a browser, so
-#   a second static rendering bought nothing and cost a second thing to keep in
-#   step with the first. The Word writer is gone, and with it officer and
-#   flextable -- the two dependencies that needed Rtools, which is what an
-#   analyst on a locked-down desktop cannot install.
+#   a second static rendering would buy nothing and cost a second thing to keep
+#   in step with the first.
 
 # Why the tables are embedded as data rather than only as markup. The analyst
 #   writing for a policymaker needs the numbers in a spreadsheet, and the
@@ -66,9 +64,8 @@ report_tables <- function(state) {
   out$what_was_tested = status_table(state)
   out$coverage = state$coverage
 
-  # These four used to be written as CSVs beside the report and nowhere else.
-  #   With the CSV dump gone they have to live here or they are lost, and each
-  #   is something a reviewer asks for rather than something an analyst reads.
+  # These four live only here, in the report's downloadable tables: each is
+  #   something a reviewer asks for rather than something an analyst reads.
   # The assigned-share table is deliberately NOT here. The size of a segment,
   #   for reporting, is the model prevalence in out$segments: pi_k from the
   #   design-weighted pseudo-likelihood, with an interval from refitting in

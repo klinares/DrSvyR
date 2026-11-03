@@ -48,14 +48,12 @@ mod_score_server <- function(id, state) {
         # Built on the WHOLE scored frame, including the respondents the model
         #   could not place, and carried with an index that says which rows the
         #   estimates run over.
-        # It used to be rebuilt on sc[reached, ]. That drops any PSU whose
-        #   respondents all went unscored, which changes n_h, the
-        #   n_h / (n_h - 1) scaling and the degrees of freedom, and it
-        #   manufactured singleton strata the released file does not have and
-        #   then halted on them. SURV701 is explicit: subset the design, not
-        #   the data. A zero-weight row and an absent row contribute
-        #   identically to a ratio estimator, so nothing is lost by keeping
-        #   them.
+        # Never rebuilt on sc[reached, ]: that drops any PSU whose respondents
+        #   all went unscored, which changes n_h, the n_h / (n_h - 1) scaling
+        #   and the degrees of freedom, and manufactures singleton strata the
+        #   released file does not have. SURV701: subset the design, not the
+        #   data. A zero-weight row and an absent row contribute identically
+        #   to a ratio estimator, so nothing is lost by keeping them.
         reached <- !is.na(sc$segment)
         des <- build_rep_design(sc, state$cfg)
         des$keep <- reached
@@ -445,8 +443,7 @@ mod_report_server <- function(id, state) {
         incProgress(0.3, detail = "report")
 
         # HTML is the report. Self-contained, every figure embedded, every
-        #   table inside it and downloadable as CSV from it. It needs no
-        #   Rtools-built package, which is what makes it deployable at all.
+        #   table inside it and downloadable as CSV from it.
         rep <- build_report_html(state, state$report_summary,
                                  state$report_not_answered,
                                  classification = state$report_classification)

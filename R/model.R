@@ -85,8 +85,6 @@ build_cfg <- function(state) {
       survey_context = state$context %||% "",
       research_question = state$question %||% "",
 
-      # No method level in the path any more. Anything an earlier version
-      #   wrote to output/lca/ stays where it is; nothing writes there again.
       out_dir = wise_path("output"),
 
       K_range = WISE_FIXED$K_range,
@@ -256,13 +254,6 @@ write_data_dict <- function(state, cfg, path) {
 
 # The fits are kept, not just the statistics: the profiles are what the analyst
 #   can actually judge, and refitting to draw them would double the wait.
-# Parallel over blocks of starting values rather than over K. Splitting by K
-#   alone leaves the largest model running alone at the end; splitting the
-#   starts balances the load and keeps every worker busy to the finish.
-
-# Determinism is unaffected. Seeds are drawn in this session and passed to the
-#   workers as data, so no worker touches the random number generator and the
-#   result is identical under any number of workers or a sequential plan.
 
 # The inputs are built once and shared. make_inputs() is not free, and calling
 #   it inside every start repeated it a thousand times over.
@@ -280,28 +271,22 @@ short_starts <- function(inp, cats, w, K, seeds, short, tol = 1e-8) {
 
 # Stage two. The survivors, carried to convergence from where stage one left
 #   them. No seed is drawn here: the starting parameters come from stage one,
-#   so the random number generator is never touched and the result does not
-#   depend on how the work was divided.
+#   so the random number generator is never touched.
 finish_starts <- function(inp, cats, w, K, inits, maxit = 800L, tol = 1e-8) {
   purrr::map(inits, function(init)
     em_run(inp$Y, inp$OH, cats, w, K, init = init[c("pi", "rho")],
            maxit = maxit, tol = tol))
 }
 
-# Which of stage one's fits are worth finishing. Chosen across the whole start
-#   set rather than within each worker's block: the best twenty of two hundred
-#   is one answer, while the best twenty of each of four blocks of fifty is a
-#   different one, and the machine's core count must not decide which model
-#   the analyst is shown.
+# Which of stage one's fits are worth finishing: the best n_keep across the
+#   whole start set.
 pick_survivors <- function(fits, keep) {
   ll = purrr::map_dbl(fits, "ll")
   fits[order(ll, decreasing = TRUE)[seq_len(min(keep, length(ll)))]]
 }
 
 # The two stages run one after the other: every start gets a short burst, the
-#   best few are taken to convergence. This used to dispatch each stage across
-#   workers in blocks and flatten them back in order, so one call over the
-#   whole set returns the identical list.
+#   best few are taken to convergence, and the best of those is the fit.
 best_of_starts <- function(inp, cats, w, K, seeds, cfg,
                            maxit = 800L, tol = 1e-8) {
   short = cfg$n_short %||% WISE_FIXED$n_short
@@ -325,10 +310,8 @@ search_sizes <- function(cfg, dat, tick = NULL) {
   #   maxima that a smaller set finds inconsistently, and a search that ranks
   #   sizes on inconsistently located maxima ranks the optimiser rather than
   #   the models.
-  # The sizes run one after another rather than all at once, so the progress
-  #   bar can say which size is being fitted. Flattening them into a single
-  #   dispatch would balance the workers slightly better and cost the analyst
-  #   the only indication that a five-minute wait is progressing.
+  # The sizes run one after another so the progress bar can say which size is
+  #   being fitted -- the only sign that a ten-minute wait is progressing.
   fits = purrr::map(cfg$K_range, function(K) {
     if (!is.null(tick)) tick(K)
     best_of_starts(inp, cfg$cats, w, K, start_seeds(cfg, K), cfg)
@@ -604,8 +587,8 @@ measurement_se <- function(cfg, dat, fit, rep_des, keep) {
   #   and the report says so. Dropping them would remove a deviation from the
   #   spread and could only narrow the interval; keeping them leaves it biased
   #   in a direction nobody can sign, which is worse to hide and better to
-  #   state. Nothing downstream reads this except the report and the reflex
-  #   that discloses it.
+  #   state. Nothing downstream reads this except the report, which
+  #   discloses it.
   # degf travels with the estimates so the domain stage can check that it is
   #   working off the same replicate set, which is what the report claims.
   list(shares = shares, probs = probs, profile = profile,

@@ -38,18 +38,10 @@ WISE_VERSION <- "1.0"
 
 # Where this code is living, which is what the write guard below is protecting.
 
-# here::here() used to answer this, and in a package it answers the wrong
-#   question. It resolves the user's PROJECT root -- wherever they happen to
-#   have opened R -- not where drsvyr is. An installed package sits in the
-#   library and the analyst may be sitting anywhere, so the guard was either
-#   comparing against an unrelated directory or, if they had opened R inside a
-#   project containing the temp folder, refusing legitimate writes.
-# It also required a dependency that DESCRIPTION does not declare, which
-#   R CMD check reports and which is the reason this surfaced at all.
-# This is a Shiny app directory, not an installed package, and Shiny sets
-#   the working directory to the app directory before app.R runs -- under
-#   runApp(), RStudio's Run App button and Posit Connect alike. So the app
-#   folder IS getwd().
+# Shiny sets the working directory to the app directory before app.R runs --
+#   under runApp(), RStudio's Run App button and Posit Connect alike -- so the
+#   app folder is getwd(). here::here() is not used: it finds the user's
+#   project root, which need not be this folder.
 repo_root <- function() fs::path_real(getwd())
 
 # Lexical normalisation rather than resolution, because the target usually does
@@ -106,7 +98,8 @@ work_dir <- function() {
   s = .wise_session()
   p = if (is.null(s)) .wise$work_dir else .wise$sessions[[s$token]]
   if (is.null(p))
-    stop("No work folder set. Call scaffold_work_folder() first.", call. = FALSE)
+    stop("No work folder for this session. Load a survey on 1. Project first.",
+         call. = FALSE)
   p
 }
 
@@ -118,13 +111,11 @@ wise_path <- function(...) {
 
 # The work folder, made rather than chosen.
 
-# It used to be a path the analyst typed. On a shared server there is no such
-#   path: the analyst has no filesystem to point at, and the one the server has
-#   belongs to every other session at once. So the folder is a temporary one
-#   per session, with the same layout as before, and the analyst downloads
-#   the report and the survey with segments from the Outputs screen.
-# Everything downstream still goes through wise_path(), so this is the only
-#   place that had to change. Nothing else knows where it is writing.
+# A temporary folder per session, made rather than chosen: on a shared server
+#   the analyst has no filesystem to point at, and the server's belongs to
+#   every session at once. The analyst downloads the report and the survey
+#   with segments from the Outputs screen. Everything writes through
+#   wise_path(), so nothing else needs to know where the folder is.
 open_session_folder <- function() {
   path = fs::path(tempfile("drsvyr_"))
   fs::dir_create(fs::path(path, WISE_SUBDIRS))
@@ -689,10 +680,3 @@ warn_box <- function(...) {
 }
 
 
-# The demonstration folder ------------------------------------------------
-
-# seed_demo_folder() was removed. It copied demo/ out of the repository into a
-#   work folder the analyst owns, which existed to work around the repository
-#   guard; the guard is gone, there is no demo/ in the repository, and nothing
-#   in the app called it. cache_clear() -- its only remaining caller -- is
-#   reachable from the app on its own.

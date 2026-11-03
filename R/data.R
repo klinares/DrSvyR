@@ -210,8 +210,8 @@ partition_identical <- function(raw, a, b) {
   kb = as.integer(factor(design_key(raw[[b]])))
   # Two columns that are entirely missing cut the sample the same way only in
   #   the sense that neither cuts it at all. Calling them interchangeable
-  #   would hide one behind the other in the picker, which is how a character
-  #   PSU used to disappear before it was ever nominated.
+  #   would hide one behind the other in the picker, and a character PSU would
+  #   disappear before it was ever nominated.
   if (all(is.na(ka)) || all(is.na(kb))) return(FALSE)
   identical(ka, kb)
 }
@@ -713,9 +713,9 @@ apply_map <- function(x, map, na_codes) {
 
 # cut() turns anything outside the breaks into NA without a word, and with
 #   right-closed intervals that includes a value sitting exactly on the lowest
-#   break. Those used to vanish from every domain table. They now stop the run
-#   with the values named, because the fix -- widen the breaks, or declare the
-#   code as nonresponse -- is the analyst's to choose.
+#   break, so such values would vanish from every domain table. They stop the
+#   run with the values named instead, because the fix -- widen the breaks, or
+#   declare the code as nonresponse -- is the analyst's to choose.
 apply_cut <- function(x, breaks, labels, na_codes) {
   v = as.numeric(unclass(x))
   nonresp = is.na(v) | v %in% demo_na_codes(x, na_codes)
@@ -752,9 +752,9 @@ build_demo_frame <- function(raw, specs, na_codes = numeric(0)) {
     #   complete-secondary, incomplete-secondary is unreadable and the figure
     #   is worse.
 
-    # The reference is no longer hoisted to the front. Nothing computes against
-    #   it -- every pair is tested against every other pair -- so hoisting only
-    #   bought a display convention, and it cost the ordering. It is recorded
+    # The reference is not moved to the front. Nothing computes against it --
+    #   every pair is tested against every other pair -- so moving it would buy
+    #   only a display convention at the cost of the ordering. It is recorded
     #   in the spec and read from there.
     lv = switch(s$kind,
       map = unique(unname(s$map[!is.na(s$map) & nzchar(s$map)])),

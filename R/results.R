@@ -93,11 +93,10 @@ plot_assignment_quality <- function(q) {
 #   its interval carries the uncertainty in where the segments are.
 # This table is a different thing. It is the share of respondents ASSIGNED to
 #   each segment, which treats the boundaries as known and counts people into
-#   bins. It used to carry a standard error, printed beside a weighted share,
-#   which is indistinguishable on screen from the estimate an analyst should be
-#   quoting and is roughly a third as wide. The standard error is gone for that
-#   reason: there is no interval here to quote, because this is not the
-#   estimand.
+#   bins. It carries no standard error on purpose: printed beside a weighted
+#   share it would be indistinguishable from the estimate an analyst should be
+#   quoting, and roughly a third as wide. There is no interval here to quote,
+#   because this is not the estimand.
 # The gap is what the table is for. Modal assignment flattens differences, so
 #   the assigned share sits closer to uniform than the model prevalence does,
 #   and the size of that gap is the classification error the BCH correction
@@ -858,10 +857,9 @@ status_table <- function(state) {
 #   keeps the framing honest.
 
 prompt_report_summary <- function(state) {
-  # Keyed on the variable, headed by the label. The summary used to name
-  #   variables the report never defines -- "differ by fs2, idio2, edre" -- and
-  #   the codebook table covers the battery only, so nothing on the page said
-  #   what those were.
+  # Keyed on the variable, headed by the label. Without it the summary names
+  #   variables the report never defines -- "differ by fs2, idio2, edre" --
+  #   because the codebook table covers the battery only.
   reads = purrr::imap_chr(state$domain_reads %||% list(),
                           function(r, v) paste0(aux_label(state$cfg, v),
                                                 ": ", r$finding))
@@ -1054,9 +1052,9 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
       "the people who withheld an answer differ from those who gave one. It is",
       "not included in the tests of which levels differ.")))
 
-  # Said once. It used to be the caption inside every domain figure, which on
-  #   six domains is the same three lines printed six times and a shorter panel
-  #   each time it was printed.
+  # Said once rather than as the caption of every domain figure, which on six
+  #   domains would be the same three lines six times and a shorter panel each
+  #   time.
   add(blk("p", paste(
     "In every figure below, bars are 95 per cent intervals and each panel is",
     "one segment. The unweighted row ignores the survey design and its",
@@ -1247,13 +1245,12 @@ plot_data_uri <- function(g, width, height, res = 150) {
 
 # What the design actually cost, measured on this run rather than asserted.
 
-# The report used to say that software assuming independent sampling reports
-#   margins "roughly half as wide". On the reference data that sentence was
-#   wrong by a factor of two in its own appendix: the median design-based
-#   interval was the same width as the naive one and four cells in ten were
-#   narrower. A general claim about survey data is not a finding about this
-#   survey, and a reader who checks it and finds it false stops believing the
-#   rest.
+# Measured rather than asserted. A general claim -- "software assuming
+#   independent sampling reports margins roughly half as wide" -- was wrong by a
+#   factor of two on the reference data: the median design-based interval was
+#   the same width as the naive one and four cells in ten were narrower. A
+#   claim about survey data in general is not a finding about this survey, and
+#   a reader who checks it and finds it false stops believing the rest.
 
 # It is a ratio of interval widths, not a design effect: the two columns
 #   differ in estimator, in variance method and in critical value at the same
