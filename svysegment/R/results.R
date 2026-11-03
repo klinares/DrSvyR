@@ -1236,13 +1236,16 @@ report_html <- function(state, summary_text = NULL, not_answered = NULL) {
   })
 }
 
-# type = "cairo" explicitly, so the report never reaches for X11. A Linux
-#   server with no display has no Xlib device, and grDevices::png() would
-#   otherwise fall back to it whenever bitmapType was not already cairo.
+# ggsave() draws with ragg when it is installed and otherwise with
+#   grDevices::png(), whose type defaults to options("bitmapType"), set to
+#   cairo in app.R. Neither needs X11. Passing type = "cairo" here as well was
+#   ignored by ragg with a warning on every figure. The PNG is only a carrier
+#   for the data URI, so it is removed once read.
 plot_data_uri <- function(g, width, height, res = 150) {
   f = tempfile(fileext = ".png")
+  on.exit(unlink(f), add = TRUE)
   ggplot2::ggsave(f, g, width = width, height = height, dpi = res, bg = "white",
-                  device = "png", type = "cairo")
+                  device = "png")
   paste0("data:image/png;base64,", base64enc::base64encode(f))
 }
 

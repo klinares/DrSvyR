@@ -41,7 +41,7 @@ library(dplyr)
 # Called as pkg::fn() in R/ and never attached. Listed so a missing one stops
 #   the app here, by name, rather than three screens later.
 APP_PACKAGES <- c(
-  "base64enc", "curl", "digest", "fs", "janitor", "jsonlite", "knitr",
+  "base64enc", "clue", "curl", "digest", "fs", "janitor", "jsonlite", "knitr",
   "markdown", "matrixStats", "MetBrewer", "readr", "rlang", "viridis", "yaml")
 
 local({
@@ -147,7 +147,12 @@ ui <- page_fluid(
 
     # help.md's images are written as figures/..., and Shiny serves www/ at
     #   the site root, so they resolve with no resource path to register.
-    tabPanel(WISE_TABS[1], includeMarkdown("help.md"), mod_key_ui("key")),
+    #   includeMarkdown() would also try to embed them, and warn on every
+    #   start that it cannot find them at that path; the page is the same.
+    tabPanel(WISE_TABS[1],
+             HTML(markdown::mark("help.md", output = NULL,
+                                 options = "-embed_resources")),
+             mod_key_ui("key")),
 
     tabPanel(WISE_TABS[2],  mod_project_ui("project")),
     tabPanel(WISE_TABS[3],  mod_design_ui("design")),
