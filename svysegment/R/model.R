@@ -740,8 +740,10 @@ draft_labels <- function(state, tick = NULL) {
     if (key %in% done$target) return(dplyr::filter(done, target == key))
     if (!is.null(tick)) tick(key)
 
+    # Read from state rather than cfg, so a detail added on Items after
+    #   Review is still used.
     prompt = prompt_segment_label(fit, k, dict, cfg$items,
-                                  cfg$survey_context)
+                                  state$context %||% "", state$question %||% "")
 
     obj = llm_json(prompt, role = "worker", system_prompt = persona_lca,
                    validate = validate_fields(c("label", "description")))

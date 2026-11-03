@@ -491,9 +491,10 @@ persona_lca <- paste(
   "probabilities and the item wording, never from outside assumptions.")
 rules_label <- paste(
   "RULES:",
-  "1. Use only the numbers and item wording shown. Survey context only",
-  "   clarifies what the items refer to; attribute nothing that the numbers",
-  "   do not show.",
+  "1. Use only the numbers and item wording shown. The survey context says",
+  "   what the items refer to and the research question says what the",
+  "   analyst is studying: use them to choose words that fit, and attribute",
+  "   nothing that the numbers do not show.",
   "2. Quote a probability exactly as it is printed, for one response category",
   "   at a time. Never add probabilities across categories and never describe a",
   "   combined or total probability. If two adjacent answers both matter, name",
@@ -549,11 +550,15 @@ format_segment_block <- function(fit, k, dictionary, items) {
            paste(lines, collapse = "\n"))
 }
 
-prompt_segment_label <- function(fit, k, dictionary, items, context = NULL) {
-  ctx = if (!is.null(context) && nzchar(context))
-    str_glue("SURVEY CONTEXT\n{context}\n\n") else ""
+# The survey context and the research question come from the Items screen.
+#   They come ahead of the segment so its name fits the analyst's survey and
+#   purpose; rule 1 keeps them from adding anything the numbers do not show.
+prompt_segment_label <- function(fit, k, dictionary, items, context = NULL,
+                                 question = NULL) {
+  ctx = if (nzchar(context %||% "")) str_glue("SURVEY CONTEXT\n{context}\n\n") else ""
+  qn = if (nzchar(question %||% "")) str_glue("RESEARCH QUESTION\n{question}\n\n") else ""
   str_glue(
-    "{ctx}",
+    "{ctx}{qn}",
     "ONE SEGMENT FROM A LATENT CLASS ANALYSIS (LCA) MEASUREMENT MODEL\n",
     "{format_segment_block(fit, k, dictionary, items)}\n\n",
     "TASK\n",

@@ -105,7 +105,7 @@ new_state <- function() {
     model = NULL, model_key = NULL, model_accepted = NULL, model_dat = NULL,
     measure = NULL, diag_reading = NULL,
     labels = NULL, labels_drafted = NULL, labels_edited = NULL,
-    labels_source = NULL,
+    labels_source = NULL, survey = NULL,
     scored = NULL, score_design = NULL, coverage = NULL, quality = NULL,
     shares = NULL, domains = NULL, domain_reads = NULL, question = NULL,
     report_summary = NULL, report_not_answered = NULL,

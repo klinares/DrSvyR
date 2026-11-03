@@ -287,65 +287,75 @@ mod_items_server <- function(id, state) {
         tags$p(class = "text-muted", "Confirm the design first.")
     })
 
-    # The free-text goal travels into every prompt from here on and into the
-    #   report's framing, so it is collected once and shown back rather than
-    #   asked for repeatedly.
+    # The survey and the research question travel into the prompt that names
+    #   the segments, into every reading of the results and into the report's
+    #   framing, so they are collected once, field by field, and shown back.
+    #   state$survey keeps the fields; state$context is the same thing as the
+    #   prompts read it (survey_context_text() in core.R).
 
-    # The two seed values are isolated. Without that this block reads the same
-    #   state the observers below write, so every keystroke invalidated the
-    #   renderUI and rebuilt both boxes -- one full re-render per character,
-    #   which is slow to type into and moves the cursor. Isolated, the block
-    #   re-renders only when the design changes, and it still seeds from
-    #   whatever has been typed because the observers keep state current.
+    # The seed values are isolated. Without that this block reads the same
+    #   state the observers below write, so every keystroke rebuilt every box
+    #   -- slow to type into, and it moves the cursor. Isolated, the block
+    #   re-renders only when the design changes.
     output$context_box <- renderUI({
       req(state$design_dat)
+      info <- isolate(state$survey %||% list())
+      line <- function(id, label, placeholder)
+        textInput(ns(id), label, value = info[[id]] %||% "", width = "100%",
+                  placeholder = placeholder)
       tagList(
-        tags$h4("Study context"),
-        textAreaInput(ns("context"), NULL, width = "100%", rows = 4,
-                      value = isolate(state$context %||% ""),
-                      placeholder = paste(
-                        "Country, what the study is for, who reads the",
-                        "results, and what you want the segments to tell",
-                        "you.")),
+        tags$h4("Your survey and research question"),
+        help_box("context"),
+        fluidRow(
+          column(6, line("survey", "Survey and year", "e.g. AmericasBarometer 2023")),
+          column(6, line("population", "Country and population",
+                         "e.g. adults living in Ecuador"))),
+        line("topic", "What this battery asks about",
+             "e.g. trust in public institutions"),
         # Asked here rather than at the report, and deliberately. A question
         #   written after the results are known is a question chosen to match
         #   the answer. Written now, it can order the report without deciding
         #   what goes in it.
-        textAreaInput(ns("question"), "Research question (optional)",
-                      width = "100%", rows = 2,
-                      value = isolate(state$question %||% ""),
+        textAreaInput(ns("question"), "Research question", width = "100%",
+                      rows = 2, value = isolate(state$question %||% ""),
                       placeholder = paste(
-                        "What you want this analysis to answer. It sets what",
-                        "the report leads with -- every difference the data",
-                        "resolve is reported either way, and the report says",
-                        "what the question cannot be answered on.")),
+                        "What you want this analysis to answer, e.g. which",
+                        "groups distrust the justice system?")),
+        textAreaInput(ns("notes"), "Anything else the names should reflect (optional)",
+                      width = "100%", rows = 2, value = info$notes %||% "",
+                      placeholder = paste(
+                        "e.g. who reads the results, or terms your audience",
+                        "uses for these groups")),
         actionButton(ns("save_context"), "Save"))
     })
 
     # Captured as it is typed, not only on the button: otherwise a question
-    #   written and left while the analyst moved on is discarded silently, and
-    #   the report goes out with no research question. The button stays
-    #   because an analyst wants to be told the thing was kept.
-
-    # Debounced, because state$context is read by four prompt builders on
-    #   three other screens. Writing it on every keystroke invalidated all of
-    #   them once per character. Three quarters of a second after typing stops
-    #   is far inside the time it takes to reach any screen that reads it.
+    #   written and left while the analyst moved on is discarded silently. The
+    #   button stays because an analyst wants to be told the thing was kept.
+    # Debounced, because state$context is read by prompt builders on three
+    #   other screens; writing it per keystroke invalidated them per character.
     CONTEXT_SETTLE <- 750
 
-    ctx_typed <- debounce(reactive(input$context), CONTEXT_SETTLE)
-    qn_typed  <- debounce(reactive(input$question), CONTEXT_SETTLE)
+    typed <- debounce(reactive(list(
+      info = map(set_names(names(SURVEY_FIELDS)), function(f) input[[f]] %||% ""),
+      question = input$question %||% "")), CONTEXT_SETTLE)
 
-    observeEvent(ctx_typed(), state$context <- ctx_typed(), ignoreInit = TRUE)
-    observeEvent(qn_typed(), state$question <- qn_typed(), ignoreInit = TRUE)
+    keep_context <- function(x) {
+      state$survey <- x$info
+      state$context <- survey_context_text(x$info)
+      state$question <- x$question
+    }
+
+    observeEvent(typed(), keep_context(typed()), ignoreInit = TRUE)
 
     observeEvent(input$save_context, {
-      state$context <- input$context
-      state$question <- input$question
+      keep_context(list(
+        info = map(set_names(names(SURVEY_FIELDS)), function(f) input[[f]] %||% ""),
+        question = input$question %||% ""))
       showNotification(
-        if (nzchar(trimws(input$question %||% "")))
-          "Saved. The research question will head the report."
-        else "Saved. No research question set.",
+        if (nzchar(trimws(state$question)))
+          "Saved. The names and the report will use your survey details and question."
+        else "Saved. No research question set: the names will use the survey details only.",
         type = "message")
     })
 

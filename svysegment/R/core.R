@@ -193,6 +193,19 @@ aux_levels <- function(state, v) {
   if (is.null(d) || !v %in% names(d)) NULL else levels(d[[v]])
 }
 
+# The survey details the analyst records on Items, in the order the prompts
+#   show them. The research question is kept apart, in state$question.
+SURVEY_FIELDS <- c(survey = "Survey", population = "Population",
+                   topic = "What the battery asks about", notes = "Other context")
+
+# The survey as the prompts read it: one labelled line per field filled in,
+#   and "" when none is.
+survey_context_text <- function(info) {
+  vals = purrr::map_chr(names(SURVEY_FIELDS), function(f) trimws(info[[f]] %||% ""))
+  filled = nzchar(vals)
+  paste0(SURVEY_FIELDS[filled], ": ", vals[filled], collapse = "\n")
+}
+
 
 # Errors that say where they came from
 #______________________________________________________________________________
@@ -401,6 +414,13 @@ WISE_HELP <- list(
     "Upload the survey file (SPSS or Stata), or use the demonstration survey.",
     "Your file is only read; the tool works in a temporary folder of its own",
     "that is deleted when you close the tab."),
+
+  context = paste(
+    "These details go into the prompt that drafts each segment's name, and",
+    "into every written reading of the results, so the wording fits your",
+    "survey and what you want to know. They never change a number, and the",
+    "model still describes each segment only from how its members answered.",
+    "The research question also sets what the report leads with."),
 
   design = paste(
     "Complex surveys are not simple random samples: people are selected in",
