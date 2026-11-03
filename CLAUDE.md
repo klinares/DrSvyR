@@ -62,7 +62,7 @@ Headless: `Rscript --no-init-file -e "shiny::runApp('svysegment', port = 8765, l
 
 Smoke test, run from inside `svysegment/`: `Rscript --no-init-file tests/smoke.R`.
 It sources `app.R`, runs a small `search_sizes()` on the demo data, checks
-`plot_data_uri()`, then times a full-size search (about 10 minutes).
+`plot_data_uri()`, then times a full-size search (about 3 minutes).
 
 Publishing uploads everything in the app folder that its `.rscignore` does not
 list. The full search blocks its R process, so in Connect's Runtime settings

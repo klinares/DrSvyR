@@ -45,9 +45,10 @@ This folder is the deployable unit; `.rscignore` keeps this README and
 above.
 
 In the content's **Runtime** settings, set **Max connections per process = 1**.
-The full model search takes about ten minutes and occupies its R process for
-that time; with one connection per process it holds up only the analyst who
-started it. Size **Max processes** to the server's memory.
+The full model search takes about three minutes on the demonstration survey,
+longer with more respondents or items, and occupies its R process for that
+time; with one connection per process it holds up only the analyst who started
+it. Size **Max processes** to the server's memory.
 
 ## What the analyst takes away
 
