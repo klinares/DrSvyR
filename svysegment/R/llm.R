@@ -403,7 +403,7 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
     #   again like any other bad reply, rather than ending the call.
     if (!is.null(validate))
       tryCatch(validate(obj), error = function(e)
-        stop(served, conditionMessage(e), call. = FALSE))
+        stop(served, conditionMessage(root_cause(e)), call. = FALSE))
     obj
   }
 
@@ -466,7 +466,9 @@ validate_all <- function(...) {
 #   commonest invention, so every number in the reply is looked for in the
 #   evidence: the request and its instructions. It passes when the evidence
 #   holds it at the precision written, or as a percentage of a proportion
-#   (0.312 in a table may be written 31% or 31.2%).
+#   (0.312 in a table may be written 31% or 31.2%). "At the precision written"
+#   means within half a unit of the last digit, so 0.345 may be 35% or 34%:
+#   round() would refuse one of them, since R rounds a half to even.
 validate_numbers <- function(evidence) {
   num = "-?[0-9]+([.][0-9]+)?"
   ev = as.numeric(regmatches(evidence, gregexpr(num, evidence))[[1]])
@@ -476,7 +478,8 @@ validate_numbers <- function(evidence) {
     unknown = purrr::discard(found, function(s) {
       d = nchar(sub("^[^.]*[.]?", "", s))
       x = as.numeric(s)
-      any(abs(round(ev, d) - x) < 1e-9) || any(abs(round(100 * ev, d) - x) < 1e-9)
+      tol = 0.5 * 10^-d + 1e-9
+      any(abs(ev - x) <= tol) || any(abs(100 * ev - x) <= tol)
     })
     if (length(unknown))
       stop("The draft cites numbers that are not in the figures it was given (",
