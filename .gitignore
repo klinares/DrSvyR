@@ -2,23 +2,31 @@
 .Rhistory
 .RData
 .Rproj.user/
-rsconnect/
 
-# Analyst data and outputs live in the session's temporary work folder, never
+# Posit Connect deployment records. rsconnect::deployApp() writes rsconnect/
+#   inside each app folder it publishes, and rsconnect-python writes
+#   rsconnect-python/. Unanchored, so they are ignored in every app folder.
+rsconnect/
+rsconnect-python/
+
+# Old package build output from before this became a set of app folders.
+dist/
+
+# Analyst data and outputs live in each app's temporary session folder, never
 #   in this repository. The one survey file that belongs here is the
-#   demonstration data the app ships with. A directory ignored outright cannot
-#   have a file re-admitted inside it, so data/ is ignored by its contents
-#   (/data/*) and the demo file is then let back in by name. Ignoring data/
-#   itself is what silently kept the demo off GitHub once before.
+#   demonstration data an app ships with. A directory ignored outright cannot
+#   have a file re-admitted inside it, so each app's data/ is ignored by its
+#   contents (/*/data/*) and a demo file is then let back in by name. Ignoring
+#   data/ itself is what silently kept the demo off GitHub once before.
 *.sav
 *.zsav
 *.dta
 *.parquet
 *.rds
-/data/*
-!/data/ECU_2023_LAPOP_AmericasBarometer_v1.0_w.sav
+/*/data/*
+!/svysegment/data/ECU_2023_LAPOP_AmericasBarometer_v1.0_w.sav
 
 output/
 cache/
-/decisions/
-/dict/
+decisions/
+dict/

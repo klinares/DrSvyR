@@ -1,64 +1,56 @@
-# DrSvyR — Shiny app (branch `shiny_app`)
+# DrSvyR
 
-This branch is DrSvyR as a plain Shiny app: clone it, install the packages,
-run it. Nothing is installed or built. The R package, launched with
-`drsvyr::run_drsvyr()`, lives on `main`.
+Shiny apps for analysing complex survey data. Each app is a self-contained
+folder that runs on its own and publishes to Posit Connect on its own.
 
-## Run it
+What they share is a standard: every margin of error comes from how the sample
+was actually drawn (strata, clusters and weights), not from a simple-random-
+sampling default. Respondent data never enters this repository, and nothing an
+app computes is presented as a decision the analyst did not make.
 
-```r
-install.packages(c(
-  "shiny", "bslib", "survey", "haven", "ggplot2", "purrr", "stringr",
-  "tibble", "tidyr", "dplyr", "base64enc", "curl", "digest", "fs",
-  "janitor", "jsonlite", "knitr", "markdown", "matrixStats", "MetBrewer",
-  "readr", "rlang", "viridis", "yaml"))
+## Apps
 
-shiny::runApp(".")      # from the repository root
-```
-
-Or open `app.R` in RStudio and press **Run App**.
-
-An API key on the **Start here** screen lets a language model draft segment
-names and written sections. Without one the model, the estimates and the
-report are identical; only the drafted prose is missing.
-
-## Publish it to Posit Connect
-
-```r
-rsconnect::deployApp(".", appName = "drsvyr")
-```
-
-The repository is the deployable unit. `.rscignore` keeps this README and the
-licence out of the bundle.
-
-## What is where
-
-| Path | What it is |
+| App | What it does |
 |---|---|
-| `app.R` | Settings, packages, state, layout, server. Ends in `shinyApp(ui, server)`. |
-| `R/` | Function definitions only. Sourced by `app.R`. |
-| `help.md` | The **Start here** page. |
-| `www/figures/` | Images for `help.md`. Shiny serves `www/` at the site root. |
-| `data/` | The demonstration survey (LAPOP AmericasBarometer, Ecuador 2023). |
+| [`svysegment`](svysegment/) | Finds respondent types in a battery of survey questions with a weighted latent class model, and compares them across groups with design-based intervals. |
 
-## Settings
+## Running an app
 
-Two lines at the top of `app.R`:
+From the repository root:
 
-- `APP_CLASSIFICATION` — the marking on every screen and in the report.
-- `APP_MAX_UPLOAD_MB` — the largest survey file accepted.
+```r
+shiny::runApp("svysegment")
+```
 
-The language-model endpoint and models are set in `R/llm.R`.
+Each app's README lists the packages it needs.
 
-## How this differs from `main`
+## Publishing an app to Posit Connect
 
-- No package scaffolding (`DESCRIPTION`, `NAMESPACE`, `man/`, `inst/`).
-- The AI Survey Methodologist chat tab is removed. The key box moved to
-  `R/llm.R` and stays on Start here, because the other drafting features use it.
-- Single-core. `future` and `furrr` are gone; the search returns the same
-  model, more slowly.
-- All PNGs are drawn with cairo, so no X11 is needed on the server.
+```r
+rsconnect::deployApp("svysegment", appName = "svysegment")
+```
 
-## Data acknowledgment
+Publish the app's folder, not the repository root. Each app folder has its own
+`.rscignore` for files that should not be uploaded. The `rsconnect/` folder
+that publishing creates inside an app folder is ignored by git.
 
-The demonstration uses the 2023 AmericasBarometer for Ecuador by the LAPOP Lab at Vanderbilt University.
+## Repository layout
+
+```
+DrSvyR/
+  README.md        this file
+  LICENSE
+  .gitignore       shared by every app
+  svysegment/      one app: app.R, R/, help.md, www/, data/, README.md
+```
+
+## Adding an app
+
+Give it its own top-level folder with an `app.R` (or `ui.R` and `server.R`), its
+own README, and its own `.rscignore`. If it ships a demonstration data file,
+let that one file back in through `.gitignore` the way `svysegment` does;
+every other survey file stays out.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).

@@ -1,83 +1,68 @@
-# DrSvyR, branch `shiny_app`
+# DrSvyR
 
-`main` is an R package launched with `drsvyr::run_drsvyr()`. This branch is the
-same analysis as a plain Shiny app directory, so Posit Connect can run it
-without installing anything. Work on this branch only; `main` is cleaned up
-separately.
+A repository of Shiny apps for complex survey data. Each app is a
+self-contained folder at the top level; `svysegment/` is the first. There is no
+R package any more.
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `app.R` | Settings, `library()` calls, masking checks, sources `R/`, state (`new_state`), `WISE_TABS`, `ui`, `server`, `shinyApp(ui, server)` |
-| `R/` | 11 files, function definitions only: core, data, engine, llm, model, plots, report_bundle, results, ui_data, ui_model, ui_results. Sourced flat, alphabetically, by `app.R` |
-| `help.md` | The "Start here" tab |
-| `www/figures/` | Help images. Shiny serves `www/` at the site root, so `help.md` links them as `figures/...` |
-| `data/` | LAPOP Ecuador 2023 demo `.sav`, found by `demo_survey_path()` |
-| `tests/smoke.R` | Smoke test. Listed in `.rscignore`, never deployed |
-| `README.md` `LICENSE` `.gitignore` `.rscignore` | |
+| `README.md` `LICENSE` `.gitignore` | Shared by every app |
+| `svysegment/app.R` | Settings, `library()` calls, masking checks, sources `R/`, state (`new_state`), `ui`, `server`, `shinyApp(ui, server)` |
+| `svysegment/R/` | 11 files, function definitions only: core, data, engine, llm, model, plots, report_bundle, results, ui_data, ui_model, ui_results. Sourced flat, alphabetically, by `app.R` |
+| `svysegment/help.md` | The "Start here" tab |
+| `svysegment/www/figures/` | Help images. Shiny serves `www/` at the site root |
+| `svysegment/data/` | LAPOP Ecuador 2023 demo `.sav`, found by `demo_survey_path()` |
+| `svysegment/tests/smoke.R` | Smoke test, kept out of the bundle by `.rscignore` |
 
-## Settings at the top of app.R
+## svysegment settings (top of app.R)
 
 - `APP_CLASSIFICATION`: the banner on every screen and in the report.
 - `APP_MAX_UPLOAD_MB`: largest upload; sets `shiny.maxRequestSize`.
 - `options(bitmapType = "cairo")`: Connect has no X11.
 - `APP_PACKAGES`: packages used as `pkg::fn()`; a missing one stops startup.
-- The LLM endpoint is `WISE_LLM` in `R/llm.R`, not in `app.R`.
+- The LLM endpoint is `WISE_LLM` in `R/llm.R`.
 
 ## Hard rules
 
 1. R code is tidyverse style. NEVER use `for` or `while` loops. Use purrr
    (`map`, `map_dbl`, `walk`, `imap`, `reduce`, `detect`, `keep`/`discard`).
-2. Files in `R/` contain only function definitions and constant assignments.
-   No top-level calls, no `library()`. No two files may define the same name:
-   alphabetical sourcing would silently pick a winner. `R/` is sourced into
-   the global environment but `runApp()` runs `app.R` in its own, so `R/`
-   cannot see objects made in `app.R` unless `app.R` assigns them to
-   `globalenv()` (as it does `APP_CLASSIFICATION`). Test by loading with
-   `shiny::shinyAppDir()`, not `source("app.R")`, which hides this.
+2. Files in an app's `R/` contain only function definitions and constant
+   assignments. No top-level calls, no `library()`. No two files may define
+   the same name: alphabetical sourcing would silently pick a winner. `R/` is
+   sourced into the global environment but `runApp()` runs `app.R` in its
+   own, so `R/` cannot see objects made in `app.R` unless `app.R` assigns
+   them to `globalenv()` (as it does `APP_CLASSIFICATION`). Test by loading
+   with `shiny::shinyAppDir()`, not `source("app.R")`, which hides this.
 3. No parallelism: no future, furrr, parallel, mirai.
 4. No package scaffolding: no DESCRIPTION, NAMESPACE, `system.file()`, or
    installed-package assumptions.
-5. Assets go in `www/` (served) or `data/` (read from `getwd()/data`). No
-   `addResourcePath()`, no new asset folders.
+5. Assets go in the app's `www/` (served) or `data/` (read from
+   `getwd()/data`). No `addResourcePath()`, no new asset folders.
 6. Do not change statistical behaviour (EM, start sets, replicate variance,
    design handling) unless asked. If a change could move an estimate, stop
    and say so.
 7. Do not invent package functions or arguments. Check the installed help or
    say you are unsure.
-8. Commit on `shiny_app` only, in small focused commits with clear messages.
-   Never commit to `main`, never force-push, never delete branches, ask
-   before pushing.
+8. Small focused commits with clear messages. Never force-push, never delete
+   branches, ask before pushing.
 
-## Run
+## Run, test, publish (from the repository root)
 
 ```r
-shiny::runApp(".")
+shiny::runApp("svysegment")
+rsconnect::deployApp("svysegment", appName = "svysegment")
 ```
 
-Headless: `Rscript --no-init-file -e "shiny::runApp('.', port = 8765, launch.browser = FALSE)"`.
+Headless: `Rscript --no-init-file -e "shiny::runApp('svysegment', port = 8765, launch.browser = FALSE)"`.
 `--no-init-file` keeps a personal `.Rprofile` out, as on Connect.
 
-## Test
+Smoke test, run from inside `svysegment/`: `Rscript --no-init-file tests/smoke.R`.
+It sources `app.R`, runs a small `search_sizes()` on the demo data, checks
+`plot_data_uri()`, then times a full-size search (about 10 minutes).
 
-```
-Rscript --no-init-file tests/smoke.R
-```
-
-Sources `app.R`, runs a small `search_sizes()` on the demo data, checks
-`plot_data_uri()`, then times a full-size search (`WISE_FIXED` settings,
-K 2:10). The full search takes about 10 minutes, so expect a wait.
-
-## Publish
-
-```r
-rsconnect::deployApp(".", appName = "drsvyr")
-```
-
-Everything in the directory is uploaded unless `.rscignore` lists it.
-
-The full search (~10 min) blocks its R process. In Connect's Runtime settings
-set Max connections per process = 1 so it blocks only its own analyst, size
-Max processes to memory, and check the timeouts outlast a 10-minute search.
+Publishing uploads everything in the app folder that its `.rscignore` does not
+list. The full search blocks its R process, so in Connect's Runtime settings
+set Max connections per process = 1 and size Max processes to memory.
 ExtendedTask would need mirai (rule 3), so it is not used.
