@@ -160,13 +160,9 @@ mod_config_server <- function(id, state) {
 
     output$written <- renderUI({
       req(state$cfg_paths)
-      tagList(
-        tags$p(class = "text-success", "Written to your work folder:"),
-        tags$ul(map(state$cfg_paths, function(p)
-          tags$li(tags$code(fs::path_rel(p, state$work_dir))))),
-        tags$p(class = "text-muted",
-               "The decision log is in ", tags$code("decisions/"),
-               ". It records what you chose and the evidence you had."))
+      tags$p(class = "text-success",
+             "Configuration recorded. It goes into the report with the decision ",
+             "log, which records what you chose and the evidence you had.")
     })
   })
 }
@@ -922,9 +918,7 @@ mod_labels_server <- function(id, state) {
     output$saved <- renderUI({
       req(state$labels_edited)
       tags$p(class = "text-muted",
-             "Saved to ", tags$code("output/labels.csv"),
-             ". Editing that file by hand is also a way to take over naming; ",
-             "deleting it triggers a redraft.")
+             "Saved. These names are used from here on and in the report.")
     })
   })
 }

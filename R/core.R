@@ -59,9 +59,9 @@ repo_root <- function() fs::path_real(getwd())
 assert_outside_repo <- function(path) {
   p = fs::path_abs(path)
   if (fs::path_has_parent(p, repo_root()))
-    stop("That path is inside the installed package: ", p, "\n",
+    stop("That path is inside the app's own folder: ", p, "\n",
          "Outputs, the decision log and scored respondent data belong in the ",
-         "session's own folder, never in the library. This is a bug rather ",
+         "session's own folder, never beside the code. This is a bug rather ",
          "than something to configure -- work folders are created under ",
          "tempdir() and cannot normally land here.", call. = FALSE)
   invisible(path)
@@ -383,9 +383,9 @@ iteration_count <- function() {
 WISE_HELP <- list(
 
   project = paste(
-    "Point to a folder on your machine holding the survey file and the",
-    "technical report. Results are written there too. Nothing is saved into",
-    "the program's own folder."),
+    "Upload the survey file (SPSS or Stata), or use the demonstration survey.",
+    "Your file is only read; the tool works in a temporary folder of its own",
+    "that is deleted when you close the tab."),
 
   design = paste(
     "Complex surveys are not simple random samples: people are selected in",
@@ -449,12 +449,12 @@ WISE_HELP <- list(
     "run, and it is the last point at which changing your mind is cheap."),
 
   config_commit = paste(
-    "Approving writes the configuration and the data dictionary to your work",
-    "folder, and starts the decision log. You can still go back afterwards,",
+    "Approving records the configuration and the data dictionary and starts",
+    "the decision log. You can still go back afterwards,",
     "but going back means going back through the model search."),
 
   search = paste(
-    "The model will be fitted at every plausible number of groups or factors.",
+    "The model will be fitted at every plausible number of groups.",
     "No number is correct in the abstract -- you are choosing between",
     "descriptions of the same people. The statistics support that choice; they",
     "do not make it."),
@@ -632,9 +632,9 @@ WISE_HELP <- list(
     "columns as well as the assignment: cross-tabulating the assignment on its",
     "own puts back the flattening the corrected column removed, and the",
     "variable label in the file says so.",
-    "\n\nThe decision log is the record of how this analysis was reached. If",
-    "anyone asks why this number of groups rather than another, the answer and",
-    "the evidence behind it are both in there.")
+    "\n\nThe decision log, inside the report, is the record of how this",
+    "analysis was reached. If anyone asks why this number of groups rather",
+    "than another, the answer and the evidence behind it are both in there.")
 )
 
 # One consistent block. Muted rather than styled as an alert, because most of

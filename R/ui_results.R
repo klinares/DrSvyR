@@ -507,19 +507,7 @@ mod_report_server <- function(id, state) {
 
     output$written <- renderUI({
       req(state$outputs)
-      tagList(
-        tags$hr(),
-        tags$h4("Where everything is"),
-        tags$p("In ", tags$code(state$work_dir), ":"),
-        tags$ul(
-          tags$li(tags$strong("output/"), " \u2014 the report, your survey file ",
-                  "with the new columns, and every table as CSV"),
-          tags$li(tags$strong("decisions/"), " \u2014 what you chose at each step ",
-                  "and the evidence you had at the time"),
-          tags$li(tags$strong("dict/"), " \u2014 the data dictionary")),
-        tags$ul(map(state$outputs, function(p)
-          tags$li(tags$code(fs::path_rel(p, state$work_dir))))),
-        help_box("finished"))
+      tagList(tags$hr(), help_box("finished"))
     })
   })
 }
