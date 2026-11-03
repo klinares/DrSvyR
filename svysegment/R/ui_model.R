@@ -73,11 +73,10 @@ mod_config_server <- function(id, state) {
     observeEvent(input$readback, {
       req(cfg())
       withProgress(message = "Reading back", value = 0.5, {
-        res <- try(llm_json(
+        res <- try(llm_write(
           prompt_config_readback(config_summary(state, cfg()),
                                  state$context %||% ""),
-          role = "pm", system_prompt = persona_pm,
-          validate = validate_fields("summary")), silent = TRUE)
+          "summary"), silent = TRUE)
         if (wise_failed(res)) return()
         state$config_readback <- res$summary
       })
@@ -343,11 +342,10 @@ mod_search_server <- function(id, state) {
     observeEvent(input$read, {
       req(state$dimension, state$search)
       withProgress(message = "Reading", value = 0.5, {
-        res <- try(llm_json(
+        res <- try(llm_write(
           prompt_search_narration(state$search$stats, state$dimension,
                                   state$context %||% ""),
-          role = "pm", system_prompt = persona_pm,
-          validate = validate_fields("reading")), silent = TRUE)
+          "reading"), silent = TRUE)
         if (wise_failed(res)) return()
         state$search_reading <- res
       })
@@ -593,11 +591,10 @@ mod_model_server <- function(id, state) {
     observeEvent(input$read, {
       req(state$model)
       withProgress(message = "Reading", value = 0.5, {
-        res <- try(llm_json(
+        res <- try(llm_write(
           prompt_diagnostics(state$model$diag, state$dimension,
                              state$context %||% ""),
-          role = "pm", system_prompt = persona_pm,
-          validate = validate_fields("reading")), silent = TRUE)
+          "reading"), silent = TRUE)
         if (wise_failed(res)) return()
         state$diag_reading <- res
       })

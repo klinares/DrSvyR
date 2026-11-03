@@ -426,6 +426,11 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
     if (is_placeholder_reply(obj))
       stop(served, "The model returned the example template instead of an ",
            "answer:\n", substr(reply, 1, 300), call. = FALSE)
+    # Checked inside the attempt, so a reply that fails a check is asked for
+    #   again like any other bad reply, rather than ending the call.
+    if (!is.null(validate))
+      tryCatch(validate(obj), error = function(e)
+        stop(served, conditionMessage(e), call. = FALSE))
     obj
   }
 
@@ -455,13 +460,50 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
   if (inherits(obj, "try-error"))
     stop(conditionMessage(last %||% attr(obj, "condition")), call. = FALSE)
 
-  if (!is.null(validate)) validate(obj)
   obj
 }
 
 # Validators are plain functions that stop with a readable message. Keeping
 #   them out of the prompt means the app can say which field the model omitted
 #   rather than showing a parse error.
+
+# Every passage the app has a model write goes through here: the writing
+#   rules as the system prompt (persona_writer, data.R), the fields the reply
+#   must carry, and its numbers checked against the request.
+llm_write <- function(prompt, fields)
+  llm_json(prompt, role = "pm", system_prompt = persona_writer,
+           validate = validate_all(validate_fields(fields),
+                                   validate_numbers(paste(persona_writer, prompt))))
+
+# Several checks as one: each must pass.
+validate_all <- function(...) {
+  checks = list(...)
+  function(obj) purrr::walk(checks, function(check) check(obj))
+}
+
+# Numbers in a model's prose that are not in what it was given are the
+#   commonest invention, so every number in the reply is looked for in the
+#   evidence: the request and its instructions. It passes when the evidence
+#   holds it at the precision written, or as a percentage of a proportion
+#   (0.312 in a table may be written 31% or 31.2%).
+validate_numbers <- function(evidence) {
+  num = "-?[0-9]+([.][0-9]+)?"
+  ev = as.numeric(regmatches(evidence, gregexpr(num, evidence))[[1]])
+  function(obj) {
+    txt = paste(unlist(purrr::keep(obj, is.character)), collapse = " ")
+    found = regmatches(txt, gregexpr(num, txt))[[1]]
+    unknown = purrr::discard(found, function(s) {
+      d = nchar(sub("^[^.]*[.]?", "", s))
+      x = as.numeric(s)
+      any(abs(round(ev, d) - x) < 1e-9) || any(abs(round(100 * ev, d) - x) < 1e-9)
+    })
+    if (length(unknown))
+      stop("The draft cites numbers that are not in the figures it was given (",
+           paste(unique(unknown), collapse = ", "), "), so it was not used.",
+           call. = FALSE)
+    invisible(TRUE)
+  }
+}
 
 validate_fields <- function(need) {
   function(obj) {

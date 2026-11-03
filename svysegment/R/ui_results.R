@@ -295,16 +295,7 @@ mod_domains_server <- function(id, state) {
       withProgress(message = "Reading", value = 0, {
         walk(state$cfg$aux, function(v) {
           incProgress(1 / length(state$cfg$aux), detail = aux_label(state$cfg, v))
-          res <- try(llm_json(
-            prompt_domain_read(
-              state$domains$dom, state$domains$marg, v,
-              labels = state$labels$Label,
-              context = state$context %||% "",
-              values_header = state$domains$values_header,
-              est = "Design-based", wald = state$domains$wald,
-              var_label = aux_label(state$cfg, v)),
-            role = "pm", system_prompt = persona_pm,
-            validate = validate_fields(c("finding", "caution"))), silent = TRUE)
+          res <- try(read_domain(state, v), silent = TRUE)
           if (wise_failed(res, paste0(v, ": "))) return()
           reads[[v]] <<- res
         })
@@ -366,9 +357,6 @@ mod_report_server <- function(id, state) {
           tags$p(class = "text-muted",
                  "No research question was set on the Items tab, so the ",
                  "report is ordered by domain."),
-        checkboxInput(ns("summarise"),
-                      "Have the AI Survey Methodologist write the summary (1 call)",
-                      value = TRUE),
         # Written into the report file itself. The report outlives this
         #   session and is read elsewhere, so its marking has to travel with
         #   it rather than come from the running app.
@@ -385,17 +373,33 @@ mod_report_server <- function(id, state) {
       req(state$domains)
       summary_text <- NULL; not_answered <- NULL
 
-      if (isTRUE(input$summarise)) {
-        s <- wise_try(withProgress(message = "Writing the summary", value = 0.5, {
-          llm_json(prompt_report_summary(state), role = "pm",
-                   system_prompt = persona_pm,
-                   validate = validate_fields(c("summary", "not_answered")))
-        }), "Writing the summary")
+      # The summary is always written when a key is available. It is written
+      #   from the domain readings, so any domain not read yet on Results is
+      #   read first.
+      if (llm_key_available()) {
+        todo <- setdiff(state$cfg$aux, names(state$domain_reads))
+        if (length(todo)) {
+          reads <- state$domain_reads %||% list()
+          withProgress(message = "Reading the domains", value = 0, walk(todo, function(v) {
+            incProgress(1 / length(todo), detail = aux_label(state$cfg, v))
+            res <- try(read_domain(state, v), silent = TRUE)
+            if (!wise_failed(res, paste0(v, ": "))) reads[[v]] <<- res
+          }))
+          state$domain_reads <- reads
+        }
+        s <- wise_try(withProgress(message = "Writing the summary", value = 0.5,
+                                   llm_write(prompt_report_summary(state),
+                                             c("summary", "not_answered"))),
+                      "Writing the summary")
         if (inherits(s, "try-error"))
           showNotification(paste("Summary skipped:",
                                  conditionMessage(attr(s, "condition"))),
                            type = "warning", duration = NULL)
         else { summary_text <- s$summary; not_answered <- s$not_answered }
+      } else {
+        showNotification(paste("No API key is set, so the report has no written",
+                               "summary or readings. Every table and figure is in it."),
+                         type = "message", duration = 10)
       }
 
       state$report_summary <- summary_text

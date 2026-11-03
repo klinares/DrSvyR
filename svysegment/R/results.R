@@ -855,6 +855,20 @@ status_table <- function() {
 #   plainly what the analysis does not answer -- which is the section that
 #   keeps the framing honest.
 
+# One domain's written reading. Used by the Results screen and, for any domain
+#   not read there, by the report build, so the two cannot differ.
+read_domain <- function(state, v) {
+  llm_write(
+    prompt_domain_read(
+      state$domains$dom, state$domains$marg, v,
+      labels = state$labels$Label,
+      context = state$context %||% "",
+      values_header = state$domains$values_header,
+      est = "Design-based", wald = state$domains$wald,
+      var_label = aux_label(state$cfg, v)),
+    c("finding", "caution"))
+}
+
 prompt_report_summary <- function(state) {
   # Keyed on the variable, headed by the label. Without it the summary names
   #   variables the report never defines -- "differ by fs2, idio2, edre" --
