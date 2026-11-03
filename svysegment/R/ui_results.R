@@ -137,7 +137,7 @@ mod_score_server <- function(id, state) {
     output$quality_plot <- renderPlot({
       req(state$quality)
       plot_assignment_quality(state$quality)
-    }, bg = "transparent")
+    }, bg = "white", res = 120)
   })
 }
 
@@ -268,7 +268,7 @@ mod_domains_server <- function(id, state) {
       req(state$domains, input$which)
       plot_domain(state$domains$dom, input$which, state$labels$Label,
                   aux_levels(state, input$which))
-    }, bg = "transparent")
+    }, bg = "white", res = 120)
 
     output$resolved <- renderText({
       req(state$domains, input$which)

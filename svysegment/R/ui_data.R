@@ -467,7 +467,7 @@ mod_items_server <- function(id, state) {
     output$dist_plot <- renderPlot({
       req(state$item_frame)
       plot_items(state$item_frame)
-    })
+    }, bg = "white", res = 120)
 
     # modal_pct is the column to read: an item everyone answers the same way
     #   passes every fit statistic and carries no information about who differs.

@@ -142,14 +142,16 @@ wise_theme <- function(base_size = 14) {
 #   the smallest CIELAB distance between any two colours, worst of normal,
 #   deutan, protan and tritan vision: viridis 5.8 at ten groups, Demuth 9.7,
 #   and Demuth is ahead at every size from two up.
-# Interpolated ("continuous") rather than MetBrewer's discrete picks, because
-#   that is what was measured.
+# Demuth's pale yellow and light grey are dropped: as thin lines on white
+#   they were hard to see (contrast with white as low as 1.6:1). Without them
+#   the lowest contrast is 2.5 to 4.0 for three to ten groups, and the
+#   colour-blind separation stays at 8.2 or more (9.7 with them, at ten).
+# The remaining eight are interpolated, as the full palette was.
 # Ordered response categories stay on viridis (plot_item_stack() in
 #   engine.R), which separates them better than any MetBrewer palette did.
-WISE_GROUP_PALETTE <- "Demuth"
+WISE_GROUP_COLOURS <- setdiff(MetBrewer::MetPalettes$Demuth[[1]], c("#f7c267", "#b9b9b8"))
 
-wise_group_colours <- function(n)
-  as.character(MetBrewer::met.brewer(WISE_GROUP_PALETTE, n, type = "continuous"))
+wise_group_colours <- function(n) grDevices::colorRampPalette(WISE_GROUP_COLOURS)(n)
 
 wise_colour <- function(...)
   ggplot2::discrete_scale("colour", palette = wise_group_colours, ...)
