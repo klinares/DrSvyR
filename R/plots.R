@@ -49,7 +49,13 @@ WISE_GRID  <- "#88888855"
 FIG_WIDTH_IN    <- 6.4    # what the report renders at; the Word copy is 6.0
 FIG_Y_CHAR_IN   <- 0.090
 FIG_STRIP_CHAR_IN <- 0.068
-FIG_KEY_IN      <- 0.35   # one legend key plus the gap after it
+# Legend entries were measured from the built plot (ggplotGrob guide-box width,
+#   wise_theme(), one row of n equal labels) and fit exactly by
+#   0.10 + n * (0.434 + c * chars): c is 0.100 for a run of "n", 0.088 for
+#   "Group 1 (31%)" and 0.076 for mixed-case segment names. 0.090 sits at the
+#   label the app always draws; a usable width of width - 0.4 is the margin.
+FIG_KEY_IN      <- 0.434  # one legend key plus the gap after it
+FIG_LEGEND_CHAR_IN <- 0.090
 
 # Characters that fit across one facet panel, given what the y axis is
 #   spending on its own labels.
@@ -66,11 +72,16 @@ panel_wrap <- function(y_labels, ncol, width = FIG_WIDTH_IN) {
 
 # Rows a horizontal legend needs. One row is what ggplot does and one row is
 #   what it clips.
+# A wrapped legend is a grid, so every column is as wide as its widest label:
+#   the count per row comes from the longest label, not from the total length
+#   of all of them, which under-counted once labels carried "(31%)". No cap on
+#   rows: a taller legend squeezes the panel, a capped one drops entries.
 legend_rows <- function(labels, width = FIG_WIDTH_IN) {
-  if (!length(labels)) return(1L)
-  need = sum(nchar(as.character(labels))) * FIG_Y_CHAR_IN +
-         length(labels) * FIG_KEY_IN
-  as.integer(max(1L, min(4L, ceiling(need / max(2, width - 0.4)))))
+  n = length(labels)
+  if (!n) return(1L)
+  entry = FIG_KEY_IN + max(nchar(as.character(labels))) * FIG_LEGEND_CHAR_IN
+  per_row = max(1L, floor((width - 0.4) / entry))
+  as.integer(ceiling(n / per_row))
 }
 
 # A caption is one text element and ggplot draws it on one line however long it

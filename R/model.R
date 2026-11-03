@@ -378,15 +378,22 @@ profile_frame <- function(fit, items, labels = NULL) {
     purrr::list_rbind()
 }
 
-plot_profiles <- function(fit, items, title = NULL) {
+# The legend wraps as plot_profiles_ci()'s does: at ten groups one horizontal
+#   row ran off the right edge. Groups are a factor in model order, so the
+#   legend reads Group 1, 2, ... 10 rather than sorting "Group 10" second.
+plot_profiles <- function(fit, items, title = NULL, width = FIG_WIDTH_IN) {
   d = profile_frame(fit, items) |>
-    dplyr::mutate(group = paste0(group, " (", round(100 * share), "%)"))
+    dplyr::mutate(group = paste0(group, " (", round(100 * share), "%)"),
+                  group = factor(group, levels = unique(group)))
+
+  rows = legend_rows(levels(d$group), width)
 
   ggplot2::ggplot(d, ggplot2::aes(item, value, group = group, colour = group)) +
     ggplot2::geom_line(linewidth = 0.8) +
     ggplot2::geom_point(size = 1.6) +
     ggplot2::scale_y_continuous(limits = c(0, 1)) +
     wise_colour(name = NULL) +
+    ggplot2::guides(colour = ggplot2::guide_legend(nrow = rows, byrow = TRUE)) +
     ggplot2::labs(x = NULL, y = "Position on the item", title = title) +
     wise_theme() + wise_rotate_x()
 }
@@ -652,11 +659,14 @@ measurement_se <- function(cfg, dat, fit, rep_des, keep) {
 #   box.
 plot_profiles_ci <- function(profile, labels = NULL, title = NULL,
                              width = FIG_WIDTH_IN) {
+  # A factor in segment order, so the legend does not sort "Group 10" second
+  #   or reorder named segments alphabetically.
+  ks = sort(unique(profile$group))
+  lv = if (is.null(labels)) paste0("Group ", ks) else labels[ks]
   d = profile |>
-    dplyr::mutate(group = if (is.null(labels)) paste0("Group ", group)
-                          else labels[group])
+    dplyr::mutate(group = factor(lv[match(group, ks)], levels = lv))
 
-  rows = legend_rows(unique(d$group), width)
+  rows = legend_rows(levels(d$group), width)
 
   ggplot2::ggplot(d, ggplot2::aes(item, value, group = group, colour = group,
                                   fill = group)) +
