@@ -1025,10 +1025,14 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
   })
 
   add(blk("box", paste0(
-    "Technical. Names are drafts written from the response profiles and the ",
-    "question wording, then ",
-    if (isTRUE(state$labels_edited)) "edited by the analyst"
-    else "accepted by the analyst without editing",
+    "Technical. ",
+    if (identical(state$labels_source, "analyst"))
+      "Names were written by the analyst from the response profiles"
+    else paste0(
+      "Names are drafts written from the response profiles and the question ",
+      "wording, then ",
+      if (isTRUE(state$labels_edited)) "edited by the analyst"
+      else "accepted by the analyst without editing"),
     ". Nothing computed depends on them. The supporting points above are the ",
     "questions on which each segment departs furthest from the average across ",
     "segments, taken from the fitted model rather than from the name.")))

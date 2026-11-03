@@ -744,8 +744,7 @@ draft_labels <- function(state, tick = NULL) {
                                   cfg$survey_context)
 
     obj = llm_json(prompt, role = "worker", system_prompt = persona_lca,
-                   validate = validate_fields(c("label", "description")),
-                   seed = cfg$seed)
+                   validate = validate_fields(c("label", "description")))
 
     row = tibble::tibble(target = key,
                          Label = as.character(obj$label),
@@ -763,7 +762,7 @@ draft_labels <- function(state, tick = NULL) {
 # Per-target isolation has one blind spot: two neighbours can draft the same
 #   name, since neither call saw the other. The check is Jaccard overlap on the
 #   words, and the closing call edits only the labels that collide.
-resolve_collisions <- function(labels, cfg) {
+resolve_collisions <- function(labels) {
   if (!labels_collide(labels$Label)) return(list(labels = labels, ran = FALSE))
 
   lab = labels |>
@@ -771,8 +770,7 @@ resolve_collisions <- function(labels, cfg) {
     dplyr::select(K, Label, Description)
 
   arr = llm_json(prompt_harmonize(lab), role = "pm",
-                 system_prompt = persona_lca, pattern = "(?s)\\[.*\\]",
-                 seed = cfg$seed)
+                 system_prompt = persona_lca, pattern = "(?s)\\[.*\\]")
 
   new = purrr::map(arr, function(x) tibble::tibble(
     K = as.integer(x$class), new = as.character(x$label))) |>
@@ -789,8 +787,8 @@ resolve_collisions <- function(labels, cfg) {
 
 
 # Section 3 is the freeze file. When it exists it is used and validated;
-#   otherwise the model drafts once and writes it. Editing that file is how the
-#   analyst takes over naming, and deleting it triggers a redraft.
+#   otherwise the names are drafted, or written by the analyst, and saved to
+#   it. source records which, so the report can say so.
 #______________________________________________________________________________
 
 # Keyed to the specification. A row-count check catches a change in the number
@@ -798,17 +796,17 @@ resolve_collisions <- function(labels, cfg) {
 #   previous run's names attach silently to groups that are no longer the ones
 #   they described.
 
-label_file <- function(cfg) wise_path("output", "labels.csv")
+label_file <- function() wise_path("output", "labels.csv")
 
-write_labels <- function(labels, cfg, key, edited = FALSE) {
+write_labels <- function(labels, key, edited = FALSE, source = "drafted") {
   labels |>
-    dplyr::mutate(model_key = key, analyst_edited = edited) |>
-    readr::write_csv(label_file(cfg))
-  invisible(label_file(cfg))
+    dplyr::mutate(model_key = key, analyst_edited = edited, source = source) |>
+    readr::write_csv(label_file())
+  invisible(label_file())
 }
 
-read_labels <- function(cfg, key, n_expected) {
-  f = label_file(cfg)
+read_labels <- function(key, n_expected) {
+  f = label_file()
   if (!fs::file_exists(f)) return(NULL)
 
   # target and model_key are identifiers, so they are read as text whatever
@@ -818,14 +816,14 @@ read_labels <- function(cfg, key, n_expected) {
                                                 model_key = readr::col_character(),
                                                 .default = readr::col_guess()))
   if (!all(c("target", "Label", "Description", "model_key") %in% names(lab)))
-    stop(f, " is missing columns. Delete it to redraft.", call. = FALSE)
+    stop(f, " is missing columns. Discard them below.", call. = FALSE)
   if (nrow(lab) != n_expected)
     stop(f, " has ", nrow(lab), " rows for a model with ", n_expected,
-         ". Delete it to redraft.", call. = FALSE)
+         ". Discard them below.", call. = FALSE)
   if (!identical(unique(lab$model_key), key))
     stop(f, " was drafted for a different specification. The battery or the ",
          "number of groups has changed since these names were written, so ",
-         "they no longer describe what they name. Delete it to redraft.",
+         "they no longer describe what they name. Discard them below.",
          call. = FALSE)
   lab
 }

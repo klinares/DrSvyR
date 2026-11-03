@@ -99,20 +99,23 @@ llm_clear_session_key <- function(token) {
   invisible(TRUE)
 }
 
-llm_api_key <- function() {
-  # In "analyst" mode the environment is not consulted at all. That is the
-  #   point: a key set on a shared server would otherwise be picked up by an
-  #   analyst who never supplied one, and spent without anyone noticing.
-  from_env = if (identical(WISE_LLM$key_source %||% "server", "server"))
-    Sys.getenv(WISE_LLM$key_var) else ""
+# In "analyst" mode the environment is not consulted at all. That is the
+#   point: a key set on a shared server would otherwise be picked up by an
+#   analyst who never supplied one, and spent without anyone noticing.
+llm_server_key_set <- function()
+  identical(WISE_LLM$key_source %||% "server", "server") &&
+    nzchar(Sys.getenv(WISE_LLM$key_var))
 
-  key = llm_session_key() %||% from_env
-  if (!nzchar(key))
-    stop(WISE_LLM$key_var, " is not set. Either paste a key on the Start here ",
-         "tab, or run usethis::edit_r_environ(), add\n",
-         "  ", WISE_LLM$key_var, "=your-key\n",
-         "save, and restart R.", call. = FALSE)
-  key
+# Whether a call would find a key, without making one. Screens that offer
+#   drafting ask this before offering it.
+llm_key_available <- function() !is.null(llm_session_key()) || llm_server_key_set()
+
+llm_api_key <- function() {
+  if (!llm_key_available())
+    stop("No API key is set, so nothing can be drafted. Paste a key on the ",
+         "Start here tab, or set ", WISE_LLM$key_var, " on the server. ",
+         "Everything else works without one.", call. = FALSE)
+  llm_session_key() %||% Sys.getenv(WISE_LLM$key_var)
 }
 
 llm_model <- function(role) {
@@ -388,8 +391,12 @@ is_placeholder_reply <- function(obj) {
 }
 
 llm_json <- function(prompt, role = "worker", system_prompt = NULL,
-                     validate = NULL, pattern = "(?s)\\{.*\\}", seed = NULL,
+                     validate = NULL, pattern = "(?s)\\{.*\\}",
                      max_times = 3L, session_cap = 10L) {
+
+  # A missing key is not a transient failure. Checked once, here, so it is
+  #   reported at once instead of after three retries and a fallback model.
+  llm_api_key()
 
   ask = paste0(prompt, "\n\n", JSON_QUOTE_RULE)
 
@@ -554,7 +561,6 @@ mod_key_ui <- function(id) {
 
 mod_key_server <- function(id, state) {
   moduleServer(id, function(input, output, session) {
-    ns <- session$ns
     token <- session$token
     set <- reactiveVal(0L)
 
@@ -586,8 +592,7 @@ mod_key_server <- function(id, state) {
     output$status <- renderUI({
       set()
       mine <- !is.null(llm_session_key())
-      env <- identical(WISE_LLM$key_source %||% "server", "server") &&
-             nzchar(Sys.getenv(WISE_LLM$key_var))
+      env <- llm_server_key_set()
 
       if (mine)
         tags$p(class = "text-success",

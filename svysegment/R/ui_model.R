@@ -728,10 +728,11 @@ mod_labels_server <- function(id, state) {
 
     output$runner <- renderUI({
       req(state$model_accepted)
-      existing <- try(read_labels(state$cfg, state$model_key, n_targets()),
-                      silent = TRUE)
+      state$key_version   # re-render when a key is pasted or forgotten
+      existing <- try(read_labels(state$model_key, n_targets()), silent = TRUE)
       stale <- inherits(existing, "try-error")
       have <- !stale && !is.null(existing)
+      keyed <- llm_key_available()
 
       tagList(
         tags$h4("Names"),
@@ -745,35 +746,43 @@ mod_labels_server <- function(id, state) {
             tags$strong("Saved names do not match this model."),
             tags$div(conditionMessage(attr(existing, "condition"))),
             tags$div("They were written for a different specification, so ",
-                     "they no longer describe what they name. Discarding them ",
-                     "and drafting again is the only safe option; if you want ",
-                     "to keep any of the wording, copy it out first."))
+                     "they no longer describe what they name. Discard them and draft ",
+                     "again or write your own; if you want to keep any of the ",
+                     "wording, copy it out first."))
         else if (have)
           tags$p(class = "text-success",
                  "Saved names found and they match this model.")
+        else if (keyed)
+          tags$p(n_targets(), " names will be drafted, one call each, or you ",
+                 "can write them yourself.")
         else
-          tags$p(n_targets(), " names will be drafted, one call each."),
+          tags$p("No API key is set, so names are not drafted. Write one name ",
+                 "for each group from its profile below."),
 
-        if (!stale)
-          actionButton(ns("draft"),
-                       if (have) "Load the saved names" else "Draft the names",
-                       class = "btn-primary"),
-        if (stale || have)
+        if (have)
+          actionButton(ns("draft"), "Load the saved names", class = "btn-primary")
+        else if (keyed && !stale)
+          actionButton(ns("draft"), "Draft the names", class = "btn-primary"),
+        if ((stale || have) && keyed)
           actionButton(ns("redraft"),
                        if (stale) "Discard them and draft again"
-                       else "Discard and redraft",
-                       class = if (stale) "btn-primary" else NULL))
+                       else "Discard and redraft"),
+        actionButton(ns("write"),
+                     if (stale || have) "Discard them and write my own"
+                     else "Write the names myself",
+                     class = if (keyed || have) NULL else "btn-primary"))
     })
 
     load_or_draft <- function(force = FALSE) {
-      cfg <- state$cfg
       key <- state$model_key
 
       if (!force) {
-        existing <- try(read_labels(cfg, key, n_targets()), silent = TRUE)
+        existing <- try(read_labels(key, n_targets()), silent = TRUE)
         if (!inherits(existing, "try-error") && !is.null(existing)) {
           state$labels <- select(existing, target, Label, Description)
+          state$labels_drafted <- state$labels
           state$labels_edited <- isTRUE(existing$analyst_edited[1])
+          state$labels_source <- existing$source[1] %||% "drafted"
           return(invisible(TRUE))
         }
       }
@@ -782,7 +791,7 @@ mod_labels_server <- function(id, state) {
         tick <- function(k) incProgress(1 / n_targets(), detail = k)
         drafted <- draft_labels(state, tick)
         setProgress(0.95, message = "Checking for duplicates")
-        resolve_collisions(drafted, cfg)
+        resolve_collisions(drafted)
       }), "Drafting the names")
 
       if (wise_failed(res)) return(invisible(FALSE))
@@ -790,7 +799,8 @@ mod_labels_server <- function(id, state) {
       state$labels <- res$labels
       state$labels_drafted <- res$labels
       state$labels_edited <- FALSE
-      write_labels(res$labels, cfg, key, edited = FALSE)
+      state$labels_source <- "drafted"
+      write_labels(res$labels, key, edited = FALSE, source = "drafted")
 
       if (res$ran)
         showNotification(
@@ -802,8 +812,22 @@ mod_labels_server <- function(id, state) {
 
     observeEvent(input$draft, load_or_draft(force = FALSE))
 
+    # Without a key, or by choice: one box per group, seeded with a neutral
+    #   placeholder, to be named from the profile beside it. Nothing is saved
+    #   until the analyst presses Save.
+    observeEvent(input$write, {
+      f <- label_file()
+      if (fs::file_exists(f)) fs::file_delete(f)
+      targets <- as.character(label_targets(state))
+      state$labels <- tibble(target = targets, Label = paste("Group", targets),
+                             Description = "")
+      state$labels_drafted <- NULL
+      state$labels_edited <- NULL
+      state$labels_source <- "analyst"
+    })
+
     observeEvent(input$redraft, {
-      f <- label_file(state$cfg)
+      f <- label_file()
       if (fs::file_exists(f)) fs::file_delete(f)
 
       # Part files from abandoned runs go too. They are keyed to the model, so
@@ -894,17 +918,20 @@ mod_labels_server <- function(id, state) {
                Description = input[[paste0("desc_", i)]] %||%
                  state$labels$Description[i])) |> list_rbind()
 
-      changed <- !identical(edited$Label, state$labels_drafted$Label) ||
+      written <- identical(state$labels_source, "analyst")
+      changed <- written ||
+                 !identical(edited$Label, state$labels_drafted$Label) ||
                  !identical(edited$Description, state$labels_drafted$Description)
 
       state$labels <- edited
       state$labels_edited <- changed
-      write_labels(edited, state$cfg, state$model_key, edited = changed)
+      write_labels(edited, state$model_key, edited = changed,
+                   source = state$labels_source %||% "drafted")
 
       log_decision(
         "labels", "Names settled",
-        decision = if (changed)
-          "The analyst edited the drafted names."
+        decision = if (written) "The analyst wrote the names; none were drafted."
+          else if (changed) "The analyst edited the drafted names."
           else "The analyst accepted every drafted name unchanged.",
         evidence = log_table(edited))
 
