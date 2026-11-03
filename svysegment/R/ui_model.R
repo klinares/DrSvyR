@@ -104,7 +104,7 @@ mod_config_server <- function(id, state) {
       blocked <- wise_try(assert_design_ok(state$design_checks),
                           "Approving the configuration")
       if (wise_failed(blocked)) {
-        state$goto <- WISE_TABS[3]
+        state$goto <- WISE_TABS[3]   # 2. Design
         return()
       }
 
@@ -672,7 +672,7 @@ mod_model_server <- function(id, state) {
           "Your domains are unaffected and do not need redoing.")),
         type = "message", duration = NULL)
 
-      state$goto <- WISE_TABS[3]
+      state$goto <- WISE_TABS[4]   # 3. Items
     })
 
     observeEvent(input$accept, {
