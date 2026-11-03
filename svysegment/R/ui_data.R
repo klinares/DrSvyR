@@ -305,8 +305,8 @@ mod_items_server <- function(id, state) {
                       value = isolate(state$context %||% ""),
                       placeholder = paste(
                         "Country, what the study is for, who reads the",
-                        "results, and what you want the segments or the",
-                        "factor to tell you.")),
+                        "results, and what you want the segments to tell",
+                        "you.")),
         # Asked here rather than at the report, and deliberately. A question
         #   written after the results are known is a question chosen to match
         #   the answer. Written now, it can order the report without deciding

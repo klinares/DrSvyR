@@ -59,7 +59,7 @@ mod_score_server <- function(id, state) {
         des$keep <- reached
 
         list(scored = sc, design = des,
-             coverage = score_coverage(sc, length(state$cfg$items)),
+             coverage = score_coverage(sc),
              quality = assignment_quality(sc),
              shares = group_shares(sc[reached, ], state$labels,
                                    subset(des$rep_des, !is.na(segment)),

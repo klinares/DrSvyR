@@ -332,11 +332,14 @@ build_rep_design <- function(dat, cfg) {
     count(.data[[cfg$strata]], name = "n_psu") |>
     filter(n_psu < 2)
 
-  if (nrow(lonely) > 0) {
-    print(lonely)
+  # The strata are named in the message: print() would send them to the
+  #   server log, where the analyst never sees them.
+  if (nrow(lonely) > 0)
     stop(nrow(lonely), " stratum/strata contain a single PSU in the analysis ",
-         "frame. Collapse them in the method config before continuing.")
-  }
+         "frame (", paste(lonely[[1]], collapse = ", "), "). A jackknife ",
+         "needs at least two PSUs per stratum: collapse these in the survey ",
+         "file, or check the stratum and PSU chosen on 2. Design.",
+         call. = FALSE)
 
   des = svydesign(ids = reformulate(cfg$psu), strata = reformulate(cfg$strata),
                    weights = reformulate(cfg$weight), data = dat, nest = TRUE)

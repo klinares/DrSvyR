@@ -213,9 +213,9 @@ mod_search_server <- function(id, state) {
     })
 
     # Synchronous, with the progress bar stepping per model. The session is
-    #   unresponsive while it runs, which is acceptable for one analyst waiting
-    #   on their own analysis and much easier to diagnose than a background
-    #   process. If this becomes a shared deployment it wants callr and polling.
+    #   unresponsive while it runs, and so is every other session in the same
+    #   R process, which is why Connect runs this app with one connection per
+    #   process (see the README).
     observeEvent(input$run, {
       req(state$cfg)
       cfg <- state$cfg

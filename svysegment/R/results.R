@@ -37,7 +37,7 @@ score_respondents <- function(state) {
 
 # Section 2 says who was reached and how well.
 #______________________________________________________________________________
-score_coverage <- function(scored, n_items) {
+score_coverage <- function(scored) {
   reached = !is.na(scored$segment)
   in_model = scored$in_analysis
 
@@ -601,7 +601,6 @@ id_key <- function(x) {
 
 export_data <- function(state, format = c("sav", "dta")) {
   format = match.arg(format)
-  cfg = state$cfg
 
   new_cols = {
     state$scored |>
@@ -793,7 +792,7 @@ diagnostic_sentences <- function(state) {
 # Every row is a claim about this analysis and how far it was checked.
 #   Nothing here is aspirational: a claim that was not verified says so, and a
 #   claim that does not apply is absent rather than blank.
-status_table <- function(state) {
+status_table <- function() {
   tibble::tribble(
     ~Claim, ~Status, ~Basis,
 

@@ -61,7 +61,7 @@ report_tables <- function(state) {
   }
 
   out$item_dictionary = dictionary_table(state)
-  out$what_was_tested = status_table(state)
+  out$what_was_tested = status_table()
   out$coverage = state$coverage
 
   # These four live only here, in the report's downloadable tables: each is
