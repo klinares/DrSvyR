@@ -76,6 +76,14 @@ assert_outside_repo <- function(path) {
 
 WISE_SUBDIRS <- c("data", "docs", "dict", "decisions", "cache", "output")
 
+# The app's tabs, in order. Here rather than in app.R because modules use
+#   them to move the analyst (state$goto), and R/ cannot see app.R's objects.
+#   Start here is first so it is where the app opens.
+WISE_TABS <- c("Start here",
+               "1. Project", "2. Design", "3. Items", "4. Domains",
+               "5. Review", "6. Search", "7. Model", "8. Names",
+               "9. Scoring", "10. Results", "11. Outputs")
+
 .wise <- new.env(parent = emptyenv())
 .wise$work_dir <- NULL      # the no-Shiny case: a script, a test, one user
 .wise$sessions <- list()    # browser token -> folder, for a shared server
@@ -117,7 +125,7 @@ wise_path <- function(...) {
 #   with segments from the Outputs screen. Everything writes through
 #   wise_path(), so nothing else needs to know where the folder is.
 open_session_folder <- function() {
-  path = fs::path(tempfile("drsvyr_"))
+  path = fs::path(tempfile("svysegment_"))
   fs::dir_create(fs::path(path, WISE_SUBDIRS))
   s = .wise_session()
   if (is.null(s)) {
@@ -332,7 +340,7 @@ log_decision <- function(which, heading, decision, evidence = NULL,
   f = log_path(which)
   if (!fs::file_exists(f)) {
     cat("# ", tools::toTitleCase(gsub("_", " ", which)), "\n\n",
-        "Written by DrSvyR as decisions are made. Do not edit; it is the ",
+        "Written by svysegment as decisions are made. Do not edit; it is the ",
         "record of what was chosen and why.\n", sep = "", file = f)
   }
 

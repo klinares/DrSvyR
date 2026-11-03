@@ -156,7 +156,7 @@ pre{background:var(--wash);border:1px solid var(--rule);border-radius:4px;
 #   can disagree with the report above it, and there would be no way to tell
 #   which was wrong. It formats and it filters.
 REPORT_JS <- "
-const DATA = JSON.parse(document.getElementById('drsvyr-data').textContent);
+const DATA = JSON.parse(document.getElementById('svysegment-data').textContent);
 
 function toCSV(rows){
   if(!rows || !rows.length) return '';
@@ -203,7 +203,7 @@ document.querySelectorAll('nav button').forEach(b => {
 document.querySelectorAll('[data-dl]').forEach(b => {
   b.onclick = () => {
     const key = b.dataset.dl;
-    download('drsvyr_' + key + '.csv',
+    download('svysegment_' + key + '.csv',
              toCSV(key === 'all_estimates' ? DATA.__long : DATA[key]));
   };
 });
@@ -450,7 +450,7 @@ build_report_html <- function(state, summary_text = NULL,
     "<html lang=\"en\"><head>",
     "<meta charset=\"utf-8\">",
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
-    paste0("<title>DrSvyR report -- ", fs::path_file(state$data_file),
+    paste0("<title>svysegment report -- ", fs::path_file(state$data_file),
            "</title>"),
     "<style>", REPORT_CSS, REPORT_TAB_CSS, "</style>",
     "</head><body>",
@@ -465,11 +465,11 @@ build_report_html <- function(state, summary_text = NULL,
     paste0("<div class=meta>", fs::path_file(state$data_file), " &middot; ",
            format(Sys.Date(), "%d %B %Y"), " &middot; ",
            format(nrow(state$raw), big.mark = ","), " respondents &middot; ",
-           "DrSvyR v", WISE_VERSION, "</div></header>"),
+           "svysegment v", WISE_VERSION, "</div></header>"),
     nav,
     "<main>", body, "</main>",
     "</div>",
-    paste0("<script type=\"application/json\" id=\"drsvyr-data\">",
+    paste0("<script type=\"application/json\" id=\"svysegment-data\">",
            json, "</script>"),
     paste0("<script>", REPORT_JS, "</script>"),
     "</body></html>"), path, useBytes = TRUE)

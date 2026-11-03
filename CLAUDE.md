@@ -31,7 +31,11 @@ separately.
    (`map`, `map_dbl`, `walk`, `imap`, `reduce`, `detect`, `keep`/`discard`).
 2. Files in `R/` contain only function definitions and constant assignments.
    No top-level calls, no `library()`. No two files may define the same name:
-   alphabetical sourcing would silently pick a winner.
+   alphabetical sourcing would silently pick a winner. `R/` is sourced into
+   the global environment but `runApp()` runs `app.R` in its own, so `R/`
+   cannot see objects made in `app.R` unless `app.R` assigns them to
+   `globalenv()` (as it does `APP_CLASSIFICATION`). Test by loading with
+   `shiny::shinyAppDir()`, not `source("app.R")`, which hides this.
 3. No parallelism: no future, furrr, parallel, mirai.
 4. No package scaffolding: no DESCRIPTION, NAMESPACE, `system.file()`, or
    installed-package assumptions.

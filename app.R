@@ -1,11 +1,8 @@
-# DrSvyR -- Shiny app.
-#   Run:     shiny::runApp(".")      (or Run App in RStudio with this file open)
-#   Publish: rsconnect::deployApp(".")
+# svysegment -- Shiny app, one of the apps in the DrSvyR repository.
+#   Run:     shiny::runApp("svysegment")   (or Run App in RStudio, this file open)
+#   Publish: rsconnect::deployApp("svysegment", appName = "svysegment")
 
-# Branch shiny_app. On main DrSvyR is an R package launched with
-#   drsvyr::run_drsvyr(). This branch is the same analysis as a plain Shiny app
-#   directory, because a package is something a server has to install and a
-#   directory is something it can just run:
+# A plain Shiny app directory, not a package, so a server can run it as is:
 #     app.R        this file: settings, state, layout, server
 #     R/           function definitions only, sourced below
 #     help.md      the Start here page
@@ -72,6 +69,11 @@ walk(sort(list.files("R", pattern = "[.]R$", full.names = TRUE)), function(f)
            error = function(e) stop("Failed loading ", f, ": ",
                                     conditionMessage(e), call. = FALSE)))
 
+# R/ lives in the global environment, but runApp() evaluates this file in an
+#   environment of its own, so nothing assigned here is visible to R/ unless
+#   it is put there. The classification is the one setting R/ reads.
+assign("APP_CLASSIFICATION", APP_CLASSIFICATION, envir = globalenv())
+
 
 # ---- 4. process settings ----------------------------------------------------
 
@@ -111,18 +113,12 @@ new_state <- function() {
     goto = NULL)
 }
 
-# Start here is first so it is where the app opens.
-WISE_TABS <- c("Start here",
-               "1. Project", "2. Design", "3. Items", "4. Domains",
-               "5. Review", "6. Search", "7. Model", "8. Names",
-               "9. Scoring", "10. Results", "11. Outputs")
-
 
 # ---- 6. layout --------------------------------------------------------------
 
 ui <- page_fluid(
   theme = bs_theme(version = 5, preset = "flatly"),
-  title = "DrSvyR",
+  title = "svysegment",
 
   # Above everything, on every tab.
   tags$div(
@@ -133,9 +129,9 @@ ui <- page_fluid(
 
   div(
     style = "display:flex; align-items:center; gap:1rem; margin-bottom:0.5rem;",
-    div(tags$h2("DrSvyR", style = "margin:0;"),
-        tags$p(tags$em("A survey methodologist you can consult, working on ",
-                       "data you already have."),
+    div(tags$h2("svysegment", style = "margin:0;"),
+        tags$p(tags$em("Respondent types in a survey battery, compared across ",
+                       "groups, with margins from the survey's own design."),
                style = "margin:0;")),
     div(style = "margin-left:auto;", input_dark_mode(id = "dark_mode"))),
 

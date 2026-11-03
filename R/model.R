@@ -188,7 +188,7 @@ write_cfg <- function(cfg, path) {
     paste0("  ", nm, " = ", paste(deparse(v), collapse = "\n    ")))
 
   writeLines(c(
-    "# cfg.R -- written by DrSvyR. Do not edit by hand.",
+    "# cfg.R -- written by svysegment. Do not edit by hand.",
     "# Re-running the analysis from this file reproduces what the app did.",
     paste0("# Written ", format(Sys.time(), "%Y-%m-%d %H:%M")),
     "",

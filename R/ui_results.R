@@ -493,7 +493,7 @@ mod_report_server <- function(id, state) {
 
     output$download_report <- downloadHandler(
       filename = function()
-        paste0("drsvyr_", fs::path_ext_remove(fs::path_file(
+        paste0("svysegment_", fs::path_ext_remove(fs::path_file(
           state$data_file %||% "survey")), "_",
           format(Sys.Date(), "%Y%m%d"), ".html"),
       content = function(file)

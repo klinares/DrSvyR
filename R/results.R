@@ -924,7 +924,7 @@ report_blocks <- function(state, summary_text = NULL, not_answered = NULL) {
     fs::path_file(state$data_file), " \u00b7 ",
     format(Sys.Date(), "%d %B %Y"), " \u00b7 ",
     format(nrow(state$raw), big.mark = ","), " respondents \u00b7 ",
-    "DrSvyR v", WISE_VERSION)))
+    "svysegment v", WISE_VERSION)))
 
   if (nzchar(state$question %||% "")) {
     add(blk("h2", "The question this was asked to answer"))
