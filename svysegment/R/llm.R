@@ -38,7 +38,10 @@ WISE_LLM <- list(
   #   reaches this is almost always a model repeating itself, and is treated as
   #   a failed attempt rather than parsed.
   max_tokens  = 1500,
-  temperature = 0,
+  # NULL sends no temperature. Recent Claude models refuse the setting
+  #   ("temperature is deprecated for this model"); set a number only for a
+  #   model that accepts one.
+  temperature = NULL,
 
   # Prompt caching. The AI reflexes are a long system prompt sent with every
   #   written passage, so a five-minute cache saves cost across a session.
@@ -294,8 +297,8 @@ JSON_QUOTE_RULE <- paste(
 #   to the next, so each segment is named without seeing the others. ellmer
 #   speaks Anthropic's Messages API, so the request and reply shapes are
 #   Anthropic's whether the endpoint is Anthropic's or a work server's.
-# temperature and a token ceiling come from WISE_LLM. Reproducibility comes
-#   from the freeze file, not from temperature.
+# The token ceiling, and a temperature only if one is set, come from
+#   WISE_LLM. Reproducibility comes from the freeze file, not from temperature.
 # The reply is plain text; llm_json() finds and repairs the JSON in it, so a
 #   model that wraps JSON in a code fence or a sentence is still read.
 llm_complete <- function(model, system_prompt, user) {
@@ -306,7 +309,7 @@ llm_complete <- function(model, system_prompt, user) {
   chat = ellmer::chat_anthropic(
     system_prompt = system_prompt,
     model = model,
-    params = ellmer::params(temperature = WISE_LLM$temperature %||% 0,
+    params = ellmer::params(temperature = WISE_LLM$temperature,
                             max_tokens = WISE_LLM$max_tokens %||% 1500L),
     cache = WISE_LLM$cache %||% "5m",
     base_url = WISE_LLM$base_url,
