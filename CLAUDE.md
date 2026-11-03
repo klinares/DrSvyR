@@ -10,7 +10,7 @@ R package any more.
 |---|---|
 | `README.md` `.gitignore` | Shared by every app |
 | `svysegment/app.R` | Settings, `library()` calls, masking checks, sources `R/`, state (`new_state`), `ui`, `server`, `shinyApp(ui, server)` |
-| `svysegment/R/` | 11 files, function definitions only: core, data, engine, llm, model, plots, report_bundle, results, ui_data, ui_model, ui_results. Sourced flat, alphabetically, by `app.R` |
+| `svysegment/R/` | 11 files of function definitions only, plus the empty `_disable_autoload.R`: core, data, engine, llm, model, plots, report_bundle, results, ui_data, ui_model, ui_results. Sourced flat, alphabetically, by `app.R` |
 | `svysegment/help.md` | The "Start here" tab |
 | `svysegment/www/figures/` | Help images. Shiny serves `www/` at the site root |
 | `svysegment/data/` | LAPOP Ecuador 2023 demo `.sav`, found by `demo_survey_path()` |
@@ -35,6 +35,8 @@ R package any more.
    own, so `R/` cannot see objects made in `app.R` unless `app.R` assigns
    them to `globalenv()` (as it does `APP_CLASSIFICATION`). Test by loading
    with `shiny::shinyAppDir()`, not `source("app.R")`, which hides this.
+   `R/_disable_autoload.R` stops Shiny auto-sourcing `R/` as well, which
+   would load every function twice and run the server on the other copy.
 3. No parallelism: no future, furrr, parallel, mirai.
 4. No package scaffolding: no DESCRIPTION, NAMESPACE, `system.file()`, or
    installed-package assumptions.
