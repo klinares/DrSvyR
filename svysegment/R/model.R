@@ -751,8 +751,7 @@ draft_labels <- function(state, tick = NULL) {
     prompt = prompt_segment_label(fit, k, dict, cfg$items,
                                   state$context %||% "", state$question %||% "")
 
-    obj = llm_json(prompt, role = "worker", system_prompt = persona_lca,
-                   validate = validate_fields(c("label", "description")))
+    obj = llm_write(prompt, c("label", "description"), role = "worker")
 
     row = tibble::tibble(target = key,
                          Label = as.character(obj$label),
@@ -778,7 +777,7 @@ resolve_collisions <- function(labels) {
     dplyr::select(K, Label, Description)
 
   arr = llm_json(prompt_harmonize(lab), role = "pm",
-                 system_prompt = persona_lca, pattern = "(?s)\\[.*\\]")
+                 system_prompt = ai_reflexes_prompt(), pattern = "(?s)\\[.*\\]")
 
   new = purrr::map(arr, function(x) tibble::tibble(
     K = as.integer(x$class), new = as.character(x$label))) |>

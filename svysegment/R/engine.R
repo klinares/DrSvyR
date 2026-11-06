@@ -476,66 +476,9 @@ predict_segments <- function(df, fit, items, min_items) {
 #   they never feed back into estimation. The JSON keys stay 
 #   label/description/class for stability.
 
-# Personas and rules are plain strings. 
-# They never take an argument and the certification harness diffs them 
-#   between runs, so a function would only get in the way.
-
-persona_lca <- paste(
-  "You are a senior survey methodologist who reads latent class analysis",
-  "(LCA) measurement models. In this work each latent class is called a",
-  "SEGMENT; that is a word-choice preference and the statistical object is",
-  "unchanged. Each segment is described only by its item-response",
-  "probabilities: for every survey item, the probability that a member of",
-  "that segment gives each answer. A segment leans toward the answers with",
-  "high probability. You interpret a segment strictly from these",
-  "probabilities and the item wording, never from outside assumptions.")
-rules_label <- paste(
-  "RULES:",
-  "1. Use only the numbers and item wording shown. The survey context says",
-  "   what the items refer to and the research question says what the",
-  "   analyst is studying: use them to choose words that fit, and attribute",
-  "   nothing that the numbers do not show.",
-  "2. Quote a probability exactly as it is printed, for one response category",
-  "   at a time. Never add probabilities across categories and never describe a",
-  "   combined or total probability. If two adjacent answers both matter, name",
-  "   them separately with their own numbers.",
-  "3. Anchor every statement to the items that stand out most.",
-  "4. If nothing stands out, say the profile is diffuse rather than inventing",
-  "   a theme.",
-  "5. Return only valid JSON: no prose before or after, no markdown fences.",
-  sep = "\n")
-
-# Domain rules are stricter because the reader will act on them. 
-# The analyst has already decided which differences clear the interval; 
-#   the model is told the answer and only translates it. 
-# It never sees a standard error and never decides significance for itself.
-rules_domain <- paste(
-  "RULES:",
-  "1. Describe a difference only where it appears in the list above. For any",
-  "   pair not listed, say the data do not separate the groups.",
-  "   overlap. Where they overlap, say the data do not separate the groups.",
-  "2. Do not rank levels whose intervals overlap.",
-  "3. Never use causal language. Groups differ in composition; being in a",
-  "   group does not cause membership.",
-  "4. Say nothing about a level flagged as too small.",
-  "5. Report at most the four clearest differences. The point is to tell the",
-  "   analyst where to look, not to narrate every cell.",
-  "6. When the design changes an estimate or an interval, say so plainly and use",
-  "   the numbers given. Do not treat a narrower interval as better or a wider",
-  "   one as worse; the design-based figure is the honest one either way.",
-  "7. Return only valid JSON: no prose before or after, no markdown fences.",
-  "8. Each estimate is followed by a 95 percent confidence interval, which",
-  "   expresses sampling uncertainty. Where the analysis did not resolve a",
-  "   pair, say the data do not separate them; do not say they are equal or",
-  "   similar, since an unresolved pair may differ by more than this sample",
-  "   can detect.",
-  "9. The differences listed were tested on the estimator named beside them,",
-  "   which is not always the estimator whose numbers are printed. Do not",
-  "   claim a tested difference is larger or smaller under the other one, and",
-  "   do not describe either as the conservative reading; whether correcting",
-  "   for classification error strengthens or weakens a contrast depends on",
-  "   the correction, and neither direction is guaranteed.",
-  sep = "\n")
+# The persona and the rules every prompt follows are the AI reflexes in
+#   www/ai_reflexes.md, sent as the system prompt (llm_write() in llm.R).
+#   The prompts below carry only the evidence and the task.
 
 # dictionary supplies the question wording and the response labels, in the 
 #   same order as the fitted category indices.
@@ -552,7 +495,7 @@ format_segment_block <- function(fit, k, dictionary, items) {
 
 # The survey context and the research question come from the Items screen.
 #   They come ahead of the segment so its name fits the analyst's survey and
-#   purpose; rule 1 keeps them from adding anything the numbers do not show.
+#   purpose; the reflexes keep them from adding anything the numbers do not show.
 prompt_segment_label <- function(fit, k, dictionary, items, context = NULL,
                                  question = NULL) {
   ctx = if (nzchar(context %||% "")) str_glue("SURVEY CONTEXT\n{context}\n\n") else ""
@@ -566,7 +509,6 @@ prompt_segment_label <- function(fit, k, dictionary, items, context = NULL,
     "for an analyst to refine, and a one or two sentence factual description ",
     "anchored to its high-probability answers. Each probability above belongs ",
     "to one response category; they are not yours to add together.\n\n",
-    "{rules_label}\n",
     'JSON (one object): {{"label": "...", "description": "..."}}')
 }
 
@@ -605,7 +547,6 @@ prompt_harmonize <- function(lab) {
     "overlap, as little as possible, so every label is distinct; anchor each ",
     "edit to that segment's own description. Keep every non-overlapping label ",
     "verbatim. Do not change any description. Labels stay 2 to 5 words.\n\n",
-    "{rules_label}\n",
     'JSON (one array, all segments): [{{"class": 1, "label": "..."}}, ...]')
 }
 pick_estimator <- function(dom, est) {
@@ -759,7 +700,6 @@ prompt_domain_read <- function(
     "field, say what accounting for the survey design changed: whether it moved ",
     "any estimate enough to matter and whether it made the intervals wider or ",
     "narrower.\n\n",
-    "{rules_domain}\n",
     'JSON (one object): {{"finding": "...", "caution": "..."}}')
 }
 

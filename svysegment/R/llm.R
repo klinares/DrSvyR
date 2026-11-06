@@ -448,10 +448,11 @@ llm_json <- function(prompt, role = "worker", system_prompt = NULL,
 
 # Every passage the app has a model write goes through here: the AI reflexes
 #   as the system prompt (ai_reflexes_prompt(), ai_reflexes.R), the fields the
-#   reply must carry, and its numbers checked against the request.
-llm_write <- function(prompt, fields) {
+#   reply must carry, and its numbers checked against the request. Segment
+#   names use role "worker"; everything else the default.
+llm_write <- function(prompt, fields, role = "pm") {
   system = ai_reflexes_prompt()
-  llm_json(prompt, role = "pm", system_prompt = system,
+  llm_json(prompt, role = role, system_prompt = system,
            validate = validate_all(validate_fields(fields),
                                    validate_numbers(paste(system, prompt))))
 }
