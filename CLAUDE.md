@@ -15,6 +15,8 @@ R package any more.
 | `svysegment/www/reports/` `svysegment/www/logo/` | Method report PDF and office logo. Shiny serves `www/` at the site root |
 | `svysegment/data/` | LAPOP Ecuador 2023 demo `.sav`, found by `demo_survey_path()` |
 | `svysegment/tests/smoke.R` | Smoke test, kept out of the bundle by `.rscignore` |
+| `inteRn/` | Not an app: the AI coding intern for RStudio. `inteRn.R` is sourced from a user's `~/.Rprofile`; `R/` holds definitions only (same rule 2); settings in a gitignored `config.R` copied from `config.example.R`. Tests: `Rscript --no-init-file inteRn/tests/smoke.R` and `inteRn/tests/skills_check.R` (no API calls). Setup in `inteRn/README.md` |
+| `ai_skills/` | Shared skills (SKILL.md folders) for inteRn, Claude Code and other agents, plus `reflexes.md`. `.claude/skills` is a gitignored junction to it |
 
 ## svysegment settings (top of app.R)
 

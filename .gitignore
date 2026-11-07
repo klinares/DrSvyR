@@ -3,6 +3,10 @@
 .RData
 .Rproj.user/
 
+# A link to ai_skills/ that each clone makes for Claude Code (see
+#   ai_skills/README.md). Tracked, it would add every skill file twice.
+/.claude/skills
+
 # Posit Connect deployment records. rsconnect::deployApp() writes rsconnect/
 #   inside each app folder it publishes, and rsconnect-python writes
 #   rsconnect-python/. Unanchored, so they are ignored in every app folder.
