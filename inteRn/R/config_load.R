@@ -6,7 +6,7 @@
 # What the user sees after sourcing inteRn.R. Everything else stays private.
 INTERN_EXPORTS <- c("ask", "%ask%", "open_intern", "close_intern", "intern_reset",
                     "intern_source_skill", "intern_complete", "reflex_add",
-                    "intern_config")
+                    "intern_config", "intern_help")
 
 # Per-session state: the conversation, a key typed in "analyst" mode, and the
 #   function that asks the user to approve a tool call. An environment, so a

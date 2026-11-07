@@ -54,12 +54,10 @@ local({
   core = new.env(parent = baseenv())
   core$.home = home
 
+  # config.R is optional: the defaults in config.example.R work as they are.
+  #   Make a config.R only to change something.
   cfg = file.path(home, "config.R")
-  if (!file.exists(cfg)) {
-    cfg = file.path(home, "config.example.R")
-    message("inteRn: no config.R, using config.example.R. Copy it to ",
-            "config.R and edit the copy.")
-  }
+  if (!file.exists(cfg)) cfg = file.path(home, "config.example.R")
   sys.source(cfg, envir = core)
 
   files = sort(list.files(file.path(home, "R"), pattern = "[.]R$",
@@ -79,7 +77,6 @@ local({
   registerS3method("print", "intern_reply", core$print.intern_reply,
                    envir = core)
 
-  if (!isTRUE(getOption("intern.quiet")))
-    message("inteRn ready: ask(\"...\"), obj %ask% \"...\", intern_config().")
+  if (!isTRUE(getOption("intern.quiet"))) core$intern_help()
   invisible(NULL)
 })

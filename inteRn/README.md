@@ -30,68 +30,41 @@ Anything that changes something -- running code, writing a file -- is shown to
 you first and needs your approval. The codebook skill writes exactly what it
 sent to the model to `sent_to_model.txt`, so it can be audited.
 
-## Set up (new user, about 10 minutes)
+## Set up
 
-**1. Get the folder.** Clone the repository that holds `inteRn/` and
-`ai_skills/` (they sit side by side), or copy both folders anywhere. Pull to
-update; nothing is installed as a package.
-
-**2. Install R packages** (R 4.1 or later; RStudio recommended):
-
-```r
-install.packages(c(
-  "ellmer", "purrr", "rlang",                                  # core
-  "httpuv", "promises", "later", "jsonlite", "commonmark",     # open_intern()
-  "lintr", "rstudioapi", "diffobj", "yaml", "viridisLite",     # lint gate, diffs, skills
-  "dplyr", "tibble", "ggplot2", "scales", "survey", "srvyr",   # skill scripts
-  "nanoparquet", "knitr", "rmarkdown", "palmerpenguins"))       # codebook skill
-```
-
-For the codebook skill also install the data-dict command-line tool (no
-admin rights, no PATH change) and [Quarto](https://quarto.org):
-
-```r
-pak::pak("tidyverse/data-dict/r")
-datadict::dd_install()
-```
-
-**3. Your settings.** Copy `inteRn/config.example.R` to `inteRn/config.R`
-and edit the copy: the endpoint (`base_url`), the model IDs (`pm`,
-`worker`), and the folders the intern may read and write (`allow_dirs`).
-`config.R` is ignored by git. Check model IDs against
-`ellmer::models_anthropic()` or your work server's list.
-
-**4. Your key.** Open your user `.Renviron` with `usethis::edit_r_environ()`
-and add one line, using the variable name in `key_var`:
+**1. Your key.** Run `usethis::edit_r_environ()`, add one line, save:
 
 ```
 ANTHROPIC_API_KEY=your-key-here
 ```
 
-On Windows RStudio keeps this file in your Documents folder, which may be
-`OneDrive\Documents`. Never put the key in `config.R` or in code.
-
-**5. Load it in every interactive session.** Open your `.Rprofile` with
-`usethis::edit_r_profile()` and add, with your own path:
+**2. Load inteRn.** Run `usethis::edit_r_profile()`, add one line with the
+path to your copy, save:
 
 ```r
 if (interactive()) source("C:/path/to/inteRn/inteRn.R")
 ```
 
-**6. Restart R and check.**
+Restart R. inteRn prints a short quick start each time R starts (show it
+again with `intern_help()`; hide it with `options(intern.quiet = TRUE)` before
+the `source()` line). That's it.
 
-```r
-intern_config()          # settings in use; says whether the key is found (never shows it)
-ask("Say hello in one line.")
-```
+If a package is missing, inteRn says which ones to install. The defaults
+(Anthropic's API, `claude-sonnet-5`, your current project folder) work as they
+are; to change them, copy `config.example.R` to `config.R` and edit it.
 
-**7. (Optional) Claude Code.** To have Claude Code read the same skills, link
-them from the repository root (one-time, per clone):
+<details><summary>Extras</summary>
 
-```
-mklink /J .claude\skills ai_skills          (Windows, cmd)
-ln -s ../ai_skills .claude/skills           (macOS / Linux)
-```
+- Everything the skills use: `install.packages(c("ellmer", "httpuv",
+  "promises", "later", "commonmark", "lintr", "diffobj", "yaml", "dplyr",
+  "ggplot2", "survey", "srvyr", "nanoparquet", "palmerpenguins"))`
+- Codebook skill: `pak::pak("tidyverse/data-dict/r"); datadict::dd_install()`
+  and [Quarto](https://quarto.org).
+- Claude Code reading the same skills: from the repository root,
+  `mklink /J .claude\skills ai_skills` (Windows) or
+  `ln -s ../ai_skills .claude/skills` (macOS/Linux).
+
+</details>
 
 ## Using it
 
