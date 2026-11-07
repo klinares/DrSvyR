@@ -33,9 +33,9 @@ INTERN_LLM <- list(
   # Seconds to wait for one reply.
   timeout    = 120,
 
-  # Ceiling for each reply. Chat answers with code run longer than the
-  #   one-line jobs svysegment sends, so this is higher than its 1500.
-  max_tokens  = 4000,
+  # Ceiling for each reply, including the model's internal reasoning.
+  #   Too low and a long answer is cut off before it is written.
+  max_tokens  = 8000,
   # NULL sends no temperature. Recent Claude models refuse the setting
   #   ("temperature is deprecated for this model"); set a number only for a
   #   model that accepts one.

@@ -295,6 +295,9 @@ for (i in 1:3) print(i)"))))
                                                   function(p) "x", 0L)), bad))
   assign("lint_reply", real_lint_reply, envir = core)
 
+  check("lint: an empty reply is not an error",
+        nrow(core$lint_reply(character(0))) == 0L && nrow(core$lint_reply("")) == 0L &&
+          identical(core$lint_gate("", list(get_turns = function() list()), function(p) "x", 0L), ""))
   fake_chat = list(get_turns = function() list())
   sends = new.env(); sends$n = 0L; sends$last = NULL
   fixer = function(p) { sends$n = sends$n + 1L; sends$last = p; paste("Fixed:", fence(good_code)) }
@@ -322,6 +325,42 @@ for (i in 1:3) print(i)"))))
   check("gate off: reply untouched", identical(core$lint_gate(bad, fake_chat, fixer, 0L), bad))
   cfg_off$lint = TRUE; assign("INTERN_LLM", cfg_off, envir = core)
 }
+
+# ---- empty replies (stand-in model) ------------------------------------------------
+no_stop = list(last_turn = function() NULL)
+nudges = new.env(); nudges$n = 0L
+answer = function(p) { nudges$n = nudges$n + 1L; nudges$p = p; "Here is the answer." }
+check("empty reply: model asked once to write its answer",
+      identical(core$fill_empty_reply("", no_stop, answer), "Here is the answer.") &&
+        nudges$n == 1L && grepl("without writing an answer", nudges$p))
+check("empty reply twice: a note instead of a blank",
+      grepl("empty reply", core$fill_empty_reply(character(0), no_stop, function(p) "")))
+check("a real reply is passed through untouched",
+      identical(core$fill_empty_reply("Fine.", no_stop, function(p) stop("not called")), "Fine."))
+av = new.env()
+promises::then(core$fill_empty_reply_async("", no_stop, function(p) promises::promise_resolve("Async answer.")),
+               function(v) av$v = v)
+purrr::walk(1:5, function(i) later::run_now(0.05))
+check("empty reply, async: model asked to write its answer", identical(av$v, "Async answer."))
+
+# ---- the async path the Viewer uses, end to end (stand-in chat) ----------------------
+fake_async_chat = list(get_turns = function() list(), set_turns = function(x) NULL,
+                       last_turn = function() NULL, get_model = function() "stand-in",
+                       chat_async = function(p, tool_mode) promises::promise_resolve("The real answer."))
+asv = new.env()
+promises::then(core$intern_send_async("Help me explore my data", fake_async_chat),
+               function(v) asv$v = v)
+purrr::walk(1:10, function(i) later::run_now(0.05))
+check("async path returns the model's text (not empty)", identical(asv$v, "The real answer."))
+
+# ---- the Viewer leaves the random stream alone and its token is unpredictable --------
+set.seed(42); expected = runif(1)
+set.seed(42); u1 = open_intern(launch = FALSE); got = runif(1)
+check("open_intern() does not change the user's random numbers", identical(expected, got))
+close_intern()
+set.seed(42); u2 = open_intern(launch = FALSE); close_intern()
+check("the Viewer token differs even after the same set.seed()",
+      !identical(sub(".*t=", "", u1), sub(".*t=", "", u2)) && nchar(sub(".*t=", "", u1)) == 32L)
 
 # ---- reflexes (in a temporary skills folder) ---------------------------------------
 tmp_skills = file.path(tempdir(), "skills_tmp")

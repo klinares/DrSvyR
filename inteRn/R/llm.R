@@ -130,10 +130,47 @@ intern_send <- function(prompt, chat = intern_get_chat()) {
         stop(intern_endpoint_error(e2, fb))
       })
     })
+  if (is.null(reply)) return(NULL)                     # interrupted
+  send = function(p) tryCatch(once(p), error = function(e) NULL)
+  reply = fill_empty_reply(reply, chat, send)
   # R code in the reply is linted; failures go back for a rewrite
   #   (lint_gate.R). A rewrite that errors leaves the reply as it was.
-  lint_gate(reply, chat, n_before = length(before),
-            send = function(p) tryCatch(once(p), error = function(e) NULL))
+  lint_gate(reply, chat, n_before = length(before), send = send)
+}
+
+# ---- empty replies -------------------------------------------------------
+
+# A model can end its last turn with only its internal reasoning and no text,
+#   or run out of tokens while reasoning. The user would see nothing, so it is
+#   asked once to write the answer; a cut-off reply says so instead.
+EMPTY_NUDGE <- "You ended your turn without writing an answer for the user. Write your answer now."
+
+is_empty_reply <- function(reply)
+  !length(reply) || all(is.na(reply)) || !nzchar(trimws(paste(reply, collapse = "")))
+
+last_stop_reason <- function(chat)
+  tryCatch(S7::prop(chat$last_turn(), "json")$stop_reason, error = function(e) NULL)
+
+empty_reply_note <- function(chat) {
+  if (identical(last_stop_reason(chat), "max_tokens"))
+    return(paste0("_(The reply was cut off at the max_tokens limit (", INTERN_LLM$max_tokens,
+                  ") before the model wrote an answer. Raise max_tokens in config.R, or ",
+                  "ask a narrower question.)_"))
+  "_(The model returned an empty reply. Please ask again.)_"
+}
+
+fill_empty_reply <- function(reply, chat, send) {
+  if (!is_empty_reply(reply)) return(reply)
+  if (identical(last_stop_reason(chat), "max_tokens")) return(empty_reply_note(chat))
+  again = send(EMPTY_NUDGE)
+  if (is_empty_reply(again)) empty_reply_note(chat) else again
+}
+
+fill_empty_reply_async <- function(reply, chat, send_async) {
+  if (!is_empty_reply(reply)) return(reply)
+  if (identical(last_stop_reason(chat), "max_tokens")) return(empty_reply_note(chat))
+  promises::then(send_async(EMPTY_NUDGE), function(again)
+    if (is_empty_reply(again)) empty_reply_note(chat) else again)
 }
 
 # Async: used by the Viewer chat. Returns a promise for the reply text.
@@ -144,14 +181,20 @@ intern_send_async <- function(prompt, chat = intern_get_chat()) {
   # Read when each request is built, which may be after this function
   #   returns, so it is set rather than restored on exit.
   options(ellmer_timeout_s = INTERN_LLM$timeout)
+  # A one-argument function, not as.character itself: promises passes extra
+  #   arguments to a function that accepts `...`, and as.character then
+  #   returns character(0) -- every Viewer reply came out empty.
   ask_async = function(p) promises::then(chat$chat_async(p, tool_mode = "sequential"),
-                                         as.character)
+                                         function(x) as.character(x))
   ask_async(prompt) |>
     promises::catch(function(e) {
       chat$set_turns(before)
       stop(intern_endpoint_error(e, chat$get_model()))
     }) |>
-    promises::then(function(reply)
-      lint_gate_async(reply, chat, n_before = length(before),
-                      send_async = function(p) promises::catch(ask_async(p), function(e) NULL)))
+    promises::then(function(reply) {
+      send_async = function(p) promises::catch(ask_async(p), function(e) NULL)
+      promises::then(promises::promise_resolve(fill_empty_reply_async(reply, chat, send_async)),
+                     function(r) lint_gate_async(r, chat, n_before = length(before),
+                                                 send_async = send_async))
+    })
 }

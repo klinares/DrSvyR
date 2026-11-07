@@ -79,6 +79,7 @@ intern_linters <- function() list(
 CODE_BLOCK <- "(?s)```\\{?[rR]\\}?[^\\n]*\\n(.*?)```"
 
 code_blocks <- function(text) {
+  text = paste(text, collapse = "\n")          # also copes with character(0)
   m = regmatches(text, gregexpr(CODE_BLOCK, text, perl = TRUE))[[1]]
   sub(CODE_BLOCK, "\\1", m, perl = TRUE)
 }
@@ -168,7 +169,7 @@ safe_lint <- function(reply) tryCatch(lint_reply(reply), error = function(e) {
 })
 
 lint_gate <- function(reply, chat, send, n_before, attempt = 0L) {
-  if (is.null(reply) || !gate_on()) return(reply)
+  if (is_empty_reply(reply) || !gate_on()) return(reply)
   problems = safe_lint(reply)
   if (is.null(problems)) return(reply)
   if (!nrow(problems) || attempt >= lint_retries())
@@ -183,7 +184,7 @@ lint_gate <- function(reply, chat, send, n_before, attempt = 0L) {
 
 # The same, for a promise of a reply; returns a promise.
 lint_gate_async <- function(reply, chat, send_async, n_before, attempt = 0L) {
-  if (is.null(reply) || !gate_on()) return(reply)
+  if (is_empty_reply(reply) || !gate_on()) return(reply)
   problems = safe_lint(reply)
   if (is.null(problems)) return(reply)
   if (!nrow(problems) || attempt >= lint_retries())

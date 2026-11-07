@@ -28,8 +28,8 @@ open_intern <- function(launch = TRUE) {
     stop("open_intern() needs: install.packages(c(\"", paste(missing, collapse = "\", \""),
          "\"))", call. = FALSE)
   if (is.null(.state$server)) {
-    .state$token = paste(sample(c(0:9, letters[1:6]), 32, replace = TRUE), collapse = "")
-    .state$port = httpuv::randomPort(host = "127.0.0.1")
+    .state$token = new_token()
+    .state$port = keep_rng(httpuv::randomPort(host = "127.0.0.1"))
     .state$server = httpuv::startServer("127.0.0.1", .state$port, viewer_app())
     .state$transcript = list()
     .state$pending = list()
@@ -41,6 +41,29 @@ open_intern <- function(launch = TRUE) {
     else utils::browseURL(url)
   }
   invisible(url)
+}
+
+# Runs expr without touching the user's random-number stream, so opening the
+#   Viewer never changes the results of a seeded analysis.
+keep_rng <- function(expr) {
+  had = exists(".Random.seed", envir = globalenv(), inherits = FALSE)
+  old = if (had) get(".Random.seed", envir = globalenv(), inherits = FALSE)
+  on.exit(if (had) assign(".Random.seed", old, envir = globalenv())
+          else if (exists(".Random.seed", envir = globalenv(), inherits = FALSE))
+            rm(".Random.seed", envir = globalenv()), add = TRUE)
+  expr
+}
+
+# The access token. From the system's secure random source (openssl, which
+#   ellmer already needs), never from R's generator: after set.seed() that
+#   would give the same token every time.
+new_token <- function() {
+  if (requireNamespace("openssl", quietly = TRUE))
+    return(paste(as.character(openssl::rand_bytes(16)), collapse = ""))
+  keep_rng({
+    set.seed(NULL)
+    paste(sample(c(0:9, letters[1:6]), 32, replace = TRUE), collapse = "")
+  })
 }
 
 # Exported. Stop the server. The conversation is kept for ask() and the next
