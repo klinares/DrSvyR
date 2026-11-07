@@ -30,28 +30,28 @@ Anything that changes something -- running code, writing a file -- is shown to
 you first and needs your approval. The codebook skill writes exactly what it
 sent to the model to `sent_to_model.txt`, so it can be audited.
 
-## Set up
+## Set up (once)
 
-**1. Your key.** Run `usethis::edit_r_environ()`, add one line, save:
-
-```
-ANTHROPIC_API_KEY=your-key-here
-```
-
-**2. Load inteRn.** Run `usethis::edit_r_profile()`, add one line with the
-path to your copy, save:
+In RStudio's **Console**, run this one line (with the path to your copy):
 
 ```r
-if (interactive()) source("C:/path/to/inteRn/inteRn.R")
+source("D:/repos/DrSvyR/inteRn/install.R")
 ```
 
-Restart R. inteRn prints a short quick start each time R starts (show it
-again with `intern_help()`; hide it with `options(intern.quiet = TRUE)` before
-the `source()` line). That's it.
+It installs what is missing, makes inteRn load every time R starts, and checks
+for your API key (if there is none, it opens the file to paste it into).
 
-If a package is missing, inteRn says which ones to install. The defaults
-(Anthropic's API, `claude-sonnet-5`, your current project folder) work as they
-are; to change them, copy `config.example.R` to `config.R` and edit it.
+## Use it
+
+Type in RStudio's **Console**, like any R function:
+
+```r
+ask("How do I set up a survey design for my data?")
+my_data %ask% "Which variables need recoding?"
+open_intern()        # or chat in the Viewer pane
+```
+
+A short guide prints every time R starts; `intern_help()` shows it again.
 
 <details><summary>Extras</summary>
 
