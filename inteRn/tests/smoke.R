@@ -24,12 +24,12 @@ check = function(what, ok) {
 before = ls(globalenv())
 source(file.path(Sys.getenv("INTERN_HOME"), "inteRn.R"))
 check("attached as 'inteRn'", "inteRn" %in% search())
-check("exports visible", all(c("ask", "%ask%", "intern_reset", "intern_config") %in%
+check("exports visible", all(c("ask", "%ask%", "open_intern", "intern_help") %in%
                                ls("inteRn", all.names = TRUE)))
 check("workspace untouched", identical(setdiff(ls(globalenv()), "before"), before))
 core = environment(get("ask", envir = as.environment("inteRn")))
 check("internals stay private", !exists("describe_value", envir = globalenv()))
-check("example config has no problems", length(core$intern_config_problems()) == 0L)
+check("default settings have no problems", length(core$intern_config_problems()) == 0L)
 
 # ---- config checks ----------------------------------------------------------
 bad_cfg = core$INTERN_LLM
@@ -226,13 +226,13 @@ check("token parsed from query", identical(core$query_token("?t=abc123"), "abc12
 
 # ---- tools and chat object (no API call) -------------------------------------
 tl = core$intern_tools()
-check("9 tools defined", length(tl) == 9L)
+check("8 tools defined", length(tl) == 8L)
 check("system prompt read without comments",
       !grepl("<!--", core$intern_system_prompt()) &&
         grepl("never see data values", core$intern_system_prompt()))
 Sys.setenv(ANTHROPIC_API_KEY = "sk-ant-not-a-real-key-for-tests")
 ch = core$intern_new_chat()
-check("chat object built with tools", length(ch$get_tools()) == 9L &&
+check("chat object built with tools", length(ch$get_tools()) == 8L &&
         identical(ch$get_model(), core$INTERN_LLM$pm))
 Sys.unsetenv("ANTHROPIC_API_KEY")
 
@@ -362,27 +362,21 @@ set.seed(42); u2 = open_intern(launch = FALSE); close_intern()
 check("the Viewer token differs even after the same set.seed()",
       !identical(sub(".*t=", "", u1), sub(".*t=", "", u2)) && nchar(sub(".*t=", "", u1)) == 32L)
 
-# ---- reflexes (in a temporary skills folder) ---------------------------------------
-tmp_skills = file.path(tempdir(), "skills_tmp")
-dir.create(tmp_skills, showWarnings = FALSE)
-cfg_r = core$INTERN_LLM; real_skills = cfg_r$skills_dir; cfg_r$skills_dir = tmp_skills
-assign("INTERN_LLM", cfg_r, envir = core)
-sent$prompt = "untouched"
-invisible(utils::capture.output(r_out <- ask("/reflex add Weights are not frequency counts; key = \"sk-ant-zzzzzzzzzzzz\"")))
-rf = readLines(file.path(tmp_skills, "reflexes.md"))
-check("/reflex add appends a dated line, scrubbed", any(grepl(paste0("^- ", Sys.Date(), ": Weights are not"), rf)) &&
-        !any(grepl("zzzzzz", rf)) && grepl("# Reflexes", rf[1]))
-check("/reflex add is not sent to the model", identical(sent$prompt, "untouched"))
-core$reflex_add("Second lesson.")
-check("reflexes append in order", grepl("Second lesson", utils::tail(readLines(file.path(tmp_skills, "reflexes.md")), 1)))
-check("reflexes go into the system prompt", grepl("Lessons learned", core$intern_system_prompt()) &&
-        grepl("Second lesson", core$intern_system_prompt()))
-check("/reflex list and /help answered locally",
-      grepl("Second lesson", core$slash_command("/reflex list")) &&
-        grepl("Commands", core$slash_command("/help")) &&
-        grepl("Unknown command", core$slash_command("/nope")) &&
-        is.null(core$slash_command("not a command")))
-cfg_r$skills_dir = real_skills; assign("INTERN_LLM", cfg_r, envir = core)
+# ---- found in live testing ----------------------------------------------------------
+listed_block = core$mark_untested("- load it:\n  ```r\n  d <- 1\n  ```")
+check("UNTESTED keeps the indentation of a block inside a list item",
+      grepl("  ```r\n  # UNTESTED\n  d <- 1", listed_block, fixed = TRUE))
+tmp_proj = file.path(tempdir(), "intern_guard"); dir.create(tmp_proj, showWarnings = FALSE)
+old_wd = setwd(tmp_proj); writeLines("a,b", "d.csv")
+read_tool = Filter(function(t) t@name == "read_file", core$intern_tools())[[1]]
+refused = tryCatch(read_tool("d.csv"), warning = function(w) "warned", error = function(e) "errored")
+setwd(old_wd)
+check("a refused file read comes back as text, without an error or warning",
+      startsWith(refused, "Not done:") && grepl("data file", refused))
+check("an empty string is shown as a value in profiles",
+      grepl("(empty string) 20", core$profile_value(data.frame(x = c(rep("", 20), rep("a", 15))), "x"),
+            fixed = TRUE))
+check("no unused worker setting", is.null(core$INTERN_LLM$worker))
 
 cat("\n", results$n - length(results$fail), " of ", results$n, " checks passed\n", sep = "")
 if (length(results$fail)) quit(status = 1)

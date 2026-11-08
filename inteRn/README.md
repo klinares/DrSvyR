@@ -1,131 +1,63 @@
 # inteRn
 
-An AI coding intern that lives in RStudio, for survey researchers and data
-scientists. Built by a survey methodologist, for survey methodologists.
-
-It helps with everyday R work -- writing and fixing tidyverse code, survey
-designs, figures, Quarto reports, codebooks -- and it can see what is in your
-R session, **but only its structure**: names, types, labels and suppressed
-aggregates, never your data's values. It follows the shared skills in
-[`../ai_skills`](../ai_skills/README.md), the same ones Claude Code reads.
-
-```r
-ask("Write srvyr code for the share who trust courts by region, with 95% CIs.")
-svy %ask% "Which variables still carry 8/9 missing-value codes?"
-open_intern()                      # a chat in the Viewer; the console stays free
-```
-
-## What leaves your R session, and what never does
-
-| Sent to the model | Never sent |
-|---|---|
-| object names, classes, dimensions | rows, cell values, min and max |
-| column names, types, variable labels, value labels, factor levels | free-text answers, names, IDs |
-| counts and shares, with every count under `suppress_n` (default 10) shown as `<10`, and one more cell marked `suppressed` so the small one cannot be worked out | data files (`.csv .sav .dta .rds .parquet .xlsx ...`), rendered reports (`.html .pdf .docx`) |
-| means, SDs and quartiles of numeric columns | the printed output of code it runs, unless you choose to share it |
-| code and text files in the folders you allow (credentials scrubbed) | `.Renviron`, `.Rprofile`, `.Rhistory`, anything under `.git/` |
-| function source (credentials and personal paths scrubbed) | your API key (it is passed to the API client and nowhere else) |
-
-Anything that changes something -- running code, writing a file -- is shown to
-you first and needs your approval. The codebook skill writes exactly what it
-sent to the model to `sent_to_model.txt`, so it can be audited.
+An AI coding assistant in RStudio, powered by Claude Opus. Built by a survey
+methodologist, for survey methodologists. It sees the names, types and labels
+of the objects in your R session, never their values, and asks before it runs
+code or writes a file.
 
 ## Set up (once)
 
-In RStudio's **Console**, run this one line (with the path to your copy):
+You need an Anthropic API key. In RStudio's **Console**, run:
 
 ```r
 source("D:/repos/DrSvyR/inteRn/install.R")
 ```
 
-It installs what is missing, makes inteRn load every time R starts, and checks
-for your API key (if there is none, it opens the file to paste it into).
+(use the path to your copy). It installs what is missing, makes inteRn load
+every time R starts, and, if no key is set, opens the file to paste
+`ANTHROPIC_API_KEY=...` into.
 
 ## Use it
 
-Type in RStudio's **Console**, like any R function:
+Type in RStudio's **Console**:
 
 ```r
-ask("How do I set up a survey design for my data?")
-my_data %ask% "Which variables need recoding?"
-open_intern()        # or chat in the Viewer pane
+ask("How do I set up a survey design for my data?")   # ask anything
+my_data %ask% "Which variables need recoding?"        # ask about one object
+open_intern()                                          # chat in the Viewer pane
 ```
 
-A short guide prints every time R starts; `intern_help()` shows it again.
+In the Viewer chat your console stays free while it thinks; when it wants to
+run code or write a file, buttons appear for you to approve. Code blocks have
+Copy, Insert (at your cursor) and To console buttons.
 
-<details><summary>Extras</summary>
+A short guide prints when R starts; `intern_help()` shows it again.
+`intern_reset()` starts a new conversation.
 
-- Everything the skills use: `install.packages(c("ellmer", "httpuv",
-  "promises", "later", "commonmark", "lintr", "diffobj", "yaml", "dplyr",
-  "ggplot2", "survey", "srvyr", "nanoparquet", "palmerpenguins"))`
-- Codebook skill: `pak::pak("tidyverse/data-dict/r"); datadict::dd_install()`
-  and [Quarto](https://quarto.org).
-- Claude Code reading the same skills: from the repository root,
-  `mklink /J .claude\skills ai_skills` (Windows) or
-  `ln -s ../ai_skills .claude/skills` (macOS/Linux).
+## What it will and won't do
 
-</details>
+- **Sees:** object names, classes, column types, variable and value labels,
+  and counts with anything under 10 hidden. Never rows or values.
+- **Won't read** data files (`.csv`, `.sav`, `.rds`, ...), reports, or
+  `.Renviron`; only works inside your current project folder.
+- **Asks first** before running code (you choose whether it sees the output)
+  or writing a file (you see the change).
+- **Checks its code** before you see it: tidyverse style with no loops, ggplot2
+  only, colourblind-safe colours. Code it hasn't run is marked `# UNTESTED`.
 
-## Using it
+## Change a setting
 
-| You type | What happens |
-|---|---|
-| `ask("...")` | One question in the session's conversation. Blocks only while the model replies; approvals are asked in the console. `ask("...", new = TRUE)` starts over. |
-| `obj %ask% "..."` | Sends `obj`'s structure with the question. Works on expressions too (`palmerpenguins::penguins %ask% "..."`); put pipelines in parentheses: `(df \|> filter(x > 1)) %ask% "..."`. |
-| `open_intern()` / `close_intern()` | A chat page in the Viewer. Your console stays free while the model thinks; approvals appear as buttons. Code blocks have Copy, Insert (at the cursor) and To console. |
-| `/reflex add <lesson>` | In `ask()` or the Viewer: appends a dated lesson to `ai_skills/reflexes.md` (not sent to the model). `/reflex list`, `/help`. Or `reflex_add("...")`. |
-| `intern_source_skill("dataviz", "theme_intern.R")` | Loads a skill's helper functions into your session. |
-| `intern_complete(prompt, system)` | One request, no tools, no history (used by the codebook skill). |
-| `intern_reset()` | Forget the conversation. |
-| `intern_config()` | Show the settings and whether the key is found. |
+Create `inteRn/config.R` with only what you want to change, for example:
 
-**Tools the model can call:** `env_summary`, `describe_object`,
-`profile_object`, `get_function_source`, `list_files`, `read_file`,
-`write_file` (shows a diff, needs approval), `run_code` (needs approval; you
-choose whether it sees the output), `load_skill`.
+```r
+INTERN_LLM$pm <- "claude-sonnet-5-5"   # a faster, cheaper model
+INTERN_LLM$allow_dirs <- c(".", "D:/shared/code")
+```
 
-**The lint gate.** R code in every reply is checked with lintr before you see
-it: no `for`/`while`/`repeat` loops, no base graphics, colourblind-safe colours
-only (Okabe-Ito or viridis), no `== NA`, no `T`/`F`. Failing code goes back to
-the model for a rewrite, at most twice (`lint_retries`); whatever still fails
-is shown with the problems listed. Code the model did not run gets
-`# UNTESTED` as its first line. A block that starts with `# BAD EXAMPLE` (what
-not to do, for teaching or review) is left alone and shown next to the
-corrected version; `# nolint` comments do not switch the gate off. Turn it off
-with `lint = FALSE` in `config.R`.
+All settings and their defaults are at the top of `inteRn.R`.
 
 ## Files
 
-```
-inteRn/
-  inteRn.R            entry point, sourced from ~/.Rprofile
-  config.example.R    settings template (copy to config.R)
-  system.md           who the intern is and the rules that never bend
-  R/                  function definitions only, one area per file
-  www/                the Viewer chat page
-  tests/smoke.R       offline checks (no API calls)
-  tests/skills_check.R  the skills, their scripts and examples (no API calls)
-  tests/live_check.R  one real round trip (needs a key; costs a few cents)
-  tests/viewer_demo.R the Viewer with a stand-in model
-```
-
-Run the offline checks from the repository root:
-
-```
-Rscript --no-init-file inteRn/tests/smoke.R
-Rscript --no-init-file inteRn/tests/skills_check.R
-```
-
-## Troubleshooting
-
-- **"No API key"** -- the variable named in `key_var` is not set. Check with
-  `nzchar(Sys.getenv("ANTHROPIC_API_KEY"))` after restarting R. `Rscript`
-  started from Git Bash or another terminal may look for `.Renviron` in a
-  different home folder than RStudio; point it at the file with
-  `R_ENVIRON_USER`.
-- **"model not found"** -- a model ID in `config.R` is not one your endpoint
-  serves; compare with `ellmer::models_anthropic()`.
-- **The Viewer stops responding** -- it is answered by your R session between
-  console commands; it waits while code is running in the console.
-- **"temperature is deprecated"** -- leave `temperature = NULL`.
-- **Lint gate does nothing** -- `install.packages("lintr")`.
+`inteRn.R` (the tool), `install.R` (setup), `system.md` (its instructions,
+editable), `www/` (the chat page), `tests/smoke.R`
+(`Rscript --no-init-file inteRn/tests/smoke.R`, no API calls).
