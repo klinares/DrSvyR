@@ -883,12 +883,27 @@ local({
       paste0("Contents of ", basename(p), ":\n", scrub_text(lines, paths = FALSE))
     }
 
+    # Code written to a file meets the same rules as code in a reply: an R
+    #   script is linted whole, a Quarto or R Markdown file chunk by chunk.
+    #   NULL (write it) for other files, with the gate off, or if lintr fails.
+    file_lint <- function(path, content) {
+      ext = tolower(tools::file_ext(path))
+      if (!ext %in% c("r", "qmd", "rmd") || !gate_on()) return(NULL)
+      text = if (ext == "r") paste0("```r\n", content, "\n```") else content
+      safe_lint(text)
+    }
+
     write_file_tool <- function(path, content) {
       p = intern_check_path(path, "write")
       if (has_scrub_marks(content))
         return(paste("Not written: the content contains a <redacted>, <path> or <email>",
                      "placeholder, which would replace the real value in the file.",
                      "Leave those lines out or ask the user for the value."))
+      problems = file_lint(p, content)
+      if (length(problems) && nrow(problems))
+        return(paste0("Not written: the R code did not pass the lint gate:\n",
+                      paste0("- line ", problems$line, ": ", problems$message, collapse = "\n"),
+                      "\nFix it and call write_file again."))
       new = strsplit(content, "\r?\n")[[1]]
       old = if (file.exists(p)) readLines(p, warn = FALSE, encoding = "UTF-8") else character(0)
       with_approval(

@@ -377,6 +377,12 @@ check("an empty string is shown as a value in profiles",
       grepl("(empty string) 20", core$profile_value(data.frame(x = c(rep("", 20), rep("a", 15))), "x"),
             fixed = TRUE))
 check("no unused worker setting", is.null(core$INTERN_LLM$worker))
+old_wd = setwd(tmp_proj)
+write_tool = Filter(function(t) t@name == "write_file", core$intern_tools())[[1]]
+lint_refused = write_tool("loop.R", "for (i in 1:3) print(i)")
+setwd(old_wd)
+check("write_file refuses an R file that fails the lint gate, without asking",
+      startsWith(lint_refused, "Not written") && !file.exists(file.path(tmp_proj, "loop.R")))
 
 cat("\n", results$n - length(results$fail), " of ", results$n, " checks passed\n", sep = "")
 if (length(results$fail)) quit(status = 1)
