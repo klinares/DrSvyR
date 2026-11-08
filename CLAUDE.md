@@ -15,7 +15,7 @@ R package any more.
 | `svysegment/www/reports/` `svysegment/www/logo/` | Method report PDF and office logo. Shiny serves `www/` at the site root |
 | `svysegment/data/` | LAPOP Ecuador 2023 demo `.sav`, found by `demo_survey_path()` |
 | `svysegment/tests/smoke.R` | Smoke test, kept out of the bundle by `.rscignore` |
-| `inteRn/` | Not an app: an AI coding intern for RStudio. One script, `inteRn/inteRn.R`, set up with `source("inteRn/install.R")`. Test: `Rscript --no-init-file inteRn/tests/smoke.R` (no API calls) |
+| `inteRn/` | Not an app: an AI coding intern for RStudio. One script, `inteRn/inteRn.R`, set up with `source("inteRn/install.R")`. Test: `Rscript --no-init-file inteRn/tests/smoke.R` (no API calls); `inteRn/tests/live.R` asks the real model (needs the key, costs a little) |
 
 ## svysegment settings (top of app.R)
 

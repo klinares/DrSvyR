@@ -59,5 +59,12 @@ All settings and their defaults are at the top of `inteRn.R`.
 ## Files
 
 `inteRn.R` (the tool), `install.R` (setup), `system.md` (its instructions,
-editable), `www/` (the chat page), `tests/smoke.R`
-(`Rscript --no-init-file inteRn/tests/smoke.R`, no API calls).
+editable), `www/` (the chat page), and two tests:
+
+- `tests/smoke.R`: `Rscript --no-init-file inteRn/tests/smoke.R`. No API
+  calls; run it after any change.
+- `tests/live.R`: `Rscript --no-init-file inteRn/tests/live.R`. Asks the real
+  model about 40 questions on toy data (privacy, approvals, the code check,
+  survey designs, the Viewer) and writes a transcript. Needs the key and costs
+  a little; run it after changing the model or `system.md`. Add case letters
+  (`... live.R B K`) to run only some.

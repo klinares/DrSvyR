@@ -1,2 +1,4 @@
-# Each user's own settings. config.example.R is the committed template.
+# Each user's own settings (see README: Change a setting).
 config.R
+# Transcript written by tests/live.R on every run.
+tests/live_log.md
