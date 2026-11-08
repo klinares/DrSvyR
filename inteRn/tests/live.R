@@ -354,5 +354,5 @@ if (run("U")) {
 
 res = do.call(rbind, results)
 log("\n## Summary: ", sum(res$ok), "/", nrow(res), " passed")
-print(res[!res$ok, ], row.names = FALSE)
+if (!all(res$ok)) print(res[!res$ok, ], row.names = FALSE)
 cat(sum(res$ok), "/", nrow(res), "passed. Transcript:", LOG, "\n")

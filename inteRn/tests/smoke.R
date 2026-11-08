@@ -384,5 +384,53 @@ setwd(old_wd)
 check("write_file refuses an R file that fails the lint gate, without asking",
       startsWith(lint_refused, "Not written") && !file.exists(file.path(tmp_proj, "loop.R")))
 
+# ---- differencing leaks: a hidden count must not be recoverable from what is shown ----
+leaky = core$profile_value(data.frame(
+  flag   = c(rep(0, 47), rep(1, 3)),
+  grp    = factor(c(rep("a", 20), rep("b", 28), NA, NA)),
+  income = c(rep(c(10, 20, 30, 40, 50, 60, 70, 80), 6), 99999, 15)), "d")
+check("a 0/1 column with a hidden count shows no mean (mean x n = the count)",
+      grepl("flag[^\n]*mean withheld", leaky) && !grepl("mean 0.06", leaky, fixed = TRUE))
+check("with missing hidden, the shown counts do not add up to the valid total",
+      grepl("- grp <factor>: missing <10. a suppressed; b 28", leaky, fixed = TRUE))
+check("a rare number (the hidden maximum) is not listed", !any(grepl("99999", leaky)))
+# ---- Windows file-name tricks that open a guarded file under another name ----
+old_wd = setwd(tmp_proj)
+writeLines("id,x\n1,ROW", "d.csv"); writeLines("KEY=VALUE", ".Renviron"); writeLines("k", ".Renviron.bak")
+tricks = c("d.csv ", "d.csv.", "d.csv::$DATA", ".Renviron.", ".Renviron.bak", "server.pem")
+leaked = purrr::keep(tricks, function(p) !startsWith(read_tool(p), "Not done:"))
+short = if (core$on_windows()) {
+  dir_x = system2("cmd", c("/c", "dir", "/x", "/a"), stdout = TRUE)
+  m = regmatches(dir_x, regexpr("RENVIR~[0-9]", dir_x)); if (length(m)) m[1]
+}
+short_read = if (length(short)) read_tool(short) else "Not done: (no short names on this disk)"
+setwd(old_wd)
+check("guarded files cannot be read with a trailing dot, space, stream name or as a copy",
+      !core$on_windows() || length(leaked) == 0)
+check("the 8.3 short name of .Renviron is refused", startsWith(short_read, "Not done:"))
+names_df = data.frame(who = factor(c("Maria Lopez", "John Smith", "Ana Ruiz", rep("none", 40))),
+                      region = factor(c(rep("North", 25), rep("South", 15), rep("Island", 3))))
+check("a factor of names: levels not listed by describe_object",
+      !grepl("Maria", core$describe_value(names_df, "d")) &&
+        grepl("not listed", core$describe_value(names_df, "d")))
+check("a factor of names: rare levels hidden in profiles",
+      !grepl("Maria", core$profile_value(names_df, "d")))
+check("a codebook factor still lists its levels, rare ones included",
+      grepl("Island | North | South", core$describe_value(names_df, "d"), fixed = TRUE))
+if (requireNamespace("survey", quietly = TRUE)) {
+  sub_des = subset(survey::svydesign(ids = ~1, strata = ~g, weights = ~w,
+                                     data = data.frame(g = factor(rep(c("a", "b"), each = 20)),
+                                                       w = 1, y = 1:40)), g == "a")
+  sub_txt = tryCatch(core$describe_value(sub_des, "s"), error = function(e) "ERROR")
+  check("describe_object works on a subset of a design (empty strata levels)",
+        grepl("1 strata, 20 PSUs", sub_txt))
+}
+odd = core$profile_value(data.frame(x = c(Inf, -Inf, 1:30), d = as.difftime(1:32, units = "mins")), "o")
+check("Inf values are left out of the mean, and their count suppressed",
+      grepl("mean 15.5", odd) && grepl("<10 values are Inf", odd, fixed = TRUE))
+check("difftime columns get a summary with units", grepl("d <difftime>[^\n]*mean 16.5[^\n]*in mins", odd))
+check("a short numeric column with nothing hidden still shows its mean",
+      grepl("mean 2.5", core$profile_value(data.frame(x = rep(1:4, 10)), "x"), fixed = TRUE))
+
 cat("\n", results$n - length(results$fail), " of ", results$n, " checks passed\n", sep = "")
 if (length(results$fail)) quit(status = 1)

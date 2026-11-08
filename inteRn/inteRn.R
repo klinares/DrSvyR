@@ -448,7 +448,7 @@ local({
     #   the API. Code, Quarto, markdown and YAML are fine.
     INTERN_DATA_EXT <- c("csv", "tsv", "gz", "zip", "sav", "zsav", "por",
                          "dta", "sas7bdat", "xpt", "rds", "rda", "rdata", "parquet",
-                         "feather", "arrow", "xlsx", "xls", "ods", "sqlite", "db",
+                         "feather", "arrow", "xlsx", "xlsm", "xlsb", "xls", "ods", "sqlite", "db", "sas7bcat",
                          "duckdb", "json", "jsonl", "ndjson", "dat",
                          # rendered reports can print rows of data
                          "html", "htm", "pdf", "docx")
@@ -456,6 +456,11 @@ local({
     # Files that hold keys or history, never read or written.
     INTERN_SECRET_FILES <- c(".renviron", ".rprofile", ".env", ".rhistory",
                              ".netrc", ".git-credentials", "id_rsa", "id_ed25519")
+    # ...and their copies (.Renviron.bak, .env.local) and key files by extension.
+    is_secret_name <- function(name)
+      name %in% INTERN_SECRET_FILES ||
+        any(startsWith(name, paste0(INTERN_SECRET_FILES, "."))) ||
+        tools::file_ext(name) %in% c("pem", "key", "p12", "pfx", "ppk")
 
     INTERN_MAX_READ <- 200 * 1024    # bytes
 
@@ -473,7 +478,7 @@ local({
     inside <- function(path, dirs) {
       norm = function(x) if (on_windows()) tolower(x) else x
       p = norm(path)
-      any(purrr::map_lgl(norm(sub("/+$", "", dirs)), function(d) startsWith(p, paste0(d, "/"))))
+      any(purrr::map_lgl(norm(sub("/+$", "", dirs)), function(d) p == d || startsWith(p, paste0(d, "/"))))
     }
 
     # The resolved path if the intern may use it, else an error that says why.
@@ -481,12 +486,21 @@ local({
     intern_check_path <- function(path, mode = c("read", "write")) {
       mode = match.arg(mode)
       if (!is_string(path)) stop("No path given.", call. = FALSE)
+      # Windows opens "data.csv.", "data.csv " and "data.csv::$DATA" as data.csv,
+      #   so such names would slip past the checks below.
+      if (on_windows() && grepl("[. ]$|:", basename(path)) &&
+          !grepl("^([.]{1,2}|[A-Za-z]:)$", basename(path)))
+        stop("'", basename(path), "' is not a usable file name (it ends in a dot or space, ",
+             "or has a colon).", call. = FALSE)
       p = resolve_path(path)
+      # The real name of an existing file, so a short name (RENVIR~1) is checked
+      #   as .Renviron.
+      if (file.exists(p)) p = normalizePath(p, winslash = "/", mustWork = TRUE)
       name = tolower(basename(p))
       if (!inside(p, intern_allow_dirs()))
         stop("'", basename(p), "' is outside the folders inteRn may use (allow_dirs in config.R).",
              call. = FALSE)
-      if (name %in% INTERN_SECRET_FILES || grepl("/\\.git/", p))
+      if (is_secret_name(name) || grepl("/\\.git/", tolower(p)))
         stop("'", basename(p), "' may hold keys or history; inteRn does not touch it.",
              call. = FALSE)
       if (mode == "read" && tools::file_ext(name) %in% INTERN_DATA_EXT)
@@ -608,12 +622,24 @@ local({
 
     # ---- describe: structure only ------------------------------------------
 
+    # A factor made from free text (names, e-mails, open answers) rather than a
+    #   codebook: most of the levels in use are rare. Its levels are not listed.
+    is_free_text_factor <- function(col, k = INTERN_LLM$suppress_n) {
+      n = as.integer(table(col))
+      is.factor(col) && any(n > 0) && mean(n[n > 0] < k) > 0.5
+    }
+
+    factor_levels_text <- function(col, prefix = paste0(nlevels(col), " levels: "))
+      if (is_free_text_factor(col))
+        paste0(nlevels(col), " levels (not listed: most are rare, so they may be names or free text)")
+      else paste0(prefix, listed(levels(col)))
+
     describe_column <- function(col, name) {
       labs = attr(col, "labels", exact = TRUE)
       paste(c(
         sprintf("- %s <%s>", name, type_of(col)),
         if (!is.null(var_label(col))) sprintf("label \"%s\"", var_label(col)),
-        if (is.factor(col)) paste0(nlevels(col), " levels: ", listed(levels(col))),
+        if (is.factor(col)) factor_levels_text(col),
         if (length(labs)) paste0("value labels: ",
                                  listed(paste0(unname(labs), "=", names(labs)), sep = ", "))),
         collapse = "; ")
@@ -636,13 +662,16 @@ local({
     describe_design <- function(x, label) {
       head_line = sprintf("`%s`: survey design (%s), %s rows",
                           label, paste(class(x), collapse = "/"), nrow(x$variables))
-      call_line = if (!is.null(x$call))
+      call_line = if (is.call(x$call))
         paste("created by:", paste(deparse(x$call, width.cutoff = 200L), collapse = " "))
+        else if (inherits(x, "tbl_svy")) "created by: srvyr"
       design_lines = if (inherits(x, "svyrep.design")) {
         c(paste0("replicate weights: type ", x$type %||% "unknown", ", ",
                  length(x$rscales), " replicates", if (isTRUE(x$mse)) ", mse = TRUE"))
       } else if (!is.null(x$strata) && !is.null(x$cluster)) {
+        # A subset keeps the strata levels it no longer has (NA here).
         psu = tapply(x$cluster[[1]], x$strata[[1]], function(v) length(unique(v)))
+        psu = psu[!is.na(psu)]
         c(paste0(length(psu), " strata, ", sum(psu), " PSUs at stage 1"),
           if (any(psu == 1L)) paste0(sum(psu == 1L), " strata have a single PSU ",
                                      "(see options(survey.lonely.psu))"))
@@ -667,7 +696,7 @@ local({
     describe_atomic <- function(x, label)
       paste(c(sprintf("`%s`: %s, %s", label, type_of(x), dims_text(x)),
               if (!is.null(var_label(x))) sprintf("label \"%s\"", var_label(x)),
-              if (is.factor(x)) paste0("levels: ", listed(levels(x)))),
+              if (is.factor(x)) factor_levels_text(x, "levels: ")),
             collapse = "; ")
 
     # Any value, described by structure. `label` is how the model will refer to it.
@@ -746,26 +775,39 @@ local({
         "(unlabelled value)")))
     }
 
-    # A frequency table. For character columns the text of a suppressed value is
-    #   hidden as well as its count: a value seen fewer than k times may be a
-    #   name or a free-text answer.
-    profile_categorical <- function(values, n_valid, k, hide_rare_text) {
+    # A frequency table. For character and numeric columns the text of a
+    #   suppressed value is hidden as well as its count: a rare text value may be
+    #   a name or a free-text answer, and a rare number may be the minimum or
+    #   maximum. `n_miss_hidden` is a missing count shown as <k: it joins the
+    #   suppression, or the shown counts would add up to it, and percentages are
+    #   dropped, or they would give the number of valid values.
+    #   Returns the text and whether any cell was hidden.
+    profile_categorical <- function(values, n_valid, k, hide_rare_text, n_miss_hidden = 0L) {
       tab = table(values, useNA = "no")
       names(tab)[names(tab) == ""] = "(empty string)"
       n = as.integer(tab)
-      shown = suppress_counts(n, k)
+      shown = utils::head(suppress_counts(c(n, n_miss_hidden), k), length(n))
       sup = is_hidden(shown)
-      cells = ifelse(sup, paste0(names(tab), " ", shown),
-                     sprintf("%s %s (%.0f%%)", names(tab), shown, 100 * n / n_valid))
+      cells = if (n_miss_hidden > 0) paste0(names(tab), " ", shown)
+        else ifelse(sup, paste0(names(tab), " ", shown),
+                    sprintf("%s %s (%.0f%%)", names(tab), shown, 100 * n / n_valid))
       if (hide_rare_text && any(sup))
         cells = c(cells[!sup], paste0(sum(sup), " other values, hidden (rare, or hidden to protect a rare one)"))
-      listed(cells, sep = "; ")
+      structure(listed(cells, sep = "; "), hidden = any(sup))
     }
 
+    # Inf and -Inf are left out of the summaries and their count is suppressed
+    #   like any other.
     profile_numeric <- function(v, k) {
+      n_inf = sum(is.infinite(v))
+      inf_txt = if (n_inf == 0) "" else paste0("; ", if (n_inf < k) paste0("<", k) else n_inf,
+                                               " values are Inf or -Inf (left out above)")
+      v = v[is.finite(v)]
+      if (length(v) < k) return(paste0("fewer than ", k, " finite values", inf_txt))
       q = stats::quantile(v, c(0.25, 0.5, 0.75), names = FALSE)
-      sprintf("mean %s, sd %s, quartiles %s / %s / %s (min and max withheld)",
-              fmt_num(mean(v)), fmt_num(stats::sd(v)), fmt_num(q[1]), fmt_num(q[2]), fmt_num(q[3]))
+      paste0(sprintf("mean %s, sd %s, quartiles %s / %s / %s (min and max withheld)",
+                     fmt_num(mean(v)), fmt_num(stats::sd(v)), fmt_num(q[1]), fmt_num(q[2]), fmt_num(q[3])),
+             inf_txt)
     }
 
     profile_column <- function(col, name, k) {
@@ -780,27 +822,36 @@ local({
         return(paste0(head_txt, "fewer than ", k, " valid values; nothing more shown."))
 
       v = col[!is.na(col)]
+      m = if (n_miss > 0 && n_miss < k) n_miss else 0L
       body = if (inherits(col, "haven_labelled")) {
-        profile_categorical(labelled_as_factor(v), n_valid, k, hide_rare_text = FALSE)
+        profile_categorical(labelled_as_factor(v), n_valid, k, hide_rare_text = FALSE, m)
       } else if (is.factor(col) || is.logical(col)) {
-        profile_categorical(v, n_valid, k, hide_rare_text = FALSE)
+        profile_categorical(v, n_valid, k, hide_rare_text = is_free_text_factor(col, k), m)
       } else if (is.numeric(col) && length(unique(v)) <= 10L) {
-        paste0(profile_categorical(v, n_valid, k, hide_rare_text = FALSE),
-               "; mean ", fmt_num(mean(v)))
+        # With a count hidden the mean is withheld: times the number of valid
+        #   values it would give the count back. Quartiles are values many share.
+        tab = profile_categorical(v, n_valid, k, hide_rare_text = TRUE, m)
+        q = stats::quantile(as.numeric(v), c(0.25, 0.5, 0.75), names = FALSE, type = 1)
+        if (isTRUE(attr(tab, "hidden")))
+          paste0(tab, "; quartiles ", paste(fmt_num(q), collapse = " / "),
+                 " (mean withheld: it would reveal a hidden count)")
+        else paste0(tab, "; mean ", fmt_num(mean(v)))
+      } else if (is.character(col) && length(unique(v)) <= MAX_LEVELS) {
+        profile_categorical(v, n_valid, k, hide_rare_text = TRUE, m)
       } else if (is.numeric(col)) {
         profile_numeric(as.numeric(v), k)
+      } else if (inherits(col, "difftime")) {
+        paste0(profile_numeric(as.numeric(v), k), ", in ", units(col))
       } else if (inherits(col, c("Date", "POSIXt"))) {
         q = stats::quantile(as.numeric(v), c(0.05, 0.95), names = FALSE)
         o = if (inherits(col, "Date")) as.Date(q) else as.POSIXct(q, origin = "1970-01-01")
         paste0("middle 90% from ", format(o[1], "%Y-%m"), " to ", format(o[2], "%Y-%m"))
-      } else if (is.character(col) && length(unique(v)) <= MAX_LEVELS) {
-        profile_categorical(v, n_valid, k, hide_rare_text = TRUE)
       } else if (is.character(col)) {
         paste0(format(length(unique(v)), big.mark = ","), " distinct values (not listed)")
       } else {
         "no summary for this type"
       }
-      paste0(head_txt, miss_txt, ". ", body)
+      paste0(head_txt, miss_txt, ". ", as.vector(body))
     }
 
     # A data frame (or the variables of a survey design) as suppressed,
@@ -922,9 +973,8 @@ local({
     }
 
     # What the model is told when the user says no.
-    REFUSED <- function(what)
-      paste0("The user chose not to ", what, ". Do not try again in another way; ",
-             "ask what they would like instead.")
+    REFUSED <- function(what, instead = "ask what they would like instead.")
+      paste0("The user chose not to ", what, ". Do not try again in another way; ", instead)
 
     # ---- running code ------------------------------------------------------
 
@@ -957,7 +1007,10 @@ local({
       with_approval("inteRn wants to run this in your session:",
                     c("Run", share, "Don't run"), detail = code,
                     then = function(choice) {
-                      if (!choice %in% c("Run", share)) return(REFUSED("run this code"))
+                      if (!choice %in% c("Run", share))
+                        return(REFUSED("run this code", paste(
+                          "if they asked for code, give it in your reply as a code block",
+                          "for them to run themselves.")))
                       run_approved(exprs, share = identical(choice, share))
                     })
     }
@@ -1066,8 +1119,10 @@ local({
         function(code) run_code_tool(code),
         name = "run_code",
         description = paste("Run R code in the user's global environment after they approve it.",
-                            "You get back success or the error and which objects changed; the",
-                            "printed output only if the user shares it."),
+                            "Only when the user asks you to run something or you need the result",
+                            "to answer; when they ask you to write or show code, put it in your",
+                            "reply instead. You get back success or the error and which objects",
+                            "changed; the printed output only if the user shares it."),
         arguments = list(code = ellmer::type_string("R code to run."))))
 
     # ask.R -- asking from the console: ask() and the %ask% pipe.
