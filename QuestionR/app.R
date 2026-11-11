@@ -99,6 +99,10 @@ walk(sort(list.files("R", pattern = "[.]R$", full.names = TRUE)), function(f)
            error = function(e) stop("Failed loading ", f, ": ",
                                     conditionMessage(e), call. = FALSE)))
 
+# Every skill file parsed now, so one that has lost its shape stops the app here
+#   with the file and the reflex named, not at the first request that needs it.
+invisible(check_skills())
+
 # R/ lives in the global environment, but runApp() evaluates this file in an
 #   environment of its own, so nothing assigned here is visible to R/ unless
 #   it is put there. These are the settings R/ reads.
