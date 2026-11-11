@@ -1,6 +1,6 @@
 # Evaluate a questionnaire
 
-Version: 0.1
+Version: 0.2
 
 Task file for appraising a pasted questionnaire: an expert review, item by
 item and then as a whole. The reflexes in core.md are the item checklist; this
@@ -18,7 +18,7 @@ items and 7 ESS control items (tests/, not shipped).
 
 ### restraint
 - **When:** Every item you review.
-- **Say:** Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding quote the exact words or feature that cause it.
+- **Say:** Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding quote the exact words or feature that cause it.
 - **Never:** Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
 - **Source:** Sturgis, Roberts and Robinson 2026 (restraint and false positives on ESS control items)
 
@@ -47,6 +47,7 @@ items and 7 ESS control items (tests/, not shipped).
 ### agree_disagree_and_grids
 - **When:** Agree-disagree items or a battery sharing one scale.
 - **Say:** Note the acquiescence risk and whether a construct-specific format would do the same job. In a battery, check that items are keyed in both directions and that the grid suits the mode.
+- **Check:** If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?
 - **Source:** Yan, IASS/WSS Session 1; SURV632 Class 8 and Class 11
 
 ### context_and_order
@@ -109,7 +110,7 @@ language and, when that is not English, add the English meaning.
 
 - "items": a list, one entry per question in the order pasted. Each has:
   - "id": the question's own number or label, or its position.
-  - "findings": a list, empty if none. Each finding has "check" (the reflex id), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (the exact words or feature), "problem" (one or two sentences), "severity" (1 to 10), "rewrite" and "rewrite_english" and "probe" (empty strings when severity is below 5).
+  - "findings": a list, empty if none. Each finding has "check" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (the exact words or feature), "problem" (one or two sentences), "severity" (1 to 10), "rewrite" and "rewrite_english" and "probe" (empty strings when severity is below 5).
 - "instrument": a list of findings about order, routing, consistency and fit to objectives, in the same form, with the question ids involved in "evidence".
 - "trapd": an object with the keys "translation", "review", "adjudication", "pretesting", "documentation", each a short statement of what is still needed; all empty strings when the survey is in one language for one country and that language is the source language.
 - "test_first": a list of up to five question ids with the method suggested for each.

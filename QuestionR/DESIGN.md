@@ -168,10 +168,11 @@ never sent to a model.
 | `attitudinal.md` `behavioral.md` `sensitive.md` | the matching task |
 | `evaluate.md` | the Evaluate task |
 | `mode.md` | always; R keeps `any_mode`, the reflexes for the modes chosen, and `mixed_mode` when more than one is chosen |
-| `cross_cultural.md` | a country is given or the output language is not English |
+| `cross_cultural.md` | a country is given, or the output language or the source language is not English |
 | `pm_brief.md` `pm_appraise.md` | the PM's two steps |
 
-The skills are version 0.1 and untested against a model. They change only by
+The skills are untested against a model (core, generate, the three task files
+and evaluate are version 0.2 after the Phase 1 review; the rest 0.1). They change only by
 editing the files; code never rewrites them. A change to a skill file is a
 commit with the `Version:` line raised.
 
@@ -197,8 +198,15 @@ CHARACTERIZE
 <the Output format section of the task's file, as written>
 ```
 
-For Evaluate the pasted questionnaire follows `ASK` under the heading
-`QUESTIONNAIRE`, as pasted.
+The task sentences are `TASK_ASK` and `ASK_CLOSING` in `R/skills.R`, written
+in Phase 1 and approved in review. Changing one is a reviewed change: it
+changes every hash.
+
+For Evaluate two blocks sit between `ASK` and `CHARACTERIZE`, in this order:
+`QUESTIONNAIRE`, the text as pasted; then `CHECKLIST`, one `id: question`
+line per `Check` in force, exactly what `build_checklist(form)` returns. A
+finding's `check` must be one of those ids. Drafting prompts carry no
+`CHECKLIST`: workers get the rules, the appraiser gets the questions.
 
 **The checklist** for an appraisal is every `Check` line of the files the
 workers received, as `id: question`. The Start here and Results tabs show the
@@ -223,8 +231,10 @@ same list as the criteria applied.
   `Research question:`, `Construct:`, `Target population:`, `Country:`,
   `Survey mode:`, `Output language:`, `Source language:`,
   `Reference period:`, `Existing items to keep:`, `Other details:`.
-  `Output language:` and `Source language:` are left out when both are
-  English.
+  `Output language:` is always printed, as `English` when the field is
+  blank, because the output format refers to it. `Source language:` is
+  printed only when it is filled and differs from the output language
+  (compared without regard to case; `en` and `eng` count as English).
 
 **Determinism.** `prompt_hash = digest(system prompt + user message)`. The log
 also stores each skill file's version and sha. Same form and same files give
@@ -302,7 +312,9 @@ APP_PROFILES <- list(
 
 - **Reply shape.** Required JSON fields per step; a missing field is a retry.
 - **Item count.** A drafting reply holds exactly the number of items asked
-  for; each item has options or an `open_format`.
+  for; each item has options or an `open_format`. Questions in an item's
+  `parts` (a filter, a branch, an unfolding bracket) are not counted, are
+  shown indented under their item, and are coded and appraised with it.
 - **Coded defaults**, per drafted item, from the JSON: open or closed; number
   of options; a midpoint (odd count); a don't-know, no-opinion or
   not-applicable option (matched on a short pattern list per output language,

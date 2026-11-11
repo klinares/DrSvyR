@@ -19,17 +19,17 @@ CODE_BUDGET <- 8L
 # sha256 of each skill file with line endings normalised, as drafted in the
 #   Claude project. Updated there, and only there, when a skill changes.
 SKILL_SHA <- c(
-  "README.md" = "1f56ceef8b247da8e33ae6989c4c73cbc40e1ff3b6086e5fc47eddb9854c0452",
-  "attitudinal.md" = "a926209144f478d58aab78c966c540d53c71796352edc8c3cab88793234163f9",
-  "behavioral.md" = "4398ccff91973dd238b4688147b6dc548becd0545bc6d07b1c2a273b6e7261d4",
-  "core.md" = "a83d291513ca83405b5ca07013a139fb5bb1563c5882ff15c4ec584b7edf4007",
+  "README.md" = "47826ef73309cfc3cd72ac45091efb43241a7875d150f2d1fac69a8dbef5b606",
+  "attitudinal.md" = "fa9e369f521353670f3e245f9318b1eaf8fcddb54163932d53a1ae0642b69a35",
+  "behavioral.md" = "c22273bf2dbb02e4e939b8ee98bf6980c5dd093398b20312c3e82f92df1c3ead",
+  "core.md" = "770a402a6dc4b60389e4c266f43cdaa28dc8ccc0e88938f76cb9b72a54379f35",
   "cross_cultural.md" = "6c8a19b8c17b19808b4cfca788b3c76a7595d54a3a25a71e355391cb944bdd4d",
-  "evaluate.md" = "01c5046be626db9f2029a45f80aba6c7877b9f7ee560ffb264d9ee33896c62a5",
-  "generate.md" = "1308a588568d53e23881f0793accb4ec8517a36201e3fbfcfd3cf1944e0bde92",
+  "evaluate.md" = "2952362b6d8e2efadff970a8b21069b768d7145808ec5b524ca8b98a998e57c1",
+  "generate.md" = "e196e81245b266fbc6321016575d932dbcb24311c366683475e8945c8bbaf738",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
   "pm_appraise.md" = "a34bcaff18ea705a863a337603505d958a940f8457b448fc030698b4773ed401",
   "pm_brief.md" = "a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a",
-  "sensitive.md" = "a5484618ef4a50f97a4d5fd1e4d98ca43c54af3505077d6fd743d515792465f0")
+  "sensitive.md" = "0ebc82a948f01caed0847f3d4a6cda87216f33dc3039e764cb8c1ab8ac45e726")
 
 stopifnot("Run from inside QuestionR/" = file.exists("DESIGN.md"))
 
@@ -235,6 +235,9 @@ forms <- list(
       "Q1. How satisfied or dissatisfied are you with the recycling services and street cleaning provided by your local council? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied",
       "Q2. Taking all things together, how happy would you say you are? 0 Extremely unhappy ... 10 Extremely happy",
       sep = "\n"))))
+# The same review, of a questionnaire translated from Spanish for English output.
+forms$evaluate_translated <- utils::modifyList(forms$evaluate,
+                                               list(source_language = "Spanish"))
 
 has <- function(txt, s) grepl(s, txt, fixed = TRUE)
 expect <- function(what, ok) tibble::tibble(check = what, result = verdict(isTRUE(ok)))
@@ -255,7 +258,19 @@ prompt_checks <- function(name, p, again, changed) {
            !has(both, "<!--") && !has(both, "**Source:**") && !has(both, "**Check:**")),
     expect("core reflex one_thing present", has(sys, "- one_thing (")),
     expect("any_mode present", has(sys, "- any_mode (")),
-    expect("prohibitions headed as overriding", has(sys, "PROHIBITIONS (override anything from training)")))
+    expect("prohibitions headed as overriding", has(sys, "PROHIBITIONS (override anything from training)")),
+    expect("Output language line always present", has(usr, "Output language:")),
+    expect("reworded prohibition in force (skills 0.2)", has(sys, "Use a rule's id only in a JSON field that asks for one.")))
+  is_review = name %in% c("evaluate", "evaluate_translated")
+  common = dplyr::bind_rows(common,
+    expect("existing_items_first only in drafting prompts", has(sys, "- existing_items_first (") != is_review),
+    expect("CHECKLIST block only in a review, after QUESTIONNAIRE and before CHARACTERIZE",
+           if (is_review) all(diff(c(regexpr("\nQUESTIONNAIRE\n", usr, fixed = TRUE),
+                                     regexpr("\nCHECKLIST\n", usr, fixed = TRUE),
+                                     regexpr("\nCHARACTERIZE\n", usr, fixed = TRUE))) > 0) &&
+                            has(usr, "\nCHECKLIST\n")
+           else !has(usr, "CHECKLIST")),
+    expect("parts field only in drafting prompts", has(usr, "\"parts\"") != is_review))
   specific = switch(name,
     attitudinal = dplyr::bind_rows(
       expect("task file sent (attitude_object)", has(sys, "- attitude_object (")),
@@ -267,6 +282,8 @@ prompt_checks <- function(name, p, again, changed) {
       expect("cross_cultural not sent (no country, English)", !has(sys, "- trapd (")),
       expect("blank fields left out (no Country, no Reference period line)",
              !has(usr, "Country:") && !has(usr, "Reference period:")),
+      expect("Output language: English shown; Source language left out when the same",
+             has(usr, "Output language: English") && !has(usr, "Source language:")),
       expect("number of items in the ask", has(usr, "6"))),
     behavioral = dplyr::bind_rows(
       expect("task file sent (how_many_or_how_often)", has(sys, "- how_many_or_how_often (")),
@@ -274,7 +291,9 @@ prompt_checks <- function(name, p, again, changed) {
              has(sys, "- telephone (") && has(sys, "- face_to_face (") && has(sys, "- mixed_mode (") && !has(sys, "- web (")),
       expect("cross_cultural sent (trapd, output_language)", has(sys, "- trapd (") && has(sys, "- output_language (")),
       expect("form values present (Kenya, Swahili, past 7 days)",
-             has(usr, "Kenya") && has(usr, "Swahili") && has(usr, "past 7 days"))),
+             has(usr, "Kenya") && has(usr, "Swahili") && has(usr, "past 7 days")),
+      expect("Source language shown when it differs from the output language",
+             has(usr, "Output language: Swahili") && has(usr, "Source language: English"))),
     sensitive = dplyr::bind_rows(
       expect("task file sent (forgiving_intro, respondent_safety)",
              has(sys, "- forgiving_intro (") && has(sys, "- respondent_safety (")),
@@ -287,7 +306,16 @@ prompt_checks <- function(name, p, again, changed) {
              !has(sys, "- declare_defaults (") && !has(sys, "- attitude_object (")),
       expect("questionnaire pasted under QUESTIONNAIRE, complete",
              has(usr, "QUESTIONNAIRE") && has(usr, "street cleaning provided by your local council") && has(usr, "10 Extremely happy")),
-      expect("output format asks for trapd and test_first", has(usr, "\"trapd\"") && has(usr, "\"test_first\""))))
+      expect("output format asks for trapd and test_first", has(usr, "\"trapd\"") && has(usr, "\"test_first\"")),
+      expect("checklist lines are id: question, for the reflexes in force (one_thing, paper, agree_disagree_and_grids)",
+             has(usr, "\none_thing: Does the question ask about exactly one thing") &&
+               has(usr, "\npaper: ") && has(usr, "\nagree_disagree_and_grids: ")),
+      expect("checklist has no line for a mode not chosen", !has(usr, "\ntelephone: ")),
+      expect("cross_cultural not sent (no country, both languages English)", !has(sys, "- trapd ("))),
+    evaluate_translated = dplyr::bind_rows(
+      expect("cross_cultural sent because the source language is not English", has(sys, "- trapd (")),
+      expect("both language lines shown", has(usr, "Output language: English") && has(usr, "Source language: Spanish")),
+      expect("its checks join the checklist (functional_equivalence)", has(usr, "\nfunctional_equivalence: "))))
   dplyr::bind_rows(common, specific)
 }
 

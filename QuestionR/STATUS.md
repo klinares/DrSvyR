@@ -140,6 +140,59 @@ New, for the Claude project or Kevin:
     `svysegment`, shown on Start here. [Placeholders until Phase 6; text needed
     from Kevin.]
 
+## Review of Phases 0 and 1 (Claude project, 2026-11-11)
+
+**Both phases pass.** Checked independently of the builder's report: the
+skill files and `tests/review.R` on disk were byte for byte as drafted; the
+hard-rule, export and checksum sections of `REVIEW.md` show no FAIL; the four
+assembled prompts were read in full against the skills; `R/skills.R` was read
+in full. `tests/smoke.R` was skimmed, not audited line by line.
+
+Rulings on the open decisions:
+
+- **Decision 1 (ASK sentences): approved as written.** Keep `TASK_ASK` and
+  `ASK_CLOSING`.
+- **Decisions 2 to 5, 8 to 13 under "Decisions taken": approved.** The
+  stricter parser and the explicit file list are improvements.
+- **Open 7 (Check questions in Evaluate): send them.** A `CHECKLIST` block of
+  `id: question` lines goes between `QUESTIONNAIRE` and `CHARACTERIZE`
+  (DESIGN section 5). A named checklist is what finds presupposition and
+  leading wording.
+- **Open 8 (prohibition against naming a reflex): a fault in the skills,
+  fixed there.** `core.md` now says "Never name a source, an author or a
+  course in what you write. Use a rule's id only in a JSON field that asks
+  for one."
+- **Open 9 (source language): send `cross_cultural.md` when a country is
+  given, or the output language or the source language is not English.**
+- **Open 10 (key instructions): stays TODO until Phase 6.**
+- **Language lines changed.** `Output language:` is always printed (English
+  when blank); `Source language:` only when it differs. The earlier rule in
+  DESIGN was mine and was wrong: the output format refers to "the output
+  language" and the prompt has to say what it is.
+
+Skill changes made in the Claude project (versions 0.2; checksums in
+`tests/review.R` updated to match):
+
+- `core.md`: prohibition reworded; `existing_items_first` moved out.
+- `generate.md`: `existing_items_first` moved in; new `parts` field on each
+  item for a filter, branch or bracket question that serves that item, so
+  "exactly N items" and a filter question no longer contradict each other.
+- `attitudinal.md`, `behavioral.md`, `sensitive.md`: branching, filter and
+  bracket questions go in `parts`.
+- `evaluate.md`: `check` is an id from the CHECKLIST; `restraint` says to take
+  each item through every checklist question; `agree_disagree_and_grids` has a
+  Check line.
+- `www/skills/README.md`, `DESIGN.md` sections 4, 5 and 7: brought into line.
+
+`tests/review.R` gained checks for all of the above and a fifth form
+(`evaluate_translated`). Until `R/skills.R` is changed it will show FAIL on
+them; that is expected and is the first job of the next session.
+
+Known and accepted: `REVIEW.md`'s git section is written before the commit
+it ships in. The branch `questionr` was cut from `main`, which does not hold
+`SurvAI_Expert/`; the root `README.md` and `CLAUDE.md` rows will need a
+hand merge when the two branches meet.
+
 ## Skipped, stubbed or hard-coded
 
 - **Tabs 1 to 4 and Methodology are placeholders** that say which phase builds

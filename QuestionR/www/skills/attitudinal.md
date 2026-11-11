@@ -1,6 +1,6 @@
 # Attitudinal scale
 
-Version: 0.1
+Version: 0.2
 
 Task file for writing a set of attitude items intended to be combined into a
 scale.
@@ -34,7 +34,7 @@ scale.
 
 ### direction_then_intensity
 - **When:** A bipolar attitude asked by telephone or interviewer, or where a long scale would be read aloud.
-- **Say:** Offer branching: first direction, then how strongly, with a follow-up lean question for those who choose neither. Give the branches as separate items linked in the programming note.
+- **Say:** Offer branching: first direction, then how strongly, with a follow-up lean question for those who choose neither. Put the main direction question in the item and the intensity and lean questions in its parts.
 - **Source:** Yan, IASS/WSS Session 1 (writing attitudinal questions 6)
 
 ### non_attitudes

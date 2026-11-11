@@ -1,6 +1,6 @@
 # QuestionR skills
 
-Draft 0.1, 2026-11-11. Text files that steer every model call in QuestionR.
+Draft 0.2, 2026-11-11. Text files that steer every model call in QuestionR.
 The expertise lives here, not in the model: swap the model and none of it moves.
 
 ## Format (same parser as svysegment/R/ai_reflexes.R, two additions)
@@ -39,15 +39,18 @@ guessed.
 | Evaluate questionnaire | PM only | core, evaluate, mode, cross_cultural |
 | Appraise candidates | PM | core, pm_appraise, then the Check lines of the files the workers received |
 
-`mode.md` and `cross_cultural.md` are filtered by R before sending: only the
-reflexes whose `When` names the mode chosen in the form are kept from
-`mode.md`; `cross_cultural.md` is sent whole whenever a country is given or
-the output language is not English.
+`mode.md` is filtered by R before sending: `any_mode`, the reflexes whose id
+is a mode chosen in the form, and `mixed_mode` when more than one is chosen.
+`cross_cultural.md` is sent whole whenever a country is given, or the output
+language or the source language is not English.
 
 The user message has three labelled blocks in Buskirk, Eck and Timbrook's
 order: PREPARE (the brief: research question, construct, population, country,
 mode, output language, anything else), ASK (the task and how many items),
-CHARACTERIZE (the Output format section of the task file).
+CHARACTERIZE (the Output format section of `generate.md` or `evaluate.md`).
+For Evaluate two blocks sit between ASK and CHARACTERIZE: QUESTIONNAIRE (as
+pasted) and CHECKLIST (one `id: question` line per Check in force). Drafting
+prompts carry no Check questions; the appraiser gets them instead.
 
 ## What R does, not the model
 

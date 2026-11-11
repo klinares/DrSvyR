@@ -1,6 +1,6 @@
 # Behavioral items
 
-Version: 0.1
+Version: 0.2
 
 Task file for questions about experiences, events and behaviours: what, when,
 where, how often, how long, how many, how much. An objective truth exists in
@@ -53,7 +53,7 @@ principle, and recall is the main problem.
 
 ### does_it_apply
 - **When:** The behaviour is not universal.
-- **Say:** Ask a filter question first (whether at all in the period), then the amount. Make zero and not-applicable separate, explicit answers.
+- **Say:** Ask a filter question first (whether at all in the period), then the amount; put the filter in the item's parts. Make zero and not-applicable separate, explicit answers.
 - **Check:** Can a respondent who did not do the behaviour, or to whom it does not apply, answer truthfully?
 - **Source:** Yan, IASS/WSS Session 2 (filter questions); Sturgis, Roberts and Robinson 2026 (applicability failures)
 

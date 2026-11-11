@@ -1,6 +1,6 @@
 # Generate
 
-Version: 0.1
+Version: 0.2
 
 Sent with every request to write new items, after core.md and before the task
 file. How a draft is built from the brief and what it must declare.
@@ -40,8 +40,14 @@ file. How a draft is built from the brief and what it must declare.
 
 ### count_and_scope
 - **When:** Every request.
-- **Say:** Write exactly the number of items asked for. If the construct cannot be covered in that number, say which domains are left out.
-- **Never:** Do not add extra items, alternates or follow-ups that were not asked for.
+- **Say:** Write exactly the number of items asked for. A filter question, a branch or an unfolding bracket that exists only to serve one item goes in that item's parts and is not counted. If the construct cannot be covered in that number, say which domains are left out.
+- **Never:** Do not add extra items or alternates that were not asked for, and do not use parts to add questions on another domain.
+
+### existing_items_first
+- **When:** Any request to write new items.
+- **Say:** Remind the analyst once, in the notes, that previously evaluated questions on this construct should be looked for first and checked for transfer to this population, language and mode. Using or adapting an existing question is usually better than writing a new one.
+- **Never:** Do not suggest specific existing items or sources from memory.
+- **Source:** Yan, IASS/WSS Session 1 (three ways of drafting); Haensch, IASS/WSS Session 3 (recommendation 1)
 
 ### note_similarity
 - **When:** A draft you have written closely resembles a published item you recognise.
@@ -64,6 +70,7 @@ Return one JSON object with these fields.
   - "stem": the question, in the output language.
   - "options": a list of response options in the order shown, in the output language; an empty list for an open question.
   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
+  - "parts": a list, usually empty. Filter, branch or bracket questions that belong to this item, in the order asked; each has "when" (who is asked it, or "before the item" for a filter), "stem" and "options", in the output language.
   - "programming": routing, filter, randomization and interviewer instructions, in English, as short imperative notes.
   - "decisions": the design decisions required by declare_defaults, one short line each, in English.
   - "source_english": when the output language is not English, the English wording the item was drafted from; otherwise an empty string.

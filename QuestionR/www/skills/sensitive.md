@@ -1,6 +1,6 @@
 # Sensitive topic items
 
-Version: 0.1
+Version: 0.2
 
 Task file for questions where respondents may refuse or edit their answer.
 The aim is more disclosure and fewer refusals without changing what is asked.
@@ -64,7 +64,7 @@ appraiser does not flag them as faults and the analyst can turn them off.
 
 ### brackets_for_amounts
 - **When:** Income, assets or other financial amounts.
-- **Say:** Ask for the amount, then for those who do not give it, unfolding brackets (above or below a threshold, then narrower). Give the thresholds as placeholders for the analyst to set in local currency.
+- **Say:** Ask for the amount, then for those who do not give it, unfolding brackets (above or below a threshold, then narrower). Put the bracket questions in the item's parts, with the thresholds as placeholders for the analyst to set in local currency.
 - **Never:** Do not invent income thresholds for a country.
 - **Source:** Yan, IASS/WSS Session 1 (writing sensitive questions 13)
 
