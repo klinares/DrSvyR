@@ -223,6 +223,10 @@ form_text <- function(x) {
 
 is_english <- function(x) tolower(trimws(x)) %in% c("english", "en", "eng")
 
+# A language as it is compared: without regard to case, and en and eng are
+#   English. Two languages are the same when their keys are.
+lang_key <- function(x) ifelse(is_english(x), "english", tolower(trimws(x)))
+
 # The form as build_prompt() uses it: all fourteen fields, each cleaned, with
 #   the checks a prompt cannot do without. Nothing is guessed; a form that
 #   cannot be turned into a prompt stops here, saying why.
@@ -271,10 +275,12 @@ clean_form <- function(form) {
 
 # ---- which files a form calls for ------------------------------------------------
 
-# A country is given, or the output language is not English. Not the source
-#   language: DESIGN.md section 4 and www/skills/README.md both say output.
-needs_cross_cultural <- function(f)
-  nzchar(f$country) || (nzchar(f$output_language) && !is_english(f$output_language))
+# A country is given, or the output language or the source language is not
+#   English (DESIGN.md section 4). A blank language is English.
+needs_cross_cultural <- function(f) {
+  langs = c(f$output_language, f$source_language)
+  nzchar(f$country) || any(nzchar(langs) & !is_english(langs))
+}
 
 # mode.md keeps any_mode, the reflexes for the modes chosen, and mixed_mode when
 #   more than one is chosen. The file's own order is kept.
@@ -324,18 +330,20 @@ assemble_system <- function(skills) {
          paste0("- ", prohibitions, collapse = "\n"))
 }
 
-# One line per filled field, in the fixed order, "Label: value". Both language
-#   lines are left out when neither language is one the analyst gave as other
-#   than English.
+# One line per filled field, in the fixed order, "Label: value". The output
+#   language is always printed, as English when the field is blank, because the
+#   output format refers to it. The source language is printed only when it is
+#   filled and differs from the output language (DESIGN.md section 5).
 prepare_lines <- function(f) {
-  langs = c(f$output_language, f$source_language)
-  show_lang = any(nzchar(langs) & !is_english(langs))
+  output_language = if (nzchar(f$output_language)) f$output_language else "English"
+  source_differs = nzchar(f$source_language) &&
+    lang_key(f$source_language) != lang_key(output_language)
   values = list(
     research_question = f$research_question, construct = f$construct,
     population = f$population, country = f$country,
     modes = paste(MODE_LABELS[f$modes], collapse = ", "),
-    output_language = if (show_lang) f$output_language else "",
-    source_language = if (show_lang) f$source_language else "",
+    output_language = output_language,
+    source_language = if (source_differs) f$source_language else "",
     reference_period = f$reference_period, keep_items = f$keep_items,
     other = f$other)
   lines = purrr::imap_chr(PREPARE_LABELS, function(label, field)
@@ -371,15 +379,34 @@ output_format_of <- function(skills) {
   with_output[[1]]$output_format
 }
 
+# Reflex id to its Check question, for the skills in force: the reflexes a
+#   prompt kept, in the order it sends them, that have a Check line. One
+#   function, so the CHECKLIST block of a review and build_checklist() cannot
+#   differ.
+checklist_of <- function(skills) {
+  rx = purrr::list_flatten(unname(purrr::map(unname(skills), function(s) unname(s$reflexes))))
+  rx = purrr::keep(rx, function(r) !is.na(r$check))
+  purrr::set_names(purrr::map_chr(rx, function(r) r$check),
+                   purrr::map_chr(rx, function(r) r$id))
+}
+
 # PREPARE, ASK, CHARACTERIZE, in Buskirk, Eck and Timbrook's order. For Evaluate
-#   the pasted questionnaire follows ASK, as pasted.
+#   two blocks sit between ASK and CHARACTERIZE: QUESTIONNAIRE as pasted, then
+#   CHECKLIST, one "id: question" line per Check in force. Workers get the
+#   rules and the appraiser gets the questions, so a drafting prompt has none.
 assemble_user <- function(f, skills) {
+  checklist = if (f$task == "evaluate") checklist_of(skills)
+  if (f$task == "evaluate" && !length(checklist))
+    stop("Evaluate needs a checklist, and no Check line is in force.", call. = FALSE)
   blocks = purrr::compact(list(
     paste(c("PREPARE", prepare_lines(f)), collapse = "\n"),
     paste(c("ASK", ask_sentence(f$task, f$n_items),
             if (nzchar(f$revision)) paste0("REVISION: ", f$revision)),
           collapse = "\n"),
     if (f$task == "evaluate") paste("QUESTIONNAIRE", f$questionnaire, sep = "\n"),
+    if (f$task == "evaluate")
+      paste(c("CHECKLIST", paste0(names(checklist), ": ", unname(checklist))),
+            collapse = "\n"),
     paste("CHARACTERIZE", output_format_of(skills), sep = "\n")))
   paste(unlist(blocks), collapse = "\n\n")
 }
@@ -407,10 +434,4 @@ build_prompt <- function(form) {
 
 # Reflex id to its Check question, for the files build_prompt(form) used and
 #   only the reflexes it kept. Reflexes with no Check line are not in it.
-build_checklist <- function(form) {
-  skills = skills_in_force(clean_form(form))
-  rx = purrr::list_flatten(unname(purrr::map(unname(skills), function(s) unname(s$reflexes))))
-  rx = purrr::keep(rx, function(r) !is.na(r$check))
-  purrr::set_names(purrr::map_chr(rx, function(r) r$check),
-                   purrr::map_chr(rx, function(r) r$id))
-}
+build_checklist <- function(form) checklist_of(skills_in_force(clean_form(form)))

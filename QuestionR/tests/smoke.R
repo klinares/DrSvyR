@@ -246,7 +246,17 @@ ok("the contract: build_prompt(form) and build_checklist(form), and what build_p
                    grepl("^[0-9a-f]{64}$", b$p$hash)))
 ok("no Source text is in any prompt", none_in_any(squash(source_texts)))
 ok("no HTML comment text is in any prompt", none_in_any(comment_texts) && every_built(function(b) !grepl("<!--", both_of(b), fixed = TRUE)))
-ok("no Check question is in any prompt (they are for the appraisal)", none_in_any(squash(check_texts)))
+# Check questions: workers get the rules and the appraiser gets the questions
+#   (DESIGN section 5). A drafting prompt holds none of them, anywhere. A review
+#   holds them once, in the CHECKLIST block of the user message, and never in the
+#   system prompt.
+contains_any <- function(txt, strings) any(purrr::map_lgl(strings, function(s) grepl(s, squash(txt), fixed = TRUE)))
+ok("no Check question is in a drafting prompt, system or user",
+   purrr::every(purrr::keep(built, function(b) b$task != "evaluate"), function(b)
+     !contains_any(both_of(b), squash(check_texts))))
+ok("no Check question is in a review's system prompt",
+   purrr::every(purrr::keep(built, function(b) b$task == "evaluate"), function(b)
+     !contains_any(b$p$system, squash(check_texts))))
 ok("no Source or Check field label is in any prompt",
    every_built(function(b) !grepl("**Source:**", both_of(b), fixed = TRUE) && !grepl("**Check:**", both_of(b), fixed = TRUE)))
 
@@ -293,8 +303,19 @@ ok("the number of items is in the ask for the drafting tasks",
                  grepl(paste0("Write exactly ", b$form$n_items, " survey item"), b$p$user, fixed = TRUE)))
 ok("the pasted questionnaire follows ASK, whole and as pasted, and only for Evaluate",
    every_built(function(b) if (b$task == "evaluate")
-     grepl(paste0("\nQUESTIONNAIRE\n", b$form$questionnaire, "\n\nCHARACTERIZE\n"), b$p$user, fixed = TRUE)
+     grepl("\nASK\n", b$p$user, fixed = TRUE) &&
+       grepl(paste0("\n\nQUESTIONNAIRE\n", b$form$questionnaire, "\n\nCHECKLIST\n"), b$p$user, fixed = TRUE)
    else !grepl("QUESTIONNAIRE", b$p$user, fixed = TRUE)))
+ok("a review's CHECKLIST is exactly build_checklist(form), id: question, between QUESTIONNAIRE and CHARACTERIZE",
+   purrr::every(purrr::keep(built, function(b) b$task == "evaluate"), function(b) {
+     block = paste0("\n\nCHECKLIST\n", paste0(names(b$ck), ": ", unname(b$ck), collapse = "\n"), "\n\nCHARACTERIZE\n")
+     length(b$ck) > 0 && grepl(block, b$p$user, fixed = TRUE) &&
+       lengths(regmatches(b$p$user, gregexpr("\nCHECKLIST\n", b$p$user, fixed = TRUE))) == 1L &&
+       regexpr("\nQUESTIONNAIRE\n", b$p$user, fixed = TRUE) < regexpr("\nCHECKLIST\n", b$p$user, fixed = TRUE)
+   }))
+ok("a drafting prompt has no CHECKLIST block and no Check question in its user message",
+   purrr::every(purrr::keep(built, function(b) b$task != "evaluate"), function(b)
+     !grepl("CHECKLIST", b$p$user, fixed = TRUE)))
 
 # The checklist is the Check lines of the reflexes the prompt kept.
 ok("the checklist is a named character vector of the Check lines in force",
@@ -366,16 +387,34 @@ ok("the PREPARE labels are the contract's, in its order, each on its own line",
              c("Research question", "Construct", "Target population", "Country",
                "Survey mode", "Output language", "Source language", "Reference period",
                "Existing items to keep", "Other details")))
-ok("blank fields leave no PREPARE line, and a blank form field is never guessed",
+ok("blank fields leave no PREPARE line, except Output language, which is always there",
    identical(prepare_of(forms$attitudinal),
-             c("Research question", "Construct", "Target population", "Survey mode")))
-ok("both language lines are left out when both are English, and shown when either is not",
-   !any(c("Output language", "Source language") %in% prepare_of(forms$attitudinal)) &&
-     !any(c("Output language", "Source language") %in%
-            prepare_of(utils::modifyList(forms$attitudinal, list(output_language = "english", source_language = "")))) &&
-     identical(prepare_of(utils::modifyList(forms$attitudinal, list(output_language = "Swahili")))[5:6],
-               c("Output language", "Source language")) &&
-     "Source language" %in% prepare_of(utils::modifyList(forms$attitudinal, list(source_language = "Spanish"))))
+             c("Research question", "Construct", "Target population", "Survey mode",
+               "Output language")))
+# Output language is always printed, English when blank. Source language is
+#   printed only when filled and different from the output language, compared
+#   without regard to case, with en and eng as English.
+lang_lines <- function(output, source)
+  strsplit(strsplit(build_prompt(utils::modifyList(
+    forms$attitudinal, list(output_language = output, source_language = source)))$user,
+    "\n\n", fixed = TRUE)[[1]][1], "\n", fixed = TRUE)[[1]] |>
+  grep(pattern = "language:", value = TRUE)
+ok("a blank output language prints as English, and hashes as English",
+   identical(lang_lines("", ""), "Output language: English") &&
+     identical(lang_lines(NA_character_, character(0)), "Output language: English") &&
+     identical(h(output_language = "", source_language = ""), base_hash))
+ok("the source language is left out when it is the same as the output language",
+   identical(lang_lines("English", "English"), "Output language: English") &&
+     identical(lang_lines("English", "english"), "Output language: English") &&
+     identical(lang_lines("en", "ENG"), "Output language: en") &&
+     identical(lang_lines("", "en"), "Output language: English") &&
+     identical(lang_lines("Swahili", "swahili"), "Output language: Swahili") &&
+     identical(lang_lines("Swahili", ""), "Output language: Swahili"))
+ok("the source language is printed when it differs from the output language",
+   identical(lang_lines("Swahili", "English"), c("Output language: Swahili", "Source language: English")) &&
+     identical(lang_lines("English", "Spanish"), c("Output language: English", "Source language: Spanish")) &&
+     identical(lang_lines("", "Spanish"), c("Output language: English", "Source language: Spanish")) &&
+     identical(lang_lines("French", "Spanish"), c("Output language: French", "Source language: Spanish")))
 ok("the survey mode line reads in words, in the fixed order of the modes",
    grepl("Survey mode: mobile web, telephone, face-to-face\n",
          build_prompt(utils::modifyList(forms$attitudinal,
@@ -386,9 +425,26 @@ ok("a REVISION line is in the ask on a rerun and nowhere else",
          build_prompt(utils::modifyList(forms$attitudinal, list(revision = "Make the stems shorter.")))$user,
          fixed = TRUE) &&
      !grepl("REVISION", build_prompt(forms$attitudinal)$user, fixed = TRUE))
-ok("cross_cultural is triggered by the output language, not by the source language alone",
-   !"trapd" %in% ids_in(build_prompt(utils::modifyList(forms$attitudinal, list(source_language = "Spanish")))$system) &&
-     "trapd" %in% ids_in(build_prompt(utils::modifyList(forms$attitudinal, list(output_language = "Spanish")))$system))
+has_trapd <- function(...)
+  "trapd" %in% ids_in(build_prompt(utils::modifyList(forms$attitudinal, list(...)))$system)
+ok("cross_cultural is sent for a country, a non-English output language, or a non-English source language",
+   has_trapd(country = "Kenya") && has_trapd(output_language = "Spanish") &&
+     has_trapd(source_language = "Spanish") &&
+     has_trapd(output_language = "French", source_language = "Spanish"))
+ok("cross_cultural is not sent when both languages are English or blank and no country is given",
+   !has_trapd() && !has_trapd(output_language = "", source_language = "") &&
+     !has_trapd(output_language = "en", source_language = "ENG") &&
+     !has_trapd(output_language = "english", source_language = ""))
+
+# A review of a translated questionnaire (Spanish source, English output) gets
+#   the cross-cultural rules, and their Check questions join the checklist.
+translated <- utils::modifyList(forms$evaluate, list(source_language = "Spanish"))
+tp <- build_prompt(translated)
+ok("a review with a Spanish source language: cross_cultural in, both language lines, its checks in the CHECKLIST",
+   "trapd" %in% ids_in(tp$system) && grepl("Output language: English\nSource language: Spanish", tp$user, fixed = TRUE) &&
+     "functional_equivalence" %in% names(build_checklist(translated)) &&
+     grepl("\nfunctional_equivalence: ", tp$user, fixed = TRUE) &&
+     identical(tp$files, c("core.md", "evaluate.md", "mode.md", "cross_cultural.md")))
 
 # A form that cannot make a prompt stops, saying why. It never makes a guess.
 fails <- function(msg, ...) grepl(msg, tryCatch({ build_prompt(...); "no error" }, error = conditionMessage), fixed = TRUE)
