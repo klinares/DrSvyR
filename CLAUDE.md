@@ -15,6 +15,7 @@ R package any more.
 | `svysegment/www/reports/` `svysegment/www/logo/` | Method report PDF and office logo. Shiny serves `www/` at the site root |
 | `svysegment/data/` | LAPOP Ecuador 2023 demo `.sav`, found by `demo_survey_path()` |
 | `svysegment/tests/smoke.R` | Smoke test, kept out of the bundle by `.rscignore` |
+| `QuestionR/` | Questionnaire drafting and review assistant. Read `QuestionR/DESIGN.md` and `QuestionR/STATUS.md` first; they hold its layout, file budget and phase. Its skill files, `www/skills/*.md`, are checksummed and are edited only in the Claude project, never by code. `tests/` is home only. Test: `Rscript --no-init-file tests/smoke.R` from inside `QuestionR/` (no API calls); `tests/review.R <phase>` writes `REVIEW.md` |
 
 ## svysegment settings (top of app.R)
 
