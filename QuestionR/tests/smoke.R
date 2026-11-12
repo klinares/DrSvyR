@@ -575,9 +575,9 @@ err <- fails_with(run_json(sc), "llm_truncated")
 ok("a reply cut off at the token limit is a failure even when what arrived would parse, and is not tried again",
    !is.null(err) && sc$state$calls == 1L && identical(err$raw, good_json) &&
      grepl("reached the token limit (100)", conditionMessage(err), fixed = TRUE) &&
-     grepl("Ask for fewer items", conditionMessage(err), fixed = TRUE) && llm_retries_used() == 0L)
-ok("the ceilings and the timeout are Kevin's Phase 3 settings",
-   identical(unname(LLM_MAX_TOKENS[c("brief", "draft", "appraisal")]), c(2000L, 8000L, 16000L)) &&
+     !grepl("Ask for fewer items", conditionMessage(err), fixed = TRUE) && llm_retries_used() == 0L)
+ok("the ceilings are section 13's (brief 4000, drafting 12000, appraisal 24000) and the timeout 600 s",
+   identical(unname(LLM_MAX_TOKENS[c("brief", "draft", "appraisal")]), c(4000L, 12000L, 24000L)) &&
      identical(LLM_TIMEOUT_S, 600))
 
 sc <- scripted(reply('{"stem": "...", "options": ["..."]}'))
@@ -790,10 +790,9 @@ local({
   ok("a 404 through llm_json() makes one request, not three", .llm_state$calls - before == 1L)
   before = .llm_state$calls
   e = fails_with(suppressWarnings(go("anthropic", "cut-off")), "llm_truncated")
-  ok("a reply cut off at the ceiling is requested once, then fails saying so and asking for fewer items",
+  ok("a reply cut off at the ceiling is requested once, then fails saying so",
      .llm_state$calls - before == 1L && !is.null(e) &&
-       grepl("reached the token limit", conditionMessage(e), fixed = TRUE) &&
-       grepl("Ask for fewer items", conditionMessage(e), fixed = TRUE))
+       grepl("reached the token limit", conditionMessage(e), fixed = TRUE))
   before = .llm_state$calls
   e = fails_with(suppressWarnings(go("openai", "cut-off")), "llm_truncated")
   ok("the same on the OpenAI-style call, whose ceiling is max_completion_tokens",
@@ -1074,14 +1073,27 @@ ok("a brief check with its fields passes; one with a string for complete, or a q
      says_in(problem_of(vb, list(complete = TRUE)), "'criteria' is missing"))
 
 appraisal_ok <- list(appraisal = list(list(candidate = "A", id = "Q1", domain = "d", fails = list())),
-                     coverage = list(), differences = list(), merged = list(), test_first = list(),
-                     limits = "An expert review by a language model.")
+                     set_fails = list(), coverage = list(), differences = list(), merged = list(),
+                     test_first = list(), limits = "An expert review by a language model.")
 va <- reply_validator("appraisal")
-ok("an appraisal with its six fields passes, empty lists included; a missing limits or a fail with no check fails",
+ok("an appraisal with its seven fields passes, empty lists included; a missing limits or set_fails fails",
    is.na(problem_of(va, appraisal_ok)) &&
      says_in(problem_of(va, appraisal_ok[names(appraisal_ok) != "limits"]), "'limits' is missing") &&
+     says_in(problem_of(va, appraisal_ok[names(appraisal_ok) != "set_fails"]), "'set_fails' is missing"))
+ok("a fail must name its check and give a severity from 1 to 10, one about the set too",
+   says_in(problem_of(va, with_field(appraisal_ok, appraisal = list(list(
+     candidate = "A", id = "Q1", fails = list(list(evidence = "x", severity = 6)))))), "does not name its check") &&
      says_in(problem_of(va, with_field(appraisal_ok, appraisal = list(list(
-       candidate = "A", id = "Q1", fails = list(list(evidence = "x")))))), "does not name its check"))
+       candidate = "A", id = "Q1", fails = list(list(check = "one_thing", evidence = "x")))))), "severity from 1 to 10") &&
+     says_in(problem_of(va, with_field(appraisal_ok, appraisal = list(list(
+       candidate = "A", id = "Q1", fails = list(list(check = "one_thing", severity = 11)))))), "severity from 1 to 10") &&
+     is.na(problem_of(va, with_field(appraisal_ok, appraisal = list(list(
+       candidate = "A", id = "Q1", fails = list(list(check = "one_thing", severity = 4))))))) &&
+     says_in(problem_of(va, with_field(appraisal_ok, set_fails = list(list(candidate = "A", check = "keying")))),
+             "set_fails 1: 'severity' is missing") &&
+     says_in(problem_of(va, with_field(appraisal_ok, set_fails = list(list(candidate = "A", check = "keying", severity = 0)))),
+             "set_fails 1: 'severity' must be a number from 1 to 10") &&
+     is.na(problem_of(va, with_field(appraisal_ok, set_fails = list(list(candidate = "A", check = "keying", severity = 5, items = list("Q1", "Q2")))))))
 ok("a format that has no schema stops, naming it",
    says_in(tryCatch(reply_validator("poem"), error = conditionMessage), "no reply schema called 'poem'"))
 REPLY_SCHEMAS$tiny <- list(fields = c(answer = "text"), each = list(), rules = character(0))
@@ -1097,45 +1109,72 @@ fx <- list(
        item = good_item(1, options = list("Strongly agree", "Agree", "Neither", "Disagree", "Strongly disagree", "Don't know"),
                         decisions = list("closed", "five points, every point labelled with words")),
        lang = "English",
-       want = list(format = "closed", n_options = 6L, n_points = 5L, midpoint = TRUE, dont_know = TRUE,
-                   ref_period = FALSE, labels = "yes")),
+       want = list(format = "closed", n_options = 6L, n_points = 5L, points_odd = TRUE,
+                   midpoint_stated = "not stated", dont_know = TRUE,
+                   ref_period = FALSE, labels = "yes", decisions = "itemised")),
   list(what = "four points, end labels only, a reference period, no don't know",
        item = good_item(2, stem = "In the past 7 days, how often did you listen to the radio?",
                         options = list("Never", "Once or twice", "Most days", "Every day"),
                         decisions = list("closed", "four points, endpoint labels only")),
        lang = "English",
-       want = list(format = "closed", n_options = 4L, n_points = 4L, midpoint = FALSE, dont_know = FALSE,
-                   ref_period = TRUE, labels = "no")),
+       want = list(format = "closed", n_options = 4L, n_points = 4L, points_odd = FALSE,
+                   midpoint_stated = "not stated", dont_know = FALSE,
+                   ref_period = TRUE, labels = "no", decisions = "itemised")),
   list(what = "an open item",
        item = good_item(3, stem = "How many days did you vote?", options = list(), open_format = "a number of days",
                         decisions = list("open, numeric")),
        lang = "English",
-       want = list(format = "open", n_options = 0L, n_points = NA_integer_, midpoint = NA, dont_know = NA,
-                   ref_period = FALSE, labels = "not stated")),
+       want = list(format = "open", n_options = 0L, n_points = NA_integer_, points_odd = NA,
+                   midpoint_stated = "not stated", dont_know = NA,
+                   ref_period = FALSE, labels = "not stated", decisions = "not itemised")),
   list(what = "a curly apostrophe and a not-applicable option",
        item = good_item(4, options = list("Yes", "No", "Not applicable", "I don’t know"), decisions = list()),
        lang = "English",
-       want = list(format = "closed", n_options = 4L, n_points = 2L, midpoint = FALSE, dont_know = TRUE,
-                   ref_period = FALSE, labels = "not stated")),
+       want = list(format = "closed", n_options = 4L, n_points = 2L, points_odd = FALSE,
+                   midpoint_stated = "not stated", dont_know = TRUE,
+                   ref_period = FALSE, labels = "not stated", decisions = "none")),
   list(what = "French: points, don't know and period are not coded",
        item = good_item(5, stem = "Au cours des 7 derniers jours, avez-vous écouté la radio ?",
                         options = list("Jamais", "Parfois", "Souvent", "Je ne sais pas"),
                         decisions = list("closed", "every point labelled")),
        lang = "French",
-       want = list(format = "closed", n_options = 4L, n_points = NA_integer_, midpoint = NA, dont_know = NA,
-                   ref_period = NA, labels = "yes")),
+       want = list(format = "closed", n_options = 4L, n_points = NA_integer_, points_odd = NA,
+                   midpoint_stated = "not stated", dont_know = NA,
+                   ref_period = NA, labels = "yes", decisions = "itemised")),
   list(what = "an item with only a stem and options",
        item = list(stem = "Do you vote?", options = list("Yes", "No")),
        lang = "",
-       want = list(format = "closed", n_options = 2L, n_points = 2L, midpoint = FALSE, dont_know = FALSE,
-                   ref_period = FALSE, labels = "not stated")))
+       want = list(format = "closed", n_options = 2L, n_points = 2L, points_odd = FALSE,
+                   midpoint_stated = "not stated", dont_know = FALSE,
+                   ref_period = FALSE, labels = "not stated", decisions = "none")))
 purrr::walk(fx, function(x)
   ok(paste("coded defaults match the hand-coded fixture:", x$what),
      identical(code_defaults(x$item, x$lang), x$want)))
 ok("the coded defaults read as words for a table, with not coded where it is",
-   identical(unname(defaults_labels(code_defaults(fx[[5]]$item, "French"))[c("Scale points", "Midpoint (odd count)", "Don't know / no opinion", "Reference period")]),
+   identical(unname(defaults_labels(code_defaults(fx[[5]]$item, "French"))[c(
+     "Scale points (no-answer options not counted)", "Odd number of points", "Don't know / no opinion", "Reference period")]),
              rep("not coded", 4L)) &&
-     identical(unname(defaults_labels(code_defaults(fx[[1]]$item))[c("Format", "Midpoint (odd count)")]), c("closed", "yes")))
+     identical(unname(defaults_labels(code_defaults(fx[[1]]$item))[c("Format", "Odd number of points")]), c("closed", "yes")))
+
+# R does not call an odd count a midpoint (DESIGN.md section 13): it reports the
+#   count, whether it is odd, and what the item itself says about a midpoint.
+ok("a five-point scale whose decisions say there is no midpoint is odd and stated as no midpoint, and R does not say 'midpoint' for the count",
+   local({
+     d = code_defaults(good_item(1, options = list("Not at all", "A little", "Somewhat", "Quite", "Very"),
+                                 decisions = list("Closed; five points", "No midpoint because the construct has no middle")))
+     identical(d$points_odd, TRUE) && identical(d$midpoint_stated, "no") &&
+       !any(grepl("^Midpoint \\(odd", names(defaults_labels(d))))
+   }))
+ok("what an item says about a midpoint is read as yes, no or not stated, in the phrasings the models used",
+   identical(code_defaults(good_item(1, decisions = list("Include a midpoint: A moderate amount represents a middle level.")))$midpoint_stated, "yes") &&
+     identical(code_defaults(good_item(1, decisions = list("Closed; 5 options; no midpoint; unipolar")))$midpoint_stated, "no") &&
+     identical(code_defaults(good_item(1, decisions = list("Midpoint: no.")))$midpoint_stated, "no") &&
+     identical(code_defaults(good_item(1, decisions = list("Closed; five options.")))$midpoint_stated, "not stated"))
+ok("decisions written as one string or one entry are flagged not itemised, two or more are itemised, none is none",
+   identical(code_defaults(good_item(1, decisions = "Closed; 5 options; no midpoint; no reasons"))$decisions, "not itemised") &&
+     identical(code_defaults(good_item(1, decisions = list("one long entry; with everything")))$decisions, "not itemised") &&
+     identical(code_defaults(good_item(1, decisions = list("a", "b")))$decisions, "itemised") &&
+     identical(code_defaults(good_item(1, decisions = list()))$decisions, "none"))
 
 
 # Checks on an appraisal.
@@ -1144,21 +1183,34 @@ ck_ids <- names(build_checklist(forms$attitudinal))
 ck_reply <- list(
   appraisal = list(
     list(candidate = "A", id = "Q1", domain = "d1", fails = list(
-      list(check = ck_ids[1], evidence = "trust", stage = "comprehension", why = "Vague."),
-      list(check = "made_up_check", evidence = "x", stage = "judgment", why = "Odd."))),
-    list(candidate = "A", id = "Q2", domain = "d2", fails = list()),
+      list(check = ck_ids[1], evidence = "trust", stage = "comprehension", severity = 7, why = "Vague."),
+      list(check = "made_up_check", evidence = "x", stage = "judgment", severity = 3, why = "Odd."))),
+    list(candidate = "A", id = "Q2", domain = "d2", fails = list(
+      list(check = ck_ids[2], evidence = "a little", stage = "reporting", severity = 2, why = "Minor."))),
     list(candidate = "C", id = "Q9", domain = "d9", fails = list())),
+  set_fails = list(list(candidate = "A", check = ck_ids[3], items = list("Q1", "Q2"), severity = 6, why = "All keyed one way."),
+                   list(candidate = "B", check = "invented_set_check", items = list("Q1"), severity = 4, why = "Odd.")),
   merged = list(list(domain = "d1", candidate = "A", id = "Q1"), list(domain = "d2", candidate = "A", id = "Q2"),
                 list(domain = "d3", candidate = "B", id = "Q7"), list(domain = "d4", candidate = "", id = "")))
 ca <- check_appraisal(ck_reply, ck_cands, build_checklist(forms$attitudinal))
 ok("an appraisal's fails are read with whether each check is an id that was sent",
-   length(ca$fails) == 2L && isTRUE(ca$fails[[1]]$known) && isFALSE(ca$fails[[2]]$known) &&
-     identical(ca$fails[[1]]$evidence, "trust") && identical(ca$unknown_checks, "made_up_check"))
+   length(ca$fails) == 3L && isTRUE(ca$fails[[1]]$known) && isFALSE(ca$fails[[2]]$known) &&
+     identical(ca$fails[[1]]$evidence, "trust") &&
+     identical(sort(ca$unknown_checks), c("invented_set_check", "made_up_check")))
+ok("a fail is shown at severity 5 or above and folded below it; one with no severity is shown",
+   identical(purrr::map_lgl(ca$fails, "shown"), c(TRUE, FALSE, FALSE)) &&
+     identical(purrr::map_dbl(ca$fails, "severity"), c(7, 3, 2)) &&
+     isTRUE(check_appraisal(list(appraisal = list(list(candidate = "A", id = "Q1", fails = list(list(check = ck_ids[1]))))),
+                            ck_cands, build_checklist(forms$attitudinal))$fails[[1]]$shown))
+ok("the fails about a candidate's whole set are kept apart, with the items they name, and count against no item",
+   length(ca$set_fails) == 2L && identical(ca$set_fails[[1]]$candidate, "A") && identical(ca$set_fails[[1]]$items, "Q1, Q2") &&
+     isTRUE(ca$set_fails[[1]]$shown) && isFALSE(ca$set_fails[[2]]$shown) && isFALSE(ca$set_fails[[2]]$known))
 ok("an item the appraiser gave no entry is not appraised, not a pass; an entry for no item is flagged",
    identical(ca$not_appraised, "B|Q1") && identical(ca$unknown_items, "C|Q9"))
-ok("a merged item that does not exist, or that failed a check, is a problem; an empty domain is not",
-   length(ca$merged_problems) == 2L && any(grepl("A Q1 failed a check", ca$merged_problems, fixed = TRUE)) &&
-     any(grepl("B Q7 is not in any candidate", ca$merged_problems, fixed = TRUE)))
+ok("a merged item that does not exist, or has a fail rated 5 or above, is a problem; one with only a low fail is not; an empty domain is not",
+   length(ca$merged_problems) == 2L && any(grepl("A Q1 has a fail rated 5 or above", ca$merged_problems, fixed = TRUE)) &&
+     any(grepl("B Q7 is not in any candidate", ca$merged_problems, fixed = TRUE)) &&
+     !any(grepl("A Q2", ca$merged_problems, fixed = TRUE)))
 ok("an appraisal with nothing wrong has no flags",
    local({
      c0 = check_appraisal(list(appraisal = list(
@@ -1620,9 +1672,14 @@ checklist_ids <- names(build_checklist(clean_form(fl_form)))
 rich_appraisal <- list(
   appraisal = list(
     list(candidate = "A", id = "Q1", domain = "domain 1", fails = list(
-      list(check = checklist_ids[1], evidence = "institution 1", stage = "comprehension", why = "The term is vague."),
-      list(check = "invented_check", evidence = "trust", stage = "judgment", why = "Odd."))),
-    list(candidate = "A", id = "Q2", domain = "domain 2", fails = list())),
+      list(check = checklist_ids[1], evidence = "institution 1", stage = "comprehension", severity = 7,
+           why = "The term is vague."),
+      list(check = "invented_check", evidence = "trust", stage = "judgment", severity = 3, why = "Odd."))),
+    list(candidate = "A", id = "Q2", domain = "domain 2", fails = list(
+      list(check = checklist_ids[2], evidence = "a little", stage = "reporting", severity = 2, why = "Minor.")))),
+  set_fails = list(
+    list(candidate = "A", check = checklist_ids[3], items = list("Q1", "Q2"), severity = 6, why = "Both keyed one way."),
+    list(candidate = "B", check = checklist_ids[3], items = list("Q1"), severity = 4, why = "Slightly one way.")),
   coverage = list(list(domain = "domain 1", covered_by = list("A", "B", "C"), clean_items = list(list(candidate = "A", id = "Q2")))),
   differences = list("Candidate A uses three points; the others use five."),
   merged = list(list(domain = "domain 1", candidate = "A", id = "Q2"), list(domain = "domain 2", candidate = "", id = "")),
@@ -1660,7 +1717,9 @@ local({
          grepl("A little", h, fixed = TRUE))
     ok("each item shows the coded defaults and has a tick box to keep it",
        n_in3("Coded defaults", h) == 6L && n_in3("Keep this item", h) == 6L &&
-         grepl("Midpoint (odd count)", h, fixed = TRUE) && grepl("Every point labelled (self-reported)", h, fixed = TRUE))
+         grepl("Odd number of points", h, fixed = TRUE) &&
+         grepl("Midpoint, as the item states it (self-reported)", h, fixed = TRUE) &&
+         grepl("Every point labelled (self-reported)", h, fixed = TRUE) && !grepl("Midpoint (odd count)", h, fixed = TRUE))
     ok("a failed check is shown with the appraiser's failing words and the check's question; one that was not sent is flagged",
        grepl("Failing words:", h, fixed = TRUE) && grepl("institution 1", h, fixed = TRUE) &&
          grepl(checklist_ids[1], h, fixed = TRUE) &&
@@ -1668,11 +1727,18 @@ local({
          grepl("not a check that was sent", h, fixed = TRUE))
     ok("an item the appraiser gave no entry is not shown as passed",
        n_in3("Not appraised: the appraiser gave this item no entry", h) == 4L &&
-         n_in3("No failed check reported by the appraiser", h) == 1L)
+         n_in3("No failed check rated 5 or above.", h) == 1L)
+    ok("fails below severity 5 are folded away, not listed, and a candidate's set-level fails are shown once under it",
+       n_in3("rated below 5", h) == 3L && n_in3("severity 7", h) == 1L && n_in3("severity 6", h) == 1L &&
+         n_in3("whole set", h) == 2L && grepl("(items Q1, Q2)", h, fixed = TRUE) &&
+         grepl("No set-level fail rated 5 or above.", h, fixed = TRUE))
+    ok("an item whose design decisions are one entry, not several, is flagged on the page (every canned item here)",
+       n_in3("decisions not itemised", h) == 6L)
     ok("below the candidates: coverage, differences, the merged option labelled untested, what to test first, the limits",
        grepl("Coverage by domain", h, fixed = TRUE) && grepl("Candidate A uses three points", h, fixed = TRUE) &&
          grepl("Merged option", h, fixed = TRUE) && grepl("A fourth option, untested like the others", h, fixed = TRUE) &&
-         grepl("copied word for word", h, fixed = TRUE) && grepl("no candidate item passes every check", h, fixed = TRUE) &&
+         grepl("copied word for word", h, fixed = TRUE) &&
+         grepl("no candidate item is free of a fail rated 5 or above", h, fixed = TRUE) &&
          grepl("What to test first", h, fixed = TRUE) && grepl("a cognitive interview", h, fixed = TRUE) &&
          grepl("not a pretest", h, fixed = TRUE) && grepl("does not choose, and nothing here is validated", h, fixed = TRUE))
     ok("R's checks on the appraisal are shown: the check that was not sent, and the items given no entry",
@@ -1792,3 +1858,72 @@ ok("labels said to be partial or absent are read as no, and a silence is not sta
    identical(label_of("Label only the end points of the scale."), "no") &&
      identical(label_of("Endpoint labels only."), "no") && identical(label_of("No labels present."), "no") &&
      identical(label_of("Closed; five options; direction low to high."), "not stated"))
+
+
+# ---- Phase 4a: section 13's rulings ------------------------------------------------------
+
+# A cut-off reply says what to do about it, for the step it was.
+cut_off <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
+  llm_fail("[x via y, finish: max_tokens] The reply reached the token limit (1) without finishing, so it was cut off.",
+           class = "llm_truncated")
+ok("a cut-off brief check says to try again or skip; a cut-off draft to ask for fewer items; a cut-off appraisal to untick a worker",
+   grepl("try the brief check again, or skip it", tolower(run_brief(fl_form, fl_pm, ask = cut_off)$error), fixed = TRUE) &&
+     all(purrr::map_lgl(run_drafts(fl_form, fl_workers, ask = cut_off), function(d)
+       grepl("Ask for fewer items and run again.", d$error, fixed = TRUE))) &&
+     grepl("Untick a worker or ask for fewer items", run_appraisal(fl_form, fl_drafts, fl_pm, ask = cut_off, seed = 1L)$error,
+           fixed = TRUE) &&
+     identical(unname(LLM_CUTOFF_ADVICE[["evaluate"]]), "Paste fewer questions and run again."))
+ok("an error that is not a cut-off gets no cut-off advice",
+   !grepl("fewer items", run_brief(fl_form, fl_pm, ask = function(...) stop("endpoint down", call. = FALSE))$error, fixed = TRUE))
+
+# At most 10 items a run, and the pasted questionnaire has a cap that is enforced.
+ok("a run drafts at most 10 items: 10 is accepted, 11 is refused saying so, and the form's box stops at 10",
+   identical(clean_form(utils::modifyList(forms$attitudinal, list(n_items = 10L)))$n_items, 10L) &&
+     grepl("at most 10 items; 11 were asked for", tryCatch(clean_form(utils::modifyList(forms$attitudinal, list(n_items = 11L))),
+                                                          error = conditionMessage), fixed = TRUE) &&
+     grepl("max=\"10\"", paste(as.character(mod_brief_ui("brief")), collapse = ""), fixed = TRUE))
+ok("a pasted questionnaire over the cap is refused, saying how long it is and what the limit is; at the cap it is accepted",
+   local({
+     long = function(n) utils::modifyList(forms$evaluate, list(questionnaire = strrep("a", n)))
+     e = tryCatch(clean_form(long(APP_MAX_PASTE_CHARS + 1L)), error = conditionMessage)
+     grepl("Paste it in parts", e, fixed = TRUE) && grepl(format(APP_MAX_PASTE_CHARS, big.mark = ","), e, fixed = TRUE) &&
+       identical(nchar(clean_form(long(APP_MAX_PASTE_CHARS))$questionnaire), as.integer(APP_MAX_PASTE_CHARS)) &&
+       grepl("Paste it in parts", tryCatch(build_prompt(long(APP_MAX_PASTE_CHARS + 1L)), error = conditionMessage), fixed = TRUE)
+   }))
+ok("Luna is the last of the workers (decision 15)",
+   identical(APP_MODELS$workers[[length(APP_MODELS$workers)]]$id, "openai/gpt-6-luna"))
+
+# reasoning_effort, in ellmer 0.4.2, against a server on this machine that echoes what it is sent.
+make_body_mock <- function() {
+  mock = webfakes::new_app()
+  mock$use(webfakes::mw_json())
+  body_of = function(req)
+    jsonlite::toJSON(req$json[setdiff(names(req$json), c("messages", "system"))], auto_unbox = TRUE, null = "null")
+  mock$post("/v1/chat/completions", function(req, res) {
+    res$send_json(list(id = "x", object = "chat.completion", created = 1L, model = req$json$model,
+      choices = list(list(index = 0L, message = list(role = "assistant", content = body_of(req)), finish_reason = "stop")),
+      usage = list(prompt_tokens = 5L, completion_tokens = 7L, total_tokens = 12L)), auto_unbox = TRUE)
+  })
+  mock$post("/v1/messages", function(req, res) {
+    res$send_json(list(id = "msg_1", type = "message", role = "assistant", model = req$json$model,
+      content = list(list(type = "text", text = body_of(req))), stop_reason = "end_turn", stop_sequence = NULL,
+      usage = list(input_tokens = 5L, output_tokens = 7L)), auto_unbox = TRUE, null = "null")
+  })
+  mock
+}
+local({
+  px = webfakes::new_app_process(make_body_mock())
+  on.exit(px$stop())
+  sent = function(api, effort = NULL) {
+    m = list(api = api, base_url = px$url("/v1"), id = "mock/model", key_source = "analyst")
+    if (!is.null(effort)) m$reasoning_effort = effort
+    jsonlite::fromJSON(suppressWarnings(llm_complete(m, "SYS", "hi", 1000L, key = "k", timeout = 20)))
+  }
+  ok("a model entry's reasoning_effort reaches the Anthropic-style call as adaptive thinking with that effort; unset sends neither",
+     identical(sent("anthropic", "low")$output_config$effort, "low") &&
+       identical(sent("anthropic", "low")$thinking$type, "adaptive") &&
+       is.null(sent("anthropic")$thinking) && is.null(sent("anthropic")$output_config))
+  ok("ellmer 0.4.2 does not send reasoning_effort on the OpenAI-style call (so it is left unset), and no entry sets it",
+     is.null(sent("openai", "low")$reasoning_effort) && is.null(sent("openai")$reasoning_effort) &&
+       !any(purrr::map_lgl(c(list(APP_MODELS$pm), APP_MODELS$workers), function(m) "reasoning_effort" %in% names(m))))
+})

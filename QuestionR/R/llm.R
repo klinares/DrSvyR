@@ -20,8 +20,17 @@
 #   small call. Brief, draft and appraisal are Kevin's Phase 3 settings,
 #   provisional until a live run has recorded how much each step really uses;
 #   evaluate stays as it was until Phase 4 has measured a 15-question review.
-LLM_MAX_TOKENS <- c(brief = 2000L, draft = 8000L, appraisal = 16000L,
+LLM_MAX_TOKENS <- c(brief = 4000L, draft = 12000L, appraisal = 24000L,
                     evaluate = 8000L, ping = 200L)
+
+# What a cut-off reply tells the analyst to do, by step (DESIGN.md section 13).
+#   llm_json() says only that the reply was cut off; the flow adds this, because
+#   only the flow knows which step it was.
+LLM_CUTOFF_ADVICE <- c(
+  brief = "Try the brief check again, or skip it.",
+  draft = "Ask for fewer items and run again.",
+  appraisal = "Untick a worker or ask for fewer items, and run again.",
+  evaluate = "Paste fewer questions and run again.")
 
 # Seconds before one request gives up. ellmer reads this from the option
 #   ellmer_timeout_s (its own default is five minutes); svysegment sets it the
@@ -161,12 +170,17 @@ llm_root_cause <- function(e)
 #   in a closure (credentials is a function), never through the environment. No
 #   temperature is sent unless the model's entry sets one: repeatability comes
 #   from the fixed prompt and the run log, and recent Claude models refuse the
-#   setting.
+#   setting. A model entry may set reasoning_effort ("low", "medium", "high"),
+#   which goes through ellmer::params(). Checked in ellmer 0.4.2 against a server
+#   on this machine: chat_anthropic() turns it into adaptive thinking with that
+#   effort, but chat_openai_compatible() does not send it at all. No entry sets it,
+#   so a model is measured as it comes.
 llm_chat <- function(m, system_prompt, max_tokens, key) {
   if (is.null(key) || !nzchar(key))
     llm_fail(paste0("There is no key for ", m$id, ". ", llm_key_hint(m)),
              class = "llm_client_error")
-  params = ellmer::params(temperature = m$temperature, max_tokens = max_tokens)
+  params = ellmer::params(temperature = m$temperature, max_tokens = max_tokens,
+                          reasoning_effort = m$reasoning_effort)
   switch(m$api %||% "",
     anthropic = ellmer::chat_anthropic(
       system_prompt = system_prompt, params = params, model = m$id,
@@ -435,8 +449,8 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
                     ", finish: ", finish, "] ")
     if (identical(finish, "max_tokens"))
       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
-                      ") without finishing, so it was cut off. Ask for fewer items ",
-                      "and run again. It starts: ", substr(txt, 1, 120)),
+                      ") without finishing, so it was cut off. It starts: ",
+                      substr(txt, 1, 120)),
                class = "llm_truncated", raw = txt)
     reply = clean_model_reply(txt)
     obj = tryCatch(parse_json_block(reply, pattern),

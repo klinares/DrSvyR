@@ -75,6 +75,11 @@ TASKS <- list(
     fields = c("research_question", "population", "country", "modes", "output_language",
                "source_language", "other", "questionnaire")))
 
+# The most items one drafting run is asked for (DESIGN.md section 13). The
+#   appraisal's reply grows with candidates times items, and a longer one would
+#   be cut off.
+MAX_ITEMS_PER_RUN <- 10L
+
 # The three prompts a task goes through. work is what the task is (a worker's
 #   drafting prompt, or the project manager's review); brief is the project
 #   manager's check of the form before anything is approved; appraise is the
@@ -304,6 +309,11 @@ clean_form <- function(form) {
     stop("The research question is required.", call. = FALSE)
   if (kind == "review" && !nzchar(f$questionnaire))
     stop("Evaluate needs the questionnaire pasted in.", call. = FALSE)
+  # No silent truncation: over the cap the analyst is told, and asks in parts.
+  if (kind == "review" && nchar(f$questionnaire) > APP_MAX_PASTE_CHARS)
+    stop("The pasted questionnaire is ", format(nchar(f$questionnaire), big.mark = ","),
+         " characters and the limit is ", format(APP_MAX_PASTE_CHARS, big.mark = ","),
+         ". Paste it in parts, one review each.", call. = FALSE)
 
   m = as.character(form[["modes"]])
   m = unique(trimws(m[!is.na(m)]))
@@ -320,6 +330,9 @@ clean_form <- function(form) {
     if (is.na(v) || v < 1 || v != round(v))
       stop("Drafting needs a number of items: a whole number, one or more.",
            call. = FALSE)
+    if (v > MAX_ITEMS_PER_RUN)
+      stop("A run drafts at most ", MAX_ITEMS_PER_RUN, " items; ", v, " were asked for. ",
+           "A longer set would be cut off, so draft it in parts.", call. = FALSE)
     n_items = as.integer(v)
   }
 

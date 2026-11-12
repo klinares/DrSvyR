@@ -79,7 +79,7 @@ FIELD_SPECS <- list(
   output_language = list(label = "Output language", type = "text", value = "English"),
   source_language = list(label = "Source language", type = "text", value = "English",
                          help = "The language the items are translated from, if any."),
-  n_items = list(label = "Number of items", type = "number", value = 6),
+  n_items = list(label = "Number of items (at most 10 a run)", type = "number", value = 6),
   reference_period = list(label = "Reference period and unit", type = "text",
                           help = "For behaviour: for example 'the past 7 days', and what is counted."),
   keep_items = list(label = "Existing items to keep", type = "area", rows = 3,
@@ -94,7 +94,8 @@ field_widget <- function(field, ns) {
     switch(s$type,
       text = textInput(id, s$label, value = s$value %||% "", width = "100%"),
       area = textAreaInput(id, s$label, rows = s$rows %||% 3, width = "100%", resize = "vertical"),
-      number = numericInput(id, s$label, value = s$value %||% 1, min = 1, step = 1),
+      number = numericInput(id, s$label, value = s$value %||% 1, min = 1, step = 1,
+                            max = if (field == "n_items") MAX_ITEMS_PER_RUN else NA),
       modes = checkboxGroupInput(id, s$label, inline = TRUE,
                                  choices = purrr::set_names(names(MODE_LABELS), unname(MODE_LABELS)))),
     if (!is.null(s$help)) tags$p(class = "text-muted small mt-n2", s$help))
@@ -365,6 +366,33 @@ defaults_table <- function(d) {
                tags$tr(tags$td(class = "text-muted", k), tags$td(v)))))
 }
 
+# One fail: the check, its severity, the check's question from the checklist that
+#   was sent, the failing words, the stage and the reason. A fail about a set of
+#   items also names them.
+fail_entry <- function(f, checklist)
+  tags$li(tags$strong(f$check),
+          if (nzchar(f$items %||% "")) tags$span(class = "text-muted", paste0(" (items ", f$items, ")")),
+          if (!is.na(f$severity)) tags$span(class = "badge text-bg-secondary ms-1", paste("severity", f$severity)),
+          if (!f$known) tags$span(class = "badge text-bg-warning ms-1", "not a check that was sent"),
+          if (f$known) tags$span(class = "text-muted", ": ", checklist[[f$check]]),
+          tags$br(), "Failing words: ", tags$q(f$evidence),
+          if (nzchar(f$stage)) tags$span(class = "text-muted", paste0(" (", f$stage, ")")),
+          if (nzchar(f$why)) tagList(tags$br(), f$why))
+
+# Fails rated 5 or above are listed; the rest are folded away, as a review's
+#   findings are (DESIGN.md section 13).
+fail_list <- function(fails, checklist, none_text) {
+  shown = purrr::keep(fails, function(f) f$shown)
+  low = purrr::discard(fails, function(f) f$shown)
+  tagList(
+    if (length(shown)) tags$ul(class = "small", purrr::map(shown, fail_entry, checklist = checklist))
+    else tags$p(class = "small", none_text),
+    if (length(low)) tags$details(
+      tags$summary(class = "small", paste0(length(low), if (length(low) == 1L) " fail" else " fails",
+                                           " rated below 5")),
+      tags$ul(class = "small", purrr::map(low, fail_entry, checklist = checklist))))
+}
+
 # What the appraiser said an item failed, with its words, and the check's question
 #   from the checklist that was sent. An item the appraiser gave no entry is not
 #   a pass: it says so.
@@ -373,15 +401,16 @@ fails_block <- function(fails, checklist, appraised, appraisal_ok) {
     return(tags$p(class = "text-muted small", "Not appraised: the appraisal did not come back."))
   if (!appraised)
     return(tags$p(class = "text-warning small", "Not appraised: the appraiser gave this item no entry."))
-  if (!length(fails))
-    return(tags$p(class = "small", "No failed check reported by the appraiser."))
-  tags$ul(class = "small", purrr::map(fails, function(f)
-    tags$li(tags$strong(f$check),
-            if (!f$known) tags$span(class = "badge text-bg-warning ms-1", "not a check that was sent"),
-            if (f$known) tags$span(class = "text-muted", ": ", checklist[[f$check]]),
-            tags$br(), "Failing words: ", tags$q(f$evidence),
-            if (nzchar(f$stage)) tags$span(class = "text-muted", " (", f$stage, ")"),
-            if (nzchar(f$why)) tagList(tags$br(), f$why))))
+  fail_list(fails, checklist, "No failed check rated 5 or above.")
+}
+
+# The fails about a candidate's set of items as a whole (keying, coverage, order),
+#   which count against no single item.
+set_fails_block <- function(set_fails, letter, checklist) {
+  mine = purrr::keep(set_fails, function(f) identical(f$candidate, letter))
+  if (!length(mine)) return(NULL)
+  tagList(tags$h6(paste0("Across candidate ", letter, "'s whole set")),
+          fail_list(mine, checklist, "No set-level fail rated 5 or above."))
 }
 
 # The input id of the tick box for item `position` of candidate `letter`.
@@ -389,6 +418,7 @@ keep_input <- function(letter, position) paste0("keep_", letter, "_", position)
 
 item_card <- function(it, letter, position, ns, checklist, chk, appraisal_ok, language) {
   it = full_item(it)
+  defaults = code_defaults(it, language)
   fails = purrr::keep(chk$fails %||% list(), function(f) identical(f$candidate, letter) && identical(f$id, it$id))
   appraised = !paste(letter, it$id, sep = "|") %in% chk$not_appraised
   tags$div(
@@ -401,8 +431,11 @@ item_card <- function(it, letter, position, ns, checklist, chk, appraisal_ok, la
       options_list(it$options, it$open_format),
       parts_block(it$parts),
       if (nzchar(it$programming)) tags$p(class = "text-muted small mb-1", paste0("[", it$programming, "]")),
+      if (identical(defaults$decisions, "not itemised"))
+        tags$p(class = "mb-1", tags$span(class = "badge text-bg-warning", "decisions not itemised"),
+               tags$span(class = "text-muted small", " The model wrote its design decisions as one string.")),
       tags$details(tags$summary(class = "small", "Coded defaults (by R, from the item as written)"),
-                   defaults_table(code_defaults(it, language))),
+                   defaults_table(defaults)),
       fails_block(fails, checklist, appraised, appraisal_ok),
       checkboxInput(ns(keep_input(letter, position)), "Keep this item", value = FALSE)))
 }
@@ -413,6 +446,7 @@ candidate_panel <- function(letter, model, reply, ns, checklist, chk, appraisal_
     tags$h5(paste("Candidate", letter), tags$span(class = "text-muted small", " written by ", tags$code(model))),
     purrr::imap(items, function(it, i)
       item_card(it, letter, i, ns, checklist, chk, appraisal_ok, language)),
+    if (appraisal_ok) set_fails_block(chk$set_fails, letter, checklist),
     if (length(reply$not_covered))
       tags$p(class = "text-muted small", "Domains this candidate left out: ",
              paste(purrr::map_chr(reply$not_covered, function(d) paste(unlist(d), collapse = " ")), collapse = "; ")),
@@ -459,12 +493,13 @@ appraisal_panel <- function(reply, chk, cands, language) {
     tags$h5("Merged option"),
     tags$p(class = "text-muted small",
            "A fourth option, untested like the others. Each item is copied word for word from the ",
-           "candidate named, and only from items that failed no check."),
+           "candidate named, and only from items with no fail rated 5 or above."),
     if (!length(merged)) tags$p("The appraiser offered no merged option.")
     else purrr::map(merged, function(m) {
       it = if (nzchar(m$candidate %||% "") && nzchar(m$id %||% "")) find_item(cands, m$candidate, m$id)
       if (is.null(it))
-        tags$p(class = "text-muted", paste0(label(m$domain), ": no candidate item passes every check."))
+        tags$p(class = "text-muted",
+               paste0(label(m$domain), ": no candidate item is free of a fail rated 5 or above."))
       else tags$div(class = "card mb-2", tags$div(
         class = "card-body py-2",
         tags$div(class = "text-muted small", paste0(label(m$domain), " · from candidate ", m$candidate)),

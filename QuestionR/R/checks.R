@@ -30,13 +30,15 @@ REPLY_SCHEMAS <- list(
                           options = "list?", open_format = "string?", parts = "list?")),
     rules = c("item_count", "options_or_open")),
   appraisal = list(
-    fields = c(appraisal = "list", coverage = "list", differences = "list",
+    fields = c(appraisal = "list", set_fails = "list", coverage = "list", differences = "list",
                merged = "list", test_first = "list", limits = "string"),
-    each = list(appraisal = c(candidate = "text", id = "text", fails = "list")),
+    each = list(appraisal = c(candidate = "text", id = "text", fails = "list"),
+                set_fails = c(candidate = "text", check = "text", severity = "number")),
     rules = c("fail_entries")))
 
 TYPE_WORDS <- c(text = "a non-empty string", string = "a string",
-                logical = "true or false", list = "a list")
+                logical = "true or false", list = "a list", number = "a number from 1 to 10",
+                id = "a question number or label")
 
 type_ok <- function(x, type) {
   optional = endsWith(type, "?")
@@ -46,6 +48,11 @@ type_ok <- function(x, type) {
          string = is.character(x) && length(x) == 1L && !is.na(x),
          logical = is.logical(x) && length(x) == 1L && !is.na(x),
          list = is.list(x),
+         # A severity: 1 to 10.
+         number = is.numeric(x) && length(x) == 1L && !is.na(x) && x >= 1 && x <= 10,
+         # A question's own number or label: a string or a number.
+         id = (is.character(x) && length(x) == 1L && !is.na(x) && nzchar(trimws(x))) ||
+           (is.numeric(x) && length(x) == 1L && !is.na(x)),
          FALSE)
 }
 
@@ -79,13 +86,15 @@ REPLY_RULES <- list(
       paste0("Item ", paste(purrr::map_chr(bad, function(it) it$id %||% "?"), collapse = ", "),
              " has neither options nor an open_format.")
   },
-  # Every fail in an appraisal names the check it fails.
+  # Every fail in an appraisal names the check it fails and rates it 1 to 10.
   fail_entries = function(obj, ...) {
     bad = purrr::keep(obj$appraisal, function(e)
-      !all(purrr::map_lgl(e$fails, function(f) is.list(f) && type_ok(f$check, "text"))))
+      !all(purrr::map_lgl(e$fails, function(f)
+        is.list(f) && type_ok(f$check, "text") && type_ok(f$severity, "number"))))
     if (length(bad))
       paste0("A fail for ", paste(purrr::map_chr(bad, function(e)
-        paste0(e$candidate, " ", e$id)), collapse = ", "), " does not name its check.")
+        paste0(e$candidate, " ", e$id)), collapse = ", "),
+        " does not name its check and give a severity from 1 to 10.")
   })
 
 # A validator for llm_json(): stops with a readable sentence when the reply is not
@@ -176,13 +185,19 @@ plain_apostrophe <- function(x) gsub("[\u2018\u2019]", "'", x)
 #   n_options    options listed
 #   n_points     options that are scale points: not a don't-know, no-opinion or
 #                not-applicable option (English only; NA elsewhere)
-#   midpoint     an odd number of points, from the count alone, so an unordered
-#                list of three codes as a midpoint too (NA for an open item, and
-#                where the points cannot be told from the other options)
+#   points_odd   whether that number is odd (NA for an open item, and where the
+#                points cannot be told from the other options). R does not call
+#                an odd count a midpoint: a unipolar scale from "none" to "a lot"
+#                has five points and no midpoint.
+#   midpoint_stated  what the item's own `decisions` say about a midpoint: "yes",
+#                "no" or "not stated". Self-reported.
 #   dont_know    such an option is there (NA for an open item, and where there
 #                is no pattern list for the output language)
 #   ref_period   the stem or its lead-in names a period (NA with no list)
 #   labels       "yes", "no" or "not stated", from the item's own decisions
+#   decisions    "itemised" (two or more separate entries), "not itemised" (one
+#                string or one entry, as a model writes when it runs them all
+#                together) or "none"
 # NA means "not coded", and is shown as that.
 code_defaults <- function(item, output_language = "English") {
   it = full_item(item)
@@ -195,48 +210,71 @@ code_defaults <- function(item, output_language = "English") {
   is_dk = if (closed && !is.null(dk_patterns))
     purrr::map_lgl(options, function(o) matches_any(dk_patterns, o))
   n_points = if (closed && !is.null(dk_patterns)) sum(!is_dk) else NA_integer_
-  decisions = paste(plain_apostrophe(as.character(unlist(it$decisions))), collapse = " ; ")
+  entries = as.character(unlist(it$decisions))
+  decisions = paste(plain_apostrophe(entries), collapse = " ; ")
   heads = plain_apostrophe(paste(it$intro, it$stem))
 
   list(format = if (closed) "closed" else "open",
        n_options = length(options),
        n_points = as.integer(n_points),
-       midpoint = if (closed && !is.na(n_points)) n_points >= 3L && n_points %% 2L == 1L
-                  else NA,
+       points_odd = if (closed && !is.na(n_points)) n_points %% 2L == 1L else NA,
+       midpoint_stated = if (matches_any(MIDPOINT_NO_PATTERNS, decisions)) "no"
+                         else if (matches_any(MIDPOINT_YES_PATTERNS, decisions)) "yes"
+                         else "not stated",
        dont_know = if (closed && !is.null(dk_patterns)) any(is_dk) else NA,
        ref_period = if (!is.null(period_patterns)) matches_any(period_patterns, heads) else NA,
        labels = if (!closed) "not stated"
                 else if (matches_any(LABEL_NO_PATTERNS, decisions)) "no"
                 else if (matches_any(LABEL_YES_PATTERNS, decisions)) "yes"
-                else "not stated")
+                else "not stated",
+       decisions = if (!length(entries)) "none"
+                   else if (is.list(it$decisions) && length(it$decisions) >= 2L) "itemised"
+                   else "not itemised")
 }
+
+# What an item's own decisions say about a midpoint.
+MIDPOINT_NO_PATTERNS <- c("\\bno (mid-?point|middle|neutral)", "without (a )?(mid-?point|middle|neutral)",
+                          "(omit|omitted|exclude|excluded)[^.;]{0,20}(mid-?point|middle|neutral)",
+                          "mid-?point:? ?no\\b",
+                          "(not|n't) (offer|include|use|have|provide)[^.;]{0,20}(mid-?point|middle|neutral)")
+MIDPOINT_YES_PATTERNS <- c("mid-?point", "middle (option|category|position|point|answer)",
+                           "neutral (option|category|point)")
 
 # The coded defaults as label -> words, for a table.
 defaults_labels <- function(d) {
   yes_no = function(x) if (is.na(x)) "not coded" else if (x) "yes" else "no"
   c("Format" = d$format,
     "Options listed" = as.character(d$n_options),
-    "Scale points" = if (is.na(d$n_points)) "not coded" else as.character(d$n_points),
-    "Midpoint (odd count)" = yes_no(d$midpoint),
+    "Scale points (no-answer options not counted)" = if (is.na(d$n_points)) "not coded" else as.character(d$n_points),
+    "Odd number of points" = yes_no(d$points_odd),
+    "Midpoint, as the item states it (self-reported)" = d$midpoint_stated,
     "Don't know / no opinion" = yes_no(d$dont_know),
     "Reference period" = yes_no(d$ref_period),
-    "Every point labelled (self-reported)" = d$labels)
+    "Every point labelled (self-reported)" = d$labels,
+    "Design decisions" = d$decisions)
 }
 
 
 # ---- checks on an appraisal ------------------------------------------------------------
 
+# A fail or a finding rated below this goes in a collapsed list, and does not
+#   count against an item when a merged option or the clean items are drawn up
+#   (pm_appraise.md, evaluate.md; DESIGN.md section 13).
+SEVERITY_SHOWN <- 5L
+
 # The appraisal is the project manager's, so R checks what it can without a model
 #   (DESIGN.md section 7). candidates is the drafts the appraiser saw, named by
 #   letter; checklist is the named vector it was sent. Returns:
-#   fails            one row per fail the appraiser reported, with whether its
-#                    `check` is an id in the checklist that was sent
+#   fails            one row per fail the appraiser reported on an item, with its
+#                    severity, whether it is shown (severity 5 or more, or none
+#                    given), and whether its `check` is an id that was sent
+#   set_fails        the same for the fails about a candidate's set of items
 #   unknown_checks   ids it cited that were not sent
 #   not_appraised    "letter|id" of items it gave no entry. The skill has it
 #                    report only failures, so a missing entry would otherwise
 #                    read as a pass.
 #   unknown_items    entries for an item no candidate has
-#   merged_problems  merged items that do not exist, or that failed a check
+#   merged_problems  merged items that do not exist, or that have a fail shown
 check_appraisal <- function(reply, candidates, checklist) {
   entries = reply$appraisal %||% list()
   key = function(letter, id) if (length(id)) paste(letter, id, sep = "|") else character(0)
@@ -244,13 +282,19 @@ check_appraisal <- function(reply, candidates, checklist) {
     key(letter, purrr::map_chr(r$items, function(it) it$id %||% ""))), use.names = FALSE)
   entry_keys = purrr::map_chr(entries, function(e) key(e$candidate %||% "", e$id %||% ""))
 
+  row = function(f, candidate, id, items = NULL)
+    list(candidate = candidate, id = id, items = items,
+         check = as.character(f$check %||% ""), evidence = as.character(f$evidence %||% ""),
+         stage = as.character(f$stage %||% ""), why = as.character(f$why %||% ""),
+         severity = if (is.numeric(f$severity)) f$severity else NA_real_,
+         shown = !is.numeric(f$severity) || f$severity >= SEVERITY_SHOWN,
+         known = as.character(f$check %||% "") %in% names(checklist))
   fails = purrr::list_flatten(purrr::map(entries, function(e)
-    purrr::map(e$fails, function(f)
-      list(candidate = e$candidate %||% "", id = e$id %||% "",
-           check = as.character(f$check %||% ""), evidence = as.character(f$evidence %||% ""),
-           stage = as.character(f$stage %||% ""), why = as.character(f$why %||% ""),
-           known = as.character(f$check %||% "") %in% names(checklist)))))
-  failed_keys = unique(purrr::map_chr(fails, function(f) key(f$candidate, f$id)))
+    purrr::map(e$fails, function(f) row(f, e$candidate %||% "", e$id %||% ""))))
+  set_fails = purrr::map(reply$set_fails %||% list(), function(f)
+    row(f, f$candidate %||% "", "", paste(unlist(f$items), collapse = ", ")))
+  failed_keys = unique(purrr::map_chr(purrr::keep(fails, function(f) f$shown),
+                                      function(f) key(f$candidate, f$id)))
 
   merged = purrr::keep(reply$merged %||% list(), function(m)
     nzchar(m$candidate %||% "") && nzchar(m$id %||% ""))
@@ -258,12 +302,14 @@ check_appraisal <- function(reply, candidates, checklist) {
     k = key(m$candidate, m$id)
     if (!k %in% expected) paste0("Merged item ", m$candidate, " ", m$id, " is not in any candidate.")
     else if (k %in% failed_keys) paste0("Merged item ", m$candidate, " ", m$id,
-                                         " failed a check the appraiser reported.")
+                                         " has a fail rated 5 or above.")
   }))
 
-  list(fails = fails,
-       unknown_checks = unique(purrr::map_chr(purrr::discard(fails, function(f) f$known), "check")),
+  all_fails = c(fails, set_fails)
+  list(fails = fails, set_fails = set_fails,
+       unknown_checks = unique(purrr::map_chr(purrr::discard(all_fails, function(f) f$known), "check")),
        not_appraised = setdiff(expected, entry_keys),
        unknown_items = setdiff(entry_keys, expected),
        merged_problems = merged_problems %||% character(0))
 }
+
