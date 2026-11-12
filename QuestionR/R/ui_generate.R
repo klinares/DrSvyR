@@ -18,8 +18,15 @@
 #   what the last run returned. kept is the items the analyst ticked.
 STATE_DEFAULTS <- list(
   key_version = 0L, form = NULL, workers = NULL, brief = NULL, approved = NULL,
-  run_id = 0L, round = 0L, drafts = NULL, appraisal = NULL, seed = NULL,
+  run_id = 0L, round = 0L, drafts = NULL, appraisal = NULL, review = NULL, seed = NULL,
   kept = list(), revision = "", rounds = list())
+
+# A task's kind, from a form. A form with no usable task counts as a drafting one,
+#   so a run that cannot start fails in the engine, with its reason, as any other.
+task_kind <- function(f) {
+  t = f$task
+  if (is.character(t) && length(t) == 1L && t %in% names(TASKS)) TASKS[[t]]$kind else "draft"
+}
 
 
 # ---- shared pieces -------------------------------------------------------------------
@@ -208,8 +215,10 @@ mod_brief_server <- function(id, state, go = function(tab) invisible(NULL), make
     output$task_note <- renderUI({
       task = input$task %||% names(TASKS)[1]
       if (TASKS[[task]]$kind == "review")
-        advice_box("Evaluate is built in Phase 4. You can see its prompt on the next tab, ",
-                   "but it cannot be run yet.")
+        advice_box("Evaluate sends your questionnaire to the project manager model once, with ",
+                   "the methodology files' checklist, and shows its findings question by question. ",
+                   "The limit is ", format(APP_MAX_PASTE_CHARS, big.mark = ","), " characters; a longer ",
+                   "questionnaire is reviewed in parts.")
     })
 
     output$revision_note <- renderUI({
@@ -293,9 +302,9 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
           "Approving runs ", length(state$workers), if (length(state$workers) == 1L) " worker" else " workers",
           " one after another, then the appraisal by the project manager: ", length(state$workers) + 1L,
           " model calls. It can take a few minutes, and the app is busy until it finishes."))
-        else advice_box("Evaluate is built in Phase 4, so this prompt cannot be run yet."),
-        actionButton(session$ns("approve"), "Approve and run", class = "btn-primary",
-                     disabled = !draft),
+        else tags$p("Approving makes one model call: the project manager reviews the questionnaire. ",
+                    "It can take a minute or two, and the app is busy until it finishes."),
+        actionButton(session$ns("approve"), "Approve and run", class = "btn-primary"),
         actionButton(session$ns("reset"), "Reset to the assembled prompt"))
     }))
     observeEvent(input$reset, reset(reset() + 1L))
@@ -317,10 +326,6 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
       a = assembled()
       if (is.null(a) || inherits(a, "error")) {
         message("There is no prompt to approve. Fill in the Brief tab first.")
-        return()
-      }
-      if (TASKS[[state$form$task]]$kind != "draft") {
-        message("Evaluate is built in Phase 4, so this prompt cannot be run yet.")
         return()
       }
       sys = unix(input$system)
@@ -375,7 +380,7 @@ fail_entry <- function(f, checklist)
           if (!is.na(f$severity)) tags$span(class = "badge text-bg-secondary ms-1", paste("severity", f$severity)),
           if (!f$known) tags$span(class = "badge text-bg-warning ms-1", "not a check that was sent"),
           if (f$known) tags$span(class = "text-muted", ": ", checklist[[f$check]]),
-          tags$br(), "Failing words: ", tags$q(f$evidence),
+          if (nzchar(f$evidence)) tagList(tags$br(), "Failing words: ", tags$q(f$evidence)),
           if (nzchar(f$stage)) tags$span(class = "text-muted", paste0(" (", f$stage, ")")),
           if (nzchar(f$why)) tagList(tags$br(), f$why))
 
@@ -482,7 +487,7 @@ appraisal_panel <- function(reply, chk, cands, language) {
     if (length(reply$coverage)) tagList(
       tags$h5("Coverage by domain"),
       tags$table(class = "table table-sm",
-                 tags$thead(tags$tr(tags$th("Domain"), tags$th("Covered by"), tags$th("Items that pass every check"))),
+                 tags$thead(tags$tr(tags$th("Domain"), tags$th("Covered by"), tags$th("Items with no fail rated 5 or above"))),
                  tags$tbody(purrr::map(reply$coverage, function(r)
                    tags$tr(tags$td(label(r$domain)), tags$td(label(r$covered_by)),
                            tags$td(if (length(r$clean_items))
@@ -512,6 +517,111 @@ appraisal_panel <- function(reply, chk, cands, language) {
     if (nzchar(label(reply$limits))) tags$p(tags$em(label(reply$limits))))
 }
 
+# ---- Results for a review (the Evaluate task) ------------------------------------------------
+
+# One finding, from a row of check_review(): the check and its question, the
+#   severity, flags for a check that was not sent and for a quote that is not in
+#   the pasted text, then the quote, the problem, and an untested rewrite and probe.
+review_finding <- function(r, checklist)
+  tags$li(
+    tags$strong(r$check),
+    tags$span(class = "badge text-bg-secondary ms-1", paste("severity", r$severity)),
+    if (!r$check_known) tags$span(class = "badge text-bg-warning ms-1", "not a check that was sent"),
+    if (r$scope == "question" && !isTRUE(r$evidence_found))
+      tags$span(class = "badge text-bg-warning ms-1", "quote not found"),
+    if (r$check_known) tags$span(class = "text-muted", ": ", checklist[[r$check]]),
+    tags$br(),
+    if (r$scope == "question") tagList("Quote: ", tags$q(r$evidence)) else paste0("Questions: ", r$evidence),
+    if (nzchar(r$stage)) tags$span(class = "text-muted", paste0(" (", r$stage, ")")),
+    if (nzchar(r$problem)) tagList(tags$br(), r$problem),
+    if (nzchar(r$rewrite)) tagList(
+      tags$br(), tags$em("A rewrite, untested: "), r$rewrite,
+      if (nzchar(r$rewrite_english)) paste0(" (in English: ", r$rewrite_english, ")")),
+    if (nzchar(r$probe)) tagList(tags$br(), tags$em("A probe: "), r$probe))
+
+# Findings at severity 5 and above are listed; the rest are folded away. A question
+#   with no finding says none were found by this review, never that it has no problems.
+review_findings <- function(rows, checklist) {
+  as_rows = purrr::map(seq_len(nrow(rows)), function(i) as.list(rows[i, ]))
+  shown = purrr::keep(as_rows, function(r) r$shown)
+  low = purrr::discard(as_rows, function(r) r$shown)
+  tagList(
+    if (!length(as_rows)) tags$p(class = "small", "No problem was found by this review.")
+    else if (!length(shown)) tags$p(class = "small", "No finding rated 5 or above.")
+    else tags$ul(class = "small", purrr::map(shown, review_finding, checklist = checklist)),
+    if (length(low)) tags$details(
+      tags$summary(class = "small", paste0(length(low), if (length(low) == 1L) " finding" else " findings",
+                                           " rated below 5")),
+      tags$ul(class = "small", purrr::map(low, review_finding, checklist = checklist))))
+}
+
+# The TRAPD steps the review says are still needed. Nothing is drawn when the
+#   survey is in one language for one country and the review left them all empty.
+TRAPD_STEPS <- c(translation = "Translation", review = "Review", adjudication = "Adjudication",
+                 pretesting = "Pretesting", documentation = "Documentation")
+
+trapd_block <- function(trapd) {
+  said = purrr::map_chr(names(TRAPD_STEPS), function(k) paste(unlist(trapd[[k]] %||% ""), collapse = " "))
+  if (!any(nzchar(trimws(said)))) return(NULL)
+  tagList(tags$h5("TRAPD: what is still needed"),
+          tags$ul(purrr::imap(purrr::keep(purrr::set_names(said, TRAPD_STEPS[names(TRAPD_STEPS)]),
+                                          function(s) nzchar(trimws(s))),
+                              function(text, step) tags$li(tags$strong(step), ": ", text))))
+}
+
+# Everything the review said, question by question and then as a whole, with R's
+#   flags on it. rv is run_review()'s result.
+review_panel <- function(f, rv, round) {
+  if (!identical(rv$status, "ok"))
+    return(tagList(
+      tags$p(class = "text-muted small", paste0("Round ", round, ".")),
+      warn_box(tags$strong("The review did not come back. "), rv$error)))
+  reply = rv$reply
+  checklist = build_checklist(f)
+  flags = check_review(reply, f)
+  approved = attr(rv, "prompt")
+  question = flags[flags$scope == "question", ]
+  n_missing = sum(!question$evidence_found)
+  n_unknown = sum(!flags$check_known)
+  label = function(x) paste(unlist(x), collapse = " ")
+  tagList(
+    tags$p(class = "text-muted small",
+           paste0("Round ", round, ". One review by the project manager. Prompt hash "),
+           tags$code(substr(rv$hash, 1, 16)),
+           if (isTRUE(approved$edited))
+             paste0(" (edited; assembled hash ", substr(approved$original_hash, 1, 16), ")"), "."),
+    advice_box("An expert-review appraisal by a language model against a fixed checklist. It shows ",
+               "where a respondent may have trouble; it cannot show how respondents will understand ",
+               "or answer, a rewrite or a probe is untested, and nothing here is validated."),
+    if (n_missing || n_unknown)
+      warn_box(tags$strong("R's checks on the review found: "), tags$ul(class = "mb-0", c(
+        if (n_missing) list(tags$li(n_missing, if (n_missing == 1L) " quote that is" else " quotes that are",
+                                    " not in the pasted text (flagged below).")),
+        if (n_unknown) list(tags$li(n_unknown, if (n_unknown == 1L) " finding cites" else " findings cite",
+                                    " a check that was not sent (flagged below).")))))
+    else NULL,
+    tags$h4("Question by question"),
+    purrr::imap(unname(reply$items), function(it, i)
+      tags$div(class = "card mb-2", tags$div(
+        class = "card-body py-2",
+        tags$h6(paste("Question", label(it$id))),
+        review_findings(flags[flags$scope == "question" & flags$position == i, ], checklist)))),
+    tags$h4("The instrument as a whole"),
+    review_findings(flags[flags$scope == "instrument", ], checklist),
+    trapd_block(reply$trapd),
+    if (length(reply$test_first)) tagList(
+      tags$h5("What to test first"),
+      tags$ul(purrr::map(reply$test_first, function(t)
+        tags$li(if (is.list(t) && !is.null(t$id))
+          paste0("Question ", label(t$id), ": ", label(t$method)) else label(t))))),
+    if (nzchar(label(reply$not_assessed)))
+      tagList(tags$h5("What this review could not judge"), tags$p(label(reply$not_assessed))),
+    tags$details(tags$summary(paste0("Criteria that were applied (", length(checklist), ")")),
+                 tags$ul(class = "small", purrr::imap(as.list(checklist), function(q, id)
+                   tags$li(tags$strong(id), ": ", q)))))
+}
+
+
 mod_results_ui <- function(id) {
   ns <- NS(id)
   tagList(tags$h3(QUESTIONR_TABS[4]), uiOutput(ns("results")))
@@ -531,8 +641,12 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       approved = state$approved
       pm = APP_MODELS$pm
       seed = sample.int(.Machine$integer.max, 1L)
+      review = identical(task_kind(f), "review")
       out = tryCatch(
-        withProgress(message = "Running the workers", value = 0, {
+        if (review) withProgress(message = "Reviewing the questionnaire", value = 0, {
+          list(review = run_review(f, pm, ask = make_ask(1L), prompt = approved))
+        })
+        else withProgress(message = "Running the workers", value = 0, {
           ask = make_ask(length(ws) + 1L)
           drafts = run_drafts(f, ws, ask = ask, prompt = approved)
           list(drafts = drafts, appraisal = run_appraisal(f, drafts, pm, ask = ask, seed = seed))
@@ -543,14 +657,16 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
         })
       if (is.null(out)) return()
       brief = state$brief
+      brief = if (is.list(brief) && brief$status %in% c("ok", "failed")) brief
       state$round <- (state$round %||% 0L) + 1L
       state$drafts <- out$drafts
       state$appraisal <- out$appraisal
-      state$seed <- seed
+      state$review <- out$review
+      state$seed <- if (review) NULL else seed
       state$kept <- list()
-      state$rounds <- c(state$rounds, list(flow_round(
-        f, pm, brief = if (is.list(brief) && brief$status %in% c("ok", "failed")) brief,
-        drafts = out$drafts, appraisal = out$appraisal, seed = seed)))
+      state$rounds <- c(state$rounds, list(
+        if (review) flow_round(f, pm, brief = brief, review = out$review)
+        else flow_round(f, pm, brief = brief, drafts = out$drafts, appraisal = out$appraisal, seed = seed)))
       result(list(form = f, round = state$round))
     }, ignoreInit = TRUE)
 
@@ -571,8 +687,10 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       if (is.null(r))
         return(tags$p(class = "text-muted",
                       "Nothing has been run yet. Fill in the Brief tab, approve the prompt on the next tab, ",
-                      "and the candidates appear here."))
+                      "and the candidates, or the review's findings, appear here."))
       f = r$form
+      if (identical(task_kind(f), "review"))
+        return(review_panel(f, state$review, r$round))
       drafts = state$drafts
       ap = state$appraisal
       approved = attr(drafts, "prompt")

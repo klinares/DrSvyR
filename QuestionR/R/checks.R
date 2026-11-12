@@ -344,6 +344,8 @@ normalise_quote <- function(x)
 # The review's findings, one row each, whether about a question or the instrument:
 #   item            the question's id, or "" for an instrument finding
 #   scope           "question" or "instrument"
+#   position        the question's place in the reply (0 for the instrument), so
+#                   two questions with one id are still told apart
 #   check           the id it cites
 #   severity        1 to 10 (NA if none given)
 #   shown           severity 5 or more, or none given
@@ -362,8 +364,8 @@ check_review <- function(reply, form) {
     q = normalise_quote(gsub("^[\"'‘’]+|[\"'‘’]+$", "", trimws(as_text(ev))))
     nzchar(q) && grepl(q, text, fixed = TRUE)
   }
-  one = function(x, item, scope)
-    list(item = item, scope = scope, check = as_text(x$check),
+  one = function(x, item, scope, position)
+    list(item = item, scope = scope, position = position, check = as_text(x$check),
          severity = if (is.numeric(x$severity)) x$severity else NA_real_,
          evidence = as_text(x$evidence),
          evidence_found = if (scope == "question") found(x$evidence) else NA,
@@ -371,10 +373,11 @@ check_review <- function(reply, form) {
          problem = as_text(x$problem), rewrite = as_text(x$rewrite),
          rewrite_english = as_text(x$rewrite_english), probe = as_text(x$probe))
   rows = c(
-    purrr::list_flatten(purrr::map(reply$items %||% list(), function(it)
-      purrr::map(it$findings %||% list(), function(x) one(x, as_text(it$id), "question")))),
-    purrr::map(reply$instrument %||% list(), function(x) one(x, "", "instrument")))
+    purrr::list_flatten(purrr::imap(unname(reply$items %||% list()), function(it, i)
+      purrr::map(it$findings %||% list(), function(x) one(x, as_text(it$id), "question", i)))),
+    purrr::map(reply$instrument %||% list(), function(x) one(x, "", "instrument", 0L)))
   d = data.frame(item = purrr::map_chr(rows, "item"), scope = purrr::map_chr(rows, "scope"),
+                 position = purrr::map_int(rows, "position"),
                  check = purrr::map_chr(rows, "check"), severity = purrr::map_dbl(rows, "severity"),
                  evidence = purrr::map_chr(rows, "evidence"),
                  evidence_found = purrr::map_lgl(rows, "evidence_found"),

@@ -88,7 +88,7 @@ run_brief <- function(form, pm, ask = llm_json) {
 #   run_brief: status, error, system, user, hash, reply (the parsed review). The
 #   prompt is the one build_prompt() gives for a review. R's checks on the reply
 #   (a quote not in the text, a check that was not sent) are check_review().
-run_review <- function(form, pm, ask = llm_json) {
+run_review <- function(form, pm, ask = llm_json, prompt = NULL) {
   p = step_prompt(form, "work")
   failed = function(why)
     list(status = "failed", error = why, system = NA_character_, user = NA_character_,
@@ -96,10 +96,20 @@ run_review <- function(form, pm, ask = llm_json) {
   if (inherits(p, "error")) return(failed(conditionMessage(p)))
   if (TASKS[[clean_form(form)$task]]$kind != "review")
     return(failed("Only a review task is reviewed by the project manager."))
+  # The prompt the analyst approved, which is the assembled one unless they edited
+  #   it, as in run_drafts(). Kept as the result's attribute "prompt".
+  if (!is.null(prompt)) {
+    if (!is.list(prompt) || !is.character(prompt$system) || !is.character(prompt$user))
+      stop("prompt must be a list with a system and a user string.", call. = FALSE)
+    p = prompt
+    p$hash = p$hash %||% prompt_hash(p$system, p$user)
+  }
   r = call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["evaluate"]],
                  reply_validator("review"), "evaluate")
-  with_call(list(status = r$status, error = r$error, system = p$system, user = p$user,
-                 hash = p$hash, reply = r$reply), r$call)
+  out = with_call(list(status = r$status, error = r$error, system = p$system, user = p$user,
+                       hash = p$hash, reply = r$reply), r$call)
+  if (!is.null(prompt)) attr(out, "prompt") <- prompt
+  out
 }
 
 
@@ -236,7 +246,7 @@ flow_round <- function(form, pm = NULL, brief = NULL, drafts = NULL, appraisal =
   list(schema = 1L, time = format(time, "%Y-%m-%dT%H:%M:%S%z"),
        summary = flow_summary(brief, drafts, appraisal, pm, review),
        form = form, seed = seed, brief = brief, review = review,
-       prompt = attr(drafts, "prompt"),
+       prompt = attr(drafts, "prompt") %||% attr(review, "prompt"),
        drafts = if (!is.null(drafts)) purrr::map(unname(as.list(drafts)), function(d) {
          d$call = attr(d, "call")
          d

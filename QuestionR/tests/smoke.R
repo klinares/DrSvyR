@@ -1460,7 +1460,7 @@ set_inputs <- function(session, base, ...) do.call(session$setInputs, utils::mod
 ok("the state object is made from STATE_DEFAULTS, and every field a module uses is in it",
    identical(sort(names(STATE_DEFAULTS)),
              sort(c("key_version", "form", "workers", "brief", "approved", "run_id", "round",
-                    "drafts", "appraisal", "seed", "kept", "revision", "rounds"))))
+                    "drafts", "appraisal", "review", "seed", "kept", "revision", "rounds"))))
 ok("every field any task lists has a widget spec, so a new task that reuses fields needs no screen change",
    all(unlist(purrr::map(TASKS, "fields")) %in% names(FIELD_SPECS)))
 ok("the registry's progress_ask announces the model on the page before it makes each call",
@@ -1549,10 +1549,16 @@ local({
        identical(st$form$reference_period, "past 7 days") && identical(st$form$task, "behavioral"))
     set_inputs(session, brief_inputs, task = "evaluate", questionnaire = "Q1. How are you? Fine / Not fine",
                skip = 3)
-    ok("Evaluate carries its questionnaire, no item count and no workers, and says it is built in Phase 4",
+    ok("Evaluate carries its questionnaire, no item count and no workers, and says it makes one review and what the limit is",
        identical(st$form$task, "evaluate") && grepl("Q1. How are you?", st$form$questionnaire, fixed = TRUE) &&
          is.na(st$form$n_items) && length(st$workers) == 0L &&
-         grepl("Phase 4", html_of3(output$task_note), fixed = TRUE))
+         grepl("sends your questionnaire to the project manager model once", html_of3(output$task_note), fixed = TRUE) &&
+         grepl(format(APP_MAX_PASTE_CHARS, big.mark = ","), html_of3(output$task_note), fixed = TRUE) &&
+         !grepl("Phase 4", html_of3(output$task_note), fixed = TRUE))
+    set_inputs(session, brief_inputs, task = "evaluate", questionnaire = strrep("a", APP_MAX_PASTE_CHARS + 1L), skip = 5)
+    ok("a questionnaire over the cap is refused on the Brief tab with its length and the limit, and nothing moves on",
+       grepl("Paste it in parts", html_of3(output$message), fixed = TRUE) && identical(st$form$task, "evaluate") &&
+         nchar(st$form$questionnaire) < APP_MAX_PASTE_CHARS)
     st$revision = "Make the stems shorter."
     session$flushReact()
     ok("a requested change is shown on the Brief tab with the round it belongs to, and can be dropped",
@@ -1658,11 +1664,14 @@ local({
     st$form = clean_form(forms$evaluate)
     session$flushReact()
     b = html_of3(output$body)
-    ok("Evaluate's prompt can be read but not run: the button is off and the page says why",
-       grepl("disabled", b, fixed = TRUE) && grepl("Phase 4", b, fixed = TRUE) && grepl("QUESTIONNAIRE", b, fixed = TRUE))
-    session$setInputs(approve = 1)
-    ok("pressing it anyway starts nothing, and says so",
-       st$run_id == 0L && is.null(st$approved) && grepl("cannot be run yet", html_of3(output$message), fixed = TRUE))
+    ok("Evaluate's prompt can be read and approved: the button is on and the page says it makes one call",
+       !grepl("disabled", b, fixed = TRUE) && grepl("QUESTIONNAIRE", b, fixed = TRUE) &&
+         grepl("one model call", b, fixed = TRUE) && !grepl("Phase 4", b, fixed = TRUE))
+    a = build_prompt(st$form)
+    session$setInputs(system = a$system, user = paste0(a$user, "\nAlso say if a question is too long."), approve = 1)
+    ok("approving a review prompt, edited or not, starts a run with the edited text and both hashes",
+       st$run_id == 1L && identical(st$approved$edited, TRUE) && identical(st$approved$original_hash, a$hash) &&
+         grepl("Also say if a question is too long.", st$approved$user, fixed = TRUE))
   })
 })
 
@@ -2034,3 +2043,134 @@ rr_back <- jsonlite::fromJSON(as.character(flow_log_json(rr)), simplifyVector = 
 ok("a review round is a log too: the summary row, the review with its prompt hash and its call record",
    identical(purrr::map_chr(rr_back$summary, "step"), "review") && identical(rr_back$review$hash, rv$hash) &&
      !is.null(rr_back$review$call$seconds) && identical(rr_back$schema, 1L) && is.null(rr_back$appraisal))
+
+
+# ---- Phase 4c: the Evaluate screens ---------------------------------------------------------
+
+review_state <- function(form = forms$evaluate) {
+  st = test_state()
+  st$form = clean_form(form)
+  st$workers = list()
+  st
+}
+approve_review <- function(st, edited = FALSE) {
+  a = build_prompt(st$form)
+  st$approved = c(a, list(edited = edited, original_hash = a$hash))
+  st$run_id = st$run_id + 1L
+}
+
+local({
+  st = review_state()
+  ra = rv_ask()
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) ra$ask), {
+    session$flushReact()
+    approve_review(st, edited = TRUE)
+    session$flushReact()
+    h = html_of3(output$results)
+    ok("a review run makes one call to the project manager at the evaluation ceiling, and records the round, with no candidates",
+       length(ra$st$calls) == 1L && identical(ra$st$calls[[1]]$id, APP_MODELS$pm$id) &&
+         identical(ra$st$calls[[1]]$max_tokens, LLM_MAX_TOKENS[["evaluate"]]) &&
+         st$round == 1L && identical(st$review$status, "ok") && is.null(st$drafts) && is.null(st$appraisal) &&
+         is.null(st$seed) && length(st$rounds) == 1L &&
+         identical(purrr::map_chr(st$rounds[[1]]$summary, "step"), "review") &&
+         identical(st$rounds[[1]]$prompt$edited, TRUE))
+    ok("the page says it is one review, shows the prompt hash and that it was edited, and does not claim validation",
+       grepl("One review by the project manager", h, fixed = TRUE) &&
+         grepl(substr(build_prompt(st$form)$hash, 1, 16), h, fixed = TRUE) && grepl("edited; assembled hash", h, fixed = TRUE) &&
+         grepl("nothing here is validated", h, fixed = TRUE) && !grepl("Candidate", h, fixed = TRUE) &&
+         !grepl("Keep this item", h, fixed = TRUE))
+    ok("findings are shown question by question, in the order pasted, a question with a numeric id included",
+       grepl("Question Q1", h, fixed = TRUE) && grepl("Question 2", h, fixed = TRUE) &&
+         regexpr("Question Q1", h, fixed = TRUE) < regexpr("Question 2", h, fixed = TRUE))
+    ok("a finding at severity 5 or above shows its check and the check's question, severity, quote, rewrite and probe",
+       grepl("one_thing", h, fixed = TRUE) && grepl("severity 8", h, fixed = TRUE) &&
+         grepl(build_checklist(st$form)[["one_thing"]], h, fixed = TRUE) && grepl("local recycling", h, fixed = TRUE) &&
+         grepl("A rewrite, untested", h, fixed = TRUE) && grepl("A rewrite.", h, fixed = TRUE) &&
+         grepl("A probe", h, fixed = TRUE) && grepl("A probe.", h, fixed = TRUE))
+    ok("a finding below 5 is folded away, and flagged when its quote is not in the text or its check was not sent",
+       grepl("1 finding rated below 5", h, fixed = TRUE) && grepl("quote not found", h, fixed = TRUE) &&
+         grepl("not a check that was sent", h, fixed = TRUE) && grepl("words that are nowhere", h, fixed = TRUE) &&
+         n_in3("not_a_check", h) == 1L && n_in3("words that are nowhere", h) == 1L)
+    ok("a question with no finding says none was found by this review, never that it has no problems",
+       grepl("No problem was found by this review.", h, fixed = TRUE) && !grepl("no problems", tolower(h), fixed = TRUE))
+    ok("instrument-level findings are shown apart, naming the questions involved",
+       grepl("The instrument as a whole", h, fixed = TRUE) && grepl("context_and_order", h, fixed = TRUE) &&
+         grepl("Questions: Q1 and Q2", h, fixed = TRUE))
+    ok("an empty TRAPD block is not drawn; what to test first and what was not assessed are",
+       !grepl("TRAPD: what is still needed", h, fixed = TRUE) && grepl("What to test first", h, fixed = TRUE) &&
+         grepl("Question Q1: cognitive interview", h, fixed = TRUE) && grepl("What this review could not judge", h, fixed = TRUE) &&
+         grepl("Fit to objectives was not assessed.", h, fixed = TRUE))
+    ok("R's checks on the review are counted: the quote that is not in the text and the check that was not sent",
+       grepl("checks on the review found", h, fixed = TRUE) && grepl("quote that is", h, fixed = TRUE) &&
+         grepl("finding cites", h, fixed = TRUE))
+    ok("the criteria that were applied are listed", grepl("Criteria that were applied", h, fixed = TRUE))
+  })
+})
+
+local({
+  st = review_state(with_field(forms$evaluate, source_language = "Spanish"))
+  trapd_reply = with_field(rv_reply, trapd = list(translation = "Two independent translations are needed.", review = "",
+                                                   adjudication = "An adjudicator must reconcile them.", pretesting = "", documentation = ""))
+  ra = rv_ask(trapd_reply)
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) ra$ask), {
+    session$flushReact()
+    approve_review(st)
+    session$flushReact()
+    h = html_of3(output$results)
+    ok("a review of translated text shows the TRAPD steps that are still needed, and only those",
+       grepl("TRAPD: what is still needed", h, fixed = TRUE) && grepl("Two independent translations are needed.", h, fixed = TRUE) &&
+         grepl("An adjudicator must reconcile them.", h, fixed = TRUE) &&
+         grepl("<strong>Translation</strong>", h, fixed = TRUE) && grepl("<strong>Adjudication</strong>", h, fixed = TRUE) &&
+         !grepl("<strong>Pretesting</strong>", h, fixed = TRUE) && !grepl("<strong>Review</strong>", h, fixed = TRUE) &&
+         grepl("functional_equivalence", paste(build_prompt(st$form)$user), fixed = TRUE))
+  })
+})
+
+local({
+  st = review_state()
+  dead = rv_ask()
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL,
+                                make_ask = function(total) function(...) stop("the project manager is down", call. = FALSE)), {
+    session$flushReact()
+    approve_review(st)
+    session$flushReact()
+    h = html_of3(output$results)
+    ok("a review that fails is said on the page in words, with its reason, and the round is still recorded",
+       grepl("The review did not come back", h, fixed = TRUE) && grepl("the project manager is down", h, fixed = TRUE) &&
+         identical(st$review$status, "failed") && st$round == 1L && !grepl("Question by question", h, fixed = TRUE))
+  })
+})
+local({
+  st = review_state()
+  ra = rv_ask(list(items = list(list(id = "Q1", findings = list(
+    finding("one_thing", "local recycling", 6), finding("one_thing", "local recycling", 7)))),
+    instrument = list(), trapd = rv_reply$trapd, test_first = list("Q1"), not_assessed = ""))
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) ra$ask), {
+    session$flushReact()
+    approve_review(st)
+    session$flushReact()
+    h = html_of3(output$results)
+    ok("two findings on one question, a test_first given as plain ids, and no not_assessed are all drawn",
+       n_in3("severity 6", h) == 1L && n_in3("severity 7", h) == 1L && grepl("What to test first", h, fixed = TRUE) &&
+         !grepl("What this review could not judge", h, fixed = TRUE) && !grepl("quote not found", h, fixed = TRUE))
+  })
+})
+
+# The review's hash is what the review.R and the log record, and edited prompts are what is sent.
+local({
+  ra = rv_ask()
+  base_prompt = build_prompt(rv_form)
+  ed = with_field(base_prompt, user = "EDITED REVIEW PROMPT",
+                  hash = prompt_hash(base_prompt$system, "EDITED REVIEW PROMPT"), edited = TRUE)
+  rv_ed = run_review(rv_form, fl_pm, ask = ra$ask, prompt = ed)
+  ok("run_review sends an edited prompt when given one, and keeps it as the result's prompt with its own hash",
+     identical(ra$st$calls[[1]]$user, "EDITED REVIEW PROMPT") && identical(rv_ed$user, "EDITED REVIEW PROMPT") &&
+       identical(rv_ed$hash, prompt_hash(ed$system, "EDITED REVIEW PROMPT")) && identical(attr(rv_ed, "prompt")$edited, TRUE) &&
+       identical(flow_round(rv_form, fl_pm, review = rv_ed)$prompt$edited, TRUE) &&
+       grepl("system and a user", tryCatch(run_review(rv_form, fl_pm, ask = ra$ask, prompt = list(user = "x")),
+                                           error = conditionMessage), fixed = TRUE))
+})
