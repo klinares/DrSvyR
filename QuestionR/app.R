@@ -175,9 +175,7 @@ ui <- page_fluid(
     tabPanel(QUESTIONR_TABS[3], mod_prompt_ui("prompt")),
     tabPanel(QUESTIONR_TABS[4], mod_results_ui("results"), mod_again_ui("again")),
     tabPanel(QUESTIONR_TABS[5], mod_output_ui("output")),
-    tabPanel(QUESTIONR_TABS[6],
-             tab_placeholder(QUESTIONR_TABS[6], 5,
-               "The methodology note, the skills as readable text, and the sources per rule."))))
+    tabPanel(QUESTIONR_TABS[6], methodology_page())))
 
 
 # ---- 7. server --------------------------------------------------------------

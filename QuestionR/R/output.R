@@ -8,7 +8,7 @@
 #   definitions and constants only.
 
 
-# ---- the skills as a table (Methodology tab) ---------------------------------------------------------------------------
+# ---- the Methodology tab ---------------------------------------------------------------------------
 
 # One row per reflex of every skill file, in the order of SKILL_FILES: file, id, when
 #   it applies, and its source ("" when a reflex gives none). Read from the files as
@@ -22,6 +22,41 @@ skills_table <- function(dir = SKILLS_DIR) {
              when = purrr::map_chr(rows, "when"), source = purrr::map_chr(rows, "source"),
              stringsAsFactors = FALSE)
 }
+
+
+# The methodology note, then the skills table, as the Methodology tab shows them (DESIGN.md
+#   section 14). The note is www/methodology.md, rendered by shiny::markdown() (commonmark with
+#   the GitHub extensions, so its tables are tables). The table is skills_table(), one row per
+#   reflex, in a block for each skill file with its title and version. A file that is missing or
+#   a skill that no longer parses is said in words, not a crash: the page is built when the app
+#   starts.
+METHODOLOGY_FILE <- file.path("www", "methodology.md")
+
+skills_html <- function(tab = skills_table(), dir = SKILLS_DIR) {
+  files = unique(tab$file)
+  tagList(
+    tags$h2("The rules, file by file"),
+    tags$p("One row for every rule the app can send to a model, with when it applies and where it comes from. ",
+           "The rules are the text files in www/skills/; nothing here is written by hand."),
+    purrr::map(files, function(f) {
+      s = read_skill(f, dir)
+      rows = tab[tab$file == f, ]
+      tagList(
+        tags$h4(paste0(f, ": ", s$title), tags$span(class = "text-muted small", paste0("  version ", s$version))),
+        tags$table(class = "table table-sm small",
+                   tags$thead(tags$tr(tags$th("Rule"), tags$th("When it applies"), tags$th("Source"))),
+                   tags$tbody(purrr::map(seq_len(nrow(rows)), function(i)
+                     tags$tr(tags$td(tags$code(rows$id[i])), tags$td(rows$when[i]),
+                             tags$td(if (nzchar(rows$source[i])) rows$source[i] else tags$span(class = "text-muted", "none given")))))))
+    }))
+}
+
+methodology_page <- function(path = METHODOLOGY_FILE, dir = SKILLS_DIR)
+  tryCatch(
+    tagList(HTML(shiny::markdown(paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n"))),
+            skills_html(skills_table(dir), dir)),
+    error = function(e)
+      warn_box(tags$strong("The methodology note could not be shown. "), substr(conditionMessage(e), 1, 400)))
 
 
 # ---- a document as blocks, drawn twice ------------------------------------------------------

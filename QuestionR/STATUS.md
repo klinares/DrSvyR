@@ -76,6 +76,20 @@ Read `DESIGN.md` first. Update this file at the end of every session.
   not, the text above the boxes says to select and copy by hand, which always
   works.
 
+- **5d done.** The Methodology tab is `www/methodology.md` rendered by
+  **`shiny::markdown()`** (installed help checked: `markdown(mds, extensions = TRUE,
+  .noWS = NULL, ...)`, "Github syntax extensions" on by default, rendered by
+  `commonmark::markdown_html()`; Shiny 1.14.0, commonmark 2.0.0). With the
+  extensions on, the note's tables are tables. Below it, `skills_html()` draws
+  `skills_table()` as a block for each skill file (file name, title, version) with
+  one row per reflex: the rule's id, when it applies, its source or "none given".
+  `methodology_page()` is built when the app starts and says in words, not a
+  crash, if the note or a skill file is missing. No tab is a placeholder any
+  more. Smoke checks that the table has a row for every reflex of every file (and
+  a row's id inside the block of its own file), that the note's headings, list
+  and tables render, that sources are shown, and that a missing file is said in
+  words.
+
 ## Phase 4 (2026-11-12): Evaluate built, 15-question measurement, gold test
 
 **Take `REVIEW.md`, this file, `tests/review_tokens.md`, `tests/gold_summary.md` and

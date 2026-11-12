@@ -60,10 +60,10 @@ ok("the logo shows, or its placeholder box does",
    else has("Office logo"))
 ok("every tab is in the navlist", all(purrr::map_lgl(QUESTIONR_TABS, has)))
 ok("the key box is on Start here", has("Use this key") && has("type=\"password\""))
-# Phase 3 built tabs 1 to 3 and Phase 5c the Output tab, so one is left: Methodology.
-ok("the not-yet-built tabs say so",
-   lengths(regmatches(page$html, gregexpr("Not built yet", page$html, fixed = TRUE))) == 1L &&
-     grepl("Phase 5", page$html, fixed = TRUE))
+# Phase 3 built tabs 1 to 3, 5c the Output tab and 5d the Methodology tab: none is a placeholder now.
+ok("no tab is a placeholder any more, and the Methodology tab holds the note and the rules table",
+   !grepl("Not built yet", page$html, fixed = TRUE) && grepl("Methodology note", page$html, fixed = TRUE) &&
+     grepl("The rules, file by file", page$html, fixed = TRUE))
 
 # The profile block. Each profile in its own process.
 home <- in_child("home", c(
@@ -1850,9 +1850,9 @@ local({
 })
 
 # The whole page, as the browser gets it.
-ok("the page has the Generate tabs' controls, and the later tabs are still placeholders",
+ok("the page has the Generate tabs' controls, and no tab is a placeholder",
    grepl("Check the brief", page$html, fixed = TRUE) && grepl("Skip the brief check", page$html, fixed = TRUE) &&
-     grepl("Research question (required)", page$html, fixed = TRUE) && n_in3("Not built yet", page$html) == 1L)
+     grepl("Research question (required)", page$html, fixed = TRUE) && !grepl("Not built yet", page$html, fixed = TRUE))
 ok("no key is anywhere on the page", !grepl("pm-test-key|SECRET-KEY|or-secret-key", page$html))
 
 
@@ -2754,3 +2754,43 @@ ok("the page has the Output tab's boxes in place of its placeholder, and no key 
    grepl("output-view", page$html, fixed = TRUE) && grepl("output-downloads", page$html, fixed = TRUE) &&
      !grepl(key_planted, page$html, fixed = TRUE))
 
+
+# ---- Phase 5d: the Methodology tab ----------------------------------------------------------------
+
+meth_tab <- skills_table()
+meth_html <- paste(as.character(methodology_page()), collapse = "\n")
+all_reflexes <- unlist(purrr::map(SKILL_FILES, function(f) purrr::map_chr(unname(read_skill(f)$reflexes), "id")))
+
+ok("skills_table has one row for every reflex of every skill file, with its file, id, when and source, in the order of the files",
+   identical(names(meth_tab), c("file", "id", "when", "source")) && nrow(meth_tab) == length(all_reflexes) && nrow(meth_tab) > 80L &&
+     identical(meth_tab$id, unname(all_reflexes)) && identical(unique(meth_tab$file), SKILL_FILES) &&
+     all(nzchar(meth_tab$when)) && !anyNA(meth_tab) && any(!nzchar(meth_tab$source)) && any(nzchar(meth_tab$source)))
+ok("the Methodology page renders the note: its headings, its numbered list, and its tables as tables",
+   grepl("<h1>Methodology note</h1>", meth_html, fixed = TRUE) && grepl("<h2>Where the rules come from</h2>", meth_html, fixed = TRUE) &&
+     grepl("<ol>", meth_html, fixed = TRUE) && grepl("<strong>Brief check.</strong>", meth_html, fixed = TRUE) &&
+     grepl("<th>Finding</th>", meth_html, fixed = TRUE) && grepl("Models pick response formats silently", meth_html, fixed = TRUE) &&
+     grepl("36 of the 48 faults", meth_html, fixed = TRUE) && !grepl("| Finding |", meth_html, fixed = TRUE))
+ok("below the note there is a block for each skill file with its title and version, and a row for every one of its reflexes",
+   local({
+     sections = strsplit(meth_html, "<h4>", fixed = TRUE)[[1]][-1]
+     length(sections) == length(SKILL_FILES) &&
+       all(purrr::map2_lgl(SKILL_FILES, sections, function(f, sec) {
+         s = read_skill(f)
+         startsWith(trimws(sec), paste0(f, ": ", s$title)) && grepl(paste0("version ", s$version), sec, fixed = TRUE) &&
+           all(purrr::map_lgl(names(s$reflexes), function(id) grepl(paste0("<code>", id, "</code>"), sec, fixed = TRUE))) &&
+           lengths(regmatches(sec, gregexpr("<code>", sec, fixed = TRUE))) == length(s$reflexes)
+       }))
+   }))
+ok("each rule's source is shown as the skill file gives it, and a rule with none says so",
+   grepl(meth_tab$source[meth_tab$id == "one_thing"][1], meth_html, fixed = TRUE) && nzchar(meth_tab$source[meth_tab$id == "one_thing"][1]) &&
+     grepl("none given", meth_html, fixed = TRUE) &&
+     identical(lengths(regmatches(meth_html, gregexpr("none given", meth_html, fixed = TRUE))), sum(!nzchar(meth_tab$source))))
+ok("a methodology file that is missing, or a skills folder that is, is said in words and does not stop the page",
+   local({
+     a = paste(as.character(methodology_page(path = file.path("www", "no_such_note.md"))), collapse = "")
+     b = paste(as.character(methodology_page(dir = file.path("www", "no_such_skills"))), collapse = "")
+     grepl("The methodology note could not be shown", a, fixed = TRUE) && grepl("The methodology note could not be shown", b, fixed = TRUE)
+   }))
+ok("the page's Methodology tab is the note and the table, and the app starts with it (the whole page was built above)",
+   grepl("<h1>Methodology note</h1>", page$html, fixed = TRUE) &&
+     lengths(regmatches(page$html, gregexpr("<code>one_thing</code>", page$html, fixed = TRUE))) >= 1L)
