@@ -14,16 +14,19 @@
 
 # ---- settings of the call ------------------------------------------------------
 
-# max_tokens for each step (DESIGN.md section 6). A reply that reaches the
-#   ceiling is a failed attempt, not a short answer. ping is the connection
-#   check's very small call.
-LLM_MAX_TOKENS <- c(brief = 1500L, draft = 4000L, appraisal = 8000L,
+# max_tokens for each step (DESIGN.md sections 6 and 12). A reply that reaches
+#   the ceiling is a failure, not a short answer, and is not retried: the same
+#   prompt is cut off at the same place. ping is the connection check's very
+#   small call. Brief, draft and appraisal are Kevin's Phase 3 settings,
+#   provisional until a live run has recorded how much each step really uses;
+#   evaluate stays as it was until Phase 4 has measured a 15-question review.
+LLM_MAX_TOKENS <- c(brief = 2000L, draft = 8000L, appraisal = 16000L,
                     evaluate = 8000L, ping = 200L)
 
 # Seconds before one request gives up. ellmer reads this from the option
 #   ellmer_timeout_s (its own default is five minutes); svysegment sets it the
 #   same way. The connection check waits less.
-LLM_TIMEOUT_S <- 300
+LLM_TIMEOUT_S <- 600
 LLM_PING_TIMEOUT_S <- 60
 
 # Anthropic prompt caching. Each step has a different system prompt, so there is
@@ -377,9 +380,11 @@ is_placeholder_reply <- function(obj) {
 
 # One model, one message, one parsed object. The distinction that matters is
 #   whether a second attempt could plausibly succeed. A timeout, a 5xx, a rate
-#   limit, a reply cut off at the token limit, a reply that is not JSON, and the
-#   echoed template are all worth another try. A client error (a bad key, an
-#   unknown model) is not: it is raised at once. A reply that parsed but carried
+#   limit, a reply that is not JSON, and the echoed template are all worth
+#   another try. A client error (a bad key, an unknown model) is not: it is
+#   raised at once. Nor is a reply cut off at the token limit (class
+#   llm_truncated): the same prompt is cut off at the same place, so a retry only
+#   spends the ceiling again. A reply that parsed but carried
 #   the wrong fields is a prompt problem, so validate (a function that stops with
 #   a readable message) is applied last, inside the attempt, and only when asked
 #   for; R/checks.R brings the validators.
@@ -430,8 +435,9 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
                     ", finish: ", finish, "] ")
     if (identical(finish, "max_tokens"))
       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
-                      ") without finishing. It starts: ", substr(txt, 1, 120)),
-               raw = txt)
+                      ") without finishing, so it was cut off. Ask for fewer items ",
+                      "and run again. It starts: ", substr(txt, 1, 120)),
+               class = "llm_truncated", raw = txt)
     reply = clean_model_reply(txt)
     obj = tryCatch(parse_json_block(reply, pattern),
                    error = function(e)
@@ -456,7 +462,8 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
   #   is not sent three times.
   res = try(
     purrr::insistently(function()
-                         tryCatch(logged(), llm_client_error = function(e) e),
+                         tryCatch(logged(), llm_client_error = function(e) e,
+                                  llm_truncated = function(e) e),
                        rate = purrr::rate_backoff(pause_base = pause_base,
                                                   pause_min = pause_min,
                                                   max_times = max_times),
@@ -464,7 +471,7 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
     silent = TRUE)
   made = .llm_state$calls - before
   llm_add_retries(max(0L, made - 1L))
-  if (inherits(res, "llm_client_error"))
+  if (inherits(res, c("llm_client_error", "llm_truncated")))
     res = structure(conditionMessage(res), class = "try-error", condition = res)
   if (inherits(res, "try-error")) stop(last %||% attr(res, "condition"))
 

@@ -570,10 +570,14 @@ ok("the failure names the model, the endpoint and why it stopped, and carries th
      identical(err$raw, "not json at all"))
 
 sc <- scripted(reply(good_json, finish = "max_tokens"))
-err <- fails_with(run_json(sc))
-ok("a reply cut off at the token limit is a failed attempt, even when what arrived would parse",
-   !is.null(err) && sc$state$calls == 3L &&
-     grepl("reached the token limit (100)", conditionMessage(err), fixed = TRUE))
+err <- fails_with(run_json(sc), "llm_truncated")
+ok("a reply cut off at the token limit is a failure even when what arrived would parse, and is not tried again",
+   !is.null(err) && sc$state$calls == 1L && identical(err$raw, good_json) &&
+     grepl("reached the token limit (100)", conditionMessage(err), fixed = TRUE) &&
+     grepl("Ask for fewer items", conditionMessage(err), fixed = TRUE) && llm_retries_used() == 0L)
+ok("the ceilings and the timeout are Kevin's Phase 3 settings",
+   identical(unname(LLM_MAX_TOKENS[c("brief", "draft", "appraisal")]), c(2000L, 8000L, 16000L)) &&
+     identical(LLM_TIMEOUT_S, 600))
 
 sc <- scripted(reply('{"stem": "...", "options": ["..."]}'))
 err <- fails_with(run_json(sc))
@@ -784,10 +788,15 @@ local({
   fails_with(suppressWarnings(go("openai", "unknown-model")), "llm_client_error")
   ok("a 404 through llm_json() makes one request, not three", .llm_state$calls - before == 1L)
   before = .llm_state$calls
-  e = fails_with(suppressWarnings(go("anthropic", "cut-off")))
-  ok("a reply cut off at the ceiling is requested three times, then fails saying so",
-     .llm_state$calls - before == 3L && !is.null(e) &&
-       grepl("reached the token limit", conditionMessage(e), fixed = TRUE))
+  e = fails_with(suppressWarnings(go("anthropic", "cut-off")), "llm_truncated")
+  ok("a reply cut off at the ceiling is requested once, then fails saying so and asking for fewer items",
+     .llm_state$calls - before == 1L && !is.null(e) &&
+       grepl("reached the token limit", conditionMessage(e), fixed = TRUE) &&
+       grepl("Ask for fewer items", conditionMessage(e), fixed = TRUE))
+  before = .llm_state$calls
+  e = fails_with(suppressWarnings(go("openai", "cut-off")), "llm_truncated")
+  ok("the same on the OpenAI-style call, whose ceiling is max_completion_tokens",
+     .llm_state$calls - before == 1L && !is.null(e))
 
   before = .llm_state$calls
   pa = llm_ping(mm("anthropic"), key = "mock-key-123")
@@ -1000,3 +1009,379 @@ ok("the appraisal stops for a review task, and for no candidate or an unnamed on
      grepl("at least one candidate", tryCatch(build_step_prompt(forms$attitudinal, "appraise",
                                                                 candidates = list(cand("x"))),
                                               error = conditionMessage), fixed = TRUE))
+
+
+# ---- Phase 3b: reply schemas, coded defaults, and the flow engine on a fake ask --------
+
+# Canned replies. utils::modifyList() ignores an unnamed list (options, parts,
+#   decisions), so a field is replaced by name here, and NULL leaves it null.
+with_field <- function(x, ...) {
+  over = list(...)
+  x[names(over)] = over
+  x
+}
+# A draft item with every field the skill asks for.
+good_item <- function(i, ...)
+  with_field(
+    list(id = paste0("Q", i), domain = paste("domain", i), intro = "",
+         stem = paste0("How much do you trust institution ", i, "?"),
+         options = list("None", "A little", "A lot"), open_format = "", parts = list(),
+         programming = "", decisions = list("closed; three points, every point labelled"),
+         source_english = "", notes = ""),
+    ...)
+draft_of <- function(n, ...)
+  list(items = purrr::map(seq_len(n), good_item, ...), not_covered = list(), missing_from_brief = list())
+problem_of <- function(validate, obj) tryCatch({ validate(obj); NA_character_ }, error = conditionMessage)
+says_in <- function(msg, s) !is.na(msg) && grepl(s, msg, fixed = TRUE)
+
+vd <- reply_validator("draft", n_items = 2L)
+ok("a draft with the number of items asked for, each closed or open, passes",
+   is.na(problem_of(vd, draft_of(2))) &&
+     is.na(problem_of(vd, list(items = list(good_item(1), good_item(2, options = NULL, open_format = "a number of days"))))))
+ok("a draft with too many or too few items fails, saying how many and how many were asked for",
+   says_in(problem_of(vd, draft_of(3)), "holds 3 items; 2 were asked for") &&
+     says_in(problem_of(vd, draft_of(1)), "holds 1 item; 2 were asked for") &&
+     says_in(problem_of(reply_validator("draft", n_items = 1L), draft_of(2)), "1 was asked for"))
+ok("questions in an item's parts are not counted as items",
+   is.na(problem_of(vd, list(items = list(
+     good_item(1, parts = list(list(when = "before the item", stem = "Do you know it?", options = list("Yes", "No")),
+                               list(when = "if yes", stem = "How well?", options = list("A", "B")))),
+     good_item(2))))))
+ok("a reply with no items field, or an item with no stem, id or domain, fails naming the field",
+   says_in(problem_of(vd, list(not_covered = list())), "'items' is missing") &&
+     says_in(problem_of(vd, list(items = list(good_item(1, stem = NULL), good_item(2)))), "items 1: 'stem' is missing") &&
+     says_in(problem_of(vd, list(items = list(good_item(1), good_item(2, id = "")))), "items 2: 'id' must be a non-empty string") &&
+     says_in(problem_of(vd, list(items = list(good_item(1, domain = NULL), good_item(2)))), "'domain' is missing"))
+ok("an item with neither options nor an open_format fails, naming the item",
+   says_in(problem_of(vd, list(items = list(good_item(1, options = list()), good_item(2)))),
+           "Item Q1 has neither options nor an open_format"))
+ok("a reply that is not an object, or whose items are not a list, fails",
+   says_in(problem_of(vd, "just text"), "not a JSON object") &&
+     says_in(problem_of(vd, list(items = "three")), "'items' must be a list"))
+ok("the draft validator is what llm_json() is given: a fields problem is a readable sentence ending in a full stop",
+   grepl("^The reply is not what was asked for: .*\\.$", problem_of(vd, list(items = "x"))))
+
+brief_ok <- list(complete = FALSE, questions = list(list(ask = "Which country?", why = "Wording.", blocking = TRUE)),
+                 task_fit = "", criteria = list("One thing per question."))
+vb <- reply_validator("brief")
+ok("a brief check with its fields passes; one with a string for complete, or a question with no ask, fails",
+   is.na(problem_of(vb, brief_ok)) &&
+     is.na(problem_of(vb, with_field(brief_ok, questions = list(), complete = TRUE))) &&
+     says_in(problem_of(vb, with_field(brief_ok, complete = "yes")), "'complete' must be true or false") &&
+     says_in(problem_of(vb, with_field(brief_ok, questions = list(list(why = "x", blocking = TRUE)))),
+             "questions 1: 'ask' is missing") &&
+     says_in(problem_of(vb, list(complete = TRUE)), "'criteria' is missing"))
+
+appraisal_ok <- list(appraisal = list(list(candidate = "A", id = "Q1", domain = "d", fails = list())),
+                     coverage = list(), differences = list(), merged = list(), test_first = list(),
+                     limits = "An expert review by a language model.")
+va <- reply_validator("appraisal")
+ok("an appraisal with its six fields passes, empty lists included; a missing limits or a fail with no check fails",
+   is.na(problem_of(va, appraisal_ok)) &&
+     says_in(problem_of(va, appraisal_ok[names(appraisal_ok) != "limits"]), "'limits' is missing") &&
+     says_in(problem_of(va, with_field(appraisal_ok, appraisal = list(list(
+       candidate = "A", id = "Q1", fails = list(list(evidence = "x")))))), "does not name its check"))
+ok("a format that has no schema stops, naming it",
+   says_in(tryCatch(reply_validator("poem"), error = conditionMessage), "no reply schema called 'poem'"))
+REPLY_SCHEMAS$tiny <- list(fields = c(answer = "text"), each = list(), rules = character(0))
+ok("a new output format is one entry: the validator is built from REPLY_SCHEMAS alone",
+   is.na(problem_of(reply_validator("tiny"), list(answer = "x"))) &&
+     says_in(problem_of(reply_validator("tiny"), list(answer = "")), "'answer' must be a non-empty string"))
+REPLY_SCHEMAS$tiny <- NULL
+
+
+# Coded defaults, against a fixture coded by hand.
+fx <- list(
+  list(what = "five labelled points and a don't know",
+       item = good_item(1, options = list("Strongly agree", "Agree", "Neither", "Disagree", "Strongly disagree", "Don't know"),
+                        decisions = list("closed", "five points, every point labelled with words")),
+       lang = "English",
+       want = list(format = "closed", n_options = 6L, n_points = 5L, midpoint = TRUE, dont_know = TRUE,
+                   ref_period = FALSE, labels = "yes")),
+  list(what = "four points, end labels only, a reference period, no don't know",
+       item = good_item(2, stem = "In the past 7 days, how often did you listen to the radio?",
+                        options = list("Never", "Once or twice", "Most days", "Every day"),
+                        decisions = list("closed", "four points, endpoint labels only")),
+       lang = "English",
+       want = list(format = "closed", n_options = 4L, n_points = 4L, midpoint = FALSE, dont_know = FALSE,
+                   ref_period = TRUE, labels = "no")),
+  list(what = "an open item",
+       item = good_item(3, stem = "How many days did you vote?", options = list(), open_format = "a number of days",
+                        decisions = list("open, numeric")),
+       lang = "English",
+       want = list(format = "open", n_options = 0L, n_points = NA_integer_, midpoint = NA, dont_know = NA,
+                   ref_period = FALSE, labels = "not stated")),
+  list(what = "a curly apostrophe and a not-applicable option",
+       item = good_item(4, options = list("Yes", "No", "Not applicable", "I don’t know"), decisions = list()),
+       lang = "English",
+       want = list(format = "closed", n_options = 4L, n_points = 2L, midpoint = FALSE, dont_know = TRUE,
+                   ref_period = FALSE, labels = "not stated")),
+  list(what = "French: points, don't know and period are not coded",
+       item = good_item(5, stem = "Au cours des 7 derniers jours, avez-vous écouté la radio ?",
+                        options = list("Jamais", "Parfois", "Souvent", "Je ne sais pas"),
+                        decisions = list("closed", "every point labelled")),
+       lang = "French",
+       want = list(format = "closed", n_options = 4L, n_points = NA_integer_, midpoint = NA, dont_know = NA,
+                   ref_period = NA, labels = "yes")),
+  list(what = "an item with only a stem and options",
+       item = list(stem = "Do you vote?", options = list("Yes", "No")),
+       lang = "",
+       want = list(format = "closed", n_options = 2L, n_points = 2L, midpoint = FALSE, dont_know = FALSE,
+                   ref_period = FALSE, labels = "not stated")))
+purrr::walk(fx, function(x)
+  ok(paste("coded defaults match the hand-coded fixture:", x$what),
+     identical(code_defaults(x$item, x$lang), x$want)))
+ok("the coded defaults read as words for a table, with not coded where it is",
+   identical(unname(defaults_labels(code_defaults(fx[[5]]$item, "French"))[c("Scale points", "Midpoint (odd count)", "Don't know / no opinion", "Reference period")]),
+             rep("not coded", 4L)) &&
+     identical(unname(defaults_labels(code_defaults(fx[[1]]$item))[c("Format", "Midpoint (odd count)")]), c("closed", "yes")))
+
+
+# Checks on an appraisal.
+ck_cands <- list(A = draft_of(2), B = draft_of(1))
+ck_ids <- names(build_checklist(forms$attitudinal))
+ck_reply <- list(
+  appraisal = list(
+    list(candidate = "A", id = "Q1", domain = "d1", fails = list(
+      list(check = ck_ids[1], evidence = "trust", stage = "comprehension", why = "Vague."),
+      list(check = "made_up_check", evidence = "x", stage = "judgment", why = "Odd."))),
+    list(candidate = "A", id = "Q2", domain = "d2", fails = list()),
+    list(candidate = "C", id = "Q9", domain = "d9", fails = list())),
+  merged = list(list(domain = "d1", candidate = "A", id = "Q1"), list(domain = "d2", candidate = "A", id = "Q2"),
+                list(domain = "d3", candidate = "B", id = "Q7"), list(domain = "d4", candidate = "", id = "")))
+ca <- check_appraisal(ck_reply, ck_cands, build_checklist(forms$attitudinal))
+ok("an appraisal's fails are read with whether each check is an id that was sent",
+   length(ca$fails) == 2L && isTRUE(ca$fails[[1]]$known) && isFALSE(ca$fails[[2]]$known) &&
+     identical(ca$fails[[1]]$evidence, "trust") && identical(ca$unknown_checks, "made_up_check"))
+ok("an item the appraiser gave no entry is not appraised, not a pass; an entry for no item is flagged",
+   identical(ca$not_appraised, "B|Q1") && identical(ca$unknown_items, "C|Q9"))
+ok("a merged item that does not exist, or that failed a check, is a problem; an empty domain is not",
+   length(ca$merged_problems) == 2L && any(grepl("A Q1 failed a check", ca$merged_problems, fixed = TRUE)) &&
+     any(grepl("B Q7 is not in any candidate", ca$merged_problems, fixed = TRUE)))
+ok("an appraisal with nothing wrong has no flags",
+   local({
+     c0 = check_appraisal(list(appraisal = list(
+       list(candidate = "A", id = "Q1", fails = list()), list(candidate = "A", id = "Q2", fails = list()),
+       list(candidate = "B", id = "Q1", fails = list()))), ck_cands, build_checklist(forms$attitudinal))
+     !length(c0$fails) && !length(c0$unknown_checks) && !length(c0$not_appraised) &&
+       !length(c0$unknown_items) && !length(c0$merged_problems)
+   }))
+
+
+# The flow engine on a fake ask. The fake has exactly the five arguments the seam
+#   names, so a flow that passed it anything else (a key, say) would fail here.
+fl_form <- make_form(task = "attitudinal", n_items = 2L, modes = "web", population = "Adults",
+                     research_question = "How much do adults trust the electoral commission?",
+                     construct = "Trust in the electoral commission")
+fl_models <- function(ids) purrr::map(ids, function(id)
+  list(api = "openai", base_url = "https://example.invalid/v1", id = id, key_source = "analyst"))
+fl_workers <- fl_models(c("vendor-a/model-one", "vendor-b/model-two", "vendor-c/model-three"))
+fl_pm <- fl_models("vendor-p/pm-model")[[1]]
+fl_ids <- purrr::map_chr(fl_workers, "id")
+worker_no <- function(m) match(m$id, fl_ids)
+
+# reply_for(m, system_prompt) decides what each model says; the fake then validates
+#   it the way llm_json() would, so a bad reply is an error.
+rec_ask <- function(reply_for) {
+  st = new.env()
+  st$calls = list()
+  list(st = st, ask = function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL) {
+    st$calls[[length(st$calls) + 1L]] = list(id = m$id, user = user, system = system_prompt, max_tokens = max_tokens)
+    obj = reply_for(m, system_prompt)
+    if (!is.null(validate)) validate(obj)
+    obj
+  })
+}
+is_brief <- function(system_prompt) grepl("- what_a_brief_needs (", system_prompt, fixed = TRUE)
+tagged_draft <- function(m, n = 2L) draft_of(n, stem = paste0("Question from worker ", worker_no(m), "?"))
+reply_ok <- function(m, sys) {
+  if (identical(m$id, fl_pm$id)) { if (is_brief(sys)) brief_ok else appraisal_ok }
+  else tagged_draft(m)
+}
+
+fa <- rec_ask(reply_ok)
+fl_brief <- run_brief(fl_form, fl_pm, ask = fa$ask)
+fl_drafts <- run_drafts(fl_form, fl_workers, ask = fa$ask)
+fl_ap <- run_appraisal(fl_form, fl_drafts, fl_pm, ask = fa$ask, seed = 11L)
+
+ok("each result has exactly the fields the design names",
+   identical(sort(names(fl_brief)), sort(c("status", "error", "system", "user", "hash", "reply"))) &&
+     identical(sort(names(fl_ap)), sort(c("status", "error", "labels", "system", "user", "hash", "reply"))) &&
+     purrr::every(fl_drafts, function(d) identical(sort(names(d)), sort(c("model", "status", "error", "reply", "seconds")))) &&
+     is.null(names(fl_drafts)) && length(fl_drafts) == 3L)
+ok("the flow makes one brief call, one call per worker in the workers' order, and one appraisal call",
+   identical(purrr::map_chr(fa$st$calls, "id"), c(fl_pm$id, fl_ids, fl_pm$id)))
+ok("each call gets its step's ceiling, and the brief and appraisal hold no worker's name",
+   identical(purrr::map_int(fa$st$calls, "max_tokens"),
+             unname(LLM_MAX_TOKENS[c("brief", "draft", "draft", "draft", "appraisal")])))
+ok("every worker gets the same approved prompt, which is the list's 'prompt' attribute",
+   local({
+     pr = attr(fl_drafts, "prompt")
+     identical(pr, build_prompt(fl_form)) &&
+       identical(unique(purrr::map_chr(fa$st$calls[2:4], "user")), pr$user) &&
+       identical(unique(purrr::map_chr(fa$st$calls[2:4], "system")), pr$system)
+   }))
+ok("the brief check's prompt is the brief step's, and its reply is kept",
+   identical(fl_brief$status, "ok") && is.na(fl_brief$error) &&
+     identical(fl_brief$hash, build_step_prompt(fl_form, "brief")$hash) && identical(fl_brief$reply, brief_ok))
+ok("an ok draft keeps its parsed reply and a time; the model is the id the endpoint is called by",
+   identical(fl_drafts[[2]]$reply, tagged_draft(fl_workers[[2]])) && is.na(fl_drafts[[2]]$error) &&
+     identical(fl_drafts[[2]]$model, "vendor-b/model-two") &&
+     is.numeric(fl_drafts[[2]]$seconds) && fl_drafts[[2]]$seconds >= 0)
+
+ok("the labels are A, B, C over the three models, the same for the same seed, and not the workers' order for every seed",
+   identical(names(fl_ap$labels), c("A", "B", "C")) && setequal(fl_ap$labels, fl_ids) &&
+     identical(fl_ap$labels, labels_of(fl_drafts, 11L)) &&
+     length(unique(purrr::map_chr(1:40, function(s) paste(labels_of(fl_drafts, s), collapse = ",")))) > 1L &&
+     purrr::every(1:40, function(s) setequal(labels_of(fl_drafts, s), fl_ids)))
+ok("candidate A is the draft of the model labelled A, whatever the seed",
+   purrr::every(c(1L, 7L, 11L, 23L), function(s) {
+     lab = labels_of(fl_drafts, s)
+     cd = candidates_of(fl_drafts, s)
+     identical(names(cd), names(lab)) &&
+       identical(cd$A$items[[1]]$stem, paste0("Question from worker ", match(lab[["A"]], fl_ids), "?")) &&
+       identical(cd$C$items[[1]]$stem, paste0("Question from worker ", match(lab[["C"]], fl_ids), "?"))
+   }))
+ok("shuffling by seed leaves the random number generator alone",
+   local({
+     set.seed(5); a = stats::runif(1)
+     set.seed(5); invisible(labels_of(fl_drafts, 99L)); b = stats::runif(1)
+     identical(a, b)
+   }))
+ok("the appraisal prompt shows each letter with the draft of the model that letter stands for, and no model name anywhere",
+   local({
+     ap_call = fa$st$calls[[5]]
+     both = paste(ap_call$system, ap_call$user)
+     lab = labels_of(fl_drafts, 11L)
+     lines = strsplit(ap_call$user, "\n", fixed = TRUE)[[1]]
+     cl = lines[grepl("^\\{\"candidate\":", lines)]
+     line_for = function(letter) cl[startsWith(cl, paste0("{\"candidate\":\"", letter, "\""))]
+     identical(ap_call$user, fl_ap$user) && length(cl) == 3L &&
+       all(purrr::map_lgl(names(lab), function(L)
+         grepl(paste0("Question from worker ", match(lab[[L]], fl_ids), "?"), line_for(L), fixed = TRUE))) &&
+       !any(purrr::map_lgl(c(fl_ids, fl_pm$id, "vendor-", "example.invalid", "model-one"), function(s) grepl(s, both, fixed = TRUE)))
+   }))
+ok("the appraisal's status, hash and reply are kept, and its error is empty",
+   identical(fl_ap$status, "ok") && is.na(fl_ap$error) && identical(fl_ap$reply, appraisal_ok) &&
+     grepl("^[0-9a-f]{64}$", fl_ap$hash))
+
+# A worker that fails, a wrong number of items, and the run goes on.
+fb <- rec_ask(function(m, sys) {
+  if (identical(m$id, "vendor-b/model-two")) stop("canned endpoint error", call. = FALSE)
+  if (identical(m$id, "vendor-c/model-three")) return(tagged_draft(m, 3L))
+  reply_ok(m, sys)
+})
+fl_bad <- run_drafts(fl_form, fl_workers, ask = fb$ask)
+ok("a worker that errors, and one that returns the wrong number of items, are failed with their reasons; the first still arrives",
+   identical(purrr::map_chr(fl_bad, "status"), c("ok", "failed", "failed")) &&
+     identical(fl_bad[[2]]$error, "canned endpoint error") &&
+     grepl("holds 3 items; 2 were asked for", fl_bad[[3]]$error, fixed = TRUE) &&
+     is.null(fl_bad[[2]]$reply) && is.null(fl_bad[[3]]$reply) && !is.null(fl_bad[[1]]$reply) &&
+     length(fb$st$calls) == 3L)
+fl_bad_ap <- run_appraisal(fl_form, fl_bad, fl_pm, ask = fb$ask, seed = 11L)
+ok("the appraisal covers only the drafts that arrived: one candidate, A, over the one model that answered",
+   identical(fl_bad_ap$status, "ok") && identical(names(fl_bad_ap$labels), "A") &&
+     identical(unname(fl_bad_ap$labels), "vendor-a/model-one") &&
+     grepl("Appraise the 1 candidate draft ", fl_bad_ap$user, fixed = TRUE))
+
+# A failed appraisal is reported, with the labels kept so the candidates can still be read.
+fc <- rec_ask(function(m, sys) if (identical(m$id, fl_pm$id)) stop("the appraiser is down", call. = FALSE) else reply_ok(m, sys))
+fl_dead <- run_appraisal(fl_form, fl_drafts, fl_pm, ask = fc$ask, seed = 11L)
+ok("a failed appraisal is recorded with its reason and the labels, and nothing is raised",
+   identical(fl_dead$status, "failed") && identical(fl_dead$error, "the appraiser is down") &&
+     identical(fl_dead$labels, fl_ap$labels) && is.null(fl_dead$reply) && grepl("^[0-9a-f]{64}$", fl_dead$hash))
+fd <- rec_ask(reply_ok)
+fl_none <- run_appraisal(fl_form, run_drafts(fl_form, fl_workers, ask = rec_ask(function(m, sys) stop("down", call. = FALSE))$ask),
+                         fl_pm, ask = fd$ask, seed = 11L)
+ok("with no draft there is nothing to appraise, and the project manager is not called",
+   identical(fl_none$status, "failed") && grepl("No draft arrived", fl_none$error, fixed = TRUE) &&
+     length(fl_none$labels) == 0L && length(fd$st$calls) == 0L)
+fe <- rec_ask(reply_ok)
+fl_brief_dead <- run_brief(fl_form, fl_pm, ask = rec_ask(function(m, sys) stop("brief endpoint down", call. = FALSE))$ask)
+fl_brief_bad <- run_brief(utils::modifyList(fl_form, list(research_question = "")), fl_pm, ask = fe$ask)
+ok("a brief check that errors, or whose form cannot become a prompt, is failed with a plain reason and is not raised",
+   identical(fl_brief_dead$status, "failed") && identical(fl_brief_dead$error, "brief endpoint down") &&
+     identical(fl_brief_bad$status, "failed") && grepl("research question is required", fl_brief_bad$error, fixed = TRUE) &&
+     length(fe$st$calls) == 0L)
+ok("a reply the brief validator refuses is a failed brief check",
+   identical(run_brief(fl_form, fl_pm, ask = rec_ask(function(m, sys) list(complete = TRUE))$ask)$status, "failed"))
+
+# The appraisal stays blind: a draft that names its own model is not sent on.
+fg <- rec_ask(function(m, sys) {
+  if (identical(m$id, fl_pm$id)) return(reply_ok(m, sys))
+  if (identical(m$id, "vendor-a/model-one"))
+    return(draft_of(2, stem = "As model-one I ask: how much do you trust institution 1?"))
+  tagged_draft(m)
+})
+fl_leaky <- run_drafts(fl_form, fl_workers, ask = fg$ask)
+before_calls <- length(fg$st$calls)
+fl_leak_ap <- run_appraisal(fl_form, fl_leaky, fl_pm, ask = fg$ask, seed = 11L)
+ok("a model's name in a draft stops the appraisal before it is sent, saying why, and the call is not made",
+   identical(fl_leak_ap$status, "failed") && grepl("model-one", fl_leak_ap$error, fixed = TRUE) &&
+     grepl("was not sent", fl_leak_ap$error, fixed = TRUE) && length(fg$st$calls) == before_calls)
+
+# What the analyst edited is what the workers get.
+edited <- with_field(build_prompt(fl_form), user = "EDITED PROMPT TEXT", edited = TRUE)
+fh <- rec_ask(reply_ok)
+fl_ed <- run_drafts(fl_form, fl_workers, ask = fh$ask, prompt = edited)
+ok("an edited prompt is the one sent to every worker, and is kept as the list's attribute",
+   identical(unique(purrr::map_chr(fh$st$calls, "user")), "EDITED PROMPT TEXT") &&
+     identical(attr(fl_ed, "prompt")$edited, TRUE) && identical(attr(fl_ed, "prompt")$hash, build_prompt(fl_form)$hash))
+ok("run_drafts needs a task that drafts, a prompt that is a prompt, and run_appraisal a seed",
+   grepl("Only a drafting task", tryCatch(run_drafts(forms$evaluate, fl_workers, ask = fh$ask, prompt = edited), error = conditionMessage), fixed = TRUE) &&
+     grepl("system and a user", tryCatch(run_drafts(fl_form, fl_workers, ask = fh$ask, prompt = list(user = "x")), error = conditionMessage), fixed = TRUE) &&
+     grepl("needs a seed", tryCatch(run_appraisal(fl_form, fl_drafts, fl_pm, ask = fh$ask), error = conditionMessage), fixed = TRUE))
+ok("the engine reaches a model only through ask, and never looks up a key: no flow function calls Sys.getenv or llm_key_for",
+   !any(c("Sys.getenv", "llm_key_for", "llm_session_key", "llm_json", "llm_complete") %in%
+          all.names(c(body(run_brief), body(run_drafts), body(run_appraisal), body(call_model)))))
+
+# Through the real llm_json(), with the network stood in for: the validator retries
+#   a draft with the wrong count, and the log keeps the call's cost and no key.
+rj_state <- new.env()
+rj_state$n = 0L
+rj_state$wrong_once = FALSE
+rj_complete <- function(m, system_prompt, user, max_tokens, key, timeout = NULL) {
+  rj_state$n = rj_state$n + 1L
+  obj = if (identical(m$id, "vendor-b/model-two") && !rj_state$wrong_once) {
+    rj_state$wrong_once = TRUE
+    tagged_draft(m, 3L)
+  } else reply_ok(m, system_prompt)
+  structure(as.character(jsonlite::toJSON(obj, auto_unbox = TRUE)), provider = "example.invalid",
+            finish = "success", tokens = c(input = 100, output = 50, cached_input = 0), seconds = 0.01)
+}
+rj_ask <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
+  llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens, validate = validate,
+           key = "SECRET-KEY-XYZ", complete = rj_complete, pause_base = 0.01, pause_min = 0.01)
+llm_clear_counters(llm_session_id())
+rj_brief <- run_brief(fl_form, fl_pm, ask = rj_ask)
+rj_drafts <- run_drafts(fl_form, fl_workers, ask = rj_ask)
+rj_ap <- run_appraisal(fl_form, rj_drafts, fl_pm, ask = rj_ask, seed = 11L)
+ok("through llm_json(): a draft with the wrong number of items is retried until it is right, and the whole flow is ok",
+   identical(purrr::map_chr(rj_drafts, "status"), c("ok", "ok", "ok")) &&
+     identical(rj_brief$status, "ok") && identical(rj_ap$status, "ok") &&
+     attr(rj_drafts[[2]], "call")$attempts == 2L && rj_state$n == 6L)
+ok("the call record keeps the reply as sent, why it stopped, the tokens and the attempts",
+   local({
+     cl = attr(rj_drafts[[1]], "call")
+     identical(cl$finish, "success") && identical(cl$tokens$input, 100) && identical(cl$tokens$output, 50) &&
+       cl$attempts == 1L && grepl("\"items\"", cl$raw, fixed = TRUE) && is.numeric(cl$seconds)
+   }))
+rj_round <- flow_round(fl_form, fl_pm, rj_brief, rj_drafts, rj_ap, seed = 11L)
+rj_json <- as.character(flow_log_json(rj_round))
+rj_back <- jsonlite::fromJSON(rj_json, simplifyVector = FALSE)
+ok("the round is the log: schema 1, the time and a summary first, then the form, seed, prompts and replies, as valid JSON",
+   identical(names(rj_back)[1:3], c("schema", "time", "summary")) && identical(rj_back$schema, 1L) &&
+     length(rj_back$summary) == 5L && identical(rj_back$seed, 11L) &&
+     identical(rj_back$form$research_question, fl_form$research_question) &&
+     identical(rj_back$prompt$hash, build_prompt(fl_form)$hash) && length(rj_back$drafts) == 3L &&
+     identical(rj_back$appraisal$labels, as.list(fl_ap$labels)) && identical(rj_back$appraisal$hash, rj_ap$hash))
+ok("the summary has one row per call with the step, model, status, seconds, tokens and attempts",
+   identical(purrr::map_chr(rj_back$summary, "step"), c("brief check", "draft", "draft", "draft", "appraisal")) &&
+     identical(purrr::map_chr(rj_back$summary, "model"), c(fl_pm$id, fl_ids, fl_pm$id)) &&
+     identical(purrr::map_dbl(rj_back$summary, "tokens_in"), rep(100, 5L)) &&
+     identical(purrr::map_int(rj_back$summary, "attempts"), c(1L, 1L, 2L, 1L, 1L)))
+ok("no key is in the log, though the call that made it was given one",
+   !grepl("SECRET-KEY-XYZ", rj_json, fixed = TRUE) && !any(grepl("key", names(rj_back$form), fixed = TRUE)) &&
+     !any(Sys.getenv() == "SECRET-KEY-XYZ"))
+ok("a round with only the form is a valid log too",
+   identical(jsonlite::fromJSON(as.character(flow_log_json(flow_round(fl_form))), simplifyVector = FALSE)$schema, 1L))
