@@ -2,41 +2,152 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
-## Phase 4, in progress (2026-11-11, written at a gate; the final report replaces this)
+## Phase 4 (2026-11-12): Evaluate built, 15-question measurement, gold test
 
-- **Blocked, 4e: the gold items cannot be fetched.** The brief names
-  `github.com/PatrickSturgis/cogbot-replication`; that repository does not exist
-  (the API and the web page both return 404). The author's account has one
-  related repository, `PatrickSturgis/cogbot` ("LLM-based cognitive interviewing
-  for survey question pretesting"): it holds the package, `data/backstories_*.csv`
-  and one example script, and no flawed items, no ESS control items and no answer
-  key (I read its README, `examples/evaluate_question.py` and `cogbot/prompts.py`).
-  I did not write the items from memory. **Kevin: the file, or the right
-  repository name, is needed.** 4a to 4d do not depend on it.
-- **Done and committed:** the Claude project's files `c273eb9`; 4a `463f0c0`
-  (section 13 applied); 4b `0439b18` (`run_review`, `check_review`); 4c `0f1e097`
-  (the Evaluate screens). Smoke is 319 checks, all ok. The drafting prompt hashes
-  changed once, at 4a, because `generate.md` is 0.3: 45 of the 60 I record moved
-  (every drafting form), the 15 Evaluate ones did not; they have not moved since
-  (compared after 4b and 4c).
-- **4d is run (2026-11-12):** one live review of `tests/review_questionnaire.txt`
-  (15 questions, 1,823 characters, written for the test), ceiling raised to
-  24,000 in that process only. **154.9 seconds, 4,774 tokens in, 21,272 out,
-  finish success, 1 attempt**; 33 findings, 20 rated 5 or above, 4 about the
-  instrument; R's checks flagged 1 quote not found (a severity-2 finding whose
-  evidence was elided with "...") and 0 checks not sent. Numbers are in
-  `tests/review_tokens.md`; the raw reply is `tests/review15_run.json`. Set from
-  it: `LLM_MAX_TOKENS[["evaluate"]]` 8000 to **43,000** (about twice 21,272) and
-  `APP_MAX_PASTE_CHARS` 15,000 to **4,000** (about twice 1,823). Smoke still 319,
-  all ok. **Worth knowing:** a 15-question review used 89% of a 24,000 ceiling,
-  so output is about 1,400 tokens a question; the old 15,000-character cap would
-  have allowed far more than any ceiling can finish. At 43,000 tokens a review
-  can take about 5 minutes (LLM_TIMEOUT_S is 600).
-- **`reasoning_effort` (VERIFY from section 13):** passed through
-  `ellmer::params()`. Checked against a local server: `chat_anthropic()` sends
-  adaptive thinking with that effort; `chat_openai_compatible()` in ellmer 0.4.2
-  sends nothing. So it is unset in every entry, as the default says; an
-  OpenAI-style worker could take it through `api_args` instead, not tried.
+**Take `REVIEW.md`, this file, `tests/review_tokens.md`, `tests/gold_summary.md` and
+`tests/gold_matches.csv` to the Claude project.** Nothing is pushed.
+
+- **Commits, branch `questionr`:** the Claude project's files `c273eb9`; 4a
+  `463f0c0`; 4b `0439b18`; 4c `0f1e097`; 4d preparation `1d930ec`; 4d
+  `d77a3bc`; 4e preparation (gold file and runner) `01c7100`; and the commit
+  that carries this file, `REVIEW.md`, the gold results and `PROMPTS.md`.
+- **Smoke:** 319 checks, all ok, no model calls. `tests/review.R 4`: **no FAIL**;
+  11 of 12 code files (`gold_run.R` is the eleventh).
+
+### What was built
+
+- **4a, section 13 applied.** Skills 0.3 in place (not edited by me). The appraisal
+  carries `set_fails` and a severity on every fail; Results shows fails at severity
+  5 or above and folds the rest; a candidate's set-level fails are shown once under
+  it; the merged option is made from items with no fail at 5 or above. Ceilings
+  brief 4,000, draft 12,000, appraisal 24,000 (evaluate: see 4d). At most 10 items a
+  run (`MAX_ITEMS_PER_RUN`); a cut-off reply says what to do, by step
+  (`LLM_CUTOFF_ADVICE`); Luna is the last worker; midpoint is coded as the number of
+  scale points, whether it is odd and what the item itself says; `reasoning_effort`
+  is passed through `ellmer::params()`.
+- **4b, `run_review(form, pm, ask = llm_json, prompt = NULL)` and
+  `check_review(reply, form)`.** The result has the shape of `run_brief`'s.
+  `check_review` returns one row per finding (item, check, severity, evidence,
+  evidence_found, check_known, and the finding's own fields); a quote not in the
+  pasted text, or a check that was not sent, is flagged, not dropped. The paste cap
+  is enforced in `clean_form`. `review.R` section 9 passes.
+- **4c, the Evaluate screens.** Approve is enabled and makes one call; findings
+  show question by question (five or more shown, the rest in a fold); a flag on a
+  quote not found or an unknown check; instrument findings; the TRAPD steps still
+  needed; what to test first; what was not assessed. Smoke runs the whole Evaluate
+  flow on a fake `ask`. I also checked the screens in the real browser with a copy
+  of the app and a stand-in for the models.
+- **4d, the 15-question measurement.** One live review of
+  `tests/review_questionnaire.txt` (15 questions, 1,823 characters, written for the
+  test), the ceiling raised to 24,000 in that process only: **154.9 seconds, 4,774
+  tokens in, 21,272 out, finish success, 1 attempt**; 33 findings, 20 at 5 or above,
+  4 about the instrument; R flagged 1 quote not found (a severity-2 finding whose
+  evidence was shortened with "...") and no check not sent. Set from it:
+  **evaluation ceiling 43,000 tokens** (was 8,000) and **paste cap 4,000
+  characters** (was 15,000), each about twice what the run used.
+  `tests/review_tokens.md` has the numbers; `tests/review15_run.json` the reply.
+- **4e, the gold test.** `tests/gold_items.csv` (the Claude project's transcription
+  of Appendix B, unedited) and `tests/gold_run.R go`: 27 reviews, each item alone
+  through `run_review()` with the app's ceiling, the model shown only `Q1.` and the
+  options line, asserted before every call. All 27 finished on the first attempt, none
+  cut off: 838 seconds, 112,254 tokens in, 106,374 out (about 3,900 out and 31
+  seconds an item). Raw replies are in `tests/gold_runs/`. **Numbers (matching by
+  me, to be checked): 36 of 48 known problems found (75.0%; 33 exact, 3
+  approximate); 36 of the 45 that can be judged (80.0%); target 65%. Findings at 5
+  or above per control item: 0.43 (3 over 7 items), also 0.43 after setting aside
+  findings only about the unshown in-between options (there were none); target at
+  most 1.0.** Weakest types: sensitivity 1 of 4, response-mapping 3 of 7 (3 of the 4
+  failures need the full scale). Six of the 12 missed problems have a finding rated 3
+  or 4 that matches them, which the 5-or-above rule hides; I did not move the
+  threshold. 28 findings at 5 or above on flawed items matched nothing; they are in
+  `tests/gold_summary.md` in full for the Claude project to judge.
+
+### Decisions taken, with the default used
+
+18. **A review of one question is one call, no worker.** Same prompt as
+    `build_prompt()` gives, so the Evaluate hashes in `REVIEW.md` section 6 did not
+    move (`evaluate` `907cea17...`, `evaluate_translated` `332a79ae...`).
+19. **`run_review()` takes an optional `prompt`** (not in section 13): without it an
+    analyst's edit to the Evaluate prompt would be ignored while the screen said it
+    was used. The edited prompt is kept as the result's attribute `prompt`.
+20. **The appraisal severity rule:** a fail with no severity is shown (not
+    hidden); severity below 5 is folded; set-level fails count against no item.
+21. **`reasoning_effort` stays unset in every `APP_MODELS` entry** (as the default
+    said). Against a local test server, `chat_anthropic()` turns it into adaptive
+    thinking with that effort; `chat_openai_compatible()` in ellmer 0.4.2 sends
+    nothing. An OpenAI-style worker could take it through `api_args`; not tried.
+22. **The measurement uses a 24,000 ceiling in its own process only,** and the
+    gold test the app's 43,000, not raised. A gold call cut off at its ceiling is
+    recorded and not rerun; there was none.
+23. **Gold matching rules I fixed before reading results:** only findings at 5 or
+    above are matched, one to one; question-level findings are the main count for
+    control items and instrument-level ones are listed apart (there was no instrument
+    finding on a control item); `gold_matches.csv` has an extra column,
+    `only_unshown_options`, and a `note` on close calls.
+24. **The gold file says 19 of the 27 scales are incomplete (end options only), not
+    16** as the brief said. I used the file as it is.
+25. **Prompt hashes.** The five fixed forms in `REVIEW.md` section 6: attitudinal
+    `8f3b2f32...`, behavioral `bf022b8c...`, sensitive `96325718...` (the three
+    drafting forms; changed once, at 4a, because `generate.md` is 0.3) and evaluate
+    `907cea17...`, evaluate_translated `332a79ae...` (unchanged). Full hashes are in
+    `REVIEW.md` section 6. Of the 60 I record across the forms, 45 drafting ones moved
+    at 4a and none since.
+
+### Skipped, stubbed or not done
+
+- Output and Methodology tabs are still placeholders.
+- `reasoning_effort` for an OpenAI-style worker is not tried (decision 21).
+- The 43,000-token ceiling has not been exercised by a review that long: the
+  longest real one used 21,272 (15 questions) and the gold items used 2,179 to 6,521.
+  A review of 15 questions took 155 seconds; at the new cap a full one could take
+  about 5 minutes against the 600-second timeout.
+- The gold matching is mine and unchecked.
+
+### What a model did that the skills did not expect
+
+- **Evidence is often a description, not a quote.** Of the 100 question-level
+  findings in the gold run, **45 had evidence R could not find in the pasted text**
+  (for example "'a scale running from X to Y' with no 'does not apply' option visible",
+  or a quote with "..." in it). The skill says "the exact words or feature", so this
+  is allowed, but the screen's "quote not found" flag would fire on nearly half of
+  all findings. That flag was built for a made-up quote; it does not tell those
+  apart. For the Claude project to decide.
+- **It said so when the in-between options were not shown** ("the middle options were
+  not shown, so evenness could not be checked") in 7 findings, rather than inventing
+  a fault, which is what the wording was for. Five were rated 4; two were rated 5
+  (F7 and F15, options_fit) and each also says something else.
+- **One-question reviews still produced instrument findings** (2, both on flawed
+  items, both repeating the presupposition finding as a missing filter).
+- **Severity does not track how often a fault is on the author's list:** neutral_wording
+  on "deserve to be punished severely" was 4, on "scandals in government" 8; the
+  idiom "the way things are going" was 4 and 'terms of employment' 6.
+- **It reached for `specific_concrete` and `plain_words` often** (18 and 11 of the 67
+  findings at 5 or above), including on controls: the three control findings at 5 or
+  above were a missing time frame or an undefined term.
+
+### Click-through for Kevin (Evaluate, added to the list below)
+
+Run `shiny::runApp("QuestionR")` from the repository root. Free until step 5.
+
+1. **1. Brief:** choose Evaluate. The questionnaire box shows and the note says it
+   is one call and gives the paste limit (4,000 characters). Paste more than 4,000
+   characters: the message should say to paste it in parts, and nothing is sent.
+2. Paste the 15-question text from `tests/review_questionnaire.txt` (it is under the
+   cap), fill the research question and population, and press Skip.
+3. **2. Prompt:** read it; Approve is enabled and the text says one call.
+4. Edit the message and approve: the Results page should say the prompt was edited.
+5. **Approve and run** (one call, about $0.20; about 2.5 minutes). **3. Results**
+   should show each question with its findings (five or more shown, the rest in a
+   fold), the instrument findings, the TRAPD steps, what to test first and what was
+   not assessed. Look for a "quote not found" flag: expect it on a good share of
+   findings (see above).
+6. Generate with a worker and the appraisal as before; fails should now show only at
+   severity 5 or above, with a fold for the rest and the set-level fails once under
+   each candidate.
+
+### Remaining FAIL in `REVIEW.md`
+
+None.
 
 ## Where things stand (2026-11-11, end of the Phase 3 session)
 

@@ -229,3 +229,55 @@ take REVIEW.md, STATUS.md, tests/review_tokens.md, tests/gold_summary.md and
 tests/gold_matches.csv to the Claude project.
 ```
 
+## Phase 4e: the gold test, with the items file from the Claude project
+
+```
+tests/gold_items.csv is now in place, written by the Claude project from
+Appendix B of the paper (the replication repository named there does not
+exist). Read its four header lines. Do not edit the file.
+
+Check it first and tell me what you find: 27 items (20 flawed, 7 control),
+48 known problems, one row per known problem and one row per control item,
+columns id, set, topic, question, scale, scale_complete, problem_id,
+problem_type, problem, needs_full_scale. Lines starting with # are comments.
+
+Then do step 4e of DESIGN.md section 13, with these additions:
+
+- What the model is shown for each item, as the pasted questionnaire, and
+  nothing else from the file:
+    Q1. <question>
+    Response options: <scale>
+  When scale_complete is FALSE, write the second line as
+    Response options: a scale running from <first> to <last> (the options in
+    between are not shown in this test)
+  so the model is not led to think the two end options are the whole scale.
+- The paper prints only the end options for 16 of the 27 scales. Three known
+  problems (needs_full_scale TRUE) cannot be judged without the options in
+  between. Report the share found twice: of all 48, and of the 45 that can
+  be judged. Report findings per control item twice as well: all findings at
+  severity 5 or above, and those left after setting aside any finding that
+  is only about the in-between options not being shown.
+- Everything else as section 13 and the Phase 4 prompt say: each item
+  reviewed alone through run_review(); the model never sees the answer key,
+  the topic, the set or the id beyond "Q1"; raw replies saved under
+  tests/gold_runs/ with no key in them; matching done by you after all 27
+  are saved, exact, approximate or none, one to one; no skill, prompt,
+  threshold or test changed to move the numbers; a call cut off at its
+  ceiling is recorded and not rerun.
+- In tests/gold_summary.md also give: detection by problem_type; seconds and
+  output tokens per item (mean and range); the count of findings below
+  severity 5 on flawed and on control items; and every finding at 5 or above
+  on a flawed item that matched nothing, in full, for the Claude project to
+  judge.
+
+Before any live call tell me the number of calls (27) and the cost, and wait
+for my yes.
+
+Then finish Phase 4: run tests/smoke.R and tests/review.R 4 until there is
+no FAIL you can fix, update STATUS.md as the Phase 4 prompt says, including
+the settings from 4d (evaluation ceiling 43,000 tokens, paste cap 4,000
+characters), commit with REVIEW.md, do not push, and stop. Tell me to take
+REVIEW.md, STATUS.md, tests/review_tokens.md, tests/gold_summary.md and
+tests/gold_matches.csv to the Claude project.
+```
+

@@ -1,6 +1,6 @@
-# QuestionR review evidence, Phase 3
+# QuestionR review evidence, Phase 4
 
-Generated 2026-11-11 22:14 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-12 16:37 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,6 +12,14 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+01c7100 QuestionR 4e preparation: gold items file and the gold runner
+d77a3bc QuestionR 4d: evaluation ceiling and paste cap from one live 15-question review
+1d930ec QuestionR: Phase 4d preparation (15-question review, STATUS at the gate)
+0f1e097 QuestionR: Phase 4c Evaluate screens
+0439b18 QuestionR: Phase 4b run_review and check_review
+463f0c0 QuestionR: Phase 4a apply design section 13 (severity, set-level fails, ceilings, midpoint coding)
+c273eb9 QuestionR: changes from the Claude project (design section 13, generate and pm_appraise 0.3, review.R section 9)
+a656f4b QuestionR: Phase 3 live run of the engine, two fixes it found, REVIEW.md
 d03f7db QuestionR: llm_check.R go generate runs the Generate engine live
 76b6354 QuestionR: Phase 3c Generate screens: Brief, Prompt, Results, Run again
 aa07e01 QuestionR: Phase 3b flow engine, reply schemas, coded defaults, checks
@@ -19,62 +27,60 @@ aa07e01 QuestionR: Phase 3b flow engine, reply schemas, coded defaults, checks
 539ec08 QuestionR: changes from the Claude project (design section 12, prompts, review.R section 8)
 c8870dd QuestionR: STATUS.md records the Phase 2 commit
 025a86f QuestionR: Phase 2 model layer, connection check, live check
-670b899 QuestionR: Phase 1b bring skills.R into line with DESIGN sections 4 and 5
-0228360 QuestionR: review changes from the Claude project (skills 0.2, design, review.R)
-ca5aa70 QuestionR: Phase 1 skills loader and prompt assembly
-d651cfe QuestionR: Phase 0 scaffold, key box and profile block
-00e5741 svysegment: segment names follow the AI reflexes
-6ed970c svysegment: number check accepts correctly rounded figures
-877cd8d svysegment: send no temperature unless one is configured
-aeee335 svysegment: call Claude through ellmer::chat_anthropic() instead of hand-built OpenRouter requests
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
- M R/checks.R
- M R/flow.R
+ M PROMPTS.md
  M REVIEW.md
  M STATUS.md
- M tests/smoke.R
-?? tests/run_generate.json
+?? tests/gold_matches.csv
+?? tests/gold_runs/
+?? tests/gold_summary.md
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
- CLAUDE.md                              |    1 +
- QuestionR/.rscignore                   |    7 +
- QuestionR/DESIGN.md                    |  533 ++++++++++
- QuestionR/PROMPTS.md                   |  171 +++
- QuestionR/R/_disable_autoload.R        |    5 +
- QuestionR/R/checks.R                   |  267 +++++
- QuestionR/R/flow.R                     |  213 ++++
- QuestionR/R/llm.R                      |  592 +++++++++++
- QuestionR/R/skills.R                   |  577 +++++++++++
- QuestionR/R/ui.R                       |  180 ++++
- QuestionR/R/ui_generate.R              |  606 +++++++++++
- QuestionR/README.md                    |   43 +
- QuestionR/REVIEW.md                    | 1128 ++++++++++++++++++++
- QuestionR/STATUS.md                    | 1066 +++++++++++++++++++
- QuestionR/app.R                        |  194 ++++
- QuestionR/tests/llm_check.R            |  284 +++++
- QuestionR/tests/llm_check.out          |   24 +
- QuestionR/tests/openrouter_check.R     |   81 ++
- QuestionR/tests/review.R               |  511 +++++++++
- QuestionR/tests/smoke.R                | 1774 ++++++++++++++++++++++++++++++++
- QuestionR/www/methodology.md           |   71 ++
- QuestionR/www/skills/README.md         |   66 ++
- QuestionR/www/skills/attitudinal.md    |   72 ++
- QuestionR/www/skills/behavioral.md     |   67 ++
- QuestionR/www/skills/core.md           |   92 ++
- QuestionR/www/skills/cross_cultural.md |   66 ++
- QuestionR/www/skills/evaluate.md       |  117 +++
- QuestionR/www/skills/generate.md       |   79 ++
- QuestionR/www/skills/mode.md           |   57 +
- QuestionR/www/skills/pm_appraise.md    |   63 ++
- QuestionR/www/skills/pm_brief.md       |   42 +
- QuestionR/www/skills/sensitive.md      |   90 ++
- README.md                              |    2 +
- 33 files changed, 9141 insertions(+)
+ CLAUDE.md                                |    1 +
+ QuestionR/.rscignore                     |    7 +
+ QuestionR/DESIGN.md                      |  599 ++++++++
+ QuestionR/PROMPTS.md                     |  231 ++++
+ QuestionR/R/_disable_autoload.R          |    5 +
+ QuestionR/R/checks.R                     |  390 ++++++
+ QuestionR/R/flow.R                       |  260 ++++
+ QuestionR/R/llm.R                        |  607 +++++++++
+ QuestionR/R/skills.R                     |  590 ++++++++
+ QuestionR/R/ui.R                         |  180 +++
+ QuestionR/R/ui_generate.R                |  759 +++++++++++
+ QuestionR/README.md                      |   43 +
+ QuestionR/REVIEW.md                      | 1352 +++++++++++++++++++
+ QuestionR/STATUS.md                      | 1370 +++++++++++++++++++
+ QuestionR/app.R                          |  196 +++
+ QuestionR/tests/gold_items.csv           |   60 +
+ QuestionR/tests/gold_run.R               |  151 +++
+ QuestionR/tests/llm_check.R              |  351 +++++
+ QuestionR/tests/llm_check.out            |   24 +
+ QuestionR/tests/openrouter_check.R       |   81 ++
+ QuestionR/tests/review.R                 |  585 ++++++++
+ QuestionR/tests/review15_run.json        |  498 +++++++
+ QuestionR/tests/review_questionnaire.txt |   15 +
+ QuestionR/tests/review_tokens.md         |   18 +
+ QuestionR/tests/run_generate.json        |  864 ++++++++++++
+ QuestionR/tests/smoke.R                  | 2176 ++++++++++++++++++++++++++++++
+ QuestionR/www/methodology.md             |   71 +
+ QuestionR/www/skills/README.md           |   66 +
+ QuestionR/www/skills/attitudinal.md      |   72 +
+ QuestionR/www/skills/behavioral.md       |   67 +
+ QuestionR/www/skills/core.md             |   92 ++
+ QuestionR/www/skills/cross_cultural.md   |   66 +
+ QuestionR/www/skills/evaluate.md         |  117 ++
+ QuestionR/www/skills/generate.md         |   77 ++
+ QuestionR/www/skills/mode.md             |   57 +
+ QuestionR/www/skills/pm_appraise.md      |   77 ++
+ QuestionR/www/skills/pm_brief.md         |   42 +
+ QuestionR/www/skills/sensitive.md        |   90 ++
+ README.md                                |    2 +
+ 39 files changed, 12309 insertions(+)
 exit status: 0
 ~~~~
 
@@ -82,20 +88,21 @@ exit status: 0
 
 | file | lines |
 |---|---|
-| app.R | 194 |
+| app.R | 196 |
 | R/_disable_autoload.R | 5 |
-| R/checks.R | 269 |
-| R/flow.R | 221 |
-| R/llm.R | 592 |
-| R/skills.R | 577 |
+| R/checks.R | 390 |
+| R/flow.R | 260 |
+| R/llm.R | 607 |
+| R/skills.R | 590 |
 | R/ui.R | 180 |
-| R/ui_generate.R | 606 |
-| tests/llm_check.R | 284 |
+| R/ui_generate.R | 759 |
+| tests/gold_run.R | 151 |
+| tests/llm_check.R | 351 |
 | tests/openrouter_check.R | 81 |
-| tests/review.R | 511 |
-| tests/smoke.R | 1794 |
+| tests/review.R | 585 |
+| tests/smoke.R | 2176 |
 
-Code files counted: 10 of 10 allowed: PASS
+Code files counted: 11 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
 
 ## 3. Hard rules
@@ -108,11 +115,11 @@ R/_disable_autoload.R present and empty of code: PASS
 | Sys.setenv() in the app | none | PASS |
 | addResourcePath() or system.file() in the app | none | PASS |
 | parallelism (future, furrr, mirai, parallel, parallel_chat*) | none | PASS |
-| key read from the environment for a pasted-key model (Sys.getenv in R/, listed for reading) | R/llm.R:116 Sys.getenv | READ |
+| key read from the environment for a pasted-key model (Sys.getenv in R/, listed for reading) | R/llm.R:126 Sys.getenv | READ |
 
 Top-level expressions in R/ that are not assignments: PASS
 Names defined more than once across R/: PASS
-pkg::fn calls checked: 28. Not exported by the installed package: PASS
+pkg::fn calls checked: 30. Not exported by the installed package: PASS
 
 ## 4. Skill files
 
@@ -126,9 +133,9 @@ PASS means the file is byte for byte what the Claude project drafted (line endin
 | core.md | PASS | 770a402a6dc4b60389e4c266f43cdaa28dc8ccc0e88938f76cb9b72a54379f35 |
 | cross_cultural.md | PASS | 6c8a19b8c17b19808b4cfca788b3c76a7595d54a3a25a71e355391cb944bdd4d |
 | evaluate.md | PASS | 2952362b6d8e2efadff970a8b21069b768d7145808ec5b524ca8b98a998e57c1 |
-| generate.md | PASS | e196e81245b266fbc6321016575d932dbcb24311c366683475e8945c8bbaf738 |
+| generate.md | PASS | 9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2 |
 | mode.md | PASS | 98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0 |
-| pm_appraise.md | PASS | ced64452127616e41906380b972fc100c3a11443cfdc564e615fe13ea78e0b57 |
+| pm_appraise.md | PASS | f45e6e4ae77020fadf0cc1d6162b84f015300984e4eafcc9e83cf0116472c4eb |
 | pm_brief.md | PASS | a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a |
 | sensitive.md | PASS | 0ebc82a948f01caed0847f3d4a6cda87216f33dc3039e764cb8c1ab8ac45e726 |
 
@@ -245,7 +252,7 @@ ok  a transient error (503, a timeout) is tried again, and the third attempt suc
 ok  a reply that never parses fails after exactly three attempts
 ok  the failure names the model, the endpoint and why it stopped, and carries the raw reply
 ok  a reply cut off at the token limit is a failure even when what arrived would parse, and is not tried again
-ok  the ceilings and the timeout are Kevin's Phase 3 settings
+ok  the ceilings are section 13's (brief 4000, drafting 12000, appraisal 24000) and the timeout 600 s
 ok  the echoed example object is a failed attempt, retried
 ok  a reply that fails the validator is tried again; one that passes is returned
 ok  a validator's own message reaches the analyst when every attempt fails
@@ -276,7 +283,7 @@ ok  a 401 is a client error, and the key the endpoint echoed back is blanked
 ok  a 502 with no content type is an error the analyst can read, and is not a client error
 ok  llm_json() through the real path: the echoed object comes back parsed, with the message as sent
 ok  a 404 through llm_json() makes one request, not three
-ok  a reply cut off at the ceiling is requested once, then fails saying so and asking for fewer items
+ok  a reply cut off at the ceiling is requested once, then fails saying so
 ok  the same on the OpenAI-style call, whose ceiling is max_completion_tokens
 ok  the connection check's call: ready when the endpoint answers, one request each, the reply kept
 ok  the connection check's call: the endpoint's own words when it refuses, never the key
@@ -322,7 +329,8 @@ ok  an item with neither options nor an open_format fails, naming the item
 ok  a reply that is not an object, or whose items are not a list, fails
 ok  the draft validator is what llm_json() is given: a fields problem is a readable sentence ending in a full stop
 ok  a brief check with its fields passes; one with a string for complete, or a question with no ask, fails
-ok  an appraisal with its six fields passes, empty lists included; a missing limits or a fail with no check fails
+ok  an appraisal with its seven fields passes, empty lists included; a missing limits or set_fails fails
+ok  a fail must name its check and give a severity from 1 to 10, one about the set too
 ok  a format that has no schema stops, naming it
 ok  a new output format is one entry: the validator is built from REPLY_SCHEMAS alone
 ok  coded defaults match the hand-coded fixture: five labelled points and a don't know
@@ -332,9 +340,14 @@ ok  coded defaults match the hand-coded fixture: a curly apostrophe and a not-ap
 ok  coded defaults match the hand-coded fixture: French: points, don't know and period are not coded
 ok  coded defaults match the hand-coded fixture: an item with only a stem and options
 ok  the coded defaults read as words for a table, with not coded where it is
+ok  a five-point scale whose decisions say there is no midpoint is odd and stated as no midpoint, and R does not say 'midpoint' for the count
+ok  what an item says about a midpoint is read as yes, no or not stated, in the phrasings the models used
+ok  decisions written as one string or one entry are flagged not itemised, two or more are itemised, none is none
 ok  an appraisal's fails are read with whether each check is an id that was sent
+ok  a fail is shown at severity 5 or above and folded below it; one with no severity is shown
+ok  the fails about a candidate's whole set are kept apart, with the items they name, and count against no item
 ok  an item the appraiser gave no entry is not appraised, not a pass; an entry for no item is flagged
-ok  a merged item that does not exist, or that failed a check, is a problem; an empty domain is not
+ok  a merged item that does not exist, or has a fail rated 5 or above, is a problem; one with only a low fail is not; an empty domain is not
 ok  an appraisal with nothing wrong has no flags
 ok  each result has exactly the fields the design names
 ok  the flow makes one brief call, one call per worker in the workers' order, and one appraisal call
@@ -377,7 +390,8 @@ ok  Continue after a check keeps the check and moves to the prompt
 ok  a brief check that fails is said on the page in words, with the reason, and offers to skip
 ok  a field the chosen task does not show is blank in the form, whatever was typed there before
 ok  a field the task does show is carried (the reference period, for behavioral items)
-ok  Evaluate carries its questionnaire, no item count and no workers, and says it is built in Phase 4
+ok  Evaluate carries its questionnaire, no item count and no workers, and says it makes one review and what the limit is
+ok  a questionnaire over the cap is refused on the Brief tab with its length and the limit, and nothing moves on
 ok  a requested change is shown on the Brief tab with the round it belongs to, and can be dropped
 ok  the change goes into the form as its revision, and so into the prompt as a REVISION block
 ok  dropping the change clears it
@@ -394,14 +408,16 @@ ok  an edited prompt is marked edited, showing both hashes
 ok  approving an edited prompt sends the edited text, marks it edited, and keeps both hashes
 ok  a browser's line endings are not an edit
 ok  an empty prompt is refused on the page, and no run starts
-ok  Evaluate's prompt can be read but not run: the button is off and the page says why
-ok  pressing it anyway starts nothing, and says so
+ok  Evaluate's prompt can be read and approved: the button is on and the page says it makes one call
+ok  approving a review prompt, edited or not, starts a run with the edited text and both hashes
 ok  before any run the Results tab says nothing has been run
 ok  a run makes one call per worker and one for the appraisal, and records the round in the state and the log
 ok  each candidate is shown by letter with its items, options and the model that wrote it
 ok  each item shows the coded defaults and has a tick box to keep it
 ok  a failed check is shown with the appraiser's failing words and the check's question; one that was not sent is flagged
 ok  an item the appraiser gave no entry is not shown as passed
+ok  fails below severity 5 are folded away, not listed, and a candidate's set-level fails are shown once under it
+ok  an item whose design decisions are one entry, not several, is flagged on the page (every canned item here)
 ok  below the candidates: coverage, differences, the merged option labelled untested, what to test first, the limits
 ok  R's checks on the appraisal are shown: the check that was not sent, and the items given no entry
 ok  the criteria applied are listed, and the prompt hash and seed are shown, with no model name given to the appraiser
@@ -420,6 +436,41 @@ ok  no key is anywhere on the page
 ok  the log keeps the brief check's and the appraisal's own call records: raw reply, tokens, attempts
 ok  a model's own words for labelling every point are read as yes, in the phrasings the live run produced
 ok  labels said to be partial or absent are read as no, and a silence is not stated
+ok  a cut-off brief check says to try again or skip; a cut-off draft to ask for fewer items; a cut-off appraisal to untick a worker
+ok  an error that is not a cut-off gets no cut-off advice
+ok  a run drafts at most 10 items: 10 is accepted, 11 is refused saying so, and the form's box stops at 10
+ok  a pasted questionnaire over the cap is refused, saying how long it is and what the limit is; at the cap it is accepted
+ok  Luna is the last of the workers (decision 15)
+ok  a model entry's reasoning_effort reaches the Anthropic-style call as adaptive thinking with that effort; unset sends neither
+ok  ellmer 0.4.2 does not send reasoning_effort on the OpenAI-style call (so it is left unset), and no entry sets it
+ok  a review with its five fields passes: findings per question, instrument findings, TRAPD, test_first, not_assessed
+ok  a question's id may be a label or a number, and an empty list of findings is a question with none
+ok  a review missing a field, or with a finding that has no check, evidence, problem or severity from 1 to 10, fails naming the question
+ok  run_review has the fields of run_brief, uses build_prompt()'s prompt, and makes one call at the evaluation ceiling
+ok  a review that errors, is cut off, or fails the schema is failed with a plain reason and is not raised
+ok  a form that is not a review, or has no questionnaire, or is over the cap, is failed without a call
+ok  run_review never looks up a key and reaches no model but through ask
+ok  check_review gives one row per finding, questions and instrument alike, with the columns the flow needs
+ok  a quote that is in the text, and a check that was sent, are accepted; an invented quote and an unknown check are flagged, not dropped
+ok  a quote is found whatever its case, spacing, curly quotes or enclosing quotation marks
+ok  severity 5 and above is shown, below 5 is not, and a finding with no severity is shown
+ok  a review with no findings is a data frame with no rows and the same columns
+ok  the review's checks need the CHECKLIST that was sent: ids in it are known, others are not
+ok  a review round is a log too: the summary row, the review with its prompt hash and its call record
+ok  a review run makes one call to the project manager at the evaluation ceiling, and records the round, with no candidates
+ok  the page says it is one review, shows the prompt hash and that it was edited, and does not claim validation
+ok  findings are shown question by question, in the order pasted, a question with a numeric id included
+ok  a finding at severity 5 or above shows its check and the check's question, severity, quote, rewrite and probe
+ok  a finding below 5 is folded away, and flagged when its quote is not in the text or its check was not sent
+ok  a question with no finding says none was found by this review, never that it has no problems
+ok  instrument-level findings are shown apart, naming the questions involved
+ok  an empty TRAPD block is not drawn; what to test first and what was not assessed are
+ok  R's checks on the review are counted: the quote that is not in the text and the check that was not sent
+ok  the criteria that were applied are listed
+ok  a review of translated text shows the TRAPD steps that are still needed, and only those
+ok  a review that fails is said on the page in words, with its reason, and the round is still recorded
+ok  two findings on one question, a test_first given as plain ids, and no not_assessed are all drawn
+ok  run_review sends an edited prompt when given one, and keeps it as the result's prompt with its own hash
 exit status: 0
 ~~~~
 
@@ -453,9 +504,9 @@ exit status: 0
 | Output language: English shown; Source language left out when the same | PASS |
 | number of items in the ask | PASS |
 
-hash: 4d008204aee86df01103cdf252d71e1b6f5360abc03ac3c687056efc4c052825
+hash: 8f3b2f326d01f516a47cb867c120e6a3bcacb31a04eab31ed400a9f534f306fc
 files: core.md, generate.md, attitudinal.md, mode.md
-characters: system 11004, user 1770
+characters: system 11026, user 1770
 
 Checklist (id: question):
 ~~~~
@@ -468,9 +519,7 @@ no_presupposition: Does the question apply to every respondent who will be asked
 neutral_wording: Is the wording free of any push toward one answer?
 options_fit: Can every respondent find exactly one option that is true for them?
 design_not_topic: Is the item usable as written in the stated mode for the stated population?
-declare_defaults: Is each format decision stated with a reason that comes from the construct, population or mode?
 labelled_scales: Are all points labelled in one consistent form, with poles that match the construct?
-midpoint_and_dont_know: Are the midpoint and don't-know decisions each stated and justified?
 attitude_object: Is the attitude object named and bounded so that respondents will have the same thing in mind?
 specific_before_vague: If a general item is included, is it placed before the specific items on its topic?
 construct_specific_options: Are the response options in the construct's own terms and not agree-disagree?
@@ -498,9 +547,9 @@ REFLEXES: Core (v0.2)
 - brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
 - not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
 
-REFLEXES: Generate (v0.2)
+REFLEXES: Generate (v0.3)
 - design_not_topic (Before writing any item.) Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.
-- declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made and one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
+- declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made, as separate entries with one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
 - labelled_scales (Any ordered response scale.) Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or unipolar (none to a lot) and build the scale to match. MUST NOT: Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.
 - midpoint_and_dont_know (Any attitude or evaluation item.) Decide both explicitly. Offer a midpoint when a middle position is a real answer on the construct. Offer don't know or no opinion when a real share of the population will not have the knowledge or an attitude; say in the notes that offering it raises its use. Keep a not-applicable answer separate from both.
 - response_order (Any closed item.) For unordered lists, note that options should be randomized or rotated where the mode allows, and why: readers favour early options, listeners favour late ones. Keep ordered scales in one direction throughout an instrument.
@@ -590,9 +639,9 @@ Return one JSON object with these fields.
 | form values present (Kenya, Swahili, past 7 days) | PASS |
 | Source language shown when it differs from the output language | PASS |
 
-hash: 0f38e945c698b917e15f30431eaa91392978f1d1445e9eae72b42e02cccff63a
+hash: bf022b8c13313a5c576ef8e21004e3e77c123e295c8fd122112073121bfa890a
 files: core.md, generate.md, behavioral.md, mode.md, cross_cultural.md
-characters: system 15428, user 1831
+characters: system 15450, user 1831
 
 Checklist (id: question):
 ~~~~
@@ -605,9 +654,7 @@ no_presupposition: Does the question apply to every respondent who will be asked
 neutral_wording: Is the wording free of any push toward one answer?
 options_fit: Can every respondent find exactly one option that is true for them?
 design_not_topic: Is the item usable as written in the stated mode for the stated population?
-declare_defaults: Is each format decision stated with a reason that comes from the construct, population or mode?
 labelled_scales: Are all points labelled in one consistent form, with poles that match the construct?
-midpoint_and_dont_know: Are the midpoint and don't-know decisions each stated and justified?
 can_they_know: Is the item asking for something the respondent is likely to have stored and can retrieve?
 reference_period: Is there one stated reference period with unambiguous boundaries, short enough for the behaviour?
 decompose_with_care: If the item is decomposed, are the sub-categories distinct, non-overlapping and memorable?
@@ -640,9 +687,9 @@ REFLEXES: Core (v0.2)
 - brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
 - not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
 
-REFLEXES: Generate (v0.2)
+REFLEXES: Generate (v0.3)
 - design_not_topic (Before writing any item.) Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.
-- declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made and one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
+- declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made, as separate entries with one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
 - labelled_scales (Any ordered response scale.) Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or unipolar (none to a lot) and build the scale to match. MUST NOT: Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.
 - midpoint_and_dont_know (Any attitude or evaluation item.) Decide both explicitly. Offer a midpoint when a middle position is a real answer on the construct. Offer don't know or no opinion when a real share of the population will not have the knowledge or an attitude; say in the notes that offering it raises its use. Keep a not-applicable answer separate from both.
 - response_order (Any closed item.) For unordered lists, note that options should be randomized or rotated where the mode allows, and why: readers favour early options, listeners favour late ones. Keep ordered scales in one direction throughout an instrument.
@@ -747,9 +794,9 @@ Return one JSON object with these fields.
 | face_to_face kept; mixed_mode dropped | PASS |
 | cross_cultural sent | PASS |
 
-hash: ec1ae793277ae3b63ef1aa84763ed16508eb1668b501b01a5c53fb479156c470
+hash: 96325718a3c4f4ef45f50c3da07fe5075e19bd5f178b6f48d52ea595f28cbc2f
 files: core.md, generate.md, sensitive.md, mode.md, cross_cultural.md
-characters: system 15587, user 1850
+characters: system 15609, user 1850
 
 Checklist (id: question):
 ~~~~
@@ -762,9 +809,7 @@ no_presupposition: Does the question apply to every respondent who will be asked
 neutral_wording: Is the wording free of any push toward one answer?
 options_fit: Can every respondent find exactly one option that is true for them?
 design_not_topic: Is the item usable as written in the stated mode for the stated population?
-declare_defaults: Is each format decision stated with a reason that comes from the construct, population or mode?
 labelled_scales: Are all points labelled in one consistent form, with poles that match the construct?
-midpoint_and_dont_know: Are the midpoint and don't-know decisions each stated and justified?
 why_sensitive: Is the kind of sensitivity and the expected direction of misreporting stated?
 mode_and_privacy: Do the notes address who can hear or see the answer in the stated mode?
 forgiving_intro: If a forgiving introduction is used, does it point only toward the under-reported answer and contain no invented fact?
@@ -796,9 +841,9 @@ REFLEXES: Core (v0.2)
 - brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
 - not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
 
-REFLEXES: Generate (v0.2)
+REFLEXES: Generate (v0.3)
 - design_not_topic (Before writing any item.) Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.
-- declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made and one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
+- declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made, as separate entries with one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
 - labelled_scales (Any ordered response scale.) Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or unipolar (none to a lot) and build the scale to match. MUST NOT: Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.
 - midpoint_and_dont_know (Any attitude or evaluation item.) Decide both explicitly. Offer a midpoint when a middle position is a real answer on the construct. Offer don't know or no opinion when a real share of the population will not have the knowledge or an attitude; say in the notes that offering it raises its use. Keep a not-applicable answer separate from both.
 - response_order (Any closed item.) For unordered lists, note that options should be randomized or rotated where the mode allows, and why: readers favour early options, listeners favour late ones. Keep ordered scales in one direction throughout an instrument.
@@ -1209,34 +1254,35 @@ Lines in R/llm.R that build calls or handle keys:
 9: #   "anthropic" calls ellmer::chat_anthropic(); "openai" calls
 10: #   ellmer::chat_openai_compatible(), which takes the base URL of any
 17: # max_tokens for each step (DESIGN.md sections 6 and 12). A reply that reaches
-104: # The one place the environment is read, and only for a model whose key_source
-105: #   is "server": the variable named in its key_var. A model whose key_source is
-110:   switch(m$key_source %||% "",
-113:       if (is.null(m$key_var) || !nzchar(m$key_var))
-114:         llm_fail(paste0("The model ", m$id, " has key_source 'server' and no key_var."),
-116:       k = Sys.getenv(m$key_var)
-119:     llm_fail(paste0("The model ", m$id, " has key_source '", m$key_source,
-128:   if (identical(m$key_source, "server"))
-129:     paste0("Set the server variable ", m$key_var, ".")
-140: llm_host <- function(m) sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url)
-161: #   in a closure (credentials is a function), never through the environment. No
-162: #   temperature is sent unless the model's entry sets one: repeatability comes
-165: llm_chat <- function(m, system_prompt, max_tokens, key) {
-169:   params = ellmer::params(temperature = m$temperature, max_tokens = max_tokens)
-171:     anthropic = ellmer::chat_anthropic(
-173:       cache = LLM_CACHE, base_url = m$base_url,
-174:       credentials = function() key, echo = "none"),
-175:     openai = ellmer::chat_openai_compatible(
-176:       base_url = m$base_url, name = llm_host(m), system_prompt = system_prompt,
-177:       credentials = function() key, model = m$id, params = params,
-187: #   stopped, as ellmer standardises it: "success", "max_tokens", ...), tokens
-189: llm_complete <- function(m, system_prompt, user, max_tokens,
-193:   chat = llm_chat(m, system_prompt, max_tokens, key)
-399: #   environment for a model whose key_source is "analyst". complete is the
-406: llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
-427:     out = complete(m, system_prompt, ask, max_tokens, key)
-436:     if (identical(finish, "max_tokens"))
-437:       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
+114: # The one place the environment is read, and only for a model whose key_source
+115: #   is "server": the variable named in its key_var. A model whose key_source is
+120:   switch(m$key_source %||% "",
+123:       if (is.null(m$key_var) || !nzchar(m$key_var))
+124:         llm_fail(paste0("The model ", m$id, " has key_source 'server' and no key_var."),
+126:       k = Sys.getenv(m$key_var)
+129:     llm_fail(paste0("The model ", m$id, " has key_source '", m$key_source,
+138:   if (identical(m$key_source, "server"))
+139:     paste0("Set the server variable ", m$key_var, ".")
+150: llm_host <- function(m) sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url)
+171: #   in a closure (credentials is a function), never through the environment. No
+172: #   temperature is sent unless the model's entry sets one: repeatability comes
+175: #   which goes through ellmer::params(). Checked in ellmer 0.4.2 against a server
+179: llm_chat <- function(m, system_prompt, max_tokens, key) {
+183:   params = ellmer::params(temperature = m$temperature, max_tokens = max_tokens,
+186:     anthropic = ellmer::chat_anthropic(
+188:       cache = LLM_CACHE, base_url = m$base_url,
+189:       credentials = function() key, echo = "none"),
+190:     openai = ellmer::chat_openai_compatible(
+191:       base_url = m$base_url, name = llm_host(m), system_prompt = system_prompt,
+192:       credentials = function() key, model = m$id, params = params,
+202: #   stopped, as ellmer standardises it: "success", "max_tokens", ...), tokens
+204: llm_complete <- function(m, system_prompt, user, max_tokens,
+208:   chat = llm_chat(m, system_prompt, max_tokens, key)
+414: #   environment for a model whose key_source is "analyst". complete is the
+421: llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
+442:     out = complete(m, system_prompt, ask, max_tokens, key)
+451:     if (identical(finish, "max_tokens"))
+452:       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
 ~~~~
 Live check output (tests/llm_check.out), verbatim:
 ~~~~
@@ -1283,6 +1329,7 @@ ALL GREEN: TRUE  (8 of 8 calls)
 | only drafts that are ok become candidates | PASS |
 | no model id, vendor or endpoint reaches the appraisal prompt | PASS |
 | appraisal prompt: CANDIDATES then CHECKLIST then CHARACTERIZE, with the stems and the check questions | PASS |
+| documentation checks are not in the appraisal checklist (skills 0.3) | PASS |
 | appraisal system prompt: persona and pm_appraise rules, not the drafting rules | PASS |
 | flow.R has no Shiny in it | PASS |
 | flow.R never looks up a key | PASS |
@@ -1349,4 +1396,195 @@ Live run log (tests/run_generate.json), first 60 lines:
       "error": null
     }
   ],
+~~~~
+
+## 9. Review flow and gold test
+
+| check | result |
+|---|---|
+| run_review: status ok, with system, user, hash and the parsed reply | PASS |
+| run_review uses the prompt build_prompt() gives | PASS |
+| a failed call is status failed with a reason, not an R error | PASS |
+| check_review returns one row per finding with item, check, severity, evidence_found, check_known | PASS |
+| a real quote and a sent check id are accepted | PASS |
+| an invented quote and an unknown check id are flagged, not dropped | PASS |
+
+tests/gold_items.csv rows: 59
+
+Token measurement (tests/review_tokens.md), verbatim:
+~~~~
+# Token measurement: one 15-question review (tests/llm_check.R go review15)
+
+Run: 2026-11-12 06:36 | profile: home
+Model: claude-sonnet-5-5 | prompt hash fdae7e07ec83e84b0d67d18f6e6f8edf3cf16b67417eb329095c8a425c661194
+Questionnaire: tests/review_questionnaire.txt, written for this test: 15 questions, 1823 characters.
+Form: research question "Satisfaction with and use of local council services", population "Adults aged 18 and over living in the council area", mode web, no country, English.
+Ceiling used for this measurement: 24000 tokens (the app's was 8000 until this run).
+
+| Seconds | Tokens in | Tokens out | Finish | Attempts | Status |
+|---|---|---|---|---|---|
+| 154.9 | 4774 | 21272 | success | 1 | ok |
+
+Findings: 33 in all, 20 rated 5 or above; 4 about the instrument. R's checks: 1 quotes not found, 0 checks not sent.
+
+## Settings this implies
+
+About twice what it used: an evaluation ceiling of 43000 tokens. The paste cap to match, about twice the characters of this questionnaire: 4000 characters.
+
+~~~~
+
+Gold test matches (tests/gold_matches.csv), verbatim:
+~~~~
+item,set,scope,finding_check,finding_problem,severity,matched_problem_id,match,only_unshown_options,note,evidence
+F1,flawed,question,one_thing,Recycling and street cleaning are two different services joined by 'and'. A respondent who is satisfied with one and dissatisfied with the other has no true answer on a single scale. Any midpoint answer or choice of one service cannot be told apart in the data.,7,F1-P1,exact,,,'the recycling services and street cleaning provided by your local council'
+F1,flawed,question,no_presupposition,"The stem assumes every respondent has these services from the local council and has had some experience of them. Some respondents may have a private or landlord arrangement, no recycling collection, or no idea who provides the service. For them the question does not apply, and there is no filter.",5,F1-P2,exact,,"The finding also says respondents may have had no experience of the services (F1-P3's content); one finding matches one problem, so F1-P3 counts as not found.",'provided by your local council'
+F2,flawed,question,specific_concrete,"The wording does not say whose finances count (own or household), which part of them (income, savings, debts, spending) or what 'current' covers (today, this month, this year). The respondent has to settle all three before judging, so answers can differ in meaning from one person to the next.",6,F2-P1,exact,,,'your current financial situation'
+F3,flawed,question,plain_words,"The stem gives no definition of 'vigorous' or 'moderate', so respondents may draw the line between them in different places, and some may treat the two as the same thing. On the web the definition has to be on screen with the question, and the stem has none.",6,,none,,,'vigorous physical activity and moderate physical activity'
+F3,flawed,question,specific_concrete,"The stem does not say whether activity at paid work, housework, getting around or in free time counts. Respondents who have physically active jobs or do heavy housework could include it or leave it out, and the estimate would shift accordingly.",5,,none,,,'physical activity' (no setting named) and 'In a typical week'
+F3,flawed,question,one_thing,"The item asks about two different intensities of activity and requires one total. A respondent may do a lot of one kind and little of the other, and the total hides this. The two hours-per-week quantities can no longer be analysed separately.",6,F3-P1,exact,,,'vigorous physical activity and moderate physical activity combined'
+F3,flawed,question,retrieval_and_judgment,"Respondents must decide what a 'typical' week is, estimate hours for two kinds of activity and add them in their heads. This is harder for people whose weeks vary, for example because of shift work, seasons or irregular exercise. Short bouts spread across the week are also hard to recall and total up.",6,F3-P2,exact,,,"'In a typical week, how many hours ... combined'"
+F4,flawed,question,neutral_wording,"The opening states as fact that pressure on public services is growing, and the tag 'don't you think' invites a yes. The closing clause frames immigrants as a possible burden. Together these make agreement the expected answer and supply a reason for it before the respondent has formed a view.",9,F4-P1,exact,,,"'Given the growing pressure on public services, don't you think that the government should do more' and 'particularly those who may not contribute to the economy'"
+F4,flawed,question,simple_syntax,"The stem is a negative interrogative. It also stacks an introductory clause, a main clause and a trailing qualifier in one sentence. Respondents must keep all of it in mind, and with a negative question it is unclear what 'agree' means.",6,F4-P2,exact,,,"'don't you think that the government should do more to reduce the number of immigrants coming to this country, particularly those who may not contribute to the economy'"
+F4,flawed,question,one_thing,"The item asks about reducing immigration in general and about reducing it for one subgroup. A respondent who wants fewer non-contributing immigrants but not fewer immigrants overall, or the reverse, has no accurate answer. 'Do more' and 'reduce the number' also add a policy-effort judgment to a judgment about the level.",7,,none,,,"'reduce the number of immigrants coming to this country, particularly those who may not contribute to the economy'"
+F4,flawed,question,plain_words,"'Contribute to the economy' can mean paid work, paying tax, running a business, unpaid care or spending. 'May not' also leaves open whether it means now or in future. Respondents will read the group differently. 'Immigrants' may likewise be read as including or excluding refugees, students or long-settled residents.",6,,none,,,'those who may not contribute to the economy'
+F4,flawed,question,specific_concrete,"'Do more' compares against current government action that many respondents may not know, and no policy, group or time frame is named. Respondents may answer about the current level of immigration, about government effort, or about a general feeling. These are different things.",5,,none,,,'the government should do more to reduce the number of immigrants'
+F4,flawed,question,agree_disagree_and_grids,"A one-sided statement is open to acquiescence, and the leading wording adds to the pull toward agreeing. A direct question about the preferred level of immigration would ask for the same judgment without requiring respondents to convert it into agreement.",5,,none,,,"Strongly agree to Strongly disagree, attached to a single statement worded in one direction"
+F5,flawed,question,no_presupposition,"The question assumes every respondent has an employer and a work contract. Retired people, students, unemployed people, full-time carers and many self-employed people have no terms of employment to rate. They must skip, guess or pick a scale point that is not true for them. Respondents with more than one job also do not know which job to rate.",8,F5-P3,exact,,,'your terms of employment' asked of 'Adults in the general population' with no filter and no not-applicable option
+F5,flawed,question,plain_words,"This is a contract-style phrase. Some respondents will read it narrowly as pay, hours and holidays in their contract. Others will read it as the job in general, the workplace or their manager. The answer then rests on different content for different people.",6,F5-P1,exact,,,'terms of employment'
+F5,flawed,question,response_scale,"The scale has three positive points and two negative points, so it is not balanced, and there is no neutral middle point. 'Completely' and 'very' are hard to tell apart, and the order of 'very' and 'fairly' depends on how each respondent reads these intensity words. Respondents who are neither satisfied nor dissatisfied have no true option, and no 'not applicable' option is offered (see the finding on presupposition).",6,F5-P2,exact,,,'Completely satisfied / Very satisfied / Fairly satisfied / Not very satisfied / Not at all satisfied'
+F5,flawed,instrument,filters_and_routing,"Every adult respondent reaches Q1, so the question reaches people it does not apply to, and no route leads non-employees to a suitable next question. A screening question and a skip are needed before Q1 in the full instrument.",7,,none,,,"Q1 is the only item, with no screening question before it and no routing for people who are not employees"
+F6,flawed,question,retrieval_and_judgment,"To answer, the respondent may have to find out what other household members receive, add several incomes together, convert weekly, annual or irregular pay into a monthly figure, and work out a before-tax figure when they may only know what is paid into their account. Each of these steps can produce a wrong total or a mixed basis (some before tax, some after).",7,F6-P2,approximate,,"Borderline: the finding is about the respondent having to find out and add up what other household members receive, not about household income being unidentifiable as such.","'total monthly income from all sources, before tax and deductions' for the household"
+F6,flawed,question,specific_concrete,"The item does not say who counts as part of the household (for example adult children, lodgers, or relatives who share only some costs). It also does not say which month is meant (last month, a usual month, or an average), which matters when income varies. On the web there is no interviewer to explain, so any definition must be in the visible question text. The household definition should match the benchmark source the analyst will compare against, which the brief does not name.",6,,none,,,'household's' and 'monthly'
+F6,flawed,question,plain_words,"'All sources' does not tell the respondent whether benefits, pensions, gifts from family, savings withdrawals, loans or one-off payments count. 'Deductions' is a payroll term whose scope (pension contributions, loan repayments, other items) is not clear to everyone. Respondents may therefore include different things.",5,,none,,,'from all sources' and 'before tax and deductions'
+F7,flawed,question,one_thing,"The stem asks about two destinations, work and essential services, and the services are themselves several things. A respondent who finds the trip to work easy but the trip to a clinic hard has no single true answer and must average or pick one part. The analyst cannot tell which part the answer describes.",7,F7-P1,exact,,,'get to work and to access essential services such as healthcare'
+F7,flawed,question,no_presupposition,"The stem assumes the respondent has a job they travel to. Retired people, unemployed people, full-time carers and people who work from home do not fit. The brief gives no filter, so these respondents must guess, skip or answer about something else.",6,F7-P3,exact,,,'get to work'
+F7,flawed,question,plain_words,"'Essential services' has no fixed meaning, and one example does not say which others count. 'Access' can mean physically travelling there, getting an appointment, affording it or being eligible. Respondents may therefore answer about different things.",5,,none,,,'access essential services such as healthcare'
+F7,flawed,question,specific_concrete,"The stem does not say whether difficulty means distance, travel time, cost, lack of transport or something else. It does not say which way of travelling to think of, or whether to think of a usual trip or the worst one. Respondents will fill these gaps differently. The analyst must decide which dimension and reference period the study needs.",5,,none,,,"'How easy or difficult is it' with no time frame, no way of travelling and no dimension of difficulty"
+F7,flawed,question,options_fit,"A respondent who does not travel to work, or who has not needed healthcare, has no true option on the scale shown. A respondent whose answers differ between work and services also has no true option. The in-between options were not shown, so a midpoint could not be checked.",5,F7-P2,exact,,,'a scale running from Very easy to Very difficult' with no 'does not apply' option visible
+F8,flawed,question,plain_words,"The term has no definition on screen. Respondents can differ on whether messaging apps, video-sharing sites, forums or workplace tools count, so the same hours could be reported or left out differently. 'Platforms' is also a technical word that not everyone uses for these services. The brief does not say which services the analyst wants counted, so that decision has to come from the analyst.",6,F8-P1,exact,,,'social media platforms'
+F8,flawed,question,retrieval_and_judgment,"Respondents must recall many short sessions across several apps and devices, add them up, and convert the total to hours. Use that is spread through the day or runs in the background is hard to total. Respondents are likely to fall back on a guess or a stereotype of their own use.",6,F8-P2,exact,,,'Roughly how many hours per week do you spend on social media platforms?'
+F9,flawed,question,one_thing,"The statement joins a view about how severe punishment should be with a view about longer prison sentences. A respondent who wants severe punishment but through other means, or who does not accept longer sentences, has no true answer on one agree-disagree scale. The 'even if' clause also assumes that severe punishment means longer prison terms.",7,,none,,,"'deserve to be punished severely, even if this means longer prison sentences'"
+F9,flawed,question,specific_concrete,"Respondents may picture very different crimes (for example violent crime, fraud, drug offences) and different meanings of 'severely'. The answers then reflect different private reference points rather than one common object. Choosing which crimes to name, or whether to leave the term broad, narrows or changes the construct and is the analyst's decision.",5,,none,,,'serious crimes' and 'punished severely'
+F9,flawed,question,agree_disagree_and_grids,"Only the punitive side is stated and there is no item keyed the other way, so acquiescence would inflate agreement and cannot be separated from the attitude. A construct-specific question about how severe punishment should be could do the same job without a statement to accept or reject.",5,,none,,,'To what extent do you agree or disagree?' after a single one-directional statement
+F10,flawed,question,one_thing,"The stem asks about two situations at once. A respondent who feels safe in daylight but uneasy at night has no single true answer and must pick one, average the two, or answer for only one part. The result cannot be read as either time of day.",7,F10-P1,exact,,,'during the day and after dark'
+F10,flawed,question,specific_concrete,"The stem does not say how large 'your neighbourhood' is. It could mean the street, the block, or a wider district. It also does not say whether it means being at home or walking outside, or what the respondent should be safe from, such as crime, traffic or something else. Respondents will fill these gaps differently.",5,F10-P2,exact,,,'safe in your neighbourhood'
+F11,flawed,question,no_presupposition,"The question assumes every respondent needed, and tried to get, an appointment in the past 12 months. Respondents who did not need one, or who needed one but never tried to book, have no true answer on an easy-to-difficult scale. They may skip, guess, or pick a middle point, and that would mix non-users into the ratings.",6,F11-P3,exact,,,'when you needed one' with no filter before the item and no not-applicable option shown
+F11,flawed,question,specific_concrete,"The phrase covers many kinds of provider (for example doctor, nurse, dentist, specialist, therapist, pharmacist). It also does not say whether a phone, video or walk-in contact counts as an appointment. Respondents will include different providers and contacts, and one who found a doctor easy but a specialist hard has no single true answer. The scope of 'healthcare professional' depends on what the analyst wants to measure, which the brief does not say.",6,F11-P1,exact,,,'a healthcare professional'
+F11,flawed,question,retrieval_and_judgment,"A 12-month period can cover several appointments with different levels of difficulty. The respondent must remember them and average them into one rating, or may base the answer on the most recent or most memorable one. Different respondents will use different strategies.",5,F11-P2,exact,,,"'In the past 12 months, how easy has it been'"
+F12,flawed,question,neutral_wording,"The first sentence states a claim as fact and appeals to research. It tells respondents what answer is expected before they judge for themselves, so high importance is favoured. This review cannot check whether the claim is true, but a question should not carry it as a premise.",9,F12-P1,exact,,,'Research consistently shows that children benefit from having a parent at home in the early years.'
+F12,flawed,question,one_thing,"The item changes its object from 'a parent' to 'mothers', so the question bundles gender with the at-home arrangement. A respondent who thinks it matters that a parent is home, but not that it is the mother, has no accurate answer. Whether the intended construct is parental care or mothers' roles is not stated in the brief.",6,F12-P2,approximate,,"Same feature (the shift from 'a parent' to 'mothers') but framed as bundling gender with the at-home arrangement (one_thing), not as sensitivity.","The lead-in says 'a parent at home', but the question asks 'that mothers stay at home'."
+F12,flawed,question,specific_concrete,"The phrase does not say whether it means full time, or whether a mother who works part time or from home counts. Respondents may read it differently and answer different questions. The analyst must decide which meaning is intended.",5,,none,,,'stay at home to look after their children'
+F13,flawed,question,specific_concrete,"The first phrase asks for an overall view of life. The second narrows it to the present moment. Respondents may answer from today's mood or from a longer stretch of their life, and the brief does not say which time frame the analyst intends.",5,,none,,,'Taking everything into account' together with 'at this moment'
+F14,flawed,question,one_thing,"The stem asks about two qualities joined by 'and'. A respondent who finds childcare easy to get but too costly, or the reverse, has no true answer on a single satisfaction scale. Any answer also mixes two judgments, so it cannot be read as either one.",7,F14-P1,exact,,,'availability and affordability of childcare services'
+F14,flawed,question,no_presupposition,"The stem assumes the respondent knows enough about local childcare to judge it. Adults with no children, or whose children no longer need care, may have no basis for an answer. They must either guess, pick a midpoint they do not mean, or leave the item. Whether the analyst wants the views of all adults or only those with experience is not stated in the brief.",7,F14-P2,exact,,"Borderline between exact and approximate: framed as respondents lacking a basis to judge childcare (adults with no children), where the known problem says the question assumes a need for childcare.",'How satisfied are you with ... childcare services in your area?' asked of 'Adults in the general population' with no filter or not-applicable option
+F14,flawed,question,plain_words,"The term can be read as formal paid provision, such as nurseries or paid carers. It can also be read to include care by grandparents or other relatives, or after-school care. Which meaning a respondent picks changes what they judge. The analyst must decide which kinds of care the item is meant to cover.",5,,none,,,'childcare services'
+F14,flawed,question,specific_concrete,"'Area' has no fixed size. Respondents may think of their street, their town or a wider region, and may judge different sets of providers. Where it is meant to apply, such as near home or near work, is also left open.",5,,none,,,'in your area'
+F15,flawed,question,neutral_wording,"The lead-in states two contested claims as fact and says what the respondent is expected to value. Respondents who want to appear responsible, or who feel they should have acted, may report more change than they made, and those who disagree with the claims may be pushed to react to them. The shifts would come from the framing, not from behaviour.",8,F15-P1,exact,,,'Considering the urgent need to address climate change and the fact that individual actions collectively make a significant difference'
+F15,flawed,question,plain_words,"This is a technical or metaphorical term, and the item gives no definition. Some respondents may read it as energy use only, others as all environmental harm, and others may not know it. The web mode allows the definition to sit in the question text.",6,,none,,,'personal carbon footprint'
+F15,flawed,question,one_thing,"'Daily habits' covers many different behaviours, such as travel, food, home energy and shopping. A respondent who changed one area but not another has no clear answer. To pick one position on the scale, the respondent must recall changes across all areas, add them up, and decide which count as done 'specifically' for this reason. The brief names no construct, so the domains that matter are for the analyst to choose.",6,,none,,,'changes to your daily habits'
+F15,flawed,question,options_fit,"The question asks about change over the past year. Someone who already lived in a low-carbon way before that year, and so made no recent change, has no true option: 'Not at all' would suggest they do nothing. The in-between options were not shown, so they could not be checked.",5,,none,,,Response options 'A great deal' to 'Not at all'
+F16,flawed,question,plain_words,"'Community organisation' has no shared boundary. Respondents may differ on whether a place of worship, sports club, school parents' group, trade union or national charity counts. 'Work' may also be read as a job-like task, so helping at a one-off event could be left out. The brief does not say which organisations the analyst wants counted.",6,F16-P1,exact,,,'voluntary or unpaid work for a community organisation'
+F16,flawed,question,specific_concrete,"A 'time' is not defined. A weekly volunteer might count each session, count each week, or count the whole year as one ongoing commitment, and a one-off event might count as one. 'Past year' could also mean the last 12 months or the calendar year.",6,F16-P3,approximate,,"The finding's main point is that a 'time' is undefined; its last sentence says 'past year' could mean the last 12 months or the calendar year, which is F16-P3.",'How many times in the past year'
+F16,flawed,question,retrieval_and_judgment,"The respondent must recall and count episodes over 12 months. Regular volunteers have to multiply or estimate, and occasional volunteers may forget one-off events. The task is hard at the retrieval stage in different ways for these two groups.",5,F16-P2,exact,,,'How many times in the past year' combined with a top option of 'More than 10 times'
+F17,flawed,question,options_fit,"The stem asks how adequate the space is, which invites an answer such as 'very adequate' or 'not at all adequate'. The options instead measure whether there is too much or too little space. A respondent with plenty of space may think 'adequate' fits well but find no matching option, or may be unsure how 'adequate' maps onto 'too much'. The stem and the scale ask different questions.",6,F17-P2,exact,,,'How adequate is the amount of space' paired with options running from 'Far too much space' to 'Far too little space'
+F17,flawed,question,specific_concrete,"The question does not say which space counts: rooms inside, storage, a garden, balcony or other outdoor areas. It does not say which needs count: sleeping, privacy, working or studying at home, hosting, storage. Respondents may fill these gaps differently, so the same housing situation could get different answers. The analyst must decide what the space construct covers, and this review cannot decide it.",5,,none,,,'the amount of space in the home' and 'the needs of your household'
+F18,flawed,question,one_thing,"The stem asks about two topics with one answer. A respondent who argues often about money but never about children has no true single answer. Anyone who answers has to average the two topics in their head, and the analyst cannot tell which topic drove the answer.",8,F18-P1,exact,,,'argue about money and about how to raise your children'
+F18,flawed,question,no_presupposition,"The stem assumes every respondent has a partner and children they are raising. Adults in the general population include people with no partner and people with no children, so the question does not apply to them. The wording also assumes that arguments happen at all.",8,F18-P3,exact,,,'you and your partner' and 'your children'
+F18,flawed,question,specific_concrete,"The stem gives no reference period, so each respondent picks their own: the past week, the past year, or the whole relationship. Answers are then not comparable. The brief gives no reference period, so its length is the analyst's choice.",6,,none,,,'How often do you...' with no time frame
+F18,flawed,question,options_fit,"No option is offered for people with no partner or no children. They must choose 'Never', which is untrue for them and mixes them with partnered respondents who do not argue. This overlaps with the presupposition finding: a filter question or a 'does not apply' option would each solve it, and the analyst decides which.",5,,none,,,'a scale running from Very often to Never'
+F18,flawed,instrument,filters_and_routing,"Nothing sends people without a partner, or without children, past Q1. Every adult in the general population would reach an item that applies only to some of them. In web mode no interviewer can skip or clarify it.",6,,none,,,Q1 is the only item pasted and no screening question comes before it
+F19,flawed,question,neutral_wording,The opening clause states as fact that there were scandals and links them to the trust judgment. This pushes respondents toward low trust and supplies the mood and the standard of comparison for the answer.,8,F19-P1,exact,,,Given the recent scandals in government
+F19,flawed,question,no_presupposition,"The question assumes every respondent knows of these scandals and accepts that they happened. Respondents who know of none, or who dispute the label 'scandals', cannot answer on the terms given. The brief does not say which events are meant.",6,,none,,,the recent scandals in government
+F19,flawed,question,specific_concrete,"It is not clear whose trust is being asked about: national, regional or local politicians, the governing party, or all of them. Respondents must choose their own referent and may differ, and they must average across many people to answer. The analyst should choose the level that matches the research aim, which the brief does not state.",5,,none,,,politicians
+F20,flawed,question,simple_syntax,"One sentence holds the question, a 'not including' exclusion list, a 'but including' inclusion list and a time frame. The respondent has to keep both lists in mind before reaching the end, and the negated exclusion adds load. Some respondents will lose part of the rule and answer on their own idea of leisure.",6,F20-P1,exact,,,"not including time spent on domestic tasks, caring responsibilities, or personal grooming, but including any time spent on hobbies, socialising, watching television, reading, or using the internet for personal enjoyment"
+F20,flawed,question,retrieval_and_judgment,"The respondent must recall several separate activities, estimate time for each, add them up, and average over days that may differ. Activities that overlap, such as television on while doing chores or internet use at work, make the sum harder to judge. Anyone whose weekdays vary has no 'typical' day to retrieve.",6,F20-P3,exact,,,"On a typical weekday, approximately how many hours do you spend on leisure activities ... hobbies, socialising, watching television, reading, or using the internet"
+F20,flawed,question,plain_words,"These are formal terms and may not be read the same way by everyone. 'Caring responsibilities' may be taken to mean only care for someone ill or dependent, so playing with one's own child could be counted as leisure by some and as care by others. 'Domestic tasks' may or may not include cooking, gardening or shopping.",5,,none,,,"domestic tasks, caring responsibilities, or personal grooming"
+F20,flawed,question,specific_concrete,"The lists do not say how to treat activities that fall between categories, such as sport or exercise, resting or doing nothing, religious or community activity, or cooking or gardening done for pleasure. Respondents will draw the boundary differently, so totals are not comparable. Which of these belong in the construct is the analyst's decision.",5,F20-P2,exact,,"Matched to this finding (activities between categories) rather than to the plain_words finding on the exclusion terms, because one finding matches one problem.",leisure activities
+C7,control,question,plain_words,"'Fruit' is read differently by different people: fresh only, or also dried, tinned or frozen fruit, fruit in a smoothie, or fruit cooked into a dish. The exclusion names only juice, so the other forms are left to each respondent. Which forms count is the analyst's decision, and the brief does not say.",5,,none,,,"fruit, excluding drinking juice"
+C7,control,question,specific_concrete,"The stem gives no time frame, so each respondent picks their own period, such as last week, a typical week or the current season. Fruit eating can vary by season and by week. The unit 'times' is also undefined: it could mean separate eating occasions or pieces of fruit, so someone who eats two apples at once could answer either way. Which period fits depends on what the estimate is for, and the brief does not say.",5,,none,,,'How often do you eat fruit' with the top option 'Three times or more a day'
+C8,control,question,specific_concrete,"The item does not say which parts of life to consider (for example work, money, health, family), so respondents could each pick different parts or average over them. 'Nowadays' gives no clear time frame, so it is unclear whether the answer is about this week, this year or recent years. The brief names no construct or reference period, so the analyst must decide how narrow the item should be.",5,,none,,,'over your life in general nowadays'
+~~~~
+
+Gold test summary (tests/gold_summary.md), verbatim:
+~~~~
+# Gold test: the Evaluate review against the known problems
+
+Test items: Sturgis, P., Roberts, C. and Robinson, T. (2026), LLMs for survey pretesting: How well can large language models identify flaws in survey questions? Survey Futures Working Paper 15, Appendix B, as transcribed by the Claude project into `tests/gold_items.csv` (20 flawed questions with 48 known problems; 7 European Social Survey core items as controls). Run on 2026-11-12.
+
+**The matching of findings to known problems was done by the builder (Claude, in Claude Code), by reading, after all 27 reviews were saved. It is a judgement and is to be checked.** Every match is in `tests/gold_matches.csv` with a note where it was a close call; the borderline ones are listed below. Nothing in the app, a skill, a prompt, a threshold or a test was changed after seeing the results.
+
+## How it was run
+
+- Each of the 27 items was reviewed alone through `run_review()`, as a one-question questionnaire (`Q1. <question>` and a `Response options:` line), by the project manager model (claude-sonnet-5-5) with the app's own evaluation ceiling of 43,000 tokens, which was not raised. Form: research question "Evaluate this survey question", population "Adults in the general population", web, no country, English.
+- The model was shown only the question and its options. Where the paper prints only the two end options (`scale_complete` FALSE, 19 of the 27 items in the file) the line reads `a scale running from <first> to <last> (the options in between are not shown in this test)`. The runner asserts before every call that the prompt holds no id, topic, set, problem id or problem text.
+- All 27 calls finished (27 ok, 0 cut off, 0 other failures), each on the first attempt. Raw replies are in `tests/gold_runs/<id>.json`.
+- Matching: only findings rated 5 or above were matched. Exact means the same problem with the same framing; approximate means the same underlying issue with a different emphasis. One finding matches at most one known problem and the reverse. Findings about the instrument (routing across questions) were matched like the others; there were none at 5 or above on a control item.
+
+## Share of known problems found
+
+- **Of all 48: 36 found, 75.0%** (33 exact, 3 approximate). Target 65%.
+- **Of the 45 that can be judged from the end options alone: 36 found, 80.0%.** The 3 problems that need the full scale (F2-P2, F12-P3, F19-P2) were all not found.
+
+Approximate matches, and the close calls among the exact ones, are the least certain: F6-P2, F12-P2 and F16-P3 (approximate), F14-P2 (exact, borderline), and F1-P2, where one finding states the content of two known problems and only one can be credited.
+
+### Detection by problem type
+
+| Problem type | Known | Found | Share | Judgeable | Found of judgeable |
+|---|---|---|---|---|---|
+| presupposition | 9 | 7 | 77.8% | 9 | 9 |
+| vague/ambiguous | 9 | 8 | 88.9% | 9 | 9 |
+| response-mapping | 7 | 3 | 42.9% | 4 | 4 |
+| double-barrelled | 6 | 6 | 100.0% | 6 | 6 |
+| leading/loaded | 5 | 4 | 80.0% | 5 | 5 |
+| retrieval/recall | 5 | 5 | 100.0% | 5 | 5 |
+| sensitivity | 4 | 1 | 25.0% | 4 | 4 |
+| complex-syntax | 3 | 2 | 66.7% | 3 | 3 |
+
+### Known problems not found
+
+| Problem | Type | Known problem | Closest finding below severity 5 (builder's reading) |
+|---|---|---|---|
+| F1-P3 | presupposition | assumes respondent has experience of services | none separate; the severity 5 presupposition finding that matched F1-P2 also says respondents may have no experience of the services |
+| F2-P2 | response-mapping | categories use inconsistent linguistic constructions | finding 7 (severity 4, response_scale): the two end labels are not parallel and the verb phrases differ |
+| F6-P1 | sensitivity | precise income is a highly sensitive question | none |
+| F9-P1 | leading/loaded | frames punishment as deserved | finding 37 (severity 4, neutral_wording): 'deserve' asserts a moral claim as fact |
+| F9-P2 | sensitivity | social desirability around criminal justice attitudes | none |
+| F12-P3 | response-mapping | no neutral midpoint | none |
+| F13-P1 | vague/ambiguous | "the way things are going" conflates trajectory with current state | finding 49 (severity 4, plain_words): 'the way things are going' read as state or as direction |
+| F13-P2 | response-mapping | only endpoints labelled on 0 to 10 scale | finding 50 (severity 4, response_scale): only the endpoints carry words |
+| F15-P2 | complex-syntax | long sentence with conditional premise, domain specification, purpose clause, and time reference | finding 60 (severity 4, simple_syntax): one sentence stacking two premises, a purpose clause and a time frame |
+| F17-P1 | presupposition | assumes respondent has a fixed home | finding 69 (severity 3, no_presupposition): assumes one home and one clear household |
+| F18-P2 | sensitivity | reporting arguments is sensitive | none |
+| F19-P2 | response-mapping | asymmetric scale interacts with leading preamble | none |
+
+Findings are shown to the analyst only at severity 5 or above, so the ones in the last column would not have been seen. Six of the twelve (F2-P2, F9-P1, F13-P1, F13-P2, F15-P2, F17-P1) have a finding of that kind that matches them on the builder's reading; counting them would give 42 of 48. That is context, not the result: the threshold was not changed.
+
+## Control items (7 ESS core items)
+
+- **Findings rated 5 or above per control item: 0.43** (3 findings over 7 items; 2 of the 7 items have any). Target at most 1.0.
+- **After setting aside findings that are only about the in-between options not being shown: 0.43** (3 findings). None of the control findings at 5 or above was only about that, so the two counts are the same. Instrument-level findings at 5 or above on a control item: 0.
+
+| Control item | Findings at 5 or above (question) | (instrument) | After setting aside unshown-options findings |
+|---|---|---|---|
+| C1 | 0 | 0 | 0 |
+| C3 | 0 | 0 | 0 |
+| C4 | 0 | 0 | 0 |
+| C5 | 0 | 0 | 0 |
+| C6 | 0 | 0 | 0 |
+| C7 | 2 | 0 | 2 |
+| C8 | 1 | 0 | 1 |
+
+The control findings at 5 or above:
+
+- C7, plain_words, severity 5, on fruit, excluding drinking juice: 'Fruit' is read differently by different people: fresh only, or also dried, tinned or frozen fruit, fruit in a smoothie, or fruit cooked into a dish. The exclusion names only juice, so the other forms are left to each respondent. Which forms count is the analyst's decision, and the brief does not say.
+- C7, specific_concrete, severity 5, on 'How often do you eat fruit' with the top option 'Three times or more a day': The stem gives no time frame, so each respondent picks their own period, such as last week, a typical week or the current season. Fruit eating can vary by season and by week. The unit 'times' is also undefined: it could mean separate eating occasions or pieces of fruit, so someone who eats two apples at once could answer either way. Which period fits depends on what the estimate is for, and the brief does not say.
+- C8, specific_concrete, severity 5, on 'over your life in general nowadays': The item does not say which parts of life to consider (for example work, money, health, family), so respondents could each pick different parts or average over them. 'Nowadays' gives no clear time frame, so it is unclear whether the answer is about this week, this year or recent years. The brief names no construct or reference period, so the analyst must decide how narrow the item should be.
+
+## Seconds and output tokens per item
+
+| | Seconds | Output tokens |
+|---|---|---|
+| All 27 | mean 31.0, range 17.6 to 47.6 | mean 3940, range 2179 to 6521 |
+| 20 flawed | mean 33.5, range 22.0 to 47.6 | mean 4301, range 2698 to 6521 |
+| 7 control | mean 23.9, range 17.6 to 40.9 | mean 2907, range 2179 to 5278 |
 ~~~~
