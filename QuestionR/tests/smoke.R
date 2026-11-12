@@ -457,3 +457,404 @@ ok("a number of items that is not a whole number of one or more stops",
 ok("Evaluate with no questionnaire stops", fails("questionnaire pasted in", utils::modifyList(forms$evaluate, list(questionnaire = ""))))
 ok("a field that is not in the contract stops", fails("not in the contract: populaton", c(forms$attitudinal, list(populaton = "typo"))))
 ok("an unknown survey mode stops", fails("Unknown survey mode: radio", utils::modifyList(forms$attitudinal, list(modes = "radio"))))
+
+
+# ---- Phase 2: the model layer. No model is called: the network is a stand-in ---
+
+stopifnot("webfakes is needed for the mock-server checks (home only): install.packages('webfakes')" =
+            requireNamespace("webfakes", quietly = TRUE))
+
+# Environment variables for the length of one expression, then put back as they
+#   were. NA means unset.
+set_env <- function(vars)
+  purrr::iwalk(vars, function(v, nm)
+    if (is.na(v)) Sys.unsetenv(nm) else do.call(Sys.setenv, stats::setNames(list(v), nm)))
+with_env <- function(vars, code) {
+  old = Sys.getenv(names(vars), unset = NA)
+  on.exit(set_env(old))
+  set_env(vars)
+  force(code)
+}
+
+m_analyst <- list(api = "anthropic", base_url = "https://api.anthropic.com/v1",
+                  id = "claude-x", key_source = "analyst")
+m_server <- list(api = "openai", base_url = "https://openrouter.ai/api/v1",
+                 id = "vendor/model-x", key_source = "server", key_var = "QUESTIONR_SMOKE_KEY")
+fails_with <- function(expr, class = "llm_error") {
+  e = tryCatch({ expr; NULL }, error = function(e) e)
+  if (inherits(e, class)) e else NULL
+}
+
+
+# The five failures svysegment met in model replies, and the ones no repair can
+#   fix. Each goes through clean_model_reply() first, as llm_json() does.
+parsed <- function(txt) tryCatch(parse_json_block(clean_model_reply(txt)), error = function(e) e)
+
+r1 <- parsed('{"stem": "Do you "often" read a paper?", "options": ["Yes", "No"]}')
+ok("repair: a bare double quote inside a value is escaped, and the rest is kept",
+   identical(r1$stem, 'Do you "often" read a paper?') && identical(unlist(r1$options), c("Yes", "No")))
+r2 <- parsed('{"id": "A1", "stem": "How often do you read a paper?}')
+ok("repair: the quote the model left off the last value is put back",
+   identical(r2$stem, "How often do you read a paper?") && identical(r2$id, "A1"))
+r3 <- parsed('{"items": [{"id": "A1", "stem": "How often do you read')
+ok("repair: a reply cut off inside a value is closed, and what arrived is kept",
+   identical(r3$items[[1]]$id, "A1") && identical(r3$items[[1]]$stem, "How often do you read"))
+r4 <- parsed('Here is the JSON you asked for:\n```json\n{"a": 1}\n```\nHope this helps.')
+ok("repair: JSON inside a code fence and prose is found", identical(r4$a, 1L))
+r5 <- parsed('<|start_header_id|>assistant<|end_header_id|>\n\n{"a": "b"}<|eot_id|>')
+ok("repair: chat-template tokens and a bare 'assistant' line are stripped before parsing",
+   identical(r5$a, "b"))
+ok("a reply with no JSON fails, and says so",
+   grepl("No JSON found", conditionMessage(parsed("I am unable to help with that.")), fixed = TRUE))
+ok("a reply that cannot be repaired fails, carrying the reply",
+   grepl("could not be repaired", conditionMessage(parsed('{"a": ')), fixed = TRUE) &&
+     grepl("--- reply ---", conditionMessage(parsed('{"a": ')), fixed = TRUE))
+ok("the echoed template ({\"stem\": \"...\"}) and an empty object count as no answer",
+   is_placeholder_reply(list(stem = "...", options = list("..."))) &&
+     is_placeholder_reply(list()) && !is_placeholder_reply(list(stem = "Real question?")))
+
+
+# llm_json() with a scripted stand-in for the network: the replies in turn (the
+#   last repeats), a count of the calls, and what each call was sent.
+reply <- function(txt, finish = "success") structure(txt, finish = finish, provider = "mock")
+scripted <- function(...) {
+  replies = list(...)
+  st = new.env()
+  st$calls = 0L
+  st$seen = list()
+  list(state = st, complete = function(m, system_prompt, user, max_tokens, key, timeout = NULL) {
+    st$calls = st$calls + 1L
+    st$seen[[st$calls]] = list(user = user, key = key, system = system_prompt, max_tokens = max_tokens)
+    r = replies[[min(st$calls, length(replies))]]
+    if (is.function(r)) r() else r
+  })
+}
+m_fake <- list(api = "openai", base_url = "http://mock.invalid/v1", id = "mock/model",
+               key_source = "analyst")
+good_json <- '{"stem": "Real question?", "options": ["a", "b"]}'
+run_json <- function(sc, ..., fresh = TRUE) {
+  if (fresh) llm_clear_counters(llm_session_id())
+  llm_json(user = "Question?", m = m_fake, system_prompt = "SYS", max_tokens = 100L,
+           key = "k-test", complete = sc$complete, pause_base = 0.01, pause_min = 0.01, ...)
+}
+
+sc <- scripted(reply(good_json))
+res <- run_json(sc)
+ok("a good reply comes back parsed, with the raw text, the message as sent and one attempt",
+   identical(res$obj$stem, "Real question?") && identical(res$raw, good_json) &&
+     res$attempts == 1L && sc$state$calls == 1L && identical(res$model, "mock/model") &&
+     identical(res$finish, "success"))
+ok("the message sent is the approved prompt plus the quote rule, and nothing else",
+   identical(res$user_sent, paste0("Question?\n\n", JSON_QUOTE_RULE)) &&
+     identical(sc$state$seen[[1]]$user, res$user_sent) &&
+     identical(sc$state$seen[[1]]$key, "k-test") && identical(sc$state$seen[[1]]$system, "SYS") &&
+     identical(sc$state$seen[[1]]$max_tokens, 100L))
+
+sc <- scripted(reply("Sorry, here you go."), reply(good_json))
+res <- run_json(sc)
+ok("a reply that is not JSON is tried again, and the second one is returned",
+   res$attempts == 2L && sc$state$calls == 2L && identical(res$obj$stem, "Real question?"))
+
+sc <- scripted(function() llm_fail("HTTP 503: overloaded"), function() llm_fail("HTTP 503: overloaded"),
+               reply(good_json))
+res <- run_json(sc)
+ok("a transient error (503, a timeout) is tried again, and the third attempt succeeds",
+   res$attempts == 3L && identical(res$obj$options, list("a", "b")))
+
+sc <- scripted(reply("not json at all"))
+err <- fails_with(run_json(sc))
+ok("a reply that never parses fails after exactly three attempts",
+   !is.null(err) && !inherits(err, "llm_client_error") && sc$state$calls == 3L)
+ok("the failure names the model, the endpoint and why it stopped, and carries the raw reply",
+   grepl("[mock/model via mock, finish: success]", conditionMessage(err), fixed = TRUE) &&
+     identical(err$raw, "not json at all"))
+
+sc <- scripted(reply(good_json, finish = "max_tokens"))
+err <- fails_with(run_json(sc))
+ok("a reply cut off at the token limit is a failed attempt, even when what arrived would parse",
+   !is.null(err) && sc$state$calls == 3L &&
+     grepl("reached the token limit (100)", conditionMessage(err), fixed = TRUE))
+
+sc <- scripted(reply('{"stem": "...", "options": ["..."]}'))
+err <- fails_with(run_json(sc))
+ok("the echoed example object is a failed attempt, retried",
+   !is.null(err) && sc$state$calls == 3L && grepl("example template", conditionMessage(err), fixed = TRUE))
+
+need_items <- function(o) if (is.null(o$items)) stop("the reply has no items field") else invisible(o)
+sc <- scripted(reply('{"a": "x"}'), reply('{"items": [{"id": "Q1"}]}'))
+res <- run_json(sc, validate = need_items)
+ok("a reply that fails the validator is tried again; one that passes is returned",
+   res$attempts == 2L && identical(res$obj$items[[1]]$id, "Q1"))
+sc <- scripted(reply('{"a": "x"}'))
+err <- fails_with(run_json(sc, validate = need_items))
+ok("a validator's own message reaches the analyst when every attempt fails",
+   !is.null(err) && sc$state$calls == 3L &&
+     grepl("the reply has no items field", conditionMessage(err), fixed = TRUE))
+
+sc <- scripted(function() llm_fail("The endpoint refused the request (HTTP 401).", class = "llm_client_error"))
+err <- fails_with(run_json(sc), "llm_client_error")
+ok("a client error (bad key, unknown model) is raised at once and not tried again",
+   !is.null(err) && sc$state$calls == 1L && grepl("HTTP 401", conditionMessage(err), fixed = TRUE))
+
+sc <- scripted(reply(good_json))
+err <- fails_with(llm_json(user = "Question?", m = m_fake, system_prompt = "SYS", max_tokens = 100L,
+                           key = NULL, complete = sc$complete), "llm_client_error")
+ok("no key is a client error before any call is made, and says what to do",
+   !is.null(err) && sc$state$calls == 0L && grepl("Paste a key", conditionMessage(err), fixed = TRUE))
+
+# The session cap: a prompt that is broken for every attempt must not drain the
+#   quota one retry at a time.
+llm_clear_counters(llm_session_id())
+sc <- scripted(reply("not json"))
+err <- fails_with(run_json(sc, session_cap = 2L, fresh = FALSE))
+ok("a failed call uses two repeat attempts of the session's allowance",
+   !is.null(err) && sc$state$calls == 3L && llm_retries_used() == 2L)
+sc <- scripted(reply(good_json))
+err <- fails_with(run_json(sc, session_cap = 2L, fresh = FALSE), "llm_client_error")
+ok("once the allowance is used the next call fails at once, with the reason, and makes no call",
+   !is.null(err) && sc$state$calls == 0L && grepl("retry cap of 2", conditionMessage(err), fixed = TRUE))
+llm_clear_counters(llm_session_id())
+ok("clearing the counters gives the session its allowance back",
+   llm_retries_used() == 0L && run_json(scripted(reply(good_json)), session_cap = 2L, fresh = FALSE)$attempts == 1L)
+
+
+# Where a key comes from. The environment is read for a server model and for no
+#   other.
+set_env(c(QUESTIONR_SMOKE_KEY = NA))
+ok("a pasted-key model ignores ANTHROPIC_API_KEY, even when it is set",
+   with_env(c(ANTHROPIC_API_KEY = "env-key-should-be-ignored"),
+            is.null(llm_key_for(m_analyst)) && !llm_key_ready(m_analyst)))
+ok("a server model reads the variable named in key_var",
+   with_env(c(QUESTIONR_SMOKE_KEY = "server-key"),
+            identical(llm_key_for(m_server), "server-key") && llm_key_ready(m_server)))
+ok("a server model with the variable unset or empty has no key",
+   with_env(c(QUESTIONR_SMOKE_KEY = NA), is.null(llm_key_for(m_server))) &&
+     with_env(c(QUESTIONR_SMOKE_KEY = ""), is.null(llm_key_for(m_server))))
+ok("each kind of model is told what to do about a missing key",
+   grepl("key box", llm_key_hint(m_analyst), fixed = TRUE) &&
+     grepl("QUESTIONR_SMOKE_KEY", llm_key_hint(m_server), fixed = TRUE))
+ok("a server model with no key_var, or a key_source that is neither, is a client error",
+   !is.null(fails_with(llm_key_for(utils::modifyList(m_server, list(key_var = NULL))), "llm_client_error")) &&
+     !is.null(fails_with(llm_key_for(utils::modifyList(m_server, list(key_source = "file"))), "llm_client_error")))
+ok("at home the project manager takes a pasted key and the workers a server variable",
+   identical(llm_models()[[1]]$m$key_source, "analyst") &&
+     length(llm_models()) == 1L + length(APP_MODELS$workers) &&
+     all(purrr::map_chr(llm_models()[-1], function(x) x$m$key_source) == "server"))
+
+paste_state <- shiny::reactiveValues(key_version = 0L)
+shiny::testServer(mod_key_server, args = list(state = paste_state), {
+  session$setInputs(key = "pasted-by-analyst", save = 1)
+  with_env(c(ANTHROPIC_API_KEY = "env-key-should-be-ignored"),
+           ok("a pasted-key model gets the pasted key, not the environment's",
+              identical(llm_key_for(m_analyst), "pasted-by-analyst") && llm_key_ready(m_analyst)))
+})
+shiny::testServer(mod_key_server, args = list(state = paste_state), {
+  ok("a key pasted in one session is not visible to another", is.null(llm_key_for(m_analyst)))
+})
+
+
+# The chat objects, built and inspected without a request.
+chat_of <- function(m, key = "k-chat", max_tokens = 1500L) llm_chat(m, "SYS", max_tokens, key)
+pa <- chat_of(m_analyst)$get_provider()
+po <- chat_of(m_server, max_tokens = 4000L)$get_provider()
+ok("anthropic: the Anthropic provider, with the model, base URL, ceiling and system prompt given",
+   inherits(pa, "ellmer::ProviderAnthropic") && identical(S7::prop(pa, "model"), "claude-x") &&
+     identical(S7::prop(pa, "base_url"), m_analyst$base_url) &&
+     identical(S7::prop(pa, "params")$max_tokens, 1500L) &&
+     identical(chat_of(m_analyst)$get_system_prompt(), "SYS"))
+ok("openai: the OpenAI-compatible provider, with the model, base URL and ceiling given",
+   inherits(po, "ellmer::ProviderOpenAICompatible") && identical(S7::prop(po, "model"), "vendor/model-x") &&
+     identical(S7::prop(po, "base_url"), m_server$base_url) &&
+     identical(S7::prop(po, "params")$max_tokens, 4000L))
+ok("no temperature is set unless the model's entry sets one",
+   is.null(S7::prop(pa, "params")$temperature) && is.null(S7::prop(po, "params")$temperature) &&
+     identical(S7::prop(chat_of(utils::modifyList(m_analyst, list(temperature = 0.2)))$get_provider(),
+                        "params")$temperature, 0.2))
+ok("the key travels in a closure that returns it, and is not in the environment",
+   identical(S7::prop(pa, "credentials")(), "k-chat") && identical(S7::prop(po, "credentials")(), "k-chat") &&
+     !any(Sys.getenv() == "k-chat"))
+ok("a chat with no key, or an api that is neither anthropic nor openai, is a client error",
+   !is.null(fails_with(chat_of(m_analyst, key = NULL), "llm_client_error")) &&
+     !is.null(fails_with(chat_of(m_analyst, key = ""), "llm_client_error")) &&
+     !is.null(fails_with(chat_of(utils::modifyList(m_analyst, list(api = "cohere"))), "llm_client_error")))
+
+
+# The real call path, ellmer and httr2 and all, against a server on this machine
+#   that answers in both API styles and echoes what it was sent. Everything the
+#   handlers use is made inside make_mock(), because the handlers run in another
+#   process and see none of this one's variables. The model id picks the
+#   behaviour: unknown-model is a 404, bad-key a 401, gateway a 502 with no
+#   content type, cut-off a reply that stopped at the token limit.
+make_mock <- function() {
+  mock = webfakes::new_app()
+  mock$use(webfakes::mw_json())
+  na_if_null = function(x) if (is.null(x)) NA else x
+  echo = function(req) {
+    b = req$json
+    jsonlite::toJSON(list(
+      auth = na_if_null(req$get_header("Authorization")),
+      xkey = na_if_null(req$get_header("x-api-key")),
+      model = b$model, max_tokens = na_if_null(b$max_tokens),
+      max_completion_tokens = na_if_null(b$max_completion_tokens),
+      has_temperature = "temperature" %in% names(b),
+      has_system = grepl("SYS-PROMPT", jsonlite::toJSON(b, auto_unbox = TRUE), fixed = TRUE)),
+      auto_unbox = TRUE, na = "null")
+  }
+  refuse = function(req, res) {
+    m = req$json$model
+    if (identical(m, "unknown-model"))
+      res$set_status(404L)$send_json(list(error = list(message = "model not found")), auto_unbox = TRUE)
+    else if (identical(m, "bad-key"))
+      res$set_status(401L)$send_json(list(error = list(message = "invalid api key: mock-key-123")), auto_unbox = TRUE)
+    else if (identical(m, "gateway"))
+      res$set_status(502L)$send("Bad Gateway")
+    else return(FALSE)
+    TRUE
+  }
+  mock$post("/v1/chat/completions", function(req, res) {
+    if (refuse(req, res)) return()
+    res$send_json(list(id = "x", object = "chat.completion", created = 1L, model = req$json$model,
+      choices = list(list(index = 0L, message = list(role = "assistant", content = echo(req)),
+                          finish_reason = if (identical(req$json$model, "cut-off")) "length" else "stop")),
+      usage = list(prompt_tokens = 5L, completion_tokens = 7L, total_tokens = 12L)), auto_unbox = TRUE)
+  })
+  mock$post("/v1/messages", function(req, res) {
+    if (refuse(req, res)) return()
+    res$send_json(list(id = "msg_1", type = "message", role = "assistant", model = req$json$model,
+      content = list(list(type = "text", text = echo(req))),
+      stop_reason = if (identical(req$json$model, "cut-off")) "max_tokens" else "end_turn",
+      stop_sequence = NULL, usage = list(input_tokens = 5L, output_tokens = 7L)),
+      auto_unbox = TRUE, null = "null")
+  })
+  mock
+}
+
+local({
+  px = webfakes::new_app_process(make_mock())
+  on.exit(px$stop())
+  mm = function(api, id = "mock/model")
+    list(api = api, base_url = px$url("/v1"), id = id, key_source = "analyst")
+  ask = function(api, id = "mock/model", max_tokens = 1500L, key = "mock-key-123")
+    suppressWarnings(llm_complete(mm(api, id), "SYS-PROMPT", "hello", max_tokens, key = key, timeout = 20))
+
+  a = ask("anthropic")
+  sa = jsonlite::fromJSON(a)
+  ok("anthropic style: the key in x-api-key, the ceiling as max_tokens, the system prompt sent, no temperature",
+     identical(sa$xkey, "mock-key-123") && is.null(sa$auth) && identical(sa$max_tokens, 1500L) &&
+       isTRUE(sa$has_system) && !isTRUE(sa$has_temperature) && identical(sa$model, "mock/model"))
+  o = ask("openai", max_tokens = 4000L)
+  so = jsonlite::fromJSON(o)
+  ok("openai style: the key as a Bearer token, the ceiling as max_completion_tokens, the system prompt sent, no temperature",
+     identical(so$auth, "Bearer mock-key-123") && is.null(so$xkey) &&
+       identical(so$max_completion_tokens, 4000L) && is.null(so$max_tokens) &&
+       isTRUE(so$has_system) && !isTRUE(so$has_temperature))
+  ok("a reply carries why it stopped, the endpoint, the tokens and the seconds",
+     identical(attr(a, "finish"), "success") && identical(attr(o, "finish"), "success") &&
+       identical(attr(o, "provider"), sub("^http://([^/]+).*$", "\\1", px$url("/v1"))) &&
+       identical(unname(attr(o, "tokens")[c("input", "output")]), c(5, 7)) &&
+       is.numeric(attr(o, "seconds")))
+  ok("a reply that stopped at the token limit says so, in both API styles",
+     identical(attr(ask("anthropic", "cut-off"), "finish"), "max_tokens") &&
+       identical(attr(ask("openai", "cut-off"), "finish"), "max_tokens"))
+
+  e404 = fails_with(ask("openai", "unknown-model"), "llm_client_error")
+  ok("a 404 is a client error and carries the endpoint's own words",
+     !is.null(e404) && grepl("HTTP 404", conditionMessage(e404), fixed = TRUE) &&
+       grepl("model not found", conditionMessage(e404), fixed = TRUE))
+  e401 = fails_with(ask("anthropic", "bad-key"), "llm_client_error")
+  ok("a 401 is a client error, and the key the endpoint echoed back is blanked",
+     !is.null(e401) && grepl("HTTP 401", conditionMessage(e401), fixed = TRUE) &&
+       grepl("[key]", conditionMessage(e401), fixed = TRUE) &&
+       !grepl("mock-key-123", conditionMessage(e401), fixed = TRUE))
+  e502 = fails_with(ask("openai", "gateway"))
+  ok("a 502 with no content type is an error the analyst can read, and is not a client error",
+     !is.null(e502) && !inherits(e502, "llm_client_error") &&
+       grepl("HTTP 502", conditionMessage(e502), fixed = TRUE))
+
+  go = function(api, id = "mock/model", ...) {
+    llm_clear_counters(llm_session_id())
+    llm_json("hello", mm(api, id), system_prompt = "SYS-PROMPT", max_tokens = 1500L,
+             key = "mock-key-123", pause_base = 0.01, pause_min = 0.01, ...)
+  }
+  r = suppressWarnings(go("openai"))
+  ok("llm_json() through the real path: the echoed object comes back parsed, with the message as sent",
+     identical(r$obj$auth, "Bearer mock-key-123") && r$attempts == 1L &&
+       endsWith(r$user_sent, JSON_QUOTE_RULE) && identical(r$finish, "success"))
+  before = .llm_state$calls
+  fails_with(suppressWarnings(go("openai", "unknown-model")), "llm_client_error")
+  ok("a 404 through llm_json() makes one request, not three", .llm_state$calls - before == 1L)
+  before = .llm_state$calls
+  e = fails_with(suppressWarnings(go("anthropic", "cut-off")))
+  ok("a reply cut off at the ceiling is requested three times, then fails saying so",
+     .llm_state$calls - before == 3L && !is.null(e) &&
+       grepl("reached the token limit", conditionMessage(e), fixed = TRUE))
+
+  before = .llm_state$calls
+  pa = llm_ping(mm("anthropic"), key = "mock-key-123")
+  po = llm_ping(mm("openai"), key = "mock-key-123")
+  ok("the connection check's call: ready when the endpoint answers, one request each, the reply kept",
+     isTRUE(pa$ok) && isTRUE(po$ok) && .llm_state$calls - before == 2L &&
+       grepl("mock-key-123", pa$reply, fixed = TRUE) && identical(po$message, "Ready."))
+  bad = llm_ping(mm("openai", "bad-key"), key = "mock-key-123")
+  ok("the connection check's call: the endpoint's own words when it refuses, never the key",
+     isFALSE(bad$ok) && grepl("HTTP 401", bad$message, fixed = TRUE) &&
+       !grepl("mock-key-123", bad$message, fixed = TRUE))
+  none = llm_ping(m_analyst)
+  ok("the connection check makes no call for a model with no key, and says what to do",
+     isFALSE(none$ok) && is.na(none$seconds) && grepl("Waits for a key", none$message, fixed = TRUE))
+  ok("no key reached the environment", !any(Sys.getenv() == "mock-key-123"))
+})
+
+
+# The connection check on Start here: who is ready, one small call each, no key shown.
+local({
+  called = new.env()
+  called$ids = character(0)
+  fake_ping = function(m, ...) {
+    called$ids = c(called$ids, m$id)
+    if (identical(m$id, APP_MODELS$workers[[1]]$id))
+      list(ok = FALSE, message = "model not found (HTTP 404)", seconds = 0.2)
+    else list(ok = TRUE, message = "Ready.", seconds = 0.1)
+  }
+  html_of = function(x) paste(as.character(x$html), collapse = "")
+  n_in = function(pattern, txt) lengths(regmatches(txt, gregexpr(pattern, txt, fixed = TRUE)))
+  pm_id = APP_MODELS$pm$id
+  conn_state = shiny::reactiveValues(key_version = 0L)
+
+  with_env(c(OPENROUTER_API_KEY = "or-secret-key", ANTHROPIC_API_KEY = "env-key-should-be-ignored"), {
+    shiny::testServer(mod_connect_server, args = list(state = conn_state, ping = fake_ping), {
+      t0 = html_of(output$models)
+      ok("the table lists the project manager and each worker, with the key's source in words",
+         n_in("<code>", t0) == 1L + length(APP_MODELS$workers) && grepl(pm_id, t0, fixed = TRUE) &&
+           grepl("key pasted below", t0, fixed = TRUE) &&
+           grepl("server variable OPENROUTER_API_KEY", t0, fixed = TRUE))
+      ok("with no pasted key the project manager waits for one, whatever ANTHROPIC_API_KEY holds; the workers are ready",
+         n_in("waits for a key", t0) == 1L && n_in(">ready<", t0) == length(APP_MODELS$workers))
+
+      session$setInputs(check = 1)
+      r1 = html_of(output$result)
+      ok("Check connections calls each model that has a key and none that has not",
+         identical(sort(called$ids), sort(purrr::map_chr(APP_MODELS$workers, "id"))))
+      ok("the result shows ready, the endpoint's words for a refusal, and what a keyless model waits for",
+         n_in("Ready", r1) == length(APP_MODELS$workers) - 1L &&
+           grepl("model not found (HTTP 404)", r1, fixed = TRUE) &&
+           grepl("Waits for a key", r1, fixed = TRUE))
+
+      called$ids = character(0)
+      llm_set_session_key("pasted-pm-key")
+      conn_state$key_version = conn_state$key_version + 1L
+      session$flushReact()
+      t1 = html_of(output$models)
+      ok("pasting a key makes the project manager ready, with no key on the page",
+         n_in("waits for a key", t1) == 0L && !grepl("pasted-pm-key", t1, fixed = TRUE))
+      session$setInputs(check = 2)
+      r2 = html_of(output$result)
+      ok("with a key the project manager is called as well, and no key is on the page",
+         pm_id %in% called$ids && length(called$ids) == 1L + length(APP_MODELS$workers) &&
+           !grepl("pasted-pm-key|or-secret-key|env-key-should-be-ignored", paste(t0, r1, t1, r2)))
+    })
+  })
+})
+
+ok("Start here has the models table and the Check connections button",
+   grepl("Check connections", page$html, fixed = TRUE) && grepl("<h4>Models</h4>", page$html, fixed = TRUE))

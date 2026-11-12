@@ -46,7 +46,7 @@ APP_PROFILES <- list(
            id = "meta-llama/llama-4-maverick",
            key_source = "server", key_var = "OPENROUTER_API_KEY"),
       list(api = "openai", base_url = "https://openrouter.ai/api/v1",
-           id = "openai/gpt-6-luna-decisions",
+           id = "openai/gpt-6-luna",
            key_source = "server", key_var = "OPENROUTER_API_KEY"))),
   work = list(
     pm      = list(api = "anthropic", base_url = "<work base url>",
@@ -73,8 +73,10 @@ library(purrr)
 library(stringr)
 
 # Called as pkg::fn() in R/ and never attached. Listed so a missing one stops
-#   the app here, by name, rather than three screens later.
-APP_PACKAGES <- c("digest")
+#   the app here, by name, rather than three screens later. S7 and httr2 come
+#   with ellmer; R/llm.R calls them directly, to read a reply's finish reason and
+#   an HTTP error's status.
+APP_PACKAGES <- c("digest", "ellmer", "httr2", "jsonlite", "rlang", "S7")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
@@ -157,7 +159,7 @@ ui <- page_fluid(
   navlistPanel(
     id = "stage", widths = c(3, 9), well = FALSE,
 
-    tabPanel(QUESTIONR_TABS[1], help_ui(), mod_key_ui("key")),
+    tabPanel(QUESTIONR_TABS[1], help_ui(), mod_key_ui("key"), mod_connect_ui("connect")),
 
     tabPanel(QUESTIONR_TABS[2],
              tab_placeholder(QUESTIONR_TABS[2], 3,
@@ -184,6 +186,7 @@ ui <- page_fluid(
 server <- function(input, output, session) {
   state <- new_state()
   mod_key_server("key", state)
+  mod_connect_server("connect", state)
 }
 
 

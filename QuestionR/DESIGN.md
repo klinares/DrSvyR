@@ -259,7 +259,7 @@ APP_PROFILES <- list(
            id = "meta-llama/llama-4-maverick",
            key_source = "server", key_var = "OPENROUTER_API_KEY"),
       list(api = "openai", base_url = "https://openrouter.ai/api/v1",
-           id = "openai/gpt-6-luna-decisions",
+           id = "openai/gpt-6-luna",
            key_source = "server", key_var = "OPENROUTER_API_KEY"))),
   work = list(
     pm      = list(api = "anthropic", base_url = "<work base url>",

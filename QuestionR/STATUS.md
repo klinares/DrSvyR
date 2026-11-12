@@ -2,27 +2,113 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
-## Where things stand (2026-11-11)
+## Where things stand (2026-11-11, end of the Phase 2 session, live check run)
 
-- **Phases 0 and 1 are built** on branch `questionr` (from `main` at 00e5741),
-  one commit each, not pushed. Phase 0 is `d651cfe`; Phase 1 is the commit that
-  contains this file.
-- `tests/smoke.R`: 78 checks (18 for Phase 0, 60 for Phase 1), all ok, about 8 s,
-  no model calls. `tests/review.R 1`: **no FAIL**; 6 of 8 code files; all 11 skill
-  checksums PASS; the four assembled prompts pass every check in section 6.
-- No model has been called, and no key was used. Nothing was pushed.
-- **Next:** the review gate. Take `REVIEW.md` and this file to the Claude project.
-  Phase 2 (model layer) is not started.
+- **Phases 0, 1 and 1b are committed** on branch `questionr` (from `main` at
+  00e5741), not pushed: `d651cfe`, `ca5aa70`, `0228360`, `670b899` (the last is
+  Phase 1b, after the Claude project's review).
+- **Phase 2 is written, checked live, and not committed**: `R/llm.R`, the Models
+  table and "Check connections" in `R/ui.R`, the wiring in `app.R`, the Phase 2
+  checks in `tests/smoke.R`, and a new `tests/llm_check.R` with its output
+  `tests/llm_check.out`.
+- **Live check: 8 of 8 calls green** (4 connection pings, 3 worker drafts, 1 PM
+  review), about $0.075 by list prices. Results and what they leave open are in
+  "Live run, result" below. The third worker is now `openai/gpt-6-luna` (Kevin,
+  2026-11-11; `app.R` and the copy in `DESIGN.md` section 4 changed).
+- `tests/smoke.R`: 142 checks, all ok, about 13 s, no model calls (85 from
+  Phases 0 to 1b, then 57 for Phase 2; the network in those is a mock server on
+  this machine); rerun after the ID swap, still 142. `tests/review.R 2` run
+  after the live check: **no FAIL**; 7 of 8 code files; `REVIEW.md` now carries
+  `llm_check.out` verbatim.
+- Nothing was pushed.
+- **Next:** Kevin takes `REVIEW.md` and this file to the Claude project; commit
+  Phase 2 when Kevin says (small commits: the ID swap can be its own). Decision 13
+  (token ceilings) is the one the live run raised.
+
+## Live run, result (2026-11-11 21:05, Kevin's yes, third worker swapped first)
+
+`tests/llm_check.R go`, from PowerShell inside `QuestionR/`. Exit 0, **8 of 8
+calls green**, one request each (no retries fired). `tests/llm_check.out` holds
+the first 300 characters of every reply and no key (a search for key-shaped
+strings found none). Draft prompt hash `1f303eea...`, review prompt hash
+`907cea17...`.
+
+| Call | Model | Seconds | Tokens in / out | Finish |
+|---|---|---|---|---|
+| Ping | `claude-sonnet-5-5` | 1.3 | | |
+| Ping | `google/gemma-4-31b-it` | 0.5 | | |
+| Ping | `meta-llama/llama-4-maverick` | 0.5 | | |
+| Ping | `openai/gpt-6-luna` | 0.9 | | |
+| Draft, 2 items | `google/gemma-4-31b-it` | 8.1 | 2889 / 535 | success |
+| Draft, 2 items | `meta-llama/llama-4-maverick` | 5.7 | 2784 / 454 | success |
+| Draft, 2 items | `openai/gpt-6-luna` | 32.1 | 2779 / 2740 | success |
+| Review, 2 questions | `claude-sonnet-5-5` | 47.4 | 4155 / 6241 | success |
+
+Every ping answered `OK`. A ping carries no finish reason, so its row shows `-`.
+
+What it shows, and what it does not:
+
+- **All three key paths work against real endpoints.** The pasted-style key
+  reached Anthropic as `x-api-key`; `OPENROUTER_API_KEY`, read through
+  `llm_key_for()`, reached OpenRouter as `Authorization: Bearer`. This closes the
+  caveat in VERIFY items: a real OpenRouter did not return a 401.
+- **Gemma and Llama wrapped their reply in a ```` ```json ```` fence**; Luna did
+  not. The fence stripper in `R/llm.R` took it on the first request, so that
+  repair is used in practice, not only in tests.
+- **The review shape check passed and its findings cite real ids:** 6 findings,
+  0 `check` values outside the CHECKLIST sent. That is encouraging for decision 8
+  (a model obeying `core.md`'s "never cite a reflex by name" could have left
+  `check` empty) but it is one questionnaire on one model, not a conclusion.
+- **The review used 6241 of its 8000-token ceiling on a two-question
+  questionnaire** (open decision 13), and Luna used 2740 of the 4000 draft
+  ceiling for two items. Neither hit it here.
+- **Luna took 32 s** against 5 to 8 s for the other two workers, and billed 2740
+  output tokens for two items where the others billed about 500. That looks like
+  reasoning that bills as output; `llm_check.out` keeps only the first 300
+  characters of the reply, so I did not measure the reply's own length. Phase 3's
+  screen that waits on all three workers will wait on Luna.
+- **Not shown:** whether OpenRouter honours `max_completion_tokens`. No call hit
+  the ceiling, so a cut-off was never forced; it shows only that the parameter
+  was not rejected. The work server at Phase 6 still needs the check.
+
+Cost, by the prices below applied to the tokens above: Gemma $0.0008, Llama
+$0.0014, Luna $0.0017, Sonnet $0.0707, pings negligible: **about $0.075 in all**,
+against $0.05 expected and $0.30 at most. All of the excess is the review, as the
+thinking-token note warned. I read no bill; this is arithmetic on list prices.
+
+The estimate as it was given, for reference. Prompts about 3.3k tokens in (13k
+characters at about four characters a token); outputs were guesses. Prices:
+OpenRouter's public model list (2026-11-11) for the workers; the Claude API
+reference (cached 2026-11-03) for Sonnet 5.5.
+
+| Call | Model | $ per M tokens in / out | Typical | Worst case: 3 attempts, output at the ceiling |
+|---|---|---|---|---|
+| 4 pings | all four | | under $0.01 in all | |
+| Draft | `google/gemma-4-31b-it` | 0.20 / 0.40 | $0.001 | $0.007 |
+| Draft | `meta-llama/llama-4-maverick` | 0.35 / 1.00 | $0.003 | $0.016 |
+| Draft | `openai/gpt-6-luna` | 0.10 / 0.50 | $0.001 | $0.007 |
+| Review | `claude-sonnet-5-5` | 2.00 / 10.00 | $0.04 | $0.26 |
+
+To run it again (about $0.075):
+
+```
+& "C:/Program Files/R/R-4.6.1/bin/Rscript.exe" --no-init-file tests/llm_check.R go
+```
+
+`tests/openrouter_check.R` (the throwaway) was not run. Its one useful result,
+whether each ID is served, is now answered by the live check (all three workers
+answered), so it can be deleted; I left it, as the Phase 0 commit has it.
 
 ## What was built
 
 | File | Lines | What it holds |
 |---|---|---|
-| `app.R` | 190 | Settings (`APP_CLASSIFICATION`, `APP_LOGO`, `APP_OFFICE`, `APP_MAX_PASTE_CHARS`), the `APP_PROFILES` block and `QUESTIONR_PROFILE`, `library()` calls, `APP_PACKAGES` check, masking check, sources `R/`, the startup `check_skills()`, `options(bitmapType = "cairo")`, `new_state()`, banner and header, six-tab navlist, server |
-| `R/llm.R` | 129 | **Key box only**: per-session key registry, `mod_key_ui`, `mod_key_server`. No model call, no JSON repair, no retry, no `Sys.getenv()` |
+| `app.R` | 193 | Settings (`APP_CLASSIFICATION`, `APP_LOGO`, `APP_OFFICE`, `APP_MAX_PASTE_CHARS`), the `APP_PROFILES` block and `QUESTIONR_PROFILE`, `library()` calls, `APP_PACKAGES` check, masking check, sources `R/`, the startup `check_skills()`, `options(bitmapType = "cairo")`, `new_state()`, banner and header, six-tab navlist, server |
+| `R/llm.R` | 585 | The model layer (Phase 2): the key rule `llm_key_for()` (the only `Sys.getenv()`, server models only), `llm_chat()` and `llm_complete()` for both API styles, JSON parse and repair, `llm_json()` with retry, session cap and client-error class, `llm_ping()`, and the key box (`mod_key_ui`, `mod_key_server`) |
 | `R/skills.R` | 416 | The parser, `check_skills()`, `clean_form()`, the file and mode filters, `build_prompt(form)`, `build_checklist(form)` |
-| `R/ui.R` | 118 | `QUESTIONR_TABS`, `warn_box`, `advice_box`, `office_logo`, Start here, placeholder tabs |
-| `tests/smoke.R` | 403 | The checks above |
+| `R/ui.R` | 179 | `QUESTIONR_TABS`, `warn_box`, `advice_box`, `office_logo`, Start here, the Models table and Check connections (`mod_connect_ui`, `mod_connect_server`, injectable `ping`), placeholder tabs |
+| `tests/smoke.R` | 860 | The checks above, and from Phase 2 the repair, retry, cap, key-rule, chat-object, mock-server and connection-check ones |
+| `tests/llm_check.R` | 190 | Live, home only, does nothing without the word `go`. Writes `tests/llm_check.out` |
 | `.rscignore`, `README.md` | | As in DESIGN section 3; root `README.md` and `CLAUDE.md` have a QuestionR row |
 
 `R/checks.R` is not created: nothing in these phases belongs in it.
@@ -87,9 +173,47 @@ change.
 
 ## VERIFY items
 
-None of DESIGN's VERIFY items falls due in Phases 0 and 1, so none is resolved:
-the ellmer function for a custom base URL is Phase 2 (open decision 2 below), the
-copy button is Phase 5.
+**Resolved in Phase 2 (ellmer 0.4.2, read from the installed help and source;
+no model called).** The copy button (Phase 5) is still open.
+
+- `api = "anthropic"`: `ellmer::chat_anthropic(system_prompt, params, model,
+  cache, api_args, base_url, beta_headers, api_key, credentials, api_headers,
+  echo)`. Used: `system_prompt`, `params`, `model`, `cache`, `base_url`,
+  `credentials`, `echo`. `api_key` is deprecated. Live check: accepted by
+  Anthropic's API with a real key.
+- `api = "openai"`: `ellmer::chat_openai_compatible(base_url, name,
+  system_prompt, api_key, credentials, model, params, api_args, api_headers,
+  preserve_thinking, echo)`. Used: `base_url` (required), `name`,
+  `system_prompt`, `credentials`, `model` (required), `params`, `echo`. It takes
+  any base URL, so it serves OpenRouter at home and the work server later.
+- `credentials` is a zero-argument function returning the bare key string. The
+  `chat_openai_compatible` page says only "Credentials to use for
+  authentication"; the zero-argument form is on the `chat_anthropic` and
+  `chat_openrouter` pages and enforced by `ellmer:::check_credentials`.
+  ellmer adds `Bearer ` itself for the OpenAI-style `Authorization` header
+  (`ellmer:::ellmer_req_credentials`, `base_request` for
+  `ProviderOpenAICompatible`). **Checked on the wire** against a mock server on
+  this machine (smoke test): the OpenAI-style call carries
+  `Authorization: Bearer <key>`, the Anthropic-style call `x-api-key: <key>`.
+  **Live check (2026-11-11):** OpenRouter accepted the key on all six calls to
+  it (three pings, three drafts; no 401), so the real server agrees with the mock.
+- `ellmer::params(temperature, max_tokens, ...)`: used `temperature` (only when
+  a model entry sets one) and `max_tokens`. **On the wire** the Anthropic-style
+  body carries `max_tokens`, but the OpenAI-style body carries
+  `max_completion_tokens` and no `max_tokens` (ellmer 0.4.2 renames it). Whether
+  OpenRouter honours it is **still open**: the live run did not reject it, but
+  no call reached the ceiling, so a cut-off was never forced. The work server at
+  Phase 6 must be checked, by asking for a long reply under a tiny ceiling,
+  since one that knows only `max_tokens` would ignore the ceiling.
+- Why a reply stopped: `chat$last_turn()` returns an `AssistantTurn` whose
+  `finish_reason` is documented on the `Turn` help page ("success",
+  "max_tokens", ...). Read with `S7::prop()`.
+- The option `ellmer_timeout_s` is read by `ellmer_req_robustify()` in the
+  source but is on no help page. svysegment sets it too; if ellmer renames it,
+  the fallback is ellmer's 5 minute default.
+
+**Phase 2's offline part and its live check are done** (8 of 8). See "Live run,
+result" above and the Log below.
 
 Package functions I used were checked in the installed versions (shiny 1.14.0,
 bslib 0.12.0, purrr 1.2.2, stringr 1.6.0, digest 0.6.39, rlang 1.3.0) before use,
@@ -105,8 +229,9 @@ theme, lang)`, `bslib::input_dark_mode(..., id, mode)`,
 
 1. Models at home: settled by Kevin 2026-11-11. Workers through OpenRouter:
    `google/gemma-4-31b-it`, `meta-llama/llama-4-maverick`,
-   `openai/gpt-6-luna-decisions`. PM: `claude-sonnet-5-5` for now, on
-   Anthropic's API, key pasted into the app. In `app.R` as given.
+   `openai/gpt-6-luna` (was `-decisions`, which OpenRouter does not serve:
+   decision 11). PM: `claude-sonnet-5-5` for now, on Anthropic's API, key pasted
+   into the app. In `app.R`.
 2. Which ellmer function serves the OpenAI-style calls with a custom base URL.
    [Open until Phase 2; check installed help, record function and arguments.]
 3. Copy button on tab 4. [Leave it out; select and copy.]
@@ -139,6 +264,31 @@ New, for the Claude project or Kevin:
 10. **`KEY_INSTRUCTIONS`** (where to get a key) are the `TODO` placeholders from
     `svysegment`, shown on Start here. [Placeholders until Phase 6; text needed
     from Kevin.]
+11. **RESOLVED 2026-11-11.** `openai/gpt-6-luna-decisions` is not served by
+    OpenRouter (its public model list, 466 models; no key sent). Kevin chose
+    `openai/gpt-6-luna` ($0.10 in / $0.50 out per M tokens); `app.R` and the copy
+    in `DESIGN.md` section 4 now say so, and the live check called it
+    successfully. Other near ones, not used: `openai/gpt-6-luna-pro`,
+    `openai/gpt-6.1-terra` ($1 / $5).
+12. **Phase 2 choices to confirm** (carried from the interrupted session):
+    `LLM_CACHE = "none"`; `JSON_QUOTE_RULE` is appended to the user message at
+    call time, so what is sent is the approved prompt plus that rule (`user_sent`
+    in the result is for the log); `llm_json()` returns a list (`obj`, `raw`,
+    `user_sent`, `finish`, `tokens`, `model`, `attempts`, `seconds`), not the bare
+    object. [As written.]
+13. **Token ceilings, raised by the live run.** `LLM_MAX_TOKENS` is `draft` 4000,
+    `evaluate` 8000, `appraisal` 8000, `brief` 1500. A two-question review took
+    6241 of the 8000 (Sonnet 5.5, with its default thinking on, billed as
+    output), and two drafted items took 2740 of the 4000 on Luna. A review of a
+    longer questionnaire, or a ten-item draft, may well reach the ceiling, and
+    `llm_json()` then retries a cut-off reply twice and fails, saying why.
+    Retrying does not help: the same prompt is cut off at the same place.
+    Options: raise the ceilings (cost grows with them); set a thinking effort or
+    budget on the PM call, which `llm_chat()` does not do today (it passes only
+    `max_tokens`, and `temperature` when a model entry sets one); or split a long
+    review into batches of questions. [Left as is. I would measure first: one
+    live run of a 15-question review, reading `finish`, a cost of about $0.10 by
+    the same arithmetic; Kevin's call.]
 
 ## Review of Phases 0 and 1 (Claude project, 2026-11-11)
 
@@ -198,7 +348,19 @@ hand merge when the two branches meet.
 - **Tabs 1 to 4 and Methodology are placeholders** that say which phase builds
   them. Only Start here is real.
 - **Not created, because a later phase owns them:** `R/checks.R`,
-  `tests/llm_check.R`, `tests/gold_items.csv`, `www/methodology.md`.
+  `tests/gold_items.csv`, `www/methodology.md`.
+- **`tests/llm_check.R` has no brief check and no appraisal**, because their
+  prompts do not exist until Phase 3, which adds them. Its drafting shape check
+  and review shape check are inline and minimal; Phase 3's validators replace them.
+- **Live coverage is thin by design.** `llm_check.R` ran once, on two items and
+  two questions, so it did not reach a token ceiling, a retry, a 4xx, or a
+  placeholder reply against a real model; those are covered by the mock server
+  only. The brief check, the appraisal, `LLM_MAX_TOKENS` at realistic sizes, and
+  `max_completion_tokens` being honoured are untested live.
+- **New test dependency:** `webfakes` (with `callr`, already installed), home
+  only, for the mock server in `tests/smoke.R`. It starts one child R process
+  for the length of the test, not parallel work in the app (root rule 3 is about
+  the app; `review.R` finds none).
 - **No logo file.** `www/logo/` does not exist, so the dashed placeholder box
   shows, as the Phase 0 pass condition says. Add `www/logo/office_logo.png` to
   replace it; the smoke test copes with either.
@@ -242,11 +404,38 @@ hand merge when the two branches meet.
   files in one prompt ever share an id, so a future clash cannot pass silently.
 - The skills hold 84 `Source` lines, 50 `Check` lines and 4 comments. The parser
   found every one, counted independently from the raw files.
+- **Phase 2 session, found by the mock server** (the real ellmer and httr2 code
+  path, no model): the OpenAI-style call sends `max_completion_tokens`, not
+  `max_tokens` (see VERIFY items). A 502 with no content type made httr2 fail
+  while parsing the error body, which looked like an `llm.R` bug and was my
+  mock's fault, so handlers now send JSON errors; a real gateway 502 reads
+  "HTTP 502 Bad Gateway" and is retried, not treated as a client error.
+- **A real inconsistency, fixed in `R/llm.R`:** a failed `llm_json()` carried
+  `$raw` with the reply's `finish` and `provider` attributes still on it, while a
+  success stripped them. Both now carry plain text. A smoke check asserts it.
+- **`is_placeholder_reply()` treats `{"items": []}` as no answer** (no text values
+  at all). Fine for the app, since a drafting or review reply always has items;
+  noted because my first validator test used exactly that and failed.
+- **`llm_ping()` now counts its request** in `.llm_state$calls` and returns the
+  model's `reply` beside `message`, so `llm_check.out` shows what the model said.
+  The screen still shows only Ready or the error.
+- **The new smoke checks can fail.** Three mutations of a copy (analyst model
+  falling back to the environment, session cap never binding, client errors
+  retried) were each caught by the check meant to catch them. The real files
+  were not touched.
+- **Live run (2026-11-11), nothing broke.** The one thing the mock could not
+  tell me turned out fine: a real OpenRouter and a real Anthropic accepted the
+  keys as sent. The surprises were cost and time, not correctness: the review
+  cost more than forty times the dearest worker draft ($0.07 against $0.002) and
+  used 78% of its token ceiling on two questions, and Luna took four to six times
+  as long as the other two workers for the same job (decision 13).
+- `review.R` prints "masked by .GlobalEnv: %||%" on stderr because it defines its
+  own `%||%` before the app attaches purrr. Harmless; not changed.
 
 ## Remaining FAIL in REVIEW.md
 
-None. The one `READ` row (a `Sys.getenv()` call in `R/`) found none: nothing in
-these phases reads the environment.
+None as of `review.R 2` after the live run. The one `READ` row is the single
+`Sys.getenv()` in `llm_key_for()`, for server-key models only.
 
 ## Log
 
@@ -262,6 +451,39 @@ these phases reads the environment.
   review carries a `CHECKLIST` block, built by the same function as
   `build_checklist()`. `tests/smoke.R` updated to the new rules (85 ok);
   `review.R 1` no FAIL for all five forms. Prompts below are regenerated.
+- **Phase 2, first session (stopped at a usage limit).** Wrote `R/llm.R` (key
+  rule `llm_key_for()`, `llm_chat()` for both API styles, `llm_complete()`, JSON
+  repair copied from svysegment, `llm_json()` with retry, session cap, client-error
+  class and an injectable `complete`, `llm_ping()`), the Start here Models table
+  and "Check connections" in `R/ui.R`, and the `app.R` wiring plus
+  `APP_PACKAGES`. Probed offline only; smoke still 85 ok.
+- **Phase 2, second session (2026-11-11), offline part finished, uncommitted.**
+  Smoke is now 142 ok (57 new): the five repair cases and two unrepairable ones;
+  `llm_json()` through a scripted stand-in (first-try success, the message sent,
+  retry on non-JSON, on a 503, on a reply cut off at the ceiling, on the echoed
+  template, on a failed validator; a client error and a missing key raised at
+  once and never retried; the session cap and its reset); the key rule (an
+  analyst model ignores `ANTHROPIC_API_KEY`, a server model reads its `key_var`,
+  one session's pasted key is not another's); both chat objects (provider, model,
+  base URL, ceiling, no temperature, key in a closure); the real `llm_complete()`,
+  `llm_json()` and `llm_ping()` against a local mock server in both API styles
+  (key header, ceiling, finish reason, tokens, 404, 401 with the key blanked, 502,
+  cut-off); and the connection-check module (who is ready, which models are
+  called, no key on the page). Also written: `tests/llm_check.R`, dry-run
+  against the mock with well-formed replies in a throwaway copy (report, exit
+  code, no key in the file). `review.R 2`: no FAIL; `REVIEW.md` rewritten for
+  Phase 2, its live section says `llm_check.out` does not exist. Small fixes in
+  `R/llm.R`: `$raw` is plain text on failure too; `llm_ping()` counts its request
+  and keeps the model's reply. No model had been called at the end of that session.
+- **Phase 2, third session (2026-11-11), live check run, uncommitted.** Kevin said
+  "Swap and run" to the one question asked: `app.R` and `DESIGN.md` section 4 now
+  name `openai/gpt-6-luna` for the third worker (decision 11 resolved). Smoke
+  rerun: 142 ok, no FAIL. `tests/llm_check.R go`: 8 of 8 green, about $0.075 by
+  list prices (4 pings, 3 drafts, 1 review; details in "Live run, result"); no
+  key in `tests/llm_check.out`. `review.R 2` rerun: no FAIL, `REVIEW.md` carries
+  the live output. **Raised, not settled:** token ceilings (decision 13);
+  `max_completion_tokens` still unproven (VERIFY items). **Not done:** the Phase 2
+  commit (Kevin to ask), the Claude project's review of `REVIEW.md` and this file.
 
 ## Assembled prompts (Phase 1b)
 

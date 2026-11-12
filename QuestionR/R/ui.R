@@ -54,9 +54,7 @@ office_logo <- function(file, office = "") {
 
 # ---- Start here --------------------------------------------------------------
 
-# Where a model's key comes from, in words. Never the key itself, and never a
-#   look at the environment: whether a variable is set is Phase 2's connection
-#   check.
+# Where a model's key comes from, in words. Never the key itself.
 key_source_label <- function(m) {
   if (identical(m$key_source, "analyst")) "key pasted below"
   else paste0("key from the server variable ", m$key_var)
@@ -68,7 +66,8 @@ model_label <- function(m)
                     paste0(m$api, " API at ", m$base_url, "; ", key_source_label(m))))
 
 # The settings that are in force for this process, read from the globals app.R
-#   assigns (APP_CLASSIFICATION, APP_PROFILE, APP_MODELS, APP_MAX_PASTE_CHARS).
+#   assigns (APP_CLASSIFICATION, APP_PROFILE, APP_MAX_PASTE_CHARS). The models
+#   are in their own table, with whether each has a key.
 settings_table <- function() {
   row = function(label, value) tags$tr(tags$th(scope = "row", label), tags$td(value))
   tags$table(
@@ -76,9 +75,6 @@ settings_table <- function() {
     tags$tbody(
       row("Profile", APP_PROFILE),
       row("Classification banner", APP_CLASSIFICATION),
-      row("Project manager", model_label(APP_MODELS$pm)),
-      purrr::imap(APP_MODELS$workers, function(m, i)
-        row(paste("Worker", i), model_label(m))),
       row("Pasted questionnaire limit",
           paste(format(APP_MAX_PASTE_CHARS, big.mark = ","), "characters"))))
 }
@@ -104,6 +100,71 @@ help_ui <- function() {
 
     tags$h5("Settings in force"),
     settings_table())
+}
+
+# The models, and whether each has a key; and a button that makes one very small
+#   call to each. Never shows a key. A model with no key is not called: it says
+#   what is missing. The calls run one after another, and that R process is busy
+#   until they finish. ping is the function that calls one model, so a test can
+#   stand in for the network.
+mod_connect_ui <- function(id) {
+  ns <- NS(id)
+  tagList(
+    tags$hr(),
+    tags$h4("Models"),
+    uiOutput(ns("models")),
+    actionButton(ns("check"), "Check connections"),
+    tags$p(class = "text-muted small mt-2",
+           "Makes one very small call to each model that has a key, and shows ",
+           "whether it answered or what the endpoint said. Nothing you have ",
+           "entered is sent."),
+    uiOutput(ns("result")))
+}
+
+mod_connect_server <- function(id, state, ping = llm_ping) {
+  moduleServer(id, function(input, output, session) {
+    results <- reactiveVal(NULL)
+
+    output$models <- renderUI({
+      state$key_version   # a key pasted or forgotten changes who is ready
+      tags$table(
+        class = "table table-sm",
+        tags$thead(tags$tr(tags$th("Role"), tags$th("Model"), tags$th("Key"))),
+        tags$tbody(purrr::map(llm_models(), function(x) {
+          ready = llm_key_ready(x$m)
+          tags$tr(tags$td(x$role), tags$td(model_label(x$m)),
+                  tags$td(if (ready) tags$span(class = "text-success", "ready")
+                          else tagList(tags$span(class = "text-warning", "waits for a key"),
+                                       tags$br(),
+                                       tags$span(class = "text-muted small", llm_key_hint(x$m)))))
+        })))
+    })
+
+    observeEvent(input$check, {
+      ms <- llm_models()
+      withProgress(message = "Checking connections", value = 0, {
+        out <- purrr::map(ms, function(x) {
+          incProgress(1 / length(ms), detail = x$m$id)
+          r <- if (llm_key_ready(x$m)) ping(x$m) else llm_ping(x$m)
+          c(list(role = x$role, model = x$m$id), r)
+        })
+        results(out)
+      })
+    })
+
+    output$result <- renderUI({
+      out <- results()
+      if (is.null(out)) return(NULL)
+      tags$table(
+        class = "table table-sm",
+        tags$thead(tags$tr(tags$th("Model"), tags$th("Result"), tags$th("Seconds"))),
+        tags$tbody(purrr::map(out, function(r)
+          tags$tr(tags$td(tags$code(r$model)),
+                  tags$td(tags$span(class = if (isTRUE(r$ok)) "text-success" else "text-danger",
+                                    if (isTRUE(r$ok)) "Ready" else r$message)),
+                  tags$td(if (is.na(r$seconds)) "" else sprintf("%.1f", r$seconds))))))
+    })
+  })
 }
 
 

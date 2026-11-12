@@ -1,6 +1,6 @@
-# QuestionR review evidence, Phase 1
+# QuestionR review evidence, Phase 2
 
-Generated 2026-11-11 13:16 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-11 21:08 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,6 +12,7 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+670b899 QuestionR: Phase 1b bring skills.R into line with DESIGN sections 4 and 5
 0228360 QuestionR: review changes from the Claude project (skills 0.2, design, review.R)
 ca5aa70 QuestionR: Phase 1 skills loader and prompt assembly
 d651cfe QuestionR: Phase 0 scaffold, key box and profile block
@@ -26,45 +27,51 @@ df9547a svysegment: standard writing rules for every model-written passage; alwa
 f95a888 svysegment: plots readable in light and dark themes
 fca7039 svysegment: let the analyst set the range of segment numbers to search
 c22f1f4 svysegment: card layout for Start here; method report and office logo
-f7ec3f9 svysegment: record the survey and research question on Items; use both to name segments
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
- M R/skills.R
+ M DESIGN.md
+ M R/llm.R
+ M R/ui.R
+ M REVIEW.md
+ M STATUS.md
+ M app.R
  M tests/smoke.R
+?? tests/llm_check.R
+?? tests/llm_check.out
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
  CLAUDE.md                              |   1 +
  QuestionR/.rscignore                   |   7 +
- QuestionR/DESIGN.md                    | 456 +++++++++++++++++++
- QuestionR/PROMPTS.md                   | 108 +++++
+ QuestionR/DESIGN.md                    | 456 +++++++++++++++
+ QuestionR/PROMPTS.md                   | 108 ++++
  QuestionR/R/_disable_autoload.R        |   5 +
- QuestionR/R/llm.R                      | 129 ++++++
- QuestionR/R/skills.R                   | 416 ++++++++++++++++++
- QuestionR/R/ui.R                       | 118 +++++
+ QuestionR/R/llm.R                      | 129 +++++
+ QuestionR/R/skills.R                   | 437 +++++++++++++++
+ QuestionR/R/ui.R                       | 118 ++++
  QuestionR/README.md                    |  43 ++
- QuestionR/REVIEW.md                    | 773 +++++++++++++++++++++++++++++++++
- QuestionR/STATUS.md                    | 687 +++++++++++++++++++++++++++++
- QuestionR/app.R                        | 190 ++++++++
- QuestionR/tests/openrouter_check.R     |  81 ++++
- QuestionR/tests/review.R               | 393 +++++++++++++++++
- QuestionR/tests/smoke.R                | 403 +++++++++++++++++
+ QuestionR/REVIEW.md                    | 996 +++++++++++++++++++++++++++++++++
+ QuestionR/STATUS.md                    | 845 ++++++++++++++++++++++++++++
+ QuestionR/app.R                        | 190 +++++++
+ QuestionR/tests/openrouter_check.R     |  81 +++
+ QuestionR/tests/review.R               | 393 +++++++++++++
+ QuestionR/tests/smoke.R                | 459 +++++++++++++++
  QuestionR/www/skills/README.md         |  66 +++
  QuestionR/www/skills/attitudinal.md    |  72 +++
  QuestionR/www/skills/behavioral.md     |  67 +++
- QuestionR/www/skills/core.md           |  92 ++++
+ QuestionR/www/skills/core.md           |  92 +++
  QuestionR/www/skills/cross_cultural.md |  66 +++
- QuestionR/www/skills/evaluate.md       | 117 +++++
- QuestionR/www/skills/generate.md       |  79 ++++
- QuestionR/www/skills/mode.md           |  57 +++
+ QuestionR/www/skills/evaluate.md       | 117 ++++
+ QuestionR/www/skills/generate.md       |  79 +++
+ QuestionR/www/skills/mode.md           |  57 ++
  QuestionR/www/skills/pm_appraise.md    |  63 +++
  QuestionR/www/skills/pm_brief.md       |  42 ++
- QuestionR/www/skills/sensitive.md      |  90 ++++
+ QuestionR/www/skills/sensitive.md      |  90 +++
  README.md                              |   2 +
- 27 files changed, 4623 insertions(+)
+ 27 files changed, 5081 insertions(+)
 exit status: 0
 ~~~~
 
@@ -72,16 +79,17 @@ exit status: 0
 
 | file | lines |
 |---|---|
-| app.R | 190 |
+| app.R | 193 |
 | R/_disable_autoload.R | 5 |
-| R/llm.R | 129 |
+| R/llm.R | 585 |
 | R/skills.R | 437 |
-| R/ui.R | 118 |
+| R/ui.R | 179 |
+| tests/llm_check.R | 190 |
 | tests/openrouter_check.R | 81 |
 | tests/review.R | 393 |
-| tests/smoke.R | 459 |
+| tests/smoke.R | 860 |
 
-Code files counted: 6 of 8 allowed: PASS
+Code files counted: 7 of 8 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
 
 ## 3. Hard rules
@@ -94,11 +102,11 @@ R/_disable_autoload.R present and empty of code: PASS
 | Sys.setenv() in the app | none | PASS |
 | addResourcePath() or system.file() in the app | none | PASS |
 | parallelism (future, furrr, mirai, parallel, parallel_chat*) | none | PASS |
-| key read from the environment for a pasted-key model (Sys.getenv in R/, listed for reading) | none | READ |
+| key read from the environment for a pasted-key model (Sys.getenv in R/, listed for reading) | R/llm.R:113 Sys.getenv | READ |
 
 Top-level expressions in R/ that are not assignments: PASS
 Names defined more than once across R/: PASS
-pkg::fn calls checked: 14. Not exported by the installed package: PASS
+pkg::fn calls checked: 25. Not exported by the installed package: PASS
 
 ## 4. Skill files
 
@@ -216,6 +224,63 @@ ok  a number of items that is not a whole number of one or more stops
 ok  Evaluate with no questionnaire stops
 ok  a field that is not in the contract stops
 ok  an unknown survey mode stops
+ok  repair: a bare double quote inside a value is escaped, and the rest is kept
+ok  repair: the quote the model left off the last value is put back
+ok  repair: a reply cut off inside a value is closed, and what arrived is kept
+ok  repair: JSON inside a code fence and prose is found
+ok  repair: chat-template tokens and a bare 'assistant' line are stripped before parsing
+ok  a reply with no JSON fails, and says so
+ok  a reply that cannot be repaired fails, carrying the reply
+ok  the echoed template ({"stem": "..."}) and an empty object count as no answer
+ok  a good reply comes back parsed, with the raw text, the message as sent and one attempt
+ok  the message sent is the approved prompt plus the quote rule, and nothing else
+ok  a reply that is not JSON is tried again, and the second one is returned
+ok  a transient error (503, a timeout) is tried again, and the third attempt succeeds
+ok  a reply that never parses fails after exactly three attempts
+ok  the failure names the model, the endpoint and why it stopped, and carries the raw reply
+ok  a reply cut off at the token limit is a failed attempt, even when what arrived would parse
+ok  the echoed example object is a failed attempt, retried
+ok  a reply that fails the validator is tried again; one that passes is returned
+ok  a validator's own message reaches the analyst when every attempt fails
+ok  a client error (bad key, unknown model) is raised at once and not tried again
+ok  no key is a client error before any call is made, and says what to do
+ok  a failed call uses two repeat attempts of the session's allowance
+ok  once the allowance is used the next call fails at once, with the reason, and makes no call
+ok  clearing the counters gives the session its allowance back
+ok  a pasted-key model ignores ANTHROPIC_API_KEY, even when it is set
+ok  a server model reads the variable named in key_var
+ok  a server model with the variable unset or empty has no key
+ok  each kind of model is told what to do about a missing key
+ok  a server model with no key_var, or a key_source that is neither, is a client error
+ok  at home the project manager takes a pasted key and the workers a server variable
+ok  a pasted-key model gets the pasted key, not the environment's
+ok  a key pasted in one session is not visible to another
+ok  anthropic: the Anthropic provider, with the model, base URL, ceiling and system prompt given
+ok  openai: the OpenAI-compatible provider, with the model, base URL and ceiling given
+ok  no temperature is set unless the model's entry sets one
+ok  the key travels in a closure that returns it, and is not in the environment
+ok  a chat with no key, or an api that is neither anthropic nor openai, is a client error
+ok  anthropic style: the key in x-api-key, the ceiling as max_tokens, the system prompt sent, no temperature
+ok  openai style: the key as a Bearer token, the ceiling as max_completion_tokens, the system prompt sent, no temperature
+ok  a reply carries why it stopped, the endpoint, the tokens and the seconds
+ok  a reply that stopped at the token limit says so, in both API styles
+ok  a 404 is a client error and carries the endpoint's own words
+ok  a 401 is a client error, and the key the endpoint echoed back is blanked
+ok  a 502 with no content type is an error the analyst can read, and is not a client error
+ok  llm_json() through the real path: the echoed object comes back parsed, with the message as sent
+ok  a 404 through llm_json() makes one request, not three
+ok  a reply cut off at the ceiling is requested three times, then fails saying so
+ok  the connection check's call: ready when the endpoint answers, one request each, the reply kept
+ok  the connection check's call: the endpoint's own words when it refuses, never the key
+ok  the connection check makes no call for a model with no key, and says what to do
+ok  no key reached the environment
+ok  the table lists the project manager and each worker, with the key's source in words
+ok  with no pasted key the project manager waits for one, whatever ANTHROPIC_API_KEY holds; the workers are ready
+ok  Check connections calls each model that has a key and none that has not
+ok  the result shows ready, the endpoint's words for a refusal, and what a keyless model waits for
+ok  pasting a key makes the project manager ready, with no key on the page
+ok  with a key the project manager is called as well, and no key is on the page
+ok  Start here has the models table and the Check connections button
 exit status: 0
 ~~~~
 
@@ -993,4 +1058,71 @@ language and, when that is not English, add the English meaning.
 
 ## 7. Model layer
 
-Not due until Phase 2.
+ellmer version: 0.4.2
+Arguments the installed ellmer functions accept:
+~~~~
+ellmer::params(temperature, top_p, top_k, frequency_penalty, presence_penalty, seed, max_tokens, log_probs, stop_sequences, reasoning_effort, reasoning_tokens, ...)
+ellmer::chat_anthropic(system_prompt, params, model, cache, api_args, base_url, beta_headers, api_key, credentials, api_headers, echo)
+ellmer::chat_openai_compatible(base_url, name, system_prompt, api_key, credentials, model, params, api_args, api_headers, preserve_thinking, echo)
+~~~~
+Lines in R/llm.R that build calls or handle keys:
+~~~~
+9: #   "anthropic" calls ellmer::chat_anthropic(); "openai" calls
+10: #   ellmer::chat_openai_compatible(), which takes the base URL of any
+17: # max_tokens for each step (DESIGN.md section 6). A reply that reaches the
+101: # The one place the environment is read, and only for a model whose key_source
+102: #   is "server": the variable named in its key_var. A model whose key_source is
+107:   switch(m$key_source %||% "",
+110:       if (is.null(m$key_var) || !nzchar(m$key_var))
+111:         llm_fail(paste0("The model ", m$id, " has key_source 'server' and no key_var."),
+113:       k = Sys.getenv(m$key_var)
+116:     llm_fail(paste0("The model ", m$id, " has key_source '", m$key_source,
+125:   if (identical(m$key_source, "server"))
+126:     paste0("Set the server variable ", m$key_var, ".")
+137: llm_host <- function(m) sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url)
+158: #   in a closure (credentials is a function), never through the environment. No
+159: #   temperature is sent unless the model's entry sets one: repeatability comes
+162: llm_chat <- function(m, system_prompt, max_tokens, key) {
+166:   params = ellmer::params(temperature = m$temperature, max_tokens = max_tokens)
+168:     anthropic = ellmer::chat_anthropic(
+170:       cache = LLM_CACHE, base_url = m$base_url,
+171:       credentials = function() key, echo = "none"),
+172:     openai = ellmer::chat_openai_compatible(
+173:       base_url = m$base_url, name = llm_host(m), system_prompt = system_prompt,
+174:       credentials = function() key, model = m$id, params = params,
+184: #   stopped, as ellmer standardises it: "success", "max_tokens", ...), tokens
+186: llm_complete <- function(m, system_prompt, user, max_tokens,
+190:   chat = llm_chat(m, system_prompt, max_tokens, key)
+394: #   environment for a model whose key_source is "analyst". complete is the
+401: llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
+422:     out = complete(m, system_prompt, ask, max_tokens, key)
+431:     if (identical(finish, "max_tokens"))
+432:       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
+~~~~
+Live check output (tests/llm_check.out), verbatim:
+~~~~
+QuestionR live check (tests/llm_check.R)
+Run: 2026-11-11 21:05 | profile: home | ellmer 0.4.2
+Draft prompt hash:  1f303eea542179e4ccaeae36146fa437b68cfedbc40e99a2c79420192b6b48b3
+Review prompt hash: 907cea17ade3998b18d48d0974ad2c5a381fb3f84737962a8167cd0c6a8948a7
+
+[ OK ] Project manager | claude-sonnet-5-5 | connection check | 1.3 s | 1 call | finish: -
+      reply (first 300): OK
+[ OK ] Worker 1 | google/gemma-4-31b-it | connection check | 0.5 s | 1 call | finish: -
+      reply (first 300): OK
+[ OK ] Worker 2 | meta-llama/llama-4-maverick | connection check | 0.5 s | 1 call | finish: -
+      reply (first 300): OK
+[ OK ] Worker 3 | openai/gpt-6-luna | connection check | 0.9 s | 1 call | finish: -
+      reply (first 300): OK
+[ OK ] Worker 1 | google/gemma-4-31b-it | draft, 2 items | 8.1 s | 1 call | finish: success | tokens in 2889 out 535
+      reply (first 300): ```json { "items": [ { "id": "NEC_1", "domain": "competence and honesty (general trust)", "intro": "", "stem": "How much trust do you have in the national electoral commission?", "options": [ "A great deal of trust", "A lot of trust", "A moderate amount of trust", "A little trust", "No trust at all"
+[ OK ] Worker 2 | meta-llama/llama-4-maverick | draft, 2 items | 5.7 s | 1 call | finish: success | tokens in 2784 out 454
+      reply (first 300): ```json { "items": [ { "id": "Tnec1", "domain": "fairness", "intro": "", "stem": "How confident are you that the national electoral commission counts votes fairly?", "options": ["Not at all confident", "Not very confident", "Somewhat confident", "Very confident", "Extremely confident"], "open_format
+[ OK ] Worker 3 | openai/gpt-6-luna | draft, 2 items | 32.1 s | 1 call | finish: success | tokens in 2779 out 2740
+      reply (first 300): { "items": [ { "id": "TR1", "domain": "Trust in accurate vote counting", "intro": "", "stem": "How much do you trust the national electoral commission to count votes accurately?", "options": [ "No trust at all", "A little trust", "A moderate amount of trust", "A lot of trust", "A great deal of trust
+[ OK ] Project manager | claude-sonnet-5-5 | small review | 47.4 s | 1 call | finish: success | tokens in 4155 out 6241
+      findings: 6; check ids not in the CHECKLIST sent: 0
+      reply (first 300): {"items":[{"id":"Q1","findings":[{"check":"one_thing","stage":"judgment","evidence":"'the recycling services and street cleaning provided by your local council'","problem":"Two different services are joined by 'and' under one rating. A respondent who is happy with recycling but unhappy with street c
+
+ALL GREEN: TRUE  (8 of 8 calls)
+~~~~
