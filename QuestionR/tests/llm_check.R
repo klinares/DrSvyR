@@ -23,13 +23,27 @@
 #   why the reply stopped, the tokens, whether the reply validated, and the first
 #   300 characters of what came back. No key is written to it.
 
+#
+# Phase 3 adds a second run, `go generate`, which runs the Generate engine live
+#   instead: a brief check, a 3-item attitudinal draft by every worker, and the
+#   appraisal, through run_brief(), run_drafts() and run_appraisal() exactly as
+#   the screens call them (5 requests; each may be repeated up to twice by
+#   llm_json() when a reply fails). It writes tests/run_generate.json, the run
+#   log: the summary of every call first (seconds, tokens, why it stopped), then
+#   the form, the prompts, the raw and parsed replies and R's checks. No key is
+#   written to it.
+#     & "C:/Program Files/R/R-4.6.1/bin/Rscript.exe" --no-init-file tests/llm_check.R go generate
+
 args <- commandArgs(trailingOnly = TRUE)
 stopifnot("Run from inside QuestionR/" = file.exists("DESIGN.md"))
 
 if (!"go" %in% args) {
   cat("tests/llm_check.R makes live calls and spends money. Nothing was called.\n",
-      "It will make: 4 connection pings, 3 drafting calls (one per worker, 2 items),\n",
-      "and 1 small review by the project manager. Run it again with the word go.\n", sep = "")
+      "  go            4 connection pings, 3 drafting calls (one per worker, 2 items),\n",
+      "                and 1 small review by the project manager.\n",
+      "  go generate   the Generate engine: 1 brief check, 3 drafting calls (3 items),\n",
+      "                and 1 appraisal; writes tests/run_generate.json.\n",
+      "Run it again with the word go, and generate if you want the second.\n", sep = "")
   quit(status = 0)
 }
 
@@ -40,6 +54,86 @@ stopifnot("llm_check.R is for the home profile" = identical(APP_PROFILE, "home")
 
 pm_key <- Sys.getenv("ANTHROPIC_API_KEY")
 models <- llm_models()
+
+
+# ---- go generate: the Generate engine, live ---------------------------------------
+
+if ("generate" %in% args) {
+  gen_form <- list(
+    task = "attitudinal",
+    research_question = "How much do adults trust the national electoral commission?",
+    construct = "Trust in the national electoral commission",
+    population = "Adults aged 18 and over", country = "", modes = "web",
+    output_language = "English", source_language = "English", n_items = 3L,
+    reference_period = "", keep_items = "", other = "", questionnaire = "", revision = "")
+
+  # The key box's key for the project manager; the environment variable named in
+  #   key_var for a worker. Both are handed to llm_json() here, outside the engine,
+  #   which never looks up a key.
+  key_for_model <- function(m)
+    if (identical(m$key_source, "analyst")) pm_key else llm_key_for(m)
+  missing_keys <- purrr::keep(models, function(x) !nzchar(key_for_model(x$m) %||% ""))
+  if (length(missing_keys)) {
+    cat("No call was made. No key for: ",
+        paste(purrr::map_chr(missing_keys, function(x) x$m$id), collapse = ", "), "\n", sep = "")
+    quit(status = 1)
+  }
+  ask_live <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
+    llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens,
+             validate = validate, key = key_for_model(m))
+
+  seed <- 20261111L
+  brief <- run_brief(gen_form, APP_MODELS$pm, ask = ask_live)
+  drafts <- run_drafts(gen_form, APP_MODELS$workers, ask = ask_live)
+  appraisal <- run_appraisal(gen_form, drafts, APP_MODELS$pm, ask = ask_live, seed = seed)
+
+  cands <- candidates_of(drafts, seed)
+  checklist <- build_checklist(gen_form)
+  chk <- if (identical(appraisal$status, "ok")) check_appraisal(appraisal$reply, cands, checklist)
+  coded <- purrr::imap(cands, function(reply, letter)
+    purrr::map(unname(reply$items), function(it)
+      c(list(id = it$id %||% ""), code_defaults(it, gen_form$output_language))))
+
+  round <- flow_round(gen_form, APP_MODELS$pm, brief = brief, drafts = drafts,
+                      appraisal = appraisal, seed = seed)
+  round$profile <- APP_PROFILE
+  round$labels <- as.list(labels_of(drafts, seed))
+  round$r_checks <- list(
+    appraisal = if (!is.null(chk)) list(unknown_checks = as.list(chk$unknown_checks),
+                                         not_appraised = as.list(chk$not_appraised),
+                                         unknown_items = as.list(chk$unknown_items),
+                                         merged_problems = as.list(chk$merged_problems),
+                                         fails_reported = length(chk$fails)),
+    coded_defaults = coded)
+
+  # A key must never reach the file, even inside an error message from an endpoint.
+  secrets <- purrr::keep(c(pm_key, Sys.getenv("OPENROUTER_API_KEY")), nzchar)
+  log_txt <- purrr::reduce(secrets, function(txt, s) gsub(s, "[key]", txt, fixed = TRUE),
+                           .init = as.character(flow_log_json(round)))
+  writeLines(log_txt, file.path("tests", "run_generate.json"), useBytes = TRUE)
+
+  rows <- flow_summary(brief, drafts, appraisal, APP_MODELS$pm)
+  cat("QuestionR live run of the Generate engine (tests/llm_check.R go generate)\n",
+      "Run: ", format(Sys.time(), "%Y-%m-%d %H:%M"), " | profile: ", APP_PROFILE, " | seed ", seed, "\n",
+      "Brief prompt hash:     ", brief$hash %||% "-", "\n",
+      "Work prompt hash:      ", attr(drafts, "prompt")$hash, "\n",
+      "Appraisal prompt hash: ", appraisal$hash %||% "-", "\n\n", sep = "")
+  cat(purrr::map_chr(rows, function(r)
+    sprintf("[%s] %-12s %-34s %6.1f s  in %s out %s  finish %s  attempts %s%s",
+            if (identical(r$status, "ok")) " OK " else "FAIL", r$step, r$model,
+            r$seconds %||% NA_real_, r$tokens_in %||% "-", r$tokens_out %||% "-",
+            r$finish %||% "-", r$attempts %||% "-",
+            if (!identical(r$status, "ok")) paste0("\n      ", r$error) else "")), sep = "\n")
+  if (!is.null(chk))
+    cat("\nR's checks on the appraisal: ", length(chk$fails), " fails reported; ",
+        length(chk$unknown_checks), " unknown check ids; ", length(chk$not_appraised),
+        " items not appraised; ", length(chk$unknown_items), " entries for no item; ",
+        length(chk$merged_problems), " merged-option problems.\n", sep = "")
+  statuses <- c(brief$status, purrr::map_chr(unname(as.list(drafts)), "status"), appraisal$status)
+  cat("\nALL OK: ", all(statuses == "ok"), "  (", sum(statuses == "ok"), " of ", length(statuses),
+      " steps)\nLog written to tests/run_generate.json\n", sep = "")
+  quit(status = if (all(statuses == "ok")) 0L else 1L)
+}
 
 
 # ---- the two prompts, from the same function the app uses -----------------------
