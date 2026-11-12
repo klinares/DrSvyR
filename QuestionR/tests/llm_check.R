@@ -45,7 +45,10 @@ if (!"go" %in% args) {
       "                and 1 appraisal; writes tests/run_generate.json.\n",
       "  go review15   one review of the 15-question test questionnaire, to measure its\n",
       "                tokens; writes tests/review_tokens.md and tests/review15_run.json.\n",
-      "Run it again with the word go, and generate or review15 if you want one of those.\n", sep = "")
+      "  go review30   one review of the 30-question test questionnaire (tests/review_long_questionnaire.txt),\n",
+      "                in parts: one call for each part and one for the instrument as a whole; writes\n",
+      "                tests/review_long.md and tests/review_long.json. Nothing is raised for it.\n",
+      "Run it again with the word go, and generate, review15 or review30 if you want one of those.\n", sep = "")
   quit(status = 0)
 }
 
@@ -118,6 +121,97 @@ if ("review15" %in% args) {
            "The paste cap to match, about twice the characters of this questionnaire: ", cap_for_app, " characters."),
     "")
   writeLines(scrub(md), file.path("tests", "review_tokens.md"), useBytes = TRUE)
+  cat(scrub(md), sep = "\n")
+  quit(status = if (identical(rv$status, "ok")) 0L else 1L)
+}
+
+
+
+# ---- go review30: one live long review, in parts (Phase 5e) --------------------------------
+
+if ("review30" %in% args) {
+  if (!nzchar(pm_key)) {
+    cat("No call was made. ANTHROPIC_API_KEY is not set in .Renviron.\n")
+    quit(status = 1)
+  }
+  questionnaire <- paste(readLines(file.path("tests", "review_long_questionnaire.txt"), warn = FALSE), collapse = "\n")
+  form <- list(task = "evaluate", research_question = "Household energy use, travel and quality of life",
+               construct = "", population = "Adults aged 18 and over living in England",
+               country = "", modes = "web", output_language = "English", source_language = "English",
+               n_items = NA_integer_, reference_period = "", keep_items = "", other = "",
+               questionnaire = questionnaire, revision = "")
+  f <- clean_form(form)
+  plan <- review_plan(f$questionnaire, APP_BATCH_CHARS)
+  n_questions <- length(grep("^Q[0-9]+\\.", strsplit(questionnaire, "\n", fixed = TRUE)[[1]]))
+
+  ask_live <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
+    llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens,
+             validate = validate, key = pm_key)
+  say <- function(msg) cat(format(Sys.time(), "%H:%M:%S"), msg, "\n")
+  # The app's own ceiling and batch size: nothing is raised for this run.
+  rv <- run_review(form, APP_MODELS$pm, ask = ask_live, progress = say)
+  flags <- if (!is.null(rv$reply)) check_review(rv$reply, f)
+
+  secrets <- purrr::keep(c(pm_key, Sys.getenv("OPENROUTER_API_KEY")), nzchar)
+  scrub <- function(txt) purrr::reduce(secrets, function(t, s) gsub(s, "[key]", t, fixed = TRUE), .init = txt)
+  writeLines(scrub(as.character(flow_log_json(flow_round(f, APP_MODELS$pm, review = rv)))),
+             file.path("tests", "review_long.json"), useBytes = TRUE)
+
+  num <- function(x) if (is.null(x) || is.na(x)) "-" else format(round(x), big.mark = ",")
+  rows <- purrr::map_chr(rv$batches, function(b)
+    paste0("| ", if (identical(b$kind, "instrument")) "instrument" else paste0("part ", b$part, " of ", b$n_parts),
+           " | ", if (identical(b$kind, "instrument")) nchar(questionnaire) else b$chars,
+           " | ", sprintf("%.1f", b$seconds %||% NA_real_), " | ", num(b$tokens$input), " | ", num(b$tokens$output),
+           " | ", b$finish %||% "-", " | ", b$attempts %||% "-", " | ", b$status, " |"))
+  failed <- purrr::keep(rv$batches, function(b) !identical(b$status, "ok"))
+  q <- if (!is.null(flags)) flags[flags$scope == "question", ]
+  bands <- if (!is.null(flags)) table(factor(severity_band(flags$severity), levels = names(SEVERITY_BANDS)))
+  ids_back <- purrr::map_chr(rv$reply$items %||% list(), function(it) paste(unlist(it$id), collapse = " "))
+  expect_ids <- regmatches(questionnaire, gregexpr("(?m)^Q[0-9]+(?=\\. )", questionnaire, perl = TRUE))[[1]]
+  item_calls <- purrr::keep(rv$batches, function(b) identical(b$kind, "items") && !is.null(b$reply))
+  strays <- purrr::map_int(item_calls, function(b)
+    length(b$reply$instrument) + length(b$reply$test_first) +
+      sum(nzchar(trimws(unlist(b$reply$trapd)))) + nzchar(trimws(paste(unlist(b$reply$not_assessed), collapse = ""))))
+  inst_call <- purrr::detect(rv$batches, function(b) identical(b$kind, "instrument") && !is.null(b$reply))
+  inst_items <- if (!is.null(inst_call)) length(inst_call$reply$items) else NA_integer_
+  total_s <- sum(purrr::map_dbl(rv$batches, function(b) b$seconds %||% 0))
+  tot_in <- sum(purrr::map_dbl(rv$batches, function(b) as.numeric(b$tokens$input %||% 0)))
+  tot_out <- sum(purrr::map_dbl(rv$batches, function(b) as.numeric(b$tokens$output %||% 0)))
+
+  md <- c(
+    "# One live long review, in parts (tests/llm_check.R go review30)", "",
+    paste0("Run: ", format(Sys.time(), "%Y-%m-%d %H:%M"), " | profile: ", APP_PROFILE),
+    paste0("Model: ", APP_MODELS$pm$id, " | evaluation ceiling ", LLM_MAX_TOKENS[["evaluate"]],
+           " tokens a call, batch size ", APP_BATCH_CHARS, " characters, paste cap ", APP_MAX_PASTE_CHARS, "; none was changed for this run."),
+    paste0("Questionnaire: tests/review_long_questionnaire.txt, written for this test: ", n_questions,
+           " questions in ", length(strsplit(questionnaire, "\n\n", fixed = TRUE)[[1]]), " blocks, ", nchar(questionnaire), " characters."),
+    paste0("Form: research question \"", form$research_question, "\", population \"", form$population, "\", mode web, no country, English."),
+    paste0("Parts: ", length(plan) - 1L, " (first blocks ", paste(purrr::map_int(plan[seq_len(length(plan) - 1L)], "first_block"), collapse = ", "),
+           "), so ", length(plan), " calls: one for each part and one for the instrument as a whole."), "",
+    "| Call | Characters | Seconds | Tokens in | Tokens out | Finish | Attempts | Status |", "|---|---|---|---|---|---|---|---|",
+    rows, "",
+    paste0("Total: ", sprintf("%.0f", total_s), " seconds (", sprintf("%.1f", total_s / 60), " minutes), ",
+           format(tot_in, big.mark = ","), " tokens in, ", format(tot_out, big.mark = ","), " tokens out. Result status: ", rv$status, "."),
+    "",
+    if (!length(failed)) "Failed parts: none."
+    else c("Failed parts:", purrr::map_chr(failed, function(b) paste0("- ", if (identical(b$kind, "instrument")) "the instrument call" else paste0("part ", b$part),
+                                                                     ": ", b$error))),
+    "",
+    if (!is.null(flags)) c(
+      paste0("Findings: ", nrow(flags), " in all: ", nrow(q), " about questions and ", sum(flags$scope == "instrument"), " about the instrument."),
+      paste0("By band: Fix before fielding ", bands[["fix"]], ", Needs your judgment ", bands[["judgment"]], ", Minor ", bands[["minor"]], "."),
+      paste0("**Share of question findings whose evidence was found in the pasted text: ", sum(q$evidence_found, na.rm = TRUE), " of ", nrow(q), " (",
+             sprintf("%.1f", 100 * mean(q$evidence_found, na.rm = TRUE)), "%).** Phase 4's gold run found 55 of 100 (45 had evidence that was a description)."),
+      if (any(!q$evidence_found)) c("Evidence not found in the text:", paste0("- ", q$item[!q$evidence_found], ", ", q$check[!q$evidence_found], ": ", q$evidence[!q$evidence_found])),
+      paste0("Checks not in the checklist that was sent: ", sum(!flags$check_known), "."),
+      paste0("Questions back: ", length(ids_back), " of ", n_questions, "; ids ", if (identical(ids_back, expect_ids)) "exactly as pasted, in order" else
+               paste0("differ from the pasted ones. Missing: ", paste(setdiff(expect_ids, ids_back), collapse = ", "),
+                      "; extra or repeated: ", paste(ids_back[!ids_back %in% expect_ids | duplicated(ids_back)], collapse = ", ")), "."),
+      paste0("Item calls that filled fields they were told to leave empty (instrument, test_first, trapd, not_assessed): ",
+             sum(strays > 0L), " of ", length(item_calls), if (length(strays)) paste0(" (", paste(strays, collapse = ", "), " entries)") else "", "."),
+      paste0("The instrument call returned ", inst_items, " question entries (it was told to leave items empty).")),
+    "")
+  writeLines(scrub(md), file.path("tests", "review_long.md"), useBytes = TRUE)
   cat(scrub(md), sep = "\n")
   quit(status = if (identical(rv$status, "ok")) 0L else 1L)
 }
