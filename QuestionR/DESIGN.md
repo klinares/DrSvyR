@@ -531,3 +531,69 @@ appraisal 16000 (provisional; record actual use in the live run); timeout
 600 seconds; a reply cut off at the ceiling is not retried and the app says
 to ask for fewer items. The appraisal reports failed checks only
 (`pm_appraise.md` 0.2).
+
+
+## 13. Review of Phase 3 and the definition of Phase 4 (Claude project, 2026-11-11)
+
+**Phase 3 passes.** `REVIEW.md` shows no FAIL; section 8 passes all 16 engine
+checks; the live appraisal in `tests/run_generate.json` was read in full. The
+screens were not reviewed in a browser by the Claude project; Kevin's
+click-through in `STATUS.md` covers them.
+
+### What the live appraisal showed, and the rulings
+
+The appraiser's 27 fails were specific and mostly right (two overlapping
+no-answer options; a double negative; "A little" beside "Some"). Three faults
+were in how the checklist was built, not in the appraiser:
+
+- **One fault under several checks.** A missing don't-know route was failed
+  under three checks. `pm_appraise.md` 0.3 says to report a fault once,
+  under the most exact check.
+- **Write-up checks blocked every item.** Two checks asked whether the
+  design decisions were stated and justified. That is about the worker's
+  notes, not what a respondent sees. Their `Check` lines are removed from
+  `generate.md` 0.3; R already shows each item's decisions and flags a
+  missing one.
+- **Set-level checks counted against each item** (keying, coverage, order).
+  They now go once per candidate in `set_fails`.
+- **Fails carry a severity**, 1 to 10, as review findings do. The merged
+  option and "clean items" use items with no fail at 5 or above. The Results
+  tab shows fails at 5 and above and collapses the rest, as Evaluate does.
+
+Decisions from `STATUS.md`:
+
+- **12** (cache none; quote rule appended at call time; `llm_json()` returns
+  a list): approved. The log keeps `user_sent`.
+- **14, token ceilings:** brief check 4000; drafting 12000; appraisal 24000.
+  The form accepts at most 10 items per run. The cut-off message is worded by
+  step: brief check "try again or skip"; drafting "ask for fewer items";
+  appraisal "untick a worker or ask for fewer items"; review "paste fewer
+  questions".
+- **13, thinking:** a model entry may set `reasoning_effort`, passed through
+  `ellmer::params()`. **VERIFY** in ellmer 0.4.2 help how `chat_anthropic()`
+  and `chat_openai_compatible()` treat it; if either ignores or rejects it,
+  say so and leave it unset. Default: unset, so the gold test measures the
+  model as it comes.
+- **15, Luna:** move it last among the workers.
+- **16, midpoint:** R reports the number of scale points (no-answer options
+  not counted) and whether that number is odd, and beside it the item's own
+  stated midpoint decision. It does not call an odd count a midpoint. A
+  `decisions` field that is one string and not separate entries is shown
+  with a "decisions not itemised" flag.
+- **Brief check carries the CHECKLIST:** approved.
+- **Code budget is 12 files**, so each flow can have its own screen file.
+
+### Phase 4
+
+| Step | What | Passes when |
+|---|---|---|
+| 4a | Apply this section: skills 0.3 already in place; appraisal schema with `set_fails` and `severity`; Results tab severity collapse and set-level fails; ceilings, messages, item cap, Luna last, midpoint coding, `reasoning_effort` | smoke and `review.R 3` clean; drafting prompt hashes change once, because `generate.md` changed, and the new ones are recorded |
+| 4b | `run_review(form, pm, ask = llm_json)` in `R/flow.R`, same result shape as `run_brief`; `check_review(reply, form)` in `R/checks.R` returning one row per finding with `item`, `check`, `severity`, `evidence_found`, `check_known`; paste cap enforced | `review.R 4` section 9 has no FAIL |
+| 4c | Evaluate screens: Approve enabled; Results shows findings per item (5 and above shown, rest collapsed), flags for a quote not found or an unknown check, instrument findings, the TRAPD block, what to test first, what was not assessed | smoke runs the Evaluate flow on a fake `ask` |
+| 4d | Token measurement: one live review of a 15-question questionnaire written for the test; seconds, tokens in and out, finish. Then set the evaluation ceiling to about twice what it used and `APP_MAX_PASTE_CHARS` to match, and write the numbers to `tests/review_tokens.md` | file written; ceiling and cap recorded in `STATUS.md` |
+| 4e | Gold test: `tests/gold_items.csv` (section 9); each of the 27 items reviewed alone through `run_review()`; every finding at severity 5 or above matched by the session against the answer key as exact, approximate or none, written to `tests/gold_matches.csv` (item, set, finding check, finding problem, severity, matched problem_id or blank, match); `tests/gold_summary.md` gives the share of the 48 known problems found, findings at 5 and above per control item, detection by problem type, and every unmatched finding on a flawed item listed for the Claude project to judge | files written; numbers in `STATUS.md`. Target 65 percent found and at most 1.0 per control item; below target is reported, not tuned away |
+
+The gold test is run once, on the skills as they stand. Do not adjust prompts,
+skills or thresholds to move its numbers; that is the Claude project's job
+after it sees them.
+

@@ -14,7 +14,7 @@
 # Needs: shiny, purrr, dplyr, tibble, stringr, digest.
 
 PHASE <- as.integer(c(commandArgs(trailingOnly = TRUE), "0")[1])
-CODE_BUDGET <- 10L
+CODE_BUDGET <- 12L
 
 # sha256 of each skill file with line endings normalised, as drafted in the
 #   Claude project. Updated there, and only there, when a skill changes.
@@ -25,9 +25,9 @@ SKILL_SHA <- c(
   "core.md" = "770a402a6dc4b60389e4c266f43cdaa28dc8ccc0e88938f76cb9b72a54379f35",
   "cross_cultural.md" = "6c8a19b8c17b19808b4cfca788b3c76a7595d54a3a25a71e355391cb944bdd4d",
   "evaluate.md" = "2952362b6d8e2efadff970a8b21069b768d7145808ec5b524ca8b98a998e57c1",
-  "generate.md" = "e196e81245b266fbc6321016575d932dbcb24311c366683475e8945c8bbaf738",
+  "generate.md" = "9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
-  "pm_appraise.md" = "ced64452127616e41906380b972fc100c3a11443cfdc564e615fe13ea78e0b57",
+  "pm_appraise.md" = "f45e6e4ae77020fadf0cc1d6162b84f015300984e4eafcc9e83cf0116472c4eb",
   "pm_brief.md" = "a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a",
   "sensitive.md" = "0ebc82a948f01caed0847f3d4a6cda87216f33dc3039e764cb8c1ab8ac45e726")
 
@@ -388,7 +388,7 @@ fake_item <- function(i) list(
   source_english = "", notes = "")
 fake_draft <- function(n) list(items = purrr::map(seq_len(n), fake_item),
                                not_covered = list(), missing_from_brief = list())
-fake_appraisal <- list(appraisal = list(), coverage = list(), differences = list(),
+fake_appraisal <- list(appraisal = list(), set_fails = list(), coverage = list(), differences = list(),
                        merged = list(), test_first = list(), limits = "Canned.")
 fake_brief <- list(complete = TRUE, questions = list(), task_fit = "",
                    criteria = list("Canned criterion."))
@@ -460,7 +460,9 @@ flow_checks <- function() {
                       regexpr("\nCHECKLIST\n", ap$user, fixed = TRUE),
                       regexpr("\nCHARACTERIZE\n", ap$user, fixed = TRUE))) > 0) &&
              has(ap$user, "\nCANDIDATES\n") && has(ap$user, "Canned stem number 1?") &&
-             has(ap$user, "\none_thing: ") && has(ap$user, "\"fails\"")),
+             has(ap$user, "\none_thing: ") && has(ap$user, "\"fails\"") && has(ap$user, "\"set_fails\"")),
+    expect("documentation checks are not in the appraisal checklist (skills 0.3)",
+           !has(ap$user, "\ndeclare_defaults: ") && !has(ap$user, "\nmidpoint_and_dont_know: ")),
     expect("appraisal system prompt: persona and pm_appraise rules, not the drafting rules",
            has(ap$system, "senior survey methodologist") && has(ap$system, "- code_every_check (") &&
              !has(ap$system, "- declare_defaults (")),
@@ -494,6 +496,78 @@ sec_flow <- if (PHASE < 3L) {
 }
 
 
+# ---- 9. review flow and gold test (Phase 4 on) -------------------------------------
+
+fake_review <- list(
+  items = list(
+    list(id = "Q1", findings = list(
+      list(check = "one_thing", stage = "comprehension",
+           evidence = "the recycling services and street cleaning", problem = "Two services.",
+           severity = 8, rewrite = "x", rewrite_english = "", probe = "y"),
+      list(check = "not_a_real_check", stage = "comprehension",
+           evidence = "words that are nowhere in the questionnaire", problem = "Invented.",
+           severity = 3, rewrite = "", rewrite_english = "", probe = ""))),
+    list(id = "Q2", findings = list())),
+  instrument = list(),
+  trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
+  test_first = list(), not_assessed = "")
+
+review_checks <- function() {
+  form = forms$evaluate
+  ask = function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL, ...) {
+    if (!is.null(validate)) validate(fake_review)
+    fake_review
+  }
+  rv = run_review(form, fake_pm, ask = ask)
+  flags = check_review(rv$reply, form)
+  bad_ask = function(...) stop("canned endpoint error")
+  failed = run_review(form, fake_pm, ask = bad_ask)
+  dplyr::bind_rows(
+    expect("run_review: status ok, with system, user, hash and the parsed reply",
+           identical(rv$status, "ok") && all(c("system", "user", "hash", "reply") %in% names(rv)) &&
+             length(rv$reply$items) == 2L),
+    expect("run_review uses the prompt build_prompt() gives", identical(rv$hash, build_prompt(form)$hash)),
+    expect("a failed call is status failed with a reason, not an R error",
+           identical(failed$status, "failed") && nzchar(paste(failed$error, collapse = " "))),
+    expect("check_review returns one row per finding with item, check, severity, evidence_found, check_known",
+           is.data.frame(flags) && nrow(flags) == 2L &&
+             all(c("item", "check", "severity", "evidence_found", "check_known") %in% names(flags))),
+    expect("a real quote and a sent check id are accepted",
+           isTRUE(flags$evidence_found[flags$check == "one_thing"]) &&
+             isTRUE(flags$check_known[flags$check == "one_thing"])),
+    expect("an invented quote and an unknown check id are flagged, not dropped",
+           isFALSE(flags$evidence_found[flags$check == "not_a_real_check"]) &&
+             isFALSE(flags$check_known[flags$check == "not_a_real_check"])))
+}
+
+sec_review <- if (PHASE < 4L) {
+  c("## 9. Review flow and gold test", "", "Not due until Phase 4.")
+} else {
+  out = tryCatch({
+    if (!exists("build_prompt", mode = "function")) {
+      app = shiny::shinyAppDir(".")
+      invisible(app$serverFuncSource())
+    }
+    review_checks()
+  }, error = function(e) conditionMessage(e))
+  show_file = function(path, n) {
+    if (file.exists(path)) fence(utils::head(readLines(path, warn = FALSE), n))
+    else paste(path, "does not exist yet.")
+  }
+  gold_path = file.path("tests", "gold_items.csv")
+  c("## 9. Review flow and gold test", "",
+    if (is.character(out)) paste("FAIL: the review checks stopped:", out) else md_table(out), "",
+    paste0("tests/gold_items.csv rows: ",
+           if (file.exists(gold_path)) length(readLines(gold_path, warn = FALSE)) - 1L else "file missing"),
+    "", "Token measurement (tests/review_tokens.md), verbatim:",
+    show_file(file.path("tests", "review_tokens.md"), 60), "",
+    "Gold test matches (tests/gold_matches.csv), verbatim:",
+    show_file(file.path("tests", "gold_matches.csv"), 400), "",
+    "Gold test summary (tests/gold_summary.md), verbatim:",
+    show_file(file.path("tests", "gold_summary.md"), 80))
+}
+
+
 # ---- write ----------------------------------------------------------------------
 
 pkgs <- c("shiny", "bslib", "ellmer", "purrr", "dplyr", "stringr", "jsonlite", "digest")
@@ -506,6 +580,6 @@ writeLines(c(
          R.version.string, "."),
   paste0("Packages: ", paste0(pkgs, " ", versions, collapse = ", ")), "",
   sec_git, "", sec_files, "", sec_rules, "", sec_skills, "", sec_smoke, "",
-  sec_prompts, "", sec_llm, "", sec_flow), "REVIEW.md", useBytes = TRUE)
+  sec_prompts, "", sec_llm, "", sec_flow, "", sec_review), "REVIEW.md", useBytes = TRUE)
 
 cat("Wrote REVIEW.md for Phase", PHASE, "\n")

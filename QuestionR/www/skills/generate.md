@@ -1,6 +1,6 @@
 # Generate
 
-Version: 0.2
+Version: 0.3
 
 Sent with every request to write new items, after core.md and before the task
 file. How a draft is built from the brief and what it must declare.
@@ -15,9 +15,8 @@ file. How a draft is built from the brief and what it must declare.
 
 ### declare_defaults
 - **When:** Every item you write.
-- **Say:** Every response format is a design decision, not a default. For each item state the decisions you made and one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one.
+- **Say:** Every response format is a design decision, not a default. For each item state the decisions you made, as separate entries with one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one.
 - **Never:** Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
-- **Check:** Is each format decision stated with a reason that comes from the construct, population or mode?
 - **Source:** Haensch, IASS/WSS Session 3 (every default is a design decision; recommendation 4); Fuchs, Haensch and Weber 2026 (models default to five points and omit don't-know); Padgett, Maiorino and Gutierrez 2024 as reported in Fuchs et al. (too many open-ended and yes/no items)
 
 ### labelled_scales
@@ -30,7 +29,6 @@ file. How a draft is built from the brief and what it must declare.
 ### midpoint_and_dont_know
 - **When:** Any attitude or evaluation item.
 - **Say:** Decide both explicitly. Offer a midpoint when a middle position is a real answer on the construct. Offer don't know or no opinion when a real share of the population will not have the knowledge or an attitude; say in the notes that offering it raises its use. Keep a not-applicable answer separate from both.
-- **Check:** Are the midpoint and don't-know decisions each stated and justified?
 - **Source:** SURV632 Class 8 (don't-know filters, middle alternatives); Yan, IASS/WSS Session 1 (full and quasi filters)
 
 ### response_order

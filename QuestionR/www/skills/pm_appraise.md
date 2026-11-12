@@ -1,6 +1,6 @@
 # Project manager: appraise candidates
 
-Version: 0.2
+Version: 0.3
 
 After the worker models return drafts. The project manager codes every
 candidate against the same checklist and lays the results side by side. It
@@ -20,6 +20,19 @@ codes the format defaults itself; the PM is not asked to count options.
 - **Never:** Do not add checks. Do not let fluent wording stand in for passing a check.
 - **Source:** Haensch, IASS/WSS Session 3 (recommendation 3: check every draft against the guidelines; well-formed is not the same as valid)
 
+### one_fault_once
+- **When:** One fault in an item could be reported under more than one check.
+- **Say:** Report it once, under the check that names it most exactly, and do not repeat it under a broader check. A missing don't-know route, for example, is one fail, not three.
+- **Never:** Do not fail an item on how its design decisions are written up; the checks are about what a respondent will see.
+
+### set_level
+- **When:** A check is about the set of items as a whole: the direction items are keyed, coverage of the construct, the order of general and specific items, consistency of scales.
+- **Say:** Report it once per candidate in set_fails, naming the items involved. It does not count against any single item.
+
+### severity
+- **When:** Every fail.
+- **Say:** Rate how far the fault would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for faults you would fix before fielding.
+
 ### declared_exceptions
 - **When:** An item's decisions declare a forgiving introduction or an assumed behaviour.
 - **Say:** Do not fail it on neutral wording or presupposition for that reason. Check instead that the exception meets its own check in the sensitive-items rules.
@@ -31,13 +44,13 @@ codes the format defaults itself; the PM is not asked to count options.
 
 ### compare_do_not_rank
 - **When:** Summarizing across candidates.
-- **Say:** For each domain of the construct say which candidates cover it and which candidate items pass every check. Describe how the candidates differ in their design decisions (format, number of options, midpoint, don't know, reference period) without saying which is right; those are the analyst's choices.
+- **Say:** For each domain of the construct say which candidates cover it and which candidate items have no fail rated 5 or above. Describe how the candidates differ in their design decisions (format, number of options, midpoint, don't know, reference period) without saying which is right; those are the analyst's choices.
 - **Never:** Do not name a best candidate, give candidates an overall score, or count passes into a total.
 - **Source:** Fuchs, Haensch and Weber 2026 (models and prompts yield different item characteristics); Haensch, IASS/WSS Session 3 (recommendation 4)
 
 ### merged_option
 - **When:** Offering a combined version.
-- **Say:** Build it only from candidate items that pass every check, one per domain, copied word for word, and record which candidate each came from. Where no candidate item passes for a domain, leave the domain empty and say so. Label the result as a fourth option, untested like the others.
+- **Say:** Build it only from candidate items with no fail rated 5 or above, one per domain, copied word for word, and record which candidate each came from. Where several qualify take the one with the fewest fails. Where none qualifies for a domain, leave the domain empty and say so. Label the result as a fourth option, untested like the others.
 - **Never:** Do not write new items or reword candidate items in the merged version.
 - **Source:** Adhikari et al. 2025 as reported in Haensch, IASS/WSS Session 3
 
@@ -55,8 +68,9 @@ codes the format defaults itself; the PM is not asked to count options.
 
 Return one JSON object with these fields, all text in English.
 
-- "appraisal": a list, one entry per candidate item, with "candidate" (A, B, C...), "id" (the item id), "domain", and "fails": a list, empty when the item fails nothing, of objects with "check" (the id from the checklist), "evidence" (the words or feature that fail), "stage" and "why" (one sentence).
-- "coverage": a list, one entry per domain, with "domain", "covered_by" (candidate letters) and "clean_items" (candidate letter and item id pairs that pass every check).
+- "appraisal": a list, one entry per candidate item, with "candidate" (A, B, C...), "id" (the item id), "domain", and "fails": a list, empty when the item fails nothing, of objects with "check" (the id from the checklist), "evidence" (the words or feature that fail), "stage", "severity" (1 to 10) and "why" (one sentence).
+- "set_fails": a list, one entry per set-level fail, with "candidate", "check", "items" (the ids involved), "severity" and "why" (one sentence).
+- "coverage": a list, one entry per domain, with "domain", "covered_by" (candidate letters) and "clean_items" (candidate letter and item id pairs with no fail rated 5 or above).
 - "differences": a list of one-sentence descriptions of how the candidates' design decisions differ.
 - "merged": a list of objects with "domain", "candidate", "id"; domains with no clean item have empty "candidate" and "id".
 - "test_first": a list of up to five objects with "candidate", "id" and "method".

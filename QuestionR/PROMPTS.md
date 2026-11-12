@@ -169,3 +169,63 @@ short click-through list for Kevin to try in the browser. Then stop and tell
 me to take REVIEW.md, STATUS.md and tests/run_generate.json to the Claude
 project.
 ```
+
+## Phase 4: review changes, the Evaluate flow, token measurement, gold test
+
+```
+Read CLAUDE.md, then QuestionR/DESIGN.md sections 12 and 13 (13 wins where
+they differ), QuestionR/STATUS.md, the changed skill files
+QuestionR/www/skills/generate.md and pm_appraise.md (both now 0.3) and
+evaluate.md, and QuestionR/tests/review.R, which has a new section 9.
+
+First commit the files the Claude project changed, as they are, in one
+commit: DESIGN.md, PROMPTS.md, tests/review.R, www/skills/generate.md,
+www/skills/pm_appraise.md.
+
+Do Phase 4 as the table in DESIGN.md section 13 defines it, steps 4a to 4e,
+one commit each.
+
+Notes:
+- 4a changes the drafting prompts once, because generate.md changed. Record
+  the new hashes; from then on they must not move.
+- The gold items: take the 20 flawed and 7 control questions, their scales
+  and the 48 known problems from the authors' public replication repository,
+  github.com/PatrickSturgis/cogbot-replication. Keep their wording exactly.
+  Put the citation (Sturgis, Roberts and Robinson 2026, Survey Futures
+  Working Paper 15) in the file header. If you cannot get the file, stop and
+  tell me; do not write the items from memory.
+- Review each gold item alone, as a one-question questionnaire, with the
+  form: research question "Evaluate this survey question", population
+  "Adults in the general population", mode web, no country, English. The
+  model must not see the answer key or which set an item is in.
+- Match findings to the key yourself, after all 27 reviews are saved, reading
+  each finding beside that item's known problems. Exact: same problem, same
+  framing. Approximate: same underlying issue, different emphasis. Each
+  finding matches at most one known problem and each known problem at most
+  one finding. Say in gold_summary.md that the matching was done by you, the
+  builder, and is to be checked.
+- Do not change a skill, a prompt, a threshold or a test to improve the gold
+  numbers. Report them as they come.
+- Live calls: before 4d say the cost and wait for my yes; before 4e say the
+  number of calls (27) and the cost and wait for my yes. Save raw replies
+  under tests/gold_runs/, with no key in them.
+- If any live call is cut off at its ceiling, record it and go on; do not
+  raise a ceiling during the gold test.
+
+Rules, unchanged: root CLAUDE.md hard rules; no edits to www/skills/; no
+change to what tests/review.R checks (a bug in it: fix only the bug and
+report the diff); no invented functions or arguments (ellmer is 0.4.2; check
+installed help); never weaken a test; do not push. If something in section
+13 cannot be built as written, stop and say so in STATUS.md.
+
+At the end run tests/smoke.R and tests/review.R 4 until there is no FAIL you
+can fix, and commit with REVIEW.md.
+
+Finish by updating STATUS.md: what was built, decisions and their defaults,
+anything skipped or stubbed, seconds and tokens for the live calls, the gold
+numbers, anything a model did that the skills did not expect, every
+remaining FAIL, and an updated click-through list. Then stop and tell me to
+take REVIEW.md, STATUS.md, tests/review_tokens.md, tests/gold_summary.md and
+tests/gold_matches.csv to the Claude project.
+```
+
