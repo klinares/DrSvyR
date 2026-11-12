@@ -1,7 +1,8 @@
 # ui.R for QuestionR
-# The tabs' UI, and the small helpers they share. Function definitions and
-#   constants only (root CLAUDE.md rule 2). Phase 0: Start here is real, the
-#   other tabs are placeholders that say which phase builds them.
+# The tab titles, the small helpers the tabs share, Start here, and the
+#   placeholders for the tabs not built yet. The Generate flow's four screens
+#   (Brief, Prompt, Results, Run again) are in ui_generate.R. Function
+#   definitions and constants only (root CLAUDE.md rule 2).
 
 # The tab titles, in order. The navlist in app.R and any code that moves the
 #   analyst between tabs both read this.

@@ -127,9 +127,11 @@ options(bitmapType = "cairo")
 # ---- 5. state ---------------------------------------------------------------
 
 # One state object, passed to every module. Modules read from it and write to
-#   it; they never talk to each other. key_version changes whenever the pasted
-#   key is saved or forgotten, so anything that depends on a key can re-run.
-new_state <- function() reactiveValues(key_version = 0L)
+#   it; they never talk to each other. What it holds, and what each field is for,
+#   is STATE_DEFAULTS in R/ui_generate.R, so a test can make the same object.
+#   key_version changes whenever the pasted key is saved or forgotten, so
+#   anything that depends on a key can re-run.
+new_state <- function() do.call(reactiveValues, STATE_DEFAULTS)
 
 
 # ---- 6. layout --------------------------------------------------------------
@@ -161,17 +163,9 @@ ui <- page_fluid(
 
     tabPanel(QUESTIONR_TABS[1], help_ui(), mod_key_ui("key"), mod_connect_ui("connect")),
 
-    tabPanel(QUESTIONR_TABS[2],
-             tab_placeholder(QUESTIONR_TABS[2], 3,
-               paste("The task dropdown and the form. A project manager model",
-                     "checks the brief for gaps before anything is drafted."))),
-    tabPanel(QUESTIONR_TABS[3],
-             tab_placeholder(QUESTIONR_TABS[3], 3,
-               "The assembled prompt, editable, with Approve.")),
-    tabPanel(QUESTIONR_TABS[4],
-             tab_placeholder(QUESTIONR_TABS[4], 3,
-               paste("Drafting: candidates side by side with the appraisal.",
-                     "Evaluate: the findings table (Phase 4)."))),
+    tabPanel(QUESTIONR_TABS[2], mod_brief_ui("brief")),
+    tabPanel(QUESTIONR_TABS[3], mod_prompt_ui("prompt")),
+    tabPanel(QUESTIONR_TABS[4], mod_results_ui("results"), mod_again_ui("again")),
     tabPanel(QUESTIONR_TABS[5],
              tab_placeholder(QUESTIONR_TABS[5], 5,
                paste("The chosen items laid out for Word, the disclosure block",
@@ -185,8 +179,15 @@ ui <- page_fluid(
 
 server <- function(input, output, session) {
   state <- new_state()
+  # How a module moves the analyst to another tab. It is given the root session,
+  #   because a module's own session would look for the navlist inside its namespace.
+  go <- function(tab) updateNavlistPanel(session, "stage", selected = tab)
   mod_key_server("key", state)
   mod_connect_server("connect", state)
+  mod_brief_server("brief", state, go = go)
+  mod_prompt_server("prompt", state, go = go)
+  mod_results_server("results", state, go = go)
+  mod_again_server("again", state, go = go)
 }
 
 

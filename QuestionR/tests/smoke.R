@@ -60,9 +60,10 @@ ok("the logo shows, or its placeholder box does",
    else has("Office logo"))
 ok("every tab is in the navlist", all(purrr::map_lgl(QUESTIONR_TABS, has)))
 ok("the key box is on Start here", has("Use this key") && has("type=\"password\""))
+# Phase 3 built tabs 1 to 3, so two are left: Output and Methodology.
 ok("the not-yet-built tabs say so",
-   lengths(regmatches(page$html, gregexpr("Not built yet", page$html, fixed = TRUE))) ==
-     length(QUESTIONR_TABS) - 1L)
+   lengths(regmatches(page$html, gregexpr("Not built yet", page$html, fixed = TRUE))) == 2L &&
+     grepl("Phase 5", page$html, fixed = TRUE))
 
 # The profile block. Each profile in its own process.
 home <- in_child("home", c(
@@ -1385,3 +1386,389 @@ ok("no key is in the log, though the call that made it was given one",
      !any(Sys.getenv() == "SECRET-KEY-XYZ"))
 ok("a round with only the form is a valid log too",
    identical(jsonlite::fromJSON(as.character(flow_log_json(flow_round(fl_form))), simplifyVector = FALSE)$schema, 1L))
+
+
+# ---- Phase 3c: the screens, each module driven with a fake ask ---------------------------
+
+html_of3 <- function(x) paste(as.character(x$html), collapse = "")
+n_in3 <- function(pattern, txt) lengths(regmatches(txt, gregexpr(pattern, txt, fixed = TRUE)))
+test_state <- function() do.call(shiny::reactiveValues, STATE_DEFAULTS)
+nav_rec <- function() {
+  e = new.env()
+  e$tabs = character(0)
+  list(env = e, go = function(tab) e$tabs = c(e$tabs, tab))
+}
+worker_ids <- purrr::map_chr(APP_MODELS$workers, "id")
+brief_inputs <- list(task = "attitudinal", research_question = "How much do adults trust the electoral commission?",
+                     construct = "Trust in the commission", population = "Adults", modes = "web",
+                     output_language = "English", source_language = "English", n_items = 2,
+                     workers = worker_ids)
+set_inputs <- function(session, base, ...) do.call(session$setInputs, utils::modifyList(base, list(...)))
+
+ok("the state object is made from STATE_DEFAULTS, and every field a module uses is in it",
+   identical(sort(names(STATE_DEFAULTS)),
+             sort(c("key_version", "form", "workers", "brief", "approved", "run_id", "round",
+                    "drafts", "appraisal", "seed", "kept", "revision", "rounds"))))
+ok("every field any task lists has a widget spec, so a new task that reuses fields needs no screen change",
+   all(unlist(purrr::map(TASKS, "fields")) %in% names(FIELD_SPECS)))
+ok("the registry's progress_ask announces the model on the page before it makes each call",
+   local({
+     nm = all.names(body(progress_ask))
+     match("setProgress", nm) < match("llm_json", nm)
+   }))
+
+
+# Tab 1, Brief.
+local({
+  nav = nav_rec()
+  fa = rec_ask(function(m, sys) brief_ok)
+  st = test_state()
+  shiny::testServer(mod_brief_server,
+                    args = list(state = st, go = nav$go, make_ask = function(total) fa$ask), {
+    set_inputs(session, brief_inputs, skip = 1)
+    ok("Skip carries the cleaned form and the ticked workers on, marks the brief skipped, and moves to the prompt",
+       identical(st$form$task, "attitudinal") && identical(st$form$n_items, 2L) &&
+         identical(st$form$modes, "web") && length(st$workers) == length(worker_ids) &&
+         identical(st$brief$status, "skipped") && identical(nav$env$tabs, QUESTIONR_TABS[3]) &&
+         length(fa$st$calls) == 0L)
+
+    nav$env$tabs = character(0)
+    st$form = NULL
+    set_inputs(session, brief_inputs, research_question = "", skip = 2)
+    ok("a form that cannot be a prompt says why on the page, and goes nowhere",
+       grepl("research question is required", html_of3(output$message), fixed = TRUE) &&
+         is.null(st$form) && !length(nav$env$tabs))
+    set_inputs(session, brief_inputs, workers = character(0), skip = 3)
+    ok("no worker ticked says so, and goes nowhere",
+       grepl("Tick at least one worker", html_of3(output$message), fixed = TRUE) && is.null(st$form))
+    set_inputs(session, brief_inputs, n_items = NA, skip = 4)
+    ok("no number of items says so, and goes nowhere",
+       grepl("number of items", html_of3(output$message), fixed = TRUE) && is.null(st$form))
+
+    set_inputs(session, brief_inputs, check = 1)
+    ok("the brief check without the project manager's key says what to do and makes no call",
+       grepl("needs the project manager", html_of3(output$message), fixed = TRUE) &&
+         grepl("Paste a key", html_of3(output$message), fixed = TRUE) && length(fa$st$calls) == 0L)
+
+    llm_set_session_key("pm-test-key")
+    set_inputs(session, brief_inputs, check = 2)
+    r = html_of3(output$result)
+    ok("with a key the brief check makes one call to the project manager and shows its questions and criteria",
+       length(fa$st$calls) == 1L && identical(fa$st$calls[[1]]$id, APP_MODELS$pm$id) &&
+         identical(st$brief$status, "ok") && grepl("Blocking: ", r, fixed = TRUE) &&
+         grepl("Which country?", r, fixed = TRUE) && grepl("One thing per question.", r, fixed = TRUE) &&
+         grepl("Continue to the prompt", r, fixed = TRUE) && grepl("found gaps that block", r, fixed = TRUE))
+    ok("the brief check's prompt is the brief step's, and no key is on the page",
+       identical(fa$st$calls[[1]]$max_tokens, LLM_MAX_TOKENS[["brief"]]) &&
+         !grepl("pm-test-key", paste(r, html_of3(output$message)), fixed = TRUE))
+
+    nav$env$tabs = character(0)
+    set_inputs(session, brief_inputs, continue = 1)
+    ok("Continue after a check keeps the check and moves to the prompt",
+       identical(st$brief$status, "ok") && identical(nav$env$tabs, QUESTIONR_TABS[3]) && !is.null(st$form))
+    llm_clear_session_key(session$token)
+  })
+})
+
+local({
+  dead = rec_ask(function(m, sys) stop("the project manager is down", call. = FALSE))
+  st = test_state()
+  shiny::testServer(mod_brief_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) dead$ask), {
+    llm_set_session_key("pm-test-key")
+    set_inputs(session, brief_inputs, check = 1)
+    r = html_of3(output$result)
+    ok("a brief check that fails is said on the page in words, with the reason, and offers to skip",
+       identical(st$brief$status, "failed") && grepl("did not come back", r, fixed = TRUE) &&
+         grepl("the project manager is down", r, fixed = TRUE) && grepl("skip it", r, fixed = TRUE))
+    llm_clear_session_key(session$token)
+  })
+})
+
+local({
+  st = test_state()
+  shiny::testServer(mod_brief_server, args = list(state = st, go = function(tab) NULL), {
+    set_inputs(session, brief_inputs, questionnaire = "LEAKED QUESTIONNAIRE", reference_period = "LEAKED PERIOD",
+               skip = 1)
+    ok("a field the chosen task does not show is blank in the form, whatever was typed there before",
+       identical(st$form$questionnaire, "") && identical(st$form$reference_period, ""))
+    set_inputs(session, brief_inputs, task = "behavioral", reference_period = "past 7 days", skip = 2)
+    ok("a field the task does show is carried (the reference period, for behavioral items)",
+       identical(st$form$reference_period, "past 7 days") && identical(st$form$task, "behavioral"))
+    set_inputs(session, brief_inputs, task = "evaluate", questionnaire = "Q1. How are you? Fine / Not fine",
+               skip = 3)
+    ok("Evaluate carries its questionnaire, no item count and no workers, and says it is built in Phase 4",
+       identical(st$form$task, "evaluate") && grepl("Q1. How are you?", st$form$questionnaire, fixed = TRUE) &&
+         is.na(st$form$n_items) && length(st$workers) == 0L &&
+         grepl("Phase 4", html_of3(output$task_note), fixed = TRUE))
+    st$revision = "Make the stems shorter."
+    session$flushReact()
+    ok("a requested change is shown on the Brief tab with the round it belongs to, and can be dropped",
+       grepl("REVISION", html_of3(output$revision_note), fixed = TRUE) &&
+         grepl("Make the stems shorter.", html_of3(output$revision_note), fixed = TRUE) &&
+         grepl("Round 1", html_of3(output$revision_note), fixed = TRUE))
+    set_inputs(session, brief_inputs, skip = 4)
+    ok("the change goes into the form as its revision, and so into the prompt as a REVISION block",
+       identical(st$form$revision, "Make the stems shorter.") &&
+         grepl("\nREVISION: Make the stems shorter.", build_prompt(st$form)$user, fixed = TRUE))
+    session$setInputs(drop_revision = 1)
+    ok("dropping the change clears it", identical(st$revision, ""))
+  })
+})
+
+# The form is the registry's, not the screen's.
+brief_page <- paste(as.character(mod_brief_ui("brief")), collapse = "")
+ok("the Brief tab has the dropdown, the form, a box per worker, the check and the skip button",
+   n_in3("brief-task", brief_page) >= 1L && grepl("Check the brief", brief_page, fixed = TRUE) &&
+     grepl("Skip the brief check", brief_page, fixed = TRUE) &&
+     all(purrr::map_lgl(worker_ids, function(id) grepl(id, brief_page, fixed = TRUE))) &&
+     all(purrr::map_lgl(purrr::map_chr(TASKS, "label"), function(l) grepl(l, brief_page, fixed = TRUE))))
+ok("each field is shown for exactly the tasks that list it, and the worker boxes for the drafting tasks",
+   identical(tasks_condition(c("attitudinal", "behavioral")), "[\"attitudinal\",\"behavioral\"].indexOf(input.task) >= 0") &&
+     n_in3("data-display-if", brief_page) == length(intersect(FORM_FIELDS, names(FIELD_SPECS))) + 1L &&
+     grepl("indexOf(input.task)", brief_page, fixed = TRUE))
+
+# A new task is a registry entry; a new worker is a model entry. Neither touches a screen.
+TASKS$knowledge <- utils::modifyList(TASKS$attitudinal, list(label = "Knowledge items"))
+APP_MODELS$workers <- c(APP_MODELS$workers, list(list(api = "openai", base_url = "https://example.invalid/v1",
+                                                      id = "vendor-z/extra-worker", key_source = "analyst")))
+extended <- paste(as.character(mod_brief_ui("brief")), collapse = "")
+ok("a task added to TASKS is in the dropdown, its fields are shown for it, and it assembles a prompt",
+   grepl("Knowledge items", extended, fixed = TRUE) && grepl("knowledge", extended, fixed = TRUE) &&
+     "knowledge" %in% task_choices() &&
+     grepl("^PREPARE", build_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")))$user) &&
+     length(build_step_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")), "brief")$files) == 5L)
+ok("a worker added to the model list gets its own box, and nothing else changes",
+   grepl("vendor-z/extra-worker", extended, fixed = TRUE) && !grepl("vendor-z/extra-worker", brief_page, fixed = TRUE))
+TASKS$knowledge <- NULL
+APP_MODELS$workers <- APP_MODELS$workers[-length(APP_MODELS$workers)]
+ok("the registry and the model list are back as they were",
+   !"knowledge" %in% names(TASKS) && length(APP_MODELS$workers) == length(worker_ids))
+
+
+# Tab 2, Prompt.
+flow_state <- function(form = fl_form, workers = fl_workers) {
+  st = test_state()
+  st$form = clean_form(form)
+  st$workers = workers
+  st
+}
+local({
+  nav = nav_rec()
+  st = test_state()
+  shiny::testServer(mod_prompt_server, args = list(state = st, go = nav$go), {
+    ok("with no form the Prompt tab asks for the Brief first",
+       grepl("Fill in the Brief tab", html_of3(output$body), fixed = TRUE))
+    st$form = clean_form(fl_form)
+    st$workers = fl_workers
+    session$flushReact()
+    a = build_prompt(st$form)
+    b = html_of3(output$body)
+    ok("the assembled prompt is shown whole and editable, with the skill files used",
+       grepl("senior survey methodologist", b, fixed = TRUE) && grepl("Write exactly 2 survey items", b, fixed = TRUE) &&
+         grepl("textarea", b, fixed = TRUE) && grepl("core.md, generate.md", b, fixed = TRUE) &&
+         grepl("Approve and run", b, fixed = TRUE) && !grepl("disabled", b, fixed = TRUE) &&
+         grepl("3 workers", b, fixed = TRUE) && grepl("4 model calls", b, fixed = TRUE))
+
+    session$setInputs(system = a$system, user = a$user)
+    ok("an untouched prompt is shown as assembled, with its hash",
+       grepl("As assembled", html_of3(output$status), fixed = TRUE) &&
+         grepl(substr(a$hash, 1, 16), html_of3(output$status), fixed = TRUE))
+    session$setInputs(approve = 1)
+    ok("approving it as it is records it unedited, with one hash, starts a run and moves to Results",
+       identical(st$approved$edited, FALSE) && identical(st$approved$hash, a$hash) &&
+         identical(st$approved$original_hash, a$hash) && identical(st$approved$user, a$user) &&
+         identical(st$approved$system, a$system) && st$run_id == 1L && identical(nav$env$tabs, QUESTIONR_TABS[4]))
+
+    ed_user = paste0(a$user, "\nPlease keep every stem under 15 words.")
+    session$setInputs(system = a$system, user = ed_user)
+    s = html_of3(output$status)
+    ok("an edited prompt is marked edited, showing both hashes",
+       grepl("Edited", s, fixed = TRUE) && grepl(substr(a$hash, 1, 16), s, fixed = TRUE) &&
+         grepl(substr(prompt_hash(a$system, ed_user), 1, 16), s, fixed = TRUE))
+    session$setInputs(approve = 2)
+    ok("approving an edited prompt sends the edited text, marks it edited, and keeps both hashes",
+       identical(st$approved$edited, TRUE) && identical(st$approved$user, ed_user) &&
+         identical(st$approved$hash, prompt_hash(a$system, ed_user)) && identical(st$approved$original_hash, a$hash) &&
+         st$run_id == 2L)
+    session$setInputs(system = gsub("\n", "\r\n", a$system, fixed = TRUE), user = gsub("\n", "\r\n", a$user, fixed = TRUE),
+                      approve = 3)
+    ok("a browser's line endings are not an edit",
+       identical(st$approved$edited, FALSE) && identical(st$approved$hash, a$hash))
+    session$setInputs(system = a$system, user = "   ", approve = 4)
+    ok("an empty prompt is refused on the page, and no run starts",
+       grepl("prompt is empty", html_of3(output$message), fixed = TRUE) && st$run_id == 3L)
+  })
+})
+local({
+  st = test_state()
+  shiny::testServer(mod_prompt_server, args = list(state = st, go = function(tab) NULL), {
+    st$form = clean_form(forms$evaluate)
+    session$flushReact()
+    b = html_of3(output$body)
+    ok("Evaluate's prompt can be read but not run: the button is off and the page says why",
+       grepl("disabled", b, fixed = TRUE) && grepl("Phase 4", b, fixed = TRUE) && grepl("QUESTIONNAIRE", b, fixed = TRUE))
+    session$setInputs(approve = 1)
+    ok("pressing it anyway starts nothing, and says so",
+       st$run_id == 0L && is.null(st$approved) && grepl("cannot be run yet", html_of3(output$message), fixed = TRUE))
+  })
+})
+
+
+# Tab 3, Results, and Run again.
+checklist_ids <- names(build_checklist(clean_form(fl_form)))
+rich_appraisal <- list(
+  appraisal = list(
+    list(candidate = "A", id = "Q1", domain = "domain 1", fails = list(
+      list(check = checklist_ids[1], evidence = "institution 1", stage = "comprehension", why = "The term is vague."),
+      list(check = "invented_check", evidence = "trust", stage = "judgment", why = "Odd."))),
+    list(candidate = "A", id = "Q2", domain = "domain 2", fails = list())),
+  coverage = list(list(domain = "domain 1", covered_by = list("A", "B", "C"), clean_items = list(list(candidate = "A", id = "Q2")))),
+  differences = list("Candidate A uses three points; the others use five."),
+  merged = list(list(domain = "domain 1", candidate = "A", id = "Q2"), list(domain = "domain 2", candidate = "", id = "")),
+  test_first = list(list(candidate = "A", id = "Q1", method = "a cognitive interview")),
+  limits = "An expert review by a language model, not a pretest.")
+# The screens call the project manager the app is configured with.
+pm_id <- APP_MODELS$pm$id
+reply_rich <- function(m, sys) {
+  if (identical(m$id, pm_id)) rich_appraisal else tagged_draft(m)
+}
+approve_state <- function(st) {
+  st$approved = c(build_prompt(st$form), list(edited = FALSE, original_hash = build_prompt(st$form)$hash))
+  st$run_id = st$run_id + 1L
+}
+
+local({
+  st = flow_state()
+  fa = rec_ask(reply_rich)
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) fa$ask), {
+    session$flushReact()   # the run observer starts listening at the first flush, as in a session
+    ok("before any run the Results tab says nothing has been run",
+       grepl("Nothing has been run yet", html_of3(output$results), fixed = TRUE))
+    approve_state(st)
+    session$flushReact()
+    h = html_of3(output$results)
+    ok("a run makes one call per worker and one for the appraisal, and records the round in the state and the log",
+       identical(purrr::map_chr(fa$st$calls, "id"), c(fl_ids, pm_id)) && st$round == 1L &&
+         length(st$drafts) == 3L && identical(st$appraisal$status, "ok") && length(st$rounds) == 1L &&
+         identical(st$rounds[[1]]$schema, 1L) && identical(st$rounds[[1]]$seed, st$seed))
+    ok("each candidate is shown by letter with its items, options and the model that wrote it",
+       all(purrr::map_lgl(c("Candidate A", "Candidate B", "Candidate C"), function(l) grepl(l, h, fixed = TRUE))) &&
+         all(purrr::map_lgl(fl_ids, function(id) grepl(id, h, fixed = TRUE))) &&
+         grepl("Question from worker", h, fixed = TRUE) && grepl("<ol", h, fixed = TRUE) &&
+         grepl("A little", h, fixed = TRUE))
+    ok("each item shows the coded defaults and has a tick box to keep it",
+       n_in3("Coded defaults", h) == 6L && n_in3("Keep this item", h) == 6L &&
+         grepl("Midpoint (odd count)", h, fixed = TRUE) && grepl("Every point labelled (self-reported)", h, fixed = TRUE))
+    ok("a failed check is shown with the appraiser's failing words and the check's question; one that was not sent is flagged",
+       grepl("Failing words:", h, fixed = TRUE) && grepl("institution 1", h, fixed = TRUE) &&
+         grepl(checklist_ids[1], h, fixed = TRUE) &&
+         grepl(build_checklist(st$form)[[checklist_ids[1]]], h, fixed = TRUE) &&
+         grepl("not a check that was sent", h, fixed = TRUE))
+    ok("an item the appraiser gave no entry is not shown as passed",
+       n_in3("Not appraised: the appraiser gave this item no entry", h) == 4L &&
+         n_in3("No failed check reported by the appraiser", h) == 1L)
+    ok("below the candidates: coverage, differences, the merged option labelled untested, what to test first, the limits",
+       grepl("Coverage by domain", h, fixed = TRUE) && grepl("Candidate A uses three points", h, fixed = TRUE) &&
+         grepl("Merged option", h, fixed = TRUE) && grepl("A fourth option, untested like the others", h, fixed = TRUE) &&
+         grepl("copied word for word", h, fixed = TRUE) && grepl("no candidate item passes every check", h, fixed = TRUE) &&
+         grepl("What to test first", h, fixed = TRUE) && grepl("a cognitive interview", h, fixed = TRUE) &&
+         grepl("not a pretest", h, fixed = TRUE) && grepl("does not choose, and nothing here is validated", h, fixed = TRUE))
+    ok("R's checks on the appraisal are shown: the check that was not sent, and the items given no entry",
+       grepl("checks on the appraisal found", h, fixed = TRUE) && grepl("invented_check", h, fixed = TRUE))
+    ok("the criteria applied are listed, and the prompt hash and seed are shown, with no model name given to the appraiser",
+       grepl("Criteria that were applied", h, fixed = TRUE) && grepl(substr(build_prompt(st$form)$hash, 1, 16), h, fixed = TRUE) &&
+         grepl(as.character(st$seed), h, fixed = TRUE) && !any(purrr::map_lgl(c(fl_ids, "vendor-"), function(s) grepl(s, fa$st$calls[[4]]$user, fixed = TRUE))))
+
+    session$setInputs(keep_A_1 = TRUE, keep_B_2 = TRUE, keep_C_1 = FALSE)
+    session$flushReact()
+    ok("ticking items records them by candidate letter, position and id, and unticking removes them",
+       length(st$kept) == 2L && identical(st$kept[[1]]$candidate, "A") && st$kept[[1]]$position == 1L &&
+         identical(st$kept[[1]]$id, "Q1") && identical(st$kept[[2]]$candidate, "B") && st$kept[[2]]$position == 2L)
+    session$setInputs(keep_A_1 = FALSE)
+    session$flushReact()
+    ok("an item unticked is no longer kept", length(st$kept) == 1L && identical(st$kept[[1]]$candidate, "B"))
+
+    # A browser resets the boxes when the results are drawn again; the test's inputs do not.
+    session$setInputs(keep_B_2 = FALSE)
+    approve_state(st)
+    session$flushReact()
+    ok("a second run is a second round in the log, with nothing kept",
+       st$round == 2L && length(st$rounds) == 2L && length(st$kept) == 0L)
+  })
+})
+
+local({
+  st = flow_state()
+  fb = rec_ask(function(m, sys) {
+    if (identical(m$id, "vendor-b/model-two")) stop("canned endpoint error", call. = FALSE)
+    reply_rich(m, sys)
+  })
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) fb$ask), {
+    session$flushReact()
+    approve_state(st)
+    session$flushReact()
+    h = html_of3(output$results)
+    ok("a worker that failed is listed with its reason, the other two are shown, and the appraisal covers two candidates",
+       grepl("Did not return a usable draft", h, fixed = TRUE) && grepl("canned endpoint error", h, fixed = TRUE) &&
+         grepl("2 of 3", h, fixed = TRUE) && n_in3("Coded defaults", h) == 4L &&
+         !grepl("Candidate C", h, fixed = TRUE) && identical(st$appraisal$status, "ok"))
+  })
+})
+
+local({
+  st = flow_state()
+  fc <- rec_ask(function(m, sys) if (identical(m$id, pm_id)) stop("the appraiser is down", call. = FALSE) else reply_rich(m, sys))
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) fc$ask), {
+    session$flushReact()
+    approve_state(st)
+    session$flushReact()
+    h = html_of3(output$results)
+    ok("a failed appraisal is said in words with its reason; the candidates are still shown, none marked appraised",
+       grepl("The appraisal did not come back", h, fixed = TRUE) && grepl("the appraiser is down", h, fixed = TRUE) &&
+         grepl("Candidate A", h, fixed = TRUE) && n_in3("Not appraised: the appraisal did not come back", h) == 6L &&
+         !grepl("The appraisal, across the candidates", h, fixed = TRUE))
+  })
+})
+
+local({
+  st = test_state()
+  fd = rec_ask(reply_rich)
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) fd$ask), {
+    session$flushReact()
+    st$workers = fl_workers
+    st$approved = list(system = "s", user = "u", hash = "h", edited = FALSE, original_hash = "h")
+    st$run_id = 1L
+    session$flushReact()
+    ok("a run that cannot start (no form) stops with a plain sentence on the page, not an error",
+       grepl("The run stopped", html_of3(output$results), fixed = TRUE) && length(fd$st$calls) == 0L && st$round == 0L)
+  })
+})
+
+local({
+  nav = nav_rec()
+  st = test_state()
+  shiny::testServer(mod_again_server, args = list(state = st, go = nav$go), {
+    ok("Run again is not offered before there is a round to run again",
+       is.null(output$panel$html) || !nzchar(html_of3(output$panel)))
+    st$round = 1L
+    session$flushReact()
+    ok("after a round, Run again offers a box for what to change",
+       grepl("What to change", html_of3(output$panel), fixed = TRUE) && grepl("REVISION", html_of3(output$panel), fixed = TRUE))
+    session$setInputs(change = "  Use plainer words.\r\nKeep it short.  ", again = 1)
+    ok("what is typed becomes the revision, trimmed, and the Brief tab opens with the form as it was",
+       identical(st$revision, "Use plainer words.\nKeep it short.") && identical(nav$env$tabs, QUESTIONR_TABS[2]))
+    session$setInputs(change = "   ", again = 2)
+    ok("a blank box clears the revision and still goes back to the brief", identical(st$revision, ""))
+  })
+})
+
+# The whole page, as the browser gets it.
+ok("the page has the Generate tabs' controls, and the later tabs are still placeholders",
+   grepl("Check the brief", page$html, fixed = TRUE) && grepl("Skip the brief check", page$html, fixed = TRUE) &&
+     grepl("Research question (required)", page$html, fixed = TRUE) && n_in3("Not built yet", page$html) == 2L)
+ok("no key is anywhere on the page", !grepl("pm-test-key|SECRET-KEY|or-secret-key", page$html))
