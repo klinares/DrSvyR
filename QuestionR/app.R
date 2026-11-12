@@ -174,10 +174,7 @@ ui <- page_fluid(
     tabPanel(QUESTIONR_TABS[2], mod_brief_ui("brief")),
     tabPanel(QUESTIONR_TABS[3], mod_prompt_ui("prompt")),
     tabPanel(QUESTIONR_TABS[4], mod_results_ui("results"), mod_again_ui("again")),
-    tabPanel(QUESTIONR_TABS[5],
-             tab_placeholder(QUESTIONR_TABS[5], 5,
-               paste("The chosen items laid out for Word, the disclosure block",
-                     "and the run log download."))),
+    tabPanel(QUESTIONR_TABS[5], mod_output_ui("output")),
     tabPanel(QUESTIONR_TABS[6],
              tab_placeholder(QUESTIONR_TABS[6], 5,
                "The methodology note, the skills as readable text, and the sources per rule."))))
@@ -196,6 +193,7 @@ server <- function(input, output, session) {
   mod_prompt_server("prompt", state, go = go)
   mod_results_server("results", state, go = go)
   mod_again_server("again", state, go = go)
+  mod_output_server("output", state)
 }
 
 

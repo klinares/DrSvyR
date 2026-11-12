@@ -41,6 +41,41 @@ Read `DESIGN.md` first. Update this file at the end of every session.
     the instrument as a whole, and name the questions involved, by their ids, in
     the evidence of each finding."
 
+- **5c done.** `R/output.R` (the twelfth code file; `checks.R` is 455 lines, so
+  the 600-line rule did not call for it, but the output builders are a different
+  job from the checks): `build_output()` makes one document of blocks (`blk_h`,
+  `blk_p`, `blk_list`) and draws it twice, `doc_html()` (headings, paragraphs,
+  ordered and bullet lists, block quotes: what Word keeps) and `doc_text()`, so
+  the HTML and the plain text cannot differ. Drafting: the kept items in the
+  order ticked (id, introduction, stem, numbered options, parts indented under
+  the item, programming notes in square brackets, the English source in italics
+  when the output language is not English). Review: question by question in the
+  three severity bands (Minor findings listed too, since Word cannot fold),
+  instrument findings, what to test first, what was not assessed. The TRAPD
+  block comes above the disclosure when a language other than the source is
+  involved: a review prints what its `trapd` field says is still needed, or the
+  five fixed lines when it said nothing; drafted items get the fixed lines. The
+  disclosure block: date, profile, project manager and each worker model by id
+  and host, models asked that returned no draft, each skill file's version, each
+  prompt's hash in full (the brief check, the drafting prompt as sent and, if
+  edited, as assembled, the appraisal, or the review's, one per call for a review
+  in parts), which candidate and model each kept item came from, and the fixed
+  line. The Output tab (`mod_output_*` at the end of `ui_generate.R`): the HTML in
+  a box with a "Copy for Word" button, the plain text in a box with a copy
+  button, a download of the text and a download of the run log
+  (`run_log_json()`: `schema` 1, profile, time, every round, the kept items on
+  the last round). **No key, ever:** the log and the output are built from data
+  that holds none, and `scrub_secrets()` takes the session's key and any server
+  key (`known_keys()`) out of the page, the text and the log anyway; smoke plants
+  a key in the session and in a model's reply and finds it in none of them (and
+  finds it in the unscrubbed output, so the check is not empty). The samples are
+  written by smoke from canned runs: `tests/output_generate.txt` (French items
+  with English source, TRAPD block) and `tests/output_review.txt`.
+  **VERIFY:** the copy buttons use `document.execCommand("copy")` on a selection;
+  that works in a current browser but I could not test it on Connect. If it does
+  not, the text above the boxes says to select and copy by hand, which always
+  works.
+
 ## Phase 4 (2026-11-12): Evaluate built, 15-question measurement, gold test
 
 **Take `REVIEW.md`, this file, `tests/review_tokens.md`, `tests/gold_summary.md` and

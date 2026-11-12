@@ -60,9 +60,9 @@ ok("the logo shows, or its placeholder box does",
    else has("Office logo"))
 ok("every tab is in the navlist", all(purrr::map_lgl(QUESTIONR_TABS, has)))
 ok("the key box is on Start here", has("Use this key") && has("type=\"password\""))
-# Phase 3 built tabs 1 to 3, so two are left: Output and Methodology.
+# Phase 3 built tabs 1 to 3 and Phase 5c the Output tab, so one is left: Methodology.
 ok("the not-yet-built tabs say so",
-   lengths(regmatches(page$html, gregexpr("Not built yet", page$html, fixed = TRUE))) == 2L &&
+   lengths(regmatches(page$html, gregexpr("Not built yet", page$html, fixed = TRUE))) == 1L &&
      grepl("Phase 5", page$html, fixed = TRUE))
 
 # The profile block. Each profile in its own process.
@@ -1852,7 +1852,7 @@ local({
 # The whole page, as the browser gets it.
 ok("the page has the Generate tabs' controls, and the later tabs are still placeholders",
    grepl("Check the brief", page$html, fixed = TRUE) && grepl("Skip the brief check", page$html, fixed = TRUE) &&
-     grepl("Research question (required)", page$html, fixed = TRUE) && n_in3("Not built yet", page$html) == 2L)
+     grepl("Research question (required)", page$html, fixed = TRUE) && n_in3("Not built yet", page$html) == 1L)
 ok("no key is anywhere on the page", !grepl("pm-test-key|SECRET-KEY|or-secret-key", page$html))
 
 
@@ -2443,3 +2443,314 @@ local({
          !grepl("Run this part again", h2, fixed = TRUE))
   })
 })
+
+
+# ---- Phase 5c: the output, built without a browser -----------------------------------------------
+
+out_time <- as.POSIXct("2026-11-12 09:30:00", tz = "UTC")
+out_models <- list(pm = fl_pm, workers = fl_workers)
+plain_of <- function(x) gsub("\\s+", " ", gsub("<[^>]+>", " ", paste(as.character(x), collapse = " ")))
+
+# A drafting run with the kind of items a model really writes: an introduction, parts, programming
+#   notes, and the English source wording, in French.
+rich_item <- function(n, who) list(
+  id = paste0("CONF", n), domain = "Trust in the commission",
+  intro = if (n == 1L) "Nous allons vous poser quelques questions sur la commission électorale nationale." else "",
+  stem = paste0("Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle ", who, ")"),
+  options = list("Beaucoup", "Assez", "Peu", "Pas du tout"), open_format = "",
+  parts = if (n == 2L) list(list(when = "if the answer is Peu or Pas du tout", stem = "Pourquoi ?", options = list())) else list(),
+  programming = if (n == 1L) "Randomize the order of options 1 to 4; keep Pas du tout last." else "",
+  decisions = list("Four points, no midpoint."), source_english = paste0("How much do you trust the national electoral commission? (", who, ")"),
+  notes = "Test the translation of Assez.")
+rich_draft <- function(m) list(items = list(rich_item(1L, worker_no(m)), rich_item(2L, worker_no(m))),
+                               not_covered = list(), missing_from_brief = list())
+fr_form <- clean_form(with_field(fl_form, output_language = "French", source_language = "English"))
+fr_ask <- rec_ask(function(m, sys) if (identical(m$id, fl_pm$id)) { if (is_brief(sys)) brief_ok else appraisal_ok } else rich_draft(m))
+fr_brief <- run_brief(fr_form, fl_pm, ask = fr_ask$ask)
+fr_drafts <- run_drafts(fr_form, fl_workers, ask = fr_ask$ask)
+fr_ap <- run_appraisal(fr_form, fr_drafts, fl_pm, ask = fr_ask$ask, seed = 11L)
+fr_labels <- labels_of(fr_drafts, 11L)
+fr_kept <- list(list(candidate = "A", position = 1L, id = "CONF1"), list(candidate = "C", position = 2L, id = "CONF2"))
+fr_approved <- c(attr(fr_drafts, "prompt"), list(edited = FALSE, original_hash = attr(fr_drafts, "prompt")$hash))
+fr_out <- build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, kept = fr_kept, brief = fr_brief,
+                       approved = fr_approved, models = out_models, time = out_time)
+fr_txt <- fr_out$text
+fr_html <- paste(as.character(fr_out$html), collapse = "")
+
+ok("a drafting output has the kept items in the order they were ticked, each with its id, introduction, stem, numbered options and programming notes",
+   identical(fr_out$kind, "draft") && fr_out$n_items == 2L &&
+     regexpr("CONF1", fr_txt, fixed = TRUE) < regexpr("CONF2", fr_txt, fixed = TRUE) &&
+     grepl("Nous allons vous poser", fr_txt, fixed = TRUE) && grepl("\n1. Beaucoup\n2. Assez\n3. Peu\n4. Pas du tout", fr_txt, fixed = TRUE) &&
+     grepl("[Randomize the order of options 1 to 4; keep Pas du tout last.]", fr_txt, fixed = TRUE) &&
+     grepl(paste0("(modèle ", match(fr_labels[["A"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
+     grepl(paste0("(modèle ", match(fr_labels[["C"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
+     !grepl(paste0("(modèle ", match(fr_labels[["B"]], fl_ids), ")"), fr_txt, fixed = TRUE))
+ok("the HTML is plain: headings, paragraphs, an ordered list of options that Word keeps numbered, emphasis for the introduction, a block quote for a part",
+   grepl("<ol>", fr_html, fixed = TRUE) && grepl("<li>Beaucoup</li>", fr_html, fixed = TRUE) && grepl("<em>Nous allons", fr_html, fixed = TRUE) &&
+     grepl("<blockquote>", fr_html, fixed = TRUE) && grepl("Asked if the answer is Peu or Pas du tout: Pourquoi ?", plain_of(fr_html), fixed = TRUE) &&
+     !grepl("<script|<style|style=|class=", fr_html) && !grepl("<table", fr_html, fixed = TRUE))
+ok("the HTML and the plain text say the same: every line of the text is in the HTML's text, in the same order",
+   local({
+     lines = trimws(strsplit(fr_txt, "\n", fixed = TRUE)[[1]])
+     lines = sub("^([0-9]+\\. |- )", "", lines[nzchar(lines) & !grepl("^(=+|-+)$", lines)])
+     h = plain_of(fr_html)
+     # each line is looked for after the end of the one before it
+     end = purrr::reduce(lines, function(at, l) {
+       if (is.na(at)) return(NA_integer_)
+       l = gsub("\\s+", " ", l)
+       p = regexpr(l, substring(h, at + 1L), fixed = TRUE)[[1]]
+       if (p < 0L) NA_integer_ else at + p - 1L + nchar(l)
+     }, .init = 0L)
+     !is.na(end) && length(lines) > 30L
+   }))
+ok("the output language not being English puts the English source wording in italics after each item",
+   grepl("English source: How much do you trust the national electoral commission?", fr_txt, fixed = TRUE) &&
+     grepl("<em>English source: How much", fr_html, fixed = TRUE) &&
+     !grepl("English source", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
+                                           kept = list(list(candidate = "A", position = 1L, id = "Q1")),
+                                           models = out_models, time = out_time)$text, fixed = TRUE))
+ok("a language other than the source puts the TRAPD block above the disclosure block, and an English one has none",
+   grepl("TRAPD: what is still needed", fr_txt, fixed = TRUE) && grepl("first draft inside the Translation step only", fr_txt, fixed = TRUE) &&
+     grepl("Adjudication of disagreements by a named person is still needed.", fr_txt, fixed = TRUE) &&
+     regexpr("TRAPD: what is still needed", fr_txt, fixed = TRUE) < regexpr("Disclosure of the use of language models", fr_txt, fixed = TRUE) &&
+     !grepl("TRAPD", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
+                                  kept = list(list(candidate = "A", position = 1L, id = "Q1")), models = out_models, time = out_time)$text, fixed = TRUE))
+
+skill_versions <- function(files) purrr::map_chr(files, function(x) paste0(x, " ", read_skill(x)$version))
+ok("the disclosure names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft",
+   grepl("Date: 2026-11-12 09:30", fr_txt, fixed = TRUE) && grepl(paste0("Profile: ", APP_PROFILE), fr_txt, fixed = TRUE) &&
+     grepl("Project manager model: vendor-p/pm-model (example.invalid)", fr_txt, fixed = TRUE) &&
+     all(purrr::map_lgl(fl_ids, function(id) grepl(id, fr_txt, fixed = TRUE))) &&
+     !grepl("asked that returned no usable draft", fr_txt, fixed = TRUE) &&
+     grepl("returned no usable draft: vendor-b/model-two, vendor-c/model-three", {
+       bad = run_drafts(fr_form, fl_workers, ask = rec_ask(function(m, sys) if (identical(m$id, "vendor-a/model-one")) rich_draft(m) else stop("down", call. = FALSE))$ask)
+       build_output(fr_form, drafts = bad, seed = 11L, kept = list(list(candidate = "A", position = 1L, id = "CONF1")),
+                    models = out_models, time = out_time)$text
+     }, fixed = TRUE))
+ok("the disclosure gives the version of each skill file used, and pm_brief.md only when the brief was checked",
+   grepl(paste0("Skill files and versions: ", paste(skill_versions(c("core.md", "generate.md", "attitudinal.md", "mode.md", "cross_cultural.md", "pm_appraise.md", "pm_brief.md")), collapse = "; ")),
+         fr_txt, fixed = TRUE) &&
+     !grepl("pm_brief.md", build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, kept = fr_kept,
+                                        approved = fr_approved, models = out_models, time = out_time)$text, fixed = TRUE) &&
+     !grepl("cross_cultural.md", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
+                                              kept = list(list(candidate = "A", position = 1L, id = "Q1")),
+                                              models = out_models, time = out_time)$text, fixed = TRUE))
+ok("the disclosure gives each prompt's hash in full, says the drafting prompt was not edited, and says it was when it was",
+   grepl(paste0("Brief check prompt: ", fr_brief$hash), fr_txt, fixed = TRUE) &&
+     grepl(paste0("Drafting prompt (not edited): ", fr_approved$hash), fr_txt, fixed = TRUE) &&
+     grepl(paste0("Appraisal prompt: ", fr_ap$hash), fr_txt, fixed = TRUE) &&
+     local({
+       ed = c(with_field(fr_approved, user = "EDITED", hash = prompt_hash(fr_approved$system, "EDITED")), list())
+       ed$edited = TRUE
+       t = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, kept = fr_kept, approved = ed,
+                        models = out_models, time = out_time)$text
+       grepl(paste0("Drafting prompt as sent (edited by the analyst): ", ed$hash), t, fixed = TRUE) &&
+         grepl(paste0("Drafting prompt as assembled: ", fr_approved$original_hash), t, fixed = TRUE)
+     }))
+ok("the disclosure says which candidate each kept item came from and the model behind it, and ends with the fixed line",
+   grepl(paste0("Item 1 (CONF1): candidate A, written by ", fr_labels[["A"]]), fr_txt, fixed = TRUE) &&
+     grepl(paste0("Item 2 (CONF2): candidate C, written by ", fr_labels[["C"]]), fr_txt, fixed = TRUE) &&
+     endsWith(fr_txt, "Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.") &&
+     identical(DISCLOSURE_LINE, "Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding."))
+ok("with no item kept, or a tick that points at nothing, the output says so and has no disclosure to make",
+   local({
+     none = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, kept = list(), models = out_models, time = out_time)
+     stale = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L,
+                          kept = list(list(candidate = "Z", position = 1L, id = "x"), list(candidate = "A", position = 99L, id = "y")),
+                          models = out_models, time = out_time)
+     grepl("No item has been kept yet", none$text, fixed = TRUE) && none$n_items == 0L && !grepl("Disclosure", none$text, fixed = TRUE) &&
+       identical(stale$n_items, 0L) &&
+       !grepl("No item has been kept", build_output(fr_form, drafts = fr_drafts, seed = 11L, kept = fr_kept, models = out_models)$text, fixed = TRUE)
+   }))
+
+# A review: three questions, findings in each band, instrument findings, what to test first.
+ex_q <- paste("Q1. How satisfied are you with the recycling services and street cleaning provided by your council?",
+              "Very satisfied / Fairly satisfied / Fairly dissatisfied / Very dissatisfied", "",
+              "Q2. Do you agree that the council should spend more on libraries?", "Yes / No", "",
+              "Q3. How often did you visit a library in the past 12 months?", "Never / Once or twice / Often", sep = "\n")
+ex_form <- clean_form(with_field(forms$evaluate, questionnaire = ex_q))
+ex_reply <- list(
+  items = list(
+    list(id = "Q1", findings = list(
+      finding("one_thing", "recycling services and street cleaning", 8, problem = "Two services in one question.",
+              rewrite = "How satisfied are you with the recycling services?", probe = "Which service did you think of?"),
+      finding("response_scale", "Fairly satisfied / Fairly dissatisfied", 6, problem = "There is no middle option."),
+      finding("plain_words", "street cleaning", 3, problem = "Could mean sweeping or litter bins."))),
+    list(id = "Q2", findings = list(
+      finding("neutral_wording", "Do you agree that the council should", 7, problem = "Invites agreement."),
+      finding("no_presupposition", "words that are nowhere in the questionnaire", 5, problem = "Assumes an opinion."))),
+    list(id = "Q3", findings = list())),
+  instrument = list(finding("filters_and_routing", "Q2 and Q3", 5, problem = "Q3 applies only to library users.")),
+  trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
+  test_first = list(list(id = "Q1", method = "cognitive interviews")),
+  not_assessed = "Fit to objectives was not assessed: the brief names no analysis plan.")
+ex_ask <- rv_ask(ex_reply)
+ex_rv <- run_review(ex_form, fl_pm, ask = ex_ask$ask)
+ex_approved <- c(build_prompt(ex_form), list(edited = FALSE, original_hash = build_prompt(ex_form)$hash))
+ex_out <- build_output(ex_form, review = ex_rv, approved = ex_approved, models = out_models, time = out_time)
+ex_txt <- ex_out$text
+
+ok("a review's output is question by question, each question's findings in the severity bands, highest first, the Minor ones listed too",
+   identical(ex_out$kind, "review") &&
+     regexpr("Question Q1", ex_txt, fixed = TRUE) < regexpr("Question Q2", ex_txt, fixed = TRUE) &&
+     regexpr("Question Q2", ex_txt, fixed = TRUE) < regexpr("Question Q3", ex_txt, fixed = TRUE) &&
+     local({
+       q1 = substr(ex_txt, regexpr("Question Q1", ex_txt, fixed = TRUE), regexpr("Question Q2", ex_txt, fixed = TRUE))
+       regexpr("Fix before fielding", q1, fixed = TRUE) < regexpr("Needs your judgment", q1, fixed = TRUE) &&
+         regexpr("Needs your judgment", q1, fixed = TRUE) < regexpr("Minor (rated below 5)", q1, fixed = TRUE) &&
+         grepl("one_thing (severity 8)", q1, fixed = TRUE) && grepl("response_scale (severity 6)", q1, fixed = TRUE) &&
+         grepl("plain_words (severity 3)", q1, fixed = TRUE)
+     }) && grepl("Question Q3\n---", ex_txt, fixed = TRUE) && grepl("No problem was found by this review.", ex_txt, fixed = TRUE))
+ok("a finding gives its quote, problem, and a rewrite and a probe each said to be untested; a quote R did not find is flagged",
+   grepl("\"recycling services and street cleaning\". Two services in one question. A rewrite, untested: How satisfied are you with the recycling services? A probe: Which service did you think of?",
+         ex_txt, fixed = TRUE) &&
+     grepl("no_presupposition (severity 5) [quote not found in the text]", ex_txt, fixed = TRUE) &&
+     !grepl("one_thing (severity 8) [quote not found", ex_txt, fixed = TRUE))
+ok("the instrument findings, what to test first and what the review could not judge follow, then the disclosure with the review prompt's hash",
+   regexpr("The instrument as a whole", ex_txt, fixed = TRUE) > regexpr("Question Q3", ex_txt, fixed = TRUE) &&
+     grepl("filters_and_routing (severity 5): Questions: Q2 and Q3.", ex_txt, fixed = TRUE) &&
+     grepl("Question Q1: cognitive interviews", ex_txt, fixed = TRUE) && grepl("the brief names no analysis plan", ex_txt, fixed = TRUE) &&
+     grepl(paste0("Review prompt (not edited): ", ex_rv$hash), ex_txt, fixed = TRUE) &&
+     !grepl("TRAPD", ex_txt, fixed = TRUE) && !grepl("worker", ex_txt, ignore.case = TRUE) &&
+     endsWith(ex_txt, DISCLOSURE_LINE) &&
+     grepl("review.*workers|Worker", ex_txt) == FALSE)
+ok("a review of translated text prints what its trapd field says is still needed, or the fixed lines when it said nothing",
+   local({
+     tf = with_field(ex_form, source_language = "Spanish")
+     said = with_field(ex_reply, trapd = list(translation = "Two independent translations are needed.", review = "",
+                                              adjudication = "", pretesting = "", documentation = ""))
+     a = build_output(tf, review = run_review(tf, fl_pm, ask = rv_ask(said)$ask), models = out_models, time = out_time)$text
+     b = build_output(tf, review = run_review(tf, fl_pm, ask = rv_ask(ex_reply)$ask), models = out_models, time = out_time)$text
+     grepl("Translation: Two independent translations are needed.", a, fixed = TRUE) && !grepl("Adjudication of disagreements", a, fixed = TRUE) &&
+       grepl("Adjudication of disagreements by a named person is still needed.", b, fixed = TRUE)
+   }))
+ok("a review in parts lists a prompt hash for each call, and one with a part missing says so at the top; no review gives a plain message",
+   local({
+     pa = parts_ask(fail_at = 2L)
+     part_rv = run_review(long_form, fl_pm, ask = pa$ask)
+     t = build_output(clean_form(long_form), review = part_rv, models = out_models, time = out_time)$text
+     all(purrr::map_lgl(part_rv$batches, function(b) grepl(b$hash, t, fixed = TRUE))) &&
+       grepl("Review prompt, part 1 of 3: ", t, fixed = TRUE) && grepl("Review prompt, instrument as a whole: ", t, fixed = TRUE) &&
+       grepl("PART OF THE REVIEW IS MISSING: Part 2 of 3 did not come back", t, fixed = TRUE) &&
+       grepl("There is no review to show", build_output(ex_form, review = NULL, models = out_models)$text, fixed = TRUE)
+   }))
+
+# The run log: schema, no key. A planted key string is scrubbed from the output and from the log.
+key_planted <- "sk-planted-KEY-0123456789abcdef"
+leaky_rounds <- list(flow_round(fr_form, fl_pm, brief = fr_brief, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, kept = fr_kept),
+                     flow_round(ex_form, fl_pm, review = with_field(ex_rv, error = paste("echoed", key_planted))))
+leaky_rounds[[1]]$drafts[[1]]$call$raw <- paste0("{\"echo\": \"", key_planted, "\"}")
+log_txt <- run_log_json(leaky_rounds, profile = "home", time = out_time, secrets = c(key_planted, "short"))
+log_back <- jsonlite::fromJSON(log_txt, simplifyVector = FALSE)
+ok("the run log is one JSON file with a schema, the profile, the time and every round; the kept items are in it",
+   identical(log_back$schema, 1L) && identical(log_back$profile, "home") && length(log_back$rounds) == 2L &&
+     grepl("^2026-11-12T", log_back$written) && identical(log_back$rounds[[1]]$schema, 1L) &&
+     identical(purrr::map_chr(log_back$rounds[[1]]$kept, "id"), c("CONF1", "CONF2")) &&
+     !is.null(log_back$rounds[[1]]$drafts[[1]]$reply) && !is.null(log_back$rounds[[2]]$review$hash))
+ok("a planted key is absent from the log, which says where it was taken out, and a string too short to be a key is left alone",
+   !grepl(key_planted, log_txt, fixed = TRUE) && grepl("[key removed]", log_txt, fixed = TRUE) &&
+     identical(scrub_secrets("a short word", "short"), "a short word") &&
+     identical(scrub_secrets(paste("x", key_planted, "y", key_planted), key_planted), "x [key removed] y [key removed]") &&
+     identical(scrub_secrets("nothing here", character(0)), "nothing here"))
+ok("no output text or HTML carries a planted key: it is not in the run's data, and scrub_secrets takes it out of anything that is",
+   local({
+     leak = with_field(ex_reply, not_assessed = paste("Echoed key", key_planted))
+     lr = run_review(ex_form, fl_pm, ask = rv_ask(leak)$ask)
+     o = build_output(ex_form, review = lr, models = out_models, time = out_time)
+     grepl(key_planted, o$text, fixed = TRUE) &&
+       !grepl(key_planted, scrub_secrets(o$text, key_planted), fixed = TRUE) &&
+       !grepl(key_planted, scrub_secrets(paste(as.character(o$html), collapse = ""), key_planted), fixed = TRUE) &&
+       !grepl(key_planted, fr_txt, fixed = TRUE) && !grepl(key_planted, fr_html, fixed = TRUE)
+   }))
+ok("known_keys gives the analyst's pasted key and a server key, none when there is none; the output and log functions never read a key themselves",
+   local({
+     st = test_state()
+     got = NULL
+     shiny::testServer(mod_key_server, args = list(state = st), {
+       llm_set_session_key(key_planted)
+       got <<- known_keys(list(pm = list(id = "p", api = "openai", base_url = "https://x.invalid/v1", key_source = "analyst"),
+                               workers = list()))
+     })
+     identical(got, key_planted) && identical(known_keys(list(pm = list(id = "p", api = "openai", base_url = "https://x.invalid/v1",
+                                                                         key_source = "analyst"), workers = list())), character(0)) &&
+       !any(c("Sys.getenv", "llm_json", "llm_complete") %in% all.names(body(build_output))) &&
+       !any(c("Sys.getenv", "llm_key_for") %in% all.names(body(run_log_json)))
+   }))
+
+# The two samples the Claude project reads, written by this test from the canned runs above.
+writeLines(c(fr_txt, ""), file.path("tests", "output_generate.txt"), useBytes = TRUE)
+writeLines(c(ex_txt, ""), file.path("tests", "output_review.txt"), useBytes = TRUE)
+ok("the two sample outputs are saved as tests/output_generate.txt and tests/output_review.txt",
+   file.exists(file.path("tests", "output_generate.txt")) && file.exists(file.path("tests", "output_review.txt")) &&
+     grepl("Disclosure of the use of language models", paste(readLines(file.path("tests", "output_generate.txt"), encoding = "UTF-8"), collapse = "\n"), fixed = TRUE))
+
+
+# The Output tab, over canned runs.
+local({
+  st = test_state()
+  shiny::testServer(mod_output_server, args = list(state = st), {
+    session$flushReact()
+    ok("before anything has run, the Output tab says there is nothing to show and offers no download",
+       grepl("Nothing to show yet", html_of3(output$view), fixed = TRUE) && is.null(output$downloads))
+    llm_set_session_key(key_planted)
+    st$form <- fr_form; st$drafts <- fr_drafts; st$appraisal <- fr_ap; st$seed <- 11L; st$brief <- fr_brief
+    st$approved <- fr_approved; st$kept <- list(); st$round <- 1L
+    st$rounds <- list(leaky_rounds[[1]])
+    session$flushReact()
+    h0 = html_of3(output$view)
+    ok("a drafting round with nothing ticked says no item has been kept",
+       grepl("No item has been kept yet", h0, fixed = TRUE) && !grepl("Disclosure of the use", h0, fixed = TRUE))
+    st$kept <- fr_kept
+    session$flushReact()
+    h = html_of3(output$view)
+    ok("ticking items on Results puts them on the Output tab in HTML for Word and in a plain text box, with the disclosure block",
+       grepl("CONF1", h, fixed = TRUE) && grepl("<ol>", h, fixed = TRUE) && grepl("Disclosure of the use of language models", h, fixed = TRUE) &&
+         grepl("Select what is in the first box", h, fixed = TRUE) && grepl("<textarea", h, fixed = TRUE) &&
+         grepl(fr_ap$hash, h, fixed = TRUE) && grepl("Not a pretest", h, fixed = TRUE) &&
+         n_in3("Copy for Word", h) == 1L && n_in3("Copy plain text", h) == 1L && grepl("execCommand", h, fixed = TRUE))
+    st$kept <- fr_kept[1]
+    session$flushReact()
+    ok("un-ticking an item takes it off the Output tab",
+       !grepl("CONF2", html_of3(output$view), fixed = TRUE) && grepl("CONF1", html_of3(output$view), fixed = TRUE))
+    st$kept <- fr_kept
+    session$flushReact()
+    ok("the downloads are the plain text and the run log, and the page says no key is in the log",
+       grepl("Download the plain text", html_of3(output$downloads), fixed = TRUE) &&
+         grepl("Download the run log (JSON)", html_of3(output$downloads), fixed = TRUE) &&
+         grepl("No key is ever in it", html_of3(output$downloads), fixed = TRUE))
+    txt_file = output$get_text
+    log_file = output$get_log
+    txt = paste(readLines(txt_file, encoding = "UTF-8", warn = FALSE), collapse = "\n")
+    log = jsonlite::fromJSON(paste(readLines(log_file, encoding = "UTF-8", warn = FALSE), collapse = "\n"), simplifyVector = FALSE)
+    ok("the text download is the output as plain text; the log download is JSON with a schema, the round and the items kept",
+       grepl("CONF1", txt, fixed = TRUE) && grepl("Disclosure of the use of language models", txt, fixed = TRUE) &&
+         identical(log$schema, 1L) && length(log$rounds) == 1L && identical(purrr::map_chr(log$rounds[[1]]$kept, "id"), c("CONF1", "CONF2")))
+    ok("a key in the session, and echoed in a model's reply, is in neither the page, nor the text download, nor the log download",
+       key_planted %in% known_keys() &&
+         grepl(key_planted, leaky_rounds[[1]]$drafts[[1]]$call$raw, fixed = TRUE) &&
+         !grepl(key_planted, h, fixed = TRUE) && !grepl(key_planted, txt, fixed = TRUE) &&
+         !grepl(key_planted, paste(readLines(log_file, encoding = "UTF-8", warn = FALSE), collapse = "\n"), fixed = TRUE) &&
+         grepl("[key removed]", paste(readLines(log_file, encoding = "UTF-8", warn = FALSE), collapse = "\n"), fixed = TRUE))
+  })
+})
+local({
+  st = test_state()
+  st$form <- ex_form; st$review <- ex_rv; st$approved <- ex_approved; st$round <- 1L
+  st$rounds <- list(flow_round(ex_form, fl_pm, review = ex_rv))
+  shiny::testServer(mod_output_server, args = list(state = st), {
+    session$flushReact()
+    h = html_of3(output$view)
+    ok("a review's Output tab shows the review question by question in the bands, and the disclosure, with no Keep boxes",
+       grepl("Question Q1", h, fixed = TRUE) && grepl("Fix before fielding", h, fixed = TRUE) &&
+         grepl("Needs your judgment", h, fixed = TRUE) && grepl("Minor (rated below 5)", h, fixed = TRUE) &&
+         grepl("Disclosure of the use of language models", h, fixed = TRUE) && !grepl("Keep this item", h, fixed = TRUE))
+    log = jsonlite::fromJSON(paste(readLines(output$get_log, encoding = "UTF-8", warn = FALSE), collapse = "\n"), simplifyVector = FALSE)
+    ok("the review's run log has its round, its prompt hash and its call record",
+       identical(log$rounds[[1]]$review$hash, ex_rv$hash) && !is.null(log$rounds[[1]]$review$call$seconds) &&
+         identical(purrr::map_chr(log$rounds[[1]]$summary, "step"), "review"))
+  })
+})
+ok("the page has the Output tab's boxes in place of its placeholder, and no key is anywhere on it",
+   grepl("output-view", page$html, fixed = TRUE) && grepl("output-downloads", page$html, fixed = TRUE) &&
+     !grepl(key_planted, page$html, fixed = TRUE))
+

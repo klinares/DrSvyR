@@ -864,3 +864,94 @@ mod_again_server <- function(id, state, go = function(tab) invisible(NULL)) {
     })
   })
 }
+
+
+# ---- tab 4: Output ---------------------------------------------------------------------------------
+
+# The kept items, or the review, laid out for Word, with the disclosure block; and the run log.
+#   Everything is built by build_output() and run_log_json() in R/output.R. A key is taken out of
+#   anything shown or downloaded (scrub_secrets()), though none is ever in the data.
+mod_output_ui <- function(id) {
+  ns <- NS(id)
+  tagList(
+    tags$h3(QUESTIONR_TABS[5]),
+    uiOutput(ns("view")),
+    uiOutput(ns("downloads")))
+}
+
+# A button that selects what is on the page and copies it. Copying from a script depends on
+#   the browser, so the text says to select and copy by hand when it does not work.
+copy_button <- function(label, target, rich = TRUE)
+  tags$button(type = "button", class = "btn btn-sm btn-outline-primary me-2", label,
+              onclick = sprintf(paste0(
+                "var el=document.getElementById('%s'); var ok=false; try{",
+                if (rich) "var r=document.createRange(); r.selectNodeContents(el); var s=window.getSelection(); s.removeAllRanges(); s.addRange(r);"
+                else "el.select();",
+                "ok=document.execCommand('copy');}catch(e){} this.nextElementSibling.textContent= ok ? ' Copied.' : ' Not copied: select the text and copy it yourself.';"),
+                target))
+
+mod_output_server <- function(id, state) {
+  moduleServer(id, function(input, output, session) {
+    secrets <- reactive({
+      state$key_version
+      known_keys()
+    })
+
+    built <- reactive({
+      req((state$round %||% 0L) >= 1L, state$form)
+      brief = state$brief
+      brief = if (is.list(brief) && identical(brief$status, "ok")) brief
+      build_output(state$form, drafts = state$drafts, appraisal = state$appraisal, seed = state$seed,
+                   kept = state$kept, review = state$review, brief = brief, approved = state$approved)
+    })
+
+    output$view <- renderUI(safe_ui({
+      if ((state$round %||% 0L) < 1L)
+        return(tags$p(class = "text-muted",
+                      "Nothing to show yet. Draft items or review a questionnaire on the earlier tabs, ",
+                      "and tick the items to keep, and the result is laid out here."))
+      o = built()
+      html = scrub_secrets(paste(as.character(o$html), collapse = "\n"), secrets())
+      txt = scrub_secrets(o$text, secrets())
+      tagList(
+        advice_box("Select what is in the first box, or press the button, and paste it into Word: ",
+                   "the numbering and the emphasis are kept. The second box is the same thing as plain ",
+                   "text. Both end with a disclosure of the use of language models, to keep with the questionnaire."),
+        tags$h5("For Word"),
+        tags$div(id = session$ns("html_box"),
+                 style = paste("border: 1px solid var(--bs-border-color); padding: 12px 16px;",
+                               "background: var(--bs-body-bg); color: var(--bs-body-color);"),
+                 HTML(html)),
+        tags$p(class = "mt-2", copy_button("Copy for Word", session$ns("html_box"), TRUE), tags$span(class = "small")),
+        tags$h5("Plain text"),
+        tags$textarea(id = session$ns("text_box"), class = "form-control", rows = 14, readonly = NA,
+                      style = "font-family: monospace; font-size: 85%;", txt),
+        tags$p(class = "mt-2", copy_button("Copy plain text", session$ns("text_box"), FALSE), tags$span(class = "small")))
+    }))
+
+    output$downloads <- renderUI({
+      if ((state$round %||% 0L) < 1L) return(NULL)
+      tagList(
+        tags$hr(),
+        tags$h5("Downloads"),
+        tags$p("The run log is one JSON file with every round of this session: the forms, the prompts and their hashes, ",
+               "the replies as the models sent them, the shuffle seed and which model wrote which candidate, and the items ",
+               "you kept. No key is ever in it. It is made in this session only; nothing is stored on the server."),
+        downloadButton(session$ns("get_text"), "Download the plain text", class = "btn-sm me-2"),
+        downloadButton(session$ns("get_log"), "Download the run log (JSON)", class = "btn-sm"))
+    })
+
+    output$get_text <- downloadHandler(
+      filename = function() paste0("questionr-output-", format(Sys.time(), "%Y%m%d-%H%M"), ".txt"),
+      content = function(file) writeLines(scrub_secrets(built()$text, secrets()), file, useBytes = TRUE))
+
+    output$get_log <- downloadHandler(
+      filename = function() paste0("questionr-run-log-", format(Sys.time(), "%Y%m%d-%H%M"), ".json"),
+      content = function(file) {
+        rounds = state$rounds
+        n = length(rounds)
+        if (n) rounds[[n]]$kept <- state$kept
+        writeLines(run_log_json(rounds, secrets = secrets()), file, useBytes = TRUE)
+      })
+  })
+}

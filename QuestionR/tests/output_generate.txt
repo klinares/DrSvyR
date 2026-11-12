@@ -1,0 +1,60 @@
+Survey items
+============
+
+First drafts by language models, untested.
+
+CONF1
+-----
+
+Nous allons vous poser quelques questions sur la commission électorale nationale.
+
+Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle 1)
+
+1. Beaucoup
+2. Assez
+3. Peu
+4. Pas du tout
+
+[Randomize the order of options 1 to 4; keep Pas du tout last.]
+
+English source: How much do you trust the national electoral commission? (1)
+
+CONF2
+-----
+
+Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle 2)
+
+1. Beaucoup
+2. Assez
+3. Peu
+4. Pas du tout
+
+    Asked if the answer is Peu or Pas du tout: Pourquoi ?
+
+English source: How much do you trust the national electoral commission? (2)
+
+TRAPD: what is still needed
+===========================
+
+- The model's version is a first draft inside the Translation step only.
+- Review by people fluent in both languages and in survey design is still needed.
+- Adjudication of disagreements by a named person is still needed.
+- Pretesting in the target language with members of the target population is still needed.
+- Documentation of every decision, and of the model's part in it, is still needed.
+
+Disclosure of the use of language models
+========================================
+
+- Date: 2026-11-12 09:30
+- Profile: home
+- Project manager model: vendor-p/pm-model (example.invalid)
+- Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
+- Skill files and versions: core.md 0.2; generate.md 0.3; attitudinal.md 0.2; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.3; pm_brief.md 0.1
+- Brief check prompt: 395ddacac624fd946a3de8f690cdd69ba36b282b35b74b3df4c7f54c9e56afff
+- Drafting prompt (not edited): b6438476295bc94614d64a469052af204f45cdb8c43030daa3735363398dae72
+- Appraisal prompt: bbde744f6041e821f31f8abea85dab6ec16d8e222da11db74b1ab5f4ee63887c
+- Item 1 (CONF1): candidate A, written by vendor-a/model-one
+- Item 2 (CONF2): candidate C, written by vendor-b/model-two
+
+Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
+
