@@ -858,3 +858,145 @@ local({
 
 ok("Start here has the models table and the Check connections button",
    grepl("Check connections", page$html, fixed = TRUE) && grepl("<h4>Models</h4>", page$html, fixed = TRUE))
+
+
+# ---- Phase 3a: the task registry and one assembler for every step -----------------
+
+inn <- function(txt, s) grepl(s, txt, fixed = TRUE)
+
+ok("TASKS has the four tasks, each with a label, a kind, files, an ask and fields",
+   identical(sort(names(TASKS)), c("attitudinal", "behavioral", "evaluate", "sensitive")) &&
+     purrr::every(TASKS, function(t) all(c("label", "kind", "files", "ask", "fields") %in% names(t)) &&
+                    nzchar(t$label) && length(t$fields) > 0L))
+ok("a task's kind is draft or review, and only Evaluate is a review",
+   purrr::every(TASKS, function(t) t$kind %in% c("draft", "review")) &&
+     identical(names(purrr::keep(TASKS, function(t) t$kind == "review")), "evaluate"))
+ok("every file a task names is a skill file, core.md leads, and mode.md is in",
+   purrr::every(TASKS, function(t) all(t$files %in% SKILL_FILES) && identical(t$files[1], "core.md") &&
+                  "mode.md" %in% t$files))
+ok("every field a task shows is a field of the form, and none is the task itself",
+   purrr::every(TASKS, function(t) all(t$fields %in% FORM_FIELDS) && !"task" %in% t$fields))
+ok("a drafting task asks for items and shows the count; a review shows the questionnaire instead",
+   purrr::every(TASKS, function(t) if (t$kind == "draft") inn(t$ask, "%s") && "n_items" %in% t$fields
+                                   else !inn(t$ask, "%s") && "questionnaire" %in% t$fields &&
+                                     !"n_items" %in% t$fields))
+ok("a task that is not in the registry stops, naming the choices",
+   grepl("task must be one of: attitudinal, behavioral, sensitive, evaluate",
+         tryCatch(build_prompt(make_form(task = "poem", research_question = "x")),
+                  error = conditionMessage), fixed = TRUE))
+ok("TASK_FILES and TASK_ASK are gone: the registry is the only place",
+   !exists("TASK_FILES") && !exists("TASK_ASK"))
+
+ok("build_step_prompt(form, step, candidates), and build_prompt(form) is its work step",
+   identical(names(formals(build_step_prompt)), c("form", "step", "candidates")) &&
+     identical(names(formals(build_prompt)), "form") &&
+     every_built(function(b) identical(b$p, build_step_prompt(b$form, "work"))))
+ok("an unknown step stops, naming the three",
+   grepl("step must be one of: brief, work, appraise",
+         tryCatch(build_step_prompt(forms$attitudinal, "polish"), error = conditionMessage), fixed = TRUE))
+
+# The brief check: the project manager, before anything is approved.
+brief_built <- purrr::map(forms, function(fm)
+  list(form = fm, p = build_step_prompt(fm, "brief"), again = build_step_prompt(fm, "brief"),
+       ck = build_checklist(fm)))
+ok("the brief check sends core, pm_brief and the task's own files, in that order",
+   purrr::every(brief_built, function(b)
+     identical(b$p$files, c("core.md", "pm_brief.md",
+                            setdiff(TASKS[[b$form$task]]$files, c("core.md", "cross_cultural.md"))))))
+ok("the brief check's system prompt holds the brief rules and the task's rules, and no drafting output format",
+   purrr::every(brief_built, function(b)
+     inn(b$p$system, "- what_a_brief_needs (") && inn(b$p$system, "- criteria_preview (") &&
+       inn(b$p$system, if (b$form$task == "evaluate") "- restraint (" else "- declare_defaults (") &&
+       startsWith(b$p$system, skills[["core.md"]]$persona)))
+ok("the brief check's user message is PREPARE, ASK, CHECKLIST, CHARACTERIZE, with pm_brief's output format",
+   purrr::every(brief_built, function(b) {
+     u = b$p$user
+     pos = purrr::map_int(c("PREPARE", "ASK", "CHECKLIST", "CHARACTERIZE"), function(h)
+       as.integer(regexpr(paste0("(?m)^", h, "$"), u, perl = TRUE)))
+     all(pos > 0) && all(diff(pos) > 0) && startsWith(u, "PREPARE\n") &&
+       inn(u, skills[["pm_brief.md"]]$output_format) && inn(u, "\"task_fit\"") &&
+       !inn(u, "\"source_english\"") && !inn(u, "\"trapd\"")
+   }))
+ok("the brief check names the task the analyst chose, and its CHECKLIST is exactly build_checklist(form)",
+   purrr::every(brief_built, function(b) {
+     block = paste0("\n\nCHECKLIST\n", paste0(names(b$ck), ": ", unname(b$ck), collapse = "\n"), "\n\nCHARACTERIZE\n")
+     inn(b$p$user, paste0("chose the task '", TASKS[[b$form$task]]$label, "'")) && inn(b$p$user, block)
+   }))
+ok("the brief check is deterministic, and holds no Source text, comment or Check field",
+   purrr::every(brief_built, function(b) {
+     both = squash(paste(b$p$system, b$p$user))
+     identical(b$p, b$again) && !any(purrr::map_lgl(squash(source_texts), function(s) inn(both, s))) &&
+       !inn(both, "<!--") && !inn(both, "**Check:**") && !inn(both, "**Source:**")
+   }))
+ok("the brief check's Check questions are in its user message only, never in the system prompt",
+   purrr::every(brief_built, function(b) !contains_any(b$p$system, squash(check_texts)) &&
+                  contains_any(b$p$user, squash(check_texts))))
+ok("the brief check's hash differs from the work prompt's, and a changed field changes it",
+   purrr::every(brief_built, function(b) !identical(b$p$hash, build_prompt(b$form)$hash)) &&
+     !identical(build_step_prompt(forms$attitudinal, "brief")$hash,
+                build_step_prompt(utils::modifyList(forms$attitudinal, list(population = "Adults 65+")), "brief")$hash))
+
+# The appraisal: the project manager comparing candidates it cannot tell apart.
+cand_item <- function(i, tag = "")
+  list(id = paste0("TR", i), domain = paste("domain", i), intro = "",
+       stem = paste0("Stem number ", i, tag, "?"), options = list("None", "Some", "A lot"),
+       open_format = "", parts = list(list(when = "before the item", stem = paste0("Filter ", i, "?"),
+                                           options = list("Yes", "No"))),
+       programming = "Randomize options.", decisions = list("closed; three labelled options"),
+       source_english = "", notes = paste0("SECRET-NOTE-", i, " written by model-x"))
+cand <- function(tag, n = 2L) list(items = purrr::map(seq_len(n), cand_item, tag = tag),
+                                   not_covered = list("domain 9"), missing_from_brief = list())
+cands <- list(A = cand(" (A)"), B = cand(" (B)"), C = cand(" (C)"))
+ap <- build_step_prompt(forms$attitudinal, "appraise", candidates = cands)
+ok("the appraisal sends core and pm_appraise only, and none of the drafting rules",
+   identical(ap$files, c("core.md", "pm_appraise.md")) &&
+     inn(ap$system, "- code_every_check (") && inn(ap$system, "- compare_do_not_rank (") &&
+     !inn(ap$system, "- declare_defaults (") && !inn(ap$system, "- attitude_object (") &&
+     startsWith(ap$system, skills[["core.md"]]$persona))
+ok("the appraisal's user message is PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE, in that order",
+   local({
+     pos = purrr::map_int(c("PREPARE", "ASK", "CANDIDATES", "CHECKLIST", "CHARACTERIZE"), function(h)
+       as.integer(regexpr(paste0("(?m)^", h, "$"), ap$user, perl = TRUE)))
+     all(pos > 0) && all(diff(pos) > 0) && inn(ap$user, skills[["pm_appraise.md"]]$output_format) &&
+       inn(ap$user, "\"fails\"")
+   }))
+ok("the appraisal's CHECKLIST is exactly what the workers' files give, and their questions are not in the system prompt",
+   local({
+     ck = build_checklist(forms$attitudinal)
+     inn(ap$user, paste0("\n\nCHECKLIST\n", paste0(names(ck), ": ", unname(ck), collapse = "\n"), "\n\nCHARACTERIZE\n")) &&
+       !contains_any(ap$system, squash(check_texts))
+   }))
+ok("the appraisal says how many candidates and how many items each was asked for",
+   inn(ap$user, "Appraise the 3 candidate drafts") && inn(ap$user, "exactly 6 survey items"))
+ok("each candidate is one JSON line with its letter, its stems, its options, its parts and its decisions",
+   local({
+     lines = strsplit(ap$user, "\n", fixed = TRUE)[[1]]
+     cl = lines[grepl("^\\{\"candidate\":", lines)]
+     parsed = purrr::map(cl, jsonlite::fromJSON, simplifyVector = FALSE)
+     length(cl) == 3L && identical(purrr::map_chr(parsed, "candidate"), c("A", "B", "C")) &&
+       identical(parsed[[2]]$items[[1]]$stem, "Stem number 1 (B)?") &&
+       length(parsed[[1]]$items[[2]]$options) == 3L &&
+       identical(parsed[[3]]$items[[1]]$parts[[1]]$stem, "Filter 1?") &&
+       length(parsed[[1]]$items[[1]]$decisions) == 1L && identical(parsed[[1]]$not_covered[[1]], "domain 9")
+   }))
+ok("a worker's own notes never reach the appraisal, and an empty source_english is left out",
+   !inn(ap$user, "SECRET-NOTE") && !inn(ap$user, "model-x") && !inn(ap$user, "source_english") &&
+     !inn(ap$user, "\"notes\""))
+ok("the appraisal is deterministic and its hash follows the candidates",
+   identical(ap, build_step_prompt(forms$attitudinal, "appraise", candidates = cands)) &&
+     !identical(ap$hash, build_step_prompt(forms$attitudinal, "appraise",
+                                           candidates = list(A = cand(" (A)"), B = cand(" (changed)")))$hash))
+ok("the appraisal holds no Source text, comment or Check field",
+   local({
+     both = squash(paste(ap$system, ap$user))
+     !any(purrr::map_lgl(squash(source_texts), function(s) inn(both, s))) &&
+       !inn(both, "<!--") && !inn(both, "**Check:**") && !inn(both, "**Source:**")
+   }))
+ok("the appraisal stops for a review task, and for no candidate or an unnamed one",
+   grepl("Only a drafting task", tryCatch(build_step_prompt(forms$evaluate, "appraise", candidates = cands),
+                                         error = conditionMessage), fixed = TRUE) &&
+     grepl("at least one candidate", tryCatch(build_step_prompt(forms$attitudinal, "appraise"),
+                                              error = conditionMessage), fixed = TRUE) &&
+     grepl("at least one candidate", tryCatch(build_step_prompt(forms$attitudinal, "appraise",
+                                                                candidates = list(cand("x"))),
+                                              error = conditionMessage), fixed = TRUE))

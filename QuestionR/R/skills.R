@@ -33,17 +33,71 @@ SKILL_FILES <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md",
 SKILLS_WITH_OUTPUT <- c("generate.md", "evaluate.md", "pm_brief.md",
                         "pm_appraise.md")
 
-# The skill files a prompt is built from, in the order of the table in
-#   www/skills/README.md. mode.md is always in; R keeps only its reflexes for
-#   the modes chosen. cross_cultural.md is in only when needs_cross_cultural().
-TASK_FILES <- list(
-  attitudinal = c("core.md", "generate.md", "attitudinal.md", "mode.md",
-                  "cross_cultural.md"),
-  behavioral  = c("core.md", "generate.md", "behavioral.md", "mode.md",
-                  "cross_cultural.md"),
-  sensitive   = c("core.md", "generate.md", "sensitive.md", "mode.md",
-                  "cross_cultural.md"),
-  evaluate    = c("core.md", "evaluate.md", "mode.md", "cross_cultural.md"))
+# The task registry (DESIGN.md section 12). The dropdown on the Brief tab, the
+#   fields it shows, prompt assembly and the checklist all read this one list, so
+#   a new task is a skill file plus one entry here and no change to a screen.
+#   Each entry:
+#     label   shown in the dropdown
+#     kind    "draft" (workers write items) or "review" (the project manager
+#             reviews pasted text)
+#     files   the skill files a work prompt is built from, in the order of the
+#             table in www/skills/README.md. mode.md is always in; R keeps only
+#             its reflexes for the modes chosen. cross_cultural.md is in only
+#             when needs_cross_cultural().
+#     ask     the fixed sentence of the ASK block. A draft task's holds %s,
+#             where the number of items goes.
+#     fields  the form fields the Brief tab shows for this task. "task" is the
+#             dropdown itself and is not listed.
+TASKS <- list(
+  attitudinal = list(
+    label = "Attitudinal scale", kind = "draft",
+    files = c("core.md", "generate.md", "attitudinal.md", "mode.md", "cross_cultural.md"),
+    ask = "Write exactly %s for the brief above, to be combined into one attitude scale.",
+    fields = c("research_question", "construct", "population", "country", "modes",
+               "output_language", "source_language", "n_items", "keep_items", "other")),
+  behavioral = list(
+    label = "Behavioral items", kind = "draft",
+    files = c("core.md", "generate.md", "behavioral.md", "mode.md", "cross_cultural.md"),
+    ask = "Write exactly %s for the brief above, each measuring a behaviour or an experience.",
+    fields = c("research_question", "construct", "population", "country", "modes",
+               "output_language", "source_language", "n_items", "reference_period",
+               "keep_items", "other")),
+  sensitive = list(
+    label = "Sensitive topic items", kind = "draft",
+    files = c("core.md", "generate.md", "sensitive.md", "mode.md", "cross_cultural.md"),
+    ask = "Write exactly %s for the brief above, each on a topic where respondents may refuse or edit their answer.",
+    fields = c("research_question", "construct", "population", "country", "modes",
+               "output_language", "source_language", "n_items", "keep_items", "other")),
+  evaluate = list(
+    label = "Evaluate a questionnaire", kind = "review",
+    files = c("core.md", "evaluate.md", "mode.md", "cross_cultural.md"),
+    ask = "Review the questionnaire below as an expert reviewer, item by item and then as a whole.",
+    fields = c("research_question", "population", "country", "modes", "output_language",
+               "source_language", "other", "questionnaire")))
+
+# The three prompts a task goes through. work is what the task is (a worker's
+#   drafting prompt, or the project manager's review); brief is the project
+#   manager's check of the form before anything is approved; appraise is the
+#   project manager comparing the candidates the workers returned.
+STEPS <- c("brief", "work", "appraise")
+
+# The skill files each step reads. core.md leads every one (DESIGN.md section 12).
+#   The brief check sends core, pm_brief and the task's own files; the appraisal
+#   sends core and pm_appraise only, so it never holds a drafting rule.
+step_files <- function(task, step) {
+  if (!step %in% STEPS)
+    stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
+  files = TASKS[[task]]$files
+  switch(step,
+         work = files,
+         brief = c("core.md", "pm_brief.md", setdiff(files, "core.md")),
+         appraise = c("core.md", "pm_appraise.md"))
+}
+
+# The file whose Output format a step's reply follows, where it is not the task's
+#   own. NA for work: there exactly one file in force carries one.
+STEP_FORMAT_FILE <- c(brief = "pm_brief.md", work = NA_character_,
+                      appraise = "pm_appraise.md")
 
 
 # ---- the parser -----------------------------------------------------------------
@@ -239,15 +293,16 @@ clean_form <- function(form) {
          paste(odd, collapse = ", "), call. = FALSE)
 
   task = form_text(form[["task"]])
-  if (!task %in% names(TASK_FILES))
-    stop("task must be one of: ", paste(names(TASK_FILES), collapse = ", "),
+  if (!task %in% names(TASKS))
+    stop("task must be one of: ", paste(names(TASKS), collapse = ", "),
          call. = FALSE)
+  kind = TASKS[[task]]$kind
 
   text_fields = setdiff(FORM_FIELDS, c("task", "modes", "n_items"))
   f = purrr::map(purrr::set_names(text_fields), function(x) form_text(form[[x]]))
   if (!nzchar(f$research_question))
     stop("The research question is required.", call. = FALSE)
-  if (task == "evaluate" && !nzchar(f$questionnaire))
+  if (kind == "review" && !nzchar(f$questionnaire))
     stop("Evaluate needs the questionnaire pasted in.", call. = FALSE)
 
   m = as.character(form[["modes"]])
@@ -259,7 +314,7 @@ clean_form <- function(form) {
          paste(names(MODE_LABELS), collapse = ", "), call. = FALSE)
 
   n_items = NA_integer_
-  if (task != "evaluate") {
+  if (kind == "draft") {
     n = form[["n_items"]]
     v = if (form_blank(n)) NA_real_ else suppressWarnings(as.numeric(n[[1]]))
     if (is.na(v) || v < 1 || v != round(v))
@@ -294,12 +349,13 @@ filter_mode <- function(skill, modes) {
 }
 
 # The parsed skill files a prompt for this cleaned form is built from, in
-#   order, mode.md already filtered. Named by file.
-skills_in_force <- function(f, dir = SKILLS_DIR) {
-  files = TASK_FILES[[f$task]]
+#   order, mode.md already filtered where the step sends it. Named by file.
+skills_in_force <- function(f, dir = SKILLS_DIR, step = "work") {
+  files = step_files(f$task, step)
   files = files[files != "cross_cultural.md" | needs_cross_cultural(f)]
   skills = purrr::map(purrr::set_names(files), function(name) read_skill(name, dir))
-  skills[["mode.md"]] = filter_mode(skills[["mode.md"]], f$modes)
+  if ("mode.md" %in% names(skills))
+    skills[["mode.md"]] = filter_mode(skills[["mode.md"]], f$modes)
   if (is.na(skills[["core.md"]]$persona))
     stop("core.md has no '## Persona' section.", call. = FALSE)
   ids = unlist(purrr::map(skills, function(s) names(s$reflexes)), use.names = FALSE)
@@ -352,26 +408,48 @@ prepare_lines <- function(f) {
   unname(lines[!is.na(lines)])
 }
 
-# The task sentence is fixed text. The number of items is the form's.
-TASK_ASK <- c(
-  attitudinal = "Write exactly %s for the brief above, to be combined into one attitude scale.",
-  behavioral  = "Write exactly %s for the brief above, each measuring a behaviour or an experience.",
-  sensitive   = "Write exactly %s for the brief above, each on a topic where respondents may refuse or edit their answer.",
-  evaluate    = "Review the questionnaire below as an expert reviewer, item by item and then as a whole.")
-
+# The task sentence is fixed text, held in TASKS. The number of items is the
+#   form's.
 ASK_CLOSING <- paste("Follow every rule you were given.",
                      "Reply in the format given at the end of this message.")
 
 ask_sentence <- function(task, n_items) {
-  what = TASK_ASK[[task]]
-  if (task != "evaluate")
+  what = TASKS[[task]]$ask
+  if (TASKS[[task]]$kind == "draft")
     what = sprintf(what, paste(n_items, if (n_items == 1L) "survey item" else "survey items"))
   paste(what, ASK_CLOSING)
 }
 
-# The Output format section of whichever file in force carries one: generate.md
-#   for the three drafting tasks, evaluate.md for Evaluate. Exactly one does.
-output_format_of <- function(skills) {
+# The brief check's sentence. It names the task the analyst chose, because
+#   right_task in pm_brief.md is about the request not matching it, and it asks
+#   for the criteria from the CHECKLIST block below, because criteria_preview
+#   takes them from "the checklist you were given".
+brief_ask_sentence <- function(task)
+  paste0("The analyst chose the task '", TASKS[[task]]$label, "'. Check the brief ",
+         "above for what a designer would still need to know before that task is ",
+         "done, and list the criteria from the CHECKLIST below that will be applied. ",
+         "Write no items. ", ASK_CLOSING)
+
+# The appraisal's sentence: how many candidates, and how many items each was
+#   asked for, which coverage and the item count both depend on.
+appraise_ask_sentence <- function(n_candidates, n_items)
+  paste0("Appraise the ", n_candidates, " candidate ",
+         if (n_candidates == 1L) "draft" else "drafts",
+         " in CANDIDATES below against the CHECKLIST. Each was asked to write exactly ",
+         n_items, if (n_items == 1L) " survey item" else " survey items",
+         " for the brief above. ", ASK_CLOSING)
+
+# The Output format a step's reply follows. For brief and appraise it is the
+#   project manager file's. For work it is the one file in force that carries
+#   one: generate.md for the drafting tasks, evaluate.md for Evaluate. Exactly
+#   one does.
+output_format_of <- function(skills, step = "work") {
+  file = STEP_FORMAT_FILE[[step]]
+  if (!is.na(file)) {
+    if (is.null(skills[[file]]) || is.na(skills[[file]]$output_format))
+      stop(file, " is not in force or has no '## Output format'.", call. = FALSE)
+    return(skills[[file]]$output_format)
+  }
   with_output = purrr::keep(unname(skills), function(s) !is.na(s$output_format))
   if (length(with_output) != 1L)
     stop("Exactly one skill file in force must have an '## Output format'; ",
@@ -395,20 +473,67 @@ checklist_of <- function(skills) {
 #   CHECKLIST, one "id: question" line per Check in force. Workers get the
 #   rules and the appraiser gets the questions, so a drafting prompt has none.
 assemble_user <- function(f, skills) {
-  checklist = if (f$task == "evaluate") checklist_of(skills)
-  if (f$task == "evaluate" && !length(checklist))
+  review = TASKS[[f$task]]$kind == "review"
+  checklist = if (review) checklist_of(skills)
+  if (review && !length(checklist))
     stop("Evaluate needs a checklist, and no Check line is in force.", call. = FALSE)
   blocks = purrr::compact(list(
     paste(c("PREPARE", prepare_lines(f)), collapse = "\n"),
     paste(c("ASK", ask_sentence(f$task, f$n_items),
             if (nzchar(f$revision)) paste0("REVISION: ", f$revision)),
           collapse = "\n"),
-    if (f$task == "evaluate") paste("QUESTIONNAIRE", f$questionnaire, sep = "\n"),
-    if (f$task == "evaluate")
-      paste(c("CHECKLIST", paste0(names(checklist), ": ", unname(checklist))),
-            collapse = "\n"),
+    if (review) paste("QUESTIONNAIRE", f$questionnaire, sep = "\n"),
+    if (review) checklist_block(checklist),
     paste("CHARACTERIZE", output_format_of(skills), sep = "\n")))
   paste(unlist(blocks), collapse = "\n\n")
+}
+
+# "id: question" lines under a CHECKLIST heading. One function for the review,
+#   the brief check and the appraisal, so the three cannot word it differently.
+checklist_block <- function(checklist)
+  paste(c("CHECKLIST", paste0(names(checklist), ": ", unname(checklist))),
+        collapse = "\n")
+
+# What the appraiser sees of an item: what it asks and what it decided. The
+#   worker's own notes are left out, since they are where a model is most likely
+#   to say who it is. An absent field becomes empty, so the appraiser always sees
+#   the same shape.
+APPRAISAL_ITEM_DEFAULTS <- list(
+  id = "", domain = "", intro = "", stem = "", options = list(), open_format = "",
+  parts = list(), programming = "", decisions = list(), source_english = "")
+
+appraisal_item <- function(it) {
+  out = purrr::imap(APPRAISAL_ITEM_DEFAULTS, function(d, k) it[[k]] %||% d)
+  out[names(out) != "source_english" | nzchar(paste(unlist(out$source_english), collapse = ""))]
+}
+
+# CANDIDATES: one JSON object per line, the letter, the domains it left out, and
+#   its items. candidates is a list of parsed drafts named by their letter. No
+#   model id is passed in, so none can be written.
+candidates_block <- function(candidates) {
+  lines = purrr::imap_chr(candidates, function(reply, letter)
+    as.character(jsonlite::toJSON(
+      list(candidate = letter, not_covered = reply$not_covered %||% list(),
+           items = purrr::map(unname(reply$items), appraisal_item)),
+      auto_unbox = TRUE)))
+  paste(c("CANDIDATES", unname(lines)), collapse = "\n")
+}
+
+# The user message of the brief check and of the appraisal. Both carry PREPARE,
+#   an ASK, a CHECKLIST (the questions the task's own files give, which is what
+#   the criteria are taken from and what the appraisal codes against) and
+#   CHARACTERIZE; the appraisal also carries CANDIDATES before the CHECKLIST.
+assemble_user_step <- function(f, skills, step, checklist, candidates = NULL) {
+  ask = switch(step,
+    brief = brief_ask_sentence(f$task),
+    appraise = appraise_ask_sentence(length(candidates), f$n_items))
+  paste(unlist(purrr::compact(list(
+    paste(c("PREPARE", prepare_lines(f)), collapse = "\n"),
+    paste("ASK", ask, sep = "\n"),
+    if (step == "appraise") candidates_block(candidates),
+    checklist_block(checklist),
+    paste("CHARACTERIZE", output_format_of(skills, step), sep = "\n")))),
+    collapse = "\n\n")
 }
 
 # sha256 of the system prompt and the user message. The same form and the same
@@ -420,17 +545,32 @@ prompt_hash <- function(system_txt, user_txt)
 
 # ---- the contract tests/review.R relies on (DESIGN.md section 5) ------------------
 
-# For the three drafting tasks, the worker's prompt; for task = "evaluate", the
-#   project manager's review prompt. Returns system and user (one string each),
-#   hash, and files: the skill files used, in order.
-build_prompt <- function(form) {
+# One assembler for every step (DESIGN.md section 12). step "work": for a drafting
+#   task, the worker's prompt; for a review task, the project manager's review.
+#   step "brief": the project manager's check of the form. step "appraise": the
+#   project manager comparing candidates, which is a list of the workers' parsed
+#   drafts named by letter (A, B, C), already relabelled by the caller so that
+#   nothing here knows which model wrote which. Returns system and user (one
+#   string each), hash, and files: the skill files used, in order.
+build_step_prompt <- function(form, step, candidates = NULL) {
   f = clean_form(form)
-  skills = skills_in_force(f)
+  if (!step %in% STEPS)
+    stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
+  if (step == "appraise" && TASKS[[f$task]]$kind != "draft")
+    stop("Only a drafting task has candidates to appraise.", call. = FALSE)
+  if (step == "appraise" && (!length(candidates) || is.null(names(candidates))))
+    stop("The appraisal needs at least one candidate, named by its letter.", call. = FALSE)
+  skills = skills_in_force(f, step = step)
   system_txt = assemble_system(skills)
-  user_txt = assemble_user(f, skills)
+  user_txt = if (step == "work") assemble_user(f, skills)
+    else assemble_user_step(f, skills, step, checklist_of(skills_in_force(f)), candidates)
   list(system = system_txt, user = user_txt,
        hash = prompt_hash(system_txt, user_txt), files = names(skills))
 }
+
+# The work step, as it was before there were steps. The hashes in REVIEW.md
+#   section 6 are this function's, and must not change.
+build_prompt <- function(form) build_step_prompt(form, "work")
 
 # Reflex id to its Check question, for the files build_prompt(form) used and
 #   only the reflexes it kept. Reflexes with no Check line are not in it.
