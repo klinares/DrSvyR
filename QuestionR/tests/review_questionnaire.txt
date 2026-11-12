@@ -1,0 +1,15 @@
+Q1. Do you live in the Hartley Borough Council area? Yes / No
+Q2. How long have you lived at your current address? Less than a year / 1 to 5 years / 6 to 10 years / More than 10 years
+Q3. Have you used any council services in the last 12 months? Yes / No (go to Q9)
+Q4. Which council services have you used in the last 12 months? Tick all that apply. Bin collection / Recycling centre / Library / Leisure centre / Parks / Planning / Council tax / Other
+Q5. How satisfied or dissatisfied are you with the cleanliness and safety of your local streets and parks? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied
+Q6. How often do you use your local library? Never / Rarely / Sometimes / Often
+Q7. Don't you agree that the council should spend more on libraries? Strongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree
+Q8. How much do you pay in council tax each year? Please give the amount in pounds. ______
+Q9. Overall, how well do you think the council is run? Very well / Fairly well / Fairly badly / Very badly
+Q10. How much do you trust the council to spend your money wisely? A great deal / Quite a lot / Not very much / Not at all
+Q11. Thinking about when you last contacted the council, how long did it take them to respond? Same day / Within a week / Longer than a week / Never responded
+Q12. The council has invested in new recycling facilities. How satisfied are you with the recycling service? 1 Very dissatisfied ... 5 Very satisfied
+Q13. How many hours a week do you spend volunteering for a local community group? ______ hours
+Q14. How would you rate your health in general? Excellent / Good / Fair / Poor
+Q15. What is your total household income before tax? Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Prefer not to say

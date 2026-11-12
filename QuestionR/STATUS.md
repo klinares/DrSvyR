@@ -2,6 +2,32 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
+## Phase 4, in progress (2026-11-11, written at a gate; the final report replaces this)
+
+- **Blocked, 4e: the gold items cannot be fetched.** The brief names
+  `github.com/PatrickSturgis/cogbot-replication`; that repository does not exist
+  (the API and the web page both return 404). The author's account has one
+  related repository, `PatrickSturgis/cogbot` ("LLM-based cognitive interviewing
+  for survey question pretesting"): it holds the package, `data/backstories_*.csv`
+  and one example script, and no flawed items, no ESS control items and no answer
+  key (I read its README, `examples/evaluate_question.py` and `cogbot/prompts.py`).
+  I did not write the items from memory. **Kevin: the file, or the right
+  repository name, is needed.** 4a to 4d do not depend on it.
+- **Done and committed:** the Claude project's files `c273eb9`; 4a `463f0c0`
+  (section 13 applied); 4b `0439b18` (`run_review`, `check_review`); 4c `0f1e097`
+  (the Evaluate screens). Smoke is 319 checks, all ok. The drafting prompt hashes
+  changed once, at 4a, because `generate.md` is 0.3: 45 of the 60 I record moved
+  (every drafting form), the 15 Evaluate ones did not; they have not moved since
+  (compared after 4b and 4c).
+- **4d is prepared, not run:** `tests/review_questionnaire.txt` (15 questions
+  written for the test) and `tests/llm_check.R go review15`, dry-run against a
+  stand-in. It waits for Kevin's yes (one call, about $0.15 to $0.25).
+- **`reasoning_effort` (VERIFY from section 13):** passed through
+  `ellmer::params()`. Checked against a local server: `chat_anthropic()` sends
+  adaptive thinking with that effort; `chat_openai_compatible()` in ellmer 0.4.2
+  sends nothing. So it is unset in every entry, as the default says; an
+  OpenAI-style worker could take it through `api_args` instead, not tried.
+
 ## Where things stand (2026-11-11, end of the Phase 3 session)
 
 - **Committed on branch `questionr`, not pushed.** Phases 0, 1, 1b: `d651cfe`,

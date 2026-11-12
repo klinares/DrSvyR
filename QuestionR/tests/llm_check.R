@@ -43,7 +43,9 @@ if (!"go" %in% args) {
       "                and 1 small review by the project manager.\n",
       "  go generate   the Generate engine: 1 brief check, 3 drafting calls (3 items),\n",
       "                and 1 appraisal; writes tests/run_generate.json.\n",
-      "Run it again with the word go, and generate if you want the second.\n", sep = "")
+      "  go review15   one review of the 15-question test questionnaire, to measure its\n",
+      "                tokens; writes tests/review_tokens.md and tests/review15_run.json.\n",
+      "Run it again with the word go, and generate or review15 if you want one of those.\n", sep = "")
   quit(status = 0)
 }
 
@@ -54,6 +56,71 @@ stopifnot("llm_check.R is for the home profile" = identical(APP_PROFILE, "home")
 
 pm_key <- Sys.getenv("ANTHROPIC_API_KEY")
 models <- llm_models()
+
+
+# ---- go review15: how many tokens a 15-question review takes (Phase 4d) -------------
+
+if ("review15" %in% args) {
+  if (!nzchar(pm_key)) {
+    cat("No call was made. ANTHROPIC_API_KEY is not set in .Renviron.\n")
+    quit(status = 1)
+  }
+  questionnaire <- paste(readLines(file.path("tests", "review_questionnaire.txt"), warn = FALSE), collapse = "\n")
+  n_questions <- length(grep("^Q[0-9]+\\.", strsplit(questionnaire, "\n", fixed = TRUE)[[1]]))
+  form <- list(task = "evaluate", research_question = "Satisfaction with and use of local council services",
+               construct = "", population = "Adults aged 18 and over living in the council area",
+               country = "", modes = "web", output_language = "English", source_language = "English",
+               n_items = NA_integer_, reference_period = "", keep_items = "", other = "",
+               questionnaire = questionnaire, revision = "")
+
+  # The measurement is made with a ceiling well above what the review is expected
+  #   to need, so that it is not cut off and the tokens it really takes are seen.
+  #   This changes the ceiling in this process only; the app's is set from the result.
+  measuring_ceiling <- 24000L
+  LLM_MAX_TOKENS[["evaluate"]] <- measuring_ceiling
+  ask_live <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
+    llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens,
+             validate = validate, key = pm_key)
+  rv <- run_review(form, APP_MODELS$pm, ask = ask_live)
+  cl <- attr(rv, "call")
+  flags <- if (identical(rv$status, "ok")) check_review(rv$reply, form)
+  tk_in <- cl$tokens$input %||% NA_real_
+  tk_out <- cl$tokens$output %||% NA_real_
+
+  secrets <- purrr::keep(c(pm_key, Sys.getenv("OPENROUTER_API_KEY")), nzchar)
+  scrub <- function(txt) purrr::reduce(secrets, function(t, s) gsub(s, "[key]", t, fixed = TRUE), .init = txt)
+  writeLines(scrub(as.character(flow_log_json(flow_round(form, APP_MODELS$pm, review = rv)))),
+             file.path("tests", "review15_run.json"), useBytes = TRUE)
+
+  ceiling_for_app <- if (is.na(tk_out)) NA_integer_ else as.integer(ceiling(2 * tk_out / 1000) * 1000)
+  cap_for_app <- as.integer(ceiling(2 * nchar(questionnaire) / 1000) * 1000)
+  md <- c(
+    "# Token measurement: one 15-question review (tests/llm_check.R go review15)", "",
+    paste0("Run: ", format(Sys.time(), "%Y-%m-%d %H:%M"), " | profile: ", APP_PROFILE),
+    paste0("Model: ", APP_MODELS$pm$id, " | prompt hash ", rv$hash %||% "-"),
+    paste0("Questionnaire: tests/review_questionnaire.txt, written for this test: ", n_questions,
+           " questions, ", nchar(questionnaire), " characters."),
+    paste0("Form: research question \"", form$research_question, "\", population \"", form$population,
+           "\", mode web, no country, English."),
+    paste0("Ceiling used for this measurement: ", measuring_ceiling, " tokens (the app's was 8000 until this run)."), "",
+    "| Seconds | Tokens in | Tokens out | Finish | Attempts | Status |", "|---|---|---|---|---|---|",
+    paste0("| ", sprintf("%.1f", cl$seconds %||% NA_real_), " | ", tk_in, " | ", tk_out, " | ", cl$finish %||% "-",
+           " | ", cl$attempts %||% "-", " | ", rv$status, " |"), "",
+    if (!identical(rv$status, "ok")) paste0("The review failed: ", rv$error)
+    else c(paste0("Findings: ", nrow(flags), " in all, ", sum(flags$shown), " rated 5 or above; ",
+                  sum(flags$scope == "instrument"), " about the instrument. R's checks: ",
+                  sum(!flags$evidence_found, na.rm = TRUE), " quotes not found, ", sum(!flags$check_known),
+                  " checks not sent.")),
+    "",
+    "## Settings this implies",
+    "",
+    paste0("About twice what it used: an evaluation ceiling of ", ceiling_for_app, " tokens. ",
+           "The paste cap to match, about twice the characters of this questionnaire: ", cap_for_app, " characters."),
+    "")
+  writeLines(scrub(md), file.path("tests", "review_tokens.md"), useBytes = TRUE)
+  cat(scrub(md), sep = "\n")
+  quit(status = if (identical(rv$status, "ok")) 0L else 1L)
+}
 
 
 # ---- go generate: the Generate engine, live ---------------------------------------
