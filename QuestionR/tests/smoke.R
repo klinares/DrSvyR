@@ -1772,3 +1772,23 @@ ok("the page has the Generate tabs' controls, and the later tabs are still place
    grepl("Check the brief", page$html, fixed = TRUE) && grepl("Skip the brief check", page$html, fixed = TRUE) &&
      grepl("Research question (required)", page$html, fixed = TRUE) && n_in3("Not built yet", page$html) == 2L)
 ok("no key is anywhere on the page", !grepl("pm-test-key|SECRET-KEY|or-secret-key", page$html))
+
+
+# ---- From the first live run of the engine (2026-11-11) ------------------------------------
+
+# The brief check's and the appraisal's call records reach the log, as the drafts' do.
+ok("the log keeps the brief check's and the appraisal's own call records: raw reply, tokens, attempts",
+   identical(rj_back$brief$call$tokens$input, 100L) && identical(rj_back$appraisal$call$tokens$output, 50L) &&
+     grepl("criteria", rj_back$brief$call$raw, fixed = TRUE) && grepl("limits", rj_back$appraisal$call$raw, fixed = TRUE) &&
+     identical(rj_back$brief$call$attempts, 1L))
+
+# How three real models wrote that every point is labelled, and two ways of saying it is not.
+label_of <- function(...) code_defaults(good_item(1, decisions = list(...)))$labels
+ok("a model's own words for labelling every point are read as yes, in the phrasings the live run produced",
+   identical(label_of("Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot)"), "yes") &&
+     identical(label_of("Label every option; labels make each response visible and distinct on the web form."), "yes") &&
+     identical(label_of("Every option has a verbal label to avoid confusion."), "yes"))
+ok("labels said to be partial or absent are read as no, and a silence is not stated",
+   identical(label_of("Label only the end points of the scale."), "no") &&
+     identical(label_of("Endpoint labels only."), "no") && identical(label_of("No labels present."), "no") &&
+     identical(label_of("Closed; five options; direction low to high."), "not stated"))

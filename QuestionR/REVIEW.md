@@ -1,6 +1,6 @@
-# QuestionR review evidence, Phase 2
+# QuestionR review evidence, Phase 3
 
-Generated 2026-11-11 21:08 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-11 22:14 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,6 +12,13 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+d03f7db QuestionR: llm_check.R go generate runs the Generate engine live
+76b6354 QuestionR: Phase 3c Generate screens: Brief, Prompt, Results, Run again
+aa07e01 QuestionR: Phase 3b flow engine, reply schemas, coded defaults, checks
+7308eb1 QuestionR: Phase 3a task registry and one prompt assembler for every step
+539ec08 QuestionR: changes from the Claude project (design section 12, prompts, review.R section 8)
+c8870dd QuestionR: STATUS.md records the Phase 2 commit
+025a86f QuestionR: Phase 2 model layer, connection check, live check
 670b899 QuestionR: Phase 1b bring skills.R into line with DESIGN sections 4 and 5
 0228360 QuestionR: review changes from the Claude project (skills 0.2, design, review.R)
 ca5aa70 QuestionR: Phase 1 skills loader and prompt assembly
@@ -20,58 +27,54 @@ d651cfe QuestionR: Phase 0 scaffold, key box and profile block
 6ed970c svysegment: number check accepts correctly rounded figures
 877cd8d svysegment: send no temperature unless one is configured
 aeee335 svysegment: call Claude through ellmer::chat_anthropic() instead of hand-built OpenRouter requests
-62600f2 svysegment: AI reflexes as a markdown document, with a reporting style and examples
-1db630b svysegment: AI reflexes for every model-written passage, grounded in survey methodology
-b168e50 svysegment: Start here names the language models in use; best practices replace limits
-df9547a svysegment: standard writing rules for every model-written passage; always write the summary
-f95a888 svysegment: plots readable in light and dark themes
-fca7039 svysegment: let the analyst set the range of segment numbers to search
-c22f1f4 svysegment: card layout for Start here; method report and office logo
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
- M DESIGN.md
- M R/llm.R
- M R/ui.R
+ M R/checks.R
+ M R/flow.R
  M REVIEW.md
  M STATUS.md
- M app.R
  M tests/smoke.R
-?? tests/llm_check.R
-?? tests/llm_check.out
+?? tests/run_generate.json
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
- CLAUDE.md                              |   1 +
- QuestionR/.rscignore                   |   7 +
- QuestionR/DESIGN.md                    | 456 +++++++++++++++
- QuestionR/PROMPTS.md                   | 108 ++++
- QuestionR/R/_disable_autoload.R        |   5 +
- QuestionR/R/llm.R                      | 129 +++++
- QuestionR/R/skills.R                   | 437 +++++++++++++++
- QuestionR/R/ui.R                       | 118 ++++
- QuestionR/README.md                    |  43 ++
- QuestionR/REVIEW.md                    | 996 +++++++++++++++++++++++++++++++++
- QuestionR/STATUS.md                    | 845 ++++++++++++++++++++++++++++
- QuestionR/app.R                        | 190 +++++++
- QuestionR/tests/openrouter_check.R     |  81 +++
- QuestionR/tests/review.R               | 393 +++++++++++++
- QuestionR/tests/smoke.R                | 459 +++++++++++++++
- QuestionR/www/skills/README.md         |  66 +++
- QuestionR/www/skills/attitudinal.md    |  72 +++
- QuestionR/www/skills/behavioral.md     |  67 +++
- QuestionR/www/skills/core.md           |  92 +++
- QuestionR/www/skills/cross_cultural.md |  66 +++
- QuestionR/www/skills/evaluate.md       | 117 ++++
- QuestionR/www/skills/generate.md       |  79 +++
- QuestionR/www/skills/mode.md           |  57 ++
- QuestionR/www/skills/pm_appraise.md    |  63 +++
- QuestionR/www/skills/pm_brief.md       |  42 ++
- QuestionR/www/skills/sensitive.md      |  90 +++
- README.md                              |   2 +
- 27 files changed, 5081 insertions(+)
+ CLAUDE.md                              |    1 +
+ QuestionR/.rscignore                   |    7 +
+ QuestionR/DESIGN.md                    |  533 ++++++++++
+ QuestionR/PROMPTS.md                   |  171 +++
+ QuestionR/R/_disable_autoload.R        |    5 +
+ QuestionR/R/checks.R                   |  267 +++++
+ QuestionR/R/flow.R                     |  213 ++++
+ QuestionR/R/llm.R                      |  592 +++++++++++
+ QuestionR/R/skills.R                   |  577 +++++++++++
+ QuestionR/R/ui.R                       |  180 ++++
+ QuestionR/R/ui_generate.R              |  606 +++++++++++
+ QuestionR/README.md                    |   43 +
+ QuestionR/REVIEW.md                    | 1128 ++++++++++++++++++++
+ QuestionR/STATUS.md                    | 1066 +++++++++++++++++++
+ QuestionR/app.R                        |  194 ++++
+ QuestionR/tests/llm_check.R            |  284 +++++
+ QuestionR/tests/llm_check.out          |   24 +
+ QuestionR/tests/openrouter_check.R     |   81 ++
+ QuestionR/tests/review.R               |  511 +++++++++
+ QuestionR/tests/smoke.R                | 1774 ++++++++++++++++++++++++++++++++
+ QuestionR/www/methodology.md           |   71 ++
+ QuestionR/www/skills/README.md         |   66 ++
+ QuestionR/www/skills/attitudinal.md    |   72 ++
+ QuestionR/www/skills/behavioral.md     |   67 ++
+ QuestionR/www/skills/core.md           |   92 ++
+ QuestionR/www/skills/cross_cultural.md |   66 ++
+ QuestionR/www/skills/evaluate.md       |  117 +++
+ QuestionR/www/skills/generate.md       |   79 ++
+ QuestionR/www/skills/mode.md           |   57 +
+ QuestionR/www/skills/pm_appraise.md    |   63 ++
+ QuestionR/www/skills/pm_brief.md       |   42 +
+ QuestionR/www/skills/sensitive.md      |   90 ++
+ README.md                              |    2 +
+ 33 files changed, 9141 insertions(+)
 exit status: 0
 ~~~~
 
@@ -79,17 +82,20 @@ exit status: 0
 
 | file | lines |
 |---|---|
-| app.R | 193 |
+| app.R | 194 |
 | R/_disable_autoload.R | 5 |
-| R/llm.R | 585 |
-| R/skills.R | 437 |
-| R/ui.R | 179 |
-| tests/llm_check.R | 190 |
+| R/checks.R | 269 |
+| R/flow.R | 221 |
+| R/llm.R | 592 |
+| R/skills.R | 577 |
+| R/ui.R | 180 |
+| R/ui_generate.R | 606 |
+| tests/llm_check.R | 284 |
 | tests/openrouter_check.R | 81 |
-| tests/review.R | 393 |
-| tests/smoke.R | 860 |
+| tests/review.R | 511 |
+| tests/smoke.R | 1794 |
 
-Code files counted: 7 of 8 allowed: PASS
+Code files counted: 10 of 10 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
 
 ## 3. Hard rules
@@ -102,11 +108,11 @@ R/_disable_autoload.R present and empty of code: PASS
 | Sys.setenv() in the app | none | PASS |
 | addResourcePath() or system.file() in the app | none | PASS |
 | parallelism (future, furrr, mirai, parallel, parallel_chat*) | none | PASS |
-| key read from the environment for a pasted-key model (Sys.getenv in R/, listed for reading) | R/llm.R:113 Sys.getenv | READ |
+| key read from the environment for a pasted-key model (Sys.getenv in R/, listed for reading) | R/llm.R:116 Sys.getenv | READ |
 
 Top-level expressions in R/ that are not assignments: PASS
 Names defined more than once across R/: PASS
-pkg::fn calls checked: 25. Not exported by the installed package: PASS
+pkg::fn calls checked: 28. Not exported by the installed package: PASS
 
 ## 4. Skill files
 
@@ -122,7 +128,7 @@ PASS means the file is byte for byte what the Claude project drafted (line endin
 | evaluate.md | PASS | 2952362b6d8e2efadff970a8b21069b768d7145808ec5b524ca8b98a998e57c1 |
 | generate.md | PASS | e196e81245b266fbc6321016575d932dbcb24311c366683475e8945c8bbaf738 |
 | mode.md | PASS | 98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0 |
-| pm_appraise.md | PASS | a34bcaff18ea705a863a337603505d958a940f8457b448fc030698b4773ed401 |
+| pm_appraise.md | PASS | ced64452127616e41906380b972fc100c3a11443cfdc564e615fe13ea78e0b57 |
 | pm_brief.md | PASS | a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a |
 | sensitive.md | PASS | 0ebc82a948f01caed0847f3d4a6cda87216f33dc3039e764cb8c1ab8ac45e726 |
 
@@ -238,7 +244,8 @@ ok  a reply that is not JSON is tried again, and the second one is returned
 ok  a transient error (503, a timeout) is tried again, and the third attempt succeeds
 ok  a reply that never parses fails after exactly three attempts
 ok  the failure names the model, the endpoint and why it stopped, and carries the raw reply
-ok  a reply cut off at the token limit is a failed attempt, even when what arrived would parse
+ok  a reply cut off at the token limit is a failure even when what arrived would parse, and is not tried again
+ok  the ceilings and the timeout are Kevin's Phase 3 settings
 ok  the echoed example object is a failed attempt, retried
 ok  a reply that fails the validator is tried again; one that passes is returned
 ok  a validator's own message reaches the analyst when every attempt fails
@@ -269,7 +276,8 @@ ok  a 401 is a client error, and the key the endpoint echoed back is blanked
 ok  a 502 with no content type is an error the analyst can read, and is not a client error
 ok  llm_json() through the real path: the echoed object comes back parsed, with the message as sent
 ok  a 404 through llm_json() makes one request, not three
-ok  a reply cut off at the ceiling is requested three times, then fails saying so
+ok  a reply cut off at the ceiling is requested once, then fails saying so and asking for fewer items
+ok  the same on the OpenAI-style call, whose ceiling is max_completion_tokens
 ok  the connection check's call: ready when the endpoint answers, one request each, the reply kept
 ok  the connection check's call: the endpoint's own words when it refuses, never the key
 ok  the connection check makes no call for a model with no key, and says what to do
@@ -281,6 +289,137 @@ ok  the result shows ready, the endpoint's words for a refusal, and what a keyle
 ok  pasting a key makes the project manager ready, with no key on the page
 ok  with a key the project manager is called as well, and no key is on the page
 ok  Start here has the models table and the Check connections button
+ok  TASKS has the four tasks, each with a label, a kind, files, an ask and fields
+ok  a task's kind is draft or review, and only Evaluate is a review
+ok  every file a task names is a skill file, core.md leads, and mode.md is in
+ok  every field a task shows is a field of the form, and none is the task itself
+ok  a drafting task asks for items and shows the count; a review shows the questionnaire instead
+ok  a task that is not in the registry stops, naming the choices
+ok  TASK_FILES and TASK_ASK are gone: the registry is the only place
+ok  build_step_prompt(form, step, candidates), and build_prompt(form) is its work step
+ok  an unknown step stops, naming the three
+ok  the brief check sends core, pm_brief and the task's own files, in that order
+ok  the brief check's system prompt holds the brief rules and the task's rules, and no drafting output format
+ok  the brief check's user message is PREPARE, ASK, CHECKLIST, CHARACTERIZE, with pm_brief's output format
+ok  the brief check names the task the analyst chose, and its CHECKLIST is exactly build_checklist(form)
+ok  the brief check is deterministic, and holds no Source text, comment or Check field
+ok  the brief check's Check questions are in its user message only, never in the system prompt
+ok  the brief check's hash differs from the work prompt's, and a changed field changes it
+ok  the appraisal sends core and pm_appraise only, and none of the drafting rules
+ok  the appraisal's user message is PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE, in that order
+ok  the appraisal's CHECKLIST is exactly what the workers' files give, and their questions are not in the system prompt
+ok  the appraisal says how many candidates and how many items each was asked for
+ok  each candidate is one JSON line with its letter, its stems, its options, its parts and its decisions
+ok  a worker's own notes never reach the appraisal, and an empty source_english is left out
+ok  the appraisal is deterministic and its hash follows the candidates
+ok  the appraisal holds no Source text, comment or Check field
+ok  the appraisal stops for a review task, and for no candidate or an unnamed one
+ok  a draft with the number of items asked for, each closed or open, passes
+ok  a draft with too many or too few items fails, saying how many and how many were asked for
+ok  questions in an item's parts are not counted as items
+ok  a reply with no items field, or an item with no stem, id or domain, fails naming the field
+ok  an item with neither options nor an open_format fails, naming the item
+ok  a reply that is not an object, or whose items are not a list, fails
+ok  the draft validator is what llm_json() is given: a fields problem is a readable sentence ending in a full stop
+ok  a brief check with its fields passes; one with a string for complete, or a question with no ask, fails
+ok  an appraisal with its six fields passes, empty lists included; a missing limits or a fail with no check fails
+ok  a format that has no schema stops, naming it
+ok  a new output format is one entry: the validator is built from REPLY_SCHEMAS alone
+ok  coded defaults match the hand-coded fixture: five labelled points and a don't know
+ok  coded defaults match the hand-coded fixture: four points, end labels only, a reference period, no don't know
+ok  coded defaults match the hand-coded fixture: an open item
+ok  coded defaults match the hand-coded fixture: a curly apostrophe and a not-applicable option
+ok  coded defaults match the hand-coded fixture: French: points, don't know and period are not coded
+ok  coded defaults match the hand-coded fixture: an item with only a stem and options
+ok  the coded defaults read as words for a table, with not coded where it is
+ok  an appraisal's fails are read with whether each check is an id that was sent
+ok  an item the appraiser gave no entry is not appraised, not a pass; an entry for no item is flagged
+ok  a merged item that does not exist, or that failed a check, is a problem; an empty domain is not
+ok  an appraisal with nothing wrong has no flags
+ok  each result has exactly the fields the design names
+ok  the flow makes one brief call, one call per worker in the workers' order, and one appraisal call
+ok  each call gets its step's ceiling, and the brief and appraisal hold no worker's name
+ok  every worker gets the same approved prompt, which is the list's 'prompt' attribute
+ok  the brief check's prompt is the brief step's, and its reply is kept
+ok  an ok draft keeps its parsed reply and a time; the model is the id the endpoint is called by
+ok  the labels are A, B, C over the three models, the same for the same seed, and not the workers' order for every seed
+ok  candidate A is the draft of the model labelled A, whatever the seed
+ok  shuffling by seed leaves the random number generator alone
+ok  the appraisal prompt shows each letter with the draft of the model that letter stands for, and no model name anywhere
+ok  the appraisal's status, hash and reply are kept, and its error is empty
+ok  a worker that errors, and one that returns the wrong number of items, are failed with their reasons; the first still arrives
+ok  the appraisal covers only the drafts that arrived: one candidate, A, over the one model that answered
+ok  a failed appraisal is recorded with its reason and the labels, and nothing is raised
+ok  with no draft there is nothing to appraise, and the project manager is not called
+ok  a brief check that errors, or whose form cannot become a prompt, is failed with a plain reason and is not raised
+ok  a reply the brief validator refuses is a failed brief check
+ok  a model's name in a draft stops the appraisal before it is sent, saying why, and the call is not made
+ok  an edited prompt is the one sent to every worker, and is kept as the list's attribute
+ok  run_drafts needs a task that drafts, a prompt that is a prompt, and run_appraisal a seed
+ok  the engine reaches a model only through ask, and never looks up a key: no flow function calls Sys.getenv or llm_key_for
+ok  through llm_json(): a draft with the wrong number of items is retried until it is right, and the whole flow is ok
+ok  the call record keeps the reply as sent, why it stopped, the tokens and the attempts
+ok  the round is the log: schema 1, the time and a summary first, then the form, seed, prompts and replies, as valid JSON
+ok  the summary has one row per call with the step, model, status, seconds, tokens and attempts
+ok  no key is in the log, though the call that made it was given one
+ok  a round with only the form is a valid log too
+ok  the state object is made from STATE_DEFAULTS, and every field a module uses is in it
+ok  every field any task lists has a widget spec, so a new task that reuses fields needs no screen change
+ok  the registry's progress_ask announces the model on the page before it makes each call
+ok  Skip carries the cleaned form and the ticked workers on, marks the brief skipped, and moves to the prompt
+ok  a form that cannot be a prompt says why on the page, and goes nowhere
+ok  no worker ticked says so, and goes nowhere
+ok  no number of items says so, and goes nowhere
+ok  the brief check without the project manager's key says what to do and makes no call
+ok  with a key the brief check makes one call to the project manager and shows its questions and criteria
+ok  the brief check's prompt is the brief step's, and no key is on the page
+ok  Continue after a check keeps the check and moves to the prompt
+ok  a brief check that fails is said on the page in words, with the reason, and offers to skip
+ok  a field the chosen task does not show is blank in the form, whatever was typed there before
+ok  a field the task does show is carried (the reference period, for behavioral items)
+ok  Evaluate carries its questionnaire, no item count and no workers, and says it is built in Phase 4
+ok  a requested change is shown on the Brief tab with the round it belongs to, and can be dropped
+ok  the change goes into the form as its revision, and so into the prompt as a REVISION block
+ok  dropping the change clears it
+ok  the Brief tab has the dropdown, the form, a box per worker, the check and the skip button
+ok  each field is shown for exactly the tasks that list it, and the worker boxes for the drafting tasks
+ok  a task added to TASKS is in the dropdown, its fields are shown for it, and it assembles a prompt
+ok  a worker added to the model list gets its own box, and nothing else changes
+ok  the registry and the model list are back as they were
+ok  with no form the Prompt tab asks for the Brief first
+ok  the assembled prompt is shown whole and editable, with the skill files used
+ok  an untouched prompt is shown as assembled, with its hash
+ok  approving it as it is records it unedited, with one hash, starts a run and moves to Results
+ok  an edited prompt is marked edited, showing both hashes
+ok  approving an edited prompt sends the edited text, marks it edited, and keeps both hashes
+ok  a browser's line endings are not an edit
+ok  an empty prompt is refused on the page, and no run starts
+ok  Evaluate's prompt can be read but not run: the button is off and the page says why
+ok  pressing it anyway starts nothing, and says so
+ok  before any run the Results tab says nothing has been run
+ok  a run makes one call per worker and one for the appraisal, and records the round in the state and the log
+ok  each candidate is shown by letter with its items, options and the model that wrote it
+ok  each item shows the coded defaults and has a tick box to keep it
+ok  a failed check is shown with the appraiser's failing words and the check's question; one that was not sent is flagged
+ok  an item the appraiser gave no entry is not shown as passed
+ok  below the candidates: coverage, differences, the merged option labelled untested, what to test first, the limits
+ok  R's checks on the appraisal are shown: the check that was not sent, and the items given no entry
+ok  the criteria applied are listed, and the prompt hash and seed are shown, with no model name given to the appraiser
+ok  ticking items records them by candidate letter, position and id, and unticking removes them
+ok  an item unticked is no longer kept
+ok  a second run is a second round in the log, with nothing kept
+ok  a worker that failed is listed with its reason, the other two are shown, and the appraisal covers two candidates
+ok  a failed appraisal is said in words with its reason; the candidates are still shown, none marked appraised
+ok  a run that cannot start (no form) stops with a plain sentence on the page, not an error
+ok  Run again is not offered before there is a round to run again
+ok  after a round, Run again offers a box for what to change
+ok  what is typed becomes the revision, trimmed, and the Brief tab opens with the form as it was
+ok  a blank box clears the revision and still goes back to the brief
+ok  the page has the Generate tabs' controls, and the later tabs are still placeholders
+ok  no key is anywhere on the page
+ok  the log keeps the brief check's and the appraisal's own call records: raw reply, tokens, attempts
+ok  a model's own words for labelling every point are read as yes, in the phrasings the live run produced
+ok  labels said to be partial or absent are read as no, and a silence is not stated
 exit status: 0
 ~~~~
 
@@ -1069,35 +1208,35 @@ Lines in R/llm.R that build calls or handle keys:
 ~~~~
 9: #   "anthropic" calls ellmer::chat_anthropic(); "openai" calls
 10: #   ellmer::chat_openai_compatible(), which takes the base URL of any
-17: # max_tokens for each step (DESIGN.md section 6). A reply that reaches the
-101: # The one place the environment is read, and only for a model whose key_source
-102: #   is "server": the variable named in its key_var. A model whose key_source is
-107:   switch(m$key_source %||% "",
-110:       if (is.null(m$key_var) || !nzchar(m$key_var))
-111:         llm_fail(paste0("The model ", m$id, " has key_source 'server' and no key_var."),
-113:       k = Sys.getenv(m$key_var)
-116:     llm_fail(paste0("The model ", m$id, " has key_source '", m$key_source,
-125:   if (identical(m$key_source, "server"))
-126:     paste0("Set the server variable ", m$key_var, ".")
-137: llm_host <- function(m) sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url)
-158: #   in a closure (credentials is a function), never through the environment. No
-159: #   temperature is sent unless the model's entry sets one: repeatability comes
-162: llm_chat <- function(m, system_prompt, max_tokens, key) {
-166:   params = ellmer::params(temperature = m$temperature, max_tokens = max_tokens)
-168:     anthropic = ellmer::chat_anthropic(
-170:       cache = LLM_CACHE, base_url = m$base_url,
-171:       credentials = function() key, echo = "none"),
-172:     openai = ellmer::chat_openai_compatible(
-173:       base_url = m$base_url, name = llm_host(m), system_prompt = system_prompt,
-174:       credentials = function() key, model = m$id, params = params,
-184: #   stopped, as ellmer standardises it: "success", "max_tokens", ...), tokens
-186: llm_complete <- function(m, system_prompt, user, max_tokens,
-190:   chat = llm_chat(m, system_prompt, max_tokens, key)
-394: #   environment for a model whose key_source is "analyst". complete is the
-401: llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
-422:     out = complete(m, system_prompt, ask, max_tokens, key)
-431:     if (identical(finish, "max_tokens"))
-432:       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
+17: # max_tokens for each step (DESIGN.md sections 6 and 12). A reply that reaches
+104: # The one place the environment is read, and only for a model whose key_source
+105: #   is "server": the variable named in its key_var. A model whose key_source is
+110:   switch(m$key_source %||% "",
+113:       if (is.null(m$key_var) || !nzchar(m$key_var))
+114:         llm_fail(paste0("The model ", m$id, " has key_source 'server' and no key_var."),
+116:       k = Sys.getenv(m$key_var)
+119:     llm_fail(paste0("The model ", m$id, " has key_source '", m$key_source,
+128:   if (identical(m$key_source, "server"))
+129:     paste0("Set the server variable ", m$key_var, ".")
+140: llm_host <- function(m) sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url)
+161: #   in a closure (credentials is a function), never through the environment. No
+162: #   temperature is sent unless the model's entry sets one: repeatability comes
+165: llm_chat <- function(m, system_prompt, max_tokens, key) {
+169:   params = ellmer::params(temperature = m$temperature, max_tokens = max_tokens)
+171:     anthropic = ellmer::chat_anthropic(
+173:       cache = LLM_CACHE, base_url = m$base_url,
+174:       credentials = function() key, echo = "none"),
+175:     openai = ellmer::chat_openai_compatible(
+176:       base_url = m$base_url, name = llm_host(m), system_prompt = system_prompt,
+177:       credentials = function() key, model = m$id, params = params,
+187: #   stopped, as ellmer standardises it: "success", "max_tokens", ...), tokens
+189: llm_complete <- function(m, system_prompt, user, max_tokens,
+193:   chat = llm_chat(m, system_prompt, max_tokens, key)
+399: #   environment for a model whose key_source is "analyst". complete is the
+406: llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
+427:     out = complete(m, system_prompt, ask, max_tokens, key)
+436:     if (identical(finish, "max_tokens"))
+437:       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
 ~~~~
 Live check output (tests/llm_check.out), verbatim:
 ~~~~
@@ -1125,4 +1264,89 @@ Review prompt hash: 907cea17ade3998b18d48d0974ad2c5a381fb3f84737962a8167cd0c6a89
       reply (first 300): {"items":[{"id":"Q1","findings":[{"check":"one_thing","stage":"judgment","evidence":"'the recycling services and street cleaning provided by your local council'","problem":"Two different services are joined by 'and' under one rating. A respondent who is happy with recycling but unhappy with street c
 
 ALL GREEN: TRUE  (8 of 8 calls)
+~~~~
+
+## 8. Registry and flow engine
+
+| check | result |
+|---|---|
+| TASKS has the four tasks, each with label, kind, files, ask, fields | PASS |
+| task kinds are draft or review, evaluate is review | PASS |
+| build_step_prompt(form, 'work') equals build_prompt(form) | PASS |
+| brief check: status ok, reply has questions and criteria | PASS |
+| brief check prompt: persona, pm_brief and the task's rules; no drafting output format | PASS |
+| drafts: one entry per worker, in order, all ok | PASS |
+| each ok draft keeps the parsed reply with 2 items | PASS |
+| a worker error and a wrong item count are recorded as failed, with a reason, and the run goes on | PASS |
+| appraisal: status ok, labels A, B, C map onto the three model ids | PASS |
+| same seed gives the same labels | PASS |
+| only drafts that are ok become candidates | PASS |
+| no model id, vendor or endpoint reaches the appraisal prompt | PASS |
+| appraisal prompt: CANDIDATES then CHECKLIST then CHARACTERIZE, with the stems and the check questions | PASS |
+| appraisal system prompt: persona and pm_appraise rules, not the drafting rules | PASS |
+| flow.R has no Shiny in it | PASS |
+| flow.R never looks up a key | PASS |
+
+Live run log (tests/run_generate.json), first 60 lines:
+~~~~
+{
+  "schema": 1,
+  "time": "2026-11-11T22:06:27-0500",
+  "summary": [
+    {
+      "step": "brief check",
+      "model": "claude-sonnet-5-5",
+      "status": "failed",
+      "seconds": 17.2372,
+      "finish": null,
+      "attempts": null,
+      "tokens_in": null,
+      "tokens_out": null,
+      "error": "[claude-sonnet-5-5 via api.anthropic.com, finish: max_tokens] The reply reached the token limit (2000) without finishing, so it was cut off. Ask for fewer items and run again. It starts: {\"complete\": false, \"questions\": [{\"ask\": \"Which country is this for, and what is the official name of the national elec"
+    },
+    {
+      "step": "draft",
+      "model": "google/gemma-4-31b-it",
+      "status": "ok",
+      "seconds": 26.3108,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 2889,
+      "tokens_out": 700,
+      "error": null
+    },
+    {
+      "step": "draft",
+      "model": "meta-llama/llama-4-maverick",
+      "status": "ok",
+      "seconds": 8.3293,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 2784,
+      "tokens_out": 614,
+      "error": null
+    },
+    {
+      "step": "draft",
+      "model": "openai/gpt-6-luna",
+      "status": "ok",
+      "seconds": 52.8825,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 2779,
+      "tokens_out": 4550,
+      "error": null
+    },
+    {
+      "step": "appraisal",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "seconds": 91.0643,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 5320,
+      "tokens_out": 12961,
+      "error": null
+    }
+  ],
 ~~~~

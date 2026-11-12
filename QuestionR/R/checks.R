@@ -162,7 +162,9 @@ LABEL_NO_PATTERNS <- c("end ?points?[^.;]{0,25}only", "only[^.;]{0,15}end ?point
                        "only the (end|first|last)", "numeric(al)? only", "numbers only",
                        "unlabell?ed", "not (all )?labell?ed", "no (verbal )?labels?")
 LABEL_YES_PATTERNS <- c("(fully|all|every|each)[^.;]{0,40}labell?ed", "labell?ed[^.;]{0,20}(all|every|each)",
-                        "every (point|option)[^.;]{0,30}label", "verbal label")
+                        "every (point|option|response)[^.;]{0,30}label", "verbal label",
+                        "label (every|each|all)", "all labels? (are |is )?present",
+                        "labels? (are |is )?(all )?present")
 
 matches_any <- function(patterns, txt)
   any(purrr::map_lgl(patterns, function(p) grepl(p, txt, ignore.case = TRUE, perl = TRUE)))

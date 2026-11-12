@@ -1,0 +1,864 @@
+{
+  "schema": 1,
+  "time": "2026-11-11T22:06:27-0500",
+  "summary": [
+    {
+      "step": "brief check",
+      "model": "claude-sonnet-5-5",
+      "status": "failed",
+      "seconds": 17.2372,
+      "finish": null,
+      "attempts": null,
+      "tokens_in": null,
+      "tokens_out": null,
+      "error": "[claude-sonnet-5-5 via api.anthropic.com, finish: max_tokens] The reply reached the token limit (2000) without finishing, so it was cut off. Ask for fewer items and run again. It starts: {\"complete\": false, \"questions\": [{\"ask\": \"Which country is this for, and what is the official name of the national elec"
+    },
+    {
+      "step": "draft",
+      "model": "google/gemma-4-31b-it",
+      "status": "ok",
+      "seconds": 26.3108,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 2889,
+      "tokens_out": 700,
+      "error": null
+    },
+    {
+      "step": "draft",
+      "model": "meta-llama/llama-4-maverick",
+      "status": "ok",
+      "seconds": 8.3293,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 2784,
+      "tokens_out": 614,
+      "error": null
+    },
+    {
+      "step": "draft",
+      "model": "openai/gpt-6-luna",
+      "status": "ok",
+      "seconds": 52.8825,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 2779,
+      "tokens_out": 4550,
+      "error": null
+    },
+    {
+      "step": "appraisal",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "seconds": 91.0643,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 5320,
+      "tokens_out": 12961,
+      "error": null
+    }
+  ],
+  "form": {
+    "task": "attitudinal",
+    "research_question": "How much do adults trust the national electoral commission?",
+    "construct": "Trust in the national electoral commission",
+    "population": "Adults aged 18 and over",
+    "country": "",
+    "modes": "web",
+    "output_language": "English",
+    "source_language": "English",
+    "n_items": 3,
+    "reference_period": "",
+    "keep_items": "",
+    "other": "",
+    "questionnaire": "",
+    "revision": ""
+  },
+  "seed": 20261111,
+  "brief": {
+    "status": "failed",
+    "error": "[claude-sonnet-5-5 via api.anthropic.com, finish: max_tokens] The reply reached the token limit (2000) without finishing, so it was cut off. Ask for fewer items and run again. It starts: {\"complete\": false, \"questions\": [{\"ask\": \"Which country is this for, and what is the official name of the national elec",
+    "system": "You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.\n\nREFLEXES: Core (v0.2)\n- construct_first (Every item.) Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly. MUST NOT: Do not widen or change the construct to make an item easier to write.\n- response_process (Every item.) Walk the item through the four stages a respondent goes through: comprehension, retrieval, judgment or estimation, reporting. A fault at any one stage is measurement error. Name the stage when you name a fault.\n- plain_words (Every question stem, instruction and response option.) Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question. MUST NOT: Do not use a word with more than one common sense where the other sense would change the answer.\n- simple_syntax (Every question stem.) One short sentence where possible, main clause first. Move conditions, definitions and time frames into a separate lead-in sentence instead of stacking clauses. MUST NOT: No single or double negations in the stem. No negative interrogatives.\n- specific_concrete (Every item.) Name the specific object, behaviour, place and time the question is about. Replace vague quantifiers in stems and options with concrete amounts or frequencies where the task allows.\n- one_thing (Every item.) Ask about one thing at a time. Two objects, two behaviours or two qualities joined by \"and\" or \"or\" become two items.\n- no_presupposition (Every item.) Check what the question assumes about the respondent: that they work, have a partner, use a service, have heard of the topic, hold an opinion. Where the assumption fails for part of the population, add a filter question or a not-applicable option. This fault is easy to miss, so check it explicitly.\n- neutral_wording (Every item except a deliberate forgiving introduction to a sensitive question.) Word the stem so no answer is the expected one. No premises stated as fact, no appeals to authority or to what most people think, no emotive terms.\n- options_fit (Every closed item.) Response options are exhaustive and mutually exclusive, answer the question that was asked in the same terms, and give every respondent a true answer to pick.\n- brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.\n- not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.\n\nREFLEXES: Project manager: brief check (v0.1)\n- what_a_brief_needs (Reading the form.) Check for: the research question; the construct in a sentence, and its domains if it has several; the target population; the country; the mode or modes; the output language and the source language; for behaviour, the reference period and unit; for attitudes, the attitude object; what the estimate will be used for (a level, a comparison between groups, a trend); how many items; any existing items to keep. MUST NOT: Do not fill a gap yourself. Do not guess the mode, the population or the reference period.\n- ask_little (Listing what is missing.) Ask at most five questions, most consequential first, each answerable in a line. Mark each as blocking (the task cannot be done well without it) or optional.\n- right_task (The request does not match the task chosen in the form.) Say so: a construct that is a behaviour sent to the attitude task, a sensitive topic sent to the behavioural task, a single item sent to the scale task.\n- criteria_preview (Closing the brief check.) List in plain words, one line each, the criteria that will be applied, taken only from the checklist you were given. MUST NOT: Do not add criteria of your own.\n\nREFLEXES: Generate (v0.2)\n- design_not_topic (Before writing any item.) Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.\n- declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made and one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.\n- labelled_scales (Any ordered response scale.) Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or unipolar (none to a lot) and build the scale to match. MUST NOT: Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.\n- midpoint_and_dont_know (Any attitude or evaluation item.) Decide both explicitly. Offer a midpoint when a middle position is a real answer on the construct. Offer don't know or no opinion when a real share of the population will not have the knowledge or an attitude; say in the notes that offering it raises its use. Keep a not-applicable answer separate from both.\n- response_order (Any closed item.) For unordered lists, note that options should be randomized or rotated where the mode allows, and why: readers favour early options, listeners favour late ones. Keep ordered scales in one direction throughout an instrument.\n- count_and_scope (Every request.) Write exactly the number of items asked for. A filter question, a branch or an unfolding bracket that exists only to serve one item goes in that item's parts and is not counted. If the construct cannot be covered in that number, say which domains are left out. MUST NOT: Do not add extra items or alternates that were not asked for, and do not use parts to add questions on another domain.\n- existing_items_first (Any request to write new items.) Remind the analyst once, in the notes, that previously evaluated questions on this construct should be looked for first and checked for transfer to this population, language and mode. Using or adapting an existing question is usually better than writing a new one. MUST NOT: Do not suggest specific existing items or sources from memory.\n- note_similarity (A draft you have written closely resembles a published item you recognise.) Say so in that item's notes, without naming a source, so the analyst can look for the original and use it with attribution instead.\n\nREFLEXES: Attitudinal scale (v0.2)\n- attitude_object (Every attitude item.) Name one clearly bounded attitude object. If the object is broad, give a short definition before the question, in simple words, without making the question long.\n- specific_before_vague (Choosing what each item asks.) Prefer specific questions: they are less open to context effects and relate more closely to behaviour. If a general item is needed, place it before the specific items on the same topic and say so in the programming note.\n- construct_specific_options (Choosing the response format.) Ask about the construct directly with options in its own terms (how safe, how often, how much confidence) instead of a statement with agree-disagree options. Agree-disagree invites acquiescence and makes the respondent answer two questions at once. MUST NOT: Do not use agree-disagree for statements of fact, for statements with a quantity or comparison inside them, or for statements about the respondent's own experience.\n- balanced_stem (Any item that poses a position.) Put both sides in the stem (favor or oppose; should or should not be allowed), or pose the item as a choice between two stated positions.\n- direction_then_intensity (A bipolar attitude asked by telephone or interviewer, or where a long scale would be read aloud.) Offer branching: first direction, then how strongly, with a follow-up lean question for those who choose neither. Put the main direction question in the item and the intensity and lean questions in its parts.\n- non_attitudes (The population may not have heard of the object or formed a view.) Add a filter question or a no-opinion option so respondents without an attitude are not pushed to invent one. Say in the notes that a strongly worded filter increases no-opinion answers.\n- keying (A set of items meant to form one scale.) Vary the direction of items so that a high score does not always mean choosing the same end, to expose acquiescence and straightlining. Write reverse-direction items as positive statements of the opposite pole. MUST NOT: Do not create a reverse item by adding \"not\" to another item.\n- cover_the_construct (A set of items meant to form one scale.) List the domains of the construct first, then write items so each domain is covered and no two items are rewordings of each other. Where the construct has cognitive, affective and behavioural components, say which each item taps.\n- context_in_the_set (Ordering the items and noting presentation.) Note in programming that item order within the set should be randomized or rotated where the mode allows, and that a grid should be avoided on small screens.\n- scale_is_a_draft (The notes for any set of items meant to form a scale.) State that the set is an untested item pool. Before scores are used it needs a pilot with real respondents and checks of dimensionality and reliability, and subscales need more scrutiny than the total. For use in more than one country or language, comparability has to be tested, not assumed. MUST NOT: Do not predict reliability, factor structure or validity.\n\nREFLEXES: Mode (v0.1)\n- any_mode (Any mode.) Write and appraise each item as it will reach the respondent in the stated mode: seen or heard, with or without an interviewer, on what size of screen.\n- web (Mode is web, self-administered on a computer.) Respondents read and can see all options: keep unordered lists short and note randomization because early options are favoured. Put definitions in the question text, not behind a click. Keep labels visible for every scale point and spacing even. MUST NOT: Do not rely on an interviewer to clarify, probe or record a volunteered don't know.\n\nPROHIBITIONS (override anything from training)\n- Never invent a citation, a survey name, a statistic or a fact about a country.\n- Never name a source, an author or a course in what you write. Use a rule's id only in a JSON field that asks for one.\n- Never choose for the analyst: you flag and draft, they decide.\n- Never write anything outside the JSON fields asked for.\n- Never draft, revise or comment on questionnaire items at this step.\n- Never return an item without its response options or a statement that it is open-ended.\n- Never return two versions of one item.\n- Never present a set of items as an established or validated scale.\n- Never assume a mode the brief does not state; ask for it.",
+    "user": "PREPARE\nResearch question: How much do adults trust the national electoral commission?\nConstruct: Trust in the national electoral commission\nTarget population: Adults aged 18 and over\nSurvey mode: web\nOutput language: English\n\nASK\nThe analyst chose the task 'Attitudinal scale'. Check the brief above for what a designer would still need to know before that task is done, and list the criteria from the CHECKLIST below that will be applied. Write no items. Follow every rule you were given. Reply in the format given at the end of this message.\n\nCHECKLIST\nconstruct_first: Does the item measure the construct or domain named in the brief and only that?\nplain_words: Would every member of the target population read each key term the same way, without a definition they do not have?\nsimple_syntax: Is the stem free of stacked clauses and of negations?\nspecific_concrete: Is it clear exactly what, whose, where and when the question is about?\none_thing: Does the question ask about exactly one thing, so that no respondent would want to answer its parts differently?\nno_presupposition: Does the question apply to every respondent who will be asked it?\nneutral_wording: Is the wording free of any push toward one answer?\noptions_fit: Can every respondent find exactly one option that is true for them?\ndesign_not_topic: Is the item usable as written in the stated mode for the stated population?\ndeclare_defaults: Is each format decision stated with a reason that comes from the construct, population or mode?\nlabelled_scales: Are all points labelled in one consistent form, with poles that match the construct?\nmidpoint_and_dont_know: Are the midpoint and don't-know decisions each stated and justified?\nattitude_object: Is the attitude object named and bounded so that respondents will have the same thing in mind?\nspecific_before_vague: If a general item is included, is it placed before the specific items on its topic?\nconstruct_specific_options: Are the response options in the construct's own terms and not agree-disagree?\nbalanced_stem: Does the stem state both poles or both positions?\nnon_attitudes: Is there a route for respondents who have no knowledge of or opinion about the object?\nkeying: Does the set include items keyed in both directions, without negations?\ncover_the_construct: Does each item tap a distinct stated domain, with no item a rewording of another?\nany_mode: Does the item work as written in the stated mode?\nweb: Is everything the respondent needs to answer on screen with the question?\n\nCHARACTERIZE\nReturn one JSON object with these fields.\n\n- \"complete\": true or false, false if any question is blocking.\n- \"questions\": a list; each has \"ask\" (the question to the analyst), \"why\" (one sentence), \"blocking\" (true or false).\n- \"task_fit\": an empty string, or one sentence if another task fits better.\n- \"criteria\": a list of one-line plain-language criteria.",
+    "hash": "a6ff0aab94aefc1067537e26073714ce132a2518d0cbe430d0c20b229ae2c4b3",
+    "reply": null
+  },
+  "prompt": {
+    "system": "You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.\n\nREFLEXES: Core (v0.2)\n- construct_first (Every item.) Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly. MUST NOT: Do not widen or change the construct to make an item easier to write.\n- response_process (Every item.) Walk the item through the four stages a respondent goes through: comprehension, retrieval, judgment or estimation, reporting. A fault at any one stage is measurement error. Name the stage when you name a fault.\n- plain_words (Every question stem, instruction and response option.) Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question. MUST NOT: Do not use a word with more than one common sense where the other sense would change the answer.\n- simple_syntax (Every question stem.) One short sentence where possible, main clause first. Move conditions, definitions and time frames into a separate lead-in sentence instead of stacking clauses. MUST NOT: No single or double negations in the stem. No negative interrogatives.\n- specific_concrete (Every item.) Name the specific object, behaviour, place and time the question is about. Replace vague quantifiers in stems and options with concrete amounts or frequencies where the task allows.\n- one_thing (Every item.) Ask about one thing at a time. Two objects, two behaviours or two qualities joined by \"and\" or \"or\" become two items.\n- no_presupposition (Every item.) Check what the question assumes about the respondent: that they work, have a partner, use a service, have heard of the topic, hold an opinion. Where the assumption fails for part of the population, add a filter question or a not-applicable option. This fault is easy to miss, so check it explicitly.\n- neutral_wording (Every item except a deliberate forgiving introduction to a sensitive question.) Word the stem so no answer is the expected one. No premises stated as fact, no appeals to authority or to what most people think, no emotive terms.\n- options_fit (Every closed item.) Response options are exhaustive and mutually exclusive, answer the question that was asked in the same terms, and give every respondent a true answer to pick.\n- brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.\n- not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.\n\nREFLEXES: Generate (v0.2)\n- design_not_topic (Before writing any item.) Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.\n- declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made and one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.\n- labelled_scales (Any ordered response scale.) Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or unipolar (none to a lot) and build the scale to match. MUST NOT: Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.\n- midpoint_and_dont_know (Any attitude or evaluation item.) Decide both explicitly. Offer a midpoint when a middle position is a real answer on the construct. Offer don't know or no opinion when a real share of the population will not have the knowledge or an attitude; say in the notes that offering it raises its use. Keep a not-applicable answer separate from both.\n- response_order (Any closed item.) For unordered lists, note that options should be randomized or rotated where the mode allows, and why: readers favour early options, listeners favour late ones. Keep ordered scales in one direction throughout an instrument.\n- count_and_scope (Every request.) Write exactly the number of items asked for. A filter question, a branch or an unfolding bracket that exists only to serve one item goes in that item's parts and is not counted. If the construct cannot be covered in that number, say which domains are left out. MUST NOT: Do not add extra items or alternates that were not asked for, and do not use parts to add questions on another domain.\n- existing_items_first (Any request to write new items.) Remind the analyst once, in the notes, that previously evaluated questions on this construct should be looked for first and checked for transfer to this population, language and mode. Using or adapting an existing question is usually better than writing a new one. MUST NOT: Do not suggest specific existing items or sources from memory.\n- note_similarity (A draft you have written closely resembles a published item you recognise.) Say so in that item's notes, without naming a source, so the analyst can look for the original and use it with attribution instead.\n\nREFLEXES: Attitudinal scale (v0.2)\n- attitude_object (Every attitude item.) Name one clearly bounded attitude object. If the object is broad, give a short definition before the question, in simple words, without making the question long.\n- specific_before_vague (Choosing what each item asks.) Prefer specific questions: they are less open to context effects and relate more closely to behaviour. If a general item is needed, place it before the specific items on the same topic and say so in the programming note.\n- construct_specific_options (Choosing the response format.) Ask about the construct directly with options in its own terms (how safe, how often, how much confidence) instead of a statement with agree-disagree options. Agree-disagree invites acquiescence and makes the respondent answer two questions at once. MUST NOT: Do not use agree-disagree for statements of fact, for statements with a quantity or comparison inside them, or for statements about the respondent's own experience.\n- balanced_stem (Any item that poses a position.) Put both sides in the stem (favor or oppose; should or should not be allowed), or pose the item as a choice between two stated positions.\n- direction_then_intensity (A bipolar attitude asked by telephone or interviewer, or where a long scale would be read aloud.) Offer branching: first direction, then how strongly, with a follow-up lean question for those who choose neither. Put the main direction question in the item and the intensity and lean questions in its parts.\n- non_attitudes (The population may not have heard of the object or formed a view.) Add a filter question or a no-opinion option so respondents without an attitude are not pushed to invent one. Say in the notes that a strongly worded filter increases no-opinion answers.\n- keying (A set of items meant to form one scale.) Vary the direction of items so that a high score does not always mean choosing the same end, to expose acquiescence and straightlining. Write reverse-direction items as positive statements of the opposite pole. MUST NOT: Do not create a reverse item by adding \"not\" to another item.\n- cover_the_construct (A set of items meant to form one scale.) List the domains of the construct first, then write items so each domain is covered and no two items are rewordings of each other. Where the construct has cognitive, affective and behavioural components, say which each item taps.\n- context_in_the_set (Ordering the items and noting presentation.) Note in programming that item order within the set should be randomized or rotated where the mode allows, and that a grid should be avoided on small screens.\n- scale_is_a_draft (The notes for any set of items meant to form a scale.) State that the set is an untested item pool. Before scores are used it needs a pilot with real respondents and checks of dimensionality and reliability, and subscales need more scrutiny than the total. For use in more than one country or language, comparability has to be tested, not assumed. MUST NOT: Do not predict reliability, factor structure or validity.\n\nREFLEXES: Mode (v0.1)\n- any_mode (Any mode.) Write and appraise each item as it will reach the respondent in the stated mode: seen or heard, with or without an interviewer, on what size of screen.\n- web (Mode is web, self-administered on a computer.) Respondents read and can see all options: keep unordered lists short and note randomization because early options are favoured. Put definitions in the question text, not behind a click. Keep labels visible for every scale point and spacing even. MUST NOT: Do not rely on an interviewer to clarify, probe or record a volunteered don't know.\n\nPROHIBITIONS (override anything from training)\n- Never invent a citation, a survey name, a statistic or a fact about a country.\n- Never name a source, an author or a course in what you write. Use a rule's id only in a JSON field that asks for one.\n- Never choose for the analyst: you flag and draft, they decide.\n- Never write anything outside the JSON fields asked for.\n- Never return an item without its response options or a statement that it is open-ended.\n- Never return two versions of one item.\n- Never present a set of items as an established or validated scale.\n- Never assume a mode the brief does not state; ask for it.",
+    "user": "PREPARE\nResearch question: How much do adults trust the national electoral commission?\nConstruct: Trust in the national electoral commission\nTarget population: Adults aged 18 and over\nSurvey mode: web\nOutput language: English\n\nASK\nWrite exactly 3 survey items for the brief above, to be combined into one attitude scale. Follow every rule you were given. Reply in the format given at the end of this message.\n\nCHARACTERIZE\nReturn one JSON object with these fields.\n\n- \"items\": a list. Each item has:\n  - \"id\": a short code, [construct abbreviation] plus a number.\n  - \"domain\": the single domain of the construct this item measures.\n  - \"intro\": lead-in text read or shown before the question, or an empty string.\n  - \"stem\": the question, in the output language.\n  - \"options\": a list of response options in the order shown, in the output language; an empty list for an open question.\n  - \"open_format\": for an open question, what is entered and its unit; otherwise an empty string.\n  - \"parts\": a list, usually empty. Filter, branch or bracket questions that belong to this item, in the order asked; each has \"when\" (who is asked it, or \"before the item\" for a filter), \"stem\" and \"options\", in the output language.\n  - \"programming\": routing, filter, randomization and interviewer instructions, in English, as short imperative notes.\n  - \"decisions\": the design decisions required by declare_defaults, one short line each, in English.\n  - \"source_english\": when the output language is not English, the English wording the item was drafted from; otherwise an empty string.\n  - \"notes\": risks, what to test and how, in English.\n- \"not_covered\": domains of the construct left out, or an empty list.\n- \"missing_from_brief\": anything you needed that the brief did not say.",
+    "hash": "d6925e29a6f90cb5c54bb23d4410ab4724c2272db255db34a2c9b36d26efa2ca",
+    "files": ["core.md", "generate.md", "attitudinal.md", "mode.md"]
+  },
+  "drafts": [
+    {
+      "model": "google/gemma-4-31b-it",
+      "status": "ok",
+      "error": null,
+      "reply": {
+        "items": [
+          {
+            "id": "NEC_1",
+            "domain": "General confidence in integrity",
+            "intro": "",
+            "stem": "How much do you trust the national electoral commission to conduct elections fairly?",
+            "options": [
+              "A great deal",
+              "A moderate amount",
+              "A little",
+              "Not at all",
+              "Do not know"
+            ],
+            "open_format": "",
+            "parts": [],
+            "programming": "Randomize order of this item within the set.",
+            "decisions": "Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot); no reference period.",
+            "source_english": "",
+            "notes": "A general item placed first. Risk: 'fairly' may be interpreted differently by respondents (comprehension). Test with cognitive interviews."
+          },
+          {
+            "id": "NEC_2",
+            "domain": "Confidence in competence",
+            "intro": "",
+            "stem": "How much do you trust the national electoral commission to manage the voting process without making major mistakes?",
+            "options": [
+              "A great deal",
+              "A moderate amount",
+              "A little",
+              "Not at all",
+              "Do not know"
+            ],
+            "open_format": "",
+            "parts": [],
+            "programming": "Randomize order of this item within the set.",
+            "decisions": "Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot); no reference period.",
+            "source_english": "",
+            "notes": "Measures competence. Risk: Respondents may confuse institutional trust with trust in specific current leaders (judgment). Test with cognitive interviews."
+          },
+          {
+            "id": "NEC_3",
+            "domain": "Perceived independence from political influence",
+            "intro": "",
+            "stem": "How much do you trust the national electoral commission to act independently of political parties?",
+            "options": [
+              "A great deal",
+              "A moderate amount",
+              "A little",
+              "Not at all",
+              "Do not know"
+            ],
+            "open_format": "",
+            "parts": [],
+            "programming": "Randomize order of this item within the set.",
+            "decisions": "Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot); no reference period.",
+            "source_english": "",
+            "notes": "Measures independence. Risk: 'Political parties' may be too broad or too narrow depending on the country's system (comprehension). Test via web probing."
+          }
+        ],
+        "not_covered": [
+          "Trust in the commission's communication/transparency",
+          "Trust in the commission's ability to handle disputes"
+        ],
+        "missing_from_brief": [
+          "The specific country (to check for local terminology for 'national electoral commission')"
+        ]
+      },
+      "seconds": 26.3108,
+      "call": {
+        "seconds": 26.3108,
+        "finish": "success",
+        "tokens": {
+          "input": 2889,
+          "output": 700,
+          "cached_input": 0
+        },
+        "attempts": 1,
+        "raw": "```json\n{\n  \"items\": [\n    {\n      \"id\": \"NEC_1\",\n      \"domain\": \"General confidence in integrity\",\n      \"intro\": \"\",\n      \"stem\": \"How much do you trust the national electoral commission to conduct elections fairly?\",\n      \"options\": [\n        \"A great deal\",\n        \"A moderate amount\",\n        \"A little\",\n        \"Not at all\",\n        \"Do not know\"\n      ],\n      \"open_format\": \"\",\n      \"parts\": [],\n      \"programming\": \"Randomize order of this item within the set.\",\n      \"decisions\": \"Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot); no reference period.\",\n      \"source_english\": \"\",\n      \"notes\": \"A general item placed first. Risk: 'fairly' may be interpreted differently by respondents (comprehension). Test with cognitive interviews.\"\n    },\n    {\n      \"id\": \"NEC_2\",\n      \"domain\": \"Confidence in competence\",\n      \"intro\": \"\",\n      \"stem\": \"How much do you trust the national electoral commission to manage the voting process without making major mistakes?\",\n      \"options\": [\n        \"A great deal\",\n        \"A moderate amount\",\n        \"A little\",\n        \"Not at all\",\n        \"Do not know\"\n      ],\n      \"open_format\": \"\",\n      \"parts\": [],\n      \"programming\": \"Randomize order of this item within the set.\",\n      \"decisions\": \"Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot); no reference period.\",\n      \"source_english\": \"\",\n      \"notes\": \"Measures competence. Risk: Respondents may confuse institutional trust with trust in specific current leaders (judgment). Test with cognitive interviews.\"\n    },\n    {\n      \"id\": \"NEC_3\",\n      \"domain\": \"Perceived independence from political influence\",\n      \"intro\": \"\",\n      \"stem\": \"How much do you trust the national electoral commission to act independently of political parties?\",\n      \"options\": [\n        \"A great deal\",\n        \"A moderate amount\",\n        \"A little\",\n        \"Not at all\",\n        \"Do not know\"\n      ],\n      \"open_format\": \"\",\n      \"parts\": [],\n      \"programming\": \"Randomize order of this item within the set.\",\n      \"decisions\": \"Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot); no reference period.\",\n      \"source_english\": \"\",\n      \"notes\": \"Measures independence. Risk: 'Political parties' may be too broad or too narrow depending on the country's system (comprehension). Test via web probing.\"\n    }\n  ],\n  \"not_covered\": [\n    \"Trust in the commission's communication/transparency\",\n    \"Trust in the commission's ability to handle disputes\"\n  ],\n  \"missing_from_brief\": [\n    \"The specific country (to check for local terminology for 'national electoral commission')\"\n  ]\n}\n```"
+      }
+    },
+    {
+      "model": "meta-llama/llama-4-maverick",
+      "status": "ok",
+      "error": null,
+      "reply": {
+        "items": [
+          {
+            "id": "Tnec1",
+            "domain": "fairness",
+            "intro": "",
+            "stem": "How confident are you that the national electoral commission counts votes accurately?",
+            "options": [
+              "Not at all confident",
+              "Not very confident",
+              "Somewhat confident",
+              "Very confident",
+              "Extremely confident"
+            ],
+            "open_format": "",
+            "parts": [],
+            "programming": "Randomize the order of this item and the other two in the scale.",
+            "decisions": [
+              "Closed format because it is easier to compare across respondents.",
+              "Five options to capture a range of confidence levels.",
+              "Every option has a verbal label to avoid confusion.",
+              "No midpoint because it is not a natural answer for this question.",
+              "No don't-know option to encourage a considered response."
+            ],
+            "source_english": "",
+            "notes": "This item tests the cognitive aspect of trust. It needs testing for comprehension and to ensure respondents are not assuming knowledge they do not have."
+          },
+          {
+            "id": "Tnec2",
+            "domain": "impartiality",
+            "intro": "",
+            "stem": "To what extent do you think the national electoral commission favours one party over others?",
+            "options": [
+              "Not at all",
+              "A little",
+              "Some",
+              "A lot",
+              "Completely"
+            ],
+            "open_format": "",
+            "parts": [],
+            "decisions": [
+              "Closed format for comparability.",
+              "Five options to match the scale of the other items.",
+              "Verbal labels for every option to maintain clarity.",
+              "Scale direction runs from less to more favouritism."
+            ],
+            "source_english": "",
+            "notes": "This item assesses the affective aspect of trust. It should be tested for understanding of 'favours one party over others' and to check it does not presuppose knowledge of party politics."
+          },
+          {
+            "id": "Tnec3",
+            "domain": "competence",
+            "intro": "",
+            "stem": "How capable do you think the national electoral commission is of managing elections smoothly?",
+            "options": [
+              "Not at all capable",
+              "Not very capable",
+              "Somewhat capable",
+              "Very capable",
+              "Extremely capable"
+            ],
+            "open_format": "",
+            "parts": [],
+            "decisions": [
+              "Closed format for ease of comparison.",
+              "Five options to be consistent with the other items.",
+              "Every option labelled verbally for clarity.",
+              "Scale runs from less to more capability."
+            ],
+            "source_english": "",
+            "notes": "This item evaluates the competence aspect of trust. Testing should check that respondents understand 'managing elections smoothly' and that it does not assume detailed knowledge of electoral processes."
+          }
+        ],
+        "not_covered": [],
+        "missing_from_brief": []
+      },
+      "seconds": 8.3293,
+      "call": {
+        "seconds": 8.3293,
+        "finish": "success",
+        "tokens": {
+          "input": 2784,
+          "output": 614,
+          "cached_input": 0
+        },
+        "attempts": 1,
+        "raw": "```json\n{\n  \"items\": [\n    {\n      \"id\": \"Tnec1\",\n      \"domain\": \"fairness\",\n      \"intro\": \"\",\n      \"stem\": \"How confident are you that the national electoral commission counts votes accurately?\",\n      \"options\": [\"Not at all confident\", \"Not very confident\", \"Somewhat confident\", \"Very confident\", \"Extremely confident\"],\n      \"open_format\": \"\",\n      \"parts\": [],\n      \"programming\": \"Randomize the order of this item and the other two in the scale.\",\n      \"decisions\": [\n        \"Closed format because it is easier to compare across respondents.\",\n        \"Five options to capture a range of confidence levels.\",\n        \"Every option has a verbal label to avoid confusion.\",\n        \"No midpoint because it is not a natural answer for this question.\",\n        \"No don't-know option to encourage a considered response.\"\n      ],\n      \"source_english\": \"\",\n      \"notes\": \"This item tests the cognitive aspect of trust. It needs testing for comprehension and to ensure respondents are not assuming knowledge they do not have.\"\n    },\n    {\n      \"id\": \"Tnec2\",\n      \"domain\": \"impartiality\",\n      \"intro\": \"\",\n      \"stem\": \"To what extent do you think the national electoral commission favours one party over others?\",\n      \"options\": [\"Not at all\", \"A little\", \"Some\", \"A lot\", \"Completely\"],\n      \"open_format\": \"\",\n      \"parts\": [],\n      \"decisions\": [\n        \"Closed format for comparability.\",\n        \"Five options to match the scale of the other items.\",\n        \"Verbal labels for every option to maintain clarity.\",\n        \"Scale direction runs from less to more favouritism.\"\n      ],\n      \"source_english\": \"\",\n      \"notes\": \"This item assesses the affective aspect of trust. It should be tested for understanding of 'favours one party over others' and to check it does not presuppose knowledge of party politics.\"\n    },\n    {\n      \"id\": \"Tnec3\",\n      \"domain\": \"competence\",\n      \"intro\": \"\",\n      \"stem\": \"How capable do you think the national electoral commission is of managing elections smoothly?\",\n      \"options\": [\"Not at all capable\", \"Not very capable\", \"Somewhat capable\", \"Very capable\", \"Extremely capable\"],\n      \"open_format\": \"\",\n      \"parts\": [],\n      \"decisions\": [\n        \"Closed format for ease of comparison.\",\n        \"Five options to be consistent with the other items.\",\n        \"Every option labelled verbally for clarity.\",\n        \"Scale runs from less to more capability.\"\n      ],\n      \"source_english\": \"\",\n      \"notes\": \"This item evaluates the competence aspect of trust. Testing should check that respondents understand 'managing elections smoothly' and that it does not assume detailed knowledge of electoral processes.\"\n    }\n  ],\n  \"not_covered\": [],\n  \"missing_from_brief\": []\n}\n```"
+      }
+    },
+    {
+      "model": "openai/gpt-6-luna",
+      "status": "ok",
+      "error": null,
+      "reply": {
+        "items": [
+          {
+            "id": "TC1",
+            "domain": "Trust in the commission's ability to count votes accurately",
+            "intro": "",
+            "stem": "How much do you trust the national electoral commission to count votes accurately?",
+            "options": [
+              "Not at all",
+              "A little",
+              "A moderate amount",
+              "A lot",
+              "A great deal",
+              "I have not heard enough about the commission to answer",
+              "I have no opinion"
+            ],
+            "open_format": "",
+            "parts": [],
+            "programming": "Show the response options in the listed order. Keep the scale direction low to high.",
+            "decisions": [
+              "Closed question; use 7 options: 5 ordered trust levels and 2 separate ways to indicate no answer.",
+              "Label every option; labels make each response visible and distinct on the web form.",
+              "Include a midpoint: A moderate amount represents a middle level of trust.",
+              "Include both not enough knowledge and no opinion; they distinguish lack of knowledge from lack of a formed view.",
+              "Run the ordered trust levels from low to high.",
+              "Use no reference period; ask for the respondent's current view."
+            ],
+            "source_english": "",
+            "notes": "Offering not enough knowledge and no opinion raises their use. Test comprehension of the commission reference and the difference between those two options in cognitive interviews, then use web probing. Look first for previously evaluated questions on this construct and check transfer to this population, language, and mode; adapting an existing question is usually preferable to writing a new one. This three-item set is an untested item pool, not an established scale. Pilot it with real respondents and check dimensionality and reliability before using scores; examine subscales more closely than the total. Test cross-country or cross-language comparability rather than assuming it."
+          },
+          {
+            "id": "TC2",
+            "domain": "Trust in the commission's impartiality toward political parties",
+            "intro": "",
+            "stem": "How much do you trust the national electoral commission to treat political parties fairly during elections?",
+            "options": [
+              "Not at all",
+              "A little",
+              "A moderate amount",
+              "A lot",
+              "A great deal",
+              "I have not heard enough about the commission to answer",
+              "I have no opinion"
+            ],
+            "open_format": "",
+            "parts": [],
+            "programming": "Show the response options in the listed order. Keep the scale direction low to high.",
+            "decisions": [
+              "Closed question; use 7 options: 5 ordered trust levels and 2 separate ways to indicate no answer.",
+              "Label every option; labels make each response visible and distinct on the web form.",
+              "Include a midpoint: A moderate amount represents a middle level of trust.",
+              "Include both not enough knowledge and no opinion; they distinguish lack of knowledge from lack of a formed view.",
+              "Run the ordered trust levels from low to high.",
+              "Use no reference period; ask for the respondent's current view."
+            ],
+            "source_english": "",
+            "notes": "Test how respondents understand fair treatment of political parties and the reference to elections in cognitive interviews. Offering not enough knowledge and no opinion raises their use."
+          },
+          {
+            "id": "TC3",
+            "domain": "Distrust in the commission's honesty when reporting election results",
+            "intro": "",
+            "stem": "How much do you expect the national electoral commission to report election results dishonestly?",
+            "options": [
+              "Not at all",
+              "A little",
+              "A moderate amount",
+              "A lot",
+              "A great deal",
+              "I have not heard enough about the commission to answer",
+              "I have no opinion"
+            ],
+            "open_format": "",
+            "parts": [],
+            "programming": "Show the response options in the listed order. Keep the scale direction low to high. Reverse-code this item if combining it with trust-keyed items.",
+            "decisions": [
+              "Closed question; use 7 options: 5 ordered levels of expected dishonesty and 2 separate ways to indicate no answer.",
+              "Label every option; labels make each response visible and distinct on the web form.",
+              "Include a midpoint: A moderate amount represents a middle level of expected dishonesty.",
+              "Include both not enough knowledge and no opinion; they distinguish lack of knowledge from lack of a formed view.",
+              "Run the ordered levels from low to high.",
+              "Use no reference period; ask for the respondent's current view."
+            ],
+            "source_english": "",
+            "notes": "This is the reverse-direction item; test whether respondents interpret expected dishonesty as intended and use the response scale consistently. It most needs cognitive interviews and web probing, followed by a pilot of the item set. Offering not enough knowledge and no opinion raises their use."
+          }
+        ],
+        "not_covered": [],
+        "missing_from_brief": [
+          "The country and the commission's official name are not specified; use the appropriate name in the questionnaire.",
+          "No reference period is specified; these drafts ask about current views."
+        ]
+      },
+      "seconds": 52.8825,
+      "call": {
+        "seconds": 52.8825,
+        "finish": "success",
+        "tokens": {
+          "input": 2779,
+          "output": 4550,
+          "cached_input": 0
+        },
+        "attempts": 1,
+        "raw": "{\n  \"items\": [\n    {\n      \"id\": \"TC1\",\n      \"domain\": \"Trust in the commission's ability to count votes accurately\",\n      \"intro\": \"\",\n      \"stem\": \"How much do you trust the national electoral commission to count votes accurately?\",\n      \"options\": [\n        \"Not at all\",\n        \"A little\",\n        \"A moderate amount\",\n        \"A lot\",\n        \"A great deal\",\n        \"I have not heard enough about the commission to answer\",\n        \"I have no opinion\"\n      ],\n      \"open_format\": \"\",\n      \"parts\": [],\n      \"programming\": \"Show the response options in the listed order. Keep the scale direction low to high.\",\n      \"decisions\": [\n        \"Closed question; use 7 options: 5 ordered trust levels and 2 separate ways to indicate no answer.\",\n        \"Label every option; labels make each response visible and distinct on the web form.\",\n        \"Include a midpoint: A moderate amount represents a middle level of trust.\",\n        \"Include both not enough knowledge and no opinion; they distinguish lack of knowledge from lack of a formed view.\",\n        \"Run the ordered trust levels from low to high.\",\n        \"Use no reference period; ask for the respondent's current view.\"\n      ],\n      \"source_english\": \"\",\n      \"notes\": \"Offering not enough knowledge and no opinion raises their use. Test comprehension of the commission reference and the difference between those two options in cognitive interviews, then use web probing. Look first for previously evaluated questions on this construct and check transfer to this population, language, and mode; adapting an existing question is usually preferable to writing a new one. This three-item set is an untested item pool, not an established scale. Pilot it with real respondents and check dimensionality and reliability before using scores; examine subscales more closely than the total. Test cross-country or cross-language comparability rather than assuming it.\"\n    },\n    {\n      \"id\": \"TC2\",\n      \"domain\": \"Trust in the commission's impartiality toward political parties\",\n      \"intro\": \"\",\n      \"stem\": \"How much do you trust the national electoral commission to treat political parties fairly during elections?\",\n      \"options\": [\n        \"Not at all\",\n        \"A little\",\n        \"A moderate amount\",\n        \"A lot\",\n        \"A great deal\",\n        \"I have not heard enough about the commission to answer\",\n        \"I have no opinion\"\n      ],\n      \"open_format\": \"\",\n      \"parts\": [],\n      \"programming\": \"Show the response options in the listed order. Keep the scale direction low to high.\",\n      \"decisions\": [\n        \"Closed question; use 7 options: 5 ordered trust levels and 2 separate ways to indicate no answer.\",\n        \"Label every option; labels make each response visible and distinct on the web form.\",\n        \"Include a midpoint: A moderate amount represents a middle level of trust.\",\n        \"Include both not enough knowledge and no opinion; they distinguish lack of knowledge from lack of a formed view.\",\n        \"Run the ordered trust levels from low to high.\",\n        \"Use no reference period; ask for the respondent's current view.\"\n      ],\n      \"source_english\": \"\",\n      \"notes\": \"Test how respondents understand fair treatment of political parties and the reference to elections in cognitive interviews. Offering not enough knowledge and no opinion raises their use.\"\n    },\n    {\n      \"id\": \"TC3\",\n      \"domain\": \"Distrust in the commission's honesty when reporting election results\",\n      \"intro\": \"\",\n      \"stem\": \"How much do you expect the national electoral commission to report election results dishonestly?\",\n      \"options\": [\n        \"Not at all\",\n        \"A little\",\n        \"A moderate amount\",\n        \"A lot\",\n        \"A great deal\",\n        \"I have not heard enough about the commission to answer\",\n        \"I have no opinion\"\n      ],\n      \"open_format\": \"\",\n      \"parts\": [],\n      \"programming\": \"Show the response options in the listed order. Keep the scale direction low to high. Reverse-code this item if combining it with trust-keyed items.\",\n      \"decisions\": [\n        \"Closed question; use 7 options: 5 ordered levels of expected dishonesty and 2 separate ways to indicate no answer.\",\n        \"Label every option; labels make each response visible and distinct on the web form.\",\n        \"Include a midpoint: A moderate amount represents a middle level of expected dishonesty.\",\n        \"Include both not enough knowledge and no opinion; they distinguish lack of knowledge from lack of a formed view.\",\n        \"Run the ordered levels from low to high.\",\n        \"Use no reference period; ask for the respondent's current view.\"\n      ],\n      \"source_english\": \"\",\n      \"notes\": \"This is the reverse-direction item; test whether respondents interpret expected dishonesty as intended and use the response scale consistently. It most needs cognitive interviews and web probing, followed by a pilot of the item set. Offering not enough knowledge and no opinion raises their use.\"\n    }\n  ],\n  \"not_covered\": [],\n  \"missing_from_brief\": [\n    \"The country and the commission's official name are not specified; use the appropriate name in the questionnaire.\",\n    \"No reference period is specified; these drafts ask about current views.\"\n  ]\n}"
+      }
+    }
+  ],
+  "appraisal": {
+    "status": "ok",
+    "error": null,
+    "labels": {
+      "A": "meta-llama/llama-4-maverick",
+      "B": "openai/gpt-6-luna",
+      "C": "google/gemma-4-31b-it"
+    },
+    "system": "You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.\n\nREFLEXES: Core (v0.2)\n- construct_first (Every item.) Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly. MUST NOT: Do not widen or change the construct to make an item easier to write.\n- response_process (Every item.) Walk the item through the four stages a respondent goes through: comprehension, retrieval, judgment or estimation, reporting. A fault at any one stage is measurement error. Name the stage when you name a fault.\n- plain_words (Every question stem, instruction and response option.) Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question. MUST NOT: Do not use a word with more than one common sense where the other sense would change the answer.\n- simple_syntax (Every question stem.) One short sentence where possible, main clause first. Move conditions, definitions and time frames into a separate lead-in sentence instead of stacking clauses. MUST NOT: No single or double negations in the stem. No negative interrogatives.\n- specific_concrete (Every item.) Name the specific object, behaviour, place and time the question is about. Replace vague quantifiers in stems and options with concrete amounts or frequencies where the task allows.\n- one_thing (Every item.) Ask about one thing at a time. Two objects, two behaviours or two qualities joined by \"and\" or \"or\" become two items.\n- no_presupposition (Every item.) Check what the question assumes about the respondent: that they work, have a partner, use a service, have heard of the topic, hold an opinion. Where the assumption fails for part of the population, add a filter question or a not-applicable option. This fault is easy to miss, so check it explicitly.\n- neutral_wording (Every item except a deliberate forgiving introduction to a sensitive question.) Word the stem so no answer is the expected one. No premises stated as fact, no appeals to authority or to what most people think, no emotive terms.\n- options_fit (Every closed item.) Response options are exhaustive and mutually exclusive, answer the question that was asked in the same terms, and give every respondent a true answer to pick.\n- brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.\n- not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.\n\nREFLEXES: Project manager: appraise candidates (v0.2)\n- code_every_check (Each item of each candidate.) Take every item through every check in the checklist, and report only the checks it fails; a check you do not report is read as passed or not applicable. For each fail quote the words or feature that fail and name the response stage affected. Apply the checks exactly as written and the same way to every candidate. Appraise an item's parts with the item. MUST NOT: Do not add checks. Do not let fluent wording stand in for passing a check.\n- declared_exceptions (An item's decisions declare a forgiving introduction or an assumed behaviour.) Do not fail it on neutral wording or presupposition for that reason. Check instead that the exception meets its own check in the sensitive-items rules.\n- restraint (Deciding whether a check fails.) Fail a check only for a problem specific to this item that would change answers. Be slow to fail on sensitivity or burden; look twice for presuppositions, culture-bound framing and terms that mean different things to different respondents.\n- compare_do_not_rank (Summarizing across candidates.) For each domain of the construct say which candidates cover it and which candidate items pass every check. Describe how the candidates differ in their design decisions (format, number of options, midpoint, don't know, reference period) without saying which is right; those are the analyst's choices. MUST NOT: Do not name a best candidate, give candidates an overall score, or count passes into a total.\n- merged_option (Offering a combined version.) Build it only from candidate items that pass every check, one per domain, copied word for word, and record which candidate each came from. Where no candidate item passes for a domain, leave the domain empty and say so. Label the result as a fourth option, untested like the others. MUST NOT: Do not write new items or reword candidate items in the merged version.\n- say_what_was_not_checked (Closing the appraisal.) State that the appraisal is an expert review by a language model against a fixed checklist, that it cannot show how respondents will understand or answer, and name the items to test first and how.\n\nPROHIBITIONS (override anything from training)\n- Never invent a citation, a survey name, a statistic or a fact about a country.\n- Never name a source, an author or a course in what you write. Use a rule's id only in a JSON field that asks for one.\n- Never choose for the analyst: you flag and draft, they decide.\n- Never write anything outside the JSON fields asked for.\n- Never identify or guess which model produced a candidate.\n- Never describe any candidate or the merged option as validated, best or ready to field.",
+    "user": "PREPARE\nResearch question: How much do adults trust the national electoral commission?\nConstruct: Trust in the national electoral commission\nTarget population: Adults aged 18 and over\nSurvey mode: web\nOutput language: English\n\nASK\nAppraise the 3 candidate drafts in CANDIDATES below against the CHECKLIST. Each was asked to write exactly 3 survey items for the brief above. Follow every rule you were given. Reply in the format given at the end of this message.\n\nCANDIDATES\n{\"candidate\":\"A\",\"not_covered\":[],\"items\":[{\"id\":\"Tnec1\",\"domain\":\"fairness\",\"intro\":\"\",\"stem\":\"How confident are you that the national electoral commission counts votes accurately?\",\"options\":[\"Not at all confident\",\"Not very confident\",\"Somewhat confident\",\"Very confident\",\"Extremely confident\"],\"open_format\":\"\",\"parts\":[],\"programming\":\"Randomize the order of this item and the other two in the scale.\",\"decisions\":[\"Closed format because it is easier to compare across respondents.\",\"Five options to capture a range of confidence levels.\",\"Every option has a verbal label to avoid confusion.\",\"No midpoint because it is not a natural answer for this question.\",\"No don't-know option to encourage a considered response.\"]},{\"id\":\"Tnec2\",\"domain\":\"impartiality\",\"intro\":\"\",\"stem\":\"To what extent do you think the national electoral commission favours one party over others?\",\"options\":[\"Not at all\",\"A little\",\"Some\",\"A lot\",\"Completely\"],\"open_format\":\"\",\"parts\":[],\"programming\":\"\",\"decisions\":[\"Closed format for comparability.\",\"Five options to match the scale of the other items.\",\"Verbal labels for every option to maintain clarity.\",\"Scale direction runs from less to more favouritism.\"]},{\"id\":\"Tnec3\",\"domain\":\"competence\",\"intro\":\"\",\"stem\":\"How capable do you think the national electoral commission is of managing elections smoothly?\",\"options\":[\"Not at all capable\",\"Not very capable\",\"Somewhat capable\",\"Very capable\",\"Extremely capable\"],\"open_format\":\"\",\"parts\":[],\"programming\":\"\",\"decisions\":[\"Closed format for ease of comparison.\",\"Five options to be consistent with the other items.\",\"Every option labelled verbally for clarity.\",\"Scale runs from less to more capability.\"]}]}\n{\"candidate\":\"B\",\"not_covered\":[],\"items\":[{\"id\":\"TC1\",\"domain\":\"Trust in the commission's ability to count votes accurately\",\"intro\":\"\",\"stem\":\"How much do you trust the national electoral commission to count votes accurately?\",\"options\":[\"Not at all\",\"A little\",\"A moderate amount\",\"A lot\",\"A great deal\",\"I have not heard enough about the commission to answer\",\"I have no opinion\"],\"open_format\":\"\",\"parts\":[],\"programming\":\"Show the response options in the listed order. Keep the scale direction low to high.\",\"decisions\":[\"Closed question; use 7 options: 5 ordered trust levels and 2 separate ways to indicate no answer.\",\"Label every option; labels make each response visible and distinct on the web form.\",\"Include a midpoint: A moderate amount represents a middle level of trust.\",\"Include both not enough knowledge and no opinion; they distinguish lack of knowledge from lack of a formed view.\",\"Run the ordered trust levels from low to high.\",\"Use no reference period; ask for the respondent's current view.\"]},{\"id\":\"TC2\",\"domain\":\"Trust in the commission's impartiality toward political parties\",\"intro\":\"\",\"stem\":\"How much do you trust the national electoral commission to treat political parties fairly during elections?\",\"options\":[\"Not at all\",\"A little\",\"A moderate amount\",\"A lot\",\"A great deal\",\"I have not heard enough about the commission to answer\",\"I have no opinion\"],\"open_format\":\"\",\"parts\":[],\"programming\":\"Show the response options in the listed order. Keep the scale direction low to high.\",\"decisions\":[\"Closed question; use 7 options: 5 ordered trust levels and 2 separate ways to indicate no answer.\",\"Label every option; labels make each response visible and distinct on the web form.\",\"Include a midpoint: A moderate amount represents a middle level of trust.\",\"Include both not enough knowledge and no opinion; they distinguish lack of knowledge from lack of a formed view.\",\"Run the ordered trust levels from low to high.\",\"Use no reference period; ask for the respondent's current view.\"]},{\"id\":\"TC3\",\"domain\":\"Distrust in the commission's honesty when reporting election results\",\"intro\":\"\",\"stem\":\"How much do you expect the national electoral commission to report election results dishonestly?\",\"options\":[\"Not at all\",\"A little\",\"A moderate amount\",\"A lot\",\"A great deal\",\"I have not heard enough about the commission to answer\",\"I have no opinion\"],\"open_format\":\"\",\"parts\":[],\"programming\":\"Show the response options in the listed order. Keep the scale direction low to high. Reverse-code this item if combining it with trust-keyed items.\",\"decisions\":[\"Closed question; use 7 options: 5 ordered levels of expected dishonesty and 2 separate ways to indicate no answer.\",\"Label every option; labels make each response visible and distinct on the web form.\",\"Include a midpoint: A moderate amount represents a middle level of expected dishonesty.\",\"Include both not enough knowledge and no opinion; they distinguish lack of knowledge from lack of a formed view.\",\"Run the ordered levels from low to high.\",\"Use no reference period; ask for the respondent's current view.\"]}]}\n{\"candidate\":\"C\",\"not_covered\":[\"Trust in the commission's communication/transparency\",\"Trust in the commission's ability to handle disputes\"],\"items\":[{\"id\":\"NEC_1\",\"domain\":\"General confidence in integrity\",\"intro\":\"\",\"stem\":\"How much do you trust the national electoral commission to conduct elections fairly?\",\"options\":[\"A great deal\",\"A moderate amount\",\"A little\",\"Not at all\",\"Do not know\"],\"open_format\":\"\",\"parts\":[],\"programming\":\"Randomize order of this item within the set.\",\"decisions\":\"Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot); no reference period.\"},{\"id\":\"NEC_2\",\"domain\":\"Confidence in competence\",\"intro\":\"\",\"stem\":\"How much do you trust the national electoral commission to manage the voting process without making major mistakes?\",\"options\":[\"A great deal\",\"A moderate amount\",\"A little\",\"Not at all\",\"Do not know\"],\"open_format\":\"\",\"parts\":[],\"programming\":\"Randomize order of this item within the set.\",\"decisions\":\"Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot); no reference period.\"},{\"id\":\"NEC_3\",\"domain\":\"Perceived independence from political influence\",\"intro\":\"\",\"stem\":\"How much do you trust the national electoral commission to act independently of political parties?\",\"options\":[\"A great deal\",\"A moderate amount\",\"A little\",\"Not at all\",\"Do not know\"],\"open_format\":\"\",\"parts\":[],\"programming\":\"Randomize order of this item within the set.\",\"decisions\":\"Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot); no reference period.\"}]}\n\nCHECKLIST\nconstruct_first: Does the item measure the construct or domain named in the brief and only that?\nplain_words: Would every member of the target population read each key term the same way, without a definition they do not have?\nsimple_syntax: Is the stem free of stacked clauses and of negations?\nspecific_concrete: Is it clear exactly what, whose, where and when the question is about?\none_thing: Does the question ask about exactly one thing, so that no respondent would want to answer its parts differently?\nno_presupposition: Does the question apply to every respondent who will be asked it?\nneutral_wording: Is the wording free of any push toward one answer?\noptions_fit: Can every respondent find exactly one option that is true for them?\ndesign_not_topic: Is the item usable as written in the stated mode for the stated population?\ndeclare_defaults: Is each format decision stated with a reason that comes from the construct, population or mode?\nlabelled_scales: Are all points labelled in one consistent form, with poles that match the construct?\nmidpoint_and_dont_know: Are the midpoint and don't-know decisions each stated and justified?\nattitude_object: Is the attitude object named and bounded so that respondents will have the same thing in mind?\nspecific_before_vague: If a general item is included, is it placed before the specific items on its topic?\nconstruct_specific_options: Are the response options in the construct's own terms and not agree-disagree?\nbalanced_stem: Does the stem state both poles or both positions?\nnon_attitudes: Is there a route for respondents who have no knowledge of or opinion about the object?\nkeying: Does the set include items keyed in both directions, without negations?\ncover_the_construct: Does each item tap a distinct stated domain, with no item a rewording of another?\nany_mode: Does the item work as written in the stated mode?\nweb: Is everything the respondent needs to answer on screen with the question?\n\nCHARACTERIZE\nReturn one JSON object with these fields, all text in English.\n\n- \"appraisal\": a list, one entry per candidate item, with \"candidate\" (A, B, C...), \"id\" (the item id), \"domain\", and \"fails\": a list, empty when the item fails nothing, of objects with \"check\" (the id from the checklist), \"evidence\" (the words or feature that fail), \"stage\" and \"why\" (one sentence).\n- \"coverage\": a list, one entry per domain, with \"domain\", \"covered_by\" (candidate letters) and \"clean_items\" (candidate letter and item id pairs that pass every check).\n- \"differences\": a list of one-sentence descriptions of how the candidates' design decisions differ.\n- \"merged\": a list of objects with \"domain\", \"candidate\", \"id\"; domains with no clean item have empty \"candidate\" and \"id\".\n- \"test_first\": a list of up to five objects with \"candidate\", \"id\" and \"method\".\n- \"limits\": one or two sentences as required by say_what_was_not_checked.",
+    "hash": "3ef86240c6c3e56b00c589cc286d4e2f75e3ef1893e21457e044d3e4f0f0ead2",
+    "reply": {
+      "appraisal": [
+        {
+          "candidate": "A",
+          "id": "Tnec1",
+          "domain": "fairness",
+          "fails": [
+            {
+              "check": "midpoint_and_dont_know",
+              "evidence": "'No midpoint because it is not a natural answer' and 'No don't-know option to encourage a considered response'",
+              "stage": "judgment",
+              "why": "The decision says there is no midpoint, but 'Somewhat confident' is the middle of five options, and the reason given for leaving out don't know is not drawn from the construct, population or mode."
+            },
+            {
+              "check": "non_attitudes",
+              "evidence": "Options run only from 'Not at all confident' to 'Extremely confident' with no don't know, no opinion or not heard enough",
+              "stage": "retrieval",
+              "why": "A respondent with no knowledge of the commission has no route to say so."
+            },
+            {
+              "check": "options_fit",
+              "evidence": "Five confidence levels only",
+              "stage": "reporting",
+              "why": "A respondent with no basis for a judgment has no true option and must pick a level that does not describe them."
+            }
+          ]
+        },
+        {
+          "candidate": "A",
+          "id": "Tnec2",
+          "domain": "impartiality",
+          "fails": [
+            {
+              "check": "labelled_scales",
+              "evidence": "'A little', 'Some', 'A lot'",
+              "stage": "reporting",
+              "why": "'A little' and 'Some' are not clearly different in amount, so the order of the labels is unclear and respondents may place them differently."
+            },
+            {
+              "check": "midpoint_and_dont_know",
+              "evidence": "Decisions list no midpoint decision and no don't-know decision",
+              "stage": "reporting",
+              "why": "Neither choice is stated or justified, although 'Some' acts as a middle option and no don't-know option exists."
+            },
+            {
+              "check": "non_attitudes",
+              "evidence": "No don't know, no opinion or not heard enough option",
+              "stage": "retrieval",
+              "why": "A respondent who knows nothing about the commission's conduct has no route to say so."
+            },
+            {
+              "check": "options_fit",
+              "evidence": "'Not at all' to 'Completely' only",
+              "stage": "reporting",
+              "why": "A respondent with no basis to judge favouritism has no true option, and 'Not at all' would misstate their position."
+            }
+          ]
+        },
+        {
+          "candidate": "A",
+          "id": "Tnec3",
+          "domain": "competence",
+          "fails": [
+            {
+              "check": "specific_concrete",
+              "evidence": "'managing elections smoothly'",
+              "stage": "comprehension",
+              "why": "'Smoothly' can mean queues, counting, results or disputes, so respondents may answer about different things."
+            },
+            {
+              "check": "midpoint_and_dont_know",
+              "evidence": "Decisions list no midpoint decision and no don't-know decision",
+              "stage": "reporting",
+              "why": "Neither choice is stated or justified, although 'Somewhat capable' acts as a middle option and no don't-know option exists."
+            },
+            {
+              "check": "non_attitudes",
+              "evidence": "No don't know, no opinion or not heard enough option",
+              "stage": "retrieval",
+              "why": "A respondent with no knowledge of the commission has no route to say so."
+            },
+            {
+              "check": "options_fit",
+              "evidence": "'Not at all capable' to 'Extremely capable' only",
+              "stage": "reporting",
+              "why": "A respondent with no basis to judge has no true option."
+            }
+          ]
+        },
+        {
+          "candidate": "B",
+          "id": "TC1",
+          "domain": "Trust in the commission's ability to count votes accurately",
+          "fails": [
+            {
+              "check": "options_fit",
+              "evidence": "'I have not heard enough about the commission to answer' and 'I have no opinion'",
+              "stage": "reporting",
+              "why": "A respondent who has not heard enough also has no opinion, so two options are true for them and the options are not mutually exclusive."
+            }
+          ]
+        },
+        {
+          "candidate": "B",
+          "id": "TC2",
+          "domain": "Trust in the commission's impartiality toward political parties",
+          "fails": [
+            {
+              "check": "options_fit",
+              "evidence": "'I have not heard enough about the commission to answer' and 'I have no opinion'",
+              "stage": "reporting",
+              "why": "The two no-answer options overlap, so a respondent can truthfully choose either."
+            }
+          ]
+        },
+        {
+          "candidate": "B",
+          "id": "TC3",
+          "domain": "Distrust in the commission's honesty when reporting election results",
+          "fails": [
+            {
+              "check": "simple_syntax",
+              "evidence": "'report election results dishonestly' combined with the option 'Not at all'",
+              "stage": "judgment",
+              "why": "Choosing 'Not at all' means not expecting dishonesty, so the respondent must work through a double negative."
+            },
+            {
+              "check": "options_fit",
+              "evidence": "'I have not heard enough about the commission to answer' and 'I have no opinion'",
+              "stage": "reporting",
+              "why": "The two no-answer options overlap, so a respondent can truthfully choose either."
+            }
+          ]
+        },
+        {
+          "candidate": "C",
+          "id": "NEC_1",
+          "domain": "General confidence in integrity",
+          "fails": [
+            {
+              "check": "specific_before_vague",
+              "evidence": "Domain 'General confidence in integrity' with the programming 'Randomize order of this item within the set'",
+              "stage": "judgment",
+              "why": "Randomizing means this broader item may appear after the specific items and be answered in light of them."
+            },
+            {
+              "check": "keying",
+              "evidence": "All three items are worded so that a higher answer means more trust",
+              "stage": "reporting",
+              "why": "With no item keyed the other way, a respondent can give the same answer down the set without reading each item."
+            },
+            {
+              "check": "declare_defaults",
+              "evidence": "Decisions are one string listing 'Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot); no reference period' with no reasons",
+              "stage": "reporting",
+              "why": "No reason from the construct, population or mode is given for any format choice, and the stated direction 'none to a lot' does not match the options, which run from 'A great deal' to 'Not at all'."
+            },
+            {
+              "check": "midpoint_and_dont_know",
+              "evidence": "'no midpoint' stated without a reason; the 'Do not know' option has no stated decision",
+              "stage": "reporting",
+              "why": "Neither decision is justified."
+            }
+          ]
+        },
+        {
+          "candidate": "C",
+          "id": "NEC_2",
+          "domain": "Confidence in competence",
+          "fails": [
+            {
+              "check": "simple_syntax",
+              "evidence": "'without making major mistakes'",
+              "stage": "comprehension",
+              "why": "The stem contains a negation, which the respondent must reverse to judge whether the commission can be trusted."
+            },
+            {
+              "check": "specific_concrete",
+              "evidence": "'major mistakes' and 'the voting process'",
+              "stage": "comprehension",
+              "why": "What counts as major, and which part of the process is meant, is left to each respondent."
+            },
+            {
+              "check": "keying",
+              "evidence": "All three items are worded so that a higher answer means more trust",
+              "stage": "reporting",
+              "why": "With no item keyed the other way, a respondent can give the same answer down the set without reading each item."
+            },
+            {
+              "check": "declare_defaults",
+              "evidence": "Decisions are one string with no reasons",
+              "stage": "reporting",
+              "why": "No reason from the construct, population or mode is given for any format choice."
+            },
+            {
+              "check": "midpoint_and_dont_know",
+              "evidence": "'no midpoint' stated without a reason; the 'Do not know' option has no stated decision",
+              "stage": "reporting",
+              "why": "Neither decision is justified."
+            }
+          ]
+        },
+        {
+          "candidate": "C",
+          "id": "NEC_3",
+          "domain": "Perceived independence from political influence",
+          "fails": [
+            {
+              "check": "keying",
+              "evidence": "All three items are worded so that a higher answer means more trust",
+              "stage": "reporting",
+              "why": "With no item keyed the other way, a respondent can give the same answer down the set without reading each item."
+            },
+            {
+              "check": "declare_defaults",
+              "evidence": "Decisions are one string with no reasons",
+              "stage": "reporting",
+              "why": "No reason from the construct, population or mode is given for any format choice."
+            },
+            {
+              "check": "midpoint_and_dont_know",
+              "evidence": "'no midpoint' stated without a reason; the 'Do not know' option has no stated decision",
+              "stage": "reporting",
+              "why": "Neither decision is justified."
+            }
+          ]
+        }
+      ],
+      "coverage": [
+        {
+          "domain": "Accuracy of counting votes",
+          "covered_by": [
+            "A",
+            "B"
+          ],
+          "clean_items": []
+        },
+        {
+          "domain": "Impartiality or independence from political parties",
+          "covered_by": [
+            "A",
+            "B",
+            "C"
+          ],
+          "clean_items": []
+        },
+        {
+          "domain": "Competence in running elections",
+          "covered_by": [
+            "A",
+            "C"
+          ],
+          "clean_items": []
+        },
+        {
+          "domain": "Fairness in how elections are conducted",
+          "covered_by": [
+            "C"
+          ],
+          "clean_items": []
+        },
+        {
+          "domain": "Honesty in reporting election results",
+          "covered_by": [
+            "B"
+          ],
+          "clean_items": []
+        },
+        {
+          "domain": "Communication or transparency",
+          "covered_by": [],
+          "clean_items": []
+        },
+        {
+          "domain": "Handling of disputes",
+          "covered_by": [],
+          "clean_items": []
+        }
+      ],
+      "differences": [
+        "Candidate A words its items as confidence, favouritism and capability, while B and C use 'trust' in the stem for every trust-keyed item.",
+        "Candidate A uses five options with no don't-know option, B uses five levels plus two separate no-answer options, and C uses four levels plus one 'Do not know'.",
+        "Candidate A and B have an effective middle option ('Somewhat' or 'A moderate amount'), while C has four levels with no middle option.",
+        "Candidate A and B run options from low to high, while C runs them from 'A great deal' to 'Not at all'.",
+        "Candidate B has one item keyed toward distrust, A has one item keyed toward favouritism, and C keys all three items the same way.",
+        "Candidate A randomizes the three items in the first item's programming, C randomizes all three, and B shows a fixed order.",
+        "Candidate B states that no reference period is used and C also states none, while A does not state a reference period decision.",
+        "Candidate C declares two domains as not covered, communication or transparency and dispute handling, while A and B declare none missing."
+      ],
+      "merged": [
+        {
+          "domain": "Accuracy of counting votes",
+          "candidate": "",
+          "id": ""
+        },
+        {
+          "domain": "Impartiality or independence from political parties",
+          "candidate": "",
+          "id": ""
+        },
+        {
+          "domain": "Competence in running elections",
+          "candidate": "",
+          "id": ""
+        },
+        {
+          "domain": "Fairness in how elections are conducted",
+          "candidate": "",
+          "id": ""
+        },
+        {
+          "domain": "Honesty in reporting election results",
+          "candidate": "",
+          "id": ""
+        },
+        {
+          "domain": "Communication or transparency",
+          "candidate": "",
+          "id": ""
+        },
+        {
+          "domain": "Handling of disputes",
+          "candidate": "",
+          "id": ""
+        }
+      ],
+      "test_first": [
+        {
+          "candidate": "B",
+          "id": "TC3",
+          "method": "Cognitive interview probing how respondents work out what 'Not at all' means with 'dishonestly' in the stem."
+        },
+        {
+          "candidate": "A",
+          "id": "Tnec2",
+          "method": "Cognitive interview on how respondents rank 'A little' and 'Some'."
+        },
+        {
+          "candidate": "B",
+          "id": "TC1",
+          "method": "Split-ballot experiment comparing the two separate no-answer options with a single one, with web probing on why respondents chose each."
+        },
+        {
+          "candidate": "C",
+          "id": "NEC_2",
+          "method": "Cognitive interview on what respondents take 'major mistakes' and 'the voting process' to mean."
+        },
+        {
+          "candidate": "A",
+          "id": "Tnec3",
+          "method": "Web probing asking what respondents had in mind by 'managing elections smoothly'."
+        }
+      ],
+      "limits": "This is an expert review by a language model against a fixed checklist; it cannot show how respondents will understand or answer, and no item here has been tested. The items listed under test_first should be tested before any decision, and no candidate or merged option is ready to field."
+    }
+  },
+  "kept": null,
+  "profile": "home",
+  "labels": {
+    "A": "meta-llama/llama-4-maverick",
+    "B": "openai/gpt-6-luna",
+    "C": "google/gemma-4-31b-it"
+  },
+  "r_checks": {
+    "appraisal": {
+      "unknown_checks": [],
+      "not_appraised": [],
+      "unknown_items": [],
+      "merged_problems": [],
+      "fails_reported": 27
+    },
+    "coded_defaults": {
+      "A": [
+        {
+          "id": "Tnec1",
+          "format": "closed",
+          "n_options": 5,
+          "n_points": 5,
+          "midpoint": true,
+          "dont_know": false,
+          "ref_period": false,
+          "labels": "yes"
+        },
+        {
+          "id": "Tnec2",
+          "format": "closed",
+          "n_options": 5,
+          "n_points": 5,
+          "midpoint": true,
+          "dont_know": false,
+          "ref_period": false,
+          "labels": "yes"
+        },
+        {
+          "id": "Tnec3",
+          "format": "closed",
+          "n_options": 5,
+          "n_points": 5,
+          "midpoint": true,
+          "dont_know": false,
+          "ref_period": false,
+          "labels": "yes"
+        }
+      ],
+      "B": [
+        {
+          "id": "TC1",
+          "format": "closed",
+          "n_options": 7,
+          "n_points": 6,
+          "midpoint": false,
+          "dont_know": true,
+          "ref_period": false,
+          "labels": "not stated"
+        },
+        {
+          "id": "TC2",
+          "format": "closed",
+          "n_options": 7,
+          "n_points": 6,
+          "midpoint": false,
+          "dont_know": true,
+          "ref_period": false,
+          "labels": "not stated"
+        },
+        {
+          "id": "TC3",
+          "format": "closed",
+          "n_options": 7,
+          "n_points": 6,
+          "midpoint": false,
+          "dont_know": true,
+          "ref_period": false,
+          "labels": "not stated"
+        }
+      ],
+      "C": [
+        {
+          "id": "NEC_1",
+          "format": "closed",
+          "n_options": 5,
+          "n_points": 4,
+          "midpoint": false,
+          "dont_know": true,
+          "ref_period": false,
+          "labels": "not stated"
+        },
+        {
+          "id": "NEC_2",
+          "format": "closed",
+          "n_options": 5,
+          "n_points": 4,
+          "midpoint": false,
+          "dont_know": true,
+          "ref_period": false,
+          "labels": "not stated"
+        },
+        {
+          "id": "NEC_3",
+          "format": "closed",
+          "n_options": 5,
+          "n_points": 4,
+          "midpoint": false,
+          "dont_know": true,
+          "ref_period": false,
+          "labels": "not stated"
+        }
+      ]
+    }
+  }
+}

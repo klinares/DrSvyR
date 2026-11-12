@@ -2,29 +2,225 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
-## Where things stand (2026-11-11, end of the Phase 2 session, live check run)
+## Where things stand (2026-11-11, end of the Phase 3 session)
 
-- **Phases 0, 1 and 1b are committed** on branch `questionr` (from `main` at
-  00e5741), not pushed: `d651cfe`, `ca5aa70`, `0228360`, `670b899` (the last is
-  Phase 1b, after the Claude project's review).
-- **Phase 2 is committed** as `025a86f` on `questionr`, not pushed: `R/llm.R`,
-  the Models table and "Check connections" in `R/ui.R`, the wiring in `app.R`,
-  the Phase 2 checks in `tests/smoke.R`, and `tests/llm_check.R` with its output
-  `tests/llm_check.out`. Checked live (below).
-- **Live check: 8 of 8 calls green** (4 connection pings, 3 worker drafts, 1 PM
-  review), about $0.075 by list prices. Results and what they leave open are in
-  "Live run, result" below. The third worker is now `openai/gpt-6-luna` (Kevin,
-  2026-11-11; `app.R` and the copy in `DESIGN.md` section 4 changed).
-- `tests/smoke.R`: 142 checks, all ok, about 13 s, no model calls (85 from
-  Phases 0 to 1b, then 57 for Phase 2; the network in those is a mock server on
-  this machine); rerun after the ID swap, still 142. `tests/review.R 2` run
-  after the live check: **no FAIL**; 7 of 8 code files; `REVIEW.md` now carries
-  `llm_check.out` verbatim.
-- Nothing was pushed.
-- **Next:** Kevin takes `REVIEW.md` and this file to the Claude project. Decision
-  13 (token ceilings) is the one the live run raised.
+- **Committed on branch `questionr`, not pushed.** Phases 0, 1, 1b: `d651cfe`,
+  `ca5aa70`, `0228360`, `670b899`. Phase 2: `025a86f`, `c8870dd`. Phase 3:
+  `539ec08` (the Claude project's files, as they were), `7308eb1` (3a),
+  `aa07e01` (3b), `76b6354` (3c), `d03f7db` (`llm_check.R go generate`), and the
+  commit that carries this file and `REVIEW.md`.
+- **Phase 3 is built**: the task registry and one assembler for every step, the
+  flow engine, the reply schemas and checks, and the four Generate screens
+  (Brief, Prompt, Results, Run again). Output and Methodology are still
+  placeholders.
+- `tests/smoke.R`: **275 checks, all ok**, no model calls (the 272 before the
+  live run, plus 3 from what it found). `tests/review.R 3`: **no FAIL**; section
+  8 passes all 16 of its checks; **10 of 10 code files**; the five prompt hashes
+  in section 6 are unchanged, and so are 60 more I recorded before 3a and
+  compared after.
+- **One live run of the engine: 4 of 5 steps ok.** The brief check was cut off at
+  its 2000-token ceiling and failed; the three drafts and the appraisal came
+  back. About $0.17. Details below ("Live run of the engine"); the ceiling is
+  open decision 14.
+- **Next:** Kevin takes `REVIEW.md`, this file and `tests/run_generate.json` to
+  the Claude project. Open decisions 14 to 17 are what the live run raised.
 
-## Live run, result (2026-11-11 21:05, Kevin's yes, third worker swapped first)
+## What Phase 3 built
+
+| File | Lines | What it holds |
+|---|---|---|
+| `R/skills.R` | 504 | `TASKS` (label, kind, files, ask, fields) replaces `TASK_FILES` and `TASK_ASK`; `STEPS`, `step_files()`; `build_step_prompt(form, step, candidates)` for the brief, work and appraise steps, with `build_prompt(form)` as its work step; the CANDIDATES block |
+| `R/checks.R` | 239 | `REPLY_SCHEMAS` (brief, draft, appraisal) and `reply_validator()`, with the item count (parts not counted); `code_defaults()`; `check_appraisal()` |
+| `R/flow.R` | 189 | `run_brief`, `run_drafts`, `run_appraisal`; the blind labels (`labels_of`, `candidates_of`); `flow_round`, `flow_summary`, `flow_log_json` for the run log |
+| `R/ui_generate.R` | 547 | `STATE_DEFAULTS`; the four modules `mod_brief_*`, `mod_prompt_*`, `mod_results_*`, `mod_again_*`; `FIELD_SPECS`; `progress_ask()` |
+| `R/ui.R` | 158 | Unchanged but for its header: tab names, helpers, Start here, the Models table, placeholders |
+| `R/llm.R` | 511 | Ceilings brief 2000, draft 8000, appraisal 16000, timeout 600 s; a reply cut off at the ceiling is `llm_truncated`, not retried |
+| `app.R` | 155 | The state object is made from `STATE_DEFAULTS`; the tabs and the server use the modules; `go()` moves between tabs |
+| `tests/smoke.R` | 1666 | 275 checks. Phase 3 added the registry and step assembler, the validators, the coded defaults against a hand-coded fixture, the engine on a fake `ask` (a failed worker, a wrong item count, a failed appraisal, a leak, an edited prompt), the run log through the real `llm_json()`, and each module in `testServer` |
+| `tests/llm_check.R` | 248 | `go` is the Phase 2 run; `go generate` runs the engine live and writes `tests/run_generate.json` |
+
+`tests/review.R` is as the Claude project left it: `git diff 539ec08 --
+tests/review.R` is empty.
+
+## Live run of the engine (2026-11-11 22:06; Kevin's yes)
+
+`tests/llm_check.R go generate`: a 3-item attitudinal draft (trust in the national
+electoral commission, web, adults), all three workers, the brief check and the
+appraisal, through `run_brief`, `run_drafts` and `run_appraisal`. Five requests, no
+retries. Seed 20261111. Brief prompt hash `a6ff0aab...`, work prompt hash
+`d6925e29...`, appraisal prompt hash `3ef86240...`.
+
+| Step | Model | Seconds | Tokens in / out | Finish |
+|---|---|---|---|---|
+| Brief check | `claude-sonnet-5-5` | 17.2 | not recorded (see below) / 2000 | **max_tokens: failed** |
+| Draft | `google/gemma-4-31b-it` | 26.3 | 2889 / 700 | success |
+| Draft | `meta-llama/llama-4-maverick` | 8.3 | 2784 / 614 | success |
+| Draft | `openai/gpt-6-luna` | 52.9 | 2779 / 4550 | success |
+| Appraisal | `claude-sonnet-5-5` | 91.1 | 5320 / 12961 | success |
+
+- **Cost, by list prices applied to those tokens: about $0.17**, against the
+  $0.10 I projected. The appraisal alone is $0.14: it wrote 12,961 tokens where I
+  guessed 6,000. The brief check's input was not recorded (a failed call keeps no
+  tokens); I take it as about 4,100, so about $0.03. I read no bill.
+- **The brief check was cut off at 2000.** Its reply began with the first question
+  (the error carries 120 characters); where it stopped is not recorded. It failed
+  once and was not retried (as designed). The failure message says "Ask for
+  fewer items", which is the wrong advice for a brief check (decision 14).
+- **The appraisal used 12,961 of its 16,000** for 3 candidates of 3 items. It grows
+  with candidates times items, so about 12 items across the candidates is where it
+  will reach the ceiling (decision 14).
+- **Luna used 4,550 output tokens for 3 items**, about 1,500 an item, and took 53 s;
+  at that rate its 8,000 ceiling is about 5 items (decision 14).
+- **R's checks on the appraisal found nothing wrong with it**: 27 fails reported,
+  every `check` an id in the checklist that was sent, every one of the 9 items given
+  an entry, no entry for a missing item.
+- **The labels worked.** A was Llama, B was Luna, C was Gemma for this seed; the
+  appraisal prompt held no model name.
+- **No key is in the log** (a search for key-shaped strings found none, and the
+  script scrubs both keys).
+- **The log is missing two things**, because of a bug of mine that this run found
+  and that is fixed in `R/flow.R` but not re-run (it would cost another $0.17):
+  `brief` and `appraisal` have no `call` record in `tests/run_generate.json` (the
+  raw reply and tokens of those two steps). The summary at the top of the file
+  does have their seconds, tokens and finish, and the appraisal's parsed reply is
+  there. The failed brief check's raw reply is therefore not in the file; its first
+  120 characters are in the error. A smoke check now asserts both are logged.
+  Likewise the file's `coded_defaults` for candidates B and C say `labels: not
+  stated`, from patterns that missed how Luna and Gemma wrote it ("Label every
+  option", "all labels present"); the patterns are fixed and tested, the file is as
+  the run wrote it.
+
+### What the models did that the skills did not expect
+
+- **Gemma and Llama wrapped the draft in a ```` ```json ```` fence** again; Luna did
+  not. The fence stripper handled it (first attempt each).
+- **Gemma wrote `decisions` as one string per item**, with all the choices run
+  together and no reasons ("Closed; 5 options; all labels present; no midpoint;
+  ..."), where `generate.md` asks for one short line each, with a reason. The
+  appraiser failed `declare_defaults` for all three Gemma items because of it.
+- **Llama's items say "no midpoint" over a five-point scale** ("Somewhat
+  confident" is the middle). R codes a midpoint from an odd count alone, so it
+  shows "yes" while the item says no; the appraiser caught the contradiction on
+  Llama's first item (decision 16). Gemma's four points plus "Do not know" and
+  Luna's five points plus two no-answer options code as R should.
+- **Luna offered seven options**: five trust levels and two separate no-answer
+  options ("not heard enough", "no opinion"). The appraiser failed all three Luna
+  items for `options_fit` because the two overlap. One item, TC3, asks how much the
+  commission is expected to report results "dishonestly", with "Not at all" as
+  an option, which the appraiser failed as a double negative.
+- **The appraiser failed every item**: 27 fails over 9 items, so no candidate item
+  passed every check and **the merged option is empty for all seven domains** (it
+  said so, as `merged_option` asks). The commonest fails were
+  `midpoint_and_dont_know` and `options_fit` (6 each). One missing don't-know
+  option on Llama's first item was reported three times, as `midpoint_and_dont_know`,
+  `non_attitudes` and `options_fit`: one cause counted in three checks. That is the
+  Claude project's to weigh, since it is how the skills divide the checks.
+- **The appraiser listed two uncovered domains** (communication or transparency,
+  dispute handling; from Gemma's `not_covered`) in `coverage` with an empty
+  `covered_by`. The Results screen draws that as a row with a blank "Covered by".
+- **No model asked a question the brief did not answer**; Gemma and Luna put the
+  missing country in `missing_from_brief`.
+- **The appraiser did not name a winner**, and its `limits` text said no candidate
+  or merged option is ready to field, as `pm_appraise.md` asks.
+
+## Phase 3 decisions taken, with the default used
+
+This list is numbered on its own. The decisions still open are 14 to 17 in the
+"Open decisions" list.
+
+1. **`ask` keeps section 12's default, `llm_json`.** It returns a list with the
+   reply as `obj`, while the fake in `review.R` returns the bare reply, so the flow
+   takes either (`as_reply()`).
+2. **The brief prompt carries the task's CHECKLIST**, between ASK and CHARACTERIZE.
+   Section 12 does not list it, but `criteria_preview` in `pm_brief.md` takes its
+   criteria "from the checklist you were given". Its files are `core.md`,
+   `pm_brief.md`, then the task's own files (so `generate.md` too, and not
+   `core.md` twice); its output format is `pm_brief.md`'s.
+3. **The appraisal prompt** is PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE.
+   CANDIDATES is one JSON object per line (letter, `not_covered`, items). An item
+   keeps id, domain, intro, stem, options, open_format, parts, programming,
+   decisions and, if filled, source_english. **The worker's `notes` are left out**:
+   they are where a model is likeliest to say who it is. The checklist is the
+   workers' (`build_checklist(form)`).
+4. **Blind labels** come from the order of a sha256 of seed, position and model id,
+   so the same seed gives the same letters on any machine and the generator's own
+   seed is untouched. The seed is drawn at run time and stored.
+5. **A model's name in the appraisal prompt stops the appraisal** (the id, and
+   the part after its slash, at least 4 characters): it comes back failed, saying
+   so, with no call made. Free text in the form could trigger it too.
+6. **A reply that fails the shape check is retried**, up to three attempts, like
+   a reply that is not JSON; the sentence is what the analyst reads if all fail.
+   Only fields R reads are required (`id`, `domain`, `stem`, options or an
+   `open_format`); the rest are read with defaults so a forgotten note is not a
+   retry. A wrong item count is a retry too.
+7. **A result keeps its call record as an attribute `call`** (seconds, finish,
+   tokens, attempts, raw reply), so each result has exactly the fields section 12
+   names; `flow_round()` copies it into the log. `error` is `NA` when ok.
+8. **Reference period is coded from the stem and its lead-in** (`intro`), not the
+   stem alone, since a lead-in can carry it ("Thinking about the past 7 days: ...").
+9. **Scale points exclude don't-know, no-opinion and not-applicable options**
+   (English only); a midpoint is an odd number of points, three or more.
+10. **The model's id is shown under each candidate's letter on Results**; the
+    appraiser never sees it. The log records the map.
+11. **Both the system prompt and the message are editable** on the Prompt tab;
+    the edited marker covers both, and shows both hashes (first 16 characters).
+12. **The Brief form keeps what is typed when the task changes**: every field is
+    always there, shown or hidden by a condition built from the registry. A field
+    the task does not list is blank in the form that is sent.
+13. **Run again is a box under Results**; its button returns to the Brief tab with
+    the form as it was. The change stays in the prompt for every later round until
+    it is dropped (a button on the Brief tab) or replaced.
+14. **Ticked items are kept as candidate letter, position and id** in
+    `state$kept`, cleared when a new run finishes.
+15. **A cut-off reply is `llm_truncated`**, not retried and not counted against the
+    session's retry cap.
+16. **Two existing smoke checks changed because the design did**: the two that said
+    a cut-off reply is requested three times now say once, and the count of
+    "Not built yet" tabs is 2. No check was loosened to pass.
+17. **`ui.R` is split** into `ui.R` and `ui_generate.R` (section 12 allows it), which
+    makes the tenth code file.
+
+## Click-through for Kevin (the app in a browser)
+
+Run `shiny::runApp("QuestionR")` from the repository root, or Run App in RStudio.
+Everything up to step 6 is free. Steps 6 and 7 make model calls (about $0.17 with
+three workers and three items).
+
+1. **Start here:** paste the project manager's key and press Use this key; "Check
+   connections" should show all four ready.
+2. **1. Brief:** change the task. Behavioral adds "Reference period and unit".
+   Evaluate shows the questionnaire box, hides the construct, item count and workers,
+   and says Evaluate is built in Phase 4. Type something in a field, change task and
+   change back: it should still be there.
+3. Choose Attitudinal. Enter a research question, a population, tick "web", set 3
+   items, and untick one worker.
+4. **Check the brief** (a call; it may fail at the 2000 ceiling: decision 14) or
+   **Skip the brief check**. Leaving the research question blank and pressing Skip
+   should say it is required, on the page. Unticking every worker should say to tick
+   one.
+5. **2. Prompt:** read it. Edit the message: a yellow note should show "Edited" with
+   two hashes. "Reset to the assembled prompt" should bring the text back.
+6. **Approve and run.** A progress bar should name each model before its call and
+   the page should move to **3. Results**. Expect one to two minutes, longer with
+   Luna.
+7. **3. Results:** candidates A, B, C with the model under each letter; items with
+   any parts indented; the "Coded defaults" fold-out under each item; failed checks
+   with "Failing words"; a "Keep this item" box on each. Below: coverage,
+   how the candidates differ, the merged option (labelled untested), what to test
+   first. A worker that failed should be listed above the candidates with its
+   reason.
+8. **Run again:** type a change, press the button. The Brief tab should open with the
+   form as it was and a note "Round 2 ... REVISION"; Skip, and the Prompt tab should
+   hold a `REVISION:` line.
+9. **Evaluate:** paste a short questionnaire, Skip. The prompt can be read, and the
+   button is greyed.
+10. **Failures to try:** forget the key (Start here) and press Check the brief: it
+    should say it needs the key and make no call. Then run with workers only and see the
+    appraisal fail with its reason while the candidates still show.
+11. If the Results tab ever sits blank after a run, tell me which tabs you clicked
+    and in what order; that is the thing I could not rule out (see "Skipped").
+
+## Live run of Phase 2 (2026-11-11 21:05, Kevin's yes, third worker swapped first)
 
 `tests/llm_check.R go`, from PowerShell inside `QuestionR/`. Exit 0, **8 of 8
 calls green**, one request each (no retries fired). `tests/llm_check.out` holds
@@ -275,19 +471,47 @@ New, for the Claude project or Kevin:
     in the result is for the log); `llm_json()` returns a list (`obj`, `raw`,
     `user_sent`, `finish`, `tokens`, `model`, `attempts`, `seconds`), not the bare
     object. [As written.]
-13. **Token ceilings, raised by the live run.** `LLM_MAX_TOKENS` is `draft` 4000,
-    `evaluate` 8000, `appraisal` 8000, `brief` 1500. A two-question review took
-    6241 of the 8000 (Sonnet 5.5, with its default thinking on, billed as
-    output), and two drafted items took 2740 of the 4000 on Luna. A review of a
-    longer questionnaire, or a ten-item draft, may well reach the ceiling, and
-    `llm_json()` then retries a cut-off reply twice and fails, saying why.
-    Retrying does not help: the same prompt is cut off at the same place.
-    Options: raise the ceilings (cost grows with them); set a thinking effort or
-    budget on the PM call, which `llm_chat()` does not do today (it passes only
-    `max_tokens`, and `temperature` when a model entry sets one); or split a long
-    review into batches of questions. [Left as is. I would measure first: one
-    live run of a 15-question review, reading `finish`, a cost of about $0.10 by
-    the same arithmetic; Kevin's call.]
+13. **Token ceilings, raised by the Phase 2 live run.** Written when `draft` was
+    4000, `evaluate` 8000, `appraisal` 8000, `brief` 1500; Phase 3 set `brief`
+    2000, `draft` 8000, `appraisal` 16000 (section 12) and a cut-off reply is no
+    longer retried. What is still open from it is `evaluate`: a two-question
+    review took 6241 of its 8000 (Sonnet 5.5, with its default thinking on, billed
+    as output). Options: raise the ceilings (cost grows with them); set a
+    thinking effort or budget on the PM call, which `llm_chat()` does not do today
+    (it passes only `max_tokens`, and `temperature` when a model entry sets one);
+    or split a long review into batches of questions. [Left as is, for Phase 4,
+    which section 12 says measures a 15-question review first.]
+14. **The Phase 3 ceilings, from the live run of the engine.** Brief check 2000:
+    **too low**, it was cut off and failed. Draft 8000: Luna used 4,550 for 3
+    items (about 1,500 an item), so about 5 items fits; Gemma and Llama used about
+    700 and 600. Appraisal 16000: it used 12,961 for 3 candidates of 3 items, and
+    grows with candidates times items, so about 12 items across the candidates
+    reaches it. Each of these fails the step, with no retry, and the run goes on
+    without it. The brief check's failure text, "Ask for fewer items", is wrong for
+    it. Options: raise the brief ceiling to 4000 (it costs under a cent more);
+    raise the appraisal's, or appraise one domain or a few items at a time; reword
+    the truncation message by step; cap the number of items the form accepts per
+    run. I have not checked what ceiling the Anthropic API accepts without
+    streaming. [Left as Kevin set them, provisional as section 12 says. I suggest
+    brief 4000 first, since a cut-off brief check is the one failure the analyst
+    cannot fix by asking for less.]
+15. **Luna is slow and spends most of its output on reasoning**: 53 s and 4,550
+    tokens for 3 items, against 8 to 26 s and about 700 for the other two. The
+    Results run waits on it, one call after another. [As is. Moving it last in
+    `APP_PROFILES` would put the faster two first, nothing else.]
+16. **"Midpoint" is coded from the count of scale points alone**, so an
+    odd-numbered unipolar scale ("none" to "a lot", five points) shows "yes" while
+    the model's own `decisions` say "no midpoint". The Results table says
+    "Midpoint (odd count)" and the Methodology note does not yet. [As built. An
+    alternative is to show the item's own declaration beside R's code, so a
+    disagreement is visible, as the appraiser's did for Llama's first item.]
+17. **For the Claude project, from the appraisal in `run_generate.json`:** the
+    appraiser failed all 9 items (27 fails) so the merged option was empty for
+    every domain; and one cause (no don't-know option on Llama's first item) was
+    reported under three checks. Whether that is the intended strictness of
+    `pm_appraise.md` 0.2 and `restraint`, or too much, is a skills question; code
+    does not change it. Gemma also ran every decision into one unexplained string
+    that `declare_defaults` asks to be separate lines with a reason each.
 
 ## Review of Phases 0 and 1 (Claude project, 2026-11-11)
 
@@ -348,14 +572,14 @@ hand merge when the two branches meet.
   them. Only Start here is real.
 - **Not created, because a later phase owns them:** `R/checks.R`,
   `tests/gold_items.csv`, `www/methodology.md`.
-- **`tests/llm_check.R` has no brief check and no appraisal**, because their
-  prompts do not exist until Phase 3, which adds them. Its drafting shape check
-  and review shape check are inline and minimal; Phase 3's validators replace them.
-- **Live coverage is thin by design.** `llm_check.R` ran once, on two items and
-  two questions, so it did not reach a token ceiling, a retry, a 4xx, or a
-  placeholder reply against a real model; those are covered by the mock server
-  only. The brief check, the appraisal, `LLM_MAX_TOKENS` at realistic sizes, and
-  `max_completion_tokens` being honoured are untested live.
+- **`go` in `tests/llm_check.R` (the Phase 2 run) still has its inline drafting
+  and review shape checks**, minimal; `go generate` uses the real validators.
+- **Live coverage is thin by design.** The two live runs did not reach a retry,
+  a 4xx or a placeholder reply against a real model; those are covered by the
+  mock server only. Phase 3's one live run did reach a token ceiling (the brief
+  check). `max_completion_tokens` being honoured is still unproven: the brief
+  check's cut-off was at 2000 on the Anthropic API, which names the field
+  `max_tokens`, so it says nothing about the OpenAI-style one.
 - **New test dependency:** `webfakes` (with `callr`, already installed), home
   only, for the mock server in `tests/smoke.R`. It starts one child R process
   for the length of the test, not parallel work in the app (root rule 3 is about
@@ -363,12 +587,38 @@ hand merge when the two branches meet.
 - **No logo file.** `www/logo/` does not exist, so the dashed placeholder box
   shows, as the Phase 0 pass condition says. Add `www/logo/office_logo.png` to
   replace it; the smoke test copes with either.
-- **The project manager's two prompts are not assembled.** `pm_brief.md` and
-  `pm_appraise.md` are parsed and checked at startup but nothing builds a
-  prompt from them; the brief check and the appraisal are Phase 3.
-- **The smoke test leaves out what its owners are not built yet:** validators on
-  canned JSON replies, coded defaults against a fixture, JSON repair (Phases 2
-  and 3, as DESIGN section 9 lists them).
+- **Phase 3 skipped or stubbed:**
+  - **Evaluate does not run.** `run_review` is Phase 4; the Brief and Prompt tabs
+    show Evaluate's prompt and say so, and Approve is off, and refused if sent anyway.
+  - **No Output tab, run log download or Methodology tab** (Phase 5). The log is
+    built (`flow_round`, `flow_log_json`) and each round is kept in `state$rounds`,
+    and the ticked items in `state$kept`, but nothing offers them for download.
+  - **The paste cap is still not enforced** (Evaluate, Phase 4).
+  - **Coded defaults are English only.** For another output language the scale
+    points, midpoint, don't-know and reference-period cells say "not coded"; only
+    the format, the number of options and the self-reported labels are coded. The
+    English wording in `source_english` is not used for it.
+  - **No check that the appraiser's "failing words" occur in the item.** Its
+    `evidence` may name a feature rather than quote words, so a missing quote is
+    not an error; DESIGN section 7's evidence check is for Evaluate.
+  - **The brief check's answers are shown, not applied.** The analyst edits the
+    form by hand.
+  - **The brief check on Evaluate** has a prompt and a test but has not run live.
+  - **The Results screen has been seen only through `testServer`, with canned
+    replies, not in a browser with a real run**; and Approve, the move to Results
+    and the progress line were not clicked in a browser, since each makes calls.
+    The Brief and Prompt tabs, Skip, the edited marker and the Evaluate path were
+    clicked in the built-in browser. `progress_ask()` is checked only by reading
+    its body (the page announcement comes before the call).
+  - **Scripted tab changes in the browser left the Results outputs unrendered**
+    in one session (they showed "recalculating" and never filled). Clicking the
+    tabs for real, in a fresh session, including after Skip moved the page to
+    Prompt, rendered them. I take it as a quirk of driving the tabs with script and
+    not reproduced; it is the thing to watch in Kevin's click-through.
+- **Hard-coded in Phase 3:** the task sentences (in `TASKS`), the form's field
+  wording (`FIELD_SPECS`), the English pattern lists for the coded defaults, the
+  default of 6 items, the fields of an item the appraiser sees, the 16-character
+  hash shown on screen, and the seed (drawn at run time by `sample.int`).
 - **Hard-coded:** the model IDs and base URLs in `APP_PROFILES` (Kevin's, as
   given; work entries are placeholders); the banner `UNCLASSIFIED`; the cap
   15000; the `TODO` key instructions. In `tests/smoke.R`: the logo file name
@@ -433,8 +683,9 @@ hand merge when the two branches meet.
 
 ## Remaining FAIL in REVIEW.md
 
-None as of `review.R 2` after the live run. The one `READ` row is the single
-`Sys.getenv()` in `llm_key_for()`, for server-key models only.
+None as of `review.R 3` after the live run: no FAIL anywhere, 16 of 16 in section
+8. The one `READ` row is the single `Sys.getenv()` in `llm_key_for()`
+(`R/llm.R:116`), for server-key models only.
 
 ## Log
 
@@ -483,6 +734,23 @@ None as of `review.R 2` after the live run. The one `READ` row is the single
   the live output. **Raised, not settled:** token ceilings (decision 13);
   `max_completion_tokens` still unproven (VERIFY items). **Not done:** the Claude
   project's review of `REVIEW.md` and this file; nothing pushed.
+- **Phase 3 (2026-11-11), `539ec08` to `d03f7db` and the commit with this file.**
+  Kevin's brief: commit the Claude project's five files, then 3a, 3b, 3c, then say
+  what a live run costs and wait. Committed those files as they were (`539ec08`).
+  3a (`7308eb1`): `TASKS`, `build_step_prompt()`; 60 prompt hashes compared before
+  and after, identical. 3b (`aa07e01`): `R/checks.R`, `R/flow.R`, the section 12
+  ceilings and timeout, a cut-off reply no longer retried; smoke 218. 3c
+  (`76b6354`): `R/ui_generate.R`, the app wired; smoke 272; ten mutations of
+  scratch copies, each caught by the check meant to catch it; the Brief and Prompt
+  tabs clicked in the built-in browser. `d03f7db`: `llm_check.R go generate`,
+  dry-run against a stand-in. Told Kevin 5 requests and about $0.10; Kevin said
+  yes. **Live run: 4 of 5 steps ok, about $0.17**; the brief check hit its 2000
+  ceiling. The run found two bugs of mine, fixed afterwards without a new run:
+  `flow_round()` dropped the brief's and appraisal's call records from the log, and
+  the label patterns missed "Label every option" and "all labels present"; smoke
+  275. `review.R 3`: no FAIL. **Not done:** the Claude project's review; the open
+  decisions 14 to 17; a run that shows the Results screen in a browser; nothing
+  pushed.
 
 ## Assembled prompts (Phase 1b)
 

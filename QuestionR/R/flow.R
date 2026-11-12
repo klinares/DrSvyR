@@ -187,6 +187,12 @@ flow_summary <- function(brief = NULL, drafts = NULL, appraisal = NULL, pm = NUL
     if (!is.null(appraisal)) list(row("appraisal", pm$id %||% NA_character_, appraisal)))
 }
 
+# A result's call record, from its attribute into a field, so it reaches the log.
+with_call_field <- function(x) {
+  if (!is.null(x)) x$call <- attr(x, "call")
+  x
+}
+
 # A round, for the log: schema 1, the time, the form, then what each step returned.
 #   The project manager's key and every worker's key are never in these lists, and
 #   neither is a header: a call record holds no request. seed and the labels are
@@ -196,6 +202,8 @@ flow_round <- function(form, pm = NULL, brief = NULL, drafts = NULL, appraisal =
   # JSON drops the names of a character vector, and the letters are the point of
   #   labels: letter -> model id, as a named list, keeps them.
   if (!is.null(appraisal)) appraisal$labels = as.list(appraisal$labels)
+  brief = with_call_field(brief)
+  appraisal = with_call_field(appraisal)
   list(schema = 1L, time = format(time, "%Y-%m-%dT%H:%M:%S%z"),
        summary = flow_summary(brief, drafts, appraisal, pm),
        form = form, seed = seed, brief = brief,
