@@ -19,9 +19,19 @@ Read `DESIGN.md` first. Update this file at the end of every session.
   changed once, at 4a, because `generate.md` is 0.3: 45 of the 60 I record moved
   (every drafting form), the 15 Evaluate ones did not; they have not moved since
   (compared after 4b and 4c).
-- **4d is prepared, not run:** `tests/review_questionnaire.txt` (15 questions
-  written for the test) and `tests/llm_check.R go review15`, dry-run against a
-  stand-in. It waits for Kevin's yes (one call, about $0.15 to $0.25).
+- **4d is run (2026-11-12):** one live review of `tests/review_questionnaire.txt`
+  (15 questions, 1,823 characters, written for the test), ceiling raised to
+  24,000 in that process only. **154.9 seconds, 4,774 tokens in, 21,272 out,
+  finish success, 1 attempt**; 33 findings, 20 rated 5 or above, 4 about the
+  instrument; R's checks flagged 1 quote not found (a severity-2 finding whose
+  evidence was elided with "...") and 0 checks not sent. Numbers are in
+  `tests/review_tokens.md`; the raw reply is `tests/review15_run.json`. Set from
+  it: `LLM_MAX_TOKENS[["evaluate"]]` 8000 to **43,000** (about twice 21,272) and
+  `APP_MAX_PASTE_CHARS` 15,000 to **4,000** (about twice 1,823). Smoke still 319,
+  all ok. **Worth knowing:** a 15-question review used 89% of a 24,000 ceiling,
+  so output is about 1,400 tokens a question; the old 15,000-character cap would
+  have allowed far more than any ceiling can finish. At 43,000 tokens a review
+  can take about 5 minutes (LLM_TIMEOUT_S is 600).
 - **`reasoning_effort` (VERIFY from section 13):** passed through
   `ellmer::params()`. Checked against a local server: `chat_anthropic()` sends
   adaptive thinking with that effort; `chat_openai_compatible()` in ellmer 0.4.2

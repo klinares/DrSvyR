@@ -19,9 +19,10 @@
 #   prompt is cut off at the same place. ping is the connection check's very
 #   small call. Brief, draft and appraisal are Kevin's Phase 3 settings,
 #   provisional until a live run has recorded how much each step really uses;
-#   evaluate stays as it was until Phase 4 has measured a 15-question review.
+#   evaluate is about twice what one live review of a 15-question, 1,823-character
+#   questionnaire used (21,272 tokens out in 155 seconds; tests/review_tokens.md).
 LLM_MAX_TOKENS <- c(brief = 4000L, draft = 12000L, appraisal = 24000L,
-                    evaluate = 8000L, ping = 200L)
+                    evaluate = 43000L, ping = 200L)
 
 # What a cut-off reply tells the analyst to do, by step (DESIGN.md section 13).
 #   llm_json() says only that the reply was cut off; the flow adds this, because

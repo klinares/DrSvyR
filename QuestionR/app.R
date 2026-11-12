@@ -25,7 +25,9 @@ APP_OFFICE <- ""
 
 # Largest questionnaire the Evaluate task accepts, in characters. Over it the
 #   app says so and asks for the questionnaire in parts; nothing is truncated.
-APP_MAX_PASTE_CHARS <- 15000
+#   About twice the questionnaire the Phase 4d live review measured (1,823
+#   characters, tests/review_tokens.md), matched to the evaluation ceiling.
+APP_MAX_PASTE_CHARS <- 4000
 
 # Which models do which job, chosen by the environment variable
 #   QUESTIONR_PROFILE ("home" if unset, or "work"). Each model has a key_source:

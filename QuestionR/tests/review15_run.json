@@ -1,0 +1,498 @@
+{
+  "schema": 1,
+  "time": "2026-11-12T06:36:34-0500",
+  "summary": [
+    {
+      "step": "review",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "seconds": 154.9372,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 4774,
+      "tokens_out": 21272,
+      "error": null
+    }
+  ],
+  "form": {
+    "task": "evaluate",
+    "research_question": "Satisfaction with and use of local council services",
+    "construct": "",
+    "population": "Adults aged 18 and over living in the council area",
+    "country": "",
+    "modes": "web",
+    "output_language": "English",
+    "source_language": "English",
+    "n_items": null,
+    "reference_period": "",
+    "keep_items": "",
+    "other": "",
+    "questionnaire": "Q1. Do you live in the Hartley Borough Council area? Yes / No\nQ2. How long have you lived at your current address? Less than a year / 1 to 5 years / 6 to 10 years / More than 10 years\nQ3. Have you used any council services in the last 12 months? Yes / No (go to Q9)\nQ4. Which council services have you used in the last 12 months? Tick all that apply. Bin collection / Recycling centre / Library / Leisure centre / Parks / Planning / Council tax / Other\nQ5. How satisfied or dissatisfied are you with the cleanliness and safety of your local streets and parks? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied\nQ6. How often do you use your local library? Never / Rarely / Sometimes / Often\nQ7. Don't you agree that the council should spend more on libraries? Strongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree\nQ8. How much do you pay in council tax each year? Please give the amount in pounds. ______\nQ9. Overall, how well do you think the council is run? Very well / Fairly well / Fairly badly / Very badly\nQ10. How much do you trust the council to spend your money wisely? A great deal / Quite a lot / Not very much / Not at all\nQ11. Thinking about when you last contacted the council, how long did it take them to respond? Same day / Within a week / Longer than a week / Never responded\nQ12. The council has invested in new recycling facilities. How satisfied are you with the recycling service? 1 Very dissatisfied ... 5 Very satisfied\nQ13. How many hours a week do you spend volunteering for a local community group? ______ hours\nQ14. How would you rate your health in general? Excellent / Good / Fair / Poor\nQ15. What is your total household income before tax? Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Prefer not to say",
+    "revision": ""
+  },
+  "seed": null,
+  "brief": null,
+  "review": {
+    "status": "ok",
+    "error": null,
+    "system": "You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.\n\nREFLEXES: Core (v0.2)\n- construct_first (Every item.) Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly. MUST NOT: Do not widen or change the construct to make an item easier to write.\n- response_process (Every item.) Walk the item through the four stages a respondent goes through: comprehension, retrieval, judgment or estimation, reporting. A fault at any one stage is measurement error. Name the stage when you name a fault.\n- plain_words (Every question stem, instruction and response option.) Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question. MUST NOT: Do not use a word with more than one common sense where the other sense would change the answer.\n- simple_syntax (Every question stem.) One short sentence where possible, main clause first. Move conditions, definitions and time frames into a separate lead-in sentence instead of stacking clauses. MUST NOT: No single or double negations in the stem. No negative interrogatives.\n- specific_concrete (Every item.) Name the specific object, behaviour, place and time the question is about. Replace vague quantifiers in stems and options with concrete amounts or frequencies where the task allows.\n- one_thing (Every item.) Ask about one thing at a time. Two objects, two behaviours or two qualities joined by \"and\" or \"or\" become two items.\n- no_presupposition (Every item.) Check what the question assumes about the respondent: that they work, have a partner, use a service, have heard of the topic, hold an opinion. Where the assumption fails for part of the population, add a filter question or a not-applicable option. This fault is easy to miss, so check it explicitly.\n- neutral_wording (Every item except a deliberate forgiving introduction to a sensitive question.) Word the stem so no answer is the expected one. No premises stated as fact, no appeals to authority or to what most people think, no emotive terms.\n- options_fit (Every closed item.) Response options are exhaustive and mutually exclusive, answer the question that was asked in the same terms, and give every respondent a true answer to pick.\n- brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.\n- not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.\n\nREFLEXES: Evaluate a questionnaire (v0.2)\n- restraint (Every item you review.) Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding quote the exact words or feature that cause it. MUST NOT: Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.\n- known_overcalls (You are about to flag sensitivity, stigma, burden or length.) These are the faults a language-model reviewer over-reports. Flag sensitivity only when you can say who would edit their answer and in which direction; flag burden only when you can name the step that is hard.\n- known_misses (Every item, as a second pass.) Look again for the faults a language-model reviewer tends to miss: an assumption that does not hold for some respondents, a term that carries a different meaning for part of the population, a framing that belongs to one culture, a question that does not apply to everyone asked.\n- retrieval_and_judgment (Any item asking for facts, behaviour, frequency, amounts or dates.) Check the reference period (stated, bounded, short enough), whether the information is likely to be remembered, and whether the respondent must count, add or average to answer.\n- response_scale (Any closed item.) Check that the options answer the question asked, are balanced where the construct is bipolar, are labelled consistently, have a midpoint and a don't-know or not-applicable option where needed, and do not use vague quantifiers for frequency.\n- agree_disagree_and_grids (Agree-disagree items or a battery sharing one scale.) Note the acquiescence risk and whether a construct-specific format would do the same job. In a battery, check that items are keyed in both directions and that the grid suits the mode.\n- context_and_order (Reviewing the instrument as a whole.) Check that questions on a topic are grouped and run from general to specific; that an earlier item does not supply the answer, the standard of comparison or the mood for a later one; that early questions are easy and on the stated topic; and that sensitive and demographic items come late.\n- filters_and_routing (Reviewing the instrument as a whole.) Check that every item reaches only respondents it applies to, that each filter has a destination for every answer, and that no item is unreachable or asked twice.\n- scale_consistency (Reviewing the instrument as a whole.) Check that the same kind of question uses the same scale, direction and labels throughout, and that reference periods do not change without warning.\n- fit_to_objectives (The brief states research questions or an analysis plan.) List research questions with no item measuring them, and items that serve no stated question. Ask whether the items needed for screening, weighting and calibration are present and worded as in the benchmark source the analyst will use. MUST NOT: Do not judge fit to objectives when the brief gives none; say that it was not assessed.\n- translation_readiness (The brief names a country, a language other than English, or more than one language.) For each item say what would not carry across: idioms, culture-bound examples, units, institutions, scale labels with no natural equivalent, grammatical gender. Organize the instrument-level advice by the five TRAPD steps and say which steps the pasted text shows evidence of and which the analyst must still arrange.\n- severity (Every finding.) Rate how far the problem would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for problems you would revise before fielding.\n- rewrite_and_probe (Every finding rated 5 or above.) Offer one rewrite that fixes that fault and changes nothing else, and one cognitive-interview probe that would show whether real respondents have the problem. MUST NOT: Do not rewrite items that have no finding. Do not present a rewrite as better than the original; it is untested.\n- what_to_test (Closing the review.) Name the few items that most need testing with real respondents and the cheapest suitable method for each. Say at least one method should be used and several where budget allows.\n\nREFLEXES: Mode (v0.1)\n- any_mode (Any mode.) Write and appraise each item as it will reach the respondent in the stated mode: seen or heard, with or without an interviewer, on what size of screen.\n- web (Mode is web, self-administered on a computer.) Respondents read and can see all options: keep unordered lists short and note randomization because early options are favoured. Put definitions in the question text, not behind a click. Keep labels visible for every scale point and spacing even. MUST NOT: Do not rely on an interviewer to clarify, probe or record a volunteered don't know.\n\nPROHIBITIONS (override anything from training)\n- Never invent a citation, a survey name, a statistic or a fact about a country.\n- Never name a source, an author or a course in what you write. Use a rule's id only in a JSON field that asks for one.\n- Never choose for the analyst: you flag and draft, they decide.\n- Never write anything outside the JSON fields asked for.\n- Never score or rank the questionnaire as a whole.\n- Never say an item has no problems; say none were found by this review.\n- Never report how many respondents would misunderstand an item.\n- Never assume a mode the brief does not state; ask for it.",
+    "user": "PREPARE\nResearch question: Satisfaction with and use of local council services\nTarget population: Adults aged 18 and over living in the council area\nSurvey mode: web\nOutput language: English\n\nASK\nReview the questionnaire below as an expert reviewer, item by item and then as a whole. Follow every rule you were given. Reply in the format given at the end of this message.\n\nQUESTIONNAIRE\nQ1. Do you live in the Hartley Borough Council area? Yes / No\nQ2. How long have you lived at your current address? Less than a year / 1 to 5 years / 6 to 10 years / More than 10 years\nQ3. Have you used any council services in the last 12 months? Yes / No (go to Q9)\nQ4. Which council services have you used in the last 12 months? Tick all that apply. Bin collection / Recycling centre / Library / Leisure centre / Parks / Planning / Council tax / Other\nQ5. How satisfied or dissatisfied are you with the cleanliness and safety of your local streets and parks? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied\nQ6. How often do you use your local library? Never / Rarely / Sometimes / Often\nQ7. Don't you agree that the council should spend more on libraries? Strongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree\nQ8. How much do you pay in council tax each year? Please give the amount in pounds. ______\nQ9. Overall, how well do you think the council is run? Very well / Fairly well / Fairly badly / Very badly\nQ10. How much do you trust the council to spend your money wisely? A great deal / Quite a lot / Not very much / Not at all\nQ11. Thinking about when you last contacted the council, how long did it take them to respond? Same day / Within a week / Longer than a week / Never responded\nQ12. The council has invested in new recycling facilities. How satisfied are you with the recycling service? 1 Very dissatisfied ... 5 Very satisfied\nQ13. How many hours a week do you spend volunteering for a local community group? ______ hours\nQ14. How would you rate your health in general? Excellent / Good / Fair / Poor\nQ15. What is your total household income before tax? Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Prefer not to say\n\nCHECKLIST\nconstruct_first: Does the item measure the construct or domain named in the brief and only that?\nplain_words: Would every member of the target population read each key term the same way, without a definition they do not have?\nsimple_syntax: Is the stem free of stacked clauses and of negations?\nspecific_concrete: Is it clear exactly what, whose, where and when the question is about?\none_thing: Does the question ask about exactly one thing, so that no respondent would want to answer its parts differently?\nno_presupposition: Does the question apply to every respondent who will be asked it?\nneutral_wording: Is the wording free of any push toward one answer?\noptions_fit: Can every respondent find exactly one option that is true for them?\nretrieval_and_judgment: Can the respondent retrieve the information and reach the answer without difficult recall or mental arithmetic?\nresponse_scale: Do the response options match the question and treat both directions evenly?\nagree_disagree_and_grids: If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?\ncontext_and_order: Is the order free of an earlier item that would shape answers to a later one?\nfilters_and_routing: Does every respondent path lead only to questions that apply?\nscale_consistency: Are scales, their direction and reference periods consistent across the instrument?\nfit_to_objectives: Is every stated research question measured, and does every item serve one?\ntranslation_readiness: Is the item free of wording that would not survive translation or adaptation to the stated setting?\nany_mode: Does the item work as written in the stated mode?\nweb: Is everything the respondent needs to answer on screen with the question?\n\nCHARACTERIZE\nReturn one JSON object with these fields. Write findings in English whatever\nlanguage the questionnaire is in; write rewrites in the questionnaire's\nlanguage and, when that is not English, add the English meaning.\n\n- \"items\": a list, one entry per question in the order pasted. Each has:\n  - \"id\": the question's own number or label, or its position.\n  - \"findings\": a list, empty if none. Each finding has \"check\" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), \"stage\" (comprehension, retrieval, judgment, reporting, or instrument), \"evidence\" (the exact words or feature), \"problem\" (one or two sentences), \"severity\" (1 to 10), \"rewrite\" and \"rewrite_english\" and \"probe\" (empty strings when severity is below 5).\n- \"instrument\": a list of findings about order, routing, consistency and fit to objectives, in the same form, with the question ids involved in \"evidence\".\n- \"trapd\": an object with the keys \"translation\", \"review\", \"adjudication\", \"pretesting\", \"documentation\", each a short statement of what is still needed; all empty strings when the survey is in one language for one country and that language is the source language.\n- \"test_first\": a list of up to five question ids with the method suggested for each.\n- \"not_assessed\": what this review could not judge from what was pasted.",
+    "hash": "fdae7e07ec83e84b0d67d18f6e6f8edf3cf16b67417eb329095c8a425c661194",
+    "reply": {
+      "items": [
+        {
+          "id": "Q1",
+          "findings": [
+            {
+              "check": "specific_concrete",
+              "stage": "comprehension",
+              "evidence": "the Hartley Borough Council area",
+              "problem": "The question names the council, but a respondent may know which council serves them without knowing whether their address is inside the named area. A wrong Yes or No here decides whether they are in the survey at all.",
+              "severity": 3,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q2",
+          "findings": [
+            {
+              "check": "options_fit",
+              "stage": "reporting",
+              "evidence": "1 to 5 years / 6 to 10 years / More than 10 years",
+              "problem": "Someone who has lived there 5 years and 6 months, or 10 years and 3 months, has no option that is exactly true. They have to round up or down.",
+              "severity": 4,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q3",
+          "findings": [
+            {
+              "check": "plain_words",
+              "stage": "comprehension",
+              "evidence": "any council services",
+              "problem": "The respondent decides what counts as a council service before seeing the list that only appears at Q4. Routine services such as bin collection may not feel like 'using a service', and a 'No' sends the respondent past Q4 to Q9.",
+              "severity": 6,
+              "rewrite": "In the last 12 months, have you used any of these services run by Hartley Borough Council: bin collection, recycling centre, library, leisure centre, parks, planning? Yes / No",
+              "rewrite_english": "In the last 12 months, have you used any of these services run by Hartley Borough Council: bin collection, recycling centre, library, leisure centre, parks, planning? Yes / No",
+              "probe": "When you read 'council services', what did you think of first? Which services, if any, did you decide to count or leave out, and why?"
+            }
+          ]
+        },
+        {
+          "id": "Q4",
+          "findings": [
+            {
+              "check": "plain_words",
+              "stage": "comprehension",
+              "evidence": "Planning / Council tax",
+              "problem": "'Planning' could mean a planning application, a local plan or building advice. 'Council tax' is a payment rather than a service you use, so it is unclear whether paying the bill counts. Respondents may read both differently.",
+              "severity": 5,
+              "rewrite": "Planning (for example, a planning application or advice about building work) / Council tax (paying or asking about your bill)",
+              "rewrite_english": "Planning (for example, a planning application or advice about building work) / Council tax (paying or asking about your bill)",
+              "probe": "What did 'Planning' mean to you here? Did you count paying your council tax as using a service? Why or why not?"
+            },
+            {
+              "check": "any_mode",
+              "stage": "reporting",
+              "evidence": "Tick all that apply. Bin collection / Recycling centre / Library / ...",
+              "problem": "On a web page, the first options in a long tick-all list tend to be chosen more often. Keeping the list in a fixed order may favour the top services. 'Other' should stay last.",
+              "severity": 2,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q5",
+          "findings": [
+            {
+              "check": "one_thing",
+              "stage": "judgment",
+              "evidence": "cleanliness and safety of your local streets and parks",
+              "problem": "The item asks about two qualities (cleanliness, safety) in two places (streets, parks). Someone happy with clean parks but unhappy with safety on the streets has no single true answer, and different people will combine the parts differently.",
+              "severity": 7,
+              "rewrite": "How satisfied or dissatisfied are you with how clean your local streets are?",
+              "rewrite_english": "How satisfied or dissatisfied are you with how clean your local streets are?",
+              "probe": "Which did you think about when you answered: streets, parks, cleanliness or safety? How did you turn them into one answer?"
+            },
+            {
+              "check": "construct_first",
+              "stage": "comprehension",
+              "evidence": "cleanliness and safety",
+              "problem": "The brief is about satisfaction with council services. Safety in streets and parks may be credited by respondents to bodies other than the council, so the item may measure a wider concept. The analyst should confirm that the council is responsible for it.",
+              "severity": 4,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            },
+            {
+              "check": "response_scale",
+              "stage": "reporting",
+              "evidence": "Neither",
+              "problem": "The midpoint is labelled only 'Neither', which does not say 'neither satisfied nor dissatisfied'. There is no 'don't know' or 'don't use' option for people who rarely use streets or parks.",
+              "severity": 3,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q6",
+          "findings": [
+            {
+              "check": "response_scale",
+              "stage": "reporting",
+              "evidence": "Never / Rarely / Sometimes / Often",
+              "problem": "'Rarely', 'Sometimes' and 'Often' are vague quantifiers. A person who visits monthly may call that 'often' and another 'sometimes', so answers cannot be compared or turned into use rates.",
+              "severity": 6,
+              "rewrite": "How often do you use your local library? Never / Less than once a month / About once a month / About once a week / More than once a week",
+              "rewrite_english": "How often do you use your local library? Never / Less than once a month / About once a month / About once a week / More than once a week",
+              "probe": "When you chose your answer, about how many times in a year or month were you thinking of?"
+            },
+            {
+              "check": "specific_concrete",
+              "stage": "comprehension",
+              "evidence": "use your local library",
+              "problem": "'Use' could mean visiting, borrowing books, using computers or using the website. No time period is given, and 'your local library' may be a different library for different people.",
+              "severity": 4,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q7",
+          "findings": [
+            {
+              "check": "simple_syntax",
+              "stage": "comprehension",
+              "evidence": "Don't you agree that",
+              "problem": "This is a negative question, and the agree scale then asks the respondent to agree with a negative. Respondents must work out what 'Agree' and 'Disagree' mean in reply.",
+              "severity": 8,
+              "rewrite": "The council should spend more on libraries. Do you agree or disagree?",
+              "rewrite_english": "The council should spend more on libraries. Do you agree or disagree?",
+              "probe": "In your own words, what does it mean to 'agree' with this question? What would 'disagree' mean?"
+            },
+            {
+              "check": "neutral_wording",
+              "stage": "judgment",
+              "evidence": "Don't you agree that the council should spend more on libraries",
+              "problem": "The wording pushes towards 'agree'. It also puts a spending policy as the expected view and gives no hint of what the money would otherwise be spent on.",
+              "severity": 8,
+              "rewrite": "Do you agree or disagree that the council should spend more on libraries?",
+              "rewrite_english": "Do you agree or disagree that the council should spend more on libraries?",
+              "probe": "Did the question seem to expect a particular answer? What made you think so?"
+            },
+            {
+              "check": "agree_disagree_and_grids",
+              "stage": "judgment",
+              "evidence": "Strongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree",
+              "problem": "The agree-disagree format invites agreement whatever the content, and there is no 'don't know' for respondents who do not know the current spending. A direct format would do the same job.",
+              "severity": 5,
+              "rewrite": "Compared with now, should the council spend more, the same or less on libraries? Much more / A little more / About the same / A little less / Much less / Don't know",
+              "rewrite_english": "Compared with now, should the council spend more, the same or less on libraries? Much more / A little more / About the same / A little less / Much less / Don't know",
+              "probe": "How much do you think the council spends on libraries now? Did you have an idea of this when you answered?"
+            }
+          ]
+        },
+        {
+          "id": "Q8",
+          "findings": [
+            {
+              "check": "retrieval_and_judgment",
+              "stage": "retrieval",
+              "evidence": "How much do you pay in council tax each year? Please give the amount in pounds.",
+              "problem": "Respondents must recall or work out a yearly total. Many pay in instalments, may have discounts, or may not have seen the bill recently. They will guess, multiply a monthly figure, or leave it blank, with no way to say they don't know.",
+              "severity": 7,
+              "rewrite": "Please look at your latest council tax bill if you can. How much is the bill for the whole year? Please give the amount in pounds. If you don't know, tick 'Don't know'. ______ / Don't know",
+              "rewrite_english": "Please look at your latest council tax bill if you can. How much is the bill for the whole year? Please give the amount in pounds. If you don't know, tick 'Don't know'. ______ / Don't know",
+              "probe": "How did you arrive at the amount you gave? Did you look it up, remember it or work it out?"
+            },
+            {
+              "check": "no_presupposition",
+              "stage": "comprehension",
+              "evidence": "How much do you pay",
+              "problem": "The item assumes that the respondent personally pays council tax. In some households another person pays, the respondent may be exempt or on a discount, or may not pay at all. These respondents have no true answer.",
+              "severity": 5,
+              "rewrite": "Do you, or does someone in your household, pay council tax? Yes, I pay it / Yes, someone else pays it / No one pays it / Don't know",
+              "rewrite_english": "Do you, or does someone in your household, pay council tax? Yes, I pay it / Yes, someone else pays it / No one pays it / Don't know",
+              "probe": "Who in your household deals with the council tax bill? How did you decide what to answer?"
+            }
+          ]
+        },
+        {
+          "id": "Q9",
+          "findings": [
+            {
+              "check": "construct_first",
+              "stage": "comprehension",
+              "evidence": "how well do you think the council is run",
+              "problem": "The brief is about satisfaction with and use of services. 'Run' is about how the council is managed, which respondents may read as governance, staff, spending or service quality. This may not measure satisfaction with services.",
+              "severity": 4,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            },
+            {
+              "check": "response_scale",
+              "stage": "judgment",
+              "evidence": "Very well / Fairly well / Fairly badly / Very badly",
+              "problem": "There is no 'don't know' option. Respondents who have never dealt with the council (including those routed here from Q3) have little basis for a rating and can only guess or pick an option that does not fit.",
+              "severity": 3,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q10",
+          "findings": [
+            {
+              "check": "no_presupposition",
+              "stage": "comprehension",
+              "evidence": "spend your money wisely",
+              "problem": "'Your money' assumes the respondent pays towards council spending and sees it that way. It may not hold for someone who does not pay council tax. 'Wisely' is also open to different meanings.",
+              "severity": 3,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q11",
+          "findings": [
+            {
+              "check": "no_presupposition",
+              "stage": "comprehension",
+              "evidence": "when you last contacted the council",
+              "problem": "The item assumes the respondent has contacted the council. There is no filter and no 'I have never contacted the council' option. Q3 'No' respondents are routed past it to here, so those who never had contact must guess or give a wrong answer.",
+              "severity": 8,
+              "rewrite": "In the last 12 months, have you contacted the council about anything? Yes / No (go to the next section)",
+              "rewrite_english": "In the last 12 months, have you contacted the council about anything? Yes / No (go to the next section)",
+              "probe": "Think about the last time you got in touch with the council. When was it, and how did you get in touch?"
+            },
+            {
+              "check": "options_fit",
+              "stage": "reporting",
+              "evidence": "Same day / Within a week",
+              "problem": "'Within a week' includes 'same day', so the two overlap. A respondent who got a reply the same day could choose either. There is also no option for 'I don't remember'.",
+              "severity": 5,
+              "rewrite": "On the same day / 1 to 7 days later / More than 7 days later / They never responded / I don't remember",
+              "rewrite_english": "On the same day / 1 to 7 days later / More than 7 days later / They never responded / I don't remember",
+              "probe": "If they replied the same day, which answer did you choose, and why? Was it easy to tell the options apart?"
+            },
+            {
+              "check": "retrieval_and_judgment",
+              "stage": "retrieval",
+              "evidence": "when you last contacted the council",
+              "problem": "No time limit is given, so 'last contact' may be years ago and the response time may be forgotten. Contacts with several replies make 'how long' unclear.",
+              "severity": 4,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q12",
+          "findings": [
+            {
+              "check": "neutral_wording",
+              "stage": "judgment",
+              "evidence": "The council has invested in new recycling facilities.",
+              "problem": "The lead-in states a positive fact as the premise. It may prompt respondents to rate the service more favourably and it assumes they know about the facilities. The question is also about the 'recycling service', not the facilities named in the first sentence.",
+              "severity": 7,
+              "rewrite": "How satisfied or dissatisfied are you with the recycling service?",
+              "rewrite_english": "How satisfied or dissatisfied are you with the recycling service?",
+              "probe": "Did the first sentence change how you answered? Did you know about the new facilities before this question?"
+            },
+            {
+              "check": "response_scale",
+              "stage": "reporting",
+              "evidence": "1 Very dissatisfied ... 5 Very satisfied",
+              "problem": "Only the end points are labelled, so respondents give their own meaning to 2, 3 and 4. There is no 'don't use' option for people who do not use the service.",
+              "severity": 5,
+              "rewrite": "How satisfied or dissatisfied are you with the recycling service? Very dissatisfied / Dissatisfied / Neither satisfied nor dissatisfied / Satisfied / Very satisfied / I do not use the recycling service",
+              "rewrite_english": "How satisfied or dissatisfied are you with the recycling service? Very dissatisfied / Dissatisfied / Neither satisfied nor dissatisfied / Satisfied / Very satisfied / I do not use the recycling service",
+              "probe": "What did the number 3 mean to you? Which number would you pick if you did not use the service?"
+            },
+            {
+              "check": "no_presupposition",
+              "stage": "comprehension",
+              "evidence": "How satisfied are you with the recycling service",
+              "problem": "The item is asked of everyone, including respondents who do not use any recycling service. They have no experience to judge.",
+              "severity": 4,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q13",
+          "findings": [
+            {
+              "check": "no_presupposition",
+              "stage": "comprehension",
+              "evidence": "How many hours a week do you spend volunteering",
+              "problem": "The item assumes the respondent volunteers. There is no filter, and an open hours box leaves non-volunteers to guess whether to leave it blank or enter zero.",
+              "severity": 5,
+              "rewrite": "Do you volunteer for a local community group? Yes / No (go to the next question)",
+              "rewrite_english": "Do you volunteer for a local community group? Yes / No (go to the next question)",
+              "probe": "When you read this question, did you enter a number or leave it blank? Why?"
+            },
+            {
+              "check": "retrieval_and_judgment",
+              "stage": "retrieval",
+              "evidence": "How many hours a week",
+              "problem": "Volunteering hours often vary from week to week, and no reference period is given. Respondents must average in their heads.",
+              "severity": 4,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q14",
+          "findings": [
+            {
+              "check": "response_scale",
+              "stage": "reporting",
+              "evidence": "Excellent / Good / Fair / Poor",
+              "problem": "The scale is not balanced: it has two clearly positive options and no 'very poor' option, so the negative side is shorter.",
+              "severity": 4,
+              "rewrite": "",
+              "rewrite_english": "",
+              "probe": ""
+            }
+          ]
+        },
+        {
+          "id": "Q15",
+          "findings": [
+            {
+              "check": "specific_concrete",
+              "stage": "comprehension",
+              "evidence": "What is your total household income before tax? Under 15,000 / 15,000 to 29,999",
+              "problem": "The question gives no period (week, month, year) and no unit. The bands appear to be yearly amounts, but respondents may think in monthly or weekly pay and pick a band that is not what was meant.",
+              "severity": 6,
+              "rewrite": "What is your total household income for a whole year, before tax? Please choose one band, in pounds per year. Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Prefer not to say",
+              "rewrite_english": "What is your total household income for a whole year, before tax? Please choose one band, in pounds per year. Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Prefer not to say",
+              "probe": "Were you thinking about weekly, monthly or yearly income? What did you include in 'total household income'?"
+            },
+            {
+              "check": "retrieval_and_judgment",
+              "stage": "retrieval",
+              "evidence": "total household income",
+              "problem": "The respondent must add up income from every household member, possibly from several sources, and may not know the others' amounts. There is no 'don't know', only 'Prefer not to say', which has a different meaning.",
+              "severity": 5,
+              "rewrite": "Please give your best estimate for everyone in your household together. Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Don't know / Prefer not to say",
+              "rewrite_english": "Please give your best estimate for everyone in your household together. Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Don't know / Prefer not to say",
+              "probe": "Whose income did you include? How did you add it up, and how sure are you of the total?"
+            }
+          ]
+        }
+      ],
+      "instrument": [
+        {
+          "check": "filters_and_routing",
+          "stage": "instrument",
+          "evidence": "Q1 'No' has no instruction; Q3 'No (go to Q9)'; Q6 and Q4; Q11 to Q13",
+          "problem": "A 'No' at Q1 has no destination, so the survey does not say what happens to non-residents. A 'No' at Q3 skips Q5 to Q8, but Q5 applies to everyone and Q8 is not about service use. Q11 and Q12 are reached by everyone, including those who never contacted the council or never used recycling. Q6 repeats the library use already recorded in Q4.",
+          "severity": 6,
+          "rewrite": "At Q1, if 'No', show a thank-you message and end the survey. At Q3, change 'No (go to Q9)' to 'No (go to Q5)', and decide which of Q6 to Q8 each group should see.",
+          "rewrite_english": "At Q1, if 'No', show a thank-you message and end the survey. At Q3, change 'No (go to Q9)' to 'No (go to Q5)', and decide which of Q6 to Q8 each group should see.",
+          "probe": "Tell me what you were thinking when you answered 'No' to Q3. Which services did you have in mind, and did you skip any questions you could have answered?"
+        },
+        {
+          "check": "context_and_order",
+          "stage": "instrument",
+          "evidence": "Q5 to Q8 before Q9 and Q10; Q8; Q13 and Q14 between service items and Q15",
+          "problem": "Only service users see Q5 to Q8 before the general ratings in Q9 and Q10, so the two groups answer in different contexts. Q8 (council tax amount) comes right before Q10 (trust to spend wisely) and may lower trust. Q13 and Q14 are off-topic and interrupt the service questions. Q9 and Q10 are general but come after specific items.",
+          "severity": 5,
+          "rewrite": "Place Q9 and Q10 before Q3 so that all respondents answer them first. Keep Q11 and Q12 with the other service items. Move Q13 and Q14, if kept, to the end beside Q15.",
+          "rewrite_english": "Place Q9 and Q10 before Q3 so that all respondents answer them first. Keep Q11 and Q12 with the other service items. Move Q13 and Q14, if kept, to the end beside Q15.",
+          "probe": "When you answered Q9 and Q10, what were you thinking about? Did any earlier question make you think of something in particular?"
+        },
+        {
+          "check": "scale_consistency",
+          "stage": "instrument",
+          "evidence": "Q5 (five labelled points, 'Very satisfied' first); Q12 (numbers 1 to 5, 'Very dissatisfied' first); Q9 and Q10 (four points); Q3, Q4 (12 months), Q6, Q11 (no period), Q13 (weekly), Q15 (none)",
+          "problem": "The two satisfaction questions use different formats, labels and directions. The general ratings use four-point scales without a midpoint, while Q5 has one. Reference periods change from 12 months to none to weekly without warning, so answers will not be comparable.",
+          "severity": 6,
+          "rewrite": "Use one fully labelled five-point satisfaction scale in the same direction for Q5 and Q12, and state the time period in every question that needs one.",
+          "rewrite_english": "Use one fully labelled five-point satisfaction scale in the same direction for Q5 and Q12, and state the time period in every question that needs one.",
+          "probe": "Compare Q5 and Q12 for me. Did the answer options feel the same? Did the time period in each question seem clear?"
+        },
+        {
+          "check": "fit_to_objectives",
+          "stage": "instrument",
+          "evidence": "Q4 list (bin collection, leisure centre, library, parks, planning, council tax); Q5 and Q12 only; Q7, Q8, Q10, Q13, Q14; no age, sex or area items",
+          "problem": "The research question has two parts, use and satisfaction. Use is covered by Q3, Q4 and Q6, but satisfaction is measured only for streets and parks and for recycling. Services listed in Q4 have no satisfaction item. Q7, Q8, Q10, Q13 and Q14 do not serve either part and appear to be spending, trust, volunteering or health items. No item for weighting variables such as age or sex is present, and the brief names no benchmark. The analyst should decide which are covariates.",
+          "severity": 6,
+          "rewrite": "Add one satisfaction item per reported service, asked only of those who used it at Q4, on the same scale as Q5. For example: 'How satisfied or dissatisfied are you with the library service?'",
+          "rewrite_english": "Add one satisfaction item per reported service, asked only of those who used it at Q4, on the same scale as Q5. For example: 'How satisfied or dissatisfied are you with the library service?'",
+          "probe": "Which of the council's services did you think the survey was asking about? Was there a service you use that you were not asked about?"
+        }
+      ],
+      "trapd": {
+        "translation": "",
+        "review": "",
+        "adjudication": "",
+        "pretesting": "",
+        "documentation": ""
+      },
+      "test_first": [
+        {
+          "id": "Q3",
+          "method": "Cognitive interview with probes on what respondents counted as 'council services', to see which respondents skip Q4."
+        },
+        {
+          "id": "Q8",
+          "method": "Cognitive interview asking how respondents arrived at the amount and who pays the bill in their household."
+        },
+        {
+          "id": "Q11",
+          "method": "Web probing after the item asking when the last contact was and how respondents chose among the time options."
+        },
+        {
+          "id": "Q12",
+          "method": "Split-ballot experiment on the sentence about new facilities (with and without it), plus a cognitive interview on the unlabelled scale points."
+        },
+        {
+          "id": "Q15",
+          "method": "Cognitive interview on the period respondents had in mind and whose income they included."
+        }
+      ],
+      "not_assessed": "The brief gives no sample source or how residence in the council area is checked. The introduction, consent text, closing page and any 'don't know' options set by the survey software were not pasted. The list of services in Q4 was not checked against the services the council actually provides. Weighting variables and benchmark question wording could not be judged because the brief names no benchmark. Screen layout, device size, answer randomization, numeric field validation, survey length and timing were not assessed. No analysis plan was given beyond the research question."
+    },
+    "call": {
+      "seconds": 154.9372,
+      "finish": "success",
+      "tokens": {
+        "input": 4774,
+        "output": 21272,
+        "cached_input": 0
+      },
+      "attempts": 1,
+      "raw": "{\"items\":[{\"id\":\"Q1\",\"findings\":[{\"check\":\"specific_concrete\",\"stage\":\"comprehension\",\"evidence\":\"the Hartley Borough Council area\",\"problem\":\"The question names the council, but a respondent may know which council serves them without knowing whether their address is inside the named area. A wrong Yes or No here decides whether they are in the survey at all.\",\"severity\":3,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q2\",\"findings\":[{\"check\":\"options_fit\",\"stage\":\"reporting\",\"evidence\":\"1 to 5 years / 6 to 10 years / More than 10 years\",\"problem\":\"Someone who has lived there 5 years and 6 months, or 10 years and 3 months, has no option that is exactly true. They have to round up or down.\",\"severity\":4,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q3\",\"findings\":[{\"check\":\"plain_words\",\"stage\":\"comprehension\",\"evidence\":\"any council services\",\"problem\":\"The respondent decides what counts as a council service before seeing the list that only appears at Q4. Routine services such as bin collection may not feel like 'using a service', and a 'No' sends the respondent past Q4 to Q9.\",\"severity\":6,\"rewrite\":\"In the last 12 months, have you used any of these services run by Hartley Borough Council: bin collection, recycling centre, library, leisure centre, parks, planning? Yes / No\",\"rewrite_english\":\"In the last 12 months, have you used any of these services run by Hartley Borough Council: bin collection, recycling centre, library, leisure centre, parks, planning? Yes / No\",\"probe\":\"When you read 'council services', what did you think of first? Which services, if any, did you decide to count or leave out, and why?\"}]},{\"id\":\"Q4\",\"findings\":[{\"check\":\"plain_words\",\"stage\":\"comprehension\",\"evidence\":\"Planning / Council tax\",\"problem\":\"'Planning' could mean a planning application, a local plan or building advice. 'Council tax' is a payment rather than a service you use, so it is unclear whether paying the bill counts. Respondents may read both differently.\",\"severity\":5,\"rewrite\":\"Planning (for example, a planning application or advice about building work) / Council tax (paying or asking about your bill)\",\"rewrite_english\":\"Planning (for example, a planning application or advice about building work) / Council tax (paying or asking about your bill)\",\"probe\":\"What did 'Planning' mean to you here? Did you count paying your council tax as using a service? Why or why not?\"},{\"check\":\"any_mode\",\"stage\":\"reporting\",\"evidence\":\"Tick all that apply. Bin collection / Recycling centre / Library / ...\",\"problem\":\"On a web page, the first options in a long tick-all list tend to be chosen more often. Keeping the list in a fixed order may favour the top services. 'Other' should stay last.\",\"severity\":2,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q5\",\"findings\":[{\"check\":\"one_thing\",\"stage\":\"judgment\",\"evidence\":\"cleanliness and safety of your local streets and parks\",\"problem\":\"The item asks about two qualities (cleanliness, safety) in two places (streets, parks). Someone happy with clean parks but unhappy with safety on the streets has no single true answer, and different people will combine the parts differently.\",\"severity\":7,\"rewrite\":\"How satisfied or dissatisfied are you with how clean your local streets are?\",\"rewrite_english\":\"How satisfied or dissatisfied are you with how clean your local streets are?\",\"probe\":\"Which did you think about when you answered: streets, parks, cleanliness or safety? How did you turn them into one answer?\"},{\"check\":\"construct_first\",\"stage\":\"comprehension\",\"evidence\":\"cleanliness and safety\",\"problem\":\"The brief is about satisfaction with council services. Safety in streets and parks may be credited by respondents to bodies other than the council, so the item may measure a wider concept. The analyst should confirm that the council is responsible for it.\",\"severity\":4,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"},{\"check\":\"response_scale\",\"stage\":\"reporting\",\"evidence\":\"Neither\",\"problem\":\"The midpoint is labelled only 'Neither', which does not say 'neither satisfied nor dissatisfied'. There is no 'don't know' or 'don't use' option for people who rarely use streets or parks.\",\"severity\":3,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q6\",\"findings\":[{\"check\":\"response_scale\",\"stage\":\"reporting\",\"evidence\":\"Never / Rarely / Sometimes / Often\",\"problem\":\"'Rarely', 'Sometimes' and 'Often' are vague quantifiers. A person who visits monthly may call that 'often' and another 'sometimes', so answers cannot be compared or turned into use rates.\",\"severity\":6,\"rewrite\":\"How often do you use your local library? Never / Less than once a month / About once a month / About once a week / More than once a week\",\"rewrite_english\":\"How often do you use your local library? Never / Less than once a month / About once a month / About once a week / More than once a week\",\"probe\":\"When you chose your answer, about how many times in a year or month were you thinking of?\"},{\"check\":\"specific_concrete\",\"stage\":\"comprehension\",\"evidence\":\"use your local library\",\"problem\":\"'Use' could mean visiting, borrowing books, using computers or using the website. No time period is given, and 'your local library' may be a different library for different people.\",\"severity\":4,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q7\",\"findings\":[{\"check\":\"simple_syntax\",\"stage\":\"comprehension\",\"evidence\":\"Don't you agree that\",\"problem\":\"This is a negative question, and the agree scale then asks the respondent to agree with a negative. Respondents must work out what 'Agree' and 'Disagree' mean in reply.\",\"severity\":8,\"rewrite\":\"The council should spend more on libraries. Do you agree or disagree?\",\"rewrite_english\":\"The council should spend more on libraries. Do you agree or disagree?\",\"probe\":\"In your own words, what does it mean to 'agree' with this question? What would 'disagree' mean?\"},{\"check\":\"neutral_wording\",\"stage\":\"judgment\",\"evidence\":\"Don't you agree that the council should spend more on libraries\",\"problem\":\"The wording pushes towards 'agree'. It also puts a spending policy as the expected view and gives no hint of what the money would otherwise be spent on.\",\"severity\":8,\"rewrite\":\"Do you agree or disagree that the council should spend more on libraries?\",\"rewrite_english\":\"Do you agree or disagree that the council should spend more on libraries?\",\"probe\":\"Did the question seem to expect a particular answer? What made you think so?\"},{\"check\":\"agree_disagree_and_grids\",\"stage\":\"judgment\",\"evidence\":\"Strongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree\",\"problem\":\"The agree-disagree format invites agreement whatever the content, and there is no 'don't know' for respondents who do not know the current spending. A direct format would do the same job.\",\"severity\":5,\"rewrite\":\"Compared with now, should the council spend more, the same or less on libraries? Much more / A little more / About the same / A little less / Much less / Don't know\",\"rewrite_english\":\"Compared with now, should the council spend more, the same or less on libraries? Much more / A little more / About the same / A little less / Much less / Don't know\",\"probe\":\"How much do you think the council spends on libraries now? Did you have an idea of this when you answered?\"}]},{\"id\":\"Q8\",\"findings\":[{\"check\":\"retrieval_and_judgment\",\"stage\":\"retrieval\",\"evidence\":\"How much do you pay in council tax each year? Please give the amount in pounds.\",\"problem\":\"Respondents must recall or work out a yearly total. Many pay in instalments, may have discounts, or may not have seen the bill recently. They will guess, multiply a monthly figure, or leave it blank, with no way to say they don't know.\",\"severity\":7,\"rewrite\":\"Please look at your latest council tax bill if you can. How much is the bill for the whole year? Please give the amount in pounds. If you don't know, tick 'Don't know'. ______ / Don't know\",\"rewrite_english\":\"Please look at your latest council tax bill if you can. How much is the bill for the whole year? Please give the amount in pounds. If you don't know, tick 'Don't know'. ______ / Don't know\",\"probe\":\"How did you arrive at the amount you gave? Did you look it up, remember it or work it out?\"},{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"evidence\":\"How much do you pay\",\"problem\":\"The item assumes that the respondent personally pays council tax. In some households another person pays, the respondent may be exempt or on a discount, or may not pay at all. These respondents have no true answer.\",\"severity\":5,\"rewrite\":\"Do you, or does someone in your household, pay council tax? Yes, I pay it / Yes, someone else pays it / No one pays it / Don't know\",\"rewrite_english\":\"Do you, or does someone in your household, pay council tax? Yes, I pay it / Yes, someone else pays it / No one pays it / Don't know\",\"probe\":\"Who in your household deals with the council tax bill? How did you decide what to answer?\"}]},{\"id\":\"Q9\",\"findings\":[{\"check\":\"construct_first\",\"stage\":\"comprehension\",\"evidence\":\"how well do you think the council is run\",\"problem\":\"The brief is about satisfaction with and use of services. 'Run' is about how the council is managed, which respondents may read as governance, staff, spending or service quality. This may not measure satisfaction with services.\",\"severity\":4,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"},{\"check\":\"response_scale\",\"stage\":\"judgment\",\"evidence\":\"Very well / Fairly well / Fairly badly / Very badly\",\"problem\":\"There is no 'don't know' option. Respondents who have never dealt with the council (including those routed here from Q3) have little basis for a rating and can only guess or pick an option that does not fit.\",\"severity\":3,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q10\",\"findings\":[{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"evidence\":\"spend your money wisely\",\"problem\":\"'Your money' assumes the respondent pays towards council spending and sees it that way. It may not hold for someone who does not pay council tax. 'Wisely' is also open to different meanings.\",\"severity\":3,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q11\",\"findings\":[{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"evidence\":\"when you last contacted the council\",\"problem\":\"The item assumes the respondent has contacted the council. There is no filter and no 'I have never contacted the council' option. Q3 'No' respondents are routed past it to here, so those who never had contact must guess or give a wrong answer.\",\"severity\":8,\"rewrite\":\"In the last 12 months, have you contacted the council about anything? Yes / No (go to the next section)\",\"rewrite_english\":\"In the last 12 months, have you contacted the council about anything? Yes / No (go to the next section)\",\"probe\":\"Think about the last time you got in touch with the council. When was it, and how did you get in touch?\"},{\"check\":\"options_fit\",\"stage\":\"reporting\",\"evidence\":\"Same day / Within a week\",\"problem\":\"'Within a week' includes 'same day', so the two overlap. A respondent who got a reply the same day could choose either. There is also no option for 'I don't remember'.\",\"severity\":5,\"rewrite\":\"On the same day / 1 to 7 days later / More than 7 days later / They never responded / I don't remember\",\"rewrite_english\":\"On the same day / 1 to 7 days later / More than 7 days later / They never responded / I don't remember\",\"probe\":\"If they replied the same day, which answer did you choose, and why? Was it easy to tell the options apart?\"},{\"check\":\"retrieval_and_judgment\",\"stage\":\"retrieval\",\"evidence\":\"when you last contacted the council\",\"problem\":\"No time limit is given, so 'last contact' may be years ago and the response time may be forgotten. Contacts with several replies make 'how long' unclear.\",\"severity\":4,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q12\",\"findings\":[{\"check\":\"neutral_wording\",\"stage\":\"judgment\",\"evidence\":\"The council has invested in new recycling facilities.\",\"problem\":\"The lead-in states a positive fact as the premise. It may prompt respondents to rate the service more favourably and it assumes they know about the facilities. The question is also about the 'recycling service', not the facilities named in the first sentence.\",\"severity\":7,\"rewrite\":\"How satisfied or dissatisfied are you with the recycling service?\",\"rewrite_english\":\"How satisfied or dissatisfied are you with the recycling service?\",\"probe\":\"Did the first sentence change how you answered? Did you know about the new facilities before this question?\"},{\"check\":\"response_scale\",\"stage\":\"reporting\",\"evidence\":\"1 Very dissatisfied ... 5 Very satisfied\",\"problem\":\"Only the end points are labelled, so respondents give their own meaning to 2, 3 and 4. There is no 'don't use' option for people who do not use the service.\",\"severity\":5,\"rewrite\":\"How satisfied or dissatisfied are you with the recycling service? Very dissatisfied / Dissatisfied / Neither satisfied nor dissatisfied / Satisfied / Very satisfied / I do not use the recycling service\",\"rewrite_english\":\"How satisfied or dissatisfied are you with the recycling service? Very dissatisfied / Dissatisfied / Neither satisfied nor dissatisfied / Satisfied / Very satisfied / I do not use the recycling service\",\"probe\":\"What did the number 3 mean to you? Which number would you pick if you did not use the service?\"},{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"evidence\":\"How satisfied are you with the recycling service\",\"problem\":\"The item is asked of everyone, including respondents who do not use any recycling service. They have no experience to judge.\",\"severity\":4,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q13\",\"findings\":[{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"evidence\":\"How many hours a week do you spend volunteering\",\"problem\":\"The item assumes the respondent volunteers. There is no filter, and an open hours box leaves non-volunteers to guess whether to leave it blank or enter zero.\",\"severity\":5,\"rewrite\":\"Do you volunteer for a local community group? Yes / No (go to the next question)\",\"rewrite_english\":\"Do you volunteer for a local community group? Yes / No (go to the next question)\",\"probe\":\"When you read this question, did you enter a number or leave it blank? Why?\"},{\"check\":\"retrieval_and_judgment\",\"stage\":\"retrieval\",\"evidence\":\"How many hours a week\",\"problem\":\"Volunteering hours often vary from week to week, and no reference period is given. Respondents must average in their heads.\",\"severity\":4,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q14\",\"findings\":[{\"check\":\"response_scale\",\"stage\":\"reporting\",\"evidence\":\"Excellent / Good / Fair / Poor\",\"problem\":\"The scale is not balanced: it has two clearly positive options and no 'very poor' option, so the negative side is shorter.\",\"severity\":4,\"rewrite\":\"\",\"rewrite_english\":\"\",\"probe\":\"\"}]},{\"id\":\"Q15\",\"findings\":[{\"check\":\"specific_concrete\",\"stage\":\"comprehension\",\"evidence\":\"What is your total household income before tax? Under 15,000 / 15,000 to 29,999\",\"problem\":\"The question gives no period (week, month, year) and no unit. The bands appear to be yearly amounts, but respondents may think in monthly or weekly pay and pick a band that is not what was meant.\",\"severity\":6,\"rewrite\":\"What is your total household income for a whole year, before tax? Please choose one band, in pounds per year. Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Prefer not to say\",\"rewrite_english\":\"What is your total household income for a whole year, before tax? Please choose one band, in pounds per year. Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Prefer not to say\",\"probe\":\"Were you thinking about weekly, monthly or yearly income? What did you include in 'total household income'?\"},{\"check\":\"retrieval_and_judgment\",\"stage\":\"retrieval\",\"evidence\":\"total household income\",\"problem\":\"The respondent must add up income from every household member, possibly from several sources, and may not know the others' amounts. There is no 'don't know', only 'Prefer not to say', which has a different meaning.\",\"severity\":5,\"rewrite\":\"Please give your best estimate for everyone in your household together. Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Don't know / Prefer not to say\",\"rewrite_english\":\"Please give your best estimate for everyone in your household together. Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Don't know / Prefer not to say\",\"probe\":\"Whose income did you include? How did you add it up, and how sure are you of the total?\"}]}],\"instrument\":[{\"check\":\"filters_and_routing\",\"stage\":\"instrument\",\"evidence\":\"Q1 'No' has no instruction; Q3 'No (go to Q9)'; Q6 and Q4; Q11 to Q13\",\"problem\":\"A 'No' at Q1 has no destination, so the survey does not say what happens to non-residents. A 'No' at Q3 skips Q5 to Q8, but Q5 applies to everyone and Q8 is not about service use. Q11 and Q12 are reached by everyone, including those who never contacted the council or never used recycling. Q6 repeats the library use already recorded in Q4.\",\"severity\":6,\"rewrite\":\"At Q1, if 'No', show a thank-you message and end the survey. At Q3, change 'No (go to Q9)' to 'No (go to Q5)', and decide which of Q6 to Q8 each group should see.\",\"rewrite_english\":\"At Q1, if 'No', show a thank-you message and end the survey. At Q3, change 'No (go to Q9)' to 'No (go to Q5)', and decide which of Q6 to Q8 each group should see.\",\"probe\":\"Tell me what you were thinking when you answered 'No' to Q3. Which services did you have in mind, and did you skip any questions you could have answered?\"},{\"check\":\"context_and_order\",\"stage\":\"instrument\",\"evidence\":\"Q5 to Q8 before Q9 and Q10; Q8; Q13 and Q14 between service items and Q15\",\"problem\":\"Only service users see Q5 to Q8 before the general ratings in Q9 and Q10, so the two groups answer in different contexts. Q8 (council tax amount) comes right before Q10 (trust to spend wisely) and may lower trust. Q13 and Q14 are off-topic and interrupt the service questions. Q9 and Q10 are general but come after specific items.\",\"severity\":5,\"rewrite\":\"Place Q9 and Q10 before Q3 so that all respondents answer them first. Keep Q11 and Q12 with the other service items. Move Q13 and Q14, if kept, to the end beside Q15.\",\"rewrite_english\":\"Place Q9 and Q10 before Q3 so that all respondents answer them first. Keep Q11 and Q12 with the other service items. Move Q13 and Q14, if kept, to the end beside Q15.\",\"probe\":\"When you answered Q9 and Q10, what were you thinking about? Did any earlier question make you think of something in particular?\"},{\"check\":\"scale_consistency\",\"stage\":\"instrument\",\"evidence\":\"Q5 (five labelled points, 'Very satisfied' first); Q12 (numbers 1 to 5, 'Very dissatisfied' first); Q9 and Q10 (four points); Q3, Q4 (12 months), Q6, Q11 (no period), Q13 (weekly), Q15 (none)\",\"problem\":\"The two satisfaction questions use different formats, labels and directions. The general ratings use four-point scales without a midpoint, while Q5 has one. Reference periods change from 12 months to none to weekly without warning, so answers will not be comparable.\",\"severity\":6,\"rewrite\":\"Use one fully labelled five-point satisfaction scale in the same direction for Q5 and Q12, and state the time period in every question that needs one.\",\"rewrite_english\":\"Use one fully labelled five-point satisfaction scale in the same direction for Q5 and Q12, and state the time period in every question that needs one.\",\"probe\":\"Compare Q5 and Q12 for me. Did the answer options feel the same? Did the time period in each question seem clear?\"},{\"check\":\"fit_to_objectives\",\"stage\":\"instrument\",\"evidence\":\"Q4 list (bin collection, leisure centre, library, parks, planning, council tax); Q5 and Q12 only; Q7, Q8, Q10, Q13, Q14; no age, sex or area items\",\"problem\":\"The research question has two parts, use and satisfaction. Use is covered by Q3, Q4 and Q6, but satisfaction is measured only for streets and parks and for recycling. Services listed in Q4 have no satisfaction item. Q7, Q8, Q10, Q13 and Q14 do not serve either part and appear to be spending, trust, volunteering or health items. No item for weighting variables such as age or sex is present, and the brief names no benchmark. The analyst should decide which are covariates.\",\"severity\":6,\"rewrite\":\"Add one satisfaction item per reported service, asked only of those who used it at Q4, on the same scale as Q5. For example: 'How satisfied or dissatisfied are you with the library service?'\",\"rewrite_english\":\"Add one satisfaction item per reported service, asked only of those who used it at Q4, on the same scale as Q5. For example: 'How satisfied or dissatisfied are you with the library service?'\",\"probe\":\"Which of the council's services did you think the survey was asking about? Was there a service you use that you were not asked about?\"}],\"trapd\":{\"translation\":\"\",\"review\":\"\",\"adjudication\":\"\",\"pretesting\":\"\",\"documentation\":\"\"},\"test_first\":[{\"id\":\"Q3\",\"method\":\"Cognitive interview with probes on what respondents counted as 'council services', to see which respondents skip Q4.\"},{\"id\":\"Q8\",\"method\":\"Cognitive interview asking how respondents arrived at the amount and who pays the bill in their household.\"},{\"id\":\"Q11\",\"method\":\"Web probing after the item asking when the last contact was and how respondents chose among the time options.\"},{\"id\":\"Q12\",\"method\":\"Split-ballot experiment on the sentence about new facilities (with and without it), plus a cognitive interview on the unlabelled scale points.\"},{\"id\":\"Q15\",\"method\":\"Cognitive interview on the period respondents had in mind and whose income they included.\"}],\"not_assessed\":\"The brief gives no sample source or how residence in the council area is checked. The introduction, consent text, closing page and any 'don't know' options set by the survey software were not pasted. The list of services in Q4 was not checked against the services the council actually provides. Weighting variables and benchmark question wording could not be judged because the brief names no benchmark. Screen layout, device size, answer randomization, numeric field validation, survey length and timing were not assessed. No analysis plan was given beyond the research question.\"}"
+    }
+  },
+  "prompt": null,
+  "drafts": null,
+  "appraisal": null,
+  "kept": null
+}
