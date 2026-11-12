@@ -2,7 +2,25 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
-## Phase 5, in progress (2026-11-12; the final report replaces this block)
+## Phase 5 (2026-11-12): long reviews, the Output tab, the Methodology tab
+
+**Take `REVIEW.md`, this file, `tests/review_long.md`, `tests/output_generate.txt`
+and `tests/output_review.txt` to the Claude project.** Nothing is pushed.
+
+- **Commits, branch `questionr`:** the Claude project's files `b026f0a`; 5a
+  `58cfbb3`; 5b `191dcfb`; 5c `7dc49f5`; 5d `45206ac`; readability fixes from the
+  browser `f15601d`; 5e preparation `9af8f4c`; and the commit that carries this
+  file, `REVIEW.md` and the 5e results.
+- **Smoke:** 388 checks, all ok, no model calls. Seven mutations of scratch copies
+  (the key scrub, the part size, the disclosure hashes, the review status, the
+  instrument checks, the band cut, the order of kept items) each made it fail.
+  `tests/review.R 5`: **no FAIL**. 12 of 12 code files.
+- **Prompt hashes:** `evaluate.md` 0.3 moved the 15 Evaluate hashes once (5a); the 45
+  drafting ones and every Evaluate hash since are unchanged, through 5b (a one-call
+  review is exactly the Phase 5a prompt).
+
+### What was built
+
 
 - **5a done.** Severity bands in both Results views (7 and above "Fix before
   fielding", 5 and 6 "Needs your judgment", below 5 "Minor", folded; a finding or
@@ -89,6 +107,151 @@ Read `DESIGN.md` first. Update this file at the end of every session.
   a row's id inside the block of its own file), that the note's headings, list
   and tables render, that sources are shown, and that a missing file is said in
   words.
+
+- **5e done: one live long review (2026-11-12, Kevin's yes).** The 30-question
+  questionnaire I wrote (`tests/review_long_questionnaire.txt`, 5,028 characters,
+  30 blocks) split into **2 parts** (Q1 to Q23, 3,766 characters; Q24 to Q30, 1,260)
+  and so **3 calls**, nothing raised. Part 1: 129.2 s, 5,592 tokens in, 18,207 out.
+  Part 2: 62.6 s, 4,645 in, 8,421 out. Instrument call: 111.0 s, 5,663 in, 15,386
+  out. **Total 303 s (5.0 minutes), 15,900 in, 42,014 out** (about $0.7); every call
+  finished on its first attempt (finish success), **no part failed**, status ok.
+  45 findings: 34 about questions, 11 about the instrument; Fix before fielding 4,
+  Needs your judgment 25, Minor 16. **Evidence found in the pasted text: 34 of 34
+  question findings (100.0%)**, against 55 of 100 in the Phase 4 gold run, so
+  `evaluate.md` 0.3's "copy the words exactly" worked. All 30 ids came back exactly
+  as pasted and in order; the item calls filled none of the fields they were told to
+  leave empty; the instrument call returned no question entries; no check outside
+  the checklist. The deliberate faults: the leading Q11 (severity 9), the
+  double-barrelled Q12 (8) and Q17 (7), the job assumed in Q14 to Q16 (an
+  instrument finding at 7, and item findings at 5 and 6), the renters in Q13, the
+  vague "Occasionally" and reference periods, all at 5 or above; the scale that
+  turns round between Q5 and Q17 was an instrument finding at 5 and an item finding
+  at 4. Numbers in `tests/review_long.md`, the run log in `tests/review_long.json`.
+
+### Decisions taken, with the default used (numbered after Phase 4's 18 to 25)
+
+26. **A long review's Prompt tab shows the first part's prompt, read-only**, with a
+    note that the other parts differ only in their questions, part number and first
+    block, and that the last call has the whole text and the four instrument checks.
+    It is several prompts, so it cannot be edited there; approving records the
+    first part's prompt as assembled.
+27. **An edited prompt is sent only for a one-call review.** `run_review()` stops
+    ("An edited prompt can be sent only when ...") if given one for a long review;
+    the Results tab never passes one then.
+28. **`status`:** ok when every call succeeded, partial when some did, failed when
+    none did. A failed call still counts its prompt hash. Running a part again
+    replaces that call (marked `rerun`), the review, and the round in the run log
+    (the first failure is not kept in the log).
+29. **A long review's top-level `user` and `hash` are the first call's**, and its
+    call record adds up seconds, tokens and attempts; every call's own hash,
+    prompt and reply are in `batches`, and the log summary has one row a call.
+30. **`split_questionnaire()` treats a run of blank lines as one separator** and
+    never cuts a block; a block longer than a call can take stops with its number,
+    length and first words, on the Brief tab at once and in `run_review()`.
+31. **The output is one document of blocks, drawn twice** (`doc_html`, `doc_text`),
+    so the HTML and the plain text cannot say different things; smoke checks it.
+32. **Minor findings are printed in the Word output** (a Word document cannot fold
+    them), under their own heading.
+33. **The disclosure prints prompt hashes in full** (not 16 characters) and each
+    model as its id and host. A review in parts lists a hash for every call, the
+    one that failed included, since it was sent.
+34. **Keys:** `scrub_secrets()` takes any key of 8 or more characters out of the
+    page, the text and the log; `known_keys()` gives it the session's pasted key and
+    any server key. The kept items go into the log at download, on the last round.
+35. **The "For Word" box is black on white whatever the theme**, because a browser
+    copies the colours it shows and light text from the dark theme would be
+    invisible in Word.
+36. **`R/output.R` is the twelfth code file; the budget of 12 is now full.** Any
+    later file means merging two.
+37. **Smoke checks changed because the design did** (none loosened): `run_review`'s
+    fields now include `batches`; `build_step_prompt` has a `part` argument and
+    five steps; the Brief note's wording; no tab is a placeholder; a minor
+    finding's fold reads "1 minor finding, rated below 5".
+
+### Skipped, stubbed or not done
+
+- **The copy buttons are not verified on Connect** (decision in 5c): they use
+  `document.execCommand("copy")`; the page says to select and copy by hand if that
+  fails.
+- **No live drafting run in Phase 5.** The Output tab for drafts is tested on
+  canned runs and, with a stand-in for the models, in a real browser; the live
+  Phase 3 run is the last one with real drafts.
+- **The instrument findings' evidence is not checked by R** (it is a list of
+  question ids, so `evidence_found` is NA); the live run's instrument evidence was
+  the id and the copied question text, not ids alone.
+- **A part that is cut off at its ceiling would be cut off again** if run again;
+  the advice is still "Paste fewer questions".
+- The Prompt tab shows only the first part's prompt of a long review (decision 26).
+
+### What a model did that the skills did not expect
+
+- **The instrument call is not cheap**: 15,386 tokens out for 11 findings, more
+  than part 2's 8,421 for seven questions, and 111 s. It wrote long findings, a
+  long `not_assessed` and five `test_first` entries. My estimate for it was 5,000.
+- **A full-size part used far less than the ceiling**: 18,207 tokens for 23
+  questions (about 790 a question), against about 1,400 a question in Phase 4's
+  15-question run, which also did the instrument work. The 43,000 ceiling is about
+  2.4 times what a 4,000-character part needed.
+- **Instrument evidence is the question number and its words** ("Q14: In a normal
+  week, ..."), not just the numbers the skill asks for. Harmless, and useful.
+- **The instrument call said the item wording was reviewed elsewhere** in
+  `not_assessed`, which is true and was not in its instructions.
+- **Some instrument findings repeat a question-level one** (the job assumed in
+  Q14 to Q16 appears both ways), as in the gold run.
+
+### Click-through for Kevin (both flows, the Output tab and the Methodology tab)
+
+Run `shiny::runApp("QuestionR")` from the repository root. Steps 1 to 6 are free;
+7 and 11 make model calls (about $0.17 and $0.7).
+
+1. **Start here:** paste the project manager's key, "Check connections" shows all
+   four ready. Settings in force show the 40,000-character limit.
+2. **Drafting, 1. Brief:** Attitudinal, a research question, a population, "web",
+   3 items. Set Output language to French to see the TRAPD block later.
+3. **Skip the brief check**, then **2. Prompt:** read it; edit one word and see the
+   "Edited" note with two hashes; "Reset" brings it back.
+4. **Approve and run** (step 7 is the live one). **3. Results:** candidates A, B, C;
+   each item has "Coded defaults" and a "Keep this item" box; the failed checks are
+   in three bands, "Fix before fielding" (7 and above), "Needs your judgment" (5 and
+   6), and a folded "minor ... rated below 5"; a set-level fail is shown once under
+   its candidate.
+5. Tick two or three items on different candidates. **4. Output:** the kept items in
+   a white box in the order ticked, with options numbered, parts indented and the
+   English source in italics; below it the TRAPD block (French) and the disclosure
+   block; a plain-text box beneath. Un-tick an item on Results and see it leave.
+6. **Select the white box, copy, and paste it into Word:** the numbering and italics
+   should survive and the text should be black. Try "Copy for Word" too (if it says
+   "Not copied", select by hand and tell me). Download the plain text and the run
+   log: the log is JSON with `"schema": 1`, every round, your kept items; search it
+   for your key (there should be nothing).
+7. **Run it live** with a real key when you are ready.
+8. **Evaluate, a short questionnaire:** Brief, task Evaluate, a few questions with a
+   blank line between them and their options under each. **2. Prompt** is editable
+   and says one call; approve; **3. Results:** question by question in the bands,
+   each finding with its quote, a rewrite and a probe both marked untested, and a
+   flag where a quote is not in the text (it should now be rare).
+9. **Evaluate, a long questionnaire:** paste `tests/review_long_questionnaire.txt`
+   (5,028 characters). The Brief note says to leave a blank line between questions.
+   **2. Prompt** says "reviewed in 2 parts ... 3 calls", shows the first part's
+   prompt and has no editing. Paste 4,100 characters with no blank line and see the
+   Brief tab refuse it, naming the block.
+10. **Approve** (about 5 minutes, about $0.7). The progress bar names the part it is
+    on. **3. Results** lists a prompt hash for each call and, if a part ever fails,
+    names it with a "Run this part again" button (not easy to provoke: it appears
+    after a network error mid-run).
+11. **4. Output** for a review: question by question in the bands, the instrument,
+    what to test first, what could not be judged, then the disclosure with every
+    call's hash. Paste into Word as in step 6.
+12. **Methodology:** the note, its two tables as tables, and below it a block for each
+    skill file with its version and a row for every rule, with when it applies and
+    its source.
+13. If a tab ever looks blank after a click, tell me which tabs you clicked in what
+    order (a scripted click sometimes leaves the highlight on the wrong tab; a real
+    click did not in my checks).
+
+### Remaining FAIL in `REVIEW.md`
+
+None. `tests/review.R 5`: all of section 10's 11 checks PASS, 12 of 12 code files.
 
 ## Phase 4 (2026-11-12): Evaluate built, 15-question measurement, gold test
 

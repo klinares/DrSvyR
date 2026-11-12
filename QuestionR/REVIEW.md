@@ -1,6 +1,6 @@
 # QuestionR review evidence, Phase 5
 
-Generated 2026-11-12 17:25 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-12 18:38 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,6 +12,11 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+9af8f4c QuestionR 5e preparation: the 30-question questionnaire and llm_check.R go review30
+f15601d QuestionR: readability fixes found in the browser (5c, 5d)
+45206ac QuestionR 5d: the Methodology tab
+7dc49f5 QuestionR 5c: the Output tab for both flows, the disclosure block and the run log
+191dcfb QuestionR 5b: long questionnaires are reviewed in parts
 58cfbb3 QuestionR 5a: severity bands in both Results views, evidence comparison, evaluate 0.3 hashes
 b026f0a QuestionR: changes from the Claude project (design section 14, evaluate 0.3, methodology, review.R section 10)
 f96b3e1 QuestionR Phase 4: gold test results, final STATUS and REVIEW
@@ -22,97 +27,91 @@ d77a3bc QuestionR 4d: evaluation ceiling and paste cap from one live 15-question
 0439b18 QuestionR: Phase 4b run_review and check_review
 463f0c0 QuestionR: Phase 4a apply design section 13 (severity, set-level fails, ceilings, midpoint coding)
 c273eb9 QuestionR: changes from the Claude project (design section 13, generate and pm_appraise 0.3, review.R section 9)
-a656f4b QuestionR: Phase 3 live run of the engine, two fixes it found, REVIEW.md
-d03f7db QuestionR: llm_check.R go generate runs the Generate engine live
-76b6354 QuestionR: Phase 3c Generate screens: Brief, Prompt, Results, Run again
-aa07e01 QuestionR: Phase 3b flow engine, reply schemas, coded defaults, checks
-7308eb1 QuestionR: Phase 3a task registry and one prompt assembler for every step
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
- M R/checks.R
- M R/flow.R
- M R/skills.R
- M R/ui_generate.R
- M app.R
- M tests/smoke.R
-?? R/output.R
+?? tests/review_long.json
+?? tests/review_long.md
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
- CLAUDE.md                                |    1 +
- QuestionR/.rscignore                     |    7 +
- QuestionR/DESIGN.md                      |  673 +++++++++
- QuestionR/PROMPTS.md                     |  340 +++++
- QuestionR/R/_disable_autoload.R          |    5 +
- QuestionR/R/checks.R                     |  412 ++++++
- QuestionR/R/flow.R                       |  260 ++++
- QuestionR/R/llm.R                        |  607 ++++++++
- QuestionR/R/skills.R                     |  590 ++++++++
- QuestionR/R/ui.R                         |  180 +++
- QuestionR/R/ui_generate.R                |  763 ++++++++++
- QuestionR/README.md                      |   43 +
- QuestionR/REVIEW.md                      | 1628 ++++++++++++++++++++++
- QuestionR/STATUS.md                      | 1494 ++++++++++++++++++++
- QuestionR/app.R                          |  196 +++
- QuestionR/tests/gold_items.csv           |   60 +
- QuestionR/tests/gold_matches.csv         |   68 +
- QuestionR/tests/gold_run.R               |  151 ++
- QuestionR/tests/gold_runs/C1.json        |   98 ++
- QuestionR/tests/gold_runs/C3.json        |   98 ++
- QuestionR/tests/gold_runs/C4.json        |   98 ++
- QuestionR/tests/gold_runs/C5.json        |   98 ++
- QuestionR/tests/gold_runs/C6.json        |   98 ++
- QuestionR/tests/gold_runs/C7.json        |  108 ++
- QuestionR/tests/gold_runs/C8.json        |   98 ++
- QuestionR/tests/gold_runs/F1.json        |  128 ++
- QuestionR/tests/gold_runs/F10.json       |  108 ++
- QuestionR/tests/gold_runs/F11.json       |  109 ++
- QuestionR/tests/gold_runs/F12.json       |  108 ++
- QuestionR/tests/gold_runs/F13.json       |  108 ++
- QuestionR/tests/gold_runs/F14.json       |  118 ++
- QuestionR/tests/gold_runs/F15.json       |  150 ++
- QuestionR/tests/gold_runs/F16.json       |  128 ++
- QuestionR/tests/gold_runs/F17.json       |  108 ++
- QuestionR/tests/gold_runs/F18.json       |  149 ++
- QuestionR/tests/gold_runs/F19.json       |  128 ++
- QuestionR/tests/gold_runs/F2.json        |   98 ++
- QuestionR/tests/gold_runs/F20.json       |  141 ++
- QuestionR/tests/gold_runs/F3.json        |  118 ++
- QuestionR/tests/gold_runs/F4.json        |  150 ++
- QuestionR/tests/gold_runs/F5.json        |  131 ++
- QuestionR/tests/gold_runs/F6.json        |  108 ++
- QuestionR/tests/gold_runs/F7.json        |  130 ++
- QuestionR/tests/gold_runs/F8.json        |  108 ++
- QuestionR/tests/gold_runs/F9.json        |  119 ++
- QuestionR/tests/gold_runs/_calls.csv     |   28 +
- QuestionR/tests/gold_runs/_findings.csv  |  103 ++
- QuestionR/tests/gold_summary.md          |  121 ++
- QuestionR/tests/llm_check.R              |  351 +++++
- QuestionR/tests/llm_check.out            |   24 +
- QuestionR/tests/openrouter_check.R       |   81 ++
- QuestionR/tests/review.R                 |  680 +++++++++
- QuestionR/tests/review15_run.json        |  498 +++++++
- QuestionR/tests/review_questionnaire.txt |   15 +
- QuestionR/tests/review_tokens.md         |   18 +
- QuestionR/tests/run_generate.json        |  864 ++++++++++++
- QuestionR/tests/smoke.R                  | 2228 ++++++++++++++++++++++++++++++
- QuestionR/www/methodology.md             |   85 ++
- QuestionR/www/skills/README.md           |   66 +
- QuestionR/www/skills/attitudinal.md      |   72 +
- QuestionR/www/skills/behavioral.md       |   67 +
- QuestionR/www/skills/core.md             |   92 ++
- QuestionR/www/skills/cross_cultural.md   |   66 +
- QuestionR/www/skills/evaluate.md         |  117 ++
- QuestionR/www/skills/generate.md         |   77 ++
- QuestionR/www/skills/mode.md             |   57 +
- QuestionR/www/skills/pm_appraise.md      |   77 ++
- QuestionR/www/skills/pm_brief.md         |   42 +
- QuestionR/www/skills/sensitive.md        |   90 ++
- README.md                                |    2 +
- 70 files changed, 16540 insertions(+)
+ CLAUDE.md                                     |    1 +
+ QuestionR/.rscignore                          |    7 +
+ QuestionR/DESIGN.md                           |  673 ++++++
+ QuestionR/PROMPTS.md                          |  340 +++
+ QuestionR/R/_disable_autoload.R               |    5 +
+ QuestionR/R/checks.R                          |  455 ++++
+ QuestionR/R/flow.R                            |  362 ++++
+ QuestionR/R/llm.R                             |  607 ++++++
+ QuestionR/R/output.R                          |  354 ++++
+ QuestionR/R/skills.R                          |  650 ++++++
+ QuestionR/R/ui.R                              |  180 ++
+ QuestionR/R/ui_generate.R                     |  961 +++++++++
+ QuestionR/README.md                           |   43 +
+ QuestionR/REVIEW.md                           | 1681 +++++++++++++++
+ QuestionR/STATUS.md                           | 1569 ++++++++++++++
+ QuestionR/app.R                               |  198 ++
+ QuestionR/tests/gold_items.csv                |   60 +
+ QuestionR/tests/gold_matches.csv              |   68 +
+ QuestionR/tests/gold_run.R                    |  151 ++
+ QuestionR/tests/gold_runs/C1.json             |   98 +
+ QuestionR/tests/gold_runs/C3.json             |   98 +
+ QuestionR/tests/gold_runs/C4.json             |   98 +
+ QuestionR/tests/gold_runs/C5.json             |   98 +
+ QuestionR/tests/gold_runs/C6.json             |   98 +
+ QuestionR/tests/gold_runs/C7.json             |  108 +
+ QuestionR/tests/gold_runs/C8.json             |   98 +
+ QuestionR/tests/gold_runs/F1.json             |  128 ++
+ QuestionR/tests/gold_runs/F10.json            |  108 +
+ QuestionR/tests/gold_runs/F11.json            |  109 +
+ QuestionR/tests/gold_runs/F12.json            |  108 +
+ QuestionR/tests/gold_runs/F13.json            |  108 +
+ QuestionR/tests/gold_runs/F14.json            |  118 ++
+ QuestionR/tests/gold_runs/F15.json            |  150 ++
+ QuestionR/tests/gold_runs/F16.json            |  128 ++
+ QuestionR/tests/gold_runs/F17.json            |  108 +
+ QuestionR/tests/gold_runs/F18.json            |  149 ++
+ QuestionR/tests/gold_runs/F19.json            |  128 ++
+ QuestionR/tests/gold_runs/F2.json             |   98 +
+ QuestionR/tests/gold_runs/F20.json            |  141 ++
+ QuestionR/tests/gold_runs/F3.json             |  118 ++
+ QuestionR/tests/gold_runs/F4.json             |  150 ++
+ QuestionR/tests/gold_runs/F5.json             |  131 ++
+ QuestionR/tests/gold_runs/F6.json             |  108 +
+ QuestionR/tests/gold_runs/F7.json             |  130 ++
+ QuestionR/tests/gold_runs/F8.json             |  108 +
+ QuestionR/tests/gold_runs/F9.json             |  119 ++
+ QuestionR/tests/gold_runs/_calls.csv          |   28 +
+ QuestionR/tests/gold_runs/_findings.csv       |  103 +
+ QuestionR/tests/gold_summary.md               |  121 ++
+ QuestionR/tests/llm_check.R                   |  445 ++++
+ QuestionR/tests/llm_check.out                 |   24 +
+ QuestionR/tests/openrouter_check.R            |   81 +
+ QuestionR/tests/output_generate.txt           |   60 +
+ QuestionR/tests/output_review.txt             |   64 +
+ QuestionR/tests/review.R                      |  680 ++++++
+ QuestionR/tests/review15_run.json             |  498 +++++
+ QuestionR/tests/review_long_questionnaire.txt |   89 +
+ QuestionR/tests/review_questionnaire.txt      |   15 +
+ QuestionR/tests/review_tokens.md              |   18 +
+ QuestionR/tests/run_generate.json             |  864 ++++++++
+ QuestionR/tests/smoke.R                       | 2796 +++++++++++++++++++++++++
+ QuestionR/www/methodology.md                  |   85 +
+ QuestionR/www/skills/README.md                |   66 +
+ QuestionR/www/skills/attitudinal.md           |   72 +
+ QuestionR/www/skills/behavioral.md            |   67 +
+ QuestionR/www/skills/core.md                  |   92 +
+ QuestionR/www/skills/cross_cultural.md        |   66 +
+ QuestionR/www/skills/evaluate.md              |  117 ++
+ QuestionR/www/skills/generate.md              |   77 +
+ QuestionR/www/skills/mode.md                  |   57 +
+ QuestionR/www/skills/pm_appraise.md           |   77 +
+ QuestionR/www/skills/pm_brief.md              |   42 +
+ QuestionR/www/skills/sensitive.md             |   90 +
+ README.md                                     |    2 +
+ 74 files changed, 18302 insertions(+)
 exit status: 0
 ~~~~
 
@@ -120,20 +119,20 @@ exit status: 0
 
 | file | lines |
 |---|---|
-| app.R | 202 |
+| app.R | 198 |
 | R/_disable_autoload.R | 5 |
 | R/checks.R | 455 |
 | R/flow.R | 362 |
 | R/llm.R | 607 |
-| R/output.R | 24 |
+| R/output.R | 354 |
 | R/skills.R | 650 |
 | R/ui.R | 180 |
-| R/ui_generate.R | 866 |
+| R/ui_generate.R | 961 |
 | tests/gold_run.R | 151 |
-| tests/llm_check.R | 351 |
+| tests/llm_check.R | 445 |
 | tests/openrouter_check.R | 81 |
 | tests/review.R | 680 |
-| tests/smoke.R | 2445 |
+| tests/smoke.R | 2796 |
 
 Code files counted: 12 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
@@ -152,7 +151,7 @@ R/_disable_autoload.R present and empty of code: PASS
 
 Top-level expressions in R/ that are not assignments: PASS
 Names defined more than once across R/: PASS
-pkg::fn calls checked: 31. Not exported by the installed package: PASS
+pkg::fn calls checked: 32. Not exported by the installed package: PASS
 
 ## 4. Skill files
 
@@ -194,7 +193,7 @@ ok  the classification banner shows
 ok  the logo shows, or its placeholder box does
 ok  every tab is in the navlist
 ok  the key box is on Start here
-ok  the not-yet-built tabs say so
+ok  no tab is a placeholder any more, and the Methodology tab holds the note and the rules table
 ok  home profile: PM on a pasted key, three workers
 ok  work profile loads
 ok  an unknown profile stops the app and names the choices
@@ -465,7 +464,7 @@ ok  Run again is not offered before there is a round to run again
 ok  after a round, Run again offers a box for what to change
 ok  what is typed becomes the revision, trimmed, and the Brief tab opens with the form as it was
 ok  a blank box clears the revision and still goes back to the brief
-ok  the page has the Generate tabs' controls, and the later tabs are still placeholders
+ok  the page has the Generate tabs' controls, and no tab is a placeholder
 ok  no key is anywhere on the page
 ok  the log keeps the brief check's and the appraisal's own call records: raw reply, tokens, attempts
 ok  a model's own words for labelling every point are read as yes, in the phrasings the live run produced
@@ -537,6 +536,45 @@ ok  approving it records the first part's prompt as assembled, not edited, with 
 ok  a run of a long review asks for one progress step per call, records one round with the summary rows, and shows the part that failed
 ok  the page for a long review lists a prompt hash for each call and shows the questions that came back and the instrument findings
 ok  the button's input runs that part again, and the page, the review and the round in the log are replaced by one with nothing missing
+ok  a drafting output has the kept items in the order they were ticked, each with its id, introduction, stem, numbered options and programming notes
+ok  the HTML is plain: headings, paragraphs, an ordered list of options that Word keeps numbered, emphasis for the introduction, a block quote for a part
+ok  the HTML and the plain text say the same: every line of the text is in the HTML's text, in the same order
+ok  the output language not being English puts the English source wording in italics after each item
+ok  a language other than the source puts the TRAPD block above the disclosure block, and an English one has none
+ok  the disclosure names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft
+ok  the disclosure gives the version of each skill file used, and pm_brief.md only when the brief was checked
+ok  the disclosure gives each prompt's hash in full, says the drafting prompt was not edited, and says it was when it was
+ok  the disclosure says which candidate each kept item came from and the model behind it, and ends with the fixed line
+ok  with no item kept, or a tick that points at nothing, the output says so and has no disclosure to make
+ok  a review's output is question by question, each question's findings in the severity bands, highest first, the Minor ones listed too
+ok  a finding gives its quote, problem, and a rewrite and a probe each said to be untested; a quote R did not find is flagged
+ok  the instrument findings, what to test first and what the review could not judge follow, then the disclosure with the review prompt's hash
+ok  a review of translated text prints what its trapd field says is still needed, or the fixed lines when it said nothing
+ok  a review in parts lists a prompt hash for each call, and one with a part missing says so at the top; no review gives a plain message
+ok  the run log is one JSON file with a schema, the profile, the time and every round; the kept items are in it
+ok  a planted key is absent from the log, which says where it was taken out, and a string too short to be a key is left alone
+ok  no output text or HTML carries a planted key: it is not in the run's data, and scrub_secrets takes it out of anything that is
+ok  known_keys gives the analyst's pasted key and a server key, none when there is none; the output and log functions never read a key themselves
+ok  the two sample outputs are saved as tests/output_generate.txt and tests/output_review.txt
+ok  before anything has run, the Output tab says there is nothing to show and offers no download
+ok  a drafting round with nothing ticked says no item has been kept
+ok  ticking items on Results puts them on the Output tab in HTML for Word and in a plain text box, with the disclosure block
+ok  un-ticking an item takes it off the Output tab
+ok  the downloads are the plain text and the run log, and the page says no key is in the log
+ok  the text download is the output as plain text; the log download is JSON with a schema, the round and the items kept
+ok  a key in the session, and echoed in a model's reply, is in neither the page, nor the text download, nor the log download
+ok  a review's Output tab shows the review question by question in the bands, and the disclosure, with no Keep boxes
+ok  the review's run log has its round, its prompt hash and its call record
+ok  the page has the Output tab's boxes in place of its placeholder, and no key is anywhere on it
+ok  skills_table has one row for every reflex of every skill file, with its file, id, when and source, in the order of the files
+ok  the Methodology page renders the note: its headings, its numbered list, and its tables as tables
+ok  below the note there is a block for each skill file with its title and version, and a row for every one of its reflexes
+ok  each rule's source is shown as the skill file gives it, and a rule with none says so
+ok  a methodology file that is missing, or a skills folder that is, is said in words and does not stop the page
+Warning message:
+In file(con, "r") :
+  cannot open file 'www/no_such_note.md': No such file or directory
+ok  the page's Methodology tab is the note and the table, and the app starts with it (the whole page was built above)
 exit status: 0
 ~~~~
 
@@ -1672,10 +1710,163 @@ The control findings at 5 or above:
 | www/methodology.md present | PASS |
 
 Long live review (tests/review_long.md), verbatim:
-tests/review_long.md does not exist yet.
+~~~~
+# One live long review, in parts (tests/llm_check.R go review30)
+
+Run: 2026-11-12 18:38 | profile: home
+Model: claude-sonnet-5-5 | evaluation ceiling 43000 tokens a call, batch size 4000 characters, paste cap 40000; none was changed for this run.
+Questionnaire: tests/review_long_questionnaire.txt, written for this test: 30 questions in 30 blocks, 5028 characters.
+Form: research question "Household energy use, travel and quality of life", population "Adults aged 18 and over living in England", mode web, no country, English.
+Parts: 2 (first blocks 1, 24), so 3 calls: one for each part and one for the instrument as a whole.
+
+| Call | Characters | Seconds | Tokens in | Tokens out | Finish | Attempts | Status |
+|---|---|---|---|---|---|---|---|
+| part 1 of 2 | 3766 | 129.2 | 5,592 | 18,207 | success | 1 | ok |
+| part 2 of 2 | 1260 | 62.6 | 4,645 | 8,421 | success | 1 | ok |
+| instrument | 5028 | 111.0 | 5,663 | 15,386 | success | 1 | ok |
+
+Total: 303 seconds (5.0 minutes), 15,900 tokens in, 42,014 tokens out. Result status: ok.
+
+Failed parts: none.
+
+Findings: 45 in all: 34 about questions and 11 about the instrument.
+By band: Fix before fielding 4, Needs your judgment 25, Minor 16.
+**Share of question findings whose evidence was found in the pasted text: 34 of 34 (100.0%).** Phase 4's gold run found 55 of 100 (45 had evidence that was a description).
+Checks not in the checklist that was sent: 0.
+Questions back: 30 of 30; ids exactly as pasted, in order.
+Item calls that filled fields they were told to leave empty (instrument, test_first, trapd, not_assessed): 0 of 2 (0, 0 entries).
+The instrument call returned 0 question entries (it was told to leave items empty).
+
+~~~~
 
 Sample output for Word, drafting (tests/output_generate.txt), verbatim:
-tests/output_generate.txt does not exist yet.
+~~~~
+Survey items
+============
+
+First drafts by language models, untested.
+
+CONF1
+-----
+
+Nous allons vous poser quelques questions sur la commission électorale nationale.
+
+Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle 1)
+
+1. Beaucoup
+2. Assez
+3. Peu
+4. Pas du tout
+
+[Randomize the order of options 1 to 4; keep Pas du tout last.]
+
+English source: How much do you trust the national electoral commission? (1)
+
+CONF2
+-----
+
+Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle 2)
+
+1. Beaucoup
+2. Assez
+3. Peu
+4. Pas du tout
+
+    Asked if the answer is Peu or Pas du tout: Pourquoi ?
+
+English source: How much do you trust the national electoral commission? (2)
+
+TRAPD: what is still needed
+===========================
+
+- The model's version is a first draft inside the Translation step only.
+- Review by people fluent in both languages and in survey design is still needed.
+- Adjudication of disagreements by a named person is still needed.
+- Pretesting in the target language with members of the target population is still needed.
+- Documentation of every decision, and of the model's part in it, is still needed.
+
+Disclosure of the use of language models
+========================================
+
+- Date: 2026-11-12 09:30
+- Profile: home
+- Project manager model: vendor-p/pm-model (example.invalid)
+- Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
+- Skill files and versions: core.md 0.2; generate.md 0.3; attitudinal.md 0.2; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.3; pm_brief.md 0.1
+- Brief check prompt: 395ddacac624fd946a3de8f690cdd69ba36b282b35b74b3df4c7f54c9e56afff
+- Drafting prompt (not edited): b6438476295bc94614d64a469052af204f45cdb8c43030daa3735363398dae72
+- Appraisal prompt: bbde744f6041e821f31f8abea85dab6ec16d8e222da11db74b1ab5f4ee63887c
+- Item 1 (CONF1): candidate A, written by vendor-a/model-one
+- Item 2 (CONF2): candidate C, written by vendor-b/model-two
+
+Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
+
+~~~~
 
 Sample output for Word, review (tests/output_review.txt), verbatim:
-tests/output_review.txt does not exist yet.
+~~~~
+Review of the questionnaire, question by question
+=================================================
+
+An expert-review appraisal by a language model against a fixed checklist. It shows where a respondent may have trouble. A rewrite or a probe is untested.
+
+Question Q1
+-----------
+
+Fix before fielding
+
+- one_thing (severity 8): "recycling services and street cleaning". Two services in one question. A rewrite, untested: How satisfied are you with the recycling services? A probe: Which service did you think of?
+
+Needs your judgment
+
+- response_scale (severity 6): "Fairly satisfied / Fairly dissatisfied". There is no middle option.
+
+Minor (rated below 5)
+
+- plain_words (severity 3): "street cleaning". Could mean sweeping or litter bins.
+
+Question Q2
+-----------
+
+Fix before fielding
+
+- neutral_wording (severity 7): "Do you agree that the council should". Invites agreement.
+
+Needs your judgment
+
+- no_presupposition (severity 5) [quote not found in the text]: "words that are nowhere in the questionnaire". Assumes an opinion.
+
+Question Q3
+-----------
+
+No problem was found by this review.
+
+The instrument as a whole
+=========================
+
+Needs your judgment
+
+- filters_and_routing (severity 5): Questions: Q2 and Q3. Q3 applies only to library users.
+
+What to test first
+==================
+
+- Question Q1: cognitive interviews
+
+What this review could not judge
+================================
+
+Fit to objectives was not assessed: the brief names no analysis plan.
+
+Disclosure of the use of language models
+========================================
+
+- Date: 2026-11-12 09:30
+- Profile: home
+- Project manager model: vendor-p/pm-model (example.invalid)
+- Skill files and versions: core.md 0.2; evaluate.md 0.3; mode.md 0.1
+- Review prompt (not edited): 4cb3acaf9cc38c1a4ab6d4947c0d87a877aabf83661baab1ccd571a67e8ecdf8
+
+Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
+
+~~~~
