@@ -384,19 +384,30 @@ fail_entry <- function(f, checklist)
           if (nzchar(f$stage)) tags$span(class = "text-muted", paste0(" (", f$stage, ")")),
           if (nzchar(f$why)) tagList(tags$br(), f$why))
 
-# Fails rated 5 or above are listed; the rest are folded away, as a review's
-#   findings are (DESIGN.md section 13).
-fail_list <- function(fails, checklist, none_text) {
-  shown = purrr::keep(fails, function(f) f$shown)
-  low = purrr::discard(fails, function(f) f$shown)
+# Entries (fails or findings, each with a `severity`) in the three bands of
+#   DESIGN.md section 14, highest first: "Fix before fielding" (7 and above) and
+#   "Needs your judgment" (5 and 6) are listed under their headings, and the Minor
+#   band (below 5) is folded away. draw makes one entry; noun is "fail" or
+#   "finding"; none_text says what stands when nothing is rated 5 or above.
+banded_list <- function(entries, draw, noun, none_text) {
+  band = severity_band(purrr::map_dbl(entries, function(e) as.numeric(e$severity %||% NA_real_)))
+  of = function(b) entries[band == b]
+  listed = function(b) if (length(of(b))) tagList(
+    tags$h6(class = "mt-2 mb-1", SEVERITY_BANDS[[b]]),
+    tags$ul(class = "small", purrr::map(of(b), draw)))
   tagList(
-    if (length(shown)) tags$ul(class = "small", purrr::map(shown, fail_entry, checklist = checklist))
-    else tags$p(class = "small", none_text),
-    if (length(low)) tags$details(
-      tags$summary(class = "small", paste0(length(low), if (length(low) == 1L) " fail" else " fails",
-                                           " rated below 5")),
-      tags$ul(class = "small", purrr::map(low, fail_entry, checklist = checklist))))
+    if (!any(band != "minor")) tags$p(class = "small", none_text),
+    listed("fix"), listed("judgment"),
+    if (length(of("minor"))) tags$details(
+      tags$summary(class = "small", paste0(length(of("minor")), " minor ",
+                                           if (length(of("minor")) == 1L) noun else paste0(noun, "s"),
+                                           ", rated below 5")),
+      tags$ul(class = "small", purrr::map(of("minor"), draw))))
 }
+
+# A candidate's fails in the bands.
+fail_list <- function(fails, checklist, none_text)
+  banded_list(fails, function(f) fail_entry(f, checklist), "fail", none_text)
 
 # What the appraiser said an item failed, with its words, and the check's question
 #   from the checklist that was sent. An item the appraiser gave no entry is not
@@ -539,20 +550,13 @@ review_finding <- function(r, checklist)
       if (nzchar(r$rewrite_english)) paste0(" (in English: ", r$rewrite_english, ")")),
     if (nzchar(r$probe)) tagList(tags$br(), tags$em("A probe: "), r$probe))
 
-# Findings at severity 5 and above are listed; the rest are folded away. A question
-#   with no finding says none were found by this review, never that it has no problems.
+# Findings in the three severity bands. A question with no finding says none were
+#   found by this review, never that it has no problems.
 review_findings <- function(rows, checklist) {
   as_rows = purrr::map(seq_len(nrow(rows)), function(i) as.list(rows[i, ]))
-  shown = purrr::keep(as_rows, function(r) r$shown)
-  low = purrr::discard(as_rows, function(r) r$shown)
-  tagList(
-    if (!length(as_rows)) tags$p(class = "small", "No problem was found by this review.")
-    else if (!length(shown)) tags$p(class = "small", "No finding rated 5 or above.")
-    else tags$ul(class = "small", purrr::map(shown, review_finding, checklist = checklist)),
-    if (length(low)) tags$details(
-      tags$summary(class = "small", paste0(length(low), if (length(low) == 1L) " finding" else " findings",
-                                           " rated below 5")),
-      tags$ul(class = "small", purrr::map(low, review_finding, checklist = checklist))))
+  if (!length(as_rows)) return(tags$p(class = "small", "No problem was found by this review."))
+  banded_list(as_rows, function(r) review_finding(r, checklist), "finding",
+              "No finding rated 5 or above.")
 }
 
 # The TRAPD steps the review says are still needed. Nothing is drawn when the

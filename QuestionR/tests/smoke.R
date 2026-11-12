@@ -2089,7 +2089,7 @@ local({
          grepl("A rewrite, untested", h, fixed = TRUE) && grepl("A rewrite.", h, fixed = TRUE) &&
          grepl("A probe", h, fixed = TRUE) && grepl("A probe.", h, fixed = TRUE))
     ok("a finding below 5 is folded away, and flagged when its quote is not in the text or its check was not sent",
-       grepl("1 finding rated below 5", h, fixed = TRUE) && grepl("quote not found", h, fixed = TRUE) &&
+       grepl("1 minor finding, rated below 5", h, fixed = TRUE) && grepl("quote not found", h, fixed = TRUE) &&
          grepl("not a check that was sent", h, fixed = TRUE) && grepl("words that are nowhere", h, fixed = TRUE) &&
          n_in3("not_a_check", h) == 1L && n_in3("words that are nowhere", h) == 1L)
     ok("a question with no finding says none was found by this review, never that it has no problems",
@@ -2173,4 +2173,56 @@ local({
        identical(flow_round(rv_form, fl_pm, review = rv_ed)$prompt$edited, TRUE) &&
        grepl("system and a user", tryCatch(run_review(rv_form, fl_pm, ask = ra$ask, prompt = list(user = "x")),
                                            error = conditionMessage), fixed = TRUE))
+})
+
+
+# ---- Phase 5a: severity bands and the way evidence is compared ------------------------------
+
+ok("severity_band: 7 and above fix, 5 and 6 judgment, below 5 minor, none given judgment (the cut at 5 is unchanged)",
+   identical(severity_band(c(10, 9, 7, 6, 5, 4, 1, NA)),
+             c("fix", "fix", "fix", "judgment", "judgment", "minor", "minor", "judgment")) &&
+     identical(unname(SEVERITY_BANDS), c("Fix before fielding", "Needs your judgment", "Minor")) &&
+     identical(SEVERITY_SHOWN, 5L) && identical(SEVERITY_FIX, 7L) &&
+     identical(severity_band(c(9, 6, 3)) != "minor", c(9, 6, 3) >= SEVERITY_SHOWN))
+local({
+  rows = check_review(list(items = list(list(id = "Q1", findings = list(
+    finding("one_thing", "local recycling", 5), finding("one_thing", "local recycling", 9),
+    finding("response_scale", "local recycling", 4), finding("one_thing", "local recycling", 7),
+    finding("one_thing", "local recycling", 2), finding("response_scale", "local recycling", 6)))),
+    instrument = list()), forms$evaluate)
+  h = paste(as.character(review_findings(rows, build_checklist(forms$evaluate))), collapse = "")
+  at = function(x) regexpr(x, h, fixed = TRUE)[[1]]
+  sev = function(n) regexpr(paste0("severity ", n, "<"), h, fixed = TRUE)[[1]]
+  ok("a review's findings are shown in three bands, highest first, the Minor band folded away",
+     n_in3("Fix before fielding", h) == 1L && n_in3("Needs your judgment", h) == 1L &&
+       at("Fix before fielding") < at("Needs your judgment") && at("Needs your judgment") < at("<details") &&
+       n_in3("2 minor findings, rated below 5", h) == 1L &&
+       sev(9) < sev(7) && sev(7) < at("Needs your judgment") && at("Needs your judgment") < sev(5) &&
+       sev(5) < sev(6) && sev(6) < at("<details") && sev(4) > at("<details") && sev(2) > at("<details"))
+  only_low = check_review(list(items = list(list(id = "Q1", findings = list(finding("one_thing", "local recycling", 3)))),
+                               instrument = list()), forms$evaluate)
+  h2 = paste(as.character(review_findings(only_low, build_checklist(forms$evaluate))), collapse = "")
+  ok("a question with only minor findings says none is rated 5 or above and shows no band heading",
+     grepl("No finding rated 5 or above.", h2, fixed = TRUE) && !grepl("Fix before fielding", h2, fixed = TRUE) &&
+       !grepl("Needs your judgment", h2, fixed = TRUE) && grepl("1 minor finding, rated below 5", h2, fixed = TRUE))
+  fl = function(sev) list(candidate = "A", id = "Q1", items = NULL, check = "one_thing", evidence = "x", stage = "", why = "",
+                          severity = sev, shown = is.na(sev) || sev >= 5, known = TRUE)
+  h3 = paste(as.character(fail_list(list(fl(8), fl(5), fl(3), fl(NA_real_)), build_checklist(forms$attitudinal), "none")), collapse = "")
+  ok("an appraisal's fails use the same bands: a fail with no severity is in the middle band, below 5 is folded",
+     n_in3("Fix before fielding", h3) == 1L && n_in3("Needs your judgment", h3) == 1L &&
+       n_in3("severity 8", h3) == 1L && n_in3("severity 5", h3) == 1L && n_in3("1 minor fail, rated below 5", h3) == 1L)
+})
+local({
+  q = with_field(forms$evaluate, questionnaire = "Q1. How satisfied are you with the “recycling   services” and street cleaning?
+Very satisfied / Not at all")
+  found = function(ev) check_review(list(items = list(list(id = "Q1", findings = list(finding("one_thing", ev, 6)))),
+                                         instrument = list()), q)$evidence_found
+  ok("evidence is compared without case, spacing or the kind of quotation mark, with quotes around the whole of it dropped",
+     isTRUE(found("HOW SATISFIED   are you")) && isTRUE(found("“recycling services” and street cleaning")) &&
+       isTRUE(found("\"recycling services\"")) && isTRUE(found("'recycling services'")) &&
+       isTRUE(found("“How satisfied are you with the”")))
+  ok("evidence with an ellipsis, a paraphrase, or nothing is not found, and an ellipsis is not removed",
+     isFALSE(found("How satisfied ... street cleaning")) && isFALSE(found("How satisfied … street cleaning")) &&
+       isFALSE(found("how pleased are you")) && isFALSE(found("")) && isFALSE(found("...")) &&
+       identical(evidence_quote("“How ... much”"), "how ... much"))
 })

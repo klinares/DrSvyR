@@ -1,6 +1,6 @@
 # QuestionR review evidence, Phase 4
 
-Generated 2026-11-12 16:37 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-12 17:12 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,6 +12,8 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+b026f0a QuestionR: changes from the Claude project (design section 14, evaluate 0.3, methodology, review.R section 10)
+f96b3e1 QuestionR Phase 4: gold test results, final STATUS and REVIEW
 01c7100 QuestionR 4e preparation: gold items file and the gold runner
 d77a3bc QuestionR 4d: evaluation ceiling and paste cap from one live 15-question review
 1d930ec QuestionR: Phase 4d preparation (15-question review, STATUS at the gate)
@@ -25,26 +27,21 @@ d03f7db QuestionR: llm_check.R go generate runs the Generate engine live
 aa07e01 QuestionR: Phase 3b flow engine, reply schemas, coded defaults, checks
 7308eb1 QuestionR: Phase 3a task registry and one prompt assembler for every step
 539ec08 QuestionR: changes from the Claude project (design section 12, prompts, review.R section 8)
-c8870dd QuestionR: STATUS.md records the Phase 2 commit
-025a86f QuestionR: Phase 2 model layer, connection check, live check
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
- M PROMPTS.md
- M REVIEW.md
- M STATUS.md
-?? tests/gold_matches.csv
-?? tests/gold_runs/
-?? tests/gold_summary.md
+ M R/checks.R
+ M R/ui_generate.R
+ M tests/smoke.R
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
  CLAUDE.md                                |    1 +
  QuestionR/.rscignore                     |    7 +
- QuestionR/DESIGN.md                      |  599 ++++++++
- QuestionR/PROMPTS.md                     |  231 ++++
+ QuestionR/DESIGN.md                      |  673 +++++++++
+ QuestionR/PROMPTS.md                     |  340 +++++
  QuestionR/R/_disable_autoload.R          |    5 +
  QuestionR/R/checks.R                     |  390 ++++++
  QuestionR/R/flow.R                       |  260 ++++
@@ -53,21 +50,52 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/R/ui.R                         |  180 +++
  QuestionR/R/ui_generate.R                |  759 +++++++++++
  QuestionR/README.md                      |   43 +
- QuestionR/REVIEW.md                      | 1352 +++++++++++++++++++
- QuestionR/STATUS.md                      | 1370 +++++++++++++++++++
+ QuestionR/REVIEW.md                      | 1590 ++++++++++++++++++++++
+ QuestionR/STATUS.md                      | 1481 ++++++++++++++++++++
  QuestionR/app.R                          |  196 +++
  QuestionR/tests/gold_items.csv           |   60 +
+ QuestionR/tests/gold_matches.csv         |   68 +
  QuestionR/tests/gold_run.R               |  151 +++
+ QuestionR/tests/gold_runs/C1.json        |   98 ++
+ QuestionR/tests/gold_runs/C3.json        |   98 ++
+ QuestionR/tests/gold_runs/C4.json        |   98 ++
+ QuestionR/tests/gold_runs/C5.json        |   98 ++
+ QuestionR/tests/gold_runs/C6.json        |   98 ++
+ QuestionR/tests/gold_runs/C7.json        |  108 ++
+ QuestionR/tests/gold_runs/C8.json        |   98 ++
+ QuestionR/tests/gold_runs/F1.json        |  128 ++
+ QuestionR/tests/gold_runs/F10.json       |  108 ++
+ QuestionR/tests/gold_runs/F11.json       |  109 ++
+ QuestionR/tests/gold_runs/F12.json       |  108 ++
+ QuestionR/tests/gold_runs/F13.json       |  108 ++
+ QuestionR/tests/gold_runs/F14.json       |  118 ++
+ QuestionR/tests/gold_runs/F15.json       |  150 ++
+ QuestionR/tests/gold_runs/F16.json       |  128 ++
+ QuestionR/tests/gold_runs/F17.json       |  108 ++
+ QuestionR/tests/gold_runs/F18.json       |  149 ++
+ QuestionR/tests/gold_runs/F19.json       |  128 ++
+ QuestionR/tests/gold_runs/F2.json        |   98 ++
+ QuestionR/tests/gold_runs/F20.json       |  141 ++
+ QuestionR/tests/gold_runs/F3.json        |  118 ++
+ QuestionR/tests/gold_runs/F4.json        |  150 ++
+ QuestionR/tests/gold_runs/F5.json        |  131 ++
+ QuestionR/tests/gold_runs/F6.json        |  108 ++
+ QuestionR/tests/gold_runs/F7.json        |  130 ++
+ QuestionR/tests/gold_runs/F8.json        |  108 ++
+ QuestionR/tests/gold_runs/F9.json        |  119 ++
+ QuestionR/tests/gold_runs/_calls.csv     |   28 +
+ QuestionR/tests/gold_runs/_findings.csv  |  103 ++
+ QuestionR/tests/gold_summary.md          |  121 ++
  QuestionR/tests/llm_check.R              |  351 +++++
  QuestionR/tests/llm_check.out            |   24 +
  QuestionR/tests/openrouter_check.R       |   81 ++
- QuestionR/tests/review.R                 |  585 ++++++++
+ QuestionR/tests/review.R                 |  680 ++++++++++
  QuestionR/tests/review15_run.json        |  498 +++++++
  QuestionR/tests/review_questionnaire.txt |   15 +
  QuestionR/tests/review_tokens.md         |   18 +
  QuestionR/tests/run_generate.json        |  864 ++++++++++++
  QuestionR/tests/smoke.R                  | 2176 ++++++++++++++++++++++++++++++
- QuestionR/www/methodology.md             |   71 +
+ QuestionR/www/methodology.md             |   85 ++
  QuestionR/www/skills/README.md           |   66 +
  QuestionR/www/skills/attitudinal.md      |   72 +
  QuestionR/www/skills/behavioral.md       |   67 +
@@ -80,7 +108,7 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/www/skills/pm_brief.md         |   42 +
  QuestionR/www/skills/sensitive.md        |   90 ++
  README.md                                |    2 +
- 39 files changed, 12309 insertions(+)
+ 70 files changed, 16411 insertions(+)
 exit status: 0
 ~~~~
 
@@ -90,17 +118,17 @@ exit status: 0
 |---|---|
 | app.R | 196 |
 | R/_disable_autoload.R | 5 |
-| R/checks.R | 390 |
+| R/checks.R | 412 |
 | R/flow.R | 260 |
 | R/llm.R | 607 |
 | R/skills.R | 590 |
 | R/ui.R | 180 |
-| R/ui_generate.R | 759 |
+| R/ui_generate.R | 763 |
 | tests/gold_run.R | 151 |
 | tests/llm_check.R | 351 |
 | tests/openrouter_check.R | 81 |
-| tests/review.R | 585 |
-| tests/smoke.R | 2176 |
+| tests/review.R | 680 |
+| tests/smoke.R | 2228 |
 
 Code files counted: 11 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
@@ -132,7 +160,7 @@ PASS means the file is byte for byte what the Claude project drafted (line endin
 | behavioral.md | PASS | c22273bf2dbb02e4e939b8ee98bf6980c5dd093398b20312c3e82f92df1c3ead |
 | core.md | PASS | 770a402a6dc4b60389e4c266f43cdaa28dc8ccc0e88938f76cb9b72a54379f35 |
 | cross_cultural.md | PASS | 6c8a19b8c17b19808b4cfca788b3c76a7595d54a3a25a71e355391cb944bdd4d |
-| evaluate.md | PASS | 2952362b6d8e2efadff970a8b21069b768d7145808ec5b524ca8b98a998e57c1 |
+| evaluate.md | PASS | 6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb |
 | generate.md | PASS | 9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2 |
 | mode.md | PASS | 98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0 |
 | pm_appraise.md | PASS | f45e6e4ae77020fadf0cc1d6162b84f015300984e4eafcc9e83cf0116472c4eb |
@@ -471,6 +499,12 @@ ok  a review of translated text shows the TRAPD steps that are still needed, and
 ok  a review that fails is said on the page in words, with its reason, and the round is still recorded
 ok  two findings on one question, a test_first given as plain ids, and no not_assessed are all drawn
 ok  run_review sends an edited prompt when given one, and keeps it as the result's prompt with its own hash
+ok  severity_band: 7 and above fix, 5 and 6 judgment, below 5 minor, none given judgment (the cut at 5 is unchanged)
+ok  a review's findings are shown in three bands, highest first, the Minor band folded away
+ok  a question with only minor findings says none is rated 5 or above and shows no band heading
+ok  an appraisal's fails use the same bands: a fail with no severity is in the middle band, below 5 is folded
+ok  evidence is compared without case, spacing or the kind of quotation mark, with quotes around the whole of it dropped
+ok  evidence with an ellipsis, a paraphrase, or nothing is not found, and an ellipsis is not removed
 exit status: 0
 ~~~~
 
@@ -952,9 +986,9 @@ Return one JSON object with these fields.
 | checklist has no line for a mode not chosen | PASS |
 | cross_cultural not sent (no country, both languages English) | PASS |
 
-hash: 907cea17ade3998b18d48d0974ad2c5a381fb3f84737962a8167cd0c6a8948a7
+hash: 5d547f0e67ac22a924e0ba6d9ad9dd69d5cf1be5151e58377639a07ae4fc9402
 files: core.md, evaluate.md, mode.md
-characters: system 9108, user 3781
+characters: system 9311, user 3814
 
 Checklist (id: question):
 ~~~~
@@ -994,8 +1028,8 @@ REFLEXES: Core (v0.2)
 - brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
 - not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
 
-REFLEXES: Evaluate a questionnaire (v0.2)
-- restraint (Every item you review.) Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding quote the exact words or feature that cause it. MUST NOT: Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
+REFLEXES: Evaluate a questionnaire (v0.3)
+- restraint (Every item you review.) Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding copy into evidence the exact words from the question or its options that cause it, character for character, with no ellipsis and no paraphrase. When the fault is something missing, copy the words it is missing from and say what is missing in problem. MUST NOT: Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
 - known_overcalls (You are about to flag sensitivity, stigma, burden or length.) These are the faults a language-model reviewer over-reports. Flag sensitivity only when you can say who would edit their answer and in which direction; flag burden only when you can name the step that is hard.
 - known_misses (Every item, as a second pass.) Look again for the faults a language-model reviewer tends to miss: an assumption that does not hold for some respondents, a term that carries a different meaning for part of the population, a framing that belongs to one culture, a question that does not apply to everyone asked.
 - retrieval_and_judgment (Any item asking for facts, behaviour, frequency, amounts or dates.) Check the reference period (stated, bounded, short enough), whether the information is likely to be remembered, and whether the respondent must count, add or average to answer.
@@ -1066,7 +1100,7 @@ language and, when that is not English, add the English meaning.
 
 - "items": a list, one entry per question in the order pasted. Each has:
   - "id": the question's own number or label, or its position.
-  - "findings": a list, empty if none. Each finding has "check" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (the exact words or feature), "problem" (one or two sentences), "severity" (1 to 10), "rewrite" and "rewrite_english" and "probe" (empty strings when severity is below 5).
+  - "findings": a list, empty if none. Each finding has "check" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (words copied exactly from the pasted text, with no ellipsis), "problem" (one or two sentences), "severity" (1 to 10), "rewrite" and "rewrite_english" and "probe" (empty strings when severity is below 5).
 - "instrument": a list of findings about order, routing, consistency and fit to objectives, in the same form, with the question ids involved in "evidence".
 - "trapd": an object with the keys "translation", "review", "adjudication", "pretesting", "documentation", each a short statement of what is still needed; all empty strings when the survey is in one language for one country and that language is the source language.
 - "test_first": a list of up to five question ids with the method suggested for each.
@@ -1096,9 +1130,9 @@ language and, when that is not English, add the English meaning.
 | both language lines shown | PASS |
 | its checks join the checklist (functional_equivalence) | PASS |
 
-hash: 332a79ae1722d2eb05df5730e257b73e9f17ba8dbaa5efa597f09997196aaefe
+hash: 22052a7b748a9b346163d914b8587c76aa2c519901648caae8228956bc4ced10
 files: core.md, evaluate.md, mode.md, cross_cultural.md
-characters: system 12871, user 4239
+characters: system 13074, user 4272
 
 Checklist (id: question):
 ~~~~
@@ -1142,8 +1176,8 @@ REFLEXES: Core (v0.2)
 - brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
 - not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
 
-REFLEXES: Evaluate a questionnaire (v0.2)
-- restraint (Every item you review.) Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding quote the exact words or feature that cause it. MUST NOT: Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
+REFLEXES: Evaluate a questionnaire (v0.3)
+- restraint (Every item you review.) Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding copy into evidence the exact words from the question or its options that cause it, character for character, with no ellipsis and no paraphrase. When the fault is something missing, copy the words it is missing from and say what is missing in problem. MUST NOT: Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
 - known_overcalls (You are about to flag sensitivity, stigma, burden or length.) These are the faults a language-model reviewer over-reports. Flag sensitivity only when you can say who would edit their answer and in which direction; flag burden only when you can name the step that is hard.
 - known_misses (Every item, as a second pass.) Look again for the faults a language-model reviewer tends to miss: an assumption that does not hold for some respondents, a term that carries a different meaning for part of the population, a framing that belongs to one culture, a question that does not apply to everyone asked.
 - retrieval_and_judgment (Any item asking for facts, behaviour, frequency, amounts or dates.) Check the reference period (stated, bounded, short enough), whether the information is likely to be remembered, and whether the respondent must count, add or average to answer.
@@ -1232,7 +1266,7 @@ language and, when that is not English, add the English meaning.
 
 - "items": a list, one entry per question in the order pasted. Each has:
   - "id": the question's own number or label, or its position.
-  - "findings": a list, empty if none. Each finding has "check" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (the exact words or feature), "problem" (one or two sentences), "severity" (1 to 10), "rewrite" and "rewrite_english" and "probe" (empty strings when severity is below 5).
+  - "findings": a list, empty if none. Each finding has "check" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (words copied exactly from the pasted text, with no ellipsis), "problem" (one or two sentences), "severity" (1 to 10), "rewrite" and "rewrite_english" and "probe" (empty strings when severity is below 5).
 - "instrument": a list of findings about order, routing, consistency and fit to objectives, in the same form, with the question ids involved in "evidence".
 - "trapd": an object with the keys "translation", "review", "adjudication", "pretesting", "documentation", each a short statement of what is still needed; all empty strings when the survey is in one language for one country and that language is the source language.
 - "test_first": a list of up to five question ids with the method suggested for each.
@@ -1588,3 +1622,7 @@ The control findings at 5 or above:
 | 20 flawed | mean 33.5, range 22.0 to 47.6 | mean 4301, range 2698 to 6521 |
 | 7 control | mean 23.9, range 17.6 to 40.9 | mean 2907, range 2179 to 5278 |
 ~~~~
+
+## 10. Long questionnaires, output and methodology
+
+Not due until Phase 5.

@@ -283,6 +283,19 @@ defaults_labels <- function(d) {
 #   (pm_appraise.md, evaluate.md; DESIGN.md section 13).
 SEVERITY_SHOWN <- 5L
 
+# The three bands a finding or a fail is shown in, highest first (DESIGN.md
+#   section 14): 7 and above "Fix before fielding", 5 and 6 "Needs your
+#   judgment", below 5 "Minor" (collapsed). The cut at 5 stays what it was; a
+#   finding with no severity is shown, so it goes in the middle band.
+SEVERITY_FIX <- 7L
+SEVERITY_BANDS <- c(fix = "Fix before fielding", judgment = "Needs your judgment",
+                    minor = "Minor")
+
+# The band id ("fix", "judgment" or "minor") of each severity.
+severity_band <- function(severity)
+  ifelse(is.na(severity) | (severity >= SEVERITY_SHOWN & severity < SEVERITY_FIX), "judgment",
+         ifelse(severity >= SEVERITY_FIX, "fix", "minor"))
+
 # The appraisal is the project manager's, so R checks what it can without a model
 #   (DESIGN.md section 7). candidates is the drafts the appraiser saw, named by
 #   letter; checklist is the named vector it was sent. Returns:
@@ -337,9 +350,18 @@ check_appraisal <- function(reply, candidates, checklist) {
 
 # ---- checks on a review ------------------------------------------------------------------
 
-# Case, spacing and curly quotes ignored, as DESIGN.md section 7 says of the evidence.
+# How evidence is compared with the pasted text (DESIGN.md sections 7 and 14): case
+#   and runs of white space ignored, curly and straight quotes alike. A model told
+#   to copy words exactly sometimes wraps them in quotation marks, so a quote
+#   around the whole of the evidence is dropped (evidence_quote()).
 normalise_quote <- function(x)
   gsub("\\s+", " ", tolower(trimws(plain_apostrophe(gsub("[“”]", "\"", x)))))
+
+# The evidence as it is looked for in the text: normalised, then without quotation
+#   marks at either end. An ellipsis is not removed, so evidence that has one is
+#   not found: evaluate.md asks for words copied exactly.
+evidence_quote <- function(x)
+  trimws(gsub("^[\"']+|[\"']+$", "", normalise_quote(x)))
 
 # The review's findings, one row each, whether about a question or the instrument:
 #   item            the question's id, or "" for an instrument finding
@@ -361,7 +383,7 @@ check_review <- function(reply, form) {
   text = normalise_quote(f$questionnaire)
   as_text = function(x) paste(unlist(x %||% ""), collapse = " ")
   found = function(ev) {
-    q = normalise_quote(gsub("^[\"'‘’]+|[\"'‘’]+$", "", trimws(as_text(ev))))
+    q = evidence_quote(as_text(ev))
     nzchar(q) && grepl(q, text, fixed = TRUE)
   }
   one = function(x, item, scope, position)

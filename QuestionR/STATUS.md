@@ -2,6 +2,19 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
+## Phase 5, in progress (2026-11-12; the final report replaces this block)
+
+- **5a done.** Severity bands in both Results views (7 and above "Fix before
+  fielding", 5 and 6 "Needs your judgment", below 5 "Minor", folded; a finding or
+  fail with no severity is in the middle band); evidence is compared after
+  lower-casing, collapsing white space, reading curly and straight quotes alike
+  and dropping quotation marks around the whole of it (`evidence_quote()`);
+  `evaluate.md` 0.3 is in place. **New Evaluate hashes** (`REVIEW.md` section 6):
+  evaluate `5d547f0e67ac22a924e0ba6d9ad9dd69d5cf1be5151e58377639a07ae4fc9402`,
+  evaluate_translated `22052a7b748a9b346163d914b8587c76aa2c519901648caae8228956bc4ced10`.
+  Of the 60 hashes I record, exactly the 15 Evaluate ones moved; the 45 drafting
+  ones did not.
+
 ## Phase 4 (2026-11-12): Evaluate built, 15-question measurement, gold test
 
 **Take `REVIEW.md`, this file, `tests/review_tokens.md`, `tests/gold_summary.md` and
