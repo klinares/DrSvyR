@@ -1886,7 +1886,8 @@ ok("a pasted questionnaire over the cap is refused, saying how long it is and wh
    local({
      long = function(n) utils::modifyList(forms$evaluate, list(questionnaire = strrep("a", n)))
      e = tryCatch(clean_form(long(APP_MAX_PASTE_CHARS + 1L)), error = conditionMessage)
-     grepl("Paste it in parts", e, fixed = TRUE) && grepl(format(APP_MAX_PASTE_CHARS, big.mark = ","), e, fixed = TRUE) &&
+     is.character(e) && grepl("Paste it in parts", e, fixed = TRUE) &&
+       grepl(format(APP_MAX_PASTE_CHARS, big.mark = ","), e, fixed = TRUE) &&
        identical(nchar(clean_form(long(APP_MAX_PASTE_CHARS))$questionnaire), as.integer(APP_MAX_PASTE_CHARS)) &&
        grepl("Paste it in parts", tryCatch(build_prompt(long(APP_MAX_PASTE_CHARS + 1L)), error = conditionMessage), fixed = TRUE)
    }))
@@ -1927,3 +1928,109 @@ local({
      is.null(sent("openai", "low")$reasoning_effort) && is.null(sent("openai")$reasoning_effort) &&
        !any(purrr::map_lgl(c(list(APP_MODELS$pm), APP_MODELS$workers), function(m) "reasoning_effort" %in% names(m))))
 })
+
+
+# ---- Phase 4b: the review flow and its checks --------------------------------------------
+
+finding <- function(check, evidence, severity, ...)
+  with_field(list(check = check, stage = "comprehension", evidence = evidence, problem = "A problem.",
+                  severity = severity, rewrite = "", rewrite_english = "", probe = ""), ...)
+rv_reply <- list(
+  items = list(
+    list(id = "Q1", findings = list(
+      finding("one_thing", "local recycling", 8, rewrite = "A rewrite.", probe = "A probe."),
+      finding("not_a_check", "words that are nowhere in the questionnaire", 3))),
+    list(id = 2, findings = list())),
+  instrument = list(finding("context_and_order", "Q1 and Q2", 5)),
+  trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
+  test_first = list(list(id = "Q1", method = "cognitive interview")),
+  not_assessed = "Fit to objectives was not assessed.")
+
+vr <- reply_validator("review")
+ok("a review with its five fields passes: findings per question, instrument findings, TRAPD, test_first, not_assessed",
+   is.na(problem_of(vr, rv_reply)) &&
+     is.na(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list()))))))
+ok("a question's id may be a label or a number, and an empty list of findings is a question with none",
+   is.na(problem_of(vr, with_field(rv_reply, items = list(list(id = 1, findings = list()), list(id = "Q2a", findings = list()))))) &&
+     says_in(problem_of(vr, with_field(rv_reply, items = list(list(findings = list())))), "'id' is missing"))
+ok("a review missing a field, or with a finding that has no check, evidence, problem or severity from 1 to 10, fails naming the question",
+   says_in(problem_of(vr, rv_reply[names(rv_reply) != "not_assessed"]), "'not_assessed' is missing") &&
+     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list(
+       finding("one_thing", "x", 6, check = NULL)))))), "question Q1 does not give its check") &&
+     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list(
+       finding("one_thing", "x", 0)))))), "severity from 1 to 10") &&
+     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list(
+       finding("one_thing", "x", "high")))))), "severity from 1 to 10") &&
+     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list(
+       finding("one_thing", "x", 6, problem = NULL)))))), "problem and a severity") &&
+     says_in(problem_of(vr, with_field(rv_reply, instrument = list(finding("context_and_order", "x", 11)))),
+             "the instrument"))
+
+rv_form <- forms$evaluate
+rv_ask <- function(reply = rv_reply, st = new.env()) {
+  st$calls = list()
+  list(st = st, ask = function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL) {
+    st$calls[[length(st$calls) + 1L]] = list(id = m$id, user = user, system = system_prompt, max_tokens = max_tokens)
+    if (!is.null(validate)) validate(reply)
+    reply
+  })
+}
+ra <- rv_ask()
+rv <- run_review(rv_form, fl_pm, ask = ra$ask)
+ok("run_review has the fields of run_brief, uses build_prompt()'s prompt, and makes one call at the evaluation ceiling",
+   identical(sort(names(rv)), sort(c("status", "error", "system", "user", "hash", "reply"))) &&
+     identical(rv$status, "ok") && is.na(rv$error) && identical(rv$hash, build_prompt(rv_form)$hash) &&
+     identical(rv$system, build_prompt(rv_form)$system) && identical(rv$reply, rv_reply) &&
+     length(ra$st$calls) == 1L && identical(ra$st$calls[[1]]$max_tokens, LLM_MAX_TOKENS[["evaluate"]]) &&
+     identical(ra$st$calls[[1]]$user, build_prompt(rv_form)$user) && !is.null(attr(rv, "call")$seconds))
+ok("a review that errors, is cut off, or fails the schema is failed with a plain reason and is not raised",
+   identical(run_review(rv_form, fl_pm, ask = function(...) stop("endpoint down", call. = FALSE))$error, "endpoint down") &&
+     grepl("Paste fewer questions and run again.", run_review(rv_form, fl_pm, ask = cut_off)$error, fixed = TRUE) &&
+     identical(run_review(rv_form, fl_pm, ask = rv_ask(list(items = list()))$ask)$status, "failed"))
+rb <- rv_ask()
+ok("a form that is not a review, or has no questionnaire, or is over the cap, is failed without a call",
+   identical(run_review(fl_form, fl_pm, ask = rb$ask)$status, "failed") &&
+     grepl("Only a review task", run_review(fl_form, fl_pm, ask = rb$ask)$error, fixed = TRUE) &&
+     grepl("pasted in", run_review(with_field(rv_form, questionnaire = ""), fl_pm, ask = rb$ask)$error, fixed = TRUE) &&
+     grepl("Paste it in parts", run_review(with_field(rv_form, questionnaire = strrep("a", APP_MAX_PASTE_CHARS + 1L)),
+                                          fl_pm, ask = rb$ask)$error, fixed = TRUE) &&
+     length(rb$st$calls) == 0L)
+ok("run_review never looks up a key and reaches no model but through ask",
+   !any(c("Sys.getenv", "llm_key_for", "llm_session_key", "llm_json", "llm_complete") %in% all.names(body(run_review))))
+
+flags <- check_review(rv_reply, rv_form)
+ok("check_review gives one row per finding, questions and instrument alike, with the columns the flow needs",
+   is.data.frame(flags) && nrow(flags) == 3L &&
+     all(c("item", "scope", "check", "severity", "shown", "evidence", "evidence_found", "check_known", "stage",
+           "problem", "rewrite", "rewrite_english", "probe") %in% names(flags)) &&
+     identical(flags$item, c("Q1", "Q1", "")) && identical(flags$scope, c("question", "question", "instrument")))
+ok("a quote that is in the text, and a check that was sent, are accepted; an invented quote and an unknown check are flagged, not dropped",
+   isTRUE(flags$evidence_found[1]) && isTRUE(flags$check_known[1]) &&
+     isFALSE(flags$evidence_found[2]) && isFALSE(flags$check_known[2]) && is.na(flags$evidence_found[3]) &&
+     isTRUE(flags$check_known[3]))
+ok("a quote is found whatever its case, spacing, curly quotes or enclosing quotation marks",
+   local({
+     q = with_field(rv_form, questionnaire = "Q1. How satisfied are you with the “recycling   services” and street cleaning, today?")
+     found = function(ev) check_review(list(items = list(list(id = "Q1", findings = list(finding("one_thing", ev, 6)))),
+                                            instrument = list()), q)$evidence_found
+     isTRUE(found("RECYCLING SERVICES")) && isTRUE(found("\"recycling services\"")) && isTRUE(found("‘recycling services’")) &&
+       isTRUE(found("street cleaning, today")) && isFALSE(found("recycling services and the council")) && isFALSE(found(""))
+   }))
+ok("severity 5 and above is shown, below 5 is not, and a finding with no severity is shown",
+   identical(flags$shown, c(TRUE, FALSE, TRUE)) && identical(flags$severity, c(8, 3, 5)) &&
+     isTRUE(check_review(list(items = list(list(id = "Q1", findings = list(list(check = "one_thing", evidence = "x", problem = "y")))),
+                              instrument = list()), rv_form)$shown))
+ok("a review with no findings is a data frame with no rows and the same columns",
+   local({
+     d = check_review(list(items = list(list(id = "Q1", findings = list())), instrument = list()), rv_form)
+     is.data.frame(d) && nrow(d) == 0L && all(c("item", "check", "severity", "evidence_found", "check_known") %in% names(d))
+   }))
+ok("the review's checks need the CHECKLIST that was sent: ids in it are known, others are not",
+   all(c("one_thing", "response_scale") %in% names(build_checklist(rv_form))) &&
+     !"declare_defaults" %in% names(build_checklist(rv_form)))
+
+rr <- flow_round(rv_form, fl_pm, review = rv)
+rr_back <- jsonlite::fromJSON(as.character(flow_log_json(rr)), simplifyVector = FALSE)
+ok("a review round is a log too: the summary row, the review with its prompt hash and its call record",
+   identical(purrr::map_chr(rr_back$summary, "step"), "review") && identical(rr_back$review$hash, rv$hash) &&
+     !is.null(rr_back$review$call$seconds) && identical(rr_back$schema, 1L) && is.null(rr_back$appraisal))

@@ -34,15 +34,20 @@ call_record <- function(x, seconds) {
 
 # One model call, caught: nothing it does stops the caller. A failure is recorded
 #   with its reason, and with the model's last reply when there was one.
-call_model <- function(ask, user, m, system_prompt, max_tokens, validate) {
+call_model <- function(ask, user, m, system_prompt, max_tokens, validate, step) {
   started = Sys.time()
   out = tryCatch(ask(user = user, m = m, system_prompt = system_prompt,
                      max_tokens = max_tokens, validate = validate),
                  error = function(e) e)
   seconds = as.numeric(difftime(Sys.time(), started, units = "secs"))
-  if (inherits(out, "error"))
-    return(list(status = "failed", error = conditionMessage(out), reply = NULL,
+  if (inherits(out, "error")) {
+    # A reply cut off at the ceiling says what to do about it, for this step.
+    why = if (inherits(out, "llm_truncated"))
+      paste(conditionMessage(out), LLM_CUTOFF_ADVICE[[step]])
+    else conditionMessage(out)
+    return(list(status = "failed", error = why, reply = NULL,
                 call = list(seconds = seconds, raw = out$raw %||% NA_character_)))
+  }
   list(status = "ok", error = NA_character_, reply = as_reply(out),
        call = call_record(out, seconds))
 }
@@ -70,7 +75,29 @@ run_brief <- function(form, pm, ask = llm_json) {
     return(list(status = "failed", error = conditionMessage(p), system = NA_character_,
                 user = NA_character_, hash = NA_character_, reply = NULL))
   r = call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["brief"]],
-                 reply_validator("brief"))
+                 reply_validator("brief"), "brief")
+  with_call(list(status = r$status, error = r$error, system = p$system, user = p$user,
+                 hash = p$hash, reply = r$reply), r$call)
+}
+
+
+# ---- the review --------------------------------------------------------------------
+
+# The Evaluate task: the project manager reviews the pasted questionnaire, once,
+#   with the CHECKLIST of the files in force. No worker is called. Same shape as
+#   run_brief: status, error, system, user, hash, reply (the parsed review). The
+#   prompt is the one build_prompt() gives for a review. R's checks on the reply
+#   (a quote not in the text, a check that was not sent) are check_review().
+run_review <- function(form, pm, ask = llm_json) {
+  p = step_prompt(form, "work")
+  failed = function(why)
+    list(status = "failed", error = why, system = NA_character_, user = NA_character_,
+         hash = NA_character_, reply = NULL)
+  if (inherits(p, "error")) return(failed(conditionMessage(p)))
+  if (TASKS[[clean_form(form)$task]]$kind != "review")
+    return(failed("Only a review task is reviewed by the project manager."))
+  r = call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["evaluate"]],
+                 reply_validator("review"), "evaluate")
   with_call(list(status = r$status, error = r$error, system = p$system, user = p$user,
                  hash = p$hash, reply = r$reply), r$call)
 }
@@ -93,7 +120,7 @@ run_drafts <- function(form, workers, ask = llm_json, prompt = build_prompt(form
     stop("Only a drafting task is run by the workers.", call. = FALSE)
   validate = reply_validator("draft", n_items = f$n_items)
   drafts = purrr::map(unname(workers), function(m) {
-    r = call_model(ask, prompt$user, m, prompt$system, LLM_MAX_TOKENS[["draft"]], validate)
+    r = call_model(ask, prompt$user, m, prompt$system, LLM_MAX_TOKENS[["draft"]], validate, "draft")
     with_call(list(model = m$id, status = r$status, error = r$error, reply = r$reply,
                    seconds = r$call$seconds), r$call)
   })
@@ -164,7 +191,7 @@ run_appraisal <- function(form, drafts, pm, ask = llm_json, seed) {
                          "know who wrote which candidate."), p))
 
   r = call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["appraisal"]],
-                 reply_validator("appraisal"))
+                 reply_validator("appraisal"), "appraisal")
   with_call(list(status = r$status, error = r$error, labels = labels, system = p$system,
                  user = p$user, hash = p$hash, reply = r$reply), r$call)
 }
@@ -174,7 +201,7 @@ run_appraisal <- function(form, drafts, pm, ask = llm_json, seed) {
 
 # One row per model call of a round: what ran, how it ended, how long, and what it
 #   cost in tokens. First in the log, so it can be read without scrolling.
-flow_summary <- function(brief = NULL, drafts = NULL, appraisal = NULL, pm = NULL) {
+flow_summary <- function(brief = NULL, drafts = NULL, appraisal = NULL, pm = NULL, review = NULL) {
   row = function(step, model, x) {
     cl = attr(x, "call")
     list(step = step, model = model, status = x$status, seconds = cl$seconds %||% NA_real_,
@@ -184,7 +211,8 @@ flow_summary <- function(brief = NULL, drafts = NULL, appraisal = NULL, pm = NUL
   }
   c(if (!is.null(brief)) list(row("brief check", pm$id %||% NA_character_, brief)),
     purrr::map(unname(as.list(drafts)), function(d) row("draft", d$model, d)),
-    if (!is.null(appraisal)) list(row("appraisal", pm$id %||% NA_character_, appraisal)))
+    if (!is.null(appraisal)) list(row("appraisal", pm$id %||% NA_character_, appraisal)),
+    if (!is.null(review)) list(row("review", pm$id %||% NA_character_, review)))
 }
 
 # A result's call record, from its attribute into a field, so it reaches the log.
@@ -198,15 +226,16 @@ with_call_field <- function(x) {
 #   neither is a header: a call record holds no request. seed and the labels are
 #   in it, so the shuffle can be reproduced.
 flow_round <- function(form, pm = NULL, brief = NULL, drafts = NULL, appraisal = NULL,
-                       seed = NA_integer_, kept = NULL, time = Sys.time()) {
+                       seed = NA_integer_, kept = NULL, time = Sys.time(), review = NULL) {
   # JSON drops the names of a character vector, and the letters are the point of
   #   labels: letter -> model id, as a named list, keeps them.
   if (!is.null(appraisal)) appraisal$labels = as.list(appraisal$labels)
   brief = with_call_field(brief)
   appraisal = with_call_field(appraisal)
+  review = with_call_field(review)
   list(schema = 1L, time = format(time, "%Y-%m-%dT%H:%M:%S%z"),
-       summary = flow_summary(brief, drafts, appraisal, pm),
-       form = form, seed = seed, brief = brief,
+       summary = flow_summary(brief, drafts, appraisal, pm, review),
+       form = form, seed = seed, brief = brief, review = review,
        prompt = attr(drafts, "prompt"),
        drafts = if (!is.null(drafts)) purrr::map(unname(as.list(drafts)), function(d) {
          d$call = attr(d, "call")

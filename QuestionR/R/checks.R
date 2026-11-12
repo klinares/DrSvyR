@@ -34,7 +34,14 @@ REPLY_SCHEMAS <- list(
                merged = "list", test_first = "list", limits = "string"),
     each = list(appraisal = c(candidate = "text", id = "text", fails = "list"),
                 set_fails = c(candidate = "text", check = "text", severity = "number")),
-    rules = c("fail_entries")))
+    rules = c("fail_entries")),
+  # A review of pasted text (the Evaluate task). Findings sit one level further
+  #   down than `each` reaches, so a rule reads them.
+  review = list(
+    fields = c(items = "list", instrument = "list", trapd = "list", test_first = "list",
+               not_assessed = "string"),
+    each = list(items = c(id = "id", findings = "list")),
+    rules = c("finding_entries")))
 
 TYPE_WORDS <- c(text = "a non-empty string", string = "a string",
                 logical = "true or false", list = "a list", number = "a number from 1 to 10",
@@ -95,6 +102,20 @@ REPLY_RULES <- list(
       paste0("A fail for ", paste(purrr::map_chr(bad, function(e)
         paste0(e$candidate, " ", e$id)), collapse = ", "),
         " does not name its check and give a severity from 1 to 10.")
+  },
+  # Every finding in a review gives the check, the evidence, the problem and a
+  #   severity from 1 to 10, whether it is about a question or the instrument.
+  finding_entries = function(obj, ...) {
+    whole = function(f)
+      is.list(f) && type_ok(f$check, "text") && type_ok(f$severity, "number") &&
+        type_ok(f$evidence, "string") && type_ok(f$problem, "string")
+    bad_items = purrr::keep(obj$items, function(it) !all(purrr::map_lgl(it$findings, whole)))
+    bad_inst = !all(purrr::map_lgl(obj$instrument, whole))
+    if (length(bad_items) || bad_inst)
+      paste0("A finding for ",
+             paste(c(purrr::map_chr(bad_items, function(it) paste("question", it$id)),
+                     if (bad_inst) "the instrument"), collapse = ", "),
+             " does not give its check, evidence, problem and a severity from 1 to 10.")
   })
 
 # A validator for llm_json(): stops with a readable sentence when the reply is not
@@ -313,3 +334,54 @@ check_appraisal <- function(reply, candidates, checklist) {
        merged_problems = merged_problems %||% character(0))
 }
 
+
+# ---- checks on a review ------------------------------------------------------------------
+
+# Case, spacing and curly quotes ignored, as DESIGN.md section 7 says of the evidence.
+normalise_quote <- function(x)
+  gsub("\\s+", " ", tolower(trimws(plain_apostrophe(gsub("[“”]", "\"", x)))))
+
+# The review's findings, one row each, whether about a question or the instrument:
+#   item            the question's id, or "" for an instrument finding
+#   scope           "question" or "instrument"
+#   check           the id it cites
+#   severity        1 to 10 (NA if none given)
+#   shown           severity 5 or more, or none given
+#   evidence        what it quoted
+#   evidence_found  the quote occurs in the pasted text (NA for an instrument
+#                   finding, whose evidence is a list of question ids). One that
+#                   does not is flagged, not dropped.
+#   check_known     the check is an id in the CHECKLIST that was sent
+#   stage, problem, rewrite, rewrite_english, probe   as written
+check_review <- function(reply, form) {
+  f = clean_form(form)
+  sent = names(build_checklist(f))
+  text = normalise_quote(f$questionnaire)
+  as_text = function(x) paste(unlist(x %||% ""), collapse = " ")
+  found = function(ev) {
+    q = normalise_quote(gsub("^[\"'‘’]+|[\"'‘’]+$", "", trimws(as_text(ev))))
+    nzchar(q) && grepl(q, text, fixed = TRUE)
+  }
+  one = function(x, item, scope)
+    list(item = item, scope = scope, check = as_text(x$check),
+         severity = if (is.numeric(x$severity)) x$severity else NA_real_,
+         evidence = as_text(x$evidence),
+         evidence_found = if (scope == "question") found(x$evidence) else NA,
+         check_known = as_text(x$check) %in% sent, stage = as_text(x$stage),
+         problem = as_text(x$problem), rewrite = as_text(x$rewrite),
+         rewrite_english = as_text(x$rewrite_english), probe = as_text(x$probe))
+  rows = c(
+    purrr::list_flatten(purrr::map(reply$items %||% list(), function(it)
+      purrr::map(it$findings %||% list(), function(x) one(x, as_text(it$id), "question")))),
+    purrr::map(reply$instrument %||% list(), function(x) one(x, "", "instrument")))
+  d = data.frame(item = purrr::map_chr(rows, "item"), scope = purrr::map_chr(rows, "scope"),
+                 check = purrr::map_chr(rows, "check"), severity = purrr::map_dbl(rows, "severity"),
+                 evidence = purrr::map_chr(rows, "evidence"),
+                 evidence_found = purrr::map_lgl(rows, "evidence_found"),
+                 check_known = purrr::map_lgl(rows, "check_known"), stage = purrr::map_chr(rows, "stage"),
+                 problem = purrr::map_chr(rows, "problem"), rewrite = purrr::map_chr(rows, "rewrite"),
+                 rewrite_english = purrr::map_chr(rows, "rewrite_english"),
+                 probe = purrr::map_chr(rows, "probe"), stringsAsFactors = FALSE)
+  d$shown = is.na(d$severity) | d$severity >= SEVERITY_SHOWN
+  d
+}
