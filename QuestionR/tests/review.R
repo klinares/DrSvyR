@@ -24,7 +24,7 @@ SKILL_SHA <- c(
   "behavioral.md" = "c22273bf2dbb02e4e939b8ee98bf6980c5dd093398b20312c3e82f92df1c3ead",
   "core.md" = "770a402a6dc4b60389e4c266f43cdaa28dc8ccc0e88938f76cb9b72a54379f35",
   "cross_cultural.md" = "6c8a19b8c17b19808b4cfca788b3c76a7595d54a3a25a71e355391cb944bdd4d",
-  "evaluate.md" = "2952362b6d8e2efadff970a8b21069b768d7145808ec5b524ca8b98a998e57c1",
+  "evaluate.md" = "6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb",
   "generate.md" = "9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
   "pm_appraise.md" = "f45e6e4ae77020fadf0cc1d6162b84f015300984e4eafcc9e83cf0116472c4eb",
@@ -568,6 +568,101 @@ sec_review <- if (PHASE < 4L) {
 }
 
 
+# ---- 10. long questionnaires, output and methodology (Phase 5 on) ------------------
+
+long_checks <- function() {
+  blocks = purrr::map_chr(1:30, function(i)
+    paste0("Q", i, ". Canned question number ", i, " ", strrep("word ", 50), "?\nYes / No"))
+  text = paste(blocks, collapse = "\n\n")
+  parts = split_questionnaire(text, max_chars = 4000)
+  joined = paste(parts, collapse = "\n\n")
+  too_big = tryCatch({ split_questionnaire(strrep("x", 5000), max_chars = 4000); "no error" },
+                     error = function(e) conditionMessage(e))
+
+  form = utils::modifyList(forms$evaluate, list(questionnaire = text))
+  calls = new.env()
+  calls$n = 0L
+  calls$users = character(0)
+  canned = function(user) {
+    ids = regmatches(user, gregexpr("(?m)^Q[0-9]+(?=\\. )", user, perl = TRUE))[[1]]
+    instrument = !grepl("\none_thing: ", user, fixed = TRUE)
+    list(items = if (instrument) list() else purrr::map(ids, function(i) list(id = i, findings = list())),
+         instrument = if (instrument) list(list(check = "scale_consistency", stage = "instrument",
+                                                evidence = "Q1, Q2", problem = "Canned.", severity = 5,
+                                                rewrite = "", rewrite_english = "", probe = "")) else list(),
+         trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
+         test_first = list(), not_assessed = "")
+  }
+  make = function(fail_at = 0L) function(user, m, system_prompt = NULL, max_tokens = NULL,
+                                         validate = NULL, ...) {
+    calls$n = calls$n + 1L
+    calls$users = c(calls$users, user)
+    if (calls$n == fail_at) stop("canned endpoint error")
+    obj = canned(user)
+    if (!is.null(validate)) validate(obj)
+    obj
+  }
+  rv = run_review(form, fake_pm, ask = make())
+  n_ok = calls$n
+  users_ok = calls$users
+  calls$n = 0L
+  calls$users = character(0)
+  part = run_review(form, fake_pm, ask = make(fail_at = 2L))
+  short = run_review(forms$evaluate, fake_pm, ask = make())
+  tab = skills_table()
+
+  dplyr::bind_rows(
+    expect("split: more than one part, none over the limit", length(parts) > 1L && all(nchar(parts) <= 4000)),
+    expect("split: every block kept whole, once, in order", identical(joined, text)),
+    expect("split: a single block over the limit stops with a message", !identical(too_big, "no error")),
+    expect("long review: one call per part and one for the instrument",
+           n_ok == length(parts) + 1L),
+    expect("long review: item calls carry no instrument checks, the instrument call carries no item checks",
+           sum(grepl("\nscale_consistency: ", users_ok, fixed = TRUE)) == 1L &&
+             sum(grepl("\none_thing: ", users_ok, fixed = TRUE)) == length(parts)),
+    expect("long review: status ok, all 30 items in pasted order, instrument findings kept",
+           identical(rv$status, "ok") &&
+             identical(purrr::map_chr(rv$reply$items, "id"), paste0("Q", 1:30)) &&
+             length(rv$reply$instrument) == 1L),
+    expect("long review: batches recorded, one per call, each with status and hash",
+           length(rv$batches) == length(parts) + 1L &&
+             all(purrr::map_lgl(rv$batches, function(b) all(c("status", "hash") %in% names(b))))),
+    expect("a failed part gives status partial, names the part, and keeps the rest",
+           identical(part$status, "partial") && length(part$reply$items) > 0L &&
+             length(part$reply$items) < 30L &&
+             sum(purrr::map_chr(part$batches, "status") == "failed") == 1L),
+    expect("a short questionnaire is still one call with the Phase 4 prompt",
+           identical(short$hash, build_prompt(forms$evaluate)$hash) && length(short$batches) == 1L),
+    expect("skills_table: one row per reflex with file, id, when, source",
+           is.data.frame(tab) && all(c("file", "id", "when", "source") %in% names(tab)) && nrow(tab) > 80L),
+    expect("www/methodology.md present", file.exists(file.path("www", "methodology.md"))))
+}
+
+sec_long <- if (PHASE < 5L) {
+  c("## 10. Long questionnaires, output and methodology", "", "Not due until Phase 5.")
+} else {
+  out = tryCatch({
+    if (!exists("build_prompt", mode = "function")) {
+      app = shiny::shinyAppDir(".")
+      invisible(app$serverFuncSource())
+    }
+    long_checks()
+  }, error = function(e) conditionMessage(e))
+  show_file = function(path, n) {
+    if (file.exists(path)) fence(utils::head(readLines(path, warn = FALSE), n))
+    else paste(path, "does not exist yet.")
+  }
+  c("## 10. Long questionnaires, output and methodology", "",
+    if (is.character(out)) paste("FAIL: the checks stopped:", out) else md_table(out), "",
+    "Long live review (tests/review_long.md), verbatim:",
+    show_file(file.path("tests", "review_long.md"), 80), "",
+    "Sample output for Word, drafting (tests/output_generate.txt), verbatim:",
+    show_file(file.path("tests", "output_generate.txt"), 120), "",
+    "Sample output for Word, review (tests/output_review.txt), verbatim:",
+    show_file(file.path("tests", "output_review.txt"), 120))
+}
+
+
 # ---- write ----------------------------------------------------------------------
 
 pkgs <- c("shiny", "bslib", "ellmer", "purrr", "dplyr", "stringr", "jsonlite", "digest")
@@ -580,6 +675,6 @@ writeLines(c(
          R.version.string, "."),
   paste0("Packages: ", paste0(pkgs, " ", versions, collapse = ", ")), "",
   sec_git, "", sec_files, "", sec_rules, "", sec_skills, "", sec_smoke, "",
-  sec_prompts, "", sec_llm, "", sec_flow, "", sec_review), "REVIEW.md", useBytes = TRUE)
+  sec_prompts, "", sec_llm, "", sec_flow, "", sec_review, "", sec_long), "REVIEW.md", useBytes = TRUE)
 
 cat("Wrote REVIEW.md for Phase", PHASE, "\n")

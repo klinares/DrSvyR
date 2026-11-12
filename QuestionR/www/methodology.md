@@ -62,9 +62,23 @@ listed in the table below this note. The main sources are:
 - The output is an expert-review appraisal and first drafts by language
   models. It is not a pretest and does not show how respondents will
   understand or answer a question.
-- The rule files are version 0.2. The review step has not yet been scored
-  against a set of questions with known faults; until it has, treat its
-  detection and false-alarm rates as unknown.
+- **How well the review step finds known faults.** It was run once on the
+  test set of Sturgis, Roberts and Robinson (2026): 20 questions with 48
+  planted faults and 7 well-tested European Social Survey questions. With
+  the project manager model then in use it reported 36 of the 48 faults (75
+  percent) at severity 5 or above, and 0.43 findings per well-tested
+  question. It found every double-barrelled and recall fault and most vague
+  wording, leading wording and presupposition; it found 1 of 4 sensitivity
+  faults. Read these figures with care: one run, one model, planted faults
+  that are clearer than real ones, findings matched to the answer key by the
+  build assistant and spot-checked, and for most questions only the two end
+  options of the response scale were available. A different model needs its
+  own run.
+- **Severity is a rough guide.** In that run every finding on a well-tested
+  question was rated 5, and most findings that matched a planted fault were
+  rated 6 or above. Findings rated 7 and above deserve attention first;
+  those rated 5 or 6 need the analyst's judgment; six planted faults were
+  reported only at 3 or 4, so the collapsed list is worth a look.
 - Test key items with real respondents before fielding: cognitive interviews,
   web probing, a split-ballot experiment or a pilot. Use at least one method.
 - Record the use of AI with the questionnaire. The app's output carries a

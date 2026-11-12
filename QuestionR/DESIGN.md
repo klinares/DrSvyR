@@ -597,3 +597,77 @@ The gold test is run once, on the skills as they stand. Do not adjust prompts,
 skills or thresholds to move its numbers; that is the Claude project's job
 after it sees them.
 
+
+## 14. Review of Phase 4 and the definition of Phase 5 (Claude project, 2026-11-12)
+
+**Phase 4 passes.** No FAIL in `REVIEW.md`. Gold test, Sonnet 5.5 as project
+manager, skills as they stood: 36 of 48 known problems found at severity 5
+or above (75.0 percent; 80.0 percent of the 45 that can be judged from the
+scales the paper prints), against a target of 65; 0.43 findings at 5 or
+above per control item, against a limit of 1.0. The Claude project read
+every control finding, every unmatched finding and every borderline match in
+`tests/gold_matches.csv`: the builder's matching is fair and, if anything,
+strict. Correction: 19 of the 27 scales are incomplete in the gold file, not
+16 as the Phase 4e prompt said.
+
+Rulings:
+
+- **No tuning on the gold set.** The checklist rules are not changed to move
+  these numbers. Of the 28 unmatched findings on flawed items most are real
+  design points the answer key does not list; the weaker ones are "term not
+  defined" findings under `plain_words` and `specific_concrete`, all rated 5,
+  as were all three control findings. That is recorded, not acted on.
+- **Severity bands, not a new threshold.** Both Results views show findings
+  and fails in three bands, highest first: 7 and above "Fix before
+  fielding"; 5 and 6 "Needs your judgment"; below 5 collapsed as "Minor".
+  The cut at 5 for the merged option and "clean items" stays.
+- **Evidence must be a quote.** 45 of 100 findings had evidence that was a
+  description, so the "quote not found" flag was noise. `evaluate.md` 0.3
+  requires words copied exactly, with no ellipsis. R compares after
+  lower-casing, collapsing whitespace, treating curly and straight quotes
+  alike and dropping quotes around the evidence. The Evaluate prompt hashes
+  change once for this.
+- **Evaluation ceiling 43000 and 4000 characters per call** stand, as a
+  per-call limit. Long questionnaires are reviewed in parts (below).
+- Decisions in `STATUS.md` from Phase 4 not named here: approved as built.
+
+### Phase 5
+
+| Step | What | Passes when |
+|---|---|---|
+| 5a | Apply the rulings: severity bands in both Results views; evidence comparison; `evaluate.md` 0.3 | smoke and `review.R 4` clean; new Evaluate hashes recorded |
+| 5b | Long questionnaires (below) | `review.R 5` section 10 has no FAIL |
+| 5c | Output tab for both flows, as section 8: kept items, or the review by question in severity bands, as HTML that pastes into Word and as plain text; TRAPD block when a language other than the source is involved; disclosure block; run log download as JSON with `schema`, no key | smoke builds both outputs from canned runs; samples saved as `tests/output_generate.txt` and `tests/output_review.txt` |
+| 5d | Methodology tab: `www/methodology.md` rendered, then the table from `skills_table()` (one row per reflex: `file`, `id`, `when`, `source`), grouped by file | smoke checks the table has every reflex |
+| 5e | One live long review: a 30-question questionnaire written for the test, questions separated by blank lines. Record parts, seconds, tokens, any failed part, and the share of findings whose evidence was found in the text, in `tests/review_long.md`; save the run log as `tests/review_long.json` | file written; numbers in `STATUS.md` |
+
+**Long questionnaires (5b).**
+
+- The Brief tab tells the analyst to leave a blank line between questions.
+- `split_questionnaire(text, max_chars)` in `R/checks.R` splits on blank
+  lines into blocks and packs whole blocks, in order, into parts no longer
+  than `max_chars`; joining the parts with a blank line gives back the text.
+  A single block over the limit stops with a message that quotes its first
+  words. `APP_BATCH_CHARS` is 4000; `APP_MAX_PASTE_CHARS` becomes 40000.
+- One part: `run_review()` behaves exactly as in Phase 4, same prompt, same
+  hash.
+- More than one part: one item call per part, then one instrument call on
+  the whole text. `TASKS$evaluate` gains `instrument_checks`
+  (`context_and_order`, `filters_and_routing`, `scale_consistency`,
+  `fit_to_objectives`). Item calls carry the CHECKLIST without those and a
+  fixed ASK sentence that says this is part k of n, that only `items` is to
+  be filled, and the number of the first block in the part, to be used as
+  the id of a question that has no number of its own. The instrument call
+  carries only those four checks and a fixed ASK sentence that says only
+  `instrument`, `trapd`, `test_first` and `not_assessed` are to be filled.
+  `build_step_prompt()` builds both; the skill files are not changed.
+- `run_review()` returns, as before, `status`, `error`, `system`, `user`,
+  `hash`, `reply`, and now `batches`: one entry per call, in order, each with
+  `status`, `error`, `hash`, `seconds`. `reply` has the usual shape, items in
+  pasted order. `status` is `"ok"` when every call succeeded, `"partial"`
+  when some did, `"failed"` when none did. A failed part is named on the
+  Results tab with a button to run that part again.
+- `run_review()` takes `progress = function(msg) NULL` and calls it before
+  each call, so the screen can show "part 2 of 5" and the engine stays free
+  of Shiny.
+

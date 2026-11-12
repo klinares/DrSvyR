@@ -281,3 +281,60 @@ REVIEW.md, STATUS.md, tests/review_tokens.md, tests/gold_summary.md and
 tests/gold_matches.csv to the Claude project.
 ```
 
+## Phase 5: review rulings, long questionnaires, output, methodology
+
+```
+Read CLAUDE.md, then QuestionR/DESIGN.md section 14 (it wins over earlier
+sections where they differ) and section 8, QuestionR/STATUS.md, the changed
+skill file QuestionR/www/skills/evaluate.md (now 0.3),
+QuestionR/www/methodology.md, and QuestionR/tests/review.R, which has a new
+section 10.
+
+First commit the files the Claude project changed, as they are, in one
+commit: DESIGN.md, PROMPTS.md, tests/review.R, www/skills/evaluate.md,
+www/methodology.md.
+
+Do Phase 5 as the table in DESIGN.md section 14 defines it, steps 5a to 5e,
+one commit each.
+
+Notes:
+- 5a changes the Evaluate prompts once, because evaluate.md changed. Record
+  the new hashes; the drafting hashes must not move.
+- 5b: run_review() for a one-part questionnaire must give the same prompt
+  and hash as before 5b (apart from the 5a change). The item and instrument
+  ASK sentences are fixed text in the TASKS registry; show them in
+  STATUS.md. The engine stays free of Shiny: progress goes through the
+  progress argument.
+- 5c: the output is built by plain functions in R/checks.R (or a new
+  R/output.R if checks.R passes about 600 lines; the budget is 12 files),
+  so smoke can build it without a browser. The disclosure block names the
+  profile, each model id as the endpoint names it, the date, each skill
+  file's version, the prompt hashes and whether a prompt was edited, which
+  candidate each kept item came from, and the line "Expert-review appraisal
+  and first drafts by language models. Not a pretest. Test with real
+  respondents before fielding." No key, ever, in the output or the log; add
+  a smoke check that a planted key string is absent from both.
+- 5d: render the markdown with a function that is already installed with
+  Shiny; check installed help, and say in STATUS.md which you used.
+- 5e: before the live run tell me the number of calls and the rough cost
+  and wait for my yes. Write the 30 questions yourself, plain and varied,
+  with a few deliberate faults; they are only there to exercise the parts.
+
+Rules, unchanged: root CLAUDE.md hard rules; no edits to www/skills/; no
+change to what tests/review.R checks (a bug in it: fix only the bug and
+report the diff); no invented functions or arguments; never weaken a test;
+do not push; do not rerun the gold test. If something in section 14 cannot
+be built as written, stop and say so in STATUS.md.
+
+At the end run tests/smoke.R and tests/review.R 5 until there is no FAIL you
+can fix, and commit with REVIEW.md.
+
+Finish by updating STATUS.md: what was built, decisions and their defaults,
+anything skipped or stubbed, the 5e numbers, anything a model did that the
+skills did not expect, every remaining FAIL, and an updated click-through
+list that covers both flows end to end, the Output tab pasted into Word,
+and the Methodology tab. Then stop and tell me to take REVIEW.md, STATUS.md,
+tests/review_long.md, tests/output_generate.txt and tests/output_review.txt
+to the Claude project.
+```
+
