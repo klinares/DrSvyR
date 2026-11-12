@@ -896,12 +896,12 @@ ok("a task that is not in the registry stops, naming the choices",
 ok("TASK_FILES and TASK_ASK are gone: the registry is the only place",
    !exists("TASK_FILES") && !exists("TASK_ASK"))
 
-ok("build_step_prompt(form, step, candidates), and build_prompt(form) is its work step",
-   identical(names(formals(build_step_prompt)), c("form", "step", "candidates")) &&
+ok("build_step_prompt(form, step, candidates, part), and build_prompt(form) is its work step",
+   identical(names(formals(build_step_prompt)), c("form", "step", "candidates", "part")) &&
      identical(names(formals(build_prompt)), "form") &&
      every_built(function(b) identical(b$p, build_step_prompt(b$form, "work"))))
-ok("an unknown step stops, naming the three",
-   grepl("step must be one of: brief, work, appraise",
+ok("an unknown step stops, naming the five",
+   grepl("step must be one of: brief, work, appraise, items, instrument",
          tryCatch(build_step_prompt(forms$attitudinal, "polish"), error = conditionMessage), fixed = TRUE))
 
 # The brief check: the project manager, before anything is approved.
@@ -1549,16 +1549,23 @@ local({
        identical(st$form$reference_period, "past 7 days") && identical(st$form$task, "behavioral"))
     set_inputs(session, brief_inputs, task = "evaluate", questionnaire = "Q1. How are you? Fine / Not fine",
                skip = 3)
-    ok("Evaluate carries its questionnaire, no item count and no workers, and says it makes one review and what the limit is",
+    ok("Evaluate carries its questionnaire, no item count and no workers, and says to leave a blank line between questions, how long one call is and what the limit is",
        identical(st$form$task, "evaluate") && grepl("Q1. How are you?", st$form$questionnaire, fixed = TRUE) &&
          is.na(st$form$n_items) && length(st$workers) == 0L &&
-         grepl("sends your questionnaire to the project manager model once", html_of3(output$task_note), fixed = TRUE) &&
+         grepl("Leave a blank line between questions", html_of3(output$task_note), fixed = TRUE) &&
+         grepl("reviewed one call each", html_of3(output$task_note), fixed = TRUE) &&
+         grepl(format(APP_BATCH_CHARS, big.mark = ","), html_of3(output$task_note), fixed = TRUE) &&
          grepl(format(APP_MAX_PASTE_CHARS, big.mark = ","), html_of3(output$task_note), fixed = TRUE) &&
          !grepl("Phase 4", html_of3(output$task_note), fixed = TRUE))
     set_inputs(session, brief_inputs, task = "evaluate", questionnaire = strrep("a", APP_MAX_PASTE_CHARS + 1L), skip = 5)
     ok("a questionnaire over the cap is refused on the Brief tab with its length and the limit, and nothing moves on",
        grepl("Paste it in parts", html_of3(output$message), fixed = TRUE) && identical(st$form$task, "evaluate") &&
          nchar(st$form$questionnaire) < APP_MAX_PASTE_CHARS)
+    set_inputs(session, brief_inputs, task = "evaluate", questionnaire = paste0("Q1. ", strrep("x", APP_BATCH_CHARS + 50L)), skip = 6)
+    ok("a single block too long for one call is refused on the Brief tab, quoting where it starts, and nothing moves on",
+       grepl("Block 1 of the questionnaire", html_of3(output$message), fixed = TRUE) &&
+         grepl("Leave a blank line between questions", html_of3(output$message), fixed = TRUE) &&
+         grepl("It starts: ", html_of3(output$message), fixed = TRUE) && nchar(st$form$questionnaire) < APP_BATCH_CHARS)
     st$revision = "Make the stems shorter."
     session$flushReact()
     ok("a requested change is shown on the Brief tab with the round it belongs to, and can be dropped",
@@ -1986,8 +1993,9 @@ rv_ask <- function(reply = rv_reply, st = new.env()) {
 }
 ra <- rv_ask()
 rv <- run_review(rv_form, fl_pm, ask = ra$ask)
-ok("run_review has the fields of run_brief, uses build_prompt()'s prompt, and makes one call at the evaluation ceiling",
-   identical(sort(names(rv)), sort(c("status", "error", "system", "user", "hash", "reply"))) &&
+ok("run_review has the fields of run_brief and batches (one entry here), uses build_prompt()'s prompt, and makes one call at the evaluation ceiling",
+   identical(sort(names(rv)), sort(c("status", "error", "system", "user", "hash", "reply", "batches"))) &&
+     length(rv$batches) == 1L && identical(rv$batches[[1]]$kind, "all") && identical(rv$batches[[1]]$status, "ok") &&
      identical(rv$status, "ok") && is.na(rv$error) && identical(rv$hash, build_prompt(rv_form)$hash) &&
      identical(rv$system, build_prompt(rv_form)$system) && identical(rv$reply, rv_reply) &&
      length(ra$st$calls) == 1L && identical(ra$st$calls[[1]]$max_tokens, LLM_MAX_TOKENS[["evaluate"]]) &&
@@ -2225,4 +2233,213 @@ Very satisfied / Not at all")
      isFALSE(found("How satisfied ... street cleaning")) && isFALSE(found("How satisfied … street cleaning")) &&
        isFALSE(found("how pleased are you")) && isFALSE(found("")) && isFALSE(found("...")) &&
        identical(evidence_quote("“How ... much”"), "how ... much"))
+})
+
+
+# ---- Phase 5b: a long questionnaire is reviewed in parts -----------------------------------------
+
+long_blocks <- purrr::map_chr(1:30, function(i)
+  paste0("Q", i, ". Canned question number ", i, " ", strrep("word ", 50), "?\nYes / No"))
+long_text <- paste(long_blocks, collapse = "\n\n")
+long_parts <- split_questionnaire(long_text, 4000L)
+
+ok("split_questionnaire: more than one part, none over the limit, whole blocks in order, joined by a blank line they give the text back",
+   length(long_parts) == 3L && all(nchar(long_parts) <= 4000L) &&
+     identical(paste(long_parts, collapse = "\n\n"), long_text) &&
+     identical(unname(attr(long_parts, "first_block")), c(1L, 14L, 27L)) &&
+     all(purrr::map_lgl(strsplit(long_parts, "\n\n", fixed = TRUE), function(b) all(grepl("^Q[0-9]+\\. ", b)))))
+ok("split_questionnaire: a short text is one part; runs of blank lines and CRLF line endings count as one separator",
+   identical(as.character(split_questionnaire("Q1. a\nYes / No\n\nQ2. b", 4000L)), "Q1. a\nYes / No\n\nQ2. b") &&
+     identical(as.character(split_questionnaire("Q1. a\r\n\r\n\r\n   \r\nQ2. b", 10L)), c("Q1. a", "Q2. b")) &&
+     identical(unname(attr(split_questionnaire("Q1. a\r\n\r\n\r\nQ2. b", 10L), "first_block")), c(1L, 2L)))
+ok("split_questionnaire: a block over the limit stops, saying which block, how long, and quoting its first words",
+   local({
+     e = tryCatch(split_questionnaire(paste("Q1. short", paste0("Q2. This is the long block ", strrep("y", 4100)), sep = "\n\n"), 4000L),
+                  error = conditionMessage)
+     grepl("Block 2 of the questionnaire is 4,127 characters", e, fixed = TRUE) && grepl("never cut", e, fixed = TRUE) &&
+       grepl("Leave a blank line between questions", e, fixed = TRUE) && grepl("It starts: \"Q2. This is the long block", e, fixed = TRUE)
+   }))
+ok("APP_BATCH_CHARS is 4000 and APP_MAX_PASTE_CHARS is 40000, and both are in the global environment for R/ to read",
+   identical(APP_BATCH_CHARS, 4000) && identical(APP_MAX_PASTE_CHARS, 40000) &&
+     all(c("APP_BATCH_CHARS", "APP_MAX_PASTE_CHARS") %in% ls(globalenv())))
+
+long_form <- with_field(forms$evaluate, questionnaire = long_text)
+plan <- review_plan(long_text, 4000L)
+ok("review_plan: one call of kind all for a short text; an items call per part then an instrument call for a long one",
+   identical(purrr::map_chr(review_plan(forms$evaluate$questionnaire, 4000L), "kind"), "all") &&
+     identical(purrr::map_chr(plan, "kind"), c("items", "items", "items", "instrument")) &&
+     identical(purrr::map_int(plan, "first_block"), c(1L, 14L, 27L, 1L)) && identical(plan[[4]]$text, long_text))
+
+ip1 <- build_step_prompt(long_form, "items", part = plan[[2]])
+ip_inst <- build_step_prompt(long_form, "instrument", part = plan[[4]])
+inst_ids <- TASKS$evaluate$instrument_checks
+ck_lines <- function(u) { l = strsplit(u, "\n", fixed = TRUE)[[1]]; sub(":.*$", "", l[(match("CHECKLIST", l) + 1L):(match("CHARACTERIZE", l) - 2L)]) }
+ok("an item call has only its part of the text, the part sentence with its numbers, and every check but the four instrument ones",
+   grepl("Review part 2 of 3 of a questionnaire", ip1$user, fixed = TRUE) &&
+     grepl("block number 14 of the whole questionnaire", ip1$user, fixed = TRUE) &&
+     grepl("Fill only \"items\"", ip1$user, fixed = TRUE) && grepl(plan[[2]]$text, ip1$user, fixed = TRUE) &&
+     !grepl("Q1. Canned", ip1$user, fixed = TRUE) && !grepl("Q27. Canned", ip1$user, fixed = TRUE) &&
+     !any(inst_ids %in% ck_lines(ip1$user)) && "one_thing" %in% ck_lines(ip1$user) &&
+     identical(sort(c(ck_lines(ip1$user), inst_ids)), sort(names(build_checklist(long_form)))))
+ok("the instrument call has the whole questionnaire, only the four instrument checks, and the sentence that fills the other fields",
+   grepl(long_text, ip_inst$user, fixed = TRUE) && identical(ck_lines(ip_inst$user), inst_ids) &&
+     grepl("Review the questionnaire below as a whole", ip_inst$user, fixed = TRUE) &&
+     grepl("Fill only \"instrument\", \"trapd\", \"test_first\" and \"not_assessed\"", ip_inst$user, fixed = TRUE) &&
+     !grepl("\none_thing: ", ip_inst$user, fixed = TRUE))
+ok("the part sentences are fixed text from the registry, so the same part gives the same prompt and hash; the system prompt is the work step's",
+   identical(ip1$hash, build_step_prompt(long_form, "items", part = plan[[2]])$hash) &&
+     !identical(ip1$hash, build_step_prompt(long_form, "items", part = plan[[1]])$hash) &&
+     identical(ip1$system, build_prompt(long_form)$system) && identical(ip_inst$system, ip1$system) &&
+     grepl(sprintf(TASKS$evaluate$ask_items, 2L, 3L, 14L), ip1$user, fixed = TRUE) &&
+     grepl(TASKS$evaluate$ask_instrument, ip_inst$user, fixed = TRUE) &&
+     !grepl("\nQ[0-9]+\\. ", paste(sprintf(TASKS$evaluate$ask_items, 2L, 3L, 14L), TASKS$evaluate$ask_instrument)))
+ok("a part prompt needs a review task and a part of its own kind; a part sentence needs a task that has one",
+   grepl("Only a review task", tryCatch(build_step_prompt(forms$attitudinal, "items", part = plan[[1]]), error = conditionMessage), fixed = TRUE) &&
+     grepl("needs a part of kind 'items'", tryCatch(build_step_prompt(long_form, "items", part = plan[[4]]), error = conditionMessage), fixed = TRUE) &&
+     grepl("needs k, n, first_block and text", tryCatch(build_step_prompt(long_form, "items", part = list(kind = "items")), error = conditionMessage), fixed = TRUE) &&
+     grepl("not reviewed in parts", tryCatch(part_ask_sentence("attitudinal", plan[[1]]), error = conditionMessage), fixed = TRUE))
+ok("a one-part questionnaire's prompt is the work prompt, as before (same hash), and the registry gives it no part sentence",
+   identical(run_review(forms$evaluate, fl_pm, ask = rv_ask()$ask)$hash, build_prompt(forms$evaluate)$hash) &&
+     !grepl("part 1 of", build_prompt(forms$evaluate)$user, fixed = TRUE))
+
+# A fake project manager for the parts: item calls answer for the questions in their text, the instrument call
+#   for the whole. `fail_at` makes that call (by number) stop with an error.
+parts_ask <- function(fail_at = 0L, st = new.env()) {
+  st$n = 0L; st$users = character(0); st$max = integer(0); st$fail_at = fail_at
+  list(st = st, ask = function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL) {
+    st$n = st$n + 1L; st$users = c(st$users, user); st$max = c(st$max, max_tokens)
+    if (st$n == st$fail_at) stop("canned endpoint error", call. = FALSE)
+    ids = regmatches(user, gregexpr("(?m)^Q[0-9]+(?=\\. )", user, perl = TRUE))[[1]]
+    instrument = !grepl("\none_thing: ", user, fixed = TRUE)
+    obj = list(items = if (instrument) list() else purrr::map(ids, function(i) list(id = i, findings = list(
+                 finding("one_thing", "Canned question", 6)))),
+               instrument = if (instrument) list(finding("scale_consistency", "Q1, Q2", 5)) else list(),
+               trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
+               test_first = list(), not_assessed = if (instrument) "Nothing else." else "")
+    if (!is.null(validate)) validate(obj)
+    list(obj = obj, raw = "{}", finish = "stop", tokens = c(input = 1000, output = 500, cached_input = 0), attempts = 1L)
+  })
+}
+pa <- parts_ask()
+said <- character(0)
+rvl <- run_review(long_form, fl_pm, ask = pa$ask, progress = function(msg) said <<- c(said, msg))
+ok("a long review makes one call per part and one for the instrument, each at the evaluation ceiling, and says before each which it is",
+   pa$st$n == 4L && all(pa$st$max == LLM_MAX_TOKENS[["evaluate"]]) &&
+     identical(said, c("Reviewing part 1 of 3", "Reviewing part 2 of 3", "Reviewing part 3 of 3", "Reviewing the questionnaire as a whole")) &&
+     identical(pa$st$users[1:3], purrr::map_chr(plan[1:3], function(s) build_step_prompt(long_form, "items", part = s)$user)))
+ok("a long review's result has run_review's fields and batches: one per call, in order, each with kind, part, status, hash, seconds and its reply",
+   identical(sort(names(rvl)), sort(c("status", "error", "system", "user", "hash", "reply", "batches"))) &&
+     identical(rvl$status, "ok") && is.na(rvl$error) && length(rvl$batches) == 4L &&
+     identical(purrr::map_chr(rvl$batches, "kind"), c("items", "items", "items", "instrument")) &&
+     all(purrr::map_lgl(rvl$batches, function(b) all(c("status", "hash", "seconds", "part", "first_block", "reply", "user", "error") %in% names(b)))) &&
+     identical(rvl$hash, rvl$batches[[1]]$hash) && !any(duplicated(purrr::map_chr(rvl$batches, "hash"))))
+ok("the reply holds all 30 questions in the order pasted, the instrument findings and not_assessed from the instrument call only",
+   identical(purrr::map_chr(rvl$reply$items, "id"), paste0("Q", 1:30)) &&
+     length(rvl$reply$instrument) == 1L && identical(rvl$reply$not_assessed, "Nothing else.") &&
+     identical(nrow(check_review(rvl$reply, long_form)), 31L))
+ok("the call record of a long review adds up its calls: seconds, and tokens in and out",
+   identical(attr(rvl, "call")$tokens, list(input = 4000, output = 2000)) && attr(rvl, "call")$attempts == 4L &&
+     is.numeric(attr(rvl, "call")$seconds))
+
+pf <- parts_ask(fail_at = 2L)
+rvp <- run_review(long_form, fl_pm, ask = pf$ask)
+ok("a part that fails gives status partial naming it, keeps the questions of the other parts in order, and the instrument call still runs",
+   identical(rvp$status, "partial") && grepl("Part 2 of 3 did not come back: canned endpoint error", rvp$error, fixed = TRUE) &&
+     pf$st$n == 4L && identical(purrr::map_chr(rvp$batches, "status"), c("ok", "failed", "ok", "ok")) &&
+     identical(purrr::map_chr(rvp$reply$items, "id"), paste0("Q", c(1:13, 27:30))) &&
+     length(rvp$reply$instrument) == 1L)
+ok("the instrument call failing leaves the questions and an empty instrument; every call failing is failed with no reply",
+   local({
+     r1 = run_review(long_form, fl_pm, ask = parts_ask(fail_at = 4L)$ask)
+     r0 = run_review(long_form, fl_pm, ask = function(...) stop("endpoint down", call. = FALSE))
+     identical(r1$status, "partial") && length(r1$reply$items) == 30L && length(r1$reply$instrument) == 0L &&
+       grepl("The instrument as a whole did not come back", r1$error, fixed = TRUE) &&
+       identical(r0$status, "failed") && is.null(r0$reply) && length(r0$batches) == 4L && grepl("Part 1 of 3", r0$error, fixed = TRUE)
+   }))
+pr <- parts_ask()
+rvr <- rerun_review_part(long_form, fl_pm, rvp, 2L, ask = pr$ask)
+ok("running a failed part again makes one call for it, keeps the other calls as they were, and gives status ok with all 30 questions",
+   pr$st$n == 1L && identical(pr$st$users, build_step_prompt(long_form, "items", part = plan[[2]])$user) &&
+     identical(rvr$status, "ok") && identical(purrr::map_chr(rvr$reply$items, "id"), paste0("Q", 1:30)) &&
+     isTRUE(rvr$batches[[2]]$rerun) && is.null(rvr$batches[[1]]$rerun) &&
+     identical(rvr$batches[[1]]$hash, rvp$batches[[1]]$hash) && identical(rvr$batches[[4]]$reply, rvp$batches[[4]]$reply) &&
+     grepl("There is no part 9", tryCatch(rerun_review_part(long_form, fl_pm, rvp, 9L, ask = pr$ask), error = conditionMessage), fixed = TRUE) &&
+     grepl("There is no part 1", tryCatch(rerun_review_part(forms$evaluate, fl_pm, rv, 1L, ask = pr$ask), error = conditionMessage), fixed = TRUE))
+ok("an edited prompt cannot be sent in a long review (it is several prompts); a questionnaire with a block too long fails without a call",
+   grepl("only when the questionnaire is reviewed in one call", tryCatch(
+     run_review(long_form, fl_pm, ask = parts_ask()$ask, prompt = with_field(build_prompt(long_form), edited = TRUE)),
+     error = conditionMessage), fixed = TRUE) &&
+     local({
+       pz = parts_ask()
+       r = run_review(with_field(forms$evaluate, questionnaire = paste0("Q1. ", strrep("x", 4100))), fl_pm, ask = pz$ask)
+       identical(r$status, "failed") && grepl("Block 1 of the questionnaire", r$error, fixed = TRUE) && pz$st$n == 0L
+     }))
+ok("run_review reaches no model and no Shiny function but through ask and progress",
+   !any(c("Sys.getenv", "llm_key_for", "llm_session_key", "llm_json", "llm_complete", "setProgress", "withProgress",
+          "reactive", "observe") %in% all.names(body(run_review))) &&
+     !any(c("setProgress", "withProgress", "llm_json") %in% all.names(body(review_call))) &&
+     identical(names(formals(run_review)), c("form", "pm", "ask", "prompt", "progress")))
+
+sm <- flow_summary(review = rvl, pm = fl_pm)
+ok("a long review's log summary has one row per call, naming the part; a one-call review keeps its one row",
+   identical(purrr::map_chr(sm, "step"), c("review part 1 of 3", "review part 2 of 3", "review part 3 of 3", "review instrument")) &&
+     identical(purrr::map_chr(flow_summary(review = rv, pm = fl_pm), "step"), "review") &&
+     all(purrr::map_dbl(sm, "tokens_in") == 1000) && all(purrr::map_dbl(sm, "tokens_out") == 500))
+rl_back <- jsonlite::fromJSON(as.character(flow_log_json(flow_round(long_form, fl_pm, review = rvl))), simplifyVector = FALSE)
+ok("the run log of a long review holds every call: its hash, its prompt, its reply and its call record",
+   length(rl_back$review$batches) == 4L && identical(rl_back$review$batches[[2]]$hash, rvl$batches[[2]]$hash) &&
+     grepl("part 2 of 3", rl_back$review$batches[[2]]$user, fixed = TRUE) && !is.null(rl_back$review$batches[[2]]$reply$items) &&
+     abs(rl_back$review$batches[[1]]$seconds - rvl$batches[[1]]$seconds) < 0.001 &&
+     identical(purrr::map_chr(rl_back$summary, "step")[4], "review instrument"))
+
+# The screens: the Prompt tab, the run, the page for a part that failed, and running that part again.
+local({
+  st = review_state(long_form)
+  shiny::testServer(mod_prompt_server, args = list(state = st, go = function(tab) NULL), {
+    session$flushReact()
+    h = html_of3(output$body)
+    ok("the Prompt tab for a long review says it is several calls, shows the first part's prompt, and offers no editing",
+       grepl("reviewed in 3 parts", h, fixed = TRUE) && grepl("4 calls", h, fixed = TRUE) &&
+         grepl("Review part 1 of 3", h, fixed = TRUE) && grepl("cannot be edited here", h, fixed = TRUE) &&
+         grepl(substr(build_step_prompt(long_form, "items", part = plan[[1]])$hash, 1, 16), h, fixed = TRUE) &&
+         !grepl("<textarea", h, fixed = TRUE) && grepl("Approve and run", h, fixed = TRUE))
+    session$setInputs(approve = 1)
+    session$flushReact()
+    ok("approving it records the first part's prompt as assembled, not edited, with its hash, and starts the run",
+       identical(st$approved$edited, FALSE) && identical(st$approved$hash, build_step_prompt(long_form, "items", part = plan[[1]])$hash) &&
+         st$run_id == 1L && is.null(output$status))
+  })
+})
+local({
+  st = review_state(long_form)
+  pa = parts_ask(fail_at = 2L)
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) { pa$st$total = total; pa$ask }), {
+    session$flushReact()
+    approve_review(st)
+    session$flushReact()
+    h = html_of3(output$results)
+    ok("a run of a long review asks for one progress step per call, records one round with the summary rows, and shows the part that failed",
+       pa$st$total == 4L && pa$st$n == 4L && st$round == 1L && identical(st$review$status, "partial") &&
+         length(st$rounds) == 1L && length(st$rounds[[1]]$summary) == 4L &&
+         grepl("Part of the review did not come back", h, fixed = TRUE) &&
+         grepl("Part 2 of 3, from block 14", h, fixed = TRUE) && grepl("canned endpoint error", h, fixed = TRUE) &&
+         grepl("not clear of problems", h, fixed = TRUE) && n_in3("Run this part again", h) == 1L &&
+         grepl("Shiny.setInputValue(&#39;", h, fixed = TRUE) && grepl("-rerun&#39;, 2, ", h, fixed = TRUE))
+    ok("the page for a long review lists a prompt hash for each call and shows the questions that came back and the instrument findings",
+       grepl("in 3 parts and one call on the instrument as a whole", h, fixed = TRUE) &&
+         grepl("Prompt hashes, one per call", h, fixed = TRUE) && grepl("The instrument as a whole", h, fixed = TRUE) &&
+         grepl("Question Q1", h, fixed = TRUE) && grepl("Question Q30", h, fixed = TRUE) && !grepl("Question Q20", h, fixed = TRUE) &&
+         grepl("scale_consistency", h, fixed = TRUE))
+    pa$st$fail_at = 0L
+    pa$st$n = 0L
+    session$setInputs(rerun = 2L)
+    session$flushReact()
+    h2 = html_of3(output$results)
+    ok("the button's input runs that part again, and the page, the review and the round in the log are replaced by one with nothing missing",
+       pa$st$n == 1L && pa$st$total == 1L && identical(st$review$status, "ok") && isTRUE(st$review$batches[[2]]$rerun) &&
+         length(st$rounds) == 1L && all(purrr::map_chr(st$rounds[[1]]$summary, "status") == "ok") &&
+         !grepl("Part of the review did not come back", h2, fixed = TRUE) && grepl("Question Q20", h2, fixed = TRUE) &&
+         !grepl("Run this part again", h2, fixed = TRUE))
+  })
 })

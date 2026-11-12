@@ -73,18 +73,42 @@ TASKS <- list(
     files = c("core.md", "evaluate.md", "mode.md", "cross_cultural.md"),
     ask = "Review the questionnaire below as an expert reviewer, item by item and then as a whole.",
     fields = c("research_question", "population", "country", "modes", "output_language",
-               "source_language", "other", "questionnaire")))
+               "source_language", "other", "questionnaire"),
+    # A questionnaire that does not fit one call is reviewed in parts (DESIGN.md
+    #   section 14): one item call per part, then one instrument call on the whole
+    #   text. instrument_checks are the checks only the instrument call carries; an
+    #   item call carries every other. ask_items (%d: this part, how many parts, the
+    #   number of the part's first block) and ask_instrument are fixed text, like ask.
+    instrument_checks = c("context_and_order", "filters_and_routing", "scale_consistency",
+                          "fit_to_objectives"),
+    ask_items = paste(
+      "Review part %d of %d of a questionnaire as an expert reviewer, question by question.",
+      "Only the questions of this part are pasted below.",
+      "Fill only \"items\" in your reply, and give \"instrument\" and \"test_first\" as empty lists,",
+      "\"trapd\" with all five keys as empty strings and \"not_assessed\" as an empty string,",
+      "because the questionnaire as a whole is reviewed in a separate call.",
+      "The first block of this part is block number %d of the whole questionnaire;",
+      "a question that has no number of its own takes the number of its block as its id,",
+      "counting blocks from 1 across the whole questionnaire."),
+    ask_instrument = paste(
+      "Review the questionnaire below as a whole, as an expert reviewer.",
+      "Fill only \"instrument\", \"trapd\", \"test_first\" and \"not_assessed\" in your reply,",
+      "and give \"items\" as an empty list, because each question was reviewed in a separate call.",
+      "Judge only what the CHECKLIST below asks about the instrument as a whole,",
+      "and name the questions involved, by their ids, in the evidence of each finding.")))
 
 # The most items one drafting run is asked for (DESIGN.md section 13). The
 #   appraisal's reply grows with candidates times items, and a longer one would
 #   be cut off.
 MAX_ITEMS_PER_RUN <- 10L
 
-# The three prompts a task goes through. work is what the task is (a worker's
+# The prompts a task goes through. work is what the task is (a worker's
 #   drafting prompt, or the project manager's review); brief is the project
 #   manager's check of the form before anything is approved; appraise is the
-#   project manager comparing the candidates the workers returned.
-STEPS <- c("brief", "work", "appraise")
+#   project manager comparing the candidates the workers returned. items and
+#   instrument are the two kinds of call of a review in parts (a review task only):
+#   the questions of one part, and the instrument as a whole.
+STEPS <- c("brief", "work", "appraise", "items", "instrument")
 
 # The skill files each step reads. core.md leads every one (DESIGN.md section 12).
 #   The brief check sends core, pm_brief and the task's own files; the appraisal
@@ -94,7 +118,7 @@ step_files <- function(task, step) {
     stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
   files = TASKS[[task]]$files
   switch(step,
-         work = files,
+         work = , items = , instrument = files,
          brief = c("core.md", "pm_brief.md", setdiff(files, "core.md")),
          appraise = c("core.md", "pm_appraise.md"))
 }
@@ -102,7 +126,8 @@ step_files <- function(task, step) {
 # The file whose Output format a step's reply follows, where it is not the task's
 #   own. NA for work: there exactly one file in force carries one.
 STEP_FORMAT_FILE <- c(brief = "pm_brief.md", work = NA_character_,
-                      appraise = "pm_appraise.md")
+                      appraise = "pm_appraise.md", items = NA_character_,
+                      instrument = NA_character_)
 
 
 # ---- the parser -----------------------------------------------------------------
@@ -485,20 +510,49 @@ checklist_of <- function(skills) {
 #   two blocks sit between ASK and CHARACTERIZE: QUESTIONNAIRE as pasted, then
 #   CHECKLIST, one "id: question" line per Check in force. Workers get the
 #   rules and the appraiser gets the questions, so a drafting prompt has none.
-assemble_user <- function(f, skills) {
+assemble_user <- function(f, skills, part = NULL) {
   review = TASKS[[f$task]]$kind == "review"
   checklist = if (review) checklist_of(skills)
   if (review && !length(checklist))
     stop("Evaluate needs a checklist, and no Check line is in force.", call. = FALSE)
+  # A call of a review in parts has its own sentence, its own checks and, for an item
+  #   call, only its part of the text. With no part this is the whole review, as ever.
+  if (!is.null(part)) checklist = part_checklist(f$task, checklist, part)
   blocks = purrr::compact(list(
     paste(c("PREPARE", prepare_lines(f)), collapse = "\n"),
-    paste(c("ASK", ask_sentence(f$task, f$n_items),
+    paste(c("ASK", if (is.null(part)) ask_sentence(f$task, f$n_items) else part_ask_sentence(f$task, part),
             if (nzchar(f$revision)) paste0("REVISION: ", f$revision)),
           collapse = "\n"),
-    if (review) paste("QUESTIONNAIRE", f$questionnaire, sep = "\n"),
+    if (review) paste("QUESTIONNAIRE", if (is.null(part) || part$kind == "instrument") f$questionnaire else part$text,
+                      sep = "\n"),
     if (review) checklist_block(checklist),
     paste("CHARACTERIZE", output_format_of(skills), sep = "\n")))
   paste(unlist(blocks), collapse = "\n\n")
+}
+
+# What a call of a review in parts is told: for an item call part is
+#   list(kind = "items", k, n, first_block, text); for the instrument call it is
+#   list(kind = "instrument"). Fixed sentences from the registry, then ASK_CLOSING.
+part_ask_sentence <- function(task, part) {
+  t = TASKS[[task]]
+  if (is.null(t$ask_items) || is.null(t$instrument_checks))
+    stop("The task ", task, " is not reviewed in parts.", call. = FALSE)
+  what = switch(part$kind,
+    items = sprintf(t$ask_items, as.integer(part$k), as.integer(part$n), as.integer(part$first_block)),
+    instrument = t$ask_instrument,
+    stop("A part of a review is 'items' or 'instrument', not '", part$kind, "'.", call. = FALSE))
+  paste(what, ASK_CLOSING)
+}
+
+# The checks a part's call carries: an item call every check but the instrument
+#   ones, the instrument call only those.
+part_checklist <- function(task, checklist, part) {
+  inst = TASKS[[task]]$instrument_checks
+  out = if (identical(part$kind, "instrument")) checklist[names(checklist) %in% inst]
+        else checklist[!names(checklist) %in% inst]
+  if (!length(out))
+    stop("A ", part$kind, " call of a review would carry no checks.", call. = FALSE)
+  out
 }
 
 # "id: question" lines under a CHECKLIST heading. One function for the review,
@@ -565,7 +619,7 @@ prompt_hash <- function(system_txt, user_txt)
 #   drafts named by letter (A, B, C), already relabelled by the caller so that
 #   nothing here knows which model wrote which. Returns system and user (one
 #   string each), hash, and files: the skill files used, in order.
-build_step_prompt <- function(form, step, candidates = NULL) {
+build_step_prompt <- function(form, step, candidates = NULL, part = NULL) {
   f = clean_form(form)
   if (!step %in% STEPS)
     stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
@@ -573,9 +627,15 @@ build_step_prompt <- function(form, step, candidates = NULL) {
     stop("Only a drafting task has candidates to appraise.", call. = FALSE)
   if (step == "appraise" && (!length(candidates) || is.null(names(candidates))))
     stop("The appraisal needs at least one candidate, named by its letter.", call. = FALSE)
+  if (step %in% c("items", "instrument") && TASKS[[f$task]]$kind != "review")
+    stop("Only a review task is reviewed in parts.", call. = FALSE)
+  if (step %in% c("items", "instrument") && !identical(part$kind, step))
+    stop("The ", step, " step needs a part of kind '", step, "'.", call. = FALSE)
+  if (step == "items" && !all(c("k", "n", "first_block", "text") %in% names(part)))
+    stop("An items part needs k, n, first_block and text.", call. = FALSE)
   skills = skills_in_force(f, step = step)
   system_txt = assemble_system(skills)
-  user_txt = if (step == "work") assemble_user(f, skills)
+  user_txt = if (step %in% c("work", "items", "instrument")) assemble_user(f, skills, part)
     else assemble_user_step(f, skills, step, checklist_of(skills_in_force(f)), candidates)
   list(system = system_txt, user = user_txt,
        hash = prompt_hash(system_txt, user_txt), files = names(skills))

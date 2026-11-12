@@ -40,6 +40,16 @@ safe_ui <- function(expr)
   tryCatch(expr, error = function(e)
     warn_box(tags$strong("This part could not be drawn. "), plain_message(e)))
 
+# What the engine last said it was about to do (run_review's progress argument), for
+#   progress_ask() to put on the page. An environment, so a callback can set it.
+PROGRESS_NOTE <- new.env()
+
+# The number of calls a review of this form will make: one, or a call for each part
+#   and one for the instrument. One when the questionnaire cannot be split, since
+#   run_review() then fails without a call.
+review_call_count <- function(f)
+  tryCatch(length(review_plan(f$questionnaire, APP_BATCH_CHARS)), error = function(e) 1L)
+
 # The function a run hands to the engine as `ask`. It says on the page, before
 #   each call, which model is about to be asked, then makes the call through
 #   llm_json(), which finds the key for that model. Must run inside withProgress().
@@ -48,7 +58,12 @@ progress_ask <- function(total) {
   n = 0L
   function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL) {
     n <<- n + 1L
-    setProgress(value = (n - 1L) / total, message = paste0("Call ", n, " of ", total),
+    # A review in parts says which part it is on, through progress() in run_review().
+    note = PROGRESS_NOTE$msg %||% ""
+    PROGRESS_NOTE$msg <- NULL
+    setProgress(value = (n - 1L) / total,
+                message = if (nzchar(note)) paste0(note, " (call ", n, " of ", total, ")")
+                          else paste0("Call ", n, " of ", total),
                 detail = paste0("Asking ", m$id, ". The calls run one after another; ",
                                 "this can take a few minutes."))
     llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens,
@@ -193,6 +208,8 @@ mod_brief_server <- function(id, state, go = function(tab) invisible(NULL), make
       message(NULL)
       tryCatch({
         f = clean_form(form_now())
+        # A block too long to be a part says so here, not at the end of a run.
+        if (TASKS[[f$task]]$kind == "review") review_plan(f$questionnaire, APP_BATCH_CHARS)
         ws = if (TASKS[[f$task]]$kind == "draft") chosen_workers() else list()
         if (TASKS[[f$task]]$kind == "draft" && !length(ws))
           stop("Tick at least one worker to draft the items.", call. = FALSE)
@@ -215,10 +232,14 @@ mod_brief_server <- function(id, state, go = function(tab) invisible(NULL), make
     output$task_note <- renderUI({
       task = input$task %||% names(TASKS)[1]
       if (TASKS[[task]]$kind == "review")
-        advice_box("Evaluate sends your questionnaire to the project manager model once, with ",
+        advice_box("Evaluate sends your questionnaire to the project manager model, with ",
                    "the methodology files' checklist, and shows its findings question by question. ",
-                   "The limit is ", format(APP_MAX_PASTE_CHARS, big.mark = ","), " characters; a longer ",
-                   "questionnaire is reviewed in parts.")
+                   tags$strong("Leave a blank line between questions"), ", each with its response ",
+                   "options straight under it. Up to ", format(APP_BATCH_CHARS, big.mark = ","),
+                   " characters is one call. A longer questionnaire is split at the blank lines into ",
+                   "parts of that size, reviewed one call each, and one more call looks at the order, ",
+                   "routing and consistency of the whole. The limit is ",
+                   format(APP_MAX_PASTE_CHARS, big.mark = ","), " characters.")
     })
 
     output$revision_note <- renderUI({
@@ -278,9 +299,16 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
     message <- reactiveVal(NULL)
     unix <- function(x) gsub("\r\n?", "\n", x %||% "")
 
+    # One prompt, or for a review in parts the first part's, with `calls`, the number
+    #   of calls the review will make (the parts and the instrument).
     assembled <- reactive({
       if (is.null(state$form)) return(NULL)
-      tryCatch(build_prompt(state$form), error = function(e) e)
+      tryCatch({
+        f = state$form
+        plan = if (task_kind(f) == "review") review_plan(f$questionnaire, APP_BATCH_CHARS)
+        if (length(plan) > 1L) c(build_step_prompt(f, "items", part = plan[[1]]), list(calls = length(plan)))
+        else build_prompt(f)
+      }, error = function(e) e)
     })
 
     output$body <- renderUI(safe_ui({
@@ -291,6 +319,20 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
       if (inherits(a, "error"))
         return(warn_box("The prompt could not be assembled: ", plain_message(a)))
       draft = TASKS[[state$form$task]]$kind == "draft"
+      if (!is.null(a$calls)) return(tagList(
+        tags$p(class = "text-muted small", "Skill files used: ", paste(a$files, collapse = ", ")),
+        advice_box(tags$strong(paste0("This questionnaire is reviewed in ", a$calls - 1L, " parts. ")),
+                   paste0("Each part is one call, and one more call looks at the instrument as a whole: ",
+                          a$calls, " calls, one after another. "),
+                   "Below is the first part's prompt. The other ",
+                   "parts differ only in their questions, the part number and the number of their ",
+                   "first block; the last call has the whole questionnaire and only the checks about ",
+                   "order, routing, consistency and fit to objectives. Because it is several prompts, ",
+                   "it cannot be edited here. Hash of the first: ", tags$code(substr(a$hash, 1, 16)), "."),
+        tags$details(tags$summary("The first part's prompt"),
+                     tags$pre(class = "small", a$system), tags$pre(class = "small", a$user)),
+        tags$p("It can take several minutes, and the app is busy until it finishes."),
+        actionButton(session$ns("approve"), "Approve and run", class = "btn-primary")))
       tagList(
         tags$p(class = "text-muted small", "Skill files used: ", paste(a$files, collapse = ", ")),
         tags$div(class = "qr-prompt",
@@ -312,7 +354,7 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
     # Whether what is in the boxes is what R assembled, and the hash of each.
     output$status <- renderUI(safe_ui({
       a = assembled()
-      if (is.null(a) || inherits(a, "error") || is.null(input$system)) return(NULL)
+      if (is.null(a) || inherits(a, "error") || !is.null(a$calls) || is.null(input$system)) return(NULL)
       sys = unix(input$system)
       usr = unix(input$user)
       if (identical(sys, a$system) && identical(usr, a$user))
@@ -328,8 +370,9 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
         message("There is no prompt to approve. Fill in the Brief tab first.")
         return()
       }
-      sys = unix(input$system)
-      usr = unix(input$user)
+      # A review in parts is approved as assembled: its prompts are several, and not edited.
+      sys = if (is.null(a$calls)) unix(input$system) else a$system
+      usr = if (is.null(a$calls)) unix(input$user) else a$user
       if (!nzchar(trimws(sys)) || !nzchar(trimws(usr))) {
         message("The prompt is empty. Reset it to the assembled prompt, or write one.")
         return()
@@ -573,13 +616,31 @@ trapd_block <- function(trapd) {
                               function(text, step) tags$li(tags$strong(step), ": ", text))))
 }
 
+# A button for each call of a review that failed, which runs that call again. It sets
+#   the module's `rerun` input to the call's place in rv$batches.
+rerun_buttons <- function(rv, ns = identity) {
+  failed = which(!purrr::map_lgl(rv$batches, function(b) identical(b$status, "ok")))
+  if (length(rv$batches) < 2L || !length(failed)) return(NULL)
+  tags$ul(class = "mb-0 mt-2", purrr::map(failed, function(i) {
+    b = rv$batches[[i]]
+    tags$li(
+      if (identical(b$kind, "instrument")) "The instrument as a whole"
+      else paste0("Part ", b$part, " of ", b$n_parts, ", from block ", b$first_block),
+      ": ", b$error %||% "", " ",
+      tags$button(type = "button", class = "btn btn-sm btn-outline-primary",
+                  onclick = sprintf("Shiny.setInputValue('%s', %d, {priority: 'event'})", ns("rerun"), i),
+                  "Run this part again"))
+  }))
+}
+
 # Everything the review said, question by question and then as a whole, with R's
 #   flags on it. rv is run_review()'s result.
-review_panel <- function(f, rv, round) {
-  if (!identical(rv$status, "ok"))
+review_panel <- function(f, rv, round, ns = identity) {
+  if (identical(rv$status, "failed") || is.null(rv$reply))
     return(tagList(
       tags$p(class = "text-muted small", paste0("Round ", round, ".")),
-      warn_box(tags$strong("The review did not come back. "), rv$error)))
+      warn_box(tags$strong("The review did not come back. "), rv$error),
+      rerun_buttons(rv, ns)))
   reply = rv$reply
   checklist = build_checklist(f)
   flags = check_review(reply, f)
@@ -589,11 +650,25 @@ review_panel <- function(f, rv, round) {
   n_unknown = sum(!flags$check_known)
   label = function(x) paste(unlist(x), collapse = " ")
   tagList(
-    tags$p(class = "text-muted small",
+    if (length(rv$batches) > 1L)
+      tags$p(class = "text-muted small",
+             paste0("Round ", round, ". One review by the project manager, in ", length(rv$batches) - 1L,
+                    " parts and one call on the instrument as a whole. "),
+             tags$details(tags$summary("Prompt hashes, one per call"),
+                          tags$ul(purrr::map(rv$batches, function(b)
+                            tags$li(if (identical(b$kind, "instrument")) "The instrument as a whole"
+                                    else paste0("Part ", b$part, " (from block ", b$first_block, ")"), ": ",
+                                    tags$code(substr(b$hash %||% "", 1, 16)),
+                                    if (!identical(b$status, "ok")) " (did not come back)")))))
+    else tags$p(class = "text-muted small",
            paste0("Round ", round, ". One review by the project manager. Prompt hash "),
            tags$code(substr(rv$hash, 1, 16)),
            if (isTRUE(approved$edited))
              paste0(" (edited; assembled hash ", substr(approved$original_hash, 1, 16), ")"), "."),
+    if (identical(rv$status, "partial"))
+      warn_box(tags$strong("Part of the review did not come back. "),
+               "What did is shown below; the rest is missing, not clear of problems.",
+               rerun_buttons(rv, ns)),
     advice_box("An expert-review appraisal by a language model against a fixed checklist. It shows ",
                "where a respondent may have trouble; it cannot show how respondents will understand ",
                "or answer, a rewrite or a probe is untested, and nothing here is validated."),
@@ -635,6 +710,8 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
   moduleServer(id, function(input, output, session) {
     problem <- reactiveVal(NULL)
     result <- reactiveVal(NULL)
+    # What run_review() is about to do, for progress_ask() to put on the page.
+    say_progress <- function(msg) PROGRESS_NOTE$msg <- msg
 
     # A run starts when the prompt is approved. Each model call is announced on
     #   the page before it is made, and nothing a call does can stop the page.
@@ -648,7 +725,10 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       review = identical(task_kind(f), "review")
       out = tryCatch(
         if (review) withProgress(message = "Reviewing the questionnaire", value = 0, {
-          list(review = run_review(f, pm, ask = make_ask(1L), prompt = approved))
+          calls = review_call_count(f)
+          list(review = run_review(f, pm, ask = make_ask(calls), progress = say_progress,
+                                   # an edited prompt is sent only when the review is one call
+                                   prompt = if (calls == 1L) approved))
         })
         else withProgress(message = "Running the workers", value = 0, {
           ask = make_ask(length(ws) + 1L)
@@ -674,6 +754,29 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       result(list(form = f, round = state$round))
     }, ignoreInit = TRUE)
 
+    # A part of a review that failed, run again: the other calls are kept, the review
+    #   and the round in the log are replaced by the one that now holds the new call.
+    observeEvent(input$rerun, {
+      rv = state$review
+      f = state$form
+      req(rv, f, input$rerun)
+      out = tryCatch(
+        withProgress(message = "Running the part again", value = 0,
+                     rerun_review_part(f, APP_MODELS$pm, rv, as.integer(input$rerun),
+                                       ask = make_ask(1L), progress = say_progress)),
+        error = function(e) {
+          problem(paste0("The part could not be run again: ", plain_message(e)))
+          NULL
+        })
+      if (is.null(out)) return()
+      problem(NULL)
+      state$review <- out
+      brief = state$brief
+      brief = if (is.list(brief) && brief$status %in% c("ok", "failed")) brief
+      n = length(state$rounds)
+      if (n) state$rounds[[n]] <- flow_round(f, APP_MODELS$pm, brief = brief, review = out)
+    })
+
     # The items ticked, as the candidate letter, the item's position and its id.
     observe({
       r = result()
@@ -694,7 +797,7 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
                       "and the candidates, or the review's findings, appear here."))
       f = r$form
       if (identical(task_kind(f), "review"))
-        return(review_panel(f, state$review, r$round))
+        return(review_panel(f, state$review, r$round, session$ns))
       drafts = state$drafts
       ap = state$appraisal
       approved = attr(drafts, "prompt")

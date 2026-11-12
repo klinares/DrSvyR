@@ -348,6 +348,49 @@ check_appraisal <- function(reply, candidates, checklist) {
 }
 
 
+# ---- a long questionnaire, in parts (DESIGN.md section 14) ---------------------------------
+
+# The questionnaire split on blank lines into blocks (a block is a question with its
+#   options), and whole blocks packed, in order, into parts of at most max_chars
+#   characters. Joining the parts with a blank line gives the text back, when the
+#   text separates its blocks by one blank line (a longer run of blank lines counts
+#   as one). A block longer than max_chars stops with a message quoting its first
+#   words, since it cannot be split without cutting a question. The result is the
+#   parts as a character vector, with the attribute "first_block": the number of
+#   each part's first block among all the blocks.
+split_questionnaire <- function(text, max_chars) {
+  blocks = strsplit(trimws(gsub("\r\n?", "\n", text)), "\n[ \t]*\n\\s*", perl = TRUE)[[1]]
+  too_long = which(nchar(blocks) > max_chars)
+  if (length(too_long))
+    stop("Block ", too_long[[1]], " of the questionnaire is ", format(nchar(blocks[[too_long[[1]]]]), big.mark = ","),
+         " characters, over the ", format(max_chars, big.mark = ","), " a call can take, and a block is never cut. ",
+         "Leave a blank line between questions so that it can be split. It starts: \"",
+         substr(blocks[[too_long[[1]]]], 1, 60), "\".", call. = FALSE)
+  packed = purrr::reduce(seq_along(blocks), function(acc, i) {
+    n = length(acc$parts)
+    joined = if (n) paste(acc$parts[[n]], blocks[[i]], sep = "\n\n")
+    if (n && nchar(joined) <= max_chars) {
+      acc$parts[[n]] = joined
+      acc
+    } else list(parts = c(acc$parts, blocks[[i]]), first = c(acc$first, i))
+  }, .init = list(parts = list(), first = integer(0)))
+  structure(unlist(packed$parts), first_block = packed$first)
+}
+
+# The calls a review of this questionnaire takes, in order. One part: a single call
+#   of kind "all", the whole review as in Phase 4. More than one: an "items" call
+#   for each part, then an "instrument" call. Each is list(kind, k, n, first_block,
+#   text), and the instrument call's text is the whole questionnaire.
+review_plan <- function(text, max_chars) {
+  parts = split_questionnaire(text, max_chars)
+  n = length(parts)
+  if (n <= 1L) return(list(list(kind = "all", k = 1L, n = 1L, first_block = 1L, text = text)))
+  c(purrr::imap(unname(as.list(parts)), function(p, k)
+      list(kind = "items", k = k, n = n, first_block = attr(parts, "first_block")[[k]], text = p)),
+    list(list(kind = "instrument", k = n + 1L, n = n, first_block = 1L, text = text)))
+}
+
+
 # ---- checks on a review ------------------------------------------------------------------
 
 # How evidence is compared with the pasted text (DESIGN.md sections 7 and 14): case

@@ -15,6 +15,32 @@ Read `DESIGN.md` first. Update this file at the end of every session.
   Of the 60 hashes I record, exactly the 15 Evaluate ones moved; the 45 drafting
   ones did not.
 
+- **5b done.** Long questionnaires: `split_questionnaire(text, max_chars)` and
+  `review_plan()` in `R/checks.R`; `APP_BATCH_CHARS` 4000 and `APP_MAX_PASTE_CHARS`
+  40000 in `app.R`; `TASKS$evaluate` gains `instrument_checks`, `ask_items` and
+  `ask_instrument`; `build_step_prompt(form, step, candidates, part)` has two new
+  steps, `items` and `instrument`; `run_review(form, pm, ask, prompt, progress)`
+  returns `batches` and status `ok`, `partial` or `failed`;
+  `rerun_review_part()` runs one failed call again. All 60 recorded prompt hashes
+  are the same as after 5a (a one-call review is exactly the Phase 4 prompt).
+  **The fixed ASK sentences** (each is followed by "Follow every rule you were
+  given. Reply in the format given at the end of this message."):
+  - item call: "Review part %d of %d of a questionnaire as an expert reviewer,
+    question by question. Only the questions of this part are pasted below. Fill
+    only "items" in your reply, and give "instrument" and "test_first" as empty
+    lists, "trapd" with all five keys as empty strings and "not_assessed" as an
+    empty string, because the questionnaire as a whole is reviewed in a separate
+    call. The first block of this part is block number %d of the whole
+    questionnaire; a question that has no number of its own takes the number of
+    its block as its id, counting blocks from 1 across the whole questionnaire."
+    (part k, parts n, number of the part's first block)
+  - instrument call: "Review the questionnaire below as a whole, as an expert
+    reviewer. Fill only "instrument", "trapd", "test_first" and "not_assessed" in
+    your reply, and give "items" as an empty list, because each question was
+    reviewed in a separate call. Judge only what the CHECKLIST below asks about
+    the instrument as a whole, and name the questions involved, by their ids, in
+    the evidence of each finding."
+
 ## Phase 4 (2026-11-12): Evaluate built, 15-question measurement, gold test
 
 **Take `REVIEW.md`, this file, `tests/review_tokens.md`, `tests/gold_summary.md` and

@@ -61,8 +61,8 @@ with_call <- function(x, call) {
 
 # A prompt that could not be built (a form with no research question, say) is
 #   reported like any other failure, not raised.
-step_prompt <- function(form, step, candidates = NULL)
-  tryCatch(build_step_prompt(form, step, candidates), error = function(e) e)
+step_prompt <- function(form, step, candidates = NULL, part = NULL)
+  tryCatch(build_step_prompt(form, step, candidates, part), error = function(e) e)
 
 
 # ---- the brief check -------------------------------------------------------------
@@ -83,33 +83,126 @@ run_brief <- function(form, pm, ask = llm_json) {
 
 # ---- the review --------------------------------------------------------------------
 
-# The Evaluate task: the project manager reviews the pasted questionnaire, once,
-#   with the CHECKLIST of the files in force. No worker is called. Same shape as
-#   run_brief: status, error, system, user, hash, reply (the parsed review). The
-#   prompt is the one build_prompt() gives for a review. R's checks on the reply
-#   (a quote not in the text, a check that was not sent) are check_review().
-run_review <- function(form, pm, ask = llm_json, prompt = NULL) {
+# The Evaluate task: the project manager reviews the pasted questionnaire with the
+#   CHECKLIST of the files in force. No worker is called. Same shape as run_brief:
+#   status, error, system, user, hash, reply (the parsed review), and batches.
+#
+#   A questionnaire that fits one call (APP_BATCH_CHARS) is reviewed in one call, with
+#   the prompt build_prompt() gives for a review: nothing changes from Phase 4 but
+#   `batches`, which has the one call. A longer one is split on blank lines into
+#   parts (DESIGN.md section 14): one call for the questions of each part, then one
+#   call for the instrument as a whole. `batches` has one entry per call, in order:
+#   kind ("all", "items" or "instrument"), part (k), n_parts, first_block, status,
+#   error, hash, user, reply, and the call record (seconds, finish, tokens, attempts,
+#   raw). `reply` has the usual shape, the questions in the order pasted. `status` is
+#   "ok" when every call succeeded, "partial" when some did and some did not, and
+#   "failed" when none did. A part that failed can be run again, rerun_review_part().
+#   `user` and `hash` are the first call's. R's checks on the reply (a quote not in
+#   the pasted text, a check that was not sent) are check_review().
+#
+#   progress(msg) is called before each call, so a screen can say "part 2 of 5" and
+#   this file stays free of Shiny. An edited prompt (the Prompt tab) can only be
+#   sent in a one-call review; it is kept as the result's attribute "prompt".
+run_review <- function(form, pm, ask = llm_json, prompt = NULL, progress = function(msg) NULL) {
   p = step_prompt(form, "work")
   failed = function(why)
     list(status = "failed", error = why, system = NA_character_, user = NA_character_,
-         hash = NA_character_, reply = NULL)
+         hash = NA_character_, reply = NULL, batches = list())
   if (inherits(p, "error")) return(failed(conditionMessage(p)))
-  if (TASKS[[clean_form(form)$task]]$kind != "review")
+  f = clean_form(form)
+  if (TASKS[[f$task]]$kind != "review")
     return(failed("Only a review task is reviewed by the project manager."))
-  # The prompt the analyst approved, which is the assembled one unless they edited
-  #   it, as in run_drafts(). Kept as the result's attribute "prompt".
-  if (!is.null(prompt)) {
-    if (!is.list(prompt) || !is.character(prompt$system) || !is.character(prompt$user))
-      stop("prompt must be a list with a system and a user string.", call. = FALSE)
-    p = prompt
-    p$hash = p$hash %||% prompt_hash(p$system, p$user)
+  plan = tryCatch(review_plan(f$questionnaire, APP_BATCH_CHARS), error = function(e) e)
+  if (inherits(plan, "error")) return(failed(conditionMessage(plan)))
+  if (!is.null(prompt) && (!is.list(prompt) || !is.character(prompt$system) || !is.character(prompt$user)))
+    stop("prompt must be a list with a system and a user string.", call. = FALSE)
+
+  if (length(plan) == 1L) {
+    # The prompt the analyst approved, which is the assembled one unless they edited
+    #   it, as in run_drafts().
+    if (!is.null(prompt)) {
+      p = prompt
+      p$hash = p$hash %||% prompt_hash(p$system, p$user)
+    }
+    batch = review_call(ask, pm, p, plan[[1]], progress)
+    out = review_result(p$system, list(batch), p)
+    if (!is.null(prompt)) attr(out, "prompt") <- prompt
+    return(out)
   }
+  if (isTRUE(prompt$edited))
+    stop("An edited prompt can be sent only when the questionnaire is reviewed in one call; ",
+         "this one is reviewed in ", length(plan) - 1L, " parts.", call. = FALSE)
+  batches = purrr::map(plan, function(spec) review_call(ask, pm, step_prompt(f, spec$kind, part = spec), spec, progress))
+  review_result(p$system, batches)
+}
+
+# The same review with one call run again, for a part that failed: index is the
+#   place of that call in rv$batches. The other calls are kept as they were.
+rerun_review_part <- function(form, pm, rv, index, ask = llm_json, progress = function(msg) NULL) {
+  f = clean_form(form)
+  plan = review_plan(f$questionnaire, APP_BATCH_CHARS)
+  if (length(plan) < 2L || length(plan) != length(rv$batches) || index < 1L || index > length(plan))
+    stop("There is no part ", index, " to run again.", call. = FALSE)
+  spec = plan[[index]]
+  batch = review_call(ask, pm, step_prompt(f, spec$kind, part = spec), spec, progress)
+  batch$rerun = TRUE
+  review_result(rv$system, replace(rv$batches, index, list(batch)))
+}
+
+# One call of a review. p is the prompt (or the error that building it gave).
+review_call <- function(ask, pm, p, spec, progress) {
+  record = function(status, error, reply, call)
+    list(kind = spec$kind, part = spec$k, n_parts = spec$n, first_block = spec$first_block,
+         chars = nchar(spec$text), status = status, error = error,
+         hash = if (inherits(p, "error")) NA_character_ else p$hash,
+         user = if (inherits(p, "error")) NA_character_ else p$user,
+         reply = reply, seconds = call$seconds, finish = call$finish %||% NA_character_,
+         tokens = call$tokens, attempts = call$attempts %||% NA_integer_,
+         raw = call$raw %||% NA_character_)
+  if (inherits(p, "error"))
+    return(record("failed", conditionMessage(p), NULL, list(seconds = 0)))
+  progress(switch(spec$kind,
+                  all = "Reviewing the questionnaire",
+                  items = paste0("Reviewing part ", spec$k, " of ", spec$n),
+                  instrument = "Reviewing the questionnaire as a whole"))
   r = call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["evaluate"]],
                  reply_validator("review"), "evaluate")
-  out = with_call(list(status = r$status, error = r$error, system = p$system, user = p$user,
-                       hash = p$hash, reply = r$reply), r$call)
-  if (!is.null(prompt)) attr(out, "prompt") <- prompt
-  out
+  record(r$status, r$error, r$reply, r$call)
+}
+
+# A review's result from its calls. One call: exactly the fields of Phase 4 (and its
+#   call record as the attribute "call"). Several: the questions of the parts that
+#   came back, in order, and everything about the instrument from the instrument
+#   call; what an item call says about the instrument, or the instrument call about
+#   a question, is not read.
+review_result <- function(system, batches, p = NULL) {
+  ok = purrr::map_lgl(batches, function(b) identical(b$status, "ok"))
+  if (length(batches) == 1L) {
+    b = batches[[1]]
+    return(with_call(list(status = b$status, error = b$error, system = system, user = b$user,
+                          hash = b$hash, reply = b$reply, batches = batches),
+                     list(seconds = b$seconds, finish = b$finish, tokens = b$tokens,
+                          attempts = b$attempts, raw = b$raw)))
+  }
+  kinds = purrr::map_chr(batches, "kind")
+  inst = purrr::detect(batches[ok & kinds == "instrument"], function(b) TRUE)
+  empty_trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = "")
+  reply = if (any(ok)) list(
+    items = unlist(purrr::map(batches[ok & kinds == "items"], function(b) unname(b$reply$items)), recursive = FALSE) %||% list(),
+    instrument = inst$reply$instrument %||% list(), trapd = inst$reply$trapd %||% empty_trapd,
+    test_first = inst$reply$test_first %||% list(), not_assessed = inst$reply$not_assessed %||% "")
+  why = purrr::map_chr(batches[!ok], function(b)
+    paste0(if (identical(b$kind, "instrument")) "The instrument as a whole" else paste0("Part ", b$part, " of ", b$n_parts),
+           " did not come back: ", b$error))
+  num = function(f) sum(purrr::map_dbl(batches, function(b) as.numeric(b$tokens[[f]] %||% 0)))
+  with_call(list(status = if (all(ok)) "ok" else if (any(ok)) "partial" else "failed",
+                 error = if (all(ok)) NA_character_ else paste(why, collapse = " "),
+                 system = system, user = batches[[1]]$user, hash = batches[[1]]$hash, reply = reply,
+                 batches = batches),
+            list(seconds = sum(purrr::map_dbl(batches, function(b) b$seconds %||% 0)), finish = NA_character_,
+                 tokens = list(input = num("input"), output = num("output")),
+                 attempts = sum(purrr::map_int(batches, function(b) as.integer(b$attempts %||% 0L)), na.rm = TRUE),
+                 raw = NA_character_))
 }
 
 
@@ -222,7 +315,16 @@ flow_summary <- function(brief = NULL, drafts = NULL, appraisal = NULL, pm = NUL
   c(if (!is.null(brief)) list(row("brief check", pm$id %||% NA_character_, brief)),
     purrr::map(unname(as.list(drafts)), function(d) row("draft", d$model, d)),
     if (!is.null(appraisal)) list(row("appraisal", pm$id %||% NA_character_, appraisal)),
-    if (!is.null(review)) list(row("review", pm$id %||% NA_character_, review)))
+    if (!is.null(review) && length(review$batches) <= 1L)
+      list(row("review", pm$id %||% NA_character_, review)),
+    if (!is.null(review) && length(review$batches) > 1L)
+      purrr::map(review$batches, function(b)
+        list(step = if (identical(b$kind, "instrument")) "review instrument"
+                    else paste0("review part ", b$part, " of ", b$n_parts),
+             model = pm$id %||% NA_character_, status = b$status, seconds = b$seconds %||% NA_real_,
+             finish = b$finish %||% NA_character_, attempts = b$attempts %||% NA_integer_,
+             tokens_in = b$tokens$input %||% NA_real_, tokens_out = b$tokens$output %||% NA_real_,
+             error = b$error %||% NA_character_)))
 }
 
 # A result's call record, from its attribute into a field, so it reaches the log.

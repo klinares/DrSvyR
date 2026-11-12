@@ -1,6 +1,6 @@
-# QuestionR review evidence, Phase 4
+# QuestionR review evidence, Phase 5
 
-Generated 2026-11-12 17:12 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-12 17:25 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,6 +12,7 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+58cfbb3 QuestionR 5a: severity bands in both Results views, evidence comparison, evaluate 0.3 hashes
 b026f0a QuestionR: changes from the Claude project (design section 14, evaluate 0.3, methodology, review.R section 10)
 f96b3e1 QuestionR Phase 4: gold test results, final STATUS and REVIEW
 01c7100 QuestionR 4e preparation: gold items file and the gold runner
@@ -26,14 +27,17 @@ d03f7db QuestionR: llm_check.R go generate runs the Generate engine live
 76b6354 QuestionR: Phase 3c Generate screens: Brief, Prompt, Results, Run again
 aa07e01 QuestionR: Phase 3b flow engine, reply schemas, coded defaults, checks
 7308eb1 QuestionR: Phase 3a task registry and one prompt assembler for every step
-539ec08 QuestionR: changes from the Claude project (design section 12, prompts, review.R section 8)
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
  M R/checks.R
+ M R/flow.R
+ M R/skills.R
  M R/ui_generate.R
+ M app.R
  M tests/smoke.R
+?? R/output.R
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
@@ -43,19 +47,19 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/DESIGN.md                      |  673 +++++++++
  QuestionR/PROMPTS.md                     |  340 +++++
  QuestionR/R/_disable_autoload.R          |    5 +
- QuestionR/R/checks.R                     |  390 ++++++
+ QuestionR/R/checks.R                     |  412 ++++++
  QuestionR/R/flow.R                       |  260 ++++
- QuestionR/R/llm.R                        |  607 +++++++++
+ QuestionR/R/llm.R                        |  607 ++++++++
  QuestionR/R/skills.R                     |  590 ++++++++
  QuestionR/R/ui.R                         |  180 +++
- QuestionR/R/ui_generate.R                |  759 +++++++++++
+ QuestionR/R/ui_generate.R                |  763 ++++++++++
  QuestionR/README.md                      |   43 +
- QuestionR/REVIEW.md                      | 1590 ++++++++++++++++++++++
- QuestionR/STATUS.md                      | 1481 ++++++++++++++++++++
+ QuestionR/REVIEW.md                      | 1628 ++++++++++++++++++++++
+ QuestionR/STATUS.md                      | 1494 ++++++++++++++++++++
  QuestionR/app.R                          |  196 +++
  QuestionR/tests/gold_items.csv           |   60 +
  QuestionR/tests/gold_matches.csv         |   68 +
- QuestionR/tests/gold_run.R               |  151 +++
+ QuestionR/tests/gold_run.R               |  151 ++
  QuestionR/tests/gold_runs/C1.json        |   98 ++
  QuestionR/tests/gold_runs/C3.json        |   98 ++
  QuestionR/tests/gold_runs/C4.json        |   98 ++
@@ -89,12 +93,12 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/tests/llm_check.R              |  351 +++++
  QuestionR/tests/llm_check.out            |   24 +
  QuestionR/tests/openrouter_check.R       |   81 ++
- QuestionR/tests/review.R                 |  680 ++++++++++
+ QuestionR/tests/review.R                 |  680 +++++++++
  QuestionR/tests/review15_run.json        |  498 +++++++
  QuestionR/tests/review_questionnaire.txt |   15 +
  QuestionR/tests/review_tokens.md         |   18 +
  QuestionR/tests/run_generate.json        |  864 ++++++++++++
- QuestionR/tests/smoke.R                  | 2176 ++++++++++++++++++++++++++++++
+ QuestionR/tests/smoke.R                  | 2228 ++++++++++++++++++++++++++++++
  QuestionR/www/methodology.md             |   85 ++
  QuestionR/www/skills/README.md           |   66 +
  QuestionR/www/skills/attitudinal.md      |   72 +
@@ -108,7 +112,7 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/www/skills/pm_brief.md         |   42 +
  QuestionR/www/skills/sensitive.md        |   90 ++
  README.md                                |    2 +
- 70 files changed, 16411 insertions(+)
+ 70 files changed, 16540 insertions(+)
 exit status: 0
 ~~~~
 
@@ -116,21 +120,22 @@ exit status: 0
 
 | file | lines |
 |---|---|
-| app.R | 196 |
+| app.R | 202 |
 | R/_disable_autoload.R | 5 |
-| R/checks.R | 412 |
-| R/flow.R | 260 |
+| R/checks.R | 455 |
+| R/flow.R | 362 |
 | R/llm.R | 607 |
-| R/skills.R | 590 |
+| R/output.R | 24 |
+| R/skills.R | 650 |
 | R/ui.R | 180 |
-| R/ui_generate.R | 763 |
+| R/ui_generate.R | 866 |
 | tests/gold_run.R | 151 |
 | tests/llm_check.R | 351 |
 | tests/openrouter_check.R | 81 |
 | tests/review.R | 680 |
-| tests/smoke.R | 2228 |
+| tests/smoke.R | 2445 |
 
-Code files counted: 11 of 12 allowed: PASS
+Code files counted: 12 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
 
 ## 3. Hard rules
@@ -147,7 +152,7 @@ R/_disable_autoload.R present and empty of code: PASS
 
 Top-level expressions in R/ that are not assignments: PASS
 Names defined more than once across R/: PASS
-pkg::fn calls checked: 30. Not exported by the installed package: PASS
+pkg::fn calls checked: 31. Not exported by the installed package: PASS
 
 ## 4. Skill files
 
@@ -331,8 +336,8 @@ ok  every field a task shows is a field of the form, and none is the task itself
 ok  a drafting task asks for items and shows the count; a review shows the questionnaire instead
 ok  a task that is not in the registry stops, naming the choices
 ok  TASK_FILES and TASK_ASK are gone: the registry is the only place
-ok  build_step_prompt(form, step, candidates), and build_prompt(form) is its work step
-ok  an unknown step stops, naming the three
+ok  build_step_prompt(form, step, candidates, part), and build_prompt(form) is its work step
+ok  an unknown step stops, naming the five
 ok  the brief check sends core, pm_brief and the task's own files, in that order
 ok  the brief check's system prompt holds the brief rules and the task's rules, and no drafting output format
 ok  the brief check's user message is PREPARE, ASK, CHECKLIST, CHARACTERIZE, with pm_brief's output format
@@ -418,8 +423,9 @@ ok  Continue after a check keeps the check and moves to the prompt
 ok  a brief check that fails is said on the page in words, with the reason, and offers to skip
 ok  a field the chosen task does not show is blank in the form, whatever was typed there before
 ok  a field the task does show is carried (the reference period, for behavioral items)
-ok  Evaluate carries its questionnaire, no item count and no workers, and says it makes one review and what the limit is
+ok  Evaluate carries its questionnaire, no item count and no workers, and says to leave a blank line between questions, how long one call is and what the limit is
 ok  a questionnaire over the cap is refused on the Brief tab with its length and the limit, and nothing moves on
+ok  a single block too long for one call is refused on the Brief tab, quoting where it starts, and nothing moves on
 ok  a requested change is shown on the Brief tab with the round it belongs to, and can be dropped
 ok  the change goes into the form as its revision, and so into the prompt as a REVISION block
 ok  dropping the change clears it
@@ -474,7 +480,7 @@ ok  ellmer 0.4.2 does not send reasoning_effort on the OpenAI-style call (so it 
 ok  a review with its five fields passes: findings per question, instrument findings, TRAPD, test_first, not_assessed
 ok  a question's id may be a label or a number, and an empty list of findings is a question with none
 ok  a review missing a field, or with a finding that has no check, evidence, problem or severity from 1 to 10, fails naming the question
-ok  run_review has the fields of run_brief, uses build_prompt()'s prompt, and makes one call at the evaluation ceiling
+ok  run_review has the fields of run_brief and batches (one entry here), uses build_prompt()'s prompt, and makes one call at the evaluation ceiling
 ok  a review that errors, is cut off, or fails the schema is failed with a plain reason and is not raised
 ok  a form that is not a review, or has no questionnaire, or is over the cap, is failed without a call
 ok  run_review never looks up a key and reaches no model but through ask
@@ -505,6 +511,32 @@ ok  a question with only minor findings says none is rated 5 or above and shows 
 ok  an appraisal's fails use the same bands: a fail with no severity is in the middle band, below 5 is folded
 ok  evidence is compared without case, spacing or the kind of quotation mark, with quotes around the whole of it dropped
 ok  evidence with an ellipsis, a paraphrase, or nothing is not found, and an ellipsis is not removed
+ok  split_questionnaire: more than one part, none over the limit, whole blocks in order, joined by a blank line they give the text back
+ok  split_questionnaire: a short text is one part; runs of blank lines and CRLF line endings count as one separator
+ok  split_questionnaire: a block over the limit stops, saying which block, how long, and quoting its first words
+ok  APP_BATCH_CHARS is 4000 and APP_MAX_PASTE_CHARS is 40000, and both are in the global environment for R/ to read
+ok  review_plan: one call of kind all for a short text; an items call per part then an instrument call for a long one
+ok  an item call has only its part of the text, the part sentence with its numbers, and every check but the four instrument ones
+ok  the instrument call has the whole questionnaire, only the four instrument checks, and the sentence that fills the other fields
+ok  the part sentences are fixed text from the registry, so the same part gives the same prompt and hash; the system prompt is the work step's
+ok  a part prompt needs a review task and a part of its own kind; a part sentence needs a task that has one
+ok  a one-part questionnaire's prompt is the work prompt, as before (same hash), and the registry gives it no part sentence
+ok  a long review makes one call per part and one for the instrument, each at the evaluation ceiling, and says before each which it is
+ok  a long review's result has run_review's fields and batches: one per call, in order, each with kind, part, status, hash, seconds and its reply
+ok  the reply holds all 30 questions in the order pasted, the instrument findings and not_assessed from the instrument call only
+ok  the call record of a long review adds up its calls: seconds, and tokens in and out
+ok  a part that fails gives status partial naming it, keeps the questions of the other parts in order, and the instrument call still runs
+ok  the instrument call failing leaves the questions and an empty instrument; every call failing is failed with no reply
+ok  running a failed part again makes one call for it, keeps the other calls as they were, and gives status ok with all 30 questions
+ok  an edited prompt cannot be sent in a long review (it is several prompts); a questionnaire with a block too long fails without a call
+ok  run_review reaches no model and no Shiny function but through ask and progress
+ok  a long review's log summary has one row per call, naming the part; a one-call review keeps its one row
+ok  the run log of a long review holds every call: its hash, its prompt, its reply and its call record
+ok  the Prompt tab for a long review says it is several calls, shows the first part's prompt, and offers no editing
+ok  approving it records the first part's prompt as assembled, not edited, with its hash, and starts the run
+ok  a run of a long review asks for one progress step per call, records one round with the summary rows, and shows the part that failed
+ok  the page for a long review lists a prompt hash for each call and shows the questions that came back and the instrument findings
+ok  the button's input runs that part again, and the page, the review and the round in the log are replaced by one with nothing missing
 exit status: 0
 ~~~~
 
@@ -1625,4 +1657,25 @@ The control findings at 5 or above:
 
 ## 10. Long questionnaires, output and methodology
 
-Not due until Phase 5.
+| check | result |
+|---|---|
+| split: more than one part, none over the limit | PASS |
+| split: every block kept whole, once, in order | PASS |
+| split: a single block over the limit stops with a message | PASS |
+| long review: one call per part and one for the instrument | PASS |
+| long review: item calls carry no instrument checks, the instrument call carries no item checks | PASS |
+| long review: status ok, all 30 items in pasted order, instrument findings kept | PASS |
+| long review: batches recorded, one per call, each with status and hash | PASS |
+| a failed part gives status partial, names the part, and keeps the rest | PASS |
+| a short questionnaire is still one call with the Phase 4 prompt | PASS |
+| skills_table: one row per reflex with file, id, when, source | PASS |
+| www/methodology.md present | PASS |
+
+Long live review (tests/review_long.md), verbatim:
+tests/review_long.md does not exist yet.
+
+Sample output for Word, drafting (tests/output_generate.txt), verbatim:
+tests/output_generate.txt does not exist yet.
+
+Sample output for Word, review (tests/output_review.txt), verbatim:
+tests/output_review.txt does not exist yet.

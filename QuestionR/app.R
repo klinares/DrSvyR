@@ -25,9 +25,14 @@ APP_OFFICE <- ""
 
 # Largest questionnaire the Evaluate task accepts, in characters. Over it the
 #   app says so and asks for the questionnaire in parts; nothing is truncated.
-#   About twice the questionnaire the Phase 4d live review measured (1,823
-#   characters, tests/review_tokens.md), matched to the evaluation ceiling.
-APP_MAX_PASTE_CHARS <- 4000
+#   A longer questionnaire is reviewed in parts (DESIGN.md section 14): whole
+#   blocks, split on blank lines, are packed into parts of at most
+#   APP_BATCH_CHARS characters, one call to the project manager each, then one
+#   more call for the instrument as a whole. APP_BATCH_CHARS is the per-call
+#   limit Phase 4d measured: about twice a 1,823-character questionnaire, to
+#   match the evaluation ceiling (tests/review_tokens.md).
+APP_MAX_PASTE_CHARS <- 40000
+APP_BATCH_CHARS <- 4000
 
 # Which models do which job, chosen by the environment variable
 #   QUESTIONR_PROFILE ("home" if unset, or "work"). Each model has a key_source:
@@ -113,7 +118,8 @@ invisible(check_skills())
 list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION,
               APP_PROFILE = APP_PROFILE,
               APP_MODELS = APP_MODELS,
-              APP_MAX_PASTE_CHARS = APP_MAX_PASTE_CHARS),
+              APP_MAX_PASTE_CHARS = APP_MAX_PASTE_CHARS,
+              APP_BATCH_CHARS = APP_BATCH_CHARS),
          envir = globalenv())
 
 
