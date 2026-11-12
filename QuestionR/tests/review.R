@@ -14,7 +14,7 @@
 # Needs: shiny, purrr, dplyr, tibble, stringr, digest.
 
 PHASE <- as.integer(c(commandArgs(trailingOnly = TRUE), "0")[1])
-CODE_BUDGET <- 8L
+CODE_BUDGET <- 10L
 
 # sha256 of each skill file with line endings normalised, as drafted in the
 #   Claude project. Updated there, and only there, when a skill changes.
@@ -27,7 +27,7 @@ SKILL_SHA <- c(
   "evaluate.md" = "2952362b6d8e2efadff970a8b21069b768d7145808ec5b524ca8b98a998e57c1",
   "generate.md" = "e196e81245b266fbc6321016575d932dbcb24311c366683475e8945c8bbaf738",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
-  "pm_appraise.md" = "a34bcaff18ea705a863a337603505d958a940f8457b448fc030698b4773ed401",
+  "pm_appraise.md" = "ced64452127616e41906380b972fc100c3a11443cfdc564e615fe13ea78e0b57",
   "pm_brief.md" = "a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a",
   "sensitive.md" = "0ebc82a948f01caed0847f3d4a6cda87216f33dc3039e764cb8c1ab8ac45e726")
 
@@ -376,6 +376,124 @@ sec_llm <- if (PHASE < 2L) {
 }
 
 
+# ---- 8. registry and flow engine (Phase 3 on) -------------------------------------
+
+# A fake model: the flow functions reach a model only through ask (DESIGN.md
+#   section 12), so the whole flow runs here with canned replies and no call.
+fake_item <- function(i) list(
+  id = paste0("TR", i), domain = paste("domain", i), intro = "",
+  stem = paste0("Canned stem number ", i, "?"),
+  options = list("None", "A little", "A lot"), open_format = "", parts = list(),
+  programming = "", decisions = list("closed; three labelled options"),
+  source_english = "", notes = "")
+fake_draft <- function(n) list(items = purrr::map(seq_len(n), fake_item),
+                               not_covered = list(), missing_from_brief = list())
+fake_appraisal <- list(appraisal = list(), coverage = list(), differences = list(),
+                       merged = list(), test_first = list(), limits = "Canned.")
+fake_brief <- list(complete = TRUE, questions = list(), task_fit = "",
+                   criteria = list("Canned criterion."))
+fake_model <- function(id) list(api = "openai", base_url = "https://example.invalid/v1",
+                                id = id, key_source = "analyst")
+fake_pm <- fake_model("vendor-p/pm-model")
+fake_workers <- purrr::map(c("vendor-a/model-one", "vendor-b/model-two",
+                             "vendor-c/model-three"), fake_model)
+
+# good: every worker returns the 2 items asked for. bad: the second worker
+#   errors and the third returns 3 items, which validate must refuse.
+make_ask <- function(bad = FALSE) function(user, m, system_prompt = NULL,
+                                           max_tokens = NULL, validate = NULL, ...) {
+  if (bad && identical(m$id, "vendor-b/model-two")) stop("canned endpoint error")
+  obj = if (identical(m$id, fake_pm$id)) {
+    if (grepl("- what_a_brief_needs (", system_prompt, fixed = TRUE)) fake_brief
+    else fake_appraisal
+  } else fake_draft(if (bad && identical(m$id, "vendor-c/model-three")) 3L else 2L)
+  if (!is.null(validate)) validate(obj)
+  obj
+}
+
+flow_checks <- function() {
+  form = utils::modifyList(forms$attitudinal, list(n_items = 2L))
+  ids = purrr::map_chr(fake_workers, "id")
+
+  reg = get("TASKS")
+  brief = run_brief(form, fake_pm, ask = make_ask())
+  good = run_drafts(form, fake_workers, ask = make_ask())
+  bad = run_drafts(form, fake_workers, ask = make_ask(bad = TRUE))
+  ap = run_appraisal(form, good, fake_pm, ask = make_ask(), seed = 11L)
+  ap_same = run_appraisal(form, good, fake_pm, ask = make_ask(), seed = 11L)
+  ap_bad = run_appraisal(form, bad, fake_pm, ask = make_ask(), seed = 11L)
+  step = build_step_prompt(form, "work")
+  status = function(d) purrr::map_chr(unname(d[seq_along(fake_workers)]), "status")
+  both = paste(ap$system, ap$user)
+
+  dplyr::bind_rows(
+    expect("TASKS has the four tasks, each with label, kind, files, ask, fields",
+           all(c("attitudinal", "behavioral", "sensitive", "evaluate") %in% names(reg)) &&
+             all(purrr::map_lgl(reg, function(t) all(c("label", "kind", "files", "ask", "fields") %in% names(t))))),
+    expect("task kinds are draft or review, evaluate is review",
+           all(purrr::map_chr(reg, "kind") %in% c("draft", "review")) && identical(reg$evaluate$kind, "review")),
+    expect("build_step_prompt(form, 'work') equals build_prompt(form)",
+           identical(step$hash, build_prompt(form)$hash)),
+    expect("brief check: status ok, reply has questions and criteria",
+           identical(brief$status, "ok") && all(c("questions", "criteria") %in% names(brief$reply))),
+    expect("brief check prompt: persona, pm_brief and the task's rules; no drafting output format",
+           has(brief$system, "senior survey methodologist") && has(brief$system, "- what_a_brief_needs (") &&
+             has(brief$system, "- attitude_object (") && !has(brief$user, "\"source_english\"")),
+    expect("drafts: one entry per worker, in order, all ok",
+           identical(purrr::map_chr(unname(good[seq_along(fake_workers)]), "model"), ids) &&
+             all(status(good) == "ok")),
+    expect("each ok draft keeps the parsed reply with 2 items",
+           all(purrr::map_int(unname(good[seq_along(fake_workers)]), function(d) length(d$reply$items)) == 2L)),
+    expect("a worker error and a wrong item count are recorded as failed, with a reason, and the run goes on",
+           identical(status(bad), c("ok", "failed", "failed")) &&
+             all(nzchar(purrr::map_chr(unname(bad[2:3]), function(d) paste(d$error, collapse = " "))))),
+    expect("appraisal: status ok, labels A, B, C map onto the three model ids",
+           identical(ap$status, "ok") && identical(sort(names(ap$labels)), c("A", "B", "C")) &&
+             setequal(unname(ap$labels), ids)),
+    expect("same seed gives the same labels", identical(ap$labels, ap_same$labels)),
+    expect("only drafts that are ok become candidates",
+           identical(names(ap_bad$labels), "A") && identical(unname(ap_bad$labels), ids[1])),
+    expect("no model id, vendor or endpoint reaches the appraisal prompt",
+           !any(purrr::map_lgl(c(ids, fake_pm$id, "vendor-", "example.invalid"), function(s) has(both, s)))),
+    expect("appraisal prompt: CANDIDATES then CHECKLIST then CHARACTERIZE, with the stems and the check questions",
+           all(diff(c(regexpr("\nCANDIDATES\n", ap$user, fixed = TRUE),
+                      regexpr("\nCHECKLIST\n", ap$user, fixed = TRUE),
+                      regexpr("\nCHARACTERIZE\n", ap$user, fixed = TRUE))) > 0) &&
+             has(ap$user, "\nCANDIDATES\n") && has(ap$user, "Canned stem number 1?") &&
+             has(ap$user, "\none_thing: ") && has(ap$user, "\"fails\"")),
+    expect("appraisal system prompt: persona and pm_appraise rules, not the drafting rules",
+           has(ap$system, "senior survey methodologist") && has(ap$system, "- code_every_check (") &&
+             !has(ap$system, "- declare_defaults (")),
+    expect("flow.R has no Shiny in it",
+           !any(tok$file == file.path("R", "flow.R") &
+                  ((tok$token == "SYMBOL_PACKAGE" & tok$text == "shiny") |
+                     (tok$token == "SYMBOL_FUNCTION_CALL" &
+                        tok$text %in% c("reactive", "reactiveVal", "observeEvent", "moduleServer",
+                                        "showNotification", "withProgress", "getDefaultReactiveDomain"))))),
+    expect("flow.R never looks up a key",
+           !any(tok$file == file.path("R", "flow.R") & tok$token == "SYMBOL_FUNCTION_CALL" &
+                  tok$text %in% c("Sys.getenv", "llm_key_for", "llm_session_key"))))
+}
+
+sec_flow <- if (PHASE < 3L) {
+  c("## 8. Registry and flow engine", "", "Not due until Phase 3.")
+} else {
+  out = tryCatch({
+    if (!exists("build_prompt", mode = "function")) {
+      app = shiny::shinyAppDir(".")
+      invisible(app$serverFuncSource())
+    }
+    flow_checks()
+  }, error = function(e) conditionMessage(e))
+  log_path = file.path("tests", "run_generate.json")
+  c("## 8. Registry and flow engine", "",
+    if (is.character(out)) paste("FAIL: the engine checks stopped:", out) else md_table(out), "",
+    "Live run log (tests/run_generate.json), first 60 lines:",
+    if (file.exists(log_path)) fence(utils::head(readLines(log_path, warn = FALSE), 60))
+    else "tests/run_generate.json does not exist yet.")
+}
+
+
 # ---- write ----------------------------------------------------------------------
 
 pkgs <- c("shiny", "bslib", "ellmer", "purrr", "dplyr", "stringr", "jsonlite", "digest")
@@ -388,6 +506,6 @@ writeLines(c(
          R.version.string, "."),
   paste0("Packages: ", paste0(pkgs, " ", versions, collapse = ", ")), "",
   sec_git, "", sec_files, "", sec_rules, "", sec_skills, "", sec_smoke, "",
-  sec_prompts, "", sec_llm), "REVIEW.md", useBytes = TRUE)
+  sec_prompts, "", sec_llm, "", sec_flow), "REVIEW.md", useBytes = TRUE)
 
 cat("Wrote REVIEW.md for Phase", PHASE, "\n")

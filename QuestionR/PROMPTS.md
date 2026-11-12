@@ -106,3 +106,66 @@ STATUS.md as before, including every remaining FAIL and anything a model did
 that the skills did not expect. Then stop and tell me to take REVIEW.md,
 STATUS.md and tests/llm_check.out to the Claude project.
 ```
+
+## Phase 3: registry, flow engine and the Generate screens
+
+```
+Read CLAUDE.md, then QuestionR/DESIGN.md, above all section 12, which wins
+over the earlier sections. Read QuestionR/STATUS.md, the skill files
+QuestionR/www/skills/pm_brief.md, pm_appraise.md and generate.md, and
+QuestionR/tests/review.R, which has a new section 8 for this phase.
+
+First commit the files the Claude project changed, as they are, in one
+commit: DESIGN.md, PROMPTS.md, tests/review.R, www/methodology.md,
+www/skills/pm_appraise.md.
+
+Do Phase 3 as DESIGN.md section 12 defines it, in three commits:
+
+3a. Registry and assembler. Replace TASK_FILES and TASK_ASK with the TASKS
+    registry. Add build_step_prompt(form, step, ...); keep build_prompt(form)
+    as the "work" step with byte-identical output (the hashes in REVIEW.md
+    section 6 must not change). Smoke and review.R 2 stay clean.
+
+3b. Engine and checks, no Shiny. R/checks.R: the reply schemas and
+    validators, item count (parts not counted), coded defaults. R/flow.R:
+    run_brief, run_drafts, run_appraisal with exactly the arguments and the
+    result fields in section 12. They reach a model only through ask; they
+    never look up a key and never call Shiny. Candidates are relabelled A,
+    B, C in an order shuffled by seed; no model id or name may reach the
+    appraisal prompt. A worker that fails or returns an invalid reply is
+    recorded as failed and the run goes on. Extend tests/smoke.R to run the
+    whole flow on a fake ask.
+
+3c. Screens. One module per tab, reading the registry: Brief (task
+    dropdown, the fields the task lists, a tick box per worker, brief check
+    with a Skip button), Prompt (approve, or edit; an edited prompt is
+    marked edited with both hashes), Results (per candidate: items with
+    parts indented, coded defaults, failed checks with the failing words;
+    then coverage, differences, the merged option labelled untested, what
+    to test first; a tick per item to keep), Run again (the form kept, a
+    "what to change" box that becomes the REVISION block). Every model call
+    sits behind an error handler that puts a plain message on the page, and
+    a progress line shows before each call. Tabs for later phases stay as
+    placeholders.
+
+Rules, unchanged: root CLAUDE.md hard rules; no edits to www/skills/; no
+change to what tests/review.R checks (a bug in it: fix only the bug and
+report the diff); no invented functions or arguments (ellmer is 0.4.2; check
+installed help); never weaken a test; do not push. If something in section
+12 cannot be built as written, stop and say so in STATUS.md.
+
+After 3c: tell me the number of calls and the rough cost of one live run
+through the engine (a 3-item attitudinal draft, all three workers, brief
+check and appraisal) and wait for my yes. Save its run log as
+tests/run_generate.json, with no key in it.
+
+Then run tests/smoke.R and tests/review.R 3 until there is no FAIL you can
+fix, and commit with REVIEW.md.
+
+Finish by updating STATUS.md: what was built, decisions and their defaults,
+anything skipped or stubbed, seconds and tokens for each live call, anything
+a model did that the skills did not expect, every remaining FAIL, and a
+short click-through list for Kevin to try in the browser. Then stop and tell
+me to take REVIEW.md, STATUS.md and tests/run_generate.json to the Claude
+project.
+```

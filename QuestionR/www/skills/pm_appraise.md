@@ -1,6 +1,6 @@
 # Project manager: appraise candidates
 
-Version: 0.1
+Version: 0.2
 
 After the worker models return drafts. The project manager codes every
 candidate against the same checklist and lays the results side by side. It
@@ -16,7 +16,7 @@ codes the format defaults itself; the PM is not asked to count options.
 
 ### code_every_check
 - **When:** Each item of each candidate.
-- **Say:** For every check in the checklist answer pass, fail or not applicable. For a fail, quote the words or feature that fail and name the response stage affected. Apply the checks exactly as written and the same way to every candidate.
+- **Say:** Take every item through every check in the checklist, and report only the checks it fails; a check you do not report is read as passed or not applicable. For each fail quote the words or feature that fail and name the response stage affected. Apply the checks exactly as written and the same way to every candidate. Appraise an item's parts with the item.
 - **Never:** Do not add checks. Do not let fluent wording stand in for passing a check.
 - **Source:** Haensch, IASS/WSS Session 3 (recommendation 3: check every draft against the guidelines; well-formed is not the same as valid)
 
@@ -55,7 +55,7 @@ codes the format defaults itself; the PM is not asked to count options.
 
 Return one JSON object with these fields, all text in English.
 
-- "appraisal": a list, one entry per candidate item, with "candidate" (A, B, C...), "id" (the item id), "domain", and "checks": a list of objects with "check" (the reflex id), "result" (pass, fail or na), "evidence" and "stage" (empty strings unless the result is fail).
+- "appraisal": a list, one entry per candidate item, with "candidate" (A, B, C...), "id" (the item id), "domain", and "fails": a list, empty when the item fails nothing, of objects with "check" (the id from the checklist), "evidence" (the words or feature that fail), "stage" and "why" (one sentence).
 - "coverage": a list, one entry per domain, with "domain", "covered_by" (candidate letters) and "clean_items" (candidate letter and item id pairs that pass every check).
 - "differences": a list of one-sentence descriptions of how the candidates' design decisions differ.
 - "merged": a list of objects with "domain", "candidate", "id"; domains with no clean item have empty "candidate" and "id".

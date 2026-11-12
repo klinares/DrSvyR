@@ -454,3 +454,80 @@ match, and writing the table to `STATUS.md`. No paid model judges.
   hard-coded or left failing. A test is never weakened to make it pass.
 - **End of session.** Update `STATUS.md`: what was done, the numbers, what is
   next, anything that surprised you.
+
+
+## 12. Built to be extended; the remaining phases (Kevin, 2026-11-11)
+
+Kevin's instruction: no cut corners, and the app must be easy to extend. The
+review gate after every phase stays. Where this section and sections 1 to 11
+disagree, this section wins.
+
+Phase 2 passed review on its evidence: no FAIL in `REVIEW.md`; the ellmer
+0.4.2 signatures match the calls; 8 of 8 live calls green; no key in the
+output; the pasted-key model never reads the environment.
+
+### Extension points
+
+Adding a task, a model or a step should mean adding an entry and a text file,
+not editing the screens.
+
+- **Task registry.** One list, `TASKS`, in `R/skills.R`, replaces
+  `TASK_FILES` and `TASK_ASK`. Each entry: `label` (shown in the dropdown),
+  `kind` (`"draft"` or `"review"`), `files` (skill files in order), `ask`
+  (the fixed sentence), `fields` (which form fields the Brief tab shows).
+  The dropdown, the form, prompt assembly and the checklist all read it. A
+  new task is a skill file plus one entry.
+- **Model registry.** `APP_PROFILES`, as now. A worker is one entry and may
+  use either API style.
+- **One prompt assembler for every step.** `build_step_prompt(form, step,
+  ...)` with `step` one of `"brief"`, `"work"`, `"appraise"`; it returns
+  `system`, `user`, `hash`, `files`. `build_prompt(form)` stays and is
+  `build_step_prompt(form, "work")`. The brief check sends core, `pm_brief`
+  and the task's files; the appraisal sends core and `pm_appraise`, with
+  `CANDIDATES` (letters and their items as JSON) and `CHECKLIST` blocks
+  between `ASK` and `CHARACTERIZE`.
+- **A flow engine with no Shiny in it**, `R/flow.R`. The screens only call
+  it and draw what it returns, so every flow runs in a test without a
+  browser, and a new step is a new function:
+  - `run_brief(form, pm, ask = llm_json)`
+  - `run_drafts(form, workers, ask = llm_json, prompt = build_prompt(form))`
+  - `run_appraisal(form, drafts, pm, ask = llm_json, seed)`
+  - `run_review(form, pm, ask = llm_json)` (Phase 4)
+- **One seam for the model.** Every flow function reaches a model only
+  through `ask`, called as `ask(user = , m = , system_prompt = , max_tokens
+  = , validate = )`; it returns the parsed reply or signals an error. Key
+  lookup happens inside `ask`, never in the flow functions. Tests pass a
+  fake `ask`.
+- **One shape for every result.** Each flow function returns a list:
+  - `run_brief`: `status` (`"ok"` or `"failed"`), `error`, `system`, `user`,
+    `hash`, `reply`.
+  - `run_drafts`: an unnamed list with exactly one entry per worker, in the
+    workers' order, each `model` (the id), `status`, `error`, `reply` (the
+    parsed draft), `seconds`. The prompt used is the list's attribute
+    `"prompt"`.
+  - `run_appraisal`: `status`, `error`, `labels` (a named character vector,
+    candidate letter to model id, only for drafts with status ok, shuffled
+    by `seed`), `system`, `user`, `hash`, `reply`.
+  The run log is these lists, with `schema = 1`, the form and the time.
+- **Reply schemas in one place.** `R/checks.R` holds, per output format, the
+  required fields and the validator built from them. A new output format is
+  one entry.
+- **One Shiny module per tab** and one state object, as in `svysegment`.
+
+Code budget is now 10 files: `app.R`; `llm.R`, `skills.R`, `checks.R`,
+`flow.R`, `ui.R` (which may split in two); three in `tests/`.
+
+### The remaining phases
+
+| # | Phase | Passes when |
+|---|---|---|
+| 3 | Registry, step assembler, flow engine, checks, and the Generate screens: Brief (form from the registry, worker tick boxes, brief check with Skip), Prompt (approve or edit), Results (candidates, coded defaults, fails per item, coverage, differences, merged option, tick to keep), Run again | `review.R 3` shows no FAIL; smoke runs the whole Generate flow on a fake `ask`, including a failed worker, a wrong item count and a failed appraisal; one live run (3 items, all workers, appraisal) recorded in `STATUS.md` with seconds and tokens |
+| 4 | Evaluate flow, token ceilings measured, gold test | as section 10, plus: one 15-question review measured before the evaluation ceiling is fixed |
+| 5 | Output for Word, disclosure block, run log, Methodology tab (`www/methodology.md` plus the rule and source table) | as section 10 |
+| 6 | Work move: default profile switch, either API style per worker, token-limit naming switch, single-model fallback with a notice, "Setting up at work" in the README | as section 10 |
+
+Settled for Phase 3: token ceilings brief check 2000, drafting 8000,
+appraisal 16000 (provisional; record actual use in the live run); timeout
+600 seconds; a reply cut off at the ceiling is not retried and the app says
+to ask for fewer items. The appraisal reports failed checks only
+(`pm_appraise.md` 0.2).
