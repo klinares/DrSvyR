@@ -53,7 +53,11 @@ skills_html <- function(tab = skills_table(), dir = SKILLS_DIR) {
 
 methodology_page <- function(path = METHODOLOGY_FILE, dir = SKILLS_DIR)
   tryCatch(
-    tagList(HTML(shiny::markdown(paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n"))),
+    tagList(tags$style(paste0(".qr-note table { border-collapse: collapse; margin: 1rem 0; } ",
+                              ".qr-note th, .qr-note td { border: 1px solid var(--bs-border-color); padding: 6px 10px; vertical-align: top; } ",
+                              ".qr-note th { background: var(--bs-tertiary-bg); }")),
+            tags$div(class = "qr-note",
+                     HTML(shiny::markdown(paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")))),
             skills_html(skills_table(dir), dir)),
     error = function(e)
       warn_box(tags$strong("The methodology note could not be shown. "), substr(conditionMessage(e), 1, 400)))

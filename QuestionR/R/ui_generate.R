@@ -627,7 +627,7 @@ rerun_buttons <- function(rv, ns = identity) {
       if (identical(b$kind, "instrument")) "The instrument as a whole"
       else paste0("Part ", b$part, " of ", b$n_parts, ", from block ", b$first_block),
       ": ", b$error %||% "", " ",
-      tags$button(type = "button", class = "btn btn-sm btn-outline-primary",
+      tags$button(type = "button", class = "btn btn-sm btn-primary",
                   onclick = sprintf("Shiny.setInputValue('%s', %d, {priority: 'event'})", ns("rerun"), i),
                   "Run this part again"))
   }))
@@ -882,7 +882,7 @@ mod_output_ui <- function(id) {
 # A button that selects what is on the page and copies it. Copying from a script depends on
 #   the browser, so the text says to select and copy by hand when it does not work.
 copy_button <- function(label, target, rich = TRUE)
-  tags$button(type = "button", class = "btn btn-sm btn-outline-primary me-2", label,
+  tags$button(type = "button", class = "btn btn-sm btn-primary me-2", label,
               onclick = sprintf(paste0(
                 "var el=document.getElementById('%s'); var ok=false; try{",
                 if (rich) "var r=document.createRange(); r.selectNodeContents(el); var s=window.getSelection(); s.removeAllRanges(); s.addRange(r);"
@@ -918,9 +918,13 @@ mod_output_server <- function(id, state) {
                    "the numbering and the emphasis are kept. The second box is the same thing as plain ",
                    "text. Both end with a disclosure of the use of language models, to keep with the questionnaire."),
         tags$h5("For Word"),
-        tags$div(id = session$ns("html_box"),
-                 style = paste("border: 1px solid var(--bs-border-color); padding: 12px 16px;",
-                               "background: var(--bs-body-bg); color: var(--bs-body-color);"),
+        # Black on white whatever the theme: a browser copies the colours it shows, and light
+        #   text copied from the dark theme would be invisible on a Word page.
+        tags$style(paste0(".qr-word, .qr-word * { color: #000 !important; background: transparent !important; } ",
+                          ".qr-word { background: #fff !important; } .qr-word blockquote { border-left: 3px solid #adb5bd; ",
+                          "padding-left: 0.75rem; margin-left: 1rem; font-size: inherit; }")),
+        tags$div(id = session$ns("html_box"), class = "qr-word",
+                 style = "border: 1px solid #adb5bd; padding: 12px 16px;",
                  HTML(html)),
         tags$p(class = "mt-2", copy_button("Copy for Word", session$ns("html_box"), TRUE), tags$span(class = "small")),
         tags$h5("Plain text"),
