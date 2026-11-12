@@ -7,10 +7,10 @@ Read `DESIGN.md` first. Update this file at the end of every session.
 - **Phases 0, 1 and 1b are committed** on branch `questionr` (from `main` at
   00e5741), not pushed: `d651cfe`, `ca5aa70`, `0228360`, `670b899` (the last is
   Phase 1b, after the Claude project's review).
-- **Phase 2 is written, checked live, and not committed**: `R/llm.R`, the Models
-  table and "Check connections" in `R/ui.R`, the wiring in `app.R`, the Phase 2
-  checks in `tests/smoke.R`, and a new `tests/llm_check.R` with its output
-  `tests/llm_check.out`.
+- **Phase 2 is committed** as `025a86f` on `questionr`, not pushed: `R/llm.R`,
+  the Models table and "Check connections" in `R/ui.R`, the wiring in `app.R`,
+  the Phase 2 checks in `tests/smoke.R`, and `tests/llm_check.R` with its output
+  `tests/llm_check.out`. Checked live (below).
 - **Live check: 8 of 8 calls green** (4 connection pings, 3 worker drafts, 1 PM
   review), about $0.075 by list prices. Results and what they leave open are in
   "Live run, result" below. The third worker is now `openai/gpt-6-luna` (Kevin,
@@ -21,9 +21,8 @@ Read `DESIGN.md` first. Update this file at the end of every session.
   after the live check: **no FAIL**; 7 of 8 code files; `REVIEW.md` now carries
   `llm_check.out` verbatim.
 - Nothing was pushed.
-- **Next:** Kevin takes `REVIEW.md` and this file to the Claude project; commit
-  Phase 2 when Kevin says (small commits: the ID swap can be its own). Decision 13
-  (token ceilings) is the one the live run raised.
+- **Next:** Kevin takes `REVIEW.md` and this file to the Claude project. Decision
+  13 (token ceilings) is the one the live run raised.
 
 ## Live run, result (2026-11-11 21:05, Kevin's yes, third worker swapped first)
 
@@ -475,15 +474,15 @@ None as of `review.R 2` after the live run. The one `READ` row is the single
   Phase 2, its live section says `llm_check.out` does not exist. Small fixes in
   `R/llm.R`: `$raw` is plain text on failure too; `llm_ping()` counts its request
   and keeps the model's reply. No model had been called at the end of that session.
-- **Phase 2, third session (2026-11-11), live check run, uncommitted.** Kevin said
+- **Phase 2, third session (2026-11-11), live check run, `025a86f`.** Kevin said
   "Swap and run" to the one question asked: `app.R` and `DESIGN.md` section 4 now
   name `openai/gpt-6-luna` for the third worker (decision 11 resolved). Smoke
   rerun: 142 ok, no FAIL. `tests/llm_check.R go`: 8 of 8 green, about $0.075 by
   list prices (4 pings, 3 drafts, 1 review; details in "Live run, result"); no
   key in `tests/llm_check.out`. `review.R 2` rerun: no FAIL, `REVIEW.md` carries
   the live output. **Raised, not settled:** token ceilings (decision 13);
-  `max_completion_tokens` still unproven (VERIFY items). **Not done:** the Phase 2
-  commit (Kevin to ask), the Claude project's review of `REVIEW.md` and this file.
+  `max_completion_tokens` still unproven (VERIFY items). **Not done:** the Claude
+  project's review of `REVIEW.md` and this file; nothing pushed.
 
 ## Assembled prompts (Phase 1b)
 
