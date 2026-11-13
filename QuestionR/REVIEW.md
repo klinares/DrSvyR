@@ -1,6 +1,6 @@
 # QuestionR review evidence, Phase 5
 
-Generated 2026-11-12 22:44 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-12 22:58 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,6 +12,8 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+f0b1e69 questionR branch
+7e29787 Phase 7: README says what Results does now; llm_check generate reads the new appraisal
 8eb0ef3 Phase 7d: tidy after 7a-7c
 c740cfa QuestionR 7c: Start here welcomes the analyst; a short methodology note; the brief check is off by default
 2a51e87 QuestionR 7b: model calls go out together
@@ -25,12 +27,12 @@ ca20ae8 QuestionR 6c: Start here says what is in force; startup and profile noti
 9e9b6dc QuestionR: changes from the Claude project (design section 15, prompts)
 867c3ad QuestionR 5e: one live long review, final STATUS and REVIEW for Phase 5
 9af8f4c QuestionR 5e preparation: the 30-question questionnaire and llm_check.R go review30
-f15601d QuestionR: readability fixes found in the browser (5c, 5d)
-45206ac QuestionR 5d: the Methodology tab
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
+ M REVIEW.md
+ M STATUS.md
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
@@ -47,8 +49,8 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/R/skills.R                          |  650 ++++++
  QuestionR/R/ui.R                              |  188 ++
  QuestionR/R/ui_generate.R                     | 1011 ++++++++
- QuestionR/README.md                           |  157 ++
- QuestionR/REVIEW.md                           | 1877 +++++++++++++++
+ QuestionR/README.md                           |  161 ++
+ QuestionR/REVIEW.md                           | 1883 +++++++++++++++
  QuestionR/STATUS.md                           | 1892 +++++++++++++++
  QuestionR/app.R                               |  242 ++
  QuestionR/tests/gold_items.csv                |   60 +
@@ -93,7 +95,7 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/tests/review_long_questionnaire.txt |   89 +
  QuestionR/tests/review_questionnaire.txt      |   15 +
  QuestionR/tests/review_tokens.md              |   18 +
- QuestionR/tests/run_generate.json             |  864 +++++++
+ QuestionR/tests/run_generate.json             |  717 ++++++
  QuestionR/tests/smoke.R                       | 3041 +++++++++++++++++++++++++
  QuestionR/www/methodology.md                  |   55 +
  QuestionR/www/skills/README.md                |   66 +
@@ -109,7 +111,10 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/www/skills/sensitive.md             |   90 +
  QuestionR/www/start.md                        |   43 +
  README.md                                     |    2 +
- 74 files changed, 20273 insertions(+), 1 deletion(-)
+ inteRn/tests/live_log.md                      |  184 ++
+ svysegment/tests/llm_check.R                  |   40 +
+ svysegment/tests/smoke.R                      |   47 +
+ 77 files changed, 20407 insertions(+), 1 deletion(-)
 exit status: 0
 ~~~~
 
@@ -1453,61 +1458,61 @@ Live run log (tests/run_generate.json), first 60 lines:
 ~~~~
 {
   "schema": 1,
-  "time": "2026-11-11T22:06:27-0500",
+  "time": "2026-11-12T22:53:35-0500",
   "summary": [
     {
       "step": "brief check",
       "model": "claude-sonnet-5-5",
-      "status": "failed",
-      "seconds": 17.2372,
-      "finish": null,
-      "attempts": null,
-      "tokens_in": null,
-      "tokens_out": null,
-      "error": "[claude-sonnet-5-5 via api.anthropic.com, finish: max_tokens] The reply reached the token limit (2000) without finishing, so it was cut off. Ask for fewer items and run again. It starts: {\"complete\": false, \"questions\": [{\"ask\": \"Which country is this for, and what is the official name of the national elec"
+      "status": "ok",
+      "seconds": 17.6637,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 4758,
+      "tokens_out": 1975,
+      "error": null
     },
     {
       "step": "draft",
       "model": "google/gemma-4-31b-it",
       "status": "ok",
-      "seconds": 26.3108,
+      "seconds": 6.5059,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 2889,
-      "tokens_out": 700,
+      "tokens_in": 2827,
+      "tokens_out": 795,
       "error": null
     },
     {
       "step": "draft",
       "model": "meta-llama/llama-4-maverick",
       "status": "ok",
-      "seconds": 8.3293,
+      "seconds": 19.1211,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 2784,
-      "tokens_out": 614,
+      "tokens_in": 2723,
+      "tokens_out": 1392,
       "error": null
     },
     {
       "step": "draft",
       "model": "openai/gpt-6-luna",
       "status": "ok",
-      "seconds": 52.8825,
+      "seconds": 38.7322,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 2779,
-      "tokens_out": 4550,
+      "tokens_in": 2718,
+      "tokens_out": 4495,
       "error": null
     },
     {
       "step": "appraisal",
       "model": "claude-sonnet-5-5",
       "status": "ok",
-      "seconds": 91.0643,
+      "seconds": 32.2571,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 5320,
-      "tokens_out": 12961,
+      "tokens_in": 5586,
+      "tokens_out": 4113,
       "error": null
     }
   ],

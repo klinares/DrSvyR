@@ -2,6 +2,180 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
+## Phase 7 (2026-11-12): the reviewer recommends one set; calls go together; shorter pages
+
+**Next: Kevin tries the app (click-through at the end of this section). Then take `REVIEW.md`
+and this file to the Claude project.** Nothing is pushed. One live run was made, with Kevin's
+yes: `tests/llm_check.R generate`, 5 requests, all ok.
+
+- **Commits, branch `questionr`:** the Claude project's files `eae04df`; 7a `88ef184`; 7b
+  `2a51e87`; 7c `c740cfa`; 7d `8eb0ef3`; README and `llm_check.R` `7e29787`; and the commit
+  that carries this file and `REVIEW.md`. The root `CLAUDE.md` rule 3 has one added sentence (7b).
+- **Smoke:** 396 checks, all ok (391 at the end of Phase 6). `tests/review.R 5`: **no FAIL**,
+  11 of 12 code files (the same as before Phase 7). **All 60 drafting and review prompt hashes
+  are unchanged** since Phase 5a (compared after 7a, 7b, 7c and 7d). The appraisal prompt
+  changed once, in 7a, because `pm_appraise.md` is now 0.4.
+- **Not run:** the gold test (told not to), and a live review (the brief allowed one live run,
+  the draft run). A review's parts sent together was tested only against stand-ins (below).
+
+### Timing (live, 2026-11-12 22:53, the home profile, 3 items, all three workers)
+
+| Step | Model | Seconds |
+|---|---|---|
+| Brief check | claude-sonnet-5-5 | 17.7 |
+| Draft | google/gemma-4-31b-it | 6.5 |
+| Draft | meta-llama/llama-4-maverick | 19.1 |
+| Draft | openai/gpt-6-luna | 38.7 |
+| Appraisal (the review) | claude-sonnet-5-5 | 32.3 |
+
+**The three drafts, sent together: 38.9 seconds by the clock** (the longest took 38.7). The
+three one after another took 87 seconds in Phase 3; in this run their own seconds add to 64.3,
+so sending them together saves what the two shorter ones took. One run, so a rough figure.
+Nothing failed or needed a repeat (attempts 1 each).
+
+What the reviewer returned: 3 items recommended of 3 asked for (candidates B, B, C); five
+concerns on them, all rated 3 or 4; four notes on the set (one rated 5); two domains no
+candidate covered well enough; three things to test first; no check id that was not sent. R
+found every id in a draft.
+
+### What was removed
+
+- **7a, the old appraisal:** its reply schema (a per-item `fails` list, `coverage`,
+  `differences`, `merged`) and the checks of it (`fail_entries` and the old `check_appraisal`);
+  the screens that showed it (`fails_block`, `set_fails_block`, `item_card`,
+  `candidate_panel`, `appraisal_panel`, `find_item`) and the "tick the items to keep" step
+  (`keep_input`, `kept_items`); and the smoke checks that tested those.
+- **7c, the old pages:** `help_ui`, `skills_html` and `methodology_page` (the rules table drawn
+  from the skill files); the "Check the brief" and "Skip the brief check" pair of buttons.
+- **7d:** the progress text that said the calls run one after another. Nothing else was left
+  unused: the scan finds only `skills_table()`, which stays on purpose (section 16: for
+  maintainers; smoke tests it; no screen draws it).
+- No file was removed in Phase 7 (`tests/gold_run.R` and the rest went in Phase 6).
+
+### What was added
+
+- **7a, the set.** The reviewer returns candidate letters and item ids, with concerns, a
+  suggestion, notes on the set, what to test first and its limits. R refuses an id no candidate
+  has, a repeated item, or more items than asked for, and copies the wording from the draft.
+  Results shows the recommended set only: each stem, option and part in a plain text box, a
+  remove button, the concerns in three severity bands, the suggestion, the set notes and what
+  to test first. "See all drafts" is a closed panel with "Use this instead" and the coded
+  defaults. Output takes the set as the analyst left it; the disclosure names the items edited
+  and the ones swapped in. Edits and swaps live in session state and in the run log (the
+  `analyst` field), never in the drafts (`set_entry`, `initial_set`, `set_swap`, `set_remove`,
+  `apply_edits`, `edits_from_inputs`, `final_set`, `set_card`, `set_panel`, `drafts_panel`).
+- **7b, calls together.** `run_drafts` and `run_review` take an `ask_all`, which sends a list of
+  requests and returns their answers in order. Drafts go together; a review's parts go together
+  four at a time (`REVIEW_AT_ONCE`), then the instrument call. A failed part is kept and named,
+  the rest are kept, and it can be run again. `llm_json_all`, `llm_complete_all` and
+  `progress_ask_all` are the live seam; `ask_all_for(ask)` makes a one-at-a-time version for a
+  test's stand-in `ask`, so smoke needs no network.
+- **7c, pages.** Start here is `www/start.md` as it is, then the key box, then a closed
+  "Settings and connection" panel (profile, models with API styles, the connection check, the
+  pilot notice; it opens by itself when a profile still has placeholders). The Methodology tab
+  is `www/methodology.md` as it is (`md_page`). The Brief tab's main button is "Build the
+  instructions"; the brief check is the smaller "Check my brief first". The cut-off message for
+  an appraisal says "Ask for fewer items".
+- **README** says what Results and Output do now (7e29787). `llm_check.R generate` reports the
+  new appraisal (it still read the old fields) and prints the drafts' time by the clock.
+
+### Files left, and the one job of each
+
+| File | Job |
+|---|---|
+| `app.R` | Settings, profiles, package and ellmer checks, state, layout, server |
+| `R/skills.R` | Reads the skill files; builds every prompt, the checklist, the task registry |
+| `R/llm.R` | Calls the models through ellmer, one at a time or together; the session key; the connection check; the key box |
+| `R/flow.R` | Runs a brief check, drafts, an appraisal or a review (calls together); the run-log shape |
+| `R/checks.R` | Checks and codes what a model returns, including the recommended set; severity bands; splits a long questionnaire |
+| `R/output.R` | The set and the analyst's edits; the Word output, the disclosure, the run log; renders the two markdown pages |
+| `R/ui.R` | Tab titles, shared boxes, Start here, the connection check's screen |
+| `R/ui_generate.R` | Brief, Prompt, Results, Run again and Output screens |
+| `R/_disable_autoload.R` | Stops Shiny auto-loading `R/` twice (empty on purpose) |
+| `tests/smoke.R` | The checks that need no model call |
+| `tests/review.R` | Writes `REVIEW.md`, the evidence for each phase (the Claude project's; two lines longer than before) |
+| `tests/llm_check.R` | The live runs, only when named: `generate`, `review30`, `gold` |
+| `tests/` data | Test items, questionnaires and the recorded results the reviews read |
+| `www/skills/`, `www/start.md`, `www/methodology.md` | The rules and the two pages (the Claude project's, unchanged) |
+| `README.md` | What it is, how to install, set up at work, fix an error, extend |
+| `DESIGN.md`, `STATUS.md`, `PROMPTS.md`, `REVIEW.md` | How it was built; deleted at work |
+
+### Line counts, end of Phase 6 and now
+
+| | Before | After |
+|---|---|---|
+| `app.R` + `R/` (with `_disable_autoload.R`) | 3,850 | 4,072 |
+| `tests/` scripts | 3,862 (smoke 2,863, llm_check 319, review 680) | 4,054 (smoke 3,041, llm_check 331, review 682) |
+| Script files | 11 | 11 |
+
+The code grew by 222 lines: what the old appraisal and the old pages took away was less than
+the editable set (edit, remove, swap, and the disclosure of them) and the calls together
+added. No file was added and none left a Phase 6 job undone; the editable set and the calls
+together are most of the growth.
+
+### Decisions taken, with the default used (numbered after Phase 6's 38 to 44)
+
+45. **Calls go together through ellmer's `Chat$chat_async()`, `promises::then()` and
+    `later::run_now()`** on the one R process; no new process and no parallel package. `later`
+    and `promises` are ellmer's own dependencies and are now listed in `APP_PACKAGES`.
+    `later::with_temp_loop()` cannot be used: httr2 needs the global loop's curl pool. Waiting
+    is a poll of the promises with `purrr::detect`, no loop construct. Smoke has a check that
+    requests sent together take about one wait, not their sum (a local stand-in server), and
+    one that the sending code uses only what ellmer and later document.
+46. **A review's parts go four at a time** (`REVIEW_AT_ONCE`, the section's "at most four"),
+    then the instrument call, which needs every part's answer.
+47. **A set entry is named by its candidate and position** (`candidate_position`). The analyst's
+    edits are kept as differences from the draft, so "edited" in the disclosure means the text
+    differs from what the model wrote, and putting a wording back un-edits it.
+48. **A concern is banded the way a review's finding is** (7 and above Fix before fielding, 5
+    and 6 Needs your judgment, below 5 Minor), through the same two functions.
+49. **A reply that fails the set's rules is a failed attempt** (retried within the session's
+    allowance); the validator is given the candidates and the item count, so it can refuse an id
+    nobody wrote.
+50. **The Start here table of models stays**, in the closed panel, because the connection check
+    and the key box need it and section 16 moved it rather than dropping it. The pilot notice
+    reads the "How it was tested" section of `www/methodology.md`, since the bullet it used to
+    copy is no longer in the file.
+51. **`tests/output_generate.txt`** is smoke's snapshot of the Output text; it is rewritten
+    when smoke runs, so its wording and `pm_appraise.md 0.4` changed in this phase.
+
+### What section 16 asked for that I could not do
+
+- **Nothing left out.** What I could not check:
+  - A review's parts sent together against the real endpoint (only the stand-ins, and the real
+    app with a local stand-in server). The 30-question live review has not been rerun.
+  - Editing, removing and swapping in the real app with live drafts. I did it in the browser
+    against a stand-in model; the Output text showed the edited stem, the swapped item and the
+    disclosure lines. Pasting the Output into Word was not tried this phase.
+  - Posit Connect (as in Phase 6), including whether `later::run_now()` waits the same way
+    there. If it does not, the calls would have to go one at a time again: pass `ask_all_for(ask)`
+    instead of the live `ask_all`. To check at work.
+- The connection check still pings one model after another (section 16 does not ask for it).
+
+### Click-through for Kevin (home profile, your keys in `.Renviron`; about 5 calls for steps 3 to 6)
+
+1. **Start here** shows `www/start.md`, the key box, then a closed "Settings and connection".
+   Open it: the profile, the models with API styles, the pilot notice, Check connections.
+2. **Methodology** is the short note and nothing else.
+3. **Brief:** Attitudinal, any question, 3 items, all workers ticked. Press **Build the
+   instructions** (no brief check), then **Prompt: Approve and run**; the progress text names the
+   models asked and says nothing about one after another.
+4. **Results:** the recommended set only, one item for each part of the construct. Edit a stem
+   in its box; press **Remove** on one item; open **See all drafts** and press **Use this
+   instead** on another candidate's item. Read the concerns in their bands, the set notes and
+   what to test first.
+5. **Output:** select the white box, paste into Word. The text should be your edited stem, the
+   swapped item, and a disclosure that names what you edited and swapped in.
+6. **Run again** and the run log download: the log has an `analyst` field with your edits.
+7. Try **Check my brief first** on a thin brief, and an Evaluate with a pasted questionnaire of
+   five or six questions (parts and the instrument call go together).
+8. **Tell me:** whether any step felt slower than before; any item the reviewer recommended
+   that you would not have; any text on Start here or Methodology that reads badly.
+
+### Remaining FAIL in `REVIEW.md`
+
+None.
+
 ## Phase 6 (2026-11-12): ready for work
 
 **Next: Kevin runs 6e (below) under the `rehearsal` profile. Then take `REVIEW.md`, this
