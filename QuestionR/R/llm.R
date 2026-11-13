@@ -170,17 +170,27 @@ llm_root_cause <- function(e)
 #   in a closure (credentials is a function), never through the environment. No
 #   temperature is sent unless the model's entry sets one: repeatability comes
 #   from the fixed prompt and the run log, and recent Claude models refuse the
-#   setting. A model entry may set reasoning_effort ("low", "medium", "high"),
-#   which goes through ellmer::params(). Checked in ellmer 0.4.2 against a server
-#   on this machine: chat_anthropic() turns it into adaptive thinking with that
-#   effort, but chat_openai_compatible() does not send it at all. No entry sets it,
-#   so a model is measured as it comes.
+#   setting. A model entry may set reasoning_effort ("low", "medium", "high") and,
+#   for the OpenAI style, max_tokens_name. Checked in ellmer 0.4.2 against a server
+#   on this machine: for api "anthropic", params() turns reasoning_effort into
+#   adaptive thinking with that effort. For api "openai", params() sends the limit
+#   as max_completion_tokens and drops reasoning_effort, but api_args, which
+#   chat_openai_compatible() appends to the request body as they are, can send
+#   either, so those two go there. No entry sets either now: a model is used as it comes.
 llm_chat <- function(m, system_prompt, max_tokens, key) {
   if (is.null(key) || !nzchar(key))
     llm_fail(paste0("There is no key for ", m$id, ". ", llm_key_hint(m)),
              class = "llm_client_error")
-  params = ellmer::params(temperature = m$temperature, max_tokens = max_tokens,
-                          reasoning_effort = m$reasoning_effort)
+  old_name = identical(m$api, "openai") && identical(m$max_tokens_name, "max_tokens")
+  if (!is.null(m$max_tokens_name) && !m$max_tokens_name %in% c("max_completion_tokens", "max_tokens"))
+    llm_fail(paste0("The model ", m$id, " has max_tokens_name '", m$max_tokens_name,
+                    "'; it must be 'max_completion_tokens' or 'max_tokens'."),
+             class = "llm_client_error")
+  params = ellmer::params(temperature = m$temperature, max_tokens = if (!old_name) max_tokens,
+                          reasoning_effort = if (identical(m$api, "anthropic")) m$reasoning_effort)
+  api_args = as.list(c(if (old_name) list(max_tokens = max_tokens),
+                       if (identical(m$api, "openai") && !is.null(m$reasoning_effort))
+                         list(reasoning_effort = m$reasoning_effort)))
   switch(m$api %||% "",
     anthropic = ellmer::chat_anthropic(
       system_prompt = system_prompt, params = params, model = m$id,
@@ -189,7 +199,7 @@ llm_chat <- function(m, system_prompt, max_tokens, key) {
     openai = ellmer::chat_openai_compatible(
       base_url = m$base_url, name = llm_host(m), system_prompt = system_prompt,
       credentials = function() key, model = m$id, params = params,
-      echo = "none"),
+      api_args = api_args, echo = "none"),
     llm_fail(paste0("The model ", m$id, " has api '", m$api,
                     "'; it must be 'anthropic' or 'openai'."),
              class = "llm_client_error"))

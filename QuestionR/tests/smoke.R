@@ -81,7 +81,26 @@ ok("work profile loads", work$status == 0 && grepl("PROFILE=work WORKERS=1", wor
 bogus <- in_child("nonsense", c(
   "app <- shiny::shinyAppDir('.'); invisible(app$serverFuncSource())"))
 ok("an unknown profile stops the app and names the choices",
-   bogus$status != 0 && grepl("must be one of: home, work", bogus$out, fixed = TRUE))
+   bogus$status != 0 && grepl("must be one of: home, rehearsal, work", bogus$out, fixed = TRUE))
+
+# The profile switch: with QUESTIONR_PROFILE unset the app runs APP_DEFAULT_PROFILE; the
+#   rehearsal profile is the four models through one host in the OpenAI style on one pasted key.
+unset <- in_child("", c(
+  "app <- shiny::shinyAppDir('.'); invisible(app$serverFuncSource())",
+  "cat('PROFILE=', APP_PROFILE, sep = '')"))
+default_in_app <- sub("^APP_DEFAULT_PROFILE <- \"([a-z]+)\".*$", "\\1",
+                      grep("^APP_DEFAULT_PROFILE <-", readLines("app.R", warn = FALSE), value = TRUE))
+rehearsal <- in_child("rehearsal", c(
+  "app <- shiny::shinyAppDir('.'); invisible(app$serverFuncSource())",
+  "ms <- purrr::map(llm_models(), 'm')",
+  "cat('N=', length(ms), ' PM=', ms[[1]]$id, ' APIS=', paste(unique(purrr::map_chr(ms, 'api')), collapse = ','),",
+  "    ' KEYS=', paste(unique(purrr::map_chr(ms, 'key_source')), collapse = ','),",
+  "    ' HOSTS=', paste(unique(purrr::map_chr(ms, llm_host)), collapse = ','), sep = '')"))
+ok("the profile switch: unset runs APP_DEFAULT_PROFILE; rehearsal is four OpenAI-style models on OpenRouter, all on the pasted key, the project manager anthropic/claude-sonnet-5.5",
+   unset$status == 0 && grepl(paste0("PROFILE=", default_in_app), unset$out, fixed = TRUE) && identical(default_in_app, "home") &&
+     rehearsal$status == 0 &&
+     grepl("N=4 PM=anthropic/claude-sonnet-5.5 APIS=openai KEYS=analyst HOSTS=openrouter.ai", rehearsal$out, fixed = TRUE) &&
+     grepl("must be one of: home, rehearsal, work", in_child("nonsense", "shiny::shinyAppDir('.')$serverFuncSource()")$out, fixed = TRUE))
 
 # The key box. A key is held for the session, never put in the environment, and
 #   forgotten on request.
@@ -1931,18 +1950,25 @@ make_body_mock <- function() {
 local({
   px = webfakes::new_app_process(make_body_mock())
   on.exit(px$stop())
-  sent = function(api, effort = NULL) {
+  sent = function(api, effort = NULL, name = NULL) {
     m = list(api = api, base_url = px$url("/v1"), id = "mock/model", key_source = "analyst")
     if (!is.null(effort)) m$reasoning_effort = effort
+    if (!is.null(name)) m$max_tokens_name = name
     jsonlite::fromJSON(suppressWarnings(llm_complete(m, "SYS", "hi", 1000L, key = "k", timeout = 20)))
   }
   ok("a model entry's reasoning_effort reaches the Anthropic-style call as adaptive thinking with that effort; unset sends neither",
      identical(sent("anthropic", "low")$output_config$effort, "low") &&
        identical(sent("anthropic", "low")$thinking$type, "adaptive") &&
        is.null(sent("anthropic")$thinking) && is.null(sent("anthropic")$output_config))
-  ok("ellmer 0.4.2 does not send reasoning_effort on the OpenAI-style call (so it is left unset), and no entry sets it",
-     is.null(sent("openai", "low")$reasoning_effort) && is.null(sent("openai")$reasoning_effort) &&
-       !any(purrr::map_lgl(c(list(APP_MODELS$pm), APP_MODELS$workers), function(m) "reasoning_effort" %in% names(m))))
+  ok("on the OpenAI-style call reasoning_effort and the name of the token limit reach the wire through api_args, only when the entry sets them; the Anthropic style keeps max_tokens; no profile entry sets either",
+     identical(sent("openai", "low")$reasoning_effort, "low") && is.null(sent("openai")$reasoning_effort) &&
+       isTRUE(sent("openai")$max_completion_tokens == 1000) && is.null(sent("openai")$max_tokens) &&
+       isTRUE(sent("openai", name = "max_tokens")$max_tokens == 1000) &&
+       is.null(sent("openai", name = "max_tokens")$max_completion_tokens) &&
+       isTRUE(sent("anthropic", name = "max_tokens")$max_tokens == 1000) &&
+       grepl("must be 'max_completion_tokens' or 'max_tokens'",
+             tryCatch(sent("openai", name = "max_tokens_please"), error = conditionMessage), fixed = TRUE) &&
+       !any(grepl("^[^#]*\\b(reasoning_effort|max_tokens_name) *=", readLines("app.R", warn = FALSE))))
 })
 
 
