@@ -338,3 +338,54 @@ tests/review_long.md, tests/output_generate.txt and tests/output_review.txt
 to the Claude project.
 ```
 
+## Phase 6: ready for work
+
+```
+Read CLAUDE.md, then QuestionR/DESIGN.md section 15 (it wins over earlier
+sections where they differ) and section 12 "Work readiness", and
+QuestionR/STATUS.md.
+
+First commit the files the Claude project changed, as they are: DESIGN.md
+and PROMPTS.md.
+
+Do Phase 6 as the table in section 15 defines it, steps 6a to 6d, one commit
+each, then prepare 6e.
+
+Kevin's instruction for this phase: as few scripts as possible, each as
+simple as possible. So:
+- Add no new file. The budget of 12 is full; 6a should bring it down.
+- Prefer deleting to adding. Where a helper is used once, fold it in; where
+  two do the same job, keep one. Do not restructure working code for its
+  own sake, and change no behaviour while tidying.
+- New settings go in app.R section 1 with a plain comment each. No new
+  abstraction for them.
+- Add only the smoke checks section 15 names. Do not grow tests/review.R.
+
+Notes:
+- 6b: find the OpenRouter id for the project manager model in OpenRouter's
+  public model list; do not guess it. Check installed ellmer help before
+  using reasoning_effort or renaming the token limit; if ellmer 0.4.2 does
+  not support one of them, say so in STATUS.md and leave it out.
+- 6c: the pilot notice gives the gold result exactly as
+  www/methodology.md states it, with its limits. Do not round it up.
+- 6d: write for an analyst who has not seen this repository. State nothing
+  about Posit Connect that you have not verified; mark the rest "to check
+  at work".
+- No live call in this phase except the connection check under the
+  rehearsal profile, with my pasted key, when I run 6e myself.
+
+Rules, unchanged: root CLAUDE.md hard rules; no edits to www/skills/; no
+change to tests/review.R; no invented functions or arguments; never weaken
+a test; do not push; do not rerun the gold test. The prompt hashes must not
+move in this phase.
+
+At the end run tests/smoke.R and tests/review.R 5 until both are clean, and
+commit with REVIEW.md.
+
+Finish by updating STATUS.md: what was removed, what was added, every file
+left and its one job, line counts before and after, anything in section 15
+you could not do, and the 6e click-through list for me under the rehearsal
+profile. Then stop and tell me to run 6e and to take REVIEW.md, STATUS.md
+and README.md to the Claude project.
+```
+

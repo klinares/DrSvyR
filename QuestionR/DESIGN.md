@@ -671,3 +671,32 @@ Rulings:
   each call, so the screen can show "part 2 of 5" and the engine stays free
   of Shiny.
 
+
+## 15. Review of Phase 5 and the definition of Phase 6 (Claude project, 2026-11-12)
+
+**Phase 5 passes.** No FAIL in `REVIEW.md`; section 10 passes all 11 checks;
+the live 30-question review ran in 3 calls, 5 minutes, no failed part, and
+34 of 34 findings had evidence found in the text. The sample outputs read
+as intended. Copy buttons on Connect stay untested until the work move; the
+select-and-copy fallback is enough.
+
+**Kevin's instruction for what remains: as few scripts as possible, each as
+simple as possible.** Phase 6 adds no new file. `tests/review.R` gets no new
+section; `review.R 5` staying clean is the gate. Where code can be removed
+or shortened without changing behaviour, do it.
+
+### Phase 6: ready for work
+
+| Step | What | Passes when |
+|---|---|---|
+| 6a | Tidy. Delete `tests/openrouter_check.R` and any other throwaway or one-off file. Remove dead code, unused helpers and stale comments. List in `STATUS.md` every file left and its one job | smoke and `review.R 5` clean; the prompt hashes do not move |
+| 6b | Work settings, all in `app.R` section 1: `APP_DEFAULT_PROFILE` (one line to change at work; `QUESTIONR_PROFILE` overrides it); a worker may use either API style; a model entry may set `reasoning_effort` and, if the installed ellmer allows it, how the token limit is named on the wire; a third profile, `rehearsal`, with all four models through OpenRouter in the OpenAI style and `key_source = "analyst"`, so one pasted key serves every model as it will at work | the app starts under each profile; smoke covers the profile switch |
+| 6c | Start here states what is in force: profile, each model with its API style and whether its key is ready, the connection check, and the pilot notice with the gold result and its limits (from `www/methodology.md`). At startup the app checks that the installed ellmer has the functions it calls and stops with a plain message naming the version needed if not. A profile that still holds a `<placeholder>` shows which entries to fill in and does not crash. If the PM is also the only worker, Results says the appraiser reviewed a draft from its own model family | smoke covers the placeholder notice and the same-family notice |
+| 6d | `README.md`: what the app is; install line for the packages; "Setting up at work" as a numbered list (copy the folder; delete `tests/`, `DESIGN.md`, `STATUS.md`, `PROMPTS.md`, `REVIEW.md`; fill in the work block; set the default profile; logo; banner; start; paste the key; press the connection check; what each likely error means and what to change); Posit Connect notes (one connection per process; long calls) stated only as far as verified; how to add a task, a model, a rule | read by Kevin |
+| 6e | Rehearsal, by Kevin in the browser under the `rehearsal` profile with a pasted OpenRouter key: connection check, one small draft run, one short review, Output pasted into Word. The builder prepares the click-through list and fixes what Kevin reports | Kevin's yes |
+
+Not in Phase 6, and why: the work base URL, model ids and API styles are
+known only at work; the builder leaves the placeholders. The gold test is
+not rerun. Moving the project manager to Opus is a later decision and needs
+its own gold run.
+
