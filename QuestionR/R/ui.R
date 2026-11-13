@@ -1,8 +1,7 @@
 # ui.R for QuestionR
-# The tab titles, the small helpers the tabs share, Start here, and the
-#   placeholders for the tabs not built yet. The Generate flow's four screens
-#   (Brief, Prompt, Results, Run again) are in ui_generate.R. Function
-#   definitions and constants only (root CLAUDE.md rule 2).
+# The tab titles, the small helpers the tabs share, and Start here. The other
+#   screens are in ui_generate.R. Function definitions and constants only (root
+#   CLAUDE.md rule 2).
 
 # The tab titles, in order. The navlist in app.R and any code that moves the
 #   analyst between tabs both read this.
@@ -168,13 +167,3 @@ mod_connect_server <- function(id, state, ping = llm_ping) {
   })
 }
 
-
-# ---- the tabs that are not built yet -----------------------------------------
-
-# One placeholder per later tab, naming the phase that builds it (DESIGN.md
-#   section 10), so an empty tab is not mistaken for a broken one.
-tab_placeholder <- function(title, phase, what)
-  tagList(
-    tags$h3(title),
-    tags$p(tags$em(paste0("Not built yet: this tab arrives in Phase ", phase, "."))),
-    tags$p(what))

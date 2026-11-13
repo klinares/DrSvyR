@@ -3,10 +3,9 @@
 #   module each (DESIGN.md section 12). They hold no flow logic. They gather the
 #   form, call the engine in R/flow.R, and draw what it returns; the dropdown,
 #   the fields and the worker boxes all read the registry (TASKS) and the model
-#   list (APP_MODELS), so a new task or worker needs no change here. This is the
-#   second half of ui.R, the split DESIGN.md section 12 allows, which brings the
-#   code files to ten of the ten it budgets. Function definitions and constants
-#   only.
+#   list (APP_MODELS), so a new task or worker needs no change here. It also
+#   holds the Output tab. The second half of ui.R. Function definitions and
+#   constants only.
 
 
 # ---- the one state object ---------------------------------------------------------
@@ -44,12 +43,6 @@ safe_ui <- function(expr)
 #   progress_ask() to put on the page. An environment, so a callback can set it.
 PROGRESS_NOTE <- new.env()
 
-# The number of calls a review of this form will make: one, or a call for each part
-#   and one for the instrument. One when the questionnaire cannot be split, since
-#   run_review() then fails without a call.
-review_call_count <- function(f)
-  tryCatch(length(review_plan(f$questionnaire, APP_BATCH_CHARS)), error = function(e) 1L)
-
 # The function a run hands to the engine as `ask`. It says on the page, before
 #   each call, which model is about to be asked, then makes the call through
 #   llm_json(), which finds the key for that model. Must run inside withProgress().
@@ -79,9 +72,6 @@ task_choices <- function()
 #   was typed in it when the task changes.
 tasks_condition <- function(tasks)
   paste0(jsonlite::toJSON(tasks), ".indexOf(input.task) >= 0")
-
-# The date and time as the log writes it.
-now_label <- function() format(Sys.time(), "%Y-%m-%d %H:%M")
 
 
 # ---- the form's widgets, one per field -------------------------------------------------
@@ -725,7 +715,9 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       review = identical(task_kind(f), "review")
       out = tryCatch(
         if (review) withProgress(message = "Reviewing the questionnaire", value = 0, {
-          calls = review_call_count(f)
+          # one call, or a call for each part and one for the instrument; one when the
+          #   questionnaire cannot be split, since run_review() then fails without a call
+          calls = tryCatch(length(review_plan(f$questionnaire, APP_BATCH_CHARS)), error = function(e) 1L)
           list(review = run_review(f, pm, ask = make_ask(calls), progress = say_progress,
                                    # an edited prompt is sent only when the review is one call
                                    prompt = if (calls == 1L) approved))

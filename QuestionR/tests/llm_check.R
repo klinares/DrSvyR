@@ -1,56 +1,36 @@
-# llm_check.R -- LIVE check of QuestionR's model layer. Home only; deleted at work
-#   with the rest of tests/. It makes real calls and spends real money, so it does
-#   nothing until it is told to: run it with the word "go" after the script name.
+# llm_check.R -- LIVE runs of QuestionR's model layer. Home only; deleted at work with
+#   the rest of tests/. Each makes real calls and spends real money, so it does
+#   nothing until it is told what to run, by a word after the script name.
 #
 # From PowerShell, inside QuestionR/ (from Git Bash the keys look unset):
-#   & "C:/Program Files/R/R-4.6.1/bin/Rscript.exe" --no-init-file tests/llm_check.R go
+#   & "C:/Program Files/R/R-4.6.1/bin/Rscript.exe" --no-init-file tests/llm_check.R generate
 #
-# Keys come from .Renviron: OPENROUTER_API_KEY serves the three workers through
-#   the app's own rule (key_source "server"); ANTHROPIC_API_KEY is handed to the
-#   project manager's calls here directly, the way the key box would, because the
-#   app itself never reads the environment for a pasted-key model.
+# Keys come from .Renviron: OPENROUTER_API_KEY serves the three workers through the
+#   app's own rule (key_source "server"); ANTHROPIC_API_KEY is handed to the project
+#   manager's calls here directly, the way the key box would, because the app itself
+#   never reads the environment for a pasted-key model. No key is written to a file.
 #
-# What it calls, in order (Phase 2; the brief check and the appraisal have no
-#   prompt until Phase 3, which adds them here):
-#   1. the connection check's call, once per model (four very small calls);
-#   2. one drafting call per worker, the same real prompt from build_prompt(),
-#      two items, shape-checked (three calls);
-#   3. one small review by the project manager, a real Evaluate prompt on a
-#      two-question questionnaire, shape-checked (one call).
-#   Each call may be repeated up to twice by llm_json() when a reply fails.
-#
-# Writes tests/llm_check.out: per call, the model, the seconds, the attempts,
-#   why the reply stopped, the tokens, whether the reply validated, and the first
-#   300 characters of what came back. No key is written to it.
-
-#
-# Phase 3 adds a second run, `go generate`, which runs the Generate engine live
-#   instead: a brief check, a 3-item attitudinal draft by every worker, and the
-#   appraisal, through run_brief(), run_drafts() and run_appraisal() exactly as
-#   the screens call them (5 requests; each may be repeated up to twice by
-#   llm_json() when a reply fails). It writes tests/run_generate.json, the run
-#   log: the summary of every call first (seconds, tokens, why it stopped), then
-#   the form, the prompts, the raw and parsed replies and R's checks. No key is
-#   written to it.
-#     & "C:/Program Files/R/R-4.6.1/bin/Rscript.exe" --no-init-file tests/llm_check.R go generate
+#   generate  the Generate engine: a brief check, a 3-item attitudinal draft by every
+#             worker and the appraisal (5 requests, each repeated up to twice when a
+#             reply fails); writes tests/run_generate.json.
+#   review30  one review of tests/review_long_questionnaire.txt (30 questions), in
+#             parts: one call for each part and one for the instrument as a whole;
+#             writes tests/review_long.md and tests/review_long.json.
+#   gold      the gold test of tests/gold_items.csv: each of its 27 items reviewed alone,
+#             the model shown the question and its options and nothing else (asserted
+#             before every call); raw replies in tests/gold_runs/, one file an item,
+#             and an item that has a file is skipped. Matching the findings to the
+#             known problems is done by hand afterwards.
 
 args <- commandArgs(trailingOnly = TRUE)
 stopifnot("Run from inside QuestionR/" = file.exists("DESIGN.md"))
 
-if (!"go" %in% args) {
+if (!any(c("generate", "review30", "gold") %in% args)) {
   cat("tests/llm_check.R makes live calls and spends money. Nothing was called.\n",
-      "  go            4 connection pings, 3 drafting calls (one per worker, 2 items),\n",
-      "                and 1 small review by the project manager.\n",
-      "  go generate   the Generate engine: 1 brief check, 3 drafting calls (3 items),\n",
-      "                and 1 appraisal; writes tests/run_generate.json.\n",
-      "  go review15   one review of the 15-question test questionnaire, to measure its\n",
-      "                tokens; writes tests/review_tokens.md and tests/review15_run.json.\n",
-      "  go review30   one review of the 30-question test questionnaire (tests/review_long_questionnaire.txt),\n",
-      "                in parts: one call for each part and one for the instrument as a whole; writes\n",
-      "                tests/review_long.md and tests/review_long.json. Nothing is raised for it.\n",
-      "Run it again with the word go, and generate, review15 or review30 if you want one of those.\n", sep = "")
+      "Name what to run: generate (5 calls), review30 (3 calls) or gold (27 calls).\n", sep = "")
   quit(status = 0)
 }
+
 
 # Load the app the way Connect does, so R/ and its settings are in place.
 app <- shiny::shinyAppDir(".")
@@ -60,71 +40,9 @@ stopifnot("llm_check.R is for the home profile" = identical(APP_PROFILE, "home")
 pm_key <- Sys.getenv("ANTHROPIC_API_KEY")
 models <- llm_models()
 
-
-# ---- go review15: how many tokens a 15-question review takes (Phase 4d) -------------
-
-if ("review15" %in% args) {
-  if (!nzchar(pm_key)) {
-    cat("No call was made. ANTHROPIC_API_KEY is not set in .Renviron.\n")
-    quit(status = 1)
-  }
-  questionnaire <- paste(readLines(file.path("tests", "review_questionnaire.txt"), warn = FALSE), collapse = "\n")
-  n_questions <- length(grep("^Q[0-9]+\\.", strsplit(questionnaire, "\n", fixed = TRUE)[[1]]))
-  form <- list(task = "evaluate", research_question = "Satisfaction with and use of local council services",
-               construct = "", population = "Adults aged 18 and over living in the council area",
-               country = "", modes = "web", output_language = "English", source_language = "English",
-               n_items = NA_integer_, reference_period = "", keep_items = "", other = "",
-               questionnaire = questionnaire, revision = "")
-
-  # The measurement is made with a ceiling well above what the review is expected
-  #   to need, so that it is not cut off and the tokens it really takes are seen.
-  #   This changes the ceiling in this process only; the app's is set from the result.
-  measuring_ceiling <- 24000L
-  LLM_MAX_TOKENS[["evaluate"]] <- measuring_ceiling
-  ask_live <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
-    llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens,
-             validate = validate, key = pm_key)
-  rv <- run_review(form, APP_MODELS$pm, ask = ask_live)
-  cl <- attr(rv, "call")
-  flags <- if (identical(rv$status, "ok")) check_review(rv$reply, form)
-  tk_in <- cl$tokens$input %||% NA_real_
-  tk_out <- cl$tokens$output %||% NA_real_
-
-  secrets <- purrr::keep(c(pm_key, Sys.getenv("OPENROUTER_API_KEY")), nzchar)
-  scrub <- function(txt) purrr::reduce(secrets, function(t, s) gsub(s, "[key]", t, fixed = TRUE), .init = txt)
-  writeLines(scrub(as.character(flow_log_json(flow_round(form, APP_MODELS$pm, review = rv)))),
-             file.path("tests", "review15_run.json"), useBytes = TRUE)
-
-  ceiling_for_app <- if (is.na(tk_out)) NA_integer_ else as.integer(ceiling(2 * tk_out / 1000) * 1000)
-  cap_for_app <- as.integer(ceiling(2 * nchar(questionnaire) / 1000) * 1000)
-  md <- c(
-    "# Token measurement: one 15-question review (tests/llm_check.R go review15)", "",
-    paste0("Run: ", format(Sys.time(), "%Y-%m-%d %H:%M"), " | profile: ", APP_PROFILE),
-    paste0("Model: ", APP_MODELS$pm$id, " | prompt hash ", rv$hash %||% "-"),
-    paste0("Questionnaire: tests/review_questionnaire.txt, written for this test: ", n_questions,
-           " questions, ", nchar(questionnaire), " characters."),
-    paste0("Form: research question \"", form$research_question, "\", population \"", form$population,
-           "\", mode web, no country, English."),
-    paste0("Ceiling used for this measurement: ", measuring_ceiling, " tokens (the app's was 8000 until this run)."), "",
-    "| Seconds | Tokens in | Tokens out | Finish | Attempts | Status |", "|---|---|---|---|---|---|",
-    paste0("| ", sprintf("%.1f", cl$seconds %||% NA_real_), " | ", tk_in, " | ", tk_out, " | ", cl$finish %||% "-",
-           " | ", cl$attempts %||% "-", " | ", rv$status, " |"), "",
-    if (!identical(rv$status, "ok")) paste0("The review failed: ", rv$error)
-    else c(paste0("Findings: ", nrow(flags), " in all, ", sum(flags$shown), " rated 5 or above; ",
-                  sum(flags$scope == "instrument"), " about the instrument. R's checks: ",
-                  sum(!flags$evidence_found, na.rm = TRUE), " quotes not found, ", sum(!flags$check_known),
-                  " checks not sent.")),
-    "",
-    "## Settings this implies",
-    "",
-    paste0("About twice what it used: an evaluation ceiling of ", ceiling_for_app, " tokens. ",
-           "The paste cap to match, about twice the characters of this questionnaire: ", cap_for_app, " characters."),
-    "")
-  writeLines(scrub(md), file.path("tests", "review_tokens.md"), useBytes = TRUE)
-  cat(scrub(md), sep = "\n")
-  quit(status = if (identical(rv$status, "ok")) 0L else 1L)
-}
-
+# A key must never reach a file, even inside an error message from an endpoint.
+secrets <- purrr::keep(c(pm_key, Sys.getenv("OPENROUTER_API_KEY")), nzchar)
+scrub <- function(txt) purrr::reduce(secrets, function(t, s) gsub(s, "[key]", t, fixed = TRUE), .init = txt)
 
 
 # ---- go review30: one live long review, in parts (Phase 5e) --------------------------------
@@ -152,8 +70,6 @@ if ("review30" %in% args) {
   rv <- run_review(form, APP_MODELS$pm, ask = ask_live, progress = say)
   flags <- if (!is.null(rv$reply)) check_review(rv$reply, f)
 
-  secrets <- purrr::keep(c(pm_key, Sys.getenv("OPENROUTER_API_KEY")), nzchar)
-  scrub <- function(txt) purrr::reduce(secrets, function(t, s) gsub(s, "[key]", t, fixed = TRUE), .init = txt)
   writeLines(scrub(as.character(flow_log_json(flow_round(f, APP_MODELS$pm, review = rv)))),
              file.path("tests", "review_long.json"), useBytes = TRUE)
 
@@ -267,11 +183,7 @@ if ("generate" %in% args) {
                                          fails_reported = length(chk$fails)),
     coded_defaults = coded)
 
-  # A key must never reach the file, even inside an error message from an endpoint.
-  secrets <- purrr::keep(c(pm_key, Sys.getenv("OPENROUTER_API_KEY")), nzchar)
-  log_txt <- purrr::reduce(secrets, function(txt, s) gsub(s, "[key]", txt, fixed = TRUE),
-                           .init = as.character(flow_log_json(round)))
-  writeLines(log_txt, file.path("tests", "run_generate.json"), useBytes = TRUE)
+  writeLines(scrub(as.character(flow_log_json(round))), file.path("tests", "run_generate.json"), useBytes = TRUE)
 
   rows <- flow_summary(brief, drafts, appraisal, APP_MODELS$pm)
   cat("QuestionR live run of the Generate engine (tests/llm_check.R go generate)\n",
@@ -297,149 +209,111 @@ if ("generate" %in% args) {
 }
 
 
-# ---- the two prompts, from the same function the app uses -----------------------
 
-draft_form <- list(
-  task = "attitudinal",
-  research_question = "How much do adults trust the national electoral commission?",
-  construct = "Trust in the national electoral commission",
-  population = "Adults aged 18 and over", modes = "web", n_items = 2L)
-review_form <- list(
-  task = "evaluate",
-  research_question = "Satisfaction with local services",
-  population = "Adults aged 18 and over", modes = "paper",
-  questionnaire = paste(
-    "Q1. How satisfied or dissatisfied are you with the recycling services and street cleaning provided by your local council? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied",
-    "Q2. Taking all things together, how happy would you say you are? 0 Extremely unhappy ... 10 Extremely happy",
-    sep = "\n"))
-draft_prompt <- build_prompt(draft_form)
-review_prompt <- build_prompt(review_form)
+# ---- go gold: the gold test, one review for each of the 27 items (Phase 4e) -----------
+
+if ("gold" %in% args) {
+  if (!nzchar(pm_key)) {
+    cat("No call was made. ANTHROPIC_API_KEY is not set in .Renviron.\n")
+    quit(status = 1)
+  }
+  gdir <- file.path("tests", "gold_runs")
+  dir.create(gdir, showWarnings = FALSE)
+
+  gold <- readr::read_csv(file.path("tests", "gold_items.csv"), comment = "#",
+                          col_types = readr::cols(.default = readr::col_character()), na = character())
+  items <- dplyr::distinct(gold, id, set, topic, question, scale, scale_complete)
+  stopifnot("27 items expected" = nrow(items) == 27L)
+
+  gold_form <- list(task = "evaluate", research_question = "Evaluate this survey question",
+                    construct = "", population = "Adults in the general population",
+                    country = "", modes = "web", output_language = "English", source_language = "English",
+                    n_items = NA_integer_, reference_period = "", keep_items = "", other = "",
+                    questionnaire = "", revision = "")
+
+  # The options line: the scale as printed, or only its two ends when the paper gives
+  #   only those (always exactly one " to " in that case; checked when the file was read).
+  options_line <- function(scale, complete) {
+    if (identical(complete, "TRUE")) return(paste0("Response options: ", scale))
+    ends <- strsplit(scale, " to ", fixed = TRUE)[[1]]
+    stopifnot("an incomplete scale needs exactly two ends" = length(ends) == 2L)
+    paste0("Response options: a scale running from ", ends[[1]], " to ", ends[[2]],
+           " (the options in between are not shown in this test)")
+  }
+  shown_text <- function(question, scale, complete)
+    paste0("Q1. ", question, "\n", options_line(scale, complete))
 
 
-# ---- what "validated" means here --------------------------------------------------
+  ask_live <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
+    llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens,
+             validate = validate, key = pm_key)
 
-# The shape DESIGN section 7 asks of a drafting reply, in the least that is
-#   needed: the number of items asked for, each with a stem and either options or
-#   an open format. R/checks.R brings the full validators in Phase 3.
-draft_ok <- function(o) {
-  items = o$items
-  if (!is.list(items) || length(items) != draft_form$n_items)
-    stop("expected exactly ", draft_form$n_items, " items, got ", length(items))
-  bad = purrr::discard(items, function(it)
-    nzchar(trimws(it$stem %||% "")) &&
-      (length(it$options) > 0L || nzchar(trimws(it$open_format %||% ""))))
-  if (length(bad)) stop(length(bad), " item(s) have no stem, or no options and no open_format")
-  invisible(o)
+  # Nothing of the key may reach the model: take away the question and the options
+  #   line, and what is left of the prompt must hold no id, set, topic, problem id
+  #   or problem text of this item. (The problem types are words of the checklist
+  #   every review is sent, so they cannot be probed for.)
+  assert_blind <- function(user, row, shown) {
+    rest <- gsub(shown, "", user, fixed = TRUE)
+    fixed_probes <- purrr::keep(c(row$topic, gold$problem_id[gold$id == row$id],
+                                  gold$problem[gold$id == row$id], paste0(row$set, " item")), nzchar)
+    hit <- c(purrr::keep(fixed_probes, function(p) grepl(tolower(p), tolower(rest), fixed = TRUE)),
+             if (grepl(paste0("\\b", row$id, "\\b"), rest)) row$id)
+    if (length(hit)) stop("The prompt for ", row$id, " holds key material: ", paste(hit, collapse = "; "))
+    invisible(TRUE)
+  }
+
+  run_one <- function(row) {
+    out <- file.path(gdir, paste0(row$id, ".json"))
+    if (file.exists(out)) {
+      cat(row$id, "already saved, skipped\n")
+      return(invisible(NULL))
+    }
+    shown <- shown_text(row$question, row$scale, row$scale_complete)
+    form <- modifyList(gold_form, list(questionnaire = shown))
+    p <- build_step_prompt(form, "work")
+    assert_blind(p$user, row, shown)
+    cat(row$id, "calling ... ")
+    rv <- run_review(form, APP_MODELS$pm, ask = ask_live)
+    cl <- attr(rv, "call")
+    cat(rv$status, sprintf("%.0f s", cl$seconds %||% NA_real_), "\n")
+    writeLines(scrub(as.character(flow_log_json(flow_round(form, APP_MODELS$pm, review = rv)))),
+               out, useBytes = TRUE)
+    invisible(NULL)
+  }
+
+  purrr::walk(split(items, seq_len(nrow(items))), run_one)
+
+  # The working tables, from the saved files only (so a resumed run is complete).
+  saved <- purrr::map(items$id, function(id)
+    jsonlite::fromJSON(file.path(gdir, paste0(id, ".json")), simplifyVector = FALSE))
+  names(saved) <- items$id
+
+  calls <- purrr::imap_dfr(saved, function(r, id) {
+    rv <- r$review
+    cl <- rv$call
+    tibble::tibble(id = id, set = items$set[items$id == id], status = rv$status,
+                   seconds = cl$seconds %||% NA_real_, tokens_in = cl$tokens$input %||% NA_real_,
+                   tokens_out = cl$tokens$output %||% NA_real_, finish = cl$finish %||% NA_character_,
+                   attempts = cl$attempts %||% NA_integer_,
+                   cut_off = grepl("reached the token limit", rv$error %||% "", fixed = TRUE),
+                   error = rv$error %||% NA_character_)
+  })
+  readr::write_csv(calls, file.path(gdir, "_calls.csv"))
+
+  findings <- purrr::imap_dfr(saved, function(r, id) {
+    rv <- r$review
+    if (!identical(rv$status, "ok")) return(NULL)
+    df <- check_review(rv$reply, r$form)
+    this_set <- items$set[items$id == id]
+    dplyr::mutate(tibble::as_tibble(df[, c("scope", "check", "severity", "evidence", "evidence_found",
+                                           "check_known", "stage", "problem", "rewrite", "probe", "shown")]),
+                  id = id, set = this_set, .before = 1)
+  })
+  readr::write_csv(findings, file.path(gdir, "_findings.csv"))
+
+  cat("\n", nrow(calls), " items saved; ", sum(calls$status == "ok"), " ok, ", sum(calls$cut_off),
+      " cut off, ", sum(calls$status != "ok" & !calls$cut_off), " other failures. ",
+      nrow(findings), " findings, ", sum(findings$severity >= 5, na.rm = TRUE), " rated 5 or above.\n", sep = "")
+  cat("Seconds ", round(sum(calls$seconds, na.rm = TRUE)), ", tokens out ", sum(calls$tokens_out, na.rm = TRUE),
+      ", tokens in ", sum(calls$tokens_in, na.rm = TRUE), ".\n", sep = "")
 }
-
-# The fields evaluate.md's Output format names, and one entry per question.
-review_ok <- function(o) {
-  gone = setdiff(c("items", "instrument", "trapd", "test_first", "not_assessed"), names(o))
-  if (length(gone)) stop("missing field(s): ", paste(gone, collapse = ", "))
-  if (length(o$items) != 2L) stop("expected 2 items, got ", length(o$items))
-  invisible(o)
-}
-
-# What the review's findings cited as their check, against the CHECKLIST sent.
-# Informational, not a failure: it shows whether a model fills `check` with ids.
-review_note <- function(o) {
-  cited = unlist(purrr::map(o$items, function(it)
-    purrr::map_chr(it$findings, function(f) as.character(f$check %||% ""))))
-  sent = names(build_checklist(review_form))
-  paste0("findings: ", length(cited), "; check ids not in the CHECKLIST sent: ",
-         length(setdiff(cited, sent)))
-}
-
-
-# ---- one timed call, as a row ------------------------------------------------------
-
-# run returns list(finish, tokens, text, note) or stops. Everything about the
-#   call goes into one row, success or not.
-timed <- function(role, step, m, run) {
-  before = .llm_state$calls
-  started = Sys.time()
-  out = tryCatch(run(), error = function(e) e)
-  failed = inherits(out, "error")
-  list(role = role, model = m$id, step = step, ok = !failed,
-       seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
-       calls = .llm_state$calls - before,
-       finish = if (failed) NA_character_ else out$finish %||% NA_character_,
-       tokens = if (failed) NULL else out$tokens,
-       note = if (failed) "" else out$note %||% "",
-       text = if (failed)
-         paste0("FAILED: ", conditionMessage(out),
-                if (!is.null(out$raw)) paste0(" | reply: ", out$raw))
-       else out$text)
-}
-
-not_run <- function(role, step, m, why)
-  list(role = role, model = m$id, step = step, ok = FALSE, seconds = NA_real_,
-       calls = 0L, finish = NA_character_, tokens = NULL, note = "",
-       text = paste0("NOT RUN: ", why))
-
-ping_run <- function(m, key) function() {
-  r = llm_ping(m, key = key)
-  if (!isTRUE(r$ok)) stop(r$message, call. = FALSE)
-  list(text = r$reply)
-}
-
-json_run <- function(prompt, m, key, max_tokens, validate, note = NULL) function() {
-  r = llm_json(prompt$user, m, system_prompt = prompt$system, max_tokens = max_tokens,
-               validate = validate, key = key)
-  list(finish = r$finish, tokens = r$tokens, text = r$raw,
-       note = if (is.null(note)) "" else note(r$obj))
-}
-
-key_of <- function(x) if (identical(x$m$key_source, "analyst")) pm_key else llm_key_for(x$m)
-
-rows <- c(
-  purrr::map(models, function(x) {
-    k = key_of(x)
-    if (is.null(k) || !nzchar(k))
-      not_run(x$role, "connection check", x$m, llm_key_hint(x$m))
-    else timed(x$role, "connection check", x$m, ping_run(x$m, k))
-  }),
-  purrr::map(models[-1], function(x) {
-    k = key_of(x)
-    if (is.null(k) || !nzchar(k)) return(not_run(x$role, "draft, 2 items", x$m, llm_key_hint(x$m)))
-    timed(x$role, "draft, 2 items", x$m,
-          json_run(draft_prompt, x$m, k, LLM_MAX_TOKENS[["draft"]], draft_ok))
-  }),
-  list(if (!nzchar(pm_key))
-    not_run(models[[1]]$role, "small review", models[[1]]$m, "ANTHROPIC_API_KEY is not set in .Renviron")
-  else timed(models[[1]]$role, "small review", models[[1]]$m,
-             json_run(review_prompt, models[[1]]$m, pm_key, LLM_MAX_TOKENS[["evaluate"]],
-                      review_ok, review_note))))
-
-
-# ---- the report --------------------------------------------------------------------
-
-describe <- function(r) {
-  tk = r$tokens
-  c(sprintf("[%s] %s | %s | %s | %s | %s | finish: %s%s",
-            if (r$ok) " OK " else "FAIL", r$role, r$model, r$step,
-            if (is.na(r$seconds)) "not run" else sprintf("%.1f s", r$seconds),
-            sprintf("%d call%s", r$calls, if (r$calls == 1L) "" else "s"),
-            if (is.null(r$finish) || is.na(r$finish)) "-" else r$finish,
-            if (is.null(tk)) "" else sprintf(" | tokens in %s out %s", tk[["input"]], tk[["output"]])),
-    if (nzchar(r$note)) paste0("      ", r$note),
-    paste0("      reply (first 300): ", substr(gsub("\\s+", " ", r$text), 1, 300)))
-}
-
-green <- all(purrr::map_lgl(rows, "ok"))
-report <- c(
-  "QuestionR live check (tests/llm_check.R)",
-  paste0("Run: ", format(Sys.time(), "%Y-%m-%d %H:%M"), " | profile: ", APP_PROFILE,
-         " | ellmer ", as.character(utils::packageVersion("ellmer"))),
-  paste0("Draft prompt hash:  ", draft_prompt$hash),
-  paste0("Review prompt hash: ", review_prompt$hash),
-  "", unlist(purrr::map(rows, describe)), "",
-  paste0("ALL GREEN: ", green, "  (", sum(purrr::map_lgl(rows, "ok")), " of ", length(rows), " calls)"))
-
-# A key must never reach the file, even inside an error message from an endpoint.
-secrets <- purrr::keep(c(pm_key, Sys.getenv("OPENROUTER_API_KEY")), nzchar)
-report <- purrr::reduce(secrets, function(txt, s) gsub(s, "[key]", txt, fixed = TRUE), .init = report)
-
-writeLines(report, file.path("tests", "llm_check.out"), useBytes = TRUE)
-cat(report, sep = "\n")
-quit(status = if (green) 0L else 1L)

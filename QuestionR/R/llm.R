@@ -17,10 +17,9 @@
 # max_tokens for each step (DESIGN.md sections 6 and 12). A reply that reaches
 #   the ceiling is a failure, not a short answer, and is not retried: the same
 #   prompt is cut off at the same place. ping is the connection check's very
-#   small call. Brief, draft and appraisal are Kevin's Phase 3 settings,
-#   provisional until a live run has recorded how much each step really uses;
-#   evaluate is about twice what one live review of a 15-question, 1,823-character
-#   questionnaire used (21,272 tokens out in 155 seconds; tests/review_tokens.md).
+#   small call. Brief, draft and appraisal are set by hand; evaluate is about
+#   twice what one live review of a 15-question, 1,823-character questionnaire
+#   used (21,272 tokens out in 155 seconds; tests/review_tokens.md).
 LLM_MAX_TOKENS <- c(brief = 4000L, draft = 12000L, appraisal = 24000L,
                     evaluate = 43000L, ping = 200L)
 

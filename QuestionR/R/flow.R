@@ -88,8 +88,7 @@ run_brief <- function(form, pm, ask = llm_json) {
 #   status, error, system, user, hash, reply (the parsed review), and batches.
 #
 #   A questionnaire that fits one call (APP_BATCH_CHARS) is reviewed in one call, with
-#   the prompt build_prompt() gives for a review: nothing changes from Phase 4 but
-#   `batches`, which has the one call. A longer one is split on blank lines into
+#   the prompt build_prompt() gives for a review, and `batches` holds that one call. A longer one is split on blank lines into
 #   parts (DESIGN.md section 14): one call for the questions of each part, then one
 #   call for the instrument as a whole. `batches` has one entry per call, in order:
 #   kind ("all", "items" or "instrument"), part (k), n_parts, first_block, status,
@@ -170,7 +169,7 @@ review_call <- function(ask, pm, p, spec, progress) {
   record(r$status, r$error, r$reply, r$call)
 }
 
-# A review's result from its calls. One call: exactly the fields of Phase 4 (and its
+# A review's result from its calls. One call: the fields of a one-call review (and its
 #   call record as the attribute "call"). Several: the questions of the parts that
 #   came back, in order, and everything about the instrument from the instrument
 #   call; what an item call says about the instrument, or the instrument call about

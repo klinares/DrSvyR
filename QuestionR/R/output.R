@@ -346,9 +346,7 @@ scrub_secrets <- function(text, secrets) {
 # The session's run log as JSON, one file: schema 1, the profile and time, and every round as
 #   flow_round() made it (form, prompts and hashes, raw and parsed replies, R's checks' inputs, the
 #   seed and the candidate-to-model map, the kept items). Keys scrubbed.
-run_log_json <- function(rounds, profile = APP_PROFILE, time = Sys.time(), secrets = character(0)) {
-  txt = jsonlite::toJSON(list(schema = 1L, app = "QuestionR", written = format(time, "%Y-%m-%dT%H:%M:%S%z"),
-                              profile = profile, rounds = unname(rounds)),
-                         auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null", force = TRUE)
-  scrub_secrets(as.character(txt), secrets)
-}
+run_log_json <- function(rounds, profile = APP_PROFILE, time = Sys.time(), secrets = character(0))
+  scrub_secrets(as.character(flow_log_json(list(
+    schema = 1L, app = "QuestionR", written = format(time, "%Y-%m-%dT%H:%M:%S%z"),
+    profile = profile, rounds = unname(rounds)))), secrets)

@@ -158,14 +158,6 @@ ITEM_DEFAULTS <- list(
 full_item <- function(it)
   purrr::imap(ITEM_DEFAULTS, function(d, k) it[[k]] %||% d)
 
-# Everything an item says, as one string, for the pattern checks below. The
-#   notes are left out: they are about the item, not part of it.
-item_text <- function(it) {
-  it = full_item(it)
-  parts = purrr::map(it$parts, function(p) c(p$stem %||% "", unlist(p$options)))
-  paste(c(it$intro, it$stem, unlist(it$options), unlist(parts)), collapse = "\n")
-}
-
 
 # ---- coded format defaults (DESIGN.md section 7) -------------------------------------
 
@@ -378,7 +370,7 @@ split_questionnaire <- function(text, max_chars) {
 }
 
 # The calls a review of this questionnaire takes, in order. One part: a single call
-#   of kind "all", the whole review as in Phase 4. More than one: an "items" call
+#   of kind "all", the whole review. More than one: an "items" call
 #   for each part, then an "instrument" call. Each is list(kind, k, n, first_block,
 #   text), and the instrument call's text is the whole questionnaire.
 review_plan <- function(text, max_chars) {
