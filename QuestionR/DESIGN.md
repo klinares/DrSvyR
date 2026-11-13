@@ -874,3 +874,31 @@ write them as `\u201c` and `\u201d` like `plain_apostrophe()` does, so a
 server in a non-UTF-8 locale cannot misread the source. Two smoke checks
 expect `<span>` inside a button, which Shiny added in a later version; allow
 either form so smoke passes on the internal mirror's Shiny.
+
+**Revised 2026-11-13: the Phase 8 prompt in `PROMPTS.md` wins over this
+section where they disagree.** What changed:
+
+- **No panel of the rules on the Prompt tab.** Item 1 above had a closed panel,
+  "Everything else that is sent". It is gone: the analyst never sees the
+  system prompt, the checklist or the reply format on that page. They are still
+  sent and still recorded in the run log and the Output disclosure. The tab says
+  in one line that the rules are sent every time and can be read on the
+  Methodology tab.
+- **The persona** is read from `## Persona` of `core.md`, never copied into code.
+- **Frameworks (items 7 and 8):** "The frameworks behind the rules" moves to
+  directly after "What it is built on"; `fw_tse.svg` is redrawn with both the
+  measurement and the representation side; `fw_construct.svg` is new (three ways
+  a question fails; decomposition from construct to domain); each framework has a
+  diagram, a short summary and the references as the slides give them. The skills
+  table gains a "Frameworks" column. The pictures and text are checked against the
+  Session 1 to 3 slides in `www/skills_materials/`, and anything a slide does not
+  give is left out. Kevin authorises these edits to `www/methodology.md` and
+  `www/fw_*.svg`.
+- **The skill panels (item 2)** are part of the same step as the frameworks (8c),
+  below the table.
+- **Order and removals:** the steps are lettered 8a to 8i; 8g lists what is
+  removed (unused functions, tests outputs no test reads, `skills_next/`,
+  `inteRn/tests/live_log.md` from the index, `prompts/extract_reflexes.md`, stray
+  `.Rhistory`); 8i adds smoke checks (no "System prompt" or Reflexes text on the
+  Prompt tab, the message begins with the persona, every `.svg` parses, every
+  image the two pages name exists).

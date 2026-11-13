@@ -439,105 +439,200 @@ and a short click-through list for me. Then stop and tell me to try it and
 to take REVIEW.md and STATUS.md to the Claude project.
 ```
 
-## Phase 8: what analysts see, the skills, and QuestionR to main
+## Phase 8 (revised 2026-11-13)
 
 ```
-Read CLAUDE.md, then QuestionR/DESIGN.md section 17 (it wins over earlier
-sections), QuestionR/STATUS.md (Phase 7) and QuestionR/www/skills/README.md.
-Confirm `git branch --show-current` is questionr and the tree is clean
-except for the Claude project's files listed below. Commit those first, on
-their own, as "QuestionR: changes from the Claude project (design section
-17, methodology, start page picture, materials list, prompts)":
-  QuestionR/DESIGN.md, QuestionR/PROMPTS.md, QuestionR/www/methodology.md,
-  QuestionR/www/start.md, QuestionR/www/how_it_works.svg, the four
-  QuestionR/www/fw_*.svg, QuestionR/www/skills_materials/README.md
-(leave QuestionR/skills_next/ for 8a)
+Read CLAUDE.md, then QuestionR/DESIGN.md sections 16 and 17, QuestionR/STATUS.md
+(Phase 7) and QuestionR/www/skills/README.md. This prompt REPLACES the Phase 8
+prompt at the end of QuestionR/PROMPTS.md: overwrite that section with this
+prompt, word for word, under the heading "## Phase 8 (revised 2026-11-13)".
+Where this prompt and DESIGN.md section 17 disagree, this prompt wins; add a
+short note at the end of section 17 saying so and listing what changed.
 
-Then, one commit per item:
+Confirm `git branch --show-current` is questionr. Commit the Claude project's
+files already on disk first, alone, as "QuestionR: changes from the Claude
+project": QuestionR/DESIGN.md, QuestionR/PROMPTS.md, QuestionR/www/methodology.md,
+QuestionR/www/start.md, QuestionR/www/how_it_works.svg, QuestionR/www/fw_*.svg,
+QuestionR/www/skills_materials/README.md. Leave QuestionR/skills_next/ for 8a.
 
-8a. Skills and the Prompt tab (section 17, item 1; read it in full).
-    First move the four files in QuestionR/skills_next/ (core.md,
-    attitudinal.md, behavioral.md, sensitive.md, README.md: five with the
-    README) over the same names in QuestionR/www/skills/ and delete
-    skills_next/. These are the Claude project's files: move them, do not
-    edit them. The app will not start until the parser accepts
-    "## Guidelines", so do the parser in the same commit.
-    Then: the parser reads "## Guidelines" (an optional heading line, then
-    bullets) and still stops on any other unknown section. The message is
-    built in the order section 17 gives. The persona leaves the system
-    prompt. The Prompt tab shows one editable box, the message, and under
-    it a closed <details> "Everything else that is sent" with the rules,
-    the checklist where there is one, and the reply format, read-only. R
-    appends the checklist and reply format after the analyst's text when it
-    sends. Remove the system prompt text area and everything that read
-    input$system. Evaluate uses the same tab: do it there too. The brief
-    check and the appraisal are not shown to the analyst and keep their
-    block layout, apart from the persona's move.
+Kevin's rulings, which this phase implements. Do not reinterpret them:
+1. The analyst never sees the system prompt (the rules). Not on the Prompt tab,
+   not in a collapsed panel, nowhere on that page. It is still sent and still
+   recorded in the run log and the Output disclosure.
+2. The analyst sees one editable box, the message. It starts with this persona,
+   exactly as written here:
+   "You are a senior survey methodologist trained in the Total Survey Error
+   tradition, working for a public opinion analyst who knows the subject matter
+   and the country but is not a questionnaire design specialist. Your job is to
+   reduce measurement error: you judge every question by what a respondent must
+   do to understand it, recall the information, form a judgment and report an
+   answer. Write plainly. You draft and appraise; the analyst decides, and
+   nothing you produce replaces testing with real respondents."
+   (It is the ## Persona of core.md; read it from there, do not paste a copy
+   into the code.)
+3. Analysts can edit the message. They cannot edit the skills.
+4. The frameworks that guided the skills must be easy to find and complete,
+   with diagrams and short summaries, cited only as the webinar slides cite
+   them.
+5. Remove every script and file that is no longer needed.
 
-8b. Methodology tab (item 2). Under md_page(METHODOLOGY_FILE) draw one
-    closed panel per skill file in this order: core, generate, attitudinal,
-    behavioral, sensitive, mode, cross_cultural, evaluate, pm_brief,
-    pm_appraise. Title: the file's first "# " heading and its Version.
-    Body: the file as markdown with HTML comments removed. Use the reader
-    in R/skills.R; do not write a second parser. Do not draw
-    www/skills/README.md. If the files cannot be read, say so in words,
-    as md_page does.
+One commit per item below.
 
-8c. Source code button (item 3). APP_SOURCE_URL in app.R section 1, value
+8a. Skills and the message.
+    - Move QuestionR/skills_next/{core,attitudinal,behavioral,sensitive,README}.md
+      over the same names in QuestionR/www/skills/ and delete skills_next/.
+      They are the Claude project's files: move them, do not edit them. Change
+      the parser in the same commit, or the app will not start.
+    - Parser (R/skills.R): accept "## Guidelines" (an optional heading line,
+      then bullets). Still stop on any other unknown section.
+    - The message for a draft, in this order: the persona; "Brief:" and the
+      form's lines; "Task:" and the ask sentence; core.md's Guidelines; the
+      task file's Guidelines. For a review: the persona, the brief, the task,
+      the questionnaire as pasted, core.md's Guidelines. The labels PREPARE,
+      ASK and CHARACTERIZE are no longer written.
+    - The persona leaves the system prompt, so it is sent once.
+    - R appends the review checklist (where there is one) and the reply format
+      AFTER the analyst's text when it sends. The analyst never sees them, so
+      an edit cannot break parsing.
+    - The brief check and the appraisal are never shown to the analyst. They
+      keep their layout, apart from the persona's move.
+    - Every prompt hash changes. Record the new ones in STATUS.md.
+
+8b. Prompt tab (R/ui_generate.R). Delete the "System prompt (the rules)" text
+    area, its label, and every read of input$system. Show only the message
+    box, labelled "The prompt (you can edit this)", then one line under it:
+    "The survey design rules are sent with this prompt every time and cannot
+    be edited here. You can read them on the Methodology tab." Do the same
+    for Evaluate. Then grep the whole app (R/, app.R, www/) for any other
+    place that shows the system prompt to the analyst and remove it, except
+    the run log and the Output disclosure. List every place you checked in
+    STATUS.md.
+
+8c. Frameworks in www/methodology.md and www/fw_*.svg. Kevin authorises you
+    to edit these files in this phase.
+    Source material: the slide PDFs in QuestionR/www/skills_materials/
+    (Quex_Design_Session1.pdf, Quex_Design_Session2.pdf,
+    Quex_Design_Session_3.pdf). Read the relevant pages as images. Every
+    label, arrow and reference must come from a slide. If a slide does not
+    give something, leave it out and say so in STATUS.md. Do not invent
+    content or references, and do not add slide numbers.
+    - Move "## The frameworks behind the rules" to directly after "## What it
+      is built on", and open it with one sentence: these frameworks are what
+      the skills were written from, and each skill below names the ones it
+      draws on.
+    - Total Survey Error, expanded (www/fw_tse.svg). The current diagram shows
+      only the measurement side. Redraw it with both sides as in Session 1's
+      "Survey from a quality perspective" slide, adapted from Groves et al.
+      (2009), Figure 2.5. Measurement: construct, measurement, response,
+      edited response, with validity, measurement error and processing error.
+      Representation: target population, sampling frame, sample, respondents,
+      post-survey adjustments, with coverage, sampling, nonresponse and
+      adjustment error. Both meet at the survey statistic. Highlight validity
+      and measurement error as the errors the slide calls essential to
+      questionnaire design. If the slide image shows anything different from
+      this description, follow the slide and say what differed.
+    - From construct to question (NEW, www/fw_construct.svg). Two parts, from
+      Session 1:
+      (i) the three ways a question fails: measure the wrong concept
+          (specification error), measure the right concept imperfectly
+          (operationalization error), measure the right concept but the
+          respondent's answer differs from the true value (response error),
+          with the slide's "Last week, did you work..." example;
+      (ii) decomposition: from abstract, multidimensional concepts to
+          specific, single-dimensioned domains (Peytcheva and Yan 2025, as
+          the slide cites it), and the "errors from conceptualization to
+          operationalization to analysis" slide (Willimack and Snijkers 2012,
+          as the slide cites it). Draw that slide's content only.
+      Write a short summary saying this is why every draft starts from the
+      construct and writes one item per domain (core.md construct_first).
+    - Keep fw_response.svg, fw_testing.svg and fw_trapd.svg. Check each
+      against its slide and correct anything that differs.
+    - Each framework: diagram, a 3 to 5 sentence summary in plain words, then
+      an italic line with its references exactly as the slides give them.
+      Same visual style as the existing SVGs: own white panel, no JavaScript.
+    - Skills table: add a column "Frameworks", filled from each file's Source
+      lines (Total Survey Error, response model, construct and decomposition,
+      testing methods, TRAPD, sensitive questions). If a skill's Source lines
+      name none of them, write "Session guidelines". Do not guess.
+    - Below the table, one closed panel per skill file in the order core,
+      generate, attitudinal, behavioral, sensitive, mode, cross_cultural,
+      evaluate, pm_brief, pm_appraise. Title: the file's "# " heading and
+      Version. Body: the file as markdown with HTML comments removed. Use the
+      reader in R/skills.R; do not write a second parser. Do not draw
+      www/skills/README.md.
+    - "How it was tested" must stay one section with that exact heading:
+      pilot_notice() reads it.
+
+8d. Source code button. APP_SOURCE_URL in app.R section 1, value
     https://github.com/klinares/drsvyr/tree/main/QuestionR. A small outline
-    button "Source code", top left of the header, target _blank with
+    button "Source code", top left of the header. Target _blank,
     rel noopener.
 
-8d. Materials (item 4). Add www/skills_materials to QuestionR/.rscignore.
-    In the root .gitignore ignore QuestionR/www/skills_materials/*.pdf,
-    then re-admit by name only
-    "QuestionR/www/skills_materials/Evaluating Unedited AI-Generated Psychometric Scales.pdf".
-    Check with `git check-ignore -v` that the other eight PDFs are ignored
-    and `git status` shows only README.md and that one PDF.
+8e. Materials. Add www/skills_materials to QuestionR/.rscignore. In the root
+    .gitignore ignore QuestionR/www/skills_materials/*.pdf, then re-admit by
+    name only "QuestionR/www/skills_materials/Evaluating Unedited AI-Generated
+    Psychometric Scales.pdf" (CC BY-NC-ND). Confirm with `git check-ignore -v`.
+    The other PDFs stay on disk: 8c reads them.
 
-8e. Start here key text (item 5). Replace the four TODO strings in
-    KEY_INSTRUCTIONS in R/llm.R with the wording in section 17, item 5,
-    exactly.
+8f. Start here key text. Replace the four TODO strings in KEY_INSTRUCTIONS in
+    R/llm.R with:
+      where:  "Ask the person who manages the AI service for your office for a key."
+      create: "Use a key issued to you, not one shared by a team, so that use can be traced to the person who made it."
+      models: "The key must be able to reach every model listed under Settings and connection below. Check connections there before you start."
+      cost:   "If a request is refused for quota or cost, stop and ask the person who issued the key; do not borrow someone else's."
 
-8f. Hardening (section 17, last paragraph). R/checks.R line 397: write the
-    curly quotes as \u201c and \u201d. In tests/smoke.R let the two checks
-    that expect <span> inside a button accept the label with or without
-    the span.
+8g. Remove what is no longer needed. For each candidate, show the evidence
+    (grep for callers, or what replaced it), then delete it:
+    - functions in QuestionR/R/ with no callers in R/, app.R or the tests,
+      including skills_table() if 8c no longer uses it;
+    - code that only served the deleted system prompt box or the PREPARE /
+      ASK / CHARACTERIZE labels;
+    - QuestionR/skills_next/ (after 8a);
+    - QuestionR/tests/ outputs that no test reads (check llm_check.out,
+      output_generate.txt, output_review.txt, run_generate.json,
+      review_long.*). Keep any that tests/review.R or tests/smoke.R reads,
+      and say which reads each;
+    - `git rm --cached inteRn/tests/live_log.md` (main's inteRn/.gitignore
+      excludes it; keep the file on disk);
+    - `git rm prompts/extract_reflexes.md`;
+    - untracked .Rhistory files anywhere in the repository.
+    Do not touch svysegment/ or SurvAI_Expert/. List everything removed in
+    STATUS.md with its reason. If you are unsure, do not delete: list it
+    and ask.
 
-8g. Smoke: update the checks the changes above touch (the skill format,
-    the message layout, the Prompt tab, the Methodology tab, the header,
-    Start here with the picture). Add: every .svg in www/ parses as XML and
-    every image named in start.md and methodology.md exists. Do not weaken
-    any other check. Every prompt hash changes in 8a: list the new ones in
-    STATUS.md and say that nothing else moved them.
+8h. Hardening. R/checks.R line 397: write the curly quotes as “ and
+    ”. In tests/smoke.R, let the two checks that expect <span> inside a
+    button accept the label with or without it.
 
-8h. Tidy for main (item 6). `git rm --cached inteRn/tests/live_log.md`
-    (keep the file on disk), `git rm prompts/extract_reflexes.md`, and
-    delete untracked .Rhistory files anywhere in the repository. Do not
-    touch SurvAI_Expert/ (another branch's untracked files) or svysegment/.
+8i. Smoke. Update the checks the changes touch. Add checks that:
+    - the Prompt tab's HTML contains no "System prompt" and no text from
+      core.md's Reflexes;
+    - the message begins with the persona;
+    - every .svg in www/ parses as XML;
+    - every image named in start.md and methodology.md exists.
+    Do not weaken any other check.
 
-Run tests/smoke.R and tests/review.R 5 until both are clean, and commit
-with REVIEW.md. Update STATUS.md: what changed, the hash count, and a short
-click-through list. Commit.
+Run tests/smoke.R and tests/review.R 5 until both are clean. Then make ONE
+live draft run (3 items, all workers, the reviewer) to confirm the new
+message still returns items R can parse. Before you run it, say the number of
+calls and wait for my yes. Commit with REVIEW.md. Update STATUS.md: what
+changed, what was removed and why, the new hashes, the live result, and a
+short click-through list. Commit.
 
-Then prepare the merge, but do not push:
-  - `git config user.email` is "your@email.com". Stop and ask me for the
-    address to use, and set it for this repository only.
-  - `git fetch origin`. Local main is behind origin/main (origin/main has
-    the inteRn merge). Create a branch merge-questionr from origin/main and
-    merge questionr into it with --no-ff. CLAUDE.md will conflict: keep
-    both the inteRn rows and the QuestionR section, and make the Layout
-    table list svysegment, QuestionR and inteRn. Check README.md lists all
-    three. Run QuestionR's smoke test and svysegment's smoke test from the
-    merged tree.
-  - Show me `git log --oneline -5`, `git diff --stat origin/main`, and the
-    merged CLAUDE.md. Then stop. I will decide whether to push the branch
-    and open a pull request into main, or push main directly.
+Then prepare the merge to main, but do not push:
+- `git config user.email` is "your@email.com". Stop and ask me for the
+  address, and set it for this repository only.
+- `git fetch origin`. Local main is behind origin/main, which has the inteRn
+  merge. Make a branch merge-questionr from origin/main and merge questionr
+  into it with --no-ff. CLAUDE.md will conflict: keep both the inteRn rows
+  and the QuestionR section, and make the Layout table list svysegment,
+  QuestionR and inteRn. Check README.md lists all three. Run QuestionR's and
+  svysegment's smoke tests from the merged tree.
+- Show me `git log --oneline -5`, `git diff --stat origin/main` and the
+  merged CLAUDE.md, then stop.
 
-Rules, unchanged: root CLAUDE.md hard rules; no edits to www/skills/
-beyond the move in 8a; no change to what tests/review.R checks beyond what
-the new skill section and message layout force (report the diff); no
-invented functions or arguments; never weaken a test; do not push. One live
-draft run after 8a, to see that the shorter message still returns items R
-can parse: say the number of calls and wait for my yes.
+Rules: root CLAUDE.md hard rules; no edits to www/skills/ beyond the move in
+8a; no change to what tests/review.R checks beyond what 8a forces (report the
+diff); no invented functions, arguments, figures or references; never weaken
+a test; do not push.
 ```
