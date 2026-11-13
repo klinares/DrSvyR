@@ -389,3 +389,53 @@ profile. Then stop and tell me to run 6e and to take REVIEW.md, STATUS.md
 and README.md to the Claude project.
 ```
 
+## Phase 7: changes after Kevin's rehearsal
+
+```
+Read CLAUDE.md, then QuestionR/DESIGN.md section 16 (it wins over earlier
+sections where they differ), QuestionR/STATUS.md, the rewritten skill file
+QuestionR/www/skills/pm_appraise.md (now 0.4), and the two page texts
+QuestionR/www/start.md and QuestionR/www/methodology.md.
+
+First commit the files the Claude project changed, as they are, in one
+commit: DESIGN.md, PROMPTS.md, tests/review.R, www/skills/pm_appraise.md,
+www/start.md, www/methodology.md.
+
+Do Phase 7 as the table in section 16 defines it, steps 7a to 7d, one commit
+each.
+
+Kevin's standing instruction: as few scripts as possible, each as simple as
+possible. Add no new code file. Delete the code and tests the old appraisal
+screens needed. Do not build more than section 16 asks for.
+
+Notes:
+- 7a: the reviewer returns letters and ids; R copies the wording. Edits and
+  swaps by the analyst live in the session state and the run log, never in
+  the drafts themselves. Keep the editable fields plain: a text box for the
+  stem, one for each option, a remove button.
+- 7b: check installed ellmer help before writing anything. Root CLAUDE.md
+  rule 3 is lifted by Kevin for model calls only, as section 16 says; amend
+  the rule in one sentence and change nothing else in that file. The engine
+  stays free of Shiny. If the documented way needs the Shiny event loop,
+  say in STATUS.md how smoke exercises it.
+- 7c: render the two markdown files as they are. Do not rewrite their text;
+  if a line does not fit the page, tell me.
+- Before any live call say the number of calls and the rough cost and wait
+  for my yes. One live draft run (3 items, all workers, the reviewer) is
+  enough; record seconds for the drafts sent together against the 87
+  seconds they took one after another in Phase 3.
+
+Rules, unchanged: root CLAUDE.md hard rules apart from the amendment above;
+no edits to www/skills/; no change to what tests/review.R checks (a bug in
+it: fix only the bug and report the diff); no invented functions or
+arguments; never weaken a test; do not push; do not rerun the gold test.
+
+At the end run tests/smoke.R and tests/review.R 5 until both are clean, and
+commit with REVIEW.md.
+
+Finish by updating STATUS.md: what was removed, what was added, every file
+left and its one job, the timing, anything in section 16 you could not do,
+and a short click-through list for me. Then stop and tell me to try it and
+to take REVIEW.md and STATUS.md to the Claude project.
+```
+

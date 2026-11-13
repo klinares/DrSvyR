@@ -1,85 +1,55 @@
-# Methodology note
+# How QuestionR works and what stands behind it
 
-QuestionR helps an analyst draft survey items and review a questionnaire. It
-does not replace a survey methodologist or a pretest. This note says where its
-rules come from and what its output can and cannot support.
+## What it is built on
 
-## What the app does
+The rules QuestionR applies are standard questionnaire design practice, not
+the opinions of an AI model. They were drawn from:
 
-1. **Brief check.** A project manager model reads the analyst's brief and says
-   what a questionnaire designer would still need to know: construct,
-   population, mode, reference period, what the estimate is for.
-2. **A fixed prompt.** The app, not a model, assembles the prompt from the
-   brief and the rule files listed below, so the same brief gives the same
-   prompt. The analyst reads and approves it.
-3. **Several drafts.** Each worker model drafts from the same prompt. Models
-   make different design choices (number of scale points, midpoint, don't
-   know), so the drafts are shown side by side with those choices coded.
-4. **A blind appraisal.** The project manager checks every draft item against
-   the same yes/no checklist without knowing which model wrote it, and reports
-   the checks each item fails. It does not pick a winner. The analyst does.
-5. **Review of an existing questionnaire** uses one model and the same
-   checklist, item by item and then for order, routing and consistency.
+- **The Total Survey Error framework** and the model of how people answer
+  survey questions: they have to understand the question, recall what is
+  needed, form a judgment, and report an answer. Each rule protects one of
+  those steps.
+- **A webinar series on questionnaire design** given for the International
+  Association of Survey Statisticians and the Washington Statistical Society
+  by Ting Yan (NORC) and Anna-Carolina Haensch (LMU Munich): general wording
+  rules; rules for behavioral, attitudinal and sensitive questions; survey
+  mode; putting a questionnaire together; surveys in more than one country
+  or language; and the use of AI in questionnaire work.
+- **Recent academic studies** of how well AI models write and review survey
+  questions, and where they go wrong.
+- **Graduate course material** on cognition and survey measurement.
 
-## Where the rules come from
+## How it keeps the AI in check
 
-The rules are plain text files in `www/skills/`. Each rule has a source,
-listed in the table below this note. The main sources are:
+- **The rules are written down.** Every model gets the same rules, and the
+  tool shows you the instructions before anything is sent.
+- **Several models draft; one reviews.** The reviewing model checks every
+  draft against a fixed checklist without knowing which model wrote it. It
+  recommends questions exactly as drafted and tells you what it still
+  doubts.
+- **It does not invent facts about a country.** Local terms, units and
+  sensitivities are flagged for someone who knows the setting.
+- **Other languages.** A version in another language is a first draft only.
+  It still needs review by fluent speakers, a decision on disagreements,
+  testing with respondents, and a record of what was decided.
+- **Everything is recorded.** Each output states the models used, the date
+  and the instructions, so the work can be explained and repeated.
 
-- **The Total Survey Error framework and the survey response process**
-  (comprehension, retrieval, judgment, reporting): Groves et al. (2009);
-  Tourangeau, Rips and Rasinski (2000). Every rule names the stage of the
-  response process it protects.
-- **Questionnaire design guidance** for general wording and for behavioral,
-  attitudinal and sensitive questions, for survey mode, and for putting a
-  questionnaire together: Ting Yan's IASS/WSS webinar sessions 1 and 2, which
-  draw on Peytcheva and Yan (2025), Yan (2021) and Tourangeau and Yan (2007).
-- **Cross-cultural and multilingual surveys**: the TRAPD team translation
-  model (Translation, Review, Adjudication, Pretesting, Documentation) and
-  the adopt, adapt or develop choice, from the same sessions. A version the
-  app writes in another language is a first draft inside the Translation step
-  only; the other four steps are still required.
-- **Evidence on language models in questionnaire work**: Haensch's IASS/WSS
-  session 3; Fuchs, Haensch and Weber (2026); Buskirk, Eck and Timbrook
-  (2025); Sturgis, Roberts and Robinson (2026); Martini, Scagnelli and
-  Trujillo Medina (2026); Behzad et al. (2026).
-- **Cognition and survey measurement**: graduate course notes on context
-  effects, response scales, satisficing and culture in the response process.
+## How it was tested
 
-## What that evidence says, and how the app responds
+The review step was run on a published test set: 20 questions with 48
+planted faults and 7 well-tested questions from the European Social Survey.
+It found 36 of the 48 faults (75 percent) and raised fewer than one concern
+for every two well-tested questions. It was strongest on questions that ask
+two things at once, recall problems and vague wording, and weakest on
+sensitivity. This was one run with one AI model on planted faults, which are
+clearer than real ones, so treat it as a guide, not a guarantee.
 
-| Finding | What the app does |
-|---|---|
-| Models pick response formats silently, often five points and no don't-know option | Every draft item must state and justify its format decisions; the app codes them for comparison |
-| Output varies with the model and the prompt | Fixed prompt; several models; model, date and prompt recorded with every output |
-| Model review finds most structural problems but over-reports sensitivity and burden, and misses cultural framing and hidden assumptions | The checklist names presupposition and applicability explicitly; rules ask for restraint; minor findings are collapsed |
-| Model-revised items have been rated worse than the originals by experts | No automatic winner; a merged option uses only unchanged items that pass every check, and is labelled untested |
-| Models do not know a country; they know text about it | The app flags terms, units and sensitivities for local confirmation and states nothing about a country as fact |
-| Unedited model-written scales can resemble published scales and are untested | Drafts are labelled an item pool, not a validated scale |
+## What it cannot do
 
-## Limits
-
-- The output is an expert-review appraisal and first drafts by language
-  models. It is not a pretest and does not show how respondents will
-  understand or answer a question.
-- **How well the review step finds known faults.** It was run once on the
-  test set of Sturgis, Roberts and Robinson (2026): 20 questions with 48
-  planted faults and 7 well-tested European Social Survey questions. With
-  the project manager model then in use it reported 36 of the 48 faults (75
-  percent) at severity 5 or above, and 0.43 findings per well-tested
-  question. It found every double-barrelled and recall fault and most vague
-  wording, leading wording and presupposition; it found 1 of 4 sensitivity
-  faults. Read these figures with care: one run, one model, planted faults
-  that are clearer than real ones, findings matched to the answer key by the
-  build assistant and spot-checked, and for most questions only the two end
-  options of the response scale were available. A different model needs its
-  own run.
-- **Severity is a rough guide.** In that run every finding on a well-tested
-  question was rated 5, and most findings that matched a planted fault were
-  rated 6 or above. Findings rated 7 and above deserve attention first;
-  those rated 5 or 6 need the analyst's judgment; six planted faults were
-  reported only at 3 or 4, so the collapsed list is worth a look.
-- Test key items with real respondents before fielding: cognitive interviews,
-  web probing, a split-ballot experiment or a pilot. Use at least one method.
-- Record the use of AI with the questionnaire. The app's output carries a
-  disclosure block for that purpose.
+- It is an expert review and a first draft by AI models. It is not a
+  pretest and does not show how respondents will understand a question.
+- It can miss faults and can raise concerns that do not matter. Use your
+  judgment, and look at the minor concerns as well.
+- Test key questions with real respondents before fielding, and keep the
+  record of AI use with the questionnaire.

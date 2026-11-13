@@ -27,7 +27,7 @@ SKILL_SHA <- c(
   "evaluate.md" = "6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb",
   "generate.md" = "9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
-  "pm_appraise.md" = "f45e6e4ae77020fadf0cc1d6162b84f015300984e4eafcc9e83cf0116472c4eb",
+  "pm_appraise.md" = "a43e03e541f02f12d72f44d83c901faf983b0edf36fe123045da66a50aaeeb10",
   "pm_brief.md" = "a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a",
   "sensitive.md" = "0ebc82a948f01caed0847f3d4a6cda87216f33dc3039e764cb8c1ab8ac45e726")
 
@@ -388,8 +388,10 @@ fake_item <- function(i) list(
   source_english = "", notes = "")
 fake_draft <- function(n) list(items = purrr::map(seq_len(n), fake_item),
                                not_covered = list(), missing_from_brief = list())
-fake_appraisal <- list(appraisal = list(), set_fails = list(), coverage = list(), differences = list(),
-                       merged = list(), test_first = list(), limits = "Canned.")
+fake_pick <- function(i) list(domain = paste("domain", i), candidate = "A", id = paste0("TR", i),
+                              why = "Canned.", concerns = list(), suggestion = "")
+fake_appraisal <- list(selected = list(fake_pick(1), fake_pick(2)), not_covered = list(), set_notes = list(),
+                       test_first = list(), limits = "Canned.")
 fake_brief <- list(complete = TRUE, questions = list(), task_fit = "",
                    criteria = list("Canned criterion."))
 fake_model <- function(id) list(api = "openai", base_url = "https://example.invalid/v1",
@@ -460,11 +462,11 @@ flow_checks <- function() {
                       regexpr("\nCHECKLIST\n", ap$user, fixed = TRUE),
                       regexpr("\nCHARACTERIZE\n", ap$user, fixed = TRUE))) > 0) &&
              has(ap$user, "\nCANDIDATES\n") && has(ap$user, "Canned stem number 1?") &&
-             has(ap$user, "\none_thing: ") && has(ap$user, "\"fails\"") && has(ap$user, "\"set_fails\"")),
+             has(ap$user, "\none_thing: ") && has(ap$user, "\"selected\"") && has(ap$user, "\"set_notes\"")),
     expect("documentation checks are not in the appraisal checklist (skills 0.3)",
            !has(ap$user, "\ndeclare_defaults: ") && !has(ap$user, "\nmidpoint_and_dont_know: ")),
     expect("appraisal system prompt: persona and pm_appraise rules, not the drafting rules",
-           has(ap$system, "senior survey methodologist") && has(ap$system, "- code_every_check (") &&
+           has(ap$system, "senior survey methodologist") && has(ap$system, "- pick_per_domain (") &&
              !has(ap$system, "- declare_defaults (")),
     expect("flow.R has no Shiny in it",
            !any(tok$file == file.path("R", "flow.R") &

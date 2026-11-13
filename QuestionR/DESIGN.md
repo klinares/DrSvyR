@@ -700,3 +700,76 @@ known only at work; the builder leaves the placeholders. The gold test is
 not rerun. Moving the project manager to Opus is a later decision and needs
 its own gold run.
 
+
+## 16. Changes after Kevin's rehearsal (2026-11-12): Phase 7
+
+Kevin ran the app and ruled on five things. Where this section and earlier
+ones disagree, this section wins. The instruction to keep scripts few and
+simple still holds: no new code file, and remove what these changes make
+unnecessary.
+
+**1. One recommended version, not every draft.** Showing the analyst each
+model's draft with every failed check overwhelmed the page and ran the
+appraisal past its token limit. The reviewer now recommends one item per
+domain and reports only on those (`pm_appraise.md` 0.4, output fields
+`selected`, `not_covered`, `set_notes`, `test_first`, `limits`).
+
+- The reviewer returns candidate letters and item ids only. R copies the
+  wording from the draft, so a recommended item is exactly what a worker
+  wrote. R rejects a reply that names an id no candidate has, repeats an
+  item, or selects more items than were asked for.
+- Results shows the recommended set only: each item with its response
+  options and parts, its remaining concerns in the three severity bands, and
+  the reviewer's suggestion if any. Every stem, option and part is editable
+  in place, and an item can be removed. Notes about the set as a whole
+  follow, then what to test first.
+- "See all drafts" is a closed panel below, one draft per candidate letter,
+  each item with a "Use this instead" button that swaps it into the set.
+  Coded defaults move into this panel.
+- Output takes the set as the analyst left it. The disclosure block says
+  which items were edited by the analyst and which were swapped in.
+- The answers to the old fields (`appraisal`, `set_fails`, `coverage`,
+  `differences`, `merged`) and the screens for them are removed.
+
+**2. Calls go out together.** Kevin lifts root rule 3 for model calls only:
+several HTTP requests may be in flight at once inside the one R process. No
+extra R processes, no `future`, `furrr`, `mirai` or `parallel`, no new
+package.
+
+- Worker drafts are sent together. The parts of a long review are sent
+  together, at most four at a time, then the instrument call.
+- **VERIFY** in installed ellmer 0.4.2 help what does this for chat objects
+  on different models (for example an async method on the chat object, with
+  `promises`, which Shiny already depends on). Use only what the help page
+  documents. If nothing documented does it without a new package or extra
+  processes, stop and say so.
+- The engine keeps one seam. `run_drafts()` and `run_review()` take
+  `ask_all`, a function that receives a list of requests (each the
+  arguments `ask` takes) and returns a list of results in the same order,
+  each either the parsed reply or an error; its default sends them
+  together. `ask` stays for single calls. Tests pass fakes for both.
+- A failed worker or part is still recorded and the rest kept.
+- The root `CLAUDE.md` rule is amended in one sentence to say this.
+
+**3. Start here welcomes the analyst.** The page renders `www/start.md`,
+then the key box. Profile, models, API styles, the connection check and the
+pilot notice move into a closed "Settings and connection" panel below.
+
+**4. A short methodology note.** The Methodology tab renders
+`www/methodology.md` and nothing else. The table of rules and sources is
+removed from the tab; `skills_table()` stays for maintainers.
+
+**5. Speed and limits.** The brief check is off by default: Brief has one
+main button, "Build the instructions", and a smaller "Check my brief
+first". Token ceilings are unchanged. The appraisal's cut-off message says
+"ask for fewer items".
+
+### Phase 7
+
+| Step | What | Passes when |
+|---|---|---|
+| 7a | The recommended set: schema and validator for `pm_appraise.md` 0.4, Results as above, Output and disclosure updated, old appraisal code and screens removed | smoke runs the draft flow on fakes through select, edit, swap, remove and Output; `review.R 5` clean; the drafting and review prompt hashes do not move (the appraisal prompt changes once) |
+| 7b | Calls together, as above | smoke shows with a fake `ask_all` that drafts and review parts are requested in one batch and that one failure does not lose the rest; one timing line in `STATUS.md` from Kevin's live run |
+| 7c | Start here and Methodology as above; brief check off by default | smoke checks both pages render their file |
+| 7d | Tidy: remove what 7a to 7c made unused; list every file and its one job | file count no higher than before; smoke and `review.R 5` clean |
+
