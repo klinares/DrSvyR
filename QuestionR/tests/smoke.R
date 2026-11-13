@@ -77,7 +77,7 @@ ok("the key box says where to get a key in the four sentences the design gives, 
      all(purrr::map_lgl(unname(unlist(KEY_INSTRUCTIONS)), function(x) has(htmltools::htmlEscape(x)))) && !has("TODO"))
 # Phase 3 built tabs 1 to 3, 5c the Output tab and 5d the Methodology tab: none is a placeholder now.
 ok("no tab is a placeholder any more; Start here and the Methodology tab are their markdown files, and the rules table is not drawn",
-   !grepl("Not built yet", page$html, fixed = TRUE) && grepl("What this tool does", page$html, fixed = TRUE) &&
+   !grepl("Not built yet", page$html, fixed = TRUE) && grepl("What QuestionR is for", page$html, fixed = TRUE) &&
      grepl("How QuestionR works and what stands behind it", page$html, fixed = TRUE) &&
      !grepl("The rules, file by file", page$html, fixed = TRUE) && !grepl("<code>one_thing</code>", page$html, fixed = TRUE))
 
@@ -2770,7 +2770,7 @@ ok("Start here is www/start.md as it is, then the key box, then a closed Setting
    md_has_headings(START_FILE, start_html) && grepl("<ol>", start_html, fixed = TRUE) &&
      grepl("<strong>Describe what you need.</strong>", start_html, fixed = TRUE) &&
      grepl("Paste your API key below.", start_html, fixed = TRUE) &&
-     regexpr("What this tool does", start_html, fixed = TRUE) < regexpr("Paste your API key below.", start_html, fixed = TRUE) &&
+     regexpr("What QuestionR is for", start_html, fixed = TRUE) < regexpr("Paste your API key below.", start_html, fixed = TRUE) &&
      regexpr("Paste your API key below.", start_html, fixed = TRUE) < regexpr("Use this key", start_html, fixed = TRUE) &&
      regexpr("Use this key", start_html, fixed = TRUE) < regexpr("<summary>\\s*<strong>Settings and connection", start_html) &&
      regexpr("<summary>\\s*<strong>Settings and connection", start_html) < regexpr("This is a pilot", start_html, fixed = TRUE) &&
@@ -2782,7 +2782,7 @@ ok("Start here is www/start.md as it is, then the key box, then a closed Setting
      grepl(paste0("<td>", APP_PROFILE, "</td>"), start_html, fixed = TRUE) &&
      grepl("It found 36 of the 48 faults (75 percent)", gsub("\\s+", " ", start_html), fixed = TRUE) &&
      grepl("so treat it as a guide, not a guarantee", gsub("\\s+", " ", start_html), fixed = TRUE) &&
-     grepl("Settings and connection", page$html, fixed = TRUE) && grepl("What this tool does", page$html, fixed = TRUE))
+     grepl("Settings and connection", page$html, fixed = TRUE) && grepl("What QuestionR is for", page$html, fixed = TRUE))
 ok("a profile with placeholders opens the Settings and connection panel by itself",
    local({
      work_open = in_child("work", c("app <- shiny::shinyAppDir('.'); invisible(app$serverFuncSource())",
@@ -2790,37 +2790,67 @@ ok("a profile with placeholders opens the Settings and connection panel by itsel
      work_open$status == 0 && grepl("<details[^>]*open[^>]*>\\s*<summary>\\s*<strong>Settings and connection", work_open$out)
    }))
 meth_html <- paste(as.character(md_page(METHODOLOGY_FILE)), collapse = "\n")
-ok("the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; reflexes_table() stays, because tests/review.R reads it",
-   md_has_headings(METHODOLOGY_FILE, meth_html) && grepl("<ul>", meth_html, fixed = TRUE) &&
+ok("the Methodology tab is www/methodology.md as it is: its headings and its table, and nothing else; reflexes_table() stays, because tests/review.R reads it",
+   md_has_headings(METHODOLOGY_FILE, meth_html) && grepl("<table", meth_html, fixed = TRUE) &&
      grepl("36 of the 48 planted faults|It found 36 of the 48 faults", meth_html) && !grepl("<code>", meth_html, fixed = TRUE) &&
      !grepl("The rules, file by file", meth_html, fixed = TRUE) && grepl("Methodology", page$html, fixed = TRUE) &&
      grepl("How QuestionR works and what stands behind it", page$html, fixed = TRUE) &&
      is.data.frame(reflexes_table()) && nrow(reflexes_table()) > 80L && !"reflexes_html" %in% ls(globalenv()) &&
      grepl("could not be shown", paste(as.character(md_page(file.path("www", "no_such_page.md"))), collapse = ""), fixed = TRUE))
 
-# ---- Phase 8c: the frameworks and the reflex panels ---------------------------------------------
+# ---- Phase 9d and 9e: Total Survey Error first, the worked example, the shortened note ------------
 
 meth_lines <- readLines(METHODOLOGY_FILE, encoding = "UTF-8", warn = FALSE)
 meth_heads <- sub("^## ", "", grep("^## ", meth_lines, value = TRUE))
-fw_at <- which(meth_lines == "## The frameworks behind the rules")
-fw_end <- min(c(which(grepl("^## ", meth_lines) & seq_along(meth_lines) > fw_at), length(meth_lines) + 1L))
-fw_sections <- split(meth_lines[(fw_at + 1L):(fw_end - 1L)],
-                     cumsum(grepl("^### ", meth_lines[(fw_at + 1L):(fw_end - 1L)])))
-fw_sections <- fw_sections[-1]   # what comes before the first ###: the opening sentence
-ok("the frameworks section comes directly after 'What it is built on', opens with one sentence saying the reflexes were written from them, and 'How it was tested' is one section with that heading",
-   identical(meth_heads[which(meth_heads == "What it is built on") + 1L], "The frameworks behind the rules") &&
-     grepl("^These frameworks are what the reflexes were written from, and each reflex file below",
-           trimws(gsub("\\s+", " ", paste(meth_lines[(fw_at + 1L):(fw_at + 6L)], collapse = " ")))) &&
-     sum(meth_heads == "How it was tested") == 1L)
-ok("each framework is a diagram, then a summary of three to five sentences, then an italic line of references",
-   length(fw_sections) == 5L && purrr::every(fw_sections, function(s) {
-     body = s[-1][nzchar(trimws(s[-1]))]
-     img = grepl("^!\\[.+\\]\\(fw_[a-z]+\\.svg\\)$", body[1])
-     refs = grepl("^\\*[^*]+\\*$", body[length(body)])
-     summary_txt = gsub("\\s+", " ", paste(body[-c(1, length(body))], collapse = " "))
-     n_sentences = length(strsplit(summary_txt, "(?<=[.?!])\\s+", perl = TRUE)[[1]])
-     img && refs && n_sentences >= 3L && n_sentences <= 5L
+meth_sections <- function(heading) {
+  at = which(meth_lines == paste0("## ", heading))
+  end = min(c(which(grepl("^## ", meth_lines) & seq_along(meth_lines) > at), length(meth_lines) + 1L))
+  meth_lines[(at + 1L):(end - 1L)]
+}
+n_sentences <- function(txt) length(strsplit(gsub("\\s+", " ", trimws(txt)), "(?<=[.?!])\\s+", perl = TRUE)[[1]])
+ok("the note opens with Total Survey Error (fw_tse.svg), directly before 'What it is built on'; it names the errors QuestionR works on and those it does not",
+   identical(meth_heads[1:2], c("Total Survey Error", "What it is built on")) &&
+     identical(meth_lines[1], "# How QuestionR works and what stands behind it") &&
+     grepl("\\(fw_tse\\.svg\\)$", meth_sections("Total Survey Error")[2]) &&
+     grepl("QuestionR works on validity and measurement error", gsub("\\s+", " ", paste(meth_sections("Total Survey Error"), collapse = " "))) &&
+     grepl("does not work on coverage, sampling or nonresponse", gsub("\\s+", " ", paste(meth_sections("Total Survey Error"), collapse = " "))))
+ok("the note keeps its sections, in this order, and 'How it was tested' is one section with that exact heading",
+   identical(meth_heads, c("Total Survey Error", "What it is built on", "From construct to question",
+                           "One question, three ways to go wrong", "The response model",
+                           "Testing questions, and where AI fits", "What it cannot do", "How it was tested",
+                           "The AI reflexes behind every answer")))
+ok("each framework section is a diagram, then a short summary, then an italic line of references; the worked example is three sentences and cites the slide",
+   local({
+     fw = purrr::keep(meth_heads, function(h) any(grepl("^!\\[", meth_sections(h))))
+     ex = meth_sections("One question, three ways to go wrong")
+     ex = ex[nzchar(trimws(ex))]
+     purrr::every(fw, function(h) {
+       s = meth_sections(h)
+       body = s[nzchar(trimws(s))]
+       summary_txt = paste(body[-c(1, length(body))], collapse = " ")
+       grepl("^!\\[.+\\]\\(fw_[a-z]+\\.svg\\)$", body[1]) && grepl("^\\*[^*]+\\*$", body[length(body)]) &&
+         n_sentences(summary_txt) >= 2L && n_sentences(summary_txt) <= 5L
+     }) && length(fw) == 5L &&
+       n_sentences(paste(ex[-c(1, length(ex))], collapse = " ")) == 3L &&
+       grepl("(fw_example.svg)", ex[1], fixed = TRUE) &&
+       identical(ex[length(ex)], "*Ting Yan, Fundamentals of Questionnaire Design, IASS/WSS Webinar Session 1*")
    }))
+ok("the note is under 600 words outside the reflex table and the panels (image descriptions not counted)",
+   local({
+     txt = meth_lines[!grepl("^\\|", meth_lines)]
+     txt = gsub("!\\[[^]]*\\]\\([^)]*\\)", "", txt)
+     length(strsplit(paste(txt, collapse = " "), "\\s+")[[1]]) < 600L
+   }))
+ok("the worked example's diagram has the slide's question word for word, its three parts marked, and the three errors and validity named; the Sensitive and TRAPD diagrams are gone",
+   local({
+     d = paste(readLines(file.path("www", "fw_example.svg"), encoding = "UTF-8", warn = FALSE), collapse = "\n")
+     grepl("Last week,", d, fixed = TRUE) &&
+       grepl("did you work full-time, part-time, or did you not work at all?", d, fixed = TRUE) &&
+       all(purrr::map_lgl(c("reference period", "the concept", "answer options", "specification error", "operationalization error", "response error", "Validity"),
+                          function(p) grepl(p, d, fixed = TRUE))) &&
+       !file.exists(file.path("www", "fw_sensitive.svg")) && !file.exists(file.path("www", "fw_trapd.svg"))
+   }))
+
 ok("every .svg in www/ is well-formed XML with a title and a description, and no script",
    local({
      svgs = list.files("www", pattern = "\\.svg$", full.names = TRUE)
@@ -2846,8 +2876,7 @@ ok("every image named in start.md and methodology.md exists in www/",
 fw_rules <- c("Total Survey Error" = "Groves|Total Survey Error",
               "Response model" = "Tourangeau, Rips and Rasinski|response-process|response process|four-stage",
               "Construct and decomposition" = "specification and operationalization error|Fig\\. 1\\.1",
-              "Testing methods" = "testing methods|cognitive interviews",
-              "Sensitive questions" = "Tourangeau and Yan|Yan 2021|writing sensitive questions|[(]sensitive questions")
+              "Testing methods" = "testing methods|cognitive interviews")
 fw_of <- function(file) {
   src = sub("^- \\*\\*Source:\\*\\*[ \\t]*", "", grep("^- \\*\\*Source:\\*\\*", readLines(file.path("www", "reflexes", file), encoding = "UTF-8", warn = FALSE), value = TRUE))
   hit = names(fw_rules)[vapply(fw_rules, function(p) any(grepl(p, src)), NA)]
