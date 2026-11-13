@@ -21,7 +21,7 @@ the opinions of an AI model. They were drawn from:
 
 ## The frameworks behind the rules
 
-These frameworks are what the skills were written from, and each skill below
+These frameworks are what the reflexes were written from, and each reflex file below
 names the ones it draws on.
 
 ### Total Survey Error
@@ -50,7 +50,7 @@ from the respondent's true value (response error). The first two together are
 validity. To lower them, move from an abstract, multidimensional concept to
 specific, single-dimensioned domains. That is why QuestionR starts every draft
 from the construct in your brief and writes one item per domain (the rule
-construct_first in the core skill).
+construct_first in the core reflex file).
 
 *Willimack and Snijkers (2012); Peytcheva and Yan (2025): Figure 1.1*
 
@@ -147,16 +147,18 @@ clearer than real ones, so treat it as a guide, not a guarantee.
 - Test key questions with real respondents before fielding, and keep the
   record of AI use with the questionnaire.
 
-## The skills behind every answer
+## The AI reflexes behind every answer
 
-QuestionR does not rely on what an AI model happens to know about
+QuestionR is an AI skill. It works from written AI reflexes: short rules of
+survey design that every model is given. It does not rely on what an AI model
+happens to know about
 questionnaires. With every request it sends the model a set of short text
-files, called skills, that write the rules down. Each rule says when it
+files, called reflex files, that write the reflexes down. Each reflex says when it
 applies, what to do and what never to do, and most carry a yes or no question
 that the reviewing model asks of every draft. Every model gets the same
-skills, so changing the model does not change the rules.
+reflex files, so changing the model does not change the reflexes.
 
-| Skill | What it covers | When it is used | Frameworks |
+| Reflex file | What it covers | When it is used | Frameworks |
 |---|---|---|---|
 | Core | Who the models are told to be, and what every question must meet | Every request | Total Survey Error; Response model; Construct and decomposition; Testing methods |
 | Drafting | How a set of questions is built from your brief | Drafting questions | Session guidelines |
@@ -169,10 +171,10 @@ skills, so changing the model does not change the rules.
 | Brief check | What a designer would still need to know from your brief | When you ask for a brief check | Session guidelines |
 | Reviewer | How the reviewing model checks the drafts and recommends one set | After the drafts come back | Session guidelines |
 
-The Frameworks column names the frameworks above that the skill's sources cite.
+The Frameworks column names the frameworks above that the reflex file's sources cite.
 "Session guidelines" means its sources name none of them.
 
-Open any skill below to read it in full. The skill files, and the published
+Open any reflex file below to read it in full. The reflex files, and the published
 studies and webinar materials they draw on, are also in the source code: the
-[skill files](https://github.com/klinares/drsvyr/tree/main/QuestionR/www/skills)
-and the [list of materials](https://github.com/klinares/drsvyr/tree/main/QuestionR/www/skills_materials).
+[reflex files](https://github.com/klinares/drsvyr/tree/main/QuestionR/www/reflexes)
+and the [list of materials](https://github.com/klinares/drsvyr/tree/main/QuestionR/www/reflex_materials).

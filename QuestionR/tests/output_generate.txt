@@ -49,7 +49,7 @@ Disclosure of the use of language models
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
 - Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
-- Skill files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
+- Reflex files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
 - Brief check prompt: aaccce763e7134d3eae405db15ce1f7e9f956ee0b57ec327cb84149e13b4cf94
 - Drafting prompt (not edited): c5663a00236f0e4d56d563d2aade9f74d5da1c847013d775841c5d551de99095
 - Appraisal prompt: c65f2fef5822b7e84c4558f10a852be8ce9ef5ecf502113934bfe8cb870376ce

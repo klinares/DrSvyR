@@ -1,4 +1,4 @@
-# QuestionR skills
+# QuestionR reflexes
 
 Draft 0.2, 2026-11-11. Text files that steer every model call in QuestionR.
 The expertise lives here, not in the model: swap the model and none of it moves.
@@ -65,6 +65,6 @@ prompts carry no Check questions; the appraiser gets them instead.
 - Drops evaluation findings with severity below 5 into a collapsed
   "minor" list.
 - Lays the chosen items out for Word and appends the disclosure block:
-  models and versions, date, skill file versions, the prompt, which items were
+  models and versions, date, reflex file versions, the prompt, which items were
   generated or revised with AI, and the line "Expert-review appraisal by a
   language model. Not a pretest."

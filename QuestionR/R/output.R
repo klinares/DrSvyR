@@ -1,21 +1,21 @@
 # output.R for QuestionR
 # What the Output tab and the Methodology tab are made of (DESIGN.md sections 8
 #   and 14), as plain functions with no Shiny state and no model call in them, so a
-#   test can build every output without a browser: the skills as a table, the items
+#   test can build every output without a browser: the reflexes as a table, the items
 #   in the set or the review as one document that renders both as HTML that pastes
 #   into Word and as plain text, the TRAPD block, the disclosure block, and the run log.
 #   The screens that show them are the last part of ui_generate.R. Function
 #   definitions and constants only.
 
 
-# ---- the skills table, and the pages that are markdown files ---------------------------------------------------------------------------
+# ---- the reflex table, and the pages that are markdown files ---------------------------------------------------------------------------
 
-# One row per reflex of every skill file, in the order of SKILL_FILES: file, id, when
+# One row per reflex of every reflex file, in the order of REFLEX_FILES: file, id, when
 #   it applies, and its source ("" when a reflex gives none). Read from the files as
 #   the prompts are, so the table cannot say something the prompts do not.
-skills_table <- function(dir = SKILLS_DIR) {
-  skills = purrr::map(purrr::set_names(SKILL_FILES), function(f) read_skill(f, dir))
-  rows = purrr::list_flatten(unname(purrr::imap(skills, function(s, file)
+reflexes_table <- function(dir = REFLEXES_DIR) {
+  rfiles = purrr::map(purrr::set_names(REFLEX_FILES), function(f) read_reflex_file(f, dir))
+  rows = purrr::list_flatten(unname(purrr::imap(rfiles, function(s, file)
     purrr::map(unname(s$reflexes), function(r)
       list(file = file, id = r$id, when = r$when, source = if (is.na(r$source)) "" else r$source)))))
   data.frame(file = purrr::map_chr(rows, "file"), id = purrr::map_chr(rows, "id"),
@@ -42,25 +42,25 @@ md_page <- function(path)
       warn_box(tags$strong(paste0("The page ", basename(path), " could not be shown. ")), substr(conditionMessage(e), 1, 400)))
 
 
-# The skill files in the order of the table on the Methodology page.
-SKILL_PANEL_ORDER <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md", "sensitive.md",
+# The reflex files in the order of the table on the Methodology page.
+REFLEX_PANEL_ORDER <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md", "sensitive.md",
                        "mode.md", "cross_cultural.md", "evaluate.md", "pm_brief.md", "pm_appraise.md")
 
-# One closed panel for each skill file, under the Methodology page: the file's title and version, and
-#   on opening the file as markdown with its HTML comments removed. It is read by read_skill(), the
-#   one reader of the skill files (so the page and the prompts cannot read them differently); the
+# One closed panel for each reflex file, under the Methodology page: the file's title and version, and
+#   on opening the file as markdown with its HTML comments removed. It is read by read_reflex_file(), the
+#   one reader of the reflex files (so the page and the prompts cannot read them differently); the
 #   README of the folder is for maintainers and is not drawn. A file that cannot be read is said so
 #   in words, as md_page() does.
-skill_panels <- function(dir = SKILLS_DIR)
+reflex_panels <- function(dir = REFLEXES_DIR)
   tryCatch(
-    tags$div(class = "qr-note", purrr::map(SKILL_PANEL_ORDER, function(f) {
-      s = read_skill(f, dir)
+    tags$div(class = "qr-note", purrr::map(REFLEX_PANEL_ORDER, function(f) {
+      s = read_reflex_file(f, dir)
       tags$details(class = "mb-2",
                    tags$summary(tags$strong(paste0(s$title, ", version ", s$version))),
                    HTML(shiny::markdown(s$text)))
     })),
     error = function(e)
-      warn_box(tags$strong("The skill files could not be shown. "), substr(conditionMessage(e), 1, 400)))
+      warn_box(tags$strong("The reflex files could not be shown. "), substr(conditionMessage(e), 1, 400)))
 
 
 # ---- a document as blocks, drawn twice ------------------------------------------------------
@@ -311,10 +311,10 @@ trapd_blocks <- function(f, trapd = NULL) {
 DISCLOSURE_LINE <- paste("Expert-review appraisal and first drafts by language models.",
                          "Not a pretest. Test with real respondents before fielding.")
 
-# The skill files a flow used, and their versions: the task's files for the work step (and
+# The reflex files a flow used, and their versions: the task's files for the work step (and
 #   cross_cultural.md only when it was in force), pm_appraise.md for the appraisal and pm_brief.md
 #   when the brief was checked.
-skill_files_used <- function(f, brief_ran = FALSE) {
+reflex_files_used <- function(f, brief_ran = FALSE) {
   files = unique(c(step_files(f$task, "work"),
                    if (TASKS[[f$task]]$kind == "draft") "pm_appraise.md",
                    if (brief_ran) "pm_brief.md"))
@@ -324,17 +324,17 @@ skill_files_used <- function(f, brief_ran = FALSE) {
 # A model as the endpoint names it: its id, and the host that served it.
 model_text <- function(m) paste0(m$id, " (", llm_host(m), ")")
 
-# The disclosure block, as blocks: the date, the profile, each model id, each skill file's version,
+# The disclosure block, as blocks: the date, the profile, each model id, each reflex file's version,
 #   the hash of each prompt and whether it was edited, which candidate each item of the set came from
 #   and whether the analyst edited it or swapped it in, and the line that says what this is. chosen is
 #   final_set(); brief, approved, appraisal and review are what the run returned, any of them NULL.
 disclosure_blocks <- function(f, chosen = list(), drafts = NULL, appraisal = NULL, review = NULL,
                               brief = NULL, approved = NULL, profile = APP_PROFILE, models = APP_MODELS,
-                              time = Sys.time(), dir = SKILLS_DIR) {
+                              time = Sys.time(), dir = REFLEXES_DIR) {
   draft = TASKS[[f$task]]$kind == "draft"
   brief_ran = is.list(brief) && identical(brief$status, "ok")
-  files = skill_files_used(f, brief_ran)
-  versions = purrr::map_chr(files, function(x) paste0(x, " ", read_skill(x, dir)$version))
+  files = reflex_files_used(f, brief_ran)
+  versions = purrr::map_chr(files, function(x) paste0(x, " ", read_reflex_file(x, dir)$version))
   hash = function(label, h) if (!is.null(h) && !is.na(h)) paste0(label, ": ", h)
   used = purrr::map_chr(purrr::keep(unname(as.list(drafts)), function(d) identical(d$status, "ok")), "model")
   asked = purrr::map_chr(unname(as.list(drafts)), "model")
@@ -366,7 +366,7 @@ disclosure_blocks <- function(f, chosen = list(), drafts = NULL, appraisal = NUL
                                                    collapse = "; ")),
            if (draft && length(setdiff(asked, used))) paste0("Worker models asked that returned no usable draft: ",
                                                              paste(setdiff(asked, used), collapse = ", ")),
-           paste0("Skill files and versions: ", paste(versions, collapse = "; ")),
+           paste0("Reflex files and versions: ", paste(versions, collapse = "; ")),
            prompt_lines,
            if (length(from)) from))),
     list(blk_p(DISCLOSURE_LINE)))
@@ -382,7 +382,7 @@ disclosure_blocks <- function(f, chosen = list(), drafts = NULL, appraisal = NUL
 #   source is involved, then the disclosure block. f is the cleaned form of the round.
 build_output <- function(f, drafts = NULL, appraisal = NULL, seed = NULL, set = list(), edits = list(), review = NULL,
                          brief = NULL, approved = NULL, profile = APP_PROFILE, models = APP_MODELS,
-                         time = Sys.time(), dir = SKILLS_DIR) {
+                         time = Sys.time(), dir = REFLEXES_DIR) {
   kind = TASKS[[f$task]]$kind
   disclose = function(k = list())
     disclosure_blocks(f, k, drafts, appraisal, review, brief, approved, profile, models, time, dir)

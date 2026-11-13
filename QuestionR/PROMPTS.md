@@ -5,6 +5,8 @@ Each ends at a review gate: bring `QuestionR/REVIEW.md` and
 `QuestionR/STATUS.md` back to the Claude project before the next one. Later
 prompts are added here after each review.
 
+From Phase 9, what the earlier phases call "skills" are called "reflexes" (a file is a reflex file, each rule in it a reflex). The earlier prompts keep the old word, as history.
+
 ## Phases 0 and 1: scaffold, skills loader, prompt assembly
 
 ```

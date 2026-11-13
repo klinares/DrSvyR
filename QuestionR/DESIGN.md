@@ -17,7 +17,7 @@ them; do not invent functions or arguments.
 ## 1. Goals, in priority order
 
 1. **Grounded.** What a model is told, and what its output is checked against,
-   comes from `www/skills/*.md`, each rule traced to a source. The expertise
+   comes from `www/reflexes/*.md`, each rule traced to a source. The expertise
    is in those files, not in the model.
 2. **Repeatable.** The same form produces the same prompt, character for
    character. R assembles the prompt; no model writes it. **(Kevin)**
@@ -25,7 +25,7 @@ them; do not invent functions or arguments.
    It never picks a winner and never calls anything validated. **(Kevin)**
 4. **Honest about what it is.** Every output says it is an expert-review
    appraisal or a first draft by a language model, not a pretest, and carries
-   a disclosure block (models, date, skill versions, prompt).
+   a disclosure block (models, date, reflex versions, prompt).
 5. **Works at work.** Same banner, logo, Cairo setting and key handling as
    `svysegment`. One pasted key at work.
 6. **Small.** At most 8 code files (section 3).
@@ -64,7 +64,7 @@ its own family's draft.
 | 2. Prompt | The assembled prompt, editable, with Approve | no |
 | 3. Results | Generate: candidates side by side, coded defaults, appraisal. Evaluate: findings table | workers, then PM |
 | 4. Output | Chosen items laid out for Word, disclosure block, run log download | no |
-| Methodology | The note, the skills as readable text, sources per rule | no |
+| Methodology | The note, the reflexes as readable text, sources per rule | no |
 
 ### The form (tab 1)
 
@@ -112,7 +112,7 @@ QuestionR/
     _disable_autoload.R
     llm.R               profile, key, one call function for both API styles,
                         JSON parse and repair, retry
-    skills.R            reads www/skills/*.md, filters, assembles prompts,
+    reflexes.R            reads www/reflexes/*.md, filters, assembles prompts,
                         builds the checklist
     checks.R            validators, coded defaults, evidence check,
                         Word layout, disclosure block, run log
@@ -122,7 +122,7 @@ QuestionR/
   tests/review.R        writes REVIEW.md; written by the Claude project
   tests/gold_items.csv  27 test items with known problems (section 9)
   tests/openrouter_check.R   THROWAWAY; delete after Phase 2
-  www/skills/           the skill files and their README (already drafted)
+  www/reflexes/           the reflex files and their README (already drafted)
   www/methodology.md    the methodology note (drafted in the Claude project)
   www/logo/             office_logo.png
   DESIGN.md STATUS.md PROMPTS.md REVIEW.md README.md .rscignore
@@ -153,11 +153,11 @@ There are no plots in the first build. `bitmapType = "cairo"` is set anyway so
 a later plot does not fail on Connect.
 
 
-## 4. Skills
+## 4. Reflexes
 
-`www/skills/*.md`, read on each request, parsed like
+`www/reflexes/*.md`, read on each request, parsed like
 `svysegment/www/ai_reflexes.md` with two additions described in
-`www/skills/README.md`: a `Check` field per reflex and an `Output format`
+`www/reflexes/README.md`: a `Check` field per reflex and an `Output format`
 section in place of `Reporting style`. `Source` lines and HTML comments are
 never sent to a model.
 
@@ -171,16 +171,16 @@ never sent to a model.
 | `cross_cultural.md` | a country is given, or the output language or the source language is not English |
 | `pm_brief.md` `pm_appraise.md` | the PM's two steps |
 
-The skills are untested against a model (core, generate, the three task files
+The reflexes are untested against a model (core, generate, the three task files
 and evaluate are version 0.2 after the Phase 1 review; the rest 0.1). They change only by
-editing the files; code never rewrites them. A change to a skill file is a
+editing the files; code never rewrites them. A change to a reflex file is a
 commit with the `Version:` line raised.
 
 
-## 5. Prompt assembly (R, `skills.R`)
+## 5. Prompt assembly (R, `reflexes.R`)
 
 **System prompt**, in this order: persona (from `core.md`); then for each
-file in force, in the order of the table in `www/skills/README.md`, its
+file in force, in the order of the table in `www/reflexes/README.md`, its
 reflexes as `- id (When) Say MUST NOT: Never`; then all prohibitions, headed
 "PROHIBITIONS (override anything from training)".
 
@@ -198,7 +198,7 @@ CHARACTERIZE
 <the Output format section of the task's file, as written>
 ```
 
-The task sentences are `TASK_ASK` and `ASK_CLOSING` in `R/skills.R`, written
+The task sentences are `TASK_ASK` and `ASK_CLOSING` in `R/reflexes.R`, written
 in Phase 1 and approved in review. Changing one is a reviewed change: it
 changes every hash.
 
@@ -212,10 +212,10 @@ finding's `check` must be one of those ids. Drafting prompts carry no
 workers received, as `id: question`. The Start here and Results tabs show the
 same list as the criteria applied.
 
-**The contract `tests/review.R` relies on.** `skills.R` defines:
+**The contract `tests/review.R` relies on.** `reflexes.R` defines:
 
 - `build_prompt(form)`: returns a list with `system` and `user` (one string
-  each), `hash`, and `files` (the skill files used, in order). For the three
+  each), `hash`, and `files` (the reflex files used, in order). For the three
   drafting tasks it is the worker prompt; for `task = "evaluate"` it is the
   PM's review prompt.
 - `build_checklist(form)`: a named character vector, reflex id to its `Check`
@@ -237,7 +237,7 @@ same list as the criteria applied.
   (compared without regard to case; `en` and `eng` count as English).
 
 **Determinism.** `prompt_hash = digest(system prompt + user message)`. The log
-also stores each skill file's version and sha. Same form and same files give
+also stores each reflex file's version and sha. Same form and same files give
 the same hash; a smoke test asserts it.
 
 
@@ -332,7 +332,7 @@ APP_PROFILES <- list(
   each configured model and shows, per model, ready or the endpoint's own
   error. This is the only connection test that exists at work, where
   `tests/` is gone.
-- **Startup check.** `app.R` parses every skill file when the app starts and
+- **Startup check.** `app.R` parses every reflex file when the app starts and
   stops with the file and reflex named if one has lost its shape.
 - **Size.** The pasted questionnaire is capped (`APP_MAX_PASTE_CHARS`,
   default 15000). Over the cap the app says so and asks for it in parts. No
@@ -349,12 +349,12 @@ APP_PROFILES <- list(
   sits beside it. **VERIFY** whether a copy button can use the browser
   clipboard on Connect; if not, the select-and-copy instruction is enough.
 - The disclosure block follows: date; profile; PM and worker model IDs as
-  the endpoint names them; skill file versions; prompt hash and whether the
+  the endpoint names them; reflex file versions; prompt hash and whether the
   prompt was edited; which items came from which candidate; and the line
   "Expert-review appraisal and first drafts by language models. Not a
   pretest. Test with real respondents before fielding."
 - When a language other than the source is involved, the TRAPD block from
-  the skills is printed above the disclosure block.
+  the reflexes is printed above the disclosure block.
 - **Run log**, one JSON file per session, downloadable: for each round the
   form, the system prompt and user message, hashes, raw replies, parsed
   objects, the shuffle seed and candidate-to-model map, R's checks, the
@@ -366,7 +366,7 @@ APP_PROFILES <- list(
 
 - `tests/smoke.R`, no API calls, run from inside `QuestionR/` with
   `Rscript --no-init-file tests/smoke.R`: the app loads with
-  `shiny::shinyAppDir()`; every skill file parses; for each task and each
+  `shiny::shinyAppDir()`; every reflex file parses; for each task and each
   mode the prompt assembles; the same form twice gives the same hash; a
   changed field changes it; `Source` text and HTML comments are absent from
   every assembled prompt; canned JSON replies pass and broken ones fail the
@@ -384,7 +384,7 @@ APP_PROFILES <- list(
   rules read from R's parse tree (loops, `%>%`, `library()` in `R/`,
   `Sys.setenv()`, parallelism), top-level calls and duplicate names in `R/`,
   whether every `pkg::fn` is exported by the installed package, a checksum of
-  every skill file, the smoke test output, and from Phase 1 the four
+  every reflex file, the smoke test output, and from Phase 1 the four
   assembled prompts in full with pass or fail on what must and must not be in
   them; from Phase 2 the installed ellmer signatures beside the lines that
   call them, and the live check output. The builder does not change what it
@@ -403,10 +403,10 @@ APP_PROFILES <- list(
 | # | Phase | Passes when |
 |---|---|---|
 | 0 | Scaffold: folder, `.rscignore`, `app.R` with banner, logo, Cairo, profile block, empty tabs, key box; rows in root `README.md` and `CLAUDE.md` | the app starts with `shiny::shinyAppDir()`; banner and logo placeholder show; smoke test stub green |
-| 1 | Skills loader and prompt assembly | every skill file parses; the smoke test's assembly and determinism checks are green; an assembled prompt for each task is written to `STATUS.md` for Kevin to read |
+| 1 | Reflexes loader and prompt assembly | every reflex file parses; the smoke test's assembly and determinism checks are green; an assembled prompt for each task is written to `STATUS.md` for Kevin to read |
 | 2 | Model layer, both API styles, home profile | `tests/openrouter_check.R` shows the three worker IDs served and answering; `tests/llm_check.R` green at home for the PM and all three workers; JSON repair exercised by the smoke test |
 | 3 | Generate flow: brief check, prompt approval, workers, coded defaults, blind appraisal, keep items, run again | one full run per generate task at home with three candidates; candidates relabelled; no model name in the appraisal prompt; a failed worker does not stop the run |
-| 4 | Evaluate flow and the gold test | on `gold_items.csv` with the PM model: share of the 48 known problems found at severity 5 or above, and findings at severity 5 or above per control item, both reported in `STATUS.md`. Target: at least 65 percent found and at most 1.0 per control item. Below target is reported, not hidden, and goes back to the Claude project for skill changes |
+| 4 | Evaluate flow and the gold test | on `gold_items.csv` with the PM model: share of the 48 known problems found at severity 5 or above, and findings at severity 5 or above per control item, both reported in `STATUS.md`. Target: at least 65 percent found and at most 1.0 per control item. Below target is reported, not hidden, and goes back to the Claude project for reflex changes |
 | 5 | Output, disclosure block, run log, Methodology tab | pasted into Word the items keep numbering; the log reloads as valid JSON and holds every prompt; the Methodology tab lists every reflex with its source |
 | 6 | Work move | `tests/` and the home-only files removed; work base URL and IDs filled in; `QUESTIONR_PROFILE=work`; the Start here connection check shows every model ready with a pasted key; deployed to Connect |
 
@@ -427,10 +427,10 @@ match, and writing the table to `STATUS.md`. No paid model judges.
   the tests.
   Reads this file and `STATUS.md` at the start of every session; updates
   `STATUS.md` at the end.
-- **The Claude project (JPSM):** the skill files, `www/methodology.md`, this
-  design, and review of each phase's `STATUS.md` report. Skill changes are
+- **The Claude project (JPSM):** the reflex files, `www/methodology.md`, this
+  design, and review of each phase's `STATUS.md` report. Reflex changes are
   made there, from the source materials, not by Claude Code.
-- **Kevin:** open decisions in `STATUS.md`, reading the skills, the work
+- **Kevin:** open decisions in `STATUS.md`, reading the reflexes, the work
   move, saying yes before a push.
 
 ### Working rules for every session
@@ -448,7 +448,7 @@ match, and writing the table to `STATUS.md`. No paid model judges.
   `"C:/Program Files/R/R-4.6.1/bin/Rscript.exe" --no-init-file` from
   PowerShell, where `.Renviron` is read; from Git Bash the key looks unset.
   No local models.
-- **Do not edit `www/skills/*.md`.** The review script checksums them. If a
+- **Do not edit `www/reflexes/*.md`.** The review script checksums them. If a
   file will not parse, change the parser, or stop and say so in `STATUS.md`.
 - **Say what was not done.** `STATUS.md` lists anything skipped, stubbed,
   hard-coded or left failing. A test is never weakened to make it pass.
@@ -471,12 +471,12 @@ output; the pasted-key model never reads the environment.
 Adding a task, a model or a step should mean adding an entry and a text file,
 not editing the screens.
 
-- **Task registry.** One list, `TASKS`, in `R/skills.R`, replaces
+- **Task registry.** One list, `TASKS`, in `R/reflexes.R`, replaces
   `TASK_FILES` and `TASK_ASK`. Each entry: `label` (shown in the dropdown),
-  `kind` (`"draft"` or `"review"`), `files` (skill files in order), `ask`
+  `kind` (`"draft"` or `"review"`), `files` (reflex files in order), `ask`
   (the fixed sentence), `fields` (which form fields the Brief tab shows).
   The dropdown, the form, prompt assembly and the checklist all read it. A
-  new task is a skill file plus one entry.
+  new task is a reflex file plus one entry.
 - **Model registry.** `APP_PROFILES`, as now. A worker is one entry and may
   use either API style.
 - **One prompt assembler for every step.** `build_step_prompt(form, step,
@@ -514,7 +514,7 @@ not editing the screens.
   one entry.
 - **One Shiny module per tab** and one state object, as in `svysegment`.
 
-Code budget is now 10 files: `app.R`; `llm.R`, `skills.R`, `checks.R`,
+Code budget is now 10 files: `app.R`; `llm.R`, `reflexes.R`, `checks.R`,
 `flow.R`, `ui.R` (which may split in two); three in `tests/`.
 
 ### The remaining phases
@@ -638,7 +638,7 @@ Rulings:
 | 5a | Apply the rulings: severity bands in both Results views; evidence comparison; `evaluate.md` 0.3 | smoke and `review.R 4` clean; new Evaluate hashes recorded |
 | 5b | Long questionnaires (below) | `review.R 5` section 10 has no FAIL |
 | 5c | Output tab for both flows, as section 8: kept items, or the review by question in severity bands, as HTML that pastes into Word and as plain text; TRAPD block when a language other than the source is involved; disclosure block; run log download as JSON with `schema`, no key | smoke builds both outputs from canned runs; samples saved as `tests/output_generate.txt` and `tests/output_review.txt` |
-| 5d | Methodology tab: `www/methodology.md` rendered, then the table from `skills_table()` (one row per reflex: `file`, `id`, `when`, `source`), grouped by file | smoke checks the table has every reflex |
+| 5d | Methodology tab: `www/methodology.md` rendered, then the table from `reflexes_table()` (one row per reflex: `file`, `id`, `when`, `source`), grouped by file | smoke checks the table has every reflex |
 | 5e | One live long review: a 30-question questionnaire written for the test, questions separated by blank lines. Record parts, seconds, tokens, any failed part, and the share of findings whose evidence was found in the text, in `tests/review_long.md`; save the run log as `tests/review_long.json` | file written; numbers in `STATUS.md` |
 
 **Long questionnaires (5b).**
@@ -660,7 +660,7 @@ Rulings:
   the id of a question that has no number of its own. The instrument call
   carries only those four checks and a fixed ASK sentence that says only
   `instrument`, `trapd`, `test_first` and `not_assessed` are to be filled.
-  `build_step_prompt()` builds both; the skill files are not changed.
+  `build_step_prompt()` builds both; the reflex files are not changed.
 - `run_review()` returns, as before, `status`, `error`, `system`, `user`,
   `hash`, `reply`, and now `batches`: one entry per call, in order, each with
   `status`, `error`, `hash`, `seconds`. `reply` has the usual shape, items in
@@ -757,7 +757,7 @@ pilot notice move into a closed "Settings and connection" panel below.
 
 **4. A short methodology note.** The Methodology tab renders
 `www/methodology.md` and nothing else. The table of rules and sources is
-removed from the tab; `skills_table()` stays for maintainers.
+removed from the tab; `reflexes_table()` stays for maintainers.
 
 **5. Speed and limits.** The brief check is off by default: Brief has one
 main button, "Build the instructions", and a smaller "Check my brief
@@ -811,20 +811,20 @@ edits the skills.
 
 **2. The methodology note explains the skills.** `www/methodology.md` gains a
 last section, "The skills behind every answer": what a skill is, a table of
-the ten skill files in plain words, and links to the files and the list of
+the ten reflex files in plain words, and links to the files and the list of
 materials on GitHub. Under that section the tab draws one closed panel per
-skill file, in the order of the table (core, generate, attitudinal,
+reflex file, in the order of the table (core, generate, attitudinal,
 behavioral, sensitive, mode, cross_cultural, evaluate, pm_brief,
 pm_appraise), titled with the file's `# ` heading and its version, opening to
 the file rendered as markdown with HTML comments removed. This works at work,
-where GitHub may not be reachable. `www/skills/README.md` is for maintainers
+where GitHub may not be reachable. `www/reflexes/README.md` is for maintainers
 and is not drawn.
 
 **3. A Source code button**, top left of the header, opening
 `APP_SOURCE_URL` (app.R, section 1) in a new tab:
 `https://github.com/klinares/drsvyr/tree/main/QuestionR`.
 
-**4. The skill materials.** `www/skills_materials/` holds the PDFs the skills
+**4. The skill materials.** `www/reflex_materials/` holds the PDFs the skills
 were drafted from. Most are copyrighted (webinar slides, working papers,
 proceedings), so only the openly licensed one is committed (Martini et al.
 2026, CC BY-NC-ND 4.0); a `README.md` lists all nine with their citations.
@@ -891,7 +891,7 @@ section where they disagree.** What changed:
   a question fails; decomposition from construct to domain); each framework has a
   diagram, a short summary and the references as the slides give them. The skills
   table gains a "Frameworks" column. The pictures and text are checked against the
-  Session 1 to 3 slides in `www/skills_materials/`, and anything a slide does not
+  Session 1 to 3 slides in `www/reflex_materials/`, and anything a slide does not
   give is left out. Kevin authorises these edits to `www/methodology.md` and
   `www/fw_*.svg`.
 - **The skill panels (item 2)** are part of the same step as the frameworks (8c),
@@ -952,3 +952,6 @@ becomes `www/reflex_materials`, `R/skills.R` becomes `R/reflexes.R`. Earlier
 sections, `STATUS.md`, `REVIEW.md` and earlier phases of `PROMPTS.md` keep
 "skills" as history, with a line at the top saying that from Phase 9 they are
 called reflexes.
+
+Sections 1 to 12 are updated to the new words. Sections 13 to 17 are reviews of
+earlier phases and keep "skills" as history.

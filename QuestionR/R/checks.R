@@ -16,7 +16,7 @@
 #   Types: text (a non-empty string), string (any string, empty allowed), logical,
 #   list. A trailing "?" lets the field be missing or null: a model may leave
 #   `options` out of an open question.
-# Only what R itself reads is required. A field a skill asks for and R does not
+# Only what R itself reads is required. A field a reflex file asks for and R does not
 #   use (an item's notes, programming, decisions) is read with a default, so a
 #   model that forgets one is not retried for it.
 REPLY_SCHEMAS <- list(

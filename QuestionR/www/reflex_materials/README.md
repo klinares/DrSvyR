@@ -1,8 +1,8 @@
-# Materials the skills draw on
+# Materials the reflexes draw on
 
-The skill files in `../skills/` were drafted from the materials below, from
+The reflex files in `../reflexes/` were drafted from the materials below, from
 graduate course notes on cognition and survey measurement, and from standard
-texts on survey error and the response process. Each rule in a skill file
+texts on survey error and the response process. Each rule in a reflex file
 names its own sources on its `Source:` line.
 
 Only openly licensed files are kept in this folder. The others are listed so

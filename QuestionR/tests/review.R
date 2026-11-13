@@ -16,10 +16,10 @@
 PHASE <- as.integer(c(commandArgs(trailingOnly = TRUE), "0")[1])
 CODE_BUDGET <- 12L
 
-# sha256 of each skill file with line endings normalised, as drafted in the
-#   Claude project. Updated there, and only there, when a skill changes.
-SKILL_SHA <- c(
-  "README.md" = "6d851fc5dc38f734c5754c818b25cd14a2667c090fef5150da30994456ea06cf",
+# sha256 of each reflex file with line endings normalised, as drafted in the
+#   Claude project. Updated there, and only there, when a reflex file changes.
+REFLEX_SHA <- c(
+  "README.md" = "af465d960f3a82255c25300fa13cbda461dea7e024d95b21850454c225881cd5",
   "attitudinal.md" = "02a273b6ffe0428629b2b6c358a40977c11cb40adeb256fe09e3a4f03eba26e4",
   "behavioral.md" = "f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142",
   "core.md" = "d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9",
@@ -168,26 +168,26 @@ sec_rules <- c(
   if (nrow(bad_calls)) fence(paste0(bad_calls$pkg, "::", bad_calls$fn)))
 
 
-# ---- 4. skill files untouched --------------------------------------------------
+# ---- 4. reflex files untouched --------------------------------------------------
 
-skill_sha <- function(f) {
+reflex_sha <- function(f) {
   bytes = readBin(f, "raw", file.size(f))
   digest::digest(bytes[bytes != as.raw(13)], algo = "sha256", serialize = FALSE)
 }
-skills <- tibble::tibble(file = names(SKILL_SHA)) |>
+reflex_tbl <- tibble::tibble(file = names(REFLEX_SHA)) |>
   dplyr::mutate(
-    path = file.path("www", "skills", file),
+    path = file.path("www", "reflexes", file),
     present = file.exists(path),
-    sha = purrr::map2_chr(path, present, function(p, ok) if (ok) skill_sha(p) else NA_character_),
-    result = verdict(present & !is.na(sha) & sha == unname(SKILL_SHA[file])))
-extra_skills <- setdiff(list.files(file.path("www", "skills")), names(SKILL_SHA))
+    sha = purrr::map2_chr(path, present, function(p, ok) if (ok) reflex_sha(p) else NA_character_),
+    result = verdict(present & !is.na(sha) & sha == unname(REFLEX_SHA[file])))
+extra_reflex_files <- setdiff(list.files(file.path("www", "reflexes")), names(REFLEX_SHA))
 
-sec_skills <- c(
-  "## 4. Skill files", "",
+sec_reflex_files <- c(
+  "## 4. Reflex files", "",
   "PASS means the file is byte for byte what the Claude project drafted (line endings aside).",
-  "", md_table(dplyr::select(skills, file, result, sha)), "",
-  paste0("Files in www/skills not on the list: ",
-         if (length(extra_skills)) paste(extra_skills, collapse = ", ") else "none"))
+  "", md_table(dplyr::select(reflex_tbl, file, result, sha)), "",
+  paste0("Files in www/reflexes not on the list: ",
+         if (length(extra_reflex_files)) paste(extra_reflex_files, collapse = ", ") else "none"))
 
 
 # ---- 5. smoke test ---------------------------------------------------------------
@@ -261,7 +261,7 @@ prompt_checks <- function(name, p, again, changed) {
     expect("any_mode present", has(sys, "- any_mode (")),
     expect("prohibitions headed as overriding", has(sys, "PROHIBITIONS (override anything from training)")),
     expect("Output language line always present", has(usr, "Output language:")),
-    expect("reworded prohibition in force (skills 0.2)", has(sys, "Use a rule's id only in a JSON field that asks for one.")))
+    expect("reworded prohibition in force (reflex files 0.2)", has(sys, "Use a rule's id only in a JSON field that asks for one.")))
   is_review = name %in% c("evaluate", "evaluate_translated")
   common = dplyr::bind_rows(common,
     expect("existing_items_first only in drafting prompts", has(sys, "- existing_items_first (") != is_review),
@@ -464,7 +464,7 @@ flow_checks <- function() {
                       regexpr("\nCHARACTERIZE\n", ap$user, fixed = TRUE))) > 0) &&
              has(ap$user, "\nCANDIDATES\n") && has(ap$user, "Canned stem number 1?") &&
              has(ap$user, "\none_thing: ") && has(ap$user, "\"selected\"") && has(ap$user, "\"set_notes\"")),
-    expect("documentation checks are not in the appraisal checklist (skills 0.3)",
+    expect("documentation checks are not in the appraisal checklist (reflex files 0.3)",
            !has(ap$user, "\ndeclare_defaults: ") && !has(ap$user, "\nmidpoint_and_dont_know: ")),
     expect("appraisal prompt: persona (in the message), pm_appraise rules in the system prompt, not the drafting rules",
            startsWith(ap$user, "You are a senior survey methodologist") && has(ap$system, "- pick_per_domain (") &&
@@ -612,7 +612,7 @@ long_checks <- function() {
   calls$users = character(0)
   part = run_review(form, fake_pm, ask = make(fail_at = 2L))
   short = run_review(forms$evaluate, fake_pm, ask = make())
-  tab = skills_table()
+  tab = reflexes_table()
 
   dplyr::bind_rows(
     expect("split: more than one part, none over the limit", length(parts) > 1L && all(nchar(parts) <= 4000)),
@@ -636,7 +636,7 @@ long_checks <- function() {
              sum(purrr::map_chr(part$batches, "status") == "failed") == 1L),
     expect("a short questionnaire is still one call with the Phase 4 prompt",
            identical(short$hash, build_prompt(forms$evaluate)$hash) && length(short$batches) == 1L),
-    expect("skills_table: one row per reflex with file, id, when, source",
+    expect("reflexes_table: one row per reflex with file, id, when, source",
            is.data.frame(tab) && all(c("file", "id", "when", "source") %in% names(tab)) && nrow(tab) > 80L),
     expect("www/methodology.md present", file.exists(file.path("www", "methodology.md"))))
 }
@@ -674,10 +674,11 @@ versions <- purrr::map_chr(pkgs, function(p)
 
 writeLines(c(
   paste0("# QuestionR review evidence, Phase ", PHASE), "",
+  "From Phase 9, \"skills\" are called \"reflexes\". This file keeps the old word where it records earlier work.", "",
   paste0("Generated ", format(Sys.time(), "%Y-%m-%d %H:%M"), " by tests/review.R on ",
          R.version.string, "."),
   paste0("Packages: ", paste0(pkgs, " ", versions, collapse = ", ")), "",
-  sec_git, "", sec_files, "", sec_rules, "", sec_skills, "", sec_smoke, "",
+  sec_git, "", sec_files, "", sec_rules, "", sec_reflex_files, "", sec_smoke, "",
   sec_prompts, "", sec_llm, "", sec_flow, "", sec_review, "", sec_long), "REVIEW.md", useBytes = TRUE)
 
 cat("Wrote REVIEW.md for Phase", PHASE, "\n")

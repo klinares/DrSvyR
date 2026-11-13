@@ -132,27 +132,27 @@ shiny::testServer(mod_key_server, args = list(state = key_state), {
 })
 
 
-# ---- Phase 1: the skill files parse, and prompts assemble --------------------
+# ---- Phase 1: the reflex files parse, and prompts assemble --------------------
 
-skills <- check_skills()
-ok("every skill file parses", identical(names(skills), SKILL_FILES))
-ok("each skill file has a title, a version, a sha and at least one reflex",
-   purrr::every(skills, function(s)
+rfiles <- check_reflex_files()
+ok("every reflex file parses", identical(names(rfiles), REFLEX_FILES))
+ok("each reflex file has a title, a version, a sha and at least one reflex",
+   purrr::every(rfiles, function(s)
      nzchar(s$title) && nzchar(s$version) && nzchar(s$sha) && length(s$reflexes) > 0))
-ok("core.md carries the persona", !is.na(skills[["core.md"]]$persona))
+ok("core.md carries the persona", !is.na(rfiles[["core.md"]]$persona))
 ok("the four files whose reply R parses carry an Output format",
-   purrr::every(skills[SKILLS_WITH_OUTPUT], function(s) !is.na(s$output_format)))
+   purrr::every(rfiles[REFLEX_FILES_WITH_OUTPUT], function(s) !is.na(s$output_format)))
 
 # Source lines and HTML comments, taken from the raw files, to prove below that
 #   none of them reaches a prompt. Check questions likewise.
-raw_text <- purrr::map_chr(file.path(SKILLS_DIR, SKILL_FILES), function(p)
+raw_text <- purrr::map_chr(file.path(REFLEXES_DIR, REFLEX_FILES), function(p)
   paste(readLines(p, encoding = "UTF-8", warn = FALSE), collapse = "\n"))
 squash <- function(x) gsub("\\s+", " ", x)
 comment_texts <- unlist(regmatches(raw_text, gregexpr("(?s)<!--.*?-->", raw_text, perl = TRUE))) |>
   sub(pattern = "^<!--", replacement = "") |> squash() |> trimws() |> substr(1, 50)
-source_texts <- unlist(purrr::map(skills, function(s) purrr::map_chr(s$reflexes, "source")))
+source_texts <- unlist(purrr::map(rfiles, function(s) purrr::map_chr(s$reflexes, "source")))
 source_texts <- source_texts[!is.na(source_texts)]
-check_texts <- unlist(purrr::map(skills, function(s) purrr::map_chr(s$reflexes, "check")))
+check_texts <- unlist(purrr::map(rfiles, function(s) purrr::map_chr(s$reflexes, "check")))
 check_texts <- check_texts[!is.na(check_texts)]
 # The parser must have found every Source line, every Check line and every
 #   comment that is in the raw files, or the "none in any prompt" checks below
@@ -165,15 +165,15 @@ ok("the parser found every Source line, Check line and comment in the raw files"
      length(check_texts) == n_raw("(?m)^- \\*\\*Check:\\*\\*", raw_no_comments) &&
      length(comment_texts) == n_raw("<!--", raw_text))
 
-# A skill file that has lost its shape must fail with the file and the reflex
+# A reflex file that has lost its shape must fail with the file and the reflex
 #   named. The first fixture is well formed, so the others fail for their own
 #   reason and not for something common to all of them.
-try_skill <- function(body, header = c("# Fixture", "", "Version: 0.1", ""), name = "fixture.md") {
+try_reflex_file <- function(body, header = c("# Fixture", "", "Version: 0.1", ""), name = "fixture.md") {
   p = file.path(tempdir(), name)
   writeLines(c(header, body), p)
-  tryCatch(parse_skill(p), error = function(e) conditionMessage(e))
+  tryCatch(parse_reflex_file(p), error = function(e) conditionMessage(e))
 }
-good <- try_skill(c("<!-- a note for people -->", "## Reflexes", "", "### fine_one",
+good <- try_reflex_file(c("<!-- a note for people -->", "## Reflexes", "", "### fine_one",
                     "- **When:** Always.", "- **Say:** Do it.", "- **Never:** Skip it.",
                     "- **Check:** Was it done?", "- **Source:** A book.", "",
                     "## Prohibitions", "", "- Never lie.", "",
@@ -184,7 +184,7 @@ ok("a well-formed fixture parses, keeping Check and Source",
      identical(good$prohibitions, "Never lie.") && identical(good$output_format, "Return JSON."))
 
 refl <- function(...) c("## Reflexes", "", "### oops", ...)
-says <- function(msg, ...) grepl(msg, try_skill(...), fixed = TRUE)
+says <- function(msg, ...) grepl(msg, try_reflex_file(...), fixed = TRUE)
 ok("a reflex with no Say stops, naming the file and the reflex",
    says("Reflex 'oops' in fixture.md needs a When and a Say line.", refl("- **When:** Always.")))
 ok("a misspelt field name stops, naming the reflex",
@@ -212,8 +212,8 @@ ok("an unknown section stops",
 fine_reflex <- c("## Reflexes", "", "### fine_one", "- **When:** A.", "- **Say:** B.")
 ok("a Guidelines section is read: an optional heading line, then one-line bullets; bullets alone are fine",
    local({
-     with_head = try_skill(c("## Guidelines", "", "<!-- a note -->", "Guidelines:", "", "- One.", "- Two.", "", fine_reflex))
-     bare = try_skill(c("## Guidelines", "", "- Only.", "", fine_reflex))
+     with_head = try_reflex_file(c("## Guidelines", "", "<!-- a note -->", "Guidelines:", "", "- One.", "- Two.", "", fine_reflex))
+     bare = try_reflex_file(c("## Guidelines", "", "- Only.", "", fine_reflex))
      is.list(with_head) && identical(with_head$guidelines, list(heading = "Guidelines:", bullets = c("One.", "Two."))) &&
        is.list(bare) && is.na(bare$guidelines$heading) && identical(bare$guidelines$bullets, "Only.") &&
        is.null(good$guidelines)
@@ -233,7 +233,7 @@ ok("an HTML comment that never closes stops",
 ok("a missing Version line stops",
    says("has no Version: line", refl("- **When:** A.", "- **Say:** B."),
         header = c("# Fixture", "")))
-ok("a missing file stops", grepl("is missing", tryCatch(read_skill("nope.md"), error = conditionMessage)))
+ok("a missing file stops", grepl("is missing", tryCatch(read_reflex_file("nope.md"), error = conditionMessage)))
 
 # The assembled prompts: every task, every mode on its own, none, and all five,
 #   with and without a country.
@@ -317,25 +317,25 @@ ok("the files used are core, the task's files, mode, and cross_cultural only wit
      if (b$task == "evaluate") "evaluate.md" else c("generate.md", paste0(b$task, ".md")),
      "mode.md", if (nzchar(b$country)) "cross_cultural.md"))))
 ok("the persona opens the message and is not in the system prompt, and the prohibitions close the system prompt, headed as overriding",
-   every_built(function(b) startsWith(b$p$user, skills[["core.md"]]$persona) &&
-                 !grepl(skills[["core.md"]]$persona, b$p$system, fixed = TRUE) &&
-                 lengths(regmatches(b$p$user, gregexpr(skills[["core.md"]]$persona, b$p$user, fixed = TRUE))) == 1L &&
+   every_built(function(b) startsWith(b$p$user, rfiles[["core.md"]]$persona) &&
+                 !grepl(rfiles[["core.md"]]$persona, b$p$system, fixed = TRUE) &&
+                 lengths(regmatches(b$p$user, gregexpr(rfiles[["core.md"]]$persona, b$p$user, fixed = TRUE))) == 1L &&
                  lengths(regmatches(b$p$system, gregexpr("PROHIBITIONS (override anything from training)", b$p$system, fixed = TRUE))) == 1L &&
                  grepl("PROHIBITIONS (override anything from training)\n- Never", b$p$system, fixed = TRUE)))
 ok("every prohibition of every file in force is in the system prompt",
    every_built(function(b) purrr::every(b$p$files, function(f)
-     purrr::every(skills[[f]]$prohibitions, function(s) grepl(paste0("- ", s), b$p$system, fixed = TRUE)))))
+     purrr::every(rfiles[[f]]$prohibitions, function(s) grepl(paste0("- ", s), b$p$system, fixed = TRUE)))))
 ok("mode.md keeps any_mode, the modes chosen, and mixed_mode only with more than one",
    every_built(function(b) {
-     in_prompt = intersect(names(skills[["mode.md"]]$reflexes), ids_in(b$p$system))
+     in_prompt = intersect(names(rfiles[["mode.md"]]$reflexes), ids_in(b$p$system))
      expected = c("any_mode", b$modes, if (length(b$modes) > 1L) "mixed_mode")
-     identical(in_prompt, intersect(names(skills[["mode.md"]]$reflexes), expected))
+     identical(in_prompt, intersect(names(rfiles[["mode.md"]]$reflexes), expected))
    }))
 ok("cross_cultural.md is in with a country and out without",
    every_built(function(b) ("trapd" %in% ids_in(b$p$system)) == nzchar(b$country)))
 ok("every reflex of a drafting task file is in, and of the other task files out",
    every_built(function(b) {
-     task_ids = purrr::map(skills[c("attitudinal.md", "behavioral.md", "sensitive.md", "evaluate.md")], function(s) names(s$reflexes))
+     task_ids = purrr::map(rfiles[c("attitudinal.md", "behavioral.md", "sensitive.md", "evaluate.md")], function(s) names(s$reflexes))
      mine = task_ids[[paste0(b$task, ".md")]]
      others = unlist(task_ids[names(task_ids) != paste0(b$task, ".md")])
      all(mine %in% ids_in(b$p$system)) && !any(setdiff(others, mine) %in% ids_in(b$p$system))
@@ -348,13 +348,13 @@ ok("the message is the persona, Brief:, Task:, (for Evaluate, Questionnaire:), t
      heads = c("Brief:", "Task:", if (b$task == "evaluate") "Questionnaire:", "Guidelines:",
                if (b$task == "evaluate") "CHECKLIST", "REPLY FORMAT")
      pos = purrr::map_int(heads, function(h) as.integer(regexpr(paste0("(?m)^", h, "$"), u, perl = TRUE)))
-     all(pos > 0) && all(diff(pos) > 0) && startsWith(u, paste0(skills[["core.md"]]$persona, "\n\nBrief:\n")) &&
+     all(pos > 0) && all(diff(pos) > 0) && startsWith(u, paste0(rfiles[["core.md"]]$persona, "\n\nBrief:\n")) &&
        !grepl("(?m)^(PREPARE|ASK|CHARACTERIZE)$", u, perl = TRUE) &&
        startsWith(b$p$tail, if (b$task == "evaluate") "CHECKLIST\n" else "REPLY FORMAT\n")
    }))
 ok("a draft's message holds core.md's guidelines and then the task file's; a review's only core.md's; none is in the system prompt",
    every_built(function(b) {
-     gl = function(file) paste0("- ", skills[[file]]$guidelines$bullets)
+     gl = function(file) paste0("- ", rfiles[[file]]$guidelines$bullets)
      core_in = all(purrr::map_lgl(gl("core.md"), function(l) grepl(paste0("\n", l, "\n"), paste0("\n", b$p$message, "\n"), fixed = TRUE)))
      task_file = paste0(b$task, ".md")
      task_in = if (b$task == "evaluate") !any(grepl("Ask about a specific, clearly defined attitude object.", b$p$message, fixed = TRUE))
@@ -364,7 +364,7 @@ ok("a draft's message holds core.md's guidelines and then the task file's; a rev
        !grepl("Guidelines:", b$p$system, fixed = TRUE)
    }))
 ok("the Output format of the file that carries it is in the user message, as written",
-   every_built(function(b) grepl(skills[[if (b$task == "evaluate") "evaluate.md" else "generate.md"]]$output_format,
+   every_built(function(b) grepl(rfiles[[if (b$task == "evaluate") "evaluate.md" else "generate.md"]]$output_format,
                                  b$p$user, fixed = TRUE)))
 ok("the number of items is in the ask for the drafting tasks",
    every_built(function(b) b$task == "evaluate" ||
@@ -389,7 +389,7 @@ ok("a drafting prompt has no CHECKLIST block and no Check question in its user m
 ok("the checklist is a named character vector of the Check lines in force",
    every_built(function(b) {
      ck = b$ck
-     in_force = unlist(purrr::map(b$p$files, function(f) purrr::map_chr(skills[[f]]$reflexes, "check")))
+     in_force = unlist(purrr::map(b$p$files, function(f) purrr::map_chr(rfiles[[f]]$reflexes, "check")))
      is.character(ck) && !is.null(names(ck)) && !anyDuplicated(names(ck)) &&
        all(nzchar(ck)) && all(names(ck) %in% ids_in(b$p$system)) &&
        all(names(ck) %in% names(in_force)[!is.na(in_force)]) &&
@@ -427,17 +427,17 @@ ok("the order modes are ticked in does not matter",
              build_prompt(utils::modifyList(forms$behavioral, list(modes = c("face_to_face", "telephone"))))$hash))
 ok("a Windows line ending is the same as a newline",
    identical(h(other = "line one\r\nline two"), h(other = "line one\nline two")))
-ok("a change to a skill file changes the hash",
+ok("a change to a reflex file changes the hash",
    local({
-     dir = file.path(tempdir(), "skills_copy")
+     dir = file.path(tempdir(), "reflexes_copy")
      dir.create(dir, showWarnings = FALSE)
-     file.copy(file.path(SKILLS_DIR, SKILL_FILES), dir, overwrite = TRUE)
+     file.copy(file.path(REFLEXES_DIR, REFLEX_FILES), dir, overwrite = TRUE)
      core = file.path(dir, "core.md")
      writeLines(sub("Write plainly.", "Write plainly!", readLines(core, encoding = "UTF-8", warn = FALSE), fixed = TRUE), core)
      f = clean_form(forms$attitudinal)
-     before = skills_in_force(f)
-     after = skills_in_force(f, dir)
-     !identical(read_skill("core.md")$sha, read_skill("core.md", dir)$sha) &&
+     before = reflexes_in_force(f)
+     after = reflexes_in_force(f, dir)
+     !identical(read_reflex_file("core.md")$sha, read_reflex_file("core.md", dir)$sha) &&
        !identical(prompt_hash(assemble_system(before), assemble_message(f, before)),
                   prompt_hash(assemble_system(after), assemble_message(f, after)))
    }))
@@ -947,8 +947,8 @@ ok("TASKS has the four tasks, each with a label, a kind, files, an ask and field
 ok("a task's kind is draft or review, and only Evaluate is a review",
    purrr::every(TASKS, function(t) t$kind %in% c("draft", "review")) &&
      identical(names(purrr::keep(TASKS, function(t) t$kind == "review")), "evaluate"))
-ok("every file a task names is a skill file, core.md leads, and mode.md is in",
-   purrr::every(TASKS, function(t) all(t$files %in% SKILL_FILES) && identical(t$files[1], "core.md") &&
+ok("every file a task names is a reflex file, core.md leads, and mode.md is in",
+   purrr::every(TASKS, function(t) all(t$files %in% REFLEX_FILES) && identical(t$files[1], "core.md") &&
                   "mode.md" %in% t$files))
 ok("every field a task shows is a field of the form, and none is the task itself",
    purrr::every(TASKS, function(t) all(t$fields %in% FORM_FIELDS) && !"task" %in% t$fields))
@@ -983,15 +983,15 @@ ok("the brief check's system prompt holds the brief rules and the task's rules, 
    purrr::every(brief_built, function(b)
      inn(b$p$system, "- what_a_brief_needs (") && inn(b$p$system, "- criteria_preview (") &&
        inn(b$p$system, if (b$form$task == "evaluate") "- restraint (" else "- declare_defaults (") &&
-       !inn(b$p$system, skills[["core.md"]]$persona) && startsWith(b$p$user, skills[["core.md"]]$persona)))
+       !inn(b$p$system, rfiles[["core.md"]]$persona) && startsWith(b$p$user, rfiles[["core.md"]]$persona)))
 ok("the brief check's user message is the persona, then PREPARE, ASK, CHECKLIST, CHARACTERIZE, with pm_brief's output format",
    purrr::every(brief_built, function(b) {
      u = b$p$user
      pos = purrr::map_int(c("PREPARE", "ASK", "CHECKLIST", "CHARACTERIZE"), function(h)
        as.integer(regexpr(paste0("(?m)^", h, "$"), u, perl = TRUE)))
      all(pos > 0) && all(diff(pos) > 0) &&
-       startsWith(u, paste0(skills[["core.md"]]$persona, "\n\nPREPARE\n")) &&
-       inn(u, skills[["pm_brief.md"]]$output_format) && inn(u, "\"task_fit\"") &&
+       startsWith(u, paste0(rfiles[["core.md"]]$persona, "\n\nPREPARE\n")) &&
+       inn(u, rfiles[["pm_brief.md"]]$output_format) && inn(u, "\"task_fit\"") &&
        !inn(u, "\"source_english\"") && !inn(u, "\"trapd\"")
    }))
 ok("the brief check names the task the analyst chose, and its CHECKLIST is exactly build_checklist(form)",
@@ -1029,13 +1029,13 @@ ok("the appraisal sends core and pm_appraise only, and none of the drafting rule
    identical(ap$files, c("core.md", "pm_appraise.md")) &&
      inn(ap$system, "- check_before_choosing (") && inn(ap$system, "- pick_per_domain (") &&
      !inn(ap$system, "- declare_defaults (") && !inn(ap$system, "- attitude_object (") &&
-     !inn(ap$system, skills[["core.md"]]$persona))
+     !inn(ap$system, rfiles[["core.md"]]$persona))
 ok("the appraisal's user message is the persona, then PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE, in that order",
    local({
      pos = purrr::map_int(c("PREPARE", "ASK", "CANDIDATES", "CHECKLIST", "CHARACTERIZE"), function(h)
        as.integer(regexpr(paste0("(?m)^", h, "$"), ap$user, perl = TRUE)))
-     all(pos > 0) && all(diff(pos) > 0) && inn(ap$user, skills[["pm_appraise.md"]]$output_format) &&
-       startsWith(ap$user, paste0(skills[["core.md"]]$persona, "\n\nPREPARE\n")) &&
+     all(pos > 0) && all(diff(pos) > 0) && inn(ap$user, rfiles[["pm_appraise.md"]]$output_format) &&
+       startsWith(ap$user, paste0(rfiles[["core.md"]]$persona, "\n\nPREPARE\n")) &&
        inn(ap$user, "\"selected\"")
    }))
 ok("the appraisal's CHECKLIST is exactly what the workers' files give, and their questions are not in the system prompt",
@@ -1089,7 +1089,7 @@ with_field <- function(x, ...) {
   x[names(over)] = over
   x
 }
-# A draft item with every field the skill asks for.
+# A draft item with every field the reflex file asks for.
 good_item <- function(i, ...)
   with_field(
     list(id = paste0("Q", i), domain = paste("domain", i), intro = "",
@@ -1683,7 +1683,7 @@ extended <- paste(as.character(mod_brief_ui("brief")), collapse = "")
 ok("a task added to TASKS is in the dropdown, its fields are shown for it, and it assembles a prompt",
    grepl("Knowledge items", extended, fixed = TRUE) && grepl("knowledge", extended, fixed = TRUE) &&
      "knowledge" %in% task_choices() &&
-     startsWith(build_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")))$user, skills[["core.md"]]$persona) &&
+     startsWith(build_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")))$user, rfiles[["core.md"]]$persona) &&
      length(build_step_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")), "brief")$files) == 5L)
 ok("a worker added to the model list gets its own box, and nothing else changes",
    grepl("vendor-z/extra-worker", extended, fixed = TRUE) && !grepl("vendor-z/extra-worker", brief_page, fixed = TRUE))
@@ -1711,7 +1711,7 @@ local({
     session$flushReact()
     a = build_prompt(st$form)
     b = html_of3(output$body)
-    ok("the assembled prompt is shown whole and editable, with the skill files used",
+    ok("the assembled prompt is shown whole and editable, with the reflex files used",
        grepl("senior survey methodologist", b, fixed = TRUE) && grepl("Write exactly 2 survey items", b, fixed = TRUE) &&
          grepl("textarea", b, fixed = TRUE) && grepl("core.md, generate.md", b, fixed = TRUE) &&
          grepl("Approve and run", b, fixed = TRUE) && !grepl("disabled", b, fixed = TRUE) &&
@@ -1721,10 +1721,10 @@ local({
          grepl("The prompt (you can edit this)", b, fixed = TRUE) &&
          grepl("The survey design rules are sent with this prompt every time and cannot be edited here. You can read them on the Methodology tab.",
                gsub("\\s+", " ", b), fixed = TRUE))
-    reflex_says <- unlist(purrr::map(skills[["core.md"]]$reflexes, function(r) c(r$say, r$never)), use.names = FALSE)
+    reflex_says <- unlist(purrr::map(rfiles[["core.md"]]$reflexes, function(r) c(r$say, r$never)), use.names = FALSE)
     ok("the Prompt tab has no \"System prompt\", none of core.md's Reflexes or Prohibitions, and no input named system",
        !grepl("System prompt", paste(b, html_of3(output$status)), ignore.case = TRUE) &&
-         !any(purrr::map_lgl(c(reflex_says[!is.na(reflex_says)], skills[["core.md"]]$prohibitions), function(s)
+         !any(purrr::map_lgl(c(reflex_says[!is.na(reflex_says)], rfiles[["core.md"]]$prohibitions), function(s)
            grepl(squash(s), squash(paste(b, html_of3(output$status))), fixed = TRUE))) &&
          !grepl("REFLEXES:", b, fixed = TRUE) && !grepl("PROHIBITIONS", b, fixed = TRUE) &&
          !grepl("id=\"[^\"]*-system\"", b))
@@ -2655,7 +2655,7 @@ ok("a language other than the source puts the TRAPD block above the disclosure b
      !grepl("TRAPD", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
                                   set = list(set_entry("A", 1L, "Q1")), models = out_models, time = out_time)$text, fixed = TRUE))
 
-skill_versions <- function(files) purrr::map_chr(files, function(x) paste0(x, " ", read_skill(x)$version))
+reflex_versions <- function(files) purrr::map_chr(files, function(x) paste0(x, " ", read_reflex_file(x)$version))
 ok("the disclosure names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft",
    grepl("Date: 2026-11-12 09:30", fr_txt, fixed = TRUE) && grepl(paste0("Profile: ", APP_PROFILE), fr_txt, fixed = TRUE) &&
      grepl("Project manager model: vendor-p/pm-model (example.invalid)", fr_txt, fixed = TRUE) &&
@@ -2666,8 +2666,8 @@ ok("the disclosure names the date, the profile, the project manager and each wor
        build_output(fr_form, drafts = bad, seed = 11L, set = list(set_entry("A", 1L, "CONF1")),
                     models = out_models, time = out_time)$text
      }, fixed = TRUE))
-ok("the disclosure gives the version of each skill file used, and pm_brief.md only when the brief was checked",
-   grepl(paste0("Skill files and versions: ", paste(skill_versions(c("core.md", "generate.md", "attitudinal.md", "mode.md", "cross_cultural.md", "pm_appraise.md", "pm_brief.md")), collapse = "; ")),
+ok("the disclosure gives the version of each reflex file used, and pm_brief.md only when the brief was checked",
+   grepl(paste0("Reflex files and versions: ", paste(reflex_versions(c("core.md", "generate.md", "attitudinal.md", "mode.md", "cross_cultural.md", "pm_appraise.md", "pm_brief.md")), collapse = "; ")),
          fr_txt, fixed = TRUE) &&
      !grepl("pm_brief.md", build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = fr_set,
                                         approved = fr_approved, models = out_models, time = out_time)$text, fixed = TRUE) &&
@@ -2944,15 +2944,15 @@ ok("a profile with placeholders opens the Settings and connection panel by itsel
      work_open$status == 0 && grepl("<details[^>]*open[^>]*>\\s*<summary>\\s*<strong>Settings and connection", work_open$out)
    }))
 meth_html <- paste(as.character(md_page(METHODOLOGY_FILE)), collapse = "\n")
-ok("the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; skills_table() stays, because tests/review.R reads it",
+ok("the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; reflexes_table() stays, because tests/review.R reads it",
    md_has_headings(METHODOLOGY_FILE, meth_html) && grepl("<ul>", meth_html, fixed = TRUE) &&
      grepl("36 of the 48 planted faults|It found 36 of the 48 faults", meth_html) && !grepl("<code>", meth_html, fixed = TRUE) &&
      !grepl("The rules, file by file", meth_html, fixed = TRUE) && grepl("Methodology", page$html, fixed = TRUE) &&
      grepl("How QuestionR works and what stands behind it", page$html, fixed = TRUE) &&
-     is.data.frame(skills_table()) && nrow(skills_table()) > 80L && !"skills_html" %in% ls(globalenv()) &&
+     is.data.frame(reflexes_table()) && nrow(reflexes_table()) > 80L && !"reflexes_html" %in% ls(globalenv()) &&
      grepl("could not be shown", paste(as.character(md_page(file.path("www", "no_such_page.md"))), collapse = ""), fixed = TRUE))
 
-# ---- Phase 8c: the frameworks and the skill panels ---------------------------------------------
+# ---- Phase 8c: the frameworks and the reflex panels ---------------------------------------------
 
 meth_lines <- readLines(METHODOLOGY_FILE, encoding = "UTF-8", warn = FALSE)
 meth_heads <- sub("^## ", "", grep("^## ", meth_lines, value = TRUE))
@@ -2961,9 +2961,9 @@ fw_end <- min(c(which(grepl("^## ", meth_lines) & seq_along(meth_lines) > fw_at)
 fw_sections <- split(meth_lines[(fw_at + 1L):(fw_end - 1L)],
                      cumsum(grepl("^### ", meth_lines[(fw_at + 1L):(fw_end - 1L)])))
 fw_sections <- fw_sections[-1]   # what comes before the first ###: the opening sentence
-ok("the frameworks section comes directly after 'What it is built on', opens with one sentence saying the skills were written from them, and 'How it was tested' is one section with that heading",
+ok("the frameworks section comes directly after 'What it is built on', opens with one sentence saying the reflexes were written from them, and 'How it was tested' is one section with that heading",
    identical(meth_heads[which(meth_heads == "What it is built on") + 1L], "The frameworks behind the rules") &&
-     grepl("^These frameworks are what the skills were written from, and each skill below",
+     grepl("^These frameworks are what the reflexes were written from, and each reflex file below",
            trimws(gsub("\\s+", " ", paste(meth_lines[(fw_at + 1L):(fw_at + 6L)], collapse = " ")))) &&
      sum(meth_heads == "How it was tested") == 1L)
 ok("each framework is a diagram, then a summary of three to five sentences, then an italic line of references",
@@ -2995,7 +2995,7 @@ ok("every image named in start.md and methodology.md exists in www/",
      length(imgs) >= 7L && all(file.exists(file.path("www", imgs)))
    }))
 
-# The Frameworks column of the skills table: which of the six frameworks a skill file's Source lines
+# The Frameworks column of the reflex table: which of the six frameworks a reflex file's Source lines
 #   name, by the rule below; none of them is "Session guidelines".
 fw_rules <- c("Total Survey Error" = "Groves|Total Survey Error",
               "Response model" = "Tourangeau, Rips and Rasinski|response-process|response process|four-stage",
@@ -3004,33 +3004,33 @@ fw_rules <- c("Total Survey Error" = "Groves|Total Survey Error",
               "TRAPD" = "TRAPD",
               "Sensitive questions" = "Tourangeau and Yan|Yan 2021|writing sensitive questions|[(]sensitive questions")
 fw_of <- function(file) {
-  src = sub("^- \\*\\*Source:\\*\\*[ \\t]*", "", grep("^- \\*\\*Source:\\*\\*", readLines(file.path("www", "skills", file), encoding = "UTF-8", warn = FALSE), value = TRUE))
+  src = sub("^- \\*\\*Source:\\*\\*[ \\t]*", "", grep("^- \\*\\*Source:\\*\\*", readLines(file.path("www", "reflexes", file), encoding = "UTF-8", warn = FALSE), value = TRUE))
   hit = names(fw_rules)[vapply(fw_rules, function(p) any(grepl(p, src)), NA)]
   if (length(hit)) paste(hit, collapse = "; ") else "Session guidelines"
 }
-ok("the Frameworks column of the skills table is what each file's Source lines name, in the order of the panels",
+ok("the Frameworks column of the reflex table is what each file's Source lines name, in the order of the panels",
    local({
      rows = grep("^\\| ", meth_lines, value = TRUE)
      rows = rows[-1]   # the header
      cells = purrr::map_chr(rows, function(r) trimws(utils::tail(strsplit(r, "|", fixed = TRUE)[[1]], 1)))
-     length(cells) == length(SKILL_PANEL_ORDER) &&
-       identical(cells, unname(purrr::map_chr(SKILL_PANEL_ORDER, fw_of)))
+     length(cells) == length(REFLEX_PANEL_ORDER) &&
+       identical(cells, unname(purrr::map_chr(REFLEX_PANEL_ORDER, fw_of)))
    }))
 
-meth_panels <- paste(as.character(skill_panels()), collapse = "\n")
-ok("under the Methodology page, one closed panel for each skill file, in the order of the table, titled with the file's heading and version, holding the file as markdown without its comments, and not the README",
+meth_panels <- paste(as.character(reflex_panels()), collapse = "\n")
+ok("under the Methodology page, one closed panel for each reflex file, in the order of the table, titled with the file's heading and version, holding the file as markdown without its comments, and not the README",
    local({
      heads = gsub("\\s+", " ", regmatches(meth_panels, gregexpr("<summary>\\s*<strong>[^<]+</strong>\\s*</summary>", meth_panels))[[1]])
-     want = purrr::map_chr(SKILL_PANEL_ORDER, function(f) { s = read_skill(f); paste0("<summary> <strong>", s$title, ", version ", s$version, "</strong> </summary>") })
-     comments = unlist(purrr::map(SKILL_PANEL_ORDER, function(f) regmatches(paste(readLines(file.path(SKILLS_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"),
-                                                                           gregexpr("(?s)<!--.*?-->", paste(readLines(file.path(SKILLS_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"), perl = TRUE))[[1]]))
+     want = purrr::map_chr(REFLEX_PANEL_ORDER, function(f) { s = read_reflex_file(f); paste0("<summary> <strong>", s$title, ", version ", s$version, "</strong> </summary>") })
+     comments = unlist(purrr::map(REFLEX_PANEL_ORDER, function(f) regmatches(paste(readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"),
+                                                                           gregexpr("(?s)<!--.*?-->", paste(readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"), perl = TRUE))[[1]]))
      identical(heads, want) && length(gregexpr("<details", meth_panels, fixed = TRUE)[[1]]) == 10L &&
        !grepl("<details[^>]*open", meth_panels) && !grepl("<!--", meth_panels, fixed = TRUE) &&
        grepl("construct_first", meth_panels, fixed = TRUE) && grepl("You are a senior survey methodologist", meth_panels, fixed = TRUE) &&
        !any(purrr::map_lgl(trimws(gsub("<!--|-->", "", comments)), function(cm) grepl(substr(gsub("\\s+", " ", cm), 1, 60), gsub("\\s+", " ", meth_panels), fixed = TRUE))) &&
-       !grepl("QuestionR skills", meth_panels, fixed = TRUE) &&
-       grepl("could not be shown", paste(as.character(skill_panels(file.path("www", "no_such_dir"))), collapse = ""), fixed = TRUE) &&
-       any(grepl("skill_panels()", readLines("app.R", warn = FALSE), fixed = TRUE))
+       !grepl("QuestionR reflexes", meth_panels, fixed = TRUE) &&
+       grepl("could not be shown", paste(as.character(reflex_panels(file.path("www", "no_such_dir"))), collapse = ""), fixed = TRUE) &&
+       any(grepl("reflex_panels()", readLines("app.R", warn = FALSE), fixed = TRUE))
    }))
 
 

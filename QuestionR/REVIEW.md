@@ -1,6 +1,8 @@
 # QuestionR review evidence, Phase 5
 
-Generated 2026-11-13 08:45 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+From Phase 9, "skills" are called "reflexes". This file keeps the old word where it records earlier work.
+
+Generated 2026-11-13 17:50 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,6 +14,9 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+341314a QuestionR: Phase 9 prompt, and design section 18 (Kevin's five rulings)
+4f7bf1c Merge branch 'questionr': add QuestionR
+d20ba49 QuestionR Phase 8: STATUS and REVIEW
 6bbba75 QuestionR 8h: hardening
 bbddebe QuestionR 8g: remove what is no longer needed
 edd4eea QuestionR 8f: no TODO text on Start here
@@ -24,110 +29,49 @@ e0d90c5 QuestionR 8b: the Prompt tab shows one box, and never the rules
 67e6fae QuestionR: changes from the Claude project
 f408251 QuestionR Phase 7: STATUS and REVIEW
 f0b1e69 questionR branch
-7e29787 Phase 7: README says what Results does now; llm_check generate reads the new appraisal
-8eb0ef3 Phase 7d: tidy after 7a-7c
-c740cfa QuestionR 7c: Start here welcomes the analyst; a short methodology note; the brief check is off by default
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
+ M .rscignore
+ M DESIGN.md
+ M PROMPTS.md
+ M R/checks.R
+ M R/llm.R
+ M R/output.R
+RM R/skills.R -> R/reflexes.R
+ M R/ui.R
+ M R/ui_generate.R
  M README.md
- M REVIEW.md
  M STATUS.md
+ M app.R
  M tests/output_generate.txt
  M tests/output_review.txt
- M tests/run_generate.json
+ M tests/review.R
+ M tests/smoke.R
+ M www/how_it_works.svg
+ M www/methodology.md
+R  "www/skills_materials/Evaluating Unedited AI-Generated Psychometric Scales.pdf" -> "www/reflex_materials/Evaluating Unedited AI-Generated Psychometric Scales.pdf"
+RM www/skills_materials/README.md -> www/reflex_materials/README.md
+RM www/skills/README.md -> www/reflexes/README.md
+R  www/skills/attitudinal.md -> www/reflexes/attitudinal.md
+R  www/skills/behavioral.md -> www/reflexes/behavioral.md
+R  www/skills/core.md -> www/reflexes/core.md
+R  www/skills/cross_cultural.md -> www/reflexes/cross_cultural.md
+R  www/skills/evaluate.md -> www/reflexes/evaluate.md
+R  www/skills/generate.md -> www/reflexes/generate.md
+R  www/skills/mode.md -> www/reflexes/mode.md
+R  www/skills/pm_appraise.md -> www/reflexes/pm_appraise.md
+R  www/skills/pm_brief.md -> www/reflexes/pm_brief.md
+R  www/skills/sensitive.md -> www/reflexes/sensitive.md
+ M www/start.md
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
- .gitignore                                         |    7 +
- CLAUDE.md                                          |    3 +-
- QuestionR/.rscignore                               |    8 +
- QuestionR/DESIGN.md                                |  904 ++++++
- QuestionR/PROMPTS.md                               |  638 ++++
- QuestionR/R/_disable_autoload.R                    |    5 +
- QuestionR/R/checks.R                               |  451 +++
- QuestionR/R/flow.R                                 |  420 +++
- QuestionR/R/llm.R                                  |  696 +++++
- QuestionR/R/output.R                               |  431 +++
- QuestionR/R/skills.R                               |  698 +++++
- QuestionR/R/ui.R                                   |  188 ++
- QuestionR/R/ui_generate.R                          | 1015 +++++++
- QuestionR/README.md                                |  162 +
- QuestionR/REVIEW.md                                | 1888 ++++++++++++
- QuestionR/STATUS.md                                | 2066 +++++++++++++
- QuestionR/app.R                                    |  249 ++
- QuestionR/tests/gold_items.csv                     |   60 +
- QuestionR/tests/gold_matches.csv                   |   68 +
- QuestionR/tests/gold_runs/C1.json                  |   98 +
- QuestionR/tests/gold_runs/C3.json                  |   98 +
- QuestionR/tests/gold_runs/C4.json                  |   98 +
- QuestionR/tests/gold_runs/C5.json                  |   98 +
- QuestionR/tests/gold_runs/C6.json                  |   98 +
- QuestionR/tests/gold_runs/C7.json                  |  108 +
- QuestionR/tests/gold_runs/C8.json                  |   98 +
- QuestionR/tests/gold_runs/F1.json                  |  128 +
- QuestionR/tests/gold_runs/F10.json                 |  108 +
- QuestionR/tests/gold_runs/F11.json                 |  109 +
- QuestionR/tests/gold_runs/F12.json                 |  108 +
- QuestionR/tests/gold_runs/F13.json                 |  108 +
- QuestionR/tests/gold_runs/F14.json                 |  118 +
- QuestionR/tests/gold_runs/F15.json                 |  150 +
- QuestionR/tests/gold_runs/F16.json                 |  128 +
- QuestionR/tests/gold_runs/F17.json                 |  108 +
- QuestionR/tests/gold_runs/F18.json                 |  149 +
- QuestionR/tests/gold_runs/F19.json                 |  128 +
- QuestionR/tests/gold_runs/F2.json                  |   98 +
- QuestionR/tests/gold_runs/F20.json                 |  141 +
- QuestionR/tests/gold_runs/F3.json                  |  118 +
- QuestionR/tests/gold_runs/F4.json                  |  150 +
- QuestionR/tests/gold_runs/F5.json                  |  131 +
- QuestionR/tests/gold_runs/F6.json                  |  108 +
- QuestionR/tests/gold_runs/F7.json                  |  130 +
- QuestionR/tests/gold_runs/F8.json                  |  108 +
- QuestionR/tests/gold_runs/F9.json                  |  119 +
- QuestionR/tests/gold_runs/_calls.csv               |   28 +
- QuestionR/tests/gold_runs/_findings.csv            |  103 +
- QuestionR/tests/gold_summary.md                    |  121 +
- QuestionR/tests/llm_check.R                        |  331 ++
- QuestionR/tests/llm_check.out                      |   24 +
- QuestionR/tests/output_generate.txt                |   60 +
- QuestionR/tests/output_review.txt                  |   64 +
- QuestionR/tests/review.R                           |  683 +++++
- QuestionR/tests/review_long.md                     |   26 +
- QuestionR/tests/review_long_questionnaire.txt      |   89 +
- QuestionR/tests/review_questionnaire.txt           |   15 +
- QuestionR/tests/review_tokens.md                   |   18 +
- QuestionR/tests/run_generate.json                  |  717 +++++
- QuestionR/tests/smoke.R                            | 3189 ++++++++++++++++++++
- QuestionR/www/fw_construct.svg                     |  140 +
- QuestionR/www/fw_response.svg                      |   38 +
- QuestionR/www/fw_sensitive.svg                     |   57 +
- QuestionR/www/fw_testing.svg                       |   44 +
- QuestionR/www/fw_trapd.svg                         |   52 +
- QuestionR/www/fw_tse.svg                           |   82 +
- QuestionR/www/how_it_works.svg                     |  108 +
- QuestionR/www/methodology.md                       |  178 ++
- QuestionR/www/skills/README.md                     |   70 +
- QuestionR/www/skills/attitudinal.md                |   86 +
- QuestionR/www/skills/behavioral.md                 |   84 +
- QuestionR/www/skills/core.md                       |  113 +
- QuestionR/www/skills/cross_cultural.md             |   66 +
- QuestionR/www/skills/evaluate.md                   |  117 +
- QuestionR/www/skills/generate.md                   |   77 +
- QuestionR/www/skills/mode.md                       |   57 +
- QuestionR/www/skills/pm_appraise.md                |   76 +
- QuestionR/www/skills/pm_brief.md                   |   42 +
- QuestionR/www/skills/sensitive.md                  |  107 +
- ...g Unedited AI-Generated Psychometric Scales.pdf |  Bin 0 -> 470449 bytes
- QuestionR/www/skills_materials/README.md           |   42 +
- QuestionR/www/start.md                             |   46 +
- README.md                                          |    2 +
- prompts/extract_reflexes.md                        |   62 -
- svysegment/tests/llm_check.R                       |   40 +
- svysegment/tests/smoke.R                           |   47 +
- 86 files changed, 20336 insertions(+), 63 deletions(-)
+ QuestionR/DESIGN.md  |  50 ++++++++++++++++
+ QuestionR/PROMPTS.md | 165 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 215 insertions(+)
 exit status: 0
 ~~~~
 
@@ -141,11 +85,11 @@ exit status: 0
 | R/flow.R | 420 |
 | R/llm.R | 696 |
 | R/output.R | 431 |
-| R/skills.R | 698 |
-| R/ui.R | 188 |
+| R/reflexes.R | 698 |
+| R/ui.R | 187 |
 | R/ui_generate.R | 1015 |
 | tests/llm_check.R | 331 |
-| tests/review.R | 683 |
+| tests/review.R | 684 |
 | tests/smoke.R | 3189 |
 
 Code files counted: 11 of 12 allowed: PASS
@@ -167,13 +111,13 @@ Top-level expressions in R/ that are not assignments: PASS
 Names defined more than once across R/: PASS
 pkg::fn calls checked: 37. Not exported by the installed package: PASS
 
-## 4. Skill files
+## 4. Reflex files
 
 PASS means the file is byte for byte what the Claude project drafted (line endings aside).
 
 | file | result | sha |
 |---|---|---|
-| README.md | PASS | 6d851fc5dc38f734c5754c818b25cd14a2667c090fef5150da30994456ea06cf |
+| README.md | PASS | af465d960f3a82255c25300fa13cbda461dea7e024d95b21850454c225881cd5 |
 | attitudinal.md | PASS | 02a273b6ffe0428629b2b6c358a40977c11cb40adeb256fe09e3a4f03eba26e4 |
 | behavioral.md | PASS | f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142 |
 | core.md | PASS | d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9 |
@@ -185,7 +129,7 @@ PASS means the file is byte for byte what the Claude project drafted (line endin
 | pm_brief.md | PASS | a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a |
 | sensitive.md | PASS | 4d8b50d65e768c62143287b3f7400ff7d66695b4905b3d4e0849cc313b81a2eb |
 
-Files in www/skills not on the list: none
+Files in www/reflexes not on the list: none
 
 ## 5. Smoke test output, verbatim
 
@@ -219,8 +163,8 @@ ok  a pasted key is held for the session, trimmed
 ok  the key is not in the environment
 ok  saving the key bumps key_version
 ok  a forgotten key is gone
-ok  every skill file parses
-ok  each skill file has a title, a version, a sha and at least one reflex
+ok  every reflex file parses
+ok  each reflex file has a title, a version, a sha and at least one reflex
 ok  core.md carries the persona
 ok  the four files whose reply R parses carry an Output format
 ok  the parser found every Source line, Check line and comment in the raw files
@@ -271,7 +215,7 @@ ok  a changed questionnaire changes the Evaluate hash
 ok  a blank is the same blank: empty, character(0), NA, or only spaces
 ok  the order modes are ticked in does not matter
 ok  a Windows line ending is the same as a newline
-ok  a change to a skill file changes the hash
+ok  a change to a reflex file changes the hash
 ok  the PREPARE labels are the contract's, in its order, each on its own line
 ok  blank fields leave no PREPARE line, except Output language, which is always there
 ok  a blank output language prints as English, and hashes as English
@@ -350,7 +294,7 @@ ok  with a key the project manager is called as well, and no key is on the page
 ok  Start here has the models table and the Check connections button
 ok  TASKS has the four tasks, each with a label, a kind, files, an ask and fields
 ok  a task's kind is draft or review, and only Evaluate is a review
-ok  every file a task names is a skill file, core.md leads, and mode.md is in
+ok  every file a task names is a reflex file, core.md leads, and mode.md is in
 ok  every field a task shows is a field of the form, and none is the task itself
 ok  a drafting task asks for items and shows the count; a review shows the questionnaire instead
 ok  a task that is not in the registry stops, naming the choices
@@ -453,7 +397,7 @@ ok  a task added to TASKS is in the dropdown, its fields are shown for it, and i
 ok  a worker added to the model list gets its own box, and nothing else changes
 ok  the registry and the model list are back as they were
 ok  with no form the Prompt tab asks for the Brief first
-ok  the assembled prompt is shown whole and editable, with the skill files used
+ok  the assembled prompt is shown whole and editable, with the reflex files used
 ok  the Prompt tab shows one box, labelled as editable, and one line saying the rules are sent and cannot be edited here
 ok  the Prompt tab has no "System prompt", none of core.md's Reflexes or Prohibitions, and no input named system
 ok  an untouched prompt is shown as assembled, with its hash
@@ -563,7 +507,7 @@ ok  the HTML and the plain text say the same: every line of the text is in the H
 ok  the output language not being English puts the English source wording in italics after each item
 ok  a language other than the source puts the TRAPD block above the disclosure block, and an English one has none
 ok  the disclosure names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft
-ok  the disclosure gives the version of each skill file used, and pm_brief.md only when the brief was checked
+ok  the disclosure gives the version of each reflex file used, and pm_brief.md only when the brief was checked
 ok  the disclosure gives each prompt's hash in full, says the drafting prompt was not edited, and says it was when it was
 ok  the disclosure says which candidate each item of the set came from and the model behind it, and ends with the fixed line
 ok  the output takes the set as the analyst left it: an edited item has its new wording, and the disclosure says which items were edited and which were swapped in by the analyst
@@ -590,16 +534,16 @@ ok  the review's run log has its round, its prompt hash and its call record
 ok  the page has the Output tab's boxes in place of its placeholder, and no key is anywhere on it
 ok  Start here is www/start.md as it is, then the key box, then a closed Settings and connection panel that holds the profile, the models table with the connection check, and the pilot notice
 ok  a profile with placeholders opens the Settings and connection panel by itself
-ok  the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; skills_table() stays, because tests/review.R reads it
+ok  the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; reflexes_table() stays, because tests/review.R reads it
 Warning message:
 In file(con, "r") :
   cannot open file 'www/no_such_page.md': No such file or directory
-ok  the frameworks section comes directly after 'What it is built on', opens with one sentence saying the skills were written from them, and 'How it was tested' is one section with that heading
+ok  the frameworks section comes directly after 'What it is built on', opens with one sentence saying the reflexes were written from them, and 'How it was tested' is one section with that heading
 ok  each framework is a diagram, then a summary of three to five sentences, then an italic line of references
 ok  every .svg in www/ is well-formed XML with a title and a description, and no script
 ok  every image named in start.md and methodology.md exists in www/
-ok  the Frameworks column of the skills table is what each file's Source lines name, in the order of the panels
-ok  under the Methodology page, one closed panel for each skill file, in the order of the table, titled with the file's heading and version, holding the file as markdown without its comments, and not the README
+ok  the Frameworks column of the reflex table is what each file's Source lines name, in the order of the panels
+ok  under the Methodology page, one closed panel for each reflex file, in the order of the table, titled with the file's heading and version, holding the file as markdown without its comments, and not the README
 ok  a profile that still holds placeholders says which entries to fill in, the connection check does not call it, and the work profile's page builds; a filled profile says nothing
 ok  when the only worker is of the project manager's own family, Results says the appraiser reviewed a draft from its own family; with workers of other families it says nothing
 ok  the workers' drafts are requested in one batch, each request the arguments ask takes, in the workers' order, and ask is not used
@@ -631,7 +575,7 @@ exit status: 0
 | any_mode present | PASS |
 | prohibitions headed as overriding | PASS |
 | Output language line always present | PASS |
-| reworded prohibition in force (skills 0.2) | PASS |
+| reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
@@ -785,7 +729,7 @@ Return one JSON object with these fields.
 | any_mode present | PASS |
 | prohibitions headed as overriding | PASS |
 | Output language line always present | PASS |
-| reworded prohibition in force (skills 0.2) | PASS |
+| reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
@@ -960,7 +904,7 @@ Return one JSON object with these fields.
 | any_mode present | PASS |
 | prohibitions headed as overriding | PASS |
 | Output language line always present | PASS |
-| reworded prohibition in force (skills 0.2) | PASS |
+| reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
@@ -1131,7 +1075,7 @@ Return one JSON object with these fields.
 | any_mode present | PASS |
 | prohibitions headed as overriding | PASS |
 | Output language line always present | PASS |
-| reworded prohibition in force (skills 0.2) | PASS |
+| reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
@@ -1289,7 +1233,7 @@ language and, when that is not English, add the English meaning.
 | any_mode present | PASS |
 | prohibitions headed as overriding | PASS |
 | Output language line always present | PASS |
-| reworded prohibition in force (skills 0.2) | PASS |
+| reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
@@ -1547,7 +1491,7 @@ ALL GREEN: TRUE  (8 of 8 calls)
 | only drafts that are ok become candidates | PASS |
 | no model id, vendor or endpoint reaches the appraisal prompt | PASS |
 | appraisal prompt: CANDIDATES then CHECKLIST then CHARACTERIZE, with the stems and the check questions | PASS |
-| documentation checks are not in the appraisal checklist (skills 0.3) | PASS |
+| documentation checks are not in the appraisal checklist (reflex files 0.3) | PASS |
 | appraisal prompt: persona (in the message), pm_appraise rules in the system prompt, not the drafting rules | PASS |
 | flow.R has no Shiny in it | PASS |
 | flow.R never looks up a key | PASS |
@@ -1820,7 +1764,7 @@ The control findings at 5 or above:
 | long review: batches recorded, one per call, each with status and hash | PASS |
 | a failed part gives status partial, names the part, and keeps the rest | PASS |
 | a short questionnaire is still one call with the Phase 4 prompt | PASS |
-| skills_table: one row per reflex with file, id, when, source | PASS |
+| reflexes_table: one row per reflex with file, id, when, source | PASS |
 | www/methodology.md present | PASS |
 
 Long live review (tests/review_long.md), verbatim:
@@ -1906,7 +1850,7 @@ Disclosure of the use of language models
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
 - Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
-- Skill files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
+- Reflex files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
 - Brief check prompt: aaccce763e7134d3eae405db15ce1f7e9f956ee0b57ec327cb84149e13b4cf94
 - Drafting prompt (not edited): c5663a00236f0e4d56d563d2aade9f74d5da1c847013d775841c5d551de99095
 - Appraisal prompt: c65f2fef5822b7e84c4558f10a852be8ce9ef5ecf502113934bfe8cb870376ce
@@ -1978,7 +1922,7 @@ Disclosure of the use of language models
 - Date: 2026-11-12 09:30
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
-- Skill files and versions: core.md 0.3; evaluate.md 0.3; mode.md 0.1
+- Reflex files and versions: core.md 0.3; evaluate.md 0.3; mode.md 0.1
 - Review prompt (not edited): 12a1c9c921d2f72ef146cac783dcc63eb1bc806364a9694977d51a222421f4f7
 
 Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.

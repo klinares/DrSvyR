@@ -2,7 +2,7 @@
 
 A Shiny app that helps a public opinion analyst **draft survey items** and **review a
 questionnaire**. Every model call is steered by plain text files grounded in survey
-methodology (`www/skills/`); the expertise is in those files, not in the model. The app
+methodology (`www/reflexes/`); the expertise is in those files, not in the model. The app
 assembles each prompt itself, so the same brief gives the same prompt, and every output says
 what it is: a first draft, or an expert-review appraisal, by a language model. **It is not a
 pretest.** It is a pilot: the Methodology tab says how the review step did on the one test it
@@ -30,10 +30,10 @@ What it does, in four tabs after "Start here":
 | Path | What it is |
 |---|---|
 | `app.R` | The settings, the models, the packages check, the layout and the server |
-| `R/` | The code, one job a file: `skills.R` reads the skill files and builds prompts; `llm.R` calls the models and holds the key box; `flow.R` runs a draft or a review step by step; `checks.R` checks and codes what a model sends back; `output.R` builds the Word output and the Methodology page; `ui.R` and `ui_generate.R` draw the tabs |
-| `www/skills/` | The rule files. Plain text; see `www/skills/README.md` for the format |
+| `R/` | The code, one job a file: `reflexes.R` reads the reflex files and builds prompts; `llm.R` calls the models and holds the key box; `flow.R` runs a draft or a review step by step; `checks.R` checks and codes what a model sends back; `output.R` builds the Word output and the Methodology page; `ui.R` and `ui_generate.R` draw the tabs |
+| `www/reflexes/` | The rule files. Plain text; see `www/reflexes/README.md` for the format |
 | `www/start.md`, `www/methodology.md` | The Start here welcome and the Methodology tab's note, as markdown, with the pictures `www/how_it_works.svg` and `www/fw_*.svg` |
-| `www/skills_materials/` | The list of the materials the skills were drawn from, and the one open-licensed paper; the rest stay with the maintainer and are never deployed |
+| `www/reflex_materials/` | The list of the materials the reflexes were drawn from, and the one open-licensed paper; the rest stay with the maintainer and are never deployed |
 | `www/logo/` | The office logo, if you add one |
 | `tests/`, `DESIGN.md`, `STATUS.md`, `PROMPTS.md`, `REVIEW.md` | How it was built and tested, at home. Not needed to run it |
 
@@ -139,13 +139,13 @@ What is verified in this repository, and what is not.
 - **A model.** Add a list to `workers` in a profile (or change `pm`), as in step 3 above. Nothing
   else changes: the tick boxes on the Brief tab, the connection check and the disclosure all read
   the profile.
-- **A task.** Write a skill file in `www/skills/` (format in `www/skills/README.md`), add its name
-  to `SKILL_FILES` in `R/skills.R`, and add one entry to `TASKS` in the same file: `label` (what
-  the dropdown says), `kind` (`"draft"` or `"review"`), `files` (the skill files, in order),
+- **A task.** Write a reflex file in `www/reflexes/` (format in `www/reflexes/README.md`), add its name
+  to `REFLEX_FILES` in `R/reflexes.R`, and add one entry to `TASKS` in the same file: `label` (what
+  the dropdown says), `kind` (`"draft"` or `"review"`), `files` (the reflex files, in order),
   `ask` (the fixed sentence of the request) and `fields` (which form fields the Brief tab shows).
   The dropdown, the form, the prompt and the checklist read `TASKS`. A task that needs a reply in
   a new shape also needs an entry in `REPLY_SCHEMAS` in `R/checks.R`.
-- **A rule.** Add a block to the right skill file: a `### id` line (lower case, underscores) and
+- **A rule.** Add a block to the right reflex file: a `### id` line (lower case, underscores) and
   its `When`, `Say` and, if you want one, `Never`, `Check` and `Source` lines. A rule with a
   `Check` line becomes a question on the appraisal checklist (the Methodology tab is
   `www/methodology.md`, written by hand, so say there what you changed). A change to a rule changes every prompt built from it, and the Prompt tab shows the

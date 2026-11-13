@@ -345,7 +345,7 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
         return(warn_box("The prompt could not be assembled: ", plain_message(a)))
       draft = TASKS[[state$form$task]]$kind == "draft"
       if (!is.null(a$calls)) return(tagList(
-        tags$p(class = "text-muted small", "Skill files used: ", paste(a$files, collapse = ", ")),
+        tags$p(class = "text-muted small", "Reflex files used: ", paste(a$files, collapse = ", ")),
         advice_box(tags$strong(paste0("This questionnaire is reviewed in ", a$calls - 1L, " parts. ")),
                    paste0("Each part is one call, and one more call looks at the instrument as a whole: ",
                           a$calls, " calls: the parts together, at most four at a time, then the whole. "),
@@ -359,7 +359,7 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
         tags$p("It can take several minutes, and the app is busy until it finishes."),
         actionButton(session$ns("approve"), "Approve and run", class = "btn-primary")))
       tagList(
-        tags$p(class = "text-muted small", "Skill files used: ", paste(a$files, collapse = ", ")),
+        tags$p(class = "text-muted small", "Reflex files used: ", paste(a$files, collapse = ", ")),
         tags$div(class = "qr-prompt",
                  textAreaInput(session$ns("user"), "The prompt (you can edit this)",
                                value = a$message, rows = 18, width = "100%", resize = "vertical")),

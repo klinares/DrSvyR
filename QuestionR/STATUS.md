@@ -2,6 +2,8 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
+From Phase 9, what this file calls "skills" are called "reflexes" (a file is a reflex file, each rule in it a reflex). The earlier text keeps the old word, as history.
+
 ## Phase 8 (2026-11-13): what analysts see, the frameworks, and the merge prepared
 
 **Next: Kevin tries the app (click-through at the end of this section), then answers the one

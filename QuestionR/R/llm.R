@@ -1,7 +1,7 @@
 # llm.R for QuestionR
 # The model layer: where a model's key comes from, the one call function for
 #   both API styles, JSON parse and repair, retry with a session cap, the
-#   connection check's call, and the key box. Nothing here is a prompt: R/skills.R
+#   connection check's call, and the key box. Nothing here is a prompt: R/reflexes.R
 #   writes those. Function definitions and constants only (root CLAUDE.md rule 2).
 
 # Which models there are, and where each one's key comes from, is APP_MODELS in
@@ -422,7 +422,7 @@ parse_json_block <- function(txt, pattern = "(?s)\\{.*\\}") {
 }
 
 # Appended to every JSON prompt at the moment of the call, rather than written
-#   into each one: R/skills.R builds the prompt the analyst sees and approves,
+#   into each one: R/reflexes.R builds the prompt the analyst sees and approves,
 #   and has no business knowing how a reply is parsed. llm_json() returns the
 #   message as sent, so the log can hold both. Worded so it cannot be read as
 #   "avoid quotes": told only "no double quotes inside a value", a model drops

@@ -46,7 +46,7 @@ DrSvyR/
   .gitignore       shared by every app
   images/          the repository's own images (this README)
   svysegment/      one app: app.R, R/, www/, data/, README.md
-  QuestionR/       one app: app.R, R/, www/ (skills/, logo/), tests/ (home only), README.md
+  QuestionR/       one app: app.R, R/, www/ (reflexes/, logo/), tests/ (home only), README.md
   inteRn/          not an app: inteRn.R, install.R, system.md, www/, tests/, README.md
 ```
 

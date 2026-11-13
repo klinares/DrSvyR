@@ -2,7 +2,8 @@
 
 QuestionR helps you write survey questions and check a questionnaire before
 it goes to the field. It applies the same rules a survey methodologist would
-use, and shows you what it checked.
+use, and shows you what it checked. QuestionR is an AI skill. It works from
+written AI reflexes: short rules of survey design that every model is given.
 
 You can:
 
