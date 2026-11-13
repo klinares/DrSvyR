@@ -61,9 +61,10 @@ ok("the logo shows, or its placeholder box does",
 ok("every tab is in the navlist", all(purrr::map_lgl(QUESTIONR_TABS, has)))
 ok("the key box is on Start here", has("Use this key") && has("type=\"password\""))
 # Phase 3 built tabs 1 to 3, 5c the Output tab and 5d the Methodology tab: none is a placeholder now.
-ok("no tab is a placeholder any more, and the Methodology tab holds the note and the rules table",
-   !grepl("Not built yet", page$html, fixed = TRUE) && grepl("Methodology note", page$html, fixed = TRUE) &&
-     grepl("The rules, file by file", page$html, fixed = TRUE))
+ok("no tab is a placeholder any more; Start here and the Methodology tab are their markdown files, and the rules table is not drawn",
+   !grepl("Not built yet", page$html, fixed = TRUE) && grepl("What this tool does", page$html, fixed = TRUE) &&
+     grepl("How QuestionR works and what stands behind it", page$html, fixed = TRUE) &&
+     !grepl("The rules, file by file", page$html, fixed = TRUE) && !grepl("<code>one_thing</code>", page$html, fixed = TRUE))
 
 # The profile block. Each profile in its own process.
 home <- in_child("home", c(
@@ -1506,8 +1507,8 @@ local({
   st = test_state()
   shiny::testServer(mod_brief_server,
                     args = list(state = st, go = nav$go, make_ask = function(total) fa$ask), {
-    set_inputs(session, brief_inputs, skip = 1)
-    ok("Skip carries the cleaned form and the ticked workers on, marks the brief skipped, and moves to the prompt",
+    set_inputs(session, brief_inputs, build = 1)
+    ok("Build the instructions carries the cleaned form and the ticked workers on, marks the brief unchecked, and moves to the prompt",
        identical(st$form$task, "attitudinal") && identical(st$form$n_items, 2L) &&
          identical(st$form$modes, "web") && length(st$workers) == length(worker_ids) &&
          identical(st$brief$status, "skipped") && identical(nav$env$tabs, QUESTIONR_TABS[3]) &&
@@ -1515,14 +1516,14 @@ local({
 
     nav$env$tabs = character(0)
     st$form = NULL
-    set_inputs(session, brief_inputs, research_question = "", skip = 2)
+    set_inputs(session, brief_inputs, research_question = "", build = 2)
     ok("a form that cannot be a prompt says why on the page, and goes nowhere",
        grepl("research question is required", html_of3(output$message), fixed = TRUE) &&
          is.null(st$form) && !length(nav$env$tabs))
-    set_inputs(session, brief_inputs, workers = character(0), skip = 3)
+    set_inputs(session, brief_inputs, workers = character(0), build = 3)
     ok("no worker ticked says so, and goes nowhere",
        grepl("Tick at least one worker", html_of3(output$message), fixed = TRUE) && is.null(st$form))
-    set_inputs(session, brief_inputs, n_items = NA, skip = 4)
+    set_inputs(session, brief_inputs, n_items = NA, build = 4)
     ok("no number of items says so, and goes nowhere",
        grepl("number of items", html_of3(output$message), fixed = TRUE) && is.null(st$form))
 
@@ -1559,9 +1560,9 @@ local({
     llm_set_session_key("pm-test-key")
     set_inputs(session, brief_inputs, check = 1)
     r = html_of3(output$result)
-    ok("a brief check that fails is said on the page in words, with the reason, and offers to skip",
+    ok("a brief check that fails is said on the page in words, with the reason, and offers to build the instructions without it",
        identical(st$brief$status, "failed") && grepl("did not come back", r, fixed = TRUE) &&
-         grepl("the project manager is down", r, fixed = TRUE) && grepl("skip it", r, fixed = TRUE))
+         grepl("the project manager is down", r, fixed = TRUE) && grepl("without it", r, fixed = TRUE))
     llm_clear_session_key(session$token)
   })
 })
@@ -1570,14 +1571,14 @@ local({
   st = test_state()
   shiny::testServer(mod_brief_server, args = list(state = st, go = function(tab) NULL), {
     set_inputs(session, brief_inputs, questionnaire = "LEAKED QUESTIONNAIRE", reference_period = "LEAKED PERIOD",
-               skip = 1)
+               build = 1)
     ok("a field the chosen task does not show is blank in the form, whatever was typed there before",
        identical(st$form$questionnaire, "") && identical(st$form$reference_period, ""))
-    set_inputs(session, brief_inputs, task = "behavioral", reference_period = "past 7 days", skip = 2)
+    set_inputs(session, brief_inputs, task = "behavioral", reference_period = "past 7 days", build = 2)
     ok("a field the task does show is carried (the reference period, for behavioral items)",
        identical(st$form$reference_period, "past 7 days") && identical(st$form$task, "behavioral"))
     set_inputs(session, brief_inputs, task = "evaluate", questionnaire = "Q1. How are you? Fine / Not fine",
-               skip = 3)
+               build = 3)
     ok("Evaluate carries its questionnaire, no item count and no workers, and says to leave a blank line between questions, how long one call is and what the limit is",
        identical(st$form$task, "evaluate") && grepl("Q1. How are you?", st$form$questionnaire, fixed = TRUE) &&
          is.na(st$form$n_items) && length(st$workers) == 0L &&
@@ -1586,11 +1587,11 @@ local({
          grepl(format(APP_BATCH_CHARS, big.mark = ","), html_of3(output$task_note), fixed = TRUE) &&
          grepl(format(APP_MAX_PASTE_CHARS, big.mark = ","), html_of3(output$task_note), fixed = TRUE) &&
          !grepl("Phase 4", html_of3(output$task_note), fixed = TRUE))
-    set_inputs(session, brief_inputs, task = "evaluate", questionnaire = strrep("a", APP_MAX_PASTE_CHARS + 1L), skip = 5)
+    set_inputs(session, brief_inputs, task = "evaluate", questionnaire = strrep("a", APP_MAX_PASTE_CHARS + 1L), build = 5)
     ok("a questionnaire over the cap is refused on the Brief tab with its length and the limit, and nothing moves on",
        grepl("Paste it in parts", html_of3(output$message), fixed = TRUE) && identical(st$form$task, "evaluate") &&
          nchar(st$form$questionnaire) < APP_MAX_PASTE_CHARS)
-    set_inputs(session, brief_inputs, task = "evaluate", questionnaire = paste0("Q1. ", strrep("x", APP_BATCH_CHARS + 50L)), skip = 6)
+    set_inputs(session, brief_inputs, task = "evaluate", questionnaire = paste0("Q1. ", strrep("x", APP_BATCH_CHARS + 50L)), build = 6)
     ok("a single block too long for one call is refused on the Brief tab, quoting where it starts, and nothing moves on",
        grepl("Block 1 of the questionnaire", html_of3(output$message), fixed = TRUE) &&
          grepl("Leave a blank line between questions", html_of3(output$message), fixed = TRUE) &&
@@ -1601,7 +1602,7 @@ local({
        grepl("REVISION", html_of3(output$revision_note), fixed = TRUE) &&
          grepl("Make the stems shorter.", html_of3(output$revision_note), fixed = TRUE) &&
          grepl("Round 1", html_of3(output$revision_note), fixed = TRUE))
-    set_inputs(session, brief_inputs, skip = 4)
+    set_inputs(session, brief_inputs, build = 4)
     ok("the change goes into the form as its revision, and so into the prompt as a REVISION block",
        identical(st$form$revision, "Make the stems shorter.") &&
          grepl("\nREVISION: Make the stems shorter.", build_prompt(st$form)$user, fixed = TRUE))
@@ -1612,9 +1613,12 @@ local({
 
 # The form is the registry's, not the screen's.
 brief_page <- paste(as.character(mod_brief_ui("brief")), collapse = "")
-ok("the Brief tab has the dropdown, the form, a box per worker, the check and the skip button",
-   n_in3("brief-task", brief_page) >= 1L && grepl("Check the brief", brief_page, fixed = TRUE) &&
-     grepl("Skip the brief check", brief_page, fixed = TRUE) &&
+ok("the Brief tab has the dropdown, the form, a box per worker, one main button, Build the instructions, and a smaller Check my brief first (the brief check is off by default)",
+   n_in3("brief-task", brief_page) >= 1L && grepl("Check my brief first", brief_page, fixed = TRUE) &&
+     grepl("Build the instructions", brief_page, fixed = TRUE) && !grepl("Skip the brief check", brief_page, fixed = TRUE) &&
+     regexpr("Build the instructions", brief_page, fixed = TRUE) < regexpr("Check my brief first", brief_page, fixed = TRUE) &&
+     grepl("btn-primary\"[^>]*><span[^>]*>Build the instructions", brief_page) &&
+     grepl("btn-sm[^>]*><span[^>]*>Check my brief first", brief_page) &&
      all(purrr::map_lgl(worker_ids, function(id) grepl(id, brief_page, fixed = TRUE))) &&
      all(purrr::map_lgl(purrr::map_chr(TASKS, "label"), function(l) grepl(l, brief_page, fixed = TRUE))))
 ok("each field is shown for exactly the tasks that list it, and the worker boxes for the drafting tasks",
@@ -1908,7 +1912,7 @@ local({
 
 # The whole page, as the browser gets it.
 ok("the page has the Generate tabs' controls, and no tab is a placeholder",
-   grepl("Check the brief", page$html, fixed = TRUE) && grepl("Skip the brief check", page$html, fixed = TRUE) &&
+   grepl("Check my brief first", page$html, fixed = TRUE) && grepl("Build the instructions", page$html, fixed = TRUE) &&
      grepl("Research question (required)", page$html, fixed = TRUE) && !grepl("Not built yet", page$html, fixed = TRUE))
 ok("no key is anywhere on the page", !grepl("pm-test-key|SECRET-KEY|or-secret-key", page$html))
 
@@ -2839,45 +2843,47 @@ ok("the page has the Output tab's boxes in place of its placeholder, and no key 
      !grepl(key_planted, page$html, fixed = TRUE))
 
 
-# ---- Phase 5d: the Methodology tab ----------------------------------------------------------------
+# ---- Phase 7c: Start here and Methodology are their files ------------------------------------------
 
-meth_tab <- skills_table()
-meth_html <- paste(as.character(methodology_page()), collapse = "\n")
-all_reflexes <- unlist(purrr::map(SKILL_FILES, function(f) purrr::map_chr(unname(read_skill(f)$reflexes), "id")))
-
-ok("skills_table has one row for every reflex of every skill file, with its file, id, when and source, in the order of the files",
-   identical(names(meth_tab), c("file", "id", "when", "source")) && nrow(meth_tab) == length(all_reflexes) && nrow(meth_tab) > 80L &&
-     identical(meth_tab$id, unname(all_reflexes)) && identical(unique(meth_tab$file), SKILL_FILES) &&
-     all(nzchar(meth_tab$when)) && !anyNA(meth_tab) && any(!nzchar(meth_tab$source)) && any(nzchar(meth_tab$source)))
-ok("the Methodology page renders the note: its headings, its numbered list, and its tables as tables",
-   grepl("<h1>Methodology note</h1>", meth_html, fixed = TRUE) && grepl("<h2>Where the rules come from</h2>", meth_html, fixed = TRUE) &&
-     grepl("<ol>", meth_html, fixed = TRUE) && grepl("<strong>Brief check.</strong>", meth_html, fixed = TRUE) &&
-     grepl("<th>Finding</th>", meth_html, fixed = TRUE) && grepl("Models pick response formats silently", meth_html, fixed = TRUE) &&
-     grepl("36 of the 48 faults", meth_html, fixed = TRUE) && !grepl("| Finding |", meth_html, fixed = TRUE))
-ok("below the note there is a block for each skill file with its title and version, and a row for every one of its reflexes",
+# Every heading of a markdown file, as the page draws it.
+md_headings <- function(path) {
+  l = readLines(path, encoding = "UTF-8", warn = FALSE)
+  trimws(sub("^#+ ", "", l[grepl("^#+ ", l)]))
+}
+md_has_headings <- function(path, html) all(purrr::map_lgl(md_headings(path), function(h)
+  grepl(paste0(">", gsub("[()]", "", h)), gsub("[()]", "", html), fixed = TRUE)))
+start_html <- paste(as.character(start_ui()), collapse = "\n")
+ok("Start here is www/start.md as it is, then the key box, then a closed Settings and connection panel that holds the profile, the models table with the connection check, and the pilot notice",
+   md_has_headings(START_FILE, start_html) && grepl("<ol>", start_html, fixed = TRUE) &&
+     grepl("<strong>Describe what you need.</strong>", start_html, fixed = TRUE) &&
+     grepl("Paste your API key below.", start_html, fixed = TRUE) &&
+     regexpr("What this tool does", start_html, fixed = TRUE) < regexpr("Paste your API key below.", start_html, fixed = TRUE) &&
+     regexpr("Paste your API key below.", start_html, fixed = TRUE) < regexpr("Use this key", start_html, fixed = TRUE) &&
+     regexpr("Use this key", start_html, fixed = TRUE) < regexpr("Settings and connection", start_html, fixed = TRUE) &&
+     regexpr("Settings and connection", start_html, fixed = TRUE) < regexpr("This is a pilot", start_html, fixed = TRUE) &&
+     regexpr("This is a pilot", start_html, fixed = TRUE) < regexpr("Check connections", start_html, fixed = TRUE) &&
+     grepl("<details[^>]*>\\s*<summary>\\s*<strong>Settings and connection", start_html) &&
+     !grepl("<details[^>]*open[^>]*>\\s*<summary>\\s*<strong>Settings and connection", start_html) &&
+     grepl("id=\"connect-models\"", start_html, fixed = TRUE) &&
+     grepl("OpenAI-style API at https://openrouter.ai/api/v1", paste(as.character(model_label(APP_MODELS$workers[[1]])), collapse = ""), fixed = TRUE) &&
+     grepl(paste0("<td>", APP_PROFILE, "</td>"), start_html, fixed = TRUE) &&
+     grepl("It found 36 of the 48 faults (75 percent)", gsub("\\s+", " ", start_html), fixed = TRUE) &&
+     grepl("so treat it as a guide, not a guarantee", gsub("\\s+", " ", start_html), fixed = TRUE) &&
+     grepl("Settings and connection", page$html, fixed = TRUE) && grepl("What this tool does", page$html, fixed = TRUE))
+ok("a profile with placeholders opens the Settings and connection panel by itself",
    local({
-     sections = strsplit(meth_html, "<h4>", fixed = TRUE)[[1]][-1]
-     length(sections) == length(SKILL_FILES) &&
-       all(purrr::map2_lgl(SKILL_FILES, sections, function(f, sec) {
-         s = read_skill(f)
-         startsWith(trimws(sec), paste0(f, ": ", s$title)) && grepl(paste0("version ", s$version), sec, fixed = TRUE) &&
-           all(purrr::map_lgl(names(s$reflexes), function(id) grepl(paste0("<code>", id, "</code>"), sec, fixed = TRUE))) &&
-           lengths(regmatches(sec, gregexpr("<code>", sec, fixed = TRUE))) == length(s$reflexes)
-       }))
+     work_open = in_child("work", c("app <- shiny::shinyAppDir('.'); invisible(app$serverFuncSource())",
+                                    "cat(paste(as.character(start_ui()), collapse = ''))"))
+     work_open$status == 0 && grepl("<details[^>]*open[^>]*>\\s*<summary>\\s*<strong>Settings and connection", work_open$out)
    }))
-ok("each rule's source is shown as the skill file gives it, and a rule with none says so",
-   grepl(meth_tab$source[meth_tab$id == "one_thing"][1], meth_html, fixed = TRUE) && nzchar(meth_tab$source[meth_tab$id == "one_thing"][1]) &&
-     grepl("none given", meth_html, fixed = TRUE) &&
-     identical(lengths(regmatches(meth_html, gregexpr("none given", meth_html, fixed = TRUE))), sum(!nzchar(meth_tab$source))))
-ok("a methodology file that is missing, or a skills folder that is, is said in words and does not stop the page",
-   local({
-     a = paste(as.character(methodology_page(path = file.path("www", "no_such_note.md"))), collapse = "")
-     b = paste(as.character(methodology_page(dir = file.path("www", "no_such_skills"))), collapse = "")
-     grepl("The methodology note could not be shown", a, fixed = TRUE) && grepl("The methodology note could not be shown", b, fixed = TRUE)
-   }))
-ok("the page's Methodology tab is the note and the table, and the app starts with it (the whole page was built above)",
-   grepl("<h1>Methodology note</h1>", page$html, fixed = TRUE) &&
-     lengths(regmatches(page$html, gregexpr("<code>one_thing</code>", page$html, fixed = TRUE))) >= 1L)
+meth_html <- paste(as.character(md_page(METHODOLOGY_FILE)), collapse = "\n")
+ok("the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; skills_table() stays for maintainers",
+   md_has_headings(METHODOLOGY_FILE, meth_html) && grepl("<ul>", meth_html, fixed = TRUE) &&
+     grepl("36 of the 48 planted faults|It found 36 of the 48 faults", meth_html) && !grepl("<code>", meth_html, fixed = TRUE) &&
+     !grepl("The rules, file by file", meth_html, fixed = TRUE) && grepl("Methodology", page$html, fixed = TRUE) &&
+     grepl("How QuestionR works and what stands behind it", page$html, fixed = TRUE) &&
+     is.data.frame(skills_table()) && nrow(skills_table()) > 80L && !"skills_html" %in% ls(globalenv()) &&
+     grepl("could not be shown", paste(as.character(md_page(file.path("www", "no_such_page.md"))), collapse = ""), fixed = TRUE))
 
 
 # ---- Phase 6c: Start here says what is in force; the notices ---------------------------------
@@ -2891,14 +2897,14 @@ ok("a profile that still holds placeholders says which entries to fill in, the c
      h = paste(as.character(placeholder_notice(ms)), collapse = "")
      ping = llm_ping(ms[[1]]$m, key = "a-key", complete = function(...) stop("the call must not be made"))
      work_page = in_child("work", c("app <- shiny::shinyAppDir('.'); invisible(app$serverFuncSource())",
-                                    "cat(paste(as.character(help_ui()), collapse = ''))"))
+                                    "cat(paste(as.character(start_ui()), collapse = ''))"))
      grepl("profile still has placeholders to fill in", h, fixed = TRUE) &&
        grepl("Project manager (&lt;pm id at work&gt;): base_url, id", h, fixed = TRUE) &&
        grepl("Worker 1 (&lt;worker id at work&gt;): base_url, id", h, fixed = TRUE) &&
        identical(llm_placeholders(ms[[2]]$m), c("base_url", "id")) &&
        isFALSE(ping$ok) && grepl("Not set up: base_url, id", ping$message, fixed = TRUE) &&
        work_page$status == 0 && grepl("still has placeholders", work_page$out, fixed = TRUE) &&
-       is.null(placeholder_notice(llm_models())) && !grepl("placeholders to fill in", paste(as.character(help_ui()), collapse = ""), fixed = TRUE)
+       is.null(placeholder_notice(llm_models())) && !grepl("placeholders to fill in", paste(as.character(start_ui()), collapse = ""), fixed = TRUE)
    }))
 local({
   st = flow_state()

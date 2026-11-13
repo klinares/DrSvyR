@@ -165,14 +165,15 @@ mod_brief_ui <- function(id) {
       checkboxGroupInput(ns("workers"), "Workers that will each draft the items",
                          choices = purrr::set_names(worker_ids, worker_ids), selected = worker_ids),
       tags$p(class = "text-muted small mt-n2",
-             "Each ticked model gets the same prompt, one after another. Fewer models cost less.")),
+             "Each ticked model gets the same prompt, all at once. Fewer models cost less.")),
     uiOutput(ns("revision_note")),
     tags$div(
-      actionButton(ns("check"), "Check the brief", class = "btn-primary"),
-      actionButton(ns("skip"), "Skip the brief check")),
+      actionButton(ns("build"), "Build the instructions", class = "btn-primary"),
+      actionButton(ns("check"), "Check my brief first", class = "btn-sm btn-outline-secondary ms-2")),
     tags$p(class = "text-muted small mt-2",
-           "The brief check asks the project manager model what a designer would still ",
-           "need to know. It needs the key from Start here. Skipping goes straight to the prompt."),
+           "Building the instructions goes straight to the prompt, for you to read before anything is sent. ",
+           "Checking the brief first asks the project manager model what a designer would still need to ",
+           "know; it needs the key from Start here and takes a call."),
     uiOutput(ns("message")),
     uiOutput(ns("result")))
 }
@@ -182,10 +183,10 @@ mod_brief_ui <- function(id) {
 #   will be applied. continue is the button that goes on to the prompt.
 brief_panel <- function(res, ns) {
   if (identical(res$status, "skipped"))
-    return(tags$p(class = "text-muted", "The brief check was skipped."))
+    return(tags$p(class = "text-muted", "The brief was not checked."))
   if (!identical(res$status, "ok"))
     return(warn_box(tags$strong("The brief check did not come back. "), res$error,
-                    tags$br(), "You can try again, or skip it."))
+                    tags$br(), "You can try again, or build the instructions without it."))
   r = res$reply
   qs = r$questions
   qs = qs[order(!purrr::map_lgl(qs, function(q) isTRUE(q$blocking)))]
@@ -279,7 +280,7 @@ mod_brief_server <- function(id, state, go = function(tab) invisible(NULL), make
       pm = APP_MODELS$pm
       if (!llm_key_ready(pm)) {
         message(paste0("The brief check needs the project manager's key. ", llm_key_hint(pm),
-                       " Or skip the check."))
+                       " Or build the instructions without the check."))
         return()
       }
       state$form <- p$form
@@ -290,7 +291,7 @@ mod_brief_server <- function(id, state, go = function(tab) invisible(NULL), make
         error = function(e) list(status = "failed", error = plain_message(e), reply = NULL))
     })
 
-    observeEvent(input$skip, proceed(list(status = "skipped")))
+    observeEvent(input$build, proceed(list(status = "skipped")))
     observeEvent(input$continue, proceed(NULL))
 
     output$message <- renderUI(if (!is.null(message())) warn_box(message()))
@@ -344,7 +345,7 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
         tags$p(class = "text-muted small", "Skill files used: ", paste(a$files, collapse = ", ")),
         advice_box(tags$strong(paste0("This questionnaire is reviewed in ", a$calls - 1L, " parts. ")),
                    paste0("Each part is one call, and one more call looks at the instrument as a whole: ",
-                          a$calls, " calls, one after another. "),
+                          a$calls, " calls: the parts together, at most four at a time, then the whole. "),
                    "Below is the first part's prompt. The other ",
                    "parts differ only in their questions, the part number and the number of their ",
                    "first block; the last call has the whole questionnaire and only the checks about ",
@@ -363,7 +364,7 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
                                value = a$user, rows = 14, width = "100%", resize = "vertical")),
         if (draft) tags$p(paste0(
           "Approving runs ", length(state$workers), if (length(state$workers) == 1L) " worker" else " workers",
-          " one after another, then the appraisal by the project manager: ", length(state$workers) + 1L,
+          " together, then the reviewer recommends a set: ", length(state$workers) + 1L,
           " model calls. It can take a few minutes, and the app is busy until it finishes."))
         else tags$p("Approving makes one model call: the project manager reviews the questionnaire. ",
                     "It can take a minute or two, and the app is busy until it finishes."),

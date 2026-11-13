@@ -213,13 +213,13 @@ ui <- page_fluid(
   navlistPanel(
     id = "stage", widths = c(3, 9), well = FALSE,
 
-    tabPanel(QUESTIONR_TABS[1], help_ui(), mod_key_ui("key"), mod_connect_ui("connect")),
+    tabPanel(QUESTIONR_TABS[1], start_ui()),
 
     tabPanel(QUESTIONR_TABS[2], mod_brief_ui("brief")),
     tabPanel(QUESTIONR_TABS[3], mod_prompt_ui("prompt")),
     tabPanel(QUESTIONR_TABS[4], mod_results_ui("results"), mod_again_ui("again")),
     tabPanel(QUESTIONR_TABS[5], mod_output_ui("output")),
-    tabPanel(QUESTIONR_TABS[6], methodology_page())))
+    tabPanel(QUESTIONR_TABS[6], md_page(METHODOLOGY_FILE))))
 
 
 # ---- 7. server --------------------------------------------------------------

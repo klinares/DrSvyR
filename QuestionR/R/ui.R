@@ -65,24 +65,21 @@ model_label <- function(m)
                            if (identical(m$key_source, "analyst")) "key pasted below"
                            else paste0("key from the server variable ", m$key_var))))
 
-# What a review has been shown to do, in the words of the Methodology tab: the bullet of
-#   www/methodology.md that gives the result of the one test, with its limits, copied as it
+# What a review has been shown to do, in the words of the Methodology tab: the section "How it was
+#   tested" of www/methodology.md, with the result of the one test and its limits, copied as it
 #   stands (it is read from the file, so it cannot drift from it), and the model in force.
 pilot_notice <- function(path = METHODOLOGY_FILE, pm = APP_MODELS$pm) {
   txt = tryCatch(readLines(path, encoding = "UTF-8", warn = FALSE), error = function(e) character(0))
-  at = grep("^- \\*\\*How well the review step finds known faults", txt)
-  bullet = if (length(at)) {
-    rest = txt[-seq_len(at[[1]])]
-    sub("^- ", "", c(txt[at[[1]]], sub("^  ", "", rest[cumsum(!startsWith(rest, "  ")) == 0L])))
-  }
+  at = grep("^## How it was tested", txt)
+  rest = if (length(at)) txt[-seq_len(at[[1]])]
+  section = trimws(paste(rest[cumsum(grepl("^#", rest)) == 0L], collapse = "\n"))
   advice_box(
     tags$strong("This is a pilot. "),
     "The review step has been tested once, on a published set of questions with known faults. This is what the ",
     "Methodology tab says of it:",
-    if (length(bullet)) HTML(shiny::markdown(paste(bullet, collapse = "\n")))
+    if (nzchar(section)) HTML(shiny::markdown(section))
     else tags$p("(The Methodology tab's account of the test could not be read.)"),
-    tags$p(paste0("The project manager model in force here is ", pm$id, "; that test used claude-sonnet-5-5. ",
-                  "The rest of the Methodology tab says how the rules and their sources are used.")))
+    tags$p(paste0("The project manager model in force here is ", pm$id, "; that test used claude-sonnet-5-5.")))
 }
 
 # A profile that still holds <placeholders> (the work profile before it is filled in) says which
@@ -97,37 +94,29 @@ placeholder_notice <- function(ms = llm_models()) {
       tags$li(paste0(x$role, " (", x$m$id, "): ", paste(llm_placeholders(x$m), collapse = ", "))))))
 }
 
-help_ui <- function() {
+# Start here: the welcome in www/start.md as it is, then the key box, then, closed, the settings in
+#   force, the pilot notice and the connection check. The panel opens by itself when a profile still
+#   holds placeholders, since that is the first thing to deal with.
+start_ui <- function() {
   row = function(label, value) tags$tr(tags$th(scope = "row", label), tags$td(value))
+  placeholders = placeholder_notice()
   tagList(
-    tags$h3(QUESTIONR_TABS[1]),
-    tags$p("QuestionR helps a public opinion analyst draft survey items and ",
-           "review a questionnaire. Every model call is steered by plain text ",
-           "files grounded in survey methodology; the expertise is in those ",
-           "files, not in the model."),
-
-    tags$h5("What it is not"),
-    advice_box(tags$ul(
-      class = "mb-0",
-      tags$li("It is not a pretest. A draft is a first draft written by a ",
-              "language model, and a review is an expert-review appraisal by a ",
-              "language model. Test with real respondents before fielding."),
-      tags$li("It does not choose for you. It compares and flags; you decide. ",
-              "Nothing it produces is called validated."),
-      tags$li("It saves nothing you paste. Text you enter goes only to the ",
-              "model endpoints listed below."))),
-
-    pilot_notice(),
-    placeholder_notice(),
-
-    tags$h5("Settings in force"),
-    tags$table(
-      class = "table table-sm",
-      tags$tbody(
-        row("Profile", APP_PROFILE),
-        row("Classification banner", APP_CLASSIFICATION),
-        row("Pasted questionnaire limit",
-            paste(format(APP_MAX_PASTE_CHARS, big.mark = ","), "characters")))))
+    md_page(START_FILE),
+    mod_key_ui("key"),
+    tags$details(
+      class = "mt-3", open = if (!is.null(placeholders)) NA,
+      tags$summary(tags$strong("Settings and connection")),
+      placeholders,
+      pilot_notice(),
+      tags$h5("Settings in force"),
+      tags$table(
+        class = "table table-sm",
+        tags$tbody(
+          row("Profile", APP_PROFILE),
+          row("Classification banner", APP_CLASSIFICATION),
+          row("Pasted questionnaire limit",
+              paste(format(APP_MAX_PASTE_CHARS, big.mark = ","), "characters")))),
+      mod_connect_ui("connect")))
 }
 
 # The models, and whether each has a key; and a button that makes one very small
