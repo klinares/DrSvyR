@@ -1,6 +1,6 @@
 # QuestionR review evidence, Phase 5
 
-Generated 2026-11-12 18:38 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-12 21:35 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,6 +12,12 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+9a07c6a QuestionR 6d: README for an analyst who has not seen the repository
+ca20ae8 QuestionR 6c: Start here says what is in force; startup and profile notices
+76378d6 QuestionR 6b: work settings in app.R section 1
+55451c9 QuestionR 6a: tidy, fewer scripts
+9e9b6dc QuestionR: changes from the Claude project (design section 15, prompts)
+867c3ad QuestionR 5e: one live long review, final STATUS and REVIEW for Phase 5
 9af8f4c QuestionR 5e preparation: the 30-question questionnaire and llm_check.R go review30
 f15601d QuestionR: readability fixes found in the browser (5c, 5d)
 45206ac QuestionR 5d: the Methodology tab
@@ -21,41 +27,34 @@ f15601d QuestionR: readability fixes found in the browser (5c, 5d)
 b026f0a QuestionR: changes from the Claude project (design section 14, evaluate 0.3, methodology, review.R section 10)
 f96b3e1 QuestionR Phase 4: gold test results, final STATUS and REVIEW
 01c7100 QuestionR 4e preparation: gold items file and the gold runner
-d77a3bc QuestionR 4d: evaluation ceiling and paste cap from one live 15-question review
-1d930ec QuestionR: Phase 4d preparation (15-question review, STATUS at the gate)
-0f1e097 QuestionR: Phase 4c Evaluate screens
-0439b18 QuestionR: Phase 4b run_review and check_review
-463f0c0 QuestionR: Phase 4a apply design section 13 (severity, set-level fails, ceilings, midpoint coding)
-c273eb9 QuestionR: changes from the Claude project (design section 13, generate and pm_appraise 0.3, review.R section 9)
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
-?? tests/review_long.json
-?? tests/review_long.md
+ M R/ui.R
+ M REVIEW.md
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
  CLAUDE.md                                     |    1 +
  QuestionR/.rscignore                          |    7 +
- QuestionR/DESIGN.md                           |  673 ++++++
- QuestionR/PROMPTS.md                          |  340 +++
+ QuestionR/DESIGN.md                           |  702 ++++++
+ QuestionR/PROMPTS.md                          |  391 ++++
  QuestionR/R/_disable_autoload.R               |    5 +
- QuestionR/R/checks.R                          |  455 ++++
- QuestionR/R/flow.R                            |  362 ++++
- QuestionR/R/llm.R                             |  607 ++++++
- QuestionR/R/output.R                          |  354 ++++
+ QuestionR/R/checks.R                          |  447 ++++
+ QuestionR/R/flow.R                            |  361 ++++
+ QuestionR/R/llm.R                             |  625 ++++++
+ QuestionR/R/output.R                          |  352 +++
  QuestionR/R/skills.R                          |  650 ++++++
- QuestionR/R/ui.R                              |  180 ++
- QuestionR/R/ui_generate.R                     |  961 +++++++++
- QuestionR/README.md                           |   43 +
- QuestionR/REVIEW.md                           | 1681 +++++++++++++++
- QuestionR/STATUS.md                           | 1569 ++++++++++++++
- QuestionR/app.R                               |  198 ++
+ QuestionR/R/ui.R                              |  200 ++
+ QuestionR/R/ui_generate.R                     |  970 +++++++++
+ QuestionR/README.md                           |  157 ++
+ QuestionR/REVIEW.md                           | 1872 ++++++++++++++++
+ QuestionR/STATUS.md                           | 1732 +++++++++++++++
+ QuestionR/app.R                               |  241 +++
  QuestionR/tests/gold_items.csv                |   60 +
  QuestionR/tests/gold_matches.csv              |   68 +
- QuestionR/tests/gold_run.R                    |  151 ++
  QuestionR/tests/gold_runs/C1.json             |   98 +
  QuestionR/tests/gold_runs/C3.json             |   98 +
  QuestionR/tests/gold_runs/C4.json             |   98 +
@@ -68,7 +67,7 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/tests/gold_runs/F11.json            |  109 +
  QuestionR/tests/gold_runs/F12.json            |  108 +
  QuestionR/tests/gold_runs/F13.json            |  108 +
- QuestionR/tests/gold_runs/F14.json            |  118 ++
+ QuestionR/tests/gold_runs/F14.json            |  118 +
  QuestionR/tests/gold_runs/F15.json            |  150 ++
  QuestionR/tests/gold_runs/F16.json            |  128 ++
  QuestionR/tests/gold_runs/F17.json            |  108 +
@@ -76,42 +75,42 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/tests/gold_runs/F19.json            |  128 ++
  QuestionR/tests/gold_runs/F2.json             |   98 +
  QuestionR/tests/gold_runs/F20.json            |  141 ++
- QuestionR/tests/gold_runs/F3.json             |  118 ++
+ QuestionR/tests/gold_runs/F3.json             |  118 +
  QuestionR/tests/gold_runs/F4.json             |  150 ++
  QuestionR/tests/gold_runs/F5.json             |  131 ++
  QuestionR/tests/gold_runs/F6.json             |  108 +
  QuestionR/tests/gold_runs/F7.json             |  130 ++
  QuestionR/tests/gold_runs/F8.json             |  108 +
- QuestionR/tests/gold_runs/F9.json             |  119 ++
+ QuestionR/tests/gold_runs/F9.json             |  119 +
  QuestionR/tests/gold_runs/_calls.csv          |   28 +
  QuestionR/tests/gold_runs/_findings.csv       |  103 +
  QuestionR/tests/gold_summary.md               |  121 ++
- QuestionR/tests/llm_check.R                   |  445 ++++
+ QuestionR/tests/llm_check.R                   |  319 +++
  QuestionR/tests/llm_check.out                 |   24 +
- QuestionR/tests/openrouter_check.R            |   81 +
  QuestionR/tests/output_generate.txt           |   60 +
  QuestionR/tests/output_review.txt             |   64 +
  QuestionR/tests/review.R                      |  680 ++++++
- QuestionR/tests/review15_run.json             |  498 +++++
+ QuestionR/tests/review_long.json              | 1393 ++++++++++++
+ QuestionR/tests/review_long.md                |   26 +
  QuestionR/tests/review_long_questionnaire.txt |   89 +
  QuestionR/tests/review_questionnaire.txt      |   15 +
  QuestionR/tests/review_tokens.md              |   18 +
  QuestionR/tests/run_generate.json             |  864 ++++++++
- QuestionR/tests/smoke.R                       | 2796 +++++++++++++++++++++++++
+ QuestionR/tests/smoke.R                       | 2863 +++++++++++++++++++++++++
  QuestionR/www/methodology.md                  |   85 +
  QuestionR/www/skills/README.md                |   66 +
  QuestionR/www/skills/attitudinal.md           |   72 +
  QuestionR/www/skills/behavioral.md            |   67 +
  QuestionR/www/skills/core.md                  |   92 +
  QuestionR/www/skills/cross_cultural.md        |   66 +
- QuestionR/www/skills/evaluate.md              |  117 ++
+ QuestionR/www/skills/evaluate.md              |  117 +
  QuestionR/www/skills/generate.md              |   77 +
  QuestionR/www/skills/mode.md                  |   57 +
  QuestionR/www/skills/pm_appraise.md           |   77 +
  QuestionR/www/skills/pm_brief.md              |   42 +
  QuestionR/www/skills/sensitive.md             |   90 +
  README.md                                     |    2 +
- 74 files changed, 18302 insertions(+)
+ 73 files changed, 19559 insertions(+)
 exit status: 0
 ~~~~
 
@@ -119,22 +118,20 @@ exit status: 0
 
 | file | lines |
 |---|---|
-| app.R | 198 |
+| app.R | 241 |
 | R/_disable_autoload.R | 5 |
-| R/checks.R | 455 |
-| R/flow.R | 362 |
-| R/llm.R | 607 |
-| R/output.R | 354 |
+| R/checks.R | 447 |
+| R/flow.R | 361 |
+| R/llm.R | 625 |
+| R/output.R | 352 |
 | R/skills.R | 650 |
-| R/ui.R | 180 |
-| R/ui_generate.R | 961 |
-| tests/gold_run.R | 151 |
-| tests/llm_check.R | 445 |
-| tests/openrouter_check.R | 81 |
+| R/ui.R | 199 |
+| R/ui_generate.R | 970 |
+| tests/llm_check.R | 319 |
 | tests/review.R | 680 |
-| tests/smoke.R | 2796 |
+| tests/smoke.R | 2863 |
 
-Code files counted: 12 of 12 allowed: PASS
+Code files counted: 11 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
 
 ## 3. Hard rules
@@ -147,7 +144,7 @@ R/_disable_autoload.R present and empty of code: PASS
 | Sys.setenv() in the app | none | PASS |
 | addResourcePath() or system.file() in the app | none | PASS |
 | parallelism (future, furrr, mirai, parallel, parallel_chat*) | none | PASS |
-| key read from the environment for a pasted-key model (Sys.getenv in R/, listed for reading) | R/llm.R:126 Sys.getenv | READ |
+| key read from the environment for a pasted-key model (Sys.getenv in R/, listed for reading) | R/llm.R:125 Sys.getenv | READ |
 
 Top-level expressions in R/ that are not assignments: PASS
 Names defined more than once across R/: PASS
@@ -197,6 +194,7 @@ ok  no tab is a placeholder any more, and the Methodology tab holds the note and
 ok  home profile: PM on a pasted key, three workers
 ok  work profile loads
 ok  an unknown profile stops the app and names the choices
+ok  the profile switch: unset runs APP_DEFAULT_PROFILE; rehearsal is four OpenAI-style models on OpenRouter, all on the pasted key, the project manager anthropic/claude-sonnet-5.5
 ok  no key is held before one is pasted
 ok  a pasted key is held for the session, trimmed
 ok  the key is not in the environment
@@ -475,7 +473,7 @@ ok  a run drafts at most 10 items: 10 is accepted, 11 is refused saying so, and 
 ok  a pasted questionnaire over the cap is refused, saying how long it is and what the limit is; at the cap it is accepted
 ok  Luna is the last of the workers (decision 15)
 ok  a model entry's reasoning_effort reaches the Anthropic-style call as adaptive thinking with that effort; unset sends neither
-ok  ellmer 0.4.2 does not send reasoning_effort on the OpenAI-style call (so it is left unset), and no entry sets it
+ok  on the OpenAI-style call reasoning_effort and the name of the token limit reach the wire through api_args, only when the entry sets them; the Anthropic style keeps max_tokens; no profile entry sets either
 ok  a review with its five fields passes: findings per question, instrument findings, TRAPD, test_first, not_assessed
 ok  a question's id may be a label or a number, and an empty list of findings is a question with none
 ok  a review missing a field, or with a finding that has no check, evidence, problem or severity from 1 to 10, fails naming the question
@@ -575,6 +573,8 @@ Warning message:
 In file(con, "r") :
   cannot open file 'www/no_such_note.md': No such file or directory
 ok  the page's Methodology tab is the note and the table, and the app starts with it (the whole page was built above)
+ok  a profile that still holds placeholders says which entries to fill in, the connection check does not call it, and the work profile's page builds; a filled profile says nothing
+ok  when the only worker is of the project manager's own family, Results says the appraiser reviewed a draft from its own family; with workers of other families it says nothing
 exit status: 0
 ~~~~
 
@@ -1358,35 +1358,40 @@ Lines in R/llm.R that build calls or handle keys:
 9: #   "anthropic" calls ellmer::chat_anthropic(); "openai" calls
 10: #   ellmer::chat_openai_compatible(), which takes the base URL of any
 17: # max_tokens for each step (DESIGN.md sections 6 and 12). A reply that reaches
-114: # The one place the environment is read, and only for a model whose key_source
-115: #   is "server": the variable named in its key_var. A model whose key_source is
-120:   switch(m$key_source %||% "",
-123:       if (is.null(m$key_var) || !nzchar(m$key_var))
-124:         llm_fail(paste0("The model ", m$id, " has key_source 'server' and no key_var."),
-126:       k = Sys.getenv(m$key_var)
-129:     llm_fail(paste0("The model ", m$id, " has key_source '", m$key_source,
-138:   if (identical(m$key_source, "server"))
-139:     paste0("Set the server variable ", m$key_var, ".")
-150: llm_host <- function(m) sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url)
-171: #   in a closure (credentials is a function), never through the environment. No
-172: #   temperature is sent unless the model's entry sets one: repeatability comes
-175: #   which goes through ellmer::params(). Checked in ellmer 0.4.2 against a server
-179: llm_chat <- function(m, system_prompt, max_tokens, key) {
-183:   params = ellmer::params(temperature = m$temperature, max_tokens = max_tokens,
-186:     anthropic = ellmer::chat_anthropic(
-188:       cache = LLM_CACHE, base_url = m$base_url,
-189:       credentials = function() key, echo = "none"),
-190:     openai = ellmer::chat_openai_compatible(
-191:       base_url = m$base_url, name = llm_host(m), system_prompt = system_prompt,
-192:       credentials = function() key, model = m$id, params = params,
-202: #   stopped, as ellmer standardises it: "success", "max_tokens", ...), tokens
-204: llm_complete <- function(m, system_prompt, user, max_tokens,
-208:   chat = llm_chat(m, system_prompt, max_tokens, key)
-414: #   environment for a model whose key_source is "analyst". complete is the
-421: llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
-442:     out = complete(m, system_prompt, ask, max_tokens, key)
-451:     if (identical(finish, "max_tokens"))
-452:       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
+113: # The one place the environment is read, and only for a model whose key_source
+114: #   is "server": the variable named in its key_var. A model whose key_source is
+119:   switch(m$key_source %||% "",
+122:       if (is.null(m$key_var) || !nzchar(m$key_var))
+123:         llm_fail(paste0("The model ", m$id, " has key_source 'server' and no key_var."),
+125:       k = Sys.getenv(m$key_var)
+128:     llm_fail(paste0("The model ", m$id, " has key_source '", m$key_source,
+137:   if (identical(m$key_source, "server"))
+138:     paste0("Set the server variable ", m$key_var, ".")
+149: llm_host <- function(m) sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url)
+175: #   in a closure (credentials is a function), never through the environment. No
+176: #   temperature is sent unless the model's entry sets one: repeatability comes
+179: #   for the OpenAI style, max_tokens_name. Checked in ellmer 0.4.2 against a server
+185: llm_chat <- function(m, system_prompt, max_tokens, key) {
+189:   old_name = identical(m$api, "openai") && identical(m$max_tokens_name, "max_tokens")
+190:   if (!is.null(m$max_tokens_name) && !m$max_tokens_name %in% c("max_completion_tokens", "max_tokens"))
+191:     llm_fail(paste0("The model ", m$id, " has max_tokens_name '", m$max_tokens_name,
+192:                     "'; it must be 'max_completion_tokens' or 'max_tokens'."),
+194:   params = ellmer::params(temperature = m$temperature, max_tokens = if (!old_name) max_tokens,
+196:   api_args = as.list(c(if (old_name) list(max_tokens = max_tokens),
+200:     anthropic = ellmer::chat_anthropic(
+202:       cache = LLM_CACHE, base_url = m$base_url,
+203:       credentials = function() key, echo = "none"),
+204:     openai = ellmer::chat_openai_compatible(
+205:       base_url = m$base_url, name = llm_host(m), system_prompt = system_prompt,
+206:       credentials = function() key, model = m$id, params = params,
+216: #   stopped, as ellmer standardises it: "success", "max_tokens", ...), tokens
+218: llm_complete <- function(m, system_prompt, user, max_tokens,
+222:   chat = llm_chat(m, system_prompt, max_tokens, key)
+428: #   environment for a model whose key_source is "analyst". complete is the
+435: llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
+456:     out = complete(m, system_prompt, ask, max_tokens, key)
+465:     if (identical(finish, "max_tokens"))
+466:       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
 ~~~~
 Live check output (tests/llm_check.out), verbatim:
 ~~~~

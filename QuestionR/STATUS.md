@@ -2,6 +2,166 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
+## Phase 6 (2026-11-12): ready for work
+
+**Next: Kevin runs 6e (below) under the `rehearsal` profile. Then take `REVIEW.md`, this
+file and `README.md` to the Claude project.** Nothing is pushed. No model was called in this
+phase.
+
+- **Commits, branch `questionr`:** the Claude project's files `9e9b6dc`; 6a `55451c9`; 6b
+  `76378d6`; 6c `ca20ae8`; 6d `9a07c6a`; and the commit that carries this file, `REVIEW.md`
+  and a last wording change to the pilot notice.
+- **Smoke:** 391 checks, all ok (388 at the end of Phase 5: three added, see below).
+  `tests/review.R 5`: **no FAIL**, 11 of 12 code files. **All 60 prompt hashes are
+  unchanged** since Phase 5a (compared after 6a and at the end).
+
+### What was removed (6a)
+
+- `tests/openrouter_check.R`: a throwaway from Phase 2.
+- `tests/gold_run.R`: folded into `tests/llm_check.R` as the run `gold` (the gold test is the
+  one script that may be wanted again, when the project manager changes).
+- `tests/review15_run.json`: a raw log; the numbers are in `tests/review_tokens.md`.
+- In `tests/llm_check.R`: the old Phase 2 run (four pings, three drafts, one small review) and
+  the 15-question run, both superseded; the key scrub is now written once.
+- Unused code: `item_text` (`checks.R`), `tab_placeholder` (`ui.R`), `now_label`
+  (`ui_generate.R`); `review_call_count` folded into its one caller; `run_log_json` builds on
+  `flow_log_json` instead of repeating its JSON options; `key_source_label` and
+  `settings_table` folded into their callers when Start here was rewritten.
+- Comments that named phases or described the code as it was (the `ui.R` and
+  `ui_generate.R` headers, the token-limit note in `llm.R`, "placeholders until Phase 6").
+- Kept on purpose, though they look like leftovers: `tests/llm_check.out` and
+  `tests/run_generate.json` (`review.R` shows them verbatim), the gold evidence in
+  `tests/gold_runs/` and the files `review.R` reads.
+
+### What was added
+
+- **6b, in `app.R` section 1:** `APP_DEFAULT_PROFILE` (the one line to change at work;
+  `QUESTIONR_PROFILE` overrides it); the `rehearsal` profile (all four models through
+  OpenRouter, OpenAI style, `key_source = "analyst"`); and, documented once above the profiles,
+  the options of a model entry. `llm_chat()` honours two optional entries: `reasoning_effort`
+  for either API style, and `max_tokens_name` ("max_completion_tokens", ellmer's default, or
+  "max_tokens") for the OpenAI style.
+- **6c:** Start here gives the pilot notice (the review test's result and limits copied from
+  `www/methodology.md` as it stands, read from the file so it cannot drift, with the project
+  manager in force), the placeholder notice, and the models table with the API style in words;
+  `llm_ping()` refuses a model that holds a placeholder; at start-up `app.R` checks that the
+  installed ellmer has the functions and arguments `R/llm.R` calls; Results says when every
+  draft came from the appraiser's own model family.
+- **6d:** `README.md`, rewritten (43 to 157 lines).
+- **Smoke:** three checks added or changed, the three section 15 names: the profile switch, the
+  placeholder notice, the same-family notice. Two existing checks changed because behaviour did:
+  the unknown-profile message now lists three profiles, and the OpenAI-style wire check now
+  expects `reasoning_effort` and the token-limit name to reach the wire through `api_args` when
+  an entry sets them (it used to expect them dropped). Nothing was loosened.
+
+### Files left, and the one job of each
+
+| File | Job |
+|---|---|
+| `app.R` | Settings, profiles, package and ellmer checks, state, layout, server |
+| `R/skills.R` | Reads the skill files; builds every prompt, the checklist, the task registry |
+| `R/llm.R` | Calls the models through ellmer; the session key; the connection check; the key box |
+| `R/flow.R` | Runs a brief check, a draft, an appraisal or a review; the run-log shape |
+| `R/checks.R` | Checks and codes what a model returns; severity bands; splits a long questionnaire |
+| `R/output.R` | Builds the Word output, the disclosure, the run log, the Methodology page |
+| `R/ui.R` | Tab titles, shared boxes, Start here, the connection check's screen |
+| `R/ui_generate.R` | Brief, Prompt, Results, Run again and Output screens |
+| `R/_disable_autoload.R` | Stops Shiny auto-loading `R/` twice (empty on purpose) |
+| `tests/smoke.R` | The checks that need no model call |
+| `tests/review.R` | Writes `REVIEW.md`, the evidence for each phase (the Claude project's, unchanged) |
+| `tests/llm_check.R` | The live runs, only when named: `generate`, `review30`, `gold` |
+| `tests/` data | Test items, questionnaires and the recorded results the reviews read |
+| `www/skills/`, `www/methodology.md` | The rules and the note (the Claude project's, unchanged) |
+| `README.md` | What it is, how to install, set up at work, fix an error, extend |
+| `DESIGN.md`, `STATUS.md`, `PROMPTS.md`, `REVIEW.md` | How it was built; deleted at work |
+
+### Line counts, before (end of Phase 5) and after
+
+| | Before | After |
+|---|---|---|
+| `app.R` + `R/` (8 files, with `_disable_autoload.R`) | 3,772 | 3,850 |
+| `tests/` scripts | 4,153 (smoke 2,796, llm_check 445, gold_run 151, openrouter_check 81, review 680) | 3,862 (smoke 2,863, llm_check 319, review 680) |
+| Script files | 13 | 11 |
+| `README.md` | 43 | 157 |
+
+The code grew by 78 lines net: the removals above came to about 60, and the work settings,
+notices, the ellmer check and the Start here rewrite added about 140.
+
+### Decisions taken, with the default used (numbered after Phase 5's 26 to 37)
+
+38. **The gold runner is a mode of `llm_check.R`** (`gold`), not a file of its own; with the
+    old Phase 2 and 15-question modes deleted, `llm_check.R` is smaller than before.
+39. **`reasoning_effort` and the token-limit name are sent through `api_args` for the OpenAI
+    style** (documented in ellmer 0.4.2 as "arbitrary extra arguments appended to the body"),
+    because `params()` there sends `max_completion_tokens` and drops `reasoning_effort` with a
+    warning. Checked against a server on this machine: `max_tokens` replaces
+    `max_completion_tokens` and the value arrives. For the Anthropic style `params()` is used as
+    before. No profile entry sets either; they are for an endpoint that needs them.
+40. **The rehearsal project manager is `anthropic/claude-sonnet-5.5`**, found in OpenRouter's
+    public model list on 2026-11-12 (`https://openrouter.ai/api/v1/models`, no key). The list
+    also has `anthropic/claude-sonnet-5` and `:batch` variants, not used; it supports
+    `max_tokens`, `max_completion_tokens` and `reasoning_effort` for it. The three home workers'
+    ids are in the list too.
+41. **Same family** is decided from the id: the name after the vendor's slash, up to its first
+    dash, dot, space or digit. The notice shows when every draft came from the project
+    manager's family, which includes the case in the brief (the project manager is also the only
+    worker). With the home or rehearsal workers it never shows.
+42. **A placeholder is any entry that is exactly `<something>`**; `llm_ping()` says "Not set up"
+    for such a model without calling it. A run that includes one still fails with the endpoint's
+    error, said on the page.
+43. **The ellmer check is by name and argument, not by version number**, because what matters
+    is that the calls exist. Its message names ellmer 0.4.2 as the version the app was built
+    with. Tested by hand against a copy of `app.R` that asked for something ellmer does not
+    have (not in smoke, which Kevin's rule keeps to the named checks).
+44. **The pilot notice has no smoke check** for the same reason; I read its output (the bullet
+    of `www/methodology.md` word for word, then the project manager in force).
+
+### What section 15 asked for that I could not do
+
+- **Nothing in 6a to 6d was left undone.** What I could not do is *verify* anything about Posit
+  Connect, so the README separates what is verified here from what is "to check at work".
+- The copy buttons on the Output tab are still untested on Connect (as at Phase 5).
+- The README's Connect section repeats three things from the repository's own notes (the
+  `rsconnect::deployApp` line, that Connect honours `.rscignore`, one connection per process),
+  marked as not verified.
+
+### 6e: rehearsal, for Kevin (under the `rehearsal` profile, your OpenRouter key pasted)
+
+The free steps are 1 to 3; steps 4 to 6 make calls (about 4 tiny calls, then roughly $0.2 for
+the draft run and $0.2 for the review, my estimate).
+
+1. **Start the app under the profile.** From PowerShell, in the folder that holds `QuestionR/`
+   (the profile name is not a key; the key is only ever pasted into the app):
+
+   ```powershell
+   $env:QUESTIONR_PROFILE = "rehearsal"; & "C:/Program Files/R/R-4.6.1/bin/Rscript.exe" -e "shiny::runApp('QuestionR')"
+   ```
+
+2. **Start here:** Profile says `rehearsal`. The pilot notice gives the review test's result
+   (36 of the 48 faults, 75 percent; 0.43 per well-tested question) and its limits. The Models
+   table lists four models, all "OpenAI-style API at https://openrouter.ai/api/v1; key pasted
+   below", all "waits for a key". The "Where to get one" text is still `TODO` (README step 6).
+3. **Press Check connections without a key:** every row should say "Waits for a key", and no
+   call is made.
+4. **Paste your OpenRouter key, press Use this key.** All four models should say "ready". Press
+   **Check connections:** four "Ready" rows with seconds. If one is not ready, copy me its words.
+5. **One small draft run:** Brief, Attitudinal, any research question, 2 items, all workers
+   ticked, Skip the brief check (or try Check the brief); Prompt, Approve and run; Results should
+   show candidates A, B and C, and **no** "same model family" box (the project manager is
+   Claude, the workers are Gemma, Llama and GPT). Tick two items, open **Output**, select the
+   white box, paste into Word: numbering and italics should survive and the text be black.
+6. **One short review:** Brief, Evaluate, four or five questions with a blank line between
+   them and their options under each; Approve (one call); Results by question in the bands;
+   Output, paste into Word.
+7. **Tell me:** any error words (HTTP codes, "not what was asked for"); whether any model's
+   answer needed repair or failed validation (the Results page names a failed worker); whether
+   OpenRouter's `anthropic/claude-sonnet-5.5` behaved like the direct one (Fix/Judgment bands,
+   evidence found, no stray fields); anything on Start here that read badly.
+
+### Remaining FAIL in `REVIEW.md`
+
+None.
+
 ## Phase 5 (2026-11-12): long reviews, the Output tab, the Methodology tab
 
 **Take `REVIEW.md`, this file, `tests/review_long.md`, `tests/output_generate.txt`

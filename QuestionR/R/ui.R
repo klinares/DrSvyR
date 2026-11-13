@@ -77,7 +77,6 @@ pilot_notice <- function(path = METHODOLOGY_FILE, pm = APP_MODELS$pm) {
   }
   advice_box(
     tags$strong("This is a pilot. "),
-    "A draft is a first draft and a review is an expert-review appraisal by a language model; neither is a pretest. ",
     "The review step has been tested once, on a published set of questions with known faults. This is what the ",
     "Methodology tab says of it:",
     if (length(bullet)) HTML(shiny::markdown(paste(bullet, collapse = "\n")))
