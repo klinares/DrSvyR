@@ -185,11 +185,11 @@ if ("generate" %in% args) {
   round$profile <- APP_PROFILE
   round$labels <- as.list(labels_of(drafts, seed))
   round$r_checks <- list(
-    appraisal = if (!is.null(chk)) list(unknown_checks = as.list(chk$unknown_checks),
-                                         not_appraised = as.list(chk$not_appraised),
-                                         unknown_items = as.list(chk$unknown_items),
-                                         merged_problems = as.list(chk$merged_problems),
-                                         fails_reported = length(chk$fails)),
+    appraisal = if (!is.null(chk)) list(items_recommended = length(chk$selected),
+                                         concerns_shown = sum(purrr::map_int(chk$selected, function(e) sum(purrr::map_lgl(e$concerns, "shown")))),
+                                         set_notes = length(chk$set_notes),
+                                         not_covered = as.list(chk$not_covered),
+                                         unknown_checks = as.list(chk$unknown_checks)),
     coded_defaults = coded)
 
   writeLines(scrub(as.character(flow_log_json(round))), file.path("tests", "run_generate.json"), useBytes = TRUE)
@@ -207,10 +207,10 @@ if ("generate" %in% args) {
             r$finish %||% "-", r$attempts %||% "-",
             if (!identical(r$status, "ok")) paste0("\n      ", r$error) else "")), sep = "\n")
   if (!is.null(chk))
-    cat("\nR's checks on the appraisal: ", length(chk$fails), " fails reported; ",
-        length(chk$unknown_checks), " unknown check ids; ", length(chk$not_appraised),
-        " items not appraised; ", length(chk$unknown_items), " entries for no item; ",
-        length(chk$merged_problems), " merged-option problems.\n", sep = "")
+    cat("\nR's checks on the appraisal: ", length(chk$selected), " items recommended (",
+        gen_form$n_items, " asked for); ", length(chk$set_notes), " notes on the set; ",
+        length(chk$not_covered), " domains not covered; ",
+        length(chk$unknown_checks), " unknown check ids.\n", sep = "")
   cat("\nThe drafts, sent together: ", sprintf("%.1f", draft_wall), " seconds by the clock; the longest draft took ",
       sprintf("%.1f", max(purrr::map_dbl(unname(as.list(drafts)), function(d) d$seconds %||% NA_real_), na.rm = TRUE)),
       " seconds (the three one after another took 87 seconds in Phase 3).\n", sep = "")

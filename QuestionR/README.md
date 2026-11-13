@@ -11,13 +11,17 @@ has had, and what that test cannot show.
 What it does, in four tabs after "Start here":
 
 1. **Brief**: choose a task (an attitudinal scale, behavioral items, sensitive-topic items, or
-   evaluate a pasted questionnaire) and describe what you need. A model can check the brief.
+   evaluate a pasted questionnaire) and describe what you need. **Build the instructions** goes
+   straight on; **Check my brief first** asks a model whether the brief is complete.
 2. **Prompt**: read the exact prompt that will be sent; approve it or edit it first.
-3. **Results**: for drafting, one draft from each worker model, side by side, with a
-   project manager model's checklist appraisal of each item (it does not pick a winner); for a
-   review, the findings question by question, in three bands by severity. Tick the items to keep.
-4. **Output**: the kept items, or the review, laid out to paste into Word, with a disclosure of
-   the use of language models, and a download of the run log.
+3. **Results**: for drafting, the workers draft together and a project manager model reviews the
+   drafts and recommends one item for each part of what you need. You see that set, with its
+   concerns in three bands by severity, and edit any wording, remove an item, or swap in another
+   model's draft ("See all drafts"). For a review, the findings question by question, in three
+   bands by severity.
+4. **Output**: the set as you left it, or the review, laid out to paste into Word, with a
+   disclosure of the use of language models (it says which items you edited or swapped in), and
+   a download of the run log.
 
 ## What is in this folder
 
@@ -138,9 +142,9 @@ What is verified in this repository, and what is not.
   The dropdown, the form, the prompt and the checklist read `TASKS`. A task that needs a reply in
   a new shape also needs an entry in `REPLY_SCHEMAS` in `R/checks.R`.
 - **A rule.** Add a block to the right skill file: a `### id` line (lower case, underscores) and
-  its `When`, `Say` and, if you want one, `Never`, `Check` and `Source` lines. The Methodology
-  tab lists it at once. A rule with a `Check` line becomes a question on the appraisal
-  checklist. A change to a rule changes every prompt built from it, and the Prompt tab shows the
+  its `When`, `Say` and, if you want one, `Never`, `Check` and `Source` lines. A rule with a
+  `Check` line becomes a question on the appraisal checklist (the Methodology tab is
+  `www/methodology.md`, written by hand, so say there what you changed). A change to a rule changes every prompt built from it, and the Prompt tab shows the
   new hash.
 
 ## At home: the tests
