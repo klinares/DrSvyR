@@ -902,3 +902,53 @@ section where they disagree.** What changed:
   `.Rhistory`); 8i adds smoke checks (no "System prompt" or Reflexes text on the
   Prompt tab, the message begins with the persona, every `.svg` parses, every
   image the two pages name exists).
+
+## 18. After Phase 8: Phase 9, simpler output, one idea first, one name (Claude project, 2026-11-13)
+
+Kevin ruled on five things. Where this section and earlier ones disagree, this
+section wins. Still no new code file.
+
+**1. The output overwhelms analysts.** A drafted question and a questionnaire
+review are shown as simply as possible, for a reader who cannot take in much.
+Drafted questions, per question: the question, its answer options, and at most
+one line, "Check before use:", only when the reviewer found a real problem (one
+sentence, 20 words or fewer, plain words). No scores, checklist results,
+per-model drafts, reflex ids, stage names or rationale. The edit, remove and
+swap controls stay. Reviews, per question: the question as pasted, a verdict of
+"Keep" or "Revise", and for Revise one problem sentence (20 words or fewer) and a
+suggested rewrite; at most two problems per question, the most serious first;
+then "The questionnaire as a whole", at most three one-sentence points; questions
+marked Keep fold into one line. Above both, "These are drafts. Test them with
+real respondents before fielding." The Output format sections of `generate.md`,
+`evaluate.md` and `pm_appraise.md` ask the models for only these fields, with the
+limits stated, and R enforces the limits and renders no other field. Copy for
+Word is what is on screen plus three lines (the date, "Drafted with QuestionR, an
+AI tool; reviewed by [analyst to complete]", the tool version). The full record
+(prompts, models, hashes, every draft, the full appraisal) is one file behind a
+small "Download the full record" button. This replaces the detail that sections
+11 to 17 put on Results and Output.
+
+**2. TRAPD and all translation leave.** The output-language field, every path
+that handles a language other than English or a translation, `fw_trapd.svg` and
+the TRAPD parts of the methodology note go. Questions are written in English. The
+country field and the reflexes about local terms, cultural sensitivity and
+context stay.
+
+**3. One worked example in the methodology note,** from the Session 1 slides:
+"Last week, did you work full-time, part-time, or did you not work at all?" and
+its three versions, with its parts marked and one label on each.
+
+**4. Total Survey Error comes first.** The app exists to reduce measurement error
+from the item and from the instrument, and says so first: Start here opens with
+two sentences, the methodology note opens with Total Survey Error (before "What it
+is built on") and says which errors QuestionR works on (validity and measurement
+error) and which it does not (coverage, sampling, nonresponse). The note is cut
+to under 600 words outside the reflex table and panels.
+
+**5. Naming.** QuestionR, the tool, is the AI skill. What it depends on are AI
+reflexes: a file is a "reflex file", each `### id` rule in it a "reflex". Nothing
+else is called a skill. `www/skills` becomes `www/reflexes`, `www/skills_materials`
+becomes `www/reflex_materials`, `R/skills.R` becomes `R/reflexes.R`. Earlier
+sections, `STATUS.md`, `REVIEW.md` and earlier phases of `PROMPTS.md` keep
+"skills" as history, with a line at the top saying that from Phase 9 they are
+called reflexes.
