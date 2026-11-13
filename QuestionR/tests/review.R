@@ -24,10 +24,10 @@ REFLEX_SHA <- c(
   "behavioral.md" = "f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142",
   "core.md" = "d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9",
   "cross_cultural.md" = "915d46090cf22e858cbe431bbcc54091c599df18c17efd2e5bfa97662f805f80",
-  "evaluate.md" = "6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb",
-  "generate.md" = "9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2",
+  "evaluate.md" = "f290fb25d8ba90b3adb896d6dafc920c01eec94a684470c14be348a78806e7a7",
+  "generate.md" = "f7410389ee03de9fa3bf911d7410fa182f93169d0d40b57e96c3d0fb368ab687",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
-  "pm_appraise.md" = "a43e03e541f02f12d72f44d83c901faf983b0edf36fe123045da66a50aaeeb10",
+  "pm_appraise.md" = "1bebaba53a961493eed2d1b4fa7d058d0dab53dd05d3b6113d606364ac6f4211",
   "pm_brief.md" = "a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a",
   "sensitive.md" = "4d8b50d65e768c62143287b3f7400ff7d66695b4905b3d4e0849cc313b81a2eb")
 
@@ -266,7 +266,7 @@ prompt_checks <- function(name, p, again, changed) {
                                      regexpr("\nREPLY FORMAT\n", usr, fixed = TRUE))) > 0) &&
                             has(usr, "\nCHECKLIST\n")
            else !has(usr, "CHECKLIST")),
-    expect("parts field only in drafting prompts", has(usr, "\"parts\"") != is_review))
+    expect("the drafting output format (open_format) only in drafting prompts", has(usr, "\"open_format\"") != is_review))
   specific = switch(name,
     attitudinal = dplyr::bind_rows(
       expect("task file sent (attitude_object)", has(sys, "- attitude_object (")),
@@ -299,7 +299,7 @@ prompt_checks <- function(name, p, again, changed) {
              !has(sys, "- declare_defaults (") && !has(sys, "- attitude_object (")),
       expect("questionnaire pasted under Questionnaire:, complete",
              has(usr, "Questionnaire:") && has(usr, "street cleaning provided by your local council") && has(usr, "10 Extremely happy")),
-      expect("output format asks for test_first", has(usr, "\"test_first\"")),
+      expect("output format asks for a verdict per question and points about the whole", has(usr, "\"verdict\"") && has(usr, "\"instrument\"")),
       expect("checklist lines are id: question, for the reflexes in force (one_thing, paper, agree_disagree_and_grids)",
              has(usr, "\none_thing: Does the question ask about exactly one thing") &&
                has(usr, "\npaper: ") && has(usr, "\nagree_disagree_and_grids: ")),
@@ -378,9 +378,8 @@ fake_item <- function(i) list(
 fake_draft <- function(n) list(items = purrr::map(seq_len(n), fake_item),
                                not_covered = list(), missing_from_brief = list())
 fake_pick <- function(i) list(domain = paste("domain", i), candidate = "A", id = paste0("TR", i),
-                              why = "Canned.", concerns = list(), suggestion = "")
-fake_appraisal <- list(selected = list(fake_pick(1), fake_pick(2)), not_covered = list(), set_notes = list(),
-                       test_first = list(), limits = "Canned.")
+                              check_before_use = "")
+fake_appraisal <- list(selected = list(fake_pick(1), fake_pick(2)))
 fake_brief <- list(complete = TRUE, questions = list(), task_fit = "",
                    criteria = list("Canned criterion."))
 fake_model <- function(id) list(api = "openai", base_url = "https://example.invalid/v1",
@@ -451,7 +450,7 @@ flow_checks <- function() {
                       regexpr("\nCHECKLIST\n", ap$user, fixed = TRUE),
                       regexpr("\nCHARACTERIZE\n", ap$user, fixed = TRUE))) > 0) &&
              has(ap$user, "\nCANDIDATES\n") && has(ap$user, "Canned stem number 1?") &&
-             has(ap$user, "\none_thing: ") && has(ap$user, "\"selected\"") && has(ap$user, "\"set_notes\"")),
+             has(ap$user, "\none_thing: ") && has(ap$user, "\"selected\"") && has(ap$user, "\"check_before_use\"")),
     expect("documentation checks are not in the appraisal checklist (reflex files 0.3)",
            !has(ap$user, "\ndeclare_defaults: ") && !has(ap$user, "\nmidpoint_and_dont_know: ")),
     expect("appraisal prompt: persona (in the message), pm_appraise rules in the system prompt, not the drafting rules",
@@ -491,16 +490,12 @@ sec_flow <- if (PHASE < 3L) {
 
 fake_review <- list(
   items = list(
-    list(id = "Q1", findings = list(
-      list(check = "one_thing", stage = "comprehension",
-           evidence = "the recycling services and street cleaning", problem = "Two services.",
-           severity = 8, rewrite = "x", probe = "y"),
-      list(check = "not_a_real_check", stage = "comprehension",
-           evidence = "words that are nowhere in the questionnaire", problem = "Invented.",
-           severity = 3, rewrite = "", probe = ""))),
-    list(id = "Q2", findings = list())),
-  instrument = list(),
-  test_first = list(), not_assessed = "")
+    list(id = "Q1", verdict = "Revise", problems = list(
+      list(problem = "Two services.", rewrite = "x"),
+      list(problem = "Street cleaning is unclear.", rewrite = "y"),
+      list(problem = "A third problem that is not shown.", rewrite = "z"))),
+    list(id = "Q2", verdict = "Keep", problems = list())),
+  instrument = list())
 
 review_checks <- function() {
   form = forms$evaluate
@@ -509,7 +504,7 @@ review_checks <- function() {
     fake_review
   }
   rv = run_review(form, fake_pm, ask = ask)
-  flags = check_review(rv$reply, form)
+  shown = shape_review(rv$reply, form$questionnaire)
   bad_ask = function(...) stop("canned endpoint error")
   failed = run_review(form, fake_pm, ask = bad_ask)
   dplyr::bind_rows(
@@ -519,15 +514,12 @@ review_checks <- function() {
     expect("run_review uses the prompt build_prompt() gives", identical(rv$hash, build_prompt(form)$hash)),
     expect("a failed call is status failed with a reason, not an R error",
            identical(failed$status, "failed") && nzchar(paste(failed$error, collapse = " "))),
-    expect("check_review returns one row per finding with item, check, severity, evidence_found, check_known",
-           is.data.frame(flags) && nrow(flags) == 2L &&
-             all(c("item", "check", "severity", "evidence_found", "check_known") %in% names(flags))),
-    expect("a real quote and a sent check id are accepted",
-           isTRUE(flags$evidence_found[flags$check == "one_thing"]) &&
-             isTRUE(flags$check_known[flags$check == "one_thing"])),
-    expect("an invented quote and an unknown check id are flagged, not dropped",
-           isFALSE(flags$evidence_found[flags$check == "not_a_real_check"]) &&
-             isFALSE(flags$check_known[flags$check == "not_a_real_check"])))
+    expect("shape_review gives the question as pasted, a verdict, at most two problems, and the questions to keep",
+           identical(purrr::map_chr(shown$questions, "verdict"), c("Revise", "Keep")) &&
+             length(shown$questions[[1]]$problems) == 2L && identical(shown$keep, "Q2") &&
+             grepl("^Q1\\.", shown$questions[[1]]$text)),
+    expect("a third problem is dropped, and no other field of the reply is read",
+           !any(grepl("third problem", unlist(shown), fixed = TRUE)) && identical(names(shown), c("questions", "keep", "instrument"))))
 }
 
 sec_review <- if (PHASE < 4L) {
@@ -576,11 +568,8 @@ long_checks <- function() {
   canned = function(user) {
     ids = regmatches(user, gregexpr("(?m)^Q[0-9]+(?=\\. )", user, perl = TRUE))[[1]]
     instrument = !grepl("\none_thing: ", user, fixed = TRUE)
-    list(items = if (instrument) list() else purrr::map(ids, function(i) list(id = i, findings = list())),
-         instrument = if (instrument) list(list(check = "scale_consistency", stage = "instrument",
-                                                evidence = "Q1, Q2", problem = "Canned.", severity = 5,
-                                                rewrite = "", probe = "")) else list(),
-         test_first = list(), not_assessed = "")
+    list(items = if (instrument) list() else purrr::map(ids, function(i) list(id = i, verdict = "Keep", problems = list())),
+         instrument = if (instrument) list("Canned point about the whole.") else list())
   }
   make = function(fail_at = 0L) function(user, m, system_prompt = NULL, max_tokens = NULL,
                                          validate = NULL, ...) {
@@ -609,7 +598,7 @@ long_checks <- function() {
     expect("long review: item calls carry no instrument checks, the instrument call carries no item checks",
            sum(grepl("\nscale_consistency: ", users_ok, fixed = TRUE)) == 1L &&
              sum(grepl("\none_thing: ", users_ok, fixed = TRUE)) == length(parts)),
-    expect("long review: status ok, all 30 items in pasted order, instrument findings kept",
+    expect("long review: status ok, all 30 items in pasted order, the points about the whole kept",
            identical(rv$status, "ok") &&
              identical(purrr::map_chr(rv$reply$items, "id"), paste0("Q", 1:30)) &&
              length(rv$reply$instrument) == 1L),

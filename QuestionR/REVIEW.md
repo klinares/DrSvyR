@@ -2,7 +2,7 @@
 
 From Phase 9, "skills" are called "reflexes". This file keeps the old word where it records earlier work.
 
-Generated 2026-11-13 18:04 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-13 18:30 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -14,6 +14,7 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+62c036b QuestionR 9b: no translation, no TRAPD, questions are written in English
 752e23c QuestionR 9a: skills are reflexes
 341314a QuestionR: Phase 9 prompt, and design section 18 (Kevin's five rulings)
 4f7bf1c Merge branch 'questionr': add QuestionR
@@ -28,25 +29,24 @@ e0d90c5 QuestionR 8b: the Prompt tab shows one box, and never the rules
 06373be QuestionR 8a: the skills with Guidelines, and the message the analyst edits
 58f00d4 QuestionR: Phase 8 prompt revised 2026-11-13; note at the end of design section 17
 67e6fae QuestionR: changes from the Claude project
-f408251 QuestionR Phase 7: STATUS and REVIEW
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
-M  R/checks.R
-M  R/flow.R
-M  R/output.R
-M  R/reflexes.R
-M  R/ui_generate.R
-M  tests/output_generate.txt
-M  tests/output_review.txt
-MM tests/review.R
-M  tests/smoke.R
-D  www/fw_trapd.svg
-M  www/methodology.md
-M  www/reflexes/README.md
-M  www/reflexes/cross_cultural.md
-M  www/start.md
+ M R/checks.R
+ M R/flow.R
+ M R/output.R
+ M R/reflexes.R
+ M R/ui_generate.R
+ M REVIEW.md
+ M tests/llm_check.R
+ M tests/output_generate.txt
+ M tests/output_review.txt
+ M tests/review.R
+ M tests/smoke.R
+ M www/reflexes/evaluate.md
+ M www/reflexes/generate.md
+ M www/reflexes/pm_appraise.md
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
@@ -54,40 +54,43 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  .gitignore                                         |   6 +-
  CLAUDE.md                                          |   2 +-
  QuestionR/.rscignore                               |   2 +-
- QuestionR/DESIGN.md                                | 131 ++++++++++-----
- QuestionR/PROMPTS.md                               | 167 +++++++++++++++++++
- QuestionR/R/checks.R                               |   2 +-
+ QuestionR/DESIGN.md                                | 131 +++--
+ QuestionR/PROMPTS.md                               | 167 +++++++
+ QuestionR/R/checks.R                               |  24 +-
+ QuestionR/R/flow.R                                 |   3 +-
  QuestionR/R/llm.R                                  |   4 +-
- QuestionR/R/output.R                               |  46 +++---
- QuestionR/R/{skills.R => reflexes.R}               | 150 ++++++++---------
+ QuestionR/R/output.R                               | 105 ++--
+ QuestionR/R/{skills.R => reflexes.R}               | 203 ++++----
  QuestionR/R/ui.R                                   |   1 -
- QuestionR/R/ui_generate.R                          |   4 +-
+ QuestionR/R/ui_generate.R                          |  33 +-
  QuestionR/README.md                                |  16 +-
- QuestionR/REVIEW.md                                | 180 +++++++--------------
+ QuestionR/REVIEW.md                                | 536 ++++++---------------
  QuestionR/STATUS.md                                |   2 +
  QuestionR/app.R                                    |   8 +-
- QuestionR/tests/output_generate.txt                |   2 +-
- QuestionR/tests/output_review.txt                  |   2 +-
- QuestionR/tests/review.R                           |  43 ++---
- QuestionR/tests/smoke.R                            | 138 ++++++++--------
+ QuestionR/tests/output_generate.txt                |  47 +-
+ QuestionR/tests/output_review.txt                  |   4 +-
+ QuestionR/tests/review.R                           |  91 ++--
+ QuestionR/tests/smoke.R                            | 335 +++++--------
+ QuestionR/www/fw_trapd.svg                         |  52 --
  QuestionR/www/how_it_works.svg                     |   6 +-
- QuestionR/www/methodology.md                       |  24 +--
+ QuestionR/www/methodology.md                       |  47 +-
  ...g Unedited AI-Generated Psychometric Scales.pdf | Bin
  .../README.md                                      |   6 +-
- QuestionR/www/{skills => reflexes}/README.md       |   4 +-
+ QuestionR/www/{skills => reflexes}/README.md       |   9 +-
  QuestionR/www/{skills => reflexes}/attitudinal.md  |   0
  QuestionR/www/{skills => reflexes}/behavioral.md   |   0
  QuestionR/www/{skills => reflexes}/core.md         |   0
- .../www/{skills => reflexes}/cross_cultural.md     |   0
+ QuestionR/www/reflexes/cross_cultural.md           |  41 ++
  QuestionR/www/{skills => reflexes}/evaluate.md     |   0
  QuestionR/www/{skills => reflexes}/generate.md     |   0
  QuestionR/www/{skills => reflexes}/mode.md         |   0
  QuestionR/www/{skills => reflexes}/pm_appraise.md  |   0
  QuestionR/www/{skills => reflexes}/pm_brief.md     |   0
  QuestionR/www/{skills => reflexes}/sensitive.md    |   0
- QuestionR/www/start.md                             |   3 +-
+ QuestionR/www/skills/cross_cultural.md             |  66 ---
+ QuestionR/www/start.md                             |   7 +-
  README.md                                          |   2 +-
- 36 files changed, 560 insertions(+), 391 deletions(-)
+ 39 files changed, 808 insertions(+), 1148 deletions(-)
 exit status: 0
 ~~~~
 
@@ -97,16 +100,16 @@ exit status: 0
 |---|---|
 | app.R | 249 |
 | R/_disable_autoload.R | 5 |
-| R/checks.R | 447 |
-| R/flow.R | 419 |
+| R/checks.R | 434 |
+| R/flow.R | 418 |
 | R/llm.R | 696 |
-| R/output.R | 394 |
-| R/reflexes.R | 675 |
+| R/output.R | 365 |
+| R/reflexes.R | 673 |
 | R/ui.R | 187 |
-| R/ui_generate.R | 996 |
-| tests/llm_check.R | 331 |
-| tests/review.R | 670 |
-| tests/smoke.R | 3096 |
+| R/ui_generate.R | 809 |
+| tests/llm_check.R | 316 |
+| tests/review.R | 659 |
+| tests/smoke.R | 3015 |
 
 Code files counted: 11 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
@@ -138,10 +141,10 @@ PASS means the file is byte for byte what the Claude project drafted (line endin
 | behavioral.md | PASS | f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142 |
 | core.md | PASS | d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9 |
 | cross_cultural.md | PASS | 915d46090cf22e858cbe431bbcc54091c599df18c17efd2e5bfa97662f805f80 |
-| evaluate.md | PASS | 6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb |
-| generate.md | PASS | 9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2 |
+| evaluate.md | PASS | f290fb25d8ba90b3adb896d6dafc920c01eec94a684470c14be348a78806e7a7 |
+| generate.md | PASS | f7410389ee03de9fa3bf911d7410fa182f93169d0d40b57e96c3d0fb368ab687 |
 | mode.md | PASS | 98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0 |
-| pm_appraise.md | PASS | a43e03e541f02f12d72f44d83c901faf983b0edf36fe123045da66a50aaeeb10 |
+| pm_appraise.md | PASS | 1bebaba53a961493eed2d1b4fa7d058d0dab53dd05d3b6113d606364ac6f4211 |
 | pm_brief.md | PASS | a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a |
 | sensitive.md | PASS | 4d8b50d65e768c62143287b3f7400ff7d66695b4905b3d4e0849cc313b81a2eb |
 
@@ -325,21 +328,21 @@ ok  the appraisal sends core and pm_appraise only, and none of the drafting rule
 ok  the appraisal's user message is the persona, then PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE, in that order
 ok  the appraisal's CHECKLIST is exactly what the workers' files give, and their questions are not in the system prompt
 ok  the appraisal says how many candidates and how many items each was asked for
-ok  each candidate is one JSON line with its letter, its stems, its options, its parts and its decisions
-ok  a worker's own notes never reach the appraisal, and an empty source_english is left out
+ok  each candidate is one JSON line with its letter and its items' ids, domains, stems, options and open format, and nothing else of an item
+ok  a worker's own notes never reach the appraisal
 ok  the appraisal is deterministic and its hash follows the candidates
 ok  the appraisal holds no Source text, comment or Check field
 ok  the appraisal stops for a review task, and for no candidate or an unnamed one
 ok  a draft with the number of items asked for, each closed or open, passes
 ok  a draft with too many or too few items fails, saying how many and how many were asked for
-ok  questions in an item's parts are not counted as items
+ok  fields a draft is no longer asked for (parts, programming, decisions, notes) are ignored, not refused
 ok  a reply with no items field, or an item with no stem, id or domain, fails naming the field
 ok  an item with neither options nor an open_format fails, naming the item
 ok  a reply that is not an object, or whose items are not a list, fails
 ok  the draft validator is what llm_json() is given: a fields problem is a readable sentence ending in a full stop
 ok  a brief check with its fields passes; one with a string for complete, or a question with no ask, fails
-ok  a recommendation with its five fields passes, empty lists included; a missing limits or selected fails
-ok  a recommended item gives its domain, candidate and id; a concern its check, failing words, a severity from 1 to 10 and why; a note on the set its check, severity and why
+ok  a recommendation with its one field passes, a line to check before use or not; a missing selected fails; fields it is no longer asked for are ignored
+ok  a recommended item gives its domain, candidate and id; its line to check before use is a string
 ok  R refuses a recommendation that names an id no candidate has, names an item twice, or has more items than were asked for; two candidates may share an id; an id may be a number
 ok  a format that has no schema stops, naming it
 ok  a new output format is one entry: the validator is built from REPLY_SCHEMAS alone
@@ -352,10 +355,9 @@ ok  the coded defaults read as words for a table
 ok  a five-point scale whose decisions say there is no midpoint is odd and stated as no midpoint, and R does not say 'midpoint' for the count
 ok  what an item says about a midpoint is read as yes, no or not stated, in the phrasings the models used
 ok  decisions written as one string or one entry are flagged not itemised, two or more are itemised, none is none
-ok  each recommended item is found in its draft by letter and id, in the order given, with its position, domain, reason and suggestion
-ok  a concern is read with whether its check is an id that was sent; severity 5 or above is shown, below is not, and none given is shown
-ok  the notes on the set are read the same way, the domains not covered are listed, and the check ids that were not sent are collected
-ok  an item that cannot be found in its draft is left out, not guessed at; a reply with nothing recommended has no flags
+ok  each recommended item is found in its draft by letter and id, in the order given, with its position, domain and line to check; nothing else of the reply is read
+ok  the line to check before use is held to one sentence of 20 words or fewer, and is empty when the reviewer gave none
+ok  an item that cannot be found in its draft is left out, not guessed at; a reply with nothing recommended has none
 ok  each result has exactly the fields the design names
 ok  the flow makes one brief call, one call per worker in the workers' order, and one appraisal call
 ok  each call gets its step's ceiling, and the brief and appraisal hold no worker's name
@@ -423,17 +425,18 @@ ok  Evaluate's Prompt tab also shows one box, no rules, no checklist and no repl
 ok  approving a review prompt, edited or not, starts a run with the edited text and both hashes
 ok  before any run the Results tab says nothing has been run
 ok  a run makes one call per worker and one for the appraisal, records the round, and sets the recommended set from the reviewer's letters and ids
-ok  only the recommended set is shown: each item with its domain, the reviewer's reason, its stem and every option in a text box, a button to take it out, and no tick boxes
-ok  an item's remaining concerns are in the three bands, the minor ones folded, a check that was not sent is flagged, and the reviewer's suggestion is labelled untested
-ok  below the set: what no draft covered, the notes on the set as a whole in bands, what to test first, and the limits
-ok  every draft is in a closed panel below, a candidate at a time with its model, each item with its coded defaults and a button to use it, except the two already in the set
-ok  the page for the round shows the prompt hash and seed, the criteria that were applied, and gives the appraiser no model name
+ok  only the recommended questions are shown, under the one sentence: each question and every option in a text box, numbered, with a button to take it out, and no tick boxes
+ok  a recommended question has no domain, reason, model, severity, band, suggestion or reflex id on the screen
+ok  the one line to check before use is on the question that has one, cut to its first sentence, and not on the other
+ok  nothing else of the reviewer's reply is drawn, though the model sent it: no reasons, concerns, notes on the set, domains not covered, test first or limits
+ok  the other drafts are in a closed panel below, by domain, each with its question and options and a button to use it, except the two already in the set; no model, candidate or coded default
+ok  the page for the round shows no prompt hash, seed or criteria, and the appraiser was given no model name
 ok  typing in a box is recorded in the session as a change, only for what differs from the draft; the item is the draft's with the change put on it, and the drafts are as the workers wrote them
 ok  taking an item out removes it from the set and the page, and what was typed in the others is put back in the boxes
 ok  an item from the drafts used with no item chosen goes at the end of the set, marked as swapped in; one already in the set is not put in twice
 ok  an item used with an item of the set chosen takes its place, and the replaced item's changes go with it
 ok  a second run is a second round in the log, with the set the reviewer recommended and nothing edited
-ok  a worker that failed is listed with its reason, the other two are shown, and the reviewer covers two candidates
+ok  a worker that failed is not on the screen when others came back (the record has it); the other two are shown, and the reviewer covers two candidates
 ok  a reviewer that did not come back is said in words with its reason; there is no recommended set, the drafts are open, and the analyst can build a set from them
 ok  using an item from the drafts then gives a set of one, marked as swapped in
 ok  a run that cannot start (no form) stops with a plain sentence on the page, not an error
@@ -453,39 +456,27 @@ ok  a pasted questionnaire over the cap is refused, saying how long it is and wh
 ok  Luna is the last of the workers (decision 15)
 ok  a model entry's reasoning_effort reaches the Anthropic-style call as adaptive thinking with that effort; unset sends neither
 ok  on the OpenAI-style call reasoning_effort and the name of the token limit reach the wire through api_args, only when the entry sets them; the Anthropic style keeps max_tokens; no profile entry sets either
-ok  a review with its four fields passes: findings per question, instrument findings, test_first, not_assessed
-ok  a question's id may be a label or a number, and an empty list of findings is a question with none
-ok  a review missing a field, or with a finding that has no check, evidence, problem or severity from 1 to 10, fails naming the question
+ok  a review with its two fields passes: a verdict and problems for each question, and points about the whole; fields it is no longer asked for are ignored
+ok  a question's id may be a label or a number; a missing id, a missing field or a verdict that is not Keep or Revise fails
+ok  a Revise with no problem fails, asking for the problem or a Keep; a point about the whole must be a sentence
 ok  run_review has the fields of run_brief and batches (one entry here), uses build_prompt()'s prompt, and makes one call at the evaluation ceiling
 ok  a review that errors, is cut off, or fails the schema is failed with a plain reason and is not raised
 ok  a form that is not a review, or has no questionnaire, or is over the cap, is failed without a call
 ok  run_review never looks up a key and reaches no model but through ask
-ok  check_review gives one row per finding, questions and instrument alike, with the columns the flow needs
-ok  a quote that is in the text, and a check that was sent, are accepted; an invented quote and an unknown check are flagged, not dropped
-ok  a quote is found whatever its case, spacing, curly quotes or enclosing quotation marks
-ok  severity 5 and above is shown, below 5 is not, and a finding with no severity is shown
-ok  a review with no findings is a data frame with no rows and the same columns
-ok  the review's checks need the CHECKLIST that was sent: ids in it are known, others are not
-ok  a review round is a log too: the summary row, the review with its prompt hash and its call record
+ok  shape_review gives, per question, its id, its text as pasted, a verdict and at most two problems with their rewrites; and the ids kept, and at most three points about the whole
+ok  a third problem and a fourth point are dropped, whatever the model sent; so are test first and what was not assessed
+ok  a problem is held to one sentence of 20 words or fewer, and a point about the whole to one sentence
+ok  a Revise with no problem to show is a Keep, and a verdict in any case is read
+ok  the question as pasted is found by blocks when the blank lines make as many as the ids, and by the line that begins with its id when they do not; one that is not found is empty
+ok  the review's checks need the CHECKLIST that was sent
+ok  a review round is a log too: the summary row, the review with its prompt hash and its call record, and the whole reply as the model sent it
 ok  a review run makes one call to the project manager at the evaluation ceiling, and records the round, with no candidates
-ok  the page says it is one review, shows the prompt hash and that it was edited, and does not claim validation
-ok  findings are shown question by question, in the order pasted, a question with a numeric id included
-ok  a finding at severity 5 or above shows its check and the check's question, severity, quote, rewrite and probe
-ok  a finding below 5 is folded away, and flagged when its quote is not in the text or its check was not sent
-ok  a question with no finding says none was found by this review, never that it has no problems
-ok  instrument-level findings are shown apart, naming the questions involved
-ok  what to test first and what was not assessed are drawn
-ok  R's checks on the review are counted: the quote that is not in the text and the check that was not sent
-ok  the criteria that were applied are listed
+ok  the review is shown under the one sentence: a question marked Revise with the question as pasted, the verdict, two problems and a suggested rewrite each
+ok  the questions marked Keep are one line, not cards; the questionnaire as a whole has three points and no more
+ok  nothing else of the reply is on the screen: no third problem, fourth point, test first, what was not assessed, severity, check, quote, prompt hash, round or criteria
 ok  a review that fails is said on the page in words, with its reason, and the round is still recorded
-ok  two findings on one question, a test_first given as plain ids, and no not_assessed are all drawn
+ok  a review that keeps every question says so in one line and has no cards and no points about the whole
 ok  run_review sends an edited prompt when given one, and keeps it as the result's prompt with its own hash
-ok  severity_band: 7 and above fix, 5 and 6 judgment, below 5 minor, none given judgment (the cut at 5 is unchanged)
-ok  a review's findings are shown in three bands, highest first, the Minor band folded away
-ok  a question with only minor findings says none is rated 5 or above and shows no band heading
-ok  an appraisal's fails use the same bands: a fail with no severity is in the middle band, below 5 is folded
-ok  evidence is compared without case, spacing or the kind of quotation mark, with quotes around the whole of it dropped
-ok  evidence with an ellipsis, a paraphrase, or nothing is not found, and an ellipsis is not removed
 ok  split_questionnaire: more than one part, none over the limit, whole blocks in order, joined by a blank line they give the text back
 ok  split_questionnaire: a short text is one part; runs of blank lines and CRLF line endings count as one separator
 ok  split_questionnaire: a block over the limit stops, saying which block, how long, and quoting its first words
@@ -498,7 +489,7 @@ ok  a part prompt needs a review task and a part of its own kind; a part sentenc
 ok  a one-part questionnaire's prompt is the work prompt, as before (same hash), and the registry gives it no part sentence
 ok  a long review makes one call per part and one for the instrument, each at the evaluation ceiling, and says before each which it is
 ok  a long review's result has run_review's fields and batches: one per call, in order, each with kind, part, status, hash, seconds and its reply
-ok  the reply holds all 30 questions in the order pasted, the instrument findings and not_assessed from the instrument call only
+ok  the reply holds all 30 questions in the order pasted, and the points about the whole from the instrument call only
 ok  the call record of a long review adds up its calls: seconds, and tokens in and out
 ok  a part that fails gives status partial naming it, keeps the questions of the other parts in order, and the instrument call still runs
 ok  the instrument call failing leaves the questions and an empty instrument; every call failing is failed with no reply
@@ -510,35 +501,39 @@ ok  the run log of a long review holds every call: its hash, its prompt, its rep
 ok  the Prompt tab for a long review says it is several calls, shows the first part's prompt, and offers no editing
 ok  approving it records the first part's prompt as assembled, not edited, with its hash, and starts the run
 ok  a run of a long review asks for one progress step per call, records one round with the summary rows, and shows the part that failed
-ok  the page for a long review lists a prompt hash for each call and shows the questions that came back and the instrument findings
+ok  the page for a long review shows the questions that came back and the points about the whole, and no prompt hash or call count
 ok  the button's input runs that part again, and the page, the review and the round in the log are replaced by one with nothing missing
-ok  a drafting output has the items of the set in its order, each with its id, introduction, stem, numbered options and programming notes
-ok  the HTML is plain: headings, paragraphs, an ordered list of options that Word keeps numbered, emphasis for the introduction, a block quote for a part
+ok  a drafting output has the questions of the set in its order, each with its number, the question and its numbered options, and the one line to check on the first
+ok  nothing else of a question or of the reply is in the output: no id, domain, introduction, filter question, programming, decision, note, reason, limits, model, hash or disclosure
+ok  the output opens with the one sentence and ends with the three lines: the date, who drafted and who reviewed, and the version of the tool; and the copy is exactly the screen's text and those lines
+ok  the HTML is plain: headings, paragraphs, an ordered list of options that Word keeps numbered, emphasis for the line to check
 ok  the HTML and the plain text say the same: every line of the text is in the HTML's text, in the same order
-ok  the disclosure names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft
+ok  the disclosure, which now goes in the record, names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft
 ok  the disclosure gives the version of each reflex file used, and pm_brief.md only when the brief was checked
 ok  the disclosure gives each prompt's hash in full, says the drafting prompt was not edited, and says it was when it was
 ok  the disclosure says which candidate each item of the set came from and the model behind it, and ends with the fixed line
-ok  the output takes the set as the analyst left it: an edited item has its new wording, and the disclosure says which items were edited and which were swapped in by the analyst
-ok  with nothing in the set, or an entry that points at nothing, the output says so and has no disclosure to make
-ok  a review's output is question by question, each question's findings in the severity bands, highest first, the Minor ones listed too
-ok  a finding gives its quote, problem, and a rewrite and a probe each said to be untested; a quote R did not find is flagged
-ok  the instrument findings, what to test first and what the review could not judge follow, then the disclosure with the review prompt's hash
-ok  a review in parts lists a prompt hash for each call, and one with a part missing says so at the top; no review gives a plain message
-ok  the run log is one JSON file with a schema, the profile, the time and every round; what the analyst did with the set is in it
-ok  a planted key is absent from the log, which says where it was taken out, and a string too short to be a key is left alone
+ok  the output takes the set as the analyst left it: an edited question has its new wording, and the record says which items were edited and which were swapped in
+ok  with nothing in the set, or an entry that points at nothing, the output says so and has no three lines
+ok  a review's output is the one sentence, then each question to revise with the question as pasted, the verdict, its problems and suggested rewrites, in the order pasted
+ok  the question marked Keep is one line, the questionnaire as a whole follows, then the three lines; no severity, check, quote, band, test first, hash or disclosure
+ok  a review in parts with a part missing says so at the top; no review gives a plain message
+ok  the record's disclosure for a review in parts lists a prompt hash for each call
+ok  the full record is one JSON file with a schema, the version, the profile, the time, the disclosure and every round; what the analyst did with the set is in it
+ok  the record holds what the screen does not: every draft with its notes and decisions, and the reviewer's whole reply
+ok  a planted key is absent from the record, which says where it was taken out, and a string too short to be a key is left alone
 ok  no output text or HTML carries a planted key: it is not in the run's data, and scrub_secrets takes it out of anything that is
-ok  known_keys gives the analyst's pasted key and a server key, none when there is none; the output and log functions never read a key themselves
+ok  known_keys gives the analyst's pasted key and a server key, none when there is none; the output and record functions never read a key themselves
 ok  the two sample outputs are saved as tests/output_generate.txt and tests/output_review.txt
 ok  before anything has run, the Output tab says there is nothing to show and offers no download
 ok  a drafting round with nothing in the set says there is no item in it
-ok  ticking items on Results puts them on the Output tab in HTML for Word and in a plain text box, with the disclosure block
-ok  un-ticking an item takes it off the Output tab
-ok  the downloads are the plain text and the run log, and the page says no key is in the log
-ok  the text download is the output as plain text; the log download is JSON with a schema, the round and the analyst's final items
-ok  a key in the session, and echoed in a model's reply, is in neither the page, nor the text download, nor the log download
-ok  a review's Output tab shows the review question by question in the bands, and the disclosure, with no Keep boxes
-ok  the review's run log has its round, its prompt hash and its call record
+ok  the questions of the set are on the Output tab in HTML for Word, followed by the three lines, with one button and no plain text box
+ok  every line of what build_output() gives (the screen's text and the three lines) is on the Output tab, in order
+ok  taking a question out of the set takes it off the Output tab
+ok  the one download is the full record, in one small button, and the page says what is in it
+ok  the record download is JSON with a schema, the round, the disclosure with each prompt's hash, and the analyst's final items
+ok  a key in the session, and echoed in a model's reply, is in neither the page nor the record download
+ok  a review's Output tab shows the questions to revise with their problems and rewrites, the Keep line and the three lines, and no bands or disclosure
+ok  the review's record has its round, its prompt hash, its call record and its disclosure
 ok  the page has the Output tab's boxes in place of its placeholder, and no key is anywhere on it
 ok  Start here is www/start.md as it is, then the key box, then a closed Settings and connection panel that holds the profile, the models table with the connection check, and the pilot notice
 ok  a profile with placeholders opens the Settings and connection panel by itself
@@ -553,7 +548,6 @@ ok  every image named in start.md and methodology.md exists in www/
 ok  the Frameworks column of the reflex table is what each file's Source lines name, in the order of the panels
 ok  under the Methodology page, one closed panel for each reflex file, in the order of the table, titled with the file's heading and version, holding the file as markdown without its comments, and not the README
 ok  a profile that still holds placeholders says which entries to fill in, the connection check does not call it, and the work profile's page builds; a filled profile says nothing
-ok  when the only worker is of the project manager's own family, Results says the appraiser reviewed a draft from its own family; with workers of other families it says nothing
 ok  the workers' drafts are requested in one batch, each request the arguments ask takes, in the workers' order, and ask is not used
 ok  one worker failing is recorded with its reason and the other two are kept; a call's own seconds are used when the reply gives them
 ok  an ask_all that fails as a whole fails every worker and nothing else; with only ask given, the requests are answered one after the other through it
@@ -585,7 +579,7 @@ exit status: 0
 | reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
-| parts field only in drafting prompts | PASS |
+| the drafting output format (open_format) only in drafting prompts | PASS |
 | task file sent (attitude_object) | PASS |
 | generate.md sent (declare_defaults) | PASS |
 | other task files not sent (reference_period, forgiving_intro) | PASS |
@@ -594,9 +588,9 @@ exit status: 0
 | blank fields left out (no Country, no Reference period line) | PASS |
 | number of items in the ask | PASS |
 
-hash: 752c4a48fdd63f77246c47aabd69b61b4cdff0b93909560cffc544840b9f2731
+hash: 8205824f114098a4bdd411f89dfe757250e8e9aaa327e92349f6cd7e938e940c
 files: core.md, generate.md, attitudinal.md, mode.md
-characters: system 10515, user 2813
+characters: system 10515, user 2206
 
 Checklist (id: question):
 ~~~~
@@ -635,7 +629,7 @@ REFLEXES: Core (v0.3)
 - brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
 - not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
 
-REFLEXES: Generate (v0.3)
+REFLEXES: Generate (v0.4)
 - design_not_topic (Before writing any item.) Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.
 - declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made, as separate entries with one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
 - labelled_scales (Any ordered response scale.) Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or unipolar (none to a lot) and build the scale to match. MUST NOT: Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.
@@ -701,22 +695,16 @@ For attitudinal questions, also:
 - Use a filter or "no opinion" option for respondents without an opinion.
 
 REPLY FORMAT
-Return one JSON object with these fields.
+Return one JSON object with this field.
 
 - "items": a list. Each item has:
   - "id": a short code, [construct abbreviation] plus a number.
   - "domain": the single domain of the construct this item measures.
-  - "intro": lead-in text read or shown before the question, or an empty string.
-  - "stem": the question, in the output language.
-  - "options": a list of response options in the order shown, in the output language; an empty list for an open question.
+  - "stem": the question as the respondent reads or hears it, including any lead-in sentence, in English.
+  - "options": a list of response options in the order shown, in English; an empty list for an open question.
   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
-  - "parts": a list, usually empty. Filter, branch or bracket questions that belong to this item, in the order asked; each has "when" (who is asked it, or "before the item" for a filter), "stem" and "options", in the output language.
-  - "programming": routing, filter, randomization and interviewer instructions, in English, as short imperative notes.
-  - "decisions": the design decisions required by declare_defaults, one short line each, in English.
-  - "source_english": when the output language is not English, the English wording the item was drafted from; otherwise an empty string.
-  - "notes": risks, what to test and how, in English.
-- "not_covered": domains of the construct left out, or an empty list.
-- "missing_from_brief": anything you needed that the brief did not say.
+
+Nothing else: no notes, no design decisions, no routing, no separate filter or branch questions. The analyst is shown the question and its answer options and nothing more, so write each stem plainly and keep it short.
 ~~~~
 
 ### behavioral
@@ -736,16 +724,16 @@ Return one JSON object with these fields.
 | reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
-| parts field only in drafting prompts | PASS |
+| the drafting output format (open_format) only in drafting prompts | PASS |
 | task file sent (how_many_or_how_often) | PASS |
 | telephone, face_to_face, mixed_mode kept; web dropped | PASS |
 | cross_cultural sent (flag_do_not_assert, context_and_face) | PASS |
 | no translation or language reflex sent (trapd, output_language, write_for_translation) | PASS |
 | form values present (Kenya, past 7 days) | PASS |
 
-hash: 8c672c2bd82443c58914ee8ff7d6b55fc842216dfd8ccc22d8cb3275b55c7593
+hash: d4be11dd5cce556068eb9d1b81f25c4f3bb6b644fe9c38222ae1e5275636bb62
 files: core.md, generate.md, behavioral.md, mode.md, cross_cultural.md
-characters: system 12997, user 2879
+characters: system 12997, user 2272
 
 Checklist (id: question):
 ~~~~
@@ -786,7 +774,7 @@ REFLEXES: Core (v0.3)
 - brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
 - not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
 
-REFLEXES: Generate (v0.3)
+REFLEXES: Generate (v0.4)
 - design_not_topic (Before writing any item.) Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.
 - declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made, as separate entries with one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
 - labelled_scales (Any ordered response scale.) Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or unipolar (none to a lot) and build the scale to match. MUST NOT: Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.
@@ -865,22 +853,16 @@ For behavioral questions, also:
 - Avoid vague quantifiers such as "often" or "sometimes".
 
 REPLY FORMAT
-Return one JSON object with these fields.
+Return one JSON object with this field.
 
 - "items": a list. Each item has:
   - "id": a short code, [construct abbreviation] plus a number.
   - "domain": the single domain of the construct this item measures.
-  - "intro": lead-in text read or shown before the question, or an empty string.
-  - "stem": the question, in the output language.
-  - "options": a list of response options in the order shown, in the output language; an empty list for an open question.
+  - "stem": the question as the respondent reads or hears it, including any lead-in sentence, in English.
+  - "options": a list of response options in the order shown, in English; an empty list for an open question.
   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
-  - "parts": a list, usually empty. Filter, branch or bracket questions that belong to this item, in the order asked; each has "when" (who is asked it, or "before the item" for a filter), "stem" and "options", in the output language.
-  - "programming": routing, filter, randomization and interviewer instructions, in English, as short imperative notes.
-  - "decisions": the design decisions required by declare_defaults, one short line each, in English.
-  - "source_english": when the output language is not English, the English wording the item was drafted from; otherwise an empty string.
-  - "notes": risks, what to test and how, in English.
-- "not_covered": domains of the construct left out, or an empty list.
-- "missing_from_brief": anything you needed that the brief did not say.
+
+Nothing else: no notes, no design decisions, no routing, no separate filter or branch questions. The analyst is shown the question and its answer options and nothing more, so write each stem plainly and keep it short.
 ~~~~
 
 ### sensitive
@@ -900,14 +882,14 @@ Return one JSON object with these fields.
 | reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
-| parts field only in drafting prompts | PASS |
+| the drafting output format (open_format) only in drafting prompts | PASS |
 | task file sent (forgiving_intro, respondent_safety) | PASS |
 | face_to_face kept; mixed_mode dropped | PASS |
 | cross_cultural sent | PASS |
 
-hash: 6993c1929428da1cffeeb422c66f88a80a56069cca759b07111f851833e60c3c
+hash: add552dfbcf4f8fec6c95ac8ef4c05f5b65ed6275f047723df74b69daf6a7f40
 files: core.md, generate.md, sensitive.md, mode.md, cross_cultural.md
-characters: system 13156, user 2963
+characters: system 13156, user 2356
 
 Checklist (id: question):
 ~~~~
@@ -947,7 +929,7 @@ REFLEXES: Core (v0.3)
 - brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
 - not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
 
-REFLEXES: Generate (v0.3)
+REFLEXES: Generate (v0.4)
 - design_not_topic (Before writing any item.) Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.
 - declare_defaults (Every item you write.) Every response format is a design decision, not a default. For each item state the decisions you made, as separate entries with one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint, whether there is a don't-know or no-opinion option, the direction the options run, and the reference period if there is one. MUST NOT: Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
 - labelled_scales (Any ordered response scale.) Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or unipolar (none to a lot) and build the scale to match. MUST NOT: Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.
@@ -1025,22 +1007,16 @@ For sensitive questions, also:
 - Provide face-saving response options.
 
 REPLY FORMAT
-Return one JSON object with these fields.
+Return one JSON object with this field.
 
 - "items": a list. Each item has:
   - "id": a short code, [construct abbreviation] plus a number.
   - "domain": the single domain of the construct this item measures.
-  - "intro": lead-in text read or shown before the question, or an empty string.
-  - "stem": the question, in the output language.
-  - "options": a list of response options in the order shown, in the output language; an empty list for an open question.
+  - "stem": the question as the respondent reads or hears it, including any lead-in sentence, in English.
+  - "options": a list of response options in the order shown, in English; an empty list for an open question.
   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
-  - "parts": a list, usually empty. Filter, branch or bracket questions that belong to this item, in the order asked; each has "when" (who is asked it, or "before the item" for a filter), "stem" and "options", in the output language.
-  - "programming": routing, filter, randomization and interviewer instructions, in English, as short imperative notes.
-  - "decisions": the design decisions required by declare_defaults, one short line each, in English.
-  - "source_english": when the output language is not English, the English wording the item was drafted from; otherwise an empty string.
-  - "notes": risks, what to test and how, in English.
-- "not_covered": domains of the construct left out, or an empty list.
-- "missing_from_brief": anything you needed that the brief did not say.
+
+Nothing else: no notes, no design decisions, no routing, no separate filter or branch questions. The analyst is shown the question and its answer options and nothing more, so write each stem plainly and keep it short.
 ~~~~
 
 ### evaluate
@@ -1060,18 +1036,18 @@ Return one JSON object with these fields.
 | reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
-| parts field only in drafting prompts | PASS |
+| the drafting output format (open_format) only in drafting prompts | PASS |
 | evaluate.md sent (restraint, translation_readiness) | PASS |
 | generate.md and task drafting files not sent | PASS |
 | questionnaire pasted under Questionnaire:, complete | PASS |
-| output format asks for test_first | PASS |
+| output format asks for a verdict per question and points about the whole | PASS |
 | checklist lines are id: question, for the reflexes in force (one_thing, paper, agree_disagree_and_grids) | PASS |
 | checklist has no line for a mode not chosen | PASS |
 | cross_cultural not sent (no country) | PASS |
 
-hash: e38ea89b6cd3eef0ffd5d5fa08814c6d57155b95ee85cbcdaa9ec114cc68f057
+hash: d9303decf0c53c233eb7c57fc52a99266a1ff4090e32bdcf8c8669cf77bd8722
 files: core.md, evaluate.md, mode.md
-characters: system 8800, user 4582
+characters: system 8800, user 4162
 
 Checklist (id: question):
 ~~~~
@@ -1109,7 +1085,7 @@ REFLEXES: Core (v0.3)
 - brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
 - not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
 
-REFLEXES: Evaluate a questionnaire (v0.3)
+REFLEXES: Evaluate a questionnaire (v0.4)
 - restraint (Every item you review.) Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding copy into evidence the exact words from the question or its options that cause it, character for character, with no ellipsis and no paraphrase. When the fault is something missing, copy the words it is missing from and say what is missing in problem. MUST NOT: Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
 - known_overcalls (You are about to flag sensitivity, stigma, burden or length.) These are the faults a language-model reviewer over-reports. Flag sensitivity only when you can say who would edit their answer and in which direction; flag burden only when you can name the step that is hard.
 - known_misses (Every item, as a second pass.) Look again for the faults a language-model reviewer tends to miss: an assumption that does not hold for some respondents, a term that carries a different meaning for part of the population, a framing that belongs to one culture, a question that does not apply to everyone asked.
@@ -1186,17 +1162,15 @@ any_mode: Does the item work as written in the stated mode?
 paper: Can the respondent follow the routing without help?
 
 REPLY FORMAT
-Return one JSON object with these fields. Write findings in English whatever
-language the questionnaire is in; write rewrites in the questionnaire's
-language and, when that is not English, add the English meaning.
+Return one JSON object with these fields. Write in English. Be brief: the analyst is shown only what is below, and reads very little.
 
 - "items": a list, one entry per question in the order pasted. Each has:
   - "id": the question's own number or label, or its position.
-  - "findings": a list, empty if none. Each finding has "check" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (words copied exactly from the pasted text, with no ellipsis), "problem" (one or two sentences), "severity" (1 to 10), "rewrite" and "rewrite_english" and "probe" (empty strings when severity is below 5).
-- "instrument": a list of findings about order, routing, consistency and fit to objectives, in the same form, with the question ids involved in "evidence".
-- "trapd": an object with the keys "translation", "review", "adjudication", "pretesting", "documentation", each a short statement of what is still needed; all empty strings when the survey is in one language for one country and that language is the source language.
-- "test_first": a list of up to five question ids with the method suggested for each.
-- "not_assessed": what this review could not judge from what was pasted.
+  - "verdict": "Keep" if the question can be used as written, or "Revise" if it has a real problem. Say "Revise" only for a real problem.
+  - "problems": a list, empty when the verdict is "Keep". At most two entries, the most serious first. Each has "problem" (one sentence of 20 words or fewer, in plain words, saying what is wrong) and "rewrite" (a suggested rewrite of the question, ready to use).
+- "instrument": a list of at most three points about the questionnaire as a whole (order, routing, consistency, fit to objectives), the most important first, one sentence each; an empty list if there is nothing to say.
+
+Nothing else: no severities, no check ids, no quotes, no stages and no test plans.
 ~~~~
 
 
@@ -1372,9 +1346,8 @@ Live run log (tests/run_generate.json), first 60 lines:
 | run_review: status ok, with system, user, hash and the parsed reply | PASS |
 | run_review uses the prompt build_prompt() gives | PASS |
 | a failed call is status failed with a reason, not an R error | PASS |
-| check_review returns one row per finding with item, check, severity, evidence_found, check_known | PASS |
-| a real quote and a sent check id are accepted | PASS |
-| an invented quote and an unknown check id are flagged, not dropped | PASS |
+| shape_review gives the question as pasted, a verdict, at most two problems, and the questions to keep | PASS |
+| a third problem is dropped, and no other field of the reply is read | PASS |
 
 tests/gold_items.csv rows: 59
 
@@ -1565,7 +1538,7 @@ The control findings at 5 or above:
 | split: a single block over the limit stops with a message | PASS |
 | long review: one call per part and one for the instrument | PASS |
 | long review: item calls carry no instrument checks, the instrument call carries no item checks | PASS |
-| long review: status ok, all 30 items in pasted order, instrument findings kept | PASS |
+| long review: status ok, all 30 items in pasted order, the points about the whole kept | PASS |
 | long review: batches recorded, one per call, each with status and hash | PASS |
 | a failed part gives status partial, names the part, and keeps the rest | PASS |
 | a short questionnaire is still one call with the Phase 4 prompt | PASS |
@@ -1604,15 +1577,10 @@ The instrument call returned 0 question entries (it was told to leave items empt
 
 Sample output for Word, drafting (tests/output_generate.txt), verbatim:
 ~~~~
-Survey items
-============
+These are drafts. Test them with real respondents before fielding.
 
-First drafts by language models, as recommended by a reviewing model and left by the analyst; untested.
-
-CONF1
------
-
-We will ask you a few questions about the national electoral commission.
+Question 1
+----------
 
 How much do you trust the national electoral commission? (model 1)
 
@@ -1621,10 +1589,10 @@ How much do you trust the national electoral commission? (model 1)
 3. A little
 4. Not at all
 
-[Randomize the order of options 1 to 4; keep Not at all last.]
+Check before use: The word trust may mean different things.
 
-CONF2
------
+Question 2
+----------
 
 How much do you trust the national electoral commission? (model 2)
 
@@ -1633,90 +1601,57 @@ How much do you trust the national electoral commission? (model 2)
 3. A little
 4. Not at all
 
-    Asked if the answer is A little or Not at all: Why?
+Date: 2026-11-12
 
-Disclosure of the use of language models
-========================================
+Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]
 
-- Date: 2026-11-12 09:30
-- Profile: home
-- Project manager model: vendor-p/pm-model (example.invalid)
-- Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
-- Reflex files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.2; pm_appraise.md 0.4; pm_brief.md 0.1
-- Brief check prompt: a3ddf3e290541a2aa4d1f076e084725872ad0dcd2e3ad3f5d2c0bd8a487ae1f0
-- Drafting prompt (not edited): 0e3d15bd3748c7fdc5d6552771cc3f224041904e878383eb05d3ed3e58899130
-- Appraisal prompt: 5b606043f641b019d2a7ec0d9da74fafcc26e0a0082c9dc960f69dcc5e7b8580
-- Item 1 (CONF1): candidate A, written by vendor-a/model-one
-- Item 2 (CONF2): candidate C, written by vendor-b/model-two
-
-Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
+QuestionR version 0.9
 
 ~~~~
 
 Sample output for Word, review (tests/output_review.txt), verbatim:
 ~~~~
-Review of the questionnaire, question by question
-=================================================
-
-An expert-review appraisal by a language model against a fixed checklist. It shows where a respondent may have trouble. A rewrite or a probe is untested.
+These are drafts. Test them with real respondents before fielding.
 
 Question Q1
 -----------
 
-Fix before fielding
+Q1. How satisfied are you with the recycling services and street cleaning provided by your council?
+Very satisfied / Fairly satisfied / Fairly dissatisfied / Very dissatisfied
 
-- one_thing (severity 8): "recycling services and street cleaning". Two services in one question. A rewrite, untested: How satisfied are you with the recycling services? A probe: Which service did you think of?
+Revise
 
-Needs your judgment
+Problem: Two services in one question.
 
-- response_scale (severity 6): "Fairly satisfied / Fairly dissatisfied". There is no middle option.
+Suggested rewrite: How satisfied are you with the recycling services?
 
-Minor (rated below 5)
+Problem: Street cleaning could mean sweeping or litter bins.
 
-- plain_words (severity 3): "street cleaning". Could mean sweeping or litter bins.
+Suggested rewrite: How satisfied are you with street sweeping?
 
 Question Q2
 -----------
 
-Fix before fielding
+Q2. Do you agree that the council should spend more on libraries?
+Yes / No
 
-- neutral_wording (severity 7): "Do you agree that the council should". Invites agreement.
+Revise
 
-Needs your judgment
+Problem: The wording invites agreement.
 
-- no_presupposition (severity 5) [quote not found in the text]: "words that are nowhere in the questionnaire". Assumes an opinion.
+Suggested rewrite: Should the council spend more, the same or less on libraries?
 
-Question Q3
------------
+Question Q3: keep as written
 
-No problem was found by this review.
+The questionnaire as a whole
+============================
 
-The instrument as a whole
-=========================
+- Question 3 applies only to library users.
 
-Needs your judgment
+Date: 2026-11-12
 
-- filters_and_routing (severity 5): Questions: Q2 and Q3. Q3 applies only to library users.
+Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]
 
-What to test first
-==================
-
-- Question Q1: cognitive interviews
-
-What this review could not judge
-================================
-
-Fit to objectives was not assessed: the brief names no analysis plan.
-
-Disclosure of the use of language models
-========================================
-
-- Date: 2026-11-12 09:30
-- Profile: home
-- Project manager model: vendor-p/pm-model (example.invalid)
-- Reflex files and versions: core.md 0.3; evaluate.md 0.3; mode.md 0.1
-- Review prompt (not edited): 1fd641d9da89425dce97e88ee9160fa15bfaaebf6213b04e4329f1bead0bc042
-
-Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
+QuestionR version 0.9
 
 ~~~~

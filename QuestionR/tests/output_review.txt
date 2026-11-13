@@ -1,64 +1,43 @@
-Review of the questionnaire, question by question
-=================================================
-
-An expert-review appraisal by a language model against a fixed checklist. It shows where a respondent may have trouble. A rewrite or a probe is untested.
+These are drafts. Test them with real respondents before fielding.
 
 Question Q1
 -----------
 
-Fix before fielding
+Q1. How satisfied are you with the recycling services and street cleaning provided by your council?
+Very satisfied / Fairly satisfied / Fairly dissatisfied / Very dissatisfied
 
-- one_thing (severity 8): "recycling services and street cleaning". Two services in one question. A rewrite, untested: How satisfied are you with the recycling services? A probe: Which service did you think of?
+Revise
 
-Needs your judgment
+Problem: Two services in one question.
 
-- response_scale (severity 6): "Fairly satisfied / Fairly dissatisfied". There is no middle option.
+Suggested rewrite: How satisfied are you with the recycling services?
 
-Minor (rated below 5)
+Problem: Street cleaning could mean sweeping or litter bins.
 
-- plain_words (severity 3): "street cleaning". Could mean sweeping or litter bins.
+Suggested rewrite: How satisfied are you with street sweeping?
 
 Question Q2
 -----------
 
-Fix before fielding
+Q2. Do you agree that the council should spend more on libraries?
+Yes / No
 
-- neutral_wording (severity 7): "Do you agree that the council should". Invites agreement.
+Revise
 
-Needs your judgment
+Problem: The wording invites agreement.
 
-- no_presupposition (severity 5) [quote not found in the text]: "words that are nowhere in the questionnaire". Assumes an opinion.
+Suggested rewrite: Should the council spend more, the same or less on libraries?
 
-Question Q3
------------
+Question Q3: keep as written
 
-No problem was found by this review.
+The questionnaire as a whole
+============================
 
-The instrument as a whole
-=========================
+- Question 3 applies only to library users.
 
-Needs your judgment
+Date: 2026-11-12
 
-- filters_and_routing (severity 5): Questions: Q2 and Q3. Q3 applies only to library users.
+Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]
 
-What to test first
-==================
-
-- Question Q1: cognitive interviews
-
-What this review could not judge
-================================
-
-Fit to objectives was not assessed: the brief names no analysis plan.
-
-Disclosure of the use of language models
-========================================
-
-- Date: 2026-11-12 09:30
-- Profile: home
-- Project manager model: vendor-p/pm-model (example.invalid)
-- Reflex files and versions: core.md 0.3; evaluate.md 0.3; mode.md 0.1
-- Review prompt (not edited): 1fd641d9da89425dce97e88ee9160fa15bfaaebf6213b04e4329f1bead0bc042
-
-Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
+QuestionR version 0.9
 

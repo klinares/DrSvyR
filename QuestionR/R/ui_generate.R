@@ -413,6 +413,11 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
 
 # ---- tab 3: Results ----------------------------------------------------------------------------
 
+# Results shows the analyst only what they need to act (DESIGN.md section 18): for a drafted question,
+#   the question, its answer options and, only when the reviewer found a real problem, one line to
+#   check before use; for a review, the questions that need revising, with the problem and a suggested
+#   rewrite. Prompts, hashes, models, scores and every other draft are in the full record.
+
 # An ordered list of options, or what an open item collects.
 options_list <- function(options, open_format = "") {
   opts = purrr::map_chr(options, function(o) paste(unlist(o), collapse = " "))
@@ -421,59 +426,6 @@ options_list <- function(options, open_format = "") {
                                                 if (nzchar(open_format)) paste0(": ", open_format), "]"))
 }
 
-# Filter, branch and bracket questions, indented under their item.
-parts_block <- function(parts)
-  purrr::map(parts, function(p)
-    tags$div(style = "margin-left:1.25rem; padding-left:0.75rem; border-left:3px solid var(--bs-border-color);",
-             tags$div(class = "text-muted small", paste0("Part, asked ", p$when %||% "", ":")),
-             tags$div(p$stem %||% ""),
-             options_list(p$options)))
-
-defaults_table <- function(d) {
-  lab = defaults_labels(d)
-  tags$table(class = "table table-sm small mb-1",
-             tags$tbody(purrr::imap(as.list(lab), function(v, k)
-               tags$tr(tags$td(class = "text-muted", k), tags$td(v)))))
-}
-
-# One fail: the check, its severity, the check's question from the checklist that
-#   was sent, the failing words, the stage and the reason. A fail about a set of
-#   items also names them.
-fail_entry <- function(f, checklist)
-  tags$li(tags$strong(f$check),
-          if (nzchar(f$items %||% "")) tags$span(class = "text-muted", paste0(" (items ", f$items, ")")),
-          if (!is.na(f$severity)) tags$span(class = "badge text-bg-secondary ms-1", paste("severity", f$severity)),
-          if (!f$known) tags$span(class = "badge text-bg-warning ms-1", "not a check that was sent"),
-          if (f$known) tags$span(class = "text-muted", ": ", checklist[[f$check]]),
-          if (nzchar(f$evidence)) tagList(tags$br(), "Failing words: ", tags$q(f$evidence)),
-          if (nzchar(f$stage)) tags$span(class = "text-muted", paste0(" (", f$stage, ")")),
-          if (nzchar(f$why)) tagList(tags$br(), f$why))
-
-# Entries (fails or findings, each with a `severity`) in the three bands of
-#   DESIGN.md section 14, highest first: "Fix before fielding" (7 and above) and
-#   "Needs your judgment" (5 and 6) are listed under their headings, and the Minor
-#   band (below 5) is folded away. draw makes one entry; noun is "fail" or
-#   "finding"; none_text says what stands when nothing is rated 5 or above.
-banded_list <- function(entries, draw, noun, none_text) {
-  band = severity_band(purrr::map_dbl(entries, function(e) as.numeric(e$severity %||% NA_real_)))
-  of = function(b) entries[band == b]
-  listed = function(b) if (length(of(b))) tagList(
-    tags$h6(class = "mt-2 mb-1", SEVERITY_BANDS[[b]]),
-    tags$ul(class = "small", purrr::map(of(b), draw)))
-  tagList(
-    if (!any(band != "minor")) tags$p(class = "small", none_text),
-    listed("fix"), listed("judgment"),
-    if (length(of("minor"))) tags$details(
-      tags$summary(class = "small", paste0(length(of("minor")), " minor ",
-                                           if (length(of("minor")) == 1L) noun else paste0(noun, "s"),
-                                           ", rated below 5")),
-      tags$ul(class = "small", purrr::map(of("minor"), draw))))
-}
-
-# A candidate's fails in the bands.
-fail_list <- function(fails, checklist, none_text)
-  banded_list(fails, function(f) fail_entry(f, checklist), "fail", none_text)
-
 # A button that sets one input of the Results module to a value when it is pressed. A plain
 #   button and one observer for all of them, so the number of items does not matter.
 set_button <- function(label, input, value, ns, class = "btn btn-sm btn-primary")
@@ -481,139 +433,73 @@ set_button <- function(label, input, value, ns, class = "btn btn-sm btn-primary"
               onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'})", ns(input), value),
               label)
 
-# The text of one option or part: what the page shows and edits.
+# The text of one option: what the page shows and edits.
 option_text <- function(o) paste(unlist(o), collapse = " ")
 
-# One item of the set, each stem, option and part in a plain text box so it can be edited in
-#   place; boxes are named by edit_input_id() and what they hold is read by edits_from_inputs().
-#   ed is what the analyst changed before (output.R), so the boxes can be drawn again as they
-#   were left. Under it: the reviewer's reason, what it still doubts in the three bands, and
-#   its suggestion if any, which is a suggestion and not a new item.
-set_card <- function(e, it, model, ns, checklist, ed = NULL) {
+# One question of the set, numbered i: the question and each answer option in a plain text box so it
+#   can be edited in place (boxes are named by edit_input_id() and read by edits_from_inputs()); under
+#   them, when the reviewer found a real problem, the one line "Check before use:"; and the button that
+#   takes the question out. ed is what the analyst changed before (output.R), so the boxes can be
+#   drawn again as they were left.
+set_card <- function(e, it, i, ns, ed = NULL) {
   box = function(id, value, label = NULL) textInput(ns(id), label, value = value, width = "100%")
-  options_boxes = function(prefix, opts, now)
-    purrr::imap(purrr::map_chr(opts, option_text), function(o, j)
-      box(edit_input_id(e$uid, prefix, paste0("o", j)), now[[as.character(j)]] %||% o))
   it = full_item(it)
   tags$div(
     class = "card mb-2",
     tags$div(
       class = "card-body py-2",
-      tags$div(tags$strong(it$id), tags$span(class = "text-muted", paste0(" · ", e$domain, " · candidate ", e$candidate,
-                                                                          ", written by ", model)),
-               if (isTRUE(e$swapped)) tags$span(class = "badge text-bg-info ms-1", "swapped in by you"),
-               if (!is.null(ed)) tags$span(class = "badge text-bg-secondary ms-1", "edited")),
-      if (nzchar(e$why)) tags$p(class = "text-muted small mb-1", paste0("Why this one: ", e$why)),
-      if (nzchar(it$intro)) tags$p(class = "mb-1", tags$em(it$intro)),
-      box(edit_input_id(e$uid, "stem"), ed$stem %||% it$stem),
-      if (length(it$options)) options_boxes(NULL, it$options, ed$options %||% list())
+      box(edit_input_id(e$uid, "stem"), ed$stem %||% it$stem, paste("Question", i)),
+      if (length(it$options))
+        purrr::imap(purrr::map_chr(it$options, option_text), function(o, j)
+          box(edit_input_id(e$uid, paste0("o", j)), ed$options[[as.character(j)]] %||% o))
       else tags$p(class = "text-muted mb-1", paste0("[Open question",
                                                     if (nzchar(it$open_format)) paste0(": ", it$open_format), "]")),
-      purrr::imap(it$parts, function(p, i)
-        tags$div(style = "margin-left:1.25rem; padding-left:0.75rem; border-left:3px solid var(--bs-border-color);",
-                 tags$div(class = "text-muted small", paste0("Part, asked ", p$when %||% "", ":")),
-                 box(edit_input_id(e$uid, paste0("p", i), "stem"), ed$parts[[as.character(i)]]$stem %||% p$stem %||% ""),
-                 options_boxes(paste0("p", i), p$options %||% list(), ed$parts[[as.character(i)]]$options %||% list()))),
-      if (nzchar(it$programming)) tags$p(class = "text-muted small mb-1", paste0("[", it$programming, "]")),
-      tags$h6(class = "mt-2 mb-0", "What the reviewer still doubts"),
-      fail_list(e$concerns, checklist, "Nothing rated 5 or above."),
-      if (nzchar(e$suggestion)) tags$p(class = "mb-1", tags$em("A suggested change, untested: "), e$suggestion),
+      if (nzchar(e$check)) tags$p(class = "mb-1", tags$em(CHECK_LABEL), " ", e$check),
       set_button("Remove from the set", "remove", e$uid, ns, "btn btn-sm btn-outline-secondary")))
 }
 
-# The recommended set, as the analyst has it now, then the reviewer's notes on the set as a whole.
-#   chk is check_appraisal() (NULL when the reviewer did not come back), reply its parsed reply.
-set_panel <- function(set, cands, labels, ns, checklist, edits, chk, reply) {
-  items = purrr::map(set, function(e) {
-    it = unname(cands[[e$candidate]]$items)[[e$position]]
-    set_card(e, it, labels[[e$candidate]], ns, checklist, edits[[e$uid]])
-  })
+# The recommended set, as the analyst has it now, under the one sentence.
+set_panel <- function(set, cands, ns, edits) {
+  items = purrr::imap(set, function(e, i)
+    set_card(e, unname(cands[[e$candidate]]$items)[[e$position]], i, ns, edits[[e$uid]]))
   tagList(
-    tags$h4("The recommended set"),
-    advice_box("An expert-review appraisal by a language model against a fixed checklist: one item for each ",
-               "domain, chosen from the drafts and copied exactly as a worker wrote it. It cannot show how ",
-               "respondents will understand or answer, and nothing here is validated. Change anything in the ",
-               "boxes, take an item out, or put one from the drafts below in its place."),
-    if (!length(set)) tags$p("The set is empty. Open the drafts below and use an item from one.") else items,
-    if (length(chk$not_covered)) tags$p(class = "text-muted small",
-                                        paste0("No draft item was good enough to recommend for: ", paste(chk$not_covered, collapse = "; "))),
-    if (length(chk$set_notes)) tagList(tags$h5("About the set as a whole"),
-                                       fail_list(chk$set_notes, checklist, "Nothing rated 5 or above.")),
-    if (length(reply$test_first)) tagList(
-      tags$h5("What to test first"),
-      tags$ul(purrr::map(reply$test_first, function(t)
-        tags$li(paste0("Item ", paste(unlist(t$id %||% "?"), collapse = " "), ": ", paste(unlist(t$method), collapse = " ")))))),
-    if (nzchar(paste(unlist(reply$limits), collapse = " ")))
-      tags$p(tags$em(paste(unlist(reply$limits), collapse = " "))))
+    tags$p(tags$em(RESULT_NOTICE)),
+    if (!length(set)) tags$p("The set is empty. Open the other questions below and use one.") else items)
 }
 
-# Every draft, a candidate at a time, closed until asked for. Each item has a button that puts it
-#   in the set: in place of the item chosen in the box at the top, or at the end of the set. The
-#   coded defaults are here, beside the draft they describe.
-drafts_panel <- function(cands, labels, set, ns, open) {
+# The other questions the workers drafted, closed until asked for, by domain. Each has a button that
+#   puts it in the set: in place of the question chosen in the box at the top, or at the end of the set.
+#   No model is named and nothing is scored: only the question and its answer options.
+drafts_panel <- function(cands, set, ns, open) {
   targets = c("at the end of the set" = "",
               purrr::set_names(purrr::map_chr(set, "uid"),
-                               purrr::imap_chr(set, function(e, i) paste0("in place of item ", i, " (", e$id, ")"))))
+                               purrr::imap_chr(set, function(e, i) paste0("in place of question ", i))))
+  in_set = purrr::map_chr(set, "uid")
+  others = purrr::compact(unname(unlist(purrr::imap(cands, function(reply, letter)
+    purrr::imap(unname(reply$items), function(it, i)
+      if (!paste0(letter, "_", i) %in% in_set)
+        list(uid = paste0(letter, "_", i), item = full_item(it)))), recursive = FALSE)))
+  domains = purrr::map_chr(others, function(o) o$item$domain)
   tags$details(
     id = ns("drafts"), open = if (isTRUE(open)) NA,
     ontoggle = sprintf("Shiny.setInputValue('%s', this.open)", ns("drafts_open")),
-    tags$summary(paste0("See all drafts (", length(cands), if (length(cands) == 1L) " candidate)" else " candidates)")),
-    selectInput(ns("swap_target"), "An item you use from a draft goes", choices = targets, width = "100%"),
-    purrr::imap(cands, function(reply, letter)
+    tags$summary("See all drafts"),
+    selectInput(ns("swap_target"), "A question you use from here goes", choices = targets, width = "100%"),
+    purrr::map(unique(domains), function(d)
       tagList(
-        tags$h5(paste("Candidate", letter), tags$span(class = "text-muted small", " written by ", tags$code(labels[[letter]]))),
-        purrr::imap(unname(reply$items), function(it, i) {
-          it = full_item(it)
+        tags$h6(class = "mt-2 mb-1", d),
+        purrr::map(others[domains == d], function(o)
           tags$div(
             class = "card mb-2",
             tags$div(
               class = "card-body py-2",
-              tags$div(tags$strong(it$id), tags$span(class = "text-muted", " · ", it$domain)),
-              if (nzchar(it$intro)) tags$p(class = "mb-1", tags$em(it$intro)),
-              tags$p(class = "mb-1", tags$strong(it$stem)),
-              options_list(it$options, it$open_format),
-              parts_block(it$parts),
-              if (nzchar(it$programming)) tags$p(class = "text-muted small mb-1", paste0("[", it$programming, "]")),
-              if (identical(code_defaults(it)$decisions, "not itemised"))
-                tags$p(class = "mb-1", tags$span(class = "badge text-bg-warning", "decisions not itemised"),
-                       tags$span(class = "text-muted small", " The model wrote its design decisions as one string.")),
-              tags$details(tags$summary(class = "small", "Coded defaults (by R, from the item as written)"),
-                           defaults_table(code_defaults(it))),
-              if (!paste0(letter, "_", i) %in% purrr::map_chr(set, "uid"))
-                set_button("Use this instead", "swap", paste0(letter, "_", i), ns)))
-        }))))
+              tags$p(class = "mb-1", tags$strong(o$item$stem)),
+              options_list(o$item$options, o$item$open_format),
+              set_button("Use this instead", "swap", o$uid, ns)))))))
 }
 
 
 # ---- Results for a review (the Evaluate task) ------------------------------------------------
-
-# One finding, from a row of check_review(): the check and its question, the
-#   severity, flags for a check that was not sent and for a quote that is not in
-#   the pasted text, then the quote, the problem, and an untested rewrite and probe.
-review_finding <- function(r, checklist)
-  tags$li(
-    tags$strong(r$check),
-    tags$span(class = "badge text-bg-secondary ms-1", paste("severity", r$severity)),
-    if (!r$check_known) tags$span(class = "badge text-bg-warning ms-1", "not a check that was sent"),
-    if (r$scope == "question" && !isTRUE(r$evidence_found))
-      tags$span(class = "badge text-bg-warning ms-1", "quote not found"),
-    if (r$check_known) tags$span(class = "text-muted", ": ", checklist[[r$check]]),
-    tags$br(),
-    if (r$scope == "question") tagList("Quote: ", tags$q(r$evidence)) else paste0("Questions: ", r$evidence),
-    if (nzchar(r$stage)) tags$span(class = "text-muted", paste0(" (", r$stage, ")")),
-    if (nzchar(r$problem)) tagList(tags$br(), r$problem),
-    if (nzchar(r$rewrite)) tagList(
-      tags$br(), tags$em("A rewrite, untested: "), r$rewrite),
-    if (nzchar(r$probe)) tagList(tags$br(), tags$em("A probe: "), r$probe))
-
-# Findings in the three severity bands. A question with no finding says none were
-#   found by this review, never that it has no problems.
-review_findings <- function(rows, checklist) {
-  as_rows = purrr::map(seq_len(nrow(rows)), function(i) as.list(rows[i, ]))
-  if (!length(as_rows)) return(tags$p(class = "small", "No problem was found by this review."))
-  banded_list(as_rows, function(r) review_finding(r, checklist), "finding",
-              "No finding rated 5 or above.")
-}
 
 # A button for each call of a review that failed, which runs that call again. It sets
 #   the module's `rerun` input to the call's place in rv$batches.
@@ -632,70 +518,36 @@ rerun_buttons <- function(rv, ns = identity) {
   }))
 }
 
-# Everything the review said, question by question and then as a whole, with R's
-#   flags on it. rv is run_review()'s result.
-review_panel <- function(f, rv, round, ns = identity) {
+# The review as the analyst is shown it: the one sentence; each question marked Revise with the
+#   question as pasted, the verdict, at most two problems and a suggested rewrite; the questions
+#   marked Keep in one line; and at most three points about the questionnaire as a whole (R holds the
+#   review to these limits, shape_review()). rv is run_review()'s result.
+review_panel <- function(f, rv, ns = identity) {
   if (identical(rv$status, "failed") || is.null(rv$reply))
-    return(tagList(
-      tags$p(class = "text-muted small", paste0("Round ", round, ".")),
-      warn_box(tags$strong("The review did not come back. "), rv$error),
-      rerun_buttons(rv, ns)))
-  reply = rv$reply
-  checklist = build_checklist(f)
-  flags = check_review(reply, f)
-  approved = attr(rv, "prompt")
-  question = flags[flags$scope == "question", ]
-  n_missing = sum(!question$evidence_found)
-  n_unknown = sum(!flags$check_known)
-  label = function(x) paste(unlist(x), collapse = " ")
+    return(tagList(warn_box(tags$strong("The review did not come back. "), rv$error),
+                   rerun_buttons(rv, ns)))
+  sh = shape_review(rv$reply, f$questionnaire)
+  revise = purrr::keep(sh$questions, function(q) identical(q$verdict, "Revise"))
   tagList(
-    if (length(rv$batches) > 1L)
-      tags$p(class = "text-muted small",
-             paste0("Round ", round, ". One review by the project manager, in ", length(rv$batches) - 1L,
-                    " parts and one call on the instrument as a whole. "),
-             tags$details(tags$summary("Prompt hashes, one per call"),
-                          tags$ul(purrr::map(rv$batches, function(b)
-                            tags$li(if (identical(b$kind, "instrument")) "The instrument as a whole"
-                                    else paste0("Part ", b$part, " (from block ", b$first_block, ")"), ": ",
-                                    tags$code(substr(b$hash %||% "", 1, 16)),
-                                    if (!identical(b$status, "ok")) " (did not come back)")))))
-    else tags$p(class = "text-muted small",
-           paste0("Round ", round, ". One review by the project manager. Prompt hash "),
-           tags$code(substr(rv$hash, 1, 16)),
-           if (isTRUE(approved$edited))
-             paste0(" (edited; assembled hash ", substr(approved$original_hash, 1, 16), ")"), "."),
+    tags$p(tags$em(RESULT_NOTICE)),
     if (identical(rv$status, "partial"))
       warn_box(tags$strong("Part of the review did not come back. "),
                "What did is shown below; the rest is missing, not clear of problems.",
                rerun_buttons(rv, ns)),
-    advice_box("An expert-review appraisal by a language model against a fixed checklist. It shows ",
-               "where a respondent may have trouble; it cannot show how respondents will understand ",
-               "or answer, a rewrite or a probe is untested, and nothing here is validated."),
-    if (n_missing || n_unknown)
-      warn_box(tags$strong("R's checks on the review found: "), tags$ul(class = "mb-0", c(
-        if (n_missing) list(tags$li(n_missing, if (n_missing == 1L) " quote that is" else " quotes that are",
-                                    " not in the pasted text (flagged below).")),
-        if (n_unknown) list(tags$li(n_unknown, if (n_unknown == 1L) " finding cites" else " findings cite",
-                                    " a check that was not sent (flagged below).")))))
-    else NULL,
-    tags$h4("Question by question"),
-    purrr::imap(unname(reply$items), function(it, i)
+    purrr::map(revise, function(q)
       tags$div(class = "card mb-2", tags$div(
         class = "card-body py-2",
-        tags$h6(paste("Question", label(it$id))),
-        review_findings(flags[flags$scope == "question" & flags$position == i, ], checklist)))),
-    tags$h4("The instrument as a whole"),
-    review_findings(flags[flags$scope == "instrument", ], checklist),
-    if (length(reply$test_first)) tagList(
-      tags$h5("What to test first"),
-      tags$ul(purrr::map(reply$test_first, function(t)
-        tags$li(if (is.list(t) && !is.null(t$id))
-          paste0("Question ", label(t$id), ": ", label(t$method)) else label(t))))),
-    if (nzchar(label(reply$not_assessed)))
-      tagList(tags$h5("What this review could not judge"), tags$p(label(reply$not_assessed))),
-    tags$details(tags$summary(paste0("Criteria that were applied (", length(checklist), ")")),
-                 tags$ul(class = "small", purrr::imap(as.list(checklist), function(q, id)
-                   tags$li(tags$strong(id), ": ", q)))))
+        tags$h6(paste("Question", q$id)),
+        if (nzchar(q$text)) tags$p(class = "mb-1", style = "white-space: pre-line;", q$text),
+        tags$p(class = "mb-1", tags$strong("Revise")),
+        purrr::map(q$problems, function(p)
+          tagList(tags$p(class = "mb-1", paste0("Problem: ", p$problem)),
+                  if (nzchar(p$rewrite)) tags$p(class = "mb-1", paste0("Suggested rewrite: ", p$rewrite))))))),
+    if (length(sh$keep))
+      tags$p(paste0(if (length(sh$keep) == 1L) "Question " else "Questions ", paste(sh$keep, collapse = ", "),
+                    ": keep as written")),
+    if (length(sh$instrument))
+      tagList(tags$h5("The questionnaire as a whole"), tags$ul(purrr::map(sh$instrument, tags$li))))
 }
 
 
@@ -752,7 +604,7 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       state$review <- out$review
       state$seed <- if (review) NULL else seed
       state$set <- if (!review && identical(out$appraisal$status, "ok"))
-        initial_set(check_appraisal(out$appraisal$reply, candidates_of(out$drafts, seed), build_checklist(f)))
+        initial_set(check_appraisal(out$appraisal$reply, candidates_of(out$drafts, seed)))
       else list()
       state$edits <- list()
       state$rounds <- c(state$rounds, list(
@@ -784,8 +636,8 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       if (n) state$rounds[[n]] <- flow_round(f, APP_MODELS$pm, brief = brief, review = out)
     })
 
-    # What the analyst changes in the set: typing in a box, taking an item out, using one from the
-    #   drafts. Edits are read from the boxes into state$edits (the page is not drawn again for them,
+    # What the analyst changes in the set: typing in a box, taking a question out, using one from the
+    #   other drafts. Edits are read from the boxes into state$edits (the page is not drawn again for them,
     #   so a box keeps its cursor); the set itself changes only on a swap or a removal.
     observe({
       req(length(state$set) > 0L, state$drafts)
@@ -807,64 +659,39 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       if (is.null(r))
         return(tags$p(class = "text-muted",
                       "Nothing has been run yet. Fill in the Brief tab, approve the prompt on the next tab, ",
-                      "and the candidates, or the review's findings, appear here."))
+                      "and the questions, or the review, appear here."))
       f = r$form
       if (identical(task_kind(f), "review"))
-        return(review_panel(f, state$review, r$round, session$ns))
+        return(review_panel(f, state$review, session$ns))
       drafts = state$drafts
       ap = state$appraisal
-      approved = attr(drafts, "prompt")
       cands = candidates_of(drafts, state$seed)
-      labels = labels_of(drafts, state$seed)
-      checklist = build_checklist(f)
-      appraisal_ok = identical(ap$status, "ok")
       failed = purrr::keep(unname(as.list(drafts)), function(d) !identical(d$status, "ok"))
       tagList(
-        tags$p(class = "text-muted small",
-               paste0("Round ", r$round, ". ", length(cands), " of ", length(drafts),
-                      " workers returned usable drafts. Prompt hash "),
-               tags$code(substr(approved$hash, 1, 16)),
-               if (isTRUE(approved$edited))
-                 paste0(" (edited; assembled hash ", substr(approved$original_hash, 1, 16), ")"),
-               paste0(". Labels shuffled with seed ", state$seed, ".")),
-        if (length(failed)) warn_box(
-          tags$strong("Did not return a usable draft: "),
-          tags$ul(class = "mb-0", purrr::map(failed, function(d)
-            tags$li(tags$code(d$model), ": ", d$error)))),
-        if (!appraisal_ok) warn_box(tags$strong("The reviewer did not come back. "), ap$error,
-                                    " There is no recommended set; the drafts are below, and you can build a set from them."),
-        if (appraisal_ok) same_family_note(APP_MODELS$pm$id, unname(labels)),
-        if (!length(cands)) tags$p("No draft to show."),
+        # A worker that failed matters only when none came back; the record has the rest.
+        if (!length(cands)) warn_box(
+          tags$strong("No draft came back. "),
+          tags$ul(class = "mb-0", purrr::map(failed, function(d) tags$li(tags$code(d$model), ": ", d$error)))),
+        if (length(cands) && !identical(ap$status, "ok"))
+          warn_box(tags$strong("The reviewer did not come back. "), ap$error,
+                   " There is no recommended set; the other questions are below, and you can build a set from them."),
         uiOutput(session$ns("set_ui")),
-        uiOutput(session$ns("drafts_ui")),
-        tags$details(tags$summary(paste0("Criteria that were applied (", length(checklist), ")")),
-                     tags$ul(class = "small", purrr::imap(as.list(checklist), function(q, id)
-                       tags$li(tags$strong(id), ": ", q)))))
+        uiOutput(session$ns("drafts_ui")))
     }))
 
-    # The set and the drafts are drawn on their own, so a swap or a removal redraws them and
+    # The set and the other drafts are drawn on their own, so a swap or a removal redraws them and
     #   nothing else. What the analyst typed is put back from state$edits, which they do not read.
-    set_context <- function() {
-      f = result()$form
-      list(f = f, cands = candidates_of(state$drafts, state$seed), labels = labels_of(state$drafts, state$seed),
-           checklist = build_checklist(f), ap = state$appraisal)
-    }
     output$set_ui <- renderUI(safe_ui({
       req(result(), state$drafts)
-      x = set_context()
-      appraisal_ok = identical(x$ap$status, "ok")
-      set_panel(state$set, x$cands, x$labels, session$ns, x$checklist, isolate(state$edits),
-                if (appraisal_ok) check_appraisal(x$ap$reply, x$cands, x$checklist), if (appraisal_ok) x$ap$reply)
+      set_panel(state$set, candidates_of(state$drafts, state$seed), session$ns, isolate(state$edits))
     }))
     output$drafts_ui <- renderUI(safe_ui({
       req(result(), state$drafts)
-      x = set_context()
-      drafts_panel(x$cands, x$labels, state$set, session$ns,
+      drafts_panel(candidates_of(state$drafts, state$seed), state$set, session$ns,
                    open = isolate(input$drafts_open) %||% !length(state$set))
     }))
   })
 }
-
 
 # ---- Run again ----------------------------------------------------------------------------------
 
@@ -899,8 +726,8 @@ mod_again_server <- function(id, state, go = function(tab) invisible(NULL)) {
 
 # ---- tab 4: Output ---------------------------------------------------------------------------------
 
-# The set as the analyst left it, or the review, laid out for Word, with the disclosure block; and the
-#   run log.
+# What is on the Results screen, laid out for Word and followed by three lines (the date, who drafted and
+#   reviewed, the tool's version); and, behind one small button, the full record.
 #   Everything is built by build_output() and run_log_json() in R/output.R. A key is taken out of
 #   anything shown or downloaded (scrub_secrets()), though none is ever in the data.
 mod_output_ui <- function(id) {
@@ -931,11 +758,8 @@ mod_output_server <- function(id, state) {
 
     built <- reactive({
       req((state$round %||% 0L) >= 1L, state$form)
-      brief = state$brief
-      brief = if (is.list(brief) && identical(brief$status, "ok")) brief
-      build_output(state$form, drafts = state$drafts, appraisal = state$appraisal, seed = state$seed,
-                   set = state$set, edits = state$edits, review = state$review, brief = brief,
-                   approved = state$approved)
+      build_output(state$form, drafts = state$drafts, seed = state$seed,
+                   set = state$set, edits = state$edits, review = state$review)
     })
 
     output$view <- renderUI(safe_ui({
@@ -945,12 +769,9 @@ mod_output_server <- function(id, state) {
                       "and the result is laid out here."))
       o = built()
       html = scrub_secrets(paste(as.character(o$html), collapse = "\n"), secrets())
-      txt = scrub_secrets(o$text, secrets())
       tagList(
-        advice_box("Select what is in the first box, or press the button, and paste it into Word: ",
-                   "the numbering and the emphasis are kept. The second box is the same thing as plain ",
-                   "text. Both end with a disclosure of the use of language models, to keep with the questionnaire."),
-        tags$h5("For Word"),
+        tags$p("Press the button, or select what is in the box, and paste it into Word: the numbering and ",
+               "the emphasis are kept."),
         # Black on white whatever the theme: a browser copies the colours it shows, and light
         #   text copied from the dark theme would be invisible on a Word page.
         tags$style(paste0(".qr-word, .qr-word * { color: #000 !important; background: transparent !important; } ",
@@ -959,38 +780,30 @@ mod_output_server <- function(id, state) {
         tags$div(id = session$ns("html_box"), class = "qr-word",
                  style = "border: 1px solid #adb5bd; padding: 12px 16px;",
                  HTML(html)),
-        tags$p(class = "mt-2", copy_button("Copy for Word", session$ns("html_box"), TRUE), tags$span(class = "small")),
-        tags$h5("Plain text"),
-        tags$textarea(id = session$ns("text_box"), class = "form-control", rows = 14, readonly = NA,
-                      style = "font-family: monospace; font-size: 85%;", txt),
-        tags$p(class = "mt-2", copy_button("Copy plain text", session$ns("text_box"), FALSE), tags$span(class = "small")))
+        tags$p(class = "mt-2", copy_button("Copy for Word", session$ns("html_box"), TRUE), tags$span(class = "small")))
     }))
 
     output$downloads <- renderUI({
       if ((state$round %||% 0L) < 1L) return(NULL)
-      tagList(
-        tags$hr(),
-        tags$h5("Downloads"),
-        tags$p("The run log is one JSON file with every round of this session: the forms, the prompts and their hashes, ",
-               "the replies as the models sent them, the shuffle seed and which model wrote which candidate, and the set ",
-               "as you left it, with what you edited and swapped. No key is ever in it. It is made in this session only; nothing is stored on the server."),
-        downloadButton(session$ns("get_text"), "Download the plain text", class = "btn-sm me-2"),
-        downloadButton(session$ns("get_log"), "Download the run log (JSON)", class = "btn-sm"))
+      tags$p(class = "mt-4",
+             downloadButton(session$ns("get_log"), "Download the full record", class = "btn-sm btn-outline-secondary"),
+             tags$span(class = "text-muted small ms-2",
+                       "Prompts, models, hashes, every draft and the full reply, for your files."))
     })
 
-    output$get_text <- downloadHandler(
-      filename = function() paste0("questionr-output-", format(Sys.time(), "%Y%m%d-%H%M"), ".txt"),
-      content = function(file) writeLines(scrub_secrets(built()$text, secrets()), file, useBytes = TRUE))
-
     output$get_log <- downloadHandler(
-      filename = function() paste0("questionr-run-log-", format(Sys.time(), "%Y%m%d-%H%M"), ".json"),
+      filename = function() paste0("questionr-record-", format(Sys.time(), "%Y%m%d-%H%M"), ".json"),
       content = function(file) {
         rounds = state$rounds
         n = length(rounds)
+        chosen = if (!is.null(state$drafts)) final_set(state$set, state$edits, state$drafts, state$seed) else list()
         if (n && !is.null(state$drafts))
-          rounds[[n]]$analyst <- list(set = state$set, edits = state$edits,
-                                      final = final_set(state$set, state$edits, state$drafts, state$seed))
-        writeLines(run_log_json(rounds, secrets = secrets()), file, useBytes = TRUE)
+          rounds[[n]]$analyst <- list(set = state$set, edits = state$edits, final = chosen)
+        brief = state$brief
+        brief = if (is.list(brief) && identical(brief$status, "ok")) brief
+        disclosure = strsplit(doc_text(disclosure_blocks(state$form, chosen, state$drafts, state$appraisal, state$review,
+                                                         brief, state$approved)), "\n", fixed = TRUE)[[1]]
+        writeLines(run_log_json(rounds, secrets = secrets(), disclosure = disclosure), file, useBytes = TRUE)
       })
   })
 }

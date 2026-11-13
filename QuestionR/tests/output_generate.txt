@@ -1,12 +1,7 @@
-Survey items
-============
+These are drafts. Test them with real respondents before fielding.
 
-First drafts by language models, as recommended by a reviewing model and left by the analyst; untested.
-
-CONF1
------
-
-We will ask you a few questions about the national electoral commission.
+Question 1
+----------
 
 How much do you trust the national electoral commission? (model 1)
 
@@ -15,10 +10,10 @@ How much do you trust the national electoral commission? (model 1)
 3. A little
 4. Not at all
 
-[Randomize the order of options 1 to 4; keep Not at all last.]
+Check before use: The word trust may mean different things.
 
-CONF2
------
+Question 2
+----------
 
 How much do you trust the national electoral commission? (model 2)
 
@@ -27,21 +22,9 @@ How much do you trust the national electoral commission? (model 2)
 3. A little
 4. Not at all
 
-    Asked if the answer is A little or Not at all: Why?
+Date: 2026-11-12
 
-Disclosure of the use of language models
-========================================
+Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]
 
-- Date: 2026-11-12 09:30
-- Profile: home
-- Project manager model: vendor-p/pm-model (example.invalid)
-- Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
-- Reflex files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.2; pm_appraise.md 0.4; pm_brief.md 0.1
-- Brief check prompt: a3ddf3e290541a2aa4d1f076e084725872ad0dcd2e3ad3f5d2c0bd8a487ae1f0
-- Drafting prompt (not edited): 0e3d15bd3748c7fdc5d6552771cc3f224041904e878383eb05d3ed3e58899130
-- Appraisal prompt: 5b606043f641b019d2a7ec0d9da74fafcc26e0a0082c9dc960f69dcc5e7b8580
-- Item 1 (CONF1): candidate A, written by vendor-a/model-one
-- Item 2 (CONF2): candidate C, written by vendor-b/model-two
-
-Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
+QuestionR version 0.9
 

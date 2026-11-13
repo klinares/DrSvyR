@@ -55,7 +55,7 @@ if ("review30" %in% args) {
   questionnaire <- paste(readLines(file.path("tests", "review_long_questionnaire.txt"), warn = FALSE), collapse = "\n")
   form <- list(task = "evaluate", research_question = "Household energy use, travel and quality of life",
                construct = "", population = "Adults aged 18 and over living in England",
-               country = "", modes = "web", output_language = "English", source_language = "English",
+               country = "", modes = "web",
                n_items = NA_integer_, reference_period = "", keep_items = "", other = "",
                questionnaire = questionnaire, revision = "")
   f <- clean_form(form)
@@ -72,7 +72,7 @@ if ("review30" %in% args) {
   wall_started <- Sys.time()
   rv <- run_review(form, APP_MODELS$pm, ask = ask_live, progress = say, ask_all = ask_all_live)
   wall_s <- as.numeric(difftime(Sys.time(), wall_started, units = "secs"))
-  flags <- if (!is.null(rv$reply)) check_review(rv$reply, f)
+  shown <- if (!is.null(rv$reply)) shape_review(rv$reply, f$questionnaire)
 
   writeLines(scrub(as.character(flow_log_json(flow_round(f, APP_MODELS$pm, review = rv)))),
              file.path("tests", "review_long.json"), useBytes = TRUE)
@@ -84,14 +84,10 @@ if ("review30" %in% args) {
            " | ", sprintf("%.1f", b$seconds %||% NA_real_), " | ", num(b$tokens$input), " | ", num(b$tokens$output),
            " | ", b$finish %||% "-", " | ", b$attempts %||% "-", " | ", b$status, " |"))
   failed <- purrr::keep(rv$batches, function(b) !identical(b$status, "ok"))
-  q <- if (!is.null(flags)) flags[flags$scope == "question", ]
-  bands <- if (!is.null(flags)) table(factor(severity_band(flags$severity), levels = names(SEVERITY_BANDS)))
   ids_back <- purrr::map_chr(rv$reply$items %||% list(), function(it) paste(unlist(it$id), collapse = " "))
   expect_ids <- regmatches(questionnaire, gregexpr("(?m)^Q[0-9]+(?=\\. )", questionnaire, perl = TRUE))[[1]]
   item_calls <- purrr::keep(rv$batches, function(b) identical(b$kind, "items") && !is.null(b$reply))
-  strays <- purrr::map_int(item_calls, function(b)
-    length(b$reply$instrument) + length(b$reply$test_first) +
-      sum(nzchar(trimws(unlist(b$reply$trapd)))) + nzchar(trimws(paste(unlist(b$reply$not_assessed), collapse = ""))))
+  strays <- purrr::map_int(item_calls, function(b) length(b$reply$instrument))
   inst_call <- purrr::detect(rv$batches, function(b) identical(b$kind, "instrument") && !is.null(b$reply))
   inst_items <- if (!is.null(inst_call)) length(inst_call$reply$items) else NA_integer_
   total_s <- sum(purrr::map_dbl(rv$batches, function(b) b$seconds %||% 0))
@@ -118,17 +114,15 @@ if ("review30" %in% args) {
     else c("Failed parts:", purrr::map_chr(failed, function(b) paste0("- ", if (identical(b$kind, "instrument")) "the instrument call" else paste0("part ", b$part),
                                                                      ": ", b$error))),
     "",
-    if (!is.null(flags)) c(
-      paste0("Findings: ", nrow(flags), " in all: ", nrow(q), " about questions and ", sum(flags$scope == "instrument"), " about the instrument."),
-      paste0("By band: Fix before fielding ", bands[["fix"]], ", Needs your judgment ", bands[["judgment"]], ", Minor ", bands[["minor"]], "."),
-      paste0("**Share of question findings whose evidence was found in the pasted text: ", sum(q$evidence_found, na.rm = TRUE), " of ", nrow(q), " (",
-             sprintf("%.1f", 100 * mean(q$evidence_found, na.rm = TRUE)), "%).** Phase 4's gold run found 55 of 100 (45 had evidence that was a description)."),
-      if (any(!q$evidence_found)) c("Evidence not found in the text:", paste0("- ", q$item[!q$evidence_found], ", ", q$check[!q$evidence_found], ": ", q$evidence[!q$evidence_found])),
-      paste0("Checks not in the checklist that was sent: ", sum(!flags$check_known), "."),
+    if (!is.null(shown)) c(
+      paste0("Shown to the analyst: ", length(shown$keep), " questions marked Keep and ", length(shown$questions) - length(shown$keep),
+             " marked Revise, with ", sum(purrr::map_int(shown$questions, function(q) length(q$problems))), " problems in all (at most ",
+             MAX_PROBLEMS, " a question), and ", length(shown$instrument), " points about the questionnaire as a whole (at most ", MAX_POINTS, ")."),
+      paste0("Questions whose text as pasted R could not find: ", sum(!nzchar(purrr::map_chr(shown$questions, "text"))), "."),
       paste0("Questions back: ", length(ids_back), " of ", n_questions, "; ids ", if (identical(ids_back, expect_ids)) "exactly as pasted, in order" else
                paste0("differ from the pasted ones. Missing: ", paste(setdiff(expect_ids, ids_back), collapse = ", "),
                       "; extra or repeated: ", paste(ids_back[!ids_back %in% expect_ids | duplicated(ids_back)], collapse = ", ")), "."),
-      paste0("Item calls that filled fields they were told to leave empty (instrument, test_first, trapd, not_assessed): ",
+      paste0("Item calls that filled the instrument field they were told to leave empty: ",
              sum(strays > 0L), " of ", length(item_calls), if (length(strays)) paste0(" (", paste(strays, collapse = ", "), " entries)") else "", "."),
       paste0("The instrument call returned ", inst_items, " question entries (it was told to leave items empty).")),
     "")
@@ -146,7 +140,7 @@ if ("generate" %in% args) {
     research_question = "How much do adults trust the national electoral commission?",
     construct = "Trust in the national electoral commission",
     population = "Adults aged 18 and over", country = "", modes = "web",
-    output_language = "English", source_language = "English", n_items = 3L,
+    n_items = 3L,
     reference_period = "", keep_items = "", other = "", questionnaire = "", revision = "")
 
   # The key box's key for the project manager; the environment variable named in
@@ -174,11 +168,7 @@ if ("generate" %in% args) {
   appraisal <- run_appraisal(gen_form, drafts, APP_MODELS$pm, ask = ask_live, seed = seed)
 
   cands <- candidates_of(drafts, seed)
-  checklist <- build_checklist(gen_form)
-  chk <- if (identical(appraisal$status, "ok")) check_appraisal(appraisal$reply, cands, checklist)
-  coded <- purrr::imap(cands, function(reply, letter)
-    purrr::map(unname(reply$items), function(it)
-      c(list(id = it$id %||% ""), code_defaults(it, gen_form$output_language))))
+  chk <- if (identical(appraisal$status, "ok")) check_appraisal(appraisal$reply, cands)
 
   round <- flow_round(gen_form, APP_MODELS$pm, brief = brief, drafts = drafts,
                       appraisal = appraisal, seed = seed)
@@ -186,11 +176,7 @@ if ("generate" %in% args) {
   round$labels <- as.list(labels_of(drafts, seed))
   round$r_checks <- list(
     appraisal = if (!is.null(chk)) list(items_recommended = length(chk$selected),
-                                         concerns_shown = sum(purrr::map_int(chk$selected, function(e) sum(purrr::map_lgl(e$concerns, "shown")))),
-                                         set_notes = length(chk$set_notes),
-                                         not_covered = as.list(chk$not_covered),
-                                         unknown_checks = as.list(chk$unknown_checks)),
-    coded_defaults = coded)
+                                         check_lines = sum(nzchar(purrr::map_chr(chk$selected, "check")))))
 
   writeLines(scrub(as.character(flow_log_json(round))), file.path("tests", "run_generate.json"), useBytes = TRUE)
 
@@ -208,9 +194,8 @@ if ("generate" %in% args) {
             if (!identical(r$status, "ok")) paste0("\n      ", r$error) else "")), sep = "\n")
   if (!is.null(chk))
     cat("\nR's checks on the appraisal: ", length(chk$selected), " items recommended (",
-        gen_form$n_items, " asked for); ", length(chk$set_notes), " notes on the set; ",
-        length(chk$not_covered), " domains not covered; ",
-        length(chk$unknown_checks), " unknown check ids.\n", sep = "")
+        gen_form$n_items, " asked for); ", sum(nzchar(purrr::map_chr(chk$selected, "check"))),
+        " with a line to check before use.\n", sep = "")
   cat("\nThe drafts, sent together: ", sprintf("%.1f", draft_wall), " seconds by the clock; the longest draft took ",
       sprintf("%.1f", max(purrr::map_dbl(unname(as.list(drafts)), function(d) d$seconds %||% NA_real_), na.rm = TRUE)),
       " seconds (the three one after another took 87 seconds in Phase 3).\n", sep = "")
@@ -239,7 +224,7 @@ if ("gold" %in% args) {
 
   gold_form <- list(task = "evaluate", research_question = "Evaluate this survey question",
                     construct = "", population = "Adults in the general population",
-                    country = "", modes = "web", output_language = "English", source_language = "English",
+                    country = "", modes = "web",
                     n_items = NA_integer_, reference_period = "", keep_items = "", other = "",
                     questionnaire = "", revision = "")
 

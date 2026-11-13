@@ -82,18 +82,17 @@ TASKS <- list(
     ask_items = paste(
       "Review part %d of %d of a questionnaire as an expert reviewer, question by question.",
       "Only the questions of this part are pasted below.",
-      "Fill only \"items\" in your reply, and give \"instrument\" and \"test_first\" as empty lists,",
-      "and \"not_assessed\" as an empty string,",
+      "Fill only \"items\" in your reply, and give \"instrument\" as an empty list,",
       "because the questionnaire as a whole is reviewed in a separate call.",
       "The first block of this part is block number %d of the whole questionnaire;",
       "a question that has no number of its own takes the number of its block as its id,",
       "counting blocks from 1 across the whole questionnaire."),
     ask_instrument = paste(
       "Review the questionnaire below as a whole, as an expert reviewer.",
-      "Fill only \"instrument\", \"test_first\" and \"not_assessed\" in your reply,",
+      "Fill only \"instrument\" in your reply,",
       "and give \"items\" as an empty list, because each question was reviewed in a separate call.",
       "Judge only what the CHECKLIST below asks about the instrument as a whole,",
-      "and name the questions involved, by their ids, in the evidence of each finding.")))
+      "and give at most three points, the most important first, one sentence each.")))
 
 # The most items one drafting run is asked for (DESIGN.md section 13). The
 #   appraisal's reply grows with candidates times items, and a longer one would
@@ -587,8 +586,7 @@ checklist_block <- function(checklist)
 #   to say who it is. An absent field becomes empty, so the appraiser always sees
 #   the same shape.
 APPRAISAL_ITEM_DEFAULTS <- list(
-  id = "", domain = "", intro = "", stem = "", options = list(), open_format = "",
-  parts = list(), programming = "", decisions = list())
+  id = "", domain = "", stem = "", options = list(), open_format = "")
 
 appraisal_item <- function(it)
   purrr::imap(APPRAISAL_ITEM_DEFAULTS, function(d, k) it[[k]] %||% d)

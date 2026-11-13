@@ -107,16 +107,14 @@ doc_text <- function(blocks) {
 #   the candidate letter, the item's position in that candidate's draft, its id and domain, the
 #   reviewer's reason and concerns, and whether the analyst swapped it in. state$edits holds
 #   only what the analyst changed, by the entry's uid (the letter and the position).
-set_entry <- function(candidate, position, id, domain = "", why = "", suggestion = "",
-                      concerns = list(), swapped = FALSE)
+set_entry <- function(candidate, position, id, domain = "", check = "", swapped = FALSE)
   list(uid = paste0(candidate, "_", position), candidate = candidate, position = position, id = id,
-       domain = domain, why = why, suggestion = suggestion, concerns = concerns, swapped = swapped)
+       domain = domain, check = check, swapped = swapped)
 
 # The set as the reviewer recommended it (check_appraisal()'s `selected`).
 initial_set <- function(chk)
   purrr::map(chk$selected, function(e)
-    set_entry(e$candidate, e$position, e$id, e$domain, e$why, e$suggestion, e$concerns))
-
+    set_entry(e$candidate, e$position, e$id, e$domain, e$check))
 # An item from a draft put in the set: in place of the entry whose uid is `target`, or at the
 #   end when there is none. An item that is already in the set is not put in twice.
 set_swap <- function(set, entry, target = NULL) {
@@ -130,9 +128,8 @@ set_swap <- function(set, entry, target = NULL) {
 # An item taken out of the set.
 set_remove <- function(set, uid) purrr::discard(set, function(e) identical(e$uid, uid))
 
-# An item with the analyst's changes put on it. edits holds only what changed: `stem`, `options`
-#   (a list of new texts by the option's number) and `parts` (by the part's number: `stem` and
-#   `options`). An option whose text is cleared is taken out.
+# An item with the analyst's changes put on it. edits holds only what changed: `stem` and `options`
+#   (a list of new texts by the option's number). An option whose text is cleared is taken out.
 apply_edits <- function(it, ed) {
   if (is.null(ed)) return(it)
   texts = function(old, new) {
@@ -142,44 +139,28 @@ apply_edits <- function(it, ed) {
   }
   if (!is.null(ed$stem)) it$stem = ed$stem
   if (!is.null(ed$options)) it$options = texts(it$options, ed$options)
-  if (!is.null(ed$parts))
-    it$parts = purrr::imap(it$parts, function(p, i) {
-      e = ed$parts[[as.character(i)]]
-      if (!is.null(e$stem)) p$stem = e$stem
-      if (!is.null(e$options)) p$options = texts(p$options %||% list(), e$options)
-      p
-    })
   it
 }
 
 # What the analyst changed, read from the boxes on the page: for each entry of the set, the fields
 #   whose text is no longer the draft's. get(id) gives what is in the box with that input id, or
-#   NULL; the box ids are edit_input_ids(). An entry with no change has no entry in the result.
+#   NULL; the box ids are made by edit_input_id(). An entry with no change has no entry in the result.
 edit_input_id <- function(uid, ...) paste(c("ed", uid, ...), collapse = "_")
 
 edits_from_inputs <- function(set, drafts, seed, get) {
   cands = candidates_of(drafts, seed)
   text_of = function(o) paste(unlist(o), collapse = " ")
   changed = function(id, old) { v = get(id); if (!is.null(v) && !identical(v, old)) v }
-  opts = function(uid, prefix, old) {
-    new = purrr::imap(purrr::map_chr(old, text_of), function(o, j) changed(edit_input_id(uid, prefix, paste0("o", j)), o))
-    purrr::set_names(new, seq_along(new))[!purrr::map_lgl(new, is.null)]
-  }
   out = purrr::map(set, function(e) {
     it = full_item(unname(cands[[e$candidate]]$items)[[e$position]])
-    parts = purrr::imap(it$parts, function(p, i)
-      purrr::compact(list(stem = changed(edit_input_id(e$uid, paste0("p", i), "stem"), p$stem %||% ""),
-                          options = purrr::compact(opts(e$uid, paste0("p", i), p$options %||% list())))))
-    parts = purrr::set_names(parts, seq_along(parts))
-    parts = parts[purrr::map_lgl(parts, function(p) length(p) > 0L)]
+    new = purrr::imap(purrr::map_chr(it$options, text_of), function(o, j) changed(edit_input_id(e$uid, paste0("o", j)), o))
+    opts = purrr::set_names(new, seq_along(new))[!purrr::map_lgl(new, is.null)]
     ed = purrr::compact(list(stem = changed(edit_input_id(e$uid, "stem"), it$stem),
-                             options = if (length(opts(e$uid, NULL, it$options))) opts(e$uid, NULL, it$options),
-                             parts = if (length(parts)) parts))
+                             options = if (length(opts)) opts))
     if (length(ed)) ed
   })
   purrr::compact(purrr::set_names(out, purrr::map_chr(set, "uid")))
 }
-
 # The set as the analyst left it: for each entry the candidate, the model behind that letter (which
 #   Results shows), the item with the changes put on it, and whether it was swapped in or edited. An
 #   entry that no longer points at an item is dropped, not guessed at.
@@ -190,85 +171,62 @@ final_set <- function(set, edits, drafts, seed) {
     items = unname(cands[[e$candidate]]$items)
     if (is.null(items) || e$position > length(items)) return(NULL)
     list(candidate = e$candidate, model = labels[[e$candidate]], position = e$position, uid = e$uid,
-         domain = e$domain, swapped = isTRUE(e$swapped), edited = !is.null(edits[[e$uid]]),
+         domain = e$domain, check = e$check %||% "", swapped = isTRUE(e$swapped), edited = !is.null(edits[[e$uid]]),
          item = apply_edits(full_item(items[[e$position]]), edits[[e$uid]]))
   }))
 }
 
-# One item as blocks: its id, the introduction, the stem, the numbered options (or what an
-#   open question collects), the filter, branch and bracket questions indented under it,
-#   and the programming notes in square brackets.
-item_blocks <- function(it) {
+# ---- what is shown: the result, short (DESIGN.md section 18) ---------------------------------------
+
+# The one sentence above either result.
+RESULT_NOTICE <- "These are drafts. Test them with real respondents before fielding."
+
+CHECK_LABEL <- "Check before use:"
+
+# One drafted question as blocks, and nothing else: its number, the question, its answer options (or
+#   what an open question collects) and, when the reviewer found a real problem, the one line to
+#   check before use.
+item_blocks <- function(it, i, check = "") {
   opts = purrr::map_chr(it$options, function(o) paste(unlist(o), collapse = " "))
-  c(list(blk_h(it$id, 3L)),
-    if (nzchar(it$intro)) list(blk_p(it$intro, em = TRUE)),
-    list(blk_p(it$stem)),
+  c(list(blk_h(paste("Question", i), 3L), blk_p(it$stem)),
     if (length(opts)) list(blk_list(opts, ordered = TRUE))
     else list(blk_p(paste0("[Open question", if (nzchar(it$open_format)) paste0(": ", it$open_format), "]"))),
-    unlist(purrr::map(it$parts, function(p) {
-      po = purrr::map_chr(p$options %||% list(), function(o) paste(unlist(o), collapse = " "))
-      c(list(blk_p(paste0("Asked ", p$when %||% "", ": ", p$stem %||% ""), indent = TRUE)),
-        if (length(po)) list(blk_list(po, ordered = TRUE, indent = TRUE)))
-    }), recursive = FALSE),
-    if (nzchar(it$programming)) list(blk_p(paste0("[", it$programming, "]"))))
+    if (nzchar(check)) list(blk_p(paste(CHECK_LABEL, check), em = TRUE)))
 }
+
+# The drafted questions of the set as the analyst left it (final_set()), under the one sentence.
+draft_blocks <- function(chosen)
+  c(list(blk_p(RESULT_NOTICE, em = TRUE)),
+    unlist(purrr::imap(chosen, function(k, i) item_blocks(k$item, i, k$check)), recursive = FALSE))
 
 
 # ---- a review ------------------------------------------------------------------------------------
 
-# One finding as a list item: the check, its severity, the quote, the problem, and the rewrite
-#   and probe, each said to be untested. A quote that R could not find in the text, or a check
-#   that was not in the checklist, says so.
-finding_line <- function(r) {
-  paste0(r$check, " (severity ", r$severity, ")",
-         if (!isTRUE(r$check_known)) " [not a check that was sent]",
-         if (identical(r$scope, "question") && !isTRUE(r$evidence_found)) " [quote not found in the text]",
-         ": ", if (identical(r$scope, "question")) paste0("\"", r$evidence, "\". ") else paste0("Questions: ", r$evidence, ". "),
-         r$problem,
-         if (nzchar(r$rewrite)) paste0(" A rewrite, untested: ", r$rewrite),
-         if (nzchar(r$probe)) paste0(" A probe: ", r$probe))
-}
-
-# Findings (rows of check_review()) in the three severity bands, highest first, as blocks. Minor
-#   findings are listed too: a Word document cannot fold them away.
-finding_blocks <- function(rows) {
-  rs = purrr::map(seq_len(nrow(rows)), function(i) as.list(rows[i, ]))
-  band = severity_band(purrr::map_dbl(rs, function(r) r$severity))
-  unlist(purrr::map(names(SEVERITY_BANDS), function(b) {
-    mine = rs[band == b]
-    if (length(mine)) list(blk_p(paste0(SEVERITY_BANDS[[b]], if (b == "minor") " (rated below 5)" else ""), em = TRUE),
-                           blk_list(purrr::map_chr(mine, finding_line)))
-  }), recursive = FALSE)
-}
-
-# What the review said, as blocks: question by question, then the instrument,
-#   what to test first, and what it could not judge. rv is run_review()'s result.
+# The review as blocks, from shape_review(): the one sentence; for each question marked Revise, the
+#   question as pasted, the verdict, and at most two problems with a suggested rewrite; the questions
+#   marked Keep folded into one line; and at most three points about the questionnaire as a whole.
+#   rv is run_review()'s result.
 review_blocks <- function(f, rv) {
-  reply = rv$reply
-  flags = check_review(reply, f)
-  label = function(x) paste(unlist(x), collapse = " ")
-  per_question = unlist(purrr::imap(unname(reply$items), function(it, i) {
-    rows = flags[flags$scope == "question" & flags$position == i, ]
-    c(list(blk_h(paste("Question", label(it$id)), 3L)),
-      if (!nrow(rows)) list(blk_p("No problem was found by this review.")) else finding_blocks(rows))
-  }), recursive = FALSE)
-  inst = flags[flags$scope == "instrument", ]
-  c(list(blk_h("Review of the questionnaire, question by question", 2L)),
-    list(blk_p(paste0("An expert-review appraisal by a language model against a fixed checklist. It shows where a ",
-                      "respondent may have trouble. A rewrite or a probe is untested."), em = TRUE)),
+  sh = shape_review(rv$reply, f$questionnaire)
+  revise = purrr::keep(sh$questions, function(q) identical(q$verdict, "Revise"))
+  per_question = unlist(purrr::map(revise, function(q)
+    c(list(blk_h(paste("Question", q$id), 3L)),
+      if (nzchar(q$text)) list(blk_p(q$text)),
+      list(blk_p("Revise", em = TRUE)),
+      unlist(purrr::map(q$problems, function(p)
+        c(list(blk_p(paste("Problem:", p$problem))),
+          if (nzchar(p$rewrite)) list(blk_p(paste("Suggested rewrite:", p$rewrite))))), recursive = FALSE))),
+    recursive = FALSE)
+  c(list(blk_p(RESULT_NOTICE, em = TRUE)),
     if (identical(rv$status, "partial"))
       list(blk_p(paste0("PART OF THE REVIEW IS MISSING: ", rv$error, " The questions that are not below were not reviewed."))),
     per_question,
-    list(blk_h("The instrument as a whole", 2L)),
-    if (nrow(inst)) finding_blocks(inst) else list(blk_p("No problem was found by this review.")),
-    if (length(reply$test_first))
-      list(blk_h("What to test first", 2L),
-           blk_list(purrr::map_chr(reply$test_first, function(t)
-             if (is.list(t) && !is.null(t$id)) paste0("Question ", label(t$id), ": ", label(t$method)) else label(t)))),
-    if (nzchar(label(reply$not_assessed)))
-      list(blk_h("What this review could not judge", 2L), blk_p(label(reply$not_assessed))))
+    if (length(sh$keep))
+      list(blk_p(paste0(if (length(sh$keep) == 1L) "Question " else "Questions ", paste(sh$keep, collapse = ", "),
+                        ": keep as written"))),
+    if (length(sh$instrument))
+      list(blk_h("The questionnaire as a whole", 2L), blk_list(sh$instrument)))
 }
-
 
 # ---- the disclosure block ----------------------------------------------------------------------
 
@@ -339,34 +297,42 @@ disclosure_blocks <- function(f, chosen = list(), drafts = NULL, appraisal = NUL
 
 # ---- the whole output --------------------------------------------------------------------------
 
-# The output of one flow, as a list: `kind` ("draft" or "review"), `blocks`, `html` (plain HTML for
-#   Word), `text` (the same, as plain text), and `n_items`. A drafting flow's output is the set as the
-#   analyst left it (final_set()); with nothing in it the output says so, and has no disclosure, since
-#   there is nothing to disclose a use of. A review's is the review. Both end with the disclosure block. f is the cleaned form of the round.
-build_output <- function(f, drafts = NULL, appraisal = NULL, seed = NULL, set = list(), edits = list(), review = NULL,
-                         brief = NULL, approved = NULL, profile = APP_PROFILE, models = APP_MODELS,
-                         time = Sys.time(), dir = REFLEXES_DIR) {
+# The version of the tool, in the last line of what is copied to Word.
+QUESTIONR_VERSION <- "0.9"
+
+# The three lines after what is on screen, in what is copied to Word: the date, who drafted and who
+#   reviewed (the analyst completes the last), and the tool's version.
+output_footer <- function(time = Sys.time())
+  list(blk_p(paste0("Date: ", format(time, "%Y-%m-%d"))),
+       blk_p("Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]"),
+       blk_p(paste0("QuestionR version ", QUESTIONR_VERSION)))
+
+# The output of one flow, as a list: `kind` ("draft" or "review"), `blocks` (what is on screen, then
+#   the three lines), `html` (plain HTML for Word), `text` (the same, as plain text), `screen_text` (the
+#   text of what is on screen, without the three lines) and `n_items`. A drafting flow's output is the
+#   set as the analyst left it (final_set()); a review's is the review. With nothing to show, the output
+#   says so and has no three lines. Everything else (prompts, models, hashes, every draft, the full
+#   reply) is in the record (disclosure_blocks(), run_log_json()), not here. f is the cleaned form.
+build_output <- function(f, drafts = NULL, seed = NULL, set = list(), edits = list(), review = NULL,
+                         time = Sys.time()) {
   kind = TASKS[[f$task]]$kind
-  disclose = function(k = list())
-    disclosure_blocks(f, k, drafts, appraisal, review, brief, approved, profile, models, time, dir)
   if (kind == "review") {
     if (is.null(review) || is.null(review$reply))
-      return(finish_output(kind, list(blk_p("There is no review to show. Run one on the Results tab.")), 0L))
-    return(finish_output(kind, c(review_blocks(f, review), disclose()), 0L))
+      return(finish_output(kind, list(blk_p("There is no review to show. Run one on the Results tab.")), list(), 0L))
+    return(finish_output(kind, review_blocks(f, review), output_footer(time), 0L))
   }
   chosen = if (!is.null(drafts)) final_set(set, edits, drafts, seed) else list()
   if (!length(chosen))
     return(finish_output(kind, list(blk_p(paste0("There is no item in the set yet. The Results tab shows the ",
-                                                 "recommended items, and you can add items from the drafts."))), 0L))
-  items = unlist(purrr::map(chosen, function(k) item_blocks(k$item)), recursive = FALSE)
-  finish_output(kind, c(list(blk_h("Survey items", 2L),
-                             blk_p("First drafts by language models, as recommended by a reviewing model and left by the analyst; untested.", em = TRUE)),
-                        items, disclose(chosen)), length(chosen))
+                                                 "recommended items, and you can add items from the drafts."))), list(), 0L))
+  finish_output(kind, draft_blocks(chosen), output_footer(time), length(chosen))
 }
 
-finish_output <- function(kind, blocks, n_items)
-  list(kind = kind, blocks = blocks, html = doc_html(blocks), text = doc_text(blocks), n_items = n_items)
-
+finish_output <- function(kind, screen, footer, n_items) {
+  blocks = c(screen, footer)
+  list(kind = kind, blocks = blocks, html = doc_html(blocks), text = doc_text(blocks),
+       screen_text = doc_text(screen), n_items = n_items)
+}
 
 # ---- the run log and keys ---------------------------------------------------------------------------
 
@@ -385,10 +351,15 @@ scrub_secrets <- function(text, secrets) {
   purrr::reduce(secrets, function(t, s) gsub(s, "[key removed]", t, fixed = TRUE), .init = text)
 }
 
-# The session's run log as JSON, one file: schema 1, the profile and time, and every round as
-#   flow_round() made it (form, prompts and hashes, raw and parsed replies, R's checks' inputs, the
-#   seed and the candidate-to-model map, and the analyst's set, edits and final items). Keys scrubbed.
-run_log_json <- function(rounds, profile = APP_PROFILE, time = Sys.time(), secrets = character(0))
+# The full record of the session as JSON, one file (the "Download the full record" button): schema 1,
+#   the profile and time, the disclosure of the use of language models as text lines (models, reflex
+#   file versions, prompt hashes, which candidate each item came from), and every round as flow_round()
+#   made it (form, prompts and hashes, raw and parsed replies, the seed and the candidate-to-model map,
+#   and the analyst's set, edits and final items). It holds everything that is not on screen or in what
+#   is copied to Word, so the work stays defensible. Keys scrubbed.
+run_log_json <- function(rounds, profile = APP_PROFILE, time = Sys.time(), secrets = character(0),
+                         disclosure = character(0))
   scrub_secrets(as.character(flow_log_json(list(
-    schema = 1L, app = "QuestionR", written = format(time, "%Y-%m-%dT%H:%M:%S%z"),
-    profile = profile, rounds = unname(rounds)))), secrets)
+    schema = 1L, app = "QuestionR", version = QUESTIONR_VERSION,
+    written = format(time, "%Y-%m-%dT%H:%M:%S%z"), profile = profile,
+    disclosure = as.list(disclosure), rounds = unname(rounds)))), secrets)

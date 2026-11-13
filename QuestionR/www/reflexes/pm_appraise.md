@@ -1,6 +1,6 @@
 # Project manager: choose the recommended set
 
-Version: 0.4
+Version: 0.5
 
 After the worker models return drafts. The project manager checks every
 candidate item against the checklist, then recommends one item per domain,
@@ -67,10 +67,8 @@ items only.
 
 ## Output format
 
-Return one JSON object with these fields, all text in English.
+Return one JSON object with this field, all text in English.
 
-- "selected": a list, one entry per recommended item, in the order they should be asked. Each has "domain", "candidate" (A, B, C...), "id" (the item id as the candidate gave it), "why" (one sentence on why this item and not the others for the domain), "concerns" (a list, empty if none, of objects with "check" (the id from the checklist), "evidence" (the words that fail), "severity" (1 to 10) and "why" (one sentence)), and "suggestion" (one sentence, or an empty string).
-- "not_covered": domains of the construct for which no candidate item was good enough to recommend, or an empty list.
-- "set_notes": a list, empty if none, of objects with "check", "severity" and "why", about the recommended set as a whole.
-- "test_first": a list of up to three objects with "id" and "method".
-- "limits": one or two sentences as required by say_what_was_not_checked.
+- "selected": a list, one entry per recommended item, in the order they should be asked. Each has "domain", "candidate" (A, B, C...), "id" (the item id as the candidate gave it) and "check_before_use": one sentence of 20 words or fewer, in plain words, naming the one problem that most needs the analyst's attention before the item is used, or an empty string when the item has no real problem.
+
+Nothing else: no reasons, scores, check ids, notes on the set or suggestions. The analyst is shown the chosen question and, only when it is not empty, that one line.
