@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 520" role="img" aria-labelledby="t d" font-family="Lato, 'Segoe UI', system-ui, -apple-system, sans-serif">
+<title id="t">One question, three ways to go wrong</title>
+<desc id="d">The question "Last week, did you work full-time, part-time, or did you not work at all?" with the answer options "Yes, full-time", "Yes, part-time" and "No", its parts marked: the reference period, the concept and the answer options. Below it, the three ways the slide gives for it to go wrong: measuring the wrong concept (specification error), measuring the right concept imperfectly (operationalization error), and measuring the right concept "perfectly" but the respondent's response differing from the respondent's true value (response error), where the answer "No" leads on to the question "What is the reason you didn't work at all last week?". The first two together are validity.</desc>
+<rect x="0.5" y="0.5" width="999" height="519" rx="12" fill="#ffffff" stroke="#dee2e6"/>
+<text x="500" y="30" text-anchor="middle" font-size="15px" font-weight="700" fill="#2c3e50">The goal of questionnaire design is to reduce measurement error</text>
+
+<rect x="30" y="50" width="940" height="170" rx="10" fill="#f8f9fa" stroke="#ced4da" stroke-width="1.5"/>
+<g font-size="17px" font-weight="700" fill="#2c3e50">
+<text x="60" y="88">Last week,</text>
+<text x="60" y="114">did you work full-time, part-time, or did you not work at all?</text>
+</g>
+<g font-size="15px" font-weight="400" fill="#2c3e50">
+<text x="60" y="152">Yes, full-time</text>
+<text x="60" y="176">Yes, part-time</text>
+<text x="60" y="200">No</text>
+</g>
+<g stroke="#18bc9c" stroke-width="1.5" fill="none" stroke-dasharray="4 3">
+<line x1="168" y1="83" x2="706" y2="83"/>
+<line x1="668" y1="109" x2="706" y2="109"/>
+<line x1="190" y1="176" x2="706" y2="176"/>
+</g>
+<g fill="#e8f8f5" stroke="#18bc9c" stroke-width="1.5">
+<rect x="708" y="69" width="150" height="26" rx="13"/>
+<rect x="708" y="95" width="150" height="26" rx="13"/>
+<rect x="708" y="162" width="150" height="26" rx="13"/>
+</g>
+<g font-size="13px" font-weight="700" fill="#0f8f75" text-anchor="middle">
+<text x="783" y="87">reference period</text>
+<text x="783" y="113">the concept</text>
+<text x="783" y="180">answer options</text>
+</g>
+
+<g>
+<rect x="30" y="250" width="300" height="140" rx="10" fill="#ffffff" stroke="#ced4da" stroke-width="1.5"/>
+<rect x="350" y="250" width="300" height="140" rx="10" fill="#ffffff" stroke="#ced4da" stroke-width="1.5"/>
+<rect x="670" y="250" width="300" height="140" rx="10" fill="#ffffff" stroke="#ced4da" stroke-width="1.5"/>
+</g>
+<g font-size="14px" font-weight="700" fill="#0f8f75" text-anchor="middle">
+<text x="180" y="284">Measure the wrong concept</text>
+<text x="180" y="304">(specification error)</text>
+<text x="500" y="284">Measure the right concept imperfectly</text>
+<text x="500" y="304">(operationalization error)</text>
+<text x="820" y="284">Measure the right concept "perfectly",</text>
+<text x="820" y="304">but R's response &lt;&gt; R's true value</text>
+<text x="820" y="324">(response error)</text>
+</g>
+<g font-size="13px" font-weight="700" fill="#2c3e50" text-anchor="middle">
+<text x="820" y="358">No (-&gt;What is the reason you</text>
+<text x="820" y="376">didn't work at all last week?)</text>
+</g>
+<path d="M30,402 L30,410 L650,410 L650,402 M340,410 L340,424" fill="none" stroke="#18bc9c" stroke-width="2"/>
+<rect x="290" y="426" width="100" height="28" rx="4" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2"/>
+<text x="340" y="445" text-anchor="middle" font-size="13.5px" font-weight="700" fill="#2c3e50">Validity</text>
+<text x="985" y="508" text-anchor="end" font-size="11px" font-weight="400" fill="#5a6a6b" font-style="italic">Ting Yan, Fundamentals of Questionnaire Design, IASS/WSS Webinar Session 1</text>
+</svg>

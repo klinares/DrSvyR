@@ -1,49 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1170" role="img" aria-labelledby="t d" font-family="Lato, 'Segoe UI', system-ui, -apple-system, sans-serif">
-<title id="t">From construct to question</title>
-<desc id="d">Three parts. First, three ways a question fails, shown with the question "Last week, did you work full-time, part-time, or did you not work at all?": measuring the wrong concept (specification error), measuring the right concept imperfectly (operationalization error), and measuring the right concept perfectly but the respondent's response differing from the respondent's true value (response error); specification and operationalization error together are validity. Second, decomposition: from a theoretical construct, nonfatal victimization, through dimensions and sub-dimensions to indicators, moving from abstract, multidimensional concepts to specific, single-dimensioned domains. Third, errors from conceptualization to operationalization to analysis: in the theoretical world, theory, concepts and attributes, with specification errors between concepts and attributes; in the empirical world, question or questions, questionnaire, response and data file, with operationalization errors, measurement and non-response errors, and processing errors between them; the operational definition links attributes to questions, and the data file feeds back to theory.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 800" role="img" aria-labelledby="t d" font-family="Lato, 'Segoe UI', system-ui, -apple-system, sans-serif">
+<title id="t">From construct to question: decomposition and the errors on the way</title>
+<desc id="d">Two parts. First, decomposition: from a theoretical construct, nonfatal victimization, through dimensions and sub-dimensions to indicators, moving from abstract, multidimensional concepts to specific, single-dimensioned domains. Second, errors from conceptualization to operationalization to analysis: in the theoretical world, theory, concepts and attributes, with specification errors between concepts and attributes; in the empirical world, question or questions, questionnaire, response and data file, with operationalization errors, measurement and non-response errors, and processing errors between them; the operational definition links attributes to questions, and the data file feeds back to theory.</desc>
 <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2c3e50"/></marker></defs>
-<rect x="0.5" y="0.5" width="999" height="1169" rx="12" fill="#ffffff" stroke="#dee2e6"/>
+<rect x="0.5" y="0.5" width="999" height="799" rx="12" fill="#ffffff" stroke="#dee2e6"/>
 
-<!-- (i) three ways a question fails -->
-<text x="500" y="30" text-anchor="middle" font-size="15px" font-weight="700" fill="#2c3e50">The goal of questionnaire design is to reduce measurement error</text>
-<g>
-<rect x="30" y="50" width="300" height="250" rx="10" fill="#f8f9fa" stroke="#ced4da" stroke-width="1.5"/>
-<rect x="350" y="50" width="300" height="250" rx="10" fill="#f8f9fa" stroke="#ced4da" stroke-width="1.5"/>
-<rect x="670" y="50" width="300" height="250" rx="10" fill="#f8f9fa" stroke="#ced4da" stroke-width="1.5"/>
-</g>
-<g font-size="14px" font-weight="700" fill="#0f8f75" text-anchor="middle">
-<text x="180" y="78">Measure the wrong concept</text>
-<text x="180" y="98">(specification error)</text>
-<text x="500" y="78">Measure the right concept imperfectly</text>
-<text x="500" y="98">(operationalization error)</text>
-<text x="820" y="78">Measure the right concept "perfectly",</text>
-<text x="820" y="98">but R's response &lt;&gt; R's true value</text>
-<text x="820" y="118">(response error)</text>
-</g>
-<g font-size="13px" font-weight="700" fill="#2c3e50" text-anchor="middle">
-<text x="180" y="156">Last week, did you work full-time,</text>
-<text x="180" y="174">part-time, or did you not work at all?</text>
-<text x="180" y="208" font-weight="400">Yes, full-time</text>
-<text x="180" y="230" font-weight="400">Yes, part-time</text>
-<text x="180" y="252" font-weight="400">No</text>
-<text x="500" y="156">Last week, did you work full-time,</text>
-<text x="500" y="174">part-time, or did you not work at all?</text>
-<text x="500" y="208" font-weight="400">Yes, full-time</text>
-<text x="500" y="230" font-weight="400">Yes, part-time</text>
-<text x="500" y="252" font-weight="400">No</text>
-<text x="820" y="156">Last week, did you work full-time,</text>
-<text x="820" y="174">part-time, or did you not work at all?</text>
-<text x="820" y="208" font-weight="400">Yes, full-time</text>
-<text x="820" y="230" font-weight="400">Yes, part-time</text>
-<text x="820" y="252" font-weight="400">No (-&gt;What is the reason you</text>
-<text x="820" y="270" font-weight="400">didn't work at all last week?)</text>
-</g>
-<path d="M30,312 L30,320 L650,320 L650,312 M340,320 L340,334" fill="none" stroke="#18bc9c" stroke-width="2"/>
-<rect x="290" y="336" width="100" height="28" rx="4" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2"/>
-<text x="340" y="355" text-anchor="middle" font-size="13.5px" font-weight="700" fill="#2c3e50">Validity</text>
-
-<line x1="30" y1="384" x2="970" y2="384" stroke="#dee2e6"/>
-
+<g transform="translate(0,-380)">
 <!-- (ii) decomposition -->
 <text x="500" y="414" text-anchor="middle" font-size="15px" font-weight="700" fill="#2c3e50">Decomposition: from abstract, multidimensional concepts to specific, single-dimensioned domains</text>
 <g font-size="12.5px" font-weight="700" fill="#5a6a6b">
@@ -137,4 +98,5 @@
 <text x="478" y="1106" font-weight="700">Operational definition</text>
 </g>
 <text x="985" y="1158" text-anchor="end" font-size="11px" font-weight="400" fill="#5a6a6b" font-style="italic">Willimack and Snijkers (2012)</text>
+</g>
 </svg>
