@@ -1,40 +1,52 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 250" role="img" aria-labelledby="t d" font-family="Lato, 'Segoe UI', system-ui, -apple-system, sans-serif" xmlns:c2pa="http://c2pa.org/manifest">
-<title id="t">The TRAPD model for translating questionnaires</title>
-<desc id="d">Five steps: translation, review, adjudication, pretesting and documentation. QuestionR can produce a first draft translation only; review by fluent speakers, deciding disagreements, testing with respondents and documenting the decisions are done by people.</desc>
-<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7b8a8b"/></marker></defs>
-<rect x="0.5" y="0.5" width="999" height="249" rx="12" fill="#ffffff" stroke="#dee2e6"/>
-<rect x="30" y="60" width="160" height="120" rx="10" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2"/>
-<circle cx="110" cy="88" r="17" fill="#18bc9c"/><text x="110" y="94" text-anchor="middle" font-size="16px" font-weight="700" fill="#ffffff">T</text>
-<text x="110" y="128" text-anchor="middle" font-size="15px" font-weight="700" fill="#2c3e50">Translation</text>
-<text x="110" y="150" text-anchor="middle" font-size="12.5px" font-weight="400" fill="#2c3e50">Draft translations</text>
-<rect x="225" y="60" width="160" height="120" rx="10" fill="#2c3e50"/>
-<circle cx="305" cy="88" r="17" fill="#18bc9c"/><text x="305" y="94" text-anchor="middle" font-size="16px" font-weight="700" fill="#ffffff">R</text>
-<text x="305" y="128" text-anchor="middle" font-size="15px" font-weight="700" fill="#ffffff">Review</text>
-<text x="305" y="150" text-anchor="middle" font-size="12.5px" font-weight="400" fill="#ffffff">Compare the drafts</text>
-<text x="305" y="166" text-anchor="middle" font-size="12.5px" font-weight="400" fill="#ffffff">with reviewers</text>
-<rect x="420" y="60" width="160" height="120" rx="10" fill="#2c3e50"/>
-<circle cx="500" cy="88" r="17" fill="#18bc9c"/><text x="500" y="94" text-anchor="middle" font-size="16px" font-weight="700" fill="#ffffff">A</text>
-<text x="500" y="128" text-anchor="middle" font-size="15px" font-weight="700" fill="#ffffff">Adjudication</text>
-<text x="500" y="150" text-anchor="middle" font-size="12.5px" font-weight="400" fill="#ffffff">Decide where</text>
-<text x="500" y="166" text-anchor="middle" font-size="12.5px" font-weight="400" fill="#ffffff">they disagree</text>
-<rect x="615" y="60" width="160" height="120" rx="10" fill="#2c3e50"/>
-<circle cx="695" cy="88" r="17" fill="#18bc9c"/><text x="695" y="94" text-anchor="middle" font-size="16px" font-weight="700" fill="#ffffff">P</text>
-<text x="695" y="128" text-anchor="middle" font-size="15px" font-weight="700" fill="#ffffff">Pretesting</text>
-<text x="695" y="150" text-anchor="middle" font-size="12.5px" font-weight="400" fill="#ffffff">Test with</text>
-<text x="695" y="166" text-anchor="middle" font-size="12.5px" font-weight="400" fill="#ffffff">respondents</text>
-<rect x="810" y="60" width="160" height="120" rx="10" fill="#2c3e50"/>
-<circle cx="890" cy="88" r="17" fill="#18bc9c"/><text x="890" y="94" text-anchor="middle" font-size="16px" font-weight="700" fill="#ffffff">D</text>
-<text x="890" y="128" text-anchor="middle" font-size="15px" font-weight="700" fill="#ffffff">Documentation</text>
-<text x="890" y="150" text-anchor="middle" font-size="12.5px" font-weight="400" fill="#ffffff">Record what was</text>
-<text x="890" y="166" text-anchor="middle" font-size="12.5px" font-weight="400" fill="#ffffff">decided and why</text>
-<line x1="192" y1="120" x2="223" y2="120" stroke="#7b8a8b" stroke-width="2" marker-end="url(#a)"/>
-<line x1="387" y1="120" x2="418" y2="120" stroke="#7b8a8b" stroke-width="2" marker-end="url(#a)"/>
-<line x1="582" y1="120" x2="613" y2="120" stroke="#7b8a8b" stroke-width="2" marker-end="url(#a)"/>
-<line x1="777" y1="120" x2="808" y2="120" stroke="#7b8a8b" stroke-width="2" marker-end="url(#a)"/>
-<path d="M110,190 L110,204" stroke="#18bc9c" stroke-width="2"/>
-<text x="110" y="222" text-anchor="middle" font-size="12.5px" font-weight="700" fill="#0f8f75">QuestionR: a first draft only</text>
-<path d="M305,190 L305,200 L890,200 L890,190" fill="none" stroke="#2c3e50" stroke-width="2"/>
-<text x="597" y="222" text-anchor="middle" font-size="12.5px" font-weight="700" fill="#2c3e50">Done by people: fluent speakers, an adjudicator, real respondents</text>
-<text x="500" y="36" text-anchor="middle" font-size="14px" font-weight="700" fill="#2c3e50">Translating a questionnaire: the TRAPD model</text>
-<text x="985" y="240" text-anchor="end" font-size="11px" font-weight="400" fill="#5a6a6b" font-style="italic">Yan, IASS/WSS Session 2; Haensch, IASS/WSS Session 3</text>
-<metadata><c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTo0Zjc1YTI2OC00YzJhLTRlY2MtOTJkMy1kOThhNjM4MzU4ZTYAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaFLUcxD4WAw5A+a6ad0ec8cAAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDpiYmRiODUyNy0wYWYzLTRjZTktOWZlMy00Nzk5MTE5ZDkyNjNscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNouyLeRMjB6s08sEF8Sk31FAAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFggAdAdPR5Xt36KbH+tStkN0gfSvWutIokG9MXZspj/SSGkZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaK1+yWjXNTHssi0ch5AGwvIAAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRMAAAAAAAAAAAAAAAAZGhhc2hYICBtmsjA2HPxasQiOn9scNaSD5CMyGdQydQkatbaIntlZG5hbWVuanVtYmYgbWFuaWZlc3RqZXhjbHVzaW9uc4GiZXN0YXJ0GRKGZmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOjRmNzVhMjY4LTRjMmEtNGVjYy05MmQzLWQ5OGE2MzgzNThlNi9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOmE5YjM0NDEwLTQ3MTktNDAxOC1hMGMyLTUxMGQ5MjQ2OGNkNHJjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCAB0B09Hle3fopsf61K2Q3SB9K9a60iiQb0xdmymP9JIaJjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFggWWD6MTZXnT6Kv39LvelrvknOdAUlLZNvo6JZ0cCQuwGiY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggbikUpTAD1mjwCOB7eGgwMsiR5pLUaaqb7zBj8nnGhkV0Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQO8gvWHsTxscHXGmgfCw2SjAK32T+AxdSi1icC5Xb83W95JGaJAPUOmMhChQSuJ+rh1ixIzgxKZTwBLwzw6gPpw=</c2pa:manifest></metadata></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" role="img" aria-labelledby="t d" font-family="Lato, 'Segoe UI', system-ui, -apple-system, sans-serif">
+<title id="t">TRAPD: the Translation, Review, Adjudication, Pretesting, and Documentation model</title>
+<desc id="d">A source instrument is translated twice, independently (Translation 1 and Translation 2). Both go to review. Review and adjudication pass back and forth, and adjudication either sends the draft to a pretest, which returns to adjudication, or releases the target instrument. Documentation runs alongside every step. For the new and revised 2026 General Social Survey items, a Gemini draft replaced the independent human draft translations; the rest of TRAPD, including human review and adjudication, was unchanged.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2c3e50"/></marker></defs>
+<rect x="0.5" y="0.5" width="999" height="559" rx="12" fill="#ffffff" stroke="#dee2e6"/>
+<text x="500" y="30" text-anchor="middle" font-size="15px" font-weight="700" fill="#2c3e50">TRAPD: Translation, Review, Adjudication, Pretesting, and Documentation Model</text>
+
+<g transform="translate(150,0)">
+<g fill="#ffffff" stroke="#2c3e50" stroke-width="1.5">
+<rect x="330" y="60" width="180" height="50" rx="4"/>
+<rect x="210" y="150" width="190" height="46" rx="4" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2.5"/>
+<rect x="440" y="150" width="190" height="46" rx="4" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2.5"/>
+<rect x="320" y="236" width="200" height="40" rx="4"/>
+<path d="M420,312 L510,344 L420,376 L330,344 Z"/>
+<rect x="580" y="326" width="120" height="38" rx="4"/>
+<rect x="330" y="424" width="180" height="50" rx="4"/>
+</g>
+<g font-size="14px" fill="#2c3e50" text-anchor="middle">
+<text x="420" y="82">Source</text><text x="420" y="100">Instrument</text>
+<text x="305" y="178">Translation 1</text>
+<text x="535" y="178">Translation 2</text>
+<text x="420" y="261">Review</text>
+<text x="420" y="349">Adjudication</text>
+<text x="640" y="350">Pretest</text>
+<text x="420" y="446">Target</text><text x="420" y="464">Instrument</text>
+</g>
+
+<g stroke="#2c3e50" stroke-width="2" fill="none">
+<path d="M420,110 L420,130 L305,130 L305,148" marker-end="url(#a)"/>
+<path d="M420,130 L535,130 L535,148" marker-end="url(#a)"/>
+<path d="M305,196 L305,256 L318,256" marker-end="url(#a)"/>
+<path d="M535,196 L535,256 L522,256" marker-end="url(#a)"/>
+<line x1="420" y1="278" x2="420" y2="310" marker-start="url(#a)" marker-end="url(#a)"/>
+<path d="M512,344 L578,344" marker-start="url(#a)" marker-end="url(#a)"/>
+<path d="M418,378 L418,422" marker-end="url(#a)"/>
+<path d="M370,358 L300,358 L300,344 L328,344" marker-end="url(#a)"/>
+</g>
+
+<line x1="800" y1="70" x2="800" y2="470" stroke="#2c3e50" stroke-width="2" marker-start="url(#a)" marker-end="url(#a)"/>
+<text transform="translate(776,270) rotate(-90)" text-anchor="middle" font-size="13px" letter-spacing="6" font-weight="700" fill="#2c3e50">DOCUMENTATION</text>
+
+</g>
+<g font-size="12.5px" fill="#2c3e50">
+<text x="30" y="128" font-weight="700" fill="#0f8f75">2026 GSS (Spanish version):</text>
+<text x="30" y="146">a Gemini draft replaced the</text>
+<text x="30" y="162">independent human draft</text>
+<text x="30" y="178">translations; the rest of TRAPD,</text>
+<text x="30" y="194">including human review and</text>
+<text x="30" y="210">adjudication, was unchanged.</text>
+</g>
+<text x="30" y="530" font-size="13px" font-weight="700" fill="#0f8f75">LLMs are a useful first drafter, but not a substitute for translators.</text>
+</svg>

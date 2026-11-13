@@ -219,7 +219,7 @@ ui <- page_fluid(
     tabPanel(QUESTIONR_TABS[3], mod_prompt_ui("prompt")),
     tabPanel(QUESTIONR_TABS[4], mod_results_ui("results"), mod_again_ui("again")),
     tabPanel(QUESTIONR_TABS[5], mod_output_ui("output")),
-    tabPanel(QUESTIONR_TABS[6], md_page(METHODOLOGY_FILE))))
+    tabPanel(QUESTIONR_TABS[6], md_page(METHODOLOGY_FILE), skill_panels())))
 
 
 # ---- 7. server --------------------------------------------------------------

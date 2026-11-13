@@ -2929,13 +2929,94 @@ ok("a profile with placeholders opens the Settings and connection panel by itsel
      work_open$status == 0 && grepl("<details[^>]*open[^>]*>\\s*<summary>\\s*<strong>Settings and connection", work_open$out)
    }))
 meth_html <- paste(as.character(md_page(METHODOLOGY_FILE)), collapse = "\n")
-ok("the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; skills_table() stays for maintainers",
+ok("the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; skills_table() stays, because tests/review.R reads it",
    md_has_headings(METHODOLOGY_FILE, meth_html) && grepl("<ul>", meth_html, fixed = TRUE) &&
      grepl("36 of the 48 planted faults|It found 36 of the 48 faults", meth_html) && !grepl("<code>", meth_html, fixed = TRUE) &&
      !grepl("The rules, file by file", meth_html, fixed = TRUE) && grepl("Methodology", page$html, fixed = TRUE) &&
      grepl("How QuestionR works and what stands behind it", page$html, fixed = TRUE) &&
      is.data.frame(skills_table()) && nrow(skills_table()) > 80L && !"skills_html" %in% ls(globalenv()) &&
      grepl("could not be shown", paste(as.character(md_page(file.path("www", "no_such_page.md"))), collapse = ""), fixed = TRUE))
+
+# ---- Phase 8c: the frameworks and the skill panels ---------------------------------------------
+
+meth_lines <- readLines(METHODOLOGY_FILE, encoding = "UTF-8", warn = FALSE)
+meth_heads <- sub("^## ", "", grep("^## ", meth_lines, value = TRUE))
+fw_at <- which(meth_lines == "## The frameworks behind the rules")
+fw_end <- min(c(which(grepl("^## ", meth_lines) & seq_along(meth_lines) > fw_at), length(meth_lines) + 1L))
+fw_sections <- split(meth_lines[(fw_at + 1L):(fw_end - 1L)],
+                     cumsum(grepl("^### ", meth_lines[(fw_at + 1L):(fw_end - 1L)])))
+fw_sections <- fw_sections[-1]   # what comes before the first ###: the opening sentence
+ok("the frameworks section comes directly after 'What it is built on', opens with one sentence saying the skills were written from them, and 'How it was tested' is one section with that heading",
+   identical(meth_heads[which(meth_heads == "What it is built on") + 1L], "The frameworks behind the rules") &&
+     grepl("^These frameworks are what the skills were written from, and each skill below",
+           trimws(gsub("\\s+", " ", paste(meth_lines[(fw_at + 1L):(fw_at + 6L)], collapse = " ")))) &&
+     sum(meth_heads == "How it was tested") == 1L)
+ok("each framework is a diagram, then a summary of three to five sentences, then an italic line of references",
+   length(fw_sections) == 6L && purrr::every(fw_sections, function(s) {
+     body = s[-1][nzchar(trimws(s[-1]))]
+     img = grepl("^!\\[.+\\]\\(fw_[a-z]+\\.svg\\)$", body[1])
+     refs = grepl("^\\*[^*]+\\*$", body[length(body)])
+     summary_txt = gsub("\\s+", " ", paste(body[-c(1, length(body))], collapse = " "))
+     n_sentences = length(strsplit(summary_txt, "(?<=[.?!])\\s+", perl = TRUE)[[1]])
+     img && refs && n_sentences >= 3L && n_sentences <= 5L
+   }))
+ok("every .svg in www/ is well-formed XML with a title and a description, and no script",
+   local({
+     svgs = list.files("www", pattern = "\\.svg$", full.names = TRUE)
+     length(svgs) >= 7L && purrr::every(svgs, function(p) {
+       d = tryCatch(xml2::read_xml(p), error = function(e) NULL)
+       !is.null(d) && identical(xml2::xml_name(d), "svg") &&
+         length(xml2::xml_find_all(d, "//*[local-name()='title']")) == 1L &&
+         length(xml2::xml_find_all(d, "//*[local-name()='desc']")) == 1L &&
+         length(xml2::xml_find_all(d, "//*[local-name()='script']")) == 0L
+     })
+   }))
+ok("every image named in start.md and methodology.md exists in www/",
+   local({
+     imgs = unlist(purrr::map(c(START_FILE, METHODOLOGY_FILE), function(p) {
+       txt = paste(readLines(p, encoding = "UTF-8", warn = FALSE), collapse = "\n")
+       sub("\\)$", "", sub("^!\\[[^]]*\\]\\(", "", regmatches(txt, gregexpr("!\\[[^]]*\\]\\([^)]+\\)", txt))[[1]]))
+     }))
+     length(imgs) >= 7L && all(file.exists(file.path("www", imgs)))
+   }))
+
+# The Frameworks column of the skills table: which of the six frameworks a skill file's Source lines
+#   name, by the rule below; none of them is "Session guidelines".
+fw_rules <- c("Total Survey Error" = "Groves|Total Survey Error",
+              "Response model" = "Tourangeau, Rips and Rasinski|response-process|response process|four-stage",
+              "Construct and decomposition" = "specification and operationalization error|Fig\\. 1\\.1",
+              "Testing methods" = "testing methods|cognitive interviews",
+              "TRAPD" = "TRAPD",
+              "Sensitive questions" = "Tourangeau and Yan|Yan 2021|writing sensitive questions|[(]sensitive questions")
+fw_of <- function(file) {
+  src = sub("^- \\*\\*Source:\\*\\*[ \\t]*", "", grep("^- \\*\\*Source:\\*\\*", readLines(file.path("www", "skills", file), encoding = "UTF-8", warn = FALSE), value = TRUE))
+  hit = names(fw_rules)[vapply(fw_rules, function(p) any(grepl(p, src)), NA)]
+  if (length(hit)) paste(hit, collapse = "; ") else "Session guidelines"
+}
+ok("the Frameworks column of the skills table is what each file's Source lines name, in the order of the panels",
+   local({
+     rows = grep("^\\| ", meth_lines, value = TRUE)
+     rows = rows[-1]   # the header
+     cells = purrr::map_chr(rows, function(r) trimws(utils::tail(strsplit(r, "|", fixed = TRUE)[[1]], 1)))
+     length(cells) == length(SKILL_PANEL_ORDER) &&
+       identical(cells, unname(purrr::map_chr(SKILL_PANEL_ORDER, fw_of)))
+   }))
+
+meth_panels <- paste(as.character(skill_panels()), collapse = "\n")
+ok("under the Methodology page, one closed panel for each skill file, in the order of the table, titled with the file's heading and version, holding the file as markdown without its comments, and not the README",
+   local({
+     heads = gsub("\\s+", " ", regmatches(meth_panels, gregexpr("<summary>\\s*<strong>[^<]+</strong>\\s*</summary>", meth_panels))[[1]])
+     want = purrr::map_chr(SKILL_PANEL_ORDER, function(f) { s = read_skill(f); paste0("<summary> <strong>", s$title, ", version ", s$version, "</strong> </summary>") })
+     comments = unlist(purrr::map(SKILL_PANEL_ORDER, function(f) regmatches(paste(readLines(file.path(SKILLS_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"),
+                                                                           gregexpr("(?s)<!--.*?-->", paste(readLines(file.path(SKILLS_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"), perl = TRUE))[[1]]))
+     identical(heads, want) && length(gregexpr("<details", meth_panels, fixed = TRUE)[[1]]) == 10L &&
+       !grepl("<details[^>]*open", meth_panels) && !grepl("<!--", meth_panels, fixed = TRUE) &&
+       grepl("construct_first", meth_panels, fixed = TRUE) && grepl("You are a senior survey methodologist", meth_panels, fixed = TRUE) &&
+       !any(purrr::map_lgl(trimws(gsub("<!--|-->", "", comments)), function(cm) grepl(substr(gsub("\\s+", " ", cm), 1, 60), gsub("\\s+", " ", meth_panels), fixed = TRUE))) &&
+       !grepl("QuestionR skills", meth_panels, fixed = TRUE) &&
+       grepl("could not be shown", paste(as.character(skill_panels(file.path("www", "no_such_dir"))), collapse = ""), fixed = TRUE) &&
+       any(grepl("skill_panels()", readLines("app.R", warn = FALSE), fixed = TRUE))
+   }))
 
 
 # ---- Phase 6c: Start here says what is in force; the notices ---------------------------------

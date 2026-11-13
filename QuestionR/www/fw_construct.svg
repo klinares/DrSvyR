@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1170" role="img" aria-labelledby="t d" font-family="Lato, 'Segoe UI', system-ui, -apple-system, sans-serif">
+<title id="t">From construct to question</title>
+<desc id="d">Three parts. First, three ways a question fails, shown with the question "Last week, did you work full-time, part-time, or did you not work at all?": measuring the wrong concept (specification error), measuring the right concept imperfectly (operationalization error), and measuring the right concept perfectly but the respondent's response differing from the respondent's true value (response error); specification and operationalization error together are validity. Second, decomposition: from a theoretical construct, nonfatal victimization, through dimensions and sub-dimensions to indicators, moving from abstract, multidimensional concepts to specific, single-dimensioned domains. Third, errors from conceptualization to operationalization to analysis: in the theoretical world, theory, concepts and attributes, with specification errors between concepts and attributes; in the empirical world, question or questions, questionnaire, response and data file, with operationalization errors, measurement and non-response errors, and processing errors between them; the operational definition links attributes to questions, and the data file feeds back to theory.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2c3e50"/></marker></defs>
+<rect x="0.5" y="0.5" width="999" height="1169" rx="12" fill="#ffffff" stroke="#dee2e6"/>
+
+<!-- (i) three ways a question fails -->
+<text x="500" y="30" text-anchor="middle" font-size="15px" font-weight="700" fill="#2c3e50">The goal of questionnaire design is to reduce measurement error</text>
+<g>
+<rect x="30" y="50" width="300" height="250" rx="10" fill="#f8f9fa" stroke="#ced4da" stroke-width="1.5"/>
+<rect x="350" y="50" width="300" height="250" rx="10" fill="#f8f9fa" stroke="#ced4da" stroke-width="1.5"/>
+<rect x="670" y="50" width="300" height="250" rx="10" fill="#f8f9fa" stroke="#ced4da" stroke-width="1.5"/>
+</g>
+<g font-size="14px" font-weight="700" fill="#0f8f75" text-anchor="middle">
+<text x="180" y="78">Measure the wrong concept</text>
+<text x="180" y="98">(specification error)</text>
+<text x="500" y="78">Measure the right concept imperfectly</text>
+<text x="500" y="98">(operationalization error)</text>
+<text x="820" y="78">Measure the right concept "perfectly",</text>
+<text x="820" y="98">but R's response &lt;&gt; R's true value</text>
+<text x="820" y="118">(response error)</text>
+</g>
+<g font-size="13px" font-weight="700" fill="#2c3e50" text-anchor="middle">
+<text x="180" y="156">Last week, did you work full-time,</text>
+<text x="180" y="174">part-time, or did you not work at all?</text>
+<text x="180" y="208" font-weight="400">Yes, full-time</text>
+<text x="180" y="230" font-weight="400">Yes, part-time</text>
+<text x="180" y="252" font-weight="400">No</text>
+<text x="500" y="156">Last week, did you work full-time,</text>
+<text x="500" y="174">part-time, or did you not work at all?</text>
+<text x="500" y="208" font-weight="400">Yes, full-time</text>
+<text x="500" y="230" font-weight="400">Yes, part-time</text>
+<text x="500" y="252" font-weight="400">No</text>
+<text x="820" y="156">Last week, did you work full-time,</text>
+<text x="820" y="174">part-time, or did you not work at all?</text>
+<text x="820" y="208" font-weight="400">Yes, full-time</text>
+<text x="820" y="230" font-weight="400">Yes, part-time</text>
+<text x="820" y="252" font-weight="400">No (-&gt;What is the reason you</text>
+<text x="820" y="270" font-weight="400">didn't work at all last week?)</text>
+</g>
+<path d="M30,312 L30,320 L650,320 L650,312 M340,320 L340,334" fill="none" stroke="#18bc9c" stroke-width="2"/>
+<rect x="290" y="336" width="100" height="28" rx="4" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2"/>
+<text x="340" y="355" text-anchor="middle" font-size="13.5px" font-weight="700" fill="#2c3e50">Validity</text>
+
+<line x1="30" y1="384" x2="970" y2="384" stroke="#dee2e6"/>
+
+<!-- (ii) decomposition -->
+<text x="500" y="414" text-anchor="middle" font-size="15px" font-weight="700" fill="#2c3e50">Decomposition: from abstract, multidimensional concepts to specific, single-dimensioned domains</text>
+<g font-size="12.5px" font-weight="700" fill="#5a6a6b">
+<text x="24" y="470">Theoretical Construct</text>
+<text x="24" y="540">Dimensions</text>
+<text x="24" y="610">Sub-dimensions</text>
+<text x="24" y="680">Indicators</text>
+</g>
+<g fill="#e9ecef" stroke="#2c3e50" stroke-width="1.5">
+<rect x="635" y="440" width="170" height="50" rx="3"/>
+<rect x="465" y="510" width="190" height="50" rx="3"/>
+<rect x="785" y="510" width="190" height="50" rx="3"/>
+<rect x="205" y="580" width="130" height="50" rx="3"/>
+<rect x="350" y="580" width="130" height="50" rx="3"/>
+<rect x="495" y="580" width="130" height="50" rx="3"/>
+<rect x="640" y="580" width="130" height="50" rx="3"/>
+<rect x="785" y="580" width="130" height="50" rx="3"/>
+<rect x="165" y="650" width="100" height="46" rx="3"/>
+<rect x="275" y="650" width="120" height="46" rx="3"/>
+</g>
+<g font-size="13px" font-weight="700" fill="#2c3e50" text-anchor="middle">
+<text x="720" y="461">Nonfatal</text><text x="720" y="479">Victimization</text>
+<text x="560" y="531">Nonfatal</text><text x="560" y="549">Personal Crimes</text>
+<text x="880" y="531">Nonfatal</text><text x="880" y="549">Property Crimes</text>
+<text x="270" y="601">Simple</text><text x="270" y="619">Assault</text>
+<text x="415" y="601">Aggravated</text><text x="415" y="619">Assault</text>
+<text x="560" y="601">Rape/Sexual</text><text x="560" y="619">Assault</text>
+<text x="705" y="615">Robbery</text>
+<text x="850" y="601">Personal</text><text x="850" y="619">Larceny</text>
+<text x="215" y="677">Threat</text>
+<text x="335" y="668">Physical</text><text x="335" y="686">Contact</text>
+</g>
+<g stroke="#2c3e50" stroke-width="1.5" fill="none">
+<path d="M720,490 L720,500 M560,500 L880,500 M560,500 L560,508 M880,500 L880,508" marker-end="url(#a)"/>
+<path d="M560,560 L560,570 M270,570 L850,570 M270,570 L270,578 M415,570 L415,578 M560,570 L560,578 M705,570 L705,578 M850,570 L850,578" marker-end="url(#a)"/>
+<path d="M270,630 L270,640 M215,640 L335,640 M215,640 L215,648 M335,640 L335,648" marker-end="url(#a)"/>
+</g>
+<text x="985" y="712" text-anchor="end" font-size="11px" font-weight="400" fill="#5a6a6b" font-style="italic">Peytcheva and Yan (2025): Figure 1.1</text>
+
+<line x1="30" y1="732" x2="970" y2="732" stroke="#dee2e6"/>
+
+<!-- (iii) errors from conceptualization to operationalization to analysis -->
+<text x="500" y="762" text-anchor="middle" font-size="15px" font-weight="700" fill="#2c3e50">Errors from conceptualization to operationalization to analysis</text>
+<rect x="40" y="784" width="360" height="346" fill="none" stroke="#2c3e50" stroke-width="1.5" stroke-dasharray="7 5"/>
+<rect x="520" y="784" width="440" height="346" fill="none" stroke="#2c3e50" stroke-width="1.5" stroke-dasharray="7 5"/>
+<g font-size="14px" font-weight="700" fill="#2c3e50" text-anchor="middle">
+<text x="220" y="812">Theoretical world:</text>
+<text x="220" y="831">Conceptualization</text>
+<text x="740" y="812">Empirical world:</text>
+<text x="740" y="831">Operationalization and</text>
+<text x="740" y="850">survey measurement</text>
+</g>
+<g fill="#ffffff" stroke="#2c3e50" stroke-width="1.5">
+<rect x="140" y="870" width="160" height="36" rx="2"/>
+<rect x="140" y="968" width="160" height="36" rx="2"/>
+<rect x="140" y="1068" width="160" height="36" rx="2"/>
+<rect x="655" y="870" width="170" height="36" rx="2"/>
+<rect x="655" y="935" width="170" height="36" rx="2"/>
+<rect x="655" y="1000" width="170" height="36" rx="2"/>
+<rect x="655" y="1068" width="170" height="36" rx="2"/>
+</g>
+<g font-size="14px" font-weight="700" fill="#2c3e50" text-anchor="middle">
+<text x="220" y="893">Theory</text>
+<text x="220" y="991">Concepts</text>
+<text x="220" y="1091">Attributes</text>
+<text x="740" y="893">Data file</text>
+<text x="740" y="958">Response</text>
+<text x="740" y="1023">Questionnaire</text>
+<text x="740" y="1091">Question(s)</text>
+</g>
+<g stroke="#2c3e50" stroke-width="1.5" fill="none">
+<line x1="655" y1="888" x2="302" y2="888" marker-end="url(#a)"/>
+<line x1="220" y1="906" x2="220" y2="968"/>
+<line x1="220" y1="1004" x2="220" y2="1068"/>
+<line x1="740" y1="1067" x2="740" y2="1038" marker-end="url(#a)"/>
+<line x1="740" y1="999" x2="740" y2="973" marker-end="url(#a)"/>
+<line x1="740" y1="934" x2="740" y2="908" marker-end="url(#a)"/>
+<line x1="302" y1="1086" x2="653" y2="1086" marker-end="url(#a)"/>
+</g>
+<g fill="#e9ecef">
+<rect x="235" y="1026" width="150" height="24" rx="2"/>
+<rect x="612" y="911" width="124" height="22" rx="2"/>
+<rect x="505" y="976" width="231" height="22" rx="2"/>
+<rect x="576" y="1041" width="160" height="22" rx="2"/>
+</g>
+<g font-size="12.5px" fill="#2c3e50" text-anchor="middle">
+<text x="310" y="1042">Specification errors</text>
+<text x="674" y="926">Processing errors</text>
+<text x="620" y="991">Measurement &amp; Non-response errors</text>
+<text x="656" y="1056">Operationalization errors</text>
+<text x="478" y="1106" font-weight="700">Operational definition</text>
+</g>
+<text x="985" y="1158" text-anchor="end" font-size="11px" font-weight="400" fill="#5a6a6b" font-style="italic">Willimack and Snijkers (2012)</text>
+</svg>

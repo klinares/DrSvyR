@@ -42,6 +42,27 @@ md_page <- function(path)
       warn_box(tags$strong(paste0("The page ", basename(path), " could not be shown. ")), substr(conditionMessage(e), 1, 400)))
 
 
+# The skill files in the order of the table on the Methodology page.
+SKILL_PANEL_ORDER <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md", "sensitive.md",
+                       "mode.md", "cross_cultural.md", "evaluate.md", "pm_brief.md", "pm_appraise.md")
+
+# One closed panel for each skill file, under the Methodology page: the file's title and version, and
+#   on opening the file as markdown with its HTML comments removed. It is read by read_skill(), the
+#   one reader of the skill files (so the page and the prompts cannot read them differently); the
+#   README of the folder is for maintainers and is not drawn. A file that cannot be read is said so
+#   in words, as md_page() does.
+skill_panels <- function(dir = SKILLS_DIR)
+  tryCatch(
+    tags$div(class = "qr-note", purrr::map(SKILL_PANEL_ORDER, function(f) {
+      s = read_skill(f, dir)
+      tags$details(class = "mb-2",
+                   tags$summary(tags$strong(paste0(s$title, ", version ", s$version))),
+                   HTML(shiny::markdown(s$text)))
+    })),
+    error = function(e)
+      warn_box(tags$strong("The skill files could not be shown. "), substr(conditionMessage(e), 1, 400)))
+
+
 # ---- a document as blocks, drawn twice ------------------------------------------------------
 
 # An output is a list of blocks, so the HTML for Word and the plain text can never say

@@ -167,8 +167,9 @@ parse_reflex <- function(block, file) {
 }
 
 # One skill file, parsed: title, version, sha (line endings normalised, as
-#   tests/review.R computes it), persona (core.md only), guidelines (heading and
-#   bullets, or NULL), reflexes by id, prohibitions, and the output format as written.
+#   tests/review.R computes it), text (the file with its HTML comments removed, for the
+#   Methodology tab), persona (core.md only), guidelines (heading and bullets, or NULL),
+#   reflexes by id, prohibitions, and the output format as written.
 parse_skill <- function(path) {
   file = basename(path)
   if (!file.exists(path))
@@ -257,7 +258,7 @@ parse_skill <- function(path) {
 
   list(file = file, title = trimws(title),
        version = trimws(sub("^Version:", "", ver[1])), sha = sha,
-       persona = persona, guidelines = guidelines, reflexes = purrr::set_names(reflexes, ids),
+       text = txt, persona = persona, guidelines = guidelines, reflexes = purrr::set_names(reflexes, ids),
        prohibitions = trimws(sub("^- ", "", pr)), output_format = of)
 }
 
