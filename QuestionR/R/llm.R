@@ -611,13 +611,14 @@ llm_ping <- function(m, key = NULL, complete = llm_complete) {
 # On Start here, because the brief check, the appraisal and the Evaluate task all
 #   need a key.
 
-# WHERE TO GET A KEY -- replace the placeholder text below with the real
-#   instructions for your deployment before handing this to anyone.
+# WHERE TO GET A KEY -- what Start here tells an analyst under "Where to get one". General
+#   wording that holds anywhere; replace it with your deployment's own (the page to open, who
+#   to ask) when you have it.
 KEY_INSTRUCTIONS <- list(
-  where = "TODO: name the provider and the page to open, e.g. 'Sign in at <URL> and open Settings -> Keys'.",
-  create = "TODO: how to create a key, and which permissions or spending limit to set.",
-  models = "TODO: which models the key must be able to reach, and anything to enable first.",
-  cost   = "TODO: who pays, and what to do when the quota runs out.")
+  where = "Ask the person who manages the AI service for your office for a key.",
+  create = "Use a key issued to you, not one shared by a team, so that use can be traced to the person who made it.",
+  models = "The key must be able to reach every model listed under Settings and connection below. Check connections there before you start.",
+  cost   = "If a request is refused for quota or cost, stop and ask the person who issued the key; do not borrow someone else's.")
 
 mod_key_ui <- function(id) {
   ns <- NS(id)

@@ -69,6 +69,12 @@ ok("the logo shows, or its placeholder box does",
    else has("Office logo"))
 ok("every tab is in the navlist", all(purrr::map_lgl(QUESTIONR_TABS, has)))
 ok("the key box is on Start here", has("Use this key") && has("type=\"password\""))
+ok("the key box says where to get a key in the four sentences the design gives, and no TODO text shows anywhere on the page",
+   identical(unname(unlist(KEY_INSTRUCTIONS)), c("Ask the person who manages the AI service for your office for a key.",
+     "Use a key issued to you, not one shared by a team, so that use can be traced to the person who made it.",
+     "The key must be able to reach every model listed under Settings and connection below. Check connections there before you start.",
+     "If a request is refused for quota or cost, stop and ask the person who issued the key; do not borrow someone else's.")) &&
+     all(purrr::map_lgl(unname(unlist(KEY_INSTRUCTIONS)), function(x) has(htmltools::htmlEscape(x)))) && !has("TODO"))
 # Phase 3 built tabs 1 to 3, 5c the Output tab and 5d the Methodology tab: none is a placeholder now.
 ok("no tab is a placeholder any more; Start here and the Methodology tab are their markdown files, and the rules table is not drawn",
    !grepl("Not built yet", page$html, fixed = TRUE) && grepl("What this tool does", page$html, fixed = TRUE) &&
@@ -2920,9 +2926,9 @@ ok("Start here is www/start.md as it is, then the key box, then a closed Setting
      grepl("Paste your API key below.", start_html, fixed = TRUE) &&
      regexpr("What this tool does", start_html, fixed = TRUE) < regexpr("Paste your API key below.", start_html, fixed = TRUE) &&
      regexpr("Paste your API key below.", start_html, fixed = TRUE) < regexpr("Use this key", start_html, fixed = TRUE) &&
-     regexpr("Use this key", start_html, fixed = TRUE) < regexpr("Settings and connection", start_html, fixed = TRUE) &&
-     regexpr("Settings and connection", start_html, fixed = TRUE) < regexpr("This is a pilot", start_html, fixed = TRUE) &&
-     regexpr("This is a pilot", start_html, fixed = TRUE) < regexpr("Check connections", start_html, fixed = TRUE) &&
+     regexpr("Use this key", start_html, fixed = TRUE) < regexpr("<summary>\\s*<strong>Settings and connection", start_html) &&
+     regexpr("<summary>\\s*<strong>Settings and connection", start_html) < regexpr("This is a pilot", start_html, fixed = TRUE) &&
+     regexpr("This is a pilot", start_html, fixed = TRUE) < regexpr("id=\"connect-check\"", start_html, fixed = TRUE) &&
      grepl("<details[^>]*>\\s*<summary>\\s*<strong>Settings and connection", start_html) &&
      !grepl("<details[^>]*open[^>]*>\\s*<summary>\\s*<strong>Settings and connection", start_html) &&
      grepl("id=\"connect-models\"", start_html, fixed = TRUE) &&

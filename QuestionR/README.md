@@ -85,8 +85,9 @@ instead.
 5. **Logo and banner.** Put the logo in `www/logo/` and set `APP_LOGO` (the file name) and, if
    you want a name beside it, `APP_OFFICE`. Set `APP_CLASSIFICATION` to the marking that
    belongs above every screen.
-6. **Say where to get a key.** `KEY_INSTRUCTIONS` in `R/llm.R` is four lines of `TODO` text that
-   Start here shows under "Where to get one". Replace them with your own instructions.
+6. **Say where to get a key.** `KEY_INSTRUCTIONS` in `R/llm.R` is four lines of general wording
+   that Start here shows under "Where to get one" (ask the person who manages the AI service for
+   your office; use a key issued to you). Replace them with your own instructions if you have them.
 7. **Start the app** (`shiny::runApp("QuestionR")`). While anything in angle brackets is left,
    Start here lists the entries still to fill in and does not call that model.
 8. **Paste the key** on Start here and press **Check connections**. It makes one very small call
