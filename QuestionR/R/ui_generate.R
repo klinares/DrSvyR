@@ -14,11 +14,12 @@
 #   from these. key_version changes whenever the pasted key is saved or forgotten.
 #   form is the cleaned form the Brief tab handed on; approved is the prompt the
 #   analyst approved (edited or not); run_id changes to start a run; the rest is
-#   what the last run returned. kept is the items the analyst ticked.
+#   what the last run returned. set is the items in the recommended set as the analyst has it
+#   (set_entry() in output.R) and edits what the analyst changed in them, by entry.
 STATE_DEFAULTS <- list(
   key_version = 0L, form = NULL, workers = NULL, brief = NULL, approved = NULL,
   run_id = 0L, round = 0L, drafts = NULL, appraisal = NULL, review = NULL, seed = NULL,
-  kept = list(), revision = "", rounds = list())
+  set = list(), edits = list(), revision = "", rounds = list())
 
 # A task's kind, from a form. A form with no usable task counts as a drafting one,
 #   so a run that cannot start fails in the engine, with its reason, as any other.
@@ -458,124 +459,116 @@ banded_list <- function(entries, draw, noun, none_text) {
 fail_list <- function(fails, checklist, none_text)
   banded_list(fails, function(f) fail_entry(f, checklist), "fail", none_text)
 
-# What the appraiser said an item failed, with its words, and the check's question
-#   from the checklist that was sent. An item the appraiser gave no entry is not
-#   a pass: it says so.
-fails_block <- function(fails, checklist, appraised, appraisal_ok) {
-  if (!appraisal_ok)
-    return(tags$p(class = "text-muted small", "Not appraised: the appraisal did not come back."))
-  if (!appraised)
-    return(tags$p(class = "text-warning small", "Not appraised: the appraiser gave this item no entry."))
-  fail_list(fails, checklist, "No failed check rated 5 or above.")
-}
+# A button that sets one input of the Results module to a value when it is pressed. A plain
+#   button and one observer for all of them, so the number of items does not matter.
+set_button <- function(label, input, value, ns, class = "btn btn-sm btn-primary")
+  tags$button(type = "button", class = class,
+              onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'})", ns(input), value),
+              label)
 
-# The fails about a candidate's set of items as a whole (keying, coverage, order),
-#   which count against no single item.
-set_fails_block <- function(set_fails, letter, checklist) {
-  mine = purrr::keep(set_fails, function(f) identical(f$candidate, letter))
-  if (!length(mine)) return(NULL)
-  tagList(tags$h6(paste0("Across candidate ", letter, "'s whole set")),
-          fail_list(mine, checklist, "No set-level fail rated 5 or above."))
-}
+# The text of one option or part: what the page shows and edits.
+option_text <- function(o) paste(unlist(o), collapse = " ")
 
-# The input id of the tick box for item `position` of candidate `letter`.
-keep_input <- function(letter, position) paste0("keep_", letter, "_", position)
-
-item_card <- function(it, letter, position, ns, checklist, chk, appraisal_ok, language) {
+# One item of the set, each stem, option and part in a plain text box so it can be edited in
+#   place; boxes are named by edit_input_id() and what they hold is read by edits_from_inputs().
+#   ed is what the analyst changed before (output.R), so the boxes can be drawn again as they
+#   were left. Under it: the reviewer's reason, what it still doubts in the three bands, and
+#   its suggestion if any, which is a suggestion and not a new item.
+set_card <- function(e, it, model, ns, checklist, ed = NULL) {
+  box = function(id, value, label = NULL) textInput(ns(id), label, value = value, width = "100%")
+  options_boxes = function(prefix, opts, now)
+    purrr::imap(purrr::map_chr(opts, option_text), function(o, j)
+      box(edit_input_id(e$uid, prefix, paste0("o", j)), now[[as.character(j)]] %||% o))
   it = full_item(it)
-  defaults = code_defaults(it, language)
-  fails = purrr::keep(chk$fails %||% list(), function(f) identical(f$candidate, letter) && identical(f$id, it$id))
-  appraised = !paste(letter, it$id, sep = "|") %in% chk$not_appraised
   tags$div(
     class = "card mb-2",
     tags$div(
       class = "card-body py-2",
-      tags$div(tags$strong(it$id), tags$span(class = "text-muted", " · ", it$domain)),
+      tags$div(tags$strong(it$id), tags$span(class = "text-muted", " · ", e$domain, " · candidate ", e$candidate,
+                                             ", written by ", model),
+               if (isTRUE(e$swapped)) tags$span(class = "badge text-bg-info ms-1", "swapped in by you"),
+               if (!is.null(ed)) tags$span(class = "badge text-bg-secondary ms-1", "edited")),
+      if (nzchar(e$why)) tags$p(class = "text-muted small mb-1", paste0("Why this one: ", e$why)),
       if (nzchar(it$intro)) tags$p(class = "mb-1", tags$em(it$intro)),
-      tags$p(class = "mb-1", tags$strong(it$stem)),
-      options_list(it$options, it$open_format),
-      parts_block(it$parts),
+      box(edit_input_id(e$uid, "stem"), ed$stem %||% it$stem),
+      if (length(it$options)) options_boxes(NULL, it$options, ed$options %||% list())
+      else tags$p(class = "text-muted mb-1", paste0("[Open question",
+                                                    if (nzchar(it$open_format)) paste0(": ", it$open_format), "]")),
+      purrr::imap(it$parts, function(p, i)
+        tags$div(style = "margin-left:1.25rem; padding-left:0.75rem; border-left:3px solid var(--bs-border-color);",
+                 tags$div(class = "text-muted small", paste0("Part, asked ", p$when %||% "", ":")),
+                 box(edit_input_id(e$uid, paste0("p", i), "stem"), ed$parts[[as.character(i)]]$stem %||% p$stem %||% ""),
+                 options_boxes(paste0("p", i), p$options %||% list(), ed$parts[[as.character(i)]]$options %||% list()))),
       if (nzchar(it$programming)) tags$p(class = "text-muted small mb-1", paste0("[", it$programming, "]")),
-      if (identical(defaults$decisions, "not itemised"))
-        tags$p(class = "mb-1", tags$span(class = "badge text-bg-warning", "decisions not itemised"),
-               tags$span(class = "text-muted small", " The model wrote its design decisions as one string.")),
-      tags$details(tags$summary(class = "small", "Coded defaults (by R, from the item as written)"),
-                   defaults_table(defaults)),
-      fails_block(fails, checklist, appraised, appraisal_ok),
-      checkboxInput(ns(keep_input(letter, position)), "Keep this item", value = FALSE)))
+      tags$h6(class = "mt-2 mb-0", "What the reviewer still doubts"),
+      fail_list(e$concerns, checklist, "Nothing rated 5 or above."),
+      if (nzchar(e$suggestion)) tags$p(class = "mb-1", tags$em("A suggested change, untested: "), e$suggestion),
+      set_button("Remove from the set", "remove", e$uid, ns, "btn btn-sm btn-outline-secondary")))
 }
 
-candidate_panel <- function(letter, model, reply, ns, checklist, chk, appraisal_ok, language) {
-  items = unname(reply$items)
+# The recommended set, as the analyst has it now, then the reviewer's notes on the set as a whole.
+#   chk is check_appraisal() (NULL when the reviewer did not come back), reply its parsed reply.
+set_panel <- function(set, cands, labels, ns, checklist, edits, chk, reply) {
+  items = purrr::map(set, function(e) {
+    it = unname(cands[[e$candidate]]$items)[[e$position]]
+    set_card(e, it, labels[[e$candidate]], ns, checklist, edits[[e$uid]])
+  })
   tagList(
-    tags$h5(paste("Candidate", letter), tags$span(class = "text-muted small", " written by ", tags$code(model))),
-    purrr::imap(items, function(it, i)
-      item_card(it, letter, i, ns, checklist, chk, appraisal_ok, language)),
-    if (appraisal_ok) set_fails_block(chk$set_fails, letter, checklist),
-    if (length(reply$not_covered))
-      tags$p(class = "text-muted small", "Domains this candidate left out: ",
-             paste(purrr::map_chr(reply$not_covered, function(d) paste(unlist(d), collapse = " ")), collapse = "; ")),
-    if (length(reply$missing_from_brief))
-      tags$p(class = "text-muted small", "What it said the brief did not give: ",
-             paste(purrr::map_chr(reply$missing_from_brief, function(d) paste(unlist(d), collapse = " ")), collapse = "; ")))
-}
-
-# The text of one item of one candidate, found by letter and id, as drafted.
-find_item <- function(cands, letter, id) {
-  hits = purrr::keep(unname(cands[[letter]]$items), function(it) identical(it$id, id))
-  if (length(hits)) hits[[1]]
-}
-
-# Everything below the candidates: the coverage the appraiser reported, how the
-#   candidates differ, the merged option built from items copied from the
-#   candidates (R shows the candidates' own words, not the appraiser's), what to
-#   test first, and what R found wrong with the appraisal itself.
-appraisal_panel <- function(reply, chk, cands, language) {
-  label = function(x) paste(unlist(x), collapse = " ")
-  merged = reply$merged %||% list()
-  tagList(
-    tags$h4("The appraisal, across the candidates"),
-    advice_box("An expert-review appraisal by a language model against a fixed checklist. ",
-               "It compares; it does not choose, and nothing here is validated. It cannot show ",
-               "how respondents will understand or answer. The appraiser saw the candidates ",
-               "as A, B and C, without knowing which model wrote which."),
-    if (length(chk$unknown_checks) || length(chk$unknown_items) || length(chk$merged_problems))
-      warn_box(tags$strong("R's checks on the appraisal found: "), tags$ul(class = "mb-0", c(
-        purrr::map(chk$unknown_checks, function(x) tags$li("It cited '", x, "', which is not a check that was sent.")),
-        purrr::map(chk$unknown_items, function(x) tags$li("It gave an entry for ", x, ", which is no candidate's item.")),
-        purrr::map(chk$merged_problems, tags$li)))),
-    if (length(reply$coverage)) tagList(
-      tags$h5("Coverage by domain"),
-      tags$table(class = "table table-sm",
-                 tags$thead(tags$tr(tags$th("Domain"), tags$th("Covered by"), tags$th("Items with no fail rated 5 or above"))),
-                 tags$tbody(purrr::map(reply$coverage, function(r)
-                   tags$tr(tags$td(label(r$domain)), tags$td(label(r$covered_by)),
-                           tags$td(if (length(r$clean_items))
-                             paste(purrr::map_chr(r$clean_items, label), collapse = "; ") else "none")))))),
-    if (length(reply$differences)) tagList(
-      tags$h5("How the candidates differ"),
-      tags$ul(purrr::map(reply$differences, function(d) tags$li(label(d))))),
-    tags$h5("Merged option"),
-    tags$p(class = "text-muted small",
-           "A fourth option, untested like the others. Each item is copied word for word from the ",
-           "candidate named, and only from items with no fail rated 5 or above."),
-    if (!length(merged)) tags$p("The appraiser offered no merged option.")
-    else purrr::map(merged, function(m) {
-      it = if (nzchar(m$candidate %||% "") && nzchar(m$id %||% "")) find_item(cands, m$candidate, m$id)
-      if (is.null(it))
-        tags$p(class = "text-muted",
-               paste0(label(m$domain), ": no candidate item is free of a fail rated 5 or above."))
-      else tags$div(class = "card mb-2", tags$div(
-        class = "card-body py-2",
-        tags$div(class = "text-muted small", paste0(label(m$domain), " · from candidate ", m$candidate)),
-        tags$p(class = "mb-1", tags$strong(it$stem)), options_list(it$options, it$open_format %||% "")))
-    }),
+    tags$h4("The recommended set"),
+    advice_box("An expert-review appraisal by a language model against a fixed checklist: one item for each ",
+               "domain, chosen from the drafts and copied exactly as a worker wrote it. It cannot show how ",
+               "respondents will understand or answer, and nothing here is validated. Change anything in the ",
+               "boxes, take an item out, or put one from the drafts below in its place."),
+    if (!length(set)) tags$p("The set is empty. Open the drafts below and use an item from one.") else items,
+    if (length(chk$not_covered)) tags$p(class = "text-muted small",
+                                        paste0("No draft item was good enough to recommend for: ", paste(chk$not_covered, collapse = "; "))),
+    if (length(chk$set_notes)) tagList(tags$h5("About the set as a whole"),
+                                       fail_list(chk$set_notes, checklist, "Nothing rated 5 or above.")),
     if (length(reply$test_first)) tagList(
       tags$h5("What to test first"),
       tags$ul(purrr::map(reply$test_first, function(t)
-        tags$li(paste0("Candidate ", t$candidate %||% "?", ", item ", t$id %||% "?", ": ", label(t$method)))))),
-    if (nzchar(label(reply$limits))) tags$p(tags$em(label(reply$limits))))
+        tags$li(paste0("Item ", paste(unlist(t$id %||% "?"), collapse = " "), ": ", paste(unlist(t$method), collapse = " ")))))),
+    if (nzchar(paste(unlist(reply$limits), collapse = " ")))
+      tags$p(tags$em(paste(unlist(reply$limits), collapse = " "))))
 }
+
+# Every draft, a candidate at a time, closed until asked for. Each item has a button that puts it
+#   in the set: in place of the item chosen in the box at the top, or at the end of the set. The
+#   coded defaults are here, beside the draft they describe.
+drafts_panel <- function(cands, labels, set, ns, language, open) {
+  targets = c("at the end of the set" = "",
+              purrr::set_names(purrr::map_chr(set, "uid"),
+                               purrr::imap_chr(set, function(e, i) paste0("in place of item ", i, " (", e$id, ")"))))
+  tags$details(
+    id = ns("drafts"), open = if (isTRUE(open)) NA,
+    ontoggle = sprintf("Shiny.setInputValue('%s', this.open)", ns("drafts_open")),
+    tags$summary(paste0("See all drafts (", length(cands), if (length(cands) == 1L) " candidate)" else " candidates)")),
+    selectInput(ns("swap_target"), "An item you use from a draft goes", choices = targets, width = "100%"),
+    purrr::imap(cands, function(reply, letter)
+      tagList(
+        tags$h5(paste("Candidate", letter), tags$span(class = "text-muted small", " written by ", tags$code(labels[[letter]]))),
+        purrr::imap(unname(reply$items), function(it, i) {
+          it = full_item(it)
+          tags$div(
+            class = "card mb-2",
+            tags$div(
+              class = "card-body py-2",
+              tags$div(tags$strong(it$id), tags$span(class = "text-muted", " · ", it$domain)),
+              if (nzchar(it$intro)) tags$p(class = "mb-1", tags$em(it$intro)),
+              tags$p(class = "mb-1", tags$strong(it$stem)),
+              options_list(it$options, it$open_format),
+              parts_block(it$parts),
+              if (nzchar(it$programming)) tags$p(class = "text-muted small mb-1", paste0("[", it$programming, "]")),
+              if (identical(code_defaults(it, language)$decisions, "not itemised"))
+                tags$p(class = "mb-1", tags$span(class = "badge text-bg-warning", "decisions not itemised"),
+                       tags$span(class = "text-muted small", " The model wrote its design decisions as one string.")),
+              tags$details(tags$summary(class = "small", "Coded defaults (by R, from the item as written)"),
+                           defaults_table(code_defaults(it, language))),
+              if (!paste0(letter, "_", i) %in% purrr::map_chr(set, "uid"))
+                set_button("Use this instead", "swap", paste0(letter, "_", i), ns)))
+        }))))
+}
+
 
 # ---- Results for a review (the Evaluate task) ------------------------------------------------
 
@@ -755,7 +748,10 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       state$appraisal <- out$appraisal
       state$review <- out$review
       state$seed <- if (review) NULL else seed
-      state$kept <- list()
+      state$set <- if (!review && identical(out$appraisal$status, "ok"))
+        initial_set(check_appraisal(out$appraisal$reply, candidates_of(out$drafts, seed), build_checklist(f)))
+      else list()
+      state$edits <- list()
       state$rounds <- c(state$rounds, list(
         if (review) flow_round(f, pm, brief = brief, review = out$review)
         else flow_round(f, pm, brief = brief, drafts = out$drafts, appraisal = out$appraisal, seed = seed)))
@@ -785,15 +781,21 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       if (n) state$rounds[[n]] <- flow_round(f, APP_MODELS$pm, brief = brief, review = out)
     })
 
-    # The items ticked, as the candidate letter, the item's position and its id.
+    # What the analyst changes in the set: typing in a box, taking an item out, using one from the
+    #   drafts. Edits are read from the boxes into state$edits (the page is not drawn again for them,
+    #   so a box keeps its cursor); the set itself changes only on a swap or a removal.
     observe({
-      r = result()
-      req(r, state$drafts)
-      cands = candidates_of(state$drafts, state$seed)
-      state$kept <- purrr::list_flatten(unname(purrr::imap(cands, function(reply, letter)
-        purrr::compact(purrr::imap(unname(reply$items), function(it, i)
-          if (isTRUE(input[[keep_input(letter, i)]]))
-            list(candidate = letter, position = i, id = it$id %||% ""))))))
+      req(length(state$set) > 0L, state$drafts)
+      state$edits <- edits_from_inputs(state$set, state$drafts, state$seed, function(id) input[[id]])
+    })
+    observeEvent(input$remove, state$set <- set_remove(state$set, input$remove))
+    observeEvent(input$swap, {
+      req(state$drafts, input$swap)
+      at = as.integer(sub("^.*_", "", input$swap))
+      letter = sub("_.*$", "", input$swap)
+      it = unname(candidates_of(state$drafts, state$seed)[[letter]]$items)[[at]]
+      state$set <- set_swap(state$set, set_entry(letter, at, it$id %||% "", it$domain %||% "", swapped = TRUE),
+                            if (nzchar(input$swap_target %||% "")) input$swap_target)
     })
 
     output$results <- renderUI(safe_ui({
@@ -813,8 +815,6 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       labels = labels_of(drafts, state$seed)
       checklist = build_checklist(f)
       appraisal_ok = identical(ap$status, "ok")
-      chk = if (appraisal_ok) check_appraisal(ap$reply, cands, checklist)
-            else list(fails = list(), not_appraised = character(0))
       failed = purrr::keep(unname(as.list(drafts)), function(d) !identical(d$status, "ok"))
       tagList(
         tags$p(class = "text-muted small",
@@ -828,17 +828,36 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
           tags$strong("Did not return a usable draft: "),
           tags$ul(class = "mb-0", purrr::map(failed, function(d)
             tags$li(tags$code(d$model), ": ", d$error)))),
-        if (!appraisal_ok) warn_box(tags$strong("The appraisal did not come back. "), ap$error,
-                                    " The candidates are shown without it."),
+        if (!appraisal_ok) warn_box(tags$strong("The reviewer did not come back. "), ap$error,
+                                    " There is no recommended set; the drafts are below, and you can build a set from them."),
         if (appraisal_ok) same_family_note(APP_MODELS$pm$id, unname(labels)),
-        if (!length(cands)) tags$p("No candidate to show."),
-        purrr::imap(cands, function(reply, letter)
-          candidate_panel(letter, labels[[letter]], reply, session$ns, checklist, chk, appraisal_ok,
-                          f$output_language)),
-        if (appraisal_ok) appraisal_panel(ap$reply, chk, cands, f$output_language),
+        if (!length(cands)) tags$p("No draft to show."),
+        uiOutput(session$ns("set_ui")),
+        uiOutput(session$ns("drafts_ui")),
         tags$details(tags$summary(paste0("Criteria that were applied (", length(checklist), ")")),
                      tags$ul(class = "small", purrr::imap(as.list(checklist), function(q, id)
                        tags$li(tags$strong(id), ": ", q)))))
+    }))
+
+    # The set and the drafts are drawn on their own, so a swap or a removal redraws them and
+    #   nothing else. What the analyst typed is put back from state$edits, which they do not read.
+    set_context <- function() {
+      f = result()$form
+      list(f = f, cands = candidates_of(state$drafts, state$seed), labels = labels_of(state$drafts, state$seed),
+           checklist = build_checklist(f), ap = state$appraisal)
+    }
+    output$set_ui <- renderUI(safe_ui({
+      req(result(), state$drafts)
+      x = set_context()
+      appraisal_ok = identical(x$ap$status, "ok")
+      set_panel(state$set, x$cands, x$labels, session$ns, x$checklist, isolate(state$edits),
+                if (appraisal_ok) check_appraisal(x$ap$reply, x$cands, x$checklist), if (appraisal_ok) x$ap$reply)
+    }))
+    output$drafts_ui <- renderUI(safe_ui({
+      req(result(), state$drafts)
+      x = set_context()
+      drafts_panel(x$cands, x$labels, state$set, session$ns, x$f$output_language,
+                   open = isolate(input$drafts_open) %||% !length(state$set))
     }))
   })
 }
@@ -877,7 +896,8 @@ mod_again_server <- function(id, state, go = function(tab) invisible(NULL)) {
 
 # ---- tab 4: Output ---------------------------------------------------------------------------------
 
-# The kept items, or the review, laid out for Word, with the disclosure block; and the run log.
+# The set as the analyst left it, or the review, laid out for Word, with the disclosure block; and the
+#   run log.
 #   Everything is built by build_output() and run_log_json() in R/output.R. A key is taken out of
 #   anything shown or downloaded (scrub_secrets()), though none is ever in the data.
 mod_output_ui <- function(id) {
@@ -911,14 +931,15 @@ mod_output_server <- function(id, state) {
       brief = state$brief
       brief = if (is.list(brief) && identical(brief$status, "ok")) brief
       build_output(state$form, drafts = state$drafts, appraisal = state$appraisal, seed = state$seed,
-                   kept = state$kept, review = state$review, brief = brief, approved = state$approved)
+                   set = state$set, edits = state$edits, review = state$review, brief = brief,
+                   approved = state$approved)
     })
 
     output$view <- renderUI(safe_ui({
       if ((state$round %||% 0L) < 1L)
         return(tags$p(class = "text-muted",
                       "Nothing to show yet. Draft items or review a questionnaire on the earlier tabs, ",
-                      "and tick the items to keep, and the result is laid out here."))
+                      "and the result is laid out here."))
       o = built()
       html = scrub_secrets(paste(as.character(o$html), collapse = "\n"), secrets())
       txt = scrub_secrets(o$text, secrets())
@@ -948,8 +969,8 @@ mod_output_server <- function(id, state) {
         tags$hr(),
         tags$h5("Downloads"),
         tags$p("The run log is one JSON file with every round of this session: the forms, the prompts and their hashes, ",
-               "the replies as the models sent them, the shuffle seed and which model wrote which candidate, and the items ",
-               "you kept. No key is ever in it. It is made in this session only; nothing is stored on the server."),
+               "the replies as the models sent them, the shuffle seed and which model wrote which candidate, and the set ",
+               "as you left it, with what you edited and swapped. No key is ever in it. It is made in this session only; nothing is stored on the server."),
         downloadButton(session$ns("get_text"), "Download the plain text", class = "btn-sm me-2"),
         downloadButton(session$ns("get_log"), "Download the run log (JSON)", class = "btn-sm"))
     })
@@ -963,7 +984,9 @@ mod_output_server <- function(id, state) {
       content = function(file) {
         rounds = state$rounds
         n = length(rounds)
-        if (n) rounds[[n]]$kept <- state$kept
+        if (n && !is.null(state$drafts))
+          rounds[[n]]$analyst <- list(set = state$set, edits = state$edits,
+                                      final = final_set(state$set, state$edits, state$drafts, state$seed))
         writeLines(run_log_json(rounds, secrets = secrets()), file, useBytes = TRUE)
       })
   })

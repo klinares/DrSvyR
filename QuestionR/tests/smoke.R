@@ -978,7 +978,7 @@ cands <- list(A = cand(" (A)"), B = cand(" (B)"), C = cand(" (C)"))
 ap <- build_step_prompt(forms$attitudinal, "appraise", candidates = cands)
 ok("the appraisal sends core and pm_appraise only, and none of the drafting rules",
    identical(ap$files, c("core.md", "pm_appraise.md")) &&
-     inn(ap$system, "- code_every_check (") && inn(ap$system, "- compare_do_not_rank (") &&
+     inn(ap$system, "- check_before_choosing (") && inn(ap$system, "- pick_per_domain (") &&
      !inn(ap$system, "- declare_defaults (") && !inn(ap$system, "- attitude_object (") &&
      startsWith(ap$system, skills[["core.md"]]$persona))
 ok("the appraisal's user message is PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE, in that order",
@@ -986,7 +986,7 @@ ok("the appraisal's user message is PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACT
      pos = purrr::map_int(c("PREPARE", "ASK", "CANDIDATES", "CHECKLIST", "CHARACTERIZE"), function(h)
        as.integer(regexpr(paste0("(?m)^", h, "$"), ap$user, perl = TRUE)))
      all(pos > 0) && all(diff(pos) > 0) && inn(ap$user, skills[["pm_appraise.md"]]$output_format) &&
-       inn(ap$user, "\"fails\"")
+       inn(ap$user, "\"selected\"")
    }))
 ok("the appraisal's CHECKLIST is exactly what the workers' files give, and their questions are not in the system prompt",
    local({
@@ -1091,28 +1091,42 @@ ok("a brief check with its fields passes; one with a string for complete, or a q
              "questions 1: 'ask' is missing") &&
      says_in(problem_of(vb, list(complete = TRUE)), "'criteria' is missing"))
 
-appraisal_ok <- list(appraisal = list(list(candidate = "A", id = "Q1", domain = "d", fails = list())),
-                     set_fails = list(), coverage = list(), differences = list(), merged = list(),
-                     test_first = list(), limits = "An expert review by a language model.")
+appraisal_ok <- list(selected = list(list(domain = "d", candidate = "A", id = "Q1", why = "The plainest wording.",
+                                          concerns = list(), suggestion = "")),
+                     not_covered = list(), set_notes = list(), test_first = list(),
+                     limits = "An expert review by a language model.")
+sel1 <- function(...) with_field(appraisal_ok$selected[[1]], ...)
+sel_with <- function(...) with_field(appraisal_ok, selected = list(sel1(...)))
 va <- reply_validator("appraisal")
-ok("an appraisal with its seven fields passes, empty lists included; a missing limits or set_fails fails",
+ok("a recommendation with its five fields passes, empty lists included; a missing limits or selected fails",
    is.na(problem_of(va, appraisal_ok)) &&
      says_in(problem_of(va, appraisal_ok[names(appraisal_ok) != "limits"]), "'limits' is missing") &&
-     says_in(problem_of(va, appraisal_ok[names(appraisal_ok) != "set_fails"]), "'set_fails' is missing"))
-ok("a fail must name its check and give a severity from 1 to 10, one about the set too",
-   says_in(problem_of(va, with_field(appraisal_ok, appraisal = list(list(
-     candidate = "A", id = "Q1", fails = list(list(evidence = "x", severity = 6)))))), "does not name its check") &&
-     says_in(problem_of(va, with_field(appraisal_ok, appraisal = list(list(
-       candidate = "A", id = "Q1", fails = list(list(check = "one_thing", evidence = "x")))))), "severity from 1 to 10") &&
-     says_in(problem_of(va, with_field(appraisal_ok, appraisal = list(list(
-       candidate = "A", id = "Q1", fails = list(list(check = "one_thing", severity = 11)))))), "severity from 1 to 10") &&
-     is.na(problem_of(va, with_field(appraisal_ok, appraisal = list(list(
-       candidate = "A", id = "Q1", fails = list(list(check = "one_thing", severity = 4))))))) &&
-     says_in(problem_of(va, with_field(appraisal_ok, set_fails = list(list(candidate = "A", check = "keying")))),
-             "set_fails 1: 'severity' is missing") &&
-     says_in(problem_of(va, with_field(appraisal_ok, set_fails = list(list(candidate = "A", check = "keying", severity = 0)))),
-             "set_fails 1: 'severity' must be a number from 1 to 10") &&
-     is.na(problem_of(va, with_field(appraisal_ok, set_fails = list(list(candidate = "A", check = "keying", severity = 5, items = list("Q1", "Q2")))))))
+     says_in(problem_of(va, appraisal_ok[names(appraisal_ok) != "selected"]), "'selected' is missing"))
+ok("a recommended item gives its domain, candidate and id; a concern its check, failing words, a severity from 1 to 10 and why; a note on the set its check, severity and why",
+   says_in(problem_of(va, with_field(appraisal_ok, selected = list(with_field(sel1(), domain = NULL)))), "selected 1: 'domain' is missing") &&
+     says_in(problem_of(va, with_field(appraisal_ok, selected = list(with_field(sel1(), id = NULL)))), "selected 1: 'id' is missing") &&
+     says_in(problem_of(va, sel_with(concerns = list(list(evidence = "x", severity = 6, why = "y")))), "does not give its check") &&
+     says_in(problem_of(va, sel_with(concerns = list(list(check = "one_thing", evidence = "x", why = "y")))), "severity from 1 to 10") &&
+     says_in(problem_of(va, sel_with(concerns = list(list(check = "one_thing", evidence = "x", severity = 11, why = "y")))), "severity from 1 to 10") &&
+     is.na(problem_of(va, sel_with(concerns = list(list(check = "one_thing", evidence = "x", severity = 4, why = "y"))))) &&
+     says_in(problem_of(va, with_field(appraisal_ok, set_notes = list(list(check = "keying", why = "y")))),
+             "set_notes 1: 'severity' is missing") &&
+     says_in(problem_of(va, with_field(appraisal_ok, set_notes = list(list(check = "keying", severity = 0, why = "y")))),
+             "set_notes 1: 'severity' must be a number from 1 to 10") &&
+     is.na(problem_of(va, with_field(appraisal_ok, set_notes = list(list(check = "keying", severity = 5, why = "y"))))))
+vc_cands <- list(A = list(items = list(list(id = "Q1"), list(id = "Q2"))), B = list(items = list(list(id = "Q1"))))
+vc <- reply_validator("appraisal", candidates = vc_cands, n_items = 2L)
+pick <- function(...) purrr::map(list(...), function(x) sel1(candidate = x[[1]], id = x[[2]]))
+ok("R refuses a recommendation that names an id no candidate has, names an item twice, or has more items than were asked for; two candidates may share an id; an id may be a number",
+   is.na(problem_of(vc, with_field(appraisal_ok, selected = pick(c("A", "Q1"), c("B", "Q1"))))) &&
+     says_in(problem_of(vc, with_field(appraisal_ok, selected = pick(c("A", "Q9")))), "item Q9 of candidate A, which is not among the drafts") &&
+     says_in(problem_of(vc, with_field(appraisal_ok, selected = pick(c("C", "Q1")))), "item Q1 of candidate C") &&
+     says_in(problem_of(vc, with_field(appraisal_ok, selected = pick(c("A", "Q1"), c("A", "Q1")))),
+             "the same item more than once: item Q1 of candidate A") &&
+     says_in(problem_of(vc, with_field(appraisal_ok, selected = pick(c("A", "Q1"), c("A", "Q2"), c("B", "Q1")))),
+             "recommends 3 items; 2 were asked for") &&
+     is.na(problem_of(reply_validator("appraisal", candidates = list(A = list(items = list(list(id = "1")))), n_items = 1L),
+                      with_field(appraisal_ok, selected = list(sel1(id = 1))))))
 ok("a format that has no schema stops, naming it",
    says_in(tryCatch(reply_validator("poem"), error = conditionMessage), "no reply schema called 'poem'"))
 REPLY_SCHEMAS$tiny <- list(fields = c(answer = "text"), each = list(), rules = character(0))
@@ -1196,48 +1210,44 @@ ok("decisions written as one string or one entry are flagged not itemised, two o
      identical(code_defaults(good_item(1, decisions = list()))$decisions, "none"))
 
 
-# Checks on an appraisal.
+# Checks on the reviewer's recommendation.
 ck_cands <- list(A = draft_of(2), B = draft_of(1))
 ck_ids <- names(build_checklist(forms$attitudinal))
 ck_reply <- list(
-  appraisal = list(
-    list(candidate = "A", id = "Q1", domain = "d1", fails = list(
-      list(check = ck_ids[1], evidence = "trust", stage = "comprehension", severity = 7, why = "Vague."),
-      list(check = "made_up_check", evidence = "x", stage = "judgment", severity = 3, why = "Odd."))),
-    list(candidate = "A", id = "Q2", domain = "d2", fails = list(
-      list(check = ck_ids[2], evidence = "a little", stage = "reporting", severity = 2, why = "Minor."))),
-    list(candidate = "C", id = "Q9", domain = "d9", fails = list())),
-  set_fails = list(list(candidate = "A", check = ck_ids[3], items = list("Q1", "Q2"), severity = 6, why = "All keyed one way."),
-                   list(candidate = "B", check = "invented_set_check", items = list("Q1"), severity = 4, why = "Odd.")),
-  merged = list(list(domain = "d1", candidate = "A", id = "Q1"), list(domain = "d2", candidate = "A", id = "Q2"),
-                list(domain = "d3", candidate = "B", id = "Q7"), list(domain = "d4", candidate = "", id = "")))
+  selected = list(
+    list(domain = "d1", candidate = "A", id = "Q2", why = "Plainer.", suggestion = "Say who.", concerns = list(
+      list(check = ck_ids[1], evidence = "trust", severity = 7, why = "Vague."),
+      list(check = "made_up_check", evidence = "x", severity = 3, why = "Odd."))),
+    list(domain = "d2", candidate = "B", id = "Q1", why = "The only one.", suggestion = "", concerns = list())),
+  not_covered = list("domain 9", list("domain", "10")),
+  set_notes = list(list(check = ck_ids[3], severity = 6, why = "All keyed one way."),
+                   list(check = "invented_set_check", severity = 4, why = "Odd.")),
+  test_first = list(), limits = "x")
 ca <- check_appraisal(ck_reply, ck_cands, build_checklist(forms$attitudinal))
-ok("an appraisal's fails are read with whether each check is an id that was sent",
-   length(ca$fails) == 3L && isTRUE(ca$fails[[1]]$known) && isFALSE(ca$fails[[2]]$known) &&
-     identical(ca$fails[[1]]$evidence, "trust") &&
+ok("each recommended item is found in its draft by letter and id, in the order given, with its position, domain, reason and suggestion",
+   length(ca$selected) == 2L && identical(purrr::map_chr(ca$selected, "candidate"), c("A", "B")) &&
+     identical(purrr::map_chr(ca$selected, "id"), c("Q2", "Q1")) && identical(purrr::map_int(ca$selected, "position"), c(2L, 1L)) &&
+     identical(ca$selected[[1]]$domain, "d1") && identical(ca$selected[[1]]$why, "Plainer.") &&
+     identical(ca$selected[[1]]$suggestion, "Say who.") && !"stem" %in% names(ca$selected[[1]]))
+ok("a concern is read with whether its check is an id that was sent; severity 5 or above is shown, below is not, and none given is shown",
+   identical(purrr::map_lgl(ca$selected[[1]]$concerns, "known"), c(TRUE, FALSE)) &&
+     identical(purrr::map_lgl(ca$selected[[1]]$concerns, "shown"), c(TRUE, FALSE)) &&
+     identical(purrr::map_dbl(ca$selected[[1]]$concerns, "severity"), c(7, 3)) &&
+     identical(ca$selected[[1]]$concerns[[1]]$evidence, "trust") && length(ca$selected[[2]]$concerns) == 0L &&
+     isTRUE(check_appraisal(list(selected = list(list(domain = "d", candidate = "A", id = "Q1", concerns = list(list(check = ck_ids[1]))))),
+                            ck_cands, build_checklist(forms$attitudinal))$selected[[1]]$concerns[[1]]$shown))
+ok("the notes on the set are read the same way, the domains not covered are listed, and the check ids that were not sent are collected",
+   identical(purrr::map_lgl(ca$set_notes, "shown"), c(TRUE, FALSE)) && identical(purrr::map_lgl(ca$set_notes, "known"), c(TRUE, FALSE)) &&
+     identical(ca$not_covered, c("domain 9", "domain 10")) &&
      identical(sort(ca$unknown_checks), c("invented_set_check", "made_up_check")))
-ok("a fail is shown at severity 5 or above and folded below it; one with no severity is shown",
-   identical(purrr::map_lgl(ca$fails, "shown"), c(TRUE, FALSE, FALSE)) &&
-     identical(purrr::map_dbl(ca$fails, "severity"), c(7, 3, 2)) &&
-     isTRUE(check_appraisal(list(appraisal = list(list(candidate = "A", id = "Q1", fails = list(list(check = ck_ids[1]))))),
-                            ck_cands, build_checklist(forms$attitudinal))$fails[[1]]$shown))
-ok("the fails about a candidate's whole set are kept apart, with the items they name, and count against no item",
-   length(ca$set_fails) == 2L && identical(ca$set_fails[[1]]$candidate, "A") && identical(ca$set_fails[[1]]$items, "Q1, Q2") &&
-     isTRUE(ca$set_fails[[1]]$shown) && isFALSE(ca$set_fails[[2]]$shown) && isFALSE(ca$set_fails[[2]]$known))
-ok("an item the appraiser gave no entry is not appraised, not a pass; an entry for no item is flagged",
-   identical(ca$not_appraised, "B|Q1") && identical(ca$unknown_items, "C|Q9"))
-ok("a merged item that does not exist, or has a fail rated 5 or above, is a problem; one with only a low fail is not; an empty domain is not",
-   length(ca$merged_problems) == 2L && any(grepl("A Q1 has a fail rated 5 or above", ca$merged_problems, fixed = TRUE)) &&
-     any(grepl("B Q7 is not in any candidate", ca$merged_problems, fixed = TRUE)) &&
-     !any(grepl("A Q2", ca$merged_problems, fixed = TRUE)))
-ok("an appraisal with nothing wrong has no flags",
-   local({
-     c0 = check_appraisal(list(appraisal = list(
-       list(candidate = "A", id = "Q1", fails = list()), list(candidate = "A", id = "Q2", fails = list()),
-       list(candidate = "B", id = "Q1", fails = list()))), ck_cands, build_checklist(forms$attitudinal))
-     !length(c0$fails) && !length(c0$unknown_checks) && !length(c0$not_appraised) &&
-       !length(c0$unknown_items) && !length(c0$merged_problems)
-   }))
+ok("an item that cannot be found in its draft is left out, not guessed at; a reply with nothing recommended has no flags",
+   length(check_appraisal(list(selected = list(list(domain = "d", candidate = "A", id = "Q9", concerns = list()),
+                                               list(domain = "d", candidate = "C", id = "Q1", concerns = list()))),
+                          ck_cands, build_checklist(forms$attitudinal))$selected) == 0L &&
+     local({
+       c0 = check_appraisal(list(selected = list(), not_covered = list(), set_notes = list()), ck_cands, build_checklist(forms$attitudinal))
+       !length(c0$selected) && !length(c0$set_notes) && !length(c0$not_covered) && !length(c0$unknown_checks)
+     }))
 
 
 # The flow engine on a fake ask. The fake has exactly the five arguments the seam
@@ -1479,7 +1489,7 @@ set_inputs <- function(session, base, ...) do.call(session$setInputs, utils::mod
 ok("the state object is made from STATE_DEFAULTS, and every field a module uses is in it",
    identical(sort(names(STATE_DEFAULTS)),
              sort(c("key_version", "form", "workers", "brief", "approved", "run_id", "round",
-                    "drafts", "appraisal", "review", "seed", "kept", "revision", "rounds"))))
+                    "drafts", "appraisal", "review", "seed", "set", "edits", "revision", "rounds"))))
 ok("every field any task lists has a widget spec, so a new task that reuses fields needs no screen change",
    all(unlist(purrr::map(TASKS, "fields")) %in% names(FIELD_SPECS)))
 ok("the registry's progress_ask announces the model on the page before it makes each call",
@@ -1705,20 +1715,17 @@ local({
 # Tab 3, Results, and Run again.
 checklist_ids <- names(build_checklist(clean_form(fl_form)))
 rich_appraisal <- list(
-  appraisal = list(
-    list(candidate = "A", id = "Q1", domain = "domain 1", fails = list(
-      list(check = checklist_ids[1], evidence = "institution 1", stage = "comprehension", severity = 7,
-           why = "The term is vague."),
-      list(check = "invented_check", evidence = "trust", stage = "judgment", severity = 3, why = "Odd."))),
-    list(candidate = "A", id = "Q2", domain = "domain 2", fails = list(
-      list(check = checklist_ids[2], evidence = "a little", stage = "reporting", severity = 2, why = "Minor.")))),
-  set_fails = list(
-    list(candidate = "A", check = checklist_ids[3], items = list("Q1", "Q2"), severity = 6, why = "Both keyed one way."),
-    list(candidate = "B", check = checklist_ids[3], items = list("Q1"), severity = 4, why = "Slightly one way.")),
-  coverage = list(list(domain = "domain 1", covered_by = list("A", "B", "C"), clean_items = list(list(candidate = "A", id = "Q2")))),
-  differences = list("Candidate A uses three points; the others use five."),
-  merged = list(list(domain = "domain 1", candidate = "A", id = "Q2"), list(domain = "domain 2", candidate = "", id = "")),
-  test_first = list(list(candidate = "A", id = "Q1", method = "a cognitive interview")),
+  selected = list(
+    list(domain = "domain 1", candidate = "A", id = "Q1", why = "The plainest wording.", suggestion = "Name the institution.",
+         concerns = list(
+           list(check = checklist_ids[1], evidence = "institution 1", severity = 7, why = "The term is vague."),
+           list(check = "invented_check", evidence = "trust", severity = 3, why = "Odd."))),
+    list(domain = "domain 2", candidate = "B", id = "Q2", why = "Neutral wording.", suggestion = "",
+         concerns = list(list(check = checklist_ids[2], evidence = "a little", severity = 6, why = "A judgment call.")))),
+  not_covered = list("domain 3"),
+  set_notes = list(list(check = checklist_ids[3], severity = 6, why = "Both are keyed one way."),
+                   list(check = checklist_ids[4], severity = 3, why = "Slightly uneven.")),
+  test_first = list(list(id = "Q1", method = "a cognitive interview")),
   limits = "An expert review by a language model, not a pretest.")
 # The screens call the project manager the app is configured with.
 pm_id <- APP_MODELS$pm$id
@@ -1741,62 +1748,86 @@ local({
     approve_state(st)
     session$flushReact()
     h = html_of3(output$results)
-    ok("a run makes one call per worker and one for the appraisal, and records the round in the state and the log",
+    s = html_of3(output$set_ui)
+    d = html_of3(output$drafts_ui)
+    ok("a run makes one call per worker and one for the appraisal, records the round, and sets the recommended set from the reviewer's letters and ids",
        identical(purrr::map_chr(fa$st$calls, "id"), c(fl_ids, pm_id)) && st$round == 1L &&
          length(st$drafts) == 3L && identical(st$appraisal$status, "ok") && length(st$rounds) == 1L &&
-         identical(st$rounds[[1]]$schema, 1L) && identical(st$rounds[[1]]$seed, st$seed))
-    ok("each candidate is shown by letter with its items, options and the model that wrote it",
-       all(purrr::map_lgl(c("Candidate A", "Candidate B", "Candidate C"), function(l) grepl(l, h, fixed = TRUE))) &&
-         all(purrr::map_lgl(fl_ids, function(id) grepl(id, h, fixed = TRUE))) &&
-         grepl("Question from worker", h, fixed = TRUE) && grepl("<ol", h, fixed = TRUE) &&
-         grepl("A little", h, fixed = TRUE))
-    ok("each item shows the coded defaults and has a tick box to keep it",
-       n_in3("Coded defaults", h) == 6L && n_in3("Keep this item", h) == 6L &&
-         grepl("Odd number of points", h, fixed = TRUE) &&
-         grepl("Midpoint, as the item states it (self-reported)", h, fixed = TRUE) &&
-         grepl("Every point labelled (self-reported)", h, fixed = TRUE) && !grepl("Midpoint (odd count)", h, fixed = TRUE))
-    ok("a failed check is shown with the appraiser's failing words and the check's question; one that was not sent is flagged",
-       grepl("Failing words:", h, fixed = TRUE) && grepl("institution 1", h, fixed = TRUE) &&
-         grepl(checklist_ids[1], h, fixed = TRUE) &&
-         grepl(build_checklist(st$form)[[checklist_ids[1]]], h, fixed = TRUE) &&
-         grepl("not a check that was sent", h, fixed = TRUE))
-    ok("an item the appraiser gave no entry is not shown as passed",
-       n_in3("Not appraised: the appraiser gave this item no entry", h) == 4L &&
-         n_in3("No failed check rated 5 or above.", h) == 1L)
-    ok("fails below severity 5 are folded away, not listed, and a candidate's set-level fails are shown once under it",
-       n_in3("rated below 5", h) == 3L && n_in3("severity 7", h) == 1L && n_in3("severity 6", h) == 1L &&
-         n_in3("whole set", h) == 2L && grepl("(items Q1, Q2)", h, fixed = TRUE) &&
-         grepl("No set-level fail rated 5 or above.", h, fixed = TRUE))
-    ok("an item whose design decisions are one entry, not several, is flagged on the page (every canned item here)",
-       n_in3("decisions not itemised", h) == 6L)
-    ok("below the candidates: coverage, differences, the merged option labelled untested, what to test first, the limits",
-       grepl("Coverage by domain", h, fixed = TRUE) && grepl("Candidate A uses three points", h, fixed = TRUE) &&
-         grepl("Merged option", h, fixed = TRUE) && grepl("A fourth option, untested like the others", h, fixed = TRUE) &&
-         grepl("copied word for word", h, fixed = TRUE) &&
-         grepl("no candidate item is free of a fail rated 5 or above", h, fixed = TRUE) &&
-         grepl("What to test first", h, fixed = TRUE) && grepl("a cognitive interview", h, fixed = TRUE) &&
-         grepl("not a pretest", h, fixed = TRUE) && grepl("does not choose, and nothing here is validated", h, fixed = TRUE))
-    ok("R's checks on the appraisal are shown: the check that was not sent, and the items given no entry",
-       grepl("checks on the appraisal found", h, fixed = TRUE) && grepl("invented_check", h, fixed = TRUE))
-    ok("the criteria applied are listed, and the prompt hash and seed are shown, with no model name given to the appraiser",
+         identical(st$rounds[[1]]$schema, 1L) && identical(st$rounds[[1]]$seed, st$seed) &&
+         identical(purrr::map_chr(st$set, "uid"), c("A_1", "B_2")) && identical(purrr::map_lgl(st$set, "swapped"), c(FALSE, FALSE)) &&
+         length(st$edits) == 0L)
+    ok("only the recommended set is shown: each item with its domain, the reviewer's reason, its stem and every option in a text box, a button to take it out, and no tick boxes",
+       grepl("The recommended set", s, fixed = TRUE) && grepl("Why this one: The plainest wording.", s, fixed = TRUE) &&
+         grepl("domain 1", s, fixed = TRUE) && grepl("ed_A_1_stem", s, fixed = TRUE) &&
+         all(purrr::map_lgl(c("ed_A_1_o1", "ed_A_1_o2", "ed_A_1_o3", "ed_B_2_stem", "ed_B_2_o3"), function(id) grepl(id, s, fixed = TRUE))) &&
+         grepl("Question from worker", s, fixed = TRUE) && n_in3("Remove from the set", s) == 2L &&
+         !grepl("Keep this item", paste(h, s, d), fixed = TRUE) && !grepl("Candidate C", s, fixed = TRUE))
+    ok("an item's remaining concerns are in the three bands, the minor ones folded, a check that was not sent is flagged, and the reviewer's suggestion is labelled untested",
+       n_in3("Fix before fielding", s) == 1L && grepl("severity 7", s, fixed = TRUE) && grepl("Needs your judgment", s, fixed = TRUE) &&
+         grepl("severity 6", s, fixed = TRUE) && grepl("Failing words:", s, fixed = TRUE) && grepl("institution 1", s, fixed = TRUE) &&
+         grepl(build_checklist(st$form)[[checklist_ids[1]]], s, fixed = TRUE) &&
+         grepl("1 minor fail, rated below 5", s, fixed = TRUE) && grepl("not a check that was sent", s, fixed = TRUE) &&
+         grepl("A suggested change, untested: ", s, fixed = TRUE) && grepl("Name the institution.", s, fixed = TRUE))
+    ok("below the set: what no draft covered, the notes on the set as a whole in bands, what to test first, and the limits",
+       grepl("No draft item was good enough to recommend for: domain 3", s, fixed = TRUE) &&
+         grepl("About the set as a whole", s, fixed = TRUE) && grepl("Both are keyed one way.", s, fixed = TRUE) &&
+         grepl("What to test first", s, fixed = TRUE) && grepl("Item Q1: a cognitive interview", s, fixed = TRUE) &&
+         grepl("not a pretest", s, fixed = TRUE) && grepl("nothing here is validated", s, fixed = TRUE) &&
+         !grepl("Merged option|Coverage by domain", paste(h, s, d)))
+    ok("every draft is in a closed panel below, a candidate at a time with its model, each item with its coded defaults and a button to use it, except the two already in the set",
+       grepl("See all drafts (3 candidates)", d, fixed = TRUE) && !grepl("<details[^>]* open", d) &&
+         all(purrr::map_lgl(c("Candidate A", "Candidate B", "Candidate C"), function(l) grepl(l, d, fixed = TRUE))) &&
+         all(purrr::map_lgl(fl_ids, function(id) grepl(id, d, fixed = TRUE))) &&
+         n_in3("Coded defaults", d) == 6L && n_in3("Use this instead", d) == 4L && n_in3("decisions not itemised", d) == 6L &&
+         grepl("Odd number of points", d, fixed = TRUE) && grepl("Midpoint, as the item states it (self-reported)", d, fixed = TRUE))
+    ok("the page for the round shows the prompt hash and seed, the criteria that were applied, and gives the appraiser no model name",
        grepl("Criteria that were applied", h, fixed = TRUE) && grepl(substr(build_prompt(st$form)$hash, 1, 16), h, fixed = TRUE) &&
-         grepl(as.character(st$seed), h, fixed = TRUE) && !any(purrr::map_lgl(c(fl_ids, "vendor-"), function(s) grepl(s, fa$st$calls[[4]]$user, fixed = TRUE))))
+         grepl(as.character(st$seed), h, fixed = TRUE) &&
+         !any(purrr::map_lgl(c(fl_ids, "vendor-"), function(x) grepl(x, fa$st$calls[[4]]$user, fixed = TRUE))))
 
-    session$setInputs(keep_A_1 = TRUE, keep_B_2 = TRUE, keep_C_1 = FALSE)
+    # What the analyst does. The drafts are never touched.
+    before = st$drafts
+    b2_stem = candidates_of(st$drafts, st$seed)$B$items[[2]]$stem
+    session$setInputs(ed_A_1_stem = "A better stem?", ed_A_1_o2 = "Somewhat", ed_B_2_o3 = "", ed_B_2_stem = b2_stem)
     session$flushReact()
-    ok("ticking items records them by candidate letter, position and id, and unticking removes them",
-       length(st$kept) == 2L && identical(st$kept[[1]]$candidate, "A") && st$kept[[1]]$position == 1L &&
-         identical(st$kept[[1]]$id, "Q1") && identical(st$kept[[2]]$candidate, "B") && st$kept[[2]]$position == 2L)
-    session$setInputs(keep_A_1 = FALSE)
+    final = final_set(st$set, st$edits, st$drafts, st$seed)
+    ok("typing in a box is recorded in the session as a change, only for what differs from the draft; the item is the draft's with the change put on it, and the drafts are as the workers wrote them",
+       identical(names(st$edits), c("A_1", "B_2")) && identical(st$edits$A_1$stem, "A better stem?") &&
+         identical(st$edits$A_1$options[["2"]], "Somewhat") && identical(st$edits$B_2$options[["3"]], "") &&
+         is.null(st$edits$B_2$stem) &&
+         identical(final[[1]]$item$stem, "A better stem?") && identical(unlist(final[[1]]$item$options), c("None", "Somewhat", "A lot")) &&
+         isTRUE(final[[1]]$edited) && length(final[[2]]$item$options) == 2L &&
+         identical(st$drafts, before))
+    session$setInputs(remove = "B_2")
     session$flushReact()
-    ok("an item unticked is no longer kept", length(st$kept) == 1L && identical(st$kept[[1]]$candidate, "B"))
+    s2 = html_of3(output$set_ui)
+    ok("taking an item out removes it from the set and the page, and what was typed in the others is put back in the boxes",
+       identical(purrr::map_chr(st$set, "uid"), "A_1") && identical(names(st$edits), "A_1") &&
+         n_in3("Remove from the set", s2) == 1L && grepl("A better stem?", s2, fixed = TRUE) && grepl("Somewhat", s2, fixed = TRUE) &&
+         !grepl("ed_B_2_stem", s2, fixed = TRUE) && grepl("edited", s2, fixed = TRUE))
+    session$setInputs(swap_target = "", swap = "C_1")
+    session$flushReact()
+    ok("an item from the drafts used with no item chosen goes at the end of the set, marked as swapped in; one already in the set is not put in twice",
+       identical(purrr::map_chr(st$set, "uid"), c("A_1", "C_1")) && identical(purrr::map_lgl(st$set, "swapped"), c(FALSE, TRUE)) &&
+         identical(st$set[[2]]$candidate, "C") && st$set[[2]]$position == 1L && identical(st$set[[2]]$id, "Q1") &&
+         grepl("swapped in by you", html_of3(output$set_ui), fixed = TRUE) &&
+         identical(purrr::map_chr(set_swap(st$set, st$set[[2]]), "uid"), c("A_1", "C_1")))
+    session$setInputs(swap_target = "A_1", swap = "B_1")
+    session$flushReact()
+    s3 = html_of3(output$set_ui)
+    ok("an item used with an item of the set chosen takes its place, and the replaced item's changes go with it",
+       identical(purrr::map_chr(st$set, "uid"), c("B_1", "C_1")) && length(st$edits) == 0L &&
+         !grepl("A better stem?", s3, fixed = TRUE) && grepl("ed_B_1_stem", s3, fixed = TRUE) &&
+         grepl("Use this instead", html_of3(output$drafts_ui), fixed = TRUE) &&
+         identical(st$drafts, before))
 
     # A browser resets the boxes when the results are drawn again; the test's inputs do not.
-    session$setInputs(keep_B_2 = FALSE)
+    session$setInputs(ed_A_1_stem = NULL, ed_A_1_o2 = NULL, ed_B_2_stem = NULL, ed_B_2_o3 = NULL)
     approve_state(st)
     session$flushReact()
-    ok("a second run is a second round in the log, with nothing kept",
-       st$round == 2L && length(st$rounds) == 2L && length(st$kept) == 0L)
+    ok("a second run is a second round in the log, with the set the reviewer recommended and nothing edited",
+       st$round == 2L && length(st$rounds) == 2L && identical(purrr::map_chr(st$set, "uid"), c("A_1", "B_2")) &&
+         length(st$edits) == 0L)
   })
 })
 
@@ -1812,10 +1843,11 @@ local({
     approve_state(st)
     session$flushReact()
     h = html_of3(output$results)
-    ok("a worker that failed is listed with its reason, the other two are shown, and the appraisal covers two candidates",
+    d = html_of3(output$drafts_ui)
+    ok("a worker that failed is listed with its reason, the other two are shown, and the reviewer covers two candidates",
        grepl("Did not return a usable draft", h, fixed = TRUE) && grepl("canned endpoint error", h, fixed = TRUE) &&
-         grepl("2 of 3", h, fixed = TRUE) && n_in3("Coded defaults", h) == 4L &&
-         !grepl("Candidate C", h, fixed = TRUE) && identical(st$appraisal$status, "ok"))
+         grepl("2 of 3", h, fixed = TRUE) && n_in3("Coded defaults", d) == 4L &&
+         !grepl("Candidate C", d, fixed = TRUE) && identical(st$appraisal$status, "ok") && length(st$set) == 2L)
   })
 })
 
@@ -1828,10 +1860,16 @@ local({
     approve_state(st)
     session$flushReact()
     h = html_of3(output$results)
-    ok("a failed appraisal is said in words with its reason; the candidates are still shown, none marked appraised",
-       grepl("The appraisal did not come back", h, fixed = TRUE) && grepl("the appraiser is down", h, fixed = TRUE) &&
-         grepl("Candidate A", h, fixed = TRUE) && n_in3("Not appraised: the appraisal did not come back", h) == 6L &&
-         !grepl("The appraisal, across the candidates", h, fixed = TRUE))
+    d = html_of3(output$drafts_ui)
+    ok("a reviewer that did not come back is said in words with its reason; there is no recommended set, the drafts are open, and the analyst can build a set from them",
+       grepl("The reviewer did not come back", h, fixed = TRUE) && grepl("the appraiser is down", h, fixed = TRUE) &&
+         grepl("The set is empty", html_of3(output$set_ui), fixed = TRUE) && length(st$set) == 0L &&
+         grepl("Candidate A", d, fixed = TRUE) && grepl("<details[^>]* open", d) && n_in3("Use this instead", d) == 6L)
+    session$setInputs(swap_target = "", swap = "A_2")
+    session$flushReact()
+    ok("using an item from the drafts then gives a set of one, marked as swapped in",
+       identical(purrr::map_chr(st$set, "uid"), "A_2") && isTRUE(st$set[[1]]$swapped) &&
+         grepl("ed_A_2_stem", html_of3(output$set_ui), fixed = TRUE))
   })
 })
 
@@ -1901,11 +1939,11 @@ ok("labels said to be partial or absent are read as no, and a silence is not sta
 cut_off <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
   llm_fail("[x via y, finish: max_tokens] The reply reached the token limit (1) without finishing, so it was cut off.",
            class = "llm_truncated")
-ok("a cut-off brief check says to try again or skip; a cut-off draft to ask for fewer items; a cut-off appraisal to untick a worker",
+ok("a cut-off brief check says to try again or skip; a cut-off draft to ask for fewer items; a cut-off appraisal to ask for fewer items",
    grepl("try the brief check again, or skip it", tolower(run_brief(fl_form, fl_pm, ask = cut_off)$error), fixed = TRUE) &&
      all(purrr::map_lgl(run_drafts(fl_form, fl_workers, ask = cut_off), function(d)
        grepl("Ask for fewer items and run again.", d$error, fixed = TRUE))) &&
-     grepl("Untick a worker or ask for fewer items", run_appraisal(fl_form, fl_drafts, fl_pm, ask = cut_off, seed = 1L)$error,
+     grepl("Ask for fewer items, and run again.", run_appraisal(fl_form, fl_drafts, fl_pm, ask = cut_off, seed = 1L)$error,
            fixed = TRUE) &&
      identical(unname(LLM_CUTOFF_ADVICE[["evaluate"]]), "Paste fewer questions and run again."))
 ok("an error that is not a cut-off gets no cut-off advice",
@@ -2491,19 +2529,23 @@ rich_item <- function(n, who) list(
 rich_draft <- function(m) list(items = list(rich_item(1L, worker_no(m)), rich_item(2L, worker_no(m))),
                                not_covered = list(), missing_from_brief = list())
 fr_form <- clean_form(with_field(fl_form, output_language = "French", source_language = "English"))
-fr_ask <- rec_ask(function(m, sys) if (identical(m$id, fl_pm$id)) { if (is_brief(sys)) brief_ok else appraisal_ok } else rich_draft(m))
+fr_appraisal <- list(
+  selected = list(list(domain = "trust", candidate = "A", id = "CONF1", why = "The plainest wording.", concerns = list(), suggestion = ""),
+                  list(domain = "trust again", candidate = "C", id = "CONF2", why = "Neutral.", concerns = list(), suggestion = "")),
+  not_covered = list(), set_notes = list(), test_first = list(), limits = "An expert review by a language model.")
+fr_ask <- rec_ask(function(m, sys) if (identical(m$id, fl_pm$id)) { if (is_brief(sys)) brief_ok else fr_appraisal } else rich_draft(m))
 fr_brief <- run_brief(fr_form, fl_pm, ask = fr_ask$ask)
 fr_drafts <- run_drafts(fr_form, fl_workers, ask = fr_ask$ask)
 fr_ap <- run_appraisal(fr_form, fr_drafts, fl_pm, ask = fr_ask$ask, seed = 11L)
 fr_labels <- labels_of(fr_drafts, 11L)
-fr_kept <- list(list(candidate = "A", position = 1L, id = "CONF1"), list(candidate = "C", position = 2L, id = "CONF2"))
+fr_set <- initial_set(check_appraisal(fr_ap$reply, candidates_of(fr_drafts, 11L), build_checklist(fr_form)))
 fr_approved <- c(attr(fr_drafts, "prompt"), list(edited = FALSE, original_hash = attr(fr_drafts, "prompt")$hash))
-fr_out <- build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, kept = fr_kept, brief = fr_brief,
+fr_out <- build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = fr_set, brief = fr_brief,
                        approved = fr_approved, models = out_models, time = out_time)
 fr_txt <- fr_out$text
 fr_html <- paste(as.character(fr_out$html), collapse = "")
 
-ok("a drafting output has the kept items in the order they were ticked, each with its id, introduction, stem, numbered options and programming notes",
+ok("a drafting output has the items of the set in its order, each with its id, introduction, stem, numbered options and programming notes",
    identical(fr_out$kind, "draft") && fr_out$n_items == 2L &&
      regexpr("CONF1", fr_txt, fixed = TRUE) < regexpr("CONF2", fr_txt, fixed = TRUE) &&
      grepl("Nous allons vous poser", fr_txt, fixed = TRUE) && grepl("\n1. Beaucoup\n2. Assez\n3. Peu\n4. Pas du tout", fr_txt, fixed = TRUE) &&
@@ -2533,14 +2575,14 @@ ok("the output language not being English puts the English source wording in ita
    grepl("English source: How much do you trust the national electoral commission?", fr_txt, fixed = TRUE) &&
      grepl("<em>English source: How much", fr_html, fixed = TRUE) &&
      !grepl("English source", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
-                                           kept = list(list(candidate = "A", position = 1L, id = "Q1")),
+                                           set = list(set_entry("A", 1L, "Q1")),
                                            models = out_models, time = out_time)$text, fixed = TRUE))
 ok("a language other than the source puts the TRAPD block above the disclosure block, and an English one has none",
    grepl("TRAPD: what is still needed", fr_txt, fixed = TRUE) && grepl("first draft inside the Translation step only", fr_txt, fixed = TRUE) &&
      grepl("Adjudication of disagreements by a named person is still needed.", fr_txt, fixed = TRUE) &&
      regexpr("TRAPD: what is still needed", fr_txt, fixed = TRUE) < regexpr("Disclosure of the use of language models", fr_txt, fixed = TRUE) &&
      !grepl("TRAPD", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
-                                  kept = list(list(candidate = "A", position = 1L, id = "Q1")), models = out_models, time = out_time)$text, fixed = TRUE))
+                                  set = list(set_entry("A", 1L, "Q1")), models = out_models, time = out_time)$text, fixed = TRUE))
 
 skill_versions <- function(files) purrr::map_chr(files, function(x) paste0(x, " ", read_skill(x)$version))
 ok("the disclosure names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft",
@@ -2550,16 +2592,16 @@ ok("the disclosure names the date, the profile, the project manager and each wor
      !grepl("asked that returned no usable draft", fr_txt, fixed = TRUE) &&
      grepl("returned no usable draft: vendor-b/model-two, vendor-c/model-three", {
        bad = run_drafts(fr_form, fl_workers, ask = rec_ask(function(m, sys) if (identical(m$id, "vendor-a/model-one")) rich_draft(m) else stop("down", call. = FALSE))$ask)
-       build_output(fr_form, drafts = bad, seed = 11L, kept = list(list(candidate = "A", position = 1L, id = "CONF1")),
+       build_output(fr_form, drafts = bad, seed = 11L, set = list(set_entry("A", 1L, "CONF1")),
                     models = out_models, time = out_time)$text
      }, fixed = TRUE))
 ok("the disclosure gives the version of each skill file used, and pm_brief.md only when the brief was checked",
    grepl(paste0("Skill files and versions: ", paste(skill_versions(c("core.md", "generate.md", "attitudinal.md", "mode.md", "cross_cultural.md", "pm_appraise.md", "pm_brief.md")), collapse = "; ")),
          fr_txt, fixed = TRUE) &&
-     !grepl("pm_brief.md", build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, kept = fr_kept,
+     !grepl("pm_brief.md", build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = fr_set,
                                         approved = fr_approved, models = out_models, time = out_time)$text, fixed = TRUE) &&
      !grepl("cross_cultural.md", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
-                                              kept = list(list(candidate = "A", position = 1L, id = "Q1")),
+                                              set = list(set_entry("A", 1L, "Q1")),
                                               models = out_models, time = out_time)$text, fixed = TRUE))
 ok("the disclosure gives each prompt's hash in full, says the drafting prompt was not edited, and says it was when it was",
    grepl(paste0("Brief check prompt: ", fr_brief$hash), fr_txt, fixed = TRUE) &&
@@ -2568,25 +2610,40 @@ ok("the disclosure gives each prompt's hash in full, says the drafting prompt wa
      local({
        ed = c(with_field(fr_approved, user = "EDITED", hash = prompt_hash(fr_approved$system, "EDITED")), list())
        ed$edited = TRUE
-       t = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, kept = fr_kept, approved = ed,
+       t = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = fr_set, approved = ed,
                         models = out_models, time = out_time)$text
        grepl(paste0("Drafting prompt as sent (edited by the analyst): ", ed$hash), t, fixed = TRUE) &&
          grepl(paste0("Drafting prompt as assembled: ", fr_approved$original_hash), t, fixed = TRUE)
      }))
-ok("the disclosure says which candidate each kept item came from and the model behind it, and ends with the fixed line",
+ok("the disclosure says which candidate each item of the set came from and the model behind it, and ends with the fixed line",
    grepl(paste0("Item 1 (CONF1): candidate A, written by ", fr_labels[["A"]]), fr_txt, fixed = TRUE) &&
      grepl(paste0("Item 2 (CONF2): candidate C, written by ", fr_labels[["C"]]), fr_txt, fixed = TRUE) &&
      endsWith(fr_txt, "Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.") &&
      identical(DISCLOSURE_LINE, "Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding."))
-ok("with no item kept, or a tick that points at nothing, the output says so and has no disclosure to make",
+ok("the output takes the set as the analyst left it: an edited item has its new wording, and the disclosure says which items were edited and which were swapped in by the analyst",
    local({
-     none = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, kept = list(), models = out_models, time = out_time)
+     st_set = c(fr_set[1], list(set_entry("B", 1L, "CONF1", "x", swapped = TRUE)))
+     ed = list(A_1 = list(stem = "An edited stem?", options = list(`2` = "Somewhat")))
+     o = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = st_set, edits = ed,
+                      approved = fr_approved, models = out_models, time = out_time)$text
+     plain = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = st_set,
+                          approved = fr_approved, models = out_models, time = out_time)$text
+     grepl("An edited stem?", o, fixed = TRUE) && grepl("\n2. Somewhat\n", o, fixed = TRUE) && n_in3("Assez", o) == 1L &&
+       grepl("Item 1 (CONF1): candidate A, written by", o, fixed = TRUE) && grepl("; edited by the analyst", o, fixed = TRUE) &&
+       grepl("Item 2 (CONF1): candidate B, written by", o, fixed = TRUE) &&
+       grepl("; swapped in by the analyst, not the reviewer's choice", o, fixed = TRUE) &&
+       n_in3("edited by the analyst", o) == 1L && !grepl("edited by the analyst", plain, fixed = TRUE) &&
+       grepl("swapped in by the analyst", plain, fixed = TRUE) && !grepl("An edited stem?", plain, fixed = TRUE)
+   }))
+ok("with nothing in the set, or an entry that points at nothing, the output says so and has no disclosure to make",
+   local({
+     none = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = list(), models = out_models, time = out_time)
      stale = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L,
-                          kept = list(list(candidate = "Z", position = 1L, id = "x"), list(candidate = "A", position = 99L, id = "y")),
+                          set = list(set_entry("Z", 1L, "x"), set_entry("A", 99L, "y")),
                           models = out_models, time = out_time)
-     grepl("No item has been kept yet", none$text, fixed = TRUE) && none$n_items == 0L && !grepl("Disclosure", none$text, fixed = TRUE) &&
+     grepl("There is no item in the set yet", none$text, fixed = TRUE) && none$n_items == 0L && !grepl("Disclosure", none$text, fixed = TRUE) &&
        identical(stale$n_items, 0L) &&
-       !grepl("No item has been kept", build_output(fr_form, drafts = fr_drafts, seed = 11L, kept = fr_kept, models = out_models)$text, fixed = TRUE)
+       !grepl("There is no item in the set", build_output(fr_form, drafts = fr_drafts, seed = 11L, set = fr_set, models = out_models)$text, fixed = TRUE)
    }))
 
 # A review: three questions, findings in each band, instrument findings, what to test first.
@@ -2663,15 +2720,16 @@ ok("a review in parts lists a prompt hash for each call, and one with a part mis
 
 # The run log: schema, no key. A planted key string is scrubbed from the output and from the log.
 key_planted <- "sk-planted-KEY-0123456789abcdef"
-leaky_rounds <- list(flow_round(fr_form, fl_pm, brief = fr_brief, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, kept = fr_kept),
+leaky_rounds <- list(flow_round(fr_form, fl_pm, brief = fr_brief, drafts = fr_drafts, appraisal = fr_ap, seed = 11L,
+                                analyst = list(set = fr_set, edits = list(), final = final_set(fr_set, list(), fr_drafts, 11L))),
                      flow_round(ex_form, fl_pm, review = with_field(ex_rv, error = paste("echoed", key_planted))))
 leaky_rounds[[1]]$drafts[[1]]$call$raw <- paste0("{\"echo\": \"", key_planted, "\"}")
 log_txt <- run_log_json(leaky_rounds, profile = "home", time = out_time, secrets = c(key_planted, "short"))
 log_back <- jsonlite::fromJSON(log_txt, simplifyVector = FALSE)
-ok("the run log is one JSON file with a schema, the profile, the time and every round; the kept items are in it",
+ok("the run log is one JSON file with a schema, the profile, the time and every round; what the analyst did with the set is in it",
    identical(log_back$schema, 1L) && identical(log_back$profile, "home") && length(log_back$rounds) == 2L &&
      grepl("^2026-11-12T", log_back$written) && identical(log_back$rounds[[1]]$schema, 1L) &&
-     identical(purrr::map_chr(log_back$rounds[[1]]$kept, "id"), c("CONF1", "CONF2")) &&
+     identical(purrr::map_chr(purrr::map(log_back$rounds[[1]]$analyst$final, "item"), "id"), c("CONF1", "CONF2")) &&
      !is.null(log_back$rounds[[1]]$drafts[[1]]$reply) && !is.null(log_back$rounds[[2]]$review$hash))
 ok("a planted key is absent from the log, which says where it was taken out, and a string too short to be a key is left alone",
    !grepl(key_planted, log_txt, fixed = TRUE) && grepl("[key removed]", log_txt, fixed = TRUE) &&
@@ -2720,13 +2778,13 @@ local({
        grepl("Nothing to show yet", html_of3(output$view), fixed = TRUE) && is.null(output$downloads))
     llm_set_session_key(key_planted)
     st$form <- fr_form; st$drafts <- fr_drafts; st$appraisal <- fr_ap; st$seed <- 11L; st$brief <- fr_brief
-    st$approved <- fr_approved; st$kept <- list(); st$round <- 1L
+    st$approved <- fr_approved; st$set <- list(); st$round <- 1L
     st$rounds <- list(leaky_rounds[[1]])
     session$flushReact()
     h0 = html_of3(output$view)
-    ok("a drafting round with nothing ticked says no item has been kept",
-       grepl("No item has been kept yet", h0, fixed = TRUE) && !grepl("Disclosure of the use", h0, fixed = TRUE))
-    st$kept <- fr_kept
+    ok("a drafting round with nothing in the set says there is no item in it",
+       grepl("There is no item in the set yet", h0, fixed = TRUE) && !grepl("Disclosure of the use", h0, fixed = TRUE))
+    st$set <- fr_set
     session$flushReact()
     h = html_of3(output$view)
     ok("ticking items on Results puts them on the Output tab in HTML for Word and in a plain text box, with the disclosure block",
@@ -2734,11 +2792,11 @@ local({
          grepl("Select what is in the first box", h, fixed = TRUE) && grepl("<textarea", h, fixed = TRUE) &&
          grepl(fr_ap$hash, h, fixed = TRUE) && grepl("Not a pretest", h, fixed = TRUE) &&
          n_in3("Copy for Word", h) == 1L && n_in3("Copy plain text", h) == 1L && grepl("execCommand", h, fixed = TRUE))
-    st$kept <- fr_kept[1]
+    st$set <- fr_set[1]
     session$flushReact()
     ok("un-ticking an item takes it off the Output tab",
        !grepl("CONF2", html_of3(output$view), fixed = TRUE) && grepl("CONF1", html_of3(output$view), fixed = TRUE))
-    st$kept <- fr_kept
+    st$set <- fr_set
     session$flushReact()
     ok("the downloads are the plain text and the run log, and the page says no key is in the log",
        grepl("Download the plain text", html_of3(output$downloads), fixed = TRUE) &&
@@ -2748,9 +2806,9 @@ local({
     log_file = output$get_log
     txt = paste(readLines(txt_file, encoding = "UTF-8", warn = FALSE), collapse = "\n")
     log = jsonlite::fromJSON(paste(readLines(log_file, encoding = "UTF-8", warn = FALSE), collapse = "\n"), simplifyVector = FALSE)
-    ok("the text download is the output as plain text; the log download is JSON with a schema, the round and the items kept",
+    ok("the text download is the output as plain text; the log download is JSON with a schema, the round and the analyst's final items",
        grepl("CONF1", txt, fixed = TRUE) && grepl("Disclosure of the use of language models", txt, fixed = TRUE) &&
-         identical(log$schema, 1L) && length(log$rounds) == 1L && identical(purrr::map_chr(log$rounds[[1]]$kept, "id"), c("CONF1", "CONF2")))
+         identical(log$schema, 1L) && length(log$rounds) == 1L && identical(purrr::map_chr(purrr::map(log$rounds[[1]]$analyst$final, "item"), "id"), c("CONF1", "CONF2")))
     ok("a key in the session, and echoed in a model's reply, is in neither the page, nor the text download, nor the log download",
        key_planted %in% known_keys() &&
          grepl(key_planted, leaky_rounds[[1]]$drafts[[1]]$call$raw, fixed = TRUE) &&
@@ -2845,7 +2903,7 @@ ok("a profile that still holds placeholders says which entries to fill in, the c
 local({
   st = flow_state()
   st$workers = fl_models("claude-haiku-5-5")
-  fa = rec_ask(reply_rich)
+  fa = rec_ask(function(m, sys) if (identical(m$id, pm_id)) appraisal_ok else tagged_draft(m))
   shiny::testServer(mod_results_server,
                     args = list(state = st, go = function(tab) NULL, make_ask = function(total) fa$ask), {
     session$flushReact()

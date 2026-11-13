@@ -29,7 +29,7 @@ LLM_MAX_TOKENS <- c(brief = 4000L, draft = 12000L, appraisal = 24000L,
 LLM_CUTOFF_ADVICE <- c(
   brief = "Try the brief check again, or skip it.",
   draft = "Ask for fewer items and run again.",
-  appraisal = "Untick a worker or ask for fewer items, and run again.",
+  appraisal = "Ask for fewer items, and run again.",
   evaluate = "Paste fewer questions and run again.")
 
 # Seconds before one request gives up. ellmer reads this from the option

@@ -1,9 +1,9 @@
 # output.R for QuestionR
 # What the Output tab and the Methodology tab are made of (DESIGN.md sections 8
 #   and 14), as plain functions with no Shiny state and no model call in them, so a
-#   test can build every output without a browser: the skills as a table, the kept
-#   items or the review as one document that renders both as HTML that pastes into
-#   Word and as plain text, the TRAPD block, the disclosure block, and the run log.
+#   test can build every output without a browser: the skills as a table, the items
+#   in the set or the review as one document that renders both as HTML that pastes
+#   into Word and as plain text, the TRAPD block, the disclosure block, and the run log.
 #   The screens that show them are the last part of ui_generate.R. Function
 #   definitions and constants only.
 
@@ -99,23 +99,100 @@ doc_text <- function(blocks) {
 }
 
 
-# ---- kept items ---------------------------------------------------------------------------------
+# ---- the analyst's set -------------------------------------------------------------------------
 
-# The items the analyst kept: for each, the candidate letter, the model behind it (the
-#   letter's model, which the analyst sees on Results), and the item as drafted. kept is
-#   state$kept (candidate, position, id); a tick that no longer points at an item is
-#   dropped, not guessed at.
-kept_items <- function(drafts, seed, kept) {
+# What the reviewer recommended, and what the analyst does with it, is kept in the session
+#   state and the run log, never in the drafts: the drafts stay as the workers wrote them.
+#   state$set is a list of entries (set_entry()), one per item in the set, in the order asked:
+#   the candidate letter, the item's position in that candidate's draft, its id and domain, the
+#   reviewer's reason and concerns, and whether the analyst swapped it in. state$edits holds
+#   only what the analyst changed, by the entry's uid (the letter and the position).
+set_entry <- function(candidate, position, id, domain = "", why = "", suggestion = "",
+                      concerns = list(), swapped = FALSE)
+  list(uid = paste0(candidate, "_", position), candidate = candidate, position = position, id = id,
+       domain = domain, why = why, suggestion = suggestion, concerns = concerns, swapped = swapped)
+
+# The set as the reviewer recommended it (check_appraisal()'s `selected`).
+initial_set <- function(chk)
+  purrr::map(chk$selected, function(e)
+    set_entry(e$candidate, e$position, e$id, e$domain, e$why, e$suggestion, e$concerns))
+
+# An item from a draft put in the set: in place of the entry whose uid is `target`, or at the
+#   end when there is none. An item that is already in the set is not put in twice.
+set_swap <- function(set, entry, target = NULL) {
+  uids = purrr::map_chr(set, "uid")
+  at = match(target %||% "", uids)
+  if (entry$uid %in% uids) set
+  else if (is.na(at)) c(set, list(entry))
+  else replace(set, at, list(entry))
+}
+
+# An item taken out of the set.
+set_remove <- function(set, uid) purrr::discard(set, function(e) identical(e$uid, uid))
+
+# An item with the analyst's changes put on it. edits holds only what changed: `stem`, `options`
+#   (a list of new texts by the option's number) and `parts` (by the part's number: `stem` and
+#   `options`). An option whose text is cleared is taken out.
+apply_edits <- function(it, ed) {
+  if (is.null(ed)) return(it)
+  texts = function(old, new) {
+    olds = purrr::map_chr(old, function(o) paste(unlist(o), collapse = " "))
+    now = purrr::imap_chr(olds, function(o, j) new[[as.character(j)]] %||% o)
+    as.list(now[nzchar(trimws(now))])
+  }
+  if (!is.null(ed$stem)) it$stem = ed$stem
+  if (!is.null(ed$options)) it$options = texts(it$options, ed$options)
+  if (!is.null(ed$parts))
+    it$parts = purrr::imap(it$parts, function(p, i) {
+      e = ed$parts[[as.character(i)]]
+      if (!is.null(e$stem)) p$stem = e$stem
+      if (!is.null(e$options)) p$options = texts(p$options %||% list(), e$options)
+      p
+    })
+  it
+}
+
+# What the analyst changed, read from the boxes on the page: for each entry of the set, the fields
+#   whose text is no longer the draft's. get(id) gives what is in the box with that input id, or
+#   NULL; the box ids are edit_input_ids(). An entry with no change has no entry in the result.
+edit_input_id <- function(uid, ...) paste(c("ed", uid, ...), collapse = "_")
+
+edits_from_inputs <- function(set, drafts, seed, get) {
+  cands = candidates_of(drafts, seed)
+  text_of = function(o) paste(unlist(o), collapse = " ")
+  changed = function(id, old) { v = get(id); if (!is.null(v) && !identical(v, old)) v }
+  opts = function(uid, prefix, old) {
+    new = purrr::imap(purrr::map_chr(old, text_of), function(o, j) changed(edit_input_id(uid, prefix, paste0("o", j)), o))
+    purrr::set_names(new, seq_along(new))[!purrr::map_lgl(new, is.null)]
+  }
+  out = purrr::map(set, function(e) {
+    it = full_item(unname(cands[[e$candidate]]$items)[[e$position]])
+    parts = purrr::imap(it$parts, function(p, i)
+      purrr::compact(list(stem = changed(edit_input_id(e$uid, paste0("p", i), "stem"), p$stem %||% ""),
+                          options = purrr::compact(opts(e$uid, paste0("p", i), p$options %||% list())))))
+    parts = purrr::set_names(parts, seq_along(parts))
+    parts = parts[purrr::map_lgl(parts, function(p) length(p) > 0L)]
+    ed = purrr::compact(list(stem = changed(edit_input_id(e$uid, "stem"), it$stem),
+                             options = if (length(opts(e$uid, NULL, it$options))) opts(e$uid, NULL, it$options),
+                             parts = if (length(parts)) parts))
+    if (length(ed)) ed
+  })
+  purrr::compact(purrr::set_names(out, purrr::map_chr(set, "uid")))
+}
+
+# The set as the analyst left it: for each entry the candidate, the model behind that letter (which
+#   Results shows), the item with the changes put on it, and whether it was swapped in or edited. An
+#   entry that no longer points at an item is dropped, not guessed at.
+final_set <- function(set, edits, drafts, seed) {
   cands = candidates_of(drafts, seed)
   labels = labels_of(drafts, seed)
-  hits = purrr::map(kept, function(k) {
-    if (is.null(k$candidate) || !k$candidate %in% names(cands)) return(NULL)
-    items = unname(cands[[k$candidate]]$items)
-    if (k$position > length(items)) return(NULL)
-    list(candidate = k$candidate, model = labels[[k$candidate]], position = k$position,
-         item = full_item(items[[k$position]]))
-  })
-  purrr::compact(hits)
+  purrr::compact(purrr::map(set, function(e) {
+    items = unname(cands[[e$candidate]]$items)
+    if (is.null(items) || e$position > length(items)) return(NULL)
+    list(candidate = e$candidate, model = labels[[e$candidate]], position = e$position, uid = e$uid,
+         domain = e$domain, swapped = isTRUE(e$swapped), edited = !is.null(edits[[e$uid]]),
+         item = apply_edits(full_item(items[[e$position]]), edits[[e$uid]]))
+  }))
 }
 
 # One item as blocks: its id, the introduction, the stem, the numbered options (or what an
@@ -248,10 +325,10 @@ skill_files_used <- function(f, brief_ran = FALSE) {
 model_text <- function(m) paste0(m$id, " (", llm_host(m), ")")
 
 # The disclosure block, as blocks: the date, the profile, each model id, each skill file's version,
-#   the hash of each prompt and whether it was edited, which candidate each kept item came from, and
-#   the line that says what this is. kept is kept_items(); brief, approved, appraisal and review are
-#   what the run returned, any of them NULL.
-disclosure_blocks <- function(f, kept = list(), drafts = NULL, appraisal = NULL, review = NULL,
+#   the hash of each prompt and whether it was edited, which candidate each item of the set came from
+#   and whether the analyst edited it or swapped it in, and the line that says what this is. chosen is
+#   final_set(); brief, approved, appraisal and review are what the run returned, any of them NULL.
+disclosure_blocks <- function(f, chosen = list(), drafts = NULL, appraisal = NULL, review = NULL,
                               brief = NULL, approved = NULL, profile = APP_PROFILE, models = APP_MODELS,
                               time = Sys.time(), dir = SKILLS_DIR) {
   draft = TASKS[[f$task]]$kind == "draft"
@@ -275,8 +352,10 @@ disclosure_blocks <- function(f, kept = list(), drafts = NULL, appraisal = NULL,
     if (!draft && length(review$batches) > 1L)
       unlist(purrr::map(review$batches, function(b) hash(if (identical(b$kind, "instrument")) "Review prompt, instrument as a whole"
                                                          else paste0("Review prompt, part ", b$part, " of ", b$n_parts), b$hash))))
-  from = purrr::map_chr(seq_along(kept), function(i)
-    paste0("Item ", i, " (", kept[[i]]$item$id, "): candidate ", kept[[i]]$candidate, ", written by ", kept[[i]]$model))
+  from = purrr::map_chr(seq_along(chosen), function(i)
+    paste0("Item ", i, " (", chosen[[i]]$item$id, "): candidate ", chosen[[i]]$candidate, ", written by ",
+           chosen[[i]]$model, if (chosen[[i]]$swapped) "; swapped in by the analyst, not the reviewer's choice",
+           if (chosen[[i]]$edited) "; edited by the analyst"))
   c(list(blk_h("Disclosure of the use of language models", 2L),
          blk_list(c(
            paste0("Date: ", format(time, "%Y-%m-%d %H:%M")),
@@ -297,11 +376,11 @@ disclosure_blocks <- function(f, kept = list(), drafts = NULL, appraisal = NULL,
 # ---- the whole output --------------------------------------------------------------------------
 
 # The output of one flow, as a list: `kind` ("draft" or "review"), `blocks`, `html` (plain HTML for
-#   Word), `text` (the same, as plain text), and `n_items`. A drafting flow's output is the items the
-#   analyst kept; with none kept it says so, and has no disclosure, since there is nothing to disclose
-#   a use of. A review's is the review. Both end with the TRAPD block when a language other than the
+#   Word), `text` (the same, as plain text), and `n_items`. A drafting flow's output is the set as the
+#   analyst left it (final_set()); with nothing in it the output says so, and has no disclosure, since
+#   there is nothing to disclose a use of. A review's is the review. Both end with the TRAPD block when a language other than the
 #   source is involved, then the disclosure block. f is the cleaned form of the round.
-build_output <- function(f, drafts = NULL, appraisal = NULL, seed = NULL, kept = list(), review = NULL,
+build_output <- function(f, drafts = NULL, appraisal = NULL, seed = NULL, set = list(), edits = list(), review = NULL,
                          brief = NULL, approved = NULL, profile = APP_PROFILE, models = APP_MODELS,
                          time = Sys.time(), dir = SKILLS_DIR) {
   kind = TASKS[[f$task]]$kind
@@ -312,13 +391,13 @@ build_output <- function(f, drafts = NULL, appraisal = NULL, seed = NULL, kept =
       return(finish_output(kind, list(blk_p("There is no review to show. Run one on the Results tab.")), 0L))
     return(finish_output(kind, c(review_blocks(f, review), trapd_blocks(f, review$reply$trapd), disclose()), 0L))
   }
-  chosen = if (!is.null(drafts)) kept_items(drafts, seed, kept) else list()
+  chosen = if (!is.null(drafts)) final_set(set, edits, drafts, seed) else list()
   if (!length(chosen))
-    return(finish_output(kind, list(blk_p(paste0("No item has been kept yet. Tick \"Keep this item\" on the ",
-                                                 "Results tab, and the items appear here."))), 0L))
+    return(finish_output(kind, list(blk_p(paste0("There is no item in the set yet. The Results tab shows the ",
+                                                 "recommended items, and you can add items from the drafts."))), 0L))
   items = unlist(purrr::map(chosen, function(k) item_blocks(k$item, f$output_language)), recursive = FALSE)
   finish_output(kind, c(list(blk_h("Survey items", 2L),
-                             blk_p("First drafts by language models, untested.", em = TRUE)),
+                             blk_p("First drafts by language models, as recommended by a reviewing model and left by the analyst; untested.", em = TRUE)),
                         items, trapd_blocks(f), disclose(chosen)), length(chosen))
 }
 
@@ -345,7 +424,7 @@ scrub_secrets <- function(text, secrets) {
 
 # The session's run log as JSON, one file: schema 1, the profile and time, and every round as
 #   flow_round() made it (form, prompts and hashes, raw and parsed replies, R's checks' inputs, the
-#   seed and the candidate-to-model map, the kept items). Keys scrubbed.
+#   seed and the candidate-to-model map, and the analyst's set, edits and final items). Keys scrubbed.
 run_log_json <- function(rounds, profile = APP_PROFILE, time = Sys.time(), secrets = character(0))
   scrub_secrets(as.character(flow_log_json(list(
     schema = 1L, app = "QuestionR", written = format(time, "%Y-%m-%dT%H:%M:%S%z"),

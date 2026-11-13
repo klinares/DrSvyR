@@ -1,8 +1,8 @@
 # checks.R for QuestionR
 # What R checks and codes for itself, so no model is trusted with it (DESIGN.md
 #   sections 7 and 12): the shape of every reply and the validators built from
-#   it, the item count, the coded format defaults, and the checks on an
-#   appraisal. No Shiny and no model call in here; every function takes the
+#   it, the item count, the coded format defaults, and the checks on the reviewer's
+#   recommendation. No Shiny and no model call in here; every function takes the
 #   parsed reply it is to check. Function definitions and constants only.
 
 
@@ -30,11 +30,12 @@ REPLY_SCHEMAS <- list(
                           options = "list?", open_format = "string?", parts = "list?")),
     rules = c("item_count", "options_or_open")),
   appraisal = list(
-    fields = c(appraisal = "list", set_fails = "list", coverage = "list", differences = "list",
-               merged = "list", test_first = "list", limits = "string"),
-    each = list(appraisal = c(candidate = "text", id = "text", fails = "list"),
-                set_fails = c(candidate = "text", check = "text", severity = "number")),
-    rules = c("fail_entries")),
+    fields = c(selected = "list", not_covered = "list", set_notes = "list", test_first = "list",
+               limits = "string"),
+    each = list(selected = c(domain = "text", candidate = "text", id = "id", why = "string",
+                             concerns = "list", suggestion = "string?"),
+                set_notes = c(check = "text", severity = "number", why = "string")),
+    rules = c("selection_concerns", "selection_valid")),
   # A review of pasted text (the Evaluate task). Findings sit one level further
   #   down than `each` reaches, so a rule reads them.
   review = list(
@@ -93,15 +94,36 @@ REPLY_RULES <- list(
       paste0("Item ", paste(purrr::map_chr(bad, function(it) it$id %||% "?"), collapse = ", "),
              " has neither options nor an open_format.")
   },
-  # Every fail in an appraisal names the check it fails and rates it 1 to 10.
-  fail_entries = function(obj, ...) {
-    bad = purrr::keep(obj$appraisal, function(e)
-      !all(purrr::map_lgl(e$fails, function(f)
-        is.list(f) && type_ok(f$check, "text") && type_ok(f$severity, "number"))))
+  # Every concern about a recommended item names its check, the failing words, a severity
+  #   from 1 to 10 and why.
+  selection_concerns = function(obj, ...) {
+    bad = purrr::keep(obj$selected, function(e)
+      !all(purrr::map_lgl(e$concerns, function(cn)
+        is.list(cn) && type_ok(cn$check, "text") && type_ok(cn$severity, "number") &&
+          type_ok(cn$evidence, "string") && type_ok(cn$why, "string"))))
     if (length(bad))
-      paste0("A fail for ", paste(purrr::map_chr(bad, function(e)
-        paste0(e$candidate, " ", e$id)), collapse = ", "),
-        " does not name its check and give a severity from 1 to 10.")
+      paste0("A concern about ", paste(purrr::map_chr(bad, function(e) paste("item", e$id, "of", e$candidate)),
+                                      collapse = ", "),
+             " does not give its check, the failing words, a severity from 1 to 10 and why.")
+  },
+  # The recommendation names items that are in the drafts, none twice, and no more than were
+  #   asked for. candidates is the drafts by letter, n_items the number asked for.
+  selection_valid = function(obj, candidates = NULL, n_items = NULL, ...) {
+    sel = obj$selected
+    label = function(e) paste0("item ", e$id, " of candidate ", e$candidate)
+    keys = purrr::map_chr(sel, function(e) paste(e$candidate, as.character(e$id), sep = "|"))
+    unknown = if (!is.null(candidates)) purrr::keep(sel, function(e)
+      !as.character(e$id) %in% purrr::map_chr(candidates[[as.character(e$candidate)]]$items,
+                                              function(it) as.character(it$id %||% "")))
+    c(if (length(unknown))
+        paste0("The reply recommends ", paste(purrr::map_chr(unknown, label), collapse = ", "),
+               ", which ", if (length(unknown) == 1L) "is" else "are", " not among the drafts."),
+      if (anyDuplicated(keys))
+        paste0("The reply recommends the same item more than once: ",
+               paste(purrr::map_chr(sel[duplicated(keys)], label), collapse = ", "), "."),
+      if (!is.null(n_items) && length(sel) > n_items)
+        paste0("The reply recommends ", length(sel), " items; ", n_items, " ",
+               if (n_items == 1L) "was" else "were", " asked for."))
   },
   # Every finding in a review gives the check, the evidence, the problem and a
   #   severity from 1 to 10, whether it is about a question or the instrument.
@@ -268,11 +290,10 @@ defaults_labels <- function(d) {
 }
 
 
-# ---- checks on an appraisal ------------------------------------------------------------
+# ---- the reviewer's recommendation, and severity bands ------------------------------------------------------------
 
-# A fail or a finding rated below this goes in a collapsed list, and does not
-#   count against an item when a merged option or the clean items are drawn up
-#   (pm_appraise.md, evaluate.md; DESIGN.md section 13).
+# A concern or a finding rated below this goes in a collapsed list (pm_appraise.md,
+#   evaluate.md; DESIGN.md section 13).
 SEVERITY_SHOWN <- 5L
 
 # The three bands a finding or a fail is shown in, highest first (DESIGN.md
@@ -288,55 +309,38 @@ severity_band <- function(severity)
   ifelse(is.na(severity) | (severity >= SEVERITY_SHOWN & severity < SEVERITY_FIX), "judgment",
          ifelse(severity >= SEVERITY_FIX, "fix", "minor"))
 
-# The appraisal is the project manager's, so R checks what it can without a model
-#   (DESIGN.md section 7). candidates is the drafts the appraiser saw, named by
-#   letter; checklist is the named vector it was sent. Returns:
-#   fails            one row per fail the appraiser reported on an item, with its
-#                    severity, whether it is shown (severity 5 or more, or none
-#                    given), and whether its `check` is an id that was sent
-#   set_fails        the same for the fails about a candidate's set of items
-#   unknown_checks   ids it cited that were not sent
-#   not_appraised    "letter|id" of items it gave no entry. The skill has it
-#                    report only failures, so a missing entry would otherwise
-#                    read as a pass.
-#   unknown_items    entries for an item no candidate has
-#   merged_problems  merged items that do not exist, or that have a fail shown
+# The reviewer's recommendation is the project manager's, so R checks what it can without a
+#   model (DESIGN.md sections 7 and 16). candidates is the drafts the reviewer saw, named by
+#   letter; checklist is the named vector it was sent. The reviewer returns candidate letters
+#   and item ids only: R finds each item in its draft, and copies the wording from there.
+#   Returns:
+#   selected       one entry per recommended item, in the order given: candidate, id, the
+#                  item's position in that candidate's items, domain, why, suggestion, and
+#                  concerns (one row each: check, evidence, severity, why, whether it is
+#                  shown, whether its check is an id that was sent). An item that cannot be
+#                  found is left out (the validator refuses such a reply, so none is).
+#   set_notes      rows of the same kind about the recommended set as a whole
+#   not_covered    the domains it said no candidate covered well enough
+#   unknown_checks the check ids it cited that were not sent
 check_appraisal <- function(reply, candidates, checklist) {
-  entries = reply$appraisal %||% list()
-  key = function(letter, id) if (length(id)) paste(letter, id, sep = "|") else character(0)
-  expected = unlist(purrr::imap(candidates, function(r, letter)
-    key(letter, purrr::map_chr(r$items, function(it) it$id %||% ""))), use.names = FALSE)
-  entry_keys = purrr::map_chr(entries, function(e) key(e$candidate %||% "", e$id %||% ""))
-
-  row = function(f, candidate, id, items = NULL)
-    list(candidate = candidate, id = id, items = items,
-         check = as.character(f$check %||% ""), evidence = as.character(f$evidence %||% ""),
-         stage = as.character(f$stage %||% ""), why = as.character(f$why %||% ""),
+  row = function(f)
+    list(check = as.character(f$check %||% ""), evidence = as.character(f$evidence %||% ""),
+         stage = "", why = as.character(f$why %||% ""), items = NULL,
          severity = if (is.numeric(f$severity)) f$severity else NA_real_,
          shown = !is.numeric(f$severity) || f$severity >= SEVERITY_SHOWN,
          known = as.character(f$check %||% "") %in% names(checklist))
-  fails = purrr::list_flatten(purrr::map(entries, function(e)
-    purrr::map(e$fails, function(f) row(f, e$candidate %||% "", e$id %||% ""))))
-  set_fails = purrr::map(reply$set_fails %||% list(), function(f)
-    row(f, f$candidate %||% "", "", paste(unlist(f$items), collapse = ", ")))
-  failed_keys = unique(purrr::map_chr(purrr::keep(fails, function(f) f$shown),
-                                      function(f) key(f$candidate, f$id)))
-
-  merged = purrr::keep(reply$merged %||% list(), function(m)
-    nzchar(m$candidate %||% "") && nzchar(m$id %||% ""))
-  merged_problems = unlist(purrr::map(merged, function(m) {
-    k = key(m$candidate, m$id)
-    if (!k %in% expected) paste0("Merged item ", m$candidate, " ", m$id, " is not in any candidate.")
-    else if (k %in% failed_keys) paste0("Merged item ", m$candidate, " ", m$id,
-                                         " has a fail rated 5 or above.")
-  }))
-
-  all_fails = c(fails, set_fails)
-  list(fails = fails, set_fails = set_fails,
-       unknown_checks = unique(purrr::map_chr(purrr::discard(all_fails, function(f) f$known), "check")),
-       not_appraised = setdiff(expected, entry_keys),
-       unknown_items = setdiff(entry_keys, expected),
-       merged_problems = merged_problems %||% character(0))
+  ids_of = function(letter) purrr::map_chr(candidates[[letter]]$items, function(it) as.character(it$id %||% ""))
+  selected = purrr::map(reply$selected %||% list(), function(e)
+    list(candidate = as.character(e$candidate), id = as.character(e$id),
+         position = match(as.character(e$id), ids_of(as.character(e$candidate))),
+         domain = as.character(e$domain %||% ""), why = as.character(e$why %||% ""),
+         suggestion = as.character(e$suggestion %||% ""), concerns = purrr::map(e$concerns %||% list(), row)))
+  selected = purrr::discard(selected, function(e) is.na(e$position))
+  set_notes = purrr::map(reply$set_notes %||% list(), row)
+  all_rows = c(purrr::list_flatten(purrr::map(selected, "concerns")), set_notes)
+  list(selected = selected, set_notes = set_notes,
+       not_covered = purrr::map_chr(reply$not_covered %||% list(), function(d) paste(unlist(d), collapse = " ")),
+       unknown_checks = unique(purrr::map_chr(purrr::discard(all_rows, function(r) r$known), "check")))
 }
 
 

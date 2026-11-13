@@ -268,9 +268,10 @@ model_names_in <- function(text, ids) {
 
 # ---- the appraisal --------------------------------------------------------------------------
 
-# The project manager appraises the drafts that arrived, relabelled A, B, C in an
-#   order the seed gives, so it does not know which model wrote which. Fields:
-#   status, error, labels (letter -> model id, only for drafts with status "ok"),
+# The project manager reviews the drafts that arrived, relabelled A, B, C in an order the
+#   seed gives, so it does not know which model wrote which, and recommends one item per
+#   domain, by candidate letter and item id (check_appraisal() finds each in its draft).
+#   Fields: status, error, labels (letter -> model id, only for drafts with status "ok"),
 #   system, user, hash, reply. seed is stored in the log, with the labels.
 run_appraisal <- function(form, drafts, pm, ask = llm_json, seed) {
   if (missing(seed) || length(seed) != 1L || is.na(seed))
@@ -293,7 +294,8 @@ run_appraisal <- function(form, drafts, pm, ask = llm_json, seed) {
                          "know who wrote which candidate."), p))
 
   r = call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["appraisal"]],
-                 reply_validator("appraisal"), "appraisal")
+                 reply_validator("appraisal", candidates = candidates_of(drafts, seed),
+                                 n_items = clean_form(form)$n_items), "appraisal")
   with_call(list(status = r$status, error = r$error, labels = labels, system = p$system,
                  user = p$user, hash = p$hash, reply = r$reply), r$call)
 }
@@ -335,9 +337,11 @@ with_call_field <- function(x) {
 # A round, for the log: schema 1, the time, the form, then what each step returned.
 #   The project manager's key and every worker's key are never in these lists, and
 #   neither is a header: a call record holds no request. seed and the labels are
-#   in it, so the shuffle can be reproduced.
+#   in it, so the shuffle can be reproduced. analyst is what the analyst did with the
+#   result (the set, the edits, the final items): it is kept apart from the drafts, which
+#   stay as the workers wrote them.
 flow_round <- function(form, pm = NULL, brief = NULL, drafts = NULL, appraisal = NULL,
-                       seed = NA_integer_, kept = NULL, time = Sys.time(), review = NULL) {
+                       seed = NA_integer_, analyst = NULL, time = Sys.time(), review = NULL) {
   # JSON drops the names of a character vector, and the letters are the point of
   #   labels: letter -> model id, as a named list, keeps them.
   if (!is.null(appraisal)) appraisal$labels = as.list(appraisal$labels)
@@ -352,7 +356,7 @@ flow_round <- function(form, pm = NULL, brief = NULL, drafts = NULL, appraisal =
          d$call = attr(d, "call")
          d
        }),
-       appraisal = appraisal, kept = kept)
+       appraisal = appraisal, analyst = analyst)
 }
 
 # The log as JSON text. Nothing is written to disk here.
