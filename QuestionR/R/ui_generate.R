@@ -301,12 +301,16 @@ mod_brief_server <- function(id, state, go = function(tab) invisible(NULL), make
 
 # ---- tab 2: Prompt ----------------------------------------------------------------------------
 
+# The one line under the prompt box. The rules are sent with every prompt and are not shown here.
+RULES_NOTE <- paste("The survey design rules are sent with this prompt every time and cannot be edited here.",
+                    "You can read them on the Methodology tab.")
+
 mod_prompt_ui <- function(id) {
   ns <- NS(id)
   tagList(
     tags$style(".qr-prompt textarea { font-family: monospace; font-size: 85%; }"),
     tags$h3(QUESTIONR_TABS[3]),
-    tags$p("This is exactly what the workers will be sent. R assembled it from the form and ",
+    tags$p("This is the prompt the model will be sent. R assembled it from the form and ",
            "the methodology files; no model wrote it. Approve it as it is, or edit it first: ",
            "an edited prompt is marked as edited, with both hashes, wherever it is recorded."),
     uiOutput(ns("body")),
@@ -350,17 +354,16 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
                    "first block; the last call has the whole questionnaire and only the checks about ",
                    "order, routing, consistency and fit to objectives. Because it is several prompts, ",
                    "it cannot be edited here. Hash of the first: ", tags$code(substr(a$hash, 1, 16)), "."),
-        tags$details(tags$summary("The first part's prompt"),
-                     tags$pre(class = "small", a$system), tags$pre(class = "small", a$message)),
+        tags$details(tags$summary("The first part's prompt"), tags$pre(class = "small", a$message)),
+        tags$p(class = "text-muted small", RULES_NOTE),
         tags$p("It can take several minutes, and the app is busy until it finishes."),
         actionButton(session$ns("approve"), "Approve and run", class = "btn-primary")))
       tagList(
         tags$p(class = "text-muted small", "Skill files used: ", paste(a$files, collapse = ", ")),
         tags$div(class = "qr-prompt",
-                 textAreaInput(session$ns("system"), "System prompt (the rules)", value = a$system,
-                               rows = 12, width = "100%", resize = "vertical"),
-                 textAreaInput(session$ns("user"), "Message (the brief, the ask, the reply format)",
-                               value = a$message, rows = 14, width = "100%", resize = "vertical")),
+                 textAreaInput(session$ns("user"), "The prompt (you can edit this)",
+                               value = a$message, rows = 18, width = "100%", resize = "vertical")),
+        tags$p(class = "text-muted small", RULES_NOTE),
         if (draft) tags$p(paste0(
           "Approving runs ", length(state$workers), if (length(state$workers) == 1L) " worker" else " workers",
           " together, then the reviewer recommends a set: ", length(state$workers) + 1L,
@@ -375,13 +378,12 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
     # Whether what is in the boxes is what R assembled, and the hash of each.
     output$status <- renderUI(safe_ui({
       a = assembled()
-      if (is.null(a) || inherits(a, "error") || !is.null(a$calls) || is.null(input$system)) return(NULL)
-      sys = unix(input$system)
+      if (is.null(a) || inherits(a, "error") || !is.null(a$calls) || is.null(input$user)) return(NULL)
       msg = unix(input$user)
-      if (identical(sys, a$system) && identical(msg, a$message))
+      if (identical(msg, a$message))
         tags$p(class = "text-muted small", "As assembled. Hash ", tags$code(substr(a$hash, 1, 16)), ".")
       else warn_box(tags$strong("Edited. "), "Assembled hash ", tags$code(substr(a$hash, 1, 16)),
-                    "; edited hash ", tags$code(substr(prompt_hash(sys, sent_user(msg, a$tail)), 1, 16)), ".")
+                    "; edited hash ", tags$code(substr(prompt_hash(a$system, sent_user(msg, a$tail)), 1, 16)), ".")
     }))
 
     observeEvent(input$approve, {
@@ -391,17 +393,17 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
         message("There is no prompt to approve. Fill in the Brief tab first.")
         return()
       }
-      # A review in parts is approved as assembled: its prompts are several, and not edited.
-      sys = if (is.null(a$calls)) unix(input$system) else a$system
+      # A review in parts is approved as assembled: its prompts are several, and not edited. The
+      #   rules (the system prompt) are never the analyst's to change: they are what R assembled.
       msg = if (is.null(a$calls)) unix(input$user) else a$message
-      if (!nzchar(trimws(sys)) || !nzchar(trimws(msg))) {
+      if (!nzchar(trimws(msg))) {
         message("The prompt is empty. Reset it to the assembled prompt, or write one.")
         return()
       }
       # What is sent is the analyst's text and, after it, R's tail (the checklist and the reply format).
       usr = sent_user(msg, a$tail)
-      state$approved <- list(system = sys, user = usr, hash = prompt_hash(sys, usr), files = a$files,
-                             edited = !identical(sys, a$system) || !identical(msg, a$message),
+      state$approved <- list(system = a$system, user = usr, hash = prompt_hash(a$system, usr), files = a$files,
+                             edited = !identical(msg, a$message),
                              original_hash = a$hash)
       state$run_id <- (state$run_id %||% 0L) + 1L
       go(QUESTIONR_TABS[4])

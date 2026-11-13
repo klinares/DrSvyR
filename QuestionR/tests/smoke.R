@@ -1701,8 +1701,20 @@ local({
          grepl("textarea", b, fixed = TRUE) && grepl("core.md, generate.md", b, fixed = TRUE) &&
          grepl("Approve and run", b, fixed = TRUE) && !grepl("disabled", b, fixed = TRUE) &&
          grepl("3 workers", b, fixed = TRUE) && grepl("4 model calls", b, fixed = TRUE))
+    ok("the Prompt tab shows one box, labelled as editable, and one line saying the rules are sent and cannot be edited here",
+       lengths(regmatches(b, gregexpr("<textarea", b, fixed = TRUE))) == 1L &&
+         grepl("The prompt (you can edit this)", b, fixed = TRUE) &&
+         grepl("The survey design rules are sent with this prompt every time and cannot be edited here. You can read them on the Methodology tab.",
+               gsub("\\s+", " ", b), fixed = TRUE))
+    reflex_says <- unlist(purrr::map(skills[["core.md"]]$reflexes, function(r) c(r$say, r$never)), use.names = FALSE)
+    ok("the Prompt tab has no \"System prompt\", none of core.md's Reflexes or Prohibitions, and no input named system",
+       !grepl("System prompt", paste(b, html_of3(output$status)), ignore.case = TRUE) &&
+         !any(purrr::map_lgl(c(reflex_says[!is.na(reflex_says)], skills[["core.md"]]$prohibitions), function(s)
+           grepl(squash(s), squash(paste(b, html_of3(output$status))), fixed = TRUE))) &&
+         !grepl("REFLEXES:", b, fixed = TRUE) && !grepl("PROHIBITIONS", b, fixed = TRUE) &&
+         !grepl("id=\"[^\"]*-system\"", b))
 
-    session$setInputs(system = a$system, user = a$message)
+    session$setInputs(user = a$message)
     ok("an untouched prompt is shown as assembled, with its hash",
        grepl("As assembled", html_of3(output$status), fixed = TRUE) &&
          grepl(substr(a$hash, 1, 16), html_of3(output$status), fixed = TRUE))
@@ -1714,7 +1726,7 @@ local({
 
     ed_msg = paste0(a$message, "\nPlease keep every stem under 15 words.")
     ed_user = sent_user(ed_msg, a$tail)
-    session$setInputs(system = a$system, user = ed_msg)
+    session$setInputs(user = ed_msg)
     s = html_of3(output$status)
     ok("an edited prompt is marked edited, showing both hashes",
        grepl("Edited", s, fixed = TRUE) && grepl(substr(a$hash, 1, 16), s, fixed = TRUE) &&
@@ -1724,11 +1736,11 @@ local({
        identical(st$approved$edited, TRUE) && identical(st$approved$user, ed_user) &&
          identical(st$approved$hash, prompt_hash(a$system, ed_user)) && identical(st$approved$original_hash, a$hash) &&
          st$run_id == 2L)
-    session$setInputs(system = gsub("\n", "\r\n", a$system, fixed = TRUE), user = gsub("\n", "\r\n", a$message, fixed = TRUE),
+    session$setInputs(user = gsub("\n", "\r\n", a$message, fixed = TRUE),
                       approve = 3)
     ok("a browser's line endings are not an edit",
        identical(st$approved$edited, FALSE) && identical(st$approved$hash, a$hash))
-    session$setInputs(system = a$system, user = "   ", approve = 4)
+    session$setInputs(user = "   ", approve = 4)
     ok("an empty prompt is refused on the page, and no run starts",
        grepl("prompt is empty", html_of3(output$message), fixed = TRUE) && st$run_id == 3L)
   })
@@ -1742,8 +1754,13 @@ local({
     ok("Evaluate's prompt can be read and approved: the button is on and the page says it makes one call",
        !grepl("disabled", b, fixed = TRUE) && grepl("Questionnaire:", b, fixed = TRUE) &&
          grepl("one model call", b, fixed = TRUE) && !grepl("Phase 4", b, fixed = TRUE))
+    ok("Evaluate's Prompt tab also shows one box, no rules, no checklist and no reply format, and the same line about the rules",
+       lengths(regmatches(b, gregexpr("<textarea", b, fixed = TRUE))) == 1L &&
+         grepl("The prompt (you can edit this)", b, fixed = TRUE) && !grepl("System prompt", b, ignore.case = TRUE) &&
+         !grepl("REFLEXES:", b, fixed = TRUE) && !grepl("CHECKLIST", b, fixed = TRUE) && !grepl("REPLY FORMAT", b, fixed = TRUE) &&
+         grepl("cannot be edited here. You can read them on the Methodology tab.", gsub("\\s+", " ", b), fixed = TRUE))
     a = build_prompt(st$form)
-    session$setInputs(system = a$system, user = paste0(a$message, "\nAlso say if a question is too long."), approve = 1)
+    session$setInputs(user = paste0(a$message, "\nAlso say if a question is too long."), approve = 1)
     ok("approving a review prompt, edited or not, starts a run with the edited text and both hashes",
        st$run_id == 1L && identical(st$approved$edited, TRUE) && identical(st$approved$original_hash, a$hash) &&
          grepl("Also say if a question is too long.", st$approved$user, fixed = TRUE))
