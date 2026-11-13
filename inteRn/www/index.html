@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>inteRn</title>
+<link rel="stylesheet" href="chat.css">
+<script>window.INTERN_TOKEN = "{{TOKEN}}";</script>
+</head>
+<body>
+<header>
+  <span class="brand">inte<b>R</b>n</span>
+  <span id="model" class="muted"></span>
+  <span id="conn" class="muted" title="Connection to your R session"></span>
+  <button id="reset" type="button" title="Start a new conversation">New</button>
+</header>
+<main id="log" aria-live="polite">
+  <div class="msg note" id="welcome">
+    Ask about your code, your data's structure or your survey design. I see the
+    names, types and labels of objects in your session, never their values.
+    Your console stays free while I think.
+  </div>
+</main>
+<div id="status" class="muted" hidden><span class="dot"></span> Thinking. Your console is free.</div>
+<form id="ask">
+  <textarea id="input" rows="3" placeholder="Ask inteRn... (Enter to send, Shift+Enter for a new line)" autofocus></textarea>
+  <button id="send" type="submit">Send</button>
+</form>
+<script src="chat.js"></script>
+</body>
+</html>
