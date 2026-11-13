@@ -57,8 +57,8 @@ Disclosure of the use of language models
 - Date: 2026-11-12 09:30
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
-- Skill files and versions: core.md 0.2; evaluate.md 0.3; mode.md 0.1
-- Review prompt (not edited): 4cb3acaf9cc38c1a4ab6d4947c0d87a877aabf83661baab1ccd571a67e8ecdf8
+- Skill files and versions: core.md 0.3; evaluate.md 0.3; mode.md 0.1
+- Review prompt (not edited): 12a1c9c921d2f72ef146cac783dcc63eb1bc806364a9694977d51a222421f4f7
 
 Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
 

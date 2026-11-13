@@ -2,6 +2,318 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
+## Phase 8 (2026-11-13): what analysts see, the frameworks, and the merge prepared
+
+**Next: Kevin tries the app (click-through at the end of this section), then answers the one
+question the merge preparation needs (the e-mail address for this repository), and takes
+`REVIEW.md` and this file to the Claude project.** Nothing is pushed. One live run was made,
+with Kevin's yes: `tests/llm_check.R generate`, 5 requests, all ok.
+
+- **Commits, branch `questionr`:** the Claude project's files `67e6fae`; the revised Phase 8 prompt
+  and the note at the end of design section 17 `58f00d4`; 8a `06373be`; 8b `e0d90c5`; 8c
+  `eabbb8a`; 8d `da1477f`; 8e `c01c1a5`; 8f `edd4eea`; 8g `bbddebe`; 8h `6bbba75`; and the commit
+  that carries this file and `REVIEW.md`. 8i is in 8b, 8c, 8d and 8f: each change carries its
+  smoke checks, and the four checks 8i names are among them (listed below).
+- **Smoke:** 410 checks, all ok (396 at the end of Phase 7). `tests/review.R 5`: **no FAIL**, 11
+  of 12 code files (as before).
+- **Every prompt hash changed**, as 8a said: the message and the system prompt both changed. All
+  60 differ from the Phase 7 ones; nothing else moved them (the same two inputs, the form and the
+  skill files, give the same hash twice, and any change to either changes it). They are below.
+
+### What changed
+
+- **8a, the message.** The skill files `core`, `attitudinal`, `behavioral`, `sensitive` and
+  `README` of `www/skills/` are the Claude project's new ones, moved over the old (not edited;
+  `skills_next/` is gone). The parser reads `## Guidelines` (an optional heading line, then
+  one-line bullets) and still stops on any other unknown section; a Guidelines section that has
+  a second heading line, a wrapped bullet or no bullets stops, naming the file.
+  A draft's user text is now: the persona (read from `core.md`'s Persona, not copied into the
+  code); `Brief:` and the form's lines; `Task:` and the ask sentence; `core.md`'s Guidelines;
+  the task file's Guidelines. A review's: the persona, `Brief:`, `Task:`, `Questionnaire:` as
+  pasted, `core.md`'s Guidelines. PREPARE, ASK and CHARACTERIZE are not written there. The
+  persona is not in the system prompt (rules and prohibitions only). After the analyst's text R
+  appends the `CHECKLIST` (a review) and a `REPLY FORMAT` block, so an edit cannot break parsing.
+  `build_step_prompt()` returns `message` (what the analyst sees and edits), `tail` (what R
+  appends) and `user` (the two together, which is what is sent and hashed). The brief check
+  and the appraisal keep their layout (PREPARE, ASK, CHECKLIST, CHARACTERIZE); only the
+  persona moved, to the top of their message.
+- **8b, the Prompt tab** shows one box, "The prompt (you can edit this)", and under it the one
+  line the prompt gives. The "System prompt (the rules)" box, its label and every read of
+  `input$system` are gone. A review in parts shows its first part's message only. Places checked
+  for another view of the system prompt (grep of `R/`, `app.R` and `www/` for `system`, `prompt`,
+  `REFLEXES`, `reflex`, and by hand):
+  - `R/ui_generate.R`, Prompt module: box removed; the "first part's prompt" panel showed
+    `a$system` and now shows the message only; the status line shows hashes only.
+  - `R/ui_generate.R`, Results (the prompt hashes, one per call) and Run again (the REVISION block): hashes and
+    the form only; no prompt text.
+  - `R/output.R`, Output and its disclosure: the hash of each prompt, whether it was edited, the
+    skill files and their versions. No rules text. (The disclosure and the run log record the
+    system prompt by its hash and, in the log, in full: allowed by ruling 1.)
+  - `R/ui.R` and `www/start.md`, Start here: no system prompt.
+  - `www/methodology.md` and the skill panels: these *are* where the rules can be read, as the
+    line under the box says; the Prompt page itself has none of them (smoke checks that).
+  - `app.R`: no view of it; `R/flow.R`, `R/llm.R`: plumbing only.
+  - `www/skills/README.md` says "Never sent in the system prompt" about Guidelines; it is for
+    maintainers and is not drawn.
+- **8c, the frameworks** (details below).
+- **8d, a Source code button** (`APP_SOURCE_URL`, `app.R` section 1): small, outline, top left of the
+  header before the logo, `target="_blank" rel="noopener"`.
+- **8e:** `www/skills_materials` is in `.rscignore`; the root `.gitignore` ignores
+  `QuestionR/www/skills_materials/*.pdf` and re-admits by name only the CC BY-NC-ND one (Martini et
+  al. 2026), which is now committed. `git check-ignore -v` shows the other eight ignored.
+- **8f:** `KEY_INSTRUCTIONS` holds the four sentences; README step 6 says so.
+- **8h:** `normalise_quote` writes `“` and `”`; the two button-label checks accept the label
+  with or without the `<span>`. Three other non-ASCII characters remain in the app code (two
+  middle dots in `R/ui_generate.R`, one ellipsis in `R/llm.R`); the brief named only the quotes,
+  so I left them.
+- **8i, the four checks it names:** the Prompt tab's HTML has no "System prompt" and none of
+  `core.md`'s Reflexes or Prohibitions (for a draft and for Evaluate); the message begins with the
+  persona (for every task, mode and country, and for the brief check and the appraisal); every
+  `.svg` in `www/` parses as XML (with one title, one description and no script); every image named
+  in `start.md` and `methodology.md` exists. Also added: the parser's `Guidelines` rules; the
+  guidelines in the message and not in the system prompt; the frameworks section's place, order
+  and shape; the Frameworks column; the ten skill panels; the Source code button; the key text.
+  Existing checks changed only where the contract changed (listed in the commits); none was loosened.
+
+### The frameworks (8c): what came from which slide, and what I left out
+
+Slides read as images: Session 1 slides 5, 6, 7, 8, 12, 13 and 14; Session 2 slides 13 and 45; Session 3 slides 17 and 22. Read as text: Session 1 slides 46 and 47; Session 2 slides 22 and 44; Session 3 slide 21.
+
+- **Total Survey Error** (`fw_tse.svg`): redrawn from Session 1 slide 5. Both sides, all labels and
+  arrows as the slide has them; validity and measurement error highlighted as the errors the slide
+  calls essential to questionnaire design. The slide matched the description in the brief. Left
+  out: the slide's symbols (the mean and total notation under each box).
+- **From construct to question** (`fw_construct.svg`, new): the three ways a question fails with the "Last
+  week, did you work..." example (slide 8; the validity bracket of slide 14), the decomposition
+  tree (slide 13) and the Willimack and Snijkers figure (slide 12). Slide 14 labels the first
+  column "specific error", which looks like a typo; I used "specification error" from slide 8.
+  The slide's crow's-foot connectors on slide 12 are drawn as plain lines.
+- **Survey response model** (`fw_response.svg`): the four stages of slide 6 and the arrows of slide 7
+  (skipping ahead to reporting, going back a stage). The old diagram's one-line description of each
+  stage ("Understand the question", "Recall what is needed", "Form an answer", "Fit it to the
+  answer options") and its closing line are not on the slides, so they are gone.
+- **Testing** (`fw_testing.svg`): redrawn from Session 3 slide 17 with Session 2 slide 13's wording.
+  Corrected: the examples under each class (the old ones, "appraisal systems", "debriefing", were
+  not the slide's), the "QuestionR is here" marker (not on a slide) is gone. The summary says
+  QuestionR is an expert method.
+- **TRAPD** (`fw_trapd.svg`): redrawn as the flowchart of Session 2 slide 45 (source instrument,
+  two translations, review, adjudication, pretest, target instrument, documentation), with the
+  2026 GSS note from Session 3 slide 22. The old five-box version and its step descriptions were
+  not on the slides. **The slides name TRAPD without a reference, so none is given for it**; the
+  italic line gives the GSS report as slide 22 shows it.
+- **Sensitive questions** (`fw_sensitive.svg`, new, not named in the brief): Session 1 slides 46 and 47,
+  so that each of the six frameworks has a diagram.
+- **References:** each italic line is as the slides give it. The testing slides carry no reference of
+  their own; the only one nearby is "Tourangeau et al. (2020): Table 3.1" on Session 2's slide 22
+  (choosing a method), which is what I give.
+- **Frameworks column:** one rule, in `tests/smoke.R` too: a framework is named when a skill file's
+  Source lines match its pattern (Total Survey Error: "Groves"; response model: "Tourangeau, Rips and
+  Rasinski", "response process", "four-stage"; construct and decomposition: "specification and
+  operationalization error", "Fig. 1.1"; testing methods: "testing methods", "cognitive interviews";
+  TRAPD; sensitive questions: "Tourangeau and Yan", "Yan 2021", "writing sensitive questions"). No match is
+  "Session guidelines": five of the ten files, because their Source lines name sessions and studies
+  but none of the six frameworks.
+- **The old SVGs carried a signed provenance block** (`c2pa`); the redrawn files do not.
+- "How it was tested" is still one section with that heading; `pilot_notice()` reads it (smoke
+  checks the notice).
+
+### What was removed, and why
+
+- `QuestionR/skills_next/`: moved over `www/skills/` (8a).
+- The system prompt box and its code: `input$system` reads, its label, the system half of the
+  edited-prompt hash (8b). `assemble_user()`: replaced by `assemble_message()` and `assemble_tail()`.
+- `QuestionR/tests/review_long.json`: a raw log no test reads (`review.R` reads `review_long.md`;
+  `llm_check.R review30` writes both and would write it again).
+- `prompts/extract_reflexes.md`: a one-off prompt; its product, `svysegment/www/ai_reflexes.md`, is
+  committed.
+- `inteRn/tests/live_log.md`: out of the index (`git rm --cached`), kept on disk; main's
+  `inteRn/.gitignore` excludes it.
+- Untracked `.Rhistory` in the repository root, `inteRn/` and `QuestionR/`. Those under
+  `svysegment/` are untouched, as asked.
+
+### Kept, with the reason (and two questions)
+
+- `skills_table()` (`R/output.R`): no screen draws it now, but `tests/review.R` calls it (section "skills_table: one
+  row per reflex") and smoke tests it, so it has callers. Removing it means changing what `review.R` checks.
+  **Question for the Claude project: drop it with that check?**
+- `tests/llm_check.out`: read by `review.R` (its "Live check output" section). `tests/output_generate.txt` and
+  `tests/output_review.txt`: written by `smoke.R`, shown by `review.R`. `tests/run_generate.json`: written
+  by `llm_check.R generate`, shown by `review.R`. `tests/review_long.md`, `review_tokens.md`,
+  `gold_summary.md`, `gold_matches.csv`, `gold_items.csv`: shown or read by `review.R`.
+- **Not deleted because I am unsure (asking):** `tests/gold_runs/_calls.csv` and `_findings.csv`
+  (written by `llm_check.R gold`, read by no test: the evidence the hand matching in
+  `gold_matches.csv` came from) and `tests/review_questionnaire.txt` (read by no code; the 15-question
+  text the Phase 4 click-through asks the analyst to paste).
+
+### Changes to `tests/review.R` that 8a forced (the diff)
+
+The five skill shas (`README`, `attitudinal`, `behavioral`, `core`, `sensitive`) and these checks, which
+looked for the persona in the system prompt or for the old labels. `git diff 58f00d4 HEAD -- tests/review.R`
+shows all of it: 19 lines added, 18 removed, and nothing else.
+
+```
+persona present                 has(sys, "senior survey methodologist")
+  -> persona opens the message, once, and is not in the system prompt
+PREPARE, ASK, CHARACTERIZE in that order
+  -> Brief:, Task:, REPLY FORMAT in that order
+CHECKLIST ... after QUESTIONNAIRE and before CHARACTERIZE
+  -> ... after Questionnaire: and before REPLY FORMAT
+questionnaire pasted under QUESTIONNAIRE, complete
+  -> questionnaire pasted under Questionnaire:, complete
+brief check prompt: persona ... has(brief$system, "senior survey methodologist")
+  -> startsWith(brief$user, "You are a senior survey methodologist")
+appraisal system prompt: persona ... has(ap$system, "senior survey methodologist")
+  -> startsWith(ap$user, "You are a senior survey methodologist")
+```
+
+### Files left, and the one job of each
+
+| File | Job |
+|---|---|
+| `app.R` | Settings, profiles, package and ellmer checks, state, layout (header with the Source code button), server |
+| `R/skills.R` | Reads the skill files (one reader, `read_skill()`, which also keeps the file's text without comments); builds the message, the tail, the system prompt and the checklist |
+| `R/llm.R` | Calls the models through ellmer, one at a time or together; the session key and its box; the connection check |
+| `R/flow.R` | Runs a brief check, drafts, an appraisal or a review (calls together); the run-log shape |
+| `R/checks.R` | Checks and codes what a model returns, including the recommended set; severity bands; splits a long questionnaire |
+| `R/output.R` | The set and the analyst's edits; the Word output, the disclosure, the run log; renders the two markdown pages and the skill panels |
+| `R/ui.R` | Tab titles, shared boxes, Start here, the connection check's screen |
+| `R/ui_generate.R` | Brief, Prompt (one box), Results, Run again and Output screens |
+| `R/_disable_autoload.R` | Stops Shiny auto-loading `R/` twice (empty on purpose) |
+| `tests/smoke.R` | The checks that need no model call |
+| `tests/review.R` | Writes `REVIEW.md` (the Claude project's; the diff above) |
+| `tests/llm_check.R` | The live runs, only when named: `generate`, `review30`, `gold` |
+| `tests/` data | Test items, questionnaires and the recorded results the reviews read |
+| `www/skills/` | The rules (the Claude project's; edited only there) |
+| `www/start.md`, `www/methodology.md` | The welcome and the methodology note, as markdown the app draws |
+| `www/fw_*.svg`, `www/how_it_works.svg` | The seven pictures in those two pages (static, own white panel, no script) |
+| `www/skills_materials/` | `README.md` and the one open-licensed PDF; the other PDFs stay on the maintainer's disk; never deployed |
+| `README.md` | What it is, how to install, set up at work, fix an error, extend |
+| `DESIGN.md`, `STATUS.md`, `PROMPTS.md`, `REVIEW.md` | How it was built; deleted at work |
+
+Code files: 11 of 12 (the same). Lines: `app.R` + `R/` 4,153 (4,072 before); `tests/` scripts 4,203 (4,054).
+
+### The new prompt hashes
+
+The two checks of Phase 7 that said "all 60 unchanged" end here; these replace them. Task, mode set (1 none,
+2 to 6 each mode alone, 7 all five), country, hash (build_prompt, work step); `revision` rows are a
+rerun with a REVISION line:
+
+```
+attitudinal|1||b88ff66d7a72f43abfb4debcab95bec774f3b9b247a1f9ee2c095bc34906ca1f
+attitudinal|1|Kenya|ad930a9f57ce4f6ea1476c4c3233032c35dcfb97dd239aceef915842fcf08a7f
+attitudinal|2||82409250f0a2eafca341fb2214db95c5b708cbe420e19af3ec0e396776da8fd4
+attitudinal|2|Kenya|4f32c002200dc8645dec13344eb0b0f6efa8d0ff2be4715a4c5fb5b829b68562
+attitudinal|3||e06f24a1687b667fce2886a31301e7a9b5367de48b12400b3ff9da63c48a4eee
+attitudinal|3|Kenya|8906d914293832fad3353da7c434e4a165aa22475693490055b097b3d64be6ed
+attitudinal|4||275743f22d9ba9f14e1e23d2c04b627a44159701de7898a170f641326d3b50cd
+attitudinal|4|Kenya|e74a06efa9332130751038fb65a89dd8f6d83eea06a53f2ce967c13363c4bfca
+attitudinal|5||eac34114a32326762ffe3c85dd46720634f5d4a0581e845e801ac28a5a1e8cea
+attitudinal|5|Kenya|6712942b4591eabc98b8d4dcaa4b1da6c5c3e73857201465960e6298c170945e
+attitudinal|6||8b4251fd10f8cb3f9752aa6581c94e01895c7b12abb45e217fc1235494a248c8
+attitudinal|6|Kenya|4044a6b977913678d261b66556e567017e24b9ff4437338e8049012d1fa5a8f8
+attitudinal|7||d2bfb69eb11bb2e3d22b3d63e38037e30930f7b1731c2e9c25de97a49af69cc1
+attitudinal|7|Kenya|c869da05fd4136e469ed2b2975645df3c152d65ed1fdf083d1c66efb3e1c02c3
+behavioral|1||1f24c0e4810ea81798b988be22e31cb3f34aa9876d428f4b1f37a580dbe8c9e5
+behavioral|1|Kenya|efc325a4f8d8c413945280f5001d48cfec37b5f4fd552dc812ed8ab86995cdc3
+behavioral|2||76d9bcd04c015dd12a77341a92cf6558d5a94b9ede8294682ee81a54688ed86d
+behavioral|2|Kenya|55ab2c25c32318657c8d21eb2e8d6793df9242f5bc4db76258ec689236d46b3c
+behavioral|3||2712bd742cd6c5b935a20afcc851405cd5a9739772ee220ab77cff7fb6fe06c3
+behavioral|3|Kenya|348e37c2ea3e121cd457b878583736a57804736fcf8cdfedb648ad64155c8077
+behavioral|4||3ad22bbcb853ae73b55869693b55f77b7409bb600ba2b7717c01797ef0bc7983
+behavioral|4|Kenya|61879e38adeaa246027473c4fa6b712becc1889c815a893814cbfb8f2300eb9e
+behavioral|5||b0992a5f93d38995e59ca7dfcdadc6af5d6f0c26d6ffe8220a6b1c81f1592ba0
+behavioral|5|Kenya|4d47f0df027579284d95ffe5f65d61cce9d39baa27d55aa3e7294d3d395bfab1
+behavioral|6||096d9372809690c998120817ae2596511c1c3a461c2747d39537d2cdd2a278d8
+behavioral|6|Kenya|59a2d03248ab5c2319a96629d6512068c45548402817894934e53191a49c0a38
+behavioral|7||8953fa1a62386c0935624f63fd7b06e3a3eb5c2c35dd21936245fc44db362b83
+behavioral|7|Kenya|63e2087508de02525fa0ab27045faf967776a0761947ec89fdc44c382b671772
+sensitive|1||70b6beffbca152c1eb82dd36c747e87f6d68e62146d5bfb431c67d1c893dd3bd
+sensitive|1|Kenya|7acb8f06f7d56e3a4c84fca087dee1539b06c56536dfe356dcfa044b45da082c
+sensitive|2||4ff1a102f3abd6a15eeff74dc7a209ea2af4eec04f561d2a65deac0510b904b4
+sensitive|2|Kenya|2af3a13c7b6a86cd650dda8ad57d03f650476bca527f290d210a2f1a075de590
+sensitive|3||0f94e52900088015235ef4489c6d90c9f1793252181c475517094802aa226356
+sensitive|3|Kenya|e485221bf5644ef74bf8001cdbf2a1e3e1aa33555e48c640e038cf902c925557
+sensitive|4||19933ff13f630c40481d3088b3ab88376c93a7752a313894550beb142c1bf1fd
+sensitive|4|Kenya|16768e21874c4895e9914c7cc0b072cec442c2cae28b366a166bbdc25c5bab96
+sensitive|5||89ab49c39e90b1a114b8ee6c103c221659296bfefe4b0223be95626c2812dcd1
+sensitive|5|Kenya|4a87a086c5ffd2139b4f48b4f83ef07803cae8b87fd5d63a34943b3044694dc0
+sensitive|6||8e43a76a38bbc866bf7f69c1eb2b0bf73429974261732bcb3c6bbb316676cc07
+sensitive|6|Kenya|3b95b601569a924cdfc24efe95b07ca96e371e4e558fdacd64d7137fc555305f
+sensitive|7||c65fcbc5071023837d9a6354decab63144e0da3d1330688e233e62abf3387855
+sensitive|7|Kenya|01bc44555fed98daeeb533931a2d9d2038a3f82e237b9f724da090998f5dc036
+evaluate|1||5cdde0fb951f2a81edd3f93654110e3d6d5b2d1c3d848ad2deff47f6ec3119ce
+evaluate|1|Kenya|83c668eaf375ba3f91fe3a575e869d6992349c86fbf66634744e5a954a836f00
+evaluate|2||5b92c983189ca19935e4c4132139ce269bb7ae55b672b9e23e05a44a8cce173c
+evaluate|2|Kenya|c00925bcc835dff2cfe2c098ab688e4a1c3cd772eaa7d3fe21bc4aaa98582937
+evaluate|3||d004b074a71f9989774b6461096d8554669bb8994bab89f43b082d6cfdd5e50a
+evaluate|3|Kenya|262983c13daf9a9330427957b632767da889bfcd67be03d2caafd4106bd80135
+evaluate|4||44b48327634d5f756a42a487e609f77ec5ce05971d740346ba4a51e30f287926
+evaluate|4|Kenya|4f324de77c32701d0a84f7b448fbf4b6addcb3d3fdececa4be1129c67114abf9
+evaluate|5||e3c065a199815aabc142af20b94b9e40987113c87bec39d2272d2f29b2d94182
+evaluate|5|Kenya|aec62d3757862ff19603033cad07d420c57d4730cbd732c86cd130c01ea5e927
+evaluate|6||bd7dcbb460a5b17bc8fc212e279071d8c10b0b8e8cb563757db804ea1f27ea29
+evaluate|6|Kenya|3ca662d39c2cb9c006eb2661c9a11908c7b4cc2828bfb9b2e86a08898b4d6497
+evaluate|7||d2cfd8d9ad2e4d44c9fac07eaf9944db054e76fc1a3db2fc44ee9ba81d0539a3
+evaluate|7|Kenya|78800aaba5a4d5dd16f9facd256aaa37b1a3e79466efebbe34bab7a573789499
+revision|attitudinal|68fb5ce4d67b8016efe4c08703bb3695b63448862c6fde8a5e8bc8ece17c9fc7
+revision|behavioral|6cf034b28760dbe8189eea6a9a3fb6f0c6b17e546b8eb79195b011421a95698e
+revision|sensitive|9d968eeb675a7e5c65f19a162eda013756b1809b4f92100a6d1cd887c7fab01f
+revision|evaluate|2ea18785645054acf251ac5ce69fe76979b63b89a106e4f0dd6d7d5db7f38c23
+```
+
+The live run's three: brief check `e95a95ae9614f96e1fc75f518fa5bb5e73faf56a14bb93796311d8e4118383bb`; work prompt (attitudinal, 3 items)
+`4970c58c1b34a52f86085a759b8a3bc47916644408eac32f03a3dbadeae4f44c`; appraisal `2c430d8e9cf7f217a51dca294164e03fe978d52e8517207b4336a793b31c018e`
+(the appraisal's depends on the three drafts that came back).
+
+### Live result (2026-11-13 08:42, the home profile, 3 items, all three workers)
+
+| Step | Model | Seconds | Tokens in / out |
+|---|---|---|---|
+| Brief check | claude-sonnet-5-5 | 10.3 | 4,758 / 1,117 |
+| Draft | google/gemma-4-31b-it | 4.5 | 2,957 / 881 |
+| Draft | meta-llama/llama-4-maverick | 10.1 | 2,839 / 678 |
+| Draft | openai/gpt-6-luna | 51.0 | 2,833 / 4,869 |
+| Appraisal | claude-sonnet-5-5 | 27.0 | 5,804 / 3,356 |
+
+All five ok, attempts 1 each. **The shorter message still returns items R can parse**: R accepted every
+draft (the right number of items each), the appraisal recommended 3 items of 3 asked for with
+3 notes on the set, 0 domains not covered and no check id that was not sent. The drafts, sent together,
+took 51.1 seconds by the clock (the longest, 51.0). A worker's input grew by about 130 tokens (the persona
+and the guidelines now sit in the message; the rules are the same). One run, so a rough figure.
+
+### Not done, or not checked
+
+- Nothing in the brief is left undone before the merge step. Not run live: a review (Evaluate) with the
+  new message, and the gold test (told not to); both are covered by smoke against stand-ins and by
+  `review.R`'s checks of the assembled prompts.
+- The diagrams were checked by eye in headless Edge and in the app (light page, dark theme): the
+  Total Survey Error and construct pictures and the skill panels. I did not look at every picture in
+  every browser, or on Posit Connect.
+- The Frameworks column is static text in `www/methodology.md`; smoke recomputes it from the skill
+  files, so a new Source line that changes it fails smoke until the table is updated.
+
+### Click-through for Kevin (home profile, your keys in `.Renviron`; steps 5 to 7 make about 5 calls)
+
+1. **Header:** a small outline "Source code" button at the top left; it opens the repository in a new tab.
+2. **Start here:** the key box says "Ask the person who manages the AI service for your office for a key."
+   and the three sentences after it; no TODO anywhere.
+3. **Methodology:** "The frameworks behind the rules" comes right after "What it is built on", with six
+   pictures, a short summary under each and an italic reference line. The skills table has a Frameworks
+   column. Under it ten closed panels, from "Core, version 0.3" to the reviewer; open one.
+4. **Brief** an attitudinal task, 3 items, all workers, **Build the instructions**.
+5. **Prompt:** one box, "The prompt (you can edit this)", starting with the persona, then Brief, Task and
+   the guidelines; no rules, no checklist, no reply format; the one line under it. Edit a word and see
+   "Edited" with both hashes. **Approve and run.**
+6. **Results** and **Output** as in Phase 7; the disclosure still names the prompt hashes.
+7. **Evaluate** with a pasted questionnaire: the same Prompt tab (the first part's message, read-only, when
+   it is long).
+8. **Tell me:** anything on the Methodology page that reads badly, a picture that differs from your
+   slide, and whether the shorter prompt changed what you see in the drafts.
+
+### Remaining FAIL in `REVIEW.md`
+
+None.
+
 ## Phase 7 (2026-11-12): the reviewer recommends one set; calls go together; shorter pages
 
 **Next: Kevin tries the app (click-through at the end of this section). Then take `REVIEW.md`

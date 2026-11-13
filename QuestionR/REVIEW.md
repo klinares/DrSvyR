@@ -1,6 +1,6 @@
 # QuestionR review evidence, Phase 5
 
-Generated 2026-11-12 22:58 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-13 08:45 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,109 +12,122 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+6bbba75 QuestionR 8h: hardening
+bbddebe QuestionR 8g: remove what is no longer needed
+edd4eea QuestionR 8f: no TODO text on Start here
+c01c1a5 QuestionR 8e: the skill materials are not deployed, and only the open-licensed PDF is committed
+da1477f QuestionR 8d: a Source code button at the top left of the header
+eabbb8a QuestionR 8c: the frameworks, complete and drawn from the slides; the skills on the Methodology tab
+e0d90c5 QuestionR 8b: the Prompt tab shows one box, and never the rules
+06373be QuestionR 8a: the skills with Guidelines, and the message the analyst edits
+58f00d4 QuestionR: Phase 8 prompt revised 2026-11-13; note at the end of design section 17
+67e6fae QuestionR: changes from the Claude project
+f408251 QuestionR Phase 7: STATUS and REVIEW
 f0b1e69 questionR branch
 7e29787 Phase 7: README says what Results does now; llm_check generate reads the new appraisal
 8eb0ef3 Phase 7d: tidy after 7a-7c
 c740cfa QuestionR 7c: Start here welcomes the analyst; a short methodology note; the brief check is off by default
-2a51e87 QuestionR 7b: model calls go out together
-88ef184 QuestionR 7a: the reviewer recommends one set; the analyst edits it
-eae04df QuestionR: changes from the Claude project (design section 16, pm_appraise 0.4, start.md, methodology, review.R)
-6c9481d QuestionR Phase 6: STATUS, REVIEW, and a shorter pilot notice
-9a07c6a QuestionR 6d: README for an analyst who has not seen the repository
-ca20ae8 QuestionR 6c: Start here says what is in force; startup and profile notices
-76378d6 QuestionR 6b: work settings in app.R section 1
-55451c9 QuestionR 6a: tidy, fewer scripts
-9e9b6dc QuestionR: changes from the Claude project (design section 15, prompts)
-867c3ad QuestionR 5e: one live long review, final STATUS and REVIEW for Phase 5
-9af8f4c QuestionR 5e preparation: the 30-question questionnaire and llm_check.R go review30
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
+ M README.md
  M REVIEW.md
  M STATUS.md
+ M tests/output_generate.txt
+ M tests/output_review.txt
+ M tests/run_generate.json
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
- CLAUDE.md                                     |    3 +-
- QuestionR/.rscignore                          |    7 +
- QuestionR/DESIGN.md                           |  775 +++++++
- QuestionR/PROMPTS.md                          |  441 ++++
- QuestionR/R/_disable_autoload.R               |    5 +
- QuestionR/R/checks.R                          |  451 ++++
- QuestionR/R/flow.R                            |  420 ++++
- QuestionR/R/llm.R                             |  695 ++++++
- QuestionR/R/output.R                          |  410 ++++
- QuestionR/R/skills.R                          |  650 ++++++
- QuestionR/R/ui.R                              |  188 ++
- QuestionR/R/ui_generate.R                     | 1011 ++++++++
- QuestionR/README.md                           |  161 ++
- QuestionR/REVIEW.md                           | 1883 +++++++++++++++
- QuestionR/STATUS.md                           | 1892 +++++++++++++++
- QuestionR/app.R                               |  242 ++
- QuestionR/tests/gold_items.csv                |   60 +
- QuestionR/tests/gold_matches.csv              |   68 +
- QuestionR/tests/gold_runs/C1.json             |   98 +
- QuestionR/tests/gold_runs/C3.json             |   98 +
- QuestionR/tests/gold_runs/C4.json             |   98 +
- QuestionR/tests/gold_runs/C5.json             |   98 +
- QuestionR/tests/gold_runs/C6.json             |   98 +
- QuestionR/tests/gold_runs/C7.json             |  108 +
- QuestionR/tests/gold_runs/C8.json             |   98 +
- QuestionR/tests/gold_runs/F1.json             |  128 ++
- QuestionR/tests/gold_runs/F10.json            |  108 +
- QuestionR/tests/gold_runs/F11.json            |  109 +
- QuestionR/tests/gold_runs/F12.json            |  108 +
- QuestionR/tests/gold_runs/F13.json            |  108 +
- QuestionR/tests/gold_runs/F14.json            |  118 +
- QuestionR/tests/gold_runs/F15.json            |  150 ++
- QuestionR/tests/gold_runs/F16.json            |  128 ++
- QuestionR/tests/gold_runs/F17.json            |  108 +
- QuestionR/tests/gold_runs/F18.json            |  149 ++
- QuestionR/tests/gold_runs/F19.json            |  128 ++
- QuestionR/tests/gold_runs/F2.json             |   98 +
- QuestionR/tests/gold_runs/F20.json            |  141 ++
- QuestionR/tests/gold_runs/F3.json             |  118 +
- QuestionR/tests/gold_runs/F4.json             |  150 ++
- QuestionR/tests/gold_runs/F5.json             |  131 ++
- QuestionR/tests/gold_runs/F6.json             |  108 +
- QuestionR/tests/gold_runs/F7.json             |  130 ++
- QuestionR/tests/gold_runs/F8.json             |  108 +
- QuestionR/tests/gold_runs/F9.json             |  119 +
- QuestionR/tests/gold_runs/_calls.csv          |   28 +
- QuestionR/tests/gold_runs/_findings.csv       |  103 +
- QuestionR/tests/gold_summary.md               |  121 +
- QuestionR/tests/llm_check.R                   |  331 +++
- QuestionR/tests/llm_check.out                 |   24 +
- QuestionR/tests/output_generate.txt           |   60 +
- QuestionR/tests/output_review.txt             |   64 +
- QuestionR/tests/review.R                      |  682 ++++++
- QuestionR/tests/review_long.json              | 1393 +++++++++++
- QuestionR/tests/review_long.md                |   26 +
- QuestionR/tests/review_long_questionnaire.txt |   89 +
- QuestionR/tests/review_questionnaire.txt      |   15 +
- QuestionR/tests/review_tokens.md              |   18 +
- QuestionR/tests/run_generate.json             |  717 ++++++
- QuestionR/tests/smoke.R                       | 3041 +++++++++++++++++++++++++
- QuestionR/www/methodology.md                  |   55 +
- QuestionR/www/skills/README.md                |   66 +
- QuestionR/www/skills/attitudinal.md           |   72 +
- QuestionR/www/skills/behavioral.md            |   67 +
- QuestionR/www/skills/core.md                  |   92 +
- QuestionR/www/skills/cross_cultural.md        |   66 +
- QuestionR/www/skills/evaluate.md              |  117 +
- QuestionR/www/skills/generate.md              |   77 +
- QuestionR/www/skills/mode.md                  |   57 +
- QuestionR/www/skills/pm_appraise.md           |   76 +
- QuestionR/www/skills/pm_brief.md              |   42 +
- QuestionR/www/skills/sensitive.md             |   90 +
- QuestionR/www/start.md                        |   43 +
- README.md                                     |    2 +
- inteRn/tests/live_log.md                      |  184 ++
- svysegment/tests/llm_check.R                  |   40 +
- svysegment/tests/smoke.R                      |   47 +
- 77 files changed, 20407 insertions(+), 1 deletion(-)
+ .gitignore                                         |    7 +
+ CLAUDE.md                                          |    3 +-
+ QuestionR/.rscignore                               |    8 +
+ QuestionR/DESIGN.md                                |  904 ++++++
+ QuestionR/PROMPTS.md                               |  638 ++++
+ QuestionR/R/_disable_autoload.R                    |    5 +
+ QuestionR/R/checks.R                               |  451 +++
+ QuestionR/R/flow.R                                 |  420 +++
+ QuestionR/R/llm.R                                  |  696 +++++
+ QuestionR/R/output.R                               |  431 +++
+ QuestionR/R/skills.R                               |  698 +++++
+ QuestionR/R/ui.R                                   |  188 ++
+ QuestionR/R/ui_generate.R                          | 1015 +++++++
+ QuestionR/README.md                                |  162 +
+ QuestionR/REVIEW.md                                | 1888 ++++++++++++
+ QuestionR/STATUS.md                                | 2066 +++++++++++++
+ QuestionR/app.R                                    |  249 ++
+ QuestionR/tests/gold_items.csv                     |   60 +
+ QuestionR/tests/gold_matches.csv                   |   68 +
+ QuestionR/tests/gold_runs/C1.json                  |   98 +
+ QuestionR/tests/gold_runs/C3.json                  |   98 +
+ QuestionR/tests/gold_runs/C4.json                  |   98 +
+ QuestionR/tests/gold_runs/C5.json                  |   98 +
+ QuestionR/tests/gold_runs/C6.json                  |   98 +
+ QuestionR/tests/gold_runs/C7.json                  |  108 +
+ QuestionR/tests/gold_runs/C8.json                  |   98 +
+ QuestionR/tests/gold_runs/F1.json                  |  128 +
+ QuestionR/tests/gold_runs/F10.json                 |  108 +
+ QuestionR/tests/gold_runs/F11.json                 |  109 +
+ QuestionR/tests/gold_runs/F12.json                 |  108 +
+ QuestionR/tests/gold_runs/F13.json                 |  108 +
+ QuestionR/tests/gold_runs/F14.json                 |  118 +
+ QuestionR/tests/gold_runs/F15.json                 |  150 +
+ QuestionR/tests/gold_runs/F16.json                 |  128 +
+ QuestionR/tests/gold_runs/F17.json                 |  108 +
+ QuestionR/tests/gold_runs/F18.json                 |  149 +
+ QuestionR/tests/gold_runs/F19.json                 |  128 +
+ QuestionR/tests/gold_runs/F2.json                  |   98 +
+ QuestionR/tests/gold_runs/F20.json                 |  141 +
+ QuestionR/tests/gold_runs/F3.json                  |  118 +
+ QuestionR/tests/gold_runs/F4.json                  |  150 +
+ QuestionR/tests/gold_runs/F5.json                  |  131 +
+ QuestionR/tests/gold_runs/F6.json                  |  108 +
+ QuestionR/tests/gold_runs/F7.json                  |  130 +
+ QuestionR/tests/gold_runs/F8.json                  |  108 +
+ QuestionR/tests/gold_runs/F9.json                  |  119 +
+ QuestionR/tests/gold_runs/_calls.csv               |   28 +
+ QuestionR/tests/gold_runs/_findings.csv            |  103 +
+ QuestionR/tests/gold_summary.md                    |  121 +
+ QuestionR/tests/llm_check.R                        |  331 ++
+ QuestionR/tests/llm_check.out                      |   24 +
+ QuestionR/tests/output_generate.txt                |   60 +
+ QuestionR/tests/output_review.txt                  |   64 +
+ QuestionR/tests/review.R                           |  683 +++++
+ QuestionR/tests/review_long.md                     |   26 +
+ QuestionR/tests/review_long_questionnaire.txt      |   89 +
+ QuestionR/tests/review_questionnaire.txt           |   15 +
+ QuestionR/tests/review_tokens.md                   |   18 +
+ QuestionR/tests/run_generate.json                  |  717 +++++
+ QuestionR/tests/smoke.R                            | 3189 ++++++++++++++++++++
+ QuestionR/www/fw_construct.svg                     |  140 +
+ QuestionR/www/fw_response.svg                      |   38 +
+ QuestionR/www/fw_sensitive.svg                     |   57 +
+ QuestionR/www/fw_testing.svg                       |   44 +
+ QuestionR/www/fw_trapd.svg                         |   52 +
+ QuestionR/www/fw_tse.svg                           |   82 +
+ QuestionR/www/how_it_works.svg                     |  108 +
+ QuestionR/www/methodology.md                       |  178 ++
+ QuestionR/www/skills/README.md                     |   70 +
+ QuestionR/www/skills/attitudinal.md                |   86 +
+ QuestionR/www/skills/behavioral.md                 |   84 +
+ QuestionR/www/skills/core.md                       |  113 +
+ QuestionR/www/skills/cross_cultural.md             |   66 +
+ QuestionR/www/skills/evaluate.md                   |  117 +
+ QuestionR/www/skills/generate.md                   |   77 +
+ QuestionR/www/skills/mode.md                       |   57 +
+ QuestionR/www/skills/pm_appraise.md                |   76 +
+ QuestionR/www/skills/pm_brief.md                   |   42 +
+ QuestionR/www/skills/sensitive.md                  |  107 +
+ ...g Unedited AI-Generated Psychometric Scales.pdf |  Bin 0 -> 470449 bytes
+ QuestionR/www/skills_materials/README.md           |   42 +
+ QuestionR/www/start.md                             |   46 +
+ README.md                                          |    2 +
+ prompts/extract_reflexes.md                        |   62 -
+ svysegment/tests/llm_check.R                       |   40 +
+ svysegment/tests/smoke.R                           |   47 +
+ 86 files changed, 20336 insertions(+), 63 deletions(-)
 exit status: 0
 ~~~~
 
@@ -122,18 +135,18 @@ exit status: 0
 
 | file | lines |
 |---|---|
-| app.R | 242 |
+| app.R | 249 |
 | R/_disable_autoload.R | 5 |
 | R/checks.R | 451 |
 | R/flow.R | 420 |
-| R/llm.R | 695 |
-| R/output.R | 410 |
-| R/skills.R | 650 |
+| R/llm.R | 696 |
+| R/output.R | 431 |
+| R/skills.R | 698 |
 | R/ui.R | 188 |
-| R/ui_generate.R | 1011 |
+| R/ui_generate.R | 1015 |
 | tests/llm_check.R | 331 |
-| tests/review.R | 682 |
-| tests/smoke.R | 3041 |
+| tests/review.R | 683 |
+| tests/smoke.R | 3189 |
 
 Code files counted: 11 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
@@ -160,17 +173,17 @@ PASS means the file is byte for byte what the Claude project drafted (line endin
 
 | file | result | sha |
 |---|---|---|
-| README.md | PASS | 47826ef73309cfc3cd72ac45091efb43241a7875d150f2d1fac69a8dbef5b606 |
-| attitudinal.md | PASS | fa9e369f521353670f3e245f9318b1eaf8fcddb54163932d53a1ae0642b69a35 |
-| behavioral.md | PASS | c22273bf2dbb02e4e939b8ee98bf6980c5dd093398b20312c3e82f92df1c3ead |
-| core.md | PASS | 770a402a6dc4b60389e4c266f43cdaa28dc8ccc0e88938f76cb9b72a54379f35 |
+| README.md | PASS | 6d851fc5dc38f734c5754c818b25cd14a2667c090fef5150da30994456ea06cf |
+| attitudinal.md | PASS | 02a273b6ffe0428629b2b6c358a40977c11cb40adeb256fe09e3a4f03eba26e4 |
+| behavioral.md | PASS | f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142 |
+| core.md | PASS | d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9 |
 | cross_cultural.md | PASS | 6c8a19b8c17b19808b4cfca788b3c76a7595d54a3a25a71e355391cb944bdd4d |
 | evaluate.md | PASS | 6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb |
 | generate.md | PASS | 9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2 |
 | mode.md | PASS | 98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0 |
 | pm_appraise.md | PASS | a43e03e541f02f12d72f44d83c901faf983b0edf36fe123045da66a50aaeeb10 |
 | pm_brief.md | PASS | a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a |
-| sensitive.md | PASS | 0ebc82a948f01caed0847f3d4a6cda87216f33dc3039e764cb8c1ab8ac45e726 |
+| sensitive.md | PASS | 4d8b50d65e768c62143287b3f7400ff7d66695b4905b3d4e0849cc313b81a2eb |
 
 Files in www/skills not on the list: none
 
@@ -191,9 +204,11 @@ ok  the settings R/ reads are in the global environment
 ok  the Cairo bitmap type is set
 ok  the page is served
 ok  the classification banner shows
+ok  a small outline Source code button, first in the header and before the logo, opens the source in a new tab without an opener
 ok  the logo shows, or its placeholder box does
 ok  every tab is in the navlist
 ok  the key box is on Start here
+ok  the key box says where to get a key in the four sentences the design gives, and no TODO text shows anywhere on the page
 ok  no tab is a placeholder any more; Start here and the Methodology tab are their markdown files, and the rules table is not drawn
 ok  home profile: PM on a pasted key, three workers
 ok  work profile loads
@@ -219,6 +234,8 @@ ok  a reflex id with capitals or hyphens stops
 ok  two reflexes with one id stop
 ok  text before the first reflex stops
 ok  an unknown section stops
+ok  a Guidelines section is read: an optional heading line, then one-line bullets; bullets alone are fine
+ok  a Guidelines section with a second heading line, a wrapped bullet or no bullets stops, naming the file
 ok  a missing Reflexes section stops
 ok  a prohibition wrapped onto a second line stops
 ok  an HTML comment that never closes stops
@@ -233,17 +250,18 @@ ok  no Check question is in a drafting prompt, system or user
 ok  no Check question is in a review's system prompt
 ok  no Source or Check field label is in any prompt
 ok  the files used are core, the task's files, mode, and cross_cultural only with a country
-ok  the persona opens the system prompt, and the prohibitions close it, headed as overriding
+ok  the persona opens the message and is not in the system prompt, and the prohibitions close the system prompt, headed as overriding
 ok  every prohibition of every file in force is in the system prompt
 ok  mode.md keeps any_mode, the modes chosen, and mixed_mode only with more than one
 ok  cross_cultural.md is in with a country and out without
 ok  every reflex of a drafting task file is in, and of the other task files out
 ok  no reflex id appears twice in one prompt
-ok  PREPARE, ASK, CHARACTERIZE come in that order, once each as a heading
+ok  the message is the persona, Brief:, Task:, (for Evaluate, Questionnaire:), the guidelines; then R's tail: (for Evaluate, CHECKLIST) and REPLY FORMAT; the old labels are not written
+ok  a draft's message holds core.md's guidelines and then the task file's; a review's only core.md's; none is in the system prompt
 ok  the Output format of the file that carries it is in the user message, as written
 ok  the number of items is in the ask for the drafting tasks
-ok  the pasted questionnaire follows ASK, whole and as pasted, and only for Evaluate
-ok  a review's CHECKLIST is exactly build_checklist(form), id: question, between QUESTIONNAIRE and CHARACTERIZE
+ok  the pasted questionnaire follows Task:, whole and as pasted, and only for Evaluate
+ok  a review's CHECKLIST is exactly build_checklist(form), id: question, then REPLY FORMAT, in R's tail after the message
 ok  a drafting prompt has no CHECKLIST block and no Check question in its user message
 ok  the checklist is a named character vector of the Check lines in force
 ok  the checklist follows the mode filter: web in, telephone out, one_thing in
@@ -341,13 +359,13 @@ ok  build_step_prompt(form, step, candidates, part), and build_prompt(form) is i
 ok  an unknown step stops, naming the five
 ok  the brief check sends core, pm_brief and the task's own files, in that order
 ok  the brief check's system prompt holds the brief rules and the task's rules, and no drafting output format
-ok  the brief check's user message is PREPARE, ASK, CHECKLIST, CHARACTERIZE, with pm_brief's output format
+ok  the brief check's user message is the persona, then PREPARE, ASK, CHECKLIST, CHARACTERIZE, with pm_brief's output format
 ok  the brief check names the task the analyst chose, and its CHECKLIST is exactly build_checklist(form)
 ok  the brief check is deterministic, and holds no Source text, comment or Check field
 ok  the brief check's Check questions are in its user message only, never in the system prompt
 ok  the brief check's hash differs from the work prompt's, and a changed field changes it
 ok  the appraisal sends core and pm_appraise only, and none of the drafting rules
-ok  the appraisal's user message is PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE, in that order
+ok  the appraisal's user message is the persona, then PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE, in that order
 ok  the appraisal's CHECKLIST is exactly what the workers' files give, and their questions are not in the system prompt
 ok  the appraisal says how many candidates and how many items each was asked for
 ok  each candidate is one JSON line with its letter, its stems, its options, its parts and its decisions
@@ -436,6 +454,8 @@ ok  a worker added to the model list gets its own box, and nothing else changes
 ok  the registry and the model list are back as they were
 ok  with no form the Prompt tab asks for the Brief first
 ok  the assembled prompt is shown whole and editable, with the skill files used
+ok  the Prompt tab shows one box, labelled as editable, and one line saying the rules are sent and cannot be edited here
+ok  the Prompt tab has no "System prompt", none of core.md's Reflexes or Prohibitions, and no input named system
 ok  an untouched prompt is shown as assembled, with its hash
 ok  approving it as it is records it unedited, with one hash, starts a run and moves to Results
 ok  an edited prompt is marked edited, showing both hashes
@@ -443,6 +463,7 @@ ok  approving an edited prompt sends the edited text, marks it edited, and keeps
 ok  a browser's line endings are not an edit
 ok  an empty prompt is refused on the page, and no run starts
 ok  Evaluate's prompt can be read and approved: the button is on and the page says it makes one call
+ok  Evaluate's Prompt tab also shows one box, no rules, no checklist and no reply format, and the same line about the rules
 ok  approving a review prompt, edited or not, starts a run with the edited text and both hashes
 ok  before any run the Results tab says nothing has been run
 ok  a run makes one call per worker and one for the appraisal, records the round, and sets the recommended set from the reviewer's letters and ids
@@ -569,10 +590,16 @@ ok  the review's run log has its round, its prompt hash and its call record
 ok  the page has the Output tab's boxes in place of its placeholder, and no key is anywhere on it
 ok  Start here is www/start.md as it is, then the key box, then a closed Settings and connection panel that holds the profile, the models table with the connection check, and the pilot notice
 ok  a profile with placeholders opens the Settings and connection panel by itself
-ok  the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; skills_table() stays for maintainers
+ok  the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; skills_table() stays, because tests/review.R reads it
 Warning message:
 In file(con, "r") :
   cannot open file 'www/no_such_page.md': No such file or directory
+ok  the frameworks section comes directly after 'What it is built on', opens with one sentence saying the skills were written from them, and 'How it was tested' is one section with that heading
+ok  each framework is a diagram, then a summary of three to five sentences, then an italic line of references
+ok  every .svg in www/ is well-formed XML with a title and a description, and no script
+ok  every image named in start.md and methodology.md exists in www/
+ok  the Frameworks column of the skills table is what each file's Source lines name, in the order of the panels
+ok  under the Methodology page, one closed panel for each skill file, in the order of the table, titled with the file's heading and version, holding the file as markdown without its comments, and not the README
 ok  a profile that still holds placeholders says which entries to fill in, the connection check does not call it, and the work profile's page builds; a filled profile says nothing
 ok  when the only worker is of the project manager's own family, Results says the appraiser reviewed a draft from its own family; with workers of other families it says nothing
 ok  the workers' drafts are requested in one batch, each request the arguments ask takes, in the workers' order, and ask is not used
@@ -596,8 +623,8 @@ exit status: 0
 | system and user are single strings | PASS |
 | same form twice gives the same hash | PASS |
 | a changed research question changes the hash | PASS |
-| persona present | PASS |
-| PREPARE, ASK, CHARACTERIZE in that order | PASS |
+| persona opens the message, once, and is not in the system prompt | PASS |
+| Brief:, Task:, REPLY FORMAT in that order | PASS |
 | no source text sent (IASS/WSS, SURV632, Sturgis, Tourangeau) | PASS |
 | no HTML comment or Source or Check field sent | PASS |
 | core reflex one_thing present | PASS |
@@ -606,7 +633,7 @@ exit status: 0
 | Output language line always present | PASS |
 | reworded prohibition in force (skills 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
-| CHECKLIST block only in a review, after QUESTIONNAIRE and before CHARACTERIZE | PASS |
+| CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
 | task file sent (attitude_object) | PASS |
 | generate.md sent (declare_defaults) | PASS |
@@ -617,9 +644,9 @@ exit status: 0
 | Output language: English shown; Source language left out when the same | PASS |
 | number of items in the ask | PASS |
 
-hash: 8f3b2f326d01f516a47cb867c120e6a3bcacb31a04eab31ed400a9f534f306fc
+hash: 5f5a4fa8dc4b8f0f610287f769665e2b7d90d36dcb326af32714177faa1e329e
 files: core.md, generate.md, attitudinal.md, mode.md
-characters: system 11026, user 1770
+characters: system 10515, user 2838
 
 Checklist (id: question):
 ~~~~
@@ -645,9 +672,7 @@ web: Is everything the respondent needs to answer on screen with the question?
 ~~~~
 System prompt:
 ~~~~
-You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
-
-REFLEXES: Core (v0.2)
+REFLEXES: Core (v0.3)
 - construct_first (Every item.) Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly. MUST NOT: Do not widen or change the construct to make an item easier to write.
 - response_process (Every item.) Walk the item through the four stages a respondent goes through: comprehension, retrieval, judgment or estimation, reporting. A fault at any one stage is measurement error. Name the stage when you name a fault.
 - plain_words (Every question stem, instruction and response option.) Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question. MUST NOT: Do not use a word with more than one common sense where the other sense would change the answer.
@@ -670,7 +695,7 @@ REFLEXES: Generate (v0.3)
 - existing_items_first (Any request to write new items.) Remind the analyst once, in the notes, that previously evaluated questions on this construct should be looked for first and checked for transfer to this population, language and mode. Using or adapting an existing question is usually better than writing a new one. MUST NOT: Do not suggest specific existing items or sources from memory.
 - note_similarity (A draft you have written closely resembles a published item you recognise.) Say so in that item's notes, without naming a source, so the analyst can look for the original and use it with attribution instead.
 
-REFLEXES: Attitudinal scale (v0.2)
+REFLEXES: Attitudinal scale (v0.3)
 - attitude_object (Every attitude item.) Name one clearly bounded attitude object. If the object is broad, give a short definition before the question, in simple words, without making the question long.
 - specific_before_vague (Choosing what each item asks.) Prefer specific questions: they are less open to context effects and relate more closely to behaviour. If a general item is needed, place it before the specific items on the same topic and say so in the programming note.
 - construct_specific_options (Choosing the response format.) Ask about the construct directly with options in its own terms (how safe, how often, how much confidence) instead of a statement with agree-disagree options. Agree-disagree invites acquiescence and makes the respondent answer two questions at once. MUST NOT: Do not use agree-disagree for statements of fact, for statements with a quantity or comparison inside them, or for statements about the respondent's own experience.
@@ -698,17 +723,35 @@ PROHIBITIONS (override anything from training)
 ~~~~
 User message:
 ~~~~
-PREPARE
+You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
+
+Brief:
 Research question: How much do adults trust the national electoral commission?
 Construct: Trust in the national electoral commission
 Target population: Adults aged 18 and over
 Survey mode: web
 Output language: English
 
-ASK
+Task:
 Write exactly 6 survey items for the brief above, to be combined into one attitude scale. Follow every rule you were given. Reply in the format given at the end of this message.
 
-CHARACTERIZE
+Guidelines:
+- Use simple, familiar words.
+- Use simple syntax.
+- Avoid ambiguous words.
+- Be specific and concrete.
+- Make response options exhaustive and mutually exclusive.
+- Avoid leading or loaded wording.
+- Ask about one thing at a time.
+- Avoid single or double negations.
+
+For attitudinal questions, also:
+- Ask about a specific, clearly defined attitude object.
+- Balance the question with a counter-argument.
+- Use construct-specific response options, not agree–disagree.
+- Use a filter or "no opinion" option for respondents without an opinion.
+
+REPLY FORMAT
 Return one JSON object with these fields.
 
 - "items": a list. Each item has:
@@ -734,8 +777,8 @@ Return one JSON object with these fields.
 | system and user are single strings | PASS |
 | same form twice gives the same hash | PASS |
 | a changed research question changes the hash | PASS |
-| persona present | PASS |
-| PREPARE, ASK, CHARACTERIZE in that order | PASS |
+| persona opens the message, once, and is not in the system prompt | PASS |
+| Brief:, Task:, REPLY FORMAT in that order | PASS |
 | no source text sent (IASS/WSS, SURV632, Sturgis, Tourangeau) | PASS |
 | no HTML comment or Source or Check field sent | PASS |
 | core reflex one_thing present | PASS |
@@ -744,7 +787,7 @@ Return one JSON object with these fields.
 | Output language line always present | PASS |
 | reworded prohibition in force (skills 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
-| CHECKLIST block only in a review, after QUESTIONNAIRE and before CHARACTERIZE | PASS |
+| CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
 | task file sent (how_many_or_how_often) | PASS |
 | telephone, face_to_face, mixed_mode kept; web dropped | PASS |
@@ -752,9 +795,9 @@ Return one JSON object with these fields.
 | form values present (Kenya, Swahili, past 7 days) | PASS |
 | Source language shown when it differs from the output language | PASS |
 
-hash: bf022b8c13313a5c576ef8e21004e3e77c123e295c8fd122112073121bfa890a
+hash: be7ae85c7f5c5116e550f4b47a4a01c04b59a582f44e070a154768a7368a2d86
 files: core.md, generate.md, behavioral.md, mode.md, cross_cultural.md
-characters: system 15450, user 1831
+characters: system 14939, user 2929
 
 Checklist (id: question):
 ~~~~
@@ -785,9 +828,7 @@ trapd: Does the output state what Review, Adjudication, Pretesting and Documenta
 ~~~~
 System prompt:
 ~~~~
-You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
-
-REFLEXES: Core (v0.2)
+REFLEXES: Core (v0.3)
 - construct_first (Every item.) Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly. MUST NOT: Do not widen or change the construct to make an item easier to write.
 - response_process (Every item.) Walk the item through the four stages a respondent goes through: comprehension, retrieval, judgment or estimation, reporting. A fault at any one stage is measurement error. Name the stage when you name a fault.
 - plain_words (Every question stem, instruction and response option.) Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question. MUST NOT: Do not use a word with more than one common sense where the other sense would change the answer.
@@ -810,7 +851,7 @@ REFLEXES: Generate (v0.3)
 - existing_items_first (Any request to write new items.) Remind the analyst once, in the notes, that previously evaluated questions on this construct should be looked for first and checked for transfer to this population, language and mode. Using or adapting an existing question is usually better than writing a new one. MUST NOT: Do not suggest specific existing items or sources from memory.
 - note_similarity (A draft you have written closely resembles a published item you recognise.) Say so in that item's notes, without naming a source, so the analyst can look for the original and use it with attribution instead.
 
-REFLEXES: Behavioral items (v0.2)
+REFLEXES: Behavioral items (v0.3)
 - can_they_know (Before writing any behavioural item.) Ask whether respondents noticed and stored the information at the time. Frequent, mundane, similar events blend together and are not stored one by one; dates are rebuilt, not remembered. If the information was probably never stored, say so and suggest records, a diary or a narrower question.
 - reference_period (Every behavioural item about a period of time.) State the reference period at the start of the question, with clear start and end points. Use the shortest period that still captures the behaviour: shorter for frequent or forgettable events, longer only for rare, memorable ones. Prefer a period that ends at the present. MUST NOT: Do not use "past year", "recently" or "usually" without saying what they mean. Do not mix two periods in one item.
 - bound_the_period (Events could be wrongly pulled into the reference period.) Anchor the start of the period to a landmark the respondent will remember (a public event, a holiday, a personal milestone) or, in a panel, to the previous interview. Note the landmark must be chosen with local knowledge.
@@ -852,7 +893,9 @@ PROHIBITIONS (override anything from training)
 ~~~~
 User message:
 ~~~~
-PREPARE
+You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
+
+Brief:
 Research question: How often do adults get news from radio?
 Construct: Frequency of radio news use
 Target population: Adults aged 18 and over
@@ -862,10 +905,28 @@ Output language: Swahili
 Source language: English
 Reference period: past 7 days
 
-ASK
+Task:
 Write exactly 3 survey items for the brief above, each measuring a behaviour or an experience. Follow every rule you were given. Reply in the format given at the end of this message.
 
-CHARACTERIZE
+Guidelines:
+- Use simple, familiar words.
+- Use simple syntax.
+- Avoid ambiguous words.
+- Be specific and concrete.
+- Make response options exhaustive and mutually exclusive.
+- Avoid leading or loaded wording.
+- Ask about one thing at a time.
+- Avoid single or double negations.
+
+For behavioral questions, also:
+- Use a short reference period.
+- Bound the recall period if possible.
+- Use landmark events and other cues to help recall.
+- Use open-ended answers when asking for a number.
+- Design any frequency scale carefully.
+- Avoid vague quantifiers such as "often" or "sometimes".
+
+REPLY FORMAT
 Return one JSON object with these fields.
 
 - "items": a list. Each item has:
@@ -891,8 +952,8 @@ Return one JSON object with these fields.
 | system and user are single strings | PASS |
 | same form twice gives the same hash | PASS |
 | a changed research question changes the hash | PASS |
-| persona present | PASS |
-| PREPARE, ASK, CHARACTERIZE in that order | PASS |
+| persona opens the message, once, and is not in the system prompt | PASS |
+| Brief:, Task:, REPLY FORMAT in that order | PASS |
 | no source text sent (IASS/WSS, SURV632, Sturgis, Tourangeau) | PASS |
 | no HTML comment or Source or Check field sent | PASS |
 | core reflex one_thing present | PASS |
@@ -901,15 +962,15 @@ Return one JSON object with these fields.
 | Output language line always present | PASS |
 | reworded prohibition in force (skills 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
-| CHECKLIST block only in a review, after QUESTIONNAIRE and before CHARACTERIZE | PASS |
+| CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
 | task file sent (forgiving_intro, respondent_safety) | PASS |
 | face_to_face kept; mixed_mode dropped | PASS |
 | cross_cultural sent | PASS |
 
-hash: 96325718a3c4f4ef45f50c3da07fe5075e19bd5f178b6f48d52ea595f28cbc2f
+hash: 892e3df19a98d20aef2c171a730a7018e65b01c3e1ff584f34894b3468ab568f
 files: core.md, generate.md, sensitive.md, mode.md, cross_cultural.md
-characters: system 15609, user 1850
+characters: system 15098, user 3012
 
 Checklist (id: question):
 ~~~~
@@ -939,9 +1000,7 @@ trapd: Does the output state what Review, Adjudication, Pretesting and Documenta
 ~~~~
 System prompt:
 ~~~~
-You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
-
-REFLEXES: Core (v0.2)
+REFLEXES: Core (v0.3)
 - construct_first (Every item.) Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly. MUST NOT: Do not widen or change the construct to make an item easier to write.
 - response_process (Every item.) Walk the item through the four stages a respondent goes through: comprehension, retrieval, judgment or estimation, reporting. A fault at any one stage is measurement error. Name the stage when you name a fault.
 - plain_words (Every question stem, instruction and response option.) Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question. MUST NOT: Do not use a word with more than one common sense where the other sense would change the answer.
@@ -964,7 +1023,7 @@ REFLEXES: Generate (v0.3)
 - existing_items_first (Any request to write new items.) Remind the analyst once, in the notes, that previously evaluated questions on this construct should be looked for first and checked for transfer to this population, language and mode. Using or adapting an existing question is usually better than writing a new one. MUST NOT: Do not suggest specific existing items or sources from memory.
 - note_similarity (A draft you have written closely resembles a published item you recognise.) Say so in that item's notes, without naming a source, so the analyst can look for the original and use it with attribution instead.
 
-REFLEXES: Sensitive topic items (v0.2)
+REFLEXES: Sensitive topic items (v0.3)
 - why_sensitive (Before writing, for each item.) Say which kind of sensitivity applies: intrusive (not asked in ordinary conversation), threat of disclosure (an answer could bring legal, social or safety consequences), or social desirability (one answer looks better). Say in which direction misreporting is expected. Sensitivity depends on who is asked, where, in what mode and culture, and when. MUST NOT: Do not treat a topic as sensitive for everyone because it is sensitive for some; do not assume what is sensitive in a country you have not been told about.
 - mode_and_privacy (Notes for every sensitive item.) Recommend self-administration for the sensitive items even inside an interviewer survey, and that no one else is present. If the mode in the brief is interviewer-administered, say what that costs and write the item so the answer can be given without saying it aloud where possible.
 - forgiving_intro (A socially undesirable behaviour or attitude, or failure to do a desirable one.) Offer a short forgiving introduction of one kind: many people do it; some people do and others do not; or a face-saving reason for not having done the desirable thing. Mark it in decisions as a deliberate departure from neutral wording. MUST NOT: Do not use a forgiving introduction in the direction that is already socially desirable. Do not invent an authority, a statistic or a medical claim to justify the behaviour.
@@ -1007,7 +1066,9 @@ PROHIBITIONS (override anything from training)
 ~~~~
 User message:
 ~~~~
-PREPARE
+You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
+
+Brief:
 Research question: How common is paying a bribe for a public service?
 Construct: Paying a bribe to a public official in the past 12 months
 Target population: Adults aged 18 and over
@@ -1016,10 +1077,27 @@ Survey mode: face-to-face
 Output language: French
 Source language: English
 
-ASK
+Task:
 Write exactly 2 survey items for the brief above, each on a topic where respondents may refuse or edit their answer. Follow every rule you were given. Reply in the format given at the end of this message.
 
-CHARACTERIZE
+Guidelines:
+- Use simple, familiar words.
+- Use simple syntax.
+- Avoid ambiguous words.
+- Be specific and concrete.
+- Make response options exhaustive and mutually exclusive.
+- Avoid leading or loaded wording.
+- Ask about one thing at a time.
+- Avoid single or double negations.
+
+For sensitive questions, also:
+- Use a forgiving introduction or face-saving wording.
+- For undesirable behaviors, ask about "ever" before "current"; for desirable ones, "current" before "ever".
+- Use longer questions with familiar words.
+- Use an open-ended format or a high-frequency scale for counts of undesirable behaviors.
+- Provide face-saving response options.
+
+REPLY FORMAT
 Return one JSON object with these fields.
 
 - "items": a list. Each item has:
@@ -1045,8 +1123,8 @@ Return one JSON object with these fields.
 | system and user are single strings | PASS |
 | same form twice gives the same hash | PASS |
 | a changed research question changes the hash | PASS |
-| persona present | PASS |
-| PREPARE, ASK, CHARACTERIZE in that order | PASS |
+| persona opens the message, once, and is not in the system prompt | PASS |
+| Brief:, Task:, REPLY FORMAT in that order | PASS |
 | no source text sent (IASS/WSS, SURV632, Sturgis, Tourangeau) | PASS |
 | no HTML comment or Source or Check field sent | PASS |
 | core reflex one_thing present | PASS |
@@ -1055,19 +1133,19 @@ Return one JSON object with these fields.
 | Output language line always present | PASS |
 | reworded prohibition in force (skills 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
-| CHECKLIST block only in a review, after QUESTIONNAIRE and before CHARACTERIZE | PASS |
+| CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
 | evaluate.md sent (restraint, translation_readiness) | PASS |
 | generate.md and task drafting files not sent | PASS |
-| questionnaire pasted under QUESTIONNAIRE, complete | PASS |
+| questionnaire pasted under Questionnaire:, complete | PASS |
 | output format asks for trapd and test_first | PASS |
 | checklist lines are id: question, for the reflexes in force (one_thing, paper, agree_disagree_and_grids) | PASS |
 | checklist has no line for a mode not chosen | PASS |
 | cross_cultural not sent (no country, both languages English) | PASS |
 
-hash: 5d547f0e67ac22a924e0ba6d9ad9dd69d5cf1be5151e58377639a07ae4fc9402
+hash: 8c6395325e7c4e68c5f074f8a0a7b8525fa902b5dd867b54b1b9b0ad6480e789
 files: core.md, evaluate.md, mode.md
-characters: system 9311, user 3814
+characters: system 8800, user 4607
 
 Checklist (id: question):
 ~~~~
@@ -1092,9 +1170,7 @@ paper: Can the respondent follow the routing without help?
 ~~~~
 System prompt:
 ~~~~
-You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
-
-REFLEXES: Core (v0.2)
+REFLEXES: Core (v0.3)
 - construct_first (Every item.) Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly. MUST NOT: Do not widen or change the construct to make an item easier to write.
 - response_process (Every item.) Walk the item through the four stages a respondent goes through: comprehension, retrieval, judgment or estimation, reporting. A fault at any one stage is measurement error. Name the stage when you name a fault.
 - plain_words (Every question stem, instruction and response option.) Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question. MUST NOT: Do not use a word with more than one common sense where the other sense would change the answer.
@@ -1139,18 +1215,30 @@ PROHIBITIONS (override anything from training)
 ~~~~
 User message:
 ~~~~
-PREPARE
+You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
+
+Brief:
 Research question: Satisfaction with local services
 Target population: Adults aged 18 and over
 Survey mode: paper
 Output language: English
 
-ASK
+Task:
 Review the questionnaire below as an expert reviewer, item by item and then as a whole. Follow every rule you were given. Reply in the format given at the end of this message.
 
-QUESTIONNAIRE
+Questionnaire:
 Q1. How satisfied or dissatisfied are you with the recycling services and street cleaning provided by your local council? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied
 Q2. Taking all things together, how happy would you say you are? 0 Extremely unhappy ... 10 Extremely happy
+
+Guidelines:
+- Use simple, familiar words.
+- Use simple syntax.
+- Avoid ambiguous words.
+- Be specific and concrete.
+- Make response options exhaustive and mutually exclusive.
+- Avoid leading or loaded wording.
+- Ask about one thing at a time.
+- Avoid single or double negations.
 
 CHECKLIST
 construct_first: Does the item measure the construct or domain named in the brief and only that?
@@ -1172,7 +1260,7 @@ translation_readiness: Is the item free of wording that would not survive transl
 any_mode: Does the item work as written in the stated mode?
 paper: Can the respondent follow the routing without help?
 
-CHARACTERIZE
+REPLY FORMAT
 Return one JSON object with these fields. Write findings in English whatever
 language the questionnaire is in; write rewrites in the questionnaire's
 language and, when that is not English, add the English meaning.
@@ -1193,8 +1281,8 @@ language and, when that is not English, add the English meaning.
 | system and user are single strings | PASS |
 | same form twice gives the same hash | PASS |
 | a changed research question changes the hash | PASS |
-| persona present | PASS |
-| PREPARE, ASK, CHARACTERIZE in that order | PASS |
+| persona opens the message, once, and is not in the system prompt | PASS |
+| Brief:, Task:, REPLY FORMAT in that order | PASS |
 | no source text sent (IASS/WSS, SURV632, Sturgis, Tourangeau) | PASS |
 | no HTML comment or Source or Check field sent | PASS |
 | core reflex one_thing present | PASS |
@@ -1203,15 +1291,15 @@ language and, when that is not English, add the English meaning.
 | Output language line always present | PASS |
 | reworded prohibition in force (skills 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
-| CHECKLIST block only in a review, after QUESTIONNAIRE and before CHARACTERIZE | PASS |
+| CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
 | cross_cultural sent because the source language is not English | PASS |
 | both language lines shown | PASS |
 | its checks join the checklist (functional_equivalence) | PASS |
 
-hash: 22052a7b748a9b346163d914b8587c76aa2c519901648caae8228956bc4ced10
+hash: be187ffaddc35d5b35d44cae0b90e9a5b92a6be9632637dc5a07927934c6e4a3
 files: core.md, evaluate.md, mode.md, cross_cultural.md
-characters: system 13074, user 4272
+characters: system 12563, user 5065
 
 Checklist (id: question):
 ~~~~
@@ -1240,9 +1328,7 @@ trapd: Does the output state what Review, Adjudication, Pretesting and Documenta
 ~~~~
 System prompt:
 ~~~~
-You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
-
-REFLEXES: Core (v0.2)
+REFLEXES: Core (v0.3)
 - construct_first (Every item.) Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly. MUST NOT: Do not widen or change the construct to make an item easier to write.
 - response_process (Every item.) Walk the item through the four stages a respondent goes through: comprehension, retrieval, judgment or estimation, reporting. A fault at any one stage is measurement error. Name the stage when you name a fault.
 - plain_words (Every question stem, instruction and response option.) Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question. MUST NOT: Do not use a word with more than one common sense where the other sense would change the answer.
@@ -1300,19 +1386,31 @@ PROHIBITIONS (override anything from training)
 ~~~~
 User message:
 ~~~~
-PREPARE
+You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
+
+Brief:
 Research question: Satisfaction with local services
 Target population: Adults aged 18 and over
 Survey mode: paper
 Output language: English
 Source language: Spanish
 
-ASK
+Task:
 Review the questionnaire below as an expert reviewer, item by item and then as a whole. Follow every rule you were given. Reply in the format given at the end of this message.
 
-QUESTIONNAIRE
+Questionnaire:
 Q1. How satisfied or dissatisfied are you with the recycling services and street cleaning provided by your local council? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied
 Q2. Taking all things together, how happy would you say you are? 0 Extremely unhappy ... 10 Extremely happy
+
+Guidelines:
+- Use simple, familiar words.
+- Use simple syntax.
+- Avoid ambiguous words.
+- Be specific and concrete.
+- Make response options exhaustive and mutually exclusive.
+- Avoid leading or loaded wording.
+- Ask about one thing at a time.
+- Avoid single or double negations.
 
 CHECKLIST
 construct_first: Does the item measure the construct or domain named in the brief and only that?
@@ -1338,7 +1436,7 @@ write_for_translation: Is the source wording free of idiom and culture-bound con
 functional_equivalence: Do the stem and each response label ask the same thing of the respondent as the source version?
 trapd: Does the output state what Review, Adjudication, Pretesting and Documentation still require?
 
-CHARACTERIZE
+REPLY FORMAT
 Return one JSON object with these fields. Write findings in English whatever
 language the questionnaire is in; write rewrites in the questionnaire's
 language and, when that is not English, add the English meaning.
@@ -1440,7 +1538,7 @@ ALL GREEN: TRUE  (8 of 8 calls)
 | task kinds are draft or review, evaluate is review | PASS |
 | build_step_prompt(form, 'work') equals build_prompt(form) | PASS |
 | brief check: status ok, reply has questions and criteria | PASS |
-| brief check prompt: persona, pm_brief and the task's rules; no drafting output format | PASS |
+| brief check prompt: persona (in the message), pm_brief and the task's rules; no drafting output format | PASS |
 | drafts: one entry per worker, in order, all ok | PASS |
 | each ok draft keeps the parsed reply with 2 items | PASS |
 | a worker error and a wrong item count are recorded as failed, with a reason, and the run goes on | PASS |
@@ -1450,7 +1548,7 @@ ALL GREEN: TRUE  (8 of 8 calls)
 | no model id, vendor or endpoint reaches the appraisal prompt | PASS |
 | appraisal prompt: CANDIDATES then CHECKLIST then CHARACTERIZE, with the stems and the check questions | PASS |
 | documentation checks are not in the appraisal checklist (skills 0.3) | PASS |
-| appraisal system prompt: persona and pm_appraise rules, not the drafting rules | PASS |
+| appraisal prompt: persona (in the message), pm_appraise rules in the system prompt, not the drafting rules | PASS |
 | flow.R has no Shiny in it | PASS |
 | flow.R never looks up a key | PASS |
 
@@ -1458,61 +1556,61 @@ Live run log (tests/run_generate.json), first 60 lines:
 ~~~~
 {
   "schema": 1,
-  "time": "2026-11-12T22:53:35-0500",
+  "time": "2026-11-13T08:42:16-0500",
   "summary": [
     {
       "step": "brief check",
       "model": "claude-sonnet-5-5",
       "status": "ok",
-      "seconds": 17.6637,
+      "seconds": 10.3375,
       "finish": "success",
       "attempts": 1,
       "tokens_in": 4758,
-      "tokens_out": 1975,
+      "tokens_out": 1117,
       "error": null
     },
     {
       "step": "draft",
       "model": "google/gemma-4-31b-it",
       "status": "ok",
-      "seconds": 6.5059,
+      "seconds": 4.4608,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 2827,
-      "tokens_out": 795,
+      "tokens_in": 2957,
+      "tokens_out": 881,
       "error": null
     },
     {
       "step": "draft",
       "model": "meta-llama/llama-4-maverick",
       "status": "ok",
-      "seconds": 19.1211,
+      "seconds": 10.0541,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 2723,
-      "tokens_out": 1392,
+      "tokens_in": 2839,
+      "tokens_out": 678,
       "error": null
     },
     {
       "step": "draft",
       "model": "openai/gpt-6-luna",
       "status": "ok",
-      "seconds": 38.7322,
+      "seconds": 51.0088,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 2718,
-      "tokens_out": 4495,
+      "tokens_in": 2833,
+      "tokens_out": 4869,
       "error": null
     },
     {
       "step": "appraisal",
       "model": "claude-sonnet-5-5",
       "status": "ok",
-      "seconds": 32.2571,
+      "seconds": 27.0212,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 5586,
-      "tokens_out": 4113,
+      "tokens_in": 5804,
+      "tokens_out": 3356,
       "error": null
     }
   ],
@@ -1808,10 +1906,10 @@ Disclosure of the use of language models
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
 - Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
-- Skill files and versions: core.md 0.2; generate.md 0.3; attitudinal.md 0.2; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
-- Brief check prompt: 395ddacac624fd946a3de8f690cdd69ba36b282b35b74b3df4c7f54c9e56afff
-- Drafting prompt (not edited): b6438476295bc94614d64a469052af204f45cdb8c43030daa3735363398dae72
-- Appraisal prompt: e369d7e583dbf69ba2a8f4e95397a16065c25a2a13b732b146fac05c2c49b2ac
+- Skill files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
+- Brief check prompt: aaccce763e7134d3eae405db15ce1f7e9f956ee0b57ec327cb84149e13b4cf94
+- Drafting prompt (not edited): c5663a00236f0e4d56d563d2aade9f74d5da1c847013d775841c5d551de99095
+- Appraisal prompt: c65f2fef5822b7e84c4558f10a852be8ce9ef5ecf502113934bfe8cb870376ce
 - Item 1 (CONF1): candidate A, written by vendor-a/model-one
 - Item 2 (CONF2): candidate C, written by vendor-b/model-two
 
@@ -1880,8 +1978,8 @@ Disclosure of the use of language models
 - Date: 2026-11-12 09:30
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
-- Skill files and versions: core.md 0.2; evaluate.md 0.3; mode.md 0.1
-- Review prompt (not edited): 4cb3acaf9cc38c1a4ab6d4947c0d87a877aabf83661baab1ccd571a67e8ecdf8
+- Skill files and versions: core.md 0.3; evaluate.md 0.3; mode.md 0.1
+- Review prompt (not edited): 12a1c9c921d2f72ef146cac783dcc63eb1bc806364a9694977d51a222421f4f7
 
 Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
 

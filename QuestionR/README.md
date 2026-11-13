@@ -13,7 +13,9 @@ What it does, in four tabs after "Start here":
 1. **Brief**: choose a task (an attitudinal scale, behavioral items, sensitive-topic items, or
    evaluate a pasted questionnaire) and describe what you need. **Build the instructions** goes
    straight on; **Check my brief first** asks a model whether the brief is complete.
-2. **Prompt**: read the exact prompt that will be sent; approve it or edit it first.
+2. **Prompt**: read the prompt the model will be sent (a short message: who it is told to be, your
+   brief, the task and a few guidelines); approve it or edit it first. The survey design rules
+   are sent with it every time and cannot be edited; they are on the Methodology tab.
 3. **Results**: for drafting, the workers draft together and a project manager model reviews the
    drafts and recommends one item for each part of what you need. You see that set, with its
    concerns in three bands by severity, and edit any wording, remove an item, or swap in another
@@ -30,7 +32,8 @@ What it does, in four tabs after "Start here":
 | `app.R` | The settings, the models, the packages check, the layout and the server |
 | `R/` | The code, one job a file: `skills.R` reads the skill files and builds prompts; `llm.R` calls the models and holds the key box; `flow.R` runs a draft or a review step by step; `checks.R` checks and codes what a model sends back; `output.R` builds the Word output and the Methodology page; `ui.R` and `ui_generate.R` draw the tabs |
 | `www/skills/` | The rule files. Plain text; see `www/skills/README.md` for the format |
-| `www/methodology.md` | The Methodology tab's note |
+| `www/start.md`, `www/methodology.md` | The Start here welcome and the Methodology tab's note, as markdown, with the pictures `www/how_it_works.svg` and `www/fw_*.svg` |
+| `www/skills_materials/` | The list of the materials the skills were drawn from, and the one open-licensed paper; the rest stay with the maintainer and are never deployed |
 | `www/logo/` | The office logo, if you add one |
 | `tests/`, `DESIGN.md`, `STATUS.md`, `PROMPTS.md`, `REVIEW.md` | How it was built and tested, at home. Not needed to run it |
 

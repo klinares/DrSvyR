@@ -49,10 +49,10 @@ Disclosure of the use of language models
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
 - Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
-- Skill files and versions: core.md 0.2; generate.md 0.3; attitudinal.md 0.2; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
-- Brief check prompt: 395ddacac624fd946a3de8f690cdd69ba36b282b35b74b3df4c7f54c9e56afff
-- Drafting prompt (not edited): b6438476295bc94614d64a469052af204f45cdb8c43030daa3735363398dae72
-- Appraisal prompt: e369d7e583dbf69ba2a8f4e95397a16065c25a2a13b732b146fac05c2c49b2ac
+- Skill files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
+- Brief check prompt: aaccce763e7134d3eae405db15ce1f7e9f956ee0b57ec327cb84149e13b4cf94
+- Drafting prompt (not edited): c5663a00236f0e4d56d563d2aade9f74d5da1c847013d775841c5d551de99095
+- Appraisal prompt: c65f2fef5822b7e84c4558f10a852be8ce9ef5ecf502113934bfe8cb870376ce
 - Item 1 (CONF1): candidate A, written by vendor-a/model-one
 - Item 2 (CONF2): candidate C, written by vendor-b/model-two
 
