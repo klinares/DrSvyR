@@ -194,6 +194,20 @@ ok("text before the first reflex stops",
 ok("an unknown section stops",
    says("section that is not part of the format: '## Reflex'",
         c("## Reflex", "", "### oops", "- **When:** A.", "- **Say:** B.")))
+fine_reflex <- c("## Reflexes", "", "### fine_one", "- **When:** A.", "- **Say:** B.")
+ok("a Guidelines section is read: an optional heading line, then one-line bullets; bullets alone are fine",
+   local({
+     with_head = try_skill(c("## Guidelines", "", "<!-- a note -->", "Guidelines:", "", "- One.", "- Two.", "", fine_reflex))
+     bare = try_skill(c("## Guidelines", "", "- Only.", "", fine_reflex))
+     is.list(with_head) && identical(with_head$guidelines, list(heading = "Guidelines:", bullets = c("One.", "Two."))) &&
+       is.list(bare) && is.na(bare$guidelines$heading) && identical(bare$guidelines$bullets, "Only.") &&
+       is.null(good$guidelines)
+   }))
+ok("a Guidelines section with a second heading line, a wrapped bullet or no bullets stops, naming the file",
+   says("has a '## Guidelines' section that is not an optional heading line and then one-line bullets",
+        c("## Guidelines", "", "Head", "More head", "- One.", "", fine_reflex)) &&
+     says("fixture.md has a '## Guidelines' section that is not", c("## Guidelines", "", "- One", "  wrapped.", "", fine_reflex)) &&
+     says("fixture.md has a '## Guidelines' section that is not", c("## Guidelines", "", "Heading only", "", fine_reflex)))
 ok("a missing Reflexes section stops",
    says("has no '## Reflexes' section", c("## Prohibitions", "", "- Never lie.")))
 ok("a prohibition wrapped onto a second line stops",
@@ -261,7 +275,8 @@ ok("the same form twice gives the same prompt and the same hash",
 ok("the contract: build_prompt(form) and build_checklist(form), and what build_prompt returns",
    identical(names(formals(build_prompt)), "form") &&
      identical(names(formals(build_checklist)), "form") &&
-     every_built(function(b) identical(sort(names(b$p)), c("files", "hash", "system", "user")) &&
+     every_built(function(b) identical(sort(names(b$p)), c("files", "hash", "message", "system", "tail", "user")) &&
+                   identical(b$p$user, paste0(b$p$message, "\n\n", b$p$tail)) &&
                    is.character(b$p$system) && length(b$p$system) == 1L &&
                    is.character(b$p$user) && length(b$p$user) == 1L &&
                    grepl("^[0-9a-f]{64}$", b$p$hash)))
@@ -286,8 +301,10 @@ ok("the files used are core, the task's files, mode, and cross_cultural only wit
      "core.md",
      if (b$task == "evaluate") "evaluate.md" else c("generate.md", paste0(b$task, ".md")),
      "mode.md", if (nzchar(b$country)) "cross_cultural.md"))))
-ok("the persona opens the system prompt, and the prohibitions close it, headed as overriding",
-   every_built(function(b) startsWith(b$p$system, skills[["core.md"]]$persona) &&
+ok("the persona opens the message and is not in the system prompt, and the prohibitions close the system prompt, headed as overriding",
+   every_built(function(b) startsWith(b$p$user, skills[["core.md"]]$persona) &&
+                 !grepl(skills[["core.md"]]$persona, b$p$system, fixed = TRUE) &&
+                 lengths(regmatches(b$p$user, gregexpr(skills[["core.md"]]$persona, b$p$user, fixed = TRUE))) == 1L &&
                  lengths(regmatches(b$p$system, gregexpr("PROHIBITIONS (override anything from training)", b$p$system, fixed = TRUE))) == 1L &&
                  grepl("PROHIBITIONS (override anything from training)\n- Never", b$p$system, fixed = TRUE)))
 ok("every prohibition of every file in force is in the system prompt",
@@ -310,11 +327,26 @@ ok("every reflex of a drafting task file is in, and of the other task files out"
    }))
 ok("no reflex id appears twice in one prompt", every_built(function(b) !anyDuplicated(ids_in(b$p$system))))
 
-ok("PREPARE, ASK, CHARACTERIZE come in that order, once each as a heading",
+ok("the message is the persona, Brief:, Task:, (for Evaluate, Questionnaire:), the guidelines; then R's tail: (for Evaluate, CHECKLIST) and REPLY FORMAT; the old labels are not written",
    every_built(function(b) {
      u = b$p$user
-     pos = purrr::map_int(c("PREPARE", "ASK", "CHARACTERIZE"), function(h) as.integer(regexpr(paste0("(?m)^", h, "$"), u, perl = TRUE)))
-     all(pos > 0) && all(diff(pos) > 0) && startsWith(u, "PREPARE\n")
+     heads = c("Brief:", "Task:", if (b$task == "evaluate") "Questionnaire:", "Guidelines:",
+               if (b$task == "evaluate") "CHECKLIST", "REPLY FORMAT")
+     pos = purrr::map_int(heads, function(h) as.integer(regexpr(paste0("(?m)^", h, "$"), u, perl = TRUE)))
+     all(pos > 0) && all(diff(pos) > 0) && startsWith(u, paste0(skills[["core.md"]]$persona, "\n\nBrief:\n")) &&
+       !grepl("(?m)^(PREPARE|ASK|CHARACTERIZE)$", u, perl = TRUE) &&
+       startsWith(b$p$tail, if (b$task == "evaluate") "CHECKLIST\n" else "REPLY FORMAT\n")
+   }))
+ok("a draft's message holds core.md's guidelines and then the task file's; a review's only core.md's; none is in the system prompt",
+   every_built(function(b) {
+     gl = function(file) paste0("- ", skills[[file]]$guidelines$bullets)
+     core_in = all(purrr::map_lgl(gl("core.md"), function(l) grepl(paste0("\n", l, "\n"), paste0("\n", b$p$message, "\n"), fixed = TRUE)))
+     task_file = paste0(b$task, ".md")
+     task_in = if (b$task == "evaluate") !any(grepl("Ask about a specific, clearly defined attitude object.", b$p$message, fixed = TRUE))
+       else all(purrr::map_lgl(gl(task_file), function(l) grepl(paste0("\n", l, "\n"), paste0("\n", b$p$message, "\n"), fixed = TRUE))) &&
+         regexpr(gl("core.md")[1], b$p$message, fixed = TRUE) < regexpr(gl(task_file)[1], b$p$message, fixed = TRUE)
+     core_in && task_in && !grepl("Use simple, familiar words.\n", b$p$system, fixed = TRUE) &&
+       !grepl("Guidelines:", b$p$system, fixed = TRUE)
    }))
 ok("the Output format of the file that carries it is in the user message, as written",
    every_built(function(b) grepl(skills[[if (b$task == "evaluate") "evaluate.md" else "generate.md"]]$output_format,
@@ -322,17 +354,17 @@ ok("the Output format of the file that carries it is in the user message, as wri
 ok("the number of items is in the ask for the drafting tasks",
    every_built(function(b) b$task == "evaluate" ||
                  grepl(paste0("Write exactly ", b$form$n_items, " survey item"), b$p$user, fixed = TRUE)))
-ok("the pasted questionnaire follows ASK, whole and as pasted, and only for Evaluate",
+ok("the pasted questionnaire follows Task:, whole and as pasted, and only for Evaluate",
    every_built(function(b) if (b$task == "evaluate")
-     grepl("\nASK\n", b$p$user, fixed = TRUE) &&
-       grepl(paste0("\n\nQUESTIONNAIRE\n", b$form$questionnaire, "\n\nCHECKLIST\n"), b$p$user, fixed = TRUE)
-   else !grepl("QUESTIONNAIRE", b$p$user, fixed = TRUE)))
-ok("a review's CHECKLIST is exactly build_checklist(form), id: question, between QUESTIONNAIRE and CHARACTERIZE",
+     grepl("\nTask:\n", b$p$user, fixed = TRUE) &&
+       grepl(paste0("\n\nQuestionnaire:\n", b$form$questionnaire, "\n\nGuidelines:\n"), b$p$user, fixed = TRUE)
+   else !grepl("Questionnaire:", b$p$user, fixed = TRUE)))
+ok("a review's CHECKLIST is exactly build_checklist(form), id: question, then REPLY FORMAT, in R's tail after the message",
    purrr::every(purrr::keep(built, function(b) b$task == "evaluate"), function(b) {
-     block = paste0("\n\nCHECKLIST\n", paste0(names(b$ck), ": ", unname(b$ck), collapse = "\n"), "\n\nCHARACTERIZE\n")
-     length(b$ck) > 0 && grepl(block, b$p$user, fixed = TRUE) &&
+     block = paste0("CHECKLIST\n", paste0(names(b$ck), ": ", unname(b$ck), collapse = "\n"), "\n\nREPLY FORMAT\n")
+     length(b$ck) > 0 && startsWith(b$p$tail, block) && !grepl("CHECKLIST", b$p$message, fixed = TRUE) &&
        lengths(regmatches(b$p$user, gregexpr("\nCHECKLIST\n", b$p$user, fixed = TRUE))) == 1L &&
-       regexpr("\nQUESTIONNAIRE\n", b$p$user, fixed = TRUE) < regexpr("\nCHECKLIST\n", b$p$user, fixed = TRUE)
+       regexpr("\nQuestionnaire:\n", b$p$user, fixed = TRUE) < regexpr("\nCHECKLIST\n", b$p$user, fixed = TRUE)
    }))
 ok("a drafting prompt has no CHECKLIST block and no Check question in its user message",
    purrr::every(purrr::keep(built, function(b) b$task != "evaluate"), function(b)
@@ -391,13 +423,13 @@ ok("a change to a skill file changes the hash",
      before = skills_in_force(f)
      after = skills_in_force(f, dir)
      !identical(read_skill("core.md")$sha, read_skill("core.md", dir)$sha) &&
-       !identical(prompt_hash(assemble_system(before), assemble_user(f, before)),
-                  prompt_hash(assemble_system(after), assemble_user(f, after)))
+       !identical(prompt_hash(assemble_system(before), assemble_message(f, before)),
+                  prompt_hash(assemble_system(after), assemble_message(f, after)))
    }))
 
 # The PREPARE lines: fixed labels, fixed order, blanks left out.
 prepare_of <- function(fm) {
-  u = strsplit(build_prompt(fm)$user, "\n\n", fixed = TRUE)[[1]][1]
+  u = strsplit(build_prompt(fm)$user, "\n\n", fixed = TRUE)[[1]][2]
   sub(":.*$", "", strsplit(u, "\n", fixed = TRUE)[[1]][-1])
 }
 full <- utils::modifyList(forms$attitudinal, list(
@@ -418,7 +450,7 @@ ok("blank fields leave no PREPARE line, except Output language, which is always 
 lang_lines <- function(output, source)
   strsplit(strsplit(build_prompt(utils::modifyList(
     forms$attitudinal, list(output_language = output, source_language = source)))$user,
-    "\n\n", fixed = TRUE)[[1]][1], "\n", fixed = TRUE)[[1]] |>
+    "\n\n", fixed = TRUE)[[1]][2], "\n", fixed = TRUE)[[1]] |>
   grep(pattern = "language:", value = TRUE)
 ok("a blank output language prints as English, and hashes as English",
    identical(lang_lines("", ""), "Output language: English") &&
@@ -442,9 +474,9 @@ ok("the survey mode line reads in words, in the fixed order of the modes",
                                         list(modes = c("face_to_face", "mobile_web", "telephone"))))$user,
          fixed = TRUE))
 ok("a REVISION line is in the ask on a rerun and nowhere else",
-   grepl("\nREVISION: Make the stems shorter.\n\nCHARACTERIZE",
+   grepl("\nTask:\n[^\n]+\nREVISION: Make the stems shorter\\.\n\nGuidelines:",
          build_prompt(utils::modifyList(forms$attitudinal, list(revision = "Make the stems shorter.")))$user,
-         fixed = TRUE) &&
+         perl = TRUE) &&
      !grepl("REVISION", build_prompt(forms$attitudinal)$user, fixed = TRUE))
 has_trapd <- function(...)
   "trapd" %in% ids_in(build_prompt(utils::modifyList(forms$attitudinal, list(...)))$system)
@@ -936,13 +968,14 @@ ok("the brief check's system prompt holds the brief rules and the task's rules, 
    purrr::every(brief_built, function(b)
      inn(b$p$system, "- what_a_brief_needs (") && inn(b$p$system, "- criteria_preview (") &&
        inn(b$p$system, if (b$form$task == "evaluate") "- restraint (" else "- declare_defaults (") &&
-       startsWith(b$p$system, skills[["core.md"]]$persona)))
-ok("the brief check's user message is PREPARE, ASK, CHECKLIST, CHARACTERIZE, with pm_brief's output format",
+       !inn(b$p$system, skills[["core.md"]]$persona) && startsWith(b$p$user, skills[["core.md"]]$persona)))
+ok("the brief check's user message is the persona, then PREPARE, ASK, CHECKLIST, CHARACTERIZE, with pm_brief's output format",
    purrr::every(brief_built, function(b) {
      u = b$p$user
      pos = purrr::map_int(c("PREPARE", "ASK", "CHECKLIST", "CHARACTERIZE"), function(h)
        as.integer(regexpr(paste0("(?m)^", h, "$"), u, perl = TRUE)))
-     all(pos > 0) && all(diff(pos) > 0) && startsWith(u, "PREPARE\n") &&
+     all(pos > 0) && all(diff(pos) > 0) &&
+       startsWith(u, paste0(skills[["core.md"]]$persona, "\n\nPREPARE\n")) &&
        inn(u, skills[["pm_brief.md"]]$output_format) && inn(u, "\"task_fit\"") &&
        !inn(u, "\"source_english\"") && !inn(u, "\"trapd\"")
    }))
@@ -981,12 +1014,13 @@ ok("the appraisal sends core and pm_appraise only, and none of the drafting rule
    identical(ap$files, c("core.md", "pm_appraise.md")) &&
      inn(ap$system, "- check_before_choosing (") && inn(ap$system, "- pick_per_domain (") &&
      !inn(ap$system, "- declare_defaults (") && !inn(ap$system, "- attitude_object (") &&
-     startsWith(ap$system, skills[["core.md"]]$persona))
-ok("the appraisal's user message is PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE, in that order",
+     !inn(ap$system, skills[["core.md"]]$persona))
+ok("the appraisal's user message is the persona, then PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE, in that order",
    local({
      pos = purrr::map_int(c("PREPARE", "ASK", "CANDIDATES", "CHECKLIST", "CHARACTERIZE"), function(h)
        as.integer(regexpr(paste0("(?m)^", h, "$"), ap$user, perl = TRUE)))
      all(pos > 0) && all(diff(pos) > 0) && inn(ap$user, skills[["pm_appraise.md"]]$output_format) &&
+       startsWith(ap$user, paste0(skills[["core.md"]]$persona, "\n\nPREPARE\n")) &&
        inn(ap$user, "\"selected\"")
    }))
 ok("the appraisal's CHECKLIST is exactly what the workers' files give, and their questions are not in the system prompt",
@@ -1634,7 +1668,7 @@ extended <- paste(as.character(mod_brief_ui("brief")), collapse = "")
 ok("a task added to TASKS is in the dropdown, its fields are shown for it, and it assembles a prompt",
    grepl("Knowledge items", extended, fixed = TRUE) && grepl("knowledge", extended, fixed = TRUE) &&
      "knowledge" %in% task_choices() &&
-     grepl("^PREPARE", build_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")))$user) &&
+     startsWith(build_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")))$user, skills[["core.md"]]$persona) &&
      length(build_step_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")), "brief")$files) == 5L)
 ok("a worker added to the model list gets its own box, and nothing else changes",
    grepl("vendor-z/extra-worker", extended, fixed = TRUE) && !grepl("vendor-z/extra-worker", brief_page, fixed = TRUE))
@@ -1668,7 +1702,7 @@ local({
          grepl("Approve and run", b, fixed = TRUE) && !grepl("disabled", b, fixed = TRUE) &&
          grepl("3 workers", b, fixed = TRUE) && grepl("4 model calls", b, fixed = TRUE))
 
-    session$setInputs(system = a$system, user = a$user)
+    session$setInputs(system = a$system, user = a$message)
     ok("an untouched prompt is shown as assembled, with its hash",
        grepl("As assembled", html_of3(output$status), fixed = TRUE) &&
          grepl(substr(a$hash, 1, 16), html_of3(output$status), fixed = TRUE))
@@ -1678,8 +1712,9 @@ local({
          identical(st$approved$original_hash, a$hash) && identical(st$approved$user, a$user) &&
          identical(st$approved$system, a$system) && st$run_id == 1L && identical(nav$env$tabs, QUESTIONR_TABS[4]))
 
-    ed_user = paste0(a$user, "\nPlease keep every stem under 15 words.")
-    session$setInputs(system = a$system, user = ed_user)
+    ed_msg = paste0(a$message, "\nPlease keep every stem under 15 words.")
+    ed_user = sent_user(ed_msg, a$tail)
+    session$setInputs(system = a$system, user = ed_msg)
     s = html_of3(output$status)
     ok("an edited prompt is marked edited, showing both hashes",
        grepl("Edited", s, fixed = TRUE) && grepl(substr(a$hash, 1, 16), s, fixed = TRUE) &&
@@ -1689,7 +1724,7 @@ local({
        identical(st$approved$edited, TRUE) && identical(st$approved$user, ed_user) &&
          identical(st$approved$hash, prompt_hash(a$system, ed_user)) && identical(st$approved$original_hash, a$hash) &&
          st$run_id == 2L)
-    session$setInputs(system = gsub("\n", "\r\n", a$system, fixed = TRUE), user = gsub("\n", "\r\n", a$user, fixed = TRUE),
+    session$setInputs(system = gsub("\n", "\r\n", a$system, fixed = TRUE), user = gsub("\n", "\r\n", a$message, fixed = TRUE),
                       approve = 3)
     ok("a browser's line endings are not an edit",
        identical(st$approved$edited, FALSE) && identical(st$approved$hash, a$hash))
@@ -1705,10 +1740,10 @@ local({
     session$flushReact()
     b = html_of3(output$body)
     ok("Evaluate's prompt can be read and approved: the button is on and the page says it makes one call",
-       !grepl("disabled", b, fixed = TRUE) && grepl("QUESTIONNAIRE", b, fixed = TRUE) &&
+       !grepl("disabled", b, fixed = TRUE) && grepl("Questionnaire:", b, fixed = TRUE) &&
          grepl("one model call", b, fixed = TRUE) && !grepl("Phase 4", b, fixed = TRUE))
     a = build_prompt(st$form)
-    session$setInputs(system = a$system, user = paste0(a$user, "\nAlso say if a question is too long."), approve = 1)
+    session$setInputs(system = a$system, user = paste0(a$message, "\nAlso say if a question is too long."), approve = 1)
     ok("approving a review prompt, edited or not, starts a run with the edited text and both hashes",
        st$run_id == 1L && identical(st$approved$edited, TRUE) && identical(st$approved$original_hash, a$hash) &&
          grepl("Also say if a question is too long.", st$approved$user, fixed = TRUE))
@@ -2341,7 +2376,7 @@ ok("review_plan: one call of kind all for a short text; an items call per part t
 ip1 <- build_step_prompt(long_form, "items", part = plan[[2]])
 ip_inst <- build_step_prompt(long_form, "instrument", part = plan[[4]])
 inst_ids <- TASKS$evaluate$instrument_checks
-ck_lines <- function(u) { l = strsplit(u, "\n", fixed = TRUE)[[1]]; sub(":.*$", "", l[(match("CHECKLIST", l) + 1L):(match("CHARACTERIZE", l) - 2L)]) }
+ck_lines <- function(u) { l = strsplit(u, "\n", fixed = TRUE)[[1]]; sub(":.*$", "", l[(match("CHECKLIST", l) + 1L):(match("REPLY FORMAT", l) - 2L)]) }
 ok("an item call has only its part of the text, the part sentence with its numbers, and every check but the four instrument ones",
    grepl("Review part 2 of 3 of a questionnaire", ip1$user, fixed = TRUE) &&
      grepl("block number 14 of the whole questionnaire", ip1$user, fixed = TRUE) &&

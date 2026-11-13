@@ -1,6 +1,6 @@
 # Sensitive topic items
 
-Version: 0.2
+Version: 0.3
 
 Task file for questions where respondents may refuse or edit their answer.
 The aim is more disclosure and fewer refusals without changing what is asked.
@@ -11,6 +11,23 @@ planned exception to neutral_wording, and assume_behavior to
 no_presupposition. Both must be declared in the item's decisions so the
 appraiser does not flag them as faults and the analyst can turn them off.
 -->
+
+## Guidelines
+
+<!--
+From Yan, IASS/WSS Session 1, writing sensitive questions (rules 9 to 12 and
+the forgiving introduction), worded in the style of the LLM Question Lab's
+informed prompt. Replace with the Question Lab's own sensitive list if
+Kevin has it.
+-->
+
+For sensitive questions, also:
+
+- Use a forgiving introduction or face-saving wording.
+- For undesirable behaviors, ask about "ever" before "current"; for desirable ones, "current" before "ever".
+- Use longer questions with familiar words.
+- Use an open-ended format or a high-frequency scale for counts of undesirable behaviors.
+- Provide face-saving response options.
 
 ## Reflexes
 

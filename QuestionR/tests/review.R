@@ -19,17 +19,17 @@ CODE_BUDGET <- 12L
 # sha256 of each skill file with line endings normalised, as drafted in the
 #   Claude project. Updated there, and only there, when a skill changes.
 SKILL_SHA <- c(
-  "README.md" = "47826ef73309cfc3cd72ac45091efb43241a7875d150f2d1fac69a8dbef5b606",
-  "attitudinal.md" = "fa9e369f521353670f3e245f9318b1eaf8fcddb54163932d53a1ae0642b69a35",
-  "behavioral.md" = "c22273bf2dbb02e4e939b8ee98bf6980c5dd093398b20312c3e82f92df1c3ead",
-  "core.md" = "770a402a6dc4b60389e4c266f43cdaa28dc8ccc0e88938f76cb9b72a54379f35",
+  "README.md" = "6d851fc5dc38f734c5754c818b25cd14a2667c090fef5150da30994456ea06cf",
+  "attitudinal.md" = "02a273b6ffe0428629b2b6c358a40977c11cb40adeb256fe09e3a4f03eba26e4",
+  "behavioral.md" = "f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142",
+  "core.md" = "d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9",
   "cross_cultural.md" = "6c8a19b8c17b19808b4cfca788b3c76a7595d54a3a25a71e355391cb944bdd4d",
   "evaluate.md" = "6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb",
   "generate.md" = "9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
   "pm_appraise.md" = "a43e03e541f02f12d72f44d83c901faf983b0edf36fe123045da66a50aaeeb10",
   "pm_brief.md" = "a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a",
-  "sensitive.md" = "0ebc82a948f01caed0847f3d4a6cda87216f33dc3039e764cb8c1ab8ac45e726")
+  "sensitive.md" = "4d8b50d65e768c62143287b3f7400ff7d66695b4905b3d4e0849cc313b81a2eb")
 
 stopifnot("Run from inside QuestionR/" = file.exists("DESIGN.md"))
 
@@ -248,10 +248,11 @@ prompt_checks <- function(name, p, again, changed) {
     expect("system and user are single strings", is.character(sys) && length(sys) == 1 && is.character(usr) && length(usr) == 1),
     expect("same form twice gives the same hash", identical(p$hash, again$hash)),
     expect("a changed research question changes the hash", !identical(p$hash, changed$hash)),
-    expect("persona present", has(sys, "senior survey methodologist")),
-    expect("PREPARE, ASK, CHARACTERIZE in that order",
-           all(diff(c(regexpr("PREPARE", usr, fixed = TRUE), regexpr("ASK", usr, fixed = TRUE),
-                      regexpr("CHARACTERIZE", usr, fixed = TRUE))) > 0) && has(usr, "PREPARE")),
+    expect("persona opens the message, once, and is not in the system prompt",
+           startsWith(usr, "You are a senior survey methodologist") && !has(sys, "senior survey methodologist")),
+    expect("Brief:, Task:, REPLY FORMAT in that order",
+           all(diff(c(regexpr("\nBrief:\n", usr, fixed = TRUE), regexpr("\nTask:\n", usr, fixed = TRUE),
+                      regexpr("\nREPLY FORMAT\n", usr, fixed = TRUE))) > 0) && has(usr, "\nBrief:\n")),
     expect("no source text sent (IASS/WSS, SURV632, Sturgis, Tourangeau)",
            !any(purrr::map_lgl(c("IASS/WSS", "SURV632", "Sturgis", "Tourangeau"), function(s) has(both, s)))),
     expect("no HTML comment or Source or Check field sent",
@@ -264,10 +265,10 @@ prompt_checks <- function(name, p, again, changed) {
   is_review = name %in% c("evaluate", "evaluate_translated")
   common = dplyr::bind_rows(common,
     expect("existing_items_first only in drafting prompts", has(sys, "- existing_items_first (") != is_review),
-    expect("CHECKLIST block only in a review, after QUESTIONNAIRE and before CHARACTERIZE",
-           if (is_review) all(diff(c(regexpr("\nQUESTIONNAIRE\n", usr, fixed = TRUE),
+    expect("CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT",
+           if (is_review) all(diff(c(regexpr("\nQuestionnaire:\n", usr, fixed = TRUE),
                                      regexpr("\nCHECKLIST\n", usr, fixed = TRUE),
-                                     regexpr("\nCHARACTERIZE\n", usr, fixed = TRUE))) > 0) &&
+                                     regexpr("\nREPLY FORMAT\n", usr, fixed = TRUE))) > 0) &&
                             has(usr, "\nCHECKLIST\n")
            else !has(usr, "CHECKLIST")),
     expect("parts field only in drafting prompts", has(usr, "\"parts\"") != is_review))
@@ -304,8 +305,8 @@ prompt_checks <- function(name, p, again, changed) {
              has(sys, "- restraint (") && has(sys, "- translation_readiness (")),
       expect("generate.md and task drafting files not sent",
              !has(sys, "- declare_defaults (") && !has(sys, "- attitude_object (")),
-      expect("questionnaire pasted under QUESTIONNAIRE, complete",
-             has(usr, "QUESTIONNAIRE") && has(usr, "street cleaning provided by your local council") && has(usr, "10 Extremely happy")),
+      expect("questionnaire pasted under Questionnaire:, complete",
+             has(usr, "Questionnaire:") && has(usr, "street cleaning provided by your local council") && has(usr, "10 Extremely happy")),
       expect("output format asks for trapd and test_first", has(usr, "\"trapd\"") && has(usr, "\"test_first\"")),
       expect("checklist lines are id: question, for the reflexes in force (one_thing, paper, agree_disagree_and_grids)",
              has(usr, "\none_thing: Does the question ask about exactly one thing") &&
@@ -438,8 +439,8 @@ flow_checks <- function() {
            identical(step$hash, build_prompt(form)$hash)),
     expect("brief check: status ok, reply has questions and criteria",
            identical(brief$status, "ok") && all(c("questions", "criteria") %in% names(brief$reply))),
-    expect("brief check prompt: persona, pm_brief and the task's rules; no drafting output format",
-           has(brief$system, "senior survey methodologist") && has(brief$system, "- what_a_brief_needs (") &&
+    expect("brief check prompt: persona (in the message), pm_brief and the task's rules; no drafting output format",
+           startsWith(brief$user, "You are a senior survey methodologist") && has(brief$system, "- what_a_brief_needs (") &&
              has(brief$system, "- attitude_object (") && !has(brief$user, "\"source_english\"")),
     expect("drafts: one entry per worker, in order, all ok",
            identical(purrr::map_chr(unname(good[seq_along(fake_workers)]), "model"), ids) &&
@@ -465,8 +466,8 @@ flow_checks <- function() {
              has(ap$user, "\none_thing: ") && has(ap$user, "\"selected\"") && has(ap$user, "\"set_notes\"")),
     expect("documentation checks are not in the appraisal checklist (skills 0.3)",
            !has(ap$user, "\ndeclare_defaults: ") && !has(ap$user, "\nmidpoint_and_dont_know: ")),
-    expect("appraisal system prompt: persona and pm_appraise rules, not the drafting rules",
-           has(ap$system, "senior survey methodologist") && has(ap$system, "- pick_per_domain (") &&
+    expect("appraisal prompt: persona (in the message), pm_appraise rules in the system prompt, not the drafting rules",
+           startsWith(ap$user, "You are a senior survey methodologist") && has(ap$system, "- pick_per_domain (") &&
              !has(ap$system, "- declare_defaults (")),
     expect("flow.R has no Shiny in it",
            !any(tok$file == file.path("R", "flow.R") &

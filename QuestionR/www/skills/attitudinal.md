@@ -1,9 +1,23 @@
 # Attitudinal scale
 
-Version: 0.2
+Version: 0.3
 
 Task file for writing a set of attitude items intended to be combined into a
 scale.
+
+## Guidelines
+
+<!--
+In the words of the LLM Question Lab's informed prompt (Haensch, IASS/WSS
+Session 3), from Yan, IASS/WSS Session 1, writing attitudinal questions.
+-->
+
+For attitudinal questions, also:
+
+- Ask about a specific, clearly defined attitude object.
+- Balance the question with a counter-argument.
+- Use construct-specific response options, not agree–disagree.
+- Use a filter or "no opinion" option for respondents without an opinion.
 
 ## Reflexes
 

@@ -1,10 +1,27 @@
 # Behavioral items
 
-Version: 0.2
+Version: 0.3
 
 Task file for questions about experiences, events and behaviours: what, when,
 where, how often, how long, how many, how much. An objective truth exists in
 principle, and recall is the main problem.
+
+## Guidelines
+
+<!--
+From Yan, IASS/WSS Session 1, writing behavioral questions (rules 4, 8, 9,
+12, 13 and 14), worded in the style of the LLM Question Lab's informed
+prompt. Replace with the Question Lab's own behavioral list if Kevin has it.
+-->
+
+For behavioral questions, also:
+
+- Use a short reference period.
+- Bound the recall period if possible.
+- Use landmark events and other cues to help recall.
+- Use open-ended answers when asking for a number.
+- Design any frequency scale carefully.
+- Avoid vague quantifiers such as "often" or "sometimes".
 
 ## Reflexes
 

@@ -7,6 +7,10 @@ The expertise lives here, not in the model: swap the model and none of it moves.
 
 - `Version:` line near the top.
 - `## Persona` (core.md only): one paragraph.
+- `## Guidelines` (core.md and the three draft task files): NEW. A short
+  bulleted list, optionally under one heading line, that R puts in the
+  message the analyst sees and can edit. Never sent in the system prompt.
+  The Reflexes are the rules; the Guidelines only remind.
 - `## Reflexes`: one `### id` per reflex (lower case, underscores), each with
   one-line fields:
   - `- **When:**` the situation the rule applies to.

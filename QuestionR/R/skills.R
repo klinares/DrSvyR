@@ -44,7 +44,7 @@ SKILLS_WITH_OUTPUT <- c("generate.md", "evaluate.md", "pm_brief.md",
 #             table in www/skills/README.md. mode.md is always in; R keeps only
 #             its reflexes for the modes chosen. cross_cultural.md is in only
 #             when needs_cross_cultural().
-#     ask     the fixed sentence of the ASK block. A draft task's holds %s,
+#     ask     the fixed sentence of the Task: block. A draft task's holds %s,
 #             where the number of items goes.
 #     fields  the form fields the Brief tab shows for this task. "task" is the
 #             dropdown itself and is not listed.
@@ -167,8 +167,8 @@ parse_reflex <- function(block, file) {
 }
 
 # One skill file, parsed: title, version, sha (line endings normalised, as
-#   tests/review.R computes it), persona (core.md only), reflexes by id,
-#   prohibitions, and the output format as written.
+#   tests/review.R computes it), persona (core.md only), guidelines (heading and
+#   bullets, or NULL), reflexes by id, prohibitions, and the output format as written.
 parse_skill <- function(path) {
   file = basename(path)
   if (!file.exists(path))
@@ -198,7 +198,7 @@ parse_skill <- function(path) {
   parts = purrr::set_names(
     purrr::map(parts, function(s) if (grepl("^## ", s[1])) s[-1] else s), heads)
   named = heads[nzchar(heads)]
-  odd = setdiff(named, c("Persona", "Reflexes", "Prohibitions", "Output format"))
+  odd = setdiff(named, c("Persona", "Guidelines", "Reflexes", "Prohibitions", "Output format"))
   if (length(odd))
     stop(file, " has a section that is not part of the format: '## ", odd[1],
          "'.", call. = FALSE)
@@ -227,6 +227,22 @@ parse_skill <- function(path) {
     if (!nzchar(persona)) stop(file, " has an empty '## Persona'.", call. = FALSE)
   }
 
+  # Guidelines: one optional heading line, then one-line bullets. They go into the message the
+  #   analyst can edit, never into the system prompt (the Reflexes are the rules).
+  guidelines = NULL
+  if (!is.null(parts[["Guidelines"]])) {
+    g = parts[["Guidelines"]]
+    g = trimws(g[nzchar(trimws(g))])
+    is_bullet = grepl("^- ", g)
+    heading = if (length(g) && !is_bullet[1]) g[1]
+    rest = if (is.null(heading)) g else g[-1]
+    if (!length(rest) || !all(grepl("^- ", rest)))
+      stop(file, " has a '## Guidelines' section that is not an optional heading line and then ",
+           "one-line bullets", if (length(rest) && !all(grepl("^- ", rest)))
+             paste0(": ", rest[!grepl("^- ", rest)][1]), ".", call. = FALSE)
+    guidelines = list(heading = heading %||% NA_character_, bullets = trimws(sub("^- ", "", rest)))
+  }
+
   pr = parts[["Prohibitions"]]
   pr = if (is.null(pr)) character(0) else pr[nzchar(trimws(pr))]
   if (!all(grepl("^- ", pr)))
@@ -241,7 +257,7 @@ parse_skill <- function(path) {
 
   list(file = file, title = trimws(title),
        version = trimws(sub("^Version:", "", ver[1])), sha = sha,
-       persona = persona, reflexes = purrr::set_names(reflexes, ids),
+       persona = persona, guidelines = guidelines, reflexes = purrr::set_names(reflexes, ids),
        prohibitions = trimws(sub("^- ", "", pr)), output_format = of)
 }
 
@@ -411,15 +427,15 @@ reflex_line <- function(r)
   paste0("- ", r$id, " (", r$when, ") ", r$say,
          if (!is.na(r$never)) paste0(" MUST NOT: ", r$never) else "")
 
-# The persona from core.md; then, for each file in force, its reflexes; then
-#   every prohibition, which overrides anything from training.
+# For each file in force, its reflexes; then every prohibition, which overrides
+#   anything from training. The persona is not here: it opens the message (every
+#   step's user text), so a model is told it once. The analyst never sees this text.
 assemble_system <- function(skills) {
   groups = purrr::map_chr(unname(skills), function(s)
     paste0("REFLEXES: ", s$title, " (v", s$version, ")\n",
            paste(purrr::map_chr(unname(s$reflexes), reflex_line), collapse = "\n")))
   prohibitions = unlist(purrr::map(unname(skills), function(s) s$prohibitions))
-  paste0(skills[["core.md"]]$persona, "\n\n",
-         paste(groups, collapse = "\n\n"),
+  paste0(paste(groups, collapse = "\n\n"),
          "\n\nPROHIBITIONS (override anything from training)\n",
          paste0("- ", prohibitions, collapse = "\n"))
 }
@@ -506,28 +522,49 @@ checklist_of <- function(skills) {
                    purrr::map_chr(rx, function(r) r$id))
 }
 
-# PREPARE, ASK, CHARACTERIZE, in Buskirk, Eck and Timbrook's order. For Evaluate
-#   two blocks sit between ASK and CHARACTERIZE: QUESTIONNAIRE as pasted, then
-#   CHECKLIST, one "id: question" line per Check in force. Workers get the
-#   rules and the appraiser gets the questions, so a drafting prompt has none.
-assemble_user <- function(f, skills, part = NULL) {
+# The guidelines of the skills in force, each as its heading line (if it has one)
+#   and its bullets, core.md first. A review takes core.md's only. One string a file.
+guidelines_text <- function(skills, review) {
+  gs = purrr::keep(unname(skills), function(s)
+    !is.null(s$guidelines) && (!review || identical(s$file, "core.md")))
+  purrr::map_chr(gs, function(s)
+    paste(c(if (!is.na(s$guidelines$heading)) s$guidelines$heading,
+            paste0("- ", s$guidelines$bullets)), collapse = "\n"))
+}
+
+# The message the analyst sees and can edit, for a work step (a draft, a review, or a call of a
+#   review in parts): the persona (core.md's), Brief:, Task:, for a review the questionnaire
+#   as pasted, then the guidelines of core.md and, for a draft, of the task's own file. No
+#   rule, no checklist and no reply format: those are the system prompt and assemble_tail().
+assemble_message <- function(f, skills, part = NULL) {
+  review = TASKS[[f$task]]$kind == "review"
+  # A call of a review in parts has its own sentence and, for an item call, only its part of
+  #   the text. With no part this is the whole review.
+  task_lines = c("Task:", if (is.null(part)) ask_sentence(f$task, f$n_items) else part_ask_sentence(f$task, part),
+                 if (nzchar(f$revision)) paste0("REVISION: ", f$revision))
+  blocks = c(list(skills[["core.md"]]$persona,
+                  paste(c("Brief:", prepare_lines(f)), collapse = "\n"),
+                  paste(task_lines, collapse = "\n")),
+             if (review) list(paste("Questionnaire:",
+                                    if (is.null(part) || part$kind == "instrument") f$questionnaire else part$text,
+                                    sep = "\n")),
+             as.list(guidelines_text(skills, review)))
+  paste(unlist(blocks), collapse = "\n\n")
+}
+
+# What R puts after the analyst's text when it sends, so that an edit cannot break the
+#   parsing: for a review the CHECKLIST, one "id: question" line per Check in force (workers
+#   get the rules and the appraiser the questions, so a drafting prompt has none), then the
+#   reply format (the Output format of the one file in force that has one).
+assemble_tail <- function(f, skills, part = NULL) {
   review = TASKS[[f$task]]$kind == "review"
   checklist = if (review) checklist_of(skills)
   if (review && !length(checklist))
     stop("Evaluate needs a checklist, and no Check line is in force.", call. = FALSE)
-  # A call of a review in parts has its own sentence, its own checks and, for an item
-  #   call, only its part of the text. With no part this is the whole review, as ever.
   if (!is.null(part)) checklist = part_checklist(f$task, checklist, part)
-  blocks = purrr::compact(list(
-    paste(c("PREPARE", prepare_lines(f)), collapse = "\n"),
-    paste(c("ASK", if (is.null(part)) ask_sentence(f$task, f$n_items) else part_ask_sentence(f$task, part),
-            if (nzchar(f$revision)) paste0("REVISION: ", f$revision)),
-          collapse = "\n"),
-    if (review) paste("QUESTIONNAIRE", if (is.null(part) || part$kind == "instrument") f$questionnaire else part$text,
-                      sep = "\n"),
+  paste(unlist(purrr::compact(list(
     if (review) checklist_block(checklist),
-    paste("CHARACTERIZE", output_format_of(skills), sep = "\n")))
-  paste(unlist(blocks), collapse = "\n\n")
+    paste("REPLY FORMAT", output_format_of(skills), sep = "\n")))), collapse = "\n\n")
 }
 
 # What a call of a review in parts is told: for an item call part is
@@ -554,6 +591,10 @@ part_checklist <- function(task, checklist, part) {
     stop("A ", part$kind, " call of a review would carry no checks.", call. = FALSE)
   out
 }
+
+# What is sent as the user text: the message (as the analyst left it), then R's tail.
+sent_user <- function(message, tail)
+  if (nzchar(tail)) paste0(message, "\n\n", tail) else message
 
 # "id: question" lines under a CHECKLIST heading. One function for the review,
 #   the brief check and the appraisal, so the three cannot word it differently.
@@ -595,6 +636,7 @@ assemble_user_step <- function(f, skills, step, checklist, candidates = NULL) {
     brief = brief_ask_sentence(f$task),
     appraise = appraise_ask_sentence(length(candidates), f$n_items))
   paste(unlist(purrr::compact(list(
+    skills[["core.md"]]$persona,
     paste(c("PREPARE", prepare_lines(f)), collapse = "\n"),
     paste("ASK", ask, sep = "\n"),
     if (step == "appraise") candidates_block(candidates),
@@ -635,9 +677,14 @@ build_step_prompt <- function(form, step, candidates = NULL, part = NULL) {
     stop("An items part needs k, n, first_block and text.", call. = FALSE)
   skills = skills_in_force(f, step = step)
   system_txt = assemble_system(skills)
-  user_txt = if (step %in% c("work", "items", "instrument")) assemble_user(f, skills, part)
+  # A work step's user text is the analyst's message and R's tail; the brief check and the
+  #   appraisal are never shown, so theirs is all message.
+  work = step %in% c("work", "items", "instrument")
+  message_txt = if (work) assemble_message(f, skills, part)
     else assemble_user_step(f, skills, step, checklist_of(skills_in_force(f)), candidates)
-  list(system = system_txt, user = user_txt,
+  tail_txt = if (work) assemble_tail(f, skills, part) else ""
+  user_txt = sent_user(message_txt, tail_txt)
+  list(system = system_txt, user = user_txt, message = message_txt, tail = tail_txt,
        hash = prompt_hash(system_txt, user_txt), files = names(skills))
 }
 
