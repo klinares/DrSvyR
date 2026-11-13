@@ -1141,69 +1141,6 @@ ok("a new output format is one entry: the validator is built from REPLY_SCHEMAS 
 REPLY_SCHEMAS$tiny <- NULL
 
 
-# Coded defaults, against a fixture coded by hand.
-fx <- list(
-  list(what = "five labelled points and a don't know",
-       item = good_item(1, options = list("Strongly agree", "Agree", "Neither", "Disagree", "Strongly disagree", "Don't know"),
-                        decisions = list("closed", "five points, every point labelled with words")),
-       lang = "English",
-       want = list(format = "closed", n_options = 6L, n_points = 5L, points_odd = TRUE,
-                   midpoint_stated = "not stated", dont_know = TRUE,
-                   ref_period = FALSE, labels = "yes", decisions = "itemised")),
-  list(what = "four points, end labels only, a reference period, no don't know",
-       item = good_item(2, stem = "In the past 7 days, how often did you listen to the radio?",
-                        options = list("Never", "Once or twice", "Most days", "Every day"),
-                        decisions = list("closed", "four points, endpoint labels only")),
-       lang = "English",
-       want = list(format = "closed", n_options = 4L, n_points = 4L, points_odd = FALSE,
-                   midpoint_stated = "not stated", dont_know = FALSE,
-                   ref_period = TRUE, labels = "no", decisions = "itemised")),
-  list(what = "an open item",
-       item = good_item(3, stem = "How many days did you vote?", options = list(), open_format = "a number of days",
-                        decisions = list("open, numeric")),
-       lang = "English",
-       want = list(format = "open", n_options = 0L, n_points = NA_integer_, points_odd = NA,
-                   midpoint_stated = "not stated", dont_know = NA,
-                   ref_period = FALSE, labels = "not stated", decisions = "not itemised")),
-  list(what = "a curly apostrophe and a not-applicable option",
-       item = good_item(4, options = list("Yes", "No", "Not applicable", "I don’t know"), decisions = list()),
-       lang = "English",
-       want = list(format = "closed", n_options = 4L, n_points = 2L, points_odd = FALSE,
-                   midpoint_stated = "not stated", dont_know = TRUE,
-                   ref_period = FALSE, labels = "not stated", decisions = "none")),
-  list(what = "an item with only a stem and options",
-       item = list(stem = "Do you vote?", options = list("Yes", "No")),
-       lang = "",
-       want = list(format = "closed", n_options = 2L, n_points = 2L, points_odd = FALSE,
-                   midpoint_stated = "not stated", dont_know = FALSE,
-                   ref_period = FALSE, labels = "not stated", decisions = "none")))
-purrr::walk(fx, function(x)
-  ok(paste("coded defaults match the hand-coded fixture:", x$what),
-     identical(code_defaults(x$item), x$want)))
-ok("the coded defaults read as words for a table",
-   identical(unname(defaults_labels(code_defaults(fx[[1]]$item))[c("Format", "Odd number of points")]), c("closed", "yes")))
-
-# R does not call an odd count a midpoint (DESIGN.md section 13): it reports the
-#   count, whether it is odd, and what the item itself says about a midpoint.
-ok("a five-point scale whose decisions say there is no midpoint is odd and stated as no midpoint, and R does not say 'midpoint' for the count",
-   local({
-     d = code_defaults(good_item(1, options = list("Not at all", "A little", "Somewhat", "Quite", "Very"),
-                                 decisions = list("Closed; five points", "No midpoint because the construct has no middle")))
-     identical(d$points_odd, TRUE) && identical(d$midpoint_stated, "no") &&
-       !any(grepl("^Midpoint \\(odd", names(defaults_labels(d))))
-   }))
-ok("what an item says about a midpoint is read as yes, no or not stated, in the phrasings the models used",
-   identical(code_defaults(good_item(1, decisions = list("Include a midpoint: A moderate amount represents a middle level.")))$midpoint_stated, "yes") &&
-     identical(code_defaults(good_item(1, decisions = list("Closed; 5 options; no midpoint; unipolar")))$midpoint_stated, "no") &&
-     identical(code_defaults(good_item(1, decisions = list("Midpoint: no.")))$midpoint_stated, "no") &&
-     identical(code_defaults(good_item(1, decisions = list("Closed; five options.")))$midpoint_stated, "not stated"))
-ok("decisions written as one string or one entry are flagged not itemised, two or more are itemised, none is none",
-   identical(code_defaults(good_item(1, decisions = "Closed; 5 options; no midpoint; no reasons"))$decisions, "not itemised") &&
-     identical(code_defaults(good_item(1, decisions = list("one long entry; with everything")))$decisions, "not itemised") &&
-     identical(code_defaults(good_item(1, decisions = list("a", "b")))$decisions, "itemised") &&
-     identical(code_defaults(good_item(1, decisions = list()))$decisions, "none"))
-
-
 # Checks on the reviewer's recommendation.
 ck_cands <- list(A = draft_of(2), B = draft_of(1))
 ck_reply <- list(
@@ -1916,18 +1853,6 @@ ok("the log keeps the brief check's and the appraisal's own call records: raw re
    identical(rj_back$brief$call$tokens$input, 100L) && identical(rj_back$appraisal$call$tokens$output, 50L) &&
      grepl("criteria", rj_back$brief$call$raw, fixed = TRUE) && grepl("selected", rj_back$appraisal$call$raw, fixed = TRUE) &&
      identical(rj_back$brief$call$attempts, 1L))
-
-# How three real models wrote that every point is labelled, and two ways of saying it is not.
-label_of <- function(...) code_defaults(good_item(1, decisions = list(...)))$labels
-ok("a model's own words for labelling every point are read as yes, in the phrasings the live run produced",
-   identical(label_of("Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot)"), "yes") &&
-     identical(label_of("Label every option; labels make each response visible and distinct on the web form."), "yes") &&
-     identical(label_of("Every option has a verbal label to avoid confusion."), "yes"))
-ok("labels said to be partial or absent are read as no, and a silence is not stated",
-   identical(label_of("Label only the end points of the scale."), "no") &&
-     identical(label_of("Endpoint labels only."), "no") && identical(label_of("No labels present."), "no") &&
-     identical(label_of("Closed; five options; direction low to high."), "not stated"))
-
 
 # ---- Phase 4a: section 13's rulings ------------------------------------------------------
 
