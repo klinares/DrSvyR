@@ -19,11 +19,11 @@ CODE_BUDGET <- 12L
 # sha256 of each reflex file with line endings normalised, as drafted in the
 #   Claude project. Updated there, and only there, when a reflex file changes.
 REFLEX_SHA <- c(
-  "README.md" = "af465d960f3a82255c25300fa13cbda461dea7e024d95b21850454c225881cd5",
+  "README.md" = "661506b1e796079b84092555165e860dcd08eabf478c45c8819a0518b63fc8ce",
   "attitudinal.md" = "02a273b6ffe0428629b2b6c358a40977c11cb40adeb256fe09e3a4f03eba26e4",
   "behavioral.md" = "f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142",
   "core.md" = "d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9",
-  "cross_cultural.md" = "6c8a19b8c17b19808b4cfca788b3c76a7595d54a3a25a71e355391cb944bdd4d",
+  "cross_cultural.md" = "915d46090cf22e858cbe431bbcc54091c599df18c17efd2e5bfa97662f805f80",
   "evaluate.md" = "6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb",
   "generate.md" = "9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
@@ -205,8 +205,7 @@ sec_smoke <- c(
 # Four fixed forms. The field names are the contract in DESIGN.md section 5.
 blank_form <- list(
   task = "", research_question = "", construct = "", population = "",
-  country = "", modes = character(0), output_language = "English",
-  source_language = "English", n_items = NA_integer_, reference_period = "",
+  country = "", modes = character(0), n_items = NA_integer_, reference_period = "",
   keep_items = "", other = "", questionnaire = "", revision = "")
 forms <- list(
   attitudinal = utils::modifyList(blank_form, list(
@@ -219,14 +218,14 @@ forms <- list(
     research_question = "How often do adults get news from radio?",
     construct = "Frequency of radio news use",
     population = "Adults aged 18 and over", country = "Kenya",
-    modes = c("telephone", "face_to_face"), output_language = "Swahili",
+    modes = c("telephone", "face_to_face"),
     n_items = 3L, reference_period = "past 7 days")),
   sensitive = utils::modifyList(blank_form, list(
     task = "sensitive",
     research_question = "How common is paying a bribe for a public service?",
     construct = "Paying a bribe to a public official in the past 12 months",
     population = "Adults aged 18 and over", country = "Mali",
-    modes = "face_to_face", output_language = "French", n_items = 2L)),
+    modes = "face_to_face", n_items = 2L)),
   evaluate = utils::modifyList(blank_form, list(
     task = "evaluate",
     research_question = "Satisfaction with local services",
@@ -235,9 +234,6 @@ forms <- list(
       "Q1. How satisfied or dissatisfied are you with the recycling services and street cleaning provided by your local council? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied",
       "Q2. Taking all things together, how happy would you say you are? 0 Extremely unhappy ... 10 Extremely happy",
       sep = "\n"))))
-# The same review, of a questionnaire translated from Spanish for English output.
-forms$evaluate_translated <- utils::modifyList(forms$evaluate,
-                                               list(source_language = "Spanish"))
 
 has <- function(txt, s) grepl(s, txt, fixed = TRUE)
 expect <- function(what, ok) tibble::tibble(check = what, result = verdict(isTRUE(ok)))
@@ -260,9 +256,8 @@ prompt_checks <- function(name, p, again, changed) {
     expect("core reflex one_thing present", has(sys, "- one_thing (")),
     expect("any_mode present", has(sys, "- any_mode (")),
     expect("prohibitions headed as overriding", has(sys, "PROHIBITIONS (override anything from training)")),
-    expect("Output language line always present", has(usr, "Output language:")),
     expect("reworded prohibition in force (reflex files 0.2)", has(sys, "Use a rule's id only in a JSON field that asks for one.")))
-  is_review = name %in% c("evaluate", "evaluate_translated")
+  is_review = name == "evaluate"
   common = dplyr::bind_rows(common,
     expect("existing_items_first only in drafting prompts", has(sys, "- existing_items_first (") != is_review),
     expect("CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT",
@@ -280,26 +275,23 @@ prompt_checks <- function(name, p, again, changed) {
              !has(sys, "- reference_period (") && !has(sys, "- forgiving_intro (")),
       expect("web kept; telephone, mobile_web, mixed_mode dropped",
              has(sys, "- web (") && !has(sys, "- telephone (") && !has(sys, "- mobile_web (") && !has(sys, "- mixed_mode (")),
-      expect("cross_cultural not sent (no country, English)", !has(sys, "- trapd (")),
+      expect("cross_cultural not sent (no country)", !has(sys, "- flag_do_not_assert (")),
       expect("blank fields left out (no Country, no Reference period line)",
              !has(usr, "Country:") && !has(usr, "Reference period:")),
-      expect("Output language: English shown; Source language left out when the same",
-             has(usr, "Output language: English") && !has(usr, "Source language:")),
       expect("number of items in the ask", has(usr, "6"))),
     behavioral = dplyr::bind_rows(
       expect("task file sent (how_many_or_how_often)", has(sys, "- how_many_or_how_often (")),
       expect("telephone, face_to_face, mixed_mode kept; web dropped",
              has(sys, "- telephone (") && has(sys, "- face_to_face (") && has(sys, "- mixed_mode (") && !has(sys, "- web (")),
-      expect("cross_cultural sent (trapd, output_language)", has(sys, "- trapd (") && has(sys, "- output_language (")),
-      expect("form values present (Kenya, Swahili, past 7 days)",
-             has(usr, "Kenya") && has(usr, "Swahili") && has(usr, "past 7 days")),
-      expect("Source language shown when it differs from the output language",
-             has(usr, "Output language: Swahili") && has(usr, "Source language: English"))),
+      expect("cross_cultural sent (flag_do_not_assert, context_and_face)", has(sys, "- flag_do_not_assert (") && has(sys, "- context_and_face (")),
+      expect("no translation or language reflex sent (trapd, output_language, write_for_translation)",
+             !has(sys, "- trapd (") && !has(sys, "- output_language (") && !has(sys, "- write_for_translation (")),
+      expect("form values present (Kenya, past 7 days)", has(usr, "Kenya") && has(usr, "past 7 days"))),
     sensitive = dplyr::bind_rows(
       expect("task file sent (forgiving_intro, respondent_safety)",
              has(sys, "- forgiving_intro (") && has(sys, "- respondent_safety (")),
       expect("face_to_face kept; mixed_mode dropped", has(sys, "- face_to_face (") && !has(sys, "- mixed_mode (")),
-      expect("cross_cultural sent", has(sys, "- trapd ("))),
+      expect("cross_cultural sent", has(sys, "- flag_do_not_assert ("))),
     evaluate = dplyr::bind_rows(
       expect("evaluate.md sent (restraint, translation_readiness)",
              has(sys, "- restraint (") && has(sys, "- translation_readiness (")),
@@ -307,16 +299,12 @@ prompt_checks <- function(name, p, again, changed) {
              !has(sys, "- declare_defaults (") && !has(sys, "- attitude_object (")),
       expect("questionnaire pasted under Questionnaire:, complete",
              has(usr, "Questionnaire:") && has(usr, "street cleaning provided by your local council") && has(usr, "10 Extremely happy")),
-      expect("output format asks for trapd and test_first", has(usr, "\"trapd\"") && has(usr, "\"test_first\"")),
+      expect("output format asks for test_first", has(usr, "\"test_first\"")),
       expect("checklist lines are id: question, for the reflexes in force (one_thing, paper, agree_disagree_and_grids)",
              has(usr, "\none_thing: Does the question ask about exactly one thing") &&
                has(usr, "\npaper: ") && has(usr, "\nagree_disagree_and_grids: ")),
       expect("checklist has no line for a mode not chosen", !has(usr, "\ntelephone: ")),
-      expect("cross_cultural not sent (no country, both languages English)", !has(sys, "- trapd ("))),
-    evaluate_translated = dplyr::bind_rows(
-      expect("cross_cultural sent because the source language is not English", has(sys, "- trapd (")),
-      expect("both language lines shown", has(usr, "Output language: English") && has(usr, "Source language: Spanish")),
-      expect("its checks join the checklist (functional_equivalence)", has(usr, "\nfunctional_equivalence: "))))
+      expect("cross_cultural not sent (no country)", !has(sys, "- flag_do_not_assert ("))))
   dplyr::bind_rows(common, specific)
 }
 
@@ -386,7 +374,7 @@ fake_item <- function(i) list(
   stem = paste0("Canned stem number ", i, "?"),
   options = list("None", "A little", "A lot"), open_format = "", parts = list(),
   programming = "", decisions = list("closed; three labelled options"),
-  source_english = "", notes = "")
+  notes = "")
 fake_draft <- function(n) list(items = purrr::map(seq_len(n), fake_item),
                                not_covered = list(), missing_from_brief = list())
 fake_pick <- function(i) list(domain = paste("domain", i), candidate = "A", id = paste0("TR", i),
@@ -506,13 +494,12 @@ fake_review <- list(
     list(id = "Q1", findings = list(
       list(check = "one_thing", stage = "comprehension",
            evidence = "the recycling services and street cleaning", problem = "Two services.",
-           severity = 8, rewrite = "x", rewrite_english = "", probe = "y"),
+           severity = 8, rewrite = "x", probe = "y"),
       list(check = "not_a_real_check", stage = "comprehension",
            evidence = "words that are nowhere in the questionnaire", problem = "Invented.",
-           severity = 3, rewrite = "", rewrite_english = "", probe = ""))),
+           severity = 3, rewrite = "", probe = ""))),
     list(id = "Q2", findings = list())),
   instrument = list(),
-  trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
   test_first = list(), not_assessed = "")
 
 review_checks <- function() {
@@ -592,8 +579,7 @@ long_checks <- function() {
     list(items = if (instrument) list() else purrr::map(ids, function(i) list(id = i, findings = list())),
          instrument = if (instrument) list(list(check = "scale_consistency", stage = "instrument",
                                                 evidence = "Q1, Q2", problem = "Canned.", severity = 5,
-                                                rewrite = "", rewrite_english = "", probe = "")) else list(),
-         trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
+                                                rewrite = "", probe = "")) else list(),
          test_first = list(), not_assessed = "")
   }
   make = function(fail_at = 0L) function(user, m, system_prompt = NULL, max_tokens = NULL,

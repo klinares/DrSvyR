@@ -3,7 +3,7 @@
 #   and 14), as plain functions with no Shiny state and no model call in them, so a
 #   test can build every output without a browser: the reflexes as a table, the items
 #   in the set or the review as one document that renders both as HTML that pastes
-#   into Word and as plain text, the TRAPD block, the disclosure block, and the run log.
+#   into Word and as plain text, the disclosure block, and the run log.
 #   The screens that show them are the last part of ui_generate.R. Function
 #   definitions and constants only.
 
@@ -197,9 +197,8 @@ final_set <- function(set, edits, drafts, seed) {
 
 # One item as blocks: its id, the introduction, the stem, the numbered options (or what an
 #   open question collects), the filter, branch and bracket questions indented under it,
-#   the programming notes in square brackets, and when the output language is not English
-#   the English source wording in italics.
-item_blocks <- function(it, language = "English") {
+#   and the programming notes in square brackets.
+item_blocks <- function(it) {
   opts = purrr::map_chr(it$options, function(o) paste(unlist(o), collapse = " "))
   c(list(blk_h(it$id, 3L)),
     if (nzchar(it$intro)) list(blk_p(it$intro, em = TRUE)),
@@ -211,9 +210,7 @@ item_blocks <- function(it, language = "English") {
       c(list(blk_p(paste0("Asked ", p$when %||% "", ": ", p$stem %||% ""), indent = TRUE)),
         if (length(po)) list(blk_list(po, ordered = TRUE, indent = TRUE)))
     }), recursive = FALSE),
-    if (nzchar(it$programming)) list(blk_p(paste0("[", it$programming, "]"))),
-    if (!is_english(language) && nzchar(paste(unlist(it$source_english), collapse = "")))
-      list(blk_p(paste0("English source: ", paste(unlist(it$source_english), collapse = " ")), em = TRUE)))
+    if (nzchar(it$programming)) list(blk_p(paste0("[", it$programming, "]"))))
 }
 
 
@@ -228,8 +225,7 @@ finding_line <- function(r) {
          if (identical(r$scope, "question") && !isTRUE(r$evidence_found)) " [quote not found in the text]",
          ": ", if (identical(r$scope, "question")) paste0("\"", r$evidence, "\". ") else paste0("Questions: ", r$evidence, ". "),
          r$problem,
-         if (nzchar(r$rewrite)) paste0(" A rewrite, untested: ", r$rewrite,
-                                       if (nzchar(r$rewrite_english)) paste0(" (in English: ", r$rewrite_english, ")")),
+         if (nzchar(r$rewrite)) paste0(" A rewrite, untested: ", r$rewrite),
          if (nzchar(r$probe)) paste0(" A probe: ", r$probe))
 }
 
@@ -245,8 +241,8 @@ finding_blocks <- function(rows) {
   }), recursive = FALSE)
 }
 
-# What the review said, as blocks: question by question, then the instrument, the TRAPD steps
-#   still needed, what to test first, and what it could not judge. rv is run_review()'s result.
+# What the review said, as blocks: question by question, then the instrument,
+#   what to test first, and what it could not judge. rv is run_review()'s result.
 review_blocks <- function(f, rv) {
   reply = rv$reply
   flags = check_review(reply, f)
@@ -271,38 +267,6 @@ review_blocks <- function(f, rv) {
              if (is.list(t) && !is.null(t$id)) paste0("Question ", label(t$id), ": ", label(t$method)) else label(t)))),
     if (nzchar(label(reply$not_assessed)))
       list(blk_h("What this review could not judge", 2L), blk_p(label(reply$not_assessed))))
-}
-
-
-# ---- TRAPD ---------------------------------------------------------------------------------------
-
-# What each TRAPD step still needs when the model's text is a first draft (the trapd reflex in
-#   cross_cultural.md): used for drafted items when the output language is not the source's.
-TRAPD_DRAFT_LINES <- c(
-  translation = "The model's version is a first draft inside the Translation step only.",
-  review = "Review by people fluent in both languages and in survey design is still needed.",
-  adjudication = "Adjudication of disagreements by a named person is still needed.",
-  pretesting = "Pretesting in the target language with members of the target population is still needed.",
-  documentation = "Documentation of every decision, and of the model's part in it, is still needed.")
-
-# Whether a language other than the source is involved: the output language differs from the
-#   source language, or either is not English while the other is.
-language_involved <- function(f) {
-  out = if (nzchar(f$output_language)) f$output_language else "English"
-  src = if (nzchar(f$source_language)) f$source_language else "English"
-  lang_key(out) != lang_key(src)
-}
-
-# The TRAPD block, as blocks, or none. A review gives what its trapd field says is still needed;
-#   when it said nothing and a language other than the source is involved, the fixed lines stand.
-#   Drafted items, in a language other than the source, get the fixed lines.
-trapd_blocks <- function(f, trapd = NULL) {
-  said = purrr::map_chr(names(TRAPD_STEPS), function(k) trimws(paste(unlist(trapd[[k]] %||% ""), collapse = " ")))
-  said = purrr::set_names(said, names(TRAPD_STEPS))
-  lines = if (any(nzchar(said))) paste0(unname(TRAPD_STEPS[names(said)[nzchar(said)]]), ": ", unname(said[nzchar(said)]))
-          else if (language_involved(f)) unname(TRAPD_DRAFT_LINES)
-  if (!length(lines)) return(NULL)
-  list(blk_h("TRAPD: what is still needed", 2L), blk_list(lines))
 }
 
 
@@ -378,8 +342,7 @@ disclosure_blocks <- function(f, chosen = list(), drafts = NULL, appraisal = NUL
 # The output of one flow, as a list: `kind` ("draft" or "review"), `blocks`, `html` (plain HTML for
 #   Word), `text` (the same, as plain text), and `n_items`. A drafting flow's output is the set as the
 #   analyst left it (final_set()); with nothing in it the output says so, and has no disclosure, since
-#   there is nothing to disclose a use of. A review's is the review. Both end with the TRAPD block when a language other than the
-#   source is involved, then the disclosure block. f is the cleaned form of the round.
+#   there is nothing to disclose a use of. A review's is the review. Both end with the disclosure block. f is the cleaned form of the round.
 build_output <- function(f, drafts = NULL, appraisal = NULL, seed = NULL, set = list(), edits = list(), review = NULL,
                          brief = NULL, approved = NULL, profile = APP_PROFILE, models = APP_MODELS,
                          time = Sys.time(), dir = REFLEXES_DIR) {
@@ -389,16 +352,16 @@ build_output <- function(f, drafts = NULL, appraisal = NULL, seed = NULL, set = 
   if (kind == "review") {
     if (is.null(review) || is.null(review$reply))
       return(finish_output(kind, list(blk_p("There is no review to show. Run one on the Results tab.")), 0L))
-    return(finish_output(kind, c(review_blocks(f, review), trapd_blocks(f, review$reply$trapd), disclose()), 0L))
+    return(finish_output(kind, c(review_blocks(f, review), disclose()), 0L))
   }
   chosen = if (!is.null(drafts)) final_set(set, edits, drafts, seed) else list()
   if (!length(chosen))
     return(finish_output(kind, list(blk_p(paste0("There is no item in the set yet. The Results tab shows the ",
                                                  "recommended items, and you can add items from the drafts."))), 0L))
-  items = unlist(purrr::map(chosen, function(k) item_blocks(k$item, f$output_language)), recursive = FALSE)
+  items = unlist(purrr::map(chosen, function(k) item_blocks(k$item)), recursive = FALSE)
   finish_output(kind, c(list(blk_h("Survey items", 2L),
                              blk_p("First drafts by language models, as recommended by a reviewing model and left by the analyst; untested.", em = TRUE)),
-                        items, trapd_blocks(f), disclose(chosen)), length(chosen))
+                        items, disclose(chosen)), length(chosen))
 }
 
 finish_output <- function(kind, blocks, n_items)

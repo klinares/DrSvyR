@@ -118,9 +118,6 @@ FIELD_SPECS <- list(
                  help = "Leave it blank if the questionnaire is not for one country."),
   modes = list(label = "Survey mode", type = "modes",
                help = "One or more. Leave all clear if it is not yet decided."),
-  output_language = list(label = "Output language", type = "text", value = "English"),
-  source_language = list(label = "Source language", type = "text", value = "English",
-                         help = "The language the items are translated from, if any."),
   n_items = list(label = "Number of items (at most 10 a run)", type = "number", value = 6),
   reference_period = list(label = "Reference period and unit", type = "text",
                           help = "For behaviour: for example 'the past 7 days', and what is counted."),
@@ -553,7 +550,7 @@ set_panel <- function(set, cands, labels, ns, checklist, edits, chk, reply) {
 # Every draft, a candidate at a time, closed until asked for. Each item has a button that puts it
 #   in the set: in place of the item chosen in the box at the top, or at the end of the set. The
 #   coded defaults are here, beside the draft they describe.
-drafts_panel <- function(cands, labels, set, ns, language, open) {
+drafts_panel <- function(cands, labels, set, ns, open) {
   targets = c("at the end of the set" = "",
               purrr::set_names(purrr::map_chr(set, "uid"),
                                purrr::imap_chr(set, function(e, i) paste0("in place of item ", i, " (", e$id, ")"))))
@@ -577,11 +574,11 @@ drafts_panel <- function(cands, labels, set, ns, language, open) {
               options_list(it$options, it$open_format),
               parts_block(it$parts),
               if (nzchar(it$programming)) tags$p(class = "text-muted small mb-1", paste0("[", it$programming, "]")),
-              if (identical(code_defaults(it, language)$decisions, "not itemised"))
+              if (identical(code_defaults(it)$decisions, "not itemised"))
                 tags$p(class = "mb-1", tags$span(class = "badge text-bg-warning", "decisions not itemised"),
                        tags$span(class = "text-muted small", " The model wrote its design decisions as one string.")),
               tags$details(tags$summary(class = "small", "Coded defaults (by R, from the item as written)"),
-                           defaults_table(code_defaults(it, language))),
+                           defaults_table(code_defaults(it))),
               if (!paste0(letter, "_", i) %in% purrr::map_chr(set, "uid"))
                 set_button("Use this instead", "swap", paste0(letter, "_", i), ns)))
         }))))
@@ -606,8 +603,7 @@ review_finding <- function(r, checklist)
     if (nzchar(r$stage)) tags$span(class = "text-muted", paste0(" (", r$stage, ")")),
     if (nzchar(r$problem)) tagList(tags$br(), r$problem),
     if (nzchar(r$rewrite)) tagList(
-      tags$br(), tags$em("A rewrite, untested: "), r$rewrite,
-      if (nzchar(r$rewrite_english)) paste0(" (in English: ", r$rewrite_english, ")")),
+      tags$br(), tags$em("A rewrite, untested: "), r$rewrite),
     if (nzchar(r$probe)) tagList(tags$br(), tags$em("A probe: "), r$probe))
 
 # Findings in the three severity bands. A question with no finding says none were
@@ -617,20 +613,6 @@ review_findings <- function(rows, checklist) {
   if (!length(as_rows)) return(tags$p(class = "small", "No problem was found by this review."))
   banded_list(as_rows, function(r) review_finding(r, checklist), "finding",
               "No finding rated 5 or above.")
-}
-
-# The TRAPD steps the review says are still needed. Nothing is drawn when the
-#   survey is in one language for one country and the review left them all empty.
-TRAPD_STEPS <- c(translation = "Translation", review = "Review", adjudication = "Adjudication",
-                 pretesting = "Pretesting", documentation = "Documentation")
-
-trapd_block <- function(trapd) {
-  said = purrr::map_chr(names(TRAPD_STEPS), function(k) paste(unlist(trapd[[k]] %||% ""), collapse = " "))
-  if (!any(nzchar(trimws(said)))) return(NULL)
-  tagList(tags$h5("TRAPD: what is still needed"),
-          tags$ul(purrr::imap(purrr::keep(purrr::set_names(said, TRAPD_STEPS[names(TRAPD_STEPS)]),
-                                          function(s) nzchar(trimws(s))),
-                              function(text, step) tags$li(tags$strong(step), ": ", text))))
 }
 
 # A button for each call of a review that failed, which runs that call again. It sets
@@ -704,7 +686,6 @@ review_panel <- function(f, rv, round, ns = identity) {
         review_findings(flags[flags$scope == "question" & flags$position == i, ], checklist)))),
     tags$h4("The instrument as a whole"),
     review_findings(flags[flags$scope == "instrument", ], checklist),
-    trapd_block(reply$trapd),
     if (length(reply$test_first)) tagList(
       tags$h5("What to test first"),
       tags$ul(purrr::map(reply$test_first, function(t)
@@ -878,7 +859,7 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
     output$drafts_ui <- renderUI(safe_ui({
       req(result(), state$drafts)
       x = set_context()
-      drafts_panel(x$cands, x$labels, state$set, session$ns, x$f$output_language,
+      drafts_panel(x$cands, x$labels, state$set, session$ns,
                    open = isolate(input$drafts_open) %||% !length(state$set))
     }))
   })

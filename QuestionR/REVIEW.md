@@ -2,7 +2,7 @@
 
 From Phase 9, "skills" are called "reflexes". This file keeps the old word where it records earlier work.
 
-Generated 2026-11-13 17:50 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-13 18:04 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -14,6 +14,7 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+752e23c QuestionR 9a: skills are reflexes
 341314a QuestionR: Phase 9 prompt, and design section 18 (Kevin's five rulings)
 4f7bf1c Merge branch 'questionr': add QuestionR
 d20ba49 QuestionR Phase 8: STATUS and REVIEW
@@ -28,50 +29,65 @@ e0d90c5 QuestionR 8b: the Prompt tab shows one box, and never the rules
 58f00d4 QuestionR: Phase 8 prompt revised 2026-11-13; note at the end of design section 17
 67e6fae QuestionR: changes from the Claude project
 f408251 QuestionR Phase 7: STATUS and REVIEW
-f0b1e69 questionR branch
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
- M .rscignore
- M DESIGN.md
- M PROMPTS.md
- M R/checks.R
- M R/llm.R
- M R/output.R
-RM R/skills.R -> R/reflexes.R
- M R/ui.R
- M R/ui_generate.R
- M README.md
- M STATUS.md
- M app.R
- M tests/output_generate.txt
- M tests/output_review.txt
- M tests/review.R
- M tests/smoke.R
- M www/how_it_works.svg
- M www/methodology.md
-R  "www/skills_materials/Evaluating Unedited AI-Generated Psychometric Scales.pdf" -> "www/reflex_materials/Evaluating Unedited AI-Generated Psychometric Scales.pdf"
-RM www/skills_materials/README.md -> www/reflex_materials/README.md
-RM www/skills/README.md -> www/reflexes/README.md
-R  www/skills/attitudinal.md -> www/reflexes/attitudinal.md
-R  www/skills/behavioral.md -> www/reflexes/behavioral.md
-R  www/skills/core.md -> www/reflexes/core.md
-R  www/skills/cross_cultural.md -> www/reflexes/cross_cultural.md
-R  www/skills/evaluate.md -> www/reflexes/evaluate.md
-R  www/skills/generate.md -> www/reflexes/generate.md
-R  www/skills/mode.md -> www/reflexes/mode.md
-R  www/skills/pm_appraise.md -> www/reflexes/pm_appraise.md
-R  www/skills/pm_brief.md -> www/reflexes/pm_brief.md
-R  www/skills/sensitive.md -> www/reflexes/sensitive.md
- M www/start.md
+M  R/checks.R
+M  R/flow.R
+M  R/output.R
+M  R/reflexes.R
+M  R/ui_generate.R
+M  tests/output_generate.txt
+M  tests/output_review.txt
+MM tests/review.R
+M  tests/smoke.R
+D  www/fw_trapd.svg
+M  www/methodology.md
+M  www/reflexes/README.md
+M  www/reflexes/cross_cultural.md
+M  www/start.md
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
- QuestionR/DESIGN.md  |  50 ++++++++++++++++
- QuestionR/PROMPTS.md | 165 +++++++++++++++++++++++++++++++++++++++++++++++++++
- 2 files changed, 215 insertions(+)
+ .gitignore                                         |   6 +-
+ CLAUDE.md                                          |   2 +-
+ QuestionR/.rscignore                               |   2 +-
+ QuestionR/DESIGN.md                                | 131 ++++++++++-----
+ QuestionR/PROMPTS.md                               | 167 +++++++++++++++++++
+ QuestionR/R/checks.R                               |   2 +-
+ QuestionR/R/llm.R                                  |   4 +-
+ QuestionR/R/output.R                               |  46 +++---
+ QuestionR/R/{skills.R => reflexes.R}               | 150 ++++++++---------
+ QuestionR/R/ui.R                                   |   1 -
+ QuestionR/R/ui_generate.R                          |   4 +-
+ QuestionR/README.md                                |  16 +-
+ QuestionR/REVIEW.md                                | 180 +++++++--------------
+ QuestionR/STATUS.md                                |   2 +
+ QuestionR/app.R                                    |   8 +-
+ QuestionR/tests/output_generate.txt                |   2 +-
+ QuestionR/tests/output_review.txt                  |   2 +-
+ QuestionR/tests/review.R                           |  43 ++---
+ QuestionR/tests/smoke.R                            | 138 ++++++++--------
+ QuestionR/www/how_it_works.svg                     |   6 +-
+ QuestionR/www/methodology.md                       |  24 +--
+ ...g Unedited AI-Generated Psychometric Scales.pdf | Bin
+ .../README.md                                      |   6 +-
+ QuestionR/www/{skills => reflexes}/README.md       |   4 +-
+ QuestionR/www/{skills => reflexes}/attitudinal.md  |   0
+ QuestionR/www/{skills => reflexes}/behavioral.md   |   0
+ QuestionR/www/{skills => reflexes}/core.md         |   0
+ .../www/{skills => reflexes}/cross_cultural.md     |   0
+ QuestionR/www/{skills => reflexes}/evaluate.md     |   0
+ QuestionR/www/{skills => reflexes}/generate.md     |   0
+ QuestionR/www/{skills => reflexes}/mode.md         |   0
+ QuestionR/www/{skills => reflexes}/pm_appraise.md  |   0
+ QuestionR/www/{skills => reflexes}/pm_brief.md     |   0
+ QuestionR/www/{skills => reflexes}/sensitive.md    |   0
+ QuestionR/www/start.md                             |   3 +-
+ README.md                                          |   2 +-
+ 36 files changed, 560 insertions(+), 391 deletions(-)
 exit status: 0
 ~~~~
 
@@ -81,16 +97,16 @@ exit status: 0
 |---|---|
 | app.R | 249 |
 | R/_disable_autoload.R | 5 |
-| R/checks.R | 451 |
-| R/flow.R | 420 |
+| R/checks.R | 447 |
+| R/flow.R | 419 |
 | R/llm.R | 696 |
-| R/output.R | 431 |
-| R/reflexes.R | 698 |
+| R/output.R | 394 |
+| R/reflexes.R | 675 |
 | R/ui.R | 187 |
-| R/ui_generate.R | 1015 |
+| R/ui_generate.R | 996 |
 | tests/llm_check.R | 331 |
-| tests/review.R | 684 |
-| tests/smoke.R | 3189 |
+| tests/review.R | 670 |
+| tests/smoke.R | 3096 |
 
 Code files counted: 11 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
@@ -117,11 +133,11 @@ PASS means the file is byte for byte what the Claude project drafted (line endin
 
 | file | result | sha |
 |---|---|---|
-| README.md | PASS | af465d960f3a82255c25300fa13cbda461dea7e024d95b21850454c225881cd5 |
+| README.md | PASS | 661506b1e796079b84092555165e860dcd08eabf478c45c8819a0518b63fc8ce |
 | attitudinal.md | PASS | 02a273b6ffe0428629b2b6c358a40977c11cb40adeb256fe09e3a4f03eba26e4 |
 | behavioral.md | PASS | f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142 |
 | core.md | PASS | d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9 |
-| cross_cultural.md | PASS | 6c8a19b8c17b19808b4cfca788b3c76a7595d54a3a25a71e355391cb944bdd4d |
+| cross_cultural.md | PASS | 915d46090cf22e858cbe431bbcc54091c599df18c17efd2e5bfa97662f805f80 |
 | evaluate.md | PASS | 6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb |
 | generate.md | PASS | 9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2 |
 | mode.md | PASS | 98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0 |
@@ -217,15 +233,12 @@ ok  the order modes are ticked in does not matter
 ok  a Windows line ending is the same as a newline
 ok  a change to a reflex file changes the hash
 ok  the PREPARE labels are the contract's, in its order, each on its own line
-ok  blank fields leave no PREPARE line, except Output language, which is always there
-ok  a blank output language prints as English, and hashes as English
-ok  the source language is left out when it is the same as the output language
-ok  the source language is printed when it differs from the output language
+ok  blank fields leave no PREPARE line
+ok  a language is not a field of the form: it is refused, and no language line is in any prompt
+ok  the form has twelve fields and every task's fields are among them
 ok  the survey mode line reads in words, in the fixed order of the modes
 ok  a REVISION line is in the ask on a rerun and nowhere else
-ok  cross_cultural is sent for a country, a non-English output language, or a non-English source language
-ok  cross_cultural is not sent when both languages are English or blank and no country is given
-ok  a review with a Spanish source language: cross_cultural in, both language lines, its checks in the CHECKLIST
+ok  cross_cultural is sent for a country and for nothing else
 ok  a form with no research question stops
 ok  an unknown task stops
 ok  a drafting task with no number of items stops
@@ -334,9 +347,8 @@ ok  coded defaults match the hand-coded fixture: five labelled points and a don'
 ok  coded defaults match the hand-coded fixture: four points, end labels only, a reference period, no don't know
 ok  coded defaults match the hand-coded fixture: an open item
 ok  coded defaults match the hand-coded fixture: a curly apostrophe and a not-applicable option
-ok  coded defaults match the hand-coded fixture: French: points, don't know and period are not coded
 ok  coded defaults match the hand-coded fixture: an item with only a stem and options
-ok  the coded defaults read as words for a table, with not coded where it is
+ok  the coded defaults read as words for a table
 ok  a five-point scale whose decisions say there is no midpoint is odd and stated as no midpoint, and R does not say 'midpoint' for the count
 ok  what an item says about a midpoint is read as yes, no or not stated, in the phrasings the models used
 ok  decisions written as one string or one entry are flagged not itemised, two or more are itemised, none is none
@@ -441,7 +453,7 @@ ok  a pasted questionnaire over the cap is refused, saying how long it is and wh
 ok  Luna is the last of the workers (decision 15)
 ok  a model entry's reasoning_effort reaches the Anthropic-style call as adaptive thinking with that effort; unset sends neither
 ok  on the OpenAI-style call reasoning_effort and the name of the token limit reach the wire through api_args, only when the entry sets them; the Anthropic style keeps max_tokens; no profile entry sets either
-ok  a review with its five fields passes: findings per question, instrument findings, TRAPD, test_first, not_assessed
+ok  a review with its four fields passes: findings per question, instrument findings, test_first, not_assessed
 ok  a question's id may be a label or a number, and an empty list of findings is a question with none
 ok  a review missing a field, or with a finding that has no check, evidence, problem or severity from 1 to 10, fails naming the question
 ok  run_review has the fields of run_brief and batches (one entry here), uses build_prompt()'s prompt, and makes one call at the evaluation ceiling
@@ -462,10 +474,9 @@ ok  a finding at severity 5 or above shows its check and the check's question, s
 ok  a finding below 5 is folded away, and flagged when its quote is not in the text or its check was not sent
 ok  a question with no finding says none was found by this review, never that it has no problems
 ok  instrument-level findings are shown apart, naming the questions involved
-ok  an empty TRAPD block is not drawn; what to test first and what was not assessed are
+ok  what to test first and what was not assessed are drawn
 ok  R's checks on the review are counted: the quote that is not in the text and the check that was not sent
 ok  the criteria that were applied are listed
-ok  a review of translated text shows the TRAPD steps that are still needed, and only those
 ok  a review that fails is said on the page in words, with its reason, and the round is still recorded
 ok  two findings on one question, a test_first given as plain ids, and no not_assessed are all drawn
 ok  run_review sends an edited prompt when given one, and keeps it as the result's prompt with its own hash
@@ -504,8 +515,6 @@ ok  the button's input runs that part again, and the page, the review and the ro
 ok  a drafting output has the items of the set in its order, each with its id, introduction, stem, numbered options and programming notes
 ok  the HTML is plain: headings, paragraphs, an ordered list of options that Word keeps numbered, emphasis for the introduction, a block quote for a part
 ok  the HTML and the plain text say the same: every line of the text is in the HTML's text, in the same order
-ok  the output language not being English puts the English source wording in italics after each item
-ok  a language other than the source puts the TRAPD block above the disclosure block, and an English one has none
 ok  the disclosure names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft
 ok  the disclosure gives the version of each reflex file used, and pm_brief.md only when the brief was checked
 ok  the disclosure gives each prompt's hash in full, says the drafting prompt was not edited, and says it was when it was
@@ -515,7 +524,6 @@ ok  with nothing in the set, or an entry that points at nothing, the output says
 ok  a review's output is question by question, each question's findings in the severity bands, highest first, the Minor ones listed too
 ok  a finding gives its quote, problem, and a rewrite and a probe each said to be untested; a quote R did not find is flagged
 ok  the instrument findings, what to test first and what the review could not judge follow, then the disclosure with the review prompt's hash
-ok  a review of translated text prints what its trapd field says is still needed, or the fixed lines when it said nothing
 ok  a review in parts lists a prompt hash for each call, and one with a part missing says so at the top; no review gives a plain message
 ok  the run log is one JSON file with a schema, the profile, the time and every round; what the analyst did with the set is in it
 ok  a planted key is absent from the log, which says where it was taken out, and a string too short to be a key is left alone
@@ -574,7 +582,6 @@ exit status: 0
 | core reflex one_thing present | PASS |
 | any_mode present | PASS |
 | prohibitions headed as overriding | PASS |
-| Output language line always present | PASS |
 | reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
@@ -583,14 +590,13 @@ exit status: 0
 | generate.md sent (declare_defaults) | PASS |
 | other task files not sent (reference_period, forgiving_intro) | PASS |
 | web kept; telephone, mobile_web, mixed_mode dropped | PASS |
-| cross_cultural not sent (no country, English) | PASS |
+| cross_cultural not sent (no country) | PASS |
 | blank fields left out (no Country, no Reference period line) | PASS |
-| Output language: English shown; Source language left out when the same | PASS |
 | number of items in the ask | PASS |
 
-hash: 5f5a4fa8dc4b8f0f610287f769665e2b7d90d36dcb326af32714177faa1e329e
+hash: 752c4a48fdd63f77246c47aabd69b61b4cdff0b93909560cffc544840b9f2731
 files: core.md, generate.md, attitudinal.md, mode.md
-characters: system 10515, user 2838
+characters: system 10515, user 2813
 
 Checklist (id: question):
 ~~~~
@@ -674,7 +680,6 @@ Research question: How much do adults trust the national electoral commission?
 Construct: Trust in the national electoral commission
 Target population: Adults aged 18 and over
 Survey mode: web
-Output language: English
 
 Task:
 Write exactly 6 survey items for the brief above, to be combined into one attitude scale. Follow every rule you were given. Reply in the format given at the end of this message.
@@ -728,20 +733,19 @@ Return one JSON object with these fields.
 | core reflex one_thing present | PASS |
 | any_mode present | PASS |
 | prohibitions headed as overriding | PASS |
-| Output language line always present | PASS |
 | reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | parts field only in drafting prompts | PASS |
 | task file sent (how_many_or_how_often) | PASS |
 | telephone, face_to_face, mixed_mode kept; web dropped | PASS |
-| cross_cultural sent (trapd, output_language) | PASS |
-| form values present (Kenya, Swahili, past 7 days) | PASS |
-| Source language shown when it differs from the output language | PASS |
+| cross_cultural sent (flag_do_not_assert, context_and_face) | PASS |
+| no translation or language reflex sent (trapd, output_language, write_for_translation) | PASS |
+| form values present (Kenya, past 7 days) | PASS |
 
-hash: be7ae85c7f5c5116e550f4b47a4a01c04b59a582f44e070a154768a7368a2d86
+hash: 8c672c2bd82443c58914ee8ff7d6b55fc842216dfd8ccc22d8cb3275b55c7593
 files: core.md, generate.md, behavioral.md, mode.md, cross_cultural.md
-characters: system 14939, user 2929
+characters: system 12997, user 2879
 
 Checklist (id: question):
 ~~~~
@@ -766,9 +770,6 @@ telephone: Can a respondent hold the question and all its options in mind after 
 face_to_face: Are interviewer instructions and any show card specified, and are sensitive items protected from the interviewer and bystanders?
 mixed_mode: Would the item be asked in the same words and format in every mode used?
 flag_do_not_assert: Is every country-specific term or assumption either taken from the brief or marked for local confirmation?
-write_for_translation: Is the source wording free of idiom and culture-bound content?
-functional_equivalence: Do the stem and each response label ask the same thing of the respondent as the source version?
-trapd: Does the output state what Review, Adjudication, Pretesting and Documentation still require?
 ~~~~
 System prompt:
 ~~~~
@@ -812,16 +813,12 @@ REFLEXES: Mode (v0.1)
 - face_to_face (Mode is face-to-face with an interviewer.) Note where a show card is needed, what the interviewer reads and does not read, and how a volunteered don't know or refusal is recorded. Flag items where an interviewer's presence invites edited answers and suggest the respondent enters those answers privately.
 - mixed_mode (More than one mode is used, or the mode may change later.) Use the same wording, format and option order in every mode, built to the limits of the most restrictive mode, usually telephone. Say whether the goal is comparison across groups or modes, which calls for identical stimuli, or the best overall estimate, which allows each mode its best form. Say that some mode differences will remain. MUST NOT: Do not write a format that exists in only one of the modes.
 
-REFLEXES: Country, culture and language (v0.1)
-- flag_do_not_assert (Anything that depends on the country, culture or language.) Mark what must be confirmed by someone who knows the setting and say exactly what they should check: the everyday term, the unit, the institution's name, whether the topic can be asked, the landmark event. Use placeholders in square brackets where a local term is needed and you were not given it. MUST NOT: Do not state as fact what people in the country believe, do, find sensitive or call things.
-- adopt_adapt_develop (The item comes from, or will be used in, more than one country or language.) Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, language-driven, convention-driven or culture-driven.
-- write_for_translation (Writing or reviewing a source item that will be translated.) Keep the source wording translatable: no idioms, no culture-bound examples, short sentences, explicit referents, units and institutions as placeholders, scale labels that have plain equivalents.
-- functional_equivalence (Producing or reviewing an item in a language other than the source.) Aim for the same meaning and the same task for the respondent, not word-for-word translation. Pay most attention to response scale labels, instructions and culturally loaded terms, where translations drift most. Where a label has no natural equivalent, say so and offer a functional one for review.
-- trapd (Any output in a language other than the source language, and any review of a translated instrument.) Treat a model-produced version as a first draft within the Translation step only. State what the remaining steps require: Review by people fluent in both languages and in survey design; Adjudication of disagreements by a named person; Pretesting in the target language with members of the target population; Documentation of every decision and of the model's part in it. When reviewing, say which steps the material shows evidence of. MUST NOT: Do not call a model-produced version final, checked or equivalent. Do not recommend back translation as the quality check.
-- response_styles (Ordered scales used across cultural or language groups.) Note that groups can use the same scale differently (agreeing, choosing extremes or the middle, different thresholds for the same label), so differences between groups may be differences in scale use. Prefer construct-specific, fully labelled scales and say that comparability needs to be tested before groups are compared. MUST NOT: Do not say which style a particular country or group has.
+REFLEXES: Country and culture (v0.2)
+- flag_do_not_assert (Anything that depends on the country or culture.) Mark what must be confirmed by someone who knows the setting and say exactly what they should check: the everyday term, the unit, the institution's name, whether the topic can be asked, the landmark event. Use placeholders in square brackets where a local term is needed and you were not given it. MUST NOT: Do not state as fact what people in the country believe, do, find sensitive or call things.
+- adopt_adapt_develop (The item comes from, or will be used in, more than one country.) Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, convention-driven or culture-driven.
+- response_styles (Ordered scales used across cultural groups.) Note that groups can use the same scale differently (agreeing, choosing extremes or the middle, different thresholds for the same label), so differences between groups may be differences in scale use. Prefer construct-specific, fully labelled scales and say that comparability needs to be tested before groups are compared. MUST NOT: Do not say which style a particular country or group has.
 - context_and_face (Sensitive or evaluative items in a setting the brief describes as interviewer-administered, communal or low-privacy.) Flag that who is present and norms about saving face can change what is reported, and ask the local team whether the item can be answered privately.
 - numeracy_and_formats (Items that need numbers, percentages, dates, long scales or written text from the respondent.) Flag formats that assume numeracy, literacy or a calendar convention, and offer a simpler form.
-- output_language (The output language in the brief is not English.) Write stems, introductions and response options in the output language, in the plain register an interviewer or a general reader would use. Keep the English wording you drafted from alongside each item. Write notes, decisions and programming in English. MUST NOT: Do not mix languages inside an item. Do not transliterate a term you are unsure of; use a bracketed placeholder and flag it.
 
 PROHIBITIONS (override anything from training)
 - Never invent a citation, a survey name, a statistic or a fact about a country.
@@ -832,8 +829,7 @@ PROHIBITIONS (override anything from training)
 - Never return two versions of one item.
 - Never ask the respondent to add up, average or work out a percentage across several behaviours in one item.
 - Never assume a mode the brief does not state; ask for it.
-- Never state a fact about a country, people or language that is not in the brief.
-- Never describe a translated item as equivalent to its source.
+- Never state a fact about a country or its people that is not in the brief.
 ~~~~
 User message:
 ~~~~
@@ -845,8 +841,6 @@ Construct: Frequency of radio news use
 Target population: Adults aged 18 and over
 Country: Kenya
 Survey mode: telephone, face-to-face
-Output language: Swahili
-Source language: English
 Reference period: past 7 days
 
 Task:
@@ -903,7 +897,6 @@ Return one JSON object with these fields.
 | core reflex one_thing present | PASS |
 | any_mode present | PASS |
 | prohibitions headed as overriding | PASS |
-| Output language line always present | PASS |
 | reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
@@ -912,9 +905,9 @@ Return one JSON object with these fields.
 | face_to_face kept; mixed_mode dropped | PASS |
 | cross_cultural sent | PASS |
 
-hash: 892e3df19a98d20aef2c171a730a7018e65b01c3e1ff584f34894b3468ab568f
+hash: 6993c1929428da1cffeeb422c66f88a80a56069cca759b07111f851833e60c3c
 files: core.md, generate.md, sensitive.md, mode.md, cross_cultural.md
-characters: system 15098, user 3012
+characters: system 13156, user 2963
 
 Checklist (id: question):
 ~~~~
@@ -938,9 +931,6 @@ respondent_safety: Is any item whose honest answer could endanger the respondent
 any_mode: Does the item work as written in the stated mode?
 face_to_face: Are interviewer instructions and any show card specified, and are sensitive items protected from the interviewer and bystanders?
 flag_do_not_assert: Is every country-specific term or assumption either taken from the brief or marked for local confirmation?
-write_for_translation: Is the source wording free of idiom and culture-bound content?
-functional_equivalence: Do the stem and each response label ask the same thing of the respondent as the source version?
-trapd: Does the output state what Review, Adjudication, Pretesting and Documentation still require?
 ~~~~
 System prompt:
 ~~~~
@@ -985,16 +975,12 @@ REFLEXES: Mode (v0.1)
 - any_mode (Any mode.) Write and appraise each item as it will reach the respondent in the stated mode: seen or heard, with or without an interviewer, on what size of screen.
 - face_to_face (Mode is face-to-face with an interviewer.) Note where a show card is needed, what the interviewer reads and does not read, and how a volunteered don't know or refusal is recorded. Flag items where an interviewer's presence invites edited answers and suggest the respondent enters those answers privately.
 
-REFLEXES: Country, culture and language (v0.1)
-- flag_do_not_assert (Anything that depends on the country, culture or language.) Mark what must be confirmed by someone who knows the setting and say exactly what they should check: the everyday term, the unit, the institution's name, whether the topic can be asked, the landmark event. Use placeholders in square brackets where a local term is needed and you were not given it. MUST NOT: Do not state as fact what people in the country believe, do, find sensitive or call things.
-- adopt_adapt_develop (The item comes from, or will be used in, more than one country or language.) Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, language-driven, convention-driven or culture-driven.
-- write_for_translation (Writing or reviewing a source item that will be translated.) Keep the source wording translatable: no idioms, no culture-bound examples, short sentences, explicit referents, units and institutions as placeholders, scale labels that have plain equivalents.
-- functional_equivalence (Producing or reviewing an item in a language other than the source.) Aim for the same meaning and the same task for the respondent, not word-for-word translation. Pay most attention to response scale labels, instructions and culturally loaded terms, where translations drift most. Where a label has no natural equivalent, say so and offer a functional one for review.
-- trapd (Any output in a language other than the source language, and any review of a translated instrument.) Treat a model-produced version as a first draft within the Translation step only. State what the remaining steps require: Review by people fluent in both languages and in survey design; Adjudication of disagreements by a named person; Pretesting in the target language with members of the target population; Documentation of every decision and of the model's part in it. When reviewing, say which steps the material shows evidence of. MUST NOT: Do not call a model-produced version final, checked or equivalent. Do not recommend back translation as the quality check.
-- response_styles (Ordered scales used across cultural or language groups.) Note that groups can use the same scale differently (agreeing, choosing extremes or the middle, different thresholds for the same label), so differences between groups may be differences in scale use. Prefer construct-specific, fully labelled scales and say that comparability needs to be tested before groups are compared. MUST NOT: Do not say which style a particular country or group has.
+REFLEXES: Country and culture (v0.2)
+- flag_do_not_assert (Anything that depends on the country or culture.) Mark what must be confirmed by someone who knows the setting and say exactly what they should check: the everyday term, the unit, the institution's name, whether the topic can be asked, the landmark event. Use placeholders in square brackets where a local term is needed and you were not given it. MUST NOT: Do not state as fact what people in the country believe, do, find sensitive or call things.
+- adopt_adapt_develop (The item comes from, or will be used in, more than one country.) Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, convention-driven or culture-driven.
+- response_styles (Ordered scales used across cultural groups.) Note that groups can use the same scale differently (agreeing, choosing extremes or the middle, different thresholds for the same label), so differences between groups may be differences in scale use. Prefer construct-specific, fully labelled scales and say that comparability needs to be tested before groups are compared. MUST NOT: Do not say which style a particular country or group has.
 - context_and_face (Sensitive or evaluative items in a setting the brief describes as interviewer-administered, communal or low-privacy.) Flag that who is present and norms about saving face can change what is reported, and ask the local team whether the item can be answered privately.
 - numeracy_and_formats (Items that need numbers, percentages, dates, long scales or written text from the respondent.) Flag formats that assume numeracy, literacy or a calendar convention, and offer a simpler form.
-- output_language (The output language in the brief is not English.) Write stems, introductions and response options in the output language, in the plain register an interviewer or a general reader would use. Keep the English wording you drafted from alongside each item. Write notes, decisions and programming in English. MUST NOT: Do not mix languages inside an item. Do not transliterate a term you are unsure of; use a bracketed placeholder and flag it.
 
 PROHIBITIONS (override anything from training)
 - Never invent a citation, a survey name, a statistic or a fact about a country.
@@ -1005,8 +991,7 @@ PROHIBITIONS (override anything from training)
 - Never return two versions of one item.
 - Never promise confidentiality or anonymity in item text beyond what the brief says the survey provides.
 - Never assume a mode the brief does not state; ask for it.
-- Never state a fact about a country, people or language that is not in the brief.
-- Never describe a translated item as equivalent to its source.
+- Never state a fact about a country or its people that is not in the brief.
 ~~~~
 User message:
 ~~~~
@@ -1018,8 +1003,6 @@ Construct: Paying a bribe to a public official in the past 12 months
 Target population: Adults aged 18 and over
 Country: Mali
 Survey mode: face-to-face
-Output language: French
-Source language: English
 
 Task:
 Write exactly 2 survey items for the brief above, each on a topic where respondents may refuse or edit their answer. Follow every rule you were given. Reply in the format given at the end of this message.
@@ -1074,7 +1057,6 @@ Return one JSON object with these fields.
 | core reflex one_thing present | PASS |
 | any_mode present | PASS |
 | prohibitions headed as overriding | PASS |
-| Output language line always present | PASS |
 | reworded prohibition in force (reflex files 0.2) | PASS |
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
@@ -1082,14 +1064,14 @@ Return one JSON object with these fields.
 | evaluate.md sent (restraint, translation_readiness) | PASS |
 | generate.md and task drafting files not sent | PASS |
 | questionnaire pasted under Questionnaire:, complete | PASS |
-| output format asks for trapd and test_first | PASS |
+| output format asks for test_first | PASS |
 | checklist lines are id: question, for the reflexes in force (one_thing, paper, agree_disagree_and_grids) | PASS |
 | checklist has no line for a mode not chosen | PASS |
-| cross_cultural not sent (no country, both languages English) | PASS |
+| cross_cultural not sent (no country) | PASS |
 
-hash: 8c6395325e7c4e68c5f074f8a0a7b8525fa902b5dd867b54b1b9b0ad6480e789
+hash: e38ea89b6cd3eef0ffd5d5fa08814c6d57155b95ee85cbcdaa9ec114cc68f057
 files: core.md, evaluate.md, mode.md
-characters: system 8800, user 4607
+characters: system 8800, user 4582
 
 Checklist (id: question):
 ~~~~
@@ -1165,7 +1147,6 @@ Brief:
 Research question: Satisfaction with local services
 Target population: Adults aged 18 and over
 Survey mode: paper
-Output language: English
 
 Task:
 Review the questionnaire below as an expert reviewer, item by item and then as a whole. Follow every rule you were given. Reply in the format given at the end of this message.
@@ -1203,182 +1184,6 @@ fit_to_objectives: Is every stated research question measured, and does every it
 translation_readiness: Is the item free of wording that would not survive translation or adaptation to the stated setting?
 any_mode: Does the item work as written in the stated mode?
 paper: Can the respondent follow the routing without help?
-
-REPLY FORMAT
-Return one JSON object with these fields. Write findings in English whatever
-language the questionnaire is in; write rewrites in the questionnaire's
-language and, when that is not English, add the English meaning.
-
-- "items": a list, one entry per question in the order pasted. Each has:
-  - "id": the question's own number or label, or its position.
-  - "findings": a list, empty if none. Each finding has "check" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (words copied exactly from the pasted text, with no ellipsis), "problem" (one or two sentences), "severity" (1 to 10), "rewrite" and "rewrite_english" and "probe" (empty strings when severity is below 5).
-- "instrument": a list of findings about order, routing, consistency and fit to objectives, in the same form, with the question ids involved in "evidence".
-- "trapd": an object with the keys "translation", "review", "adjudication", "pretesting", "documentation", each a short statement of what is still needed; all empty strings when the survey is in one language for one country and that language is the source language.
-- "test_first": a list of up to five question ids with the method suggested for each.
-- "not_assessed": what this review could not judge from what was pasted.
-~~~~
-
-### evaluate_translated
-
-| check | result |
-|---|---|
-| system and user are single strings | PASS |
-| same form twice gives the same hash | PASS |
-| a changed research question changes the hash | PASS |
-| persona opens the message, once, and is not in the system prompt | PASS |
-| Brief:, Task:, REPLY FORMAT in that order | PASS |
-| no source text sent (IASS/WSS, SURV632, Sturgis, Tourangeau) | PASS |
-| no HTML comment or Source or Check field sent | PASS |
-| core reflex one_thing present | PASS |
-| any_mode present | PASS |
-| prohibitions headed as overriding | PASS |
-| Output language line always present | PASS |
-| reworded prohibition in force (reflex files 0.2) | PASS |
-| existing_items_first only in drafting prompts | PASS |
-| CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
-| parts field only in drafting prompts | PASS |
-| cross_cultural sent because the source language is not English | PASS |
-| both language lines shown | PASS |
-| its checks join the checklist (functional_equivalence) | PASS |
-
-hash: be187ffaddc35d5b35d44cae0b90e9a5b92a6be9632637dc5a07927934c6e4a3
-files: core.md, evaluate.md, mode.md, cross_cultural.md
-characters: system 12563, user 5065
-
-Checklist (id: question):
-~~~~
-construct_first: Does the item measure the construct or domain named in the brief and only that?
-plain_words: Would every member of the target population read each key term the same way, without a definition they do not have?
-simple_syntax: Is the stem free of stacked clauses and of negations?
-specific_concrete: Is it clear exactly what, whose, where and when the question is about?
-one_thing: Does the question ask about exactly one thing, so that no respondent would want to answer its parts differently?
-no_presupposition: Does the question apply to every respondent who will be asked it?
-neutral_wording: Is the wording free of any push toward one answer?
-options_fit: Can every respondent find exactly one option that is true for them?
-retrieval_and_judgment: Can the respondent retrieve the information and reach the answer without difficult recall or mental arithmetic?
-response_scale: Do the response options match the question and treat both directions evenly?
-agree_disagree_and_grids: If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?
-context_and_order: Is the order free of an earlier item that would shape answers to a later one?
-filters_and_routing: Does every respondent path lead only to questions that apply?
-scale_consistency: Are scales, their direction and reference periods consistent across the instrument?
-fit_to_objectives: Is every stated research question measured, and does every item serve one?
-translation_readiness: Is the item free of wording that would not survive translation or adaptation to the stated setting?
-any_mode: Does the item work as written in the stated mode?
-paper: Can the respondent follow the routing without help?
-flag_do_not_assert: Is every country-specific term or assumption either taken from the brief or marked for local confirmation?
-write_for_translation: Is the source wording free of idiom and culture-bound content?
-functional_equivalence: Do the stem and each response label ask the same thing of the respondent as the source version?
-trapd: Does the output state what Review, Adjudication, Pretesting and Documentation still require?
-~~~~
-System prompt:
-~~~~
-REFLEXES: Core (v0.3)
-- construct_first (Every item.) Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly. MUST NOT: Do not widen or change the construct to make an item easier to write.
-- response_process (Every item.) Walk the item through the four stages a respondent goes through: comprehension, retrieval, judgment or estimation, reporting. A fault at any one stage is measurement error. Name the stage when you name a fault.
-- plain_words (Every question stem, instruction and response option.) Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question. MUST NOT: Do not use a word with more than one common sense where the other sense would change the answer.
-- simple_syntax (Every question stem.) One short sentence where possible, main clause first. Move conditions, definitions and time frames into a separate lead-in sentence instead of stacking clauses. MUST NOT: No single or double negations in the stem. No negative interrogatives.
-- specific_concrete (Every item.) Name the specific object, behaviour, place and time the question is about. Replace vague quantifiers in stems and options with concrete amounts or frequencies where the task allows.
-- one_thing (Every item.) Ask about one thing at a time. Two objects, two behaviours or two qualities joined by "and" or "or" become two items.
-- no_presupposition (Every item.) Check what the question assumes about the respondent: that they work, have a partner, use a service, have heard of the topic, hold an opinion. Where the assumption fails for part of the population, add a filter question or a not-applicable option. This fault is easy to miss, so check it explicitly.
-- neutral_wording (Every item except a deliberate forgiving introduction to a sensitive question.) Word the stem so no answer is the expected one. No premises stated as fact, no appeals to authority or to what most people think, no emotive terms.
-- options_fit (Every closed item.) Response options are exhaustive and mutually exclusive, answer the question that was asked in the same terms, and give every respondent a true answer to pick.
-- brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
-- not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
-
-REFLEXES: Evaluate a questionnaire (v0.3)
-- restraint (Every item you review.) Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding copy into evidence the exact words from the question or its options that cause it, character for character, with no ellipsis and no paraphrase. When the fault is something missing, copy the words it is missing from and say what is missing in problem. MUST NOT: Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
-- known_overcalls (You are about to flag sensitivity, stigma, burden or length.) These are the faults a language-model reviewer over-reports. Flag sensitivity only when you can say who would edit their answer and in which direction; flag burden only when you can name the step that is hard.
-- known_misses (Every item, as a second pass.) Look again for the faults a language-model reviewer tends to miss: an assumption that does not hold for some respondents, a term that carries a different meaning for part of the population, a framing that belongs to one culture, a question that does not apply to everyone asked.
-- retrieval_and_judgment (Any item asking for facts, behaviour, frequency, amounts or dates.) Check the reference period (stated, bounded, short enough), whether the information is likely to be remembered, and whether the respondent must count, add or average to answer.
-- response_scale (Any closed item.) Check that the options answer the question asked, are balanced where the construct is bipolar, are labelled consistently, have a midpoint and a don't-know or not-applicable option where needed, and do not use vague quantifiers for frequency.
-- agree_disagree_and_grids (Agree-disagree items or a battery sharing one scale.) Note the acquiescence risk and whether a construct-specific format would do the same job. In a battery, check that items are keyed in both directions and that the grid suits the mode.
-- context_and_order (Reviewing the instrument as a whole.) Check that questions on a topic are grouped and run from general to specific; that an earlier item does not supply the answer, the standard of comparison or the mood for a later one; that early questions are easy and on the stated topic; and that sensitive and demographic items come late.
-- filters_and_routing (Reviewing the instrument as a whole.) Check that every item reaches only respondents it applies to, that each filter has a destination for every answer, and that no item is unreachable or asked twice.
-- scale_consistency (Reviewing the instrument as a whole.) Check that the same kind of question uses the same scale, direction and labels throughout, and that reference periods do not change without warning.
-- fit_to_objectives (The brief states research questions or an analysis plan.) List research questions with no item measuring them, and items that serve no stated question. Ask whether the items needed for screening, weighting and calibration are present and worded as in the benchmark source the analyst will use. MUST NOT: Do not judge fit to objectives when the brief gives none; say that it was not assessed.
-- translation_readiness (The brief names a country, a language other than English, or more than one language.) For each item say what would not carry across: idioms, culture-bound examples, units, institutions, scale labels with no natural equivalent, grammatical gender. Organize the instrument-level advice by the five TRAPD steps and say which steps the pasted text shows evidence of and which the analyst must still arrange.
-- severity (Every finding.) Rate how far the problem would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for problems you would revise before fielding.
-- rewrite_and_probe (Every finding rated 5 or above.) Offer one rewrite that fixes that fault and changes nothing else, and one cognitive-interview probe that would show whether real respondents have the problem. MUST NOT: Do not rewrite items that have no finding. Do not present a rewrite as better than the original; it is untested.
-- what_to_test (Closing the review.) Name the few items that most need testing with real respondents and the cheapest suitable method for each. Say at least one method should be used and several where budget allows.
-
-REFLEXES: Mode (v0.1)
-- any_mode (Any mode.) Write and appraise each item as it will reach the respondent in the stated mode: seen or heard, with or without an interviewer, on what size of screen.
-- paper (Mode is paper, self-administered.) Keep routing simple and visible, since nothing enforces a skip. Avoid filters with long branches. Give written instructions for how to mark answers and for open numbers.
-
-REFLEXES: Country, culture and language (v0.1)
-- flag_do_not_assert (Anything that depends on the country, culture or language.) Mark what must be confirmed by someone who knows the setting and say exactly what they should check: the everyday term, the unit, the institution's name, whether the topic can be asked, the landmark event. Use placeholders in square brackets where a local term is needed and you were not given it. MUST NOT: Do not state as fact what people in the country believe, do, find sensitive or call things.
-- adopt_adapt_develop (The item comes from, or will be used in, more than one country or language.) Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, language-driven, convention-driven or culture-driven.
-- write_for_translation (Writing or reviewing a source item that will be translated.) Keep the source wording translatable: no idioms, no culture-bound examples, short sentences, explicit referents, units and institutions as placeholders, scale labels that have plain equivalents.
-- functional_equivalence (Producing or reviewing an item in a language other than the source.) Aim for the same meaning and the same task for the respondent, not word-for-word translation. Pay most attention to response scale labels, instructions and culturally loaded terms, where translations drift most. Where a label has no natural equivalent, say so and offer a functional one for review.
-- trapd (Any output in a language other than the source language, and any review of a translated instrument.) Treat a model-produced version as a first draft within the Translation step only. State what the remaining steps require: Review by people fluent in both languages and in survey design; Adjudication of disagreements by a named person; Pretesting in the target language with members of the target population; Documentation of every decision and of the model's part in it. When reviewing, say which steps the material shows evidence of. MUST NOT: Do not call a model-produced version final, checked or equivalent. Do not recommend back translation as the quality check.
-- response_styles (Ordered scales used across cultural or language groups.) Note that groups can use the same scale differently (agreeing, choosing extremes or the middle, different thresholds for the same label), so differences between groups may be differences in scale use. Prefer construct-specific, fully labelled scales and say that comparability needs to be tested before groups are compared. MUST NOT: Do not say which style a particular country or group has.
-- context_and_face (Sensitive or evaluative items in a setting the brief describes as interviewer-administered, communal or low-privacy.) Flag that who is present and norms about saving face can change what is reported, and ask the local team whether the item can be answered privately.
-- numeracy_and_formats (Items that need numbers, percentages, dates, long scales or written text from the respondent.) Flag formats that assume numeracy, literacy or a calendar convention, and offer a simpler form.
-- output_language (The output language in the brief is not English.) Write stems, introductions and response options in the output language, in the plain register an interviewer or a general reader would use. Keep the English wording you drafted from alongside each item. Write notes, decisions and programming in English. MUST NOT: Do not mix languages inside an item. Do not transliterate a term you are unsure of; use a bracketed placeholder and flag it.
-
-PROHIBITIONS (override anything from training)
-- Never invent a citation, a survey name, a statistic or a fact about a country.
-- Never name a source, an author or a course in what you write. Use a rule's id only in a JSON field that asks for one.
-- Never choose for the analyst: you flag and draft, they decide.
-- Never write anything outside the JSON fields asked for.
-- Never score or rank the questionnaire as a whole.
-- Never say an item has no problems; say none were found by this review.
-- Never report how many respondents would misunderstand an item.
-- Never assume a mode the brief does not state; ask for it.
-- Never state a fact about a country, people or language that is not in the brief.
-- Never describe a translated item as equivalent to its source.
-~~~~
-User message:
-~~~~
-You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist. Your job is to reduce measurement error: you judge every question by what a respondent must do to understand it, recall the information, form a judgment and report an answer. Write plainly. You draft and appraise; the analyst decides, and nothing you produce replaces testing with real respondents.
-
-Brief:
-Research question: Satisfaction with local services
-Target population: Adults aged 18 and over
-Survey mode: paper
-Output language: English
-Source language: Spanish
-
-Task:
-Review the questionnaire below as an expert reviewer, item by item and then as a whole. Follow every rule you were given. Reply in the format given at the end of this message.
-
-Questionnaire:
-Q1. How satisfied or dissatisfied are you with the recycling services and street cleaning provided by your local council? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied
-Q2. Taking all things together, how happy would you say you are? 0 Extremely unhappy ... 10 Extremely happy
-
-Guidelines:
-- Use simple, familiar words.
-- Use simple syntax.
-- Avoid ambiguous words.
-- Be specific and concrete.
-- Make response options exhaustive and mutually exclusive.
-- Avoid leading or loaded wording.
-- Ask about one thing at a time.
-- Avoid single or double negations.
-
-CHECKLIST
-construct_first: Does the item measure the construct or domain named in the brief and only that?
-plain_words: Would every member of the target population read each key term the same way, without a definition they do not have?
-simple_syntax: Is the stem free of stacked clauses and of negations?
-specific_concrete: Is it clear exactly what, whose, where and when the question is about?
-one_thing: Does the question ask about exactly one thing, so that no respondent would want to answer its parts differently?
-no_presupposition: Does the question apply to every respondent who will be asked it?
-neutral_wording: Is the wording free of any push toward one answer?
-options_fit: Can every respondent find exactly one option that is true for them?
-retrieval_and_judgment: Can the respondent retrieve the information and reach the answer without difficult recall or mental arithmetic?
-response_scale: Do the response options match the question and treat both directions evenly?
-agree_disagree_and_grids: If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?
-context_and_order: Is the order free of an earlier item that would shape answers to a later one?
-filters_and_routing: Does every respondent path lead only to questions that apply?
-scale_consistency: Are scales, their direction and reference periods consistent across the instrument?
-fit_to_objectives: Is every stated research question measured, and does every item serve one?
-translation_readiness: Is the item free of wording that would not survive translation or adaptation to the stated setting?
-any_mode: Does the item work as written in the stated mode?
-paper: Can the respondent follow the routing without help?
-flag_do_not_assert: Is every country-specific term or assumption either taken from the brief or marked for local confirmation?
-write_for_translation: Is the source wording free of idiom and culture-bound content?
-functional_equivalence: Do the stem and each response label ask the same thing of the respondent as the source version?
-trapd: Does the output state what Review, Adjudication, Pretesting and Documentation still require?
 
 REPLY FORMAT
 Return one JSON object with these fields. Write findings in English whatever
@@ -1807,41 +1612,28 @@ First drafts by language models, as recommended by a reviewing model and left by
 CONF1
 -----
 
-Nous allons vous poser quelques questions sur la commission électorale nationale.
+We will ask you a few questions about the national electoral commission.
 
-Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle 1)
+How much do you trust the national electoral commission? (model 1)
 
-1. Beaucoup
-2. Assez
-3. Peu
-4. Pas du tout
+1. A lot
+2. Somewhat
+3. A little
+4. Not at all
 
-[Randomize the order of options 1 to 4; keep Pas du tout last.]
-
-English source: How much do you trust the national electoral commission? (1)
+[Randomize the order of options 1 to 4; keep Not at all last.]
 
 CONF2
 -----
 
-Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle 2)
+How much do you trust the national electoral commission? (model 2)
 
-1. Beaucoup
-2. Assez
-3. Peu
-4. Pas du tout
+1. A lot
+2. Somewhat
+3. A little
+4. Not at all
 
-    Asked if the answer is Peu or Pas du tout: Pourquoi ?
-
-English source: How much do you trust the national electoral commission? (2)
-
-TRAPD: what is still needed
-===========================
-
-- The model's version is a first draft inside the Translation step only.
-- Review by people fluent in both languages and in survey design is still needed.
-- Adjudication of disagreements by a named person is still needed.
-- Pretesting in the target language with members of the target population is still needed.
-- Documentation of every decision, and of the model's part in it, is still needed.
+    Asked if the answer is A little or Not at all: Why?
 
 Disclosure of the use of language models
 ========================================
@@ -1850,10 +1642,10 @@ Disclosure of the use of language models
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
 - Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
-- Reflex files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
-- Brief check prompt: aaccce763e7134d3eae405db15ce1f7e9f956ee0b57ec327cb84149e13b4cf94
-- Drafting prompt (not edited): c5663a00236f0e4d56d563d2aade9f74d5da1c847013d775841c5d551de99095
-- Appraisal prompt: c65f2fef5822b7e84c4558f10a852be8ce9ef5ecf502113934bfe8cb870376ce
+- Reflex files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.2; pm_appraise.md 0.4; pm_brief.md 0.1
+- Brief check prompt: a3ddf3e290541a2aa4d1f076e084725872ad0dcd2e3ad3f5d2c0bd8a487ae1f0
+- Drafting prompt (not edited): 0e3d15bd3748c7fdc5d6552771cc3f224041904e878383eb05d3ed3e58899130
+- Appraisal prompt: 5b606043f641b019d2a7ec0d9da74fafcc26e0a0082c9dc960f69dcc5e7b8580
 - Item 1 (CONF1): candidate A, written by vendor-a/model-one
 - Item 2 (CONF2): candidate C, written by vendor-b/model-two
 
@@ -1923,7 +1715,7 @@ Disclosure of the use of language models
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
 - Reflex files and versions: core.md 0.3; evaluate.md 0.3; mode.md 0.1
-- Review prompt (not edited): 12a1c9c921d2f72ef146cac783dcc63eb1bc806364a9694977d51a222421f4f7
+- Review prompt (not edited): 1fd641d9da89425dce97e88ee9160fa15bfaaebf6213b04e4329f1bead0bc042
 
 Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
 

@@ -238,8 +238,7 @@ ok("a missing file stops", grepl("is missing", tryCatch(read_reflex_file("nope.m
 # The assembled prompts: every task, every mode on its own, none, and all five,
 #   with and without a country.
 blank_form <- list(task = "", research_question = "", construct = "", population = "",
-                   country = "", modes = character(0), output_language = "English",
-                   source_language = "English", n_items = NA_integer_,
+                   country = "", modes = character(0), n_items = NA_integer_,
                    reference_period = "", keep_items = "", other = "",
                    questionnaire = "", revision = "")
 make_form <- function(...) utils::modifyList(blank_form, list(...))
@@ -332,7 +331,7 @@ ok("mode.md keeps any_mode, the modes chosen, and mixed_mode only with more than
      identical(in_prompt, intersect(names(rfiles[["mode.md"]]$reflexes), expected))
    }))
 ok("cross_cultural.md is in with a country and out without",
-   every_built(function(b) ("trapd" %in% ids_in(b$p$system)) == nzchar(b$country)))
+   every_built(function(b) ("flag_do_not_assert" %in% ids_in(b$p$system)) == nzchar(b$country)))
 ok("every reflex of a drafting task file is in, and of the other task files out",
    every_built(function(b) {
      task_ids = purrr::map(rfiles[c("attitudinal.md", "behavioral.md", "sensitive.md", "evaluate.md")], function(s) names(s$reflexes))
@@ -409,7 +408,7 @@ base_hash <- h()
 changes <- list(
   research_question = "Something else entirely?", construct = "A different construct",
   population = "Adults aged 65 and over", country = "Kenya", modes = "mobile_web",
-  output_language = "French", source_language = "Spanish", n_items = 7L,
+  n_items = 7L,
   reference_period = "past year", keep_items = "Q1. An item to keep.",
   other = "Keep it short.", revision = "Make the stems shorter.")
 ok("a change to any one field of the form changes the hash",
@@ -448,41 +447,23 @@ prepare_of <- function(fm) {
   sub(":.*$", "", strsplit(u, "\n", fixed = TRUE)[[1]][-1])
 }
 full <- utils::modifyList(forms$attitudinal, list(
-  country = "Kenya", output_language = "Swahili", source_language = "English",
+  country = "Kenya",
   reference_period = "past 7 days", keep_items = "Q1. Keep this.", other = "Short."))
 ok("the PREPARE labels are the contract's, in its order, each on its own line",
    identical(prepare_of(full),
              c("Research question", "Construct", "Target population", "Country",
-               "Survey mode", "Output language", "Source language", "Reference period",
+               "Survey mode", "Reference period",
                "Existing items to keep", "Other details")))
-ok("blank fields leave no PREPARE line, except Output language, which is always there",
+ok("blank fields leave no PREPARE line",
    identical(prepare_of(forms$attitudinal),
-             c("Research question", "Construct", "Target population", "Survey mode",
-               "Output language")))
-# Output language is always printed, English when blank. Source language is
-#   printed only when filled and different from the output language, compared
-#   without regard to case, with en and eng as English.
-lang_lines <- function(output, source)
-  strsplit(strsplit(build_prompt(utils::modifyList(
-    forms$attitudinal, list(output_language = output, source_language = source)))$user,
-    "\n\n", fixed = TRUE)[[1]][2], "\n", fixed = TRUE)[[1]] |>
-  grep(pattern = "language:", value = TRUE)
-ok("a blank output language prints as English, and hashes as English",
-   identical(lang_lines("", ""), "Output language: English") &&
-     identical(lang_lines(NA_character_, character(0)), "Output language: English") &&
-     identical(h(output_language = "", source_language = ""), base_hash))
-ok("the source language is left out when it is the same as the output language",
-   identical(lang_lines("English", "English"), "Output language: English") &&
-     identical(lang_lines("English", "english"), "Output language: English") &&
-     identical(lang_lines("en", "ENG"), "Output language: en") &&
-     identical(lang_lines("", "en"), "Output language: English") &&
-     identical(lang_lines("Swahili", "swahili"), "Output language: Swahili") &&
-     identical(lang_lines("Swahili", ""), "Output language: Swahili"))
-ok("the source language is printed when it differs from the output language",
-   identical(lang_lines("Swahili", "English"), c("Output language: Swahili", "Source language: English")) &&
-     identical(lang_lines("English", "Spanish"), c("Output language: English", "Source language: Spanish")) &&
-     identical(lang_lines("", "Spanish"), c("Output language: English", "Source language: Spanish")) &&
-     identical(lang_lines("French", "Spanish"), c("Output language: French", "Source language: Spanish")))
+             c("Research question", "Construct", "Target population", "Survey mode")))
+ok("a language is not a field of the form: it is refused, and no language line is in any prompt",
+   grepl("not in the contract: output_language", tryCatch(build_prompt(c(forms$attitudinal, list(output_language = "French"))), error = conditionMessage), fixed = TRUE) &&
+     !any(c("output_language", "source_language") %in% FORM_FIELDS) &&
+     every_built(function(b) !grepl("language:", b$p$user, ignore.case = TRUE)))
+ok("the form has twelve fields and every task's fields are among them",
+   length(FORM_FIELDS) == 12L && purrr::every(TASKS, function(t) all(t$fields %in% FORM_FIELDS)))
+
 ok("the survey mode line reads in words, in the fixed order of the modes",
    grepl("Survey mode: mobile web, telephone, face-to-face\n",
          build_prompt(utils::modifyList(forms$attitudinal,
@@ -493,26 +474,10 @@ ok("a REVISION line is in the ask on a rerun and nowhere else",
          build_prompt(utils::modifyList(forms$attitudinal, list(revision = "Make the stems shorter.")))$user,
          perl = TRUE) &&
      !grepl("REVISION", build_prompt(forms$attitudinal)$user, fixed = TRUE))
-has_trapd <- function(...)
-  "trapd" %in% ids_in(build_prompt(utils::modifyList(forms$attitudinal, list(...)))$system)
-ok("cross_cultural is sent for a country, a non-English output language, or a non-English source language",
-   has_trapd(country = "Kenya") && has_trapd(output_language = "Spanish") &&
-     has_trapd(source_language = "Spanish") &&
-     has_trapd(output_language = "French", source_language = "Spanish"))
-ok("cross_cultural is not sent when both languages are English or blank and no country is given",
-   !has_trapd() && !has_trapd(output_language = "", source_language = "") &&
-     !has_trapd(output_language = "en", source_language = "ENG") &&
-     !has_trapd(output_language = "english", source_language = ""))
-
-# A review of a translated questionnaire (Spanish source, English output) gets
-#   the cross-cultural rules, and their Check questions join the checklist.
-translated <- utils::modifyList(forms$evaluate, list(source_language = "Spanish"))
-tp <- build_prompt(translated)
-ok("a review with a Spanish source language: cross_cultural in, both language lines, its checks in the CHECKLIST",
-   "trapd" %in% ids_in(tp$system) && grepl("Output language: English\nSource language: Spanish", tp$user, fixed = TRUE) &&
-     "functional_equivalence" %in% names(build_checklist(translated)) &&
-     grepl("\nfunctional_equivalence: ", tp$user, fixed = TRUE) &&
-     identical(tp$files, c("core.md", "evaluate.md", "mode.md", "cross_cultural.md")))
+has_cc <- function(...)
+  "flag_do_not_assert" %in% ids_in(build_prompt(utils::modifyList(forms$attitudinal, list(...)))$system)
+ok("cross_cultural is sent for a country and for nothing else",
+   has_cc(country = "Kenya") && !has_cc() && !has_cc(country = "") && !has_cc(country = "  "))
 
 # A form that cannot make a prompt stops, saying why. It never makes a guess.
 fails <- function(msg, ...) grepl(msg, tryCatch({ build_prompt(...); "no error" }, error = conditionMessage), fixed = TRUE)
@@ -1216,14 +1181,6 @@ fx <- list(
        want = list(format = "closed", n_options = 4L, n_points = 2L, points_odd = FALSE,
                    midpoint_stated = "not stated", dont_know = TRUE,
                    ref_period = FALSE, labels = "not stated", decisions = "none")),
-  list(what = "French: points, don't know and period are not coded",
-       item = good_item(5, stem = "Au cours des 7 derniers jours, avez-vous écouté la radio ?",
-                        options = list("Jamais", "Parfois", "Souvent", "Je ne sais pas"),
-                        decisions = list("closed", "every point labelled")),
-       lang = "French",
-       want = list(format = "closed", n_options = 4L, n_points = NA_integer_, points_odd = NA,
-                   midpoint_stated = "not stated", dont_know = NA,
-                   ref_period = NA, labels = "yes", decisions = "itemised")),
   list(what = "an item with only a stem and options",
        item = list(stem = "Do you vote?", options = list("Yes", "No")),
        lang = "",
@@ -1232,12 +1189,9 @@ fx <- list(
                    ref_period = FALSE, labels = "not stated", decisions = "none")))
 purrr::walk(fx, function(x)
   ok(paste("coded defaults match the hand-coded fixture:", x$what),
-     identical(code_defaults(x$item, x$lang), x$want)))
-ok("the coded defaults read as words for a table, with not coded where it is",
-   identical(unname(defaults_labels(code_defaults(fx[[5]]$item, "French"))[c(
-     "Scale points (no-answer options not counted)", "Odd number of points", "Don't know / no opinion", "Reference period")]),
-             rep("not coded", 4L)) &&
-     identical(unname(defaults_labels(code_defaults(fx[[1]]$item))[c("Format", "Odd number of points")]), c("closed", "yes")))
+     identical(code_defaults(x$item), x$want)))
+ok("the coded defaults read as words for a table",
+   identical(unname(defaults_labels(code_defaults(fx[[1]]$item))[c("Format", "Odd number of points")]), c("closed", "yes")))
 
 # R does not call an odd count a midpoint (DESIGN.md section 13): it reports the
 #   count, whether it is odd, and what the item itself says about a midpoint.
@@ -1532,7 +1486,7 @@ nav_rec <- function() {
 worker_ids <- purrr::map_chr(APP_MODELS$workers, "id")
 brief_inputs <- list(task = "attitudinal", research_question = "How much do adults trust the electoral commission?",
                      construct = "Trust in the commission", population = "Adults", modes = "web",
-                     output_language = "English", source_language = "English", n_items = 2,
+                     n_items = 2,
                      workers = worker_ids)
 set_inputs <- function(session, base, ...) do.call(session$setInputs, utils::modifyList(base, list(...)))
 
@@ -2085,7 +2039,7 @@ local({
 
 finding <- function(check, evidence, severity, ...)
   with_field(list(check = check, stage = "comprehension", evidence = evidence, problem = "A problem.",
-                  severity = severity, rewrite = "", rewrite_english = "", probe = ""), ...)
+                  severity = severity, rewrite = "", probe = ""), ...)
 rv_reply <- list(
   items = list(
     list(id = "Q1", findings = list(
@@ -2093,12 +2047,11 @@ rv_reply <- list(
       finding("not_a_check", "words that are nowhere in the questionnaire", 3))),
     list(id = 2, findings = list())),
   instrument = list(finding("context_and_order", "Q1 and Q2", 5)),
-  trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
   test_first = list(list(id = "Q1", method = "cognitive interview")),
   not_assessed = "Fit to objectives was not assessed.")
 
 vr <- reply_validator("review")
-ok("a review with its five fields passes: findings per question, instrument findings, TRAPD, test_first, not_assessed",
+ok("a review with its four fields passes: findings per question, instrument findings, test_first, not_assessed",
    is.na(problem_of(vr, rv_reply)) &&
      is.na(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list()))))))
 ok("a question's id may be a label or a number, and an empty list of findings is a question with none",
@@ -2154,7 +2107,7 @@ flags <- check_review(rv_reply, rv_form)
 ok("check_review gives one row per finding, questions and instrument alike, with the columns the flow needs",
    is.data.frame(flags) && nrow(flags) == 3L &&
      all(c("item", "scope", "check", "severity", "shown", "evidence", "evidence_found", "check_known", "stage",
-           "problem", "rewrite", "rewrite_english", "probe") %in% names(flags)) &&
+           "problem", "rewrite", "probe") %in% names(flags)) &&
      identical(flags$item, c("Q1", "Q1", "")) && identical(flags$scope, c("question", "question", "instrument")))
 ok("a quote that is in the text, and a check that was sent, are accepted; an invented quote and an unknown check are flagged, not dropped",
    isTRUE(flags$evidence_found[1]) && isTRUE(flags$check_known[1]) &&
@@ -2240,34 +2193,14 @@ local({
     ok("instrument-level findings are shown apart, naming the questions involved",
        grepl("The instrument as a whole", h, fixed = TRUE) && grepl("context_and_order", h, fixed = TRUE) &&
          grepl("Questions: Q1 and Q2", h, fixed = TRUE))
-    ok("an empty TRAPD block is not drawn; what to test first and what was not assessed are",
-       !grepl("TRAPD: what is still needed", h, fixed = TRUE) && grepl("What to test first", h, fixed = TRUE) &&
+    ok("what to test first and what was not assessed are drawn",
+       grepl("What to test first", h, fixed = TRUE) &&
          grepl("Question Q1: cognitive interview", h, fixed = TRUE) && grepl("What this review could not judge", h, fixed = TRUE) &&
          grepl("Fit to objectives was not assessed.", h, fixed = TRUE))
     ok("R's checks on the review are counted: the quote that is not in the text and the check that was not sent",
        grepl("checks on the review found", h, fixed = TRUE) && grepl("quote that is", h, fixed = TRUE) &&
          grepl("finding cites", h, fixed = TRUE))
     ok("the criteria that were applied are listed", grepl("Criteria that were applied", h, fixed = TRUE))
-  })
-})
-
-local({
-  st = review_state(with_field(forms$evaluate, source_language = "Spanish"))
-  trapd_reply = with_field(rv_reply, trapd = list(translation = "Two independent translations are needed.", review = "",
-                                                   adjudication = "An adjudicator must reconcile them.", pretesting = "", documentation = ""))
-  ra = rv_ask(trapd_reply)
-  shiny::testServer(mod_results_server,
-                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) ra$ask), {
-    session$flushReact()
-    approve_review(st)
-    session$flushReact()
-    h = html_of3(output$results)
-    ok("a review of translated text shows the TRAPD steps that are still needed, and only those",
-       grepl("TRAPD: what is still needed", h, fixed = TRUE) && grepl("Two independent translations are needed.", h, fixed = TRUE) &&
-         grepl("An adjudicator must reconcile them.", h, fixed = TRUE) &&
-         grepl("<strong>Translation</strong>", h, fixed = TRUE) && grepl("<strong>Adjudication</strong>", h, fixed = TRUE) &&
-         !grepl("<strong>Pretesting</strong>", h, fixed = TRUE) && !grepl("<strong>Review</strong>", h, fixed = TRUE) &&
-         grepl("functional_equivalence", paste(build_prompt(st$form)$user), fixed = TRUE))
   })
 })
 
@@ -2290,7 +2223,7 @@ local({
   st = review_state()
   ra = rv_ask(list(items = list(list(id = "Q1", findings = list(
     finding("one_thing", "local recycling", 6), finding("one_thing", "local recycling", 7)))),
-    instrument = list(), trapd = rv_reply$trapd, test_first = list("Q1"), not_assessed = ""))
+    instrument = list(), test_first = list("Q1"), not_assessed = ""))
   shiny::testServer(mod_results_server,
                     args = list(state = st, go = function(tab) NULL, make_ask = function(total) ra$ask), {
     session$flushReact()
@@ -2419,7 +2352,7 @@ ok("an item call has only its part of the text, the part sentence with its numbe
 ok("the instrument call has the whole questionnaire, only the four instrument checks, and the sentence that fills the other fields",
    grepl(long_text, ip_inst$user, fixed = TRUE) && identical(ck_lines(ip_inst$user), inst_ids) &&
      grepl("Review the questionnaire below as a whole", ip_inst$user, fixed = TRUE) &&
-     grepl("Fill only \"instrument\", \"trapd\", \"test_first\" and \"not_assessed\"", ip_inst$user, fixed = TRUE) &&
+     grepl("Fill only \"instrument\", \"test_first\" and \"not_assessed\"", ip_inst$user, fixed = TRUE) &&
      !grepl("\none_thing: ", ip_inst$user, fixed = TRUE))
 ok("the part sentences are fixed text from the registry, so the same part gives the same prompt and hash; the system prompt is the work step's",
    identical(ip1$hash, build_step_prompt(long_form, "items", part = plan[[2]])$hash) &&
@@ -2449,7 +2382,6 @@ parts_ask <- function(fail_at = 0L, st = new.env()) {
     obj = list(items = if (instrument) list() else purrr::map(ids, function(i) list(id = i, findings = list(
                  finding("one_thing", "Canned question", 6)))),
                instrument = if (instrument) list(finding("scale_consistency", "Q1, Q2", 5)) else list(),
-               trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
                test_first = list(), not_assessed = if (instrument) "Nothing else." else "")
     if (!is.null(validate)) validate(obj)
     list(obj = obj, raw = "{}", finish = "stop", tokens = c(input = 1000, output = 500, cached_input = 0), attempts = 1L)
@@ -2587,19 +2519,19 @@ out_models <- list(pm = fl_pm, workers = fl_workers)
 plain_of <- function(x) gsub("\\s+", " ", gsub("<[^>]+>", " ", paste(as.character(x), collapse = " ")))
 
 # A drafting run with the kind of items a model really writes: an introduction, parts, programming
-#   notes, and the English source wording, in French.
+#   notes.
 rich_item <- function(n, who) list(
   id = paste0("CONF", n), domain = "Trust in the commission",
-  intro = if (n == 1L) "Nous allons vous poser quelques questions sur la commission électorale nationale." else "",
-  stem = paste0("Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle ", who, ")"),
-  options = list("Beaucoup", "Assez", "Peu", "Pas du tout"), open_format = "",
-  parts = if (n == 2L) list(list(when = "if the answer is Peu or Pas du tout", stem = "Pourquoi ?", options = list())) else list(),
-  programming = if (n == 1L) "Randomize the order of options 1 to 4; keep Pas du tout last." else "",
-  decisions = list("Four points, no midpoint."), source_english = paste0("How much do you trust the national electoral commission? (", who, ")"),
-  notes = "Test the translation of Assez.")
+  intro = if (n == 1L) "We will ask you a few questions about the national electoral commission." else "",
+  stem = paste0("How much do you trust the national electoral commission? (model ", who, ")"),
+  options = list("A lot", "Somewhat", "A little", "Not at all"), open_format = "",
+  parts = if (n == 2L) list(list(when = "if the answer is A little or Not at all", stem = "Why?", options = list())) else list(),
+  programming = if (n == 1L) "Randomize the order of options 1 to 4; keep Not at all last." else "",
+  decisions = list("Four points, no midpoint."),
+  notes = "Test the wording of Somewhat.")
 rich_draft <- function(m) list(items = list(rich_item(1L, worker_no(m)), rich_item(2L, worker_no(m))),
                                not_covered = list(), missing_from_brief = list())
-fr_form <- clean_form(with_field(fl_form, output_language = "French", source_language = "English"))
+fr_form <- clean_form(with_field(fl_form, country = "Kenya"))
 fr_appraisal <- list(
   selected = list(list(domain = "trust", candidate = "A", id = "CONF1", why = "The plainest wording.", concerns = list(), suggestion = ""),
                   list(domain = "trust again", candidate = "C", id = "CONF2", why = "Neutral.", concerns = list(), suggestion = "")),
@@ -2619,14 +2551,14 @@ fr_html <- paste(as.character(fr_out$html), collapse = "")
 ok("a drafting output has the items of the set in its order, each with its id, introduction, stem, numbered options and programming notes",
    identical(fr_out$kind, "draft") && fr_out$n_items == 2L &&
      regexpr("CONF1", fr_txt, fixed = TRUE) < regexpr("CONF2", fr_txt, fixed = TRUE) &&
-     grepl("Nous allons vous poser", fr_txt, fixed = TRUE) && grepl("\n1. Beaucoup\n2. Assez\n3. Peu\n4. Pas du tout", fr_txt, fixed = TRUE) &&
-     grepl("[Randomize the order of options 1 to 4; keep Pas du tout last.]", fr_txt, fixed = TRUE) &&
-     grepl(paste0("(modèle ", match(fr_labels[["A"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
-     grepl(paste0("(modèle ", match(fr_labels[["C"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
-     !grepl(paste0("(modèle ", match(fr_labels[["B"]], fl_ids), ")"), fr_txt, fixed = TRUE))
+     grepl("We will ask you a few questions", fr_txt, fixed = TRUE) && grepl("\n1. A lot\n2. Somewhat\n3. A little\n4. Not at all", fr_txt, fixed = TRUE) &&
+     grepl("[Randomize the order of options 1 to 4; keep Not at all last.]", fr_txt, fixed = TRUE) &&
+     grepl(paste0("(model ", match(fr_labels[["A"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
+     grepl(paste0("(model ", match(fr_labels[["C"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
+     !grepl(paste0("(model ", match(fr_labels[["B"]], fl_ids), ")"), fr_txt, fixed = TRUE))
 ok("the HTML is plain: headings, paragraphs, an ordered list of options that Word keeps numbered, emphasis for the introduction, a block quote for a part",
-   grepl("<ol>", fr_html, fixed = TRUE) && grepl("<li>Beaucoup</li>", fr_html, fixed = TRUE) && grepl("<em>Nous allons", fr_html, fixed = TRUE) &&
-     grepl("<blockquote>", fr_html, fixed = TRUE) && grepl("Asked if the answer is Peu or Pas du tout: Pourquoi ?", plain_of(fr_html), fixed = TRUE) &&
+   grepl("<ol>", fr_html, fixed = TRUE) && grepl("<li>A lot</li>", fr_html, fixed = TRUE) && grepl("<em>We will ask", fr_html, fixed = TRUE) &&
+     grepl("<blockquote>", fr_html, fixed = TRUE) && grepl("Asked if the answer is A little or Not at all: Why?", plain_of(fr_html), fixed = TRUE) &&
      !grepl("<script|<style|style=|class=", fr_html) && !grepl("<table", fr_html, fixed = TRUE))
 ok("the HTML and the plain text say the same: every line of the text is in the HTML's text, in the same order",
    local({
@@ -2640,21 +2572,8 @@ ok("the HTML and the plain text say the same: every line of the text is in the H
        p = regexpr(l, substring(h, at + 1L), fixed = TRUE)[[1]]
        if (p < 0L) NA_integer_ else at + p - 1L + nchar(l)
      }, .init = 0L)
-     !is.na(end) && length(lines) > 30L
+     !is.na(end) && length(lines) > 20L
    }))
-ok("the output language not being English puts the English source wording in italics after each item",
-   grepl("English source: How much do you trust the national electoral commission?", fr_txt, fixed = TRUE) &&
-     grepl("<em>English source: How much", fr_html, fixed = TRUE) &&
-     !grepl("English source", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
-                                           set = list(set_entry("A", 1L, "Q1")),
-                                           models = out_models, time = out_time)$text, fixed = TRUE))
-ok("a language other than the source puts the TRAPD block above the disclosure block, and an English one has none",
-   grepl("TRAPD: what is still needed", fr_txt, fixed = TRUE) && grepl("first draft inside the Translation step only", fr_txt, fixed = TRUE) &&
-     grepl("Adjudication of disagreements by a named person is still needed.", fr_txt, fixed = TRUE) &&
-     regexpr("TRAPD: what is still needed", fr_txt, fixed = TRUE) < regexpr("Disclosure of the use of language models", fr_txt, fixed = TRUE) &&
-     !grepl("TRAPD", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
-                                  set = list(set_entry("A", 1L, "Q1")), models = out_models, time = out_time)$text, fixed = TRUE))
-
 reflex_versions <- function(files) purrr::map_chr(files, function(x) paste0(x, " ", read_reflex_file(x)$version))
 ok("the disclosure names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft",
    grepl("Date: 2026-11-12 09:30", fr_txt, fixed = TRUE) && grepl(paste0("Profile: ", APP_PROFILE), fr_txt, fixed = TRUE) &&
@@ -2694,12 +2613,12 @@ ok("the disclosure says which candidate each item of the set came from and the m
 ok("the output takes the set as the analyst left it: an edited item has its new wording, and the disclosure says which items were edited and which were swapped in by the analyst",
    local({
      st_set = c(fr_set[1], list(set_entry("B", 1L, "CONF1", "x", swapped = TRUE)))
-     ed = list(A_1 = list(stem = "An edited stem?", options = list(`2` = "Somewhat")))
+     ed = list(A_1 = list(stem = "An edited stem?", options = list(`2` = "Moderately")))
      o = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = st_set, edits = ed,
                       approved = fr_approved, models = out_models, time = out_time)$text
      plain = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = st_set,
                           approved = fr_approved, models = out_models, time = out_time)$text
-     grepl("An edited stem?", o, fixed = TRUE) && grepl("\n2. Somewhat\n", o, fixed = TRUE) && n_in3("Assez", o) == 1L &&
+     grepl("An edited stem?", o, fixed = TRUE) && grepl("\n2. Moderately\n", o, fixed = TRUE) && n_in3("Somewhat", o) == 1L &&
        grepl("Item 1 (CONF1): candidate A, written by", o, fixed = TRUE) && grepl("; edited by the analyst", o, fixed = TRUE) &&
        grepl("Item 2 (CONF1): candidate B, written by", o, fixed = TRUE) &&
        grepl("; swapped in by the analyst, not the reviewer's choice", o, fixed = TRUE) &&
@@ -2735,7 +2654,6 @@ ex_reply <- list(
       finding("no_presupposition", "words that are nowhere in the questionnaire", 5, problem = "Assumes an opinion."))),
     list(id = "Q3", findings = list())),
   instrument = list(finding("filters_and_routing", "Q2 and Q3", 5, problem = "Q3 applies only to library users.")),
-  trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
   test_first = list(list(id = "Q1", method = "cognitive interviews")),
   not_assessed = "Fit to objectives was not assessed: the brief names no analysis plan.")
 ex_ask <- rv_ask(ex_reply)
@@ -2765,19 +2683,9 @@ ok("the instrument findings, what to test first and what the review could not ju
      grepl("filters_and_routing (severity 5): Questions: Q2 and Q3.", ex_txt, fixed = TRUE) &&
      grepl("Question Q1: cognitive interviews", ex_txt, fixed = TRUE) && grepl("the brief names no analysis plan", ex_txt, fixed = TRUE) &&
      grepl(paste0("Review prompt (not edited): ", ex_rv$hash), ex_txt, fixed = TRUE) &&
-     !grepl("TRAPD", ex_txt, fixed = TRUE) && !grepl("worker", ex_txt, ignore.case = TRUE) &&
+     !grepl("worker", ex_txt, ignore.case = TRUE) &&
      endsWith(ex_txt, DISCLOSURE_LINE) &&
      grepl("review.*workers|Worker", ex_txt) == FALSE)
-ok("a review of translated text prints what its trapd field says is still needed, or the fixed lines when it said nothing",
-   local({
-     tf = with_field(ex_form, source_language = "Spanish")
-     said = with_field(ex_reply, trapd = list(translation = "Two independent translations are needed.", review = "",
-                                              adjudication = "", pretesting = "", documentation = ""))
-     a = build_output(tf, review = run_review(tf, fl_pm, ask = rv_ask(said)$ask), models = out_models, time = out_time)$text
-     b = build_output(tf, review = run_review(tf, fl_pm, ask = rv_ask(ex_reply)$ask), models = out_models, time = out_time)$text
-     grepl("Translation: Two independent translations are needed.", a, fixed = TRUE) && !grepl("Adjudication of disagreements", a, fixed = TRUE) &&
-       grepl("Adjudication of disagreements by a named person is still needed.", b, fixed = TRUE)
-   }))
 ok("a review in parts lists a prompt hash for each call, and one with a part missing says so at the top; no review gives a plain message",
    local({
      pa = parts_ask(fail_at = 2L)
@@ -2967,7 +2875,7 @@ ok("the frameworks section comes directly after 'What it is built on', opens wit
            trimws(gsub("\\s+", " ", paste(meth_lines[(fw_at + 1L):(fw_at + 6L)], collapse = " ")))) &&
      sum(meth_heads == "How it was tested") == 1L)
 ok("each framework is a diagram, then a summary of three to five sentences, then an italic line of references",
-   length(fw_sections) == 6L && purrr::every(fw_sections, function(s) {
+   length(fw_sections) == 5L && purrr::every(fw_sections, function(s) {
      body = s[-1][nzchar(trimws(s[-1]))]
      img = grepl("^!\\[.+\\]\\(fw_[a-z]+\\.svg\\)$", body[1])
      refs = grepl("^\\*[^*]+\\*$", body[length(body)])
@@ -2978,7 +2886,7 @@ ok("each framework is a diagram, then a summary of three to five sentences, then
 ok("every .svg in www/ is well-formed XML with a title and a description, and no script",
    local({
      svgs = list.files("www", pattern = "\\.svg$", full.names = TRUE)
-     length(svgs) >= 7L && purrr::every(svgs, function(p) {
+     length(svgs) >= 6L && purrr::every(svgs, function(p) {
        d = tryCatch(xml2::read_xml(p), error = function(e) NULL)
        !is.null(d) && identical(xml2::xml_name(d), "svg") &&
          length(xml2::xml_find_all(d, "//*[local-name()='title']")) == 1L &&
@@ -2992,16 +2900,15 @@ ok("every image named in start.md and methodology.md exists in www/",
        txt = paste(readLines(p, encoding = "UTF-8", warn = FALSE), collapse = "\n")
        sub("\\)$", "", sub("^!\\[[^]]*\\]\\(", "", regmatches(txt, gregexpr("!\\[[^]]*\\]\\([^)]+\\)", txt))[[1]]))
      }))
-     length(imgs) >= 7L && all(file.exists(file.path("www", imgs)))
+     length(imgs) >= 6L && all(file.exists(file.path("www", imgs)))
    }))
 
-# The Frameworks column of the reflex table: which of the six frameworks a reflex file's Source lines
+# The Frameworks column of the reflex table: which of the five frameworks a reflex file's Source lines
 #   name, by the rule below; none of them is "Session guidelines".
 fw_rules <- c("Total Survey Error" = "Groves|Total Survey Error",
               "Response model" = "Tourangeau, Rips and Rasinski|response-process|response process|four-stage",
               "Construct and decomposition" = "specification and operationalization error|Fig\\. 1\\.1",
               "Testing methods" = "testing methods|cognitive interviews",
-              "TRAPD" = "TRAPD",
               "Sensitive questions" = "Tourangeau and Yan|Yan 2021|writing sensitive questions|[(]sensitive questions")
 fw_of <- function(file) {
   src = sub("^- \\*\\*Source:\\*\\*[ \\t]*", "", grep("^- \\*\\*Source:\\*\\*", readLines(file.path("www", "reflexes", file), encoding = "UTF-8", warn = FALSE), value = TRUE))

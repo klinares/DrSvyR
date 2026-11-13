@@ -81,22 +81,6 @@ is, or as a simulated respondent, which is no substitute for real respondents.
 
 *Tourangeau et al. (2020): Table 3.1*
 
-### Translation: the TRAPD model
-
-![The TRAPD model: a source instrument is translated twice, the translations are reviewed, adjudication decides and a pretest can send the draft back, with documentation running through every step; for the 2026 General Social Survey a model draft replaced the independent human draft translations.](fw_trapd.svg)
-
-A translated questionnaire goes through translation, review, adjudication,
-pretesting and documentation (TRAPD). Two translations of the source instrument
-are made and reviewed together, adjudication decides between them, a pretest can
-send the draft back for another decision, and documentation runs through every
-step. Back translation used to be common but is no longer recommended. For the
-2026 General Social Survey, a language model draft replaced the independent
-human draft translations of the Spanish version, while human review and
-adjudication stayed as they were. A translation from QuestionR is therefore a
-first draft only.
-
-*Alisú Schoua-Glusberg and René Bautista, Translation Methodology for the Spanish Version of the 2026 General Social Survey, GSS Methodological Report #149, March 2026*
-
 ### Sensitive questions
 
 ![What makes a survey question sensitive: it is intrusive, it risks disclosing information, or it invokes social desirability; and sensitivity varies with where and how the question is asked, who answers it, culture and time.](fw_sensitive.svg)
@@ -122,9 +106,6 @@ itself matters.
   doubts.
 - **It does not invent facts about a country.** Local terms, units and
   sensitivities are flagged for someone who knows the setting.
-- **Other languages.** A version in another language is a first draft only.
-  It still needs review by fluent speakers, a decision on disagreements,
-  testing with respondents, and a record of what was decided.
 - **Everything is recorded.** Each output states the models used, the date
   and the instructions, so the work can be explained and repeated.
 
@@ -166,8 +147,8 @@ reflex files, so changing the model does not change the reflexes.
 | Behaviors | Recall, reference periods and counts | Drafting behavior questions | Session guidelines |
 | Sensitive topics | Questions people may refuse, or edit their answer to | Drafting sensitive questions | Sensitive questions |
 | Survey mode | Web, phone, in person, and more than one mode | Every request; only the modes you choose | Sensitive questions |
-| Other countries and languages | Local terms and sensitivities, and translation by the TRAPD steps: translate, review, adjudicate, pretest, document | When you name a country or a language other than English | Response model; TRAPD; Sensitive questions |
-| Questionnaire review | Reviewing a questionnaire question by question and as a whole | Reviewing a questionnaire | Testing methods; TRAPD |
+| Country and culture | Local terms, sensitivities and context | When you name a country | Response model; Sensitive questions |
+| Questionnaire review | Reviewing a questionnaire question by question and as a whole | Reviewing a questionnaire | Testing methods |
 | Brief check | What a designer would still need to know from your brief | When you ask for a brief check | Session guidelines |
 | Reviewer | How the reviewing model checks the drafts and recommends one set | After the drafts come back | Session guidelines |
 

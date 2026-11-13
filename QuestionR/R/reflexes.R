@@ -54,26 +54,24 @@ TASKS <- list(
     files = c("core.md", "generate.md", "attitudinal.md", "mode.md", "cross_cultural.md"),
     ask = "Write exactly %s for the brief above, to be combined into one attitude scale.",
     fields = c("research_question", "construct", "population", "country", "modes",
-               "output_language", "source_language", "n_items", "keep_items", "other")),
+               "n_items", "keep_items", "other")),
   behavioral = list(
     label = "Behavioral items", kind = "draft",
     files = c("core.md", "generate.md", "behavioral.md", "mode.md", "cross_cultural.md"),
     ask = "Write exactly %s for the brief above, each measuring a behaviour or an experience.",
     fields = c("research_question", "construct", "population", "country", "modes",
-               "output_language", "source_language", "n_items", "reference_period",
-               "keep_items", "other")),
+               "n_items", "reference_period", "keep_items", "other")),
   sensitive = list(
     label = "Sensitive topic items", kind = "draft",
     files = c("core.md", "generate.md", "sensitive.md", "mode.md", "cross_cultural.md"),
     ask = "Write exactly %s for the brief above, each on a topic where respondents may refuse or edit their answer.",
     fields = c("research_question", "construct", "population", "country", "modes",
-               "output_language", "source_language", "n_items", "keep_items", "other")),
+               "n_items", "keep_items", "other")),
   evaluate = list(
     label = "Evaluate a questionnaire", kind = "review",
     files = c("core.md", "evaluate.md", "mode.md", "cross_cultural.md"),
     ask = "Review the questionnaire below as an expert reviewer, item by item and then as a whole.",
-    fields = c("research_question", "population", "country", "modes", "output_language",
-               "source_language", "other", "questionnaire"),
+    fields = c("research_question", "population", "country", "modes", "other", "questionnaire"),
     # A questionnaire that does not fit one call is reviewed in parts (DESIGN.md
     #   section 14): one item call per part, then one instrument call on the whole
     #   text. instrument_checks are the checks only the instrument call carries; an
@@ -85,14 +83,14 @@ TASKS <- list(
       "Review part %d of %d of a questionnaire as an expert reviewer, question by question.",
       "Only the questions of this part are pasted below.",
       "Fill only \"items\" in your reply, and give \"instrument\" and \"test_first\" as empty lists,",
-      "\"trapd\" with all five keys as empty strings and \"not_assessed\" as an empty string,",
+      "and \"not_assessed\" as an empty string,",
       "because the questionnaire as a whole is reviewed in a separate call.",
       "The first block of this part is block number %d of the whole questionnaire;",
       "a question that has no number of its own takes the number of its block as its id,",
       "counting blocks from 1 across the whole questionnaire."),
     ask_instrument = paste(
       "Review the questionnaire below as a whole, as an expert reviewer.",
-      "Fill only \"instrument\", \"trapd\", \"test_first\" and \"not_assessed\" in your reply,",
+      "Fill only \"instrument\", \"test_first\" and \"not_assessed\" in your reply,",
       "and give \"items\" as an empty list, because each question was reviewed in a separate call.",
       "Judge only what the CHECKLIST below asks about the instrument as a whole,",
       "and name the questions involved, by their ids, in the evidence of each finding.")))
@@ -287,7 +285,7 @@ check_reflex_files <- function(dir = REFLEXES_DIR) {
 
 # The fields of the form, exactly (DESIGN.md section 5).
 FORM_FIELDS <- c("task", "research_question", "construct", "population",
-                 "country", "modes", "output_language", "source_language",
+                 "country", "modes",
                  "n_items", "reference_period", "keep_items", "other",
                  "questionnaire", "revision")
 
@@ -302,8 +300,6 @@ PREPARE_LABELS <- c(research_question = "Research question",
                     population = "Target population",
                     country = "Country",
                     modes = "Survey mode",
-                    output_language = "Output language",
-                    source_language = "Source language",
                     reference_period = "Reference period",
                     keep_items = "Existing items to keep",
                     other = "Other details")
@@ -322,13 +318,7 @@ form_text <- function(x) {
   gsub("\r\n?", "\n", trimws(paste(x[!is.na(x)], collapse = ", ")))
 }
 
-is_english <- function(x) tolower(trimws(x)) %in% c("english", "en", "eng")
-
-# A language as it is compared: without regard to case, and en and eng are
-#   English. Two languages are the same when their keys are.
-lang_key <- function(x) ifelse(is_english(x), "english", tolower(trimws(x)))
-
-# The form as build_prompt() uses it: all fourteen fields, each cleaned, with
+# The form as build_prompt() uses it: all twelve fields, each cleaned, with
 #   the checks a prompt cannot do without. Nothing is guessed; a form that
 #   cannot be turned into a prompt stops here, saying why.
 clean_form <- function(form) {
@@ -385,12 +375,9 @@ clean_form <- function(form) {
 
 # ---- which files a form calls for ------------------------------------------------
 
-# A country is given, or the output language or the source language is not
-#   English (DESIGN.md section 4). A blank language is English.
-needs_cross_cultural <- function(f) {
-  langs = c(f$output_language, f$source_language)
-  nzchar(f$country) || any(nzchar(langs) & !is_english(langs))
-}
+# A country is given (DESIGN.md section 4). Questions are written in English, so a
+#   language never calls for the file.
+needs_cross_cultural <- function(f) nzchar(f$country)
 
 # mode.md keeps any_mode, the reflexes for the modes chosen, and mixed_mode when
 #   more than one is chosen. The file's own order is kept.
@@ -441,20 +428,12 @@ assemble_system <- function(rfiles) {
          paste0("- ", prohibitions, collapse = "\n"))
 }
 
-# One line per filled field, in the fixed order, "Label: value". The output
-#   language is always printed, as English when the field is blank, because the
-#   output format refers to it. The source language is printed only when it is
-#   filled and differs from the output language (DESIGN.md section 5).
+# One line per filled field, in the fixed order, "Label: value" (DESIGN.md section 5).
 prepare_lines <- function(f) {
-  output_language = if (nzchar(f$output_language)) f$output_language else "English"
-  source_differs = nzchar(f$source_language) &&
-    lang_key(f$source_language) != lang_key(output_language)
   values = list(
     research_question = f$research_question, construct = f$construct,
     population = f$population, country = f$country,
     modes = paste(MODE_LABELS[f$modes], collapse = ", "),
-    output_language = output_language,
-    source_language = if (source_differs) f$source_language else "",
     reference_period = f$reference_period, keep_items = f$keep_items,
     other = f$other)
   lines = purrr::imap_chr(PREPARE_LABELS, function(label, field)
@@ -609,12 +588,10 @@ checklist_block <- function(checklist)
 #   the same shape.
 APPRAISAL_ITEM_DEFAULTS <- list(
   id = "", domain = "", intro = "", stem = "", options = list(), open_format = "",
-  parts = list(), programming = "", decisions = list(), source_english = "")
+  parts = list(), programming = "", decisions = list())
 
-appraisal_item <- function(it) {
-  out = purrr::imap(APPRAISAL_ITEM_DEFAULTS, function(d, k) it[[k]] %||% d)
-  out[names(out) != "source_english" | nzchar(paste(unlist(out$source_english), collapse = ""))]
-}
+appraisal_item <- function(it)
+  purrr::imap(APPRAISAL_ITEM_DEFAULTS, function(d, k) it[[k]] %||% d)
 
 # CANDIDATES: one JSON object per line, the letter, the domains it left out, and
 #   its items. candidates is a list of parsed drafts named by their letter. No

@@ -58,7 +58,7 @@ Disclosure of the use of language models
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
 - Reflex files and versions: core.md 0.3; evaluate.md 0.3; mode.md 0.1
-- Review prompt (not edited): 12a1c9c921d2f72ef146cac783dcc63eb1bc806364a9694977d51a222421f4f7
+- Review prompt (not edited): 1fd641d9da89425dce97e88ee9160fa15bfaaebf6213b04e4329f1bead0bc042
 
 Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
 

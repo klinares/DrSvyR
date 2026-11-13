@@ -45,12 +45,11 @@ guessed.
 
 `mode.md` is filtered by R before sending: `any_mode`, the reflexes whose id
 is a mode chosen in the form, and `mixed_mode` when more than one is chosen.
-`cross_cultural.md` is sent whole whenever a country is given, or the output
-language or the source language is not English.
+`cross_cultural.md` is sent whole whenever a country is given.
 
 The user message has three labelled blocks in Buskirk, Eck and Timbrook's
 order: PREPARE (the brief: research question, construct, population, country,
-mode, output language, anything else), ASK (the task and how many items),
+mode, anything else), ASK (the task and how many items),
 CHARACTERIZE (the Output format section of `generate.md` or `evaluate.md`).
 For Evaluate two blocks sit between ASK and CHARACTERIZE: QUESTIONNAIRE (as
 pasted) and CHECKLIST (one `id: question` line per Check in force). Drafting

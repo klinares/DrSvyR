@@ -39,7 +39,7 @@ REPLY_SCHEMAS <- list(
   # A review of pasted text (the Evaluate task). Findings sit one level further
   #   down than `each` reaches, so a rule reads them.
   review = list(
-    fields = c(items = "list", instrument = "list", trapd = "list", test_first = "list",
+    fields = c(items = "list", instrument = "list", test_first = "list",
                not_assessed = "string"),
     each = list(items = c(id = "id", findings = "list")),
     rules = c("finding_entries")))
@@ -173,7 +173,7 @@ reply_validator <- function(format, ...) {
 
 ITEM_DEFAULTS <- list(
   id = "", domain = "", intro = "", stem = "", options = list(), open_format = "",
-  parts = list(), programming = "", decisions = list(), source_english = "", notes = "")
+  parts = list(), programming = "", decisions = list(), notes = "")
 
 # One item with every field present, so a screen never meets a missing one. A null
 #   becomes the default as well as an absent field.
@@ -183,10 +183,8 @@ full_item <- function(it)
 
 # ---- coded format defaults (DESIGN.md section 7) -------------------------------------
 
-# Pattern lists, one per output language, English first. A language that has no
-#   list is "not coded": the cell says so, instead of guessing from words R
-#   cannot read. Adding a language is one entry in each. Matched without regard
-#   to case, with a curly apostrophe read as a straight one.
+# Pattern lists for English, the one language questions are written in. Matched
+#   without regard to case, with a curly apostrophe read as a straight one.
 DONT_KNOW_PATTERNS <- list(
   english = c("don't know", "do not know", "\\bdk\\b", "no opinion", "not sure",
               "unsure", "can't (say|choose|decide)", "cannot (say|choose|decide)",
@@ -201,7 +199,7 @@ REFERENCE_PERIOD_PATTERNS <- list(
 
 # What an item's own `decisions` say about labelling every point. Self-reported:
 #   the model wrote it, and R does not check it against the options. The
-#   decisions are always written in English, whatever the output language.
+#   decisions are written in English.
 LABEL_NO_PATTERNS <- c("end ?points?[^.;]{0,25}only", "only[^.;]{0,15}end ?points?",
                        "only the (end|first|last)", "numeric(al)? only", "numbers only",
                        "unlabell?ed", "not (all )?labell?ed", "no (verbal )?labels?")
@@ -234,9 +232,9 @@ plain_apostrophe <- function(x) gsub("[\u2018\u2019]", "'", x)
 #                string or one entry, as a model writes when it runs them all
 #                together) or "none"
 # NA means "not coded", and is shown as that.
-code_defaults <- function(item, output_language = "English") {
+code_defaults <- function(item) {
   it = full_item(item)
-  lang = lang_key(if (form_blank(output_language)) "English" else output_language)
+  lang = "english"
   options = plain_apostrophe(as.character(unlist(it$options)))
   closed = length(options) > 0L
   dk_patterns = DONT_KNOW_PATTERNS[[lang]]
@@ -415,7 +413,7 @@ evidence_quote <- function(x)
 #                   finding, whose evidence is a list of question ids). One that
 #                   does not is flagged, not dropped.
 #   check_known     the check is an id in the CHECKLIST that was sent
-#   stage, problem, rewrite, rewrite_english, probe   as written
+#   stage, problem, rewrite, probe   as written
 check_review <- function(reply, form) {
   f = clean_form(form)
   sent = names(build_checklist(f))
@@ -431,8 +429,7 @@ check_review <- function(reply, form) {
          evidence = as_text(x$evidence),
          evidence_found = if (scope == "question") found(x$evidence) else NA,
          check_known = as_text(x$check) %in% sent, stage = as_text(x$stage),
-         problem = as_text(x$problem), rewrite = as_text(x$rewrite),
-         rewrite_english = as_text(x$rewrite_english), probe = as_text(x$probe))
+         problem = as_text(x$problem), rewrite = as_text(x$rewrite), probe = as_text(x$probe))
   rows = c(
     purrr::list_flatten(purrr::imap(unname(reply$items %||% list()), function(it, i)
       purrr::map(it$findings %||% list(), function(x) one(x, as_text(it$id), "question", i)))),
@@ -444,7 +441,6 @@ check_review <- function(reply, form) {
                  evidence_found = purrr::map_lgl(rows, "evidence_found"),
                  check_known = purrr::map_lgl(rows, "check_known"), stage = purrr::map_chr(rows, "stage"),
                  problem = purrr::map_chr(rows, "problem"), rewrite = purrr::map_chr(rows, "rewrite"),
-                 rewrite_english = purrr::map_chr(rows, "rewrite_english"),
                  probe = purrr::map_chr(rows, "probe"), stringsAsFactors = FALSE)
   d$shown = is.na(d$severity) | d$severity >= SEVERITY_SHOWN
   d
