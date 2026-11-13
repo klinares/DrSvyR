@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" role="img" aria-labelledby="t d" font-family="Lato, 'Segoe UI', system-ui, -apple-system, sans-serif">
+<title id="t">TRAPD: the Translation, Review, Adjudication, Pretesting, and Documentation model</title>
+<desc id="d">A source instrument is translated twice, independently (Translation 1 and Translation 2). Both go to review. Review and adjudication pass back and forth, and adjudication either sends the draft to a pretest, which returns to adjudication, or releases the target instrument. Documentation runs alongside every step. For the new and revised 2026 General Social Survey items, a Gemini draft replaced the independent human draft translations; the rest of TRAPD, including human review and adjudication, was unchanged.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2c3e50"/></marker></defs>
+<rect x="0.5" y="0.5" width="999" height="559" rx="12" fill="#ffffff" stroke="#dee2e6"/>
+<text x="500" y="30" text-anchor="middle" font-size="15px" font-weight="700" fill="#2c3e50">TRAPD: Translation, Review, Adjudication, Pretesting, and Documentation Model</text>
+
+<g transform="translate(150,0)">
+<g fill="#ffffff" stroke="#2c3e50" stroke-width="1.5">
+<rect x="330" y="60" width="180" height="50" rx="4"/>
+<rect x="210" y="150" width="190" height="46" rx="4" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2.5"/>
+<rect x="440" y="150" width="190" height="46" rx="4" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2.5"/>
+<rect x="320" y="236" width="200" height="40" rx="4"/>
+<path d="M420,312 L510,344 L420,376 L330,344 Z"/>
+<rect x="580" y="326" width="120" height="38" rx="4"/>
+<rect x="330" y="424" width="180" height="50" rx="4"/>
+</g>
+<g font-size="14px" fill="#2c3e50" text-anchor="middle">
+<text x="420" y="82">Source</text><text x="420" y="100">Instrument</text>
+<text x="305" y="178">Translation 1</text>
+<text x="535" y="178">Translation 2</text>
+<text x="420" y="261">Review</text>
+<text x="420" y="349">Adjudication</text>
+<text x="640" y="350">Pretest</text>
+<text x="420" y="446">Target</text><text x="420" y="464">Instrument</text>
+</g>
+
+<g stroke="#2c3e50" stroke-width="2" fill="none">
+<path d="M420,110 L420,130 L305,130 L305,148" marker-end="url(#a)"/>
+<path d="M420,130 L535,130 L535,148" marker-end="url(#a)"/>
+<path d="M305,196 L305,256 L318,256" marker-end="url(#a)"/>
+<path d="M535,196 L535,256 L522,256" marker-end="url(#a)"/>
+<line x1="420" y1="278" x2="420" y2="310" marker-start="url(#a)" marker-end="url(#a)"/>
+<path d="M512,344 L578,344" marker-start="url(#a)" marker-end="url(#a)"/>
+<path d="M418,378 L418,422" marker-end="url(#a)"/>
+<path d="M370,358 L300,358 L300,344 L328,344" marker-end="url(#a)"/>
+</g>
+
+<line x1="800" y1="70" x2="800" y2="470" stroke="#2c3e50" stroke-width="2" marker-start="url(#a)" marker-end="url(#a)"/>
+<text transform="translate(776,270) rotate(-90)" text-anchor="middle" font-size="13px" letter-spacing="6" font-weight="700" fill="#2c3e50">DOCUMENTATION</text>
+
+</g>
+<g font-size="12.5px" fill="#2c3e50">
+<text x="30" y="128" font-weight="700" fill="#0f8f75">2026 GSS (Spanish version):</text>
+<text x="30" y="146">a Gemini draft replaced the</text>
+<text x="30" y="162">independent human draft</text>
+<text x="30" y="178">translations; the rest of TRAPD,</text>
+<text x="30" y="194">including human review and</text>
+<text x="30" y="210">adjudication, was unchanged.</text>
+</g>
+<text x="30" y="530" font-size="13px" font-weight="700" fill="#0f8f75">LLMs are a useful first drafter, but not a substitute for translators.</text>
+</svg>

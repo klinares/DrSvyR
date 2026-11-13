@@ -1,0 +1,89 @@
+Q1. Are you aged 18 or over? This survey is only for adults.
+Yes / No (end of questionnaire)
+
+Q2. In which type of home do you live at the moment? Please choose the one that fits best.
+Detached house / Semi-detached house / Terraced house / Flat or maisonette / Caravan or houseboat / Other (please say what)
+
+Q3. Do you own your home or do you rent it? Please choose one answer only.
+Own outright / Own with a mortgage or loan / Rent from a private landlord / Rent from a council or housing association / Live rent free / Other
+
+Q4. How many people live in your household, including you? Count children and babies too.
+1 / 2 / 3 / 4 / 5 / 6 or more
+
+Q5. All things considered, how satisfied or dissatisfied are you with the heating in your home?
+Very satisfied / Fairly satisfied / Neither satisfied nor dissatisfied / Fairly dissatisfied / Very dissatisfied
+
+Q6. Thinking about last winter, how often was your home too cold for you to be comfortable?
+Never / Rarely / Sometimes / Often / Always
+
+Q7. What is the main fuel you use to heat your home? If you use more than one, choose the one you use most.
+Mains gas / Electricity / Heating oil / Liquefied petroleum gas (LPG) / Wood or coal / Heat network / Other / Don't know
+
+Q8. Has your household cut back on heating to save money? Please include times when you kept the heating off on purpose.
+Yes / No
+
+Q9. About how much did your household spend on gas and electricity last month? Please give the amount in pounds, and include standing charges.
+Enter a number: ______
+
+Q10. Do you think the government is doing enough to help households with their energy bills?
+Definitely / Probably / Probably not / Definitely not
+
+Q11. Obviously, high energy bills are caused by greedy energy companies. How much do you agree or disagree with this statement?
+Strongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree
+
+Q12. Have you made any changes to your home to save energy, such as loft insulation, double glazing or a smart thermostat, and did these changes lower your bills?
+Yes / No
+
+Q13. How likely are you to install solar panels on your home in the next five years? Please answer even if you rent.
+Very likely / Fairly likely / Fairly unlikely / Very unlikely
+
+Q14. Now some questions about travel. In a normal week, on how many days do you travel to your place of work?
+0 / 1 / 2 / 3 / 4 / 5 / 6 / 7
+
+Q15. How do you usually travel to your place of work? Choose the way you use for the longest part of the journey.
+Car or van / Bus or coach / Train or tram / Bicycle / Walk / Motorcycle / Other
+
+Q16. How long does your journey to work usually take, door to door? Please give your answer in minutes.
+Enter a number: ______
+
+Q17. How satisfied are you with the availability and reliability of local bus services?
+Very dissatisfied / Fairly dissatisfied / Neither / Fairly satisfied / Very satisfied
+
+Q18. How safe do you feel cycling on the roads in your neighbourhood? If you never cycle, please choose the last answer.
+Very safe / Fairly safe / Fairly unsafe / Very unsafe / I do not cycle
+
+Q19. In the past 7 days, on how many days did you walk for at least 30 minutes in one go, for any reason?
+Enter a number from 0 to 7: ______
+
+Q20. Do you have a car or van that you can use whenever you need it?
+Yes / No (go to Q24)
+
+Q21. Roughly how many miles did you drive last year in total? Think of all the journeys you made, for work or otherwise.
+Enter a number: ______
+
+Q22. How old is the car or van you use most often? Give the age of the vehicle, not the year of the model.
+Less than 3 years / 3 to 5 years / 6 to 10 years / More than 10 years
+
+Q23. Would you consider switching to an electric car or van when you next change your vehicle?
+Yes, definitely / Yes, maybe / No / Not sure
+
+Q24. Which of the following would encourage you to use public transport more often than you do now?
+Tick all that apply: Cheaper fares / More frequent services / More direct routes / Cleaner vehicles / Safer stops and stations / Nothing would
+
+Q25. How worried are you about climate change, if at all?
+Very worried / Somewhat worried / Not very worried / Not at all worried
+
+Q26. In the last month, how often did you recycle your household waste, such as paper, glass, plastic and cans?
+Every week / Most weeks / Occasionally / Never
+
+Q27. What is your age in years, at your last birthday?
+Enter a number: ______
+
+Q28. What was your total household income last year before tax and other deductions, from all sources?
+Under £15,000 / £15,000 to £29,999 / £30,000 to £49,999 / £50,000 to £79,999 / £80,000 or more / Prefer not to say
+
+Q29. Which of these best describes what you were doing last week? Please choose the one that best describes your main activity.
+In paid work / Self-employed / Unemployed and looking for work / Retired / Student / Looking after the home or family / Long-term sick or disabled / Other
+
+Q30. Overall, how would you rate your quality of life at the moment, taking everything into account?
+Excellent / Good / Fair / Poor / Very poor

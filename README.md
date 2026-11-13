@@ -15,6 +15,8 @@ app computes is presented as a decision the analyst did not make.
 | App | What it does |
 |---|---|
 | [`svysegment`](svysegment/) | Finds respondent types in a battery of survey questions with a weighted latent class model, and compares them across groups with design-based intervals. |
+| [`QuestionR`](QuestionR/) | Helps a public opinion analyst draft survey items and review a questionnaire. Every model call is steered by text files grounded in survey methodology, and every output is labelled a first draft or an expert-review appraisal, not a pretest. In development (see its `STATUS.md`). |
+| [`inteRn`](inteRn/) | Not an app: an AI coding assistant for RStudio, built by a survey methodologist for survey methodologists. It sees the names, types and labels of the objects in your R session, never their values, and asks before it runs code or writes a file. |
 
 ## Running an app
 
@@ -44,6 +46,8 @@ DrSvyR/
   .gitignore       shared by every app
   images/          the repository's own images (this README)
   svysegment/      one app: app.R, R/, www/, data/, README.md
+  QuestionR/       one app: app.R, R/, www/ (skills/, logo/), tests/ (home only), README.md
+  inteRn/          not an app: inteRn.R, install.R, system.md, www/, tests/, README.md
 ```
 
 ## Adding an app

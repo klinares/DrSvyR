@@ -1,0 +1,24 @@
+QuestionR live check (tests/llm_check.R)
+Run: 2026-11-11 21:05 | profile: home | ellmer 0.4.2
+Draft prompt hash:  1f303eea542179e4ccaeae36146fa437b68cfedbc40e99a2c79420192b6b48b3
+Review prompt hash: 907cea17ade3998b18d48d0974ad2c5a381fb3f84737962a8167cd0c6a8948a7
+
+[ OK ] Project manager | claude-sonnet-5-5 | connection check | 1.3 s | 1 call | finish: -
+      reply (first 300): OK
+[ OK ] Worker 1 | google/gemma-4-31b-it | connection check | 0.5 s | 1 call | finish: -
+      reply (first 300): OK
+[ OK ] Worker 2 | meta-llama/llama-4-maverick | connection check | 0.5 s | 1 call | finish: -
+      reply (first 300): OK
+[ OK ] Worker 3 | openai/gpt-6-luna | connection check | 0.9 s | 1 call | finish: -
+      reply (first 300): OK
+[ OK ] Worker 1 | google/gemma-4-31b-it | draft, 2 items | 8.1 s | 1 call | finish: success | tokens in 2889 out 535
+      reply (first 300): ```json { "items": [ { "id": "NEC_1", "domain": "competence and honesty (general trust)", "intro": "", "stem": "How much trust do you have in the national electoral commission?", "options": [ "A great deal of trust", "A lot of trust", "A moderate amount of trust", "A little trust", "No trust at all"
+[ OK ] Worker 2 | meta-llama/llama-4-maverick | draft, 2 items | 5.7 s | 1 call | finish: success | tokens in 2784 out 454
+      reply (first 300): ```json { "items": [ { "id": "Tnec1", "domain": "fairness", "intro": "", "stem": "How confident are you that the national electoral commission counts votes fairly?", "options": ["Not at all confident", "Not very confident", "Somewhat confident", "Very confident", "Extremely confident"], "open_format
+[ OK ] Worker 3 | openai/gpt-6-luna | draft, 2 items | 32.1 s | 1 call | finish: success | tokens in 2779 out 2740
+      reply (first 300): { "items": [ { "id": "TR1", "domain": "Trust in accurate vote counting", "intro": "", "stem": "How much do you trust the national electoral commission to count votes accurately?", "options": [ "No trust at all", "A little trust", "A moderate amount of trust", "A lot of trust", "A great deal of trust
+[ OK ] Project manager | claude-sonnet-5-5 | small review | 47.4 s | 1 call | finish: success | tokens in 4155 out 6241
+      findings: 6; check ids not in the CHECKLIST sent: 0
+      reply (first 300): {"items":[{"id":"Q1","findings":[{"check":"one_thing","stage":"judgment","evidence":"'the recycling services and street cleaning provided by your local council'","problem":"Two different services are joined by 'and' under one rating. A respondent who is happy with recycling but unhappy with street c
+
+ALL GREEN: TRUE  (8 of 8 calls)

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 330" role="img" aria-labelledby="t d" font-family="Lato, 'Segoe UI', system-ui, -apple-system, sans-serif">
+<title id="t">Where LLMs fit into the testing methods</title>
+<desc id="d">Three classes of methods for testing survey questions. Expert methods (expert review, QAS, QUAID, SQP) are quick and inexpensive but have no actual respondents; an LLM comes in as expert reviewer. Lab-based methods (focus groups, cognitive interviews, eye-tracking) use actual respondents and are expensive; an LLM comes in as a simulated respondent in think-aloud interviews. Field-based methods (web probing, experiments, behavior coding, reliability and validity) collect large data from actual participants and are resource heavy; simulation has been attempted (synthetic split-ballots), but is no substitute for real respondents. Methods find partly different problems, so combine several when possible.</desc>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7b8a8b"/></marker></defs>
+<rect x="0.5" y="0.5" width="999" height="329" rx="12" fill="#ffffff" stroke="#dee2e6"/>
+<text x="500" y="28" text-anchor="middle" font-size="15px" font-weight="700" fill="#2c3e50">Where LLMs fit into the testing methods</text>
+
+<rect x="30" y="48" width="300" height="130" rx="10" fill="#2c3e50"/>
+<text x="180" y="76" text-anchor="middle" font-size="16px" font-weight="700" fill="#ffffff">Expert methods</text>
+<text x="180" y="100" text-anchor="middle" font-size="12.5px" fill="#ffffff">Expert review, QAS, QUAID, SQP</text>
+<text x="180" y="132" text-anchor="middle" font-size="12.5px" fill="#ffffff">Quick and inexpensive;</text>
+<text x="180" y="150" text-anchor="middle" font-size="12.5px" fill="#ffffff">no actual respondents</text>
+
+<rect x="350" y="48" width="300" height="130" rx="10" fill="#f8f9fa" stroke="#ced4da" stroke-width="1.5"/>
+<text x="500" y="76" text-anchor="middle" font-size="16px" font-weight="700" fill="#2c3e50">Lab-based methods</text>
+<text x="500" y="100" text-anchor="middle" font-size="12.5px" fill="#5a6a6b">Focus groups, cognitive interviews,</text>
+<text x="500" y="116" text-anchor="middle" font-size="12.5px" fill="#5a6a6b">eye-tracking</text>
+<text x="500" y="146" text-anchor="middle" font-size="12.5px" fill="#5a6a6b">Actual respondents; expensive</text>
+
+<rect x="670" y="48" width="300" height="130" rx="10" fill="#f8f9fa" stroke="#ced4da" stroke-width="1.5"/>
+<text x="820" y="76" text-anchor="middle" font-size="16px" font-weight="700" fill="#2c3e50">Field-based methods</text>
+<text x="820" y="100" text-anchor="middle" font-size="12.5px" fill="#5a6a6b">Web probing, experiments, behavior coding,</text>
+<text x="820" y="116" text-anchor="middle" font-size="12.5px" fill="#5a6a6b">reliability and validity</text>
+<text x="820" y="146" text-anchor="middle" font-size="12.5px" fill="#5a6a6b">Large data collection from actual</text>
+<text x="820" y="162" text-anchor="middle" font-size="12.5px" fill="#5a6a6b">participants; resource heavy</text>
+
+<g stroke="#7b8a8b" stroke-width="2" fill="none">
+<line x1="180" y1="180" x2="180" y2="208" marker-end="url(#a)"/>
+<line x1="500" y1="180" x2="500" y2="208" marker-end="url(#a)"/>
+<line x1="820" y1="180" x2="820" y2="208" marker-end="url(#a)"/>
+</g>
+
+<rect x="30" y="210" width="300" height="70" rx="10" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2"/>
+<text x="180" y="250" text-anchor="middle" font-size="13px" font-weight="700" fill="#2c3e50">LLM as expert reviewer</text>
+<rect x="350" y="210" width="300" height="70" rx="10" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2"/>
+<text x="500" y="237" text-anchor="middle" font-size="13px" font-weight="700" fill="#2c3e50">LLM as simulated respondent in</text>
+<text x="500" y="255" text-anchor="middle" font-size="13px" font-weight="700" fill="#2c3e50">think-aloud interviews</text>
+<rect x="670" y="210" width="300" height="70" rx="10" fill="#e8f8f5" stroke="#18bc9c" stroke-width="2"/>
+<text x="820" y="229" text-anchor="middle" font-size="12.5px" font-weight="700" fill="#2c3e50">Simulation attempted (synthetic split-</text>
+<text x="820" y="246" text-anchor="middle" font-size="12.5px" font-weight="700" fill="#2c3e50">ballots), but no substitute for real</text>
+<text x="820" y="263" text-anchor="middle" font-size="12.5px" font-weight="700" fill="#2c3e50">respondents</text>
+
+<text x="30" y="306" font-size="13px" font-weight="700" fill="#0f8f75">Methods find partly different problems, so combine several when possible.</text>
+</svg>
