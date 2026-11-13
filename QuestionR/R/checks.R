@@ -394,7 +394,7 @@ review_plan <- function(text, max_chars) {
 #   to copy words exactly sometimes wraps them in quotation marks, so a quote
 #   around the whole of the evidence is dropped (evidence_quote()).
 normalise_quote <- function(x)
-  gsub("\\s+", " ", tolower(trimws(plain_apostrophe(gsub("[“”]", "\"", x)))))
+  gsub("\\s+", " ", tolower(trimws(plain_apostrophe(gsub("[\u201c\u201d]", "\"", x)))))
 
 # The evidence as it is looked for in the text: normalised, then without quotation
 #   marks at either end. An ellipsis is not removed, so evidence that has one is

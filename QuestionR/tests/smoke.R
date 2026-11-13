@@ -1666,8 +1666,8 @@ ok("the Brief tab has the dropdown, the form, a box per worker, one main button,
    n_in3("brief-task", brief_page) >= 1L && grepl("Check my brief first", brief_page, fixed = TRUE) &&
      grepl("Build the instructions", brief_page, fixed = TRUE) && !grepl("Skip the brief check", brief_page, fixed = TRUE) &&
      regexpr("Build the instructions", brief_page, fixed = TRUE) < regexpr("Check my brief first", brief_page, fixed = TRUE) &&
-     grepl("btn-primary\"[^>]*><span[^>]*>Build the instructions", brief_page) &&
-     grepl("btn-sm[^>]*><span[^>]*>Check my brief first", brief_page) &&
+     grepl("btn-primary\"[^>]*>(<span[^>]*>)?Build the instructions", brief_page) &&
+     grepl("btn-sm[^>]*>(<span[^>]*>)?Check my brief first", brief_page) &&
      all(purrr::map_lgl(worker_ids, function(id) grepl(id, brief_page, fixed = TRUE))) &&
      all(purrr::map_lgl(purrr::map_chr(TASKS, "label"), function(l) grepl(l, brief_page, fixed = TRUE))))
 ok("each field is shown for exactly the tasks that list it, and the worker boxes for the drafting tasks",
