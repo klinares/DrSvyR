@@ -210,6 +210,37 @@ llm_chat <- function(m, system_prompt, max_tokens, key) {
              class = "llm_client_error"))
 }
 
+# What the endpoint said when a call failed, as an error that carries it. The endpoint's own
+#   explanation is in the response body ("model not found", "credit balance too low"); httr2's
+#   message alone is just the status. A client error (4xx other than 429) will not change on
+#   retry. Raises the error; llm_complete_all() catches it to hand it back as a value.
+llm_refuse <- function(e, m, key) {
+  cause = llm_root_cause(e)
+  resp = e$resp %||% cause$resp
+  status = if (is.null(resp)) NA_integer_ else httr2::resp_status(resp)
+  why = tryCatch(jsonlite::fromJSON(httr2::resp_body_string(resp))$error$message,
+                 error = function(e2) NULL) %||% conditionMessage(cause)
+  msg = paste0(if (is.na(status)) "The call to " else "The endpoint refused the request for ",
+               m$id, if (!is.na(status)) paste0(" (HTTP ", status, ")"),
+               if (is.na(status)) " failed", ": ", substr(why, 1, 300))
+  llm_fail(gsub(key, "[key]", msg, fixed = TRUE),
+           class = if (!is.na(status) && status >= 400 && status < 500 && status != 429)
+             "llm_client_error")
+}
+
+# A model's reply as text, with its attributes (see llm_complete). Read defensively: a missing
+#   turn or property is not worth losing the reply.
+llm_reply <- function(chat, reply, m, started, finished = Sys.time()) {
+  turn = tryCatch(chat$last_turn(), error = function(e) NULL)
+  finish = tryCatch(S7::prop(turn, "finish_reason"), error = function(e) NA_character_)
+  reply = as.character(reply)
+  attr(reply, "provider") = llm_host(m)
+  attr(reply, "finish") = if (length(finish) != 1L || is.na(finish)) "unknown" else as.character(finish)
+  attr(reply, "tokens") = tryCatch(S7::prop(turn, "tokens"), error = function(e) NULL)
+  attr(reply, "seconds") = as.numeric(difftime(finished, started, units = "secs"))
+  reply
+}
+
 # One request, one fresh chat object: no history carries from one request to the
 #   next. The reply is plain text; llm_json() finds and repairs the JSON in it.
 #   The reply carries attributes: provider (the host), finish (why the model
@@ -221,33 +252,51 @@ llm_complete <- function(m, system_prompt, user, max_tokens,
   on.exit(options(old), add = TRUE)
   chat = llm_chat(m, system_prompt, max_tokens, key)
   started = Sys.time()
+  reply = tryCatch(chat$chat(user, echo = "none"), error = function(e) llm_refuse(e, m, key))
+  llm_reply(chat, reply, m, started)
+}
 
-  reply = tryCatch(chat$chat(user, echo = "none"), error = function(e) {
-    # The endpoint's own explanation is in the response body ("model not
-    #   found", "credit balance too low"); httr2's message alone is just the
-    #   status. A client error (4xx other than 429) will not change on retry.
-    cause = llm_root_cause(e)
-    resp = e$resp %||% cause$resp
-    status = if (is.null(resp)) NA_integer_ else httr2::resp_status(resp)
-    why = tryCatch(jsonlite::fromJSON(httr2::resp_body_string(resp))$error$message,
-                   error = function(e2) NULL) %||% conditionMessage(cause)
-    msg = paste0(if (is.na(status)) "The call to " else "The endpoint refused the request for ",
-                 m$id, if (!is.na(status)) paste0(" (HTTP ", status, ")"),
-                 if (is.na(status)) " failed", ": ", substr(why, 1, 300))
-    llm_fail(gsub(key, "[key]", msg, fixed = TRUE),
-             class = if (!is.na(status) && status >= 400 && status < 500 && status != 429)
-               "llm_client_error")
+# Several requests sent together, and waited for, in this one R process (DESIGN.md section 16).
+#   requests is a list, each the arguments llm_json() takes (user, m, system_prompt, max_tokens;
+#   validate is not used here). Each gets its own chat object, and ellmer's Chat$chat_async()
+#   starts it and returns a promise; later::run_now() is what the later package documents for
+#   running scheduled work from inside blocking code, which here lets the requests make progress
+#   side by side until every promise has settled. Returns a list in the same order, each the reply
+#   llm_complete() would have returned, or the error it would have raised. A request that cannot
+#   start (no key, a bad api) comes back as that error and the others go on.
+llm_complete_all <- function(requests, timeout = LLM_TIMEOUT_S) {
+  old = options(ellmer_timeout_s = timeout)
+  on.exit(options(old), add = TRUE)
+  state = new.env()
+  state$out = vector("list", length(requests))
+  state$done = rep(FALSE, length(requests))
+  settle = function(i, value) {
+    state$out[[i]] = value
+    state$done[[i]] = TRUE
+  }
+  purrr::iwalk(requests, function(r, i) {
+    key = tryCatch(r$key %||% llm_key_for(r$m), error = function(e) e)
+    chat = if (inherits(key, "error")) key
+           else if (is.null(key) || !nzchar(key))
+             tryCatch(llm_fail(paste0("There is no key for ", r$m$id, ". ", llm_key_hint(r$m)), class = "llm_client_error"),
+                      error = function(e) e)
+           else tryCatch(llm_chat(r$m, r$system_prompt, r$max_tokens, key), error = function(e) e)
+    if (inherits(chat, "error")) return(settle(i, chat))
+    started = Sys.time()
+    tryCatch(
+      promises::then(chat$chat_async(r$user),
+                     onFulfilled = function(v) settle(i, tryCatch(llm_reply(chat, v, r$m, started), error = function(e) e)),
+                     onRejected = function(e) settle(i, tryCatch(llm_refuse(e, r$m, key), error = function(e2) e2))),
+      error = function(e) settle(i, tryCatch(llm_refuse(e, r$m, key), error = function(e2) e2)))
   })
-
-  # Read defensively: a missing turn or property is not worth losing the reply.
-  turn = tryCatch(chat$last_turn(), error = function(e) NULL)
-  finish = tryCatch(S7::prop(turn, "finish_reason"), error = function(e) NA_character_)
-  reply = as.character(reply)
-  attr(reply, "provider") = llm_host(m)
-  attr(reply, "finish") = if (length(finish) != 1L || is.na(finish)) "unknown" else as.character(finish)
-  attr(reply, "tokens") = tryCatch(S7::prop(turn, "tokens"), error = function(e) NULL)
-  attr(reply, "seconds") = as.numeric(difftime(Sys.time(), started, units = "secs"))
-  reply
+  # Poll in half-second turns, up to a little over the timeout; a purrr search, not a loop.
+  purrr::detect(seq_len(ceiling(2 * (timeout + 60))), function(k) {
+    later::run_now(timeoutSecs = 0.5)
+    all(state$done)
+  })
+  purrr::imap(state$out, function(x, i)
+    x %||% tryCatch(llm_fail(paste0("The call to ", requests[[i]]$m$id, " failed: no answer came back in time."),
+                             class = "llm_error"), error = function(e) e))
 }
 
 
@@ -426,7 +475,9 @@ is_placeholder_reply <- function(obj) {
 # key defaults to llm_key_for(m). tests/llm_check.R hands the project manager's
 #   key in directly, the way the key box would; the app never reads the
 #   environment for a model whose key_source is "analyst". complete is the
-#   function that makes the request, so a test can stand in for the network.
+#   function that makes the request, so a test can stand in for the network. first is
+#   a first attempt already made (by llm_complete_all(): the reply, or the error it
+#   met), used in place of the first request; any repeat attempt is made as usual.
 #
 # Returns the parsed object and everything the run log keeps: obj, raw (the
 #   reply as the model sent it), user_sent (the message with JSON_QUOTE_RULE
@@ -435,7 +486,7 @@ is_placeholder_reply <- function(obj) {
 llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
                      pattern = "(?s)\\{.*\\}", max_times = 3L, session_cap = 10L,
                      pause_base = 2, pause_min = 1, key = NULL,
-                     complete = llm_complete) {
+                     complete = llm_complete, first = NULL) {
 
   # A missing key is not a transient failure. Checked once, here, so it is
   #   reported at once instead of after three retries.
@@ -453,7 +504,13 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
                       "spend quota without diagnosing it."),
                class = "llm_client_error")
     .llm_state$calls <- .llm_state$calls + 1L
-    out = complete(m, system_prompt, ask, max_tokens, key)
+    out = if (is.null(first)) complete(m, system_prompt, ask, max_tokens, key)
+          else {
+            made = first
+            first <<- NULL
+            if (inherits(made, "error")) stop(made)
+            made
+          }
     finish = attr(out, "finish") %||% "unknown"
     # The reply as text, without the attributes that describe it: this is what
     #   the log keeps and what a failure carries as $raw.
@@ -487,6 +544,7 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
 
   before = .llm_state$calls
   started = Sys.time()
+  sent_seconds = as.numeric(attr(first, "seconds") %||% 0)
   # A client error is returned rather than raised inside the retry loop, so it
   #   is not sent three times.
   res = try(
@@ -505,7 +563,19 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
   if (inherits(res, "try-error")) stop(last %||% attr(res, "condition"))
 
   c(res, list(user_sent = ask, model = m$id, attempts = made,
-              seconds = as.numeric(difftime(Sys.time(), started, units = "secs"))))
+              seconds = as.numeric(difftime(Sys.time(), started, units = "secs")) + sent_seconds))
+}
+
+# Several JSON calls sent together (DESIGN.md section 16): the first attempts go out at once
+#   through llm_complete_all(), then each reply gets what llm_json() does to one (parse, repair,
+#   validate, and a repeat attempt if it comes to that, one at a time). requests is a list, each
+#   the arguments llm_json() takes. Returns a list in the same order, each llm_json()'s result or
+#   the error it raised: one failure does not lose the rest. The default `ask_all` of the flow
+#   functions.
+llm_json_all <- function(requests) {
+  first = llm_complete_all(requests)
+  purrr::map2(requests, first, function(r, f)
+    tryCatch(do.call(llm_json, c(r, list(first = f))), error = function(e) e))
 }
 
 

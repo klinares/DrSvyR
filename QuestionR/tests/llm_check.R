@@ -67,7 +67,11 @@ if ("review30" %in% args) {
              validate = validate, key = pm_key)
   say <- function(msg) cat(format(Sys.time(), "%H:%M:%S"), msg, "\n")
   # The app's own ceiling and batch size: nothing is raised for this run.
-  rv <- run_review(form, APP_MODELS$pm, ask = ask_live, progress = say)
+  ask_all_live <- function(requests)
+    llm_json_all(purrr::map(requests, function(r) c(r, list(key = pm_key))))
+  wall_started <- Sys.time()
+  rv <- run_review(form, APP_MODELS$pm, ask = ask_live, progress = say, ask_all = ask_all_live)
+  wall_s <- as.numeric(difftime(Sys.time(), wall_started, units = "secs"))
   flags <- if (!is.null(rv$reply)) check_review(rv$reply, f)
 
   writeLines(scrub(as.character(flow_log_json(flow_round(f, APP_MODELS$pm, review = rv)))),
@@ -106,7 +110,8 @@ if ("review30" %in% args) {
            "), so ", length(plan), " calls: one for each part and one for the instrument as a whole."), "",
     "| Call | Characters | Seconds | Tokens in | Tokens out | Finish | Attempts | Status |", "|---|---|---|---|---|---|---|---|",
     rows, "",
-    paste0("Total: ", sprintf("%.0f", total_s), " seconds (", sprintf("%.1f", total_s / 60), " minutes), ",
+    paste0("Total: ", sprintf("%.0f", wall_s), " seconds by the clock (", sprintf("%.1f", wall_s / 60), " minutes; the calls' own seconds add up to ",
+           sprintf("%.0f", total_s), "), ",
            format(tot_in, big.mark = ","), " tokens in, ", format(tot_out, big.mark = ","), " tokens out. Result status: ", rv$status, "."),
     "",
     if (!length(failed)) "Failed parts: none."
@@ -160,8 +165,12 @@ if ("generate" %in% args) {
              validate = validate, key = key_for_model(m))
 
   seed <- 20261111L
+  ask_all_live <- function(requests)
+    llm_json_all(purrr::map(requests, function(r) c(r, list(key = key_for_model(r$m)))))
   brief <- run_brief(gen_form, APP_MODELS$pm, ask = ask_live)
-  drafts <- run_drafts(gen_form, APP_MODELS$workers, ask = ask_live)
+  draft_started <- Sys.time()
+  drafts <- run_drafts(gen_form, APP_MODELS$workers, ask = ask_live, ask_all = ask_all_live)
+  draft_wall <- as.numeric(difftime(Sys.time(), draft_started, units = "secs"))
   appraisal <- run_appraisal(gen_form, drafts, APP_MODELS$pm, ask = ask_live, seed = seed)
 
   cands <- candidates_of(drafts, seed)
@@ -202,6 +211,9 @@ if ("generate" %in% args) {
         length(chk$unknown_checks), " unknown check ids; ", length(chk$not_appraised),
         " items not appraised; ", length(chk$unknown_items), " entries for no item; ",
         length(chk$merged_problems), " merged-option problems.\n", sep = "")
+  cat("\nThe drafts, sent together: ", sprintf("%.1f", draft_wall), " seconds by the clock; the longest draft took ",
+      sprintf("%.1f", max(purrr::map_dbl(unname(as.list(drafts)), function(d) d$seconds %||% NA_real_), na.rm = TRUE)),
+      " seconds (the three one after another took 87 seconds in Phase 3).\n", sep = "")
   statuses <- c(brief$status, purrr::map_chr(unname(as.list(drafts)), "status"), appraisal$status)
   cat("\nALL OK: ", all(statuses == "ok"), "  (", sum(statuses == "ok"), " of ", length(statuses),
       " steps)\nLog written to tests/run_generate.json\n", sep = "")

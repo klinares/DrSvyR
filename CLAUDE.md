@@ -39,7 +39,7 @@ R package any more.
    with `shiny::shinyAppDir()`, not `source("app.R")`, which hides this.
    `R/_disable_autoload.R` stops Shiny auto-sourcing `R/` as well, which
    would load every function twice and run the server on the other copy.
-3. No parallelism: no future, furrr, parallel, mirai.
+3. No parallelism: no future, furrr, parallel, mirai. (Exception, for QuestionR's model calls only: several HTTP requests may be in flight at once inside the one R process, with no extra R processes and no new package.)
 4. No package scaffolding: no DESCRIPTION, NAMESPACE, `system.file()`, or
    installed-package assumptions.
 5. Assets go in the app's `www/` (served) or `data/` (read from

@@ -81,6 +81,20 @@ same_family_note <- function(pm_id, writers) {
                   "Read it with that in mind."))
 }
 
+# The same for requests sent together (llm_json_all): says on the page which models are being
+#   asked, then sends them. Must run inside withProgress().
+progress_ask_all <- function(total) {
+  function(requests) {
+    note = PROGRESS_NOTE$msg %||% ""
+    PROGRESS_NOTE$msg <- NULL
+    setProgress(value = 0,
+                message = if (nzchar(note)) note else paste0("Asking ", length(requests), " models together"),
+                detail = paste0("Asking ", paste(purrr::map_chr(requests, function(r) r$m$id), collapse = ", "),
+                                ". They run side by side; this can take a few minutes."))
+    llm_json_all(requests)
+  }
+}
+
 task_choices <- function()
   purrr::set_names(names(TASKS), purrr::map_chr(TASKS, "label"))
 
@@ -484,8 +498,8 @@ set_card <- function(e, it, model, ns, checklist, ed = NULL) {
     class = "card mb-2",
     tags$div(
       class = "card-body py-2",
-      tags$div(tags$strong(it$id), tags$span(class = "text-muted", " · ", e$domain, " · candidate ", e$candidate,
-                                             ", written by ", model),
+      tags$div(tags$strong(it$id), tags$span(class = "text-muted", paste0(" · ", e$domain, " · candidate ", e$candidate,
+                                                                          ", written by ", model)),
                if (isTRUE(e$swapped)) tags$span(class = "badge text-bg-info ms-1", "swapped in by you"),
                if (!is.null(ed)) tags$span(class = "badge text-bg-secondary ms-1", "edited")),
       if (nzchar(e$why)) tags$p(class = "text-muted small mb-1", paste0("Why this one: ", e$why)),
@@ -705,7 +719,8 @@ mod_results_ui <- function(id) {
   tagList(tags$h3(QUESTIONR_TABS[4]), uiOutput(ns("results")))
 }
 
-mod_results_server <- function(id, state, go = function(tab) invisible(NULL), make_ask = progress_ask) {
+mod_results_server <- function(id, state, go = function(tab) invisible(NULL), make_ask = progress_ask,
+                               make_ask_all = NULL) {
   moduleServer(id, function(input, output, session) {
     problem <- reactiveVal(NULL)
     result <- reactiveVal(NULL)
@@ -727,13 +742,16 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
           # one call, or a call for each part and one for the instrument; one when the
           #   questionnaire cannot be split, since run_review() then fails without a call
           calls = tryCatch(length(review_plan(f$questionnaire, APP_BATCH_CHARS)), error = function(e) 1L)
-          list(review = run_review(f, pm, ask = make_ask(calls), progress = say_progress,
+          ask = make_ask(calls)
+          list(review = run_review(f, pm, ask = ask, progress = say_progress,
+                                   ask_all = if (is.null(make_ask_all)) ask_all_for(ask) else make_ask_all(calls),
                                    # an edited prompt is sent only when the review is one call
                                    prompt = if (calls == 1L) approved))
         })
         else withProgress(message = "Running the workers", value = 0, {
-          ask = make_ask(length(ws) + 1L)
-          drafts = run_drafts(f, ws, ask = ask, prompt = approved)
+          ask = make_ask(1L)
+          drafts = run_drafts(f, ws, ask = ask, prompt = approved,
+                              ask_all = if (is.null(make_ask_all)) ask_all_for(ask) else make_ask_all(length(ws)))
           list(drafts = drafts, appraisal = run_appraisal(f, drafts, pm, ask = ask, seed = seed))
         }),
         error = function(e) {

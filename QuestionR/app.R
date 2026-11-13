@@ -106,8 +106,9 @@ library(stringr)
 # Called as pkg::fn() in R/ and never attached. Listed so a missing one stops
 #   the app here, by name, rather than three screens later. S7 and httr2 come
 #   with ellmer; R/llm.R calls them directly, to read a reply's finish reason and
-#   an HTTP error's status.
-APP_PACKAGES <- c("digest", "ellmer", "httr2", "jsonlite", "rlang", "S7")
+#   an HTTP error's status. promises and later come with Shiny and ellmer; they let
+#   several model calls be in flight at once in the one R process.
+APP_PACKAGES <- c("digest", "ellmer", "httr2", "jsonlite", "later", "promises", "rlang", "S7")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
@@ -232,7 +233,7 @@ server <- function(input, output, session) {
   mod_connect_server("connect", state)
   mod_brief_server("brief", state, go = go)
   mod_prompt_server("prompt", state, go = go)
-  mod_results_server("results", state, go = go)
+  mod_results_server("results", state, go = go, make_ask_all = progress_ask_all)
   mod_again_server("again", state, go = go)
   mod_output_server("output", state)
 }

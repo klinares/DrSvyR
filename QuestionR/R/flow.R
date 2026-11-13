@@ -32,16 +32,11 @@ call_record <- function(x, seconds) {
        raw = if (full) x$raw else NA_character_)
 }
 
-# One model call, caught: nothing it does stops the caller. A failure is recorded
-#   with its reason, and with the model's last reply when there was one.
-call_model <- function(ask, user, m, system_prompt, max_tokens, validate, step) {
-  started = Sys.time()
-  out = tryCatch(ask(user = user, m = m, system_prompt = system_prompt,
-                     max_tokens = max_tokens, validate = validate),
-                 error = function(e) e)
-  seconds = as.numeric(difftime(Sys.time(), started, units = "secs"))
+# What one call came to, as a record: ok with its reply and call record, or failed with the reason
+#   (and the model's last reply when there was one). A reply cut off at the ceiling says what to
+#   do about it, for this step.
+call_result <- function(out, seconds, step) {
   if (inherits(out, "error")) {
-    # A reply cut off at the ceiling says what to do about it, for this step.
     why = if (inherits(out, "llm_truncated"))
       paste(conditionMessage(out), LLM_CUTOFF_ADVICE[[step]])
     else conditionMessage(out)
@@ -50,6 +45,36 @@ call_model <- function(ask, user, m, system_prompt, max_tokens, validate, step) 
   }
   list(status = "ok", error = NA_character_, reply = as_reply(out),
        call = call_record(out, seconds))
+}
+
+# One model call, caught: nothing it does stops the caller. A failure is recorded
+#   with its reason, and with the model's last reply when there was one.
+call_model <- function(ask, user, m, system_prompt, max_tokens, validate, step) {
+  started = Sys.time()
+  out = tryCatch(ask(user = user, m = m, system_prompt = system_prompt,
+                     max_tokens = max_tokens, validate = validate),
+                 error = function(e) e)
+  call_result(out, as.numeric(difftime(Sys.time(), started, units = "secs")), step)
+}
+
+# Several calls sent together, each caught (DESIGN.md section 16). ask_all takes the list of
+#   requests, each the arguments `ask` takes, and returns a list in the same order, each the
+#   reply or an error, so one failure does not lose the rest. A call's seconds are its own when
+#   the reply says them, and the whole batch's when it does not.
+call_all <- function(ask_all, requests, step) {
+  started = Sys.time()
+  outs = tryCatch(ask_all(requests), error = function(e) rep(list(e), length(requests)))
+  batch = as.numeric(difftime(Sys.time(), started, units = "secs"))
+  purrr::map(outs, function(out)
+    call_result(out, if (is_llm_result(out) && is.numeric(out$seconds)) out$seconds else batch, step))
+}
+
+# The `ask_all` of a flow function that was given only `ask`: the real llm_json() sends requests
+#   together (llm_json_all); any other ask (a test's fake, a script's own) answers them one after
+#   the other, each caught.
+ask_all_for <- function(ask) {
+  if (identical(ask, llm_json)) return(llm_json_all)
+  function(requests) purrr::map(requests, function(r) tryCatch(do.call(ask, r), error = function(e) e))
 }
 
 # A result keeps its call record as an attribute, so the fields a result is
@@ -99,10 +124,15 @@ run_brief <- function(form, pm, ask = llm_json) {
 #   `user` and `hash` are the first call's. R's checks on the reply (a quote not in
 #   the pasted text, a check that was not sent) are check_review().
 #
-#   progress(msg) is called before each call, so a screen can say "part 2 of 5" and
+#   The parts are sent together, at most REVIEW_AT_ONCE at a time (ask_all); the instrument
+#   call, which needs no part's answer but is one call, goes by `ask` after them. progress(msg)
+#   is called before each call or batch, so a screen can say "parts 1 to 4 of 6 together" and
 #   this file stays free of Shiny. An edited prompt (the Prompt tab) can only be
 #   sent in a one-call review; it is kept as the result's attribute "prompt".
-run_review <- function(form, pm, ask = llm_json, prompt = NULL, progress = function(msg) NULL) {
+REVIEW_AT_ONCE <- 4L
+
+run_review <- function(form, pm, ask = llm_json, prompt = NULL, progress = function(msg) NULL,
+                       ask_all = ask_all_for(ask)) {
   p = step_prompt(form, "work")
   failed = function(why)
     list(status = "failed", error = why, system = NA_character_, user = NA_character_,
@@ -131,8 +161,12 @@ run_review <- function(form, pm, ask = llm_json, prompt = NULL, progress = funct
   if (isTRUE(prompt$edited))
     stop("An edited prompt can be sent only when the questionnaire is reviewed in one call; ",
          "this one is reviewed in ", length(plan) - 1L, " parts.", call. = FALSE)
-  batches = purrr::map(plan, function(spec) review_call(ask, pm, step_prompt(f, spec$kind, part = spec), spec, progress))
-  review_result(p$system, batches)
+  parts = plan[-length(plan)]
+  together = unlist(purrr::map(unname(split(parts, ceiling(seq_along(parts) / REVIEW_AT_ONCE))),
+                               function(chunk) review_together(ask_all, pm, f, chunk, progress)), recursive = FALSE)
+  spec = plan[[length(plan)]]
+  instrument = review_call(ask, pm, step_prompt(f, "instrument", part = spec), spec, progress)
+  review_result(p$system, c(together, list(instrument)))
 }
 
 # The same review with one call run again, for a part that failed: index is the
@@ -148,25 +182,44 @@ rerun_review_part <- function(form, pm, rv, index, ask = llm_json, progress = fu
   review_result(rv$system, replace(rv$batches, index, list(batch)))
 }
 
-# One call of a review. p is the prompt (or the error that building it gave).
+# One call of a review as a record: the part, how it came out, its prompt's hash and text, its
+#   reply and its call record. p is the prompt (or the error that building it gave), r a call_result().
+review_record <- function(spec, p, r) {
+  bad = inherits(p, "error")
+  list(kind = spec$kind, part = spec$k, n_parts = spec$n, first_block = spec$first_block,
+       chars = nchar(spec$text), status = if (bad) "failed" else r$status,
+       error = if (bad) conditionMessage(p) else r$error,
+       hash = if (bad) NA_character_ else p$hash, user = if (bad) NA_character_ else p$user,
+       reply = if (bad) NULL else r$reply, seconds = if (bad) 0 else r$call$seconds,
+       finish = if (bad) NA_character_ else r$call$finish %||% NA_character_,
+       tokens = if (bad) NULL else r$call$tokens,
+       attempts = if (bad) NA_integer_ else r$call$attempts %||% NA_integer_,
+       raw = if (bad) NA_character_ else r$call$raw %||% NA_character_)
+}
+
+# One call of a review, by `ask`. p is the prompt (or the error that building it gave).
 review_call <- function(ask, pm, p, spec, progress) {
-  record = function(status, error, reply, call)
-    list(kind = spec$kind, part = spec$k, n_parts = spec$n, first_block = spec$first_block,
-         chars = nchar(spec$text), status = status, error = error,
-         hash = if (inherits(p, "error")) NA_character_ else p$hash,
-         user = if (inherits(p, "error")) NA_character_ else p$user,
-         reply = reply, seconds = call$seconds, finish = call$finish %||% NA_character_,
-         tokens = call$tokens, attempts = call$attempts %||% NA_integer_,
-         raw = call$raw %||% NA_character_)
-  if (inherits(p, "error"))
-    return(record("failed", conditionMessage(p), NULL, list(seconds = 0)))
+  if (inherits(p, "error")) return(review_record(spec, p, NULL))
   progress(switch(spec$kind,
                   all = "Reviewing the questionnaire",
                   items = paste0("Reviewing part ", spec$k, " of ", spec$n),
                   instrument = "Reviewing the questionnaire as a whole"))
-  r = call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["evaluate"]],
-                 reply_validator("review"), "evaluate")
-  record(r$status, r$error, r$reply, r$call)
+  review_record(spec, p, call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["evaluate"]],
+                                    reply_validator("review"), "evaluate"))
+}
+
+# Some parts of a review sent together, by `ask_all`; a part whose prompt cannot be built is a
+#   failed record and is not sent. Returns the records in the parts' order.
+review_together <- function(ask_all, pm, f, chunk, progress) {
+  prompts = purrr::map(chunk, function(spec) step_prompt(f, "items", part = spec))
+  sendable = !purrr::map_lgl(prompts, function(p) inherits(p, "error"))
+  progress(if (length(chunk) == 1L) paste0("Reviewing part ", chunk[[1]]$k, " of ", chunk[[1]]$n)
+           else paste0("Reviewing parts ", chunk[[1]]$k, " to ", chunk[[length(chunk)]]$k, " of ", chunk[[1]]$n, " together"))
+  results = rep(list(NULL), length(chunk))
+  results[sendable] = call_all(ask_all, purrr::map(prompts[sendable], function(p)
+    list(user = p$user, m = pm, system_prompt = p$system, max_tokens = LLM_MAX_TOKENS[["evaluate"]],
+         validate = reply_validator("review"))), "evaluate")
+  purrr::pmap(list(chunk, prompts, results), review_record)
 }
 
 # A review's result from its calls. One call: the fields of a one-call review (and its
@@ -207,25 +260,27 @@ review_result <- function(system, batches, p = NULL) {
 
 # ---- the workers -------------------------------------------------------------------
 
-# Each worker gets the same prompt, one after another. prompt is the approved
+# Each worker gets the same prompt, all sent together (ask_all). prompt is the approved
 #   prompt, which is the assembled one unless the analyst edited it. Returns an
 #   unnamed list with exactly one entry per worker, in the workers' order, each
 #   model (the id), status, error, reply (the parsed draft) and seconds. A
 #   worker that errors, or whose reply has the wrong shape or the wrong number of
 #   items, is recorded as failed and the run goes on. The prompt used is the
 #   list's attribute "prompt".
-run_drafts <- function(form, workers, ask = llm_json, prompt = build_prompt(form)) {
+run_drafts <- function(form, workers, ask = llm_json, prompt = build_prompt(form),
+                       ask_all = ask_all_for(ask)) {
   if (!is.list(prompt) || !is.character(prompt$system) || !is.character(prompt$user))
     stop("prompt must be a list with a system and a user string.", call. = FALSE)
   f = clean_form(form)
   if (TASKS[[f$task]]$kind != "draft")
     stop("Only a drafting task is run by the workers.", call. = FALSE)
   validate = reply_validator("draft", n_items = f$n_items)
-  drafts = purrr::map(unname(workers), function(m) {
-    r = call_model(ask, prompt$user, m, prompt$system, LLM_MAX_TOKENS[["draft"]], validate, "draft")
+  results = call_all(ask_all, purrr::map(unname(workers), function(m)
+    list(user = prompt$user, m = m, system_prompt = prompt$system, max_tokens = LLM_MAX_TOKENS[["draft"]],
+         validate = validate)), "draft")
+  drafts = purrr::map2(unname(workers), results, function(m, r)
     with_call(list(model = m$id, status = r$status, error = r$error, reply = r$reply,
-                   seconds = r$call$seconds), r$call)
-  })
+                   seconds = r$call$seconds), r$call))
   structure(drafts, prompt = prompt)
 }
 

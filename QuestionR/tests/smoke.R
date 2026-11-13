@@ -2389,7 +2389,7 @@ said <- character(0)
 rvl <- run_review(long_form, fl_pm, ask = pa$ask, progress = function(msg) said <<- c(said, msg))
 ok("a long review makes one call per part and one for the instrument, each at the evaluation ceiling, and says before each which it is",
    pa$st$n == 4L && all(pa$st$max == LLM_MAX_TOKENS[["evaluate"]]) &&
-     identical(said, c("Reviewing part 1 of 3", "Reviewing part 2 of 3", "Reviewing part 3 of 3", "Reviewing the questionnaire as a whole")) &&
+     identical(said, c("Reviewing parts 1 to 3 of 3 together", "Reviewing the questionnaire as a whole")) &&
      identical(pa$st$users[1:3], purrr::map_chr(plan[1:3], function(s) build_step_prompt(long_form, "items", part = s)$user)))
 ok("a long review's result has run_review's fields and batches: one per call, in order, each with kind, part, status, hash, seconds and its reply",
    identical(sort(names(rvl)), sort(c("status", "error", "system", "user", "hash", "reply", "batches"))) &&
@@ -2442,7 +2442,7 @@ ok("run_review reaches no model and no Shiny function but through ask and progre
    !any(c("Sys.getenv", "llm_key_for", "llm_session_key", "llm_json", "llm_complete", "setProgress", "withProgress",
           "reactive", "observe") %in% all.names(body(run_review))) &&
      !any(c("setProgress", "withProgress", "llm_json") %in% all.names(body(review_call))) &&
-     identical(names(formals(run_review)), c("form", "pm", "ask", "prompt", "progress")))
+     identical(names(formals(run_review)), c("form", "pm", "ask", "prompt", "progress", "ask_all")))
 
 sm <- flow_summary(review = rvl, pm = fl_pm)
 ok("a long review's log summary has one row per call, naming the part; a one-call review keeps its one row",
@@ -2918,4 +2918,118 @@ local({
          is.null(same_family_note(APP_MODELS$pm$id, fl_ids)) && is.null(same_family_note(APP_MODELS$pm$id, character(0))) &&
          is.null(same_family_note(APP_MODELS$pm$id, c("claude-haiku-5-5", "vendor-a/model-one"))))
   })
+})
+
+
+# ---- Phase 7b: calls go out together ------------------------------------------------------------
+
+# The workers' drafts are asked for in one batch; one failure does not lose the others.
+local({
+  batches = list()
+  asked_alone = 0L
+  all_fake = function(requests) {
+    batches[[length(batches) + 1L]] <<- requests
+    purrr::imap(requests, function(r, i)
+      if (i == 2L) simpleError("canned worker failure")
+      else list(obj = tagged_draft(r$m), raw = "{}", finish = "stop", tokens = c(input = 10, output = 20, cached_input = 0),
+                attempts = 1L, seconds = 5 + i))
+  }
+  d = run_drafts(fl_form, fl_workers, ask = function(...) { asked_alone <<- asked_alone + 1L; stop("not by ask") }, ask_all = all_fake)
+  ok("the workers' drafts are requested in one batch, each request the arguments ask takes, in the workers' order, and ask is not used",
+     length(batches) == 1L && length(batches[[1]]) == 3L && asked_alone == 0L &&
+       identical(purrr::map_chr(batches[[1]], function(r) r$m$id), fl_ids) &&
+       all(purrr::map_lgl(batches[[1]], function(r) setequal(names(r), c("user", "m", "system_prompt", "max_tokens", "validate")))) &&
+       all(purrr::map_int(batches[[1]], "max_tokens") == LLM_MAX_TOKENS[["draft"]]) &&
+       identical(batches[[1]][[1]]$user, build_prompt(fl_form)$user))
+  ok("one worker failing is recorded with its reason and the other two are kept; a call's own seconds are used when the reply gives them",
+     identical(purrr::map_chr(d, "status"), c("ok", "failed", "ok")) && identical(d[[2]]$error, "canned worker failure") &&
+       is.null(d[[2]]$reply) && identical(d[[1]]$reply, tagged_draft(fl_workers[[1]])) &&
+       identical(d[[3]]$reply, tagged_draft(fl_workers[[3]])) &&
+       identical(c(d[[1]]$seconds, d[[3]]$seconds), c(6, 8)) && isTRUE(attr(d[[1]], "call")$tokens$output == 20))
+  ok("an ask_all that fails as a whole fails every worker and nothing else; with only ask given, the requests are answered one after the other through it",
+     identical(purrr::map_chr(run_drafts(fl_form, fl_workers, ask = llm_json, ask_all = function(r) stop("batch down")), "status"),
+               rep("failed", 3)) &&
+       local({
+         fa2 = rec_ask(function(m, sys) tagged_draft(m))
+         d2 = run_drafts(fl_form, fl_workers, ask = fa2$ask)
+         identical(purrr::map_chr(fa2$st$calls, "id"), fl_ids) && all(purrr::map_chr(d2, "status") == "ok")
+       }) && identical(ask_all_for(llm_json), llm_json_all))
+})
+
+# The parts of a long review go out together, at most four at a time, then the instrument call.
+local({
+  small = 700
+  old = get("APP_BATCH_CHARS", globalenv())
+  assign("APP_BATCH_CHARS", small, globalenv())
+  on.exit(assign("APP_BATCH_CHARS", old, globalenv()), add = TRUE)
+  n_parts = length(split_questionnaire(long_text, small))
+  run = function(fail_at = 0L) {
+    pa = parts_ask(fail_at = fail_at)
+    sizes = integer(0)
+    said = character(0)
+    rv = run_review(long_form, fl_pm, ask = function(...) { sizes <<- c(sizes, 1L); pa$ask(...) },
+                    ask_all = function(requests) {
+                      sizes <<- c(sizes, length(requests))
+                      purrr::map(requests, function(r) tryCatch(do.call(pa$ask, r), error = function(e) e))
+                    }, progress = function(msg) said <<- c(said, msg))
+    list(rv = rv, sizes = sizes, said = said, pa = pa)
+  }
+  r = run()
+  ok("the parts are requested in batches of at most four, in order, then one instrument call by ask; the review is as ordered as before",
+     n_parts == 15L && identical(r$sizes, c(4L, 4L, 4L, 3L, 1L)) && r$pa$st$n == 16L &&
+       identical(r$rv$status, "ok") && identical(purrr::map_chr(r$rv$reply$items, "id"), paste0("Q", 1:30)) &&
+       identical(purrr::map_chr(r$rv$batches, "kind"), c(rep("items", 15), "instrument")) &&
+       identical(unname(purrr::map_int(r$rv$batches, "part")[1:15]), 1:15) && length(r$rv$reply$instrument) == 1L)
+  ok("the page is told before each batch: parts 1 to 4 of 15 together, and so on to the instrument call",
+     identical(r$said, c("Reviewing parts 1 to 4 of 15 together", "Reviewing parts 5 to 8 of 15 together",
+                         "Reviewing parts 9 to 12 of 15 together", "Reviewing parts 13 to 15 of 15 together",
+                         "Reviewing the questionnaire as a whole")))
+  f = run(fail_at = 2L)
+  ok("a part that fails in a batch is recorded and named, the other parts and the instrument call are kept, and it can be run again",
+     identical(f$rv$status, "partial") && identical(purrr::map_chr(f$rv$batches, "status")[1:4], c("ok", "failed", "ok", "ok")) &&
+       grepl("Part 2 of 15 did not come back", f$rv$error, fixed = TRUE) && f$pa$st$n == 16L && length(f$rv$reply$instrument) == 1L &&
+       length(f$rv$reply$items) == 28L &&
+       identical(rerun_review_part(long_form, fl_pm, f$rv, 2L, ask = parts_ask()$ask)$status, "ok"))
+})
+
+# A fake server that keeps each reply two seconds: requests sent together take about one wait, not their sum.
+make_slow_mock <- function() {
+  mock = webfakes::new_app()
+  mock$use(webfakes::mw_json())
+  mock$post("/v1/chat/completions", function(req, res) {
+    if (is.null(res$locals$waited)) { res$locals$waited = TRUE; res$delay(2); return(invisible()) }
+    if (identical(req$json$model, "m-missing"))
+      return(res$set_status(404L)$send_json(list(error = list(message = "model not found")), auto_unbox = TRUE))
+    res$send_json(list(id = "x", object = "chat.completion", created = 1L, model = req$json$model,
+      choices = list(list(index = 0L, message = list(role = "assistant",
+                                                     content = paste0("{\"answer\": \"from ", req$json$model, "\"}")),
+                          finish_reason = "stop")),
+      usage = list(prompt_tokens = 5L, completion_tokens = 7L, total_tokens = 12L)), auto_unbox = TRUE)
+  })
+  mock
+}
+local({
+  px = webfakes::new_app_process(make_slow_mock(), opts = webfakes::server_opts(num_threads = 6))
+  on.exit(px$stop())
+  req = function(id, key = "k")
+    list(user = "hi", m = list(api = "openai", base_url = px$url("/v1"), id = id, key_source = "analyst"), system_prompt = "S",
+         max_tokens = 100L, validate = NULL, key = key)
+  started = Sys.time()
+  out = llm_json_all(list(req("m-one"), req("m-missing"), req("m-three"), req("m-nokey", key = NULL)))
+  together = as.numeric(difftime(Sys.time(), started, units = "secs"))
+  one = Sys.time()
+  invisible(llm_json(req("m-one")$user, req("m-one")$m, system_prompt = "S", max_tokens = 100L, key = "k"))
+  alone = as.numeric(difftime(Sys.time(), one, units = "secs"))
+  ok("requests sent together through ellmer's chat_async and later::run_now take about one wait, not their sum, in the same R process",
+     together < 2 * alone && together > 1.8 && alone > 1.8)
+  ok("each answer comes back in the order sent, parsed, with its own seconds; a model the endpoint refuses and a request with no key are errors in their place and the others are kept",
+     length(out) == 4L && identical(out[[1]]$obj$answer, "from m-one") && identical(out[[3]]$obj$answer, "from m-three") &&
+       inherits(out[[2]], "llm_client_error") &&
+       grepl("refused the request for m-missing (HTTP 404): model not found", conditionMessage(out[[2]]), fixed = TRUE) &&
+       inherits(out[[4]], "llm_client_error") && grepl("There is no key for m-nokey", conditionMessage(out[[4]]), fixed = TRUE) &&
+       out[[1]]$attempts == 1L && out[[1]]$seconds > 1.8 && out[[1]]$finish == "success")
+  ok("the sending code uses only what ellmer and later document, never a package that starts other processes",
+     !any(c("future", "furrr", "mirai", "parallel", "parallel_chat", "makeCluster") %in%
+            all.names(c(body(llm_complete_all), body(llm_json_all)))) &&
+       "chat_async" %in% all.names(body(llm_complete_all)) && "run_now" %in% all.names(body(llm_complete_all)))
 })
