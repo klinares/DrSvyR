@@ -2967,3 +2967,135 @@ local({
             all.names(c(body(llm_complete_all), body(llm_json_all)))) &&
        "chat_async" %in% all.names(body(llm_complete_all)) && "run_now" %in% all.names(body(llm_complete_all)))
 })
+
+
+# ---- Phase 9g: what the analyst can see, and what they cannot --------------------------------------
+
+# The words on a page: tags gone, a text box shown by its value, buttons and scripts left out.
+see_text <- function(h) {
+  h = gsub("(?s)<script.*?</script>", " ", paste(h, collapse = " "), perl = TRUE)
+  h = gsub("(?s)<button.*?</button>", " ", h, perl = TRUE)
+  h = gsub("<input[^>]*value=\"([^\"]*)\"[^>]*>", " \\1 ", h)
+  h = gsub("<[^>]+>", " ", h)
+  h = gsub("&amp;", "&", gsub("&lt;", "<", gsub("&gt;", ">", gsub("&#39;", "'", gsub("&quot;", "\"", h)))))
+  gsub("\\s+", " ", trimws(h))
+}
+words_of <- function(x) tolower(unlist(regmatches(x, gregexpr("[[:alnum:]]+", x))))
+AI_SKILL_SENTENCE <- "QuestionR is an AI skill. It works from written AI reflexes: short rules of survey design that every model is given."
+
+ok("the word skill is on no page except in its one sentence, once on Start here and once on the Methodology page",
+   local({
+     p = gsub("\\s+", " ", see_text(page$html))
+     n_sentence = lengths(regmatches(p, gregexpr(AI_SKILL_SENTENCE, p, fixed = TRUE)))
+     n_sentence == 2L && !grepl("skill", gsub(AI_SKILL_SENTENCE, "", p, fixed = TRUE), ignore.case = TRUE) &&
+       lengths(regmatches(see_text(start_ui()), gregexpr(AI_SKILL_SENTENCE, see_text(start_ui()), fixed = TRUE))) == 1L &&
+       lengths(regmatches(see_text(md_page(METHODOLOGY_FILE)), gregexpr(AI_SKILL_SENTENCE, see_text(md_page(METHODOLOGY_FILE)), fixed = TRUE))) == 1L
+   }))
+
+# Reflex files whose own words still name translation or an output language: not ours to edit in this
+#   phase (evaluate.md and pm_brief.md; cross_cultural.md in its Source lines). Everything else is held
+#   to none, and the count here cannot grow.
+KNOWN_TRANSLATION_LEFTOVERS <- c(cross_cultural.md = 2L, evaluate.md = 4L, pm_brief.md = 1L)
+translation_pattern <- "TRAPD|translat|output language|output_language|back-translat"
+panel_html <- function(html, f) {
+  sf = read_reflex_file(f)
+  a = regexpr(paste0(sf$title, ", version ", sf$version), html, fixed = TRUE)[[1]]
+  if (a < 0L) return("")
+  from = max(gregexpr("<details", substr(html, 1L, a), fixed = TRUE)[[1]])
+  to = a + regexpr("</details>", substring(html, a), fixed = TRUE)[[1]] + 8L
+  substr(html, from, to)
+}
+ok("no page of the app names TRAPD, translation or an output language, and no form field is a language; the reflex files that still do are the three known ones, with a count that cannot grow",
+   local({
+     html = paste(page$html, collapse = " ")
+     known = purrr::map_chr(names(KNOWN_TRANSLATION_LEFTOVERS), function(f) panel_html(html, f))
+     rest = Reduce(function(h, k) if (nzchar(k)) sub(k, " ", h, fixed = TRUE) else h, known, html)
+     others = purrr::map_chr(setdiff(REFLEX_PANEL_ORDER, names(KNOWN_TRANSLATION_LEFTOVERS)), function(f) panel_html(html, f))
+     left = purrr::map_int(names(KNOWN_TRANSLATION_LEFTOVERS), function(f)
+       sum(grepl(translation_pattern, readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), ignore.case = TRUE)))
+     names(left) = names(KNOWN_TRANSLATION_LEFTOVERS)
+     all(nzchar(known)) && all(nzchar(others)) && length(others) == 7L &&
+       !grepl(translation_pattern, see_text(rest), ignore.case = TRUE) &&
+       !any(purrr::map_lgl(others, function(o) grepl(translation_pattern, see_text(o), ignore.case = TRUE))) &&
+       !grepl("id=\"[^\"]*lang[^\"]*\"", html, ignore.case = TRUE) &&
+       !any(grepl("lang", names(clean_form(forms$attitudinal)), ignore.case = TRUE)) &&
+       all(left <= KNOWN_TRANSLATION_LEFTOVERS)
+   }))
+
+# A drafted question as the analyst sees it, and the Word copy of it.
+local({
+  st = flow_state()
+  fa = rec_ask(reply_rich)
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) fa$ask), {
+    session$flushReact()
+    approve_state(st)
+    session$flushReact()
+    s = html_of3(output$set_ui)
+    cards = regmatches(s, gregexpr("(?s)<div class=\"card mb-2\">.*?</div>\\s*</div>", s, perl = TRUE))[[1]]
+    parts_of <- function(card) {
+      t = gsub("(?s)<button.*?</button>", "", card, perl = TRUE)
+      t = gsub("<input[^>]*>", "[box]", t)
+      t = gsub("<[^>]+>", "\n", t)
+      l = trimws(strsplit(t, "\n", fixed = TRUE)[[1]])
+      l[nzchar(l)]
+    }
+    allowed <- function(l) grepl("^Question [0-9]+$", l) || identical(l, "[box]") || identical(l, CHECK_LABEL) ||
+      grepl("^\\[Open question", l)
+    ok("a drafted question on the screen has the question, its answer options, and at most one line to check before use, and nothing else; every one is checked, and there are cards to check",
+       length(cards) >= 2L && all(purrr::map_lgl(cards, function(cd) {
+         l = parts_of(cd)
+         check_sentence = l[which(l == CHECK_LABEL) + 1L]
+         extra = l[!purrr::map_lgl(l, allowed)]
+         sum(l == CHECK_LABEL) <= 1L && length(setdiff(extra, check_sentence)) == 0L &&
+           (!length(check_sentence) || length(strsplit(check_sentence, "\\s+")[[1]]) <= CHECK_WORDS)
+       })))
+    o = build_output(isolate(st$form), drafts = isolate(st$drafts), seed = isolate(st$seed), set = isolate(st$set), edits = isolate(st$edits))
+    tail_lines = trimws(strsplit(substring(o$text, nchar(o$screen_text) + 1L), "\n", fixed = TRUE)[[1]])
+    tail_lines = tail_lines[nzchar(tail_lines)]
+    ok("the Word copy of drafted questions is what is on the screen, word for word, and then exactly three lines: the date, who drafted and who reviews, and the tool version",
+       identical(words_of(see_text(s)), words_of(gsub("(?m)^[0-9]+[.] ", "", o$screen_text, perl = TRUE))) && startsWith(o$text, o$screen_text) &&
+         length(tail_lines) == 3L && grepl("^Date: [0-9]{4}-[0-9]{2}-[0-9]{2}$", tail_lines[1]) &&
+         identical(tail_lines[2], "Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]") &&
+         identical(tail_lines[3], paste0("QuestionR version ", QUESTIONR_VERSION)))
+    h = paste(html_of3(output$results), s, html_of3(output$drafts_ui))
+    ok("on the drafting screens, nowhere: TRAPD, translation, the word skill, a language field",
+       !grepl(translation_pattern, see_text(h), ignore.case = TRUE) && !grepl("skill", see_text(h), ignore.case = TRUE) &&
+         !grepl("lang", paste(regmatches(h, gregexpr("id=\"[^\"]*\"", h))[[1]], collapse = " "), ignore.case = TRUE))
+  })
+})
+
+# A review as the analyst sees it, when the stand-in model sends more than is allowed, and its Word copy.
+local({
+  st = review_state()
+  ra = rv_ask()
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) ra$ask), {
+    session$flushReact()
+    approve_review(st)
+    session$flushReact()
+    h = html_of3(output$results)
+    sent_problems = purrr::map_int(rv_reply$items, function(i) length(i$problems))
+    sent_points = length(rv_reply$instrument)
+    cards = regmatches(h, gregexpr("(?s)<h6[^>]*>Question [^<]*</h6>.*?(?=<h6|The questionnaire as a whole|$)", h, perl = TRUE))[[1]]
+    ok("the stand-in sent more than two problems for a question and more than three points about the whole; the screen shows at most two for each question and at most three points",
+       max(sent_problems) > 2L && sent_points > 3L && length(cards) >= 1L &&
+         all(purrr::map_int(cards, function(cd) n_in3("Problem: ", cd)) <= 2L) &&
+         n_in3("Problem: ", h) == sum(pmin(sent_problems, 2L)) &&
+         local({
+           at = regexpr("The questionnaire as a whole", h, fixed = TRUE)
+           at > 0 && n_in3("<li", substring(h, at)) <= 3L
+         }))
+    o = build_output(isolate(st$form), review = isolate(st$review))
+    tail_lines = trimws(strsplit(substring(o$text, nchar(o$screen_text) + 1L), "\n", fixed = TRUE)[[1]])
+    tail_lines = tail_lines[nzchar(tail_lines)]
+    ok("the Word copy of a review is what is on the screen, word for word, and then exactly the same three lines",
+       identical(words_of(see_text(h)), words_of(o$screen_text)) && startsWith(o$text, o$screen_text) &&
+         length(tail_lines) == 3L && grepl("^Date: [0-9]{4}-[0-9]{2}-[0-9]{2}$", tail_lines[1]) &&
+         identical(tail_lines[2], "Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]") &&
+         identical(tail_lines[3], paste0("QuestionR version ", QUESTIONR_VERSION)))
+    ok("on the review screen, nowhere: TRAPD, translation, the word skill, a language field",
+       !grepl(translation_pattern, see_text(h), ignore.case = TRUE) && !grepl("skill", see_text(h), ignore.case = TRUE) &&
+         !grepl("lang", paste(regmatches(h, gregexpr("id=\"[^\"]*\"", h))[[1]], collapse = " "), ignore.case = TRUE))
+  })
+})
