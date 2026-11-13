@@ -58,8 +58,7 @@ progress_ask <- function(total) {
     setProgress(value = (n - 1L) / total,
                 message = if (nzchar(note)) paste0(note, " (call ", n, " of ", total, ")")
                           else paste0("Call ", n, " of ", total),
-                detail = paste0("Asking ", m$id, ". The calls run one after another; ",
-                                "this can take a few minutes."))
+                detail = paste0("Asking ", m$id, ". This can take a few minutes."))
     llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens,
              validate = validate)
   }

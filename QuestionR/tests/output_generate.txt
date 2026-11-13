@@ -1,7 +1,7 @@
 Survey items
 ============
 
-First drafts by language models, untested.
+First drafts by language models, as recommended by a reviewing model and left by the analyst; untested.
 
 CONF1
 -----
@@ -49,10 +49,10 @@ Disclosure of the use of language models
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
 - Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
-- Skill files and versions: core.md 0.2; generate.md 0.3; attitudinal.md 0.2; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.3; pm_brief.md 0.1
+- Skill files and versions: core.md 0.2; generate.md 0.3; attitudinal.md 0.2; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
 - Brief check prompt: 395ddacac624fd946a3de8f690cdd69ba36b282b35b74b3df4c7f54c9e56afff
 - Drafting prompt (not edited): b6438476295bc94614d64a469052af204f45cdb8c43030daa3735363398dae72
-- Appraisal prompt: bbde744f6041e821f31f8abea85dab6ec16d8e222da11db74b1ab5f4ee63887c
+- Appraisal prompt: e369d7e583dbf69ba2a8f4e95397a16065c25a2a13b732b146fac05c2c49b2ac
 - Item 1 (CONF1): candidate A, written by vendor-a/model-one
 - Item 2 (CONF2): candidate C, written by vendor-b/model-two
 
