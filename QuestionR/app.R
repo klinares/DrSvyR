@@ -116,6 +116,25 @@ local({
          paste(missing, collapse = ", "), call. = FALSE)
 })
 
+# The ellmer functions and arguments R/llm.R calls, checked here so that a different
+#   ellmer stops the app with a plain message and not in the middle of a call. The app
+#   was built and tested with ellmer 0.4.2.
+local({
+  calls = list(chat_anthropic = c("system_prompt", "params", "model", "cache", "base_url", "credentials", "echo"),
+               chat_openai_compatible = c("base_url", "name", "system_prompt", "credentials", "model", "params",
+                                          "api_args", "echo"),
+               params = c("temperature", "max_tokens", "reasoning_effort"))
+  gone = unlist(imap(calls, function(args, fn) {
+    if (!fn %in% getNamespaceExports("ellmer")) return(fn)
+    absent = setdiff(args, names(formals(getExportedValue("ellmer", fn))))
+    if (length(absent)) paste0(fn, "(", paste(absent, collapse = ", "), ")")
+  }))
+  if (length(gone))
+    stop("The installed ellmer (", as.character(packageVersion("ellmer")), ") has no ",
+         paste(gone, collapse = "; "), ". QuestionR needs ellmer 0.4.2 or a later version that has them: ",
+         "install it with install.packages(\"ellmer\") and start the app again.", call. = FALSE)
+})
+
 # The verbs R/ relies on, checked to be the ones meant. A masked verb fails
 #   here rather than producing a wrong prompt later.
 stopifnot(

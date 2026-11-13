@@ -2820,3 +2820,44 @@ ok("a methodology file that is missing, or a skills folder that is, is said in w
 ok("the page's Methodology tab is the note and the table, and the app starts with it (the whole page was built above)",
    grepl("<h1>Methodology note</h1>", page$html, fixed = TRUE) &&
      lengths(regmatches(page$html, gregexpr("<code>one_thing</code>", page$html, fixed = TRUE))) >= 1L)
+
+
+# ---- Phase 6c: Start here says what is in force; the notices ---------------------------------
+
+ok("a profile that still holds placeholders says which entries to fill in, the connection check does not call it, and the work profile's page builds; a filled profile says nothing",
+   local({
+     ms = list(list(role = "Project manager", m = list(api = "anthropic", base_url = "<work base url>", id = "<pm id at work>",
+                                                      key_source = "analyst")),
+               list(role = "Worker 1", m = list(api = "openai", base_url = "<work base url>", id = "<worker id at work>",
+                                                key_source = "analyst")))
+     h = paste(as.character(placeholder_notice(ms)), collapse = "")
+     ping = llm_ping(ms[[1]]$m, key = "a-key", complete = function(...) stop("the call must not be made"))
+     work_page = in_child("work", c("app <- shiny::shinyAppDir('.'); invisible(app$serverFuncSource())",
+                                    "cat(paste(as.character(help_ui()), collapse = ''))"))
+     grepl("profile still has placeholders to fill in", h, fixed = TRUE) &&
+       grepl("Project manager (&lt;pm id at work&gt;): base_url, id", h, fixed = TRUE) &&
+       grepl("Worker 1 (&lt;worker id at work&gt;): base_url, id", h, fixed = TRUE) &&
+       identical(llm_placeholders(ms[[2]]$m), c("base_url", "id")) &&
+       isFALSE(ping$ok) && grepl("Not set up: base_url, id", ping$message, fixed = TRUE) &&
+       work_page$status == 0 && grepl("still has placeholders", work_page$out, fixed = TRUE) &&
+       is.null(placeholder_notice(llm_models())) && !grepl("placeholders to fill in", paste(as.character(help_ui()), collapse = ""), fixed = TRUE)
+   }))
+local({
+  st = flow_state()
+  st$workers = fl_models("claude-haiku-5-5")
+  fa = rec_ask(reply_rich)
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) fa$ask), {
+    session$flushReact()
+    approve_state(st)
+    session$flushReact()
+    h = html_of3(output$results)
+    ok("when the only worker is of the project manager's own family, Results says the appraiser reviewed a draft from its own family; with workers of other families it says nothing",
+       grepl("The appraiser reviewed a draft from its own model family", h, fixed = TRUE) &&
+         grepl(paste0("The appraisal was made by ", APP_MODELS$pm$id, " of a draft written by claude-haiku-5-5"), h, fixed = TRUE) &&
+         identical(model_family(c("anthropic/claude-sonnet-5.5", "claude-sonnet-5-5", "gpt-6-luna", "google/gemma-4-31b-it")),
+                   c("claude", "claude", "gpt", "gemma")) &&
+         is.null(same_family_note(APP_MODELS$pm$id, fl_ids)) && is.null(same_family_note(APP_MODELS$pm$id, character(0))) &&
+         is.null(same_family_note(APP_MODELS$pm$id, c("claude-haiku-5-5", "vendor-a/model-one"))))
+  })
+})

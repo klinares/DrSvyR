@@ -148,6 +148,11 @@ llm_models <- function()
 
 llm_host <- function(m) sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url)
 
+# The entries of a model that still hold a <placeholder> (the work profile before it is
+#   filled in), by name.
+llm_placeholders <- function(m)
+  names(purrr::keep(m, function(v) is.character(v) && length(v) == 1L && grepl("^<.+>$", v)))
+
 
 # ---- errors ------------------------------------------------------------------------
 
@@ -510,6 +515,10 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
 #   own words. A model that has no key is not called: it says what is missing.
 #   This is the only connection test that exists at work, where tests/ is gone.
 llm_ping <- function(m, key = NULL, complete = llm_complete) {
+  if (length(llm_placeholders(m)))
+    return(list(ok = FALSE, seconds = NA_real_,
+                message = paste0("Not set up: ", paste(llm_placeholders(m), collapse = ", "),
+                                 " still hold a placeholder in app.R. See README.md, Setting up at work.")))
   key = key %||% llm_key_for(m)
   if (is.null(key) || !nzchar(key))
     return(list(ok = FALSE, seconds = NA_real_,

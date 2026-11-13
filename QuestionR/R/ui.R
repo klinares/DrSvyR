@@ -54,32 +54,52 @@ office_logo <- function(file, office = "") {
 
 # ---- Start here --------------------------------------------------------------
 
-# Where a model's key comes from, in words. Never the key itself.
-key_source_label <- function(m) {
-  if (identical(m$key_source, "analyst")) "key pasted below"
-  else paste0("key from the server variable ", m$key_var)
-}
-
+# A model as the page names it: the id, the API style in words, where it is called and
+#   where its key comes from. Never the key itself.
 model_label <- function(m)
   tagList(tags$code(m$id), tags$br(),
           tags$span(class = "text-muted small",
-                    paste0(m$api, " API at ", m$base_url, "; ", key_source_label(m))))
+                    paste0(switch(m$api %||% "", anthropic = "Anthropic API", openai = "OpenAI-style API",
+                                  paste0("API '", m$api, "'")),
+                           " at ", m$base_url, "; ",
+                           if (identical(m$key_source, "analyst")) "key pasted below"
+                           else paste0("key from the server variable ", m$key_var))))
 
-# The settings that are in force for this process, read from the globals app.R
-#   assigns (APP_CLASSIFICATION, APP_PROFILE, APP_MAX_PASTE_CHARS). The models
-#   are in their own table, with whether each has a key.
-settings_table <- function() {
-  row = function(label, value) tags$tr(tags$th(scope = "row", label), tags$td(value))
-  tags$table(
-    class = "table table-sm",
-    tags$tbody(
-      row("Profile", APP_PROFILE),
-      row("Classification banner", APP_CLASSIFICATION),
-      row("Pasted questionnaire limit",
-          paste(format(APP_MAX_PASTE_CHARS, big.mark = ","), "characters"))))
+# What a review has been shown to do, in the words of the Methodology tab: the bullet of
+#   www/methodology.md that gives the result of the one test, with its limits, copied as it
+#   stands (it is read from the file, so it cannot drift from it), and the model in force.
+pilot_notice <- function(path = METHODOLOGY_FILE, pm = APP_MODELS$pm) {
+  txt = tryCatch(readLines(path, encoding = "UTF-8", warn = FALSE), error = function(e) character(0))
+  at = grep("^- \\*\\*How well the review step finds known faults", txt)
+  bullet = if (length(at)) {
+    rest = txt[-seq_len(at[[1]])]
+    sub("^- ", "", c(txt[at[[1]]], sub("^  ", "", rest[cumsum(!startsWith(rest, "  ")) == 0L])))
+  }
+  advice_box(
+    tags$strong("This is a pilot. "),
+    "A draft is a first draft and a review is an expert-review appraisal by a language model; neither is a pretest. ",
+    "The review step has been tested once, on a published set of questions with known faults. This is what the ",
+    "Methodology tab says of it:",
+    if (length(bullet)) HTML(shiny::markdown(paste(bullet, collapse = "\n")))
+    else tags$p("(The Methodology tab's account of the test could not be read.)"),
+    tags$p(paste0("The project manager model in force here is ", pm$id, "; that test used claude-sonnet-5-5. ",
+                  "The rest of the Methodology tab says how the rules and their sources are used.")))
+}
+
+# A profile that still holds <placeholders> (the work profile before it is filled in) says which
+#   entries to fill in, and nothing else about it fails.
+placeholder_notice <- function(ms = llm_models()) {
+  bad = purrr::keep(ms, function(x) length(llm_placeholders(x$m)) > 0L)
+  if (!length(bad)) return(NULL)
+  warn_box(
+    tags$strong(paste0("The ", APP_PROFILE, " profile still has placeholders to fill in. ")),
+    "Open app.R, section 1, and replace each <placeholder> (README.md, Setting up at work). Still to fill in:",
+    tags$ul(class = "mb-0", purrr::map(bad, function(x)
+      tags$li(paste0(x$role, " (", x$m$id, "): ", paste(llm_placeholders(x$m), collapse = ", "))))))
 }
 
 help_ui <- function() {
+  row = function(label, value) tags$tr(tags$th(scope = "row", label), tags$td(value))
   tagList(
     tags$h3(QUESTIONR_TABS[1]),
     tags$p("QuestionR helps a public opinion analyst draft survey items and ",
@@ -98,8 +118,17 @@ help_ui <- function() {
       tags$li("It saves nothing you paste. Text you enter goes only to the ",
               "model endpoints listed below."))),
 
+    pilot_notice(),
+    placeholder_notice(),
+
     tags$h5("Settings in force"),
-    settings_table())
+    tags$table(
+      class = "table table-sm",
+      tags$tbody(
+        row("Profile", APP_PROFILE),
+        row("Classification banner", APP_CLASSIFICATION),
+        row("Pasted questionnaire limit",
+            paste(format(APP_MAX_PASTE_CHARS, big.mark = ","), "characters")))))
 }
 
 # The models, and whether each has a key; and a button that makes one very small
@@ -133,7 +162,9 @@ mod_connect_server <- function(id, state, ping = llm_ping) {
         tags$tbody(purrr::map(llm_models(), function(x) {
           ready = llm_key_ready(x$m)
           tags$tr(tags$td(x$role), tags$td(model_label(x$m)),
-                  tags$td(if (ready) tags$span(class = "text-success", "ready")
+                  tags$td(if (length(llm_placeholders(x$m)))
+                            tags$span(class = "text-warning", "waits for the settings in app.R")
+                          else if (ready) tags$span(class = "text-success", "ready")
                           else tagList(tags$span(class = "text-warning", "waits for a key"),
                                        tags$br(),
                                        tags$span(class = "text-muted small", llm_key_hint(x$m)))))
