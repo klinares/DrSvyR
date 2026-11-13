@@ -439,3 +439,105 @@ and a short click-through list for me. Then stop and tell me to try it and
 to take REVIEW.md and STATUS.md to the Claude project.
 ```
 
+## Phase 8: what analysts see, the skills, and QuestionR to main
+
+```
+Read CLAUDE.md, then QuestionR/DESIGN.md section 17 (it wins over earlier
+sections), QuestionR/STATUS.md (Phase 7) and QuestionR/www/skills/README.md.
+Confirm `git branch --show-current` is questionr and the tree is clean
+except for the Claude project's files listed below. Commit those first, on
+their own, as "QuestionR: changes from the Claude project (design section
+17, methodology, start page picture, materials list, prompts)":
+  QuestionR/DESIGN.md, QuestionR/PROMPTS.md, QuestionR/www/methodology.md,
+  QuestionR/www/start.md, QuestionR/www/how_it_works.svg, the four
+  QuestionR/www/fw_*.svg, QuestionR/www/skills_materials/README.md
+(leave QuestionR/skills_next/ for 8a)
+
+Then, one commit per item:
+
+8a. Skills and the Prompt tab (section 17, item 1; read it in full).
+    First move the four files in QuestionR/skills_next/ (core.md,
+    attitudinal.md, behavioral.md, sensitive.md, README.md: five with the
+    README) over the same names in QuestionR/www/skills/ and delete
+    skills_next/. These are the Claude project's files: move them, do not
+    edit them. The app will not start until the parser accepts
+    "## Guidelines", so do the parser in the same commit.
+    Then: the parser reads "## Guidelines" (an optional heading line, then
+    bullets) and still stops on any other unknown section. The message is
+    built in the order section 17 gives. The persona leaves the system
+    prompt. The Prompt tab shows one editable box, the message, and under
+    it a closed <details> "Everything else that is sent" with the rules,
+    the checklist where there is one, and the reply format, read-only. R
+    appends the checklist and reply format after the analyst's text when it
+    sends. Remove the system prompt text area and everything that read
+    input$system. Evaluate uses the same tab: do it there too. The brief
+    check and the appraisal are not shown to the analyst and keep their
+    block layout, apart from the persona's move.
+
+8b. Methodology tab (item 2). Under md_page(METHODOLOGY_FILE) draw one
+    closed panel per skill file in this order: core, generate, attitudinal,
+    behavioral, sensitive, mode, cross_cultural, evaluate, pm_brief,
+    pm_appraise. Title: the file's first "# " heading and its Version.
+    Body: the file as markdown with HTML comments removed. Use the reader
+    in R/skills.R; do not write a second parser. Do not draw
+    www/skills/README.md. If the files cannot be read, say so in words,
+    as md_page does.
+
+8c. Source code button (item 3). APP_SOURCE_URL in app.R section 1, value
+    https://github.com/klinares/drsvyr/tree/main/QuestionR. A small outline
+    button "Source code", top left of the header, target _blank with
+    rel noopener.
+
+8d. Materials (item 4). Add www/skills_materials to QuestionR/.rscignore.
+    In the root .gitignore ignore QuestionR/www/skills_materials/*.pdf,
+    then re-admit by name only
+    "QuestionR/www/skills_materials/Evaluating Unedited AI-Generated Psychometric Scales.pdf".
+    Check with `git check-ignore -v` that the other eight PDFs are ignored
+    and `git status` shows only README.md and that one PDF.
+
+8e. Start here key text (item 5). Replace the four TODO strings in
+    KEY_INSTRUCTIONS in R/llm.R with the wording in section 17, item 5,
+    exactly.
+
+8f. Hardening (section 17, last paragraph). R/checks.R line 397: write the
+    curly quotes as \u201c and \u201d. In tests/smoke.R let the two checks
+    that expect <span> inside a button accept the label with or without
+    the span.
+
+8g. Smoke: update the checks the changes above touch (the skill format,
+    the message layout, the Prompt tab, the Methodology tab, the header,
+    Start here with the picture). Add: every .svg in www/ parses as XML and
+    every image named in start.md and methodology.md exists. Do not weaken
+    any other check. Every prompt hash changes in 8a: list the new ones in
+    STATUS.md and say that nothing else moved them.
+
+8h. Tidy for main (item 6). `git rm --cached inteRn/tests/live_log.md`
+    (keep the file on disk), `git rm prompts/extract_reflexes.md`, and
+    delete untracked .Rhistory files anywhere in the repository. Do not
+    touch SurvAI_Expert/ (another branch's untracked files) or svysegment/.
+
+Run tests/smoke.R and tests/review.R 5 until both are clean, and commit
+with REVIEW.md. Update STATUS.md: what changed, the hash count, and a short
+click-through list. Commit.
+
+Then prepare the merge, but do not push:
+  - `git config user.email` is "your@email.com". Stop and ask me for the
+    address to use, and set it for this repository only.
+  - `git fetch origin`. Local main is behind origin/main (origin/main has
+    the inteRn merge). Create a branch merge-questionr from origin/main and
+    merge questionr into it with --no-ff. CLAUDE.md will conflict: keep
+    both the inteRn rows and the QuestionR section, and make the Layout
+    table list svysegment, QuestionR and inteRn. Check README.md lists all
+    three. Run QuestionR's smoke test and svysegment's smoke test from the
+    merged tree.
+  - Show me `git log --oneline -5`, `git diff --stat origin/main`, and the
+    merged CLAUDE.md. Then stop. I will decide whether to push the branch
+    and open a pull request into main, or push main directly.
+
+Rules, unchanged: root CLAUDE.md hard rules; no edits to www/skills/
+beyond the move in 8a; no change to what tests/review.R checks beyond what
+the new skill section and message layout force (report the diff); no
+invented functions or arguments; never weaken a test; do not push. One live
+draft run after 8a, to see that the shorter message still returns items R
+can parse: say the number of calls and wait for my yes.
+```

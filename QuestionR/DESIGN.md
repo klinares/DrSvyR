@@ -773,3 +773,104 @@ first". Token ceilings are unchanged. The appraisal's cut-off message says
 | 7c | Start here and Methodology as above; brief check off by default | smoke checks both pages render their file |
 | 7d | Tidy: remove what 7a to 7c made unused; list every file and its one job | file count no higher than before; smoke and `review.R 5` clean |
 
+## 17. After the Phase 7 click-through: Phase 8, and QuestionR goes to main (Claude project, 2026-11-12)
+
+Kevin ran Phase 7 and ruled on six things. Where this section and earlier
+ones disagree, this section wins. Still no new code file.
+
+**1. The Prompt tab shows one short, editable prompt** (revised 2026-11-13
+after Kevin saw the first version). The model for it is the informed prompt
+of the LLM Question Lab from IASS/WSS Session 3: a persona line, the task,
+a short list of guidelines, nothing else. The analyst edits that and never
+edits the skills.
+
+- **The message, in this order:** the persona from `core.md`; `Brief:` and
+  the form's lines; `Task:` and the ask sentence; the `## Guidelines` of
+  `core.md`; then the `## Guidelines` of the task file (attitudinal,
+  behavioral or sensitive). For a review: persona, brief, task, the
+  questionnaire as pasted, and core's guidelines. The labels PREPARE, ASK and
+  CHARACTERIZE are no longer written; the order is still Buskirk, Eck and
+  Timbrook's.
+- **What the analyst cannot edit, and sees only on request:** a closed panel
+  under the box, "Everything else that is sent", holding read-only the
+  rules (the Reflexes and Prohibitions of the files in force), the review
+  checklist where there is one, and the reply format. R sends the rules as
+  the system prompt and appends the checklist and reply format to the
+  message after the analyst's text, so an edit cannot break the parsing.
+- **The persona moves** from the system prompt to the top of the message,
+  so it is sent once. Deleting it from the message removes it; the rules
+  still apply.
+- **Skill format:** `## Guidelines` is a new section, in `core.md` 0.3 and
+  the three draft task files 0.3: an optional heading line and bullets. It
+  goes only into the message. The parser accepts it and still stops on any
+  other unknown section. Deleting a guideline from the message does not
+  remove the rule: the Reflexes stay in force.
+- **Hashes:** every prompt hash changes, because the message and the system
+  prompt both change. STATUS.md records the new ones; the claim that the 60
+  are unchanged ends here. An edited prompt means an edited message.
+
+**2. The methodology note explains the skills.** `www/methodology.md` gains a
+last section, "The skills behind every answer": what a skill is, a table of
+the ten skill files in plain words, and links to the files and the list of
+materials on GitHub. Under that section the tab draws one closed panel per
+skill file, in the order of the table (core, generate, attitudinal,
+behavioral, sensitive, mode, cross_cultural, evaluate, pm_brief,
+pm_appraise), titled with the file's `# ` heading and its version, opening to
+the file rendered as markdown with HTML comments removed. This works at work,
+where GitHub may not be reachable. `www/skills/README.md` is for maintainers
+and is not drawn.
+
+**3. A Source code button**, top left of the header, opening
+`APP_SOURCE_URL` (app.R, section 1) in a new tab:
+`https://github.com/klinares/drsvyr/tree/main/QuestionR`.
+
+**4. The skill materials.** `www/skills_materials/` holds the PDFs the skills
+were drafted from. Most are copyrighted (webinar slides, working papers,
+proceedings), so only the openly licensed one is committed (Martini et al.
+2026, CC BY-NC-ND 4.0); a `README.md` lists all nine with their citations.
+The folder is never deployed: `.rscignore` lists it (22 MB of PDFs). If Kevin
+obtains permission to post others, he adds them by name in `.gitignore`.
+
+**5. No TODO text on Start here.** The four `KEY_INSTRUCTIONS` placeholders
+were shown to analysts. Until Kevin supplies the work wording they read:
+where, "Ask the person who manages the AI service for your office for a
+key."; create, "Use a key issued to you, not one shared by a team, so that
+use can be traced to the person who made it."; models, "The key must be able
+to reach every model listed under Settings and connection below. Check
+connections there before you start."; cost, "If a request is refused for
+quota or cost, stop and ask the person who issued the key; do not borrow
+someone else's."
+
+**6. QuestionR goes to main.** Before the merge: untrack
+`inteRn/tests/live_log.md` (a transcript `inteRn/.gitignore` already
+excludes on main; the file stays on disk), delete `prompts/extract_reflexes.md`
+(a one-off prompt whose product, `svysegment/www/ai_reflexes.md`, is
+committed), delete stray `.Rhistory` files (already ignored), and merge onto
+`origin/main`, not the stale local `main`. `CLAUDE.md` conflicts: keep both
+the inteRn and the QuestionR sections. `DESIGN.md`, `STATUS.md`,
+`PROMPTS.md` and `REVIEW.md` stay in git (Claude Code reads them; Connect
+never gets them) and are deleted at work as before.
+
+**8. The frameworks, drawn.** `www/methodology.md` gains "The frameworks
+behind the rules" with four pictures (`www/fw_tse.svg`, `fw_response.svg`,
+`fw_testing.svg`, `fw_trapd.svg`) and a short paragraph each, citing only
+what the webinar slides cite: Groves et al. (2009) for Total Survey Error,
+Tourangeau, Rips and Rasinski (2000) for the response model, Sessions 2 and
+3 for the testing methods and TRAPD, Tourangeau and Yan (2007) and Yan
+(2021) for sensitive questions. The slides name TRAPD without a reference,
+so none is given.
+
+**7. A picture of how it works on Start here.** `www/how_it_works.svg`
+(drafted in the Claude project) sits under "How it works" in
+`www/start.md`, above the numbered list, which stays for readers who skip
+pictures. Six steps, each marked ANALYST or AI, the skills feeding steps 2 to 4,
+and a dashed "change the brief and run again" loop. It is a plain SVG image
+with its own white panel, so it reads the same in light and dark mode and
+needs no JavaScript or outside library. It is static: when the steps change,
+the SVG is edited in the Claude project with `start.md`.
+
+Also: `R/checks.R` line 397 writes curly quotes as literal characters;
+write them as `\u201c` and `\u201d` like `plain_apostrophe()` does, so a
+server in a non-UTF-8 locale cannot misread the source. Two smoke checks
+expect `<span>` inside a button, which Shiny added in a later version; allow
+either form so smoke passes on the internal mirror's Shiny.

@@ -13,6 +13,8 @@ You can:
 
 ## How it works
 
+![How QuestionR works: the analyst describes what is needed and checks the instructions; several AI models draft at the same time and one model reviews the drafts against the rules and recommends one set; the analyst decides, then copies the result into Word with a record of how it was made.](how_it_works.svg)
+
 1. **Describe what you need.** Your research question, who will be
    surveyed, the country, how the survey will be given (web, phone, in
    person), and the language.
@@ -25,8 +27,9 @@ You can:
 4. **Copy it into Word.** The final version comes with a short record of how
    it was produced, to file with the questionnaire.
 
-A set of draft questions takes a few minutes. A long questionnaire review
-can take longer.
+Reviewing a questionnaire follows the same steps, with one careful review
+in place of the drafts. A set of draft questions takes a few minutes. A long
+questionnaire review can take longer.
 
 ## What to keep in mind
 
