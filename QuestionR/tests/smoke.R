@@ -52,6 +52,15 @@ has <- function(s) grepl(s, page$html, fixed = TRUE)
 
 ok("the page is served", isTRUE(page$status == 200))
 ok("the classification banner shows", has(APP_CLASSIFICATION))
+# APP_SOURCE_URL is app.R's own setting too, so its value is written out here.
+source_url <- "https://github.com/klinares/drsvyr/tree/main/QuestionR"
+source_link <- regmatches(page$html, regexpr("<a[^>]*>Source code</a>", page$html))
+ok("a small outline Source code button, first in the header and before the logo, opens the source in a new tab without an opener",
+   length(source_link) == 1L && grepl(paste0("href=\"", source_url, "\""), source_link, fixed = TRUE) &&
+     grepl("target=\"_blank\"", source_link, fixed = TRUE) && grepl("rel=\"noopener\"", source_link, fixed = TRUE) &&
+     grepl("btn btn-outline-secondary btn-sm", source_link, fixed = TRUE) &&
+     regexpr("Source code</a>", page$html, fixed = TRUE) < regexpr("Office logo|office_logo", page$html) &&
+     regexpr("Source code</a>", page$html, fixed = TRUE) < regexpr("<h2>QuestionR</h2>|QuestionR</h2>", page$html))
 # APP_LOGO is app.R's own setting and is not in the global environment, so the
 #   default file name is written out here.
 logo_file <- "office_logo.png"

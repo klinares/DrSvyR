@@ -33,6 +33,11 @@ APP_OFFICE <- ""
 APP_MAX_PASTE_CHARS <- 40000
 APP_BATCH_CHARS <- 4000
 
+# Where the source code is, for the "Source code" button at the top left of the header. It
+#   opens in a new tab. At work, where that address may not be reachable, point it at the
+#   internal copy or leave it: the button only links.
+APP_SOURCE_URL <- "https://github.com/klinares/drsvyr/tree/main/QuestionR"
+
 # The profile used when the environment variable QUESTIONR_PROFILE is not set:
 #   "home", "rehearsal" or "work". One line to change when the app is moved to work.
 APP_DEFAULT_PROFILE <- "home"
@@ -201,6 +206,8 @@ ui <- page_fluid(
 
   div(
     style = "display:flex; align-items:center; gap:1rem; margin:0.5rem 0;",
+    tags$a("Source code", href = APP_SOURCE_URL, target = "_blank", rel = "noopener",
+           class = "btn btn-outline-secondary btn-sm"),
     office_logo(APP_LOGO, APP_OFFICE),
     div(tags$h2("QuestionR", style = "margin:0;"),
         tags$p(tags$em("Draft survey items and review a questionnaire, with ",
