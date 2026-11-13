@@ -1,6 +1,6 @@
 # QuestionR review evidence, Phase 5
 
-Generated 2026-11-12 21:35 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-12 22:44 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -12,6 +12,12 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+8eb0ef3 Phase 7d: tidy after 7a-7c
+c740cfa QuestionR 7c: Start here welcomes the analyst; a short methodology note; the brief check is off by default
+2a51e87 QuestionR 7b: model calls go out together
+88ef184 QuestionR 7a: the reviewer recommends one set; the analyst edits it
+eae04df QuestionR: changes from the Claude project (design section 16, pm_appraise 0.4, start.md, methodology, review.R)
+6c9481d QuestionR Phase 6: STATUS, REVIEW, and a shorter pilot notice
 9a07c6a QuestionR 6d: README for an analyst who has not seen the repository
 ca20ae8 QuestionR 6c: Start here says what is in force; startup and profile notices
 76378d6 QuestionR 6b: work settings in app.R section 1
@@ -21,38 +27,30 @@ ca20ae8 QuestionR 6c: Start here says what is in force; startup and profile noti
 9af8f4c QuestionR 5e preparation: the 30-question questionnaire and llm_check.R go review30
 f15601d QuestionR: readability fixes found in the browser (5c, 5d)
 45206ac QuestionR 5d: the Methodology tab
-7dc49f5 QuestionR 5c: the Output tab for both flows, the disclosure block and the run log
-191dcfb QuestionR 5b: long questionnaires are reviewed in parts
-58cfbb3 QuestionR 5a: severity bands in both Results views, evidence comparison, evaluate 0.3 hashes
-b026f0a QuestionR: changes from the Claude project (design section 14, evaluate 0.3, methodology, review.R section 10)
-f96b3e1 QuestionR Phase 4: gold test results, final STATUS and REVIEW
-01c7100 QuestionR 4e preparation: gold items file and the gold runner
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
- M R/ui.R
- M REVIEW.md
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
- CLAUDE.md                                     |    1 +
+ CLAUDE.md                                     |    3 +-
  QuestionR/.rscignore                          |    7 +
- QuestionR/DESIGN.md                           |  702 ++++++
- QuestionR/PROMPTS.md                          |  391 ++++
+ QuestionR/DESIGN.md                           |  775 +++++++
+ QuestionR/PROMPTS.md                          |  441 ++++
  QuestionR/R/_disable_autoload.R               |    5 +
- QuestionR/R/checks.R                          |  447 ++++
- QuestionR/R/flow.R                            |  361 ++++
- QuestionR/R/llm.R                             |  625 ++++++
- QuestionR/R/output.R                          |  352 +++
+ QuestionR/R/checks.R                          |  451 ++++
+ QuestionR/R/flow.R                            |  420 ++++
+ QuestionR/R/llm.R                             |  695 ++++++
+ QuestionR/R/output.R                          |  410 ++++
  QuestionR/R/skills.R                          |  650 ++++++
- QuestionR/R/ui.R                              |  200 ++
- QuestionR/R/ui_generate.R                     |  970 +++++++++
+ QuestionR/R/ui.R                              |  188 ++
+ QuestionR/R/ui_generate.R                     | 1011 ++++++++
  QuestionR/README.md                           |  157 ++
- QuestionR/REVIEW.md                           | 1872 ++++++++++++++++
- QuestionR/STATUS.md                           | 1732 +++++++++++++++
- QuestionR/app.R                               |  241 +++
+ QuestionR/REVIEW.md                           | 1877 +++++++++++++++
+ QuestionR/STATUS.md                           | 1892 +++++++++++++++
+ QuestionR/app.R                               |  242 ++
  QuestionR/tests/gold_items.csv                |   60 +
  QuestionR/tests/gold_matches.csv              |   68 +
  QuestionR/tests/gold_runs/C1.json             |   98 +
@@ -84,20 +82,20 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/tests/gold_runs/F9.json             |  119 +
  QuestionR/tests/gold_runs/_calls.csv          |   28 +
  QuestionR/tests/gold_runs/_findings.csv       |  103 +
- QuestionR/tests/gold_summary.md               |  121 ++
- QuestionR/tests/llm_check.R                   |  319 +++
+ QuestionR/tests/gold_summary.md               |  121 +
+ QuestionR/tests/llm_check.R                   |  331 +++
  QuestionR/tests/llm_check.out                 |   24 +
  QuestionR/tests/output_generate.txt           |   60 +
  QuestionR/tests/output_review.txt             |   64 +
- QuestionR/tests/review.R                      |  680 ++++++
- QuestionR/tests/review_long.json              | 1393 ++++++++++++
+ QuestionR/tests/review.R                      |  682 ++++++
+ QuestionR/tests/review_long.json              | 1393 +++++++++++
  QuestionR/tests/review_long.md                |   26 +
  QuestionR/tests/review_long_questionnaire.txt |   89 +
  QuestionR/tests/review_questionnaire.txt      |   15 +
  QuestionR/tests/review_tokens.md              |   18 +
- QuestionR/tests/run_generate.json             |  864 ++++++++
- QuestionR/tests/smoke.R                       | 2863 +++++++++++++++++++++++++
- QuestionR/www/methodology.md                  |   85 +
+ QuestionR/tests/run_generate.json             |  864 +++++++
+ QuestionR/tests/smoke.R                       | 3041 +++++++++++++++++++++++++
+ QuestionR/www/methodology.md                  |   55 +
  QuestionR/www/skills/README.md                |   66 +
  QuestionR/www/skills/attitudinal.md           |   72 +
  QuestionR/www/skills/behavioral.md            |   67 +
@@ -106,11 +104,12 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/www/skills/evaluate.md              |  117 +
  QuestionR/www/skills/generate.md              |   77 +
  QuestionR/www/skills/mode.md                  |   57 +
- QuestionR/www/skills/pm_appraise.md           |   77 +
+ QuestionR/www/skills/pm_appraise.md           |   76 +
  QuestionR/www/skills/pm_brief.md              |   42 +
  QuestionR/www/skills/sensitive.md             |   90 +
+ QuestionR/www/start.md                        |   43 +
  README.md                                     |    2 +
- 73 files changed, 19559 insertions(+)
+ 74 files changed, 20273 insertions(+), 1 deletion(-)
 exit status: 0
 ~~~~
 
@@ -118,18 +117,18 @@ exit status: 0
 
 | file | lines |
 |---|---|
-| app.R | 241 |
+| app.R | 242 |
 | R/_disable_autoload.R | 5 |
-| R/checks.R | 447 |
-| R/flow.R | 361 |
-| R/llm.R | 625 |
-| R/output.R | 352 |
+| R/checks.R | 451 |
+| R/flow.R | 420 |
+| R/llm.R | 695 |
+| R/output.R | 410 |
 | R/skills.R | 650 |
-| R/ui.R | 199 |
-| R/ui_generate.R | 970 |
-| tests/llm_check.R | 319 |
-| tests/review.R | 680 |
-| tests/smoke.R | 2863 |
+| R/ui.R | 188 |
+| R/ui_generate.R | 1011 |
+| tests/llm_check.R | 331 |
+| tests/review.R | 682 |
+| tests/smoke.R | 3041 |
 
 Code files counted: 11 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
@@ -148,7 +147,7 @@ R/_disable_autoload.R present and empty of code: PASS
 
 Top-level expressions in R/ that are not assignments: PASS
 Names defined more than once across R/: PASS
-pkg::fn calls checked: 32. Not exported by the installed package: PASS
+pkg::fn calls checked: 37. Not exported by the installed package: PASS
 
 ## 4. Skill files
 
@@ -164,7 +163,7 @@ PASS means the file is byte for byte what the Claude project drafted (line endin
 | evaluate.md | PASS | 6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb |
 | generate.md | PASS | 9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2 |
 | mode.md | PASS | 98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0 |
-| pm_appraise.md | PASS | f45e6e4ae77020fadf0cc1d6162b84f015300984e4eafcc9e83cf0116472c4eb |
+| pm_appraise.md | PASS | a43e03e541f02f12d72f44d83c901faf983b0edf36fe123045da66a50aaeeb10 |
 | pm_brief.md | PASS | a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a |
 | sensitive.md | PASS | 0ebc82a948f01caed0847f3d4a6cda87216f33dc3039e764cb8c1ab8ac45e726 |
 
@@ -190,7 +189,7 @@ ok  the classification banner shows
 ok  the logo shows, or its placeholder box does
 ok  every tab is in the navlist
 ok  the key box is on Start here
-ok  no tab is a placeholder any more, and the Methodology tab holds the note and the rules table
+ok  no tab is a placeholder any more; Start here and the Methodology tab are their markdown files, and the rules table is not drawn
 ok  home profile: PM on a pasted key, three workers
 ok  work profile loads
 ok  an unknown profile stops the app and names the choices
@@ -359,8 +358,9 @@ ok  an item with neither options nor an open_format fails, naming the item
 ok  a reply that is not an object, or whose items are not a list, fails
 ok  the draft validator is what llm_json() is given: a fields problem is a readable sentence ending in a full stop
 ok  a brief check with its fields passes; one with a string for complete, or a question with no ask, fails
-ok  an appraisal with its seven fields passes, empty lists included; a missing limits or set_fails fails
-ok  a fail must name its check and give a severity from 1 to 10, one about the set too
+ok  a recommendation with its five fields passes, empty lists included; a missing limits or selected fails
+ok  a recommended item gives its domain, candidate and id; a concern its check, failing words, a severity from 1 to 10 and why; a note on the set its check, severity and why
+ok  R refuses a recommendation that names an id no candidate has, names an item twice, or has more items than were asked for; two candidates may share an id; an id may be a number
 ok  a format that has no schema stops, naming it
 ok  a new output format is one entry: the validator is built from REPLY_SCHEMAS alone
 ok  coded defaults match the hand-coded fixture: five labelled points and a don't know
@@ -373,12 +373,10 @@ ok  the coded defaults read as words for a table, with not coded where it is
 ok  a five-point scale whose decisions say there is no midpoint is odd and stated as no midpoint, and R does not say 'midpoint' for the count
 ok  what an item says about a midpoint is read as yes, no or not stated, in the phrasings the models used
 ok  decisions written as one string or one entry are flagged not itemised, two or more are itemised, none is none
-ok  an appraisal's fails are read with whether each check is an id that was sent
-ok  a fail is shown at severity 5 or above and folded below it; one with no severity is shown
-ok  the fails about a candidate's whole set are kept apart, with the items they name, and count against no item
-ok  an item the appraiser gave no entry is not appraised, not a pass; an entry for no item is flagged
-ok  a merged item that does not exist, or has a fail rated 5 or above, is a problem; one with only a low fail is not; an empty domain is not
-ok  an appraisal with nothing wrong has no flags
+ok  each recommended item is found in its draft by letter and id, in the order given, with its position, domain, reason and suggestion
+ok  a concern is read with whether its check is an id that was sent; severity 5 or above is shown, below is not, and none given is shown
+ok  the notes on the set are read the same way, the domains not covered are listed, and the check ids that were not sent are collected
+ok  an item that cannot be found in its draft is left out, not guessed at; a reply with nothing recommended has no flags
 ok  each result has exactly the fields the design names
 ok  the flow makes one brief call, one call per worker in the workers' order, and one appraisal call
 ok  each call gets its step's ceiling, and the brief and appraisal hold no worker's name
@@ -409,7 +407,7 @@ ok  a round with only the form is a valid log too
 ok  the state object is made from STATE_DEFAULTS, and every field a module uses is in it
 ok  every field any task lists has a widget spec, so a new task that reuses fields needs no screen change
 ok  the registry's progress_ask announces the model on the page before it makes each call
-ok  Skip carries the cleaned form and the ticked workers on, marks the brief skipped, and moves to the prompt
+ok  Build the instructions carries the cleaned form and the ticked workers on, marks the brief unchecked, and moves to the prompt
 ok  a form that cannot be a prompt says why on the page, and goes nowhere
 ok  no worker ticked says so, and goes nowhere
 ok  no number of items says so, and goes nowhere
@@ -417,7 +415,7 @@ ok  the brief check without the project manager's key says what to do and makes 
 ok  with a key the brief check makes one call to the project manager and shows its questions and criteria
 ok  the brief check's prompt is the brief step's, and no key is on the page
 ok  Continue after a check keeps the check and moves to the prompt
-ok  a brief check that fails is said on the page in words, with the reason, and offers to skip
+ok  a brief check that fails is said on the page in words, with the reason, and offers to build the instructions without it
 ok  a field the chosen task does not show is blank in the form, whatever was typed there before
 ok  a field the task does show is carried (the reference period, for behavioral items)
 ok  Evaluate carries its questionnaire, no item count and no workers, and says to leave a blank line between questions, how long one call is and what the limit is
@@ -426,7 +424,7 @@ ok  a single block too long for one call is refused on the Brief tab, quoting wh
 ok  a requested change is shown on the Brief tab with the round it belongs to, and can be dropped
 ok  the change goes into the form as its revision, and so into the prompt as a REVISION block
 ok  dropping the change clears it
-ok  the Brief tab has the dropdown, the form, a box per worker, the check and the skip button
+ok  the Brief tab has the dropdown, the form, a box per worker, one main button, Build the instructions, and a smaller Check my brief first (the brief check is off by default)
 ok  each field is shown for exactly the tasks that list it, and the worker boxes for the drafting tasks
 ok  a task added to TASKS is in the dropdown, its fields are shown for it, and it assembles a prompt
 ok  a worker added to the model list gets its own box, and nothing else changes
@@ -442,21 +440,20 @@ ok  an empty prompt is refused on the page, and no run starts
 ok  Evaluate's prompt can be read and approved: the button is on and the page says it makes one call
 ok  approving a review prompt, edited or not, starts a run with the edited text and both hashes
 ok  before any run the Results tab says nothing has been run
-ok  a run makes one call per worker and one for the appraisal, and records the round in the state and the log
-ok  each candidate is shown by letter with its items, options and the model that wrote it
-ok  each item shows the coded defaults and has a tick box to keep it
-ok  a failed check is shown with the appraiser's failing words and the check's question; one that was not sent is flagged
-ok  an item the appraiser gave no entry is not shown as passed
-ok  fails below severity 5 are folded away, not listed, and a candidate's set-level fails are shown once under it
-ok  an item whose design decisions are one entry, not several, is flagged on the page (every canned item here)
-ok  below the candidates: coverage, differences, the merged option labelled untested, what to test first, the limits
-ok  R's checks on the appraisal are shown: the check that was not sent, and the items given no entry
-ok  the criteria applied are listed, and the prompt hash and seed are shown, with no model name given to the appraiser
-ok  ticking items records them by candidate letter, position and id, and unticking removes them
-ok  an item unticked is no longer kept
-ok  a second run is a second round in the log, with nothing kept
-ok  a worker that failed is listed with its reason, the other two are shown, and the appraisal covers two candidates
-ok  a failed appraisal is said in words with its reason; the candidates are still shown, none marked appraised
+ok  a run makes one call per worker and one for the appraisal, records the round, and sets the recommended set from the reviewer's letters and ids
+ok  only the recommended set is shown: each item with its domain, the reviewer's reason, its stem and every option in a text box, a button to take it out, and no tick boxes
+ok  an item's remaining concerns are in the three bands, the minor ones folded, a check that was not sent is flagged, and the reviewer's suggestion is labelled untested
+ok  below the set: what no draft covered, the notes on the set as a whole in bands, what to test first, and the limits
+ok  every draft is in a closed panel below, a candidate at a time with its model, each item with its coded defaults and a button to use it, except the two already in the set
+ok  the page for the round shows the prompt hash and seed, the criteria that were applied, and gives the appraiser no model name
+ok  typing in a box is recorded in the session as a change, only for what differs from the draft; the item is the draft's with the change put on it, and the drafts are as the workers wrote them
+ok  taking an item out removes it from the set and the page, and what was typed in the others is put back in the boxes
+ok  an item from the drafts used with no item chosen goes at the end of the set, marked as swapped in; one already in the set is not put in twice
+ok  an item used with an item of the set chosen takes its place, and the replaced item's changes go with it
+ok  a second run is a second round in the log, with the set the reviewer recommended and nothing edited
+ok  a worker that failed is listed with its reason, the other two are shown, and the reviewer covers two candidates
+ok  a reviewer that did not come back is said in words with its reason; there is no recommended set, the drafts are open, and the analyst can build a set from them
+ok  using an item from the drafts then gives a set of one, marked as swapped in
 ok  a run that cannot start (no form) stops with a plain sentence on the page, not an error
 ok  Run again is not offered before there is a round to run again
 ok  after a round, Run again offers a box for what to change
@@ -467,7 +464,7 @@ ok  no key is anywhere on the page
 ok  the log keeps the brief check's and the appraisal's own call records: raw reply, tokens, attempts
 ok  a model's own words for labelling every point are read as yes, in the phrasings the live run produced
 ok  labels said to be partial or absent are read as no, and a silence is not stated
-ok  a cut-off brief check says to try again or skip; a cut-off draft to ask for fewer items; a cut-off appraisal to untick a worker
+ok  a cut-off brief check says to try again or skip; a cut-off draft to ask for fewer items; a cut-off appraisal to ask for fewer items
 ok  an error that is not a cut-off gets no cut-off advice
 ok  a run drafts at most 10 items: 10 is accepted, 11 is refused saying so, and the form's box stops at 10
 ok  a pasted questionnaire over the cap is refused, saying how long it is and what the limit is; at the cap it is accepted
@@ -534,7 +531,7 @@ ok  approving it records the first part's prompt as assembled, not edited, with 
 ok  a run of a long review asks for one progress step per call, records one round with the summary rows, and shows the part that failed
 ok  the page for a long review lists a prompt hash for each call and shows the questions that came back and the instrument findings
 ok  the button's input runs that part again, and the page, the review and the round in the log are replaced by one with nothing missing
-ok  a drafting output has the kept items in the order they were ticked, each with its id, introduction, stem, numbered options and programming notes
+ok  a drafting output has the items of the set in its order, each with its id, introduction, stem, numbered options and programming notes
 ok  the HTML is plain: headings, paragraphs, an ordered list of options that Word keeps numbered, emphasis for the introduction, a block quote for a part
 ok  the HTML and the plain text say the same: every line of the text is in the HTML's text, in the same order
 ok  the output language not being English puts the English source wording in italics after each item
@@ -542,39 +539,46 @@ ok  a language other than the source puts the TRAPD block above the disclosure b
 ok  the disclosure names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft
 ok  the disclosure gives the version of each skill file used, and pm_brief.md only when the brief was checked
 ok  the disclosure gives each prompt's hash in full, says the drafting prompt was not edited, and says it was when it was
-ok  the disclosure says which candidate each kept item came from and the model behind it, and ends with the fixed line
-ok  with no item kept, or a tick that points at nothing, the output says so and has no disclosure to make
+ok  the disclosure says which candidate each item of the set came from and the model behind it, and ends with the fixed line
+ok  the output takes the set as the analyst left it: an edited item has its new wording, and the disclosure says which items were edited and which were swapped in by the analyst
+ok  with nothing in the set, or an entry that points at nothing, the output says so and has no disclosure to make
 ok  a review's output is question by question, each question's findings in the severity bands, highest first, the Minor ones listed too
 ok  a finding gives its quote, problem, and a rewrite and a probe each said to be untested; a quote R did not find is flagged
 ok  the instrument findings, what to test first and what the review could not judge follow, then the disclosure with the review prompt's hash
 ok  a review of translated text prints what its trapd field says is still needed, or the fixed lines when it said nothing
 ok  a review in parts lists a prompt hash for each call, and one with a part missing says so at the top; no review gives a plain message
-ok  the run log is one JSON file with a schema, the profile, the time and every round; the kept items are in it
+ok  the run log is one JSON file with a schema, the profile, the time and every round; what the analyst did with the set is in it
 ok  a planted key is absent from the log, which says where it was taken out, and a string too short to be a key is left alone
 ok  no output text or HTML carries a planted key: it is not in the run's data, and scrub_secrets takes it out of anything that is
 ok  known_keys gives the analyst's pasted key and a server key, none when there is none; the output and log functions never read a key themselves
 ok  the two sample outputs are saved as tests/output_generate.txt and tests/output_review.txt
 ok  before anything has run, the Output tab says there is nothing to show and offers no download
-ok  a drafting round with nothing ticked says no item has been kept
+ok  a drafting round with nothing in the set says there is no item in it
 ok  ticking items on Results puts them on the Output tab in HTML for Word and in a plain text box, with the disclosure block
 ok  un-ticking an item takes it off the Output tab
 ok  the downloads are the plain text and the run log, and the page says no key is in the log
-ok  the text download is the output as plain text; the log download is JSON with a schema, the round and the items kept
+ok  the text download is the output as plain text; the log download is JSON with a schema, the round and the analyst's final items
 ok  a key in the session, and echoed in a model's reply, is in neither the page, nor the text download, nor the log download
 ok  a review's Output tab shows the review question by question in the bands, and the disclosure, with no Keep boxes
 ok  the review's run log has its round, its prompt hash and its call record
 ok  the page has the Output tab's boxes in place of its placeholder, and no key is anywhere on it
-ok  skills_table has one row for every reflex of every skill file, with its file, id, when and source, in the order of the files
-ok  the Methodology page renders the note: its headings, its numbered list, and its tables as tables
-ok  below the note there is a block for each skill file with its title and version, and a row for every one of its reflexes
-ok  each rule's source is shown as the skill file gives it, and a rule with none says so
-ok  a methodology file that is missing, or a skills folder that is, is said in words and does not stop the page
+ok  Start here is www/start.md as it is, then the key box, then a closed Settings and connection panel that holds the profile, the models table with the connection check, and the pilot notice
+ok  a profile with placeholders opens the Settings and connection panel by itself
+ok  the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; skills_table() stays for maintainers
 Warning message:
 In file(con, "r") :
-  cannot open file 'www/no_such_note.md': No such file or directory
-ok  the page's Methodology tab is the note and the table, and the app starts with it (the whole page was built above)
+  cannot open file 'www/no_such_page.md': No such file or directory
 ok  a profile that still holds placeholders says which entries to fill in, the connection check does not call it, and the work profile's page builds; a filled profile says nothing
 ok  when the only worker is of the project manager's own family, Results says the appraiser reviewed a draft from its own family; with workers of other families it says nothing
+ok  the workers' drafts are requested in one batch, each request the arguments ask takes, in the workers' order, and ask is not used
+ok  one worker failing is recorded with its reason and the other two are kept; a call's own seconds are used when the reply gives them
+ok  an ask_all that fails as a whole fails every worker and nothing else; with only ask given, the requests are answered one after the other through it
+ok  the parts are requested in batches of at most four, in order, then one instrument call by ask; the review is as ordered as before
+ok  the page is told before each batch: parts 1 to 4 of 15 together, and so on to the instrument call
+ok  a part that fails in a batch is recorded and named, the other parts and the instrument call are kept, and it can be run again
+ok  requests sent together through ellmer's chat_async and later::run_now take about one wait, not their sum, in the same R process
+ok  each answer comes back in the order sent, parsed, with its own seconds; a model the endpoint refuses and a request with no key are errors in their place and the others are kept
+ok  the sending code uses only what ellmer and later document, never a package that starts other processes
 exit status: 0
 ~~~~
 
@@ -1384,14 +1388,16 @@ Lines in R/llm.R that build calls or handle keys:
 204:     openai = ellmer::chat_openai_compatible(
 205:       base_url = m$base_url, name = llm_host(m), system_prompt = system_prompt,
 206:       credentials = function() key, model = m$id, params = params,
-216: #   stopped, as ellmer standardises it: "success", "max_tokens", ...), tokens
-218: llm_complete <- function(m, system_prompt, user, max_tokens,
-222:   chat = llm_chat(m, system_prompt, max_tokens, key)
-428: #   environment for a model whose key_source is "analyst". complete is the
-435: llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
-456:     out = complete(m, system_prompt, ask, max_tokens, key)
-465:     if (identical(finish, "max_tokens"))
-466:       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
+247: #   stopped, as ellmer standardises it: "success", "max_tokens", ...), tokens
+249: llm_complete <- function(m, system_prompt, user, max_tokens,
+253:   chat = llm_chat(m, system_prompt, max_tokens, key)
+260: #   requests is a list, each the arguments llm_json() takes (user, m, system_prompt, max_tokens;
+283:            else tryCatch(llm_chat(r$m, r$system_prompt, r$max_tokens, key), error = function(e) e)
+477: #   environment for a model whose key_source is "analyst". complete is the
+486: llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
+507:     out = if (is.null(first)) complete(m, system_prompt, ask, max_tokens, key)
+522:     if (identical(finish, "max_tokens"))
+523:       llm_fail(paste0(served, "The reply reached the token limit (", max_tokens,
 ~~~~
 Live check output (tests/llm_check.out), verbatim:
 ~~~~
@@ -1749,7 +1755,7 @@ Sample output for Word, drafting (tests/output_generate.txt), verbatim:
 Survey items
 ============
 
-First drafts by language models, untested.
+First drafts by language models, as recommended by a reviewing model and left by the analyst; untested.
 
 CONF1
 -----
@@ -1797,10 +1803,10 @@ Disclosure of the use of language models
 - Profile: home
 - Project manager model: vendor-p/pm-model (example.invalid)
 - Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
-- Skill files and versions: core.md 0.2; generate.md 0.3; attitudinal.md 0.2; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.3; pm_brief.md 0.1
+- Skill files and versions: core.md 0.2; generate.md 0.3; attitudinal.md 0.2; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
 - Brief check prompt: 395ddacac624fd946a3de8f690cdd69ba36b282b35b74b3df4c7f54c9e56afff
 - Drafting prompt (not edited): b6438476295bc94614d64a469052af204f45cdb8c43030daa3735363398dae72
-- Appraisal prompt: bbde744f6041e821f31f8abea85dab6ec16d8e222da11db74b1ab5f4ee63887c
+- Appraisal prompt: e369d7e583dbf69ba2a8f4e95397a16065c25a2a13b732b146fac05c2c49b2ac
 - Item 1 (CONF1): candidate A, written by vendor-a/model-one
 - Item 2 (CONF2): candidate C, written by vendor-b/model-two
 
