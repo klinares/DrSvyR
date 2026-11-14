@@ -34,6 +34,8 @@ QuestionR/tests/review30.json
 QuestionR/tests/write_run.json
 QuestionR/Claude outputs/
 
-# SurvAI_Expert: build output and caches stay local for now.
+# SurvAI_Expert: caches (build/) and the store stay local; markdown/ and catalog/ until let in.
 SurvAI_Expert/data/markdown/
+SurvAI_Expert/data/catalog/
+SurvAI_Expert/data/store/
 SurvAI_Expert/data/build/

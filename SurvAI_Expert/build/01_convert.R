@@ -6,23 +6,32 @@
 #     Rscript --no-init-file build/01_convert.R pilot   # PILOT_FOLDER only (PDFs and its .qmd/.Rmd)
 #     Rscript --no-init-file build/01_convert.R all     # every source
 #
-#   PDFs: every page is rendered to a PNG and sent to BUILD_MODEL, one call per page, with the
+#   Conversion runs at home only; its output reaches work as text, through git.
+#
+#   PDFs: every page is rendered to a PNG and sent to BUILD_MODEL, one page per call, with the
 #   settings of the winning arm of the Phase 1 model test (survai-expert branch, build.R:
 #   BUILD_MT_PROMPT as the user turn, no system prompt, 150 dpi, temperature 0, max_tokens 4096).
 #   pdftools text is only a cross-check. .qmd/.Rmd: no model, chunks become fenced blocks.
 #   Sampling Techniques .md: copied under a header. Each page reply is cached under
-#   data/build/pages/<sha256>/, so a rerun pays only for pages it does not have.
+#   data/build/pages/<sha256>/, so a rerun pays only for pages it does not have, and a source file
+#   whose sha256 is in the manifest with no problems is not read again.
+#
+#   data/catalog/manifest.csv travels to work; data/build/ (caches, convert_problems.csv) does not.
+#   Every path written into a header or the manifest is relative to SurvAI_Expert/ or to the source root.
 
 
 # ---- 1. settings -------------------------------------------------------------------------------
 
-# The conversion model, in QuestionR's profile shape: at work only this list changes. The key is
-#   read from the environment variable named in key_var, held in a closure for the call, and never
-#   written to a file, the log or the console. max_tokens_name "max_tokens" sends the reply limit
-#   under that name in api_args, as the model test did (ellmer would send max_completion_tokens).
-BUILD_MODEL <- list(api = "openai", base_url = "https://openrouter.ai/api/v1", id = "google/gemini-4-argon",
-                    key_var = "OPENROUTER_API_KEY", temperature = 0, max_tokens = 4096L,
-                    max_tokens_name = "max_tokens")
+# The conversion model: an OpenAI-style chat completions endpoint. Nothing else in this script
+#   names a provider or a model. The key is read from OPENROUTER_API_KEY, held in a closure for the
+#   call, and never written to a file, the log or the console.
+BUILD_MODEL <- list(api = "openai", base_url = "https://openrouter.ai/api/v1", id = "google/gemini-4-argon")
+BUILD_KEY_VAR <- "OPENROUTER_API_KEY"
+
+# Reply settings of the model test. The limit is sent as max_tokens in the request body, as the
+#   model test did (ellmer's params() would send max_completion_tokens).
+BUILD_TEMPERATURE <- 0
+BUILD_MAX_TOKENS <- 4096L
 
 # One entry per source: a short id (the folder under data/markdown/), a root, a type.
 SOURCES <- list(
@@ -58,8 +67,9 @@ BUILD_PROMPT <- paste(
 IN_FLIGHT <- 8L
 CALL_TIMEOUT_S <- 120
 
-# USD per million tokens, used only when a reply carries no cost of its own (OpenRouter reports
-#   one per call). Live list price for gemini-4-argon on 2026-11-10 (old STATUS.md).
+# USD per million tokens, used only when a reply carries no cost of its own (the endpoint reports
+#   one per call when asked with usage = list(include = TRUE)). BUILD_MODEL's list price on
+#   2026-11-10 (old STATUS.md); change it with the model.
 PRICE_PER_M <- c(input = 2.00, output = 10.00)
 
 # Where things go, relative to SurvAI_Expert/.
@@ -67,6 +77,8 @@ OUT_DIR <- "data/markdown"
 BUILD_DIR <- "data/build"
 PAGE_DIR <- file.path(BUILD_DIR, "pages")
 FILES_CACHE <- file.path(BUILD_DIR, "files.csv")
+PROBLEMS_CSV <- file.path(BUILD_DIR, "convert_problems.csv")
+MANIFEST_CSV <- "data/catalog/manifest.csv"
 MODELTEST_RESULTS <- file.path(BUILD_DIR, "modeltest", "results.csv")
 
 # Skip rules of the old project (D:/repos/SurvAI_Expert: build/extract.R SKIP and FOLDERS,
@@ -110,7 +122,7 @@ local({
   if (length(missing)) stop("Not installed: ", paste(missing, collapse = ", "), call. = FALSE)
   # The functions and arguments used below, checked against the installed versions.
   calls = list(ellmer = list(chat_openai_compatible = c("base_url", "name", "credentials", "model", "params", "api_args", "echo"),
-                             content_image_file = c("path", "resize"), params = c("temperature", "max_tokens")),
+                             content_image_file = c("path", "resize"), params = "temperature"),
                pdftools = list(pdf_convert = c("pdf", "format", "pages", "filenames", "dpi", "verbose"),
                                pdf_info = "pdf", pdf_text = "pdf"),
                katex = list(katex_html = c("tex", "displayMode", "include_css", "preview")))
@@ -250,7 +262,7 @@ math_spans <- function(md) {
   tibble(tex = c(display, inline), display = rep(c(TRUE, FALSE), c(length(display), length(inline))))
 }
 
-# A fence line may sit in a list item ("* ```r"), as the model test's argon replies show.
+# A fence line may sit in a list item ("* ```r"), as the model test's replies show.
 fence_lines <- function(md) sum(str_detect(strsplit(md, "\n", fixed = TRUE)[[1]], "^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)?```"))
 
 # One row per failed check: check, detail. pdf_chars is NA for documents with no PDF text.
@@ -278,22 +290,18 @@ unwrap_reply <- function(txt) {
 # ---- 5. the model --------------------------------------------------------------------------------
 
 model_key <- function() {
-  k = Sys.getenv(BUILD_MODEL$key_var)
-  if (!nzchar(k)) stop("Set the environment variable ", BUILD_MODEL$key_var, " (in .Renviron) first.", call. = FALSE)
+  k = Sys.getenv(BUILD_KEY_VAR)
+  if (!nzchar(k)) stop("Set the environment variable ", BUILD_KEY_VAR, " (in .Renviron) first.", call. = FALSE)
   k
 }
 
+# One chat object per page: one page per call, no history.
 model_chat <- function(m, key) {
-  old_name = identical(m$max_tokens_name, "max_tokens")
-  params = ellmer::params(temperature = m$temperature, max_tokens = if (!old_name) m$max_tokens)
-  switch(m$api,
-    openai = ellmer::chat_openai_compatible(
-      base_url = m$base_url, name = sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url), credentials = function() key,
-      model = m$id, params = params, echo = "none",
-      api_args = c(if (old_name) list(max_tokens = m$max_tokens), list(usage = list(include = TRUE)))),
-    anthropic = ellmer::chat_anthropic(params = ellmer::params(temperature = m$temperature, max_tokens = m$max_tokens),
-                                       model = m$id, base_url = m$base_url, credentials = function() key, echo = "none"),
-    stop("BUILD_MODEL$api must be 'openai' or 'anthropic'.", call. = FALSE))
+  if (!identical(m$api, "openai")) stop("BUILD_MODEL$api must be 'openai' (an OpenAI-style endpoint).", call. = FALSE)
+  ellmer::chat_openai_compatible(
+    base_url = m$base_url, name = sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url), credentials = function() key,
+    model = m$id, params = ellmer::params(temperature = BUILD_TEMPERATURE), echo = "none",
+    api_args = list(max_tokens = BUILD_MAX_TOKENS, usage = list(include = TRUE)))
 }
 
 # Text, USD (as the endpoint reported it, else from tokens), tokens, finish and seconds of a reply.
@@ -509,15 +517,17 @@ write_documents <- function(docs, text) {
     if (is.null(a)) return(NULL)
     write_utf8(a$lines, d$out)
     spans = math_spans(a$body)
+    # Paths here are relative: markdown to SurvAI_Expert/, original to the source root.
     list(row = tibble(id = d$id, source = d$source, course = d$course, doc_type = d$doc_type, pages = d$pages,
                       characters = nchar(a$body), equations = nrow(spans), code_blocks = fence_lines(a$body) %/% 2,
-                      problems = nrow(a$probs), usd = round(a$usd, 4)),
+                      problems = nrow(a$probs), usd = round(a$usd, 4), sha256 = d$sha256,
+                      original = d$rel, markdown = d$out),
          probs = if (nrow(a$probs)) mutate(a$probs, file = d$id, .before = 1))
   }) |> compact()
   rows = list_rbind(map(made, "row"))
   probs = list_rbind(map(made, "probs"))
-  merge_csv(rows, file.path(BUILD_DIR, "manifest.csv"), rows$id, "id")
-  merge_csv(probs, file.path(BUILD_DIR, "convert_problems.csv"), rows$id, "file",
+  merge_csv(rows, MANIFEST_CSV, rows$id, "id")
+  merge_csv(probs, PROBLEMS_CSV, rows$id, "file",
             empty = tibble(file = character(), page = integer(), check = character(), detail = character()))
   message(sprintf("%d of %d documents written; %d not yet complete", nrow(rows), nrow(docs), nrow(docs) - nrow(rows)))
   rows
@@ -528,13 +538,25 @@ merge_csv <- function(new, f, ids, key, empty = new[0, ]) {
   keep = if (is.null(old)) NULL else old[!old[[key]] %in% ids, , drop = FALSE]
   out = bind_rows(mutate(keep %||% tibble(), across(everything(), as.character)),
                   mutate(bind_rows(empty, new), across(everything(), as.character)))
+  dir.create(dirname(f), recursive = TRUE, showWarnings = FALSE)
   utils::write.csv(out, f, row.names = FALSE, fileEncoding = "UTF-8", na = "")
 }
 
 
 # ---- 9. run ----------------------------------------------------------------------------------------
 
-dry_run <- function(all, todo, est) {
+# A source whose id and sha256 are in the manifest with no problems, and whose markdown exists, is
+#   done: it is not read, converted or written again.
+unchanged <- function(todo) {
+  if (!file.exists(MANIFEST_CSV)) return(rep(FALSE, nrow(todo)))
+  m = utils::read.csv(MANIFEST_CSV, stringsAsFactors = FALSE, colClasses = "character")
+  if (!"sha256" %in% names(m)) return(rep(FALSE, nrow(todo)))
+  ok = m |> filter(problems == "0")
+  paste(todo$id, todo$sha256) %in% paste(ok$id, ok$sha256) & file.exists(todo$out)
+}
+
+dry_run <- function(all, todo, est, n_unchanged) {
+  message(n_unchanged, " documents unchanged since the manifest, with no problems: not read again.")
   cached = map2_int(todo$sha256, todo$pages, function(sha, n)
     if (is.na(n)) 0L else sum(file.exists(page_file(sha, seq_len(n), "md"))))
   by_source = todo |> mutate(cached = cached) |> group_by(source) |>
@@ -561,8 +583,11 @@ main <- function(mode = "dry") {
   todo = todo |> filter(!path %in% empty$path)
   bad = todo |> filter(ext == "pdf", is.na(pages))
   if (nrow(bad)) stop("Unreadable PDFs: ", paste(bad$rel, collapse = ", "), call. = FALSE)
+  same = unchanged(todo)
+  todo = todo[!same, ]
   est = est_usd_page()
-  if (mode == "dry") return(invisible(dry_run(all, todo, est)))
+  if (mode == "dry") return(invisible(dry_run(all, todo, est, sum(same))))
+  message(sum(same), " documents unchanged since the manifest, with no problems: not read again.")
   key = model_key()
   pdfs = todo |> filter(ext == "pdf")
   res = convert_pdf_pages(pdfs, key, est)
