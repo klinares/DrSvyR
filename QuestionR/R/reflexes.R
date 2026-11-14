@@ -1,164 +1,127 @@
 # reflexes.R for QuestionR
-# Reads the reflex files in www/reflexes/, filters them for a form, and assembles
-#   the prompt and the checklist. R does this and no model does, so the same
-#   form and the same files give the same prompt, character for character
-#   (DESIGN.md sections 4 and 5). Function definitions and constants only.
+# Reads the reflex files in www/reflexes/, keeps the reflexes a form calls for, and assembles
+#   every prompt. R does this and no model does, so the same form and the same files give the
+#   same prompt, character for character. Function definitions and constants only.
 
-# The parser is svysegment/R/ai_reflexes.R with the two additions
-#   www/reflexes/README.md describes: a Check field per reflex, and an Output
-#   format section where svysegment has Reporting style. It is stricter than
-#   that one. A line that is not part of the format stops the app, naming the
-#   file and the reflex, instead of being dropped: a dropped line is a rule a
-#   model is never told.
-
-# Source lines and HTML comments are read and kept in the parsed reflex file, for the
-#   Methodology tab, and are never put into a prompt. Sent, sources get copied
-#   into the output as citations. Check lines are kept for the checklist and
-#   are sent only in a review's CHECKLIST.
-
-# The reflex files are only ever read here. Nothing in the app rewrites them.
+# The parser is svysegment/R/ai_reflexes.R with the additions www/reflexes/README.md
+#   describes. It is stricter than that one: a line that is not part of the format stops the
+#   app, naming the file and the reflex, instead of being dropped, because a dropped line is a
+#   rule a model is never told. Source lines, Label lines and HTML comments are kept for the
+#   Methodology page and are never put into a prompt. The reflex files are only ever read here.
 
 
-# ---- what is in www/reflexes/ ---------------------------------------------------
+# ---- what is in www/reflexes/ ------------------------------------------------------
 
 REFLEXES_DIR <- file.path("www", "reflexes")
 
-# The reflex files, by name. A list rather than a directory scan, so a file that
-#   goes missing is an error and the README beside them is not read as a reflex file.
-REFLEX_FILES <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md",
-                 "sensitive.md", "evaluate.md", "mode.md")
+# The reflex files, by name. A list rather than a directory scan, so a file that goes missing
+#   is an error and the README beside them is not read as a reflex file.
+REFLEX_FILES <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md", "sensitive.md",
+                  "evaluate.md", "mode.md")
 
 # The files whose reply R parses, so each must say what the reply holds.
 REFLEX_FILES_WITH_OUTPUT <- c("generate.md", "evaluate.md")
 
-# The task registry (DESIGN.md section 12). The dropdown on the Brief tab, the
-#   fields it shows, prompt assembly and the checklist all read this one list, so
-#   a new task is a reflex file plus one entry here and no change to a screen.
-#   Each entry:
-#     label   shown in the dropdown
-#     kind    "draft" (the model writes items) or "review" (the model reviews
-#             pasted text)
-#     files   the reflex files a work prompt is built from, in the order of the
-#             table in www/reflexes/README.md. mode.md is always in; R keeps only
-#             its reflexes for the modes chosen.
-#     ask     the fixed sentence of the Task: block. A draft task's holds %s,
-#             where the number of items goes.
-#     fields  the form fields the Brief tab shows for this task. "task" is the
-#             dropdown itself and is not listed.
+# The kinds of question a reflex can apply to (its Applies line). A reflex with no Applies line
+#   applies to the kind its file is about, and a reflex of any other file to any question.
+KINDS <- c("attitudinal", "behavioral", "sensitive")
+KIND_FILES <- c(attitudinal = "attitudinal.md", behavioral = "behavioral.md", sensitive = "sensitive.md")
+
+# The tasks. Each entry: label (what the page calls it); kind ("draft" or "review"); ask (the task
+#   sentence; a draft's holds %s, where the number of items goes); fields (what its form shows).
 TASKS <- list(
   attitudinal = list(
-    label = "Attitudinal scale", kind = "draft",
-    files = c("core.md", "generate.md", "attitudinal.md", "mode.md"),
-    ask = "Write exactly %s for the brief above, to be combined into one attitude scale.",
-    fields = c("research_question", "construct", "population", "country", "modes",
-               "n_items", "keep_items", "other")),
+    label = "Attitudinal", kind = "draft",
+    ask = "Write exactly %s for the brief, to be combined into one attitude scale.",
+    fields = c("research_question", "construct", "population", "country", "modes", "n_items")),
   behavioral = list(
-    label = "Behavioral items", kind = "draft",
-    files = c("core.md", "generate.md", "behavioral.md", "mode.md"),
-    ask = "Write exactly %s for the brief above, each measuring a behaviour or an experience.",
-    fields = c("research_question", "construct", "population", "country", "modes",
-               "n_items", "reference_period", "keep_items", "other")),
+    label = "Behavioral", kind = "draft",
+    ask = "Write exactly %s for the brief, each measuring a behaviour or an experience.",
+    fields = c("research_question", "construct", "population", "country", "modes", "n_items", "reference_period")),
   sensitive = list(
-    label = "Sensitive topic items", kind = "draft",
-    files = c("core.md", "generate.md", "sensitive.md", "mode.md"),
-    ask = "Write exactly %s for the brief above, each on a topic where respondents may refuse or edit their answer.",
-    fields = c("research_question", "construct", "population", "country", "modes",
-               "n_items", "keep_items", "other")),
+    label = "Sensitive", kind = "draft",
+    ask = "Write exactly %s for the brief, each on a topic where respondents may refuse or edit their answer.",
+    fields = c("research_question", "construct", "population", "country", "modes", "n_items")),
   evaluate = list(
-    label = "Evaluate a questionnaire", kind = "review",
-    files = c("core.md", "evaluate.md", "mode.md"),
-    ask = "Review the questionnaire below as an expert reviewer, item by item and then as a whole.",
-    fields = c("research_question", "population", "country", "modes", "other", "questionnaire"),
-    # A questionnaire that does not fit one call is reviewed in parts (DESIGN.md
-    #   section 14): one item call per part, then one instrument call on the whole
-    #   text. instrument_checks are the checks only the instrument call carries; an
-    #   item call carries every other. ask_items (%d: this part, how many parts, the
-    #   number of the part's first block) and ask_instrument are fixed text, like ask.
-    instrument_checks = c("context_and_order", "filters_and_routing", "scale_consistency",
-                          "fit_to_objectives"),
-    ask_items = paste(
-      "Review part %d of %d of a questionnaire as an expert reviewer, question by question.",
-      "Only the questions of this part are pasted below.",
-      "Fill only \"items\" in your reply, and give \"instrument\" as an empty list,",
-      "because the questionnaire as a whole is reviewed in a separate call.",
-      "The first block of this part is block number %d of the whole questionnaire;",
-      "a question that has no number of its own takes the number of its block as its id,",
-      "counting blocks from 1 across the whole questionnaire."),
-    ask_instrument = paste(
-      "Review the questionnaire below as a whole, as an expert reviewer.",
-      "Fill only \"instrument\" in your reply,",
-      "and give \"items\" as an empty list, because each question was reviewed in a separate call.",
-      "Judge only what the CHECKLIST below asks about the instrument as a whole,",
-      "and give at most three points, the most important first, one sentence each.")))
+    label = "Evaluate questions", kind = "review",
+    ask = "Review the questionnaire as an expert reviewer, question by question.",
+    fields = c("research_question", "population", "country", "modes", "kinds", "questionnaire")))
 
-# The most items one drafting run is asked for (DESIGN.md section 13).
-MAX_ITEMS_PER_RUN <- 10L
+# The most items one drafting run is asked for.
+MAX_ITEMS_PER_RUN <- 6L
 
-# The prompts a task goes through. work is what the task is (a draft, or a review in
-#   one call); items and instrument are the two kinds of call of a review in parts.
-STEPS <- c("work", "items", "instrument")
+# The calls a task makes. draft: a Write questions draft. items and instrument: the two kinds of
+#   call of a review, the questions of one part and the questionnaire as a whole. check: the
+#   review of a draft (Write questions, call 2), which is an items call with the draft's own
+#   checklist.
+STEPS <- c("draft", "items", "instrument", "check")
 
-# The reflex files each step reads: the task's own. core.md leads every one.
-step_files <- function(task, step) {
-  if (!step %in% STEPS)
-    stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
-  TASKS[[task]]$files
+# The reflex files a step reads, in order: core.md first, mode.md last.
+step_files <- function(f, step) {
+  if (!step %in% STEPS) stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
+  switch(step,
+         draft = c("core.md", "generate.md", KIND_FILES[[f$task]], "mode.md"),
+         check = c("core.md", "evaluate.md", KIND_FILES[[f$task]], "mode.md"),
+         c("core.md", "evaluate.md", unname(KIND_FILES[f$kinds]), "mode.md"))
 }
 
 
-# ---- the parser -----------------------------------------------------------------
+# ---- the parser ----------------------------------------------------------------------
 
-# purrr wraps an error raised inside map() with "In index: 1". The reason the
-#   analyst needs is the innermost one, which names the file and the reflex.
+# purrr wraps an error raised inside map() with "In index: 1". The reason the analyst needs is
+#   the innermost one, which names the file and the reflex.
 reflex_root_message <- function(e)
   if (is.null(e$parent)) conditionMessage(e) else reflex_root_message(e$parent)
 
-# One reflex: its "### id" line and the field lines under it.
-parse_reflex <- function(block, file) {
+REFLEX_FIELDS <- c("When", "Say", "Never", "Check", "Label", "Applies", "Source")
+
+# One reflex: its "### id" line and the field lines under it. instrument marks a reflex of the
+#   "## Instrument checks" group.
+parse_reflex <- function(block, file, instrument = FALSE) {
   id = trimws(sub("^### ", "", block[1]))
   where = paste0("Reflex '", id, "' in ", file)
   if (!grepl("^[a-z][a-z0-9_]*$", id))
     stop(where, " needs an id in lower case, with underscores.", call. = FALSE)
-
   body = block[-1]
   body = body[nzchar(trimws(body))]
-  m = stringr::str_match(
-    body, "^- \\*\\*(When|Say|Never|Check|Source):\\*\\*[ \\t]*(.*)$")
+  m = stringr::str_match(body, paste0("^- \\*\\*(", paste(REFLEX_FIELDS, collapse = "|"), "):\\*\\*[ \\t]*(.*)$"))
   if (anyNA(m[, 1]))
-    stop(where, " has a line that is not a field: ", body[is.na(m[, 1])][1],
-         call. = FALSE)
+    stop(where, " has a line that is not a field: ", body[is.na(m[, 1])][1], call. = FALSE)
   if (anyDuplicated(m[, 2]))
-    stop(where, " has the field ", m[anyDuplicated(m[, 2]), 2], " twice.",
-         call. = FALSE)
+    stop(where, " has the field ", m[anyDuplicated(m[, 2]), 2], " twice.", call. = FALSE)
   f = purrr::set_names(as.list(trimws(m[, 3])), m[, 2])
-  if (!all(nzchar(unlist(f))))
-    stop(where, " has a field with nothing in it.", call. = FALSE)
-  if (is.null(f[["When"]]) || is.null(f[["Say"]]))
-    stop(where, " needs a When and a Say line.", call. = FALSE)
-
-  list(id = id, when = f[["When"]], say = f[["Say"]],
-       never = f[["Never"]] %||% NA_character_,
-       check = f[["Check"]] %||% NA_character_,
-       source = f[["Source"]] %||% NA_character_)
+  if (!all(nzchar(unlist(f)))) stop(where, " has a field with nothing in it.", call. = FALSE)
+  if (is.null(f[["When"]]) || is.null(f[["Say"]])) stop(where, " needs a When and a Say line.", call. = FALSE)
+  if (!is.null(f[["Label"]]) && length(strsplit(f[["Label"]], "\\s+")[[1]]) > 6L)
+    stop(where, " has a Label of more than 6 words.", call. = FALSE)
+  applies = if (is.null(f[["Applies"]])) NA_character_ else trimws(strsplit(f[["Applies"]], ",")[[1]])
+  if (!all(is.na(applies)) && !all(applies %in% c(KINDS, "any")))
+    stop(where, " has an Applies line that is not a comma list of ", paste(c(KINDS, "any"), collapse = ", "), ".", call. = FALSE)
+  list(id = id, when = f[["When"]], say = f[["Say"]], never = f[["Never"]] %||% NA_character_,
+       check = f[["Check"]] %||% NA_character_, label = f[["Label"]] %||% NA_character_,
+       applies = applies, source = f[["Source"]] %||% NA_character_, instrument = instrument)
 }
 
-# One reflex file, parsed: title, version, sha (line endings normalised, as
-#   tests/review.R computes it), text (the file with its HTML comments removed, for the
-#   Methodology tab), persona (core.md only), guidelines (heading and bullets, or NULL),
-#   reflexes by id, prohibitions, and the output format as written.
+# The reflexes under one "## " heading.
+parse_reflex_group <- function(lines, file, heading, instrument) {
+  head = cumsum(grepl("^### ", lines))
+  if (any(head == 0L & nzchar(trimws(lines))))
+    stop(file, " has text under '## ", heading, "' before the first '### id'.", call. = FALSE)
+  blocks = purrr::keep(split(lines, head), function(b) grepl("^### ", b[1]))
+  purrr::map(unname(blocks), function(b) parse_reflex(b, file, instrument))
+}
+
+# One reflex file, parsed: title, version, sha (line endings normalised), text (the file without
+#   its HTML comments, for the Methodology page), persona (core.md only), guidelines (heading and
+#   bullets, or NULL), reflexes by id, prohibitions, and the output format as written.
 parse_reflex_file <- function(path) {
   file = basename(path)
-  if (!file.exists(path))
-    stop("The reflex file is missing: ", path, call. = FALSE)
-
+  if (!file.exists(path)) stop("The reflex file is missing: ", path, call. = FALSE)
   bytes = readBin(path, "raw", file.size(path))
-  sha = digest::digest(bytes[bytes != as.raw(13)], algo = "sha256",
-                       serialize = FALSE)
-
+  sha = digest::digest(bytes[bytes != as.raw(13)], algo = "sha256", serialize = FALSE)
   txt = paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")
   txt = gsub("(?s)<!--.*?-->", "", txt, perl = TRUE)
-  if (grepl("<!--", txt, fixed = TRUE))
-    stop(file, " has an HTML comment that is never closed.", call. = FALSE)
+  if (grepl("<!--", txt, fixed = TRUE)) stop(file, " has an HTML comment that is never closed.", call. = FALSE)
   lines = strsplit(txt, "\n", fixed = TRUE)[[1]]
 
   ver = grep("^Version:", lines, value = TRUE)
@@ -166,37 +129,22 @@ parse_reflex_file <- function(path) {
   title = sub("^# ", "", grep("^# ", lines, value = TRUE)[1])
   if (is.na(title)) stop(file, " has no '# title' line.", call. = FALSE)
 
-  # Sections, by their "## " headings. What comes before the first one is the
-  #   title and the version.
   is_head = grepl("^## ", lines)
   parts = split(lines, cumsum(is_head))
-  heads = unname(purrr::map_chr(parts, function(s)
-    if (grepl("^## ", s[1])) trimws(sub("^## ", "", s[1])) else ""))
-  parts = purrr::set_names(
-    purrr::map(parts, function(s) if (grepl("^## ", s[1])) s[-1] else s), heads)
+  heads = unname(purrr::map_chr(parts, function(s) if (grepl("^## ", s[1])) trimws(sub("^## ", "", s[1])) else ""))
+  parts = purrr::set_names(purrr::map(parts, function(s) if (grepl("^## ", s[1])) s[-1] else s), heads)
   named = heads[nzchar(heads)]
-  odd = setdiff(named, c("Persona", "Guidelines", "Reflexes", "Prohibitions", "Output format"))
-  if (length(odd))
-    stop(file, " has a section that is not part of the format: '## ", odd[1],
-         "'.", call. = FALSE)
-  if (anyDuplicated(named))
-    stop(file, " has the section '## ", named[anyDuplicated(named)], "' twice.",
-         call. = FALSE)
+  odd = setdiff(named, c("Persona", "Guidelines", "Reflexes", "Instrument checks", "Prohibitions", "Output format"))
+  if (length(odd)) stop(file, " has a section that is not part of the format: '## ", odd[1], "'.", call. = FALSE)
+  if (anyDuplicated(named)) stop(file, " has the section '## ", named[anyDuplicated(named)], "' twice.", call. = FALSE)
+  if (is.null(parts[["Reflexes"]])) stop(file, " has no '## Reflexes' section.", call. = FALSE)
 
-  rl = parts[["Reflexes"]]
-  if (is.null(rl)) stop(file, " has no '## Reflexes' section.", call. = FALSE)
-  rl_head = cumsum(grepl("^### ", rl))
-  if (any(rl_head == 0L & nzchar(trimws(rl))))
-    stop(file, " has text under '## Reflexes' before the first '### id'.",
-         call. = FALSE)
-  blocks = purrr::keep(split(rl, rl_head), function(b) grepl("^### ", b[1]))
   reflexes = tryCatch(
-    purrr::map(unname(blocks), function(b) parse_reflex(b, file)),
+    c(parse_reflex_group(parts[["Reflexes"]], file, "Reflexes", FALSE),
+      if (!is.null(parts[["Instrument checks"]])) parse_reflex_group(parts[["Instrument checks"]], file, "Instrument checks", TRUE)),
     error = function(e) stop(reflex_root_message(e), call. = FALSE))
   ids = purrr::map_chr(reflexes, "id")
-  if (anyDuplicated(ids))
-    stop(file, " has two reflexes called '", ids[anyDuplicated(ids)], "'.",
-         call. = FALSE)
+  if (anyDuplicated(ids)) stop(file, " has two reflexes called '", ids[anyDuplicated(ids)], "'.", call. = FALSE)
 
   persona = NA_character_
   if (!is.null(parts[["Persona"]])) {
@@ -208,23 +156,19 @@ parse_reflex_file <- function(path) {
   #   analyst can edit, never into the system prompt (the Reflexes are the rules).
   guidelines = NULL
   if (!is.null(parts[["Guidelines"]])) {
-    g = parts[["Guidelines"]]
-    g = trimws(g[nzchar(trimws(g))])
-    is_bullet = grepl("^- ", g)
-    heading = if (length(g) && !is_bullet[1]) g[1]
+    g = trimws(parts[["Guidelines"]])
+    g = g[nzchar(g)]
+    heading = if (length(g) && !grepl("^- ", g[1])) g[1]
     rest = if (is.null(heading)) g else g[-1]
     if (!length(rest) || !all(grepl("^- ", rest)))
-      stop(file, " has a '## Guidelines' section that is not an optional heading line and then ",
-           "one-line bullets", if (length(rest) && !all(grepl("^- ", rest)))
-             paste0(": ", rest[!grepl("^- ", rest)][1]), ".", call. = FALSE)
+      stop(file, " has a '## Guidelines' section that is not an optional heading line and then one-line bullets.", call. = FALSE)
     guidelines = list(heading = heading %||% NA_character_, bullets = trimws(sub("^- ", "", rest)))
   }
 
   pr = parts[["Prohibitions"]]
   pr = if (is.null(pr)) character(0) else pr[nzchar(trimws(pr))]
   if (!all(grepl("^- ", pr)))
-    stop(file, " has a line under '## Prohibitions' that is not a one-line bullet: ",
-         pr[!grepl("^- ", pr)][1], call. = FALSE)
+    stop(file, " has a line under '## Prohibitions' that is not a one-line bullet: ", pr[!grepl("^- ", pr)][1], call. = FALSE)
 
   of = NA_character_
   if (!is.null(parts[["Output format"]])) {
@@ -232,338 +176,282 @@ parse_reflex_file <- function(path) {
     if (!nzchar(of)) stop(file, " has an empty '## Output format'.", call. = FALSE)
   }
 
-  list(file = file, title = trimws(title),
-       version = trimws(sub("^Version:", "", ver[1])), sha = sha,
+  list(file = file, title = trimws(title), version = trimws(sub("^Version:", "", ver[1])), sha = sha,
        text = txt, persona = persona, guidelines = guidelines, reflexes = purrr::set_names(reflexes, ids),
        prohibitions = trimws(sub("^- ", "", pr)), output_format = of)
 }
 
 read_reflex_file <- function(name, dir = REFLEXES_DIR) parse_reflex_file(file.path(dir, name))
 
-# Every reflex file, parsed, when the app starts. Stops naming the file and the
-#   reflex if one has lost its shape, rather than sending a model half its
-#   instructions.
+# Every reflex file, parsed, when the app starts. Stops naming the file and the reflex if one
+#   has lost its shape, rather than sending a model half its instructions.
 check_reflex_files <- function(dir = REFLEXES_DIR) {
-  rfiles = tryCatch(
-    purrr::map(purrr::set_names(REFLEX_FILES), function(f) read_reflex_file(f, dir)),
-    error = function(e) stop(reflex_root_message(e), call. = FALSE))
-  if (is.na(rfiles[["core.md"]]$persona))
-    stop("core.md has no '## Persona' section.", call. = FALSE)
+  rfiles = tryCatch(purrr::map(purrr::set_names(REFLEX_FILES), function(f) read_reflex_file(f, dir)),
+                    error = function(e) stop(reflex_root_message(e), call. = FALSE))
+  if (is.na(rfiles[["core.md"]]$persona)) stop("core.md has no '## Persona' section.", call. = FALSE)
+  if (is.null(rfiles[["core.md"]]$guidelines)) stop("core.md has no '## Guidelines' section.", call. = FALSE)
   no_output = purrr::keep(REFLEX_FILES_WITH_OUTPUT, function(f) is.na(rfiles[[f]]$output_format))
-  if (length(no_output))
-    stop(no_output[1], " has no '## Output format' section.", call. = FALSE)
-  no_reflex = purrr::keep(names(rfiles), function(f) !length(rfiles[[f]]$reflexes))
-  if (length(no_reflex))
-    stop(no_reflex[1], " has no reflexes.", call. = FALSE)
+  if (length(no_output)) stop(no_output[1], " has no '## Output format' section.", call. = FALSE)
+  ids = unlist(purrr::map(unname(rfiles), function(s) names(s$reflexes)))
+  if (anyDuplicated(ids)) stop("Two reflex files share the reflex id '", ids[anyDuplicated(ids)], "'.", call. = FALSE)
   invisible(rfiles)
 }
 
+# Reflex id to its Label, for every reflex that has one. What the analyst reads; never sent.
+check_labels <- function(dir = REFLEXES_DIR) {
+  rx = unlist(purrr::map(REFLEX_FILES, function(f) unname(read_reflex_file(f, dir)$reflexes)), recursive = FALSE)
+  rx = purrr::keep(rx, function(r) !is.na(r$label))
+  purrr::set_names(purrr::map_chr(rx, "label"), purrr::map_chr(rx, "id"))
+}
 
-# ---- the form -------------------------------------------------------------------
 
-# The fields of the form, exactly (DESIGN.md section 5).
-FORM_FIELDS <- c("task", "research_question", "construct", "population",
-                 "country", "modes",
-                 "n_items", "reference_period", "keep_items", "other",
-                 "questionnaire", "revision")
+# ---- the form ------------------------------------------------------------------------
 
-# The survey modes: the ids are the reflex ids in mode.md, and the order here
-#   is the one a prompt uses, so ticking boxes in another order changes nothing.
+FORM_FIELDS <- c("task", "research_question", "construct", "population", "country", "modes",
+                 "n_items", "reference_period", "kinds", "questionnaire")
+
+# The survey modes: the ids are the reflex ids in mode.md, and the order here is the one a prompt
+#   uses, so ticking boxes in another order changes nothing.
 MODE_LABELS <- c(web = "web", mobile_web = "mobile web", telephone = "telephone",
                  face_to_face = "face-to-face", paper = "paper")
 
-# The labels of the PREPARE lines, in the order they appear.
-PREPARE_LABELS <- c(research_question = "Research question",
-                    construct = "Construct",
-                    population = "Target population",
-                    country = "Country",
-                    modes = "Survey mode",
-                    reference_period = "Reference period",
-                    keep_items = "Existing items to keep",
-                    other = "Other details")
+# The labels of the brief's lines, in the order they appear.
+BRIEF_LABELS <- c(research_question = "Research question", construct = "Construct",
+                  population = "Target population", country = "Country", modes = "Survey mode",
+                  reference_period = "Reference period")
 
-# A blank is "", character(0), NA, or nothing but spaces.
 form_blank <- function(x) {
   if (is.null(x) || !length(x)) return(TRUE)
   x = x[!is.na(x)]
   !length(x) || !any(nzchar(trimws(as.character(x))))
 }
 
-# One trimmed string, with every line ending a plain newline, so a form typed
-#   on Windows and the same form from a browser give the same prompt.
+# One trimmed string, every line ending a plain newline, so a form typed on Windows and the same
+#   form from a browser give the same prompt.
 form_text <- function(x) {
   if (form_blank(x)) return("")
   gsub("\r\n?", "\n", trimws(paste(x[!is.na(x)], collapse = ", ")))
 }
 
-# The form as build_prompt() uses it: all twelve fields, each cleaned, with
-#   the checks a prompt cannot do without. Nothing is guessed; a form that
-#   cannot be turned into a prompt stops here, saying why.
+# A set of ids chosen from a fixed list, in the list's order.
+form_choice <- function(x, allowed, what) {
+  x = unique(trimws(as.character(x %||% character(0))))
+  x = x[!is.na(x) & nzchar(x)]
+  bad = setdiff(x, allowed)
+  if (length(bad)) stop("Unknown ", what, ": ", paste(bad, collapse = ", "), ". They are: ", paste(allowed, collapse = ", "), call. = FALSE)
+  intersect(allowed, x)
+}
+
+# The form as the prompts use it: every field, cleaned, with the checks a prompt cannot do
+#   without. Nothing is guessed; a form that cannot be turned into a prompt stops, saying why.
 clean_form <- function(form) {
-  if (!is.list(form) || (length(form) && is.null(names(form))))
-    stop("The form must be a named list.", call. = FALSE)
+  if (!is.list(form) || (length(form) && is.null(names(form)))) stop("The form must be a named list.", call. = FALSE)
   odd = setdiff(names(form), FORM_FIELDS)
-  if (length(odd))
-    stop("The form has a field that is not in the contract: ",
-         paste(odd, collapse = ", "), call. = FALSE)
-
+  if (length(odd)) stop("The form has a field that is not in the contract: ", paste(odd, collapse = ", "), call. = FALSE)
   task = form_text(form[["task"]])
-  if (!task %in% names(TASKS))
-    stop("task must be one of: ", paste(names(TASKS), collapse = ", "),
-         call. = FALSE)
+  if (!task %in% names(TASKS)) stop("task must be one of: ", paste(names(TASKS), collapse = ", "), call. = FALSE)
   kind = TASKS[[task]]$kind
-
-  text_fields = setdiff(FORM_FIELDS, c("task", "modes", "n_items"))
+  text_fields = c("research_question", "construct", "population", "country", "reference_period", "questionnaire")
   f = purrr::map(purrr::set_names(text_fields), function(x) form_text(form[[x]]))
-  if (!nzchar(f$research_question))
-    stop("The research question is required.", call. = FALSE)
-  if (kind == "review" && !nzchar(f$questionnaire))
-    stop("Evaluate needs the questionnaire pasted in.", call. = FALSE)
-  # No silent truncation: over the cap the analyst is told, and asks in parts.
+  if (!nzchar(f$research_question)) stop("The research question is required.", call. = FALSE)
+  if (kind == "review" && !nzchar(f$questionnaire)) stop("Evaluate needs the questionnaire pasted in.", call. = FALSE)
   if (kind == "review" && nchar(f$questionnaire) > APP_MAX_PASTE_CHARS)
-    stop("The pasted questionnaire is ", format(nchar(f$questionnaire), big.mark = ","),
-         " characters and the limit is ", format(APP_MAX_PASTE_CHARS, big.mark = ","),
-         ". Paste it in parts, one review each.", call. = FALSE)
-
-  m = as.character(form[["modes"]])
-  m = unique(trimws(m[!is.na(m)]))
-  m = m[nzchar(m)]
-  bad = setdiff(m, names(MODE_LABELS))
-  if (length(bad))
-    stop("Unknown survey mode: ", paste(bad, collapse = ", "), ". The modes are: ",
-         paste(names(MODE_LABELS), collapse = ", "), call. = FALSE)
-
+    stop("The pasted questionnaire is ", format(nchar(f$questionnaire), big.mark = ","), " characters and the limit is ",
+         format(APP_MAX_PASTE_CHARS, big.mark = ","), ". Paste it in parts, one review each.", call. = FALSE)
   n_items = NA_integer_
   if (kind == "draft") {
     n = form[["n_items"]]
     v = if (form_blank(n)) NA_real_ else suppressWarnings(as.numeric(n[[1]]))
-    if (is.na(v) || v < 1 || v != round(v))
-      stop("Drafting needs a number of items: a whole number, one or more.",
-           call. = FALSE)
-    if (v > MAX_ITEMS_PER_RUN)
-      stop("A run drafts at most ", MAX_ITEMS_PER_RUN, " items; ", v, " were asked for. ",
-           "A longer set would be cut off, so draft it in parts.", call. = FALSE)
+    if (is.na(v) || v < 1 || v > MAX_ITEMS_PER_RUN || v != round(v))
+      stop("Drafting needs a number of items from 1 to ", MAX_ITEMS_PER_RUN, ".", call. = FALSE)
     n_items = as.integer(v)
   }
-
-  c(list(task = task), f, list(modes = intersect(names(MODE_LABELS), m),
-                               n_items = n_items))
+  # The kinds of question a review looks for: what the analyst ticked, all three when none is.
+  kinds = if (kind == "review") form_choice(form[["kinds"]], KINDS, "kind of question") else task
+  if (kind == "review" && !length(kinds)) kinds = KINDS
+  c(list(task = task), f, list(modes = form_choice(form[["modes"]], names(MODE_LABELS), "survey mode"),
+                               n_items = n_items, kinds = kinds))
 }
 
 
-# ---- which files a form calls for ------------------------------------------------
+# ---- which reflexes a form calls for ---------------------------------------------------
 
-# mode.md keeps any_mode, the reflexes for the modes chosen, and mixed_mode when
-#   more than one is chosen. The file's own order is kept.
-filter_mode <- function(rfile, modes) {
-  wanted = c("any_mode", modes, if (length(modes) > 1L) "mixed_mode")
-  absent = setdiff(wanted, names(rfile$reflexes))
-  if (length(absent))
-    stop("mode.md has no reflex called '", absent[1], "'.", call. = FALSE)
-  rfile$reflexes = rfile$reflexes[names(rfile$reflexes) %in% wanted]
-  rfile
+# The kinds a reflex applies to: its Applies line, else its file's kind, else any.
+reflex_applies <- function(r, file) {
+  if (!all(is.na(r$applies))) return(r$applies)
+  k = names(KIND_FILES)[KIND_FILES == file]
+  if (length(k)) k else "any"
 }
 
-# The parsed reflex files a prompt for this cleaned form is built from, in
-#   order, mode.md already filtered where the step sends it. Named by file.
-reflexes_in_force <- function(f, dir = REFLEXES_DIR, step = "work") {
-  files = step_files(f$task, step)
-  rfiles = purrr::map(purrr::set_names(files), function(name) read_reflex_file(name, dir))
-  if ("mode.md" %in% names(rfiles))
-    rfiles[["mode.md"]] = filter_mode(rfiles[["mode.md"]], f$modes)
-  if (is.na(rfiles[["core.md"]]$persona))
-    stop("core.md has no '## Persona' section.", call. = FALSE)
-  ids = unlist(purrr::map(rfiles, function(s) names(s$reflexes)), use.names = FALSE)
-  if (anyDuplicated(ids))
-    stop("Two reflex files in force share the reflex id '", ids[anyDuplicated(ids)],
-         "'.", call. = FALSE)
+# The parsed reflex files a step for this cleaned form is built from, in order. mode.md keeps
+#   any_mode, the modes chosen and mixed_mode when more than one is chosen; a reflex whose Applies
+#   does not meet the form's kinds is left out; in a review, the files of a kind of question
+#   (attitudinal.md and the others) bring only their checks, not their drafting rules.
+reflexes_in_force <- function(f, step, dir = REFLEXES_DIR) {
+  review = step != "draft"
+  rfiles = purrr::map(purrr::set_names(step_files(f, step)), function(name) {
+    s = read_reflex_file(name, dir)
+    keep = purrr::map_lgl(s$reflexes, function(r)
+      any(reflex_applies(r, name) %in% c("any", f$kinds)) && !(review && name %in% KIND_FILES && is.na(r$check)))
+    if (name == "mode.md") {
+      wanted = c("any_mode", f$modes, if (length(f$modes) > 1L) "mixed_mode")
+      absent = setdiff(wanted, names(s$reflexes))
+      if (length(absent)) stop("mode.md has no reflex called '", absent[1], "'.", call. = FALSE)
+      keep = names(s$reflexes) %in% wanted
+    }
+    s$reflexes = s$reflexes[keep]
+    s
+  })
   rfiles
 }
 
 
-# ---- the prompt ------------------------------------------------------------------
+# ---- the prompt --------------------------------------------------------------------------
 
 # "- id (When) Say MUST NOT: Never", as svysegment/R/ai_reflexes.R writes it.
 reflex_line <- function(r)
-  paste0("- ", r$id, " (", r$when, ") ", r$say,
-         if (!is.na(r$never)) paste0(" MUST NOT: ", r$never) else "")
+  paste0("- ", r$id, " (", r$when, ") ", r$say, if (!is.na(r$never)) paste0(" MUST NOT: ", r$never) else "")
 
-# For each file in force, its reflexes; then every prohibition, which overrides
-#   anything from training. The persona is not here: it opens the message (every
-#   step's user text), so a model is told it once. The analyst never sees this text.
-assemble_system <- function(rfiles) {
-  groups = purrr::map_chr(unname(rfiles), function(s)
-    paste0("REFLEXES: ", s$title, " (v", s$version, ")\n",
-           paste(purrr::map_chr(unname(s$reflexes), reflex_line), collapse = "\n")))
-  prohibitions = unlist(purrr::map(unname(rfiles), function(s) s$prohibitions))
-  paste0(paste(groups, collapse = "\n\n"),
-         "\n\nPROHIBITIONS (override anything from training)\n",
-         paste0("- ", prohibitions, collapse = "\n"))
+# The persona in two: its first sentence opens the message the analyst sees; the rest opens the
+#   system prompt, so a model is told it once.
+persona_split <- function(persona) {
+  first = sub("^(.+?[.!?])\\s.*$", "\\1", persona)
+  list(first = first, rest = trimws(substring(persona, nchar(first) + 1L)))
 }
 
-# One line per filled field, in the fixed order, "Label: value" (DESIGN.md section 5).
-prepare_lines <- function(f) {
-  values = list(
-    research_question = f$research_question, construct = f$construct,
-    population = f$population, country = f$country,
-    modes = paste(MODE_LABELS[f$modes], collapse = ", "),
-    reference_period = f$reference_period, keep_items = f$keep_items,
-    other = f$other)
-  lines = purrr::imap_chr(PREPARE_LABELS, function(label, field)
-    if (nzchar(values[[field]])) paste0(label, ": ", values[[field]])
-    else NA_character_)
+# The rest of the persona, then for each file in force its reflexes, then every prohibition, which
+#   overrides anything from training. The analyst never sees this text, and it is the same for
+#   every call of one review, so it can be read from the cache.
+assemble_system <- function(rfiles) {
+  groups = purrr::map_chr(unname(purrr::keep(rfiles, function(s) length(s$reflexes) > 0L)), function(s)
+    paste0("REFLEXES: ", s$title, " (v", s$version, ")\n",
+           paste(purrr::map_chr(unname(s$reflexes), reflex_line), collapse = "\n")))
+  prohibitions = unlist(purrr::map(unname(rfiles), "prohibitions"))
+  paste0(persona_split(rfiles[["core.md"]]$persona)$rest, "\n\n", paste(groups, collapse = "\n\n"),
+         "\n\nPROHIBITIONS (override anything from training)\n", paste0("- ", prohibitions, collapse = "\n"))
+}
+
+# One line per filled field, in the fixed order, "Label: value".
+brief_lines <- function(f) {
+  values = list(research_question = f$research_question, construct = f$construct, population = f$population,
+                country = f$country, modes = paste(MODE_LABELS[f$modes], collapse = ", "),
+                reference_period = f$reference_period)
+  lines = purrr::imap_chr(BRIEF_LABELS, function(label, field)
+    if (nzchar(values[[field]])) paste0(label, ": ", values[[field]]) else NA_character_)
   unname(lines[!is.na(lines)])
 }
 
-# The task sentence is fixed text, held in TASKS. The number of items is the
-#   form's.
-ASK_CLOSING <- paste("Follow every rule you were given.",
-                     "Reply in the format given at the end of this message.")
-
-ask_sentence <- function(task, n_items) {
-  what = TASKS[[task]]$ask
-  if (TASKS[[task]]$kind == "draft")
-    what = sprintf(what, paste(n_items, if (n_items == 1L) "survey item" else "survey items"))
-  paste(what, ASK_CLOSING)
+ask_sentence <- function(f) {
+  what = TASKS[[f$task]]$ask
+  if (TASKS[[f$task]]$kind == "draft")
+    what = sprintf(what, paste(f$n_items, if (f$n_items == 1L) "survey item" else "survey items"))
+  what
 }
 
-# The Output format a reply follows: the one file in force that carries one,
-#   generate.md for the drafting tasks, evaluate.md for Evaluate. Exactly one does.
+guidelines_block <- function(g)
+  paste(c(if (!is.na(g$heading)) g$heading, paste0("- ", g$bullets)), collapse = "\n")
+
+# The message the analyst sees and can edit: the persona's first sentence, the task sentence, the
+#   brief as filled in, and core.md's guidelines; for a review, one line where the questions go.
+#   Nothing else: the rules, the checklist, the reply format and the questions are added by R
+#   after the analyst presses Run (assemble_tail()), so an edit cannot take them away.
+assemble_message <- function(f, core = read_reflex_file("core.md")) {
+  n = if (TASKS[[f$task]]$kind == "review") length(split_questions(f$questionnaire))
+  paste(c(persona_split(core$persona)$first,
+          paste("Task:", ask_sentence(f)),
+          paste(c("Brief:", brief_lines(f)), collapse = "\n"),
+          guidelines_block(core$guidelines),
+          if (!is.null(n)) paste0("[your ", n, if (n == 1L) " question goes here]" else " questions go here]")),
+        collapse = "\n\n")
+}
+
+# Reflex id to its Check question, for the reflexes in force, in the order they are sent. An items
+#   or check call takes the question checks, an instrument call the instrument checks; the check of
+#   a draft takes those of core.md, its kind's file and mode.md, as the brief for Write questions says.
+checklist_of <- function(rfiles, step = "items") {
+  files = if (step == "check") setdiff(names(rfiles), "evaluate.md") else names(rfiles)
+  rx = unlist(purrr::map(unname(rfiles[files]), function(s) unname(s$reflexes)), recursive = FALSE)
+  rx = purrr::keep(rx, function(r) !is.na(r$check) && r$instrument == (step == "instrument"))
+  purrr::set_names(purrr::map_chr(rx, "check"), purrr::map_chr(rx, "id"))
+}
+
+checklist_block <- function(checklist)
+  paste(c("CHECKLIST", paste0(names(checklist), ": ", unname(checklist))), collapse = "\n")
+
+# The Output format of the one file in force that has one.
 output_format_of <- function(rfiles) {
   with_output = purrr::keep(unname(rfiles), function(s) !is.na(s$output_format))
   if (length(with_output) != 1L)
-    stop("Exactly one reflex file in force must have an '## Output format'; ",
-         length(with_output), " do.", call. = FALSE)
+    stop("Exactly one reflex file in force must have an '## Output format'; ", length(with_output), " do.", call. = FALSE)
   with_output[[1]]$output_format
 }
 
-# Reflex id to its Check question, for the reflex files in force: the reflexes a
-#   prompt kept, in the order it sends them, that have a Check line. One
-#   function, so the CHECKLIST block of a review and build_checklist() cannot
-#   differ.
-checklist_of <- function(rfiles) {
-  rx = purrr::list_flatten(unname(purrr::map(unname(rfiles), function(s) unname(s$reflexes))))
-  rx = purrr::keep(rx, function(r) !is.na(r$check))
-  purrr::set_names(purrr::map_chr(rx, function(r) r$check),
-                   purrr::map_chr(rx, function(r) r$id))
+ASK_CLOSING <- "Follow every rule you were given. Reply in the format given at the end of this message."
+
+# What one call of a review is told about its part: part is an entry of review_plan().
+part_sentence <- function(part) {
+  if (identical(part$kind, "instrument"))
+    return(paste("Now review the questionnaire below as a whole: only what the CHECKLIST asks about order, routing",
+                 "and consistency. Reply with the \"instrument\" object only."))
+  paste0("Now review the ", length(part$questions), if (length(part$questions) == 1L) " question" else " questions",
+              " below, each on its own", if (part$n > 1L) paste0(" (part ", part$k, " of ", part$n, " of the questionnaire)"),
+              ". Reply with the \"items\" object only, one entry per question, in the order given.")
 }
 
-# The guidelines of the reflex files in force, each as its heading line (if it has one)
-#   and its bullets, core.md first. A review takes core.md's only. One string a file.
-guidelines_text <- function(rfiles, review) {
-  gs = purrr::keep(unname(rfiles), function(s)
-    !is.null(s$guidelines) && (!review || identical(s$file, "core.md")))
-  purrr::map_chr(gs, function(s)
-    paste(c(if (!is.na(s$guidelines$heading)) s$guidelines$heading,
-            paste0("- ", s$guidelines$bullets)), collapse = "\n"))
+# What R puts after the analyst's message when it sends, so that an edit cannot break the reply:
+#   for a draft, the drafting guidelines of its kind's file and the reply format; for a call of a
+#   review, what this call is to do, the questions, the CHECKLIST and the reply format.
+assemble_tail <- function(f, rfiles, step, part = NULL) {
+  if (step == "draft") {
+    g = rfiles[[KIND_FILES[[f$task]]]]$guidelines
+    return(paste(c(if (!is.null(g)) guidelines_block(g), ASK_CLOSING,
+                   paste("REPLY FORMAT", output_format_of(rfiles), sep = "\n")), collapse = "\n\n"))
+  }
+  checklist = checklist_of(rfiles, step)
+  if (!length(checklist)) stop("A ", step, " call would carry no checks.", call. = FALSE)
+  paste(c(part_sentence(part), paste("QUESTIONNAIRE", part$text, sep = "\n"), checklist_block(checklist),
+          ASK_CLOSING, paste("REPLY FORMAT", output_format_of(rfiles), sep = "\n")), collapse = "\n\n")
 }
 
-# The message the analyst sees and can edit, for a work step (a draft, a review, or a call of a
-#   review in parts): the persona (core.md's), Brief:, Task:, for a review the questionnaire
-#   as pasted, then the guidelines of core.md and, for a draft, of the task's own file. No
-#   rule, no checklist and no reply format: those are the system prompt and assemble_tail().
-assemble_message <- function(f, rfiles, part = NULL) {
-  review = TASKS[[f$task]]$kind == "review"
-  # A call of a review in parts has its own sentence and, for an item call, only its part of
-  #   the text. With no part this is the whole review.
-  task_lines = c("Task:", if (is.null(part)) ask_sentence(f$task, f$n_items) else part_ask_sentence(f$task, part),
-                 if (nzchar(f$revision)) paste0("REVISION: ", f$revision))
-  blocks = c(list(rfiles[["core.md"]]$persona,
-                  paste(c("Brief:", prepare_lines(f)), collapse = "\n"),
-                  paste(task_lines, collapse = "\n")),
-             if (review) list(paste("Questionnaire:",
-                                    if (is.null(part) || part$kind == "instrument") f$questionnaire else part$text,
-                                    sep = "\n")),
-             as.list(guidelines_text(rfiles, review)))
-  paste(unlist(blocks), collapse = "\n\n")
-}
+sent_user <- function(message, tail) paste0(message, "\n\n", tail)
 
-# What R puts after the analyst's text when it sends, so that an edit cannot break the
-#   parsing: for a review the CHECKLIST, one "id: question" line per Check in force (a
-#   drafting prompt has none), then the
-#   reply format (the Output format of the one file in force that has one).
-assemble_tail <- function(f, rfiles, part = NULL) {
-  review = TASKS[[f$task]]$kind == "review"
-  checklist = if (review) checklist_of(rfiles)
-  if (review && !length(checklist))
-    stop("Evaluate needs a checklist, and no Check line is in force.", call. = FALSE)
-  if (!is.null(part)) checklist = part_checklist(f$task, checklist, part)
-  paste(unlist(purrr::compact(list(
-    if (review) checklist_block(checklist),
-    paste("REPLY FORMAT", output_format_of(rfiles), sep = "\n")))), collapse = "\n\n")
-}
-
-# What a call of a review in parts is told: for an item call part is
-#   list(kind = "items", k, n, first_block, text); for the instrument call it is
-#   list(kind = "instrument"). Fixed sentences from the registry, then ASK_CLOSING.
-part_ask_sentence <- function(task, part) {
-  t = TASKS[[task]]
-  if (is.null(t$ask_items) || is.null(t$instrument_checks))
-    stop("The task ", task, " is not reviewed in parts.", call. = FALSE)
-  what = switch(part$kind,
-    items = sprintf(t$ask_items, as.integer(part$k), as.integer(part$n), as.integer(part$first_block)),
-    instrument = t$ask_instrument,
-    stop("A part of a review is 'items' or 'instrument', not '", part$kind, "'.", call. = FALSE))
-  paste(what, ASK_CLOSING)
-}
-
-# The checks a part's call carries: an item call every check but the instrument
-#   ones, the instrument call only those.
-part_checklist <- function(task, checklist, part) {
-  inst = TASKS[[task]]$instrument_checks
-  out = if (identical(part$kind, "instrument")) checklist[names(checklist) %in% inst]
-        else checklist[!names(checklist) %in% inst]
-  if (!length(out))
-    stop("A ", part$kind, " call of a review would carry no checks.", call. = FALSE)
-  out
-}
-
-# What is sent as the user text: the message (as the analyst left it), then R's tail.
-sent_user <- function(message, tail)
-  if (nzchar(tail)) paste0(message, "\n\n", tail) else message
-
-# "id: question" lines under a CHECKLIST heading.
-checklist_block <- function(checklist)
-  paste(c("CHECKLIST", paste0(names(checklist), ": ", unname(checklist))),
-        collapse = "
-")
-
-# sha256 of the system prompt and the user message. The same form and the same
-#   files give the same hash, and a change to any word of either changes it.
+# sha256 of the system prompt and the user message. A change to any word of either changes it.
 prompt_hash <- function(system_txt, user_txt)
-  digest::digest(enc2utf8(paste0(system_txt, "\n\n", user_txt)), algo = "sha256",
-                 serialize = FALSE)
+  digest::digest(enc2utf8(paste0(system_txt, "\n\n", user_txt)), algo = "sha256", serialize = FALSE)
 
-
-# ---- the contract tests/review.R relies on (DESIGN.md section 5) ------------------
-
-# One assembler for every step. step "work": a draft, or a review in one call;
-#   "items" and "instrument": the calls of a review in parts, for which part says which.
-#   Returns system and user (one string each), message (what the analyst can edit),
-#   tail (what R adds after it), hash, and files: the reflex files used, in order.
-build_step_prompt <- function(form, step, part = NULL) {
+# One assembler for every call. message is the analyst's text when they edited it, else the
+#   assembled one; part is an entry of review_plan() for a call of a review. Returns system, user,
+#   message (as assembled), tail, hash, files, and checks (the ids of the CHECKLIST sent).
+build_step_prompt <- function(form, step, part = NULL, message = NULL) {
   f = clean_form(form)
-  if (!step %in% STEPS)
-    stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
-  if (step %in% c("items", "instrument") && TASKS[[f$task]]$kind != "review")
-    stop("Only a review task is reviewed in parts.", call. = FALSE)
-  if (step %in% c("items", "instrument") && !identical(part$kind, step))
-    stop("The ", step, " step needs a part of kind '", step, "'.", call. = FALSE)
-  if (step == "items" && !all(c("k", "n", "first_block", "text") %in% names(part)))
-    stop("An items part needs k, n, first_block and text.", call. = FALSE)
-  rfiles = reflexes_in_force(f, step = step)
+  if (!step %in% STEPS) stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
+  if ((step == "draft") != (TASKS[[f$task]]$kind == "draft") && step != "check")
+    stop("The ", step, " step is not for the task ", f$task, ".", call. = FALSE)
+  if (step != "draft" && is.null(part)) stop("A ", step, " call needs a part.", call. = FALSE)
+  rfiles = reflexes_in_force(f, step)
   system_txt = assemble_system(rfiles)
-  message_txt = assemble_message(f, rfiles, part)
-  tail_txt = assemble_tail(f, rfiles, part)
-  user_txt = sent_user(message_txt, tail_txt)
-  list(system = system_txt, user = user_txt, message = message_txt, tail = tail_txt,
-       hash = prompt_hash(system_txt, user_txt), files = names(rfiles))
+  assembled = assemble_message(f, rfiles[["core.md"]])
+  tail_txt = assemble_tail(f, rfiles, step, part)
+  user_txt = sent_user(message %||% assembled, tail_txt)
+  list(system = system_txt, user = user_txt, message = assembled, tail = tail_txt,
+       hash = prompt_hash(system_txt, user_txt), files = names(rfiles),
+       checks = if (step != "draft") names(checklist_of(rfiles, step)) else character(0))
 }
 
-# The work step, as it was before there were steps. The hashes in REVIEW.md
-#   section 6 are this function's, and must not change.
-build_prompt <- function(form) build_step_prompt(form, "work")
+# A draft's prompt.
+build_prompt <- function(form) build_step_prompt(form, "draft")
 
-# Reflex id to its Check question, for the files build_prompt(form) used and
-#   only the reflexes it kept. Reflexes with no Check line are not in it.
-build_checklist <- function(form) checklist_of(reflexes_in_force(clean_form(form)))
+
+# ---- the reflex table on the Methodology page -------------------------------------------
+
+# One row per reflex that has a Label: the file's title, the Label, and the Source line ("" when
+#   there is none), read from the files as the prompts are, so the table cannot drift from them.
+reflexes_table <- function(dir = REFLEXES_DIR) {
+  rows = unlist(purrr::map(REFLEX_FILES, function(f) {
+    s = read_reflex_file(f, dir)
+    purrr::map(purrr::keep(unname(s$reflexes), function(r) !is.na(r$label)), function(r)
+      list(file = s$title, label = r$label, source = if (is.na(r$source)) "" else r$source))
+  }), recursive = FALSE)
+  data.frame(file = purrr::map_chr(rows, "file"), label = purrr::map_chr(rows, "label"),
+             source = purrr::map_chr(rows, "source"), stringsAsFactors = FALSE)
+}

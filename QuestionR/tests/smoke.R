@@ -102,30 +102,33 @@ forms <- list(
                    population = "Adults", modes = "face_to_face", n_items = 2L),
   evaluate = list(task = "evaluate", research_question = "Satisfaction with services", population = "Adults",
                   modes = "web", questionnaire = "Q1. How satisfied are you with the bus and the train?\n1 Very\n2 Not\n\nQ2. Do you own a car?\n1 Yes\n2 No"))
-built <- purrr::map(forms, build_prompt)
+prompt_of <- function(fm) if (fm$task == "evaluate") build_step_prompt(fm, "items", part = review_plan(fm$questionnaire)[[1]]) else build_prompt(fm)
+built <- purrr::map(forms, prompt_of)
+persona <- persona_split(rfiles[["core.md"]]$persona)
 raw_text <- purrr::map_chr(file.path(REFLEXES_DIR, REFLEX_FILES), function(p) paste(readLines(p, encoding = "UTF-8", warn = FALSE), collapse = "\n"))
 sources <- unlist(purrr::map(rfiles, function(s) purrr::map_chr(unname(s$reflexes), "source")))
 sources <- sources[!is.na(sources)]
 comments <- trimws(substr(gsub("\\s+", " ", sub("^<!--", "", unlist(regmatches(raw_text, gregexpr("(?s)<!--.*?-->", raw_text, perl = TRUE))))), 1, 50))
 everything_sent <- paste(purrr::map_chr(built, function(p) paste(p$system, p$user)), collapse = "\n")
 ok("the same form gives the same prompt, character for character, and a changed word changes the hash",
-   identical(build_prompt(forms$attitudinal), built$attitudinal) &&
+   identical(prompt_of(forms$attitudinal), built$attitudinal) && identical(prompt_of(forms$evaluate), built$evaluate) &&
      !identical(build_prompt(utils::modifyList(forms$attitudinal, list(construct = "Trust in the police")))$hash, built$attitudinal$hash))
 ok("no Source line, no HTML comment and no field label reaches any prompt",
    length(sources) > 20L && length(comments) > 3L &&
      !any(purrr::map_lgl(sources, function(s) grepl(s, everything_sent, fixed = TRUE))) &&
      !any(purrr::map_lgl(comments, function(s) grepl(s, gsub("\\s+", " ", everything_sent), fixed = TRUE))) &&
      !grepl("**Source:**", everything_sent, fixed = TRUE) && !grepl("**Check:**", everything_sent, fixed = TRUE))
-ok("the files used are core, the task's own file and mode; a country is one line of the brief and adds no file",
+ok("the files used are core, the task's own file and mode (Evaluate: the files of the kinds ticked, all three by default); a country is one line of the brief and adds no file",
    identical(built$attitudinal$files, c("core.md", "generate.md", "attitudinal.md", "mode.md")) &&
-     identical(built$evaluate$files, c("core.md", "evaluate.md", "mode.md")) &&
+     identical(built$evaluate$files, c("core.md", "evaluate.md", "attitudinal.md", "behavioral.md", "sensitive.md", "mode.md")) &&
+     identical(prompt_of(c(forms$evaluate, list(kinds = "behavioral")))$files, c("core.md", "evaluate.md", "behavioral.md", "mode.md")) &&
      grepl("\nCountry: [country]\n", built$attitudinal$user, fixed = TRUE))
 ok("mode.md keeps any_mode, the modes chosen, and mixed_mode only with more than one",
    grepl("- mixed_mode (", built$attitudinal$system, fixed = TRUE) && grepl("- telephone (", built$attitudinal$system, fixed = TRUE) &&
      !grepl("- mixed_mode (", built$behavioral$system, fixed = TRUE) && !grepl("- paper (", built$behavioral$system, fixed = TRUE))
-ok("the persona opens the message and not the system prompt; the prohibitions close the system prompt",
-   all(purrr::map_lgl(built, function(p) startsWith(p$user, rfiles[["core.md"]]$persona) &&
-                        !grepl(rfiles[["core.md"]]$persona, p$system, fixed = TRUE) &&
+ok("the persona's first sentence opens the message and the rest opens the system prompt; the prohibitions close it",
+   all(purrr::map_lgl(built, function(p) startsWith(p$user, persona$first) && startsWith(p$system, persona$rest) &&
+                        !grepl(persona$first, p$system, fixed = TRUE) && nchar(persona$rest) > 100L &&
                         grepl("PROHIBITIONS (override anything from training)\n- Never", p$system, fixed = TRUE))))
 fails <- function(msg, form) grepl(msg, tryCatch({ build_prompt(form); "no error" }, error = conditionMessage), fixed = TRUE)
 ok("a form that cannot make a prompt stops, saying why: no research question, no questionnaire, a bad field, mode or count",
@@ -227,9 +230,34 @@ ok("the connection check names the placeholders of an unfilled profile and does 
    grepl("Not set up: base_url, id", llm_ping(APP_PROFILES$work, key = "k")$message, fixed = TRUE))
 
 
-# ---- the flows, on a fake model ------------------------------------------------------
+# ---- a pasted questionnaire, split and packed ---------------------------------------------
 
-# A fake `ask`: answers by kind of call and records what each call was sent.
+long_q <- paste(readLines(file.path("tests", "review_long_questionnaire.txt"), warn = FALSE), collapse = "\n")
+plan30 <- review_plan(long_q)
+ok("the 30-question file is two parts of 15 and one call on the whole, ids taken from the labels",
+   length(plan30) == 3L && identical(purrr::map_chr(plan30, "kind"), c("items", "items", "instrument")) &&
+     identical(purrr::map_int(plan30[1:2], function(p) length(p$questions)), c(15L, 15L)) &&
+     identical(plan30[[1]]$ids[1:2], c("Q1", "Q2")) && identical(plan30[[2]]$first, 16L) &&
+     identical(paste(plan30[[1]]$text, plan30[[2]]$text, sep = "\n\n"), trimws(gsub("\r\n?", "\n", long_q))))
+no_blank <- "Q1. Do you drive?\n1 Yes\n2 No\nQ2. Do you cycle?\n1 Yes\n2 No\nQ3) Do you walk?"
+ok("with no blank lines, questions are split on the lines that start with a label; one question is one part and no instrument call",
+   identical(split_questions(no_blank), c("Q1. Do you drive?\n1 Yes\n2 No", "Q2. Do you cycle?\n1 Yes\n2 No", "Q3) Do you walk?")) &&
+     identical(split_questions("1. A?\nYes / No\n2. B?\nYes / No"), c("1. A?\nYes / No", "2. B?\nYes / No")) &&
+     length(review_plan("How old are you?")) == 1L && identical(review_plan("How old are you?")[[1]]$ids, "1"))
+ok("parts hold at most 15 questions and 8,000 characters; a question over 8,000 characters stops, quoting its start",
+   local({
+     many = paste(sprintf("Q%d. Question number %d?\nYes / No", 1:40, 1:40), collapse = "\n\n")
+     big = paste(rep(paste(rep("word", 300), collapse = " "), 9), collapse = "\n\n")
+     p = review_plan(many)
+     identical(purrr::map_int(purrr::keep(p, function(x) x$kind == "items"), function(x) length(x$questions)), c(15L, 15L, 10L)) &&
+       all(purrr::map_int(review_plan(big), function(x) nchar(x$text)) <= 8000L | purrr::map_chr(review_plan(big), "kind") == "instrument") &&
+       grepl("never cut", tryCatch(review_plan(strrep("x", 8001)), error = conditionMessage), fixed = TRUE)
+   }))
+
+
+# ---- a review, on a fake model ---------------------------------------------------------------
+
+# A fake `ask`: answers from the message and records what each call was sent.
 fake_ask <- function(answer) {
   st = new.env()
   st$calls = list()
@@ -240,14 +268,94 @@ fake_ask <- function(answer) {
     out
   })
 }
+
+# The fake reviewer: for each question of a part, a flag on Q11's leading words (fix), on Q12's two
+#   questions (fix), a consider flag on Q13, and a flag whose quote is not in the text on Q14; and
+#   two points about the whole.
+fake_item <- function(id) {
+  fl = function(check, stage, level, quote, why) list(check = check, stage = stage, level = level, quote = quote, why = why)
+  flags = switch(id,
+    Q11 = list(fl("neutral_wording", "comprehension", "fix", "greedy energy companies", "The premise is stated as fact, so disagreeing means rejecting the question.")),
+    Q12 = list(fl("one_thing", "comprehension", "fix", "and did these changes lower your bills", "Two questions at once; a yes to one and no to the other has no answer."),
+               fl("retrieval_and_judgment", "retrieval", "consider", "lower your bills", "Bills change for many reasons, so lower bills are hard to attribute.")),
+    Q13 = list(fl("no_presupposition", "comprehension", "consider", "Please answer even if you rent", "Renters may not be able to install panels.")),
+    Q14 = list(fl("specific_concrete", "comprehension", "fix", "a typical week", "A normal week is not defined for shift workers.")),
+    list())
+  list(id = id, flags = flags, rewrite = if (any(purrr::map_chr(flags, "level") == "fix")) paste("Rewrite of", id) else "")
+}
+review_answer <- function(user) {
+  if (grepl("Reply with the \"instrument\" object only", user, fixed = TRUE))
+    return(list(instrument = list(list(check = "scale_consistency", stage = "reporting", level = "consider",
+                                       questions = list("Q5", "Q17"), why = "Q5 runs satisfied to dissatisfied and Q17 the other way."))))
+  part = strsplit(strsplit(user, "QUESTIONNAIRE\n", fixed = TRUE)[[1]][2], "\n\nCHECKLIST", fixed = TRUE)[[1]][1]
+  q = regmatches(part, gregexpr("(?m)^Q[0-9]+(?=\\.)", part, perl = TRUE))[[1]]
+  list(items = purrr::map(q, fake_item))
+}
+fa <- fake_ask(review_answer)
+rv <- run_review(utils::modifyList(forms$evaluate, list(questionnaire = long_q)), APP_MODEL, ask = fa$ask)
+sh <- shape_review(rv)
+calls_users <- purrr::map_chr(fa$state$calls, "user")
+ok("a 30-question review is three calls, every one sending the same message and its own questions, checks and ceiling",
+   identical(rv$status, "ok") && length(fa$state$calls) == 3L &&
+     all(startsWith(calls_users, assemble_message(clean_form(utils::modifyList(forms$evaluate, list(questionnaire = long_q)))))) &&
+     grepl("Q15.", calls_users[1], fixed = TRUE) && !grepl("Q16.", calls_users[1], fixed = TRUE) &&
+     identical(purrr::map_int(fa$state$calls, "max_tokens"), c(6000L, 6000L, 1500L)) &&
+     length(unique(purrr::map_chr(fa$state$calls, "system"))) == 1L)
+ok("an item call carries the question checks and not the instrument checks; the instrument call only those",
+   grepl("\none_thing: ", calls_users[1], fixed = TRUE) && !grepl("\ncontext_and_order: ", calls_users[1], fixed = TRUE) &&
+     grepl("\ncontext_and_order: ", calls_users[3], fixed = TRUE) && !grepl("\none_thing: ", calls_users[3], fixed = TRUE))
+ok("the shaped review has 30 questions in order, with their text as pasted and their flags",
+   length(sh$questions) == 30L && identical(sh$questions[[11]]$id, "Q11") && startsWith(sh$questions[[11]]$text, "Q11. Obviously") &&
+     length(sh$questions[[12]]$flags) == 2L && length(sh$instrument) == 1L)
+ok("the quote check: a quote in the question is found; one that is not is kept and marked, not dropped",
+   isTRUE(sh$questions[[11]]$flags[[1]]$found) && identical(sh$questions[[14]]$flags[[1]]$found, FALSE) &&
+     quote_found("“greedy  energy”", "Obviously, high energy bills are caused by \"greedy energy companies\"") &&
+     !quote_found("", "anything"))
+ok("the bottom line is built from the flags: counts, the main stage with its checks, and one line on the whole",
+   identical(bottom_line(sh), c(
+     "3 of 30 questions have a problem likely to change answers, and 1 more has a point to consider.",
+     paste0("All are comprehension problems (3): ", count_phrase(unname(check_label(c("neutral_wording", "one_thing", "specific_concrete")))), "."),
+     paste0("The questionnaire as a whole: ", lc1(check_label("scale_consistency")), " (Q5, Q17)."))))
+ok("what to fix first: the questions with a fix flag, most fix flags first then in order, at most five",
+   identical(purrr::map_chr(fix_first(sh), "id"), c("Q11", "Q12", "Q14")) &&
+     length(fix_first(list(questions = rep(sh$questions[11], 9)))) == 5L)
+
+v_items <- function(obj, checks = c("one_thing", "plain_words"), n = 1L) tryCatch({ reply_validator("items", checks = checks, n_questions = n)(obj); "ok" }, error = conditionMessage)
+flag1 <- list(check = "one_thing", stage = "comprehension", level = "fix", quote = "and", why = "Two things.")
+ok("the validator passes a good reply and refuses: more than 8 flags, a why over 30 words, a check not sent, no quote, a bad stage or level, a question missing",
+   identical(v_items(list(items = list(list(id = "Q1", flags = list(flag1), rewrite = "x")))), "ok") &&
+     grepl("9 flags; the limit is 8", v_items(list(items = list(list(id = "Q1", flags = rep(list(flag1), 9), rewrite = "x"))))) &&
+     grepl("why of 31 words", v_items(list(items = list(list(id = 1, flags = list(utils::modifyList(flag1, list(why = paste(rep("w", 31), collapse = " ")))), rewrite = ""))))) &&
+     grepl("not in the CHECKLIST", v_items(list(items = list(list(id = 1, flags = list(utils::modifyList(flag1, list(check = "made_up"))), rewrite = ""))))) &&
+     grepl("has no quote", v_items(list(items = list(list(id = 1, flags = list(utils::modifyList(flag1, list(quote = ""))), rewrite = ""))))) &&
+     grepl("stage", v_items(list(items = list(list(id = 1, flags = list(utils::modifyList(flag1, list(stage = "memory"))), rewrite = ""))))) &&
+     grepl("fix or consider", v_items(list(items = list(list(id = 1, flags = list(utils::modifyList(flag1, list(level = "minor"))), rewrite = ""))))) &&
+     grepl("this part has 2", v_items(list(items = list(list(id = 1, flags = list(), rewrite = ""))), n = 2L)))
+ok("the instrument validator refuses more than three points and a point with no question",
+   local({
+     p = list(check = "scale_consistency", stage = "reporting", level = "fix", questions = list("Q1"), why = "x")
+     v = function(o) tryCatch({ reply_validator("instrument", checks = "scale_consistency")(o); "ok" }, error = conditionMessage)
+     identical(v(list(instrument = list(p))), "ok") && grepl("limit is 3", v(list(instrument = rep(list(p), 4)))) &&
+       grepl("names no question", v(list(instrument = list(replace(p, "questions", list(list()))))))
+   }))
+
+fa2 <- fake_ask(function(user) if (grepl("part 1 of 2", user, fixed = TRUE)) stop("HTTP 500") else review_answer(user))
+rv2 <- run_review(utils::modifyList(forms$evaluate, list(questionnaire = long_q)), APP_MODEL, ask = fa2$ask)
+ok("a part that fails leaves its questions not reviewed, never clear; the rest is kept; it can be run again",
+   identical(rv2$status, "partial") && !sh$questions[[1]]$reviewed == FALSE &&
+     !shape_review(rv2)$questions[[1]]$reviewed && shape_review(rv2)$questions[[16]]$reviewed &&
+     identical(rerun_review_part(utils::modifyList(forms$evaluate, list(questionnaire = long_q)), APP_MODEL, rv2, 1L, ask = fa$ask)$status, "ok"))
+
+
+# ---- a draft, on a fake model ---------------------------------------------------------------
+
 draft_reply <- function(n) list(items = purrr::map(seq_len(n), function(i)
   list(id = paste0("TR", i), domain = paste("domain", i), stem = paste0("How much do you trust [council] on ", i, "?"),
        options = list("A great deal", "Somewhat", "Not at all"), open_format = "")))
 fa <- fake_ask(function(user) draft_reply(3))
 dr <- run_draft(forms$attitudinal, APP_MODEL, ask = fa$ask)
-ok("a draft is one call to the one model, with the assembled prompt", identical(dr$status, "ok") &&
-     length(fa$state$calls) == 1L && identical(fa$state$calls[[1]]$user, built$attitudinal$user) &&
-     identical(attr(dr, "prompt")$hash, built$attitudinal$hash))
+ok("a draft is one call to the one model, with the assembled prompt",
+   identical(dr$status, "ok") && length(fa$state$calls) == 1L && identical(dr$hash, built$attitudinal$hash))
 fa <- fake_ask(function(user) draft_reply(2))
 ok("a draft with the wrong number of items is a failure, with the reason",
    grepl("2 items; 3 were asked for", run_draft(forms$attitudinal, APP_MODEL, ask = fa$ask)$error, fixed = TRUE))
@@ -259,13 +367,47 @@ test_state <- function() do.call(shiny::reactiveValues, STATE_DEFAULTS)
 key_planted <- "sk-planted-0123456789abcdef"
 local({
   st = test_state()
+  f = clean_form(utils::modifyList(forms$evaluate, list(questionnaire = long_q)))
   fa = fake_ask(function(user) {
-    d = draft_reply(3)
-    d$items[[1]]$stem = paste("Leaky", key_planted)
-    d
+    out = review_answer(user)
+    if (!is.null(out$items)) out$items[[1]]$flags = list(list(check = "plain_words", stage = "comprehension", level = "consider",
+                                                              quote = "Are you", why = paste("Leaky", key_planted)))
+    out
   })
+  st$form <- f
+  st$prompt <- list(assembled = assemble_message(f), sent = assemble_message(f))
+  shiny::testServer(mod_results_server, args = list(state = st, make_ask = function(total) fa$ask), {
+    session$flushReact()
+    llm_set_session_key(key_planted)
+    st$run_id <- 1L
+    session$flushReact()
+    h = html_of(output$results)
+    b = html_of(output$bottom)
+    ok("the review page is the bottom line, what to fix first, all questions, and a closed panel on how it was produced",
+       all(purrr::map_int(c("Bottom line", "What to fix first", "All questions"), function(x) regexpr(x, h, fixed = TRUE)) > 0L) &&
+         regexpr("Bottom line", h, fixed = TRUE) < regexpr("What to fix first", h, fixed = TRUE) &&
+         regexpr("What to fix first", h, fixed = TRUE) < regexpr("All questions", h, fixed = TRUE) &&
+         grepl("How this was produced", b, fixed = TRUE) && grepl("Calls: 3", b, fixed = TRUE) &&
+         n_in("<details class=\"border-bottom", h) == 30L && grepl("<mark>greedy energy companies</mark>", h, fixed = TRUE) &&
+         grepl("None found by this review.", h, fixed = TRUE) && !grepl("[0-9a-f]{64}", paste(h, b)))
+    words_page = words_of(see_text(paste(sub("(?s)<h4>All questions</h4>.*$", "", h, perl = TRUE))))
+    words_word = words_of(doc_text(review_blocks(shape_review(st$review))[seq_len(which(purrr::map_chr(review_blocks(shape_review(st$review)), function(x) x$text %||% "") == "All questions") - 1L)]))
+    ok("Copy for Word holds the bottom line and the cards word for word as the page shows them, and the table of all questions",
+       identical(words_page, words_word) && grepl("Copy for Word", b, fixed = TRUE) && grepl("<table", b, fixed = TRUE) &&
+         grepl("Q30", b, fixed = TRUE))
+    log = paste(readLines(output$get_log, encoding = "UTF-8", warn = FALSE), collapse = "\n")
+    ok("a key in the session, echoed in a model's reply, is in neither the page, the Word copy nor the run log",
+       !grepl(key_planted, paste(h, b), fixed = TRUE) && !grepl(key_planted, log, fixed = TRUE) &&
+         grepl("[key removed]", log, fixed = TRUE))
+    ok("the run log has every call with its prompt hash and tokens, and the message as assembled and as sent",
+       grepl("\"message_sent\"", log, fixed = TRUE) && n_in("\"hash\"", log) == 3L && grepl("\"tokens_in\"", log, fixed = TRUE))
+  })
+})
+local({
+  st = test_state()
+  fa = fake_ask(function(user) draft_reply(3))
   st$form <- clean_form(forms$attitudinal)
-  st$approved <- c(built$attitudinal, list(edited = FALSE, original_hash = built$attitudinal$hash))
+  st$prompt <- list(assembled = built$attitudinal$message, sent = built$attitudinal$message)
   shiny::testServer(mod_results_server, args = list(state = st, make_ask = function(total) fa$ask), {
     session$flushReact()
     st$run_id <- 1L
@@ -275,15 +417,8 @@ local({
        n_in("card mb-2", h) == 3L && n_in("Remove", h) == 3L && grepl("Question 1", h, fixed = TRUE))
     session$setInputs(remove = "2")
     session$flushReact()
-    ok("Remove takes an item out", n_in("card mb-2", html_of(output$items_ui)) == 2L)
-  })
-  shiny::testServer(mod_output_server, args = list(state = st), {
-    llm_set_session_key(key_planted)
-    session$flushReact()
-    log = paste(readLines(output$get_log, encoding = "UTF-8", warn = FALSE), collapse = "\n")
-    ok("a key in the session, echoed in a model's reply, is in neither the page nor the run log",
-       !grepl(key_planted, html_of(output$view), fixed = TRUE) && !grepl(key_planted, log, fixed = TRUE) &&
-         grepl("[key removed]", log, fixed = TRUE))
+    ok("Remove takes an item out, and out of the Word copy", n_in("card mb-2", html_of(output$items_ui)) == 2L &&
+         !grepl("on 2?", html_of(output$bottom), fixed = TRUE) && grepl("on 3?", html_of(output$bottom), fixed = TRUE))
   })
 })
 ok("no key is anywhere on the page", !grepl(key_planted, page$html, fixed = TRUE))

@@ -50,6 +50,28 @@ items and 7 ESS control items (tests/, not shipped).
 - **Check:** If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?
 - **Source:** Yan, IASS/WSS Session 1; SURV632 Class 8 and Class 11
 
+### severity
+- **When:** Every finding.
+- **Say:** Rate how far the problem would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for problems you would revise before fielding.
+
+### rewrite_and_probe
+- **When:** Every finding rated 5 or above.
+- **Say:** Offer one rewrite that fixes that fault and changes nothing else, and one cognitive-interview probe that would show whether real respondents have the problem.
+- **Never:** Do not rewrite items that have no finding. Do not present a rewrite as better than the original; it is untested.
+- **Source:** Adhikari et al. 2025 as reported in Haensch, IASS/WSS Session 3 (experts rated model-revised items worse than originals); Yan, IASS/WSS Session 2 (cognitive interviews)
+
+### what_to_test
+- **When:** Closing the review.
+- **Say:** Name the few items that most need testing with real respondents and the cheapest suitable method for each. Say at least one method should be used and several where budget allows.
+- **Source:** Yan, IASS/WSS Session 2 (choosing testing methods); Tourangeau et al. 2020 as cited by Yan
+
+## Instrument checks
+
+<!--
+The checks the whole-questionnaire call takes, and only that call. An item call never
+carries them.
+-->
+
 ### context_and_order
 - **When:** Reviewing the instrument as a whole.
 - **Say:** Check that questions on a topic are grouped and run from general to specific; that an earlier item does not supply the answer, the standard of comparison or the mood for a later one; that early questions are easy and on the stated topic; and that sensitive and demographic items come late.
@@ -75,21 +97,6 @@ items and 7 ESS control items (tests/, not shipped).
 - **Check:** Is every stated research question measured, and does every item serve one?
 - **Source:** Yan, IASS/WSS Session 2 (final checklist: objectives, sampling, mode, processing, analysis, adjustment)
 
-### severity
-- **When:** Every finding.
-- **Say:** Rate how far the problem would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for problems you would revise before fielding.
-
-### rewrite_and_probe
-- **When:** Every finding rated 5 or above.
-- **Say:** Offer one rewrite that fixes that fault and changes nothing else, and one cognitive-interview probe that would show whether real respondents have the problem.
-- **Never:** Do not rewrite items that have no finding. Do not present a rewrite as better than the original; it is untested.
-- **Source:** Adhikari et al. 2025 as reported in Haensch, IASS/WSS Session 3 (experts rated model-revised items worse than originals); Yan, IASS/WSS Session 2 (cognitive interviews)
-
-### what_to_test
-- **When:** Closing the review.
-- **Say:** Name the few items that most need testing with real respondents and the cheapest suitable method for each. Say at least one method should be used and several where budget allows.
-- **Source:** Yan, IASS/WSS Session 2 (choosing testing methods); Tourangeau et al. 2020 as cited by Yan
-
 ## Prohibitions
 
 - Never score or rank the questionnaire as a whole.
@@ -98,12 +105,19 @@ items and 7 ESS control items (tests/, not shipped).
 
 ## Output format
 
-Return one JSON object with these fields. Write in English. Be brief: the analyst is shown only what is below, and reads very little.
+Return one JSON object. Write findings in English, and write a rewrite in the language of the question. Be brief: nothing outside the fields below is shown to the analyst.
 
-- "items": a list, one entry per question in the order pasted. Each has:
-  - "id": the question's own number or label, or its position.
-  - "verdict": "Keep" if the question can be used as written, or "Revise" if it has a real problem. Say "Revise" only for a real problem.
-  - "problems": a list, empty when the verdict is "Keep". At most two entries, the most serious first. Each has "problem" (one sentence of 20 words or fewer, in plain words, saying what is wrong) and "rewrite" (a suggested rewrite of the question, ready to use).
-- "instrument": a list of at most three points about the questionnaire as a whole (order, routing, consistency, fit to objectives), the most important first, one sentence each; an empty list if there is nothing to say.
+For questions, the object is {"items": [...]}, one entry per question, in the order given. Each entry has:
 
-Nothing else: no severities, no check ids, no quotes, no stages and no test plans.
+- "id": the question's own label, or its position.
+- "flags": every problem you stand behind, most damaging first; an empty list if there is none. Each flag has:
+  - "check": the id of the CHECKLIST check it fails.
+  - "stage": "comprehension", "retrieval", "judgment" or "reporting".
+  - "level": "fix" if you would revise the question before fielding; "consider" if the problem is real but smaller, or needs the analyst's knowledge.
+  - "quote": words copied exactly from the question or its options.
+  - "why": at most 25 words: what the respondent cannot do, in plain words.
+- "rewrite": one rewrite of the whole question and its options that fixes its fix-level flags and changes nothing else; an empty string when it has no fix-level flag.
+
+For the questionnaire as a whole, the object is {"instrument": [...]}: at most 3 flags of the same shape, each with "questions" (a list of the ids of the questions it concerns) in place of "quote".
+
+Nothing else: no severity, no probe, no test plan, no rewrite of a single flag.

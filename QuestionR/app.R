@@ -22,16 +22,14 @@ APP_CLASSIFICATION <- "UNCLASSIFIED"
 APP_LOGO <- "office_logo.png"
 APP_OFFICE <- ""
 
-# Largest questionnaire the Evaluate task accepts, in characters. Over it the
-#   app says so and asks for the questionnaire in parts; nothing is truncated.
-#   A longer questionnaire is reviewed in parts (DESIGN.md section 14): whole
-#   blocks, split on blank lines, are packed into parts of at most
-#   APP_BATCH_CHARS characters, one call to the model each, then one
-#   more call for the instrument as a whole. APP_BATCH_CHARS is the per-call
-#   limit Phase 4d measured: about twice a 1,823-character questionnaire, to
-#   match the evaluation ceiling (tests/review_tokens.md).
-APP_MAX_PASTE_CHARS <- 40000
-APP_BATCH_CHARS <- 4000
+# Largest questionnaire Evaluate accepts, in characters. Over it the app says so and asks for
+#   the questionnaire in parts; nothing is truncated. A questionnaire is split into questions
+#   (on blank lines, or on lines that start with a question label) and the questions packed, in
+#   order, into parts of at most APP_BATCH_QUESTIONS questions and APP_BATCH_CHARS characters, one
+#   call each, sent four at a time; one more call looks at the questionnaire as a whole.
+APP_MAX_PASTE_CHARS <- 60000
+APP_BATCH_QUESTIONS <- 15
+APP_BATCH_CHARS <- 8000
 
 # Where the source code is, for the "Source code" button at the top left of the header. It
 #   opens in a new tab. At work, where that address may not be reachable, point it at the
@@ -79,7 +77,7 @@ library(stringr)
 #   with ellmer; R/llm.R calls them directly, to read a reply's finish reason and
 #   an HTTP error's status. promises and later come with Shiny and ellmer; they let
 #   several model calls be in flight at once in the one R process.
-APP_PACKAGES <- c("digest", "ellmer", "httr2", "jsonlite", "later", "promises", "rlang", "S7")
+APP_PACKAGES <- c("digest", "ellmer", "htmltools", "httr2", "jsonlite", "later", "promises", "rlang", "S7")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
@@ -135,6 +133,7 @@ list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION,
               APP_PROFILES = APP_PROFILES,
               APP_MODEL = APP_MODEL,
               APP_MAX_PASTE_CHARS = APP_MAX_PASTE_CHARS,
+              APP_BATCH_QUESTIONS = APP_BATCH_QUESTIONS,
               APP_BATCH_CHARS = APP_BATCH_CHARS),
          envir = globalenv())
 
@@ -191,9 +190,8 @@ ui <- page_fluid(
 
     tabPanel(QUESTIONR_TABS[2], mod_brief_ui("brief")),
     tabPanel(QUESTIONR_TABS[3], mod_prompt_ui("prompt")),
-    tabPanel(QUESTIONR_TABS[4], mod_results_ui("results"), mod_again_ui("again")),
-    tabPanel(QUESTIONR_TABS[5], mod_output_ui("output")),
-    tabPanel(QUESTIONR_TABS[6], md_page(METHODOLOGY_FILE), reflex_panels())))
+    tabPanel(QUESTIONR_TABS[4], mod_results_ui("results")),
+    tabPanel(QUESTIONR_TABS[5], md_page(METHODOLOGY_FILE))))
 
 
 # ---- 7. server --------------------------------------------------------------
@@ -207,9 +205,7 @@ server <- function(input, output, session) {
   mod_connect_server("connect", state)
   mod_brief_server("brief", state, go = go)
   mod_prompt_server("prompt", state, go = go)
-  mod_results_server("results", state, go = go, make_ask_all = progress_ask_all)
-  mod_again_server("again", state, go = go)
-  mod_output_server("output", state)
+  mod_results_server("results", state, make_ask_all = progress_ask_all)
 }
 
 

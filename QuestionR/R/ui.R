@@ -5,8 +5,7 @@
 
 # The tab titles, in order. The navlist in app.R and any code that moves the
 #   analyst between tabs both read this.
-QUESTIONR_TABS <- c("Start here", "1. Brief", "2. Prompt", "3. Results",
-                    "4. Output", "Methodology")
+QUESTIONR_TABS <- c("Start here", "1. Brief", "2. Prompt", "3. Results", "Methodology")
 
 
 # ---- shared helpers ----------------------------------------------------------

@@ -12,12 +12,11 @@
 
 # ---- settings of the call ------------------------------------------------------
 
-# max_tokens for each kind of call. A reply that reaches the ceiling is a failure,
-#   not a short answer, and is not retried: the same prompt is cut off at the same
-#   place. items is one part of a review (at most APP_BATCH_QUESTIONS questions),
-#   instrument the whole-questionnaire call, draft a Write questions run, ping the
-#   connection check.
-LLM_MAX_TOKENS <- c(draft = 12000L, evaluate = 43000L, ping = 200L)
+# max_tokens for each kind of call. A reply that reaches the ceiling is a failure, not a
+#   short answer, and is not retried: the same prompt is cut off at the same place. items is one
+#   part of a review (at most APP_BATCH_QUESTIONS questions), instrument the whole-questionnaire
+#   call, draft a Write questions draft, ping the connection check.
+LLM_MAX_TOKENS <- c(items = 6000L, instrument = 1500L, draft = 6000L, ping = 200L)
 
 # What a cut-off reply tells the analyst to do, by kind of call. llm_json() says
 #   only that the reply was cut off; the flow adds this.
