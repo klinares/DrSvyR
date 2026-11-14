@@ -210,43 +210,38 @@ doc_text <- function(blocks)
 
 # ---- a review, as blocks ------------------------------------------------------------------
 
-# One question's card: the question as pasted with the quoted words highlighted, one line per flag
-#   (its why, with its stage as a tag, and "consider" or "not found" where they apply), and the
-#   rewrite. levels says which flags it shows.
-card_blocks <- function(q, levels = LEVELS) {
-  fl = purrr::keep(q$flags, function(x) x$level %in% levels)
-  tag = function(x) paste(c(x$stage, if (x$level == "consider" && length(levels) > 1L) "consider",
-                            if (!isTRUE(x$found)) "quote not found in your text"), collapse = ", ")
-  c(list(blk_h(paste("Question", q$id), 3L), blk_p(q$text, marks = purrr::map_chr(fl, "quote"))),
-    if (!q$reviewed) list(blk_p("Not reviewed: its part did not come back.", em = TRUE))
-    else if (!length(fl)) list(blk_p("None found by this review.", em = TRUE))
-    else list(blk_list(purrr::map_chr(fl, "why"), tags = purrr::map_chr(fl, tag))),
-    if (!is.null(q$rewrite) && "fix" %in% levels) c(list(blk_p("Suggested wording", em = TRUE)), question_blocks(q$rewrite)))
-}
+# A question's header, "Question 2 (Q3222)": its position, and its label in brackets when it has one.
+question_header <- function(q)
+  paste0("Question ", q$pos, if (!identical(q$id, as.character(q$pos))) paste0(" (", q$id, ")"))
 
-# The questions to fix first: those with a fix-level flag, by number of fix flags and then in the
-#   order pasted, at most n.
-fix_first <- function(sh, n = 5L) {
-  qs = purrr::keep(sh$questions, function(q) n_level(q, "fix") > 0L)
-  utils::head(qs[order(-purrr::map_int(qs, n_level, level = "fix"), seq_along(qs))], n)
-}
+# A question's chip: Fix, Consider, None found, or Not reviewed when its part did not come back.
+question_chip <- function(q)
+  if (!q$reviewed) "Not reviewed" else if (n_level(q, "fix")) "Fix" else if (length(q$flags)) "Consider" else "None found"
 
-# The first words of a question, for the table.
-first_words <- function(text, n = 8L) {
-  w = strsplit(trimws(gsub("\\s+", " ", sub(QUESTION_LABEL, "", text, perl = TRUE))), " ", fixed = TRUE)[[1]]
-  paste0(paste(utils::head(w, n), collapse = " "), if (length(w) > n) "..." else "")
-}
+CHIP_CLASS <- c(Fix = "text-bg-danger", Consider = "text-bg-warning", `None found` = "text-bg-light border",
+                `Not reviewed` = "text-bg-secondary")
 
-# The review as the analyst reads it and copies it to Word: the bottom line; what to fix first (at
-#   most five cards, fix-level flags only); and the table of all questions.
-review_blocks <- function(sh)
+# A question with a fix flag, as it opens: its summary, then the rewrite on the one card under
+#   "Suggested wording".
+fix_blocks <- function(q)
+  c(if (nzchar(q$summary)) list(blk_p(q$summary)), list(blk_p("Suggested wording", em = TRUE)), question_blocks(q$rewrite))
+
+# Its flags, one line each, "label: "quoted words". Why.", with the level as a small tag.
+flag_blocks <- function(q)
+  list(blk_list(purrr::map_chr(q$flags, function(fl) paste0(fl$label, ": \"", fl$quote, "\". ", fl$why)),
+                tags = purrr::map_chr(q$flags, function(fl) paste(c(fl$level, if (!isTRUE(fl$found)) "quote not found in your text"), collapse = ", "))))
+
+# Its Details: the question as pasted with the quoted words highlighted, the flags, the programming text.
+details_blocks <- function(q)
+  c(list(blk_p(q$text, marks = purrr::map_chr(q$flags, "quote"))), flag_blocks(q),
+    if (nzchar(q$rewrite$programming %||% "")) list(blk_p(paste("Programming:", q$rewrite$programming), em = TRUE)))
+
+# The review as it is copied to Word: the bottom line, then each question with a fix flag, its header,
+#   summary and suggested wording; with details, its flags too.
+review_blocks <- function(sh, details = FALSE)
   c(list(blk_h("Bottom line", 2L)), purrr::map(bottom_line(sh), blk_p),
-    if (length(fix_first(sh))) c(list(blk_h("What to fix first", 2L)),
-                                 unlist(purrr::map(fix_first(sh), card_blocks, levels = "fix"), recursive = FALSE)),
-    list(blk_h("All questions", 2L),
-         blk_table(c("Question", "Starts", "Fix", "Consider"),
-                   purrr::map(sh$questions, function(q)
-                     c(q$id, first_words(q$text), if (q$reviewed) c(n_level(q, "fix"), n_level(q, "consider")) else c("-", "-"))))))
+    unlist(purrr::map(purrr::keep(sh$questions, function(q) question_chip(q) == "Fix"), function(q)
+      c(list(blk_h(question_header(q), 3L)), fix_blocks(q), if (details) flag_blocks(q))), recursive = FALSE))
 
 # "How this was produced": date, model, reflex files and versions, number of calls, seconds.
 produced_lines <- function(files, calls, m = APP_MODEL, time = Sys.time(), dir = REFLEXES_DIR) {
@@ -475,31 +470,30 @@ set_button <- function(label, input, value, ns, class = "btn btn-sm btn-outline-
   tags$button(type = "button", class = class, label,
               onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'})", ns(input), value))
 
-# A card drawn from its blocks, so the page and the Word copy are the same words.
-card_ui <- function(blocks) tags$div(class = "card mb-2", tags$div(class = "card-body py-2", doc_html(blocks)))
-
-# The review page, top to bottom: the bottom line, what to fix first, all questions (a row opens to
-#   the card with every flag), and, closed, how it was produced. A part that did not come back is
-#   said, with a button to run it again.
-review_page <- function(rv, ns, prompt_files = character(0)) {
+# The review page, top to bottom: the bottom line; one row per question in pasted order, its header
+#   and chip (a question with a fix flag open on its summary and suggested wording, one with only
+#   points to consider closed on its summary, each with a closed Details; a question with no flag one
+#   line); and, closed, how it was produced. A part that did not come back is said, with a button to
+#   run it again.
+review_page <- function(rv, ns) {
   sh = shape_review(rv)
   failed = which(!purrr::map_lgl(rv$batches, function(b) identical(b$status, "ok")))
+  row = function(q) {
+    chip = question_chip(q)
+    head = tagList(tags$span(class = "fw-semibold me-2", question_header(q)), tags$span(class = paste("badge", CHIP_CLASS[[chip]]), chip))
+    if (!length(q$flags)) return(tags$div(class = "border-bottom py-1", head))
+    tags$details(class = "border-bottom py-1", open = if (chip == "Fix") NA, tags$summary(head),
+                 tags$div(class = "ms-3 mt-2",
+                          doc_html(if (chip == "Fix") fix_blocks(q) else if (nzchar(q$summary)) list(blk_p(q$summary))),
+                          tags$details(class = "mb-2", tags$summary(class = "small", "Details"), doc_html(details_blocks(q)))))
+  }
   tagList(
     if (length(failed)) warn_box(
       tags$strong("Part of the review did not come back. "), "Its questions are marked as not reviewed, not as clear.",
       tags$ul(class = "mb-0", purrr::map(failed, function(i) tags$li(
         rv$batches[[i]]$error, " ", set_button("Run this part again", "rerun", i, ns, "btn btn-sm btn-primary"))))),
     tags$h4("Bottom line"), purrr::map(bottom_line(sh), tags$p),
-    if (length(fix_first(sh))) tagList(tags$h4("What to fix first"),
-                                       purrr::map(fix_first(sh), function(q) card_ui(card_blocks(q, "fix")))),
-    tags$h4("All questions"),
-    tags$div(class = "qr-rows", purrr::map(sh$questions, function(q)
-      tags$details(class = "border-bottom py-1",
-                   tags$summary(tags$span(class = "fw-semibold me-2", q$id), first_words(q$text),
-                                tags$span(class = "float-end small text-muted",
-                                          if (q$reviewed) paste0("fix ", n_level(q, "fix"), ", consider ", n_level(q, "consider"))
-                                          else "not reviewed")),
-                   card_ui(card_blocks(q))))))
+    tags$div(class = "qr-rows", purrr::map(sh$questions, row)))
 }
 
 produced_panel <- function(files, calls)
@@ -507,9 +501,11 @@ produced_panel <- function(files, calls)
                tags$ul(class = "small", purrr::map(produced_lines(files, calls), tags$li)))
 
 # Copy for Word and the run log, at the bottom of a result. What is copied is the blocks drawn black
-#   on white in a box off the screen, because a browser copies the colours it shows.
-copy_and_log <- function(blocks, ns, secrets = character(0))
+#   on white in a box off the screen, because a browser copies the colours it shows. extra goes above
+#   the buttons (the review's "Include details").
+copy_and_log <- function(blocks, ns, secrets = character(0), extra = NULL)
   tagList(
+    extra,
     tags$div(id = ns("word"), class = "qr-word", style = "position:absolute; left:-10000px; top:0; width:700px;",
              HTML(scrub_secrets(paste(as.character(doc_html(blocks)), collapse = "\n"), secrets))),
     tags$p(class = "mt-4",
@@ -713,7 +709,7 @@ mod_task_server <- function(id, kind, app, make_ask = progress_ask, make_ask_all
     }))
 
     blocks <- reactive({
-      if (kind == "review") review_blocks(shape_review(state$review))
+      if (kind == "review") review_blocks(shape_review(state$review), details = isTRUE(input$details))
       else draft_blocks(final_items(state$items, state$edits),
                         final_reply(list(draft = state$draft, refine = state$refine))$needs_from_analyst %||% list())
     })
@@ -721,7 +717,8 @@ mod_task_server <- function(id, kind, app, make_ask = progress_ask, make_ask_all
     output$bottom <- renderUI(safe_ui({
       req(state$round >= 1L)
       app$key_version
-      tagList(copy_and_log(blocks(), session$ns, known_keys()),
+      tagList(copy_and_log(blocks(), session$ns, known_keys(),
+                           if (kind == "review") checkboxInput(session$ns("details"), "Include details", value = isTRUE(isolate(input$details)))),
               if (kind == "review") produced_panel(files(), run_calls(review = state$review)))
     }))
 

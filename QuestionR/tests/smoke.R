@@ -375,10 +375,6 @@ ok("one card for both tabs: a filter above, the intro, the stem in bold, the opt
        regexpr("The courts", t, fixed = TRUE) < regexpr("If a lot: Why?", t, fixed = TRUE) && !grepl("ROTATE", t, fixed = TRUE) &&
        grepl("Answer: a number of days", open, fixed = TRUE)
    }))
-ok("what to fix first: the questions with a fix flag, most fix flags first then in order, at most five",
-   identical(purrr::map_chr(fix_first(sh), "id"), c("Q11", "Q12", "Q14")) &&
-     length(fix_first(list(questions = rep(sh$questions[11], 9)))) == 5L)
-
 v_items <- function(obj, checks = c("one_thing", "plain_words"), n = 1L) tryCatch({ reply_validator("items", checks = checks, n_questions = n)(obj); "ok" }, error = conditionMessage)
 flag1 <- list(check = "one_thing", stage = "comprehension", level = "fix", quote = "and", why = "Two things.")
 rw1 <- list(intro = "", stem = "Q?", options = list("Yes", "No"), rows = list(), open_format = "", programming = "")
@@ -535,18 +531,38 @@ local({
     st = state
     h = html_of(output$results)
     b = html_of(output$bottom)
-    ok("the review page is the bottom line, what to fix first, all questions, and a closed panel on how it was produced",
-       all(purrr::map_int(c("Bottom line", "What to fix first", "All questions"), function(x) regexpr(x, h, fixed = TRUE)) > 0L) &&
-         regexpr("Bottom line", h, fixed = TRUE) < regexpr("What to fix first", h, fixed = TRUE) &&
-         regexpr("What to fix first", h, fixed = TRUE) < regexpr("All questions", h, fixed = TRUE) &&
-         grepl("How this was produced", b, fixed = TRUE) && grepl("Calls: 5", b, fixed = TRUE) &&
-         n_in("<details class=\"border-bottom", h) == 30L && grepl("<mark>greedy energy companies</mark>", h, fixed = TRUE) &&
-         grepl("None found by this review.", h, fixed = TRUE) && !grepl("[0-9a-f]{64}", paste(h, b)))
-    words_page = words_of(see_text(paste(sub("(?s)<h4>All questions</h4>.*$", "", h, perl = TRUE))))
-    words_word = words_of(doc_text(review_blocks(shape_review(st$review))[seq_len(which(purrr::map_chr(review_blocks(shape_review(st$review)), function(x) x$text %||% "") == "All questions") - 1L)]))
-    ok("Copy for Word holds the bottom line and the cards word for word as the page shows them, and the table of all questions",
-       identical(words_page, words_word) && grepl("Copy for Word", b, fixed = TRUE) && grepl("<table", b, fixed = TRUE) &&
-         grepl("Q30", b, fixed = TRUE))
+    rows = regmatches(h, gregexpr("(?s)<(details|div) class=\"border-bottom py-1\".*?(?=<(details|div) class=\"border-bottom py-1\"|$)", h, perl = TRUE))[[1]]
+    ok("the review page is the bottom line, one row per question in pasted order with its header and chip, and a closed panel on how it was produced",
+       regexpr("Bottom line", h, fixed = TRUE) < regexpr("Question 1 (Q1)", h, fixed = TRUE) &&
+         !grepl("What to fix first|All questions", h) && length(rows) == 30L &&
+         all(purrr::imap_lgl(rows, function(r, i) grepl(paste0("Question ", i, " (Q", i, ")"), r, fixed = TRUE))) &&
+         n_in(">Fix</span>", h) == 3L && n_in(">None found</span>", h) == 22L && n_in(">Consider</span>", h) == 5L &&
+         grepl("How this was produced", b, fixed = TRUE) && grepl("Calls: 5", b, fixed = TRUE) && !grepl("[0-9a-f]{64}", paste(h, b)))
+    ok("a question with a fix flag is open on its summary and suggested wording; its original, flags and programming are in a closed Details",
+       local({
+         q11 = rows[[11]]
+         open = sub("(?s)<details class=\"mb-2\">.*$", "", q11, perl = TRUE)
+         startsWith(q11, "<details class=\"border-bottom py-1\" open>") && grepl("Summary of Q11", open, fixed = TRUE) &&
+           grepl("<em>Suggested wording</em>", open, fixed = TRUE) && grepl("<strong>Rewrite of Q11</strong>", open, fixed = TRUE) &&
+           !grepl("Obviously|greedy|premise|ASK ALL", open) &&
+           grepl("<summary class=\"small\">Details</summary>", q11, fixed = TRUE) && grepl("<mark>greedy energy companies</mark>", q11, fixed = TRUE) &&
+           grepl("Pushes toward one answer: \"greedy energy companies\". The premise is stated as fact", q11, fixed = TRUE) &&
+           grepl("Programming: ASK ALL", q11, fixed = TRUE)
+       }) &&
+         startsWith(rows[[1]], "<details class=\"border-bottom py-1\">") && grepl("Leaky", rows[[1]]) &&
+         startsWith(rows[[2]], "<div class=\"border-bottom py-1\">") && !grepl("<details", rows[[2]], fixed = TRUE))
+    word_of = function(x) see_text(sub("(?s)^.*?<div id=\"[^\"]*word\"[^>]*>(.*?)</div>\\s*<p class=\"mt-4\".*$", "\\1", x, perl = TRUE))
+    word = word_of(b)
+    ok("Copy for Word holds the bottom line and, for each question with a fix flag, its header, summary and suggested wording; Include details adds the flags",
+       identical(words_of(word), words_of(doc_text(review_blocks(shape_review(st$review))))) &&
+         grepl("Question 11 (Q11)", word, fixed = TRUE) && grepl("Summary of Q11", word, fixed = TRUE) &&
+         grepl("Rewrite of Q11", word, fixed = TRUE) && !grepl("The premise is stated", word, fixed = TRUE) &&
+         !grepl("Question 13", word, fixed = TRUE) && grepl("Include details", b, fixed = TRUE) &&
+         local({
+           session$setInputs(details = TRUE)
+           w2 = word_of(html_of(output$bottom))
+           grepl("fix Pushes toward one answer: \"greedy energy companies\". The premise is stated as fact", w2, fixed = TRUE)
+         }))
     log = paste(readLines(output$get_log, encoding = "UTF-8", warn = FALSE), collapse = "\n")
     ok("a key in the session, echoed in a model's reply, is in neither the page, the Word copy nor the run log",
        !grepl(key_planted, paste(h, b), fixed = TRUE) && !grepl(key_planted, log, fixed = TRUE) &&
