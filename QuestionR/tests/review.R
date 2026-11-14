@@ -24,11 +24,11 @@ REFLEX_SHA <- c(
   "behavioral.md" = "f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142",
   "core.md" = "d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9",
   "cross_cultural.md" = "915d46090cf22e858cbe431bbcc54091c599df18c17efd2e5bfa97662f805f80",
-  "evaluate.md" = "f290fb25d8ba90b3adb896d6dafc920c01eec94a684470c14be348a78806e7a7",
+  "evaluate.md" = "12859aecda0cd0b9d841879cd8ff1f22d3e6a67936a1f89b25ee12ba7374fea0",
   "generate.md" = "f7410389ee03de9fa3bf911d7410fa182f93169d0d40b57e96c3d0fb368ab687",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
   "pm_appraise.md" = "1bebaba53a961493eed2d1b4fa7d058d0dab53dd05d3b6113d606364ac6f4211",
-  "pm_brief.md" = "a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a",
+  "pm_brief.md" = "daea3b19c360b24817e5b6104a3e798c1444ff7e53b06929614f48584e3e1655",
   "sensitive.md" = "4d8b50d65e768c62143287b3f7400ff7d66695b4905b3d4e0849cc313b81a2eb")
 
 stopifnot("Run from inside QuestionR/" = file.exists("DESIGN.md"))
@@ -293,8 +293,8 @@ prompt_checks <- function(name, p, again, changed) {
       expect("face_to_face kept; mixed_mode dropped", has(sys, "- face_to_face (") && !has(sys, "- mixed_mode (")),
       expect("cross_cultural sent", has(sys, "- flag_do_not_assert ("))),
     evaluate = dplyr::bind_rows(
-      expect("evaluate.md sent (restraint, translation_readiness)",
-             has(sys, "- restraint (") && has(sys, "- translation_readiness (")),
+      expect("evaluate.md sent (restraint), and no translation reflex in it",
+             has(sys, "- restraint (") && !has(sys, "- translation_readiness (")),
       expect("generate.md and task drafting files not sent",
              !has(sys, "- declare_defaults (") && !has(sys, "- attitude_object (")),
       expect("questionnaire pasted under Questionnaire:, complete",

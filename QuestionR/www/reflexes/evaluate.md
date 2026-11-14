@@ -1,6 +1,6 @@
 # Evaluate a questionnaire
 
-Version: 0.4
+Version: 0.5
 
 Task file for appraising a pasted questionnaire: an expert review, item by
 item and then as a whole. The reflexes in core.md are the item checklist; this
@@ -74,12 +74,6 @@ items and 7 ESS control items (tests/, not shipped).
 - **Never:** Do not judge fit to objectives when the brief gives none; say that it was not assessed.
 - **Check:** Is every stated research question measured, and does every item serve one?
 - **Source:** Yan, IASS/WSS Session 2 (final checklist: objectives, sampling, mode, processing, analysis, adjustment)
-
-### translation_readiness
-- **When:** The brief names a country, a language other than English, or more than one language.
-- **Say:** For each item say what would not carry across: idioms, culture-bound examples, units, institutions, scale labels with no natural equivalent, grammatical gender. Organize the instrument-level advice by the five TRAPD steps and say which steps the pasted text shows evidence of and which the analyst must still arrange.
-- **Check:** Is the item free of wording that would not survive translation or adaptation to the stated setting?
-- **Source:** Yan, IASS/WSS Session 2 (3MC surveys; TRAPD); Metheney and Yehle 2024 as reported in Haensch, IASS/WSS Session 3; SURV632 Class 12
 
 ### severity
 - **When:** Every finding.
