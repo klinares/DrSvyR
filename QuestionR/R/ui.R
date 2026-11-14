@@ -62,23 +62,6 @@ model_label <- function(m)
                                   paste0("API '", m$api, "'")),
                            " at ", m$base_url, "; key pasted below")))
 
-# What a review has been shown to do, in the words of the Methodology tab: the section "How it was
-#   tested" of www/methodology.md, with the result of the one test and its limits, copied as it
-#   stands (it is read from the file, so it cannot drift from it), and the model in force.
-pilot_notice <- function(path = METHODOLOGY_FILE, m = APP_MODEL) {
-  txt = tryCatch(readLines(path, encoding = "UTF-8", warn = FALSE), error = function(e) character(0))
-  at = grep("^## How it was tested", txt)
-  rest = if (length(at)) txt[-seq_len(at[[1]])]
-  section = trimws(paste(rest[cumsum(grepl("^#", rest)) == 0L], collapse = "\n"))
-  advice_box(
-    tags$strong("This is a pilot. "),
-    "The review step has been tested once, on a published set of questions with known faults. This is what the ",
-    "Methodology tab says of it:",
-    if (nzchar(section)) HTML(shiny::markdown(section))
-    else tags$p("(The Methodology tab's account of the test could not be read.)"),
-    tags$p(paste0("The model in force here is ", m$id, "; that test used claude-sonnet-5-5.")))
-}
-
 # A profile that still holds <placeholders> (the work profile before it is filled in) says which
 #   entries to fill in, and nothing else about it fails.
 placeholder_notice <- function(m = APP_MODEL) {
@@ -90,29 +73,54 @@ placeholder_notice <- function(m = APP_MODEL) {
     paste(bad, collapse = ", "), ".")
 }
 
-# Start here: the welcome in www/start.md as it is, then the key box, then, closed, the settings in
-#   force, the pilot notice and the connection check. The panel opens by itself when a profile still
-#   holds placeholders, since that is the first thing to deal with.
+# The worked example on Start here: a recorded real run of the tool on the slide question, saved by
+#   tests/llm_check.R example as www/start_example.json and drawn by the card Results uses. Until that
+#   run exists, a box says so; nothing here is written by hand.
+EXAMPLE_FILE <- file.path("www", "start_example.json")
+
+example_ui <- function(path = EXAMPLE_FILE) {
+  if (!file.exists(path))
+    return(warn_box("The worked example will be shown here once it has been recorded from a real run of the tool."))
+  ex = jsonlite::fromJSON(path, simplifyVector = FALSE)
+  sh = shape_review(list(batches = list(list(kind = "items", status = "ok", ids = "1", questions = ex$question, reply = ex$reply))))
+  tagList(card_ui(card_blocks(sh$questions[[1]])),
+          tags$p(class = "small text-muted", paste0("Recorded from ", ex$model, " on ", ex$date, ".")))
+}
+
+# Start here: www/start.md, with the worked example where its {{example}} line is; then the key box;
+#   then, closed, the settings in force and the connection check. The panel opens by itself when the
+#   profile still holds placeholders, since that is the first thing to deal with.
 start_ui <- function() {
   row = function(label, value) tags$tr(tags$th(scope = "row", label), tags$td(value))
   placeholders = placeholder_notice()
+  md = tryCatch(readLines(START_FILE, encoding = "UTF-8", warn = FALSE), error = function(e) "The page start.md could not be read.")
+  at = match("{{example}}", trimws(md))
   tagList(
-    md_page(START_FILE),
+    if (is.na(at)) md_html(paste(md, collapse = "\n"))
+    else tagList(md_html(paste(md[seq_len(at - 1L)], collapse = "\n")), example_ui(),
+                 md_html(paste(md[-seq_len(at)], collapse = "\n"))),
     mod_key_ui("key"),
     tags$details(
       class = "mt-3", open = if (!is.null(placeholders)) NA,
       tags$summary(tags$strong("Settings and connection")),
       placeholders,
-      pilot_notice(),
-      tags$h5("Settings in force"),
-      tags$table(
-        class = "table table-sm",
-        tags$tbody(
-          row("Profile", APP_PROFILE),
-          row("Classification banner", APP_CLASSIFICATION),
-          row("Pasted questionnaire limit",
-              paste(format(APP_MAX_PASTE_CHARS, big.mark = ","), "characters")))),
+      tags$table(class = "table table-sm", tags$tbody(
+        row("Profile", APP_PROFILE),
+        row("Classification banner", APP_CLASSIFICATION),
+        row("Pasted questionnaire limit", paste(format(APP_MAX_PASTE_CHARS, big.mark = ","), "characters")))),
       mod_connect_ui("connect")))
+}
+
+# The Methodology page: www/methodology.md, then the table of the reflexes, read from the reflex
+#   files (file, what each checks, and its Source line as written), so it cannot drift from them.
+methodology_ui <- function() {
+  t = tryCatch(reflexes_table(), error = function(e) NULL)
+  tagList(md_page(METHODOLOGY_FILE),
+          if (is.null(t)) warn_box("The reflex files could not be read.")
+          else tags$table(class = "table table-sm small",
+                          tags$thead(tags$tr(tags$th("Reflex file"), tags$th("What it is for"), tags$th("Source"))),
+                          tags$tbody(purrr::pmap(t, function(file, label, source)
+                            tags$tr(tags$td(file), tags$td(label), tags$td(source))))))
 }
 
 # The model, and whether it has a key; and a button that makes one very small call to it. Never

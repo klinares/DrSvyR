@@ -1,34 +1,14 @@
-## What QuestionR is for
+QuestionR is an AI model acting as an expert reviewer and item writer for a public opinion analyst. It works on one part of Total Survey Error: measurement error that comes from the questionnaire itself.
 
-QuestionR is for reducing measurement error: the gap between what you mean to
-measure and what the answers tell you, from each question and from the
-questionnaire as a whole. It helps you draft survey questions and review a
-questionnaire before it goes to the field.
+![The Total Survey Error framework: the measurement side (construct, measurement, response, edited response) in colour, and the representation side (target population, sampling frame, sample, respondents, postsurvey adjustments) in grey, meeting at the survey statistic.](fw_tse.svg)
 
-![How QuestionR works: the analyst describes what is needed and checks the instructions; several AI models draft at the same time and one model reviews the drafts against the rules and recommends one set; the analyst decides, then copies the result into Word with a record of how it was made.](how_it_works.svg)
+*QuestionR works on measurement error that comes from the questionnaire itself. It does not address interviewers, mode effects in the field, or who was sampled and who responded.*
 
-QuestionR works from written AI reflexes: short rules of
-survey design that every model is given.
+![The goal of questionnaire design is to reduce measurement error: the question "Last week, did you work full-time, part-time, or did you not work at all?" shown three times, measuring the wrong concept, the right concept imperfectly, and the right concept with a response that differs from the true value.](start_example.svg)
 
-## How it works
+{{example}}
 
-1. **Describe what you need.** Your research question, who will be
-   surveyed, the country, and how the survey will be given (web, phone, in
-   person).
-2. **Check the prompt.** The tool shows you what it will ask the AI models.
-   You can approve it or change it. The survey design rules are sent with it
-   and cannot be changed here.
-3. **Get a recommended version.** Several AI models each write a draft. A
-   reviewing model recommends one question for each part of what you need,
-   and flags a problem to check when it finds one. You can edit every question.
-4. **Copy it into Word.** The questions come with three lines to complete.
-   You can download a full record of how they were made, to file with the
-   questionnaire.
-
-Reviewing a questionnaire follows the same steps, with one careful review
-in place of the drafts. It tells you which questions to keep and which to
-revise, and why. A set of draft questions takes a few minutes. A long
-questionnaire review can take longer.
+![How QuestionR works: the analyst pastes questions or describes a construct; the AI reviewer applies the reflexes; the analyst reads the bottom line and fixes; the analyst copies into Word.](how_it_works.svg)
 
 ## What to keep in mind
 

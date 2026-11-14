@@ -187,7 +187,7 @@ ui <- page_fluid(
 
     tabPanel(QUESTIONR_TABS[2], mod_task_ui("evaluate", "review")),
     tabPanel(QUESTIONR_TABS[3], mod_task_ui("write", "draft")),
-    tabPanel(QUESTIONR_TABS[4], md_page(METHODOLOGY_FILE))))
+    tabPanel(QUESTIONR_TABS[4], methodology_ui())))
 
 
 # ---- 7. server --------------------------------------------------------------

@@ -490,3 +490,45 @@ local({
   })
 })
 ok("no key is anywhere on the page", !grepl(key_planted, page$html, fixed = TRUE))
+
+
+# ---- Start here and Methodology ---------------------------------------------------------------
+
+start_html <- html_of(start_ui())
+at <- function(x, h = start_html) regexpr(x, h, fixed = TRUE)[[1]]
+ok("Start here, in order: the two sentences, the TSE figure and its caption, the slide example, the worked example, how it works, the bullets, the key box, then the closed settings",
+   all(c(at("acting as an expert reviewer"), at("fw_tse.svg"), at("It does not address interviewers"), at("start_example.svg"),
+         at("worked example will be shown here"), at("how_it_works.svg"), at("What to keep in mind"), at("Your API key"),
+         at("Settings and connection")) > 0L) &&
+     identical(order(c(at("acting as an expert reviewer"), at("fw_tse.svg"), at("It does not address interviewers"), at("start_example.svg"),
+                       at("worked example will be shown here"), at("how_it_works.svg"), at("What to keep in mind"), at("Your API key"),
+                       at("Settings and connection"))), 1:9) &&
+     !grepl("<details[^>]*open", start_html) && !grepl("{{example}}", start_html, fixed = TRUE))
+ok("the worked example, once recorded, is drawn by the card Results uses, and is never written by hand",
+   local({
+     p = tempfile(fileext = ".json")
+     jsonlite::write_json(list(model = "m", date = "2026-11-13", question = "Last week, did you work?\nYes / No",
+                               reply = list(items = list(list(id = "1", flags = list(list(check = "one_thing", stage = "comprehension",
+                                 level = "fix", quote = "Last week", why = "W.")), rewrite = "R")))), p, auto_unbox = TRUE)
+     h = html_of(example_ui(p))
+     grepl("<mark>Last week</mark>", h, fixed = TRUE) && grepl("Rewrite: R", h, fixed = TRUE) && grepl("card mb-2", h, fixed = TRUE)
+   }))
+ok("the figures are in www/ and the old ones are gone: TSE, the slide example, how it works, construct, response, sensitive",
+   all(file.exists(file.path("www", c("fw_tse.svg", "start_example.svg", "how_it_works.svg", "fw_construct.svg", "fw_response.svg", "fw_sensitive.svg")))) &&
+     !any(file.exists(file.path("www", c("fw_testing.svg", "fw_trapd.svg", "fw_example.svg")))) &&
+     grepl("viewBox=\"0 0 1000 400\"", readLines("www/start_example.svg", n = 1L), fixed = TRUE) &&
+     any(grepl("IASS/WSS Webinar Session 1", readLines("www/start_example.svg"), fixed = TRUE)))
+meth_html <- html_of(methodology_ui())
+heads <- regmatches(meth_html, gregexpr("<h2>[^<]+</h2>", meth_html))[[1]]
+ok("the Methodology page has its sections in order, and no TRAPD or testing-methods section",
+   identical(gsub("</?h2>", "", heads), c("Total Survey Error and measurement error", "From construct to question", "The response process",
+                                          "Sensitive questions", "How the AI reviewer is kept in check", "How it was tested",
+                                          "What it cannot do", "The AI reflexes")) &&
+     !grepl("TRAPD|testing methods", html_of(md_page(METHODOLOGY_FILE)), ignore.case = TRUE))
+ok("the reflex table is read from the reflex files: one row per reflex, its Label, and its Source line as written",
+   local({
+     t = reflexes_table()
+     n = sum(purrr::map_int(rfiles, function(s) length(s$reflexes)))
+     nrow(t) == n && n_in("<tr>", meth_html) == n + 1L &&
+       all(purrr::map_lgl(t$source[nzchar(t$source)], function(s) grepl(htmltools::htmlEscape(s), meth_html, fixed = TRUE)))
+   }))
