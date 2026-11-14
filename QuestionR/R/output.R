@@ -44,7 +44,7 @@ md_page <- function(path)
 
 # The reflex files in the order of the table on the Methodology page.
 REFLEX_PANEL_ORDER <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md", "sensitive.md",
-                       "mode.md", "cross_cultural.md", "evaluate.md", "pm_brief.md", "pm_appraise.md")
+                       "mode.md", "evaluate.md", "pm_brief.md", "pm_appraise.md")
 
 # One closed panel for each reflex file, under the Methodology page: the file's title and version, and
 #   on opening the file as markdown with its HTML comments removed. It is read by read_reflex_file(), the
@@ -234,13 +234,12 @@ DISCLOSURE_LINE <- paste("Expert-review appraisal and first drafts by language m
                          "Not a pretest. Test with real respondents before fielding.")
 
 # The reflex files a flow used, and their versions: the task's files for the work step (and
-#   cross_cultural.md only when it was in force), pm_appraise.md for the appraisal and pm_brief.md
+#   pm_appraise.md for the appraisal and pm_brief.md
 #   when the brief was checked.
 reflex_files_used <- function(f, brief_ran = FALSE) {
-  files = unique(c(step_files(f$task, "work"),
-                   if (TASKS[[f$task]]$kind == "draft") "pm_appraise.md",
-                   if (brief_ran) "pm_brief.md"))
-  files[files != "cross_cultural.md" | needs_cross_cultural(f)]
+  unique(c(step_files(f$task, "work"),
+           if (TASKS[[f$task]]$kind == "draft") "pm_appraise.md",
+           if (brief_ran) "pm_brief.md"))
 }
 
 # A model as the endpoint names it: its id, and the host that served it.

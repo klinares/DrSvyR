@@ -26,7 +26,7 @@ REFLEXES_DIR <- file.path("www", "reflexes")
 # The reflex files, by name. A list rather than a directory scan, so a file that
 #   goes missing is an error and the README beside them is not read as a reflex file.
 REFLEX_FILES <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md",
-                 "sensitive.md", "evaluate.md", "mode.md", "cross_cultural.md",
+                 "sensitive.md", "evaluate.md", "mode.md",
                  "pm_brief.md", "pm_appraise.md")
 
 # The files whose reply R parses, so each must say what the reply holds.
@@ -42,8 +42,7 @@ REFLEX_FILES_WITH_OUTPUT <- c("generate.md", "evaluate.md", "pm_brief.md",
 #             reviews pasted text)
 #     files   the reflex files a work prompt is built from, in the order of the
 #             table in www/reflexes/README.md. mode.md is always in; R keeps only
-#             its reflexes for the modes chosen. cross_cultural.md is in only
-#             when needs_cross_cultural().
+#             its reflexes for the modes chosen.
 #     ask     the fixed sentence of the Task: block. A draft task's holds %s,
 #             where the number of items goes.
 #     fields  the form fields the Brief tab shows for this task. "task" is the
@@ -51,25 +50,25 @@ REFLEX_FILES_WITH_OUTPUT <- c("generate.md", "evaluate.md", "pm_brief.md",
 TASKS <- list(
   attitudinal = list(
     label = "Attitudinal scale", kind = "draft",
-    files = c("core.md", "generate.md", "attitudinal.md", "mode.md", "cross_cultural.md"),
+    files = c("core.md", "generate.md", "attitudinal.md", "mode.md"),
     ask = "Write exactly %s for the brief above, to be combined into one attitude scale.",
     fields = c("research_question", "construct", "population", "country", "modes",
                "n_items", "keep_items", "other")),
   behavioral = list(
     label = "Behavioral items", kind = "draft",
-    files = c("core.md", "generate.md", "behavioral.md", "mode.md", "cross_cultural.md"),
+    files = c("core.md", "generate.md", "behavioral.md", "mode.md"),
     ask = "Write exactly %s for the brief above, each measuring a behaviour or an experience.",
     fields = c("research_question", "construct", "population", "country", "modes",
                "n_items", "reference_period", "keep_items", "other")),
   sensitive = list(
     label = "Sensitive topic items", kind = "draft",
-    files = c("core.md", "generate.md", "sensitive.md", "mode.md", "cross_cultural.md"),
+    files = c("core.md", "generate.md", "sensitive.md", "mode.md"),
     ask = "Write exactly %s for the brief above, each on a topic where respondents may refuse or edit their answer.",
     fields = c("research_question", "construct", "population", "country", "modes",
                "n_items", "keep_items", "other")),
   evaluate = list(
     label = "Evaluate a questionnaire", kind = "review",
-    files = c("core.md", "evaluate.md", "mode.md", "cross_cultural.md"),
+    files = c("core.md", "evaluate.md", "mode.md"),
     ask = "Review the questionnaire below as an expert reviewer, item by item and then as a whole.",
     fields = c("research_question", "population", "country", "modes", "other", "questionnaire"),
     # A questionnaire that does not fit one call is reviewed in parts (DESIGN.md
@@ -374,10 +373,6 @@ clean_form <- function(form) {
 
 # ---- which files a form calls for ------------------------------------------------
 
-# A country is given (DESIGN.md section 4). Questions are written in English, so a
-#   language never calls for the file.
-needs_cross_cultural <- function(f) nzchar(f$country)
-
 # mode.md keeps any_mode, the reflexes for the modes chosen, and mixed_mode when
 #   more than one is chosen. The file's own order is kept.
 filter_mode <- function(rfile, modes) {
@@ -393,7 +388,6 @@ filter_mode <- function(rfile, modes) {
 #   order, mode.md already filtered where the step sends it. Named by file.
 reflexes_in_force <- function(f, dir = REFLEXES_DIR, step = "work") {
   files = step_files(f$task, step)
-  files = files[files != "cross_cultural.md" | needs_cross_cultural(f)]
   rfiles = purrr::map(purrr::set_names(files), function(name) read_reflex_file(name, dir))
   if ("mode.md" %in% names(rfiles))
     rfiles[["mode.md"]] = filter_mode(rfiles[["mode.md"]], f$modes)

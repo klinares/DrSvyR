@@ -310,11 +310,11 @@ ok("no Check question is in a review's system prompt",
 ok("no Source or Check field label is in any prompt",
    every_built(function(b) !grepl("**Source:**", both_of(b), fixed = TRUE) && !grepl("**Check:**", both_of(b), fixed = TRUE)))
 
-ok("the files used are core, the task's files, mode, and cross_cultural only with a country",
+ok("the files used are core, the task's files and mode",
    every_built(function(b) identical(b$p$files, c(
      "core.md",
      if (b$task == "evaluate") "evaluate.md" else c("generate.md", paste0(b$task, ".md")),
-     "mode.md", if (nzchar(b$country)) "cross_cultural.md"))))
+     "mode.md"))))
 ok("the persona opens the message and is not in the system prompt, and the prohibitions close the system prompt, headed as overriding",
    every_built(function(b) startsWith(b$p$user, rfiles[["core.md"]]$persona) &&
                  !grepl(rfiles[["core.md"]]$persona, b$p$system, fixed = TRUE) &&
@@ -330,8 +330,6 @@ ok("mode.md keeps any_mode, the modes chosen, and mixed_mode only with more than
      expected = c("any_mode", b$modes, if (length(b$modes) > 1L) "mixed_mode")
      identical(in_prompt, intersect(names(rfiles[["mode.md"]]$reflexes), expected))
    }))
-ok("cross_cultural.md is in with a country and out without",
-   every_built(function(b) ("flag_do_not_assert" %in% ids_in(b$p$system)) == nzchar(b$country)))
 ok("every reflex of a drafting task file is in, and of the other task files out",
    every_built(function(b) {
      task_ids = purrr::map(rfiles[c("attitudinal.md", "behavioral.md", "sensitive.md", "evaluate.md")], function(s) names(s$reflexes))
@@ -474,10 +472,11 @@ ok("a REVISION line is in the ask on a rerun and nowhere else",
          build_prompt(utils::modifyList(forms$attitudinal, list(revision = "Make the stems shorter.")))$user,
          perl = TRUE) &&
      !grepl("REVISION", build_prompt(forms$attitudinal)$user, fixed = TRUE))
-has_cc <- function(...)
-  "flag_do_not_assert" %in% ids_in(build_prompt(utils::modifyList(forms$attitudinal, list(...)))$system)
-ok("cross_cultural is sent for a country and for nothing else",
-   has_cc(country = "Kenya") && !has_cc() && !has_cc(country = "") && !has_cc(country = "  "))
+ok("a country is one PREPARE line and calls for no reflex file",
+   grepl("
+Country: Kenya
+", build_prompt(utils::modifyList(forms$attitudinal, list(country = "Kenya")))$user, fixed = TRUE) &&
+     identical(build_prompt(utils::modifyList(forms$attitudinal, list(country = "Kenya")))$files, build_prompt(forms$attitudinal)$files))
 
 # A form that cannot make a prompt stops, saying why. It never makes a guess.
 fails <- function(msg, ...) grepl(msg, tryCatch({ build_prompt(...); "no error" }, error = conditionMessage), fixed = TRUE)
@@ -943,7 +942,7 @@ brief_built <- purrr::map(forms, function(fm)
 ok("the brief check sends core, pm_brief and the task's own files, in that order",
    purrr::every(brief_built, function(b)
      identical(b$p$files, c("core.md", "pm_brief.md",
-                            setdiff(TASKS[[b$form$task]]$files, c("core.md", "cross_cultural.md"))))))
+                            setdiff(TASKS[[b$form$task]]$files, "core.md")))))
 ok("the brief check's system prompt holds the brief rules and the task's rules, and no drafting output format",
    purrr::every(brief_built, function(b)
      inn(b$p$system, "- what_a_brief_needs (") && inn(b$p$system, "- criteria_preview (") &&
@@ -2435,10 +2434,9 @@ ok("the disclosure, which now goes in the record, names the date, the profile, t
        disc(chosen = final_set(list(set_entry("A", 1L, "CONF1")), list(), bad, 11L), drafts = bad)
      }, fixed = TRUE))
 ok("the disclosure gives the version of each reflex file used, and pm_brief.md only when the brief was checked",
-   grepl(paste0("Reflex files and versions: ", paste(reflex_versions(c("core.md", "generate.md", "attitudinal.md", "mode.md", "cross_cultural.md", "pm_appraise.md", "pm_brief.md")), collapse = "; ")),
+   grepl(paste0("Reflex files and versions: ", paste(reflex_versions(c("core.md", "generate.md", "attitudinal.md", "mode.md", "pm_appraise.md", "pm_brief.md")), collapse = "; ")),
          fr_disc, fixed = TRUE) &&
-     !grepl("pm_brief.md", disc(brief = NULL), fixed = TRUE) &&
-     !grepl("cross_cultural.md", disc(form = clean_form(fl_form)), fixed = TRUE))
+     !grepl("pm_brief.md", disc(brief = NULL), fixed = TRUE))
 ok("the disclosure gives each prompt's hash in full, says the drafting prompt was not edited, and says it was when it was",
    grepl(paste0("Brief check prompt: ", fr_brief$hash), fr_disc, fixed = TRUE) &&
      grepl(paste0("Drafting prompt (not edited): ", fr_approved$hash), fr_disc, fixed = TRUE) &&
@@ -2823,7 +2821,7 @@ ok("under the Methodology page, one closed panel for each reflex file, in the or
      want = purrr::map_chr(REFLEX_PANEL_ORDER, function(f) { s = read_reflex_file(f); paste0("<summary> <strong>", s$title, ", version ", s$version, "</strong> </summary>") })
      comments = unlist(purrr::map(REFLEX_PANEL_ORDER, function(f) regmatches(paste(readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"),
                                                                            gregexpr("(?s)<!--.*?-->", paste(readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"), perl = TRUE))[[1]]))
-     identical(heads, want) && length(gregexpr("<details", meth_panels, fixed = TRUE)[[1]]) == 10L &&
+     identical(heads, want) && length(gregexpr("<details", meth_panels, fixed = TRUE)[[1]]) == length(REFLEX_FILES) &&
        !grepl("<details[^>]*open", meth_panels) && !grepl("<!--", meth_panels, fixed = TRUE) &&
        grepl("construct_first", meth_panels, fixed = TRUE) && grepl("You are a senior survey methodologist", meth_panels, fixed = TRUE) &&
        !any(purrr::map_lgl(trimws(gsub("<!--|-->", "", comments)), function(cm) grepl(substr(gsub("\\s+", " ", cm), 1, 60), gsub("\\s+", " ", meth_panels), fixed = TRUE))) &&
@@ -3001,13 +2999,13 @@ panel_html <- function(html, f) {
   to = a + regexpr("</details>", substring(html, a), fixed = TRUE)[[1]] + 8L
   substr(html, from, to)
 }
-ok("no page of the app names TRAPD, translation or an output language, and no form field is a language; none of the ten reflex files does either, and each has its panel on the page",
+ok("no page of the app names TRAPD, translation or an output language, and no form field is a language; none of the reflex files does either, and each has its panel on the page",
    local({
      html = paste(page$html, collapse = " ")
      panels = purrr::map_chr(REFLEX_PANEL_ORDER, function(f) panel_html(html, f))
      files = purrr::map_lgl(REFLEX_PANEL_ORDER, function(f)
        any(grepl(translation_pattern, readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), ignore.case = TRUE)))
-     length(panels) == 10L && all(nzchar(panels)) && !any(files) &&
+     length(panels) == length(REFLEX_FILES) && all(nzchar(panels)) && !any(files) &&
        !grepl(translation_pattern, see_text(html), ignore.case = TRUE) &&
        !grepl("id=\"[^\"]*lang[^\"]*\"", html, ignore.case = TRUE) &&
        !any(grepl("lang", names(clean_form(forms$attitudinal)), ignore.case = TRUE))

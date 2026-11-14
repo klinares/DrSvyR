@@ -37,15 +37,14 @@ guessed.
 | Step | Model | Files, in order |
 |---|---|---|
 | Brief check | PM | core, pm_brief, then the task file |
-| Generate: attitudinal scale | each worker | core, generate, attitudinal, mode, cross_cultural |
-| Generate: behavioral items | each worker | core, generate, behavioral, mode, cross_cultural |
-| Generate: sensitive items | each worker | core, generate, sensitive, mode, cross_cultural |
-| Evaluate questionnaire | PM only | core, evaluate, mode, cross_cultural |
+| Generate: attitudinal scale | each worker | core, generate, attitudinal, mode |
+| Generate: behavioral items | each worker | core, generate, behavioral, mode |
+| Generate: sensitive items | each worker | core, generate, sensitive, mode |
+| Evaluate questionnaire | PM only | core, evaluate, mode |
 | Appraise candidates | PM | core, pm_appraise, then the Check lines of the files the workers received |
 
 `mode.md` is filtered by R before sending: `any_mode`, the reflexes whose id
 is a mode chosen in the form, and `mixed_mode` when more than one is chosen.
-`cross_cultural.md` is sent whole whenever a country is given.
 
 The user message has three labelled blocks in Buskirk, Eck and Timbrook's
 order: PREPARE (the brief: research question, construct, population, country,

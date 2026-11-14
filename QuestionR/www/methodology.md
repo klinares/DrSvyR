@@ -68,7 +68,8 @@ QuestionR's review is. It is no substitute for real respondents.
 QuestionR is an expert review and a first draft by AI models. It is not a
 pretest and does not show how respondents will understand a question. It can
 miss faults and raise concerns that do not matter. Test key questions with
-real respondents.
+real respondents. It does not judge whether two language versions of a
+questionnaire are equivalent.
 
 ## How it was tested
 
@@ -97,7 +98,6 @@ are also in the source code.
 | Behaviors | Recall, reference periods and counts | Drafting behavior questions | Session guidelines |
 | Sensitive topics | Questions people may refuse, or edit their answer to | Drafting sensitive questions | Session guidelines |
 | Survey mode | Web, phone, in person, and more than one mode | Every request; only the modes you choose | Session guidelines |
-| Country and culture | Local terms, sensitivities and context | When you name a country | Response model |
 | Questionnaire review | Reviewing a questionnaire question by question and as a whole | Reviewing a questionnaire | Testing methods |
 | Brief check | What a designer would still need to know from your brief | When you ask for a brief check | Session guidelines |
 | Reviewer | How the reviewing model checks the drafts and recommends one set | After the drafts come back | Session guidelines |
