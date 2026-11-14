@@ -33,3 +33,7 @@ dict/
 QuestionR/tests/review30.json
 QuestionR/tests/write_run.json
 QuestionR/Claude outputs/
+
+# SurvAI_Expert: build output and caches stay local for now.
+SurvAI_Expert/data/markdown/
+SurvAI_Expert/data/build/
