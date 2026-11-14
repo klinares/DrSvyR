@@ -6,15 +6,16 @@ From Phase 9, what this file calls "skills" are called "reflexes" (a file is a r
 
 ## Phase 9 (2026-11-13): reflexes, no translation, simple output, Total Survey Error first
 
-**Next: Kevin tries the app (click-through at the end of this section), answers the one question
-in "Needs your decision" below, and takes `REVIEW.md` and this file to the Claude project.**
-Nothing is pushed. Two live runs were made, with Kevin's yes: `tests/llm_check.R generate` (5
+**Next: Kevin tries the app (click-through at the end of this section), answers the one open
+question in "Open" below, and takes `REVIEW.md` and this file to the Claude project.**
+Nothing is pushed. Two live runs were made, with Kevin's yes, before the follow-up: `tests/llm_check.R generate` (5
 requests, all ok) and one review of `tests/review_questionnaire.txt` (1 request, ok). `gold` was
 not run.
 
 - **Commits, branch `questionr`:** setup (prompt and design section 18) `341314a`; 9a `752e23c`; 9b
-  `62c036b`; 9c `b5574bb`; 9e `eea4b73`; 9d `c53c9a7`; 9f `18fe115`; 9g `d23f2ce`; and the commit
-  that carries this file and `REVIEW.md`. 9e is before 9d because 9d's note names the diagram 9e
+  `62c036b`; 9c `b5574bb`; 9e `eea4b73`; 9d `c53c9a7`; 9f `18fe115`; 9g `d23f2ce`; `07674fc` (the
+  follow-up Kevin said yes to: the translation and output-language reflexes in `evaluate.md` and
+  `pm_brief.md`); and the commit that carries this file and `REVIEW.md`. 9e is before 9d because 9d's note names the diagram 9e
   draws. Before 9a I switched from `main` to `questionr` and fast-forwarded it to `4f7bf1c` (the
   merge of Phase 8): the branch was behind `main`, and the prompt says to stop if Phase 8 is not
   on it.
@@ -22,24 +23,25 @@ not run.
   features that no longer exist, 11 of them removed in 9f, and tests rewritten for the new output).
   `tests/review.R 5`: **no FAIL**, 11 of 12 code files (as before).
 
-### Needs your decision
+### Done on Kevin's yes, and open
 
-1. **Reflex files I was not authorised to edit still mention translation or an output language.**
-   9b authorised `cross_cultural.md` only. Still there:
-   - `evaluate.md`: the reflex `translation_readiness` (When, Say, Check, and a Source line that
-     names TRAPD). Its check is still in the CHECKLIST a review sends when the brief names a
-     country, so a review is still asked "Is the item free of wording that would not survive
-     translation". `pm_brief.md`: one Say line asks the brief check to look for "the output
-     language".
-   - `cross_cultural.md`: two Source lines still say "translation" (they describe what the slides
-     said, not a reflex). I did not rewrite a citation.
-   - Because these words show in the reflex panels, the 9g check "no page names TRAPD or
-     translation" exempts exactly those three files, and counts their lines (2, 4 and 1) so the
-     number cannot grow. If you authorise the edits (delete `translation_readiness`; drop "the
-     output language and" from `pm_brief.md`; shorten the two Source lines), the exemption goes.
-2. **`same_family_note` and `model_family` (`R/ui_generate.R`) are unused.** 9c took the "appraiser
-   reviewed a draft from its own model family" notice off the screen. I left the code because
-   removing a safeguard is your call. Say delete or restore.
+- **Done (`07674fc`).** The prompt authorised no edit of `evaluate.md` and `pm_brief.md` in 9b, so
+  9b left them with translation and output-language lines; Kevin then said yes to deleting them.
+  `evaluate.md` 0.5: the reflex `translation_readiness` (When, Say, Check, and a Source line that
+  named TRAPD) is deleted, so a review no longer asks whether wording "would survive
+  translation". `pm_brief.md` 0.2: the brief check no longer looks for "the output language and the
+  source language". Diffs below. 15 prompt hashes moved (14 Evaluate and the Evaluate revision
+  row); the other 45 did not. Both live runs below were made **before** this edit, so their
+  prompts are the ones with the old `evaluate.md` (the draft run does not use it; the review run's
+  hash is the old Evaluate one); I did not repeat them (Kevin's yes covered two runs).
+- **Open 1: `cross_cultural.md` still has two Source lines that say "translation"** (the slides'
+  topic, in a citation of a reflex that is not about translation). I did not rewrite a citation. The
+  smoke check "no page names TRAPD or translation" therefore exempts that one file and counts its
+  two lines so the number cannot grow. Say the word and I shorten them (for example to "Yan,
+  IASS/WSS Session 2 (context, culture, history)") and the exemption goes.
+- **Open 2: `same_family_note` and `model_family` (`R/ui_generate.R`) are unused.** 9c took the
+  "appraiser reviewed a draft from its own model family" notice off the screen. I left the code
+  because removing a safeguard is Kevin's call. Say delete or restore.
 
 ### The gold test
 
@@ -73,10 +75,9 @@ not run it.
   culture" (diff below): the translation, TRAPD, back-translation, functional-equivalence and
   output-language reflexes, their prohibitions and checks are deleted. `fw_trapd.svg`, the TRAPD
   section of `methodology.md` and the TRAPD row of the reflex table are deleted. Removed
-  fixtures: the form `evaluate_translated` and the Swahili and French output languages of the
-  test forms, the language tests, and the French and Spanish fixtures of the coded defaults. No gold case
-  was removed: none of the 27 gold items or their matches mentions translation or another
-  language (checked by search), and `gold_items.csv` is untouched.
+  fixtures: the form `evaluate_translated`, the Swahili and French forms, the language tests and
+  the gold cases that were translation-only (none of the 27 gold items was translation-only; the
+  gold matches are untouched).
 - **9c, simple output.** Per drafted question: the question, its answer options, and at most one
   line "Check before use:" (one sentence of 20 words or fewer, only when the reviewer found a real
   problem). Per reviewed question: the question as pasted, "Keep" or "Revise", and for Revise at
@@ -127,8 +128,8 @@ not run it.
   views).
 - **9g, smoke checks** (all in `tests/smoke.R`, section "Phase 9g", and the 9d/9e block): no page
   says "skill" except in its one sentence (once on Start here, once on Methodology); no page
-  names TRAPD, translation or an output language and no form field is a language (with the
-  exemption in decision 1); a rendered drafted question has only the question, its options and
+  names TRAPD, translation or an output language and no form field is a language (the one
+  exemption is open item 1); a rendered drafted question has only the question, its options and
   at most one line of 20 words or fewer; a rendered review shows at most two problems for a
   question and three points about the whole when the stand-in sends three problems and four
   points; the Word copy is the screen's words plus exactly the three lines, for a draft and a
@@ -145,7 +146,7 @@ not run it.
 ### Authorised edits to reflex files: the diffs
 
 `cross_cultural.md` (9b), then the Output format sections of `generate.md`, `evaluate.md` and
-`pm_appraise.md` (9c). The rename `skills` to `reflexes` is in the same diffs (9a), where the
+`pm_appraise.md` (9c), then `evaluate.md` and `pm_brief.md` (the follow-up, Kevin's yes). The rename `skills` to `reflexes` is in the same diffs (9a), where the
 prose said skill. `README.md` of `www/reflexes/` changed in prose only (9a, 9b: nine lines).
 
 ```diff
@@ -228,77 +229,30 @@ prose said skill. `README.md` of `www/reflexes/` changed in prose only (9a, 9b: 
 `generate.md` (version 0.4):
 
 ```diff
-@@ -1,77 +1,71 @@
--# Generate
--
+@@ -1,6 +1,6 @@
+ # Generate
+ 
 -Version: 0.3
--
--Sent with every request to write new items, after core.md and before the task
--file. How a draft is built from the brief and what it must declare.
--
--## Reflexes
--
--### design_not_topic
--- **When:** Before writing any item.
--- **Say:** Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.
--- **Check:** Is the item usable as written in the stated mode for the stated population?
--- **Source:** Haensch, IASS/WSS Session 3 (recommendation 2); Buskirk, Eck and Timbrook 2025
--
--### declare_defaults
--- **When:** Every item you write.
--- **Say:** Every response format is a design decision, not a default. For each item state the decisions you made, as separate entries with one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint
--- **Never:** Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
--- **Source:** Haensch, IASS/WSS Session 3 (every default is a design decision; recommendation 4); Fuchs, Haensch and Weber 2026 (models default to five points and omit don't-know); Padgett, Maiorino and Gutierrez 2024 as reported in Fuchs et al. (too many ope
--
--### labelled_scales
--- **When:** Any ordered response scale.
--- **Say:** Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or u
--- **Never:** Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.
--- **Check:** Are all points labelled in one consistent form, with poles that match the construct?
--- **Source:** SURV632 Class 8 (verbal and numeric labels; conceptual and visual midpoint); Fuchs, Haensch and Weber 2026 (label and number correspondence); Sturgis, Roberts and Robinson 2026 (inconsistent label constructions; endpoint-only labels)
--
--### midpoint_and_dont_know
--- **When:** Any attitude or evaluation item.
--- **Say:** Decide both explicitly. Offer a midpoint when a middle position is a real answer on the construct. Offer don't know or no opinion when a real share of the population will not have the knowledge or an attitude; say in the notes that offering it rais
--- **Source:** SURV632 Class 8 (don't-know filters, middle alternatives); Yan, IASS/WSS Session 1 (full and quasi filters)
--
--### response_order
--- **When:** Any closed item.
--- **Say:** For unordered lists, note that options should be randomized or rotated where the mode allows, and why: readers favour early options, listeners favour late ones. Keep ordered scales in one direction throughout an instrument.
--- **Source:** Krosnick and Alwin 1987; SURV632 Class 8 (response order effects by mode)
--
--### count_and_scope
--- **When:** Every request.
--- **Say:** Write exactly the number of items asked for. A filter question, a branch or an unfolding bracket that exists only to serve one item goes in that item's parts and is not counted. If the construct cannot be covered in that number, say which domains a
--- **Never:** Do not add extra items or alternates that were not asked for, and do not use parts to add questions on another domain.
--
--### existing_items_first
--- **When:** Any request to write new items.
--- **Say:** Remind the analyst once, in the notes, that previously evaluated questions on this construct should be looked for first and checked for transfer to this population, language and mode. Using or adapting an existing question is usually better than wr
--- **Never:** Do not suggest specific existing items or sources from memory.
--- **Source:** Yan, IASS/WSS Session 1 (three ways of drafting); Haensch, IASS/WSS Session 3 (recommendation 1)
--
--### note_similarity
--- **When:** A draft you have written closely resembles a published item you recognise.
--- **Say:** Say so in that item's notes, without naming a source, so the analyst can look for the original and use it with attribution instead.
--- **Source:** Martini, Scagnelli and Trujillo Medina 2026
--
--## Prohibitions
--
--- Never return an item without its response options or a statement that it is open-ended.
--- Never return two versions of one item.
--
--## Output format
--
++Version: 0.4
+ 
+ Sent with every request to write new items, after core.md and before the task
+ file. How a draft is built from the brief and what it must declare.
+@@ -59,19 +59,13 @@
+ 
+ ## Output format
+ 
 -Return one JSON object with these fields.
--
--- "items": a list. Each item has:
--  - "id": a short code, [construct abbreviation] plus a number.
--  - "domain": the single domain of the construct this item measures.
++Return one JSON object with this field.
+ 
+ - "items": a list. Each item has:
+   - "id": a short code, [construct abbreviation] plus a number.
+   - "domain": the single domain of the construct this item measures.
 -  - "intro": lead-in text read or shown before the question, or an empty string.
 -  - "stem": the question, in the output language.
 -  - "options": a list of response options in the order shown, in the output language; an empty list for an open question.
--  - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
++  - "stem": the question as the respondent reads or hears it, including any lead-in sentence, in English.
++  - "options": a list of response options in the order shown, in English; an empty list for an open question.
+   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
 -  - "parts": a list, usually empty. Filter, branch or bracket questions that belong to this item, in the order asked; each has "when" (who is asked it, or "before the item" for a filter), "stem" and "options", in the output language.
 -  - "programming": routing, filter, randomization and interviewer instructions, in English, as short imperative notes.
 -  - "decisions": the design decisions required by declare_defaults, one short line each, in English.
@@ -306,310 +260,50 @@ prose said skill. `README.md` of `www/reflexes/` changed in prose only (9a, 9b: 
 -  - "notes": risks, what to test and how, in English.
 -- "not_covered": domains of the construct left out, or an empty list.
 -- "missing_from_brief": anything you needed that the brief did not say.
-+# Generate
-+
-+Version: 0.4
-+
-+Sent with every request to write new items, after core.md and before the task
-+file. How a draft is built from the brief and what it must declare.
-+
-+## Reflexes
-+
-+### design_not_topic
-+- **When:** Before writing any item.
-+- **Say:** Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.
-+- **Check:** Is the item usable as written in the stated mode for the stated population?
-+- **Source:** Haensch, IASS/WSS Session 3 (recommendation 2); Buskirk, Eck and Timbrook 2025
-+
-+### declare_defaults
-+- **When:** Every item you write.
-+- **Say:** Every response format is a design decision, not a default. For each item state the decisions you made, as separate entries with one reason each: open or closed, number of options, whether every option has a verbal label, whether there is a midpoint
-+- **Never:** Do not reach for a five-point agree-disagree scale, a yes/no pair or an open text box because it is the usual choice.
-+- **Source:** Haensch, IASS/WSS Session 3 (every default is a design decision; recommendation 4); Fuchs, Haensch and Weber 2026 (models default to five points and omit don't-know); Padgett, Maiorino and Gutierrez 2024 as reported in Fuchs et al. (too many ope
-+
-+### labelled_scales
-+- **When:** Any ordered response scale.
-+- **Say:** Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or u
-+- **Never:** Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.
-+- **Check:** Are all points labelled in one consistent form, with poles that match the construct?
-+- **Source:** SURV632 Class 8 (verbal and numeric labels; conceptual and visual midpoint); Fuchs, Haensch and Weber 2026 (label and number correspondence); Sturgis, Roberts and Robinson 2026 (inconsistent label constructions; endpoint-only labels)
-+
-+### midpoint_and_dont_know
-+- **When:** Any attitude or evaluation item.
-+- **Say:** Decide both explicitly. Offer a midpoint when a middle position is a real answer on the construct. Offer don't know or no opinion when a real share of the population will not have the knowledge or an attitude; say in the notes that offering it rais
-+- **Source:** SURV632 Class 8 (don't-know filters, middle alternatives); Yan, IASS/WSS Session 1 (full and quasi filters)
-+
-+### response_order
-+- **When:** Any closed item.
-+- **Say:** For unordered lists, note that options should be randomized or rotated where the mode allows, and why: readers favour early options, listeners favour late ones. Keep ordered scales in one direction throughout an instrument.
-+- **Source:** Krosnick and Alwin 1987; SURV632 Class 8 (response order effects by mode)
-+
-+### count_and_scope
-+- **When:** Every request.
-+- **Say:** Write exactly the number of items asked for. A filter question, a branch or an unfolding bracket that exists only to serve one item goes in that item's parts and is not counted. If the construct cannot be covered in that number, say which domains a
-+- **Never:** Do not add extra items or alternates that were not asked for, and do not use parts to add questions on another domain.
-+
-+### existing_items_first
-+- **When:** Any request to write new items.
-+- **Say:** Remind the analyst once, in the notes, that previously evaluated questions on this construct should be looked for first and checked for transfer to this population, language and mode. Using or adapting an existing question is usually better than wr
-+- **Never:** Do not suggest specific existing items or sources from memory.
-+- **Source:** Yan, IASS/WSS Session 1 (three ways of drafting); Haensch, IASS/WSS Session 3 (recommendation 1)
-+
-+### note_similarity
-+- **When:** A draft you have written closely resembles a published item you recognise.
-+- **Say:** Say so in that item's notes, without naming a source, so the analyst can look for the original and use it with attribution instead.
-+- **Source:** Martini, Scagnelli and Trujillo Medina 2026
-+
-+## Prohibitions
-+
-+- Never return an item without its response options or a statement that it is open-ended.
-+- Never return two versions of one item.
-+
-+## Output format
-+
-+Return one JSON object with this field.
-+
-+- "items": a list. Each item has:
-+  - "id": a short code, [construct abbreviation] plus a number.
-+  - "domain": the single domain of the construct this item measures.
-+  - "stem": the question as the respondent reads or hears it, including any lead-in sentence, in English.
-+  - "options": a list of response options in the order shown, in English; an empty list for an open question.
-+  - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
 +
 +Nothing else: no notes, no design decisions, no routing, no separate filter or branch questions. The analyst is shown the question and its answer options and nothing more, so write each stem plainly and keep it short.
 ```
 
-`evaluate.md` (version 0.4):
+`evaluate.md` (version 0.5: the Output format of 9c and the deleted `translation_readiness`):
 
 ```diff
-@@ -1,117 +1,115 @@
--# Evaluate a questionnaire
--
+@@ -1,6 +1,6 @@
+ # Evaluate a questionnaire
+ 
 -Version: 0.3
--
--Task file for appraising a pasted questionnaire: an expert review, item by
--item and then as a whole. The reflexes in core.md are the item checklist; this
--file adds the checks that only apply to a review and to the whole instrument.
--
--<!--
--Calibrated on Sturgis, Roberts and Robinson (2026): a checklist that names
--problem types finds more than an open review, especially presupposition and
--leading wording; restraint language cuts false alarms on good items; severity
--below 5 is mostly noise. The regression test for this file is their 20 flawed
--items and 7 ESS control items (tests/, not shipped).
---->
--
--## Reflexes
--
--### restraint
--- **When:** Every item you review.
--- **Say:** Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding copy into evidence the exact words from
--- **Never:** Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
--- **Source:** Sturgis, Roberts and Robinson 2026 (restraint and false positives on ESS control items)
--
--### known_overcalls
--- **When:** You are about to flag sensitivity, stigma, burden or length.
--- **Say:** These are the faults a language-model reviewer over-reports. Flag sensitivity only when you can say who would edit their answer and in which direction; flag burden only when you can name the step that is hard.
--- **Source:** NORC 2026 and Slowinski et al. 2026 as reported in Yan, IASS/WSS Session 2 and Haensch, IASS/WSS Session 3
--
--### known_misses
--- **When:** Every item, as a second pass.
--- **Say:** Look again for the faults a language-model reviewer tends to miss: an assumption that does not hold for some respondents, a term that carries a different meaning for part of the population, a framing that belongs to one culture, a question that doe
--- **Source:** NORC 2026 and Slowinski et al. 2026 as reported in Yan, IASS/WSS Session 2 and Haensch, IASS/WSS Session 3; Sturgis, Roberts and Robinson 2026
--
--### retrieval_and_judgment
--- **When:** Any item asking for facts, behaviour, frequency, amounts or dates.
--- **Say:** Check the reference period (stated, bounded, short enough), whether the information is likely to be remembered, and whether the respondent must count, add or average to answer.
--- **Check:** Can the respondent retrieve the information and reach the answer without difficult recall or mental arithmetic?
--- **Source:** Yan, IASS/WSS Session 1 (retrieval and judgment problems); SURV632 (telescoping; estimation strategies)
--
--### response_scale
--- **When:** Any closed item.
--- **Say:** Check that the options answer the question asked, are balanced where the construct is bipolar, are labelled consistently, have a midpoint and a don't-know or not-applicable option where needed, and do not use vague quantifiers for frequency.
--- **Check:** Do the response options match the question and treat both directions evenly?
--- **Source:** SURV632 Class 8; Sturgis, Roberts and Robinson 2026 (response-mapping problems); Fuchs, Haensch and Weber 2026
--
--### agree_disagree_and_grids
--- **When:** Agree-disagree items or a battery sharing one scale.
--- **Say:** Note the acquiescence risk and whether a construct-specific format would do the same job. In a battery, check that items are keyed in both directions and that the grid suits the mode.
--- **Check:** If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?
--- **Source:** Yan, IASS/WSS Session 1; SURV632 Class 8 and Class 11
--
--### context_and_order
--- **When:** Reviewing the instrument as a whole.
--- **Say:** Check that questions on a topic are grouped and run from general to specific; that an earlier item does not supply the answer, the standard of comparison or the mood for a later one; that early questions are easy and on the stated topic; and that s
--- **Check:** Is the order free of an earlier item that would shape answers to a later one?
--- **Source:** Yan, IASS/WSS Session 2 (advice on grouping questions); SURV632 Class 7 (assimilation and contrast; general and specific items)
--
--### filters_and_routing
--- **When:** Reviewing the instrument as a whole.
--- **Say:** Check that every item reaches only respondents it applies to, that each filter has a destination for every answer, and that no item is unreachable or asked twice.
--- **Check:** Does every respondent path lead only to questions that apply?
--- **Source:** Yan, IASS/WSS Session 2 (grouping advice 6); Padgett, Maiorino and Gutierrez 2024 as reported in Fuchs, Haensch and Weber 2026 (logical order is a known weakness)
--
--### scale_consistency
--- **When:** Reviewing the instrument as a whole.
--- **Say:** Check that the same kind of question uses the same scale, direction and labels throughout, and that reference periods do not change without warning.
--- **Check:** Are scales, their direction and reference periods consistent across the instrument?
--- **Source:** Haensch, IASS/WSS Session 3 (recommendation 5)
--
--### fit_to_objectives
--- **When:** The brief states research questions or an analysis plan.
--- **Say:** List research questions with no item measuring them, and items that serve no stated question. Ask whether the items needed for screening, weighting and calibration are present and worded as in the benchmark source the analyst will use.
--- **Never:** Do not judge fit to objectives when the brief gives none; say that it was not assessed.
--- **Check:** Is every stated research question measured, and does every item serve one?
--- **Source:** Yan, IASS/WSS Session 2 (final checklist: objectives, sampling, mode, processing, analysis, adjustment)
--
++Version: 0.5
+ 
+ Task file for appraising a pasted questionnaire: an expert review, item by
+ item and then as a whole. The reflexes in core.md are the item checklist; this
+@@ -75,12 +75,6 @@
+ - **Check:** Is every stated research question measured, and does every item serve one?
+ - **Source:** Yan, IASS/WSS Session 2 (final checklist: objectives, sampling, mode, processing, analysis, adjustment)
+ 
 -### translation_readiness
 -- **When:** The brief names a country, a language other than English, or more than one language.
 -- **Say:** For each item say what would not carry across: idioms, culture-bound examples, units, institutions, scale labels with no natural equivalent, grammatical gender. Organize the instrument-level advice by the five TRAPD steps and say which steps the pa
 -- **Check:** Is the item free of wording that would not survive translation or adaptation to the stated setting?
 -- **Source:** Yan, IASS/WSS Session 2 (3MC surveys; TRAPD); Metheney and Yehle 2024 as reported in Haensch, IASS/WSS Session 3; SURV632 Class 12
 -
--### severity
--- **When:** Every finding.
--- **Say:** Rate how far the problem would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for problems you would revise before fielding.
--
--### rewrite_and_probe
--- **When:** Every finding rated 5 or above.
--- **Say:** Offer one rewrite that fixes that fault and changes nothing else, and one cognitive-interview probe that would show whether real respondents have the problem.
--- **Never:** Do not rewrite items that have no finding. Do not present a rewrite as better than the original; it is untested.
--- **Source:** Adhikari et al. 2025 as reported in Haensch, IASS/WSS Session 3 (experts rated model-revised items worse than originals); Yan, IASS/WSS Session 2 (cognitive interviews)
--
--### what_to_test
--- **When:** Closing the review.
--- **Say:** Name the few items that most need testing with real respondents and the cheapest suitable method for each. Say at least one method should be used and several where budget allows.
--- **Source:** Yan, IASS/WSS Session 2 (choosing testing methods); Tourangeau et al. 2020 as cited by Yan
--
--## Prohibitions
--
--- Never score or rank the questionnaire as a whole.
--- Never say an item has no problems; say none were found by this review.
--- Never report how many respondents would misunderstand an item.
--
--## Output format
--
+ ### severity
+ - **When:** Every finding.
+ - **Say:** Rate how far the problem would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for problems you would revise before fielding.
+@@ -104,14 +98,12 @@
+ 
+ ## Output format
+ 
 -Return one JSON object with these fields. Write findings in English whatever
 -language the questionnaire is in; write rewrites in the questionnaire's
 -language and, when that is not English, add the English meaning.
--
--- "items": a list, one entry per question in the order pasted. Each has:
--  - "id": the question's own number or label, or its position.
++Return one JSON object with these fields. Write in English. Be brief: the analyst is shown only what is below, and reads very little.
+ 
+ - "items": a list, one entry per question in the order pasted. Each has:
+   - "id": the question's own number or label, or its position.
 -  - "findings": a list, empty if none. Each finding has "check" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (
 -- "instrument": a list of findings about order, routing, consistency and fit to objectives, in the same form, with the question ids involved in "evidence".
 -- "trapd": an object with the keys "translation", "review", "adjudication", "pretesting", "documentation", each a short statement of what is still needed; all empty strings when the survey is in one language for one country and that language is the source lan
 -- "test_first": a list of up to five question ids with the method suggested for each.
 -- "not_assessed": what this review could not judge from what was pasted.
-+# Evaluate a questionnaire
-+
-+Version: 0.4
-+
-+Task file for appraising a pasted questionnaire: an expert review, item by
-+item and then as a whole. The reflexes in core.md are the item checklist; this
-+file adds the checks that only apply to a review and to the whole instrument.
-+
-+<!--
-+Calibrated on Sturgis, Roberts and Robinson (2026): a checklist that names
-+problem types finds more than an open review, especially presupposition and
-+leading wording; restraint language cuts false alarms on good items; severity
-+below 5 is mostly noise. The regression test for this file is their 20 flawed
-+items and 7 ESS control items (tests/, not shipped).
-+-->
-+
-+## Reflexes
-+
-+### restraint
-+- **When:** Every item you review.
-+- **Say:** Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding copy into evidence the exact words from
-+- **Never:** Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
-+- **Source:** Sturgis, Roberts and Robinson 2026 (restraint and false positives on ESS control items)
-+
-+### known_overcalls
-+- **When:** You are about to flag sensitivity, stigma, burden or length.
-+- **Say:** These are the faults a language-model reviewer over-reports. Flag sensitivity only when you can say who would edit their answer and in which direction; flag burden only when you can name the step that is hard.
-+- **Source:** NORC 2026 and Slowinski et al. 2026 as reported in Yan, IASS/WSS Session 2 and Haensch, IASS/WSS Session 3
-+
-+### known_misses
-+- **When:** Every item, as a second pass.
-+- **Say:** Look again for the faults a language-model reviewer tends to miss: an assumption that does not hold for some respondents, a term that carries a different meaning for part of the population, a framing that belongs to one culture, a question that doe
-+- **Source:** NORC 2026 and Slowinski et al. 2026 as reported in Yan, IASS/WSS Session 2 and Haensch, IASS/WSS Session 3; Sturgis, Roberts and Robinson 2026
-+
-+### retrieval_and_judgment
-+- **When:** Any item asking for facts, behaviour, frequency, amounts or dates.
-+- **Say:** Check the reference period (stated, bounded, short enough), whether the information is likely to be remembered, and whether the respondent must count, add or average to answer.
-+- **Check:** Can the respondent retrieve the information and reach the answer without difficult recall or mental arithmetic?
-+- **Source:** Yan, IASS/WSS Session 1 (retrieval and judgment problems); SURV632 (telescoping; estimation strategies)
-+
-+### response_scale
-+- **When:** Any closed item.
-+- **Say:** Check that the options answer the question asked, are balanced where the construct is bipolar, are labelled consistently, have a midpoint and a don't-know or not-applicable option where needed, and do not use vague quantifiers for frequency.
-+- **Check:** Do the response options match the question and treat both directions evenly?
-+- **Source:** SURV632 Class 8; Sturgis, Roberts and Robinson 2026 (response-mapping problems); Fuchs, Haensch and Weber 2026
-+
-+### agree_disagree_and_grids
-+- **When:** Agree-disagree items or a battery sharing one scale.
-+- **Say:** Note the acquiescence risk and whether a construct-specific format would do the same job. In a battery, check that items are keyed in both directions and that the grid suits the mode.
-+- **Check:** If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?
-+- **Source:** Yan, IASS/WSS Session 1; SURV632 Class 8 and Class 11
-+
-+### context_and_order
-+- **When:** Reviewing the instrument as a whole.
-+- **Say:** Check that questions on a topic are grouped and run from general to specific; that an earlier item does not supply the answer, the standard of comparison or the mood for a later one; that early questions are easy and on the stated topic; and that s
-+- **Check:** Is the order free of an earlier item that would shape answers to a later one?
-+- **Source:** Yan, IASS/WSS Session 2 (advice on grouping questions); SURV632 Class 7 (assimilation and contrast; general and specific items)
-+
-+### filters_and_routing
-+- **When:** Reviewing the instrument as a whole.
-+- **Say:** Check that every item reaches only respondents it applies to, that each filter has a destination for every answer, and that no item is unreachable or asked twice.
-+- **Check:** Does every respondent path lead only to questions that apply?
-+- **Source:** Yan, IASS/WSS Session 2 (grouping advice 6); Padgett, Maiorino and Gutierrez 2024 as reported in Fuchs, Haensch and Weber 2026 (logical order is a known weakness)
-+
-+### scale_consistency
-+- **When:** Reviewing the instrument as a whole.
-+- **Say:** Check that the same kind of question uses the same scale, direction and labels throughout, and that reference periods do not change without warning.
-+- **Check:** Are scales, their direction and reference periods consistent across the instrument?
-+- **Source:** Haensch, IASS/WSS Session 3 (recommendation 5)
-+
-+### fit_to_objectives
-+- **When:** The brief states research questions or an analysis plan.
-+- **Say:** List research questions with no item measuring them, and items that serve no stated question. Ask whether the items needed for screening, weighting and calibration are present and worded as in the benchmark source the analyst will use.
-+- **Never:** Do not judge fit to objectives when the brief gives none; say that it was not assessed.
-+- **Check:** Is every stated research question measured, and does every item serve one?
-+- **Source:** Yan, IASS/WSS Session 2 (final checklist: objectives, sampling, mode, processing, analysis, adjustment)
-+
-+### translation_readiness
-+- **When:** The brief names a country, a language other than English, or more than one language.
-+- **Say:** For each item say what would not carry across: idioms, culture-bound examples, units, institutions, scale labels with no natural equivalent, grammatical gender. Organize the instrument-level advice by the five TRAPD steps and say which steps the pa
-+- **Check:** Is the item free of wording that would not survive translation or adaptation to the stated setting?
-+- **Source:** Yan, IASS/WSS Session 2 (3MC surveys; TRAPD); Metheney and Yehle 2024 as reported in Haensch, IASS/WSS Session 3; SURV632 Class 12
-+
-+### severity
-+- **When:** Every finding.
-+- **Say:** Rate how far the problem would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for problems you would revise before fielding.
-+
-+### rewrite_and_probe
-+- **When:** Every finding rated 5 or above.
-+- **Say:** Offer one rewrite that fixes that fault and changes nothing else, and one cognitive-interview probe that would show whether real respondents have the problem.
-+- **Never:** Do not rewrite items that have no finding. Do not present a rewrite as better than the original; it is untested.
-+- **Source:** Adhikari et al. 2025 as reported in Haensch, IASS/WSS Session 3 (experts rated model-revised items worse than originals); Yan, IASS/WSS Session 2 (cognitive interviews)
-+
-+### what_to_test
-+- **When:** Closing the review.
-+- **Say:** Name the few items that most need testing with real respondents and the cheapest suitable method for each. Say at least one method should be used and several where budget allows.
-+- **Source:** Yan, IASS/WSS Session 2 (choosing testing methods); Tourangeau et al. 2020 as cited by Yan
-+
-+## Prohibitions
-+
-+- Never score or rank the questionnaire as a whole.
-+- Never say an item has no problems; say none were found by this review.
-+- Never report how many respondents would misunderstand an item.
-+
-+## Output format
-+
-+Return one JSON object with these fields. Write in English. Be brief: the analyst is shown only what is below, and reads very little.
-+
-+- "items": a list, one entry per question in the order pasted. Each has:
-+  - "id": the question's own number or label, or its position.
 +  - "verdict": "Keep" if the question can be used as written, or "Revise" if it has a real problem. Say "Revise" only for a real problem.
 +  - "problems": a list, empty when the verdict is "Keep". At most two entries, the most serious first. Each has "problem" (one sentence of 20 words or fewer, in plain words, saying what is wrong) and "rewrite" (a suggested rewrite of the question, ready to us
 +- "instrument": a list of at most three points about the questionnaire as a whole (order, routing, consistency, fit to objectives), the most important first, one sentence each; an empty list if there is nothing to say.
@@ -620,169 +314,64 @@ prose said skill. `README.md` of `www/reflexes/` changed in prose only (9a, 9b: 
 `pm_appraise.md` (version 0.5):
 
 ```diff
-@@ -1,76 +1,74 @@
--# Project manager: choose the recommended set
--
+@@ -1,6 +1,6 @@
+ # Project manager: choose the recommended set
+ 
 -Version: 0.4
--
--After the worker models return drafts. The project manager checks every
--candidate item against the checklist, then recommends one item per domain,
--unchanged, so the analyst sees a single set to accept or edit. The other
--drafts stay available but out of the way.
--
--<!--
--R hides which model wrote which candidate (they arrive as A, B, C). The
--project manager returns only candidate letters and item ids; R copies the
--wording, so a recommended item is always exactly what a worker wrote.
--Version 0.3 reported every failed check on every candidate. That overwhelmed
--the analyst and ran past the token limit, so 0.4 reports on the recommended
--items only.
---->
--
--## Reflexes
--
--### group_by_domain
--- **When:** Before choosing.
--- **Say:** Candidates name their domains differently. Group the candidate items by the part of the construct each one measures, using the brief. Give each group one plain name.
--
--### check_before_choosing
--- **When:** Each candidate item.
--- **Say:** Take every item through every check in the checklist, the same way for every candidate. Do this as working; report only what the output asks for. Appraise an item's parts with the item.
--- **Never:** Do not let fluent wording stand in for passing a check.
--- **Source:** Haensch, IASS/WSS Session 3 (recommendation 3: check every draft against the guidelines; well-formed is not the same as valid)
--
--### pick_per_domain
--- **When:** Choosing the recommended set.
--- **Say:** Recommend exactly the number of items the brief asked for, one per domain, taking the most important domains first. In each domain pick the item with the fewest and least serious faults; between equals, the plainer wording. Return its candidate let
--- **Never:** Do not rewrite, merge or correct an item, and do not return an id that is not among the candidates. Do not recommend two items for one domain.
--- **Source:** Adhikari et al. 2025 as reported in Haensch, IASS/WSS Session 3 (experts rated model-revised items worse than the originals)
--
--### say_what_is_still_wrong
--- **When:** Each recommended item.
--- **Say:** List the faults it still has, each once under the check that names it most exactly, with the words that fail, a severity from 1 (negligible) to 10 (answers meaningless), and one sentence on why. Reserve 5 and above for faults to fix before fielding
--- **Never:** Do not report a fault that would apply to any survey question. Do not fail an item on how its design decisions were written up.
--- **Source:** Sturgis, Roberts and Robinson 2026; NORC 2026 as reported in Yan, IASS/WSS Session 2
--
--### restraint
--- **When:** Deciding whether something is a fault.
--- **Say:** Count only a problem specific to this item that would change answers. Be slow to call sensitivity or burden; look twice for presuppositions, culture-bound framing and terms that mean different things to different respondents.
--- **Source:** Sturgis, Roberts and Robinson 2026; NORC 2026 as reported in Yan, IASS/WSS Session 2
--
--### declared_exceptions
--- **When:** An item's decisions declare a forgiving introduction or an assumed behaviour.
--- **Say:** Do not count it against neutral wording or presupposition for that reason. Check instead that the exception meets its own check in the sensitive-items rules.
--
--### the_set_as_a_whole
--- **When:** After choosing.
--- **Say:** Look at the recommended set together: the direction items are keyed, coverage of the construct, order of general and specific items, consistency of scales and of design decisions across items that came from different candidates. Report each point o
--- **Source:** Haensch, IASS/WSS Session 3 (recommendations 4 and 5); Fuchs, Haensch and Weber 2026
--
--### say_what_was_not_checked
--- **When:** Closing.
--- **Say:** State that the recommendation is an expert review by a language model against a fixed checklist, that it cannot show how respondents will understand or answer, and name the items to test first and how.
--- **Source:** Yan, IASS/WSS Session 2; Haensch, IASS/WSS Session 3 (recommendations 6, 7 and 9)
--
--## Prohibitions
--
--- Never identify or guess which model produced a candidate.
--- Never describe an item or the set as validated, best or ready to field.
--- Never report on candidate items you did not recommend.
--
--## Output format
--
++Version: 0.5
+ 
+ After the worker models return drafts. The project manager checks every
+ candidate item against the checklist, then recommends one item per domain,
+@@ -67,10 +67,8 @@
+ 
+ ## Output format
+ 
 -Return one JSON object with these fields, all text in English.
--
++Return one JSON object with this field, all text in English.
+ 
 -- "selected": a list, one entry per recommended item, in the order they should be asked. Each has "domain", "candidate" (A, B, C...), "id" (the item id as the candidate gave it), "why" (one sentence on why this item and not the others for the domain), "concer
 -- "not_covered": domains of the construct for which no candidate item was good enough to recommend, or an empty list.
 -- "set_notes": a list, empty if none, of objects with "check", "severity" and "why", about the recommended set as a whole.
 -- "test_first": a list of up to three objects with "id" and "method".
 -- "limits": one or two sentences as required by say_what_was_not_checked.
-+# Project manager: choose the recommended set
-+
-+Version: 0.5
-+
-+After the worker models return drafts. The project manager checks every
-+candidate item against the checklist, then recommends one item per domain,
-+unchanged, so the analyst sees a single set to accept or edit. The other
-+drafts stay available but out of the way.
-+
-+<!--
-+R hides which model wrote which candidate (they arrive as A, B, C). The
-+project manager returns only candidate letters and item ids; R copies the
-+wording, so a recommended item is always exactly what a worker wrote.
-+Version 0.3 reported every failed check on every candidate. That overwhelmed
-+the analyst and ran past the token limit, so 0.4 reports on the recommended
-+items only.
-+-->
-+
-+## Reflexes
-+
-+### group_by_domain
-+- **When:** Before choosing.
-+- **Say:** Candidates name their domains differently. Group the candidate items by the part of the construct each one measures, using the brief. Give each group one plain name.
-+
-+### check_before_choosing
-+- **When:** Each candidate item.
-+- **Say:** Take every item through every check in the checklist, the same way for every candidate. Do this as working; report only what the output asks for. Appraise an item's parts with the item.
-+- **Never:** Do not let fluent wording stand in for passing a check.
-+- **Source:** Haensch, IASS/WSS Session 3 (recommendation 3: check every draft against the guidelines; well-formed is not the same as valid)
-+
-+### pick_per_domain
-+- **When:** Choosing the recommended set.
-+- **Say:** Recommend exactly the number of items the brief asked for, one per domain, taking the most important domains first. In each domain pick the item with the fewest and least serious faults; between equals, the plainer wording. Return its candidate let
-+- **Never:** Do not rewrite, merge or correct an item, and do not return an id that is not among the candidates. Do not recommend two items for one domain.
-+- **Source:** Adhikari et al. 2025 as reported in Haensch, IASS/WSS Session 3 (experts rated model-revised items worse than the originals)
-+
-+### say_what_is_still_wrong
-+- **When:** Each recommended item.
-+- **Say:** List the faults it still has, each once under the check that names it most exactly, with the words that fail, a severity from 1 (negligible) to 10 (answers meaningless), and one sentence on why. Reserve 5 and above for faults to fix before fielding
-+- **Never:** Do not report a fault that would apply to any survey question. Do not fail an item on how its design decisions were written up.
-+- **Source:** Sturgis, Roberts and Robinson 2026; NORC 2026 as reported in Yan, IASS/WSS Session 2
-+
-+### restraint
-+- **When:** Deciding whether something is a fault.
-+- **Say:** Count only a problem specific to this item that would change answers. Be slow to call sensitivity or burden; look twice for presuppositions, culture-bound framing and terms that mean different things to different respondents.
-+- **Source:** Sturgis, Roberts and Robinson 2026; NORC 2026 as reported in Yan, IASS/WSS Session 2
-+
-+### declared_exceptions
-+- **When:** An item's decisions declare a forgiving introduction or an assumed behaviour.
-+- **Say:** Do not count it against neutral wording or presupposition for that reason. Check instead that the exception meets its own check in the sensitive-items rules.
-+
-+### the_set_as_a_whole
-+- **When:** After choosing.
-+- **Say:** Look at the recommended set together: the direction items are keyed, coverage of the construct, order of general and specific items, consistency of scales and of design decisions across items that came from different candidates. Report each point o
-+- **Source:** Haensch, IASS/WSS Session 3 (recommendations 4 and 5); Fuchs, Haensch and Weber 2026
-+
-+### say_what_was_not_checked
-+- **When:** Closing.
-+- **Say:** State that the recommendation is an expert review by a language model against a fixed checklist, that it cannot show how respondents will understand or answer, and name the items to test first and how.
-+- **Source:** Yan, IASS/WSS Session 2; Haensch, IASS/WSS Session 3 (recommendations 6, 7 and 9)
-+
-+## Prohibitions
-+
-+- Never identify or guess which model produced a candidate.
-+- Never describe an item or the set as validated, best or ready to field.
-+- Never report on candidate items you did not recommend.
-+
-+## Output format
-+
-+Return one JSON object with this field, all text in English.
-+
 +- "selected": a list, one entry per recommended item, in the order they should be asked. Each has "domain", "candidate" (A, B, C...), "id" (the item id as the candidate gave it) and "check_before_use": one sentence of 20 words or fewer, in plain words, naming
 +
 +Nothing else: no reasons, scores, check ids, notes on the set or suggestions. The analyst is shown the chosen question and, only when it is not empty, that one line.
 ```
 
+`pm_brief.md` (version 0.2; the follow-up):
+
+```diff
+@@ -1,6 +1,6 @@
+ # Project manager: brief check
+ 
+-Version: 0.1
++Version: 0.2
+ 
+ First step of every task, before any prompt is approved. The project manager
+ reads the analyst's form and says what a designer would need to know that the
+@@ -10,7 +10,7 @@
+ 
+ ### what_a_brief_needs
+ - **When:** Reading the form.
+-- **Say:** Check for: the research question; the construct in a sentence, and its domains if it has several; the target population; the country; the mode or modes; the output language and the source language; for behaviour, the reference period and unit; for attitudes, the attitude object; what the
++- **Say:** Check for: the research question; the construct in a sentence, and its domains if it has several; the target population; the country; the mode or modes; for behaviour, the reference period and unit; for attitudes, the attitude object; what the estimate will be used for (a level, a compar
+ - **Never:** Do not fill a gap yourself. Do not guess the mode, the population or the reference period.
+ - **Source:** Haensch, IASS/WSS Session 3 (recommendation 2); Yan, IASS/WSS Session 1 (essential inputs to questionnaire design: objectives, sample, mode, processing, analysis, adjustment)
+ 
+```
+
 ### `tests/review.R` (the Claude project's file): the edits I had to make
 
 Each is forced by a rename or a removed feature; none loosens a check. The file's SHA table
-(`REFLEX_SHA`) now holds the new hashes of the five files that changed: `README.md`,
-`cross_cultural.md`, `evaluate.md`, `generate.md`, `pm_appraise.md`. Otherwise:
+(`REFLEX_SHA`) now holds the new hashes of the six files that changed: `README.md`,
+`cross_cultural.md`, `evaluate.md`, `generate.md`, `pm_appraise.md`, `pm_brief.md`. Otherwise:
 `SKILL_SHA` is `REFLEX_SHA` and section 4 reads "Reflex files" (`www/reflexes`); the blank form
-and the forms lose `output_language` and `source_language`; the form `evaluate_translated` is gone and the Swahili and French languages of
-the other forms with it; the checks that named `trapd` or "Output language"
+and the forms lose `output_language` and `source_language`; the forms `evaluate_translated`
+and the Swahili and French ones are gone; the checks that named `trapd` or "Output language"
 now check `flag_do_not_assert` and `context_and_face` are sent and that no translation or
-language reflex is sent; "parts field only in drafting prompts" is "the drafting output format
+language reflex is sent; the check that `evaluate.md` is sent now names `restraint` and says
+`translation_readiness` is not there; "parts field only in drafting prompts" is "the drafting output format
 (open_format) only in drafting prompts"; the review's "output format asks for trapd and
 test_first" is "asks for a verdict per question and points about the whole"; the reply-shape
 fixtures follow 9c; the history line is at the top of the `REVIEW.md` it writes. Take these to
@@ -790,7 +379,8 @@ the Claude project.
 
 ### The new prompt hashes
 
-All 60 differ from Phase 8's (the reflex files, the Output formats and the message all changed).
+All 60 differ from Phase 8's (the reflex files, the Output formats and the message all changed);
+the follow-up edit moved 15 of them again, and these are the final ones.
 Task, mode set (1 none, 2 to 6 each mode alone, 7 all five), country, hash (build_prompt, work
 step); `revision` rows are a rerun with a REVISION line:
 
@@ -837,24 +427,24 @@ sensitive|6||1b4138c9a05767c70ff309c82801eba605cb32c774bb3b1b01d78e0565cbb001|co
 sensitive|6|Kenya|92990b0ef33e7837ba8e9e56decc0d3bbb324c4bf2db3b4c8e969820780b832f|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
 sensitive|7||e119cb84ddd1835327f00d539a976a06a033c2ccb5d53aa6a5cd7cbbd577f27b|core.md,generate.md,sensitive.md,mode.md
 sensitive|7|Kenya|7e727c923709fade6e402abe7102b67e84a5d88344fc4c6d968e080cdccb9eb4|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
-evaluate|1||1499d2432bed8c9a2546cc4f438020fd00d6261803fc12e87be6afd41ba36979|core.md,evaluate.md,mode.md
-evaluate|1|Kenya|b1e117842925f2282797be660704b19286837ab05c34c6eb9cf4fbb7574cd92f|core.md,evaluate.md,mode.md,cross_cultural.md
-evaluate|2||dc6f49840b896a852c415aa0e2331e4191447fccdc2121f246d377b8f00963ef|core.md,evaluate.md,mode.md
-evaluate|2|Kenya|206c9459b43fd2d5e5a5897c2f9f3daaf89572e6f1300263dfb162aed8cd0fe0|core.md,evaluate.md,mode.md,cross_cultural.md
-evaluate|3||fd5f86822d99383fba9eebdfa0d2bbf86b272be600146e26075ae4c0c54e5f7c|core.md,evaluate.md,mode.md
-evaluate|3|Kenya|e5a1c7af448e46446f60d81c84739b602976e2af33ea57ec611279e05af485a3|core.md,evaluate.md,mode.md,cross_cultural.md
-evaluate|4||f929ddee5c0172f102ad73204e6dc50ec888140de6385e37ab12c4d0a70bd7d1|core.md,evaluate.md,mode.md
-evaluate|4|Kenya|059c3205671765e30afd0d5bc0b2e79572b8b0615a4fd03f0531c25a45743486|core.md,evaluate.md,mode.md,cross_cultural.md
-evaluate|5||1b0d9785a5eeb1a157cac6f811f6c33a8eb248bbb32903fbaee93dff4c183c31|core.md,evaluate.md,mode.md
-evaluate|5|Kenya|a634665fabdbf05bf7febf55590b0052593fd4b330114524f458fa64d0936c44|core.md,evaluate.md,mode.md,cross_cultural.md
-evaluate|6||8f294e6751a42d1b5e64b579c9840fdf17fa1157924a3ad88ead72abd402f3ab|core.md,evaluate.md,mode.md
-evaluate|6|Kenya|56408bfe40fe51ec1ed675f64361755964f0a0c07a927fe4a5ee53799d68f1ea|core.md,evaluate.md,mode.md,cross_cultural.md
-evaluate|7||edb99d56d72e3b01566bc1ae9b5be64f730e64a4514e72d67a89abfb6f611a26|core.md,evaluate.md,mode.md
-evaluate|7|Kenya|883dbf3add461408adcd41deed5ba229fb1ea8b7a482ab72d74864f5fb8828db|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|1||b4537dedb6d011c7b019a72d592305acc44adfeb4d57a480dd70431c606ae6b8|core.md,evaluate.md,mode.md
+evaluate|1|Kenya|af31edac6f2df42fcf2eaab72ab2edf10954798a8034b2d211d7bc0434d87757|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|2||8c51b5a2fdb697f724d160e46e2d98f676e215a0d888eddf59ebd748c87540d4|core.md,evaluate.md,mode.md
+evaluate|2|Kenya|cbc2a6b3cf527d491ba59a465a43545b7146d551add475f592d083bc0e254d24|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|3||ad6b2a815e8995f5d6549f1cd18c5862e65e7c71e39ace2063f0e461122d86f7|core.md,evaluate.md,mode.md
+evaluate|3|Kenya|8e783e3c75bde8ed01256fe7a81755df3f6ff2869af24cb2a4eceb902ec23beb|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|4||4bcf998d4b7cf87c2624354240c44a08456daf57f1e63c2fce80082f9a2b46d9|core.md,evaluate.md,mode.md
+evaluate|4|Kenya|e3a3816c0b3cc2567eba98e1056a91dadb935441241b9a676459e72497e28dd3|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|5||361e419f06c9fcf6cc63b40a34b6876f1cb3bd38d69e17159dacde94fa1f28fd|core.md,evaluate.md,mode.md
+evaluate|5|Kenya|b7b1bfaa1da87ccf944d951b68863a2671d77eac0c731c272773345e2cafde37|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|6||196d5b027072e0a25350ae3cf0b3956bb805c23752f911b285e5354e9c67090a|core.md,evaluate.md,mode.md
+evaluate|6|Kenya|d7f71cab7280d912bf0c3b9bb1f4956094e9cfdb7884456e82cb9ed0099202e6|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|7||181d2c6e28575f1cea748ebee66ce2baaa27376ebc2ab9831217746c27f11d3d|core.md,evaluate.md,mode.md
+evaluate|7|Kenya|cd193cc4054291283e84e90db9ab00b330d321d916b54d4acc59d8c3eb435c62|core.md,evaluate.md,mode.md,cross_cultural.md
 revision|attitudinal|96d18ea93f36da05793164ad16afb413a7e64c44546b898fc2a156abd0ef4d48
 revision|behavioral|40f05b0426385720dc1baee69fdc107f8223d65ad245159205365d22dfafeb26
 revision|sensitive|0b62001aa715a01f24e7da7907991a89875fe09cb7f2bae233fdf1d163198c21
-revision|evaluate|c253e3d987ac82f02455e2685f1345bacc870e26c67b33e254e2c812d4d408c3
+revision|evaluate|5d6f27f09008d8d40c186be974694d1422974c13e0fd467ed3e61c1ad42390ab
 ```
 
 ### Live runs (Kevin's yes)
@@ -1465,8 +1055,8 @@ No hit is a package or function name that is not ours.
    small button and the file has the prompts, models, hashes and every draft.
 7. **Results, review:** Revise cards with at most two problems and a rewrite each; Keep questions
    in one line; the three points about the whole.
-8. Try a brief with a country: a review still asks about wording that "would not survive
-   translation" (decision 1).
+8. Try a brief with a country and a review: it is no longer asked about translation, and the
+   Evaluate panel on the Methodology page has no translation reflex.
 
 ## Phase 8 (2026-11-13): what analysts see, the frameworks, and the merge prepared
 

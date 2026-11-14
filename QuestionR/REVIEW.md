@@ -2,7 +2,7 @@
 
 From Phase 9, "skills" are called "reflexes". This file keeps the old word where it records earlier work.
 
-Generated 2026-11-13 19:00 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-13 19:33 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -14,6 +14,7 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+073f227 QuestionR Phase 9: STATUS and REVIEW, with the two live runs and the new prompt hashes
 d23f2ce QuestionR 9g: smoke checks for what the analyst can and cannot see
 18fe115 QuestionR 9f: remove coded defaults and severity bands, which nothing in the app calls
 c53c9a7 QuestionR 9d: Total Survey Error first; methodology note cut under 600 words
@@ -28,14 +29,14 @@ d20ba49 QuestionR Phase 8: STATUS and REVIEW
 bbddebe QuestionR 8g: remove what is no longer needed
 edd4eea QuestionR 8f: no TODO text on Start here
 c01c1a5 QuestionR 8e: the skill materials are not deployed, and only the open-licensed PDF is committed
-da1477f QuestionR 8d: a Source code button at the top left of the header
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
- M REVIEW.md
- M STATUS.md
- M tests/run_generate.json
+ M tests/review.R
+ M tests/smoke.R
+ M www/reflexes/evaluate.md
+ M www/reflexes/pm_brief.md
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
@@ -45,22 +46,23 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/.rscignore                               |    2 +-
  QuestionR/DESIGN.md                                |  131 +-
  QuestionR/PROMPTS.md                               |  167 +++
- QuestionR/R/checks.R                               |  361 ++----
+ QuestionR/R/checks.R                               |  361 ++---
  QuestionR/R/flow.R                                 |    4 +-
  QuestionR/R/llm.R                                  |    4 +-
- QuestionR/R/output.R                               |  284 ++---
+ QuestionR/R/output.R                               |  284 ++--
  QuestionR/R/{skills.R => reflexes.R}               |  207 ++-
  QuestionR/R/ui.R                                   |    1 -
  QuestionR/R/ui_generate.R                          |  408 ++----
  QuestionR/README.md                                |   16 +-
- QuestionR/REVIEW.md                                |  817 ++++--------
- QuestionR/STATUS.md                                |    2 +
+ QuestionR/REVIEW.md                                |  874 ++++--------
+ QuestionR/STATUS.md                                | 1466 ++++++++++++++++++++
  QuestionR/app.R                                    |    8 +-
  QuestionR/tests/llm_check.R                        |   45 +-
  QuestionR/tests/output_generate.txt                |   68 +-
  QuestionR/tests/output_review.txt                  |   61 +-
- QuestionR/tests/review.R                           |  142 +--
- QuestionR/tests/smoke.R                            | 1314 +++++++++-----------
+ QuestionR/tests/review.R                           |  142 +-
+ QuestionR/tests/run_generate.json                  |  631 +++------
+ QuestionR/tests/smoke.R                            | 1314 ++++++++----------
  QuestionR/www/fw_construct.svg                     |   50 +-
  QuestionR/www/fw_example.svg                       |   55 +
  QuestionR/www/fw_sensitive.svg                     |   57 -
@@ -83,7 +85,7 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/www/skills/cross_cultural.md             |   66 -
  QuestionR/www/start.md                             |   41 +-
  README.md                                          |    2 +-
- 43 files changed, 1871 insertions(+), 2798 deletions(-)
+ 44 files changed, 3529 insertions(+), 3292 deletions(-)
 exit status: 0
 ~~~~
 
@@ -134,11 +136,11 @@ PASS means the file is byte for byte what the Claude project drafted (line endin
 | behavioral.md | PASS | f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142 |
 | core.md | PASS | d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9 |
 | cross_cultural.md | PASS | 915d46090cf22e858cbe431bbcc54091c599df18c17efd2e5bfa97662f805f80 |
-| evaluate.md | PASS | f290fb25d8ba90b3adb896d6dafc920c01eec94a684470c14be348a78806e7a7 |
+| evaluate.md | PASS | 12859aecda0cd0b9d841879cd8ff1f22d3e6a67936a1f89b25ee12ba7374fea0 |
 | generate.md | PASS | f7410389ee03de9fa3bf911d7410fa182f93169d0d40b57e96c3d0fb368ab687 |
 | mode.md | PASS | 98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0 |
 | pm_appraise.md | PASS | 1bebaba53a961493eed2d1b4fa7d058d0dab53dd05d3b6113d606364ac6f4211 |
-| pm_brief.md | PASS | a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a |
+| pm_brief.md | PASS | daea3b19c360b24817e5b6104a3e798c1444ff7e53b06929614f48584e3e1655 |
 | sensitive.md | PASS | 4d8b50d65e768c62143287b3f7400ff7d66695b4905b3d4e0849cc313b81a2eb |
 
 Files in www/reflexes not on the list: none
@@ -543,7 +545,7 @@ ok  requests sent together through ellmer's chat_async and later::run_now take a
 ok  each answer comes back in the order sent, parsed, with its own seconds; a model the endpoint refuses and a request with no key are errors in their place and the others are kept
 ok  the sending code uses only what ellmer and later document, never a package that starts other processes
 ok  the word skill is on no page except in its one sentence, once on Start here and once on the Methodology page
-ok  no page of the app names TRAPD, translation or an output language, and no form field is a language; the reflex files that still do are the three known ones, with a count that cannot grow
+ok  no page of the app names TRAPD, translation or an output language, and no form field is a language; the one reflex file that still does is cross_cultural.md (two Source lines), with a count that cannot grow
 ok  a drafted question on the screen has the question, its answer options, and at most one line to check before use, and nothing else; every one is checked, and there are cards to check
 ok  the Word copy of drafted questions is what is on the screen, word for word, and then exactly three lines: the date, who drafted and who reviews, and the tool version
 ok  on the drafting screens, nowhere: TRAPD, translation, the word skill, a language field
@@ -1030,7 +1032,7 @@ Nothing else: no notes, no design decisions, no routing, no separate filter or b
 | existing_items_first only in drafting prompts | PASS |
 | CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT | PASS |
 | the drafting output format (open_format) only in drafting prompts | PASS |
-| evaluate.md sent (restraint, translation_readiness) | PASS |
+| evaluate.md sent (restraint), and no translation reflex in it | PASS |
 | generate.md and task drafting files not sent | PASS |
 | questionnaire pasted under Questionnaire:, complete | PASS |
 | output format asks for a verdict per question and points about the whole | PASS |
@@ -1038,9 +1040,9 @@ Nothing else: no notes, no design decisions, no routing, no separate filter or b
 | checklist has no line for a mode not chosen | PASS |
 | cross_cultural not sent (no country) | PASS |
 
-hash: d9303decf0c53c233eb7c57fc52a99266a1ff4090e32bdcf8c8669cf77bd8722
+hash: 73ebd0d6978889b982d27762acb1a35a2c2f36cdd8d4b2155ddc866b06ad1548
 files: core.md, evaluate.md, mode.md
-characters: system 8800, user 4162
+characters: system 8371, user 4039
 
 Checklist (id: question):
 ~~~~
@@ -1059,7 +1061,6 @@ context_and_order: Is the order free of an earlier item that would shape answers
 filters_and_routing: Does every respondent path lead only to questions that apply?
 scale_consistency: Are scales, their direction and reference periods consistent across the instrument?
 fit_to_objectives: Is every stated research question measured, and does every item serve one?
-translation_readiness: Is the item free of wording that would not survive translation or adaptation to the stated setting?
 any_mode: Does the item work as written in the stated mode?
 paper: Can the respondent follow the routing without help?
 ~~~~
@@ -1078,7 +1079,7 @@ REFLEXES: Core (v0.3)
 - brief_only (Every sentence you write.) Work only from the brief and these instructions. If the brief does not say something you need (population, mode, reference period, what the estimate is for), say what is missing instead of assuming it. MUST NOT: Do not state facts about the country, the population, its laws, languages or customs that are not in the brief. Do not name a survey, scale or study as the source of an item, and do not describe any item as validated, tested, standard or reliable.
 - not_a_pretest (Every output.) What you produce is an expert-review appraisal or a first draft. Say which items most need testing with real respondents and by what method (cognitive interview, web probing, split-ballot experiment, pilot). MUST NOT: Do not describe how real respondents will answer, and do not say an item is ready to field.
 
-REFLEXES: Evaluate a questionnaire (v0.4)
+REFLEXES: Evaluate a questionnaire (v0.5)
 - restraint (Every item you review.) Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding copy into evidence the exact words from the question or its options that cause it, character for character, with no ellipsis and no paraphrase. When the fault is something missing, copy the words it is missing from and say what is missing in problem. MUST NOT: Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
 - known_overcalls (You are about to flag sensitivity, stigma, burden or length.) These are the faults a language-model reviewer over-reports. Flag sensitivity only when you can say who would edit their answer and in which direction; flag burden only when you can name the step that is hard.
 - known_misses (Every item, as a second pass.) Look again for the faults a language-model reviewer tends to miss: an assumption that does not hold for some respondents, a term that carries a different meaning for part of the population, a framing that belongs to one culture, a question that does not apply to everyone asked.
@@ -1089,7 +1090,6 @@ REFLEXES: Evaluate a questionnaire (v0.4)
 - filters_and_routing (Reviewing the instrument as a whole.) Check that every item reaches only respondents it applies to, that each filter has a destination for every answer, and that no item is unreachable or asked twice.
 - scale_consistency (Reviewing the instrument as a whole.) Check that the same kind of question uses the same scale, direction and labels throughout, and that reference periods do not change without warning.
 - fit_to_objectives (The brief states research questions or an analysis plan.) List research questions with no item measuring them, and items that serve no stated question. Ask whether the items needed for screening, weighting and calibration are present and worded as in the benchmark source the analyst will use. MUST NOT: Do not judge fit to objectives when the brief gives none; say that it was not assessed.
-- translation_readiness (The brief names a country, a language other than English, or more than one language.) For each item say what would not carry across: idioms, culture-bound examples, units, institutions, scale labels with no natural equivalent, grammatical gender. Organize the instrument-level advice by the five TRAPD steps and say which steps the pasted text shows evidence of and which the analyst must still arrange.
 - severity (Every finding.) Rate how far the problem would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for problems you would revise before fielding.
 - rewrite_and_probe (Every finding rated 5 or above.) Offer one rewrite that fixes that fault and changes nothing else, and one cognitive-interview probe that would show whether real respondents have the problem. MUST NOT: Do not rewrite items that have no finding. Do not present a rewrite as better than the original; it is untested.
 - what_to_test (Closing the review.) Name the few items that most need testing with real respondents and the cheapest suitable method for each. Say at least one method should be used and several where budget allows.
@@ -1150,7 +1150,6 @@ context_and_order: Is the order free of an earlier item that would shape answers
 filters_and_routing: Does every respondent path lead only to questions that apply?
 scale_consistency: Are scales, their direction and reference periods consistent across the instrument?
 fit_to_objectives: Is every stated research question measured, and does every item serve one?
-translation_readiness: Is the item free of wording that would not survive translation or adaptation to the stated setting?
 any_mode: Does the item work as written in the stated mode?
 paper: Can the respondent follow the routing without help?
 
