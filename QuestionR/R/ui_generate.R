@@ -64,22 +64,6 @@ progress_ask <- function(total) {
   }
 }
 
-# The family a model belongs to, from its id: the name after the vendor's slash, up to its
-#   first dash, dot, space or digit ("anthropic/claude-sonnet-5.5" and "claude-sonnet-5-5" are
-#   both "claude").
-model_family <- function(id) tolower(sub("[-_. 0-9].*$", "", sub("^.*/", "", id)))
-
-# When every draft came from the appraiser's own family (the project manager is also the only
-#   worker, say), the appraisal is not a view from outside, and Results says so.
-same_family_note <- function(pm_id, writers) {
-  if (!length(writers) || !all(model_family(writers) == model_family(pm_id))) return(NULL)
-  warn_box(tags$strong("The appraiser reviewed a draft from its own model family. "),
-           paste0("The appraisal was made by ", pm_id, " of ",
-                  if (length(writers) == 1L) "a draft" else "drafts", " written by ",
-                  paste(writers, collapse = ", "), ", a model of the same family, so it is not a view from outside. ",
-                  "Read it with that in mind."))
-}
-
 # The same for requests sent together (llm_json_all): says on the page which models are being
 #   asked, then sends them. Must run inside withProgress().
 progress_ask_all <- function(total) {

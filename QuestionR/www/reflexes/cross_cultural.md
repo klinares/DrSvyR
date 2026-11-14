@@ -1,6 +1,6 @@
 # Country and culture
 
-Version: 0.2
+Version: 0.3
 
 Modifier file. Sent whenever the brief names a country. A language model is
 weakest here: it knows text about places, not the places. These rules make it
@@ -13,12 +13,12 @@ flag and hand off, not assert.
 - **Say:** Mark what must be confirmed by someone who knows the setting and say exactly what they should check: the everyday term, the unit, the institution's name, whether the topic can be asked, the landmark event. Use placeholders in square brackets where a local term is needed and you were not given it.
 - **Never:** Do not state as fact what people in the country believe, do, find sensitive or call things.
 - **Check:** Is every country-specific term or assumption either taken from the brief or marked for local confirmation?
-- **Source:** Yan, IASS/WSS Session 2 (machine and AI translation ignore context, culture, history); Haensch, IASS/WSS Session 3 (what we do not know: low-resource languages and cultural adaptation)
+- **Source:** Yan, IASS/WSS Session 2 (context, culture, history); Haensch, IASS/WSS Session 3 (what we do not know: cultural adaptation)
 
 ### adopt_adapt_develop
 - **When:** The item comes from, or will be used in, more than one country.
 - **Say:** Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, convention-driven or culture-driven.
-- **Source:** Yan, IASS/WSS Session 2 (questionnaire development for 3MC surveys); SURV632 Class 12 (adaptation and translation)
+- **Source:** Yan, IASS/WSS Session 2 (questionnaire development for 3MC surveys); SURV632 Class 12 (adaptation)
 
 ### response_styles
 - **When:** Ordered scales used across cultural groups.

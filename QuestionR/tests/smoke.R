@@ -2992,10 +2992,6 @@ ok("the word skill is on no page except in its one sentence, once on Start here 
        lengths(regmatches(see_text(md_page(METHODOLOGY_FILE)), gregexpr(AI_SKILL_SENTENCE, see_text(md_page(METHODOLOGY_FILE)), fixed = TRUE))) == 1L
    }))
 
-# The one reflex file whose own words still name translation: the two Source lines of cross_cultural.md,
-#   which say what the slides were about and are citations, not reflexes. Everything else is held to none,
-#   and the count here cannot grow.
-KNOWN_TRANSLATION_LEFTOVERS <- c(cross_cultural.md = 2L)
 translation_pattern <- "TRAPD|translat|output language|output_language|back-translat"
 panel_html <- function(html, f) {
   sf = read_reflex_file(f)
@@ -3005,21 +3001,16 @@ panel_html <- function(html, f) {
   to = a + regexpr("</details>", substring(html, a), fixed = TRUE)[[1]] + 8L
   substr(html, from, to)
 }
-ok("no page of the app names TRAPD, translation or an output language, and no form field is a language; the one reflex file that still does is cross_cultural.md (two Source lines), with a count that cannot grow",
+ok("no page of the app names TRAPD, translation or an output language, and no form field is a language; none of the ten reflex files does either, and each has its panel on the page",
    local({
      html = paste(page$html, collapse = " ")
-     known = purrr::map_chr(names(KNOWN_TRANSLATION_LEFTOVERS), function(f) panel_html(html, f))
-     rest = Reduce(function(h, k) if (nzchar(k)) sub(k, " ", h, fixed = TRUE) else h, known, html)
-     others = purrr::map_chr(setdiff(REFLEX_PANEL_ORDER, names(KNOWN_TRANSLATION_LEFTOVERS)), function(f) panel_html(html, f))
-     left = purrr::map_int(names(KNOWN_TRANSLATION_LEFTOVERS), function(f)
-       sum(grepl(translation_pattern, readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), ignore.case = TRUE)))
-     names(left) = names(KNOWN_TRANSLATION_LEFTOVERS)
-     all(nzchar(known)) && all(nzchar(others)) && length(others) == 9L &&
-       !grepl(translation_pattern, see_text(rest), ignore.case = TRUE) &&
-       !any(purrr::map_lgl(others, function(o) grepl(translation_pattern, see_text(o), ignore.case = TRUE))) &&
+     panels = purrr::map_chr(REFLEX_PANEL_ORDER, function(f) panel_html(html, f))
+     files = purrr::map_lgl(REFLEX_PANEL_ORDER, function(f)
+       any(grepl(translation_pattern, readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), ignore.case = TRUE)))
+     length(panels) == 10L && all(nzchar(panels)) && !any(files) &&
+       !grepl(translation_pattern, see_text(html), ignore.case = TRUE) &&
        !grepl("id=\"[^\"]*lang[^\"]*\"", html, ignore.case = TRUE) &&
-       !any(grepl("lang", names(clean_form(forms$attitudinal)), ignore.case = TRUE)) &&
-       all(left <= KNOWN_TRANSLATION_LEFTOVERS)
+       !any(grepl("lang", names(clean_form(forms$attitudinal)), ignore.case = TRUE))
    }))
 
 # A drafted question as the analyst sees it, and the Word copy of it.

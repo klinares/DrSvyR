@@ -23,7 +23,7 @@ REFLEX_SHA <- c(
   "attitudinal.md" = "02a273b6ffe0428629b2b6c358a40977c11cb40adeb256fe09e3a4f03eba26e4",
   "behavioral.md" = "f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142",
   "core.md" = "d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9",
-  "cross_cultural.md" = "915d46090cf22e858cbe431bbcc54091c599df18c17efd2e5bfa97662f805f80",
+  "cross_cultural.md" = "f45a74c373e5af73e34e4b9808f3274115052b21e0a2c5d3409afbbbd4ce74b1",
   "evaluate.md" = "12859aecda0cd0b9d841879cd8ff1f22d3e6a67936a1f89b25ee12ba7374fea0",
   "generate.md" = "f7410389ee03de9fa3bf911d7410fa182f93169d0d40b57e96c3d0fb368ab687",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
