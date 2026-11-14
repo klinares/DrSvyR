@@ -1,106 +1,89 @@
 # How QuestionR works and what stands behind it
 
-## Total Survey Error
+QuestionR uses an AI model as an **expert reviewer** of survey questions and as an **item writer**. The model is not asked for its opinion. It is given written rules of questionnaire design, called AI reflexes, and applies them to your questions. This note says what error the tool works on, which frameworks the reflexes come from, and what the tool can and cannot tell you.
 
-![The Total Survey Error framework: the measurement side (construct, measurement, response, edited response) and the representation side (target population, sampling frame, sample, respondents, postsurvey adjustments) meet at the survey statistic. Validity and measurement error are highlighted as the errors essential to questionnaire design.](fw_tse.svg)
+## Measurement error
 
-A survey statistic can be wrong for two kinds of reasons. Some come from the
-questions: they may not capture the concept you care about (validity), or the
-answers may not match what is true (measurement error). Others come from the
-people: who could be reached (coverage), who was sampled (sampling), and who
-answered (nonresponse). QuestionR works on validity and measurement error. It
-does not work on coverage, sampling or nonresponse.
+**In plain words.** Measurement error is the gap between the answer a person gives and the answer that is true for them.
 
-*Groves et al. 2009. Survey methodology. Hoboken, N.J.: Wiley. (Figure 2.5)*
+**More precisely.** For respondent *i*, the reported value is the true value plus an error: *y = &mu; + &epsilon;*. When the errors lean one way across respondents (people under-report drinking, over-report voting), the estimate is **biased**. When they scatter in both directions (people guess at a number they cannot recall), the estimate is noisier and its **reliability** falls, and relationships with other variables look weaker than they are. The true value is often unknowable, which is why questions are judged by what a respondent has to do to answer them.
 
-## What it is built on
+In the Total Survey Error framework (the figure on the Start here tab), measurement error sits on the measurement side, between the question and the answer. **Validity** sits one step earlier, between the concept you care about and the question you ask. Processing error comes one step later, when answers are coded and edited. Questionnaire design works on validity and measurement error.
 
-The rules are standard questionnaire design practice, not the opinions of an AI
-model. They come from a webinar series by Ting Yan (NORC) and Anna-Carolina
-Haensch (LMU Munich), recent studies of AI-written survey questions, and
-graduate course material.
+Measurement error has several sources: the respondent, the interviewer, the mode of data collection and the questionnaire. QuestionR sees only the questionnaire, so that is the only source it works on.
+
+*Groves et al. 2009. Survey methodology. Hoboken, N.J.: Wiley (Figure 2.5); Tourangeau, Rips and Rasinski (2000)*
 
 ## From construct to question
 
+![The goal of questionnaire design is to reduce measurement error: the question "Last week, did you work full-time, part-time, or did you not work at all?" shown three times, measuring the wrong concept, the right concept imperfectly, and the right concept with a response that differs from the true value.](start_example.svg)
+
+A question can fail in three ways. It can measure the wrong concept (specification error). It can measure the right concept imperfectly (operationalization error). Or it can measure the right concept well and still receive an answer that differs from the respondent's true value (response error). The first two are failures of validity.
+
 ![Decomposition from a theoretical construct, nonfatal victimization, through dimensions and sub-dimensions to indicators, then the errors from conceptualization to operationalization to analysis.](fw_construct.svg)
 
-QuestionR starts every draft from the construct in your brief and writes one
-question for each narrow, single-dimension domain. That lowers specification and
-operationalization error.
+To reduce the first two, move from an abstract concept with several dimensions to specific domains with one dimension each, and write a question for each domain. This is why Write questions asks you for the construct and not only the topic, and why the reviewer checks each question against the construct you name.
 
-*Willimack and Snijkers (2012); Peytcheva and Yan (2025): Figure 1.1*
+*Yan, IASS/WSS Session 1; Willimack and Snijkers (2012); Peytcheva and Yan (2025): Figure 1.1*
 
-## One question, three ways to go wrong
-
-![The question "Last week, did you work full-time, part-time, or did you not work at all?" with its parts marked (reference period, concept, answer options), and below it three ways to go wrong: specification error, operationalization error and response error.](fw_example.svg)
-
-This question is the worked example from the first webinar session. It can
-measure the wrong concept (specification error) or the right concept
-imperfectly (operationalization error), and those two together are validity. It
-can also measure the right concept well and still get an answer that differs
-from the respondent's true value (response error).
-
-*Ting Yan, Fundamentals of Questionnaire Design, IASS/WSS Webinar Session 1*
-
-## The response model
+## The response process
 
 ![The survey response process: comprehension, retrieval, judgment or estimation, and reporting, with arrows for the undesirable response behaviors that lead to response error.](fw_response.svg)
 
-To answer a question, a respondent has to understand it, recall what is needed,
-form a judgment and report an answer. A fault at any of these stages is
-measurement error. Each of QuestionR's rules protects one of them.
+To answer a question a respondent has to understand it, retrieve the relevant information, form a judgment or an estimate, and report an answer. A problem at any step is a source of response error:
 
-*Survey Response Model (Tourangeau, Rips, and Rasinski, 2000)*
+- **Comprehension.** Long or negative sentences, two questions in one, an assumption that does not hold for the respondent, technical or ambiguous words, and what earlier questions suggest.
+- **Retrieval.** Old information, frequent everyday events, dates, and things the respondent never noticed.
+- **Judgment or estimation.** Respondents often have no ready attitude or count, so they build one on the spot and lean on whatever the context suggests.
+- **Reporting.** Answers are sometimes edited before they are given, and the order, labels and layout of the options affect which one is picked.
 
-## Testing questions, and where AI fits
+Every flag QuestionR raises names the step it affects, and the bottom line of a review counts problems by step.
 
-![Three classes of testing methods (expert, lab-based and field-based) and where language models come in: as expert reviewer, as simulated respondent in think-aloud interviews, and in attempted synthetic split-ballots that are no substitute for real respondents.](fw_testing.svg)
+*Tourangeau, Rips and Rasinski (2000), as presented in Yan, IASS/WSS Session 1*
 
-Expert methods are quick and cheap but use no real respondents. Lab-based and
-field-based methods use real respondents but cost more, and they find different
-problems. A language model can act as an expert reviewer, which is what
-QuestionR's review is. It is no substitute for real respondents.
+## Sensitive questions
 
-*Tourangeau et al. (2020): Table 3.1*
+![What makes a survey question sensitive: intrusiveness, the threat of disclosure, and social desirability.](fw_sensitive.svg)
 
-## What it cannot do
+A question is sensitive when it is intrusive, when answering carries a risk of disclosure to the survey organization or someone else, or when one answer looks better than another. Sensitivity is not fixed: it changes with where and how a question is asked, who answers, the culture and the time. The reflexes for sensitive topics come from this work: private, self-administered answering where possible, forgiving and familiar wording, the order of "ever" and "current" questions, open or high-range answer formats, and answer options that let people report without losing face.
 
-QuestionR is an expert review and a first draft by AI models. It is not a
-pretest and does not show how respondents will understand a question. It can
-miss faults and raise concerns that do not matter. Test key questions with
-real respondents.
+*Tourangeau and Yan (2007); Yan (2021); Peytcheva and Yan (2025)*
+
+## How the AI reviewer is kept in check
+
+- **The rules are written down.** Every request carries the same reflexes, and the program, not the model, assembles the instructions. The same input gives the same instructions.
+- **Every flag must point at words.** A flag has to quote the words in your question that cause the problem. The program checks that the quote is really there and marks any flag where it is not.
+- **Restraint is a rule.** The model is told to report only problems specific to the question and likely to change answers, and is warned about what AI reviewers over-report (sensitivity, burden) and what they miss (assumptions that do not hold for everyone, terms read differently by part of the population).
+- **No facts about your country.** Local terms, dates and thresholds are left as [placeholders] for you.
+- **New questions are edited, not just generated.** One model writes a draft and a second model checks it against the rules and repairs what fails before you see it.
+- **Everything is recorded.** Each result can be downloaded with the model, the date, the reflex versions and the instructions sent.
 
 ## How it was tested
 
-The review step was run on a published test set: 20 questions with 48
-planted faults and 7 well-tested questions from the European Social Survey.
-It found 36 of the 48 faults (75 percent) and raised fewer than one concern
-for every two well-tested questions. It was strongest on questions that ask
-two things at once, recall problems and vague wording, and weakest on
-sensitivity. This was one run with one AI model on planted faults, which are
-clearer than real ones, so treat it as a guide, not a guarantee.
+The reviewer is run on a published test set: 20 survey questions with 48 planted faults, and 7 well-tested questions from the European Social Survey that should draw few flags (Sturgis, Roberts and Robinson 2026).
 
-## The AI reflexes behind every answer
+{{gold_summary}}
 
-QuestionR is an AI skill. It works from written AI reflexes: short rules of
-survey design that every model is given. They are kept in text files, one for
-each topic. Open any file below to read it in full. The
-[reflex files](https://github.com/klinares/drsvyr/tree/main/QuestionR/www/reflexes)
-and the [list of materials](https://github.com/klinares/drsvyr/tree/main/QuestionR/www/reflex_materials)
-are also in the source code.
+Planted faults are clearer than real ones, and one run on one model is a guide, not a guarantee.
 
-| Reflex file | What it covers | When it is used | Frameworks |
-|---|---|---|---|
-| Core | Who the models are told to be, and what every question must meet | Every request | Total Survey Error; Response model; Construct and decomposition; Testing methods |
-| Drafting | How a set of questions is built from your brief | Drafting questions | Session guidelines |
-| Attitude scales | Wording, response scales and balance for attitude items | Drafting an attitude scale | Session guidelines |
-| Behaviors | Recall, reference periods and counts | Drafting behavior questions | Session guidelines |
-| Sensitive topics | Questions people may refuse, or edit their answer to | Drafting sensitive questions | Session guidelines |
-| Survey mode | Web, phone, in person, and more than one mode | Every request; only the modes you choose | Session guidelines |
-| Country and culture | Local terms, sensitivities and context | When you name a country | Response model |
-| Questionnaire review | Reviewing a questionnaire question by question and as a whole | Reviewing a questionnaire | Testing methods |
-| Brief check | What a designer would still need to know from your brief | When you ask for a brief check | Session guidelines |
-| Reviewer | How the reviewing model checks the drafts and recommends one set | After the drafts come back | Session guidelines |
+## What it cannot do
 
-The Frameworks column names the frameworks above that the file's sources cite;
-"Session guidelines" means they name none.
+- It is an expert review and a draft. Expert methods are quick and involve no respondents, so they find only part of what testing finds. Test key questions with real respondents before fielding.
+- Two runs on the same questions can differ. An AI model does not give the same review every time, most of all on long lists of items. For a questionnaire that matters, run it twice and read both.
+- It can miss faults and can flag things that do not matter. Open the "consider" flags as well as the "fix" ones, and use your own judgment.
+- It does not judge whether two language versions of a questionnaire are equivalent, and it does not translate.
+- It sees only the text you paste. It does not see interviewers, visual layout, or how the survey is fielded.
+
+## The AI reflexes
+
+A reflex is one written rule. It says when it applies, what to do, what never to do, and, for most rules, a yes-or-no question the reviewer asks of every question. The eight general guidelines for writing survey questions each have their own reflex, and there are further reflexes for behavioral, attitudinal and sensitive questions, for survey mode, and for the questionnaire as a whole. Changing the AI model does not change the rules.
+
+The list below is read from the reflex files themselves, so it is what every model is given. Open a group to see its rules and where each one comes from.
+
+{{reflexes}}
+
+## Sources
+
+The materials the reflexes were drawn from. Each opens as plain text.
+
+{{sources}}
