@@ -374,6 +374,9 @@ convert_group <- function(g, key, run) {
   again = which(ok & map_int(probs1, nrow) > 0)
   second = vector("list", length(pngs))
   if (length(again)) second[again] = send_pages(pngs[again], key)
+  # No key, no credit: more calls cannot succeed, so the run stops after this group.
+  refused = keep(map_chr(c(first, compact(second)), function(r) r$error %||% NA_character_), function(e) isTRUE(str_detect(e, "HTTP 40[12]")))
+  if (length(refused)) run$fatal = str_trunc(str_squish(refused[1]), 120)
   pwalk(list(seq_len(nrow(g)), first, second, probs1), function(i, a, b, pa) {
     tries = compact(list(a, b))
     usd = sum(map_dbl(tries, function(r) r$usd %||% 0))
@@ -382,6 +385,7 @@ convert_group <- function(g, key, run) {
     run$paid_usd = run$paid_usd + usd
     run$paid_pages = run$paid_pages + 1L
     if (is.null(pick$error)) write_utf8(unwrap_reply(pick$text), page_file(g$sha256[i], g$page[i], "md"))
+    dir.create(dirname(page_file(g$sha256[i], g$page[i], "json")), recursive = TRUE, showWarnings = FALSE)
     jsonlite::write_json(list(usd = usd, attempts = length(tries), tokens_in = pick$tokens_in %||% NA,
                               tokens_out = pick$tokens_out %||% NA, usd_reported = pick$usd_reported %||% NA, finish = pick$finish %||% NA,
                               error = pick$error %||% NA, seconds = pick$seconds %||% NA, model = BUILD_MODEL$id,
@@ -397,7 +401,8 @@ convert_pdf_pages <- function(pdfs, key, est) {
     tibble(path = p, sha256 = sha, page = seq_len(n),
            pdf_chars = if (length(txt) == n) nchar(str_trim(txt)) else NA_integer_)) |>
     list_rbind()
-  todo = jobs |> filter(!file.exists(page_file(sha256, page, "json")))
+  # A page with a reply is done (even one that failed its checks twice); a page whose calls failed is tried again.
+  todo = jobs |> filter(!file.exists(page_file(sha256, page, "md")))
   run = new.env()
   run$spent = spent_so_far()
   run$paid_usd = 0
@@ -416,6 +421,10 @@ convert_pdf_pages <- function(pdfs, key, est) {
                              length(ix), COST_CAP_USD, run$spent)))
     }
     convert_group(todo[ix, ], key, run)
+    if (!is.null(run$fatal)) {
+      run$stopped = TRUE
+      return(message("Stopped: the endpoint refused the key or the credit: ", run$fatal))
+    }
     message(sprintf("  group %s/%d: %d pages paid, %.3f USD this run, %.1f min", k, length(groups),
                     run$paid_pages, run$paid_usd, as.numeric(difftime(Sys.time(), started, units = "mins"))))
   })
