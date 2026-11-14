@@ -60,7 +60,18 @@ final-question layout and the second model added about 40 lines net of what was 
 - Write: behavioral 36 s, attitudinal 60 s, sensitive 44 s, 2 calls each, no retries; token counts
   now recorded for single calls (draft 355 to 803 out, refine 3,128 to 5,701 out).
 
+## Phase 10 (2026-11-13)
+
+- 10a: sensitive.md (likely_edited) and behavioral.md (no_adding_up) installed as written.
+- 10b: a "before the item" part is drawn above the intro and stem, on the page and in Copy for
+  Word; parts are edited like the stem and options; the domain is a small label under each heading
+  (in Copy for Word too, so it matches the page).
+- 10c: the bottom line names at most three kinds of fault, then "and N other kinds".
+- Live (Kevin's yes, 29 calls): gold 27 of 27 in `tests/gold_runs/2026-11-13-2316_claude-sonnet-5-5/`;
+  fix flags per flawed item 2.45, per control item 0.29 (C7 only); likely_edited cited once (F6,
+  consider); 93 of 94 quotes found; F5 and C3 needed 2 attempts and F6 needed 3 (376 s).
+  One behavioral Write run, 33 s, filter drawn above the stem. Smoke 74.
+
 ## Not verified
 
-- A part whose `when` is "before the item" (a filter) is drawn after the stem, as the brief's layout orders parts; the behavioral run produced one.
 - Copy for Word of the new layout in a real browser.
