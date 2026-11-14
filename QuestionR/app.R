@@ -20,7 +20,7 @@ APP_OFFICE <- ""
 #   packed into parts of at most APP_BATCH_QUESTIONS questions and APP_BATCH_CHARS characters, one
 #   call each, sent four at a time, and one more call looks at the questionnaire as a whole.
 APP_MAX_PASTE_CHARS <- 60000
-APP_BATCH_QUESTIONS <- 15
+APP_BATCH_QUESTIONS <- 8
 APP_BATCH_CHARS <- 8000
 
 # Where the "Source code" button in the header links to. At work, point it at the internal copy.

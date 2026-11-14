@@ -270,6 +270,9 @@ fix_first <- function(sh, n = 5L) {
   utils::head(qs[order(-purrr::map_int(qs, n_level, level = "fix"), seq_along(qs))], n)
 }
 
+# Question ids in the order they were pasted; an id that is not a question's goes last.
+in_pasted_order <- function(x, ids) x[order(match(x, ids, nomatch = length(ids) + 1L), seq_along(x))]
+
 # A label inside a sentence: its first letter in lower case.
 lc1 <- function(x) paste0(tolower(substr(x, 1, 1)), substring(x, 2))
 
@@ -300,12 +303,14 @@ bottom_line <- function(sh) {
   main = if (length(stages)) names(tab)[order(-tab, seq_along(tab))][[1]]
   in_main = purrr::keep(top, function(fl) identical(fl$stage, main))
   inst = sh$instrument
+  ids = purrr::map_chr(sh$questions, "id")
   c(paste0(paste(first, collapse = ", and "), "."),
     if (length(fix) == 1L) paste0("It is a ", main, " problem: ", lc1(in_main[[1]]$label), ".")
-    else if (length(fix)) paste0(if (length(in_main) == length(fix)) "All are " else "Most are ", main, " problems (",
-                                 length(in_main), "): ", count_phrase(purrr::map_chr(in_main, "label")), "."),
+    else if (length(fix)) paste0(if (length(in_main) == length(fix)) "All are "
+                                 else if (2L * length(in_main) > length(fix)) "Most are " else "The largest group is ",
+                                 main, " problems (", length(in_main), "): ", count_phrase(purrr::map_chr(in_main, "label")), "."),
     if (length(inst)) paste0("The questionnaire as a whole: ",
                              paste(purrr::map_chr(inst, function(fl)
-                               paste0(lc1(fl$label), if (length(fl$questions)) paste0(" (", paste(fl$questions, collapse = ", "), ")"))),
+                               paste0(lc1(fl$label), if (length(fl$questions)) paste0(" (", paste(in_pasted_order(fl$questions, ids), collapse = ", "), ")"))),
                                collapse = "; "), "."))
 }

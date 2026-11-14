@@ -259,22 +259,22 @@ ok("the connection check names the placeholders of an unfilled profile and does 
 
 long_q <- paste(readLines(file.path("tests", "review_long_questionnaire.txt"), warn = FALSE), collapse = "\n")
 plan30 <- review_plan(long_q)
-ok("the 30-question file is two parts of 15 and one call on the whole, ids taken from the labels",
-   length(plan30) == 3L && identical(purrr::map_chr(plan30, "kind"), c("items", "items", "instrument")) &&
-     identical(purrr::map_int(plan30[1:2], function(p) length(p$questions)), c(15L, 15L)) &&
-     identical(plan30[[1]]$ids[1:2], c("Q1", "Q2")) && identical(plan30[[2]]$first, 16L) &&
-     identical(paste(plan30[[1]]$text, plan30[[2]]$text, sep = "\n\n"), trimws(gsub("\r\n?", "\n", long_q))))
+ok("the 30-question file is four parts (8, 8, 8, 6) and one call on the whole, ids taken from the labels",
+   length(plan30) == 5L && identical(purrr::map_chr(plan30, "kind"), c(rep("items", 4), "instrument")) &&
+     identical(purrr::map_int(plan30[1:4], function(p) length(p$questions)), c(8L, 8L, 8L, 6L)) &&
+     identical(plan30[[1]]$ids[1:2], c("Q1", "Q2")) && identical(plan30[[2]]$first, 9L) &&
+     identical(paste(purrr::map_chr(plan30[1:4], "text"), collapse = "\n\n"), trimws(gsub("\r\n?", "\n", long_q))))
 no_blank <- "Q1. Do you drive?\n1 Yes\n2 No\nQ2. Do you cycle?\n1 Yes\n2 No\nQ3) Do you walk?"
 ok("with no blank lines, questions are split on the lines that start with a label; one question is one part and no instrument call",
    identical(split_questions(no_blank), c("Q1. Do you drive?\n1 Yes\n2 No", "Q2. Do you cycle?\n1 Yes\n2 No", "Q3) Do you walk?")) &&
      identical(split_questions("1. A?\nYes / No\n2. B?\nYes / No"), c("1. A?\nYes / No", "2. B?\nYes / No")) &&
      length(review_plan("How old are you?")) == 1L && identical(review_plan("How old are you?")[[1]]$ids, "1"))
-ok("parts hold at most 15 questions and 8,000 characters; a question over 8,000 characters stops, quoting its start",
+ok("parts hold at most 8 questions and 8,000 characters; a question over 8,000 characters stops, quoting its start",
    local({
      many = paste(sprintf("Q%d. Question number %d?\nYes / No", 1:40, 1:40), collapse = "\n\n")
      big = paste(rep(paste(rep("word", 300), collapse = " "), 9), collapse = "\n\n")
      p = review_plan(many)
-     identical(purrr::map_int(purrr::keep(p, function(x) x$kind == "items"), function(x) length(x$questions)), c(15L, 15L, 10L)) &&
+     identical(purrr::map_int(purrr::keep(p, function(x) x$kind == "items"), function(x) length(x$questions)), c(rep(8L, 5))) &&
        all(purrr::map_int(review_plan(big), function(x) nchar(x$text)) <= 8000L | purrr::map_chr(review_plan(big), "kind") == "instrument") &&
        grepl("never cut", tryCatch(review_plan(strrep("x", 8001)), error = conditionMessage), fixed = TRUE)
    }))
@@ -320,15 +320,15 @@ fa <- fake_ask(review_answer)
 rv <- run_review(utils::modifyList(forms$evaluate, list(questionnaire = long_q)), APP_MODEL, ask = fa$ask)
 sh <- shape_review(rv)
 calls_users <- purrr::map_chr(fa$state$calls, "user")
-ok("a 30-question review is three calls, every one sending the same message and its own questions, checks and ceiling",
-   identical(rv$status, "ok") && length(fa$state$calls) == 3L &&
+ok("a 30-question review is five calls, every one sending the same message and its own questions, checks and ceiling",
+   identical(rv$status, "ok") && length(fa$state$calls) == 5L &&
      all(startsWith(calls_users, assemble_message(clean_form(utils::modifyList(forms$evaluate, list(questionnaire = long_q)))))) &&
-     grepl("Q15.", calls_users[1], fixed = TRUE) && !grepl("Q16.", calls_users[1], fixed = TRUE) &&
-     identical(purrr::map_int(fa$state$calls, "max_tokens"), unname(LLM_MAX_TOKENS[c("items", "items", "instrument")])) &&
+     grepl("Q8.", calls_users[1], fixed = TRUE) && !grepl("Q9.", calls_users[1], fixed = TRUE) &&
+     identical(purrr::map_int(fa$state$calls, "max_tokens"), unname(LLM_MAX_TOKENS[c(rep("items", 4), "instrument")])) &&
      length(unique(purrr::map_chr(fa$state$calls, "system"))) == 1L)
 ok("an item call carries the question checks and not the instrument checks; the instrument call only those",
    grepl("\none_thing: ", calls_users[1], fixed = TRUE) && !grepl("\ncontext_and_order: ", calls_users[1], fixed = TRUE) &&
-     grepl("\ncontext_and_order: ", calls_users[3], fixed = TRUE) && !grepl("\none_thing: ", calls_users[3], fixed = TRUE))
+     grepl("\ncontext_and_order: ", calls_users[5], fixed = TRUE) && !grepl("\none_thing: ", calls_users[5], fixed = TRUE))
 ok("the shaped review has 30 questions in order, with their text as pasted and their flags",
    length(sh$questions) == 30L && identical(sh$questions[[11]]$id, "Q11") && startsWith(sh$questions[[11]]$text, "Q11. Obviously") &&
      length(sh$questions[[12]]$flags) == 2L && length(sh$instrument) == 1L)
@@ -341,6 +341,27 @@ ok("the bottom line is built from the flags: counts, the main stage with its che
      "3 of 30 questions have a problem likely to change answers, and 1 more has a point to consider.",
      paste0("All are comprehension problems (3): ", count_phrase(unname(check_label(c("neutral_wording", "one_thing", "specific_concrete")))), "."),
      paste0("The questionnaire as a whole: ", lc1(check_label("scale_consistency")), " (Q5, Q17)."))))
+ok("the bottom line says Most are only for more than half, else The largest group is; the whole-questionnaire ids follow the pasted order",
+   local({
+     q = function(id, stage) list(id = id, text = id, reviewed = TRUE, rewrite = "",
+                                  flags = list(list(check = "one_thing", label = "Asks two things at once", stage = stage, level = "fix", why = "w")))
+     two = list(questions = list(q("Q1", "comprehension"), q("Q2", "comprehension"), q("Q3", "retrieval"), q("Q4", "judgment")), instrument = list())
+     three = list(questions = list(q("Q1", "comprehension"), q("Q2", "comprehension"), q("Q3", "retrieval")),
+                  instrument = list(list(label = "Scales or periods inconsistent", questions = c("Q3", "Q1"))))
+     startsWith(bottom_line(two)[2], "The largest group is comprehension problems (2)") &&
+       startsWith(bottom_line(three)[2], "Most are comprehension problems (2)") &&
+       grepl("(Q1, Q3)", bottom_line(three)[3], fixed = TRUE)
+   }))
+ok("a rewrite is drawn with the question on one line and each option on its own; a rewrite that does not split that way is one paragraph",
+   local({
+     one = rewrite_blocks("Do you think the government is doing enough, or not? Yes, definitely / Yes, probably / No / Don't know")
+     two = rewrite_blocks("Think about the past 7 days.\nHow many days did you drive?\n0 / 1 to 3 / 4 or more")
+     long = rewrite_blocks("How much did you spend? Look at a bill (or tick: None / Don't know if you cannot find one at all today).")
+     identical(one[[1]]$text, "Rewrite: Do you think the government is doing enough, or not?") &&
+       identical(one[[2]]$items, c("Yes, definitely", "Yes, probably", "No", "Don't know")) &&
+       identical(two[[1]]$text, "Rewrite: Think about the past 7 days. How many days did you drive?") && identical(length(two[[2]]$items), 3L) &&
+       length(long) == 1L
+   }))
 ok("what to fix first: the questions with a fix flag, most fix flags first then in order, at most five",
    identical(purrr::map_chr(fix_first(sh), "id"), c("Q11", "Q12", "Q14")) &&
      length(fix_first(list(questions = rep(sh$questions[11], 9)))) == 5L)
@@ -364,7 +385,7 @@ ok("the instrument validator refuses more than three points and a point with no 
        grepl("names no question", v(list(instrument = list(replace(p, "questions", list(list()))))))
    }))
 
-fa2 <- fake_ask(function(user) if (grepl("part 1 of 2", user, fixed = TRUE)) stop("HTTP 500") else review_answer(user))
+fa2 <- fake_ask(function(user) if (grepl("part 1 of 4", user, fixed = TRUE)) stop("HTTP 500") else review_answer(user))
 rv2 <- run_review(utils::modifyList(forms$evaluate, list(questionnaire = long_q)), APP_MODEL, ask = fa2$ask)
 ok("a part that fails leaves its questions not reviewed, never clear; the rest is kept; it can be run again",
    identical(rv2$status, "partial") && !sh$questions[[1]]$reviewed == FALSE &&
@@ -491,7 +512,7 @@ local({
        all(purrr::map_int(c("Bottom line", "What to fix first", "All questions"), function(x) regexpr(x, h, fixed = TRUE)) > 0L) &&
          regexpr("Bottom line", h, fixed = TRUE) < regexpr("What to fix first", h, fixed = TRUE) &&
          regexpr("What to fix first", h, fixed = TRUE) < regexpr("All questions", h, fixed = TRUE) &&
-         grepl("How this was produced", b, fixed = TRUE) && grepl("Calls: 3", b, fixed = TRUE) &&
+         grepl("How this was produced", b, fixed = TRUE) && grepl("Calls: 5", b, fixed = TRUE) &&
          n_in("<details class=\"border-bottom", h) == 30L && grepl("<mark>greedy energy companies</mark>", h, fixed = TRUE) &&
          grepl("None found by this review.", h, fixed = TRUE) && !grepl("[0-9a-f]{64}", paste(h, b)))
     words_page = words_of(see_text(paste(sub("(?s)<h4>All questions</h4>.*$", "", h, perl = TRUE))))
@@ -504,7 +525,7 @@ local({
        !grepl(key_planted, paste(h, b), fixed = TRUE) && !grepl(key_planted, log, fixed = TRUE) &&
          grepl("[key removed]", log, fixed = TRUE))
     ok("the run log has every call with its prompt hash and tokens, and the message as assembled and as sent; an edit is there and not on the page",
-       grepl("\"message_sent\"", log, fixed = TRUE) && n_in("\"hash\"", log) == 3L && grepl("\"tokens_in\"", log, fixed = TRUE) &&
+       grepl("\"message_sent\"", log, fixed = TRUE) && n_in("\"hash\"", log) == 5L && grepl("\"tokens_in\"", log, fixed = TRUE) &&
          grepl("\"edited\": true", log, fixed = TRUE) && grepl("Be extra careful with Q11.", log, fixed = TRUE) &&
          all(purrr::map_lgl(fa$state$calls, function(x) grepl("Be extra careful with Q11.", x$user, fixed = TRUE))) &&
          !grepl("edited", see_text(paste(h, b)), ignore.case = TRUE))

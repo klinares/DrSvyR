@@ -81,7 +81,23 @@ card_blocks <- function(q, levels = LEVELS) {
     if (!q$reviewed) list(blk_p("Not reviewed: its part did not come back.", em = TRUE))
     else if (!length(fl)) list(blk_p("None found by this review.", em = TRUE))
     else list(blk_list(purrr::map_chr(fl, "why"), tags = purrr::map_chr(fl, tag))),
-    if (nzchar(q$rewrite) && "fix" %in% levels) list(blk_p(paste("Rewrite:", q$rewrite))))
+    if (nzchar(q$rewrite) && "fix" %in% levels) rewrite_blocks(q$rewrite))
+}
+
+# A rewrite drawn as a question: the question on one line and each option on its own. The options are
+#   its last line when that line holds " / ", else the text after its last "?"; they count as options
+#   only when there are two or more and each is at most 8 words. Otherwise the rewrite is one paragraph.
+rewrite_blocks <- function(rw) {
+  lines = trimws(strsplit(gsub("\r\n?", "\n", rw), "\n", fixed = TRUE)[[1]])
+  lines = lines[nzchar(lines)]
+  last = lines[length(lines)]
+  split_at = if (length(lines) > 1L) NA_integer_ else utils::tail(gregexpr("?", last, fixed = TRUE)[[1]], 1L)
+  head = if (length(lines) > 1L) paste(lines[-length(lines)], collapse = " ") else if (split_at > 0L) substr(last, 1, split_at) else ""
+  tail = if (length(lines) > 1L) last else if (split_at > 0L) substring(last, split_at + 1L) else ""
+  opts = trimws(strsplit(tail, " / ", fixed = TRUE)[[1]])
+  if (length(opts) < 2L || !nzchar(head) || any(purrr::map_int(opts, n_words) > 8L))
+    return(list(blk_p(paste("Rewrite:", paste(lines, collapse = " ")))))
+  list(blk_p(paste("Rewrite:", trimws(head))), blk_list(opts))
 }
 
 # The first words of a question, for the table.

@@ -8,13 +8,13 @@
 #   here, the way the key box would; the app itself never reads the environment for it. No key is
 #   written to a file.
 #
-#   review30  one review of tests/review_long_questionnaire.txt (30 questions): 2 part calls and
+#   review30  one review of tests/review_long_questionnaire.txt (30 questions): 4 part calls and
 #             1 call on the whole. Writes tests/review30.json and tests/review30.md.
 #   gold      each of the 27 items of tests/gold_items.csv reviewed alone (1 call each), shown the
 #             question and its options and nothing else (asserted before every call). Writes the
 #             flags to a new folder in tests/gold_runs/ and does not match them to the known
 #             problems; that is done in the Claude project. An item already saved is skipped.
-#             A model id after "gold" measures another model on the same items:
+#   A model id after the mode measures another main model on the same questions:
 #               tests/llm_check.R gold <model id>
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -34,8 +34,7 @@ if (!nzchar(key)) {
   cat("No call was made: neither QUESTIONR_KEY nor ANTHROPIC_API_KEY is set in .Renviron.\n")
   quit(status = 1)
 }
-m <- if (identical(mode, "gold") && length(args) > match("gold", args))
-  utils::modifyList(APP_MODEL, list(id = args[[match("gold", args) + 1L]])) else APP_MODEL
+m <- if (length(args) > match(mode, args)) utils::modifyList(APP_MODEL, list(id = args[[match(mode, args) + 1L]])) else APP_MODEL
 scrub <- function(txt) gsub(key, "[key]", txt, fixed = TRUE)
 ask_live <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
   llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens, validate = validate, key = key)
