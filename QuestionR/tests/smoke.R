@@ -109,7 +109,7 @@ REFLEX_SHA <- c(
   `attitudinal.md` = "6b5ac03131037228dfa36efabc90ac25def227aecd4a7fc71ecd14e85bf31217",
   `behavioral.md` = "2225e8f6ea521938ddc3a3529dbd6475814396205d22120fdb0d44761ce71830",
   `sensitive.md` = "f079dca7fce7782f9616944d55487eb8784c10f8e715759e8d8a760a0d47eac2",
-  `evaluate.md` = "1ab3a224876db451ed93cde5941f2faa4085e4258390db997279019431ece128",
+  `evaluate.md` = "9978d9d795b1b090f7d19e01ded618260c06a71143b40994b03eeff8dcebfd34",
   `mode.md` = "5a8271c5b6116040085f23d325d05446a9e66a0a9106cc327feb76c52c001026",
   `refine.md` = "059748adccf547e710efefc9b25f209f893bcd8823709d98ad09b263afa83ec0")
 sha_now <- purrr::map_chr(rfiles, "sha")

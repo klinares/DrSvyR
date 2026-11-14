@@ -1,6 +1,6 @@
 # Evaluate a questionnaire
 
-Version: 0.7
+Version: 0.8
 
 Task file for appraising a pasted questionnaire: an expert review, item by
 item and then as a whole. The reflexes in core.md are the item checklist; this
@@ -52,6 +52,12 @@ items and 7 ESS control items (tests/, not shipped).
 - **Check:** If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?
 - **Label:** Needless agree-disagree or grid format
 - **Source:** Yan, IASS/WSS Session 1; SURV632 Class 8 and Class 11
+
+### fix_or_consider
+- **When:** Setting the level of every flag.
+- **Say:** Mark a flag fix only for a fault in the question as written: it breaks one of the general guidelines (unfamiliar or ambiguous words, a long or negative sentence, two things at once, leading wording, options that are not exhaustive and exclusive), it does not apply to some of the people asked, or it asks for something respondents cannot recall or work out as asked. Mark it consider when it is a design choice a careful designer could defend (end points labelled only, no don't-know option, no time frame on a general attitude), when it depends on something you were not told, or when it is about sensitivity alone. A valid concern does not always need a fix.
+- **Never:** Do not mark a flag fix because a question could be more precise. Do not lower a real fault to consider to keep the list short.
+- **Source:** NORC 2026 as reported in Yan, IASS/WSS Session 2 (most problems an AI reviewer identifies are valid concerns, but not all need a fix; methodologists decide which flags need revision); Yan, IASS/WSS Session 1 (general guidelines; faulty presupposition; retrieval)
 
 ### rewrite_ready
 - **When:** A question has a fix-level flag.
@@ -111,7 +117,7 @@ For questions, the object is {"items": [...]}, one entry per question, in the or
 - "flags": every problem you stand behind, most damaging first; an empty list if there is none. Each flag has:
   - "check": the id of the CHECKLIST check it fails.
   - "stage": "comprehension", "retrieval", "judgment" or "reporting".
-  - "level": "fix" if you would revise the question before fielding; "consider" if the problem is real but smaller, or needs the analyst's knowledge.
+  - "level": "fix" for a fault in the question as written; "consider" for a defensible design choice, something that depends on knowledge you were not given, or sensitivity alone.
   - "quote": words copied exactly from the question or its options.
   - "why": at most 25 words: what the respondent cannot do, in plain words.
 - "rewrite": one rewrite of the whole question and its options that fixes its fix-level flags and changes nothing else; an empty string when it has no fix-level flag.
