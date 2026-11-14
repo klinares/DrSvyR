@@ -15,9 +15,10 @@
 #   A trailing "?" lets the field be missing or null.
 REPLY_SCHEMAS <- list(
   draft = list(
-    fields = c(items = "list"),
-    each = list(items = c(id = "text", domain = "text", stem = "text", options = "list?", open_format = "string?")),
-    rules = c("item_count", "options_or_open")),
+    fields = c(items = "list", not_covered = "list?", needs_from_analyst = "list?"),
+    each = list(items = c(id = "text", domain = "text", intro = "string?", stem = "text", options = "list?",
+                          open_format = "string?", parts = "list?", programming = "string?", why = "string?")),
+    rules = c("item_count", "options_or_open", "draft_limits")),
   items = list(
     fields = c(items = "list"),
     each = list(items = c(id = "id", flags = "list", rewrite = "string")),
@@ -89,6 +90,13 @@ REPLY_RULES <- list(
       paste0("Item ", paste(purrr::map_chr(bad, function(it) it$id %||% "?"), collapse = ", "),
              " has neither options nor an open_format.")
   },
+  # At most three things asked of the analyst, a why of at most 30 words, one line of programming.
+  draft_limits = function(obj, ...)
+    c(if (length(obj$needs_from_analyst) > 3L) paste0("needs_from_analyst has ", length(obj$needs_from_analyst), " entries; the limit is 3"),
+      unlist(purrr::imap(obj$items, function(it, i)
+        c(if (type_ok(it$why, "text") && n_words(it$why) > MAX_WHY_WORDS) paste0("Item ", i, " has a why of ", n_words(it$why), " words; the limit is 25"),
+          if (type_ok(it$programming, "text") && grepl("
+", it$programming)) paste0("Item ", i, " has more than one line of programming"))))),
   # One entry per question of the part, so a question the model skipped is never shown as clear.
   question_count = function(obj, n_questions = NULL, ...) {
     n = length(obj$items)

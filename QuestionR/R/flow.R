@@ -66,7 +66,7 @@ review_record <- function(part, p, r = NULL) {
   bad = inherits(p, "error")
   c(part[c("kind", "k", "n", "first", "ids", "questions")],
     if (bad) list(status = "failed", error = conditionMessage(p), hash = NA_character_, user = NA_character_, reply = NULL)
-    else c(list(hash = p$hash, user = p$user), r))
+    else c(list(hash = p$hash, user = p$user, checks = p$checks), r))
 }
 
 # The calls of a review, sent REVIEW_AT_ONCE at a time; a call whose prompt cannot be built is a
@@ -142,6 +142,59 @@ run_draft <- function(form, m, ask = llm_json, message = NULL) {
 }
 
 
+# ---- Write questions: a draft, then the same reviewer ------------------------------------
+
+# The drafted items as a questionnaire, for the check: "Qn. intro stem", its options on one line
+#   (or what an open question collects), and its parts, one question to a block.
+items_questionnaire <- function(items) {
+  one_line = function(x) trimws(gsub("\\s+", " ", x))
+  paste(purrr::imap_chr(items, function(it, i) {
+    opts = purrr::map_chr(it$options, function(o) one_line(option_text(o)))
+    paste(c(paste0("Q", i, ". ", one_line(paste(c(if (nzchar(it$intro)) it$intro, it$stem), collapse = " "))),
+            if (length(opts)) paste(opts, collapse = " / ") else paste0("[Open: ", one_line(it$open_format), "]"),
+            purrr::map_chr(it$parts, function(p) one_line(option_text(p)))), collapse = "\n")
+  }), collapse = "\n\n")
+}
+
+# Write questions: call 1 drafts the items; call 2 sends them, as a questionnaire, through the items
+#   call of a review in a fresh chat, with the checklist of core.md, the task's file and the modes
+#   chosen. That is the criteria check; there is no separate appraisal. Returns the draft and the
+#   check (run_review()'s shape, NULL when there was no draft to check).
+run_write <- function(form, m, ask = llm_json, message = NULL, ask_all = ask_all_for(ask)) {
+  d = run_draft(form, m, ask, message)
+  if (!identical(d$status, "ok")) return(list(draft = d, check = NULL))
+  plan = review_plan(items_questionnaire(draft_items(d$reply)))
+  list(draft = d, check = review_result(send_parts(ask_all, m, clean_form(form), plan[1], NULL)))
+}
+
+# The drafted items after the check: where the check returned a rewrite for a fix-level flag, the
+#   rewrite replaces the draft and the item's one line says so, with the flag's why; otherwise its
+#   one line is its design why.
+checked_items <- function(items, check) {
+  qs = if (!is.null(check)) shape_review(check)$questions else list()
+  purrr::imap(items, function(it, i) {
+    q = if (i <= length(qs)) qs[[i]]
+    fix = purrr::keep(q$flags %||% list(), function(x) x$level == "fix")
+    if (!isTRUE(q$reviewed) || !length(fix) || !nzchar(q$rewrite)) return(c(it, list(note = it$why)))
+    c(apply_rewrite(it, q$rewrite), list(note = paste("Revised after the check:", fix[[1]]$why)))
+  })
+}
+
+# A rewrite put in place of an item. The check was shown the item as "Qn. question" with its options
+#   on the next line, joined by " / ", and a rewrite in that layout is read back the same way. A
+#   rewrite that is not in that layout becomes the question, and the options stay as they were.
+apply_rewrite <- function(it, rewrite) {
+  lines = trimws(strsplit(gsub("\r\n?", "\n", rewrite), "\n", fixed = TRUE)[[1]])
+  lines = lines[nzchar(lines) & !grepl("^\\[Open", lines)]
+  lines[1] = trimws(sub(QUESTION_LABEL, "", lines[1], perl = TRUE))
+  opts = length(lines) > 1L && grepl(" / ", lines[length(lines)], fixed = TRUE)
+  it$intro = ""
+  it$stem = paste(if (opts) lines[-length(lines)] else lines, collapse = " ")
+  if (opts) it$options = as.list(trimws(strsplit(lines[length(lines)], " / ", fixed = TRUE)[[1]]))
+  it
+}
+
+
 # ---- the run log --------------------------------------------------------------------------
 
 # One row per model call: what ran, how it ended, how long, and what it cost in tokens.
@@ -153,18 +206,20 @@ call_rows <- function(m, calls)
          tokens_cached = x$tokens$cached_input %||% NA_real_, error = x$error %||% NA_character_))
 
 # The calls of a run, each with a label, in order.
-run_calls <- function(draft = NULL, review = NULL)
+run_calls <- function(draft = NULL, review = NULL, check = NULL)
   c(if (!is.null(draft)) list(c(draft, list(label = "draft"))),
+    purrr::map(check$batches, function(b) c(b, list(label = "check"))),
     purrr::map(review$batches, function(b)
       c(b, list(label = if (identical(b$kind, "instrument")) "whole questionnaire" else paste0("part ", b$k, " of ", b$n)))))
 
 # A run, for the log: the time, the form, the message as assembled and as sent, the call summary,
 #   then every call in full. The key is never in these lists: a call record holds no request.
-flow_round <- function(form, m = APP_MODEL, draft = NULL, review = NULL, prompt = NULL, analyst = NULL,
-                       time = Sys.time())
+flow_round <- function(form, m = APP_MODEL, draft = NULL, review = NULL, check = NULL, prompt = NULL,
+                       analyst = NULL, time = Sys.time())
   list(time = format(time, "%Y-%m-%dT%H:%M:%S%z"), model = m$id, form = form,
        message_assembled = prompt$assembled, message_sent = prompt$sent, edited = !identical(prompt$assembled, prompt$sent),
-       summary = call_rows(m, run_calls(draft, review)), draft = draft, review = review, analyst = analyst)
+       summary = call_rows(m, run_calls(draft, review, check)), draft = draft, check = check, review = review,
+       analyst = analyst)
 
 flow_log_json <- function(x)
   jsonlite::toJSON(x, auto_unbox = TRUE, pretty = TRUE, null = "null", na = "null", force = TRUE)

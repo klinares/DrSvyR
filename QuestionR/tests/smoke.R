@@ -349,9 +349,19 @@ ok("a part that fails leaves its questions not reviewed, never clear; the rest i
 
 # ---- a draft, on a fake model ---------------------------------------------------------------
 
-draft_reply <- function(n) list(items = purrr::map(seq_len(n), function(i)
-  list(id = paste0("TR", i), domain = paste("domain", i), stem = paste0("How much do you trust [council] on ", i, "?"),
-       options = list("A great deal", "Somewhat", "Not at all"), open_format = "")))
+draft_reply <- function(n) list(
+  items = purrr::map(seq_len(n), function(i)
+    list(id = paste0("TR", i), domain = paste("domain", i), intro = "", stem = paste0("How much do you trust [council] on ", i, "?"),
+         options = list("A great deal", "Somewhat", "Not at all"), open_format = "", parts = list(), programming = "",
+         why = paste("Why", i))),
+  not_covered = list("trust in officers"), needs_from_analyst = list("The council's name"))
+# The fake checker: question 2 has a fix flag and a rewrite in the layout it was shown.
+check_answer <- function(user) list(items = purrr::map(1:3, function(i)
+  if (i == 2L) list(id = "Q2", flags = list(list(check = "neutral_wording", stage = "comprehension", level = "fix",
+                                                  quote = "trust", why = "Trust alone pushes toward a positive answer.")),
+                    rewrite = "Q2. How much do you trust or distrust [council] on 2?\nTrust a lot / Neither / Distrust a lot")
+  else list(id = paste0("Q", i), flags = list(), rewrite = "")))
+write_answer <- function(user) if (grepl("QUESTIONNAIRE\n", user, fixed = TRUE)) check_answer(user) else draft_reply(3)
 fa <- fake_ask(function(user) draft_reply(3))
 dr <- run_draft(forms$attitudinal, APP_MODEL, ask = fa$ask)
 ok("a draft is one call to the one model, with the assembled prompt",
@@ -359,6 +369,36 @@ ok("a draft is one call to the one model, with the assembled prompt",
 fa <- fake_ask(function(user) draft_reply(2))
 ok("a draft with the wrong number of items is a failure, with the reason",
    grepl("2 items; 3 were asked for", run_draft(forms$attitudinal, APP_MODEL, ask = fa$ask)$error, fixed = TRUE))
+ok("the draft validator refuses more than three requests of the analyst and a why over 30 words",
+   local({
+     v = function(o) tryCatch({ reply_validator("draft", n_items = 3L)(o); "ok" }, error = conditionMessage)
+     d = draft_reply(3)
+     identical(v(d), "ok") && grepl("limit is 3", v(replace(d, "needs_from_analyst", list(as.list(letters[1:4]))))) &&
+       grepl("why of 31 words", v(local({ d$items[[1]]$why = paste(rep("w", 31), collapse = " "); d })))
+   }))
+fa <- fake_ask(write_answer)
+wr <- run_write(forms$attitudinal, APP_MODEL, ask = fa$ask)
+ck_user <- fa$state$calls[[2]]$user
+ok("Write questions is a draft, then the same reviewer's items call in a fresh chat on the drafts as a questionnaire",
+   length(fa$state$calls) == 2L && identical(wr$check$status, "ok") &&
+     grepl("QUESTIONNAIRE\nQ1. How much do you trust [council] on 1?\nA great deal / Somewhat / Not at all\n\nQ2.", ck_user, fixed = TRUE) &&
+     grepl("Task: Review the questionnaire", ck_user, fixed = TRUE) && grepl("[your 3 questions go here]", ck_user, fixed = TRUE))
+ok("the check's checklist is the Check lines of core.md, the task's file and the modes chosen, and nothing else",
+   local({
+     sent = sub(":.*$", "", grep("^[a-z_]+: ", strsplit(strsplit(ck_user, "CHECKLIST\n", fixed = TRUE)[[1]][2], "\n\n", fixed = TRUE)[[1]][1] |>
+                                   strsplit("\n", fixed = TRUE) |> unlist(), value = TRUE))
+     want = c(names(purrr::compact(purrr::map(rfiles[["core.md"]]$reflexes, function(r) if (!is.na(r$check)) r))),
+              names(purrr::compact(purrr::map(rfiles[["attitudinal.md"]]$reflexes, function(r) if (!is.na(r$check)) r))),
+              "any_mode", "web", "telephone", "mixed_mode")
+     setequal(sent, want) && identical(wr$check$batches[[1]]$checks, sent)
+   }))
+ci <- checked_items(draft_items(wr$draft$reply), wr$check)
+ok("where the check returns a rewrite it replaces the draft, read back into question and options, and says so; otherwise the line is the design why",
+   identical(ci[[2]]$stem, "How much do you trust or distrust [council] on 2?") &&
+     identical(unlist(ci[[2]]$options), c("Trust a lot", "Neither", "Distrust a lot")) &&
+     identical(ci[[2]]$note, "Revised after the check: Trust alone pushes toward a positive answer.") &&
+     identical(ci[[1]]$note, "Why 1") && identical(ci[[1]]$stem, draft_items(wr$draft$reply)[[1]]$stem) &&
+     identical(apply_rewrite(ci[[1]], "One line only?")$stem, "One line only?") && identical(apply_rewrite(ci[[1]], "One line only?")$options, ci[[1]]$options))
 
 
 # ---- the screens -------------------------------------------------------------------------
@@ -405,7 +445,7 @@ local({
 })
 local({
   st = test_state()
-  fa = fake_ask(function(user) draft_reply(3))
+  fa = fake_ask(write_answer)
   st$form <- clean_form(forms$attitudinal)
   st$prompt <- list(assembled = built$attitudinal$message, sent = built$attitudinal$message)
   shiny::testServer(mod_results_server, args = list(state = st, make_ask = function(total) fa$ask), {
@@ -413,8 +453,16 @@ local({
     st$run_id <- 1L
     session$flushReact()
     h = html_of(output$items_ui)
-    ok("the drafted items are drawn in boxes, one card each, each with a Remove button",
-       n_in("card mb-2", h) == 3L && n_in("Remove", h) == 3L && grepl("Question 1", h, fixed = TRUE))
+    r = html_of(output$results)
+    ok("Write questions: the one sentence, the items in boxes with at most one line each, the short list, and a closed Criteria applied",
+       grepl(WRITE_NOTICE, r, fixed = TRUE) && n_in("card mb-2", h) == 3L && n_in("Remove", h) == 3L &&
+         grepl("Revised after the check: Trust alone", h, fixed = TRUE) && grepl("Why 1", h, fixed = TRUE) &&
+         grepl("Not covered: trust in officers", h, fixed = TRUE) && grepl("Needs from you: The council", h, fixed = TRUE) &&
+         grepl("<summary>Criteria applied</summary>", h, fixed = TRUE) && !grepl("<details[^>]*open", h))
+    word = see_text(sub("(?s)^.*?<div id=\"[^\"]*word\"[^>]*>(.*?)</div>\\s*<p class=\"mt-4\".*$", "\\1", html_of(output$bottom), perl = TRUE))
+    ok("the Word copy is the one sentence and the items as the page has them, each with its one line",
+       identical(words_of(word), words_of(doc_text(draft_blocks(final_items(st$items, st$edits))))) &&
+         grepl("Revised after the check", word, fixed = TRUE) && grepl("Distrust a lot", word, fixed = TRUE))
     session$setInputs(remove = "2")
     session$flushReact()
     ok("Remove takes an item out, and out of the Word copy", n_in("card mb-2", html_of(output$items_ui)) == 2L &&

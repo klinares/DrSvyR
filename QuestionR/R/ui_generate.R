@@ -12,7 +12,7 @@
 #   and as the analyst left it; run_id changes to start a run; the rest is what the last run
 #   returned. items is the drafted items as the analyst has them and edits what they changed.
 STATE_DEFAULTS <- list(
-  key_version = 0L, form = NULL, prompt = NULL, run_id = 0L, round = 0L, draft = NULL,
+  key_version = 0L, form = NULL, prompt = NULL, run_id = 0L, round = 0L, draft = NULL, check = NULL,
   review = NULL, items = list(), edits = list(), rounds = list())
 
 task_kind <- function(f) {
@@ -254,16 +254,20 @@ mod_results_server <- function(id, state, make_ask = progress_ask, make_ask_all 
           list(review = run_review(f, m, ask = ask, message = msg, progress = say_progress,
                                    ask_all = if (is.null(make_ask_all)) ask_all_for(ask) else make_ask_all(calls)))
         })
-        else withProgress(message = "Drafting the items", value = 0,
-                          list(draft = run_draft(f, m, ask = make_ask(1L), message = msg))),
+        else withProgress(message = "Drafting the items, then checking them", value = 0, {
+          ask = make_ask(2L)
+          run_write(f, m, ask = ask, message = msg, ask_all = if (is.null(make_ask_all)) ask_all_for(ask) else make_ask_all(1L))
+        }),
         error = function(e) { problem(paste0("The run stopped: ", plain_message(e))); NULL })
       if (is.null(out)) return()
       state$round <- (state$round %||% 0L) + 1L
       state$draft <- out$draft
+      state$check <- out$check
       state$review <- out$review
-      state$items <- if (identical(out$draft$status, "ok")) draft_items(out$draft$reply) else list()
+      state$items <- if (identical(out$draft$status, "ok")) checked_items(draft_items(out$draft$reply), out$check) else list()
       state$edits <- list()
-      state$rounds <- c(state$rounds, list(flow_round(f, m, draft = out$draft, review = out$review, prompt = state$prompt)))
+      state$rounds <- c(state$rounds, list(flow_round(f, m, draft = out$draft, review = out$review, check = out$check,
+                                                      prompt = state$prompt)))
     }, ignoreInit = TRUE)
 
     observeEvent(input$rerun, {
@@ -296,15 +300,26 @@ mod_results_server <- function(id, state, make_ask = progress_ask, make_ask_all 
         return(HTML(scrub_secrets(as.character(review_page(rv, session$ns)), known_keys())))
       }
       d = state$draft
-      if (!identical(d$status, "ok")) warn_box(tags$strong("The draft did not come back. "), d$error)
-      else tags$p(tags$em(WRITE_NOTICE))
+      if (!identical(d$status, "ok")) return(warn_box(tags$strong("The draft did not come back. "), d$error))
+      tagList(tags$p(tags$em(WRITE_NOTICE)),
+              if (!identical(state$check$status, "ok"))
+                warn_box(tags$strong("The check did not come back. "), "These are the drafts as written, unchecked. ",
+                         state$check$error))
     }))
 
     # Drawn on their own, so a removal redraws them and nothing else; what the analyst typed is put
     #   back from state$edits, which they do not read.
     output$items_ui <- renderUI(safe_ui({
       req(state$round >= 1L, task_kind(state$form) == "draft", identical(state$draft$status, "ok"))
-      purrr::imap(state$items, function(it, i) item_card(it, i, session$ns, isolate(state$edits)[[it$uid]]))
+      d = state$draft$reply
+      asks = c(if (length(d$not_covered)) paste("Not covered:", paste(unlist(d$not_covered), collapse = "; ")),
+               purrr::map_chr(d$needs_from_analyst %||% list(), function(x) paste("Needs from you:", option_text(x))))
+      checks = state$check$batches[[1]]$checks %||% character(0)
+      tagList(
+        purrr::imap(state$items, function(it, i) item_card(it, i, session$ns, isolate(state$edits)[[it$uid]])),
+        if (length(asks)) tags$ul(class = "small", purrr::map(asks, tags$li)),
+        if (length(checks)) tags$details(class = "mt-2", tags$summary("Criteria applied"),
+                                         tags$ul(class = "small", purrr::map(unique(unname(check_label(checks))), tags$li))))
     }))
 
     blocks <- reactive({
@@ -316,7 +331,7 @@ mod_results_server <- function(id, state, make_ask = progress_ask, make_ask_all 
       req(state$round >= 1L)
       state$key_version
       tagList(copy_and_log(blocks(), session$ns, known_keys()),
-              produced_panel(files(), run_calls(state$draft, state$review)))
+              produced_panel(files(), run_calls(state$draft, state$review, state$check)))
     }))
 
     output$get_log <- downloadHandler(

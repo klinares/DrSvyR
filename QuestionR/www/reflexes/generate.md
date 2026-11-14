@@ -59,13 +59,19 @@ file. How a draft is built from the brief and what it must declare.
 
 ## Output format
 
-Return one JSON object with this field.
+Return one JSON object with these fields.
 
-- "items": a list. Each item has:
+- "items": a list, one entry per item. Each has:
   - "id": a short code, [construct abbreviation] plus a number.
   - "domain": the single domain of the construct this item measures.
-  - "stem": the question as the respondent reads or hears it, including any lead-in sentence, in English.
-  - "options": a list of response options in the order shown, in English; an empty list for an open question.
+  - "intro": a lead-in sentence read before the question, in English; an empty string if there is none.
+  - "stem": the question as the respondent reads or hears it, in English.
+  - "options": the response options in the order shown, in English; an empty list for an open question.
   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
+  - "parts": a filter, branch or follow-up question that exists only to serve this item, each one line of text with its options; an empty list if there is none.
+  - "programming": at most one line for whoever programs the survey (routing, rotation, a show card); an empty string if there is none.
+  - "why": at most 25 words: the one design choice an analyst would question, and why you made it.
+- "not_covered": the domains of the construct these items leave out; an empty list if none.
+- "needs_from_analyst": at most 3 things you needed that the brief does not say; an empty list if none.
 
-Nothing else: no notes, no design decisions, no routing, no separate filter or branch questions. The analyst is shown the question and its answer options and nothing more, so write each stem plainly and keep it short.
+Nothing else.

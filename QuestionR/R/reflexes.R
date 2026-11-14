@@ -355,10 +355,10 @@ guidelines_block <- function(g)
 #   brief as filled in, and core.md's guidelines; for a review, one line where the questions go.
 #   Nothing else: the rules, the checklist, the reply format and the questions are added by R
 #   after the analyst presses Run (assemble_tail()), so an edit cannot take them away.
-assemble_message <- function(f, core = read_reflex_file("core.md")) {
-  n = if (TASKS[[f$task]]$kind == "review") length(split_questions(f$questionnaire))
+assemble_message <- function(f, core = read_reflex_file("core.md"), ask = ask_sentence(f),
+                             n = if (TASKS[[f$task]]$kind == "review") length(split_questions(f$questionnaire))) {
   paste(c(persona_split(core$persona)$first,
-          paste("Task:", ask_sentence(f)),
+          paste("Task:", ask),
           paste(c("Brief:", brief_lines(f)), collapse = "\n"),
           guidelines_block(core$guidelines),
           if (!is.null(n)) paste0("[your ", n, if (n == 1L) " question goes here]" else " questions go here]")),
@@ -430,7 +430,9 @@ build_step_prompt <- function(form, step, part = NULL, message = NULL) {
   if (step != "draft" && is.null(part)) stop("A ", step, " call needs a part.", call. = FALSE)
   rfiles = reflexes_in_force(f, step)
   system_txt = assemble_system(rfiles)
-  assembled = assemble_message(f, rfiles[["core.md"]])
+  # The check of a draft is a review: its message asks for one, of the drafted questions.
+  assembled = if (step == "check") assemble_message(f, rfiles[["core.md"]], TASKS$evaluate$ask, length(part$questions))
+              else assemble_message(f, rfiles[["core.md"]])
   tail_txt = assemble_tail(f, rfiles, step, part)
   user_txt = sent_user(message %||% assembled, tail_txt)
   list(system = system_txt, user = user_txt, message = assembled, tail = tail_txt,
