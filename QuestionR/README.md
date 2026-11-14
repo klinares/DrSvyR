@@ -105,7 +105,7 @@ parts four at a time inside the one R process, which is busy until they finish.
 - A review is 8 questions a call, four calls at a time, then one call on the whole questionnaire
   (30 questions: 5 calls, about 2 minutes). A question's own call sees only its part; the call on
   the whole sees every question, for routing, order and scales.
-- A reply that is not what was asked for (no JSON, a check not sent, a summary over 25 words, a fix
+- A reply that is not what was asked for (no JSON, a check not sent, a summary over 30 words, a fix
   flag with no rewrite) is tried again, up to 3 attempts; a session stops after 10 repeat
   attempts. The reason for each refused attempt is in the run log.
 - A flag whose quoted words are not in the question is shown with "quote not found in your text",

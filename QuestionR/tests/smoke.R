@@ -389,8 +389,8 @@ ok("the validator passes a good reply and refuses: more than 8 flags, a why over
      grepl("stage", v_items(list(items = qf(stage = "memory")))) &&
      grepl("fix or consider", v_items(list(items = qf(level = "minor")))) &&
      grepl("this part has 2", v_items(list(items = q1()), n = 2L)))
-ok("the validator holds a summary to 25 words and a rewrite to a question; a fix flag with no rewrite is a failed attempt; no flag needs no rewrite",
-   grepl("summary of 26 words", v_items(list(items = q1(summary = paste(rep("w", 26), collapse = " "))))) &&
+ok("the validator holds a summary to 30 words and a rewrite to a question; a fix flag with no rewrite is a failed attempt; no flag needs no rewrite",
+   grepl("summary of 31 words", v_items(list(items = q1(summary = paste(rep("w", 31), collapse = " "))))) &&
      grepl("has a fix flag and no rewrite", v_items(list(items = list(list(id = "Q1", flags = list(flag1), summary = "s", rewrite = NULL))))) &&
      grepl("neither options nor an open_format", v_items(list(items = q1(rewrite = replace(rw1, "options", list(list())))))) &&
      grepl("rewrite: 'stem' must be a non-empty string", v_items(list(items = q1(rewrite = replace(rw1, "stem", "")))), fixed = TRUE) &&

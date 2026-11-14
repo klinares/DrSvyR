@@ -80,7 +80,7 @@ if (mode == "review30") {
           paste0("Flags per question: fix mean ", sprintf("%.2f", mean(per("fix"))), " (max ", max(per("fix")), "), consider mean ",
                  sprintf("%.2f", mean(per("consider"))), " (max ", max(per("consider")), ")."),
           paste0("Quotes found in the text: ", sum(purrr::map_lgl(flags, "found")), " of ", length(flags), "."),
-          paste0("Calls that needed a repeat attempt: ", sum(purrr::map_int(rv$batches, function(b) as.integer(b$attempts %||% 1L)) > 1L), "."),
+          paste0("Calls that needed a repeat attempt: ", sum(purrr::map_lgl(rv$batches, function(b) isTRUE(b$attempts > 1L))), "."),
           unlist(purrr::imap(rv$batches, function(b, i) if (length(b$refused)) paste0("- call ", i, " refused: ", unlist(b$refused)))),
           paste0("Deliberate faults flagged at either level: ", sum(faults), " of ", length(faults), ": ",
                  paste0(names(faults), " ", ifelse(faults, "yes", "no"), collapse = "; "), "."), "",
