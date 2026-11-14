@@ -7,7 +7,7 @@ questionnaire before it goes to the field.
 
 ![How QuestionR works: the analyst describes what is needed and checks the instructions; several AI models draft at the same time and one model reviews the drafts against the rules and recommends one set; the analyst decides, then copies the result into Word with a record of how it was made.](how_it_works.svg)
 
-QuestionR is an AI skill. It works from written AI reflexes: short rules of
+QuestionR works from written AI reflexes: short rules of
 survey design that every model is given.
 
 ## How it works

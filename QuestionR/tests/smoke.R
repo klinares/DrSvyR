@@ -2981,15 +2981,15 @@ see_text <- function(h) {
   gsub("\\s+", " ", trimws(h))
 }
 words_of <- function(x) tolower(unlist(regmatches(x, gregexpr("[[:alnum:]]+", x))))
-AI_SKILL_SENTENCE <- "QuestionR is an AI skill. It works from written AI reflexes: short rules of survey design that every model is given."
+AI_REFLEX_SENTENCE <- "QuestionR works from written AI reflexes: short rules of survey design that every model is given."
 
-ok("the word skill is on no page except in its one sentence, once on Start here and once on the Methodology page",
+ok("the word skill is on no page, and the reflex sentence is once on Start here and once on the Methodology page",
    local({
      p = gsub("\\s+", " ", see_text(page$html))
-     n_sentence = lengths(regmatches(p, gregexpr(AI_SKILL_SENTENCE, p, fixed = TRUE)))
-     n_sentence == 2L && !grepl("skill", gsub(AI_SKILL_SENTENCE, "", p, fixed = TRUE), ignore.case = TRUE) &&
-       lengths(regmatches(see_text(start_ui()), gregexpr(AI_SKILL_SENTENCE, see_text(start_ui()), fixed = TRUE))) == 1L &&
-       lengths(regmatches(see_text(md_page(METHODOLOGY_FILE)), gregexpr(AI_SKILL_SENTENCE, see_text(md_page(METHODOLOGY_FILE)), fixed = TRUE))) == 1L
+     n_sentence = lengths(regmatches(p, gregexpr(AI_REFLEX_SENTENCE, p, fixed = TRUE)))
+     n_sentence == 2L && !grepl("skill", gsub(AI_REFLEX_SENTENCE, "", p, fixed = TRUE), ignore.case = TRUE) &&
+       lengths(regmatches(see_text(start_ui()), gregexpr(AI_REFLEX_SENTENCE, see_text(start_ui()), fixed = TRUE))) == 1L &&
+       lengths(regmatches(see_text(md_page(METHODOLOGY_FILE)), gregexpr(AI_REFLEX_SENTENCE, see_text(md_page(METHODOLOGY_FILE)), fixed = TRUE))) == 1L
    }))
 
 translation_pattern <- "TRAPD|translat|output language|output_language|back-translat"

@@ -82,7 +82,7 @@ clearer than real ones, so treat it as a guide, not a guarantee.
 
 ## The AI reflexes behind every answer
 
-QuestionR is an AI skill. It works from written AI reflexes: short rules of
+QuestionR works from written AI reflexes: short rules of
 survey design that every model is given. They are kept in text files, one for
 each topic. Open any file below to read it in full. The
 [reflex files](https://github.com/klinares/drsvyr/tree/main/QuestionR/www/reflexes)
