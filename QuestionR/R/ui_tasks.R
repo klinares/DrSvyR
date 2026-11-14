@@ -1,24 +1,19 @@
-# ui_generate.R for QuestionR
-# The screens of the tasks: Brief, Prompt and Results, one module each. They hold no flow logic:
-#   they gather the form, call the engine in R/flow.R, and draw what it returns. The drawing of a
-#   result (the review page, the drafted items, Copy for Word, the run log) is in functions of its
-#   own, so any screen can use them. Function definitions and constants only.
+# ui_tasks.R for QuestionR
+# The two task pages, Evaluate questions and Write questions: one module, one page each, the form at
+#   the top, one button, a short box the analyst may edit with a Run button, and the results below.
+#   The module holds no flow logic: it gathers the form, calls the engine in R/flow.R, and draws what
+#   it returns. Function definitions and constants only.
 
 
 # ---- the one state object ---------------------------------------------------------
 
-# Every module reads and writes this, and none talks to another. key_version changes whenever the
-#   pasted key is saved or forgotten; form is the cleaned form; prompt is the message as assembled
-#   and as the analyst left it; run_id changes to start a run; the rest is what the last run
-#   returned. items is the drafted items as the analyst has them and edits what they changed.
+# What a task page holds: form is the cleaned form; prompt is the message as assembled and as the
+#   analyst left it; the rest is what the last run returned. items is the drafted items as the
+#   analyst has them and edits what they changed. key_version, in the app's shared state, changes
+#   whenever the pasted key is saved or forgotten.
 STATE_DEFAULTS <- list(
-  key_version = 0L, form = NULL, prompt = NULL, run_id = 0L, round = 0L, draft = NULL, check = NULL,
+  form = NULL, prompt = NULL, round = 0L, draft = NULL, check = NULL,
   review = NULL, items = list(), edits = list(), rounds = list())
-
-task_kind <- function(f) {
-  t = f$task
-  if (is.character(t) && length(t) == 1L && t %in% names(TASKS)) TASKS[[t]]$kind else "draft"
-}
 
 
 # ---- shared pieces -------------------------------------------------------------------
@@ -55,7 +50,6 @@ progress_ask_all <- function(total) {
   }
 }
 
-tasks_condition <- function(tasks) paste0(jsonlite::toJSON(tasks), ".indexOf(input.task) >= 0")
 
 
 # ---- the form's widgets, one per field -------------------------------------------------
@@ -73,6 +67,9 @@ FIELD_SPECS <- list(
   questionnaire = list(label = "Questions with their response options", type = "area", rows = 12,
                        help = "Leave a blank line between questions, or start each with its label (Q1., 1., 1), A1)."))
 
+# The drafting tasks, as the Write questions page offers them.
+DRAFT_TASKS <- names(purrr::keep(TASKS, function(t) t$kind == "draft"))
+
 field_widget <- function(field, ns) {
   s = FIELD_SPECS[[field]]
   tagList(
@@ -83,80 +80,6 @@ field_widget <- function(field, ns) {
       choices = checkboxGroupInput(ns(field), s$label, inline = TRUE, selected = s$selected,
                                    choices = purrr::set_names(names(s$choices), unname(s$choices)))),
     if (!is.null(s$help)) tags$p(class = "text-muted small mt-n2", s$help))
-}
-
-
-# ---- tab 1: Brief ----------------------------------------------------------------------------
-
-mod_brief_ui <- function(id) {
-  ns <- NS(id)
-  tagList(
-    tags$h3(QUESTIONR_TABS[2]),
-    selectInput(ns("task"), "Task", choices = purrr::set_names(names(TASKS), purrr::map_chr(TASKS, "label")), width = "100%"),
-    purrr::map(setdiff(FORM_FIELDS, "task"), function(f)
-      conditionalPanel(tasks_condition(names(purrr::keep(TASKS, function(t) f %in% t$fields))), ns = ns, field_widget(f, ns))),
-    actionButton(ns("build"), "Build the instructions", class = "btn-primary"),
-    uiOutput(ns("message")))
-}
-
-mod_brief_server <- function(id, state, go = function(tab) invisible(NULL)) {
-  moduleServer(id, function(input, output, session) {
-    message <- reactiveVal(NULL)
-    observeEvent(input$build, {
-      message(NULL)
-      task = input$task %||% names(TASKS)[1]
-      typed = purrr::map(purrr::set_names(setdiff(FORM_FIELDS, "task")), function(k)
-        if (k %in% TASKS[[task]]$fields) input[[k]])
-      f = tryCatch({
-        f = clean_form(c(list(task = task), typed))
-        if (task_kind(f) == "review") review_plan(f$questionnaire)
-        f
-      }, error = function(e) { message(plain_message(e)); NULL })
-      if (is.null(f)) return()
-      state$form <- f
-      go(QUESTIONR_TABS[3])
-    })
-    output$message <- renderUI(if (!is.null(message())) warn_box(message()))
-  })
-}
-
-
-# ---- tab 2: Prompt ----------------------------------------------------------------------------
-
-mod_prompt_ui <- function(id) {
-  ns <- NS(id)
-  tagList(tags$h3(QUESTIONR_TABS[3]), uiOutput(ns("body")), uiOutput(ns("message")))
-}
-
-mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
-  moduleServer(id, function(input, output, session) {
-    message <- reactiveVal(NULL)
-    assembled <- reactive({
-      req(state$form)
-      tryCatch(assemble_message(state$form), error = function(e) e)
-    })
-    output$body <- renderUI(safe_ui({
-      a = assembled()
-      if (inherits(a, "error")) return(warn_box("The prompt could not be assembled: ", plain_message(a)))
-      tagList(
-        textAreaInput(session$ns("user"), "What the model is told (you can edit this)", value = a,
-                      rows = 14, width = "100%", resize = "vertical"),
-        actionButton(session$ns("approve"), "Run", class = "btn-primary"))
-    }))
-    observeEvent(input$approve, {
-      message(NULL)
-      a = assembled()
-      msg = gsub("\r\n?", "\n", input$user %||% "")
-      if (inherits(a, "error") || !nzchar(trimws(msg))) {
-        message("There is nothing to send.")
-        return()
-      }
-      state$prompt <- list(assembled = a, sent = msg)
-      state$run_id <- (state$run_id %||% 0L) + 1L
-      go(QUESTIONR_TABS[4])
-    })
-    output$message <- renderUI(if (!is.null(message())) warn_box(message()))
-  })
 }
 
 
@@ -230,25 +153,70 @@ item_card <- function(it, i, ns, ed = NULL) {
 }
 
 
-# ---- tab 3: Results ----------------------------------------------------------------------------
+# ---- a task page -------------------------------------------------------------------------------
 
-mod_results_ui <- function(id) {
+# kind is "review" (Evaluate questions) or "draft" (Write questions).
+mod_task_ui <- function(id, kind) {
   ns <- NS(id)
-  tagList(tags$h3(QUESTIONR_TABS[4]), uiOutput(ns("results")), uiOutput(ns("items_ui")), uiOutput(ns("bottom")))
+  review = kind == "review"
+  tagList(
+    tags$h3(if (review) "Evaluate questions" else "Write questions"),
+    if (!review) radioButtons(ns("task"), "Kind of item", inline = TRUE,
+                              choices = purrr::set_names(DRAFT_TASKS, purrr::map_chr(TASKS[DRAFT_TASKS], "label"))),
+    purrr::map(TASKS[[if (review) "evaluate" else "attitudinal"]]$fields, function(f) field_widget(f, ns)),
+    if (!review) conditionalPanel("input.task == 'behavioral'", ns = ns, field_widget("reference_period", ns)),
+    actionButton(ns("prepare"), if (review) "Review these questions" else "Write the items", class = "btn-primary"),
+    uiOutput(ns("message")),
+    uiOutput(ns("box")),
+    uiOutput(ns("results")), uiOutput(ns("items_ui")), uiOutput(ns("bottom")))
 }
 
-mod_results_server <- function(id, state, make_ask = progress_ask, make_ask_all = NULL) {
+# app is the app's shared state (key_version). make_ask and make_ask_all build what the engine calls
+#   the model through; a test hands in fakes.
+mod_task_server <- function(id, kind, app, make_ask = progress_ask, make_ask_all = NULL) {
   moduleServer(id, function(input, output, session) {
+    state <- do.call(reactiveValues, STATE_DEFAULTS)
     problem <- reactiveVal(NULL)
+    message <- reactiveVal(NULL)
     say_progress <- function(msg) PROGRESS_NOTE$msg <- msg
 
-    observeEvent(state$run_id, {
+    # The form as typed: the fields of the task chosen and nothing else.
+    observeEvent(input$prepare, {
+      message(NULL)
+      task = if (kind == "review") "evaluate" else input$task %||% DRAFT_TASKS[1]
+      typed = purrr::map(purrr::set_names(TASKS[[task]]$fields), function(k) input[[k]])
+      f = tryCatch({
+        f = clean_form(c(list(task = task), typed))
+        if (kind == "review") review_plan(f$questionnaire)
+        f
+      }, error = function(e) { message(plain_message(e)); NULL })
+      state$form <- f
+      state$prompt <- NULL
+    })
+
+    # The short box: what the model is told, as the analyst may edit it, and the Run button. For a
+    #   review it says how many questions were found, so the analyst can go back if that is wrong.
+    output$box <- renderUI(safe_ui({
+      req(state$form)
+      n = if (kind == "review") length(split_questions(state$form$questionnaire))
+      tagList(
+        if (!is.null(n)) advice_box(paste0("Found ", n, if (n == 1L) " question." else " questions."),
+                                    " If that is wrong, put a blank line between questions and press the button again."),
+        textAreaInput(session$ns("user"), "What the model is told (you can edit it)", value = assemble_message(state$form),
+                      rows = 10, width = "100%", resize = "vertical"),
+        actionButton(session$ns("run"), "Run", class = "btn-primary"))
+    }))
+
+    observeEvent(input$run, {
       problem(NULL)
       f = state$form
-      msg = state$prompt$sent
+      req(f)
+      msg = gsub("\r\n?", "\n", input$user %||% "")
+      if (!nzchar(trimws(msg))) return(problem("The box is empty: there is nothing to send."))
+      state$prompt <- list(assembled = assemble_message(f), sent = msg)
       m = APP_MODEL
       out = tryCatch(
-        if (task_kind(f) == "review") withProgress(message = "Reviewing the questionnaire", value = 0, {
+        if (kind == "review") withProgress(message = "Reviewing the questionnaire", value = 0, {
           calls = length(review_plan(f$questionnaire))
           ask = make_ask(calls)
           list(review = run_review(f, m, ask = ask, message = msg, progress = say_progress,
@@ -268,7 +236,7 @@ mod_results_server <- function(id, state, make_ask = progress_ask, make_ask_all 
       state$edits <- list()
       state$rounds <- c(state$rounds, list(flow_round(f, m, draft = out$draft, review = out$review, check = out$check,
                                                       prompt = state$prompt)))
-    }, ignoreInit = TRUE)
+    })
 
     observeEvent(input$rerun, {
       req(state$review, state$form)
@@ -288,15 +256,17 @@ mod_results_server <- function(id, state, make_ask = progress_ask, make_ask_all 
     })
     observeEvent(input$remove, state$items <- item_remove(state$items, input$remove))
 
-    files = reactive(names(reflexes_in_force(state$form, if (task_kind(state$form) == "review") "items" else "draft")))
+    files = reactive(names(reflexes_in_force(state$form, if (kind == "review") "items" else "draft")))
+
+    output$message <- renderUI(if (!is.null(message())) warn_box(message()))
 
     output$results <- renderUI(safe_ui({
       if (!is.null(problem())) return(warn_box(problem()))
-      if ((state$round %||% 0L) < 1L) return(tags$p(class = "text-muted", "Nothing has been run yet."))
-      if (task_kind(state$form) == "review") {
+      req(state$round >= 1L)
+      if (kind == "review") {
         rv = state$review
         if (identical(rv$status, "failed") && !length(rv$batches)) return(warn_box(rv$error))
-        state$key_version
+        app$key_version
         return(HTML(scrub_secrets(as.character(review_page(rv, session$ns)), known_keys())))
       }
       d = state$draft
@@ -310,7 +280,7 @@ mod_results_server <- function(id, state, make_ask = progress_ask, make_ask_all 
     # Drawn on their own, so a removal redraws them and nothing else; what the analyst typed is put
     #   back from state$edits, which they do not read.
     output$items_ui <- renderUI(safe_ui({
-      req(state$round >= 1L, task_kind(state$form) == "draft", identical(state$draft$status, "ok"))
+      req(state$round >= 1L, kind == "draft", identical(state$draft$status, "ok"))
       d = state$draft$reply
       asks = c(if (length(d$not_covered)) paste("Not covered:", paste(unlist(d$not_covered), collapse = "; ")),
                purrr::map_chr(d$needs_from_analyst %||% list(), function(x) paste("Needs from you:", option_text(x))))
@@ -323,13 +293,13 @@ mod_results_server <- function(id, state, make_ask = progress_ask, make_ask_all 
     }))
 
     blocks <- reactive({
-      if (task_kind(state$form) == "review") review_blocks(shape_review(state$review))
+      if (kind == "review") review_blocks(shape_review(state$review))
       else draft_blocks(final_items(state$items, state$edits))
     })
 
     output$bottom <- renderUI(safe_ui({
       req(state$round >= 1L)
-      state$key_version
+      app$key_version
       tagList(copy_and_log(blocks(), session$ns, known_keys()),
               produced_panel(files(), run_calls(state$draft, state$review, state$check)))
     }))

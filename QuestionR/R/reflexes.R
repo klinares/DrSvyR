@@ -315,7 +315,7 @@ reflex_line <- function(r)
 # The persona in two: its first sentence opens the message the analyst sees; the rest opens the
 #   system prompt, so a model is told it once.
 persona_split <- function(persona) {
-  first = sub("^(.+?[.!?])\\s.*$", "\\1", persona)
+  first = sub("^(.+?[.!?])\\s.*$", "\\1", persona, perl = TRUE)
   list(first = first, rest = trimws(substring(persona, nchar(first) + 1L)))
 }
 

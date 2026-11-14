@@ -403,24 +403,42 @@ ok("where the check returns a rewrite it replaces the draft, read back into ques
 
 # ---- the screens -------------------------------------------------------------------------
 
-test_state <- function() do.call(shiny::reactiveValues, STATE_DEFAULTS)
+ok("four tabs: Start here, Evaluate questions, Write questions, Methodology",
+   identical(QUESTIONR_TABS, c("Start here", "Evaluate questions", "Write questions", "Methodology")) &&
+     all(purrr::map_lgl(QUESTIONR_TABS, function(t) grepl(paste0("data-value=\"", t, "\""), page$html, fixed = TRUE))))
+
+# The short box: a standard form of each task gives at most 150 words, and the box never holds the
+#   system prompt, the checklist, the reply format or the pasted questions.
+box_words <- purrr::map_int(c(forms, list(long = utils::modifyList(forms$evaluate, list(questionnaire = long_q)))), function(fm)
+  n_words(assemble_message(clean_form(fm))))
+ok("the box a standard form gives is at most 150 words for every task (the brief's target is 120)",
+   all(box_words <= 150L) && all(box_words > 60L))
+long_box <- assemble_message(clean_form(utils::modifyList(forms$evaluate, list(questionnaire = long_q))))
+ok("the box holds the persona's first sentence, the task, the brief, the guidelines and one line for the questions, and nothing else",
+   startsWith(long_box, persona$first) && grepl("[your 30 questions go here]", long_box, fixed = TRUE) &&
+     !grepl("Obviously, high energy bills", long_box, fixed = TRUE) && !grepl("CHECKLIST", long_box, fixed = TRUE) &&
+     !grepl("REPLY FORMAT", long_box, fixed = TRUE) && !grepl("REFLEXES", long_box, fixed = TRUE) &&
+     !grepl(persona$rest, long_box, fixed = TRUE) &&
+     all(purrr::map_lgl(rfiles[["core.md"]]$guidelines$bullets, function(b) grepl(b, long_box, fixed = TRUE))))
+
 key_planted <- "sk-planted-0123456789abcdef"
+app_state <- shiny::reactiveValues(key_version = 0L)
 local({
-  st = test_state()
-  f = clean_form(utils::modifyList(forms$evaluate, list(questionnaire = long_q)))
   fa = fake_ask(function(user) {
     out = review_answer(user)
     if (!is.null(out$items)) out$items[[1]]$flags = list(list(check = "plain_words", stage = "comprehension", level = "consider",
                                                               quote = "Are you", why = paste("Leaky", key_planted)))
     out
   })
-  st$form <- f
-  st$prompt <- list(assembled = assemble_message(f), sent = assemble_message(f))
-  shiny::testServer(mod_results_server, args = list(state = st, make_ask = function(total) fa$ask), {
-    session$flushReact()
+  shiny::testServer(mod_task_server, args = list(kind = "review", app = app_state, make_ask = function(total) fa$ask), {
     llm_set_session_key(key_planted)
-    st$run_id <- 1L
-    session$flushReact()
+    session$setInputs(research_question = "Energy use", population = "Adults", modes = "web", questionnaire = long_q, prepare = 1)
+    box = html_of(output$box)
+    ok("pressing the button shows, on the same page, the number of questions found, the short box and Run",
+       grepl("Found 30 questions.", box, fixed = TRUE) && grepl("Run", box, fixed = TRUE) && grepl("<textarea", box, fixed = TRUE) &&
+         is.null(state$review))
+    session$setInputs(user = paste(assemble_message(state$form), "Be extra careful with Q11."), run = 1)
+    st = state
     h = html_of(output$results)
     b = html_of(output$bottom)
     ok("the review page is the bottom line, what to fix first, all questions, and a closed panel on how it was produced",
@@ -439,19 +457,21 @@ local({
     ok("a key in the session, echoed in a model's reply, is in neither the page, the Word copy nor the run log",
        !grepl(key_planted, paste(h, b), fixed = TRUE) && !grepl(key_planted, log, fixed = TRUE) &&
          grepl("[key removed]", log, fixed = TRUE))
-    ok("the run log has every call with its prompt hash and tokens, and the message as assembled and as sent",
-       grepl("\"message_sent\"", log, fixed = TRUE) && n_in("\"hash\"", log) == 3L && grepl("\"tokens_in\"", log, fixed = TRUE))
+    ok("the run log has every call with its prompt hash and tokens, and the message as assembled and as sent; an edit is there and not on the page",
+       grepl("\"message_sent\"", log, fixed = TRUE) && n_in("\"hash\"", log) == 3L && grepl("\"tokens_in\"", log, fixed = TRUE) &&
+         grepl("\"edited\": true", log, fixed = TRUE) && grepl("Be extra careful with Q11.", log, fixed = TRUE) &&
+         all(purrr::map_lgl(fa$state$calls, function(x) grepl("Be extra careful with Q11.", x$user, fixed = TRUE))) &&
+         !grepl("edited", see_text(paste(h, b)), ignore.case = TRUE))
   })
 })
 local({
-  st = test_state()
   fa = fake_ask(write_answer)
-  st$form <- clean_form(forms$attitudinal)
-  st$prompt <- list(assembled = built$attitudinal$message, sent = built$attitudinal$message)
-  shiny::testServer(mod_results_server, args = list(state = st, make_ask = function(total) fa$ask), {
-    session$flushReact()
-    st$run_id <- 1L
-    session$flushReact()
+  shiny::testServer(mod_task_server, args = list(kind = "draft", app = app_state, make_ask = function(total) fa$ask), {
+    fm = forms$attitudinal
+    session$setInputs(task = "attitudinal", research_question = fm$research_question, construct = fm$construct,
+                      population = fm$population, country = fm$country, modes = fm$modes, n_items = 3, prepare = 1)
+    session$setInputs(user = assemble_message(state$form), run = 1)
+    st = state
     h = html_of(output$items_ui)
     r = html_of(output$results)
     ok("Write questions: the one sentence, the items in boxes with at most one line each, the short list, and a closed Criteria applied",
