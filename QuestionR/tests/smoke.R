@@ -676,6 +676,20 @@ local({
        identical(calls$item, c("F1", "F2", "F3")) && identical(calls$status, c("ok", "ok", "failed")) &&
        identical(calls$attempts, c("2", "1", NA)) && identical(calls$refused, c("too long", "", "HTTP 500")) &&
        !grepl("the prompt", paste(readLines(file.path(run, "reviews.json"), warn = FALSE), collapse = ""), fixed = TRUE))
+  # The script's AT_ONCE line, run as written: it must reach the REVIEW_AT_ONCE send_parts() reads.
+  line = grep("assign(\"REVIEW_AT_ONCE\"", readLines(file.path("tests", "gold_test.R"), warn = FALSE), fixed = TRUE, value = TRUE)
+  before = REVIEW_AT_ONCE
+  env$AT_ONCE = 14L
+  eval(parse(text = line), env)
+  f = clean_form(utils::modifyList(forms$evaluate, list(questionnaire = "Q1. Are you well?\nYes / No")))
+  parts = rep(list(c(review_plan(f$questionnaire)[[1]], list(form = f))), 27)
+  sizes = integer(0)
+  out = send_parts(function(requests) { sizes <<- c(sizes, length(requests)); purrr::map(requests, function(r) list(items = list(list(id = "Q1", flags = list(), summary = "", rewrite = NULL)))) },
+                   APP_MODEL, f, parts, message = NULL)
+  assign("REVIEW_AT_ONCE", before, envir = environment(send_parts))
+  ok("gold_test.R's AT_ONCE reaches what send_parts() reads: with 14, the 27 reviews go out in 2 groups (14 and 13)",
+     length(line) == 1L && identical(sizes, c(14L, 13L)) && length(out) == 27L && all(purrr::map_chr(out, "status") == "ok") &&
+       REVIEW_AT_ONCE == 4L)
 })
 
 

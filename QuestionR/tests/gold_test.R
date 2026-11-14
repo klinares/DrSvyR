@@ -19,6 +19,7 @@
 PROFILE      <- "home"   # the profile in app.R to test ("work" at work)
 RUN_REVIEWS  <- TRUE     # FALSE: reuse the flags of the latest run folder
 RUN_MATCHING <- TRUE     # FALSE: reuse matches.csv as it stands (after a person has corrected it)
+AT_ONCE      <- 14L      # calls sent together. 27 sends every review in one go; lower it if the service refuses calls for coming too fast
 
 
 # 1. Load the app's functions with the chosen profile, and read the test questions. The questions
@@ -51,7 +52,7 @@ say <- function(msg) cat(format(Sys.time(), "%H:%M:%S"), msg, "\n")
 ask_all <- function(requests) llm_json_all(purrr::map(requests, function(r) c(r, list(key = key))))
 
 
-# 2. Review each question alone, four at a time, through send_parts(), which the Evaluate tab uses
+# 2. Review each question alone, AT_ONCE at a time, through send_parts(), which the Evaluate tab uses
 #    for every review. What comes back is saved to reviews.json at once, before anything is done
 #    with it, so an error further down never costs the 27 calls a second time.
 if (RUN_REVIEWS) {
@@ -61,6 +62,9 @@ if (RUN_REVIEWS) {
     clean_form(list(task = "evaluate", research_question = "Evaluate this survey question",
                     population = "Adults in the general population", modes = "web", questionnaire = txt)))
   parts <- purrr::map(forms, function(f) c(review_plan(f$questionnaire)[[1]], list(form = f)))
+  # send_parts() sends REVIEW_AT_ONCE calls together (4 in the app, to suit one analyst). The test
+  #   raises it for this session only, so the 27 reviews go out in two or three groups, not seven.
+  assign("REVIEW_AT_ONCE", as.integer(AT_ONCE), envir = environment(send_parts))
   batches <- send_parts(ask_all, m, forms[[1]], parts, message = NULL, progress = say)
   kept <- c("reply", "status", "seconds", "attempts", "refused", "error")   # the reply and its call record; no prompt, no key
   jsonlite::write_json(purrr::map(batches, function(b) b[intersect(names(b), kept)]),
@@ -136,7 +140,7 @@ if (RUN_MATCHING) {
     }
     list(user = user, m = m, system_prompt = MATCH_INSTRUCTIONS, max_tokens = 8000L, validate = validate)
   })
-  replies <- unlist(purrr::map(unname(split(seq_along(requests), ceiling(seq_along(requests) / 4))), function(at) {
+  replies <- unlist(purrr::map(unname(split(seq_along(requests), ceiling(seq_along(requests) / AT_ONCE))), function(at) {
     say(paste("Matching", paste(flawed$id[at], collapse = ", ")))
     ask_all(requests[at])
   }), recursive = FALSE)
