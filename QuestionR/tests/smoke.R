@@ -204,8 +204,10 @@ ok("a good reply comes back parsed with the raw text and one attempt; what is se
    identical(res$obj$stem, "Real question?") && res$attempts == 1L &&
      identical(sc$state$seen[[1]]$user, paste0("Question?\n\n", JSON_QUOTE_RULE)) && identical(sc$state$seen[[1]]$system, "SYS"))
 sc <- scripted(reply("Sorry."), function() llm_fail("HTTP 503"), reply(good_json))
-ok("a reply that is not JSON and a transient error are tried again; the third attempt is returned",
-   run_json(sc)$attempts == 3L)
+res <- run_json(sc)
+ok("a reply that is not JSON and a transient error are tried again; the third attempt is returned, with why the first two were refused",
+   res$attempts == 3L && length(res$refused) == 2L && grepl("HTTP 503", res$refused[[2]], fixed = TRUE) &&
+     identical(call_result(res, 1, "items")$refused, res$refused))
 sc <- scripted(reply("not json"))
 err <- fails_with(run_json(sc))
 ok("a reply that never parses fails after three attempts, naming the model and carrying the raw reply",

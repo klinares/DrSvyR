@@ -336,8 +336,8 @@ is_llm_result <- function(x) is.list(x) && all(c("obj", "raw") %in% names(x))
 as_reply <- function(x) if (is_llm_result(x)) x$obj else x
 
 # What one call came to: ok with its reply, or failed with the reason (a reply cut off at the
-#   ceiling says what to do about it); and what the log keeps: seconds, finish, tokens, attempts
-#   and the reply as the model sent it.
+#   ceiling says what to do about it); and what the log keeps: seconds, finish, tokens, attempts,
+#   why any attempt was refused, and the reply as the model sent it.
 call_result <- function(out, seconds, step) {
   full = is_llm_result(out)
   failed = inherits(out, "error")
@@ -349,6 +349,7 @@ call_result <- function(out, seconds, step) {
        finish = if (full) out$finish %||% NA_character_ else NA_character_,
        tokens = if (full && !is.null(out$tokens)) tryCatch(as.list(out$tokens), error = function(e) NULL),
        attempts = if (full) out$attempts %||% NA_integer_ else NA_integer_,
+       refused = if (full) out$refused,
        raw = if (full) out$raw else out$raw %||% NA_character_)
 }
 

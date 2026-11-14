@@ -81,6 +81,7 @@ if (mode == "review30") {
                  sprintf("%.2f", mean(per("consider"))), " (max ", max(per("consider")), ")."),
           paste0("Quotes found in the text: ", sum(purrr::map_lgl(flags, "found")), " of ", length(flags), "."),
           paste0("Calls that needed a repeat attempt: ", sum(purrr::map_int(rv$batches, function(b) as.integer(b$attempts %||% 1L)) > 1L), "."),
+          unlist(purrr::imap(rv$batches, function(b, i) if (length(b$refused)) paste0("- call ", i, " refused: ", unlist(b$refused)))),
           paste0("Deliberate faults flagged at either level: ", sum(faults), " of ", length(faults), ": ",
                  paste0(names(faults), " ", ifelse(faults, "yes", "no"), collapse = "; "), "."), "",
           "Bottom line:", paste0("> ", bottom_line(sh)), "",
@@ -133,6 +134,7 @@ if (mode == "gold") {
     fl <- b$reply$items[[1]]$flags %||% list()
     list(call = data.frame(id = r$id, set = r$set, status = b$status, seconds = b$seconds %||% NA, tokens_in = b$tokens$input %||% NA,
                            tokens_out = b$tokens$output %||% NA, attempts = b$attempts %||% NA,
+                           refused = paste(unlist(b$refused), collapse = " || "),
                            n_fix = sum(purrr::map_chr(fl, "level") == "fix"), n_consider = sum(purrr::map_chr(fl, "level") == "consider")),
          flags = if (length(fl)) data.frame(id = r$id, set = r$set, check = purrr::map_chr(fl, "check"), stage = purrr::map_chr(fl, "stage"),
                                             level = purrr::map_chr(fl, "level"), quote = purrr::map_chr(fl, "quote"),

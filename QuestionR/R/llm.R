@@ -289,8 +289,9 @@ is_placeholder_reply <- function(obj) {
 #   error and a reply cut off at the ceiling are not. session_cap stops a broken prompt draining
 #   the quota: once a session has used that many repeat attempts, the next call fails at once.
 #   complete makes the request, so a test can stand in for the network; first is a first attempt
-#   already made by llm_complete_all(). Returns obj, raw, finish, tokens, user_sent, model, attempts
-#   and seconds; a failure carries the last raw reply as $raw.
+#   already made by llm_complete_all(). Returns obj, raw, finish, tokens, user_sent, model, attempts,
+#   seconds and refused (why each attempt before the one returned was refused); a failure carries the
+#   last raw reply as $raw.
 llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL, pattern = "(?s)\\{.*\\}",
                      max_times = 3L, session_cap = 10L, pause_base = 2, pause_min = 1, key = NULL,
                      complete = llm_complete, first = NULL) {
@@ -323,18 +324,19 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
   # insistently() says only "failed after 3 attempts", so the last attempt's own error is kept; a
   #   client error or a cut-off reply is returned, not raised, so it is not sent again.
   last = NULL
+  refused = character(0)
   sent_seconds = as.numeric(attr(first, "seconds") %||% 0)
   before = .llm_state$calls
   started = Sys.time()
   res = try(purrr::insistently(function()
-    tryCatch(withCallingHandlers(attempt(), error = function(e) last <<- e),
+    tryCatch(withCallingHandlers(attempt(), error = function(e) { last <<- e; refused <<- c(refused, substr(conditionMessage(e), 1, 300)) }),
              llm_client_error = function(e) e, llm_truncated = function(e) e),
     rate = purrr::rate_backoff(pause_base = pause_base, pause_min = pause_min, max_times = max_times), quiet = TRUE)(),
     silent = TRUE)
   made = .llm_state$calls - before
   llm_add_retries(max(0L, made - 1L))
   if (inherits(res, c("llm_client_error", "llm_truncated", "try-error"))) stop(last %||% attr(res, "condition") %||% res)
-  c(res, list(user_sent = ask, model = m$id, attempts = made,
+  c(res, list(user_sent = ask, model = m$id, attempts = made, refused = as.list(refused),
               seconds = as.numeric(difftime(Sys.time(), started, units = "secs")) + sent_seconds))
 }
 
