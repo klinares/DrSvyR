@@ -408,7 +408,8 @@ refine_reply <- function(n = 3L) {
     it$why = NULL
     it$changes = if (i == 2L) "Named both sides of trust." else ""
     if (i == 2L) { it$stem = "How much do you trust or distrust [council] on 2?"; it$options = list("Trust a lot", "Neither", "Distrust a lot") }
-    if (i == 1L) it$parts = list(list(when = "if a great deal", stem = "Why do you trust it?", options = list(), open_format = "a few words"))
+    if (i == 1L) it$parts = list(list(when = "if a great deal", stem = "Why do you trust it?", options = list(), open_format = "a few words"),
+                                 list(when = "Before the item", stem = "Have you heard of [council]?", options = list("Yes", "No"), open_format = ""))
     it
   })
   d$needs_from_analyst = list("The council's name")
@@ -545,7 +546,10 @@ local({
     before = sub("(?s)<details.*$", "", h, perl = TRUE)
     ok("Write questions: the one sentence, the final items as cards with their part and nothing about how they were reached, Before you field these, and a closed How these were written",
        grepl(WRITE_NOTICE, r, fixed = TRUE) && n_in("card mb-2", h) == 3L && n_in("Remove", h) == 3L &&
-         grepl("If a great deal: Why do you trust it?", h, fixed = TRUE) && grepl("Answer: a few words", h, fixed = TRUE) &&
+         grepl("Why do you trust it?", h, fixed = TRUE) && grepl("Answer: a few words", h, fixed = TRUE) &&
+         regexpr("Have you heard of [council]?", h, fixed = TRUE) < regexpr("How much do you trust [council] on 1?", h, fixed = TRUE) &&
+         regexpr("How much do you trust [council] on 1?", h, fixed = TRUE) < regexpr("Why do you trust it?", h, fixed = TRUE) &&
+         grepl("<em>domain 1</em>", h, fixed = TRUE) &&
          grepl("<h5>Before you field these</h5>", h, fixed = TRUE) && grepl("The council", before, fixed = TRUE) &&
          !grepl("Named both sides|trust in officers|Why 1|Revised|Open question|check", before, ignore.case = TRUE) &&
          grepl("<summary>How these were written</summary>", h, fixed = TRUE) && !grepl("<details[^>]*open", h) &&
@@ -556,6 +560,15 @@ local({
        identical(words_of(word), words_of(see_text(paste(r, before)))) &&
          identical(words_of(word), words_of(doc_text(draft_blocks(final_items(st$items, st$edits), list("The council's name"))))) &&
          grepl("Distrust a lot", word, fixed = TRUE))
+    session$setInputs(ed_1_p2_stem = "Have you ever heard of [council]?", ed_1_p1_o1 = "unused", ed_1_p2_o2 = "Not sure")
+    session$flushReact()
+    wb = html_of(output$bottom)
+    ok("a filter part is drawn above the stem in Copy for Word too, and a part's stem and options are edited like the item's",
+       regexpr("Have you ever heard of [council]?", wb, fixed = TRUE) > 0L &&
+         regexpr("Have you ever heard of [council]?", wb, fixed = TRUE) < regexpr("How much do you trust [council] on 1?", wb, fixed = TRUE) &&
+         grepl("Not sure", wb, fixed = TRUE) && !grepl("unused", wb, fixed = TRUE) &&
+         grepl("If a great deal: Why do you trust it?", wb, fixed = TRUE) &&
+         identical(final_items(st$items, st$edits)[[1]]$parts[[2]]$options, list("Yes", "Not sure")))
     session$setInputs(remove = "2")
     session$flushReact()
     ok("Remove takes an item out, and out of the Word copy", n_in("card mb-2", html_of(output$items_ui)) == 2L &&
