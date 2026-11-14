@@ -79,17 +79,56 @@ start_ui <- function() {
       mod_connect_ui("connect")))
 }
 
-# The Methodology page: www/methodology.md, then the table of the reflexes, read from the reflex
-#   files (file, what each checks, and its Source line as written), so it cannot drift from them.
-methodology_ui <- function() {
-  t = tryCatch(reflexes_table(), error = function(e) NULL)
-  tagList(md_page(METHODOLOGY_FILE),
-          if (is.null(t)) warn_box("The reflex files could not be read.")
-          else tags$table(class = "table table-sm small",
-                          tags$thead(tags$tr(tags$th("Reflex file"), tags$th("What it is for"), tags$th("Source"))),
-                          tags$tbody(purrr::pmap(t, function(file, label, source)
-                            tags$tr(tags$td(file), tags$td(label), tags$td(source))))))
-}
+# The Methodology page: www/methodology.md with its three placeholders filled: {{gold_summary}} from
+#   www/gold_summary.md (written by tests/gold_test.R), {{reflexes}} with the reflexes folded away,
+#   {{sources}} with the materials and their links.
+methodology_ui <- function()
+  safe_ui({
+    txt = paste(readLines(METHODOLOGY_FILE, encoding = "UTF-8", warn = FALSE), collapse = "\n")
+    gold = if (file.exists(GOLD_SUMMARY_FILE)) paste(readLines(GOLD_SUMMARY_FILE, encoding = "UTF-8", warn = FALSE), collapse = "\n")
+           else "The test has not been run on this installation yet."
+    a = strsplit(sub("{{gold_summary}}", gold, txt, fixed = TRUE), "{{reflexes}}", fixed = TRUE)[[1]]
+    b = strsplit(a[[2]], "{{sources}}", fixed = TRUE)[[1]]
+    sources = read_sources()
+    tagList(md_html(a[[1]]), reflexes_ui(sources), md_html(b[[1]]), sources_ui(sources), md_html(b[2] %||% ""))
+  })
+
+GOLD_SUMMARY_FILE <- file.path("www", "gold_summary.md")
+SOURCES_FILE <- file.path("www", "reflex_materials", "sources.csv")
+
+# The materials a Source line can name: key, markdown, pdf, citation.
+read_sources <- function(path = SOURCES_FILE) utils::read.csv(path, colClasses = "character", encoding = "UTF-8")
+
+# A Source line with every key of sources.csv in it a link to that material's markdown file, opening
+#   in a new tab; a source with no file stays plain text.
+source_html <- function(text, sources)
+  HTML(purrr::reduce(sources$key[order(-nchar(sources$key))], function(h, k)
+    gsub(htmltools::htmlEscape(k), sprintf("<a href=\"reflex_materials/%s\" target=\"_blank\">%s</a>",
+                                           sources$markdown[sources$key == k], htmltools::htmlEscape(k)), h, fixed = TRUE),
+    .init = htmltools::htmlEscape(text)))
+
+# The reflexes, folded away: one closed panel, inside it one closed panel per file (its title and
+#   number of rules), core first and within core the eight general guidelines first in the order of
+#   the slide (their Source says "general guideline N"); one entry per reflex: its Label in bold (its
+#   id in words when it has none), the first sentence of its Say, and its Source in small type.
+reflexes_ui <- function(sources, dir = REFLEXES_DIR)
+  tags$details(class = "mb-3", tags$summary("Show the AI reflexes"),
+    purrr::map(REFLEX_FILES, function(f) {
+      s = read_reflex_file(f, dir)
+      rs = unname(s$reflexes)
+      g = suppressWarnings(as.integer(sub("^.*general guideline ([0-9]+).*$", "\\1", purrr::map_chr(rs, function(r) if (is.na(r$source)) "" else r$source))))
+      rs = rs[order(is.na(g), g)]
+      tags$details(class = "ms-3", tags$summary(paste0(s$title, " (", length(rs), if (length(rs) == 1L) " rule)" else " rules)")),
+        tags$ul(purrr::map(rs, function(r)
+          tags$li(tags$strong(if (is.na(r$label)) gsub("_", " ", r$id) else r$label), " ",
+                  sub("^(.*?[.?!])(\\s.*)?$", "\\1", trimws(r$say)),
+                  if (!is.na(r$source)) tagList(tags$br(), tags$small(class = "text-muted", source_html(r$source, sources)))))))
+    }))
+
+# The materials, from sources.csv: the citation, then a link to its text.
+sources_ui <- function(sources)
+  tags$ul(purrr::map(seq_len(nrow(sources)), function(i)
+    tags$li(sources$citation[i], " ", tags$a(href = file.path("reflex_materials", sources$markdown[i]), target = "_blank", "text"))))
 
 # The model, and whether it has a key; and a button that makes one very small call to it. Never
 #   shows a key. With no key it is not called: it says what is missing. ping is the function that

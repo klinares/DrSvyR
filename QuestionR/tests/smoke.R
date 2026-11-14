@@ -663,10 +663,27 @@ ok("the Methodology page has its sections in order, and no TRAPD or testing-meth
                                           "Sensitive questions", "How the AI reviewer is kept in check", "How it was tested",
                                           "What it cannot do", "The AI reflexes", "Sources")) &&
      !grepl("TRAPD|testing methods", html_of(md_page(METHODOLOGY_FILE)), ignore.case = TRUE))
-ok("the reflex table is read from the reflex files and comes last: one row per reflex, its Label, and its Source line as written",
+ok("the Methodology page: no placeholder left, the test summary or its stand-in, every material's markdown file exists and is linked",
    local({
-     t = reflexes_table()
+     src = read_sources()
+     !grepl("{{", meth_html, fixed = TRUE) &&
+       grepl(if (file.exists(GOLD_SUMMARY_FILE)) "In the latest run" else "The test has not been run on this installation yet.", meth_html, fixed = TRUE) &&
+       all(file.exists(file.path("www", "reflex_materials", src$markdown))) &&
+       all(purrr::map_lgl(src$markdown, function(f) grepl(paste0("href=\"reflex_materials/", f, "\" target=\"_blank\">text</a>"), meth_html, fixed = TRUE))) &&
+       !grepl(".pdf\"", meth_html, fixed = TRUE)
+   }))
+ok("the reflexes fold away: one closed panel, a closed panel per file, core first with the eight general guidelines in slide order, every reflex once with its Source linked",
+   local({
      n = sum(purrr::map_int(rfiles, function(s) length(s$reflexes)))
-     nrow(t) == n && n_in("<tr>", meth_html) == n + 1L && regexpr("<table", meth_html) > regexpr("The AI reflexes", meth_html) &&
-       all(purrr::map_lgl(t$source[nzchar(t$source)], function(s) grepl(htmltools::htmlEscape(s), meth_html, fixed = TRUE)))
+     fold = sub("(?s)^.*?(<details class=\"mb-3\">.*?)<h2>Sources</h2>.*$", "\\1", meth_html, perl = TRUE)
+     core = sub("(?s)^.*?Core \\([0-9]+ rules\\)</summary>(.*?)</details>.*$", "\\1", fold, perl = TRUE)
+     first8 = regmatches(core, gregexpr("<strong>[^<]+</strong>", core))[[1]][1:8]
+     labs = unlist(purrr::map(rfiles, function(s) purrr::map_chr(unname(s$reflexes), function(r) if (is.na(r$label)) gsub("_", " ", r$id) else r$label)))
+     grepl("<summary>Show the AI reflexes</summary>", fold, fixed = TRUE) && !grepl("<details[^>]*open", fold) &&
+       n_in("<li>", fold) == n && n_in("<details class=\"ms-3\">", fold) == length(rfiles) &&
+       regexpr("Core (", fold, fixed = TRUE) < regexpr("Generate", fold, fixed = TRUE) &&
+       identical(gsub("</?strong>", "", first8), unname(purrr::map_chr(rfiles[["core.md"]]$reflexes[c("plain_words", "simple_syntax", "ambiguous_words",
+         "specific_concrete", "options_fit", "neutral_wording", "one_thing", "no_negation")], "label"))) &&
+       all(purrr::map_lgl(unique(labs), function(l) n_in(paste0("<strong>", htmltools::htmlEscape(l), "</strong>"), fold) == sum(labs == l))) &&
+       grepl("<a href=\"reflex_materials/yan_s1_fundamentals.md\" target=\"_blank\">Yan, IASS/WSS Session 1</a>", fold, fixed = TRUE)
    }))

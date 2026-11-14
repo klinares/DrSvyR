@@ -436,19 +436,3 @@ build_step_prompt <- function(form, step, part = NULL, message = NULL, draft = N
 
 # A draft's prompt.
 build_prompt <- function(form) build_step_prompt(form, "draft")
-
-
-# ---- the reflex table on the Methodology page -------------------------------------------
-
-# One row per reflex: the file's title, its Label (its id in words when it has none), and its Source
-#   line ("" when there is none), read from the files as the prompts are, so it cannot drift from them.
-reflexes_table <- function(dir = REFLEXES_DIR) {
-  rows = unlist(purrr::map(REFLEX_FILES, function(f) {
-    s = read_reflex_file(f, dir)
-    purrr::map(unname(s$reflexes), function(r)
-      list(file = s$title, label = if (is.na(r$label)) gsub("_", " ", r$id) else r$label,
-           source = if (is.na(r$source)) "" else r$source))
-  }), recursive = FALSE)
-  data.frame(file = purrr::map_chr(rows, "file"), label = purrr::map_chr(rows, "label"),
-             source = purrr::map_chr(rows, "source"), stringsAsFactors = FALSE)
-}

@@ -26,7 +26,7 @@ prompt from them, so the same form gives the same prompt. **It is not a pretest.
 | `app.R` | The settings, the profiles, the packages check, the layout and the server |
 | `R/` | `reflexes.R` reads the reflex files and builds prompts; `llm.R` calls the models and holds the key box; `review.R` checks replies, splits a questionnaire, builds the bottom line and runs a review or a Write run; `ui.R` draws the tabs, the results and the Word copy |
 | `www/reflexes/` | The reflex files. Plain text; `www/reflexes/README.md` has the format |
-| `www/start.md`, `www/methodology.md`, `www/*.svg` | Start here and the Methodology page, and their figures |
+| `www/start.md`, `www/methodology.md`, `www/gold_summary.md`, `www/*.svg` | Start here and the Methodology page (its test paragraph is written by `tests/gold_test.R`), and their figures |
 | `www/reflex_materials/` | The materials the reflexes were drawn from: the PDFs (not deployed), a markdown copy of each (deployed, linked from Methodology) and `sources.csv` |
 | `www/logo/` | The office logo, if you add one |
 | `tests/` | The tests, at home. Not needed to run it |
@@ -130,7 +130,7 @@ parts four at a time inside the one R process, which is busy until they finish.
 Add a `### id` block to a reflex file with its `When`, `Say` and, if wanted, `Never`, `Check`,
 `Label`, `Applies` and `Source` lines (`www/reflexes/README.md`). A rule with a `Check` line is on
 the checklist a review cites. The reflex files are checksummed in `tests/smoke.R`, so a change
-there is deliberate; the Methodology table reads them as they are.
+there is deliberate; the Methodology page lists them as they are.
 
 ## At home: the tests
 
