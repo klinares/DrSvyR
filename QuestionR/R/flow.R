@@ -86,30 +86,14 @@ with_call <- function(x, call) {
 
 # A prompt that could not be built (a form with no research question, say) is
 #   reported like any other failure, not raised.
-step_prompt <- function(form, step, candidates = NULL, part = NULL)
-  tryCatch(build_step_prompt(form, step, candidates, part), error = function(e) e)
-
-
-# ---- the brief check -------------------------------------------------------------
-
-# The project manager reads the form and says what is missing. Fields: status
-#   ("ok" or "failed"), error, system, user, hash, reply (the parsed brief check).
-run_brief <- function(form, pm, ask = llm_json) {
-  p = step_prompt(form, "brief")
-  if (inherits(p, "error"))
-    return(list(status = "failed", error = conditionMessage(p), system = NA_character_,
-                user = NA_character_, hash = NA_character_, reply = NULL))
-  r = call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["brief"]],
-                 reply_validator("brief"), "brief")
-  with_call(list(status = r$status, error = r$error, system = p$system, user = p$user,
-                 hash = p$hash, reply = r$reply), r$call)
-}
+step_prompt <- function(form, step, part = NULL)
+  tryCatch(build_step_prompt(form, step, part), error = function(e) e)
 
 
 # ---- the review --------------------------------------------------------------------
 
-# The Evaluate task: the project manager reviews the pasted questionnaire with the
-#   CHECKLIST of the files in force. No worker is called. Same shape as run_brief:
+# The Evaluate task: the model reviews the pasted questionnaire with the
+#   CHECKLIST of the files in force. Fields:
 #   status, error, system, user, hash, reply (the parsed review), and batches.
 #
 #   A questionnaire that fits one call (APP_BATCH_CHARS) is reviewed in one call, with
@@ -131,7 +115,7 @@ run_brief <- function(form, pm, ask = llm_json) {
 #   sent in a one-call review; it is kept as the result's attribute "prompt".
 REVIEW_AT_ONCE <- 4L
 
-run_review <- function(form, pm, ask = llm_json, prompt = NULL, progress = function(msg) NULL,
+run_review <- function(form, m, ask = llm_json, prompt = NULL, progress = function(msg) NULL,
                        ask_all = ask_all_for(ask)) {
   p = step_prompt(form, "work")
   failed = function(why)
@@ -140,7 +124,7 @@ run_review <- function(form, pm, ask = llm_json, prompt = NULL, progress = funct
   if (inherits(p, "error")) return(failed(conditionMessage(p)))
   f = clean_form(form)
   if (TASKS[[f$task]]$kind != "review")
-    return(failed("Only a review task is reviewed by the project manager."))
+    return(failed("Only a review task is reviewed by the model."))
   plan = tryCatch(review_plan(f$questionnaire, APP_BATCH_CHARS), error = function(e) e)
   if (inherits(plan, "error")) return(failed(conditionMessage(plan)))
   if (!is.null(prompt) && (!is.list(prompt) || !is.character(prompt$system) || !is.character(prompt$user)))
@@ -148,12 +132,12 @@ run_review <- function(form, pm, ask = llm_json, prompt = NULL, progress = funct
 
   if (length(plan) == 1L) {
     # The prompt the analyst approved, which is the assembled one unless they edited
-    #   it, as in run_drafts().
+    #   it, as in run_draft().
     if (!is.null(prompt)) {
       p = prompt
       p$hash = p$hash %||% prompt_hash(p$system, p$user)
     }
-    batch = review_call(ask, pm, p, plan[[1]], progress)
+    batch = review_call(ask, m, p, plan[[1]], progress)
     out = review_result(p$system, list(batch), p)
     if (!is.null(prompt)) attr(out, "prompt") <- prompt
     return(out)
@@ -163,21 +147,21 @@ run_review <- function(form, pm, ask = llm_json, prompt = NULL, progress = funct
          "this one is reviewed in ", length(plan) - 1L, " parts.", call. = FALSE)
   parts = plan[-length(plan)]
   together = unlist(purrr::map(unname(split(parts, ceiling(seq_along(parts) / REVIEW_AT_ONCE))),
-                               function(chunk) review_together(ask_all, pm, f, chunk, progress)), recursive = FALSE)
+                               function(chunk) review_together(ask_all, m, f, chunk, progress)), recursive = FALSE)
   spec = plan[[length(plan)]]
-  instrument = review_call(ask, pm, step_prompt(f, "instrument", part = spec), spec, progress)
+  instrument = review_call(ask, m, step_prompt(f, "instrument", part = spec), spec, progress)
   review_result(p$system, c(together, list(instrument)))
 }
 
 # The same review with one call run again, for a part that failed: index is the
 #   place of that call in rv$batches. The other calls are kept as they were.
-rerun_review_part <- function(form, pm, rv, index, ask = llm_json, progress = function(msg) NULL) {
+rerun_review_part <- function(form, m, rv, index, ask = llm_json, progress = function(msg) NULL) {
   f = clean_form(form)
   plan = review_plan(f$questionnaire, APP_BATCH_CHARS)
   if (length(plan) < 2L || length(plan) != length(rv$batches) || index < 1L || index > length(plan))
     stop("There is no part ", index, " to run again.", call. = FALSE)
   spec = plan[[index]]
-  batch = review_call(ask, pm, step_prompt(f, spec$kind, part = spec), spec, progress)
+  batch = review_call(ask, m, step_prompt(f, spec$kind, part = spec), spec, progress)
   batch$rerun = TRUE
   review_result(rv$system, replace(rv$batches, index, list(batch)))
 }
@@ -198,26 +182,26 @@ review_record <- function(spec, p, r) {
 }
 
 # One call of a review, by `ask`. p is the prompt (or the error that building it gave).
-review_call <- function(ask, pm, p, spec, progress) {
+review_call <- function(ask, m, p, spec, progress) {
   if (inherits(p, "error")) return(review_record(spec, p, NULL))
   progress(switch(spec$kind,
                   all = "Reviewing the questionnaire",
                   items = paste0("Reviewing part ", spec$k, " of ", spec$n),
                   instrument = "Reviewing the questionnaire as a whole"))
-  review_record(spec, p, call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["evaluate"]],
+  review_record(spec, p, call_model(ask, p$user, m, p$system, LLM_MAX_TOKENS[["evaluate"]],
                                     reply_validator("review"), "evaluate"))
 }
 
 # Some parts of a review sent together, by `ask_all`; a part whose prompt cannot be built is a
 #   failed record and is not sent. Returns the records in the parts' order.
-review_together <- function(ask_all, pm, f, chunk, progress) {
+review_together <- function(ask_all, m, f, chunk, progress) {
   prompts = purrr::map(chunk, function(spec) step_prompt(f, "items", part = spec))
   sendable = !purrr::map_lgl(prompts, function(p) inherits(p, "error"))
   progress(if (length(chunk) == 1L) paste0("Reviewing part ", chunk[[1]]$k, " of ", chunk[[1]]$n)
            else paste0("Reviewing parts ", chunk[[1]]$k, " to ", chunk[[length(chunk)]]$k, " of ", chunk[[1]]$n, " together"))
   results = rep(list(NULL), length(chunk))
   results[sendable] = call_all(ask_all, purrr::map(prompts[sendable], function(p)
-    list(user = p$user, m = pm, system_prompt = p$system, max_tokens = LLM_MAX_TOKENS[["evaluate"]],
+    list(user = p$user, m = m, system_prompt = p$system, max_tokens = LLM_MAX_TOKENS[["evaluate"]],
          validate = reply_validator("review"))), "evaluate")
   purrr::pmap(list(chunk, prompts, results), review_record)
 }
@@ -256,101 +240,22 @@ review_result <- function(system, batches, p = NULL) {
 }
 
 
-# ---- the workers -------------------------------------------------------------------
+# ---- the draft -------------------------------------------------------------------
 
-# Each worker gets the same prompt, all sent together (ask_all). prompt is the approved
-#   prompt, which is the assembled one unless the analyst edited it. Returns an
-#   unnamed list with exactly one entry per worker, in the workers' order, each
-#   model (the id), status, error, reply (the parsed draft) and seconds. A
-#   worker that errors, or whose reply has the wrong shape or the wrong number of
-#   items, is recorded as failed and the run goes on. The prompt used is the
-#   list's attribute "prompt".
-run_drafts <- function(form, workers, ask = llm_json, prompt = build_prompt(form),
-                       ask_all = ask_all_for(ask)) {
+# The model drafts the items with the approved prompt (the assembled one unless the
+#   analyst edited it). Fields: status, error, reply (the parsed draft); the call record
+#   is the attribute "call" and the prompt the attribute "prompt". A reply with the wrong
+#   shape or the wrong number of items is retried by llm_json() and then recorded as failed.
+run_draft <- function(form, m, ask = llm_json, prompt = build_prompt(form)) {
   if (!is.list(prompt) || !is.character(prompt$system) || !is.character(prompt$user))
     stop("prompt must be a list with a system and a user string.", call. = FALSE)
   f = clean_form(form)
   if (TASKS[[f$task]]$kind != "draft")
-    stop("Only a drafting task is run by the workers.", call. = FALSE)
-  validate = reply_validator("draft", n_items = f$n_items)
-  results = call_all(ask_all, purrr::map(unname(workers), function(m)
-    list(user = prompt$user, m = m, system_prompt = prompt$system, max_tokens = LLM_MAX_TOKENS[["draft"]],
-         validate = validate)), "draft")
-  drafts = purrr::map2(unname(workers), results, function(m, r)
-    with_call(list(model = m$id, status = r$status, error = r$error, reply = r$reply,
-                   seconds = r$call$seconds), r$call))
-  structure(drafts, prompt = prompt)
-}
-
-
-# ---- blind labels ------------------------------------------------------------------------
-
-# The order the successful drafts take once shuffled by the seed. A hash of the
-#   seed and the position decides it: the same seed always gives the same order, on
-#   any machine and any R version, and the generator's own seed is not touched.
-shuffle_order <- function(n, models, seed) {
-  keys = purrr::map_chr(seq_len(n), function(i)
-    digest::digest(paste(seed, i, models[i], sep = "|"), algo = "sha256", serialize = FALSE))
-  order(keys, method = "radix")
-}
-
-# The drafts that arrived, in the order the seed gives them, and the letters they
-#   are known by: letter -> parsed draft. Only drafts with status "ok".
-candidates_of <- function(drafts, seed) {
-  drafts = purrr::keep(unname(as.list(drafts)), function(d) identical(d$status, "ok"))
-  ord = shuffle_order(length(drafts), purrr::map_chr(drafts, "model"), seed)
-  purrr::set_names(purrr::map(drafts[ord], "reply"), LETTERS[seq_along(ord)])
-}
-
-# Candidate letter -> model id, in the same order. This is what the analyst sees;
-#   the appraiser never does.
-labels_of <- function(drafts, seed) {
-  drafts = purrr::keep(unname(as.list(drafts)), function(d) identical(d$status, "ok"))
-  ord = shuffle_order(length(drafts), purrr::map_chr(drafts, "model"), seed)
-  purrr::set_names(purrr::map_chr(drafts[ord], "model"), LETTERS[seq_along(ord)])
-}
-
-# A model's id, and the part after its vendor's slash, found in a prompt. The
-#   appraisal must be blind, so one that would not be is not sent.
-model_names_in <- function(text, ids) {
-  candidates = unique(c(ids, sub("^.*/", "", ids)))
-  candidates = candidates[nchar(candidates) >= 4L]
-  candidates[purrr::map_lgl(candidates, function(n) grepl(tolower(n), tolower(text), fixed = TRUE))]
-}
-
-
-# ---- the appraisal --------------------------------------------------------------------------
-
-# The project manager reviews the drafts that arrived, relabelled A, B, C in an order the
-#   seed gives, so it does not know which model wrote which, and recommends one item per
-#   domain, by candidate letter and item id (check_appraisal() finds each in its draft).
-#   Fields: status, error, labels (letter -> model id, only for drafts with status "ok"),
-#   system, user, hash, reply. seed is stored in the log, with the labels.
-run_appraisal <- function(form, drafts, pm, ask = llm_json, seed) {
-  if (missing(seed) || length(seed) != 1L || is.na(seed))
-    stop("run_appraisal needs a seed, one number, so the labels can be reproduced.", call. = FALSE)
-  labels = labels_of(drafts, seed)
-  failed = function(why, p = NULL)
-    list(status = "failed", error = why, labels = labels,
-         system = p$system %||% NA_character_, user = p$user %||% NA_character_,
-         hash = p$hash %||% NA_character_, reply = NULL)
-
-  if (!length(labels)) return(failed("No draft arrived, so there is nothing to appraise."))
-  p = step_prompt(form, "appraise", candidates_of(drafts, seed))
-  if (inherits(p, "error")) return(failed(conditionMessage(p)))
-
-  ids = c(pm$id, purrr::map_chr(unname(as.list(drafts)), "model"))
-  leaked = model_names_in(paste(p$system, p$user), ids)
-  if (length(leaked))
-    return(failed(paste0("A model's name (", paste(leaked, collapse = ", "), ") is in the ",
-                         "appraisal prompt, so it was not sent: the appraisal must not ",
-                         "know who wrote which candidate."), p))
-
-  r = call_model(ask, p$user, pm, p$system, LLM_MAX_TOKENS[["appraisal"]],
-                 reply_validator("appraisal", candidates = candidates_of(drafts, seed),
-                                 n_items = clean_form(form)$n_items), "appraisal")
-  with_call(list(status = r$status, error = r$error, labels = labels, system = p$system,
-                 user = p$user, hash = p$hash, reply = r$reply), r$call)
+    stop("Only a drafting task is drafted.", call. = FALSE)
+  r = call_model(ask, prompt$user, m, prompt$system, LLM_MAX_TOKENS[["draft"]],
+                 reply_validator("draft", n_items = f$n_items), "draft")
+  structure(with_call(list(status = r$status, error = r$error, reply = r$reply), r$call),
+            prompt = prompt)
 }
 
 
@@ -358,27 +263,18 @@ run_appraisal <- function(form, drafts, pm, ask = llm_json, seed) {
 
 # One row per model call of a round: what ran, how it ended, how long, and what it
 #   cost in tokens. First in the log, so it can be read without scrolling.
-flow_summary <- function(brief = NULL, drafts = NULL, appraisal = NULL, pm = NULL, review = NULL) {
-  row = function(step, model, x) {
-    cl = attr(x, "call")
-    list(step = step, model = model, status = x$status, seconds = cl$seconds %||% NA_real_,
-         finish = cl$finish %||% NA_character_, attempts = cl$attempts %||% NA_integer_,
-         tokens_in = cl$tokens$input %||% NA_real_, tokens_out = cl$tokens$output %||% NA_real_,
-         error = x$error %||% NA_character_)
-  }
-  c(if (!is.null(brief)) list(row("brief check", pm$id %||% NA_character_, brief)),
-    purrr::map(unname(as.list(drafts)), function(d) row("draft", d$model, d)),
-    if (!is.null(appraisal)) list(row("appraisal", pm$id %||% NA_character_, appraisal)),
-    if (!is.null(review) && length(review$batches) <= 1L)
-      list(row("review", pm$id %||% NA_character_, review)),
+flow_summary <- function(m, draft = NULL, review = NULL) {
+  row = function(step, x, cl = attr(x, "call") %||% x)
+    list(step = step, model = m$id %||% NA_character_, status = x$status,
+         seconds = cl$seconds %||% NA_real_, finish = cl$finish %||% NA_character_,
+         attempts = cl$attempts %||% NA_integer_, tokens_in = cl$tokens$input %||% NA_real_,
+         tokens_out = cl$tokens$output %||% NA_real_, error = x$error %||% NA_character_)
+  c(if (!is.null(draft)) list(row("draft", draft)),
+    if (!is.null(review) && length(review$batches) <= 1L) list(row("review", review)),
     if (!is.null(review) && length(review$batches) > 1L)
       purrr::map(review$batches, function(b)
-        list(step = if (identical(b$kind, "instrument")) "review instrument"
-                    else paste0("review part ", b$part, " of ", b$n_parts),
-             model = pm$id %||% NA_character_, status = b$status, seconds = b$seconds %||% NA_real_,
-             finish = b$finish %||% NA_character_, attempts = b$attempts %||% NA_integer_,
-             tokens_in = b$tokens$input %||% NA_real_, tokens_out = b$tokens$output %||% NA_real_,
-             error = b$error %||% NA_character_)))
+        row(if (identical(b$kind, "instrument")) "review instrument"
+            else paste0("review part ", b$part, " of ", b$n_parts), b, b)))
 }
 
 # A result's call record, from its attribute into a field, so it reaches the log.
@@ -387,29 +283,15 @@ with_call_field <- function(x) {
   x
 }
 
-# A round, for the log: schema 1, the time, the form, then what each step returned.
-#   The project manager's key and every worker's key are never in these lists, and
-#   neither is a header: a call record holds no request. seed and the labels are
-#   in it, so the shuffle can be reproduced. analyst is what the analyst did with the
-#   result (the set, the edits, the final items): it is kept apart from the drafts, which
-#   stay as the workers wrote them.
-flow_round <- function(form, pm = NULL, brief = NULL, drafts = NULL, appraisal = NULL,
-                       seed = NA_integer_, analyst = NULL, time = Sys.time(), review = NULL) {
-  # JSON drops the names of a character vector, and the letters are the point of
-  #   labels: letter -> model id, as a named list, keeps them.
-  if (!is.null(appraisal)) appraisal$labels = as.list(appraisal$labels)
-  brief = with_call_field(brief)
-  appraisal = with_call_field(appraisal)
-  review = with_call_field(review)
-  list(schema = 1L, time = format(time, "%Y-%m-%dT%H:%M:%S%z"),
-       summary = flow_summary(brief, drafts, appraisal, pm, review),
-       form = form, seed = seed, brief = brief, review = review,
-       prompt = attr(drafts, "prompt") %||% attr(review, "prompt"),
-       drafts = if (!is.null(drafts)) purrr::map(unname(as.list(drafts)), function(d) {
-         d$call = attr(d, "call")
-         d
-       }),
-       appraisal = appraisal, analyst = analyst)
+# A round, for the log: schema 2, the time, the form, the prompt as sent, then what the
+#   call or calls returned. The key is never in these lists, and neither is a header: a
+#   call record holds no request. analyst is what the analyst did with the result.
+flow_round <- function(form, m = APP_MODEL, draft = NULL, review = NULL, analyst = NULL,
+                       time = Sys.time()) {
+  list(schema = 2L, time = format(time, "%Y-%m-%dT%H:%M:%S%z"),
+       summary = flow_summary(m, draft, review), form = form,
+       prompt = attr(draft, "prompt") %||% attr(review, "prompt"),
+       draft = with_call_field(draft), review = with_call_field(review), analyst = analyst)
 }
 
 # The log as JSON text. Nothing is written to disk here.

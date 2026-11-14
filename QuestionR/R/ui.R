@@ -54,21 +54,19 @@ office_logo <- function(file, office = "") {
 
 # ---- Start here --------------------------------------------------------------
 
-# A model as the page names it: the id, the API style in words, where it is called and
-#   where its key comes from. Never the key itself.
+# The model as the page names it: the id, the API style in words and where it is called.
+#   Never the key.
 model_label <- function(m)
   tagList(tags$code(m$id), tags$br(),
           tags$span(class = "text-muted small",
                     paste0(switch(m$api %||% "", anthropic = "Anthropic API", openai = "OpenAI-style API",
                                   paste0("API '", m$api, "'")),
-                           " at ", m$base_url, "; ",
-                           if (identical(m$key_source, "analyst")) "key pasted below"
-                           else paste0("key from the server variable ", m$key_var))))
+                           " at ", m$base_url, "; key pasted below")))
 
 # What a review has been shown to do, in the words of the Methodology tab: the section "How it was
 #   tested" of www/methodology.md, with the result of the one test and its limits, copied as it
 #   stands (it is read from the file, so it cannot drift from it), and the model in force.
-pilot_notice <- function(path = METHODOLOGY_FILE, pm = APP_MODELS$pm) {
+pilot_notice <- function(path = METHODOLOGY_FILE, m = APP_MODEL) {
   txt = tryCatch(readLines(path, encoding = "UTF-8", warn = FALSE), error = function(e) character(0))
   at = grep("^## How it was tested", txt)
   rest = if (length(at)) txt[-seq_len(at[[1]])]
@@ -79,19 +77,18 @@ pilot_notice <- function(path = METHODOLOGY_FILE, pm = APP_MODELS$pm) {
     "Methodology tab says of it:",
     if (nzchar(section)) HTML(shiny::markdown(section))
     else tags$p("(The Methodology tab's account of the test could not be read.)"),
-    tags$p(paste0("The project manager model in force here is ", pm$id, "; that test used claude-sonnet-5-5.")))
+    tags$p(paste0("The model in force here is ", m$id, "; that test used claude-sonnet-5-5.")))
 }
 
 # A profile that still holds <placeholders> (the work profile before it is filled in) says which
 #   entries to fill in, and nothing else about it fails.
-placeholder_notice <- function(ms = llm_models()) {
-  bad = purrr::keep(ms, function(x) length(llm_placeholders(x$m)) > 0L)
+placeholder_notice <- function(m = APP_MODEL) {
+  bad = llm_placeholders(m)
   if (!length(bad)) return(NULL)
   warn_box(
     tags$strong(paste0("The ", APP_PROFILE, " profile still has placeholders to fill in. ")),
-    "Open app.R, section 1, and replace each <placeholder> (README.md, Setting up at work). Still to fill in:",
-    tags$ul(class = "mb-0", purrr::map(bad, function(x)
-      tags$li(paste0(x$role, " (", x$m$id, "): ", paste(llm_placeholders(x$m), collapse = ", "))))))
+    "Open app.R, section 1, and replace each <placeholder> (README.md, Setting up at work). Still to fill in: ",
+    paste(bad, collapse = ", "), ".")
 }
 
 # Start here: the welcome in www/start.md as it is, then the key box, then, closed, the settings in
@@ -119,22 +116,19 @@ start_ui <- function() {
       mod_connect_ui("connect")))
 }
 
-# The models, and whether each has a key; and a button that makes one very small
-#   call to each. Never shows a key. A model with no key is not called: it says
-#   what is missing. The calls run one after another, and that R process is busy
-#   until they finish. ping is the function that calls one model, so a test can
-#   stand in for the network.
+# The model, and whether it has a key; and a button that makes one very small call to it. Never
+#   shows a key. With no key it is not called: it says what is missing. ping is the function that
+#   calls the model, so a test can stand in for the network.
 mod_connect_ui <- function(id) {
   ns <- NS(id)
   tagList(
     tags$hr(),
-    tags$h4("Models"),
+    tags$h4("Model"),
     uiOutput(ns("models")),
-    actionButton(ns("check"), "Check connections"),
+    actionButton(ns("check"), "Check the connection"),
     tags$p(class = "text-muted small mt-2",
-           "Makes one very small call to each model that has a key, and shows ",
-           "whether it answered or what the endpoint said. Nothing you have ",
-           "entered is sent."),
+           "Makes one very small call to the model, and shows whether it answered ",
+           "or what the endpoint said. Nothing you have entered is sent."),
     uiOutput(ns("result")))
 }
 
@@ -143,31 +137,19 @@ mod_connect_server <- function(id, state, ping = llm_ping) {
     results <- reactiveVal(NULL)
 
     output$models <- renderUI({
-      state$key_version   # a key pasted or forgotten changes who is ready
-      tags$table(
-        class = "table table-sm",
-        tags$thead(tags$tr(tags$th("Role"), tags$th("Model"), tags$th("Key"))),
-        tags$tbody(purrr::map(llm_models(), function(x) {
-          ready = llm_key_ready(x$m)
-          tags$tr(tags$td(x$role), tags$td(model_label(x$m)),
-                  tags$td(if (length(llm_placeholders(x$m)))
-                            tags$span(class = "text-warning", "waits for the settings in app.R")
-                          else if (ready) tags$span(class = "text-success", "ready")
-                          else tagList(tags$span(class = "text-warning", "waits for a key"),
-                                       tags$br(),
-                                       tags$span(class = "text-muted small", llm_key_hint(x$m)))))
-        })))
+      state$key_version   # a key pasted or forgotten changes whether it is ready
+      m = APP_MODEL
+      tags$p(model_label(m), tags$br(),
+             if (length(llm_placeholders(m))) tags$span(class = "text-warning", "Waits for the settings in app.R.")
+             else if (llm_key_ready(m)) tags$span(class = "text-success", "Ready.")
+             else tags$span(class = "text-warning", paste("Waits for a key.", KEY_HINT)))
     })
 
     observeEvent(input$check, {
-      ms <- llm_models()
-      withProgress(message = "Checking connections", value = 0, {
-        out <- purrr::map(ms, function(x) {
-          incProgress(1 / length(ms), detail = x$m$id)
-          r <- if (llm_key_ready(x$m)) ping(x$m) else llm_ping(x$m)
-          c(list(role = x$role, model = x$m$id), r)
-        })
-        results(out)
+      m <- APP_MODEL
+      withProgress(message = "Checking the connection", value = 0.5, {
+        r <- if (llm_key_ready(m)) ping(m) else llm_ping(m)
+        results(list(c(list(model = m$id), r)))
       })
     })
 

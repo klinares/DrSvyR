@@ -44,7 +44,7 @@ md_page <- function(path)
 
 # The reflex files in the order of the table on the Methodology page.
 REFLEX_PANEL_ORDER <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md", "sensitive.md",
-                       "mode.md", "evaluate.md", "pm_brief.md", "pm_appraise.md")
+                       "mode.md", "evaluate.md")
 
 # One closed panel for each reflex file, under the Methodology page: the file's title and version, and
 #   on opening the file as markdown with its HTML comments removed. It is read by read_reflex_file(), the
@@ -99,34 +99,16 @@ doc_text <- function(blocks) {
 }
 
 
-# ---- the analyst's set -------------------------------------------------------------------------
+# ---- the drafted items, as the analyst has them ---------------------------------------------
 
-# What the reviewer recommended, and what the analyst does with it, is kept in the session
-#   state and the run log, never in the drafts: the drafts stay as the workers wrote them.
-#   state$set is a list of entries (set_entry()), one per item in the set, in the order asked:
-#   the candidate letter, the item's position in that candidate's draft, its id and domain, the
-#   reviewer's reason and concerns, and whether the analyst swapped it in. state$edits holds
-#   only what the analyst changed, by the entry's uid (the letter and the position).
-set_entry <- function(candidate, position, id, domain = "", check = "", swapped = FALSE)
-  list(uid = paste0(candidate, "_", position), candidate = candidate, position = position, id = id,
-       domain = domain, check = check, swapped = swapped)
+# state$items is the draft's items, each with every field (full_item()) and a uid, its place in the
+#   draft, in the order shown; state$edits holds only what the analyst changed, by uid. The draft
+#   itself stays as the model wrote it.
+draft_items <- function(reply)
+  purrr::imap(unname(reply$items %||% list()), function(it, i) c(full_item(it), list(uid = as.character(i))))
 
-# The set as the reviewer recommended it (check_appraisal()'s `selected`).
-initial_set <- function(chk)
-  purrr::map(chk$selected, function(e)
-    set_entry(e$candidate, e$position, e$id, e$domain, e$check))
-# An item from a draft put in the set: in place of the entry whose uid is `target`, or at the
-#   end when there is none. An item that is already in the set is not put in twice.
-set_swap <- function(set, entry, target = NULL) {
-  uids = purrr::map_chr(set, "uid")
-  at = match(target %||% "", uids)
-  if (entry$uid %in% uids) set
-  else if (is.na(at)) c(set, list(entry))
-  else replace(set, at, list(entry))
-}
-
-# An item taken out of the set.
-set_remove <- function(set, uid) purrr::discard(set, function(e) identical(e$uid, uid))
+# An item taken out.
+item_remove <- function(items, uid) purrr::discard(items, function(it) identical(it$uid, uid))
 
 # An item with the analyst's changes put on it. edits holds only what changed: `stem` and `options`
 #   (a list of new texts by the option's number). An option whose text is cleared is taken out.
@@ -142,39 +124,27 @@ apply_edits <- function(it, ed) {
   it
 }
 
-# What the analyst changed, read from the boxes on the page: for each entry of the set, the fields
-#   whose text is no longer the draft's. get(id) gives what is in the box with that input id, or
-#   NULL; the box ids are made by edit_input_id(). An entry with no change has no entry in the result.
+# What the analyst changed, read from the boxes on the page: for each item, the fields whose text is
+#   no longer the draft's. get(id) gives what is in the box with that input id, or NULL; the box ids
+#   are made by edit_input_id(). An item with no change has no entry in the result.
 edit_input_id <- function(uid, ...) paste(c("ed", uid, ...), collapse = "_")
 
-edits_from_inputs <- function(set, drafts, seed, get) {
-  cands = candidates_of(drafts, seed)
+edits_from_inputs <- function(items, get) {
   text_of = function(o) paste(unlist(o), collapse = " ")
   changed = function(id, old) { v = get(id); if (!is.null(v) && !identical(v, old)) v }
-  out = purrr::map(set, function(e) {
-    it = full_item(unname(cands[[e$candidate]]$items)[[e$position]])
-    new = purrr::imap(purrr::map_chr(it$options, text_of), function(o, j) changed(edit_input_id(e$uid, paste0("o", j)), o))
+  out = purrr::map(items, function(it) {
+    new = purrr::imap(purrr::map_chr(it$options, text_of), function(o, j) changed(edit_input_id(it$uid, paste0("o", j)), o))
     opts = purrr::set_names(new, seq_along(new))[!purrr::map_lgl(new, is.null)]
-    ed = purrr::compact(list(stem = changed(edit_input_id(e$uid, "stem"), it$stem),
+    ed = purrr::compact(list(stem = changed(edit_input_id(it$uid, "stem"), it$stem),
                              options = if (length(opts)) opts))
     if (length(ed)) ed
   })
-  purrr::compact(purrr::set_names(out, purrr::map_chr(set, "uid")))
+  purrr::compact(purrr::set_names(out, purrr::map_chr(items, "uid")))
 }
-# The set as the analyst left it: for each entry the candidate, the model behind that letter (which
-#   Results shows), the item with the changes put on it, and whether it was swapped in or edited. An
-#   entry that no longer points at an item is dropped, not guessed at.
-final_set <- function(set, edits, drafts, seed) {
-  cands = candidates_of(drafts, seed)
-  labels = labels_of(drafts, seed)
-  purrr::compact(purrr::map(set, function(e) {
-    items = unname(cands[[e$candidate]]$items)
-    if (is.null(items) || e$position > length(items)) return(NULL)
-    list(candidate = e$candidate, model = labels[[e$candidate]], position = e$position, uid = e$uid,
-         domain = e$domain, check = e$check %||% "", swapped = isTRUE(e$swapped), edited = !is.null(edits[[e$uid]]),
-         item = apply_edits(full_item(items[[e$position]]), edits[[e$uid]]))
-  }))
-}
+
+# The items as the analyst left them, each with the changes put on it and `edited`.
+final_items <- function(items, edits)
+  purrr::map(items, function(it) c(apply_edits(it, edits[[it$uid]]), list(edited = !is.null(edits[[it$uid]]))))
 
 # ---- what is shown: the result, short (DESIGN.md section 18) ---------------------------------------
 
@@ -194,10 +164,10 @@ item_blocks <- function(it, i, check = "") {
     if (nzchar(check)) list(blk_p(paste(CHECK_LABEL, check), em = TRUE)))
 }
 
-# The drafted questions of the set as the analyst left it (final_set()), under the one sentence.
+# The drafted questions as the analyst left them (final_items()), under the one sentence.
 draft_blocks <- function(chosen)
   c(list(blk_p(RESULT_NOTICE, em = TRUE)),
-    unlist(purrr::imap(chosen, function(k, i) item_blocks(k$item, i, k$check)), recursive = FALSE))
+    unlist(purrr::imap(chosen, function(it, i) item_blocks(it, i)), recursive = FALSE))
 
 
 # ---- a review ------------------------------------------------------------------------------------
@@ -230,66 +200,32 @@ review_blocks <- function(f, rv) {
 
 # ---- the disclosure block ----------------------------------------------------------------------
 
-DISCLOSURE_LINE <- paste("Expert-review appraisal and first drafts by language models.",
+DISCLOSURE_LINE <- paste("Expert-review appraisal and first drafts by a language model.",
                          "Not a pretest. Test with real respondents before fielding.")
-
-# The reflex files a flow used, and their versions: the task's files for the work step (and
-#   pm_appraise.md for the appraisal and pm_brief.md
-#   when the brief was checked.
-reflex_files_used <- function(f, brief_ran = FALSE) {
-  unique(c(step_files(f$task, "work"),
-           if (TASKS[[f$task]]$kind == "draft") "pm_appraise.md",
-           if (brief_ran) "pm_brief.md"))
-}
 
 # A model as the endpoint names it: its id, and the host that served it.
 model_text <- function(m) paste0(m$id, " (", llm_host(m), ")")
 
-# The disclosure block, as blocks: the date, the profile, each model id, each reflex file's version,
-#   the hash of each prompt and whether it was edited, which candidate each item of the set came from
-#   and whether the analyst edited it or swapped it in, and the line that says what this is. chosen is
-#   final_set(); brief, approved, appraisal and review are what the run returned, any of them NULL.
-disclosure_blocks <- function(f, chosen = list(), drafts = NULL, appraisal = NULL, review = NULL,
-                              brief = NULL, approved = NULL, profile = APP_PROFILE, models = APP_MODELS,
+# The disclosure block, as blocks: the date, the profile, the model, each reflex file's version, and
+#   the hash of each prompt sent. approved is the approved prompt (its hash, and whether it was
+#   edited); review is run_review()'s result, whose parts each have their own hash.
+disclosure_blocks <- function(f, approved = NULL, review = NULL, profile = APP_PROFILE, m = APP_MODEL,
                               time = Sys.time(), dir = REFLEXES_DIR) {
-  draft = TASKS[[f$task]]$kind == "draft"
-  brief_ran = is.list(brief) && identical(brief$status, "ok")
-  files = reflex_files_used(f, brief_ran)
+  files = step_files(f$task, "work")
   versions = purrr::map_chr(files, function(x) paste0(x, " ", read_reflex_file(x, dir)$version))
-  hash = function(label, h) if (!is.null(h) && !is.na(h)) paste0(label, ": ", h)
-  used = purrr::map_chr(purrr::keep(unname(as.list(drafts)), function(d) identical(d$status, "ok")), "model")
-  asked = purrr::map_chr(unname(as.list(drafts)), "model")
-  prompt_lines = c(
-    if (brief_ran) hash("Brief check prompt", brief$hash),
-    if (draft && !is.null(approved)) hash(if (isTRUE(approved$edited)) "Drafting prompt as sent (edited by the analyst)"
-                                          else "Drafting prompt (not edited)", approved$hash),
-    if (draft && isTRUE(approved$edited)) hash("Drafting prompt as assembled", approved$original_hash),
-    if (draft && !is.null(appraisal)) hash("Appraisal prompt", appraisal$hash),
-    if (!draft && length(review$batches) <= 1L && !is.null(review))
-      hash(if (isTRUE(approved$edited)) "Review prompt as sent (edited by the analyst)" else "Review prompt (not edited)",
-           review$hash),
-    if (!draft && isTRUE(approved$edited) && length(review$batches) <= 1L)
-      hash("Review prompt as assembled", approved$original_hash),
-    if (!draft && length(review$batches) > 1L)
-      unlist(purrr::map(review$batches, function(b) hash(if (identical(b$kind, "instrument")) "Review prompt, instrument as a whole"
-                                                         else paste0("Review prompt, part ", b$part, " of ", b$n_parts), b$hash))))
-  from = purrr::map_chr(seq_along(chosen), function(i)
-    paste0("Item ", i, " (", chosen[[i]]$item$id, "): candidate ", chosen[[i]]$candidate, ", written by ",
-           chosen[[i]]$model, if (chosen[[i]]$swapped) "; swapped in by the analyst, not the reviewer's choice",
-           if (chosen[[i]]$edited) "; edited by the analyst"))
-  c(list(blk_h("Disclosure of the use of language models", 2L),
-         blk_list(c(
-           paste0("Date: ", format(time, "%Y-%m-%d %H:%M")),
-           paste0("Profile: ", profile),
-           paste0("Project manager model: ", model_text(models$pm)),
-           if (draft && length(used)) paste0("Worker models that drafted: ",
-                                             paste(purrr::map_chr(purrr::keep(models$workers, function(m) m$id %in% used), model_text),
-                                                   collapse = "; ")),
-           if (draft && length(setdiff(asked, used))) paste0("Worker models asked that returned no usable draft: ",
-                                                             paste(setdiff(asked, used), collapse = ", ")),
-           paste0("Reflex files and versions: ", paste(versions, collapse = "; ")),
-           prompt_lines,
-           if (length(from)) from))),
+  hashes = if (length(review$batches) > 1L)
+    purrr::map_chr(review$batches, function(b)
+      paste0(if (identical(b$kind, "instrument")) "Prompt, instrument as a whole" else paste0("Prompt, part ", b$part, " of ", b$n_parts),
+             ": ", b$hash))
+  else if (!is.null(approved))
+    c(paste0(if (isTRUE(approved$edited)) "Prompt as sent (edited by the analyst): " else "Prompt (not edited): ", approved$hash),
+      if (isTRUE(approved$edited)) paste0("Prompt as assembled: ", approved$original_hash))
+  c(list(blk_h("Disclosure of the use of a language model", 2L),
+         blk_list(c(paste0("Date: ", format(time, "%Y-%m-%d %H:%M")),
+                    paste0("Profile: ", profile),
+                    paste0("Model: ", model_text(m)),
+                    paste0("Reflex files and versions: ", paste(versions, collapse = "; ")),
+                    hashes))),
     list(blk_p(DISCLOSURE_LINE)))
 }
 
@@ -309,21 +245,19 @@ output_footer <- function(time = Sys.time())
 # The output of one flow, as a list: `kind` ("draft" or "review"), `blocks` (what is on screen, then
 #   the three lines), `html` (plain HTML for Word), `text` (the same, as plain text), `screen_text` (the
 #   text of what is on screen, without the three lines) and `n_items`. A drafting flow's output is the
-#   set as the analyst left it (final_set()); a review's is the review. With nothing to show, the output
+#   items as the analyst left them (final_items()); a review's is the review. With nothing to show, the output
 #   says so and has no three lines. Everything else (prompts, models, hashes, every draft, the full
 #   reply) is in the record (disclosure_blocks(), run_log_json()), not here. f is the cleaned form.
-build_output <- function(f, drafts = NULL, seed = NULL, set = list(), edits = list(), review = NULL,
-                         time = Sys.time()) {
+build_output <- function(f, items = list(), edits = list(), review = NULL, time = Sys.time()) {
   kind = TASKS[[f$task]]$kind
   if (kind == "review") {
     if (is.null(review) || is.null(review$reply))
       return(finish_output(kind, list(blk_p("There is no review to show. Run one on the Results tab.")), list(), 0L))
     return(finish_output(kind, review_blocks(f, review), output_footer(time), 0L))
   }
-  chosen = if (!is.null(drafts)) final_set(set, edits, drafts, seed) else list()
+  chosen = final_items(items, edits)
   if (!length(chosen))
-    return(finish_output(kind, list(blk_p(paste0("There is no item in the set yet. The Results tab shows the ",
-                                                 "recommended items, and you can add items from the drafts."))), list(), 0L))
+    return(finish_output(kind, list(blk_p("There is no drafted item to show.")), list(), 0L))
   finish_output(kind, draft_blocks(chosen), output_footer(time), length(chosen))
 }
 
@@ -337,10 +271,9 @@ finish_output <- function(kind, screen, footer, n_items) {
 
 # The keys this session could have used: the analyst's pasted key and any server key of the models,
 #   as strings, for scrub_secrets(). Nothing is ever written with a key in it.
-known_keys <- function(models = APP_MODELS) {
-  ks = purrr::map_chr(c(list(models$pm), models$workers), function(m)
-    tryCatch(llm_key_for(m) %||% "", error = function(e) ""))
-  unique(ks[nzchar(ks)])
+known_keys <- function() {
+  k = llm_session_key() %||% ""
+  k[nzchar(k)]
 }
 
 # Every occurrence of a key taken out of a text. A key shorter than eight characters is not a key and
@@ -352,9 +285,8 @@ scrub_secrets <- function(text, secrets) {
 
 # The full record of the session as JSON, one file (the "Download the full record" button): schema 1,
 #   the profile and time, the disclosure of the use of language models as text lines (models, reflex
-#   file versions, prompt hashes, which candidate each item came from), and every round as flow_round()
-#   made it (form, prompts and hashes, raw and parsed replies, the seed and the candidate-to-model map,
-#   and the analyst's set, edits and final items). It holds everything that is not on screen or in what
+#   file versions, prompt hashes), and every round as flow_round() made it (form, prompts and hashes,
+#   raw and parsed replies, and the analyst's edits and final items). It holds everything that is not on screen or in what
 #   is copied to Word, so the work stays defensible. Keys scrubbed.
 run_log_json <- function(rounds, profile = APP_PROFILE, time = Sys.time(), secrets = character(0),
                          disclosure = character(0))

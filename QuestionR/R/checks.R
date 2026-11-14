@@ -20,21 +20,11 @@
 #   use (an item's notes, programming, decisions) is read with a default, so a
 #   model that forgets one is not retried for it.
 REPLY_SCHEMAS <- list(
-  brief = list(
-    fields = c(complete = "logical", questions = "list", task_fit = "string", criteria = "list"),
-    each = list(questions = c(ask = "text", blocking = "logical")),
-    rules = character(0)),
   draft = list(
     fields = c(items = "list"),
     each = list(items = c(id = "text", domain = "text", stem = "text",
                           options = "list?", open_format = "string?")),
     rules = c("item_count", "options_or_open")),
-  # The reviewer's recommendation: which items, by candidate letter and id, and for each at most one
-  #   line to check before use (DESIGN.md section 18).
-  appraisal = list(
-    fields = c(selected = "list"),
-    each = list(selected = c(domain = "text", candidate = "text", id = "id", check_before_use = "string?")),
-    rules = c("selection_valid")),
   # A review of pasted text (the Evaluate task): for each question a verdict and, for Revise, up to
   #   two problems with a rewrite; and points about the questionnaire as a whole. A rule reads the
   #   problems, which sit one level further down than `each` reaches.
@@ -91,25 +81,6 @@ REPLY_RULES <- list(
     if (length(bad))
       paste0("Item ", paste(purrr::map_chr(bad, function(it) it$id %||% "?"), collapse = ", "),
              " has neither options nor an open_format.")
-  },
-  # The recommendation names items that are in the drafts, none twice, and no more than were
-  #   asked for. candidates is the drafts by letter, n_items the number asked for.
-  selection_valid = function(obj, candidates = NULL, n_items = NULL, ...) {
-    sel = obj$selected
-    label = function(e) paste0("item ", e$id, " of candidate ", e$candidate)
-    keys = purrr::map_chr(sel, function(e) paste(e$candidate, as.character(e$id), sep = "|"))
-    unknown = if (!is.null(candidates)) purrr::keep(sel, function(e)
-      !as.character(e$id) %in% purrr::map_chr(candidates[[as.character(e$candidate)]]$items,
-                                              function(it) as.character(it$id %||% "")))
-    c(if (length(unknown))
-        paste0("The reply recommends ", paste(purrr::map_chr(unknown, label), collapse = ", "),
-               ", which ", if (length(unknown) == 1L) "is" else "are", " not among the drafts."),
-      if (anyDuplicated(keys))
-        paste0("The reply recommends the same item more than once: ",
-               paste(purrr::map_chr(sel[duplicated(keys)], label), collapse = ", "), "."),
-      if (!is.null(n_items) && length(sel) > n_items)
-        paste0("The reply recommends ", length(sel), " items; ", n_items, " ",
-               if (n_items == 1L) "was" else "were", " asked for."))
   },
   # A verdict is Keep or Revise. A Revise has at least one problem with its sentence, and every
   #   point about the questionnaire as a whole is a sentence.
@@ -194,23 +165,6 @@ cap_words <- function(x, n = CHECK_WORDS) {
 
 # One remark as it is shown: its first sentence, in 20 words or fewer.
 one_line <- function(x, n = CHECK_WORDS) cap_words(first_sentence(x), n)
-
-# The reviewer's recommendation is the project manager's, so R checks what it can without a
-#   model (DESIGN.md sections 7, 16 and 18). candidates is the drafts the reviewer saw, named by
-#   letter. The reviewer returns candidate letters and item ids, and for each a line to check
-#   before use: R finds each item in its draft, and copies the wording from there. Returns
-#   `selected`, one entry per recommended item in the order given: candidate, id, the item's
-#   position in that candidate's items, domain, and `check`, the line to check before use (one
-#   sentence of 20 words or fewer, "" when there is none). An item that cannot be found is left
-#   out (the validator refuses such a reply, so none is). No other field of the reply is read.
-check_appraisal <- function(reply, candidates) {
-  ids_of = function(letter) purrr::map_chr(candidates[[letter]]$items, function(it) as.character(it$id %||% ""))
-  selected = purrr::map(reply$selected %||% list(), function(e)
-    list(candidate = as.character(e$candidate), id = as.character(e$id),
-         position = match(as.character(e$id), ids_of(as.character(e$candidate))),
-         domain = as.character(e$domain %||% ""), check = one_line(e$check_before_use)))
-  list(selected = purrr::discard(selected, function(e) is.na(e$position)))
-}
 
 # ---- a long questionnaire, in parts (DESIGN.md section 14) ---------------------------------
 

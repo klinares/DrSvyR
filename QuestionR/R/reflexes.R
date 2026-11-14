@@ -14,7 +14,7 @@
 # Source lines and HTML comments are read and kept in the parsed reflex file, for the
 #   Methodology tab, and are never put into a prompt. Sent, sources get copied
 #   into the output as citations. Check lines are kept for the checklist and
-#   are not sent to a worker either.
+#   are sent only in a review's CHECKLIST.
 
 # The reflex files are only ever read here. Nothing in the app rewrites them.
 
@@ -26,20 +26,18 @@ REFLEXES_DIR <- file.path("www", "reflexes")
 # The reflex files, by name. A list rather than a directory scan, so a file that
 #   goes missing is an error and the README beside them is not read as a reflex file.
 REFLEX_FILES <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md",
-                 "sensitive.md", "evaluate.md", "mode.md",
-                 "pm_brief.md", "pm_appraise.md")
+                 "sensitive.md", "evaluate.md", "mode.md")
 
 # The files whose reply R parses, so each must say what the reply holds.
-REFLEX_FILES_WITH_OUTPUT <- c("generate.md", "evaluate.md", "pm_brief.md",
-                        "pm_appraise.md")
+REFLEX_FILES_WITH_OUTPUT <- c("generate.md", "evaluate.md")
 
 # The task registry (DESIGN.md section 12). The dropdown on the Brief tab, the
 #   fields it shows, prompt assembly and the checklist all read this one list, so
 #   a new task is a reflex file plus one entry here and no change to a screen.
 #   Each entry:
 #     label   shown in the dropdown
-#     kind    "draft" (workers write items) or "review" (the project manager
-#             reviews pasted text)
+#     kind    "draft" (the model writes items) or "review" (the model reviews
+#             pasted text)
 #     files   the reflex files a work prompt is built from, in the order of the
 #             table in www/reflexes/README.md. mode.md is always in; R keeps only
 #             its reflexes for the modes chosen.
@@ -93,37 +91,19 @@ TASKS <- list(
       "Judge only what the CHECKLIST below asks about the instrument as a whole,",
       "and give at most three points, the most important first, one sentence each.")))
 
-# The most items one drafting run is asked for (DESIGN.md section 13). The
-#   appraisal's reply grows with candidates times items, and a longer one would
-#   be cut off.
+# The most items one drafting run is asked for (DESIGN.md section 13).
 MAX_ITEMS_PER_RUN <- 10L
 
-# The prompts a task goes through. work is what the task is (a worker's
-#   drafting prompt, or the project manager's review); brief is the project
-#   manager's check of the form before anything is approved; appraise is the
-#   project manager comparing the candidates the workers returned. items and
-#   instrument are the two kinds of call of a review in parts (a review task only):
-#   the questions of one part, and the instrument as a whole.
-STEPS <- c("brief", "work", "appraise", "items", "instrument")
+# The prompts a task goes through. work is what the task is (a draft, or a review in
+#   one call); items and instrument are the two kinds of call of a review in parts.
+STEPS <- c("work", "items", "instrument")
 
-# The reflex files each step reads. core.md leads every one (DESIGN.md section 12).
-#   The brief check sends core, pm_brief and the task's own files; the appraisal
-#   sends core and pm_appraise only, so it never holds a drafting rule.
+# The reflex files each step reads: the task's own. core.md leads every one.
 step_files <- function(task, step) {
   if (!step %in% STEPS)
     stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
-  files = TASKS[[task]]$files
-  switch(step,
-         work = , items = , instrument = files,
-         brief = c("core.md", "pm_brief.md", setdiff(files, "core.md")),
-         appraise = c("core.md", "pm_appraise.md"))
+  TASKS[[task]]$files
 }
-
-# The file whose Output format a step's reply follows, where it is not the task's
-#   own. NA for work: there exactly one file in force carries one.
-STEP_FORMAT_FILE <- c(brief = "pm_brief.md", work = NA_character_,
-                      appraise = "pm_appraise.md", items = NA_character_,
-                      instrument = NA_character_)
 
 
 # ---- the parser -----------------------------------------------------------------
@@ -447,36 +427,9 @@ ask_sentence <- function(task, n_items) {
   paste(what, ASK_CLOSING)
 }
 
-# The brief check's sentence. It names the task the analyst chose, because
-#   right_task in pm_brief.md is about the request not matching it, and it asks
-#   for the criteria from the CHECKLIST block below, because criteria_preview
-#   takes them from "the checklist you were given".
-brief_ask_sentence <- function(task)
-  paste0("The analyst chose the task '", TASKS[[task]]$label, "'. Check the brief ",
-         "above for what a designer would still need to know before that task is ",
-         "done, and list the criteria from the CHECKLIST below that will be applied. ",
-         "Write no items. ", ASK_CLOSING)
-
-# The appraisal's sentence: how many candidates, and how many items each was
-#   asked for, which coverage and the item count both depend on.
-appraise_ask_sentence <- function(n_candidates, n_items)
-  paste0("Appraise the ", n_candidates, " candidate ",
-         if (n_candidates == 1L) "draft" else "drafts",
-         " in CANDIDATES below against the CHECKLIST. Each was asked to write exactly ",
-         n_items, if (n_items == 1L) " survey item" else " survey items",
-         " for the brief above. ", ASK_CLOSING)
-
-# The Output format a step's reply follows. For brief and appraise it is the
-#   project manager file's. For work it is the one file in force that carries
-#   one: generate.md for the drafting tasks, evaluate.md for Evaluate. Exactly
-#   one does.
-output_format_of <- function(rfiles, step = "work") {
-  file = STEP_FORMAT_FILE[[step]]
-  if (!is.na(file)) {
-    if (is.null(rfiles[[file]]) || is.na(rfiles[[file]]$output_format))
-      stop(file, " is not in force or has no '## Output format'.", call. = FALSE)
-    return(rfiles[[file]]$output_format)
-  }
+# The Output format a reply follows: the one file in force that carries one,
+#   generate.md for the drafting tasks, evaluate.md for Evaluate. Exactly one does.
+output_format_of <- function(rfiles) {
   with_output = purrr::keep(unname(rfiles), function(s) !is.na(s$output_format))
   if (length(with_output) != 1L)
     stop("Exactly one reflex file in force must have an '## Output format'; ",
@@ -526,8 +479,8 @@ assemble_message <- function(f, rfiles, part = NULL) {
 }
 
 # What R puts after the analyst's text when it sends, so that an edit cannot break the
-#   parsing: for a review the CHECKLIST, one "id: question" line per Check in force (workers
-#   get the rules and the appraiser the questions, so a drafting prompt has none), then the
+#   parsing: for a review the CHECKLIST, one "id: question" line per Check in force (a
+#   drafting prompt has none), then the
 #   reply format (the Output format of the one file in force that has one).
 assemble_tail <- function(f, rfiles, part = NULL) {
   review = TASKS[[f$task]]$kind == "review"
@@ -569,51 +522,11 @@ part_checklist <- function(task, checklist, part) {
 sent_user <- function(message, tail)
   if (nzchar(tail)) paste0(message, "\n\n", tail) else message
 
-# "id: question" lines under a CHECKLIST heading. One function for the review,
-#   the brief check and the appraisal, so the three cannot word it differently.
+# "id: question" lines under a CHECKLIST heading.
 checklist_block <- function(checklist)
   paste(c("CHECKLIST", paste0(names(checklist), ": ", unname(checklist))),
-        collapse = "\n")
-
-# What the appraiser sees of an item: what it asks and what it decided. The
-#   worker's own notes are left out, since they are where a model is most likely
-#   to say who it is. An absent field becomes empty, so the appraiser always sees
-#   the same shape.
-APPRAISAL_ITEM_DEFAULTS <- list(
-  id = "", domain = "", stem = "", options = list(), open_format = "")
-
-appraisal_item <- function(it)
-  purrr::imap(APPRAISAL_ITEM_DEFAULTS, function(d, k) it[[k]] %||% d)
-
-# CANDIDATES: one JSON object per line, the letter, the domains it left out, and
-#   its items. candidates is a list of parsed drafts named by their letter. No
-#   model id is passed in, so none can be written.
-candidates_block <- function(candidates) {
-  lines = purrr::imap_chr(candidates, function(reply, letter)
-    as.character(jsonlite::toJSON(
-      list(candidate = letter, not_covered = reply$not_covered %||% list(),
-           items = purrr::map(unname(reply$items), appraisal_item)),
-      auto_unbox = TRUE)))
-  paste(c("CANDIDATES", unname(lines)), collapse = "\n")
-}
-
-# The user message of the brief check and of the appraisal. Both carry PREPARE,
-#   an ASK, a CHECKLIST (the questions the task's own files give, which is what
-#   the criteria are taken from and what the appraisal codes against) and
-#   CHARACTERIZE; the appraisal also carries CANDIDATES before the CHECKLIST.
-assemble_user_step <- function(f, rfiles, step, checklist, candidates = NULL) {
-  ask = switch(step,
-    brief = brief_ask_sentence(f$task),
-    appraise = appraise_ask_sentence(length(candidates), f$n_items))
-  paste(unlist(purrr::compact(list(
-    rfiles[["core.md"]]$persona,
-    paste(c("PREPARE", prepare_lines(f)), collapse = "\n"),
-    paste("ASK", ask, sep = "\n"),
-    if (step == "appraise") candidates_block(candidates),
-    checklist_block(checklist),
-    paste("CHARACTERIZE", output_format_of(rfiles, step), sep = "\n")))),
-    collapse = "\n\n")
-}
+        collapse = "
+")
 
 # sha256 of the system prompt and the user message. The same form and the same
 #   files give the same hash, and a change to any word of either changes it.
@@ -624,21 +537,14 @@ prompt_hash <- function(system_txt, user_txt)
 
 # ---- the contract tests/review.R relies on (DESIGN.md section 5) ------------------
 
-# One assembler for every step (DESIGN.md section 12). step "work": for a drafting
-#   task, the worker's prompt; for a review task, the project manager's review.
-#   step "brief": the project manager's check of the form. step "appraise": the
-#   project manager comparing candidates, which is a list of the workers' parsed
-#   drafts named by letter (A, B, C), already relabelled by the caller so that
-#   nothing here knows which model wrote which. Returns system and user (one
-#   string each), hash, and files: the reflex files used, in order.
-build_step_prompt <- function(form, step, candidates = NULL, part = NULL) {
+# One assembler for every step. step "work": a draft, or a review in one call;
+#   "items" and "instrument": the calls of a review in parts, for which part says which.
+#   Returns system and user (one string each), message (what the analyst can edit),
+#   tail (what R adds after it), hash, and files: the reflex files used, in order.
+build_step_prompt <- function(form, step, part = NULL) {
   f = clean_form(form)
   if (!step %in% STEPS)
     stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
-  if (step == "appraise" && TASKS[[f$task]]$kind != "draft")
-    stop("Only a drafting task has candidates to appraise.", call. = FALSE)
-  if (step == "appraise" && (!length(candidates) || is.null(names(candidates))))
-    stop("The appraisal needs at least one candidate, named by its letter.", call. = FALSE)
   if (step %in% c("items", "instrument") && TASKS[[f$task]]$kind != "review")
     stop("Only a review task is reviewed in parts.", call. = FALSE)
   if (step %in% c("items", "instrument") && !identical(part$kind, step))
@@ -647,12 +553,8 @@ build_step_prompt <- function(form, step, candidates = NULL, part = NULL) {
     stop("An items part needs k, n, first_block and text.", call. = FALSE)
   rfiles = reflexes_in_force(f, step = step)
   system_txt = assemble_system(rfiles)
-  # A work step's user text is the analyst's message and R's tail; the brief check and the
-  #   appraisal are never shown, so theirs is all message.
-  work = step %in% c("work", "items", "instrument")
-  message_txt = if (work) assemble_message(f, rfiles, part)
-    else assemble_user_step(f, rfiles, step, checklist_of(reflexes_in_force(f)), candidates)
-  tail_txt = if (work) assemble_tail(f, rfiles, part) else ""
+  message_txt = assemble_message(f, rfiles, part)
+  tail_txt = assemble_tail(f, rfiles, part)
   user_txt = sent_user(message_txt, tail_txt)
   list(system = system_txt, user = user_txt, message = message_txt, tail = tail_txt,
        hash = prompt_hash(system_txt, user_txt), files = names(rfiles))

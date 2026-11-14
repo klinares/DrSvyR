@@ -26,7 +26,7 @@ APP_OFFICE <- ""
 #   app says so and asks for the questionnaire in parts; nothing is truncated.
 #   A longer questionnaire is reviewed in parts (DESIGN.md section 14): whole
 #   blocks, split on blank lines, are packed into parts of at most
-#   APP_BATCH_CHARS characters, one call to the project manager each, then one
+#   APP_BATCH_CHARS characters, one call to the model each, then one
 #   more call for the instrument as a whole. APP_BATCH_CHARS is the per-call
 #   limit Phase 4d measured: about twice a 1,823-character questionnaire, to
 #   match the evaluation ceiling (tests/review_tokens.md).
@@ -39,57 +39,23 @@ APP_BATCH_CHARS <- 4000
 APP_SOURCE_URL <- "https://github.com/klinares/drsvyr/tree/main/QuestionR"
 
 # The profile used when the environment variable QUESTIONR_PROFILE is not set:
-#   "home", "rehearsal" or "work". One line to change when the app is moved to work.
+#   "home" or "work". One line to change when the app is moved to work.
 APP_DEFAULT_PROFILE <- "home"
 
-# Which models do which job. Each profile is the project manager (pm) and a list of
-#   workers; a worker is one list entry, so adding or removing one changes nothing
-#   else. An entry has:
-#     api              "anthropic" or "openai" (the OpenAI style): any model, the
-#                      project manager included, may use either
+# The one model QuestionR uses, per profile. The key is always pasted into the box on
+#   Start here and held for the session; the environment is never read for it.
+#     api              "anthropic" or "openai" (the OpenAI style)
 #     base_url, id     where it is called and what the endpoint names it
-#     key_source       "analyst" is the key pasted into the box on Start here, held
-#                      for the session only, and the environment is not consulted for
-#                      it at all; "server" is the environment variable named in key_var
 #     reasoning_effort optional, "low", "medium" or "high"; sent only when set
 #     max_tokens_name  optional, openai style only: "max_completion_tokens" (what
 #                      ellmer sends by default) or "max_tokens", for an endpoint that
 #                      wants the older name for the limit on the length of a reply
-#   home:      the project manager on Anthropic's own API, three workers through
-#              OpenRouter with the key in the server's environment.
-#   rehearsal: all four through OpenRouter in the OpenAI style on one key pasted by the
-#              analyst, as it will be at work, to try the app before the move.
-#   work:      placeholders in angle brackets, to be filled in at work (see README.md).
+#   work: placeholders in angle brackets, to be filled in at work (see README.md).
 APP_PROFILES <- list(
-  home = list(
-    pm      = list(api = "anthropic", base_url = "https://api.anthropic.com/v1",
-                   id = "claude-sonnet-5-5", key_source = "analyst"),
-    workers = list(
-      list(api = "openai", base_url = "https://openrouter.ai/api/v1",
-           id = "google/gemma-4-31b-it",
-           key_source = "server", key_var = "OPENROUTER_API_KEY"),
-      list(api = "openai", base_url = "https://openrouter.ai/api/v1",
-           id = "meta-llama/llama-4-maverick",
-           key_source = "server", key_var = "OPENROUTER_API_KEY"),
-      list(api = "openai", base_url = "https://openrouter.ai/api/v1",
-           id = "openai/gpt-6-luna",
-           key_source = "server", key_var = "OPENROUTER_API_KEY"))),
-  rehearsal = list(
-    pm      = list(api = "openai", base_url = "https://openrouter.ai/api/v1",
-                   id = "anthropic/claude-sonnet-5.5", key_source = "analyst"),
-    workers = list(
-      list(api = "openai", base_url = "https://openrouter.ai/api/v1",
-           id = "google/gemma-4-31b-it", key_source = "analyst"),
-      list(api = "openai", base_url = "https://openrouter.ai/api/v1",
-           id = "meta-llama/llama-4-maverick", key_source = "analyst"),
-      list(api = "openai", base_url = "https://openrouter.ai/api/v1",
-           id = "openai/gpt-6-luna", key_source = "analyst"))),
-  work = list(
-    pm      = list(api = "anthropic", base_url = "<work base url>",
-                   id = "<pm id at work>", key_source = "analyst"),
-    workers = list(
-      list(api = "openai", base_url = "<work base url>",
-           id = "<worker id at work>", key_source = "analyst"))))
+  home = list(api = "anthropic", base_url = "https://api.anthropic.com/v1",
+              id = "claude-sonnet-5-5"),
+  work = list(api = "openai", base_url = "<work base url>",
+              id = "<model id at work>"))
 
 APP_PROFILE <- local({
   p = tolower(trimws(Sys.getenv("QUESTIONR_PROFILE")))
@@ -98,7 +64,7 @@ APP_PROFILE <- local({
 if (!APP_PROFILE %in% names(APP_PROFILES))
   stop("The profile is '", APP_PROFILE, "' (QUESTIONR_PROFILE, or APP_DEFAULT_PROFILE when that is not set); ",
        "it must be one of: ", paste(names(APP_PROFILES), collapse = ", "), call. = FALSE)
-APP_MODELS <- APP_PROFILES[[APP_PROFILE]]
+APP_MODEL <- APP_PROFILES[[APP_PROFILE]]
 
 
 # ---- 2. packages ------------------------------------------------------------
@@ -166,7 +132,8 @@ invisible(check_reflex_files())
 #   it is put there. These are the settings R/ reads.
 list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION,
               APP_PROFILE = APP_PROFILE,
-              APP_MODELS = APP_MODELS,
+              APP_PROFILES = APP_PROFILES,
+              APP_MODEL = APP_MODEL,
               APP_MAX_PASTE_CHARS = APP_MAX_PASTE_CHARS,
               APP_BATCH_CHARS = APP_BATCH_CHARS),
          envir = globalenv())

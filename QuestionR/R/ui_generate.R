@@ -2,8 +2,8 @@
 # The screens of the Generate flow: Brief, Prompt, Results and Run again, one
 #   module each (DESIGN.md section 12). They hold no flow logic. They gather the
 #   form, call the engine in R/flow.R, and draw what it returns; the dropdown,
-#   the fields and the worker boxes all read the registry (TASKS) and the model
-#   list (APP_MODELS), so a new task or worker needs no change here. It also
+#   the fields all read the registry (TASKS), so a new task needs no change
+#   here. It also
 #   holds the Output tab. The second half of ui.R. Function definitions and
 #   constants only.
 
@@ -14,12 +14,11 @@
 #   from these. key_version changes whenever the pasted key is saved or forgotten.
 #   form is the cleaned form the Brief tab handed on; approved is the prompt the
 #   analyst approved (edited or not); run_id changes to start a run; the rest is
-#   what the last run returned. set is the items in the recommended set as the analyst has it
-#   (set_entry() in output.R) and edits what the analyst changed in them, by entry.
+#   what the last run returned. items is the drafted items as the analyst has them
+#   (draft_items() in output.R) and edits what the analyst changed in them, by uid.
 STATE_DEFAULTS <- list(
-  key_version = 0L, form = NULL, workers = NULL, brief = NULL, approved = NULL,
-  run_id = 0L, round = 0L, drafts = NULL, appraisal = NULL, review = NULL, seed = NULL,
-  set = list(), edits = list(), revision = "", rounds = list())
+  key_version = 0L, form = NULL, approved = NULL, run_id = 0L, round = 0L, draft = NULL,
+  review = NULL, items = list(), edits = list(), revision = "", rounds = list())
 
 # A task's kind, from a form. A form with no usable task counts as a drafting one,
 #   so a run that cannot start fails in the engine, with its reason, as any other.
@@ -130,7 +129,6 @@ field_widget <- function(field, ns) {
 mod_brief_ui <- function(id) {
   ns <- NS(id)
   fields = intersect(FORM_FIELDS, names(FIELD_SPECS))
-  worker_ids = purrr::map_chr(APP_MODELS$workers, "id")
   tagList(
     tags$h3(QUESTIONR_TABS[2]),
     tags$p("Choose the task and describe what you need. Anything you leave blank is ",
@@ -140,48 +138,12 @@ mod_brief_ui <- function(id) {
     purrr::map(fields, function(f)
       conditionalPanel(tasks_condition(names(purrr::keep(TASKS, function(t) f %in% t$fields))),
                        ns = ns, field_widget(f, ns))),
-    conditionalPanel(
-      tasks_condition(names(purrr::keep(TASKS, function(t) identical(t$kind, "draft")))), ns = ns,
-      checkboxGroupInput(ns("workers"), "Workers that will each draft the items",
-                         choices = purrr::set_names(worker_ids, worker_ids), selected = worker_ids),
-      tags$p(class = "text-muted small mt-n2",
-             "Each ticked model gets the same prompt, all at once. Fewer models cost less.")),
     uiOutput(ns("revision_note")),
     tags$div(
-      actionButton(ns("build"), "Build the instructions", class = "btn-primary"),
-      actionButton(ns("check"), "Check my brief first", class = "btn-sm btn-outline-secondary ms-2")),
+      actionButton(ns("build"), "Build the instructions", class = "btn-primary")),
     tags$p(class = "text-muted small mt-2",
-           "Building the instructions goes straight to the prompt, for you to read before anything is sent. ",
-           "Checking the brief first asks the project manager model what a designer would still need to ",
-           "know; it needs the key from Start here and takes a call."),
-    uiOutput(ns("message")),
-    uiOutput(ns("result")))
-}
-
-# A brief check's answer, on the page: whether the brief is complete, what is
-#   missing (blocking first), whether another task fits, and the criteria that
-#   will be applied. continue is the button that goes on to the prompt.
-brief_panel <- function(res, ns) {
-  if (identical(res$status, "skipped"))
-    return(tags$p(class = "text-muted", "The brief was not checked."))
-  if (!identical(res$status, "ok"))
-    return(warn_box(tags$strong("The brief check did not come back. "), res$error,
-                    tags$br(), "You can try again, or build the instructions without it."))
-  r = res$reply
-  qs = r$questions
-  qs = qs[order(!purrr::map_lgl(qs, function(q) isTRUE(q$blocking)))]
-  tagList(
-    tags$h5("Brief check"),
-    advice_box(if (isTRUE(r$complete)) "The project manager found nothing blocking in the brief."
-               else "The project manager found gaps that block the task, marked below."),
-    if (length(qs)) tags$ul(purrr::map(qs, function(q)
-      tags$li(tags$strong(if (isTRUE(q$blocking)) "Blocking: " else "Optional: "), q$ask,
-              if (nzchar(q$why %||% "")) tags$span(class = "text-muted", " ", q$why)))),
-    if (nzchar(r$task_fit %||% "")) advice_box(tags$strong("Task: "), r$task_fit),
-    if (length(r$criteria)) tagList(
-      tags$h6("Criteria that will be applied"),
-      tags$ul(purrr::map(r$criteria, function(cr) tags$li(paste(unlist(cr), collapse = " "))))),
-    actionButton(ns("continue"), "Continue to the prompt", class = "btn-primary"))
+           "Building the instructions goes straight to the prompt, for you to read before anything is sent."),
+    uiOutput(ns("message")))
 }
 
 # make_ask(total) returns the function the engine calls a model through. A test
@@ -200,11 +162,6 @@ mod_brief_server <- function(id, state, go = function(tab) invisible(NULL), make
       c(list(task = task), typed, list(revision = state$revision %||% ""))
     })
 
-    chosen_workers <- reactive({
-      ids = input$workers %||% character(0)
-      purrr::keep(APP_MODELS$workers, function(m) m$id %in% ids)
-    })
-
     # The cleaned form, or NULL with the reason on the page.
     prepare <- function() {
       message(NULL)
@@ -212,29 +169,24 @@ mod_brief_server <- function(id, state, go = function(tab) invisible(NULL), make
         f = clean_form(form_now())
         # A block too long to be a part says so here, not at the end of a run.
         if (TASKS[[f$task]]$kind == "review") review_plan(f$questionnaire, APP_BATCH_CHARS)
-        ws = if (TASKS[[f$task]]$kind == "draft") chosen_workers() else list()
-        if (TASKS[[f$task]]$kind == "draft" && !length(ws))
-          stop("Tick at least one worker to draft the items.", call. = FALSE)
-        list(form = f, workers = ws)
+        list(form = f)
       }, error = function(e) {
         message(plain_message(e))
         NULL
       })
     }
 
-    proceed <- function(brief) {
+    proceed <- function() {
       p = prepare()
       if (is.null(p)) return(invisible(NULL))
       state$form <- p$form
-      state$workers <- p$workers
-      state$brief <- brief %||% state$brief
       go(QUESTIONR_TABS[3])
     }
 
     output$task_note <- renderUI({
       task = input$task %||% names(TASKS)[1]
       if (TASKS[[task]]$kind == "review")
-        advice_box("Evaluate sends your questionnaire to the project manager model, with ",
+        advice_box("Evaluate sends your questionnaire to the model, with ",
                    "the methodology files' checklist, and shows its findings question by question. ",
                    tags$strong("Leave a blank line between questions"), ", each with its response ",
                    "options straight under it. Up to ", format(APP_BATCH_CHARS, big.mark = ","),
@@ -254,28 +206,9 @@ mod_brief_server <- function(id, state, go = function(tab) invisible(NULL), make
     })
     observeEvent(input$drop_revision, state$revision <- "")
 
-    observeEvent(input$check, {
-      p = prepare()
-      if (is.null(p)) return()
-      pm = APP_MODELS$pm
-      if (!llm_key_ready(pm)) {
-        message(paste0("The brief check needs the project manager's key. ", llm_key_hint(pm),
-                       " Or build the instructions without the check."))
-        return()
-      }
-      state$form <- p$form
-      state$workers <- p$workers
-      state$brief <- tryCatch(
-        withProgress(message = "Checking the brief", value = 0,
-                     run_brief(p$form, pm, ask = make_ask(1L))),
-        error = function(e) list(status = "failed", error = plain_message(e), reply = NULL))
-    })
-
-    observeEvent(input$build, proceed(list(status = "skipped")))
-    observeEvent(input$continue, proceed(NULL))
+    observeEvent(input$build, proceed())
 
     output$message <- renderUI(if (!is.null(message())) warn_box(message()))
-    output$result <- renderUI(safe_ui(if (!is.null(state$brief)) brief_panel(state$brief, session$ns)))
   })
 }
 
@@ -345,12 +278,7 @@ mod_prompt_server <- function(id, state, go = function(tab) invisible(NULL)) {
                  textAreaInput(session$ns("user"), "The prompt (you can edit this)",
                                value = a$message, rows = 18, width = "100%", resize = "vertical")),
         tags$p(class = "text-muted small", RULES_NOTE),
-        if (draft) tags$p(paste0(
-          "Approving runs ", length(state$workers), if (length(state$workers) == 1L) " worker" else " workers",
-          " together, then the reviewer recommends a set: ", length(state$workers) + 1L,
-          " model calls. It can take a few minutes, and the app is busy until it finishes."))
-        else tags$p("Approving makes one model call: the project manager reviews the questionnaire. ",
-                    "It can take a minute or two, and the app is busy until it finishes."),
+        tags$p("Approving makes one model call. It can take a minute or two, and the app is busy until it finishes."),
         actionButton(session$ns("approve"), "Approve and run", class = "btn-primary"),
         actionButton(session$ns("reset"), "Reset to the assembled prompt"))
     }))
@@ -420,66 +348,31 @@ set_button <- function(label, input, value, ns, class = "btn btn-sm btn-primary"
 # The text of one option: what the page shows and edits.
 option_text <- function(o) paste(unlist(o), collapse = " ")
 
-# One question of the set, numbered i: the question and each answer option in a plain text box so it
-#   can be edited in place (boxes are named by edit_input_id() and read by edits_from_inputs()); under
-#   them, when the reviewer found a real problem, the one line "Check before use:"; and the button that
-#   takes the question out. ed is what the analyst changed before (output.R), so the boxes can be
-#   drawn again as they were left.
-set_card <- function(e, it, i, ns, ed = NULL) {
+# One drafted question, numbered i: the question and each answer option in a plain text box so it
+#   can be edited in place (boxes are named by edit_input_id() and read by edits_from_inputs()), and
+#   the button that takes the question out. ed is what the analyst changed before (output.R), so the
+#   boxes can be drawn again as they were left.
+item_card <- function(it, i, ns, ed = NULL) {
   box = function(id, value, label = NULL) textInput(ns(id), label, value = value, width = "100%")
-  it = full_item(it)
   tags$div(
     class = "card mb-2",
     tags$div(
       class = "card-body py-2",
-      box(edit_input_id(e$uid, "stem"), ed$stem %||% it$stem, paste("Question", i)),
+      box(edit_input_id(it$uid, "stem"), ed$stem %||% it$stem, paste("Question", i)),
       if (length(it$options))
         purrr::imap(purrr::map_chr(it$options, option_text), function(o, j)
-          box(edit_input_id(e$uid, paste0("o", j)), ed$options[[as.character(j)]] %||% o))
+          box(edit_input_id(it$uid, paste0("o", j)), ed$options[[as.character(j)]] %||% o))
       else tags$p(class = "text-muted mb-1", paste0("[Open question",
                                                     if (nzchar(it$open_format)) paste0(": ", it$open_format), "]")),
-      if (nzchar(e$check)) tags$p(class = "mb-1", tags$em(CHECK_LABEL), " ", e$check),
-      set_button("Remove from the set", "remove", e$uid, ns, "btn btn-sm btn-outline-secondary")))
+      set_button("Remove", "remove", it$uid, ns, "btn btn-sm btn-outline-secondary")))
 }
 
-# The recommended set, as the analyst has it now, under the one sentence.
-set_panel <- function(set, cands, ns, edits) {
-  items = purrr::imap(set, function(e, i)
-    set_card(e, unname(cands[[e$candidate]]$items)[[e$position]], i, ns, edits[[e$uid]]))
+# The drafted items, as the analyst has them now, under the one sentence.
+items_panel <- function(items, ns, edits) {
   tagList(
     tags$p(tags$em(RESULT_NOTICE)),
-    if (!length(set)) tags$p("The set is empty. Open the other questions below and use one.") else items)
-}
-
-# The other questions the workers drafted, closed until asked for, by domain. Each has a button that
-#   puts it in the set: in place of the question chosen in the box at the top, or at the end of the set.
-#   No model is named and nothing is scored: only the question and its answer options.
-drafts_panel <- function(cands, set, ns, open) {
-  targets = c("at the end of the set" = "",
-              purrr::set_names(purrr::map_chr(set, "uid"),
-                               purrr::imap_chr(set, function(e, i) paste0("in place of question ", i))))
-  in_set = purrr::map_chr(set, "uid")
-  others = purrr::compact(unname(unlist(purrr::imap(cands, function(reply, letter)
-    purrr::imap(unname(reply$items), function(it, i)
-      if (!paste0(letter, "_", i) %in% in_set)
-        list(uid = paste0(letter, "_", i), item = full_item(it)))), recursive = FALSE)))
-  domains = purrr::map_chr(others, function(o) o$item$domain)
-  tags$details(
-    id = ns("drafts"), open = if (isTRUE(open)) NA,
-    ontoggle = sprintf("Shiny.setInputValue('%s', this.open)", ns("drafts_open")),
-    tags$summary("See all drafts"),
-    selectInput(ns("swap_target"), "A question you use from here goes", choices = targets, width = "100%"),
-    purrr::map(unique(domains), function(d)
-      tagList(
-        tags$h6(class = "mt-2 mb-1", d),
-        purrr::map(others[domains == d], function(o)
-          tags$div(
-            class = "card mb-2",
-            tags$div(
-              class = "card-body py-2",
-              tags$p(class = "mb-1", tags$strong(o$item$stem)),
-              options_list(o$item$options, o$item$open_format),
-              set_button("Use this instead", "swap", o$uid, ns)))))))
+    if (!length(items)) tags$p("Every item has been removed.")
+    else purrr::imap(items, function(it, i) item_card(it, i, ns, edits[[it$uid]])))
 }
 
 
@@ -553,10 +446,8 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
     observeEvent(state$run_id, {
       problem(NULL)
       f = state$form
-      ws = state$workers
       approved = state$approved
-      pm = APP_MODELS$pm
-      seed = sample.int(.Machine$integer.max, 1L)
+      m = APP_MODEL
       review = identical(task_kind(f), "review")
       out = tryCatch(
         if (review) withProgress(message = "Reviewing the questionnaire", value = 0, {
@@ -564,36 +455,24 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
           #   questionnaire cannot be split, since run_review() then fails without a call
           calls = tryCatch(length(review_plan(f$questionnaire, APP_BATCH_CHARS)), error = function(e) 1L)
           ask = make_ask(calls)
-          list(review = run_review(f, pm, ask = ask, progress = say_progress,
+          list(review = run_review(f, m, ask = ask, progress = say_progress,
                                    ask_all = if (is.null(make_ask_all)) ask_all_for(ask) else make_ask_all(calls),
                                    # an edited prompt is sent only when the review is one call
                                    prompt = if (calls == 1L) approved))
         })
-        else withProgress(message = "Running the workers", value = 0, {
-          ask = make_ask(1L)
-          drafts = run_drafts(f, ws, ask = ask, prompt = approved,
-                              ask_all = if (is.null(make_ask_all)) ask_all_for(ask) else make_ask_all(length(ws)))
-          list(drafts = drafts, appraisal = run_appraisal(f, drafts, pm, ask = ask, seed = seed))
-        }),
+        else withProgress(message = "Drafting the items", value = 0,
+                          list(draft = run_draft(f, m, ask = make_ask(1L), prompt = approved))),
         error = function(e) {
           problem(paste0("The run stopped: ", plain_message(e)))
           NULL
         })
       if (is.null(out)) return()
-      brief = state$brief
-      brief = if (is.list(brief) && brief$status %in% c("ok", "failed")) brief
       state$round <- (state$round %||% 0L) + 1L
-      state$drafts <- out$drafts
-      state$appraisal <- out$appraisal
+      state$draft <- out$draft
       state$review <- out$review
-      state$seed <- if (review) NULL else seed
-      state$set <- if (!review && identical(out$appraisal$status, "ok"))
-        initial_set(check_appraisal(out$appraisal$reply, candidates_of(out$drafts, seed)))
-      else list()
+      state$items <- if (identical(out$draft$status, "ok")) draft_items(out$draft$reply) else list()
       state$edits <- list()
-      state$rounds <- c(state$rounds, list(
-        if (review) flow_round(f, pm, brief = brief, review = out$review)
-        else flow_round(f, pm, brief = brief, drafts = out$drafts, appraisal = out$appraisal, seed = seed)))
+      state$rounds <- c(state$rounds, list(flow_round(f, m, draft = out$draft, review = out$review)))
       result(list(form = f, round = state$round))
     }, ignoreInit = TRUE)
 
@@ -605,7 +484,7 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       req(rv, f, input$rerun)
       out = tryCatch(
         withProgress(message = "Running the part again", value = 0,
-                     rerun_review_part(f, APP_MODELS$pm, rv, as.integer(input$rerun),
+                     rerun_review_part(f, APP_MODEL, rv, as.integer(input$rerun),
                                        ask = make_ask(1L), progress = say_progress)),
         error = function(e) {
           problem(paste0("The part could not be run again: ", plain_message(e)))
@@ -614,28 +493,17 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       if (is.null(out)) return()
       problem(NULL)
       state$review <- out
-      brief = state$brief
-      brief = if (is.list(brief) && brief$status %in% c("ok", "failed")) brief
       n = length(state$rounds)
-      if (n) state$rounds[[n]] <- flow_round(f, APP_MODELS$pm, brief = brief, review = out)
+      if (n) state$rounds[[n]] <- flow_round(f, APP_MODEL, review = out)
     })
 
-    # What the analyst changes in the set: typing in a box, taking a question out, using one from the
-    #   other drafts. Edits are read from the boxes into state$edits (the page is not drawn again for them,
-    #   so a box keeps its cursor); the set itself changes only on a swap or a removal.
+    # What the analyst changes: typing in a box, taking a question out. Edits are read from the boxes
+    #   into state$edits (the page is not drawn again for them, so a box keeps its cursor).
     observe({
-      req(length(state$set) > 0L, state$drafts)
-      state$edits <- edits_from_inputs(state$set, state$drafts, state$seed, function(id) input[[id]])
+      req(length(state$items) > 0L)
+      state$edits <- edits_from_inputs(state$items, function(id) input[[id]])
     })
-    observeEvent(input$remove, state$set <- set_remove(state$set, input$remove))
-    observeEvent(input$swap, {
-      req(state$drafts, input$swap)
-      at = as.integer(sub("^.*_", "", input$swap))
-      letter = sub("_.*$", "", input$swap)
-      it = unname(candidates_of(state$drafts, state$seed)[[letter]]$items)[[at]]
-      state$set <- set_swap(state$set, set_entry(letter, at, it$id %||% "", it$domain %||% "", swapped = TRUE),
-                            if (nzchar(input$swap_target %||% "")) input$swap_target)
-    })
+    observeEvent(input$remove, state$items <- item_remove(state$items, input$remove))
 
     output$results <- renderUI(safe_ui({
       if (!is.null(problem())) return(warn_box(problem()))
@@ -647,32 +515,17 @@ mod_results_server <- function(id, state, go = function(tab) invisible(NULL), ma
       f = r$form
       if (identical(task_kind(f), "review"))
         return(review_panel(f, state$review, session$ns))
-      drafts = state$drafts
-      ap = state$appraisal
-      cands = candidates_of(drafts, state$seed)
-      failed = purrr::keep(unname(as.list(drafts)), function(d) !identical(d$status, "ok"))
+      d = state$draft
       tagList(
-        # A worker that failed matters only when none came back; the record has the rest.
-        if (!length(cands)) warn_box(
-          tags$strong("No draft came back. "),
-          tags$ul(class = "mb-0", purrr::map(failed, function(d) tags$li(tags$code(d$model), ": ", d$error)))),
-        if (length(cands) && !identical(ap$status, "ok"))
-          warn_box(tags$strong("The reviewer did not come back. "), ap$error,
-                   " There is no recommended set; the other questions are below, and you can build a set from them."),
-        uiOutput(session$ns("set_ui")),
-        uiOutput(session$ns("drafts_ui")))
+        if (!identical(d$status, "ok")) warn_box(tags$strong("The draft did not come back. "), d$error),
+        uiOutput(session$ns("items_ui")))
     }))
 
-    # The set and the other drafts are drawn on their own, so a swap or a removal redraws them and
-    #   nothing else. What the analyst typed is put back from state$edits, which they do not read.
-    output$set_ui <- renderUI(safe_ui({
-      req(result(), state$drafts)
-      set_panel(state$set, candidates_of(state$drafts, state$seed), session$ns, isolate(state$edits))
-    }))
-    output$drafts_ui <- renderUI(safe_ui({
-      req(result(), state$drafts)
-      drafts_panel(candidates_of(state$drafts, state$seed), state$set, session$ns,
-                   open = isolate(input$drafts_open) %||% !length(state$set))
+    # The items are drawn on their own, so a removal redraws them and nothing else. What the analyst
+    #   typed is put back from state$edits, which they do not read.
+    output$items_ui <- renderUI(safe_ui({
+      req(result(), identical(state$draft$status, "ok"))
+      items_panel(state$items, session$ns, isolate(state$edits))
     }))
   })
 }
@@ -742,8 +595,7 @@ mod_output_server <- function(id, state) {
 
     built <- reactive({
       req((state$round %||% 0L) >= 1L, state$form)
-      build_output(state$form, drafts = state$drafts, seed = state$seed,
-                   set = state$set, edits = state$edits, review = state$review)
+      build_output(state$form, items = state$items, edits = state$edits, review = state$review)
     })
 
     output$view <- renderUI(safe_ui({
@@ -772,7 +624,7 @@ mod_output_server <- function(id, state) {
       tags$p(class = "mt-4",
              downloadButton(session$ns("get_log"), "Download the full record", class = "btn-sm btn-outline-secondary"),
              tags$span(class = "text-muted small ms-2",
-                       "Prompts, models, hashes, every draft and the full reply, for your files."))
+                       "Prompts, the model, hashes and the full reply, for your files."))
     })
 
     output$get_log <- downloadHandler(
@@ -780,13 +632,9 @@ mod_output_server <- function(id, state) {
       content = function(file) {
         rounds = state$rounds
         n = length(rounds)
-        chosen = if (!is.null(state$drafts)) final_set(state$set, state$edits, state$drafts, state$seed) else list()
-        if (n && !is.null(state$drafts))
-          rounds[[n]]$analyst <- list(set = state$set, edits = state$edits, final = chosen)
-        brief = state$brief
-        brief = if (is.list(brief) && identical(brief$status, "ok")) brief
-        disclosure = strsplit(doc_text(disclosure_blocks(state$form, chosen, state$drafts, state$appraisal, state$review,
-                                                         brief, state$approved)), "\n", fixed = TRUE)[[1]]
+        if (n && !is.null(state$draft))
+          rounds[[n]]$analyst <- list(edits = state$edits, final = final_items(state$items, state$edits))
+        disclosure = strsplit(doc_text(disclosure_blocks(state$form, state$approved, state$review)), "\n", fixed = TRUE)[[1]]
         writeLines(run_log_json(rounds, secrets = secrets(), disclosure = disclosure), file, useBytes = TRUE)
       })
   })

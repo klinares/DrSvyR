@@ -4,32 +4,25 @@
 #   connection check's call, and the key box. Nothing here is a prompt: R/reflexes.R
 #   writes those. Function definitions and constants only (root CLAUDE.md rule 2).
 
-# Which models there are, and where each one's key comes from, is APP_MODELS in
-#   app.R (assigned to the global environment, so this file can read it).
-#   "anthropic" calls ellmer::chat_anthropic(); "openai" calls
-#   ellmer::chat_openai_compatible(), which takes the base URL of any
-#   OpenAI-style endpoint (OpenRouter at home, the work server at work).
-#   Resolved in the installed ellmer 0.4.2 and recorded in STATUS.md.
+# The one model is APP_MODEL in app.R (assigned to the global environment, so this
+#   file can read it). "anthropic" calls ellmer::chat_anthropic(); "openai" calls
+#   ellmer::chat_openai_compatible(), which takes the base URL of any OpenAI-style
+#   endpoint (the work server at work). Checked in the installed ellmer 0.4.2.
 
 
 # ---- settings of the call ------------------------------------------------------
 
-# max_tokens for each step (DESIGN.md sections 6 and 12). A reply that reaches
-#   the ceiling is a failure, not a short answer, and is not retried: the same
-#   prompt is cut off at the same place. ping is the connection check's very
-#   small call. Brief, draft and appraisal are set by hand; evaluate is about
-#   twice what one live review of a 15-question, 1,823-character questionnaire
-#   used (21,272 tokens out in 155 seconds; tests/review_tokens.md).
-LLM_MAX_TOKENS <- c(brief = 4000L, draft = 12000L, appraisal = 24000L,
-                    evaluate = 43000L, ping = 200L)
+# max_tokens for each kind of call. A reply that reaches the ceiling is a failure,
+#   not a short answer, and is not retried: the same prompt is cut off at the same
+#   place. items is one part of a review (at most APP_BATCH_QUESTIONS questions),
+#   instrument the whole-questionnaire call, draft a Write questions run, ping the
+#   connection check.
+LLM_MAX_TOKENS <- c(draft = 12000L, evaluate = 43000L, ping = 200L)
 
-# What a cut-off reply tells the analyst to do, by step (DESIGN.md section 13).
-#   llm_json() says only that the reply was cut off; the flow adds this, because
-#   only the flow knows which step it was.
+# What a cut-off reply tells the analyst to do, by kind of call. llm_json() says
+#   only that the reply was cut off; the flow adds this.
 LLM_CUTOFF_ADVICE <- c(
-  brief = "Try the brief check again, or skip it.",
   draft = "Ask for fewer items and run again.",
-  appraisal = "Ask for fewer items, and run again.",
   evaluate = "Paste fewer questions and run again.")
 
 # Seconds before one request gives up. ellmer reads this from the option
@@ -38,10 +31,11 @@ LLM_CUTOFF_ADVICE <- c(
 LLM_TIMEOUT_S <- 600
 LLM_PING_TIMEOUT_S <- 60
 
-# Anthropic prompt caching. Each step has a different system prompt, so there is
-#   little to reuse within five minutes and a cache write costs more than a plain
-#   read; "none" also works behind a proxy that rejects cache instructions.
-LLM_CACHE <- "none"
+# Anthropic prompt caching, as ellmer 0.4.2 documents chat_anthropic(cache =): "5m",
+#   "1h" or "none". The parts of one review share their system prompt, so after the
+#   first a part can read it from the cache. Set "none" behind a proxy that rejects
+#   cache instructions. Not used for the OpenAI style.
+LLM_CACHE <- "5m"
 
 # What the connection check says to a model. No analyst text goes in it.
 LLM_PING_PROMPT <- "Reply with the single word OK."
@@ -108,49 +102,22 @@ llm_clear_counters <- function(token) {
 }
 
 
-# ---- where a model's key comes from ----------------------------------------------
+# ---- the model and its key ---------------------------------------------------------
 
-# The one place the environment is read, and only for a model whose key_source
-#   is "server": the variable named in its key_var. A model whose key_source is
-#   "analyst" gets the key pasted into the key box and nothing else; the
-#   environment is not consulted for it, so an ANTHROPIC_API_KEY that happens to
-#   be set at home is ignored. NULL when there is no key.
-llm_key_for <- function(m) {
-  switch(m$key_source %||% "",
-    analyst = llm_session_key(),
-    server = {
-      if (is.null(m$key_var) || !nzchar(m$key_var))
-        llm_fail(paste0("The model ", m$id, " has key_source 'server' and no key_var."),
-                 class = "llm_client_error")
-      k = Sys.getenv(m$key_var)
-      if (nzchar(k)) k else NULL
-    },
-    llm_fail(paste0("The model ", m$id, " has key_source '", m$key_source,
-                    "'; it must be 'analyst' or 'server'."),
-             class = "llm_client_error"))
-}
+# The key pasted into the key box, and nothing else: the environment is never read
+#   for it, so an ANTHROPIC_API_KEY that happens to be set at home is ignored. NULL
+#   when there is none.
+llm_key_for <- function(m = APP_MODEL) llm_session_key()
 
-llm_key_ready <- function(m) !is.null(llm_key_for(m))
+llm_key_ready <- function(m = APP_MODEL) !is.null(llm_key_for(m))
 
-# What the analyst or the administrator has to do to give a model a key.
-llm_key_hint <- function(m) {
-  if (identical(m$key_source, "server"))
-    paste0("Set the server variable ", m$key_var, ".")
-  else
-    "Paste a key into the key box on Start here."
-}
-
-# The models in force, project manager first, each with a role for display.
-llm_models <- function()
-  c(list(list(role = "Project manager", m = APP_MODELS$pm)),
-    purrr::imap(APP_MODELS$workers, function(m, i)
-      list(role = paste("Worker", i), m = m)))
+KEY_HINT <- "Paste a key into the key box on Start here."
 
 llm_host <- function(m) sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url)
 
-# The entries of a model that still hold a <placeholder> (the work profile before it is
-#   filled in), by name.
-llm_placeholders <- function(m)
+# The entries of the model that still hold a <placeholder> (the work profile before it
+#   is filled in), by name.
+llm_placeholders <- function(m = APP_MODEL)
   names(purrr::keep(m, function(v) is.character(v) && length(v) == 1L && grepl("^<.+>$", v)))
 
 
@@ -184,7 +151,7 @@ llm_root_cause <- function(e)
 #   either, so those two go there. No entry sets either now: a model is used as it comes.
 llm_chat <- function(m, system_prompt, max_tokens, key) {
   if (is.null(key) || !nzchar(key))
-    llm_fail(paste0("There is no key for ", m$id, ". ", llm_key_hint(m)),
+    llm_fail(paste0("There is no key for ", m$id, ". ", KEY_HINT),
              class = "llm_client_error")
   old_name = identical(m$api, "openai") && identical(m$max_tokens_name, "max_tokens")
   if (!is.null(m$max_tokens_name) && !m$max_tokens_name %in% c("max_completion_tokens", "max_tokens"))
@@ -278,7 +245,7 @@ llm_complete_all <- function(requests, timeout = LLM_TIMEOUT_S) {
     key = tryCatch(r$key %||% llm_key_for(r$m), error = function(e) e)
     chat = if (inherits(key, "error")) key
            else if (is.null(key) || !nzchar(key))
-             tryCatch(llm_fail(paste0("There is no key for ", r$m$id, ". ", llm_key_hint(r$m)), class = "llm_client_error"),
+             tryCatch(llm_fail(paste0("There is no key for ", r$m$id, ". ", KEY_HINT), class = "llm_client_error"),
                       error = function(e) e)
            else tryCatch(llm_chat(r$m, r$system_prompt, r$max_tokens, key), error = function(e) e)
     if (inherits(chat, "error")) return(settle(i, chat))
@@ -472,9 +439,8 @@ is_placeholder_reply <- function(obj) {
 #   that many repeat attempts, no more are made and the call fails at once.
 #   Each attempt is also retried by ellmer itself on a 429 or 503.
 #
-# key defaults to llm_key_for(m). tests/llm_check.R hands the project manager's
-#   key in directly, the way the key box would; the app never reads the
-#   environment for a model whose key_source is "analyst". complete is the
+# key defaults to llm_key_for(m). tests/llm_check.R hands the key in directly,
+#   the way the key box would; the app never reads the environment for it. complete is the
 #   function that makes the request, so a test can stand in for the network. first is
 #   a first attempt already made (by llm_complete_all(): the reply, or the error it
 #   met), used in place of the first request; any repeat attempt is made as usual.
@@ -492,7 +458,7 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
   #   reported at once instead of after three retries.
   key = key %||% llm_key_for(m)
   if (is.null(key) || !nzchar(key))
-    llm_fail(paste0("There is no key for ", m$id, ". ", llm_key_hint(m)),
+    llm_fail(paste0("There is no key for ", m$id, ". ", KEY_HINT),
              class = "llm_client_error")
 
   ask = paste0(user, "\n\n", JSON_QUOTE_RULE)
@@ -592,7 +558,7 @@ llm_ping <- function(m, key = NULL, complete = llm_complete) {
   key = key %||% llm_key_for(m)
   if (is.null(key) || !nzchar(key))
     return(list(ok = FALSE, seconds = NA_real_,
-                message = paste("Waits for a key.", llm_key_hint(m))))
+                message = paste("Waits for a key.", KEY_HINT)))
   started = Sys.time()
   .llm_state$calls <- .llm_state$calls + 1L
   # reply is what the model said, for a test to show; the screen shows message.
@@ -608,8 +574,7 @@ llm_ping <- function(m, key = NULL, complete = llm_complete) {
 
 # ---- the key box -------------------------------------------------------------------
 
-# On Start here, because the brief check, the appraisal and the Evaluate task all
-#   need a key.
+# On Start here, because every task needs a key.
 
 # WHERE TO GET A KEY -- what Start here tells an analyst under "Where to get one". General
 #   wording that holds anywhere; replace it with your deployment's own (the page to open, who
@@ -617,7 +582,7 @@ llm_ping <- function(m, key = NULL, complete = llm_complete) {
 KEY_INSTRUCTIONS <- list(
   where = "Ask the person who manages the AI service for your office for a key.",
   create = "Use a key issued to you, not one shared by a team, so that use can be traced to the person who made it.",
-  models = "The key must be able to reach every model listed under Settings and connection below. Check connections there before you start.",
+  models = "The key must be able to reach the model listed under Settings and connection below. Check the connection there before you start.",
   cost   = "If a request is refused for quota or cost, stop and ask the person who issued the key; do not borrow someone else's.")
 
 mod_key_ui <- function(id) {
@@ -689,8 +654,7 @@ mod_key_server <- function(id, state) {
                "A key you supplied is in use for this session.")
       else
         warn_box(tags$div(
-          "No key has been pasted. The brief check, the appraisal and the ",
-          "Evaluate task are unavailable until you paste one."))
+          "No key has been pasted. Nothing can be run until you paste one."))
     })
   })
 }
