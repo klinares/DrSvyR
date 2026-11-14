@@ -165,13 +165,12 @@ md_page <- function(path)
 
 # ---- a document as blocks, drawn twice ------------------------------------------------------
 
-# Each block has a `type`: "h" (text, level), "p" (text; marks: words to highlight; em; strong), "list"
-#   (items; tags: a small tag before each item) or "table" (head, rows).
+# Each block has a `type`: "h" (text, level), "p" (text; marks: words to highlight; em; strong) or
+#   "list" (items; tags: a small tag before each item).
 blk_h <- function(text, level = 2L) list(type = "h", text = text, level = level)
 blk_p <- function(text, em = FALSE, marks = character(0), indent = FALSE, strong = FALSE)
   list(type = "p", text = text, em = em, marks = marks, indent = indent, strong = strong)
 blk_list <- function(items, tags = NULL, indent = FALSE) list(type = "list", items = as.character(items), tags = tags, indent = indent)
-blk_table <- function(head, rows) list(type = "table", head = head, rows = rows)
 
 # A text with each of the marked words wrapped in <mark>, the rest escaped. A mark is found
 #   whatever its case and spacing; one that is not in the text marks nothing.
@@ -185,8 +184,8 @@ marked_html <- function(text, marks) {
     if (i %% 2L == 0L) paste0("<mark>", htmltools::htmlEscape(x), "</mark>") else htmltools::htmlEscape(x)), collapse = "")
 }
 
-# The blocks as plain HTML: headings, paragraphs, lists and tables, which is what Word keeps when
-#   it is pasted.
+# The blocks as plain HTML: headings, paragraphs and lists, which is what Word keeps when it is
+#   pasted.
 doc_html <- function(blocks)
   tagList(purrr::map(blocks, function(b) switch(b$type,
     h = if (b$level <= 2L) tags$h4(b$text) else tags$h5(b$text),
@@ -194,17 +193,14 @@ doc_html <- function(blocks)
                HTML(sprintf(if (isTRUE(b$strong)) "<strong>%s</strong>" else if (b$em) "<em>%s</em>" else "%s",
                             marked_html(b$text, b$marks)))),
     list = tags$ul(style = if (isTRUE(b$indent)) "margin-left: 2em;", purrr::imap(b$items, function(x, i)
-      tags$li(if (length(b$tags)) tags$span(class = "badge text-bg-light border me-1", b$tags[[i]]), x))),
-    table = tags$table(class = "table table-sm", tags$thead(tags$tr(purrr::map(b$head, tags$th))),
-                       tags$tbody(purrr::map(b$rows, function(r) tags$tr(purrr::map(r, tags$td))))))))
+      tags$li(if (length(b$tags)) tags$span(class = "badge text-bg-light border me-1", b$tags[[i]]), x))))))
 
 # The same blocks as plain text.
 doc_text <- function(blocks)
   paste(purrr::map_chr(blocks, function(b) switch(b$type,
     h = paste0(b$text, "\n", strrep(if (b$level <= 2L) "=" else "-", nchar(b$text))),
     p = paste0(if (isTRUE(b$indent)) "    ", b$text),
-    list = paste0(if (isTRUE(b$indent)) "    ", "- ", if (length(b$tags)) paste0("[", b$tags, "] "), b$items, collapse = "\n"),
-    table = paste(purrr::map_chr(c(list(b$head), b$rows), function(r) paste(r, collapse = " | ")), collapse = "\n"))),
+    list = paste0(if (isTRUE(b$indent)) "    ", "- ", if (length(b$tags)) paste0("[", b$tags, "] "), b$items, collapse = "\n"))),
     collapse = "\n\n")
 
 
