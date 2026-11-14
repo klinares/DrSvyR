@@ -685,5 +685,6 @@ ok("the reflexes fold away: one closed panel, a closed panel per file, core firs
        identical(gsub("</?strong>", "", first8), unname(purrr::map_chr(rfiles[["core.md"]]$reflexes[c("plain_words", "simple_syntax", "ambiguous_words",
          "specific_concrete", "options_fit", "neutral_wording", "one_thing", "no_negation")], "label"))) &&
        all(purrr::map_lgl(unique(labs), function(l) n_in(paste0("<strong>", htmltools::htmlEscape(l), "</strong>"), fold) == sum(labs == l))) &&
-       grepl("<a href=\"reflex_materials/yan_s1_fundamentals.md\" target=\"_blank\">Yan, IASS/WSS Session 1</a>", fold, fixed = TRUE)
+       grepl("<a href=\"reflex_materials/yan_s1_fundamentals.md\" target=\"_blank\">Yan, IASS/WSS Session 1</a>", fold, fixed = TRUE) &&
+       grepl("everyone in the target population knows.", fold, fixed = TRUE) && !grepl("Replace technical terms", fold, fixed = TRUE)
    }))
