@@ -2,7 +2,7 @@
 
 From Phase 9, "skills" are called "reflexes". This file keeps the old word where it records earlier work.
 
-Generated 2026-11-13 18:30 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-13 19:00 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -14,6 +14,11 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+d23f2ce QuestionR 9g: smoke checks for what the analyst can and cannot see
+18fe115 QuestionR 9f: remove coded defaults and severity bands, which nothing in the app calls
+c53c9a7 QuestionR 9d: Total Survey Error first; methodology note cut under 600 words
+eea4b73 QuestionR 9e: worked example diagram from Session 1 slide; fw_construct trimmed to decomposition and errors
+b5574bb QuestionR 9c: simple output
 62c036b QuestionR 9b: no translation, no TRAPD, questions are written in English
 752e23c QuestionR 9a: skills are reflexes
 341314a QuestionR: Phase 9 prompt, and design section 18 (Kevin's five rulings)
@@ -24,73 +29,61 @@ bbddebe QuestionR 8g: remove what is no longer needed
 edd4eea QuestionR 8f: no TODO text on Start here
 c01c1a5 QuestionR 8e: the skill materials are not deployed, and only the open-licensed PDF is committed
 da1477f QuestionR 8d: a Source code button at the top left of the header
-eabbb8a QuestionR 8c: the frameworks, complete and drawn from the slides; the skills on the Methodology tab
-e0d90c5 QuestionR 8b: the Prompt tab shows one box, and never the rules
-06373be QuestionR 8a: the skills with Guidelines, and the message the analyst edits
-58f00d4 QuestionR: Phase 8 prompt revised 2026-11-13; note at the end of design section 17
-67e6fae QuestionR: changes from the Claude project
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
- M R/checks.R
- M R/flow.R
- M R/output.R
- M R/reflexes.R
- M R/ui_generate.R
  M REVIEW.md
- M tests/llm_check.R
- M tests/output_generate.txt
- M tests/output_review.txt
- M tests/review.R
- M tests/smoke.R
- M www/reflexes/evaluate.md
- M www/reflexes/generate.md
- M www/reflexes/pm_appraise.md
+ M STATUS.md
+ M tests/run_generate.json
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
 ~~~~
- .gitignore                                         |   6 +-
- CLAUDE.md                                          |   2 +-
- QuestionR/.rscignore                               |   2 +-
- QuestionR/DESIGN.md                                | 131 +++--
- QuestionR/PROMPTS.md                               | 167 +++++++
- QuestionR/R/checks.R                               |  24 +-
- QuestionR/R/flow.R                                 |   3 +-
- QuestionR/R/llm.R                                  |   4 +-
- QuestionR/R/output.R                               | 105 ++--
- QuestionR/R/{skills.R => reflexes.R}               | 203 ++++----
- QuestionR/R/ui.R                                   |   1 -
- QuestionR/R/ui_generate.R                          |  33 +-
- QuestionR/README.md                                |  16 +-
- QuestionR/REVIEW.md                                | 536 ++++++---------------
- QuestionR/STATUS.md                                |   2 +
- QuestionR/app.R                                    |   8 +-
- QuestionR/tests/output_generate.txt                |  47 +-
- QuestionR/tests/output_review.txt                  |   4 +-
- QuestionR/tests/review.R                           |  91 ++--
- QuestionR/tests/smoke.R                            | 335 +++++--------
- QuestionR/www/fw_trapd.svg                         |  52 --
- QuestionR/www/how_it_works.svg                     |   6 +-
- QuestionR/www/methodology.md                       |  47 +-
- ...g Unedited AI-Generated Psychometric Scales.pdf | Bin
- .../README.md                                      |   6 +-
- QuestionR/www/{skills => reflexes}/README.md       |   9 +-
- QuestionR/www/{skills => reflexes}/attitudinal.md  |   0
- QuestionR/www/{skills => reflexes}/behavioral.md   |   0
- QuestionR/www/{skills => reflexes}/core.md         |   0
- QuestionR/www/reflexes/cross_cultural.md           |  41 ++
- QuestionR/www/{skills => reflexes}/evaluate.md     |   0
- QuestionR/www/{skills => reflexes}/generate.md     |   0
- QuestionR/www/{skills => reflexes}/mode.md         |   0
- QuestionR/www/{skills => reflexes}/pm_appraise.md  |   0
- QuestionR/www/{skills => reflexes}/pm_brief.md     |   0
- QuestionR/www/{skills => reflexes}/sensitive.md    |   0
- QuestionR/www/skills/cross_cultural.md             |  66 ---
- QuestionR/www/start.md                             |   7 +-
- README.md                                          |   2 +-
- 39 files changed, 808 insertions(+), 1148 deletions(-)
+ .gitignore                                         |    6 +-
+ CLAUDE.md                                          |    2 +-
+ QuestionR/.rscignore                               |    2 +-
+ QuestionR/DESIGN.md                                |  131 +-
+ QuestionR/PROMPTS.md                               |  167 +++
+ QuestionR/R/checks.R                               |  361 ++----
+ QuestionR/R/flow.R                                 |    4 +-
+ QuestionR/R/llm.R                                  |    4 +-
+ QuestionR/R/output.R                               |  284 ++---
+ QuestionR/R/{skills.R => reflexes.R}               |  207 ++-
+ QuestionR/R/ui.R                                   |    1 -
+ QuestionR/R/ui_generate.R                          |  408 ++----
+ QuestionR/README.md                                |   16 +-
+ QuestionR/REVIEW.md                                |  817 ++++--------
+ QuestionR/STATUS.md                                |    2 +
+ QuestionR/app.R                                    |    8 +-
+ QuestionR/tests/llm_check.R                        |   45 +-
+ QuestionR/tests/output_generate.txt                |   68 +-
+ QuestionR/tests/output_review.txt                  |   61 +-
+ QuestionR/tests/review.R                           |  142 +--
+ QuestionR/tests/smoke.R                            | 1314 +++++++++-----------
+ QuestionR/www/fw_construct.svg                     |   50 +-
+ QuestionR/www/fw_example.svg                       |   55 +
+ QuestionR/www/fw_sensitive.svg                     |   57 -
+ QuestionR/www/fw_trapd.svg                         |   52 -
+ QuestionR/www/how_it_works.svg                     |    6 +-
+ QuestionR/www/methodology.md                       |  188 +--
+ ...g Unedited AI-Generated Psychometric Scales.pdf |  Bin
+ .../README.md                                      |    6 +-
+ QuestionR/www/{skills => reflexes}/README.md       |    9 +-
+ QuestionR/www/{skills => reflexes}/attitudinal.md  |    0
+ QuestionR/www/{skills => reflexes}/behavioral.md   |    0
+ QuestionR/www/{skills => reflexes}/core.md         |    0
+ QuestionR/www/reflexes/cross_cultural.md           |   41 +
+ QuestionR/www/{skills => reflexes}/evaluate.md     |   16 +-
+ QuestionR/www/{skills => reflexes}/generate.md     |   18 +-
+ QuestionR/www/{skills => reflexes}/mode.md         |    0
+ QuestionR/www/{skills => reflexes}/pm_appraise.md  |   12 +-
+ QuestionR/www/{skills => reflexes}/pm_brief.md     |    0
+ QuestionR/www/{skills => reflexes}/sensitive.md    |    0
+ QuestionR/www/skills/cross_cultural.md             |   66 -
+ QuestionR/www/start.md                             |   41 +-
+ README.md                                          |    2 +-
+ 43 files changed, 1871 insertions(+), 2798 deletions(-)
 exit status: 0
 ~~~~
 
@@ -100,7 +93,7 @@ exit status: 0
 |---|---|
 | app.R | 249 |
 | R/_disable_autoload.R | 5 |
-| R/checks.R | 434 |
+| R/checks.R | 310 |
 | R/flow.R | 418 |
 | R/llm.R | 696 |
 | R/output.R | 365 |
@@ -109,7 +102,7 @@ exit status: 0
 | R/ui_generate.R | 809 |
 | tests/llm_check.R | 316 |
 | tests/review.R | 659 |
-| tests/smoke.R | 3015 |
+| tests/smoke.R | 3101 |
 
 Code files counted: 11 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
@@ -346,15 +339,6 @@ ok  a recommended item gives its domain, candidate and id; its line to check bef
 ok  R refuses a recommendation that names an id no candidate has, names an item twice, or has more items than were asked for; two candidates may share an id; an id may be a number
 ok  a format that has no schema stops, naming it
 ok  a new output format is one entry: the validator is built from REPLY_SCHEMAS alone
-ok  coded defaults match the hand-coded fixture: five labelled points and a don't know
-ok  coded defaults match the hand-coded fixture: four points, end labels only, a reference period, no don't know
-ok  coded defaults match the hand-coded fixture: an open item
-ok  coded defaults match the hand-coded fixture: a curly apostrophe and a not-applicable option
-ok  coded defaults match the hand-coded fixture: an item with only a stem and options
-ok  the coded defaults read as words for a table
-ok  a five-point scale whose decisions say there is no midpoint is odd and stated as no midpoint, and R does not say 'midpoint' for the count
-ok  what an item says about a midpoint is read as yes, no or not stated, in the phrasings the models used
-ok  decisions written as one string or one entry are flagged not itemised, two or more are itemised, none is none
 ok  each recommended item is found in its draft by letter and id, in the order given, with its position, domain and line to check; nothing else of the reply is read
 ok  the line to check before use is held to one sentence of 20 words or fewer, and is empty when the reviewer gave none
 ok  an item that cannot be found in its draft is left out, not guessed at; a reply with nothing recommended has none
@@ -447,8 +431,6 @@ ok  a blank box clears the revision and still goes back to the brief
 ok  the page has the Generate tabs' controls, and no tab is a placeholder
 ok  no key is anywhere on the page
 ok  the log keeps the brief check's and the appraisal's own call records: raw reply, tokens, attempts
-ok  a model's own words for labelling every point are read as yes, in the phrasings the live run produced
-ok  labels said to be partial or absent are read as no, and a silence is not stated
 ok  a cut-off brief check says to try again or skip; a cut-off draft to ask for fewer items; a cut-off appraisal to ask for fewer items
 ok  an error that is not a cut-off gets no cut-off advice
 ok  a run drafts at most 10 items: 10 is accepted, 11 is refused saying so, and the form's box stops at 10
@@ -537,12 +519,15 @@ ok  the review's record has its round, its prompt hash, its call record and its 
 ok  the page has the Output tab's boxes in place of its placeholder, and no key is anywhere on it
 ok  Start here is www/start.md as it is, then the key box, then a closed Settings and connection panel that holds the profile, the models table with the connection check, and the pilot notice
 ok  a profile with placeholders opens the Settings and connection panel by itself
-ok  the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; reflexes_table() stays, because tests/review.R reads it
+ok  the Methodology tab is www/methodology.md as it is: its headings and its table, and nothing else; reflexes_table() stays, because tests/review.R reads it
 Warning message:
 In file(con, "r") :
   cannot open file 'www/no_such_page.md': No such file or directory
-ok  the frameworks section comes directly after 'What it is built on', opens with one sentence saying the reflexes were written from them, and 'How it was tested' is one section with that heading
-ok  each framework is a diagram, then a summary of three to five sentences, then an italic line of references
+ok  the note opens with Total Survey Error (fw_tse.svg), directly before 'What it is built on'; it names the errors QuestionR works on and those it does not
+ok  the note keeps its sections, in this order, and 'How it was tested' is one section with that exact heading
+ok  each framework section is a diagram, then a short summary, then an italic line of references; the worked example is three sentences and cites the slide
+ok  the note is under 600 words outside the reflex table and the panels (image descriptions not counted)
+ok  the worked example's diagram has the slide's question word for word, its three parts marked, and the three errors and validity named; the Sensitive and TRAPD diagrams are gone
 ok  every .svg in www/ is well-formed XML with a title and a description, and no script
 ok  every image named in start.md and methodology.md exists in www/
 ok  the Frameworks column of the reflex table is what each file's Source lines name, in the order of the panels
@@ -557,6 +542,14 @@ ok  a part that fails in a batch is recorded and named, the other parts and the 
 ok  requests sent together through ellmer's chat_async and later::run_now take about one wait, not their sum, in the same R process
 ok  each answer comes back in the order sent, parsed, with its own seconds; a model the endpoint refuses and a request with no key are errors in their place and the others are kept
 ok  the sending code uses only what ellmer and later document, never a package that starts other processes
+ok  the word skill is on no page except in its one sentence, once on Start here and once on the Methodology page
+ok  no page of the app names TRAPD, translation or an output language, and no form field is a language; the reflex files that still do are the three known ones, with a count that cannot grow
+ok  a drafted question on the screen has the question, its answer options, and at most one line to check before use, and nothing else; every one is checked, and there are cards to check
+ok  the Word copy of drafted questions is what is on the screen, word for word, and then exactly three lines: the date, who drafted and who reviews, and the tool version
+ok  on the drafting screens, nowhere: TRAPD, translation, the word skill, a language field
+ok  the stand-in sent more than two problems for a question and more than three points about the whole; the screen shows at most two for each question and at most three points
+ok  the Word copy of a review is what is on the screen, word for word, and then exactly the same three lines
+ok  on the review screen, nowhere: TRAPD, translation, the word skill, a language field
 exit status: 0
 ~~~~
 
@@ -1279,61 +1272,61 @@ Live run log (tests/run_generate.json), first 60 lines:
 ~~~~
 {
   "schema": 1,
-  "time": "2026-11-13T08:42:16-0500",
+  "time": "2026-11-13T18:55:20-0500",
   "summary": [
     {
       "step": "brief check",
       "model": "claude-sonnet-5-5",
       "status": "ok",
-      "seconds": 10.3375,
+      "seconds": 9.6334,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 4758,
-      "tokens_out": 1117,
+      "tokens_in": 4752,
+      "tokens_out": 995,
       "error": null
     },
     {
       "step": "draft",
       "model": "google/gemma-4-31b-it",
       "status": "ok",
-      "seconds": 4.4608,
+      "seconds": 3.6604,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 2957,
-      "tokens_out": 881,
+      "tokens_in": 2792,
+      "tokens_out": 349,
       "error": null
     },
     {
       "step": "draft",
       "model": "meta-llama/llama-4-maverick",
       "status": "ok",
-      "seconds": 10.0541,
+      "seconds": 5.3349,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 2839,
-      "tokens_out": 678,
+      "tokens_in": 2682,
+      "tokens_out": 259,
       "error": null
     },
     {
       "step": "draft",
       "model": "openai/gpt-6-luna",
       "status": "ok",
-      "seconds": 51.0088,
+      "seconds": 51.8683,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 2833,
-      "tokens_out": 4869,
+      "tokens_in": 2674,
+      "tokens_out": 5189,
       "error": null
     },
     {
       "step": "appraisal",
       "model": "claude-sonnet-5-5",
       "status": "ok",
-      "seconds": 27.0212,
+      "seconds": 12.9585,
       "finish": "success",
       "attempts": 1,
-      "tokens_in": 5804,
-      "tokens_out": 3356,
+      "tokens_in": 4155,
+      "tokens_out": 1691,
       "error": null
     }
   ],
