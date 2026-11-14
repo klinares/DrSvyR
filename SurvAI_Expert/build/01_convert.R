@@ -536,7 +536,7 @@ merge_csv <- function(new, f, ids, key, empty = new[0, ]) {
 
 dry_run <- function(all, todo, est) {
   cached = map2_int(todo$sha256, todo$pages, function(sha, n)
-    if (is.na(n)) 0L else sum(file.exists(page_file(sha, seq_len(n), "json"))))
+    if (is.na(n)) 0L else sum(file.exists(page_file(sha, seq_len(n), "md"))))
   by_source = todo |> mutate(cached = cached) |> group_by(source) |>
     summarise(files = n(), pdfs = sum(ext == "pdf"), text_files = sum(ext != "pdf"),
               pages = sum(pages, na.rm = TRUE), pages_cached = sum(cached), .groups = "drop") |>
