@@ -375,21 +375,23 @@ ok("one card for both tabs: a filter above, the intro, the stem in bold, the opt
        regexpr("The courts", t, fixed = TRUE) < regexpr("If a lot: Why?", t, fixed = TRUE) && !grepl("ROTATE", t, fixed = TRUE) &&
        grepl("Answer: a number of days", open, fixed = TRUE)
    }))
-ok("a suggested wording tags only what is not in the question as pasted; the same programming text stays under Details, a changed one is shown",
+ok("a suggested wording tags only what is not in the question as pasted; of the programming, only the new instructions are shown, each tagged, and the full text stays under Details",
    local({
-     text = "Q9. How satisfied are you with each? [ROTATE ROWS]\nThe bus / The train / The tram\nVery satisfied / Not satisfied"
+     text = "Q9. How satisfied are you with each? [ROTATE ROWS] [SHOW CARD A] [ASK ALL]\nThe bus / The train / The tram\nVery satisfied / Not satisfied"
      rw = full_item(list(stem = "How satisfied are you with each?", options = list("Very satisfied", "Not satisfied"),
                          rows = list("The bus", "The overground train", "The tram"), programming = "[ROTATE ROWS]"))
      q = list(id = "Q9", pos = 9L, text = text, reviewed = TRUE, summary = "One row named.", rewrite = rw,
               flags = list(list(label = "L", level = "fix", quote = "The train", why = "w", found = TRUE)))
      t = doc_text(fix_blocks(q))
      q2 = q
-     q2$rewrite$programming = "[ROTATE ROWS] ASK IF USES PUBLIC TRANSPORT"
+     q2$rewrite$programming = "[ROTATE ROWS] [show card a]  [RANDOMISE OPTIONS] [ASK ALL] ASK IF USES PUBLIC TRANSPORT"
      same = full_item(list(intro = "How satisfied are you with each?", stem = "How satisfied are you with each?", options = list("Yes", "No")))
      n_in("(changed)", t) == 1L && grepl("- The overground train (changed)", t, fixed = TRUE) && grepl("- The bus\n", t, fixed = TRUE) &&
-       !grepl("ROTATE", t, fixed = TRUE) && grepl("Programming: [ROTATE ROWS]", doc_text(details_blocks(q)), fixed = TRUE) &&
-       grepl("Programming: [ROTATE ROWS] ASK IF USES PUBLIC TRANSPORT (changed)", doc_text(fix_blocks(q2)), fixed = TRUE) &&
-       !grepl("Programming:", doc_text(details_blocks(q2)), fixed = TRUE) &&
+       !grepl("ROTATE", t, fixed = TRUE) && !grepl("Programming:", t, fixed = TRUE) &&
+       grepl("Programming: [ROTATE ROWS]", doc_text(details_blocks(q)), fixed = TRUE) &&
+       identical(regmatches(doc_text(fix_blocks(q2)), gregexpr("Programming: [^\n]*", doc_text(fix_blocks(q2))))[[1]],
+                 c("Programming: [RANDOMISE OPTIONS] (changed)", "Programming: ASK IF USES PUBLIC TRANSPORT (changed)")) &&
+       grepl(paste("Programming:", q2$rewrite$programming), doc_text(details_blocks(q2)), fixed = TRUE) &&
        grepl("<small class=\"text-muted ms-1\">(changed)</small>", html_of(doc_html(fix_blocks(q))), fixed = TRUE) &&
        n_in("How satisfied", doc_text(question_blocks(same))) == 1L
    }))

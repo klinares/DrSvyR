@@ -254,6 +254,12 @@ quote_found <- function(quote, text) {
   nzchar(q) && grepl(q, normalise_quote(text), fixed = TRUE)
 }
 
+# A programming text as its instructions: each [bracketed] one, then what is left outside brackets.
+programming_parts <- function(x) {
+  rest = trimws(gsub("\\s+", " ", gsub("\\[[^]]*\\]", " ", x %||% "")))
+  c(regmatches(x %||% "", gregexpr("\\[[^]]*\\]", x %||% ""))[[1]], if (nzchar(rest)) rest)
+}
+
 # Whether a line of a rewrite occurs word for word in the question as pasted, after the same
 #   normalising, as whole words (an option "No" is not found in "Not").
 occurs_in <- function(x, text) {

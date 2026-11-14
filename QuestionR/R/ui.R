@@ -272,13 +272,13 @@ CHIP_CLASS <- c(Fix = "text-bg-danger", Consider = "text-bg-warning", `None foun
                 `Not reviewed` = "text-bg-secondary")
 
 # A question with a fix flag, as it opens: its summary, then the rewrite on the one card under
-#   "Suggested wording", each line that is not in the question as pasted tagged; then its programming
-#   text, tagged, when it is not the original's.
+#   "Suggested wording", each line that is not in the question as pasted tagged; then each programming
+#   instruction of the rewrite that is not in the original, tagged. Nothing new, no Programming line.
 fix_blocks <- function(q) {
-  prog = q$rewrite$programming %||% ""
+  new = purrr::discard(programming_parts(q$rewrite$programming), occurs_in, text = q$text)
   c(if (nzchar(q$summary)) list(blk_p(q$summary)), list(blk_p("Suggested wording", em = TRUE)),
     question_blocks(q$rewrite, original = q$text),
-    if (!occurs_in(prog, q$text)) list(blk_p(paste("Programming:", prog), em = TRUE, changed = TRUE)))
+    purrr::map(new, function(x) blk_p(paste("Programming:", x), em = TRUE, changed = TRUE)))
 }
 
 # Its flags, one line each, "label: "quoted words". Why.", with the level as a small tag.
@@ -286,11 +286,11 @@ flag_blocks <- function(q)
   list(blk_list(purrr::map_chr(q$flags, function(fl) paste0(fl$label, ": \"", fl$quote, "\". ", fl$why)),
                 tags = purrr::map_chr(q$flags, function(fl) paste(c(fl$level, if (!isTRUE(fl$found)) "quote not found in your text"), collapse = ", "))))
 
-# Its Details: the question as pasted with the quoted words highlighted, the flags, the programming text.
+# Its Details: the question as pasted with the quoted words highlighted, the flags, and the rewrite's
+#   programming text in full.
 details_blocks <- function(q)
   c(list(blk_p(q$text, marks = purrr::map_chr(q$flags, "quote"))), flag_blocks(q),
-    if (nzchar(q$rewrite$programming %||% "") && occurs_in(q$rewrite$programming, q$text))
-      list(blk_p(paste("Programming:", q$rewrite$programming), em = TRUE)))
+    if (nzchar(q$rewrite$programming %||% "")) list(blk_p(paste("Programming:", q$rewrite$programming), em = TRUE)))
 
 # The review as it is copied to Word: the bottom line, then each question with a fix flag, its header,
 #   summary and suggested wording; with details, its flags too.
