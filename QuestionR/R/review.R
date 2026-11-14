@@ -403,8 +403,9 @@ review_record <- function(part, p, r = NULL) {
 
 # The calls of a review, sent REVIEW_AT_ONCE at a time; a call whose prompt cannot be built is a
 #   failed record and is not sent. progress(msg) is told before each group, so a screen can say so.
+#   A part with its own `form` is asked with it (tests/gold_test.R sends 27 one-question reviews).
 send_parts <- function(ask_all, m, f, parts, message, progress = function(msg) NULL) {
-  prompts = purrr::map(parts, function(part) review_prompt(f, part, message))
+  prompts = purrr::map(parts, function(part) review_prompt(part$form %||% f, part, message))
   groups = split(seq_along(parts), ceiling(seq_along(parts) / REVIEW_AT_ONCE))
   results = unlist(purrr::map(unname(groups), function(at) {
     progress(paste0("Sending ", if (length(at) == 1L) "call " else "calls ", min(at),

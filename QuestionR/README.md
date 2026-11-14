@@ -135,5 +135,12 @@ there is deliberate; the Methodology table reads them as they are.
 ## At home: the tests
 
 From inside `QuestionR/`, with no model calls: `Rscript --no-init-file tests/smoke.R`.
-`tests/llm_check.R review30` and `gold` (each with an optional model id) make real calls; they do nothing
-until one is named.
+`tests/llm_check.R review30` (with an optional model id) makes real calls; it does nothing until
+review30 is named.
+
+`tests/gold_test.R` is the 20-question test, at home or at work: it reviews the 27 test questions
+(27 calls), asks the main model in a separate chat which flag matches which planted fault (20
+calls), and writes `www/gold_summary.md` (the paragraph on the Methodology page) and a `summary.md`
+in a new folder in `tests/gold_runs/`. Set `PROFILE` at its top. To correct the matching by hand:
+edit `match` in that folder's `matches.csv`, put a name in `checked_by`, set `RUN_REVIEWS` and
+`RUN_MATCHING` to `FALSE` and run it again; it rebuilds both files with no calls.
