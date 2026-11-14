@@ -44,18 +44,21 @@ TASKS <- list(
     fields = c("research_question", "population", "country", "modes", "kinds", "questionnaire")))
 
 # The most items one drafting run is asked for.
-MAX_ITEMS_PER_RUN <- 6L
+MAX_ITEMS_PER_RUN <- 10L
 
-# The calls: draft (Write questions, call 1); items and instrument (a review's part, and the whole);
-#   check (Write questions, call 2: an items call with the draft's own checklist).
-STEPS <- c("draft", "items", "instrument", "check")
+# The calls: draft (Write questions, call 1, the drafter); refine (call 2, the main model edits the
+#   draft into the final questions); items and instrument (a review's part, and the whole).
+STEPS <- c("draft", "refine", "items", "instrument")
+
+# The refine call's task sentence; %s is the number of items.
+REFINE_ASK <- "Edit the draft below into the final %s for the brief, repairing every failure against the CHECKLIST."
 
 # The reflex files a step reads, in order: core.md first, mode.md last.
 step_files <- function(f, step) {
   if (!step %in% STEPS) stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
   switch(step,
          draft = c("core.md", "generate.md", KIND_FILES[[f$task]], "mode.md"),
-         check = c("core.md", "evaluate.md", KIND_FILES[[f$task]], "mode.md"),
+         refine = c("core.md", "refine.md", KIND_FILES[[f$task]], "mode.md"),
          c("core.md", "evaluate.md", unname(KIND_FILES[f$kinds]), "mode.md"))
 }
 
@@ -276,7 +279,7 @@ reflex_applies <- function(r, file) {
 #   and mixed_mode with more than one; a reflex whose Applies misses the form's kinds is left out;
 #   in a review the kind files bring only their checks, not their drafting rules.
 reflexes_in_force <- function(f, step, dir = REFLEXES_DIR) {
-  review = step != "draft"
+  review = step %in% c("items", "instrument")
   rfiles = purrr::map(purrr::set_names(step_files(f, step)), function(name) {
     s = read_reflex_file(name, dir)
     keep = purrr::map_lgl(s$reflexes, function(r)
@@ -328,11 +331,11 @@ brief_lines <- function(f) {
   unname(lines[!is.na(lines)])
 }
 
-ask_sentence <- function(f) {
-  what = TASKS[[f$task]]$ask
-  if (TASKS[[f$task]]$kind == "draft")
-    what = sprintf(what, paste(f$n_items, if (f$n_items == 1L) "survey item" else "survey items"))
-  what
+# The task sentence, with the number of items for a draft or a refine; "each" only for more than one.
+ask_sentence <- function(f, ask = TASKS[[f$task]]$ask) {
+  if (TASKS[[f$task]]$kind != "draft") return(ask)
+  what = sprintf(ask, paste(f$n_items, if (f$n_items == 1L) "survey item" else "survey items"))
+  if (f$n_items == 1L) sub(", each ", ", ", what, fixed = TRUE) else what
 }
 
 guidelines_block <- function(g)
@@ -351,11 +354,10 @@ assemble_message <- function(f, core = read_reflex_file("core.md"), ask = ask_se
         collapse = "\n\n")
 }
 
-# Reflex id to its Check question, in the order sent: the question checks for an items or check call
-#   (for check, only core.md's, the kind file's and mode.md's), the instrument checks for the whole.
+# Reflex id to its Check question, in the order sent: the question checks for an items or refine
+#   call, the instrument checks for the whole.
 checklist_of <- function(rfiles, step = "items") {
-  files = if (step == "check") setdiff(names(rfiles), "evaluate.md") else names(rfiles)
-  rx = unlist(purrr::map(unname(rfiles[files]), function(s) unname(s$reflexes)), recursive = FALSE)
+  rx = unlist(purrr::map(unname(rfiles), function(s) unname(s$reflexes)), recursive = FALSE)
   rx = purrr::keep(rx, function(r) !is.na(r$check) && r$instrument == (step == "instrument"))
   purrr::set_names(purrr::map_chr(rx, "check"), purrr::map_chr(rx, "id"))
 }
@@ -383,14 +385,20 @@ part_sentence <- function(part) {
               ". Reply with the \"items\" object only, one entry per question, in the order given.")
 }
 
-# What R puts after the analyst's message: for a draft, the kind file's guidelines and the reply
-#   format; for a call of a review, what it is to do, the questions, the CHECKLIST and the format.
-assemble_tail <- function(f, rfiles, step, part = NULL) {
+# What R puts after the message: for a draft, the kind file's guidelines and the reply format; for a
+#   refine, the draft as JSON, the CHECKLIST of the drafting files (core, generate, the kind's file,
+#   the modes) and the format; for a call of a review, what it is to do, the questions, the
+#   CHECKLIST and the format.
+assemble_tail <- function(f, rfiles, step, part = NULL, draft = NULL) {
   if (step == "draft") {
     g = rfiles[[KIND_FILES[[f$task]]]]$guidelines
     return(paste(c(if (!is.null(g)) guidelines_block(g), ASK_CLOSING,
                    paste("REPLY FORMAT", output_format_of(rfiles), sep = "\n")), collapse = "\n\n"))
   }
+  if (step == "refine")
+    return(paste(c(paste("DRAFT", jsonlite::toJSON(list(items = draft$items), auto_unbox = TRUE, pretty = TRUE), sep = "\n"),
+                   checklist_block(checklist_of(reflexes_in_force(f, "draft"))), ASK_CLOSING,
+                   paste("REPLY FORMAT", output_format_of(rfiles), sep = "\n")), collapse = "\n\n"))
   checklist = checklist_of(rfiles, step)
   if (!length(checklist)) stop("A ", step, " call would carry no checks.", call. = FALSE)
   paste(c(part_sentence(part), paste("QUESTIONNAIRE", part$text, sep = "\n"), checklist_block(checklist),
@@ -403,24 +411,27 @@ sent_user <- function(message, tail) paste0(message, "\n\n", tail)
 prompt_hash <- function(system_txt, user_txt)
   digest::digest(enc2utf8(paste0(system_txt, "\n\n", user_txt)), algo = "sha256", serialize = FALSE)
 
-# One assembler for every call. message is the analyst's text; part an entry of review_plan(). Returns
-#   system, user, message (as assembled), tail, hash, files, and checks (the CHECKLIST ids sent).
-build_step_prompt <- function(form, step, part = NULL, message = NULL) {
+# One assembler for every call. message is the analyst's text (a draft or a review); part an entry of
+#   review_plan(); draft the parsed draft a refine edits. A refine's message is assembled, never the
+#   analyst's: it asks for an edit, not a draft. Returns system, user, message (as assembled), tail,
+#   hash, files, and checks (the CHECKLIST ids sent).
+build_step_prompt <- function(form, step, part = NULL, message = NULL, draft = NULL) {
   f = clean_form(form)
   if (!step %in% STEPS) stop("step must be one of: ", paste(STEPS, collapse = ", "), call. = FALSE)
-  if ((step == "draft") != (TASKS[[f$task]]$kind == "draft") && step != "check")
+  if ((step %in% c("draft", "refine")) != (TASKS[[f$task]]$kind == "draft"))
     stop("The ", step, " step is not for the task ", f$task, ".", call. = FALSE)
-  if (step != "draft" && is.null(part)) stop("A ", step, " call needs a part.", call. = FALSE)
+  if (step %in% c("items", "instrument") && is.null(part)) stop("A ", step, " call needs a part.", call. = FALSE)
+  if (step == "refine" && is.null(draft)) stop("A refine call needs the draft.", call. = FALSE)
   rfiles = reflexes_in_force(f, step)
   system_txt = assemble_system(rfiles)
-  # The check of a draft is a review: its message asks for one, of the drafted questions.
-  assembled = if (step == "check") assemble_message(f, rfiles[["core.md"]], TASKS$evaluate$ask, length(part$questions))
+  assembled = if (step == "refine") assemble_message(f, rfiles[["core.md"]], ask_sentence(f, REFINE_ASK))
               else assemble_message(f, rfiles[["core.md"]])
-  tail_txt = assemble_tail(f, rfiles, step, part)
-  user_txt = sent_user(message %||% assembled, tail_txt)
+  tail_txt = assemble_tail(f, rfiles, step, part, draft)
+  user_txt = sent_user(if (step == "refine") assembled else message %||% assembled, tail_txt)
+  checks = switch(step, draft = character(0), refine = names(checklist_of(reflexes_in_force(f, "draft"))),
+                  names(checklist_of(rfiles, step)))
   list(system = system_txt, user = user_txt, message = assembled, tail = tail_txt,
-       hash = prompt_hash(system_txt, user_txt), files = names(rfiles),
-       checks = if (step != "draft") names(checklist_of(rfiles, step)) else character(0))
+       hash = prompt_hash(system_txt, user_txt), files = names(rfiles), checks = checks)
 }
 
 # A draft's prompt.

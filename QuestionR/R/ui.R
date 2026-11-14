@@ -45,13 +45,13 @@ model_label <- function(m)
 
 # A profile that still holds <placeholders> (the work profile before it is filled in) says which
 #   entries to fill in, and nothing else about it fails.
-placeholder_notice <- function(m = APP_MODEL) {
-  bad = llm_placeholders(m)
+placeholder_notice <- function(ms = app_models()) {
+  bad = unlist(purrr::imap(ms, function(m, role) if (length(llm_placeholders(m))) paste0(role, " ", paste(llm_placeholders(m), collapse = ", "))))
   if (!length(bad)) return(NULL)
   warn_box(
     tags$strong(paste0("The ", APP_PROFILE, " profile still has placeholders to fill in. ")),
     "Open app.R, section 1, and replace each <placeholder> (README.md, Setting up at work). Still to fill in: ",
-    paste(bad, collapse = ", "), ".")
+    paste(bad, collapse = "; "), ".")
 }
 
 # Start here: www/start.md; then the key box; then, closed, the settings in force and the connection check. The panel opens by itself when the
@@ -68,6 +68,7 @@ start_ui <- function() {
       placeholders,
       tags$table(class = "table table-sm", tags$tbody(
         row("Profile", APP_PROFILE),
+        purrr::imap(app_models(), function(m, role) row(role, m$id)),
         row("Classification banner", APP_CLASSIFICATION),
         row("Pasted questionnaire limit", paste(format(APP_MAX_PASTE_CHARS, big.mark = ","), "characters")))),
       mod_connect_ui("connect")))
@@ -92,11 +93,11 @@ mod_connect_ui <- function(id) {
   ns <- NS(id)
   tagList(
     tags$hr(),
-    tags$h4("Model"),
+    tags$h4("Models"),
     uiOutput(ns("models")),
     actionButton(ns("check"), "Check the connection"),
     tags$p(class = "text-muted small mt-2",
-           "Makes one very small call to the model, and shows whether it answered ",
+           "Makes one very small call to each model, and shows whether it answered ",
            "or what the endpoint said. Nothing you have entered is sent."),
     uiOutput(ns("result")))
 }
@@ -107,19 +108,17 @@ mod_connect_server <- function(id, state, ping = llm_ping) {
 
     output$models <- renderUI({
       state$key_version   # a key pasted or forgotten changes whether it is ready
-      m = APP_MODEL
-      tags$p(model_label(m), tags$br(),
-             if (length(llm_placeholders(m))) tags$span(class = "text-warning", "Waits for the settings in app.R.")
-             else if (llm_key_ready(m)) tags$span(class = "text-success", "Ready.")
-             else tags$span(class = "text-warning", paste("Waits for a key.", KEY_HINT)))
+      purrr::imap(app_models(), function(m, role)
+        tags$p(tags$strong(role), tags$br(), model_label(m), tags$br(),
+               if (length(llm_placeholders(m))) tags$span(class = "text-warning", "Waits for the settings in app.R.")
+               else if (llm_key_ready(m)) tags$span(class = "text-success", "Ready.")
+               else tags$span(class = "text-warning", paste("Waits for a key.", KEY_HINT))))
     })
 
     observeEvent(input$check, {
-      m <- APP_MODEL
-      withProgress(message = "Checking the connection", value = 0.5, {
-        r <- if (llm_key_ready(m)) ping(m) else llm_ping(m)
-        results(list(c(list(model = m$id), r)))
-      })
+      withProgress(message = "Checking the connection", value = 0.5,
+                   results(purrr::map(unname(app_models()), function(m)
+                     c(list(model = m$id), if (llm_key_ready(m)) ping(m) else llm_ping(m)))))
     })
 
     output$result <- renderUI({

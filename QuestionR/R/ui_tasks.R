@@ -8,7 +8,7 @@
 
 # What a task page holds: the cleaned form, the message as assembled and as sent, what the last run
 #   returned, the drafted items as the analyst has them and what they changed, and every run.
-STATE_DEFAULTS <- list(form = NULL, prompt = NULL, round = 0L, draft = NULL, check = NULL, review = NULL,
+STATE_DEFAULTS <- list(form = NULL, prompt = NULL, round = 0L, draft = NULL, refine = NULL, review = NULL,
                        items = list(), edits = list(), rounds = list())
 
 
@@ -55,7 +55,7 @@ FIELD_SPECS <- list(
   population = list(label = "Target population", type = "text"),
   country = list(label = "Country (optional)", type = "text"),
   modes = list(label = "Survey mode", type = "choices", choices = MODE_LABELS),
-  n_items = list(label = "Number of items (1 to 6)", type = "number", value = 3),
+  n_items = list(label = "Number of items (1 to 10)", type = "number", value = 3),
   reference_period = list(label = "Reference period", type = "text", help = "For example: the past 7 days."),
   kinds = list(label = "Kinds of question in the questionnaire", type = "choices",
                choices = purrr::set_names(KINDS, KINDS), selected = KINDS),
@@ -132,19 +132,40 @@ copy_and_log <- function(blocks, ns, secrets = character(0))
            tags$span(class = "small me-3"),
            downloadButton(ns("get_log"), "Download the run log", class = "btn-sm btn-outline-secondary")))
 
-# One drafted question, numbered i: the question and each option in a box, edited in place, and the
-#   button that takes it out.
+# One final question, numbered i, laid out the way it is asked: the intro and the stem in boxes that
+#   wrap, each option in a box, or what an open question collects; then each part, indented; then the
+#   programming line in small type; and the button that takes it out. ed is what was changed before.
 item_card <- function(it, i, ns, ed = NULL) {
-  box = function(id, value, label = NULL) textInput(ns(id), label, value = value, width = "100%")
+  area = function(id, value, label = NULL)
+    textAreaInput(ns(id), label, value = value, width = "100%", resize = "vertical",
+                  rows = max(1L, ceiling(nchar(value) / 90)))
   tags$div(class = "card mb-2", tags$div(
     class = "card-body py-2",
-    box(edit_input_id(it$uid, "stem"), ed$stem %||% it$stem, paste("Question", i)),
+    tags$h6(paste("Question", i)),
+    if (nzchar(it$intro)) area(edit_input_id(it$uid, "intro"), ed$intro %||% it$intro),
+    area(edit_input_id(it$uid, "stem"), ed$stem %||% it$stem),
     if (length(it$options))
       purrr::imap(purrr::map_chr(it$options, option_text), function(o, j)
-        box(edit_input_id(it$uid, paste0("o", j)), ed$options[[as.character(j)]] %||% o))
-    else tags$p(class = "text-muted mb-1", paste0("[Open question", if (nzchar(it$open_format)) paste0(": ", it$open_format), "]")),
-    if (nzchar(it$note %||% "")) tags$p(class = "small text-muted mb-1", it$note),
+        textInput(ns(edit_input_id(it$uid, paste0("o", j))), NULL, value = ed$options[[as.character(j)]] %||% o, width = "100%"))
+    else tags$p(class = "mb-1", answer_line(it$open_format)),
+    if (length(it$parts)) tags$div(class = "mb-1", doc_html(unlist(purrr::map(it$parts, part_blocks), recursive = FALSE))),
+    if (nzchar(it$programming)) tags$p(class = "small text-muted mb-1", paste("Programming:", it$programming)),
     set_button("Remove", "remove", it$uid, ns)))
+}
+
+# "How these were written", closed: the two models, what the editor changed in each item, what the
+#   items leave out, and the checks the editor applied.
+written_panel <- function(w, items) {
+  r = w$refine
+  edited = identical(r$status, "ok")
+  reply = final_reply(w)
+  tags$details(class = "mt-3", tags$summary("How these were written"),
+    tags$ul(class = "small",
+      tags$li(paste0("Drafted by ", w$draft$model, if (edited) paste0("; edited by ", r$model) else "; not edited", ".")),
+      if (edited) purrr::imap(items, function(it, i)
+        tags$li(paste0("Question ", i, ": ", if (nzchar(it$changes)) it$changes else "no change by the editor"))),
+      if (length(reply$not_covered)) tags$li(paste("Not covered:", paste(unlist(reply$not_covered), collapse = "; "))),
+      if (edited && length(r$checks)) tags$li(paste("Checks applied:", paste(unique(unname(check_label(r$checks))), collapse = "; ")))))
 }
 
 
@@ -217,19 +238,17 @@ mod_task_server <- function(id, kind, app, make_ask = progress_ask, make_ask_all
           list(review = run_review(f, m, ask = ask, message = msg, progress = say_progress,
                                    ask_all = if (is.null(make_ask_all)) ask_all_for(ask) else make_ask_all(calls)))
         })
-        else withProgress(message = "Drafting the items, then checking them", value = 0, {
-          ask = make_ask(2L)
-          run_write(f, m, ask = ask, message = msg, ask_all = if (is.null(make_ask_all)) ask_all_for(ask) else make_ask_all(1L))
-        }),
+        else withProgress(message = "Drafting the items, then editing them", value = 0,
+                          run_write(f, m, ask = make_ask(2L), message = msg)),
         error = function(e) { problem(paste0("The run stopped: ", plain_message(e))); NULL })
       if (is.null(out)) return()
       state$round <- (state$round %||% 0L) + 1L
       state$draft <- out$draft
-      state$check <- out$check
+      state$refine <- out$refine
       state$review <- out$review
-      state$items <- if (identical(out$draft$status, "ok")) checked_items(draft_items(out$draft$reply), out$check) else list()
+      state$items <- if (identical(out$draft$status, "ok")) draft_items(final_reply(out)) else list()
       state$edits <- list()
-      state$rounds <- c(state$rounds, list(flow_round(f, m, draft = out$draft, review = out$review, check = out$check,
+      state$rounds <- c(state$rounds, list(flow_round(f, m, draft = out$draft, review = out$review, refine = out$refine,
                                                       prompt = state$prompt)))
     })
 
@@ -251,7 +270,7 @@ mod_task_server <- function(id, kind, app, make_ask = progress_ask, make_ask_all
     })
     observeEvent(input$remove, state$items <- item_remove(state$items, input$remove))
 
-    files = reactive(names(reflexes_in_force(state$form, if (kind == "review") "items" else "draft")))
+    files = reactive(names(reflexes_in_force(state$form, "items")))
 
     output$message <- renderUI(if (!is.null(message())) warn_box(message()))
 
@@ -267,36 +286,34 @@ mod_task_server <- function(id, kind, app, make_ask = progress_ask, make_ask_all
       d = state$draft
       if (!identical(d$status, "ok")) return(warn_box(tags$strong("The draft did not come back. "), d$error))
       tagList(tags$p(tags$em(WRITE_NOTICE)),
-              if (!identical(state$check$status, "ok"))
-                warn_box(tags$strong("The check did not come back. "), "These are the drafts as written, unchecked. ",
-                         state$check$error))
+              if (!identical(state$refine$status, "ok"))
+                warn_box(tags$strong("These questions were not edited. "), "The editing call did not come back, so ",
+                         "these are the draft as written. ", state$refine$error))
     }))
 
     # Drawn on their own, so a removal redraws them and nothing else; what the analyst typed is put
     #   back from state$edits, which they do not read.
     output$items_ui <- renderUI(safe_ui({
       req(state$round >= 1L, kind == "draft", identical(state$draft$status, "ok"))
-      d = state$draft$reply
-      asks = c(if (length(d$not_covered)) paste("Not covered:", paste(unlist(d$not_covered), collapse = "; ")),
-               purrr::map_chr(d$needs_from_analyst %||% list(), function(x) paste("Needs from you:", option_text(x))))
-      checks = state$check$batches[[1]]$checks %||% character(0)
+      w = list(draft = state$draft, refine = state$refine)
+      needs = final_reply(w)$needs_from_analyst %||% list()
       tagList(
         purrr::imap(state$items, function(it, i) item_card(it, i, session$ns, isolate(state$edits)[[it$uid]])),
-        if (length(asks)) tags$ul(class = "small", purrr::map(asks, tags$li)),
-        if (length(checks)) tags$details(class = "mt-2", tags$summary("Criteria applied"),
-                                         tags$ul(class = "small", purrr::map(unique(unname(check_label(checks))), tags$li))))
+        if (length(needs)) tagList(tags$h5("Before you field these"), tags$ul(purrr::map(needs, function(x) tags$li(option_text(x))))),
+        written_panel(w, state$items))
     }))
 
     blocks <- reactive({
       if (kind == "review") review_blocks(shape_review(state$review))
-      else draft_blocks(final_items(state$items, state$edits))
+      else draft_blocks(final_items(state$items, state$edits),
+                        final_reply(list(draft = state$draft, refine = state$refine))$needs_from_analyst %||% list())
     })
 
     output$bottom <- renderUI(safe_ui({
       req(state$round >= 1L)
       app$key_version
       tagList(copy_and_log(blocks(), session$ns, known_keys()),
-              produced_panel(files(), run_calls(state$draft, state$review, state$check)))
+              if (kind == "review") produced_panel(files(), run_calls(review = state$review)))
     }))
 
     output$get_log <- downloadHandler(

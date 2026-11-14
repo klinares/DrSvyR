@@ -52,10 +52,8 @@ call_all <- function(ask_all, requests, step) {
 REVIEW_AT_ONCE <- 4L
 
 # The prompt of one call of a review. message is the analyst's text, the same for every call.
-review_prompt <- function(f, part, message = NULL, step = part$kind)
-  tryCatch(build_step_prompt(f, if (step == "items" && f$task != "evaluate") "check" else step,
-                             part = part, message = message),
-           error = function(e) e)
+review_prompt <- function(f, part, message = NULL)
+  tryCatch(build_step_prompt(f, part$kind, part = part, message = message), error = function(e) e)
 
 # One call of a review as a record: its part, and how it came out.
 review_record <- function(part, p, r = NULL) {
@@ -118,73 +116,32 @@ review_result <- function(batches) {
 }
 
 
-# ---- a draft ------------------------------------------------------------------------------
+# ---- Write questions: a draft, then an edit by a second model -------------------------------
 
-# The model drafts the items, with the analyst's message (the assembled one unless they edited it).
-#   Fields: status, error, reply (the parsed draft), and the call record.
-run_draft <- function(form, m, ask = llm_json, message = NULL) {
-  p = tryCatch(build_step_prompt(form, "draft", message = message), error = function(e) e)
-  if (inherits(p, "error")) return(list(status = "failed", error = conditionMessage(p)))
+# One call of Write questions, by `ask`, as a record with its model, prompt hash and user text.
+#   step is "draft" (message is the analyst's) or "refine" (draft is the parsed draft).
+write_call <- function(form, step, m, ask, message = NULL, draft = NULL) {
+  p = tryCatch(build_step_prompt(form, step, message = message, draft = draft), error = function(e) e)
+  if (inherits(p, "error")) return(list(status = "failed", error = conditionMessage(p), model = m$id))
   started = Sys.time()
-  out = tryCatch(ask(user = p$user, m = m, system_prompt = p$system, max_tokens = LLM_MAX_TOKENS[["draft"]],
-                     validate = reply_validator("draft", n_items = clean_form(form)$n_items)),
+  out = tryCatch(ask(user = p$user, m = m, system_prompt = p$system, max_tokens = LLM_MAX_TOKENS[[step]],
+                     validate = reply_validator(step, n_items = clean_form(form)$n_items)),
                  error = function(e) e)
   c(call_result(out, as.numeric(difftime(Sys.time(), started, units = "secs")), "draft"),
-    list(hash = p$hash, user = p$user))
+    list(model = m$id, hash = p$hash, user = p$user, checks = p$checks))
 }
 
-
-# ---- Write questions: a draft, then the same reviewer ------------------------------------
-
-# The drafted items as a questionnaire, for the check: "Qn. intro stem", its options on one line
-#   (or what an open question collects), and its parts, one question to a block.
-items_questionnaire <- function(items) {
-  one_line = function(x) trimws(gsub("\\s+", " ", x))
-  paste(purrr::imap_chr(items, function(it, i) {
-    opts = purrr::map_chr(it$options, function(o) one_line(option_text(o)))
-    paste(c(paste0("Q", i, ". ", one_line(paste(c(if (nzchar(it$intro)) it$intro, it$stem), collapse = " "))),
-            if (length(opts)) paste(opts, collapse = " / ") else paste0("[Open: ", one_line(it$open_format), "]"),
-            purrr::map_chr(it$parts, function(p) one_line(option_text(p)))), collapse = "\n")
-  }), collapse = "\n\n")
+# The drafter writes one draft with the analyst's message; the main model, in a fresh chat, edits it
+#   into the final questions against the CHECKLIST. Two calls, whatever the number of items. Returns
+#   the draft and the refine (NULL when there was no draft to edit).
+run_write <- function(form, m, drafter = m$drafter %||% m, ask = llm_json, message = NULL) {
+  d = write_call(form, "draft", drafter, ask, message = message)
+  if (!identical(d$status, "ok")) return(list(draft = d, refine = NULL))
+  list(draft = d, refine = write_call(form, "refine", m, ask, draft = d$reply))
 }
 
-# Write questions: call 1 drafts the items; call 2 sends them, as a questionnaire, through the items
-#   call of a review in a fresh chat, with the checklist of core.md, the task's file and the modes
-#   chosen. That is the criteria check; there is no separate appraisal. Returns the draft and the
-#   check (run_review()'s shape, NULL when there was no draft to check).
-run_write <- function(form, m, ask = llm_json, message = NULL, ask_all = ask_all_for(ask)) {
-  d = run_draft(form, m, ask, message)
-  if (!identical(d$status, "ok")) return(list(draft = d, check = NULL))
-  plan = review_plan(items_questionnaire(draft_items(d$reply)))
-  list(draft = d, check = review_result(send_parts(ask_all, m, clean_form(form), plan[1], NULL)))
-}
-
-# The drafted items after the check: where the check returned a rewrite for a fix-level flag, the
-#   rewrite replaces the draft and the item's one line says so, with the flag's why; otherwise its
-#   one line is its design why.
-checked_items <- function(items, check) {
-  qs = if (!is.null(check)) shape_review(check)$questions else list()
-  purrr::imap(items, function(it, i) {
-    q = if (i <= length(qs)) qs[[i]]
-    fix = purrr::keep(q$flags %||% list(), function(x) x$level == "fix")
-    if (!isTRUE(q$reviewed) || !length(fix) || !nzchar(q$rewrite)) return(c(it, list(note = it$why)))
-    c(apply_rewrite(it, q$rewrite), list(note = paste("Revised after the check:", fix[[1]]$why)))
-  })
-}
-
-# A rewrite put in place of an item. The check was shown the item as "Qn. question" with its options
-#   on the next line, joined by " / ", and a rewrite in that layout is read back the same way. A
-#   rewrite that is not in that layout becomes the question, and the options stay as they were.
-apply_rewrite <- function(it, rewrite) {
-  lines = trimws(strsplit(gsub("\r\n?", "\n", rewrite), "\n", fixed = TRUE)[[1]])
-  lines = lines[nzchar(lines) & !grepl("^\\[Open", lines)]
-  lines[1] = trimws(sub(QUESTION_LABEL, "", lines[1], perl = TRUE))
-  opts = length(lines) > 1L && grepl(" / ", lines[length(lines)], fixed = TRUE)
-  it$intro = ""
-  it$stem = paste(if (opts) lines[-length(lines)] else lines, collapse = " ")
-  if (opts) it$options = as.list(trimws(strsplit(lines[length(lines)], " / ", fixed = TRUE)[[1]]))
-  it
-}
+# What the page shows: the edited items, or the draft's when the edit did not come back.
+final_reply <- function(w) if (identical(w$refine$status, "ok")) w$refine$reply else w$draft$reply
 
 
 # ---- the run log --------------------------------------------------------------------------
@@ -192,25 +149,25 @@ apply_rewrite <- function(it, rewrite) {
 # One row per model call: what ran, how it ended, how long, and what it cost in tokens.
 call_rows <- function(m, calls)
   purrr::map(calls, function(x)
-    list(call = x$label, model = m$id, status = x$status, seconds = x$seconds %||% NA_real_,
+    list(call = x$label, model = x$model %||% m$id, status = x$status, seconds = x$seconds %||% NA_real_,
          finish = x$finish %||% NA_character_, attempts = x$attempts %||% NA_integer_,
          tokens_in = x$tokens$input %||% NA_real_, tokens_out = x$tokens$output %||% NA_real_,
          tokens_cached = x$tokens$cached_input %||% NA_real_, error = x$error %||% NA_character_))
 
 # The calls of a run, each with a label, in order.
-run_calls <- function(draft = NULL, review = NULL, check = NULL)
+run_calls <- function(draft = NULL, review = NULL, refine = NULL)
   c(if (!is.null(draft)) list(c(draft, list(label = "draft"))),
-    purrr::map(check$batches, function(b) c(b, list(label = "check"))),
+    if (!is.null(refine)) list(c(refine, list(label = "refine"))),
     purrr::map(review$batches, function(b)
       c(b, list(label = if (identical(b$kind, "instrument")) "whole questionnaire" else paste0("part ", b$k, " of ", b$n)))))
 
 # A run, for the log: the time, the form, the message as assembled and as sent, the call summary,
 #   then every call in full. The key is never in these lists: a call record holds no request.
-flow_round <- function(form, m = APP_MODEL, draft = NULL, review = NULL, check = NULL, prompt = NULL,
+flow_round <- function(form, m = APP_MODEL, draft = NULL, review = NULL, refine = NULL, prompt = NULL,
                        analyst = NULL, time = Sys.time())
   list(time = format(time, "%Y-%m-%dT%H:%M:%S%z"), model = m$id, form = form,
        message_assembled = prompt$assembled, message_sent = prompt$sent, edited = !identical(prompt$assembled, prompt$sent),
-       summary = call_rows(m, run_calls(draft, review, check)), draft = draft, check = check, review = review,
+       summary = call_rows(m, run_calls(draft, review, refine)), draft = draft, refine = refine, review = review,
        analyst = analyst)
 
 flow_log_json <- function(x)

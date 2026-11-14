@@ -29,8 +29,9 @@ APP_SOURCE_URL <- "https://github.com/klinares/drsvyr/tree/main/QuestionR"
 # The profile used when the environment variable QUESTIONR_PROFILE is not set: "home" or "work".
 APP_DEFAULT_PROFILE <- "home"
 
-# The one model QuestionR uses, per profile. The key is always pasted into the box on
-#   Start here and held for the session; the environment is never read for it.
+# The main model per profile (the reviewer, and the editor of Write questions), and an optional
+#   drafter for Write questions (without one, the main model drafts). Both use the one key pasted
+#   into the box on Start here and held for the session; the environment is never read for it.
 #     api              "anthropic" or "openai" (the OpenAI style)
 #     base_url, id     where it is called and what the endpoint names it
 #     reasoning_effort optional, "low", "medium" or "high"; sent only when set
@@ -38,8 +39,10 @@ APP_DEFAULT_PROFILE <- "home"
 #                      the older name for the reply limit (ellmer sends max_completion_tokens)
 #   work: placeholders in angle brackets, to be filled in at work (see README.md).
 APP_PROFILES <- list(
-  home = list(api = "anthropic", base_url = "https://api.anthropic.com/v1", id = "claude-sonnet-5-5"),
-  work = list(api = "openai", base_url = "<work base url>", id = "<model id at work>"))
+  home = list(api = "anthropic", base_url = "https://api.anthropic.com/v1", id = "claude-sonnet-5-5",
+              drafter = list(api = "anthropic", base_url = "https://api.anthropic.com/v1", id = "claude-sonnet-4-5")),
+  work = list(api = "openai", base_url = "<work base url>", id = "<model id at work>",
+              drafter = list(api = "openai", base_url = "<work base url>", id = "<drafter id at work>")))
 
 APP_PROFILE <- local({
   p = tolower(trimws(Sys.getenv("QUESTIONR_PROFILE")))

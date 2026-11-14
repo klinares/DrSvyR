@@ -11,7 +11,7 @@
 # max_tokens per kind of call; the model's thinking counts against it (Sonnet 5.5 thinks by default,
 #   at effort high). A reply that reaches the ceiling is a failure, not a short answer,
 #   and is not retried: the same prompt is cut off at the same place.
-LLM_MAX_TOKENS <- c(items = 24000L, instrument = 8000L, draft = 16000L, ping = 200L)
+LLM_MAX_TOKENS <- c(items = 24000L, instrument = 8000L, draft = 16000L, refine = 24000L, ping = 200L)
 
 # What a cut-off reply tells the analyst to do, by kind of call.
 LLM_CUTOFF_ADVICE <- c(draft = "Ask for fewer items and run again.", evaluate = "Paste fewer questions and run again.")
@@ -64,6 +64,10 @@ llm_clear_counters <- function(token) .llm_state$retries[[token]] <- NULL
 llm_key_for <- function(m = APP_MODEL) llm_session_key()
 llm_key_ready <- function(m = APP_MODEL) !is.null(llm_key_for(m))
 KEY_HINT <- "Paste a key into the key box on Start here."
+
+# The models of a profile, named for the page: the main model, and the drafter when there is one.
+app_models <- function(m = APP_MODEL)
+  purrr::compact(list(`Main model` = m[names(m) != "drafter"], Drafter = m$drafter))
 
 llm_host <- function(m) sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url)
 

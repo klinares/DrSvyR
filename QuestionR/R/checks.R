@@ -14,7 +14,12 @@ REPLY_SCHEMAS <- list(
     fields = c(items = "list", not_covered = "list?", needs_from_analyst = "list?"),
     each = list(items = c(id = "text", domain = "text", intro = "string?", stem = "text", options = "list?",
                           open_format = "string?", parts = "list?", programming = "string?", why = "string?")),
-    rules = c("item_count", "options_or_open", "draft_limits")),
+    rules = c("item_count", "options_or_open", "item_limits")),
+  refine = list(
+    fields = c(items = "list", not_covered = "list?", needs_from_analyst = "list?"),
+    each = list(items = c(id = "text", domain = "string?", intro = "string?", stem = "text", options = "list?",
+                          open_format = "string?", parts = "list?", programming = "string?", changes = "string?")),
+    rules = c("item_count", "options_or_open", "item_limits")),
   items = list(
     fields = c(items = "list"),
     each = list(items = c(id = "id", flags = "list", rewrite = "string")),
@@ -27,6 +32,7 @@ REPLY_SCHEMAS <- list(
 # The limits R holds a review to. MAX_FLAGS is a guard against a runaway reply, not a target.
 MAX_FLAGS <- 8L
 MAX_WHY_WORDS <- 30L
+MAX_CHANGES_WORDS <- 20L
 MAX_INSTRUMENT_FLAGS <- 3L
 STAGES <- c("comprehension", "retrieval", "judgment", "reporting")
 LEVELS <- c("fix", "consider")
@@ -86,12 +92,14 @@ REPLY_RULES <- list(
       paste0("Item ", paste(purrr::map_chr(bad, function(it) it$id %||% "?"), collapse = ", "),
              " has neither options nor an open_format.")
   },
-  # At most three things asked of the analyst, a why of at most 30 words, one line of programming,
-  #   and every part an object with a stem.
-  draft_limits = function(obj, ...)
+  # At most three things asked of the analyst, one line of programming, every part an object with a
+  #   stem, and a draft's why at most 30 words or a refine's changes at most 20.
+  item_limits = function(obj, ...)
     c(if (length(obj$needs_from_analyst) > 3L) paste0("needs_from_analyst has ", length(obj$needs_from_analyst), " entries; the limit is 3"),
       unlist(purrr::imap(obj$items, function(it, i)
         c(if (type_ok(it$why, "text") && n_words(it$why) > MAX_WHY_WORDS) paste0("Item ", i, " has a why of ", n_words(it$why), " words; keep it to 25"),
+          if (type_ok(it$changes, "text") && n_words(it$changes) > MAX_CHANGES_WORDS)
+            paste0("Item ", i, " has changes of ", n_words(it$changes), " words; keep it to 15"),
           if (type_ok(it$programming, "text") && grepl("\n", it$programming, fixed = TRUE))
             paste0("Item ", i, " has more than one line of programming"),
           purrr::discard(purrr::imap_chr(it$parts %||% list(), function(p, j)
@@ -138,7 +146,7 @@ reply_validator <- function(format, ...) {
 # ---- an item, read with defaults ---------------------------------------------------
 
 ITEM_DEFAULTS <- list(id = "", domain = "", intro = "", stem = "", options = list(), open_format = "",
-                      parts = list(), programming = "", why = "")
+                      parts = list(), programming = "", why = "", changes = "")
 
 # One item with every field present, so a screen never meets a missing one.
 full_item <- function(it) purrr::imap(ITEM_DEFAULTS, function(d, k) it[[k]] %||% d)
