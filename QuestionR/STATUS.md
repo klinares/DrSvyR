@@ -72,6 +72,21 @@ final-question layout and the second model added about 40 lines net of what was 
   consider); 93 of 94 quotes found; F5 and C3 needed 2 attempts and F6 needed 3 (376 s).
   One behavioral Write run, 33 s, filter drawn above the stem. Smoke 74.
 
+## Phase 10e (2026-11-14)
+
+- evaluate.md 0.8 installed as written (fix_or_consider; fix only for a fault in the question as
+  written). Smoke 74.
+- Live (Kevin's yes, 32 calls and 4 retries): gold 27 of 27 in
+  `tests/gold_runs/2026-11-14-0816_claude-sonnet-5-5/`; fix flags per flawed item 3.00 (consider
+  1.30), per control item 0.29 (consider 2.00; C7 only, 2 fix flags); likely_edited not cited;
+  102 of 102 quotes found; F1, F16 and C4 needed 2 attempts; no item over 60 s (longest F1, 39 s).
+- review30: 5 calls, 123 s; fix 0.97 and consider 0.63 per question; 48 of 48 quotes; the whole
+  call needed 2 attempts. Deliberate faults 8 of 8 at either level; at fix level 5 of 8 on the
+  questions (Q11, Q12, Q13, Q14, Q17), 7 of 8 counting the routing flag on the whole (Q14 to Q16);
+  the Q5/Q17 scale reversal is consider.
+- The reason an attempt was refused is kept only when every attempt fails, so the reasons for these
+  retries are not on record.
+
 ## Not verified
 
 - Copy for Word of the new layout in a real browser.
