@@ -316,6 +316,7 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
   # insistently() says only "failed after 3 attempts", so the last attempt's own error is kept; a
   #   client error or a cut-off reply is returned, not raised, so it is not sent again.
   last = NULL
+  sent_seconds = as.numeric(attr(first, "seconds") %||% 0)
   before = .llm_state$calls
   started = Sys.time()
   res = try(purrr::insistently(function()
@@ -327,7 +328,7 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
   llm_add_retries(max(0L, made - 1L))
   if (inherits(res, c("llm_client_error", "llm_truncated", "try-error"))) stop(last %||% attr(res, "condition") %||% res)
   c(res, list(user_sent = ask, model = m$id, attempts = made,
-              seconds = as.numeric(difftime(Sys.time(), started, units = "secs")) + as.numeric(attr(first, "seconds") %||% 0)))
+              seconds = as.numeric(difftime(Sys.time(), started, units = "secs")) + sent_seconds))
 }
 
 # Several JSON calls sent together: the first attempts go out at once through llm_complete_all(),
