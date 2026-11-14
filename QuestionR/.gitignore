@@ -1,0 +1,4 @@
+# Local files that are never committed: R's history and the run logs of the live tests.
+.Rhistory
+tests/review30.json
+tests/write_run.json
