@@ -62,15 +62,14 @@ A question is sensitive when it is intrusive, when answering carries a risk of d
 
 The reviewer is run on a published test set: 20 survey questions with 48 planted faults, and 7 well-tested questions from the European Social Survey that should draw few flags (Sturgis, Roberts and Robinson 2026).
 
-In the latest run (14 November 2026, model claude-sonnet-5-5) the reviewer flagged 41 of the 48 planted faults (85 percent): 33 as "fix" and 8 as "consider". It found every question that asks two things at once, every vague term, every recall problem, every case of leading wording and every overlong sentence. It missed three of the four sensitivity faults, two faults that could only be seen with the full answer scale, and two unstated assumptions. On the 7 well-tested questions it raised 2 "fix" flags, both on one question, and "consider" flags on all seven, so expect points to consider on good questions too.
-
-The flags were matched to the planted faults by reading, by the AI model that helped build this tool; a second person has not checked the matching.
+{{gold_summary}}
 
 Planted faults are clearer than real ones, and one run on one model is a guide, not a guarantee.
 
 ## What it cannot do
 
 - It is an expert review and a draft. Expert methods are quick and involve no respondents, so they find only part of what testing finds. Test key questions with real respondents before fielding.
+- Two runs on the same questions can differ. An AI model does not give the same review every time, most of all on long lists of items. For a questionnaire that matters, run it twice and read both.
 - It can miss faults and can flag things that do not matter. Open the "consider" flags as well as the "fix" ones, and use your own judgment.
 - It does not judge whether two language versions of a questionnaire are equivalent, and it does not translate.
 - It sees only the text you paste. It does not see interviewers, visual layout, or how the survey is fielded.
@@ -79,4 +78,12 @@ Planted faults are clearer than real ones, and one run on one model is a guide, 
 
 A reflex is one written rule. It says when it applies, what to do, what never to do, and, for most rules, a yes-or-no question the reviewer asks of every question. The eight general guidelines for writing survey questions each have their own reflex, and there are further reflexes for behavioral, attitudinal and sensitive questions, for survey mode, and for the questionnaire as a whole. Changing the AI model does not change the rules.
 
-The table below is read from the reflex files themselves, so it is what every model is given.
+The list below is read from the reflex files themselves, so it is what every model is given. Open a group to see its rules and where each one comes from.
+
+{{reflexes}}
+
+## Sources
+
+The materials the reflexes were drawn from. Each opens as plain text.
+
+{{sources}}

@@ -105,13 +105,13 @@ ok("every reflex with a Check line has a Label",
 #   is, the new sums go here (tests/smoke.R prints them when they differ).
 REFLEX_SHA <- c(
   `core.md` = "5341dacfd7ac50eaa56f5b1111cf0bfec03f1103b744e7aca0df7a5670b1e91d",
-  `generate.md` = "be4664776780889b3a39a43a700f8845b0898f7c96cae92749ed0566f398e4ac",
+  `generate.md` = "0585d3bf2ccbfb35f1489899ded0dbca07f89f87735cd8b9c62a3fac4be016a2",
   `attitudinal.md` = "6b5ac03131037228dfa36efabc90ac25def227aecd4a7fc71ecd14e85bf31217",
   `behavioral.md` = "2225e8f6ea521938ddc3a3529dbd6475814396205d22120fdb0d44761ce71830",
   `sensitive.md` = "f079dca7fce7782f9616944d55487eb8784c10f8e715759e8d8a760a0d47eac2",
-  `evaluate.md` = "c2f22c19b0afc8bff061268c9c76139d54eceb6b63ee8cd9af4ce47a329e9344",
+  `evaluate.md` = "a30929c848aeaaeb8184d29140bf3abea377c5deff421c53a72ca41590629a93",
   `mode.md` = "5a8271c5b6116040085f23d325d05446a9e66a0a9106cc327feb76c52c001026",
-  `refine.md` = "cb7a39be5257362c5f4874f0c6743d541510555893602b25d8b5c7c0fad017d7")
+  `refine.md` = "3be1dfbf24707621c5f55dd5bc28e3899dc6905152eaf79287d276e2698d6223")
 sha_now <- purrr::map_chr(rfiles, "sha")
 if (!identical(sha_now, REFLEX_SHA)) print(sha_now)
 ok("the reflex files are the ones checksummed here", identical(sha_now, REFLEX_SHA))
@@ -644,7 +644,7 @@ heads <- regmatches(meth_html, gregexpr("<h2>[^<]+</h2>", meth_html))[[1]]
 ok("the Methodology page has its sections in order, and no TRAPD or testing-methods section",
    identical(gsub("</?h2>", "", heads), c("Measurement error", "From construct to question", "The response process",
                                           "Sensitive questions", "How the AI reviewer is kept in check", "How it was tested",
-                                          "What it cannot do", "The AI reflexes")) &&
+                                          "What it cannot do", "The AI reflexes", "Sources")) &&
      !grepl("TRAPD|testing methods", html_of(md_page(METHODOLOGY_FILE)), ignore.case = TRUE))
 ok("the reflex table is read from the reflex files and comes last: one row per reflex, its Label, and its Source line as written",
    local({

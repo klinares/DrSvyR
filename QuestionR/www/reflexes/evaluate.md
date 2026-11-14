@@ -1,6 +1,6 @@
 # Evaluate a questionnaire
 
-Version: 0.9
+Version: 1.0
 
 Task file for appraising a pasted questionnaire: an expert review, item by
 item and then as a whole. The reflexes in core.md are the item checklist; this
@@ -61,8 +61,8 @@ items and 7 ESS control items (tests/, not shipped).
 
 ### rewrite_ready
 - **When:** A question has a fix-level flag.
-- **Say:** Write the rewrite as a finished question the analyst could take to testing: the full stem and every response option, in plain words, no longer than it needs to be. Put a definition or a time frame in one short lead-in sentence, not inside the stem. Use a [placeholder] for a date, a local term or a threshold you were not given. If fixing a fault means two questions, write both.
-- **Never:** Do not fix one fault by adding another: no new clause that makes the stem long, no new term that needs its own definition.
+- **Say:** Write the rewrite as a finished question the analyst could take to testing: the full stem and every response option, in plain words, no longer than it needs to be. Put a definition or a time frame in one short lead-in sentence, not inside the stem. Use a [placeholder] for a date, a local term, a threshold, or what a term covers when you were not told. If fixing a fault means two questions, write both.
+- **Never:** Do not fix one fault by adding another: no new clause that makes the stem long, no new term that needs its own definition. Do not make up a definition; that choice is the analyst's.
 - **Source:** Yan, IASS/WSS Session 1 (general guidelines 1 and 2; writing attitudinal questions 3: clearly specified concepts in simple language without making the question too long or too syntactically complicated)
 ## Instrument checks
 
@@ -116,18 +116,18 @@ Text in square brackets, or in capitals addressed to whoever programs the survey
 For questions, the object is {"items": [...]}, one entry per question, in the order given. Each entry has:
 
 - "id": the question's own label, or its position.
-- "summary": at most 20 words, for an analyst who will read nothing else: what is wrong and what the rewrite does about it. An empty string when there is no flag.
+- "summary": at most 20 words, for an analyst who will read nothing else: the faults that matter most and what the rewrite changes. Name only changes that the rewrite really makes. An empty string when there is no flag.
 - "flags": every problem you stand behind, most damaging first; an empty list if there is none. Each flag has:
   - "check": the id of the CHECKLIST check it fails.
   - "stage": "comprehension", "retrieval", "judgment" or "reporting".
   - "level": "fix" for a fault in the question as written; "consider" for a defensible design choice, something that depends on knowledge you were not given, or sensitivity alone.
-  - "quote": words copied exactly from the question or its options. In a list of rows, quote the row the flag is about.
+  - "quote": words copied exactly from the question or its options. In a list of rows, check every row; a row can carry its own flag, and its quote is that row.
   - "why": at most 25 words: what the respondent cannot do, in plain words.
 - "rewrite": the whole question rewritten to fix its fix-level flags and change nothing else, or null when it has no fix-level flag. It is an object with:
-  - "intro": a lead-in sentence; an empty string if there is none.
+  - "intro": a lead-in sentence that is not itself the question, such as a definition or a time frame; an empty string if there is none. Never say the question twice, once in "intro" and once in "stem".
   - "stem": the question as the respondent reads or hears it.
   - "options": the response options in the order shown, one per entry; an empty list for an open question.
-  - "rows": for a list of items rated on the same options, the items, one per entry; otherwise an empty list.
+  - "rows": for a list of items rated on the same options, every item, one per entry, in the original order: a row with a fix flag reworded, split or removed, every other row word for word as it was. Otherwise an empty list.
   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
   - "programming": the programming instructions of the original, unchanged except where a fix needs a change; an empty string if there are none.
 

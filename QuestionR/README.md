@@ -1,6 +1,6 @@
 # QuestionR
 
-What goes to work is `app.R`, `R/` and `www/` without `www/reflex_materials/`.
+What goes to work is `app.R`, `R/` and `www/` without the PDFs in `www/reflex_materials/`.
 
 A Shiny app that puts language models in the role of an expert reviewer and item writer for a
 public opinion analyst. It works on one part of Total Survey Error: measurement error that comes
@@ -27,7 +27,7 @@ prompt from them, so the same form gives the same prompt. **It is not a pretest.
 | `R/` | `reflexes.R` reads the reflex files and builds prompts; `llm.R` calls the models and holds the key box; `review.R` checks replies, splits a questionnaire, builds the bottom line and runs a review or a Write run; `ui.R` draws the tabs, the results and the Word copy |
 | `www/reflexes/` | The reflex files. Plain text; `www/reflexes/README.md` has the format |
 | `www/start.md`, `www/methodology.md`, `www/*.svg` | Start here and the Methodology page, and their figures |
-| `www/reflex_materials/` | The materials the reflexes were drawn from (not deployed) |
+| `www/reflex_materials/` | The materials the reflexes were drawn from: the PDFs (not deployed), a markdown copy of each (deployed, linked from Methodology) and `sources.csv` |
 | `www/logo/` | The office logo, if you add one |
 | `tests/` | The tests, at home. Not needed to run it |
 
@@ -92,7 +92,7 @@ copy or the run log.
 ## Posit Connect
 
 Publish with `rsconnect::deployApp("QuestionR", appName = "QuestionR")`; `.rscignore` keeps
-`tests/`, this README and `www/reflex_materials/` out. A review sends its
+`tests/` and this README out, and `www/reflex_materials/.rscignore` the PDFs. A review sends its
 parts four at a time inside the one R process, which is busy until they finish.
 
 ## Known limits

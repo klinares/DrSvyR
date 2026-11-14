@@ -1,6 +1,6 @@
 # Refine drafts into final questions
 
-Version: 0.2
+Version: 0.3
 
 Sent to the editing call of Write questions, after core.md and with the kind
 file and mode.md. The editor is given a draft written by another model for the
@@ -48,7 +48,7 @@ Return one JSON object with these fields.
 - "items": a list, exactly the number of items asked for. Each has:
   - "id": a short code, [construct abbreviation] plus a number.
   - "domain": the single domain of the construct this item measures.
-  - "intro": a lead-in sentence read before the question; an empty string if there is none.
+  - "intro": a lead-in sentence read before the question (a definition that several items share goes in the first item only, with a programming note to show it with each item); an empty string if there is none.
   - "stem": the question as the respondent reads or hears it.
   - "options": the response options in the order shown; an empty list for an open question.
   - "rows": for a list of items rated on the same options, the items, one per entry; otherwise an empty list.

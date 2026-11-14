@@ -1,6 +1,6 @@
 # Generate
 
-Version: 0.7
+Version: 0.8
 
 Sent with every request to write new items, after core.md and before the task
 file. How a draft is built from the brief and what it must declare.
@@ -62,7 +62,7 @@ Return one JSON object with these fields.
 - "items": a list, one entry per item. Each has:
   - "id": a short code, [construct abbreviation] plus a number.
   - "domain": the single domain of the construct this item measures.
-  - "intro": a lead-in sentence read before the question, in English; an empty string if there is none.
+  - "intro": a lead-in sentence read before the question (a definition that several items share goes in the first item only, with a programming note to show it with each item), in English; an empty string if there is none.
   - "stem": the question as the respondent reads or hears it, in English.
   - "options": the response options in the order shown, in English; an empty list for an open question.
   - "rows": for a list of items rated on the same options, the items, one per entry; otherwise an empty list.
