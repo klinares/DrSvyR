@@ -79,6 +79,12 @@ PAGE_DIR <- file.path(BUILD_DIR, "pages")
 FILES_CACHE <- file.path(BUILD_DIR, "files.csv")
 PROBLEMS_CSV <- file.path(BUILD_DIR, "convert_problems.csv")
 MANIFEST_CSV <- "data/catalog/manifest.csv"
+
+# Text replaced in every written document (columns find, replace; fixed strings), for personal
+#   details in the sources such as a seed taken from a student ID. Kept in data/build/, which git
+#   ignores, so what is removed never reaches the repository. A source already in the manifest is
+#   not reread: after adding a line, delete that source's manifest row or its markdown file.
+REDACT_CSV <- file.path(BUILD_DIR, "redact.csv")
 MODELTEST_RESULTS <- file.path(BUILD_DIR, "modeltest", "results.csv")
 
 # Skip rules of the old project (D:/repos/SurvAI_Expert: build/extract.R SKIP and FOLDERS,
@@ -519,12 +525,20 @@ assemble_text <- function(d) {
        probs = mutate(check_page(doc$body), page = NA_integer_, .before = 1))
 }
 
+redact <- function(txt) {
+  if (!file.exists(REDACT_CSV)) return(txt)
+  r = utils::read.csv(REDACT_CSV, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
+  reduce2(r$find, r$replace, function(x, f, s) str_replace_all(x, fixed(f), s), .init = txt)
+}
+
 # Writes each document, then merges its rows into the manifest and the problem list.
 write_documents <- function(docs, text) {
   made = pmap(docs, function(...) {
     d = list(...)
     a = if (d$ext == "pdf") assemble_pdf(d, text) else assemble_text(d)
     if (is.null(a)) return(NULL)
+    a$lines = redact(a$lines)
+    a$body = redact(a$body)
     write_utf8(a$lines, d$out)
     spans = math_spans(a$body)
     # Paths here are relative: markdown to SurvAI_Expert/, original to the source root.
