@@ -352,6 +352,10 @@ ok("the bottom line says Most are only for more than half, else The largest grou
        startsWith(bottom_line(three)[2], "Most are comprehension problems (2)") &&
        grepl("(Q1, Q3)", bottom_line(three)[3], fixed = TRUE)
    }))
+ok("the bottom line names at most the three most common faults, ties in pasted order, then how many other kinds",
+   identical(count_phrase(c("A", "B", "C", "D", "B", "E")), "b (2), a (1), c (1), and 2 other kinds") &&
+     identical(count_phrase(c("A", "B", "C", "D")), "a (1), b (1), c (1), and 1 other kind") &&
+     identical(count_phrase(c("A", "B", "A")), "a (2), b (1)"))
 ok("a rewrite is drawn with the question on one line and each option on its own; a rewrite that does not split that way is one paragraph",
    local({
      one = rewrite_blocks("Do you think the government is doing enough, or not? Yes, definitely / Yes, probably / No / Don't know")

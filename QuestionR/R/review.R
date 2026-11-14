@@ -280,12 +280,15 @@ in_pasted_order <- function(x, ids) x[order(match(x, ids, nomatch = length(ids) 
 # A label inside a sentence: its first letter in lower case.
 lc1 <- function(x) paste0(tolower(substr(x, 1, 1)), substring(x, 2))
 
-# "a (3), b (2)": labels with their counts, most first, ties in order of first appearance.
-count_phrase <- function(x) {
+# "a (3), b (2), c (1), and 2 other kinds": at most the top three labels with their counts, most first,
+#   ties in order of first appearance (the pasted order).
+count_phrase <- function(x, top = 3L) {
   x = lc1(x)
   t = table(factor(x, levels = unique(x)))
   t = t[order(-t, seq_along(t))]
-  paste0(names(t), " (", as.integer(t), ")", collapse = ", ")
+  rest = length(t) - top
+  paste0(paste0(utils::head(names(t), top), " (", utils::head(as.integer(t), top), ")", collapse = ", "),
+         if (rest > 0L) paste0(", and ", rest, if (rest == 1L) " other kind" else " other kinds"))
 }
 
 # The bottom line, built from the flags with no model call: how many questions have a problem
