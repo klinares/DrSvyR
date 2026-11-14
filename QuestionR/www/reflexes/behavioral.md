@@ -1,6 +1,6 @@
 # Behavioral items
 
-Version: 0.5
+Version: 0.6
 
 Task file for questions about experiences, events and behaviours: what, when,
 where, how often, how long, how many, how much. An objective truth exists in
@@ -64,6 +64,14 @@ For behavioral questions, also:
 - **Check:** Does the wording match how respondents will arrive at the answer, counting or a rate?
 - **Label:** Count or rate mismatched to recall
 - **Source:** SURV632 (enumeration and rate strategies; Burton and Blair)
+
+### no_adding_up
+- **When:** A count or an amount that covers several days, or several kinds of the same thing.
+- **Say:** Collect each day, or each kind, as its own entry and leave the adding to the analyst. When entries by both day and kind would be too many, split by day: a day is the easier unit to recall.
+- **Never:** Do not tell the respondent to think about each day in turn and then ask for one total.
+- **Check:** Can the respondent answer without adding up across days or kinds in their head?
+- **Label:** Respondent must add up
+- **Source:** Yan, IASS/WSS Session 1 (writing behavioural questions 5: breaking the recall task into smaller subtasks; judgment stage: respondents have no running tally and estimate on the spot); SURV632 (estimation strategies)
 
 ### open_number
 - **When:** The answer is a number or an amount.

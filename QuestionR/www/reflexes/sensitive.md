@@ -1,6 +1,6 @@
 # Sensitive topic items
 
-Version: 0.5
+Version: 0.6
 
 Task file for questions where respondents may refuse or edit their answer.
 The aim is more disclosure and fewer refusals without changing what is asked.
@@ -38,6 +38,14 @@ For sensitive questions, also:
 - **Check:** Is the kind of sensitivity and the expected direction of misreporting stated?
 - **Label:** Sensitivity and misreporting direction unstated
 - **Source:** Tourangeau and Yan 2007; Yan 2021; Yan, IASS/WSS Session 1 (sensitive questions); NORC 2026 as reported in Yan, IASS/WSS Session 2 (language models over-report sensitivity)
+
+### likely_edited
+- **When:** Reviewing any question whose true answer could be intrusive to give, risky to disclose, or unflattering.
+- **Say:** Name who would edit or withhold their answer and in which direction (under-report or over-report). Mark it consider, and mark it fix only when the wording or the options make it worse, for example by offering no private or face-saving way to answer.
+- **Never:** Do not flag a topic as sensitive without naming who would edit their answer and which way.
+- **Check:** Could every respondent give a true answer here without it being intrusive, risky to disclose, or unflattering to them?
+- **Label:** Answer likely to be edited
+- **Source:** Tourangeau and Yan 2007 and Yan 2021, as presented in Yan, IASS/WSS Session 1 (what makes a survey question sensitive; reporting stage: respondents deliberately not choosing the right option)
 
 ### mode_and_privacy
 - **When:** Notes for every sensitive item.

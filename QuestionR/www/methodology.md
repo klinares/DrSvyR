@@ -62,7 +62,9 @@ A question is sensitive when it is intrusive, when answering carries a risk of d
 
 The reviewer is run on a published test set: 20 survey questions with 48 planted faults, and 7 well-tested questions from the European Social Survey that should draw few flags (Sturgis, Roberts and Robinson 2026).
 
-*[Results of the latest run, to be added by the Claude project after matching: share of the 48 faults found, and flags per well-tested question.]*
+In the latest run (13 November 2026, model claude-sonnet-5-5) the reviewer flagged 41 of the 48 planted faults (85 percent): 33 as "fix" and 8 as "consider". It was strongest on questions that ask two things at once, vague terms, recall problems and leading wording. It missed three of the four sensitivity faults, which the reflexes deliberately hold back on, two faults that could only be seen with the full answer scale, one overlong sentence and one unstated assumption. On the 7 well-tested questions it raised 2 "fix" flags in all, and "consider" flags on 6 of them, so expect some flags on good questions too.
+
+The flags were matched to the planted faults by reading, by the AI model that helped build this tool; a second person has not checked the matching.
 
 Planted faults are clearer than real ones, and one run on one model is a guide, not a guarantee.
 
