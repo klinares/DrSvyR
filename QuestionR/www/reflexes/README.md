@@ -25,7 +25,7 @@ AI reflexes. The expertise lives here, not in the model.
 - `## Instrument checks` (evaluate.md only): reflexes in the same form, whose Check lines go only to
   the call that reviews the questionnaire as a whole.
 - `## Prohibitions`: one bullet each.
-- `## Output format`: the reply format, sent as written.
+- `## Output format`: the reply format, sent as written (generate.md, evaluate.md, refine.md).
 - HTML comments are notes for people and are stripped before anything is sent.
 - No real numbers or real survey items in examples. Use [placeholders].
 
@@ -36,8 +36,8 @@ prompt. Blank form fields are left out, not guessed.
 
 | Call | Files, in order | CHECKLIST |
 |---|---|---|
-| Write questions: draft | core, generate, the kind's file, mode | none |
-| Write questions: check | core, evaluate, the kind's file, mode | Check lines of core, the kind's file and mode |
+| Write questions: draft (the drafter) | core, generate, the kind's file, mode | none |
+| Write questions: refine (the main model) | core, refine, the kind's file, mode | Check lines of core, generate, the kind's file and mode, with the draft as JSON |
 | Evaluate: a part | core, evaluate, the files of the kinds ticked, mode | every Check line in force but the instrument checks |
 | Evaluate: the whole | the same | the instrument checks only |
 

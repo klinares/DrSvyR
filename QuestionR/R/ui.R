@@ -54,32 +54,13 @@ placeholder_notice <- function(m = APP_MODEL) {
     paste(bad, collapse = ", "), ".")
 }
 
-# The worked example on Start here: a recorded real run of the tool on the slide question, saved by
-#   tests/llm_check.R example as www/start_example.json and drawn by the card Results uses. Until that
-#   run exists, a box says so; nothing here is written by hand.
-EXAMPLE_FILE <- file.path("www", "start_example.json")
-
-example_ui <- function(path = EXAMPLE_FILE) {
-  if (!file.exists(path))
-    return(warn_box("The worked example will be shown here once it has been recorded from a real run of the tool."))
-  ex = jsonlite::fromJSON(path, simplifyVector = FALSE)
-  sh = shape_review(list(batches = list(list(kind = "items", status = "ok", ids = "1", questions = ex$question, reply = ex$reply))))
-  tagList(card_ui(card_blocks(sh$questions[[1]])),
-          tags$p(class = "small text-muted", paste0("Recorded from ", ex$model, " on ", ex$date, ".")))
-}
-
-# Start here: www/start.md, with the worked example where its {{example}} line is; then the key box;
-#   then, closed, the settings in force and the connection check. The panel opens by itself when the
+# Start here: www/start.md; then the key box; then, closed, the settings in force and the connection check. The panel opens by itself when the
 #   profile still holds placeholders, since that is the first thing to deal with.
 start_ui <- function() {
   row = function(label, value) tags$tr(tags$th(scope = "row", label), tags$td(value))
   placeholders = placeholder_notice()
-  md = tryCatch(readLines(START_FILE, encoding = "UTF-8", warn = FALSE), error = function(e) "The page start.md could not be read.")
-  at = match("{{example}}", trimws(md))
   tagList(
-    if (is.na(at)) md_html(paste(md, collapse = "\n"))
-    else tagList(md_html(paste(md[seq_len(at - 1L)], collapse = "\n")), example_ui(),
-                 md_html(paste(md[-seq_len(at)], collapse = "\n"))),
+    md_page(START_FILE),
     mod_key_ui("key"),
     tags$details(
       class = "mt-3", open = if (!is.null(placeholders)) NA,

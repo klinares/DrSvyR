@@ -102,13 +102,14 @@ ok("every reflex with a Check line has a Label",
 # The reflex files are edited only in the Claude project; a change here must be deliberate. When one
 #   is, the new sums go here (tests/smoke.R prints them when they differ).
 REFLEX_SHA <- c(
-  `core.md` = "ca4ab5c967d0f61683e87807c7f03c38e3371d94fbf176cb4e34f76a63447bfc",
-  `generate.md` = "ad72ff2d7a8d3a2a203ee9717e0d035af3aa789230323b596e5e3b7f68e60188",
-  `attitudinal.md` = "75a1144073d0bf570472b2653ad2c8c3aaebaac435bdec3a04951a03e607ea5d",
-  `behavioral.md` = "d2cda0848767e569ff070cde7c4ede51b2cc6867afde5b1a599f3178c8c77a4d",
-  `sensitive.md` = "3c86d54295fb78b67dd6a80ef53de985110150d8ae064b8f8ee32ba71e30d002",
-  `evaluate.md` = "13b22f495d32b9149149aac92ccd57351cdfdfe0c18c48ad074b5813856d2d22",
-  `mode.md` = "5a8271c5b6116040085f23d325d05446a9e66a0a9106cc327feb76c52c001026")
+  `core.md` = "5341dacfd7ac50eaa56f5b1111cf0bfec03f1103b744e7aca0df7a5670b1e91d",
+  `generate.md` = "82597d181d064f2d44591746cee2c3294a7e50de646ec536b57c57ac4a03f4b1",
+  `attitudinal.md` = "6b5ac03131037228dfa36efabc90ac25def227aecd4a7fc71ecd14e85bf31217",
+  `behavioral.md` = "ffc9c35f28221c738a4b825621590943cf5917df20b767c87fbcf24578183763",
+  `sensitive.md` = "6aa01d8605001e36efc0bef7a6dfed5fe0b6d59b070bfa6d547c0946a0f6e620",
+  `evaluate.md` = "1ab3a224876db451ed93cde5941f2faa4085e4258390db997279019431ece128",
+  `mode.md` = "5a8271c5b6116040085f23d325d05446a9e66a0a9106cc327feb76c52c001026",
+  `refine.md` = "059748adccf547e710efefc9b25f209f893bcd8823709d98ad09b263afa83ec0")
 sha_now <- purrr::map_chr(rfiles, "sha")
 if (!identical(sha_now, REFLEX_SHA)) print(sha_now)
 ok("the reflex files are the ones checksummed here", identical(sha_now, REFLEX_SHA))
@@ -518,39 +519,29 @@ ok("no key is anywhere on the page", !grepl(key_planted, page$html, fixed = TRUE
 
 start_html <- html_of(start_ui())
 at <- function(x, h = start_html) regexpr(x, h, fixed = TRUE)[[1]]
-ok("Start here, in order: the two sentences, the TSE figure and its caption, the slide example, the worked example, how it works, the bullets, the key box, then the closed settings",
-   all(c(at("acting as an expert reviewer"), at("fw_tse.svg"), at("It does not address interviewers"), at("start_example.svg"),
-         at(if (file.exists(EXAMPLE_FILE)) "Recorded from" else "worked example will be shown here"), at("how_it_works.svg"), at("What to keep in mind"), at("Your API key"),
-         at("Settings and connection")) > 0L) &&
-     identical(order(c(at("acting as an expert reviewer"), at("fw_tse.svg"), at("It does not address interviewers"), at("start_example.svg"),
-                       at(if (file.exists(EXAMPLE_FILE)) "Recorded from" else "worked example will be shown here"), at("how_it_works.svg"), at("What to keep in mind"), at("Your API key"),
-                       at("Settings and connection"))), 1:9) &&
-     !grepl("<details[^>]*open", start_html) && !grepl("{{example}}", start_html, fixed = TRUE))
-ok("the worked example, once recorded, is drawn by the card Results uses, and is never written by hand",
+ok("Start here is www/start.md as written (its table and block quotes drawn), then the key box, then the closed settings; no worked-example card",
    local({
-     p = tempfile(fileext = ".json")
-     jsonlite::write_json(list(model = "m", date = "2026-11-13", question = "Last week, did you work?\nYes / No",
-                               reply = list(items = list(list(id = "1", flags = list(list(check = "one_thing", stage = "comprehension",
-                                 level = "fix", quote = "Last week", why = "W.")), rewrite = "R")))), p, auto_unbox = TRUE)
-     h = html_of(example_ui(p))
-     grepl("<mark>Last week</mark>", h, fixed = TRUE) && grepl("Rewrite: R", h, fixed = TRUE) && grepl("card mb-2", h, fixed = TRUE)
+     md = html_of(md_page(START_FILE))
+     grepl("<table>", md, fixed = TRUE) && n_in("<blockquote>", md) == 2L && grepl("fw_tse.svg", md, fixed = TRUE) &&
+       grepl("how_it_works.svg", md, fixed = TRUE) && at("An example") > 0L && at("An example") < at("Your API key") &&
+       at("Your API key") < at("Settings and connection") && !grepl("<details[^>]*open", start_html) &&
+       !exists("example_ui") && !file.exists(file.path("www", "start_example.json"))
    }))
-ok("the figures are in www/ and the old ones are gone: TSE, the slide example, how it works, construct, response, sensitive",
+ok("the figures are in www/ and the old ones are gone; the slide example is on the Methodology page",
    all(file.exists(file.path("www", c("fw_tse.svg", "start_example.svg", "how_it_works.svg", "fw_construct.svg", "fw_response.svg", "fw_sensitive.svg")))) &&
      !any(file.exists(file.path("www", c("fw_testing.svg", "fw_trapd.svg", "fw_example.svg")))) &&
-     grepl("viewBox=\"0 0 1000 400\"", readLines("www/start_example.svg", n = 1L), fixed = TRUE) &&
-     any(grepl("IASS/WSS Webinar Session 1", readLines("www/start_example.svg"), fixed = TRUE)))
+     grepl("start_example.svg", html_of(md_page(METHODOLOGY_FILE)), fixed = TRUE))
 meth_html <- html_of(methodology_ui())
 heads <- regmatches(meth_html, gregexpr("<h2>[^<]+</h2>", meth_html))[[1]]
 ok("the Methodology page has its sections in order, and no TRAPD or testing-methods section",
-   identical(gsub("</?h2>", "", heads), c("Total Survey Error and measurement error", "From construct to question", "The response process",
+   identical(gsub("</?h2>", "", heads), c("Measurement error", "From construct to question", "The response process",
                                           "Sensitive questions", "How the AI reviewer is kept in check", "How it was tested",
                                           "What it cannot do", "The AI reflexes")) &&
      !grepl("TRAPD|testing methods", html_of(md_page(METHODOLOGY_FILE)), ignore.case = TRUE))
-ok("the reflex table is read from the reflex files: one row per reflex, its Label, and its Source line as written",
+ok("the reflex table is read from the reflex files and comes last: one row per reflex, its Label, and its Source line as written",
    local({
      t = reflexes_table()
      n = sum(purrr::map_int(rfiles, function(s) length(s$reflexes)))
-     nrow(t) == n && n_in("<tr>", meth_html) == n + 1L &&
+     nrow(t) == n && n_in("<tr>", meth_html) == n + 1L && regexpr("<table", meth_html) > regexpr("The AI reflexes", meth_html) &&
        all(purrr::map_lgl(t$source[nzchar(t$source)], function(s) grepl(htmltools::htmlEscape(s), meth_html, fixed = TRUE)))
    }))

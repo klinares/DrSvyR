@@ -2,14 +2,12 @@
 #   real calls and spends real money, so it does nothing until it is told what to run.
 #
 # From PowerShell, inside QuestionR/ (from Git Bash the keys look unset):
-#   & "C:/Program Files/R/R-4.6.1/bin/Rscript.exe" --no-init-file tests/llm_check.R example
+#   & "C:/Program Files/R/R-4.6.1/bin/Rscript.exe" --no-init-file tests/llm_check.R review30
 #
 # The key comes from .Renviron (QUESTIONR_KEY, else ANTHROPIC_API_KEY) and is handed to llm_json()
 #   here, the way the key box would; the app itself never reads the environment for it. No key is
 #   written to a file.
 #
-#   example   one review of the slide question ("Last week, did you work ...") as Evaluate sends
-#             it: 1 call. Writes www/start_example.json, which Start here draws.
 #   review30  one review of tests/review_long_questionnaire.txt (30 questions): 2 part calls and
 #             1 call on the whole. Writes tests/review30.json and tests/review30.md.
 #   gold      each of the 27 items of tests/gold_items.csv reviewed alone (1 call each), shown the
@@ -21,10 +19,10 @@
 
 args <- commandArgs(trailingOnly = TRUE)
 stopifnot("Run from inside QuestionR/" = file.exists("app.R") && dir.exists("tests"))
-mode <- intersect(args, c("example", "review30", "gold"))
+mode <- intersect(args, c("review30", "gold"))
 if (length(mode) != 1L) {
   cat("tests/llm_check.R makes live calls and spends money. Nothing was called.\n",
-      "Name one of: example (1 call), review30 (3 calls), gold (27 calls) [model id].\n", sep = "")
+      "Name one of: review30 (5 calls) or gold (27 calls), then optionally a model id.\n", sep = "")
   quit(status = 0)
 }
 
@@ -54,23 +52,6 @@ call_lines <- function(rv)
     paste0("| ", if (identical(b$kind, "instrument")) "whole" else paste0("part ", b$k), " | ", sprintf("%.0f", b$seconds %||% NA),
            " | ", num(b$tokens$input), " | ", num(b$tokens$cached_input), " | ", num(b$tokens$output),
            " | ", b$finish %||% "-", " | ", b$attempts %||% "-", " | ", b$status, " |"))
-
-
-# ---- example: the slide question, once ----------------------------------------------------
-
-if (mode == "example") {
-  question <- "Last week, did you work full-time, part-time, or did you not work at all?\nYes, full-time / Yes, part-time / No"
-  form <- list(task = "evaluate", research_question = "Employment status of adults in the past week",
-               population = "Adults aged 16 and over", modes = "web", questionnaire = question)
-  rv <- review(form)
-  b <- rv$batches[[1]]
-  if (!identical(rv$status, "ok")) { cat("The call failed:", rv$error, "\n"); quit(status = 1) }
-  jsonlite::write_json(list(model = m$id, date = format(Sys.Date()), question = question, reply = b$reply,
-                            hash = b$hash, seconds = b$seconds, tokens = b$tokens),
-                       file.path("www", "start_example.json"), auto_unbox = TRUE, pretty = TRUE)
-  cat(scrub(paste(readLines(file.path("www", "start_example.json")), collapse = "\n")), "\n")
-  quit(status = 0)
-}
 
 
 # ---- review30: the 30-question file ------------------------------------------------------

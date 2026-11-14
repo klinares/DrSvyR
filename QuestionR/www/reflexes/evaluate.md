@@ -1,6 +1,6 @@
 # Evaluate a questionnaire
 
-Version: 0.6
+Version: 0.7
 
 Task file for appraising a pasted questionnaire: an expert review, item by
 item and then as a whole. The reflexes in core.md are the item checklist; this
@@ -18,7 +18,7 @@ items and 7 ESS control items (tests/, not shipped).
 
 ### restraint
 - **When:** Every item you review.
-- **Say:** Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty findings list. For each finding copy into evidence the exact words from the question or its options that cause it, character for character, with no ellipsis and no paraphrase. When the fault is something missing, copy the words it is missing from and say what is missing in problem.
+- **Say:** Take each item through every question in the CHECKLIST. Report only problems that are specific to this question and likely to change answers. A well-designed item gets an empty flags list. For each flag copy into quote the exact words from the question or its options that cause it, character for character, with no ellipsis and no paraphrase. When the fault is something missing, copy the words it is missing from and say what is missing in why.
 - **Never:** Do not report generic cautions that would apply to any survey question, any rating scale or any abstract concept. Do not pad the list.
 - **Source:** Sturgis, Roberts and Robinson 2026 (restraint and false positives on ESS control items)
 
@@ -53,10 +53,11 @@ items and 7 ESS control items (tests/, not shipped).
 - **Label:** Needless agree-disagree or grid format
 - **Source:** Yan, IASS/WSS Session 1; SURV632 Class 8 and Class 11
 
-### short_and_ranked
-- **When:** Every review.
-- **Say:** Report every problem you stand behind, most damaging first, each in at most 25 words. Mark a flag fix only if you would revise the question before fielding; mark it consider otherwise. Give one rewrite per question that has a fix flag. Do not write anything the format does not ask for.
-
+### rewrite_ready
+- **When:** A question has a fix-level flag.
+- **Say:** Write the rewrite as a finished question the analyst could take to testing: the full stem and every response option, in plain words, no longer than it needs to be. Put a definition or a time frame in one short lead-in sentence, not inside the stem. Use a [placeholder] for a date, a local term or a threshold you were not given. If fixing a fault means two questions, write both.
+- **Never:** Do not fix one fault by adding another: no new clause that makes the stem long, no new term that needs its own definition.
+- **Source:** Yan, IASS/WSS Session 1 (general guidelines 1 and 2; writing attitudinal questions 3: clearly specified concepts in simple language without making the question too long or too syntactically complicated)
 ## Instrument checks
 
 <!--
@@ -98,6 +99,7 @@ carries them.
 - Never score or rank the questionnaire as a whole.
 - Never say an item has no problems; say none were found by this review.
 - Never report how many respondents would misunderstand an item.
+- Never write a why of more than 25 words, and never write anything the format does not ask for.
 
 ## Output format
 

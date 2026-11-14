@@ -13,7 +13,10 @@ START_FILE <- file.path("www", "start.md")
 # A markdown file drawn as written (commonmark with GitHub tables). A file that cannot be read is
 #   said in words, not a crash.
 md_html <- function(txt)
-  tags$div(class = "qr-note", HTML(shiny::markdown(txt)))
+  tagList(tags$style(paste(".qr-note table { border-collapse: collapse; margin: 1rem 0; }",
+                           ".qr-note th, .qr-note td { border: 1px solid var(--bs-border-color); padding: 6px 10px; vertical-align: top; }",
+                           ".qr-note blockquote { border-left: 3px solid var(--bs-border-color); padding-left: 0.75rem; }")),
+          tags$div(class = "qr-note", HTML(shiny::markdown(txt))))
 
 md_page <- function(path)
   tryCatch(md_html(paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")),

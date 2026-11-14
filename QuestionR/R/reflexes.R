@@ -13,10 +13,10 @@ REFLEXES_DIR <- file.path("www", "reflexes")
 
 # The reflex files, by name, so a missing one is an error and the README is not read as one.
 REFLEX_FILES <- c("core.md", "generate.md", "attitudinal.md", "behavioral.md", "sensitive.md",
-                  "evaluate.md", "mode.md")
+                  "evaluate.md", "mode.md", "refine.md")
 
 # The files whose reply R parses, so each must give a reply format.
-REFLEX_FILES_WITH_OUTPUT <- c("generate.md", "evaluate.md")
+REFLEX_FILES_WITH_OUTPUT <- c("generate.md", "evaluate.md", "refine.md")
 
 # The kinds of question a reflex can apply to (its Applies line). A reflex with no Applies line
 #   applies to the kind its file is about, and a reflex of any other file to any question.

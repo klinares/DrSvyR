@@ -1,6 +1,6 @@
 # Sensitive topic items
 
-Version: 0.4
+Version: 0.5
 
 Task file for questions where respondents may refuse or edit their answer.
 The aim is more disclosure and fewer refusals without changing what is asked.
@@ -8,8 +8,8 @@ The aim is more disclosure and fewer refusals without changing what is asked.
 <!--
 Two reflexes here deliberately depart from core.md: forgiving_intro is a
 planned exception to neutral_wording, and assume_behavior to
-no_presupposition. Both must be declared in the item's decisions so the
-appraiser does not flag them as faults and the analyst can turn them off.
+no_presupposition. Both are named in the item's why so the analyst can see
+the choice and undo it.
 -->
 
 ## Guidelines
@@ -42,13 +42,13 @@ For sensitive questions, also:
 ### mode_and_privacy
 - **When:** Notes for every sensitive item.
 - **Say:** Recommend self-administration for the sensitive items even inside an interviewer survey, and that no one else is present. If the mode in the brief is interviewer-administered, say what that costs and write the item so the answer can be given without saying it aloud where possible.
-- **Check:** Do the notes address who can hear or see the answer in the stated mode?
+- **Check:** Can the respondent give this answer without an interviewer or anyone else hearing or seeing it?
 - **Label:** Privacy in the mode not addressed
 - **Source:** Yan, IASS/WSS Session 1 (writing sensitive questions 1 and 2); SURV632 Class 8 (editing) and Class 10 (self-administration and social presence)
 
 ### forgiving_intro
 - **When:** A socially undesirable behaviour or attitude, or failure to do a desirable one.
-- **Say:** Offer a short forgiving introduction of one kind: many people do it; some people do and others do not; or a face-saving reason for not having done the desirable thing. Mark it in decisions as a deliberate departure from neutral wording.
+- **Say:** Offer a short forgiving introduction of one kind: many people do it; some people do and others do not; or a face-saving reason for not having done the desirable thing. Say in the item's why that it is a deliberate departure from neutral wording.
 - **Never:** Do not use a forgiving introduction in the direction that is already socially desirable. Do not invent an authority, a statistic or a medical claim to justify the behaviour.
 - **Check:** If a forgiving introduction is used, does it point only toward the under-reported answer and contain no invented fact?
 - **Label:** Forgiving introduction pushes or invents
@@ -56,7 +56,7 @@ For sensitive questions, also:
 
 ### assume_behavior
 - **When:** An undesirable behaviour where a yes/no filter would invite denial.
-- **Say:** Offer wording that asks how much or how often directly, with zero or never as an ordinary first-class answer. Mark it in decisions as deliberate and say it suits populations where the behaviour is common.
+- **Say:** Offer wording that asks how much or how often directly, with zero or never as an ordinary first-class answer. Say in the item's why that it is deliberate; it suits populations where the behaviour is common.
 - **Check:** If the item assumes the behaviour, is "none" or "never" an explicit, easy answer?
 - **Label:** None or never not easy
 - **Source:** Yan, IASS/WSS Session 1 (writing sensitive questions: assume the behaviour)
@@ -98,7 +98,7 @@ For sensitive questions, also:
 
 ### indirect_methods
 - **When:** Direct questions are unlikely to work even self-administered.
-- **Say:** Mention in the notes that indirect techniques exist (randomized response, item count, crosswise) and that they need a matching analysis plan and larger samples.
+- **Say:** Mention in needs_from_analyst that indirect techniques exist (randomized response, item count, crosswise) and that they need a matching analysis plan and larger samples.
 - **Never:** Do not draft an indirect-technique item unless the brief asks for one.
 - **Source:** Yan, IASS/WSS Session 1 (writing sensitive questions 4)
 

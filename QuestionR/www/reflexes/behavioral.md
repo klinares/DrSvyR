@@ -1,6 +1,6 @@
 # Behavioral items
 
-Version: 0.4
+Version: 0.5
 
 Task file for questions about experiences, events and behaviours: what, when,
 where, how often, how long, how many, how much. An objective truth exists in
@@ -47,12 +47,12 @@ For behavioral questions, also:
 
 ### retrieval_cues
 - **When:** The behaviour is easy to forget or under-report.
-- **Say:** Give cues about what happened and where, not dates. Allow time: a lead-in that says the question needs thought, or a slower pace in interviewer modes.
-- **Source:** Yan, IASS/WSS Session 1 (writing behavioural questions 4 and 10); Burton and Blair 1991 as cited by Yan; SURV632 (what and where cue better than when)
+- **Say:** Give cues about what happened and where, not dates. Allow time: a lead-in that says the question needs thought, or a slower pace in interviewer modes. For a long or detailed history, say in programming that a calendar of the respondent's own events, or a diary kept during the period, would serve better than one recall question.
+- **Source:** Yan, IASS/WSS Session 1 (writing behavioural questions 4, 6, 7 and 10); Burton and Blair 1991 as cited by Yan; SURV632 (what and where cue better than when)
 
 ### decompose_with_care
 - **When:** A broad category covers different kinds of event.
-- **Say:** Split it into separate questions for distinct sub-categories when the events are distinct and memorable. Say in the notes that splitting raises reported totals and can over-report for frequent, similar events.
+- **Say:** Split it into separate questions for distinct sub-categories when the events are distinct and memorable. Use it sparingly: splitting raises reported totals and can over-report frequent, similar events.
 - **Never:** Do not decompose routine, indistinct events into many small categories.
 - **Check:** If the item is decomposed, are the sub-categories distinct, non-overlapping and memorable?
 - **Label:** Sub-categories overlap or are unclear

@@ -1,6 +1,6 @@
 # Attitudinal scale
 
-Version: 0.4
+Version: 0.5
 
 Task file for writing a set of attitude items intended to be combined into a
 scale.
@@ -57,7 +57,7 @@ For attitudinal questions, also:
 
 ### non_attitudes
 - **When:** The population may not have heard of the object or formed a view.
-- **Say:** Add a filter question or a no-opinion option so respondents without an attitude are not pushed to invent one. Say in the notes that a strongly worded filter increases no-opinion answers.
+- **Say:** Add a filter question or a no-opinion option so respondents without an attitude are not pushed to invent one. A strongly worded filter increases no-opinion answers, so word it plainly.
 - **Check:** Is there a route for respondents who have no knowledge of or opinion about the object?
 - **Label:** No route for no opinion
 - **Source:** Yan, IASS/WSS Session 1 (writing attitudinal questions 7); SURV632 Class 8 (don't-know filters)
@@ -83,8 +83,8 @@ For attitudinal questions, also:
 - **Source:** Yan, IASS/WSS Session 1 (writing attitudinal questions 4; context effects); SURV632 Class 7
 
 ### scale_is_a_draft
-- **When:** The notes for any set of items meant to form a scale.
-- **Say:** State that the set is an untested item pool. Before scores are used it needs a pilot with real respondents and checks of dimensionality and reliability, and subscales need more scrutiny than the total. For use in more than one country or language, comparability has to be tested, not assumed.
+- **When:** A set of items meant to form one scale.
+- **Say:** Treat the set as an untested item pool. Say once, in needs_from_analyst, that before scores are used it needs a pilot with real respondents and checks of dimensionality and reliability, and that subscales need more scrutiny than the total.
 - **Never:** Do not predict reliability, factor structure or validity.
 - **Source:** Martini, Scagnelli and Trujillo Medina 2026 (agreement strongest at whole-scale level, weaker for subscales); Behzad et al. 2026 (coarse structure recovered, finer structure diverges); SURV632 Class 12 (measurement invariance)
 

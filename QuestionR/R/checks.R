@@ -86,13 +86,16 @@ REPLY_RULES <- list(
       paste0("Item ", paste(purrr::map_chr(bad, function(it) it$id %||% "?"), collapse = ", "),
              " has neither options nor an open_format.")
   },
-  # At most three things asked of the analyst, a why of at most 30 words, one line of programming.
+  # At most three things asked of the analyst, a why of at most 30 words, one line of programming,
+  #   and every part an object with a stem.
   draft_limits = function(obj, ...)
     c(if (length(obj$needs_from_analyst) > 3L) paste0("needs_from_analyst has ", length(obj$needs_from_analyst), " entries; the limit is 3"),
       unlist(purrr::imap(obj$items, function(it, i)
         c(if (type_ok(it$why, "text") && n_words(it$why) > MAX_WHY_WORDS) paste0("Item ", i, " has a why of ", n_words(it$why), " words; keep it to 25"),
-          if (type_ok(it$programming, "text") && grepl("
-", it$programming)) paste0("Item ", i, " has more than one line of programming"))))),
+          if (type_ok(it$programming, "text") && grepl("\n", it$programming, fixed = TRUE))
+            paste0("Item ", i, " has more than one line of programming"),
+          purrr::discard(purrr::imap_chr(it$parts %||% list(), function(p, j)
+            if (!is.list(p) || !type_ok(p$stem, "text")) paste0("Item ", i, " part ", j, " has no stem") else NA_character_), is.na))))),
   # One entry per question of the part, so a question the model skipped is never shown as clear.
   question_count = function(obj, n_questions = NULL, ...) {
     n = length(obj$items)
