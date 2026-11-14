@@ -1,68 +1,46 @@
 # QuestionR reflexes
 
-Draft 0.2, 2026-11-11. Text files that steer every model call in QuestionR.
-The expertise lives here, not in the model: swap the model and none of it moves.
+Text files that steer every model call in QuestionR. QuestionR is the AI tool; these files are its
+AI reflexes. The expertise lives here, not in the model.
 
-## Format (same parser as svysegment/R/ai_reflexes.R, two additions)
+## Format (the parser is `R/reflexes.R`)
 
-- `Version:` line near the top.
-- `## Persona` (core.md only): one paragraph.
-- `## Guidelines` (core.md and the three draft task files): NEW. A short
-  bulleted list, optionally under one heading line, that R puts in the
-  message the analyst sees and can edit. Never sent in the system prompt.
-  The Reflexes are the rules; the Guidelines only remind.
-- `## Reflexes`: one `### id` per reflex (lower case, underscores), each with
-  one-line fields:
+- `# Title` and a `Version:` line near the top.
+- `## Persona` (core.md only): one paragraph. Its first sentence opens the message the analyst sees
+  and can edit; the rest opens the system prompt.
+- `## Guidelines`: an optional heading line, then one-line bullets. core.md's go into the message
+  the analyst sees; a kind file's (attitudinal, behavioral, sensitive) are added after it for a
+  draft. Never in the system prompt: the Reflexes are the rules, the Guidelines only remind.
+- `## Reflexes`: one `### id` per reflex (lower case, underscores), each with one-line fields:
   - `- **When:**` the situation the rule applies to.
   - `- **Say:**` what to do.
   - `- **Never:**` optional, what not to do.
-  - `- **Check:**` optional and NEW. A yes/no question the project manager
-    answers for each candidate item. The Check lines of the files in force are
-    the appraisal checklist, and the list of their ids is the "criteria
-    evaluated against" summary shown to the analyst.
-  - `- **Source:**` optional. Shown on the Methodology tab. Never sent to a
-    model: sent, sources get copied into output as citations.
+  - `- **Check:**` optional. A yes/no question; the Check lines in force are the CHECKLIST a
+    review is given, and a flag must cite one of them.
+  - `- **Label:**` optional, at most 6 words, the plain name of the fault the Check finds. Shown to
+    the analyst (the bottom line, Criteria applied, the Methodology table). Never sent to a model.
+  - `- **Applies:**` optional, a comma list from `attitudinal, behavioral, sensitive, any`. With
+    none, a reflex of a kind file applies to that kind and any other reflex to any question.
+  - `- **Source:**` optional. Shown on the Methodology page. Never sent to a model.
+- `## Instrument checks` (evaluate.md only): reflexes in the same form, whose Check lines go only to
+  the call that reviews the questionnaire as a whole.
 - `## Prohibitions`: one bullet each.
-- `## Output format`: NEW name for svysegment's "Reporting style". Sent as
-  written.
-- HTML comments are notes for people and are stripped before sending.
+- `## Output format`: the reply format, sent as written.
+- HTML comments are notes for people and are stripped before anything is sent.
 - No real numbers or real survey items in examples. Use [placeholders].
 
 ## Which files go with which call
 
-The prompt is assembled by R in this fixed order, never written by a model,
-so the same form produces the same prompt. Blank form fields are omitted, not
-guessed.
+R assembles every prompt in a fixed order; no model writes one, so the same form gives the same
+prompt. Blank form fields are left out, not guessed.
 
-| Step | Model | Files, in order |
+| Call | Files, in order | CHECKLIST |
 |---|---|---|
-| Brief check | PM | core, pm_brief, then the task file |
-| Generate: attitudinal scale | each worker | core, generate, attitudinal, mode |
-| Generate: behavioral items | each worker | core, generate, behavioral, mode |
-| Generate: sensitive items | each worker | core, generate, sensitive, mode |
-| Evaluate questionnaire | PM only | core, evaluate, mode |
-| Appraise candidates | PM | core, pm_appraise, then the Check lines of the files the workers received |
+| Write questions: draft | core, generate, the kind's file, mode | none |
+| Write questions: check | core, evaluate, the kind's file, mode | Check lines of core, the kind's file and mode |
+| Evaluate: a part | core, evaluate, the files of the kinds ticked, mode | every Check line in force but the instrument checks |
+| Evaluate: the whole | the same | the instrument checks only |
 
-`mode.md` is filtered by R before sending: `any_mode`, the reflexes whose id
-is a mode chosen in the form, and `mixed_mode` when more than one is chosen.
-
-The user message has three labelled blocks in Buskirk, Eck and Timbrook's
-order: PREPARE (the brief: research question, construct, population, country,
-mode, anything else), ASK (the task and how many items),
-CHARACTERIZE (the Output format section of `generate.md` or `evaluate.md`).
-For Evaluate two blocks sit between ASK and CHARACTERIZE: QUESTIONNAIRE (as
-pasted) and CHECKLIST (one `id: question` line per Check in force). Drafting
-prompts carry no Check questions; the appraiser gets them instead.
-
-## What R does, not the model
-
-- Codes each candidate's design defaults from the returned JSON: format,
-  number of options, fully or partly labelled, midpoint, don't-know option,
-  reference period. Shown beside the PM's appraisal.
-- Hides model names from the PM (candidates are A, B, C).
-- Drops evaluation findings with severity below 5 into a collapsed
-  "minor" list.
-- Lays the chosen items out for Word and appends the disclosure block:
-  models and versions, date, reflex file versions, the prompt, which items were
-  generated or revised with AI, and the line "Expert-review appraisal by a
-  language model. Not a pretest."
+`mode.md` is filtered before sending: `any_mode`, the reflexes for the modes chosen, and
+`mixed_mode` when more than one is chosen. In a review the kind files bring only their reflexes
+that have a Check line.

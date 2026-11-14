@@ -1,6 +1,6 @@
 # Core
 
-Version: 0.3
+Version: 0.4
 
 Sent with every model call in QuestionR. What every item must satisfy whatever
 the task, and what the model may and may not claim.
@@ -42,6 +42,7 @@ Guidelines:
 - **Say:** Start from the construct in the brief, not the topic. If the construct is abstract or has several dimensions, break it into specific single-dimension domains and write one item per domain. An item that measures the wrong concept is a worse error than one that measures the right concept imperfectly.
 - **Never:** Do not widen or change the construct to make an item easier to write.
 - **Check:** Does the item measure the construct or domain named in the brief and only that?
+- **Label:** Measures something other than the construct
 - **Source:** Yan, IASS/WSS Session 1 (specification and operationalization error; decomposition); Groves et al. 2009, Fig. 2.5; Peytcheva and Yan 2025, Fig. 1.1
 
 ### response_process
@@ -54,6 +55,7 @@ Guidelines:
 - **Say:** Use simple, familiar words that the whole target population uses in the same way. Replace technical terms, jargon, slang and idioms, or define them inside the question.
 - **Never:** Do not use a word with more than one common sense where the other sense would change the answer.
 - **Check:** Would every member of the target population read each key term the same way, without a definition they do not have?
+- **Label:** Key terms read differently
 - **Source:** Yan, IASS/WSS Session 1 (general guidelines 1 and 3; semantic problems); SURV632 (conceptual variability, lexical and mapping ambiguity)
 
 ### simple_syntax
@@ -61,36 +63,42 @@ Guidelines:
 - **Say:** One short sentence where possible, main clause first. Move conditions, definitions and time frames into a separate lead-in sentence instead of stacking clauses.
 - **Never:** No single or double negations in the stem. No negative interrogatives.
 - **Check:** Is the stem free of stacked clauses and of negations?
+- **Label:** Stacked clauses or negations
 - **Source:** Yan, IASS/WSS Session 1 (general guidelines 2 and 8; syntactic problems); SURV632 (complexity and working memory)
 
 ### specific_concrete
 - **When:** Every item.
 - **Say:** Name the specific object, behaviour, place and time the question is about. Replace vague quantifiers in stems and options with concrete amounts or frequencies where the task allows.
 - **Check:** Is it clear exactly what, whose, where and when the question is about?
+- **Label:** Unclear what, whose, where or when
 - **Source:** Yan, IASS/WSS Session 1 (general guideline 4; vague quantifiers)
 
 ### one_thing
 - **When:** Every item.
 - **Say:** Ask about one thing at a time. Two objects, two behaviours or two qualities joined by "and" or "or" become two items.
 - **Check:** Does the question ask about exactly one thing, so that no respondent would want to answer its parts differently?
+- **Label:** Asks two things at once
 - **Source:** Yan, IASS/WSS Session 1 (general guideline 7); Sturgis, Roberts and Robinson 2026 (double-barrelled)
 
 ### no_presupposition
 - **When:** Every item.
 - **Say:** Check what the question assumes about the respondent: that they work, have a partner, use a service, have heard of the topic, hold an opinion. Where the assumption fails for part of the population, add a filter question or a not-applicable option. This fault is easy to miss, so check it explicitly.
 - **Check:** Does the question apply to every respondent who will be asked it?
+- **Label:** Does not apply to every respondent
 - **Source:** Yan, IASS/WSS Session 1 (faulty presupposition); SURV632 (presupposition); Sturgis, Roberts and Robinson 2026 (presupposition rarely detected without an explicit cue)
 
 ### neutral_wording
 - **When:** Every item except a deliberate forgiving introduction to a sensitive question.
 - **Say:** Word the stem so no answer is the expected one. No premises stated as fact, no appeals to authority or to what most people think, no emotive terms.
 - **Check:** Is the wording free of any push toward one answer?
+- **Label:** Pushes toward one answer
 - **Source:** Yan, IASS/WSS Session 1 (general guideline 6); SURV632 (cooperative principle: respondents treat what they are told as relevant)
 
 ### options_fit
 - **When:** Every closed item.
 - **Say:** Response options are exhaustive and mutually exclusive, answer the question that was asked in the same terms, and give every respondent a true answer to pick.
 - **Check:** Can every respondent find exactly one option that is true for them?
+- **Label:** No single true option for some
 - **Source:** Yan, IASS/WSS Session 1 (general guideline 5); SURV632 Class 8 (mapping and reporting)
 
 ### brief_only

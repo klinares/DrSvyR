@@ -2,42 +2,31 @@
 #   Run:     shiny::runApp("QuestionR")   (or Run App in RStudio, this file open)
 #   Publish: rsconnect::deployApp("QuestionR", appName = "QuestionR")
 
-# A plain Shiny app directory, not a package, so a server can run it as is:
-#     app.R        this file: settings, state, layout, server
-#     R/           function definitions only, sourced below
-#     www/         static files, served at the site root by Shiny itself:
-#                  reflexes/ (the text files that steer every model call) and
-#                  logo/ (the office logo)
-# README.md says what the app is and how to set it up.
+# A plain Shiny app directory: this file (settings, layout, server), R/ (function definitions
+#   only, sourced below) and www/ (served by Shiny: reflexes/, the figures, logo/). README.md says
+#   how to set it up.
 
 
 # ---- 1. settings an administrator may change -------------------------------
 
-# The marking shown above every screen and written into the output. Edit it
-#   here; it is one line on purpose.
+# The marking shown above every screen.
 APP_CLASSIFICATION <- "UNCLASSIFIED"
 
-# The office logo, a file in www/logo/. Until it is there a dashed placeholder
-#   box shows where it goes. The office name beside it is optional.
+# The office logo, a file in www/logo/ (a dashed box until it is there), and an optional name.
 APP_LOGO <- "office_logo.png"
 APP_OFFICE <- ""
 
-# Largest questionnaire Evaluate accepts, in characters. Over it the app says so and asks for
-#   the questionnaire in parts; nothing is truncated. A questionnaire is split into questions
-#   (on blank lines, or on lines that start with a question label) and the questions packed, in
-#   order, into parts of at most APP_BATCH_QUESTIONS questions and APP_BATCH_CHARS characters, one
-#   call each, sent four at a time; one more call looks at the questionnaire as a whole.
+# Largest questionnaire Evaluate accepts, in characters; nothing is truncated. Its questions are
+#   packed into parts of at most APP_BATCH_QUESTIONS questions and APP_BATCH_CHARS characters, one
+#   call each, sent four at a time, and one more call looks at the questionnaire as a whole.
 APP_MAX_PASTE_CHARS <- 60000
 APP_BATCH_QUESTIONS <- 15
 APP_BATCH_CHARS <- 8000
 
-# Where the source code is, for the "Source code" button at the top left of the header. It
-#   opens in a new tab. At work, where that address may not be reachable, point it at the
-#   internal copy or leave it: the button only links.
+# Where the "Source code" button in the header links to. At work, point it at the internal copy.
 APP_SOURCE_URL <- "https://github.com/klinares/drsvyr/tree/main/QuestionR"
 
-# The profile used when the environment variable QUESTIONR_PROFILE is not set:
-#   "home" or "work". One line to change when the app is moved to work.
+# The profile used when the environment variable QUESTIONR_PROFILE is not set: "home" or "work".
 APP_DEFAULT_PROFILE <- "home"
 
 # The one model QuestionR uses, per profile. The key is always pasted into the box on
@@ -45,15 +34,12 @@ APP_DEFAULT_PROFILE <- "home"
 #     api              "anthropic" or "openai" (the OpenAI style)
 #     base_url, id     where it is called and what the endpoint names it
 #     reasoning_effort optional, "low", "medium" or "high"; sent only when set
-#     max_tokens_name  optional, openai style only: "max_completion_tokens" (what
-#                      ellmer sends by default) or "max_tokens", for an endpoint that
-#                      wants the older name for the limit on the length of a reply
+#     max_tokens_name  optional, openai style only: "max_tokens" for an endpoint that wants
+#                      the older name for the reply limit (ellmer sends max_completion_tokens)
 #   work: placeholders in angle brackets, to be filled in at work (see README.md).
 APP_PROFILES <- list(
-  home = list(api = "anthropic", base_url = "https://api.anthropic.com/v1",
-              id = "claude-sonnet-5-5"),
-  work = list(api = "openai", base_url = "<work base url>",
-              id = "<model id at work>"))
+  home = list(api = "anthropic", base_url = "https://api.anthropic.com/v1", id = "claude-sonnet-5-5"),
+  work = list(api = "openai", base_url = "<work base url>", id = "<model id at work>"))
 
 APP_PROFILE <- local({
   p = tolower(trimws(Sys.getenv("QUESTIONR_PROFILE")))
@@ -72,23 +58,16 @@ library(bslib)
 library(purrr)
 library(stringr)
 
-# Called as pkg::fn() in R/ and never attached. Listed so a missing one stops
-#   the app here, by name, rather than three screens later. S7 and httr2 come
-#   with ellmer; R/llm.R calls them directly, to read a reply's finish reason and
-#   an HTTP error's status. promises and later come with Shiny and ellmer; they let
-#   several model calls be in flight at once in the one R process.
+# Called as pkg::fn() in R/ and never attached; listed so a missing one stops the app here, by name.
 APP_PACKAGES <- c("digest", "ellmer", "htmltools", "httr2", "jsonlite", "later", "promises", "rlang", "S7")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
-  if (length(missing))
-    stop("Not installed, so the app cannot start: ",
-         paste(missing, collapse = ", "), call. = FALSE)
+  if (length(missing)) stop("Not installed, so the app cannot start: ", paste(missing, collapse = ", "), call. = FALSE)
 })
 
-# The ellmer functions and arguments R/llm.R calls, checked here so that a different
-#   ellmer stops the app with a plain message and not in the middle of a call. The app
-#   was built and tested with ellmer 0.4.2.
+# The ellmer functions and arguments R/llm.R calls, checked here so a different ellmer stops the
+#   app with a plain message, not in the middle of a call. Built and tested with ellmer 0.4.2.
 local({
   calls = list(chat_anthropic = c("system_prompt", "params", "model", "cache", "base_url", "credentials", "echo"),
                chat_openai_compatible = c("base_url", "name", "system_prompt", "credentials", "model", "params",
@@ -105,45 +84,33 @@ local({
          "install it with install.packages(\"ellmer\") and start the app again.", call. = FALSE)
 })
 
-# The verbs R/ relies on, checked to be the ones meant. A masked verb fails
-#   here rather than producing a wrong prompt later.
-stopifnot(
-  identical(map, purrr::map), identical(keep, purrr::keep),
-  identical(discard, purrr::discard), identical(walk, purrr::walk))
+# The verbs R/ relies on, checked to be the ones meant: a masked verb fails here.
+stopifnot(identical(map, purrr::map), identical(keep, purrr::keep), identical(discard, purrr::discard),
+          identical(walk, purrr::walk))
 
 
 # ---- 3. the code in R/ ------------------------------------------------------
 
-# Every file there defines functions and constants and nothing else, which is
-#   what makes sourcing the folder in any order safe. Keep it that way.
+# Every file there defines functions and constants and nothing else, so the order is safe.
 walk(sort(list.files("R", pattern = "[.]R$", full.names = TRUE)), function(f)
   tryCatch(sys.source(f, envir = globalenv()),
-           error = function(e) stop("Failed loading ", f, ": ",
-                                    conditionMessage(e), call. = FALSE)))
+           error = function(e) stop("Failed loading ", f, ": ", conditionMessage(e), call. = FALSE)))
 
-# Every reflex file parsed now, so one that has lost its shape stops the app here
-#   with the file and the reflex named, not at the first request that needs it.
+# Every reflex file parsed now, so one that has lost its shape stops the app here, named.
 invisible(check_reflex_files())
 
-# R/ lives in the global environment, but runApp() evaluates this file in an
-#   environment of its own, so nothing assigned here is visible to R/ unless
-#   it is put there. These are the settings R/ reads.
-list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION,
-              APP_PROFILE = APP_PROFILE,
-              APP_PROFILES = APP_PROFILES,
-              APP_MODEL = APP_MODEL,
-              APP_MAX_PASTE_CHARS = APP_MAX_PASTE_CHARS,
-              APP_BATCH_QUESTIONS = APP_BATCH_QUESTIONS,
-              APP_BATCH_CHARS = APP_BATCH_CHARS),
+# runApp() evaluates this file in an environment of its own, so the settings R/ reads are put
+#   in the global environment, where R/ lives.
+list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION, APP_PROFILE = APP_PROFILE, APP_PROFILES = APP_PROFILES,
+              APP_MODEL = APP_MODEL, APP_MAX_PASTE_CHARS = APP_MAX_PASTE_CHARS,
+              APP_BATCH_QUESTIONS = APP_BATCH_QUESTIONS, APP_BATCH_CHARS = APP_BATCH_CHARS),
          envir = globalenv())
 
 
 # ---- 4. process settings ----------------------------------------------------
 
-# Cairo for every PNG. A Linux server with no display has no X11, and R's
-#   default bitmap device there can still be Xlib, which fails with "unable to
-#   start device PNG". There are no plots in the first build; this is set so a
-#   later one does not fail on Connect.
+# Cairo for every PNG: a Linux server with no display has no X11. No plots yet; set so a later
+#   one does not fail on Connect.
 options(bitmapType = "cairo")
 
 

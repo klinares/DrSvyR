@@ -92,6 +92,27 @@ ok("the parser refuses a bad id, a repeated id, text before the first reflex, an
      says("not part of the format: '## Reflex'", c("## Reflex", "### oops", "- **When:** A.", "- **Say:** B.")) &&
      says("never closed", c("<!-- open", refl("- **When:** A.", "- **Say:** B."))))
 
+ok("a Label of more than six words, and an Applies line outside attitudinal, behavioral, sensitive and any, are refused",
+   says("Label of more than 6 words", refl("- **When:** A.", "- **Say:** B.", "- **Label:** one two three four five six seven")) &&
+     says("Applies line that is not", refl("- **When:** A.", "- **Say:** B.", "- **Applies:** factual")) &&
+     identical(try_reflex_file(refl("- **When:** A.", "- **Say:** B.", "- **Applies:** behavioral, any"))$reflexes$oops$applies, c("behavioral", "any")))
+ok("every reflex with a Check line has a Label",
+   all(purrr::map_lgl(unlist(purrr::map(rfiles, function(s) unname(s$reflexes)), recursive = FALSE), function(r) is.na(r$check) || !is.na(r$label))))
+
+# The reflex files are edited only in the Claude project; a change here must be deliberate. When one
+#   is, the new sums go here (tests/smoke.R prints them when they differ).
+REFLEX_SHA <- c(
+  `core.md` = "ca4ab5c967d0f61683e87807c7f03c38e3371d94fbf176cb4e34f76a63447bfc",
+  `generate.md` = "ad72ff2d7a8d3a2a203ee9717e0d035af3aa789230323b596e5e3b7f68e60188",
+  `attitudinal.md` = "75a1144073d0bf570472b2653ad2c8c3aaebaac435bdec3a04951a03e607ea5d",
+  `behavioral.md` = "d2cda0848767e569ff070cde7c4ede51b2cc6867afde5b1a599f3178c8c77a4d",
+  `sensitive.md` = "3c86d54295fb78b67dd6a80ef53de985110150d8ae064b8f8ee32ba71e30d002",
+  `evaluate.md` = "13b22f495d32b9149149aac92ccd57351cdfdfe0c18c48ad074b5813856d2d22",
+  `mode.md` = "5a8271c5b6116040085f23d325d05446a9e66a0a9106cc327feb76c52c001026")
+sha_now <- purrr::map_chr(rfiles, "sha")
+if (!identical(sha_now, REFLEX_SHA)) print(sha_now)
+ok("the reflex files are the ones checksummed here", identical(sha_now, REFLEX_SHA))
+
 forms <- list(
   attitudinal = list(task = "attitudinal", research_question = "Trust in local services",
                      construct = "Trust in the town council", population = "Adults in [town]",
@@ -113,8 +134,9 @@ everything_sent <- paste(purrr::map_chr(built, function(p) paste(p$system, p$use
 ok("the same form gives the same prompt, character for character, and a changed word changes the hash",
    identical(prompt_of(forms$attitudinal), built$attitudinal) && identical(prompt_of(forms$evaluate), built$evaluate) &&
      !identical(build_prompt(utils::modifyList(forms$attitudinal, list(construct = "Trust in the police")))$hash, built$attitudinal$hash))
-ok("no Source line, no HTML comment and no field label reaches any prompt",
+ok("no Source line, no Label, no HTML comment and no field label reaches any prompt",
    length(sources) > 20L && length(comments) > 3L &&
+     !any(purrr::map_lgl(check_labels(), function(l) grepl(l, everything_sent, fixed = TRUE))) &&
      !any(purrr::map_lgl(sources, function(s) grepl(s, everything_sent, fixed = TRUE))) &&
      !any(purrr::map_lgl(comments, function(s) grepl(s, gsub("\\s+", " ", everything_sent), fixed = TRUE))) &&
      !grepl("**Source:**", everything_sent, fixed = TRUE) && !grepl("**Check:**", everything_sent, fixed = TRUE))

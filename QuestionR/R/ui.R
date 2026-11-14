@@ -1,42 +1,23 @@
 # ui.R for QuestionR
-# The tab titles, the small helpers the tabs share, and Start here. The other
-#   screens are in ui_tasks.R. Function definitions and constants only (root
-#   CLAUDE.md rule 2).
+# The tab titles, the helpers the tabs share, Start here and Methodology; the task pages are in
+#   ui_tasks.R. Function definitions and constants only.
 
-# The tab titles, in order. The navlist in app.R and any code that moves the
-#   analyst between tabs both read this.
 QUESTIONR_TABS <- c("Start here", "Evaluate questions", "Write questions", "Methodology")
 
 
 # ---- shared helpers ----------------------------------------------------------
 
-# A note the analyst should read. The theme variables keep it legible in dark
-#   mode.
-advice_box <- function(...) {
-  shiny::tags$div(
-    style = paste("background: var(--bs-tertiary-bg);",
-                  "border-left: 3px solid var(--bs-primary);",
-                  "color: var(--bs-body-color);",
-                  "padding: 8px 12px; margin: 12px 0;"),
-    ...)
-}
+# A note to read, and a warning. Theme variables, with fallbacks, keep both legible in dark mode.
+advice_box <- function(...)
+  shiny::tags$div(style = paste("background: var(--bs-tertiary-bg); border-left: 3px solid var(--bs-primary);",
+                                "color: var(--bs-body-color); padding: 8px 12px; margin: 12px 0;"), ...)
 
-# A consequence the analyst should see before they cause it. The fallbacks
-#   matter: a fixed background with an inherited foreground is how a panel ends
-#   up pale text on a pale block the moment the theme changes underneath it.
-warn_box <- function(...) {
-  shiny::tags$div(
-    style = paste(
-      "background: var(--bs-warning-bg-subtle, #fdf6ec);",
-      "border-left: 3px solid var(--bs-warning, #d9a441);",
-      "color: var(--bs-warning-text-emphasis, var(--bs-body-color));",
-      "padding: 8px 12px; margin: 12px 0; font-size: 90%;"),
-    ...)
-}
+warn_box <- function(...)
+  shiny::tags$div(style = paste("background: var(--bs-warning-bg-subtle, #fdf6ec); border-left: 3px solid var(--bs-warning, #d9a441);",
+                                "color: var(--bs-warning-text-emphasis, var(--bs-body-color)); padding: 8px 12px; margin: 12px 0;",
+                                "font-size: 90%;"), ...)
 
-# ---- the office logo ---------------------------------------------------------
-# The file named in app.R (APP_LOGO), served from www/logo/. Until it exists,
-#   a dashed box shows where it goes.
+# The office logo named in app.R, from www/logo/; a dashed box until it exists.
 office_logo <- function(file, office = "") {
   logo = if (file.exists(file.path("www", "logo", file)))
     tags$img(src = file.path("logo", file), alt = "Office logo", style = "height:48px;")

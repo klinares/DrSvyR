@@ -1,19 +1,15 @@
 # ui_tasks.R for QuestionR
-# The two task pages, Evaluate questions and Write questions: one module, one page each, the form at
-#   the top, one button, a short box the analyst may edit with a Run button, and the results below.
-#   The module holds no flow logic: it gathers the form, calls the engine in R/flow.R, and draws what
-#   it returns. Function definitions and constants only.
+# The two task pages, Evaluate questions and Write questions: one module, one page each: the form,
+#   one button, a short box the analyst may edit with Run, and the results. No flow logic: it calls
+#   the engine in R/flow.R and draws what it returns. Function definitions and constants only.
 
 
 # ---- the one state object ---------------------------------------------------------
 
-# What a task page holds: form is the cleaned form; prompt is the message as assembled and as the
-#   analyst left it; the rest is what the last run returned. items is the drafted items as the
-#   analyst has them and edits what they changed. key_version, in the app's shared state, changes
-#   whenever the pasted key is saved or forgotten.
-STATE_DEFAULTS <- list(
-  form = NULL, prompt = NULL, round = 0L, draft = NULL, check = NULL,
-  review = NULL, items = list(), edits = list(), rounds = list())
+# What a task page holds: the cleaned form, the message as assembled and as sent, what the last run
+#   returned, the drafted items as the analyst has them and what they changed, and every run.
+STATE_DEFAULTS <- list(form = NULL, prompt = NULL, round = 0L, draft = NULL, check = NULL, review = NULL,
+                       items = list(), edits = list(), rounds = list())
 
 
 # ---- shared pieces -------------------------------------------------------------------
@@ -27,8 +23,8 @@ safe_ui <- function(expr)
 # What the engine last said it was about to do, for progress_ask() to put on the page.
 PROGRESS_NOTE <- new.env()
 
-# The function a run hands to the engine as `ask`: it says on the page that a call is going out,
-#   then makes it through llm_json(). Must run inside withProgress().
+# What a run hands the engine as `ask` and `ask_all`: they say on the page what is going out, then
+#   call llm_json() or llm_json_all(). Must run inside withProgress().
 progress_ask <- function(total) {
   n = 0L
   function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL) {
@@ -39,7 +35,6 @@ progress_ask <- function(total) {
   }
 }
 
-# The same for calls sent together (llm_json_all).
 progress_ask_all <- function(total) {
   function(requests) {
     note = PROGRESS_NOTE$msg %||% ""

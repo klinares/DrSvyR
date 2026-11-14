@@ -3,13 +3,9 @@
 #   return, so every flow runs in a test without a browser. Function definitions and constants
 #   only.
 
-# Two rules hold for every function here.
-#   1. A model is reached only through `ask` (one call) or `ask_all` (several sent together):
-#        ask(user = , m = , system_prompt = , max_tokens = , validate = )
-#      returns the parsed reply, or what llm_json() returns (a list holding it as `obj`), or
-#      signals an error. ask_all(requests) returns a list of those, one per request, an error in
-#      place of a failed one. Tests hand in fakes.
-#   2. A key is never looked up here. llm_json() finds it inside `ask`.
+# A model is reached only through ask(user, m, system_prompt, max_tokens, validate), which returns
+#   the parsed reply or llm_json()'s result, or ask_all(requests), a list of those with an error in
+#   place of a failed one; tests hand in fakes. A key is never looked up here.
 
 
 # ---- one call, as a record ------------------------------------------------------------
@@ -89,13 +85,9 @@ send_parts <- function(ask_all, m, f, parts, message, progress = function(msg) N
   purrr::pmap(list(parts, prompts, results), review_record)
 }
 
-# A review: the questionnaire split into questions and packed into parts (review_plan()), one
-#   items call per part and, when there is more than one question, one instrument call on the whole
-#   text, sent together four at a time. message is the analyst's text (edited or not); every call
-#   sends it, then its own tail. Fields: status ("ok", "partial" when some calls failed, "failed"
-#   when none came back), error, batches (one record per call, in order: kind, k, n, first, ids,
-#   questions, status, error, hash, user, reply, seconds, finish, tokens, attempts, raw), and the
-#   attribute "prompt" (the message as sent and whether it was edited).
+# A review: one items call per part of review_plan() and, with more than one question, one call on
+#   the whole, four at a time. Every call sends the analyst's message, then its own tail. Fields:
+#   status ("ok", "partial", "failed"), error, and batches, one record per call in order.
 run_review <- function(form, m, ask = llm_json, message = NULL, progress = function(msg) NULL,
                        ask_all = ask_all_for(ask)) {
   f = tryCatch(clean_form(form), error = function(e) e)

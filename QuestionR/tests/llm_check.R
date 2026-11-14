@@ -1,316 +1,171 @@
-# llm_check.R -- LIVE runs of QuestionR's model layer. Home only; deleted at work with
-#   the rest of tests/. Each makes real calls and spends real money, so it does
-#   nothing until it is told what to run, by a word after the script name.
+# llm_check.R: LIVE runs of QuestionR's model layer. Home only; tests/ is not deployed. Each makes
+#   real calls and spends real money, so it does nothing until it is told what to run.
 #
 # From PowerShell, inside QuestionR/ (from Git Bash the keys look unset):
-#   & "C:/Program Files/R/R-4.6.1/bin/Rscript.exe" --no-init-file tests/llm_check.R generate
+#   & "C:/Program Files/R/R-4.6.1/bin/Rscript.exe" --no-init-file tests/llm_check.R example
 #
-# Keys come from .Renviron: OPENROUTER_API_KEY serves the three workers through the
-#   app's own rule (key_source "server"); ANTHROPIC_API_KEY is handed to the project
-#   manager's calls here directly, the way the key box would, because the app itself
-#   never reads the environment for a pasted-key model. No key is written to a file.
+# The key comes from .Renviron (QUESTIONR_KEY, else ANTHROPIC_API_KEY) and is handed to llm_json()
+#   here, the way the key box would; the app itself never reads the environment for it. No key is
+#   written to a file.
 #
-#   generate  the Generate engine: a brief check, a 3-item attitudinal draft by every
-#             worker and the appraisal (5 requests, each repeated up to twice when a
-#             reply fails); writes tests/run_generate.json.
-#   review30  one review of tests/review_long_questionnaire.txt (30 questions), in
-#             parts: one call for each part and one for the instrument as a whole;
-#             writes tests/review_long.md and tests/review_long.json.
-#   gold      the gold test of tests/gold_items.csv: each of its 27 items reviewed alone,
-#             the model shown the question and its options and nothing else (asserted
-#             before every call); raw replies in tests/gold_runs/, one file an item,
-#             and an item that has a file is skipped. Matching the findings to the
-#             known problems is done by hand afterwards.
+#   example   one review of the slide question ("Last week, did you work ...") as Evaluate sends
+#             it: 1 call. Writes www/start_example.json, which Start here draws.
+#   review30  one review of tests/review_long_questionnaire.txt (30 questions): 2 part calls and
+#             1 call on the whole. Writes tests/review30.json and tests/review30.md.
+#   gold      each of the 27 items of tests/gold_items.csv reviewed alone (1 call each), shown the
+#             question and its options and nothing else (asserted before every call). Writes the
+#             flags to a new folder in tests/gold_runs/ and does not match them to the known
+#             problems; that is done in the Claude project. An item already saved is skipped.
+#             A model id after "gold" measures another model on the same items:
+#               tests/llm_check.R gold <model id>
 
 args <- commandArgs(trailingOnly = TRUE)
-stopifnot("Run from inside QuestionR/" = file.exists("DESIGN.md"))
-
-if (!any(c("generate", "review30", "gold") %in% args)) {
+stopifnot("Run from inside QuestionR/" = file.exists("app.R") && dir.exists("tests"))
+mode <- intersect(args, c("example", "review30", "gold"))
+if (length(mode) != 1L) {
   cat("tests/llm_check.R makes live calls and spends money. Nothing was called.\n",
-      "Name what to run: generate (5 calls), review30 (3 calls) or gold (27 calls).\n", sep = "")
+      "Name one of: example (1 call), review30 (3 calls), gold (27 calls) [model id].\n", sep = "")
+  quit(status = 0)
+}
+
+app <- shiny::shinyAppDir(".")
+invisible(app$serverFuncSource())
+stopifnot("llm_check.R is for the home profile" = identical(APP_PROFILE, "home"))
+key <- Sys.getenv("QUESTIONR_KEY", Sys.getenv("ANTHROPIC_API_KEY"))
+if (!nzchar(key)) {
+  cat("No call was made: neither QUESTIONR_KEY nor ANTHROPIC_API_KEY is set in .Renviron.\n")
+  quit(status = 1)
+}
+m <- if (identical(mode, "gold") && length(args) > match("gold", args))
+  utils::modifyList(APP_MODEL, list(id = args[[match("gold", args) + 1L]])) else APP_MODEL
+scrub <- function(txt) gsub(key, "[key]", txt, fixed = TRUE)
+ask_live <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
+  llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens, validate = validate, key = key)
+ask_all_live <- function(requests) llm_json_all(purrr::map(requests, function(r) c(r, list(key = key))))
+say <- function(msg) cat(format(Sys.time(), "%H:%M:%S"), msg, "\n")
+num <- function(x) if (is.null(x) || !length(x) || is.na(x)) "-" else format(round(as.numeric(x)), big.mark = ",")
+review <- function(form) {
+  started = Sys.time()
+  rv = run_review(form, m, ask = ask_live, progress = say, ask_all = ask_all_live)
+  c(rv, list(wall = as.numeric(difftime(Sys.time(), started, units = "secs"))))
+}
+call_lines <- function(rv)
+  purrr::map_chr(rv$batches, function(b)
+    paste0("| ", if (identical(b$kind, "instrument")) "whole" else paste0("part ", b$k), " | ", sprintf("%.0f", b$seconds %||% NA),
+           " | ", num(b$tokens$input), " | ", num(b$tokens$cached_input), " | ", num(b$tokens$output),
+           " | ", b$finish %||% "-", " | ", b$attempts %||% "-", " | ", b$status, " |"))
+
+
+# ---- example: the slide question, once ----------------------------------------------------
+
+if (mode == "example") {
+  question <- "Last week, did you work full-time, part-time, or did you not work at all?\nYes, full-time / Yes, part-time / No"
+  form <- list(task = "evaluate", research_question = "Employment status of adults in the past week",
+               population = "Adults aged 16 and over", modes = "web", questionnaire = question)
+  rv <- review(form)
+  b <- rv$batches[[1]]
+  if (!identical(rv$status, "ok")) { cat("The call failed:", rv$error, "\n"); quit(status = 1) }
+  jsonlite::write_json(list(model = m$id, date = format(Sys.Date()), question = question, reply = b$reply,
+                            hash = b$hash, seconds = b$seconds, tokens = b$tokens),
+                       file.path("www", "start_example.json"), auto_unbox = TRUE, pretty = TRUE)
+  cat(scrub(paste(readLines(file.path("www", "start_example.json")), collapse = "\n")), "\n")
   quit(status = 0)
 }
 
 
-# Load the app the way Connect does, so R/ and its settings are in place.
-app <- shiny::shinyAppDir(".")
-invisible(app$serverFuncSource())
-stopifnot("llm_check.R is for the home profile" = identical(APP_PROFILE, "home"))
+# ---- review30: the 30-question file ------------------------------------------------------
 
-pm_key <- Sys.getenv("ANTHROPIC_API_KEY")
-models <- llm_models()
-
-# A key must never reach a file, even inside an error message from an endpoint.
-secrets <- purrr::keep(c(pm_key, Sys.getenv("OPENROUTER_API_KEY")), nzchar)
-scrub <- function(txt) purrr::reduce(secrets, function(t, s) gsub(s, "[key]", t, fixed = TRUE), .init = txt)
-
-
-# ---- go review30: one live long review, in parts (Phase 5e) --------------------------------
-
-if ("review30" %in% args) {
-  if (!nzchar(pm_key)) {
-    cat("No call was made. ANTHROPIC_API_KEY is not set in .Renviron.\n")
-    quit(status = 1)
-  }
+if (mode == "review30") {
   questionnaire <- paste(readLines(file.path("tests", "review_long_questionnaire.txt"), warn = FALSE), collapse = "\n")
   form <- list(task = "evaluate", research_question = "Household energy use, travel and quality of life",
-               construct = "", population = "Adults aged 18 and over living in England",
-               country = "", modes = "web",
-               n_items = NA_integer_, reference_period = "", keep_items = "", other = "",
-               questionnaire = questionnaire, revision = "")
-  f <- clean_form(form)
-  plan <- review_plan(f$questionnaire, APP_BATCH_CHARS)
-  n_questions <- length(grep("^Q[0-9]+\\.", strsplit(questionnaire, "\n", fixed = TRUE)[[1]]))
-
-  ask_live <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
-    llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens,
-             validate = validate, key = pm_key)
-  say <- function(msg) cat(format(Sys.time(), "%H:%M:%S"), msg, "\n")
-  # The app's own ceiling and batch size: nothing is raised for this run.
-  ask_all_live <- function(requests)
-    llm_json_all(purrr::map(requests, function(r) c(r, list(key = pm_key))))
-  wall_started <- Sys.time()
-  rv <- run_review(form, APP_MODELS$pm, ask = ask_live, progress = say, ask_all = ask_all_live)
-  wall_s <- as.numeric(difftime(Sys.time(), wall_started, units = "secs"))
-  shown <- if (!is.null(rv$reply)) shape_review(rv$reply, f$questionnaire)
-
-  writeLines(scrub(as.character(flow_log_json(flow_round(f, APP_MODELS$pm, review = rv)))),
-             file.path("tests", "review_long.json"), useBytes = TRUE)
-
-  num <- function(x) if (is.null(x) || is.na(x)) "-" else format(round(x), big.mark = ",")
-  rows <- purrr::map_chr(rv$batches, function(b)
-    paste0("| ", if (identical(b$kind, "instrument")) "instrument" else paste0("part ", b$part, " of ", b$n_parts),
-           " | ", if (identical(b$kind, "instrument")) nchar(questionnaire) else b$chars,
-           " | ", sprintf("%.1f", b$seconds %||% NA_real_), " | ", num(b$tokens$input), " | ", num(b$tokens$output),
-           " | ", b$finish %||% "-", " | ", b$attempts %||% "-", " | ", b$status, " |"))
-  failed <- purrr::keep(rv$batches, function(b) !identical(b$status, "ok"))
-  ids_back <- purrr::map_chr(rv$reply$items %||% list(), function(it) paste(unlist(it$id), collapse = " "))
-  expect_ids <- regmatches(questionnaire, gregexpr("(?m)^Q[0-9]+(?=\\. )", questionnaire, perl = TRUE))[[1]]
-  item_calls <- purrr::keep(rv$batches, function(b) identical(b$kind, "items") && !is.null(b$reply))
-  strays <- purrr::map_int(item_calls, function(b) length(b$reply$instrument))
-  inst_call <- purrr::detect(rv$batches, function(b) identical(b$kind, "instrument") && !is.null(b$reply))
-  inst_items <- if (!is.null(inst_call)) length(inst_call$reply$items) else NA_integer_
-  total_s <- sum(purrr::map_dbl(rv$batches, function(b) b$seconds %||% 0))
-  tot_in <- sum(purrr::map_dbl(rv$batches, function(b) as.numeric(b$tokens$input %||% 0)))
-  tot_out <- sum(purrr::map_dbl(rv$batches, function(b) as.numeric(b$tokens$output %||% 0)))
-
-  md <- c(
-    "# One live long review, in parts (tests/llm_check.R go review30)", "",
-    paste0("Run: ", format(Sys.time(), "%Y-%m-%d %H:%M"), " | profile: ", APP_PROFILE),
-    paste0("Model: ", APP_MODELS$pm$id, " | evaluation ceiling ", LLM_MAX_TOKENS[["evaluate"]],
-           " tokens a call, batch size ", APP_BATCH_CHARS, " characters, paste cap ", APP_MAX_PASTE_CHARS, "; none was changed for this run."),
-    paste0("Questionnaire: tests/review_long_questionnaire.txt, written for this test: ", n_questions,
-           " questions in ", length(strsplit(questionnaire, "\n\n", fixed = TRUE)[[1]]), " blocks, ", nchar(questionnaire), " characters."),
-    paste0("Form: research question \"", form$research_question, "\", population \"", form$population, "\", mode web, no country, English."),
-    paste0("Parts: ", length(plan) - 1L, " (first blocks ", paste(purrr::map_int(plan[seq_len(length(plan) - 1L)], "first_block"), collapse = ", "),
-           "), so ", length(plan), " calls: one for each part and one for the instrument as a whole."), "",
-    "| Call | Characters | Seconds | Tokens in | Tokens out | Finish | Attempts | Status |", "|---|---|---|---|---|---|---|---|",
-    rows, "",
-    paste0("Total: ", sprintf("%.0f", wall_s), " seconds by the clock (", sprintf("%.1f", wall_s / 60), " minutes; the calls' own seconds add up to ",
-           sprintf("%.0f", total_s), "), ",
-           format(tot_in, big.mark = ","), " tokens in, ", format(tot_out, big.mark = ","), " tokens out. Result status: ", rv$status, "."),
-    "",
-    if (!length(failed)) "Failed parts: none."
-    else c("Failed parts:", purrr::map_chr(failed, function(b) paste0("- ", if (identical(b$kind, "instrument")) "the instrument call" else paste0("part ", b$part),
-                                                                     ": ", b$error))),
-    "",
-    if (!is.null(shown)) c(
-      paste0("Shown to the analyst: ", length(shown$keep), " questions marked Keep and ", length(shown$questions) - length(shown$keep),
-             " marked Revise, with ", sum(purrr::map_int(shown$questions, function(q) length(q$problems))), " problems in all (at most ",
-             MAX_PROBLEMS, " a question), and ", length(shown$instrument), " points about the questionnaire as a whole (at most ", MAX_POINTS, ")."),
-      paste0("Questions whose text as pasted R could not find: ", sum(!nzchar(purrr::map_chr(shown$questions, "text"))), "."),
-      paste0("Questions back: ", length(ids_back), " of ", n_questions, "; ids ", if (identical(ids_back, expect_ids)) "exactly as pasted, in order" else
-               paste0("differ from the pasted ones. Missing: ", paste(setdiff(expect_ids, ids_back), collapse = ", "),
-                      "; extra or repeated: ", paste(ids_back[!ids_back %in% expect_ids | duplicated(ids_back)], collapse = ", ")), "."),
-      paste0("Item calls that filled the instrument field they were told to leave empty: ",
-             sum(strays > 0L), " of ", length(item_calls), if (length(strays)) paste0(" (", paste(strays, collapse = ", "), " entries)") else "", "."),
-      paste0("The instrument call returned ", inst_items, " question entries (it was told to leave items empty).")),
-    "")
-  writeLines(scrub(md), file.path("tests", "review_long.md"), useBytes = TRUE)
+               population = "Adults aged 18 and over living in England", modes = "web", questionnaire = questionnaire)
+  rv <- review(form)
+  writeLines(scrub(as.character(flow_log_json(c(flow_round(form, m, review = rv), list(wall = rv$wall))))),
+             file.path("tests", "review30.json"), useBytes = TRUE)
+  sh <- shape_review(rv)
+  qs <- purrr::keep(sh$questions, function(q) q$reviewed)
+  per <- function(level) purrr::map_int(qs, n_level, level = level)
+  flags <- unlist(purrr::map(qs, "flags"), recursive = FALSE)
+  flagged <- function(id) any(purrr::map_lgl(sh$questions, function(q) identical(q$id, id) && length(q$flags) > 0L))
+  # Q5 and Q17 are in different parts, so only the call on the whole can see that their scales run
+  #   in opposite directions.
+  reversal <- any(purrr::map_lgl(sh$instrument, function(fl) all(c("Q5", "Q17") %in% fl$questions)))
+  faults <- c(Q11 = flagged("Q11"), Q12 = flagged("Q12"), Q17 = flagged("Q17"), Q14 = flagged("Q14"), Q15 = flagged("Q15"),
+              Q16 = flagged("Q16"), Q13 = flagged("Q13"), `Q5/Q17 scale reversal` = reversal)
+  md <- c("# review30 (tests/llm_check.R review30)", "",
+          paste0("Run ", format(Sys.time(), "%Y-%m-%d %H:%M"), ", model ", m$id, ", ", length(rv$batches), " calls, ",
+                 sprintf("%.0f", rv$wall), " seconds by the clock. Status: ", rv$status, "."), "",
+          "| Call | Seconds | Tokens in | Cached in | Tokens out | Finish | Attempts | Status |", "|---|---|---|---|---|---|---|---|",
+          call_lines(rv), "",
+          paste0("Flags per question: fix mean ", sprintf("%.2f", mean(per("fix"))), " (max ", max(per("fix")), "), consider mean ",
+                 sprintf("%.2f", mean(per("consider"))), " (max ", max(per("consider")), ")."),
+          paste0("Quotes found in the text: ", sum(purrr::map_lgl(flags, "found")), " of ", length(flags), "."),
+          paste0("Calls that needed a repeat attempt: ", sum(purrr::map_int(rv$batches, function(b) as.integer(b$attempts %||% 1L)) > 1L), "."),
+          paste0("Deliberate faults flagged at either level: ", sum(faults), " of ", length(faults), ": ",
+                 paste0(names(faults), " ", ifelse(faults, "yes", "no"), collapse = "; "), "."), "",
+          "Bottom line:", paste0("> ", bottom_line(sh)), "",
+          if (!identical(rv$status, "ok")) c("Errors:", rv$error))
+  writeLines(scrub(md), file.path("tests", "review30.md"), useBytes = TRUE)
   cat(scrub(md), sep = "\n")
   quit(status = if (identical(rv$status, "ok")) 0L else 1L)
 }
 
 
-# ---- go generate: the Generate engine, live ---------------------------------------
+# ---- gold: the 27 items, each alone --------------------------------------------------------
 
-if ("generate" %in% args) {
-  gen_form <- list(
-    task = "attitudinal",
-    research_question = "How much do adults trust the national electoral commission?",
-    construct = "Trust in the national electoral commission",
-    population = "Adults aged 18 and over", country = "", modes = "web",
-    n_items = 3L,
-    reference_period = "", keep_items = "", other = "", questionnaire = "", revision = "")
-
-  # The key box's key for the project manager; the environment variable named in
-  #   key_var for a worker. Both are handed to llm_json() here, outside the engine,
-  #   which never looks up a key.
-  key_for_model <- function(m)
-    if (identical(m$key_source, "analyst")) pm_key else llm_key_for(m)
-  missing_keys <- purrr::keep(models, function(x) !nzchar(key_for_model(x$m) %||% ""))
-  if (length(missing_keys)) {
-    cat("No call was made. No key for: ",
-        paste(purrr::map_chr(missing_keys, function(x) x$m$id), collapse = ", "), "\n", sep = "")
-    quit(status = 1)
-  }
-  ask_live <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
-    llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens,
-             validate = validate, key = key_for_model(m))
-
-  seed <- 20261111L
-  ask_all_live <- function(requests)
-    llm_json_all(purrr::map(requests, function(r) c(r, list(key = key_for_model(r$m)))))
-  brief <- run_brief(gen_form, APP_MODELS$pm, ask = ask_live)
-  draft_started <- Sys.time()
-  drafts <- run_drafts(gen_form, APP_MODELS$workers, ask = ask_live, ask_all = ask_all_live)
-  draft_wall <- as.numeric(difftime(Sys.time(), draft_started, units = "secs"))
-  appraisal <- run_appraisal(gen_form, drafts, APP_MODELS$pm, ask = ask_live, seed = seed)
-
-  cands <- candidates_of(drafts, seed)
-  chk <- if (identical(appraisal$status, "ok")) check_appraisal(appraisal$reply, cands)
-
-  round <- flow_round(gen_form, APP_MODELS$pm, brief = brief, drafts = drafts,
-                      appraisal = appraisal, seed = seed)
-  round$profile <- APP_PROFILE
-  round$labels <- as.list(labels_of(drafts, seed))
-  round$r_checks <- list(
-    appraisal = if (!is.null(chk)) list(items_recommended = length(chk$selected),
-                                         check_lines = sum(nzchar(purrr::map_chr(chk$selected, "check")))))
-
-  writeLines(scrub(as.character(flow_log_json(round))), file.path("tests", "run_generate.json"), useBytes = TRUE)
-
-  rows <- flow_summary(brief, drafts, appraisal, APP_MODELS$pm)
-  cat("QuestionR live run of the Generate engine (tests/llm_check.R go generate)\n",
-      "Run: ", format(Sys.time(), "%Y-%m-%d %H:%M"), " | profile: ", APP_PROFILE, " | seed ", seed, "\n",
-      "Brief prompt hash:     ", brief$hash %||% "-", "\n",
-      "Work prompt hash:      ", attr(drafts, "prompt")$hash, "\n",
-      "Appraisal prompt hash: ", appraisal$hash %||% "-", "\n\n", sep = "")
-  cat(purrr::map_chr(rows, function(r)
-    sprintf("[%s] %-12s %-34s %6.1f s  in %s out %s  finish %s  attempts %s%s",
-            if (identical(r$status, "ok")) " OK " else "FAIL", r$step, r$model,
-            r$seconds %||% NA_real_, r$tokens_in %||% "-", r$tokens_out %||% "-",
-            r$finish %||% "-", r$attempts %||% "-",
-            if (!identical(r$status, "ok")) paste0("\n      ", r$error) else "")), sep = "\n")
-  if (!is.null(chk))
-    cat("\nR's checks on the appraisal: ", length(chk$selected), " items recommended (",
-        gen_form$n_items, " asked for); ", sum(nzchar(purrr::map_chr(chk$selected, "check"))),
-        " with a line to check before use.\n", sep = "")
-  cat("\nThe drafts, sent together: ", sprintf("%.1f", draft_wall), " seconds by the clock; the longest draft took ",
-      sprintf("%.1f", max(purrr::map_dbl(unname(as.list(drafts)), function(d) d$seconds %||% NA_real_), na.rm = TRUE)),
-      " seconds (the three one after another took 87 seconds in Phase 3).\n", sep = "")
-  statuses <- c(brief$status, purrr::map_chr(unname(as.list(drafts)), "status"), appraisal$status)
-  cat("\nALL OK: ", all(statuses == "ok"), "  (", sum(statuses == "ok"), " of ", length(statuses),
-      " steps)\nLog written to tests/run_generate.json\n", sep = "")
-  quit(status = if (all(statuses == "ok")) 0L else 1L)
-}
-
-
-
-# ---- go gold: the gold test, one review for each of the 27 items (Phase 4e) -----------
-
-if ("gold" %in% args) {
-  if (!nzchar(pm_key)) {
-    cat("No call was made. ANTHROPIC_API_KEY is not set in .Renviron.\n")
-    quit(status = 1)
-  }
-  gdir <- file.path("tests", "gold_runs")
-  dir.create(gdir, showWarnings = FALSE)
-
-  gold <- readr::read_csv(file.path("tests", "gold_items.csv"), comment = "#",
-                          col_types = readr::cols(.default = readr::col_character()), na = character())
-  items <- dplyr::distinct(gold, id, set, topic, question, scale, scale_complete)
+if (mode == "gold") {
+  lines <- readLines(file.path("tests", "gold_items.csv"), encoding = "UTF-8", warn = FALSE)
+  gold <- utils::read.csv(text = lines[!startsWith(lines, "#")], colClasses = "character", na.strings = character(0))
+  items <- unique(gold[, c("id", "set", "topic", "question", "scale", "scale_complete")])
   stopifnot("27 items expected" = nrow(items) == 27L)
+  gdir <- file.path("tests", "gold_runs", paste0(format(Sys.Date()), "_", gsub("[^A-Za-z0-9.-]", "-", m$id)))
+  dir.create(gdir, showWarnings = FALSE, recursive = TRUE)
 
-  gold_form <- list(task = "evaluate", research_question = "Evaluate this survey question",
-                    construct = "", population = "Adults in the general population",
-                    country = "", modes = "web",
-                    n_items = NA_integer_, reference_period = "", keep_items = "", other = "",
-                    questionnaire = "", revision = "")
-
-  # The options line: the scale as printed, or only its two ends when the paper gives
-  #   only those (always exactly one " to " in that case; checked when the file was read).
-  options_line <- function(scale, complete) {
-    if (identical(complete, "TRUE")) return(paste0("Response options: ", scale))
-    ends <- strsplit(scale, " to ", fixed = TRUE)[[1]]
+  # The options line: the scale as printed, or only its two ends when the paper gives only those.
+  shown_text <- function(r) {
+    if (identical(r$scale_complete, "TRUE")) return(paste0("Q1. ", r$question, "\nResponse options: ", r$scale))
+    ends <- strsplit(r$scale, " to ", fixed = TRUE)[[1]]
     stopifnot("an incomplete scale needs exactly two ends" = length(ends) == 2L)
-    paste0("Response options: a scale running from ", ends[[1]], " to ", ends[[2]],
+    paste0("Q1. ", r$question, "\nResponse options: a scale running from ", ends[[1]], " to ", ends[[2]],
            " (the options in between are not shown in this test)")
   }
-  shown_text <- function(question, scale, complete)
-    paste0("Q1. ", question, "\n", options_line(scale, complete))
-
-
-  ask_live <- function(user, m, system_prompt = NULL, max_tokens = NULL, validate = NULL)
-    llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens,
-             validate = validate, key = pm_key)
-
-  # Nothing of the key may reach the model: take away the question and the options
-  #   line, and what is left of the prompt must hold no id, set, topic, problem id
-  #   or problem text of this item. (The problem types are words of the checklist
-  #   every review is sent, so they cannot be probed for.)
-  assert_blind <- function(user, row, shown) {
+  # Nothing of the key may reach the model: without the question and its options, the prompt must
+  #   hold no id, topic, problem id or problem text of this item.
+  assert_blind <- function(user, r, shown) {
     rest <- gsub(shown, "", user, fixed = TRUE)
-    fixed_probes <- purrr::keep(c(row$topic, gold$problem_id[gold$id == row$id],
-                                  gold$problem[gold$id == row$id], paste0(row$set, " item")), nzchar)
-    hit <- c(purrr::keep(fixed_probes, function(p) grepl(tolower(p), tolower(rest), fixed = TRUE)),
-             if (grepl(paste0("\\b", row$id, "\\b"), rest)) row$id)
-    if (length(hit)) stop("The prompt for ", row$id, " holds key material: ", paste(hit, collapse = "; "))
-    invisible(TRUE)
+    probes <- purrr::keep(c(r$topic, gold$problem_id[gold$id == r$id], gold$problem[gold$id == r$id]), nzchar)
+    hit <- c(purrr::keep(probes, function(p) grepl(tolower(p), tolower(rest), fixed = TRUE)),
+             if (grepl(paste0("\\b", r$id, "\\b"), rest)) r$id)
+    if (length(hit)) stop("The prompt for ", r$id, " holds key material: ", paste(hit, collapse = "; "))
   }
-
-  run_one <- function(row) {
-    out <- file.path(gdir, paste0(row$id, ".json"))
-    if (file.exists(out)) {
-      cat(row$id, "already saved, skipped\n")
-      return(invisible(NULL))
+  rows <- purrr::map(split(items, seq_len(nrow(items))), function(r) {
+    out <- file.path(gdir, paste0(r$id, ".json"))
+    if (!file.exists(out)) {
+      form <- list(task = "evaluate", research_question = "Evaluate this survey question",
+                   population = "Adults in the general population", modes = "web", questionnaire = shown_text(r))
+      assert_blind(build_step_prompt(form, "items", part = review_plan(form$questionnaire)[[1]])$user, r, shown_text(r))
+      rv <- review(form)
+      say(paste(r$id, rv$status))
+      writeLines(scrub(as.character(flow_log_json(flow_round(form, m, review = rv)))), out, useBytes = TRUE)
     }
-    shown <- shown_text(row$question, row$scale, row$scale_complete)
-    form <- modifyList(gold_form, list(questionnaire = shown))
-    p <- build_step_prompt(form, "work")
-    assert_blind(p$user, row, shown)
-    cat(row$id, "calling ... ")
-    rv <- run_review(form, APP_MODELS$pm, ask = ask_live)
-    cl <- attr(rv, "call")
-    cat(rv$status, sprintf("%.0f s", cl$seconds %||% NA_real_), "\n")
-    writeLines(scrub(as.character(flow_log_json(flow_round(form, APP_MODELS$pm, review = rv)))),
-               out, useBytes = TRUE)
-    invisible(NULL)
-  }
-
-  purrr::walk(split(items, seq_len(nrow(items))), run_one)
-
-  # The working tables, from the saved files only (so a resumed run is complete).
-  saved <- purrr::map(items$id, function(id)
-    jsonlite::fromJSON(file.path(gdir, paste0(id, ".json")), simplifyVector = FALSE))
-  names(saved) <- items$id
-
-  calls <- purrr::imap_dfr(saved, function(r, id) {
-    rv <- r$review
-    cl <- rv$call
-    tibble::tibble(id = id, set = items$set[items$id == id], status = rv$status,
-                   seconds = cl$seconds %||% NA_real_, tokens_in = cl$tokens$input %||% NA_real_,
-                   tokens_out = cl$tokens$output %||% NA_real_, finish = cl$finish %||% NA_character_,
-                   attempts = cl$attempts %||% NA_integer_,
-                   cut_off = grepl("reached the token limit", rv$error %||% "", fixed = TRUE),
-                   error = rv$error %||% NA_character_)
+    rec <- jsonlite::fromJSON(out, simplifyVector = FALSE)
+    b <- rec$review$batches[[1]]
+    fl <- b$reply$items[[1]]$flags %||% list()
+    list(call = data.frame(id = r$id, set = r$set, status = b$status, seconds = b$seconds %||% NA, tokens_in = b$tokens$input %||% NA,
+                           tokens_out = b$tokens$output %||% NA, attempts = b$attempts %||% NA,
+                           n_fix = sum(purrr::map_chr(fl, "level") == "fix"), n_consider = sum(purrr::map_chr(fl, "level") == "consider")),
+         flags = if (length(fl)) data.frame(id = r$id, set = r$set, check = purrr::map_chr(fl, "check"), stage = purrr::map_chr(fl, "stage"),
+                                            level = purrr::map_chr(fl, "level"), quote = purrr::map_chr(fl, "quote"),
+                                            found = purrr::map_lgl(fl, function(x) quote_found(x$quote, shown_text(r))),
+                                            why = purrr::map_chr(fl, "why"), rewrite = b$reply$items[[1]]$rewrite %||% ""))
   })
-  readr::write_csv(calls, file.path(gdir, "_calls.csv"))
-
-  findings <- purrr::imap_dfr(saved, function(r, id) {
-    rv <- r$review
-    if (!identical(rv$status, "ok")) return(NULL)
-    df <- check_review(rv$reply, r$form)
-    this_set <- items$set[items$id == id]
-    dplyr::mutate(tibble::as_tibble(df[, c("scope", "check", "severity", "evidence", "evidence_found",
-                                           "check_known", "stage", "problem", "rewrite", "probe", "shown")]),
-                  id = id, set = this_set, .before = 1)
-  })
-  readr::write_csv(findings, file.path(gdir, "_findings.csv"))
-
-  cat("\n", nrow(calls), " items saved; ", sum(calls$status == "ok"), " ok, ", sum(calls$cut_off),
-      " cut off, ", sum(calls$status != "ok" & !calls$cut_off), " other failures. ",
-      nrow(findings), " findings, ", sum(findings$severity >= 5, na.rm = TRUE), " rated 5 or above.\n", sep = "")
-  cat("Seconds ", round(sum(calls$seconds, na.rm = TRUE)), ", tokens out ", sum(calls$tokens_out, na.rm = TRUE),
-      ", tokens in ", sum(calls$tokens_in, na.rm = TRUE), ".\n", sep = "")
+  calls <- do.call(rbind, purrr::map(rows, "call"))
+  flags <- do.call(rbind, purrr::compact(purrr::map(rows, "flags")))
+  utils::write.csv(calls, file.path(gdir, "_calls.csv"), row.names = FALSE)
+  utils::write.csv(flags, file.path(gdir, "_flags.csv"), row.names = FALSE)
+  cat("\n", nrow(calls), " items, ", sum(calls$status == "ok"), " ok. Seconds per item ", sprintf("%.1f", mean(calls$seconds, na.rm = TRUE)),
+      ", tokens in ", num(mean(calls$tokens_in, na.rm = TRUE)), " and out ", num(mean(calls$tokens_out, na.rm = TRUE)), " per item.\n",
+      "Fix flags per flawed item ", sprintf("%.2f", mean(calls$n_fix[calls$set == "flawed"])),
+      ", per control item ", sprintf("%.2f", mean(calls$n_fix[calls$set == "control"])), ".\n",
+      "Flags written to ", gdir, "\n", sep = "")
 }

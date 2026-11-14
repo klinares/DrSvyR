@@ -1,18 +1,14 @@
 # checks.R for QuestionR
-# What R checks and builds for itself, so no model is trusted with it: the shape and
-#   limits of every reply, the splitting of a pasted questionnaire into questions and
-#   parts, the quote check, and the review as the analyst is shown it, down to its bottom
-#   line. No Shiny and no model call in here. Function definitions and constants only.
+# What R checks and builds for itself, so no model is trusted with it: the shape and limits of every
+#   reply, the questions and parts of a pasted questionnaire, the quote check, and the review as the
+#   analyst is shown it, down to its bottom line. Function definitions and constants only.
 
 
 # ---- reply schemas ---------------------------------------------------------------
 
-# What a reply must hold, per kind of call. Each entry:
-#   fields  top-level field -> type
-#   each    for a field that is a list of objects, field -> (field -> type)
-#   rules   names of the checks in REPLY_RULES that run once the shape is right
-# Types: text (a non-empty string), string (any string), list, id (a label or a number).
-#   A trailing "?" lets the field be missing or null.
+# What a reply must hold, per kind of call: fields (top-level field -> type), each (for a list of
+#   objects, field -> type), rules (REPLY_RULES run once the shape is right). Types: text (non-empty),
+#   string, list, id (a label or a number); a trailing "?" lets a field be missing.
 REPLY_SCHEMAS <- list(
   draft = list(
     fields = c(items = "list", not_covered = "list?", needs_from_analyst = "list?"),
@@ -206,9 +202,9 @@ review_plan <- function(text, max_questions = APP_BATCH_QUESTIONS, max_chars = A
 #   is found whatever the typography. Quote marks around the whole of a quote are dropped.
 normalise_quote <- function(x) {
   x = paste(unlist(x %||% ""), collapse = " ")
-  x = gsub("[‘’‚′]", "'", x)
-  x = gsub("[“”„″]", "\"", x)
-  x = gsub("[–—]", "-", x)
+  x = gsub("[\u2018\u2019\u201a\u2032]", "'", x)
+  x = gsub("[\u201c\u201d\u201e\u2033]", "\"", x)
+  x = gsub("[\u2013\u2014]", "-", x)
   tolower(trimws(gsub("\\s+", " ", x)))
 }
 evidence_quote <- function(x) trimws(gsub("^[\"']+|[\"']+$", "", normalise_quote(x)))

@@ -1,6 +1,6 @@
 # Generate
 
-Version: 0.4
+Version: 0.5
 
 Sent with every request to write new items, after core.md and before the task
 file. How a draft is built from the brief and what it must declare.
@@ -11,6 +11,7 @@ file. How a draft is built from the brief and what it must declare.
 - **When:** Before writing any item.
 - **Say:** Write for the construct, target population, mode and country in the brief. An item for a telephone interview and an item for a mobile web form are different items.
 - **Check:** Is the item usable as written in the stated mode for the stated population?
+- **Label:** Not usable in the stated mode
 - **Source:** Haensch, IASS/WSS Session 3 (recommendation 2); Buskirk, Eck and Timbrook 2025
 
 ### declare_defaults
@@ -24,6 +25,7 @@ file. How a draft is built from the brief and what it must declare.
 - **Say:** Give every scale point a verbal label, in the same grammatical form, evenly spaced in meaning. If numbers are shown they run in the same direction as the labels. Decide whether the construct is bipolar (two opposite poles, a meaningful middle) or unipolar (none to a lot) and build the scale to match.
 - **Never:** Do not mix label constructions within one scale, and do not use negative numbers on a unipolar construct.
 - **Check:** Are all points labelled in one consistent form, with poles that match the construct?
+- **Label:** Scale labels inconsistent or mismatched
 - **Source:** SURV632 Class 8 (verbal and numeric labels; conceptual and visual midpoint); Fuchs, Haensch and Weber 2026 (label and number correspondence); Sturgis, Roberts and Robinson 2026 (inconsistent label constructions; endpoint-only labels)
 
 ### midpoint_and_dont_know

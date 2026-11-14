@@ -1,6 +1,6 @@
 # Sensitive topic items
 
-Version: 0.3
+Version: 0.4
 
 Task file for questions where respondents may refuse or edit their answer.
 The aim is more disclosure and fewer refusals without changing what is asked.
@@ -36,12 +36,14 @@ For sensitive questions, also:
 - **Say:** Say which kind of sensitivity applies: intrusive (not asked in ordinary conversation), threat of disclosure (an answer could bring legal, social or safety consequences), or social desirability (one answer looks better). Say in which direction misreporting is expected. Sensitivity depends on who is asked, where, in what mode and culture, and when.
 - **Never:** Do not treat a topic as sensitive for everyone because it is sensitive for some; do not assume what is sensitive in a country you have not been told about.
 - **Check:** Is the kind of sensitivity and the expected direction of misreporting stated?
+- **Label:** Sensitivity and misreporting direction unstated
 - **Source:** Tourangeau and Yan 2007; Yan 2021; Yan, IASS/WSS Session 1 (sensitive questions); NORC 2026 as reported in Yan, IASS/WSS Session 2 (language models over-report sensitivity)
 
 ### mode_and_privacy
 - **When:** Notes for every sensitive item.
 - **Say:** Recommend self-administration for the sensitive items even inside an interviewer survey, and that no one else is present. If the mode in the brief is interviewer-administered, say what that costs and write the item so the answer can be given without saying it aloud where possible.
 - **Check:** Do the notes address who can hear or see the answer in the stated mode?
+- **Label:** Privacy in the mode not addressed
 - **Source:** Yan, IASS/WSS Session 1 (writing sensitive questions 1 and 2); SURV632 Class 8 (editing) and Class 10 (self-administration and social presence)
 
 ### forgiving_intro
@@ -49,18 +51,21 @@ For sensitive questions, also:
 - **Say:** Offer a short forgiving introduction of one kind: many people do it; some people do and others do not; or a face-saving reason for not having done the desirable thing. Mark it in decisions as a deliberate departure from neutral wording.
 - **Never:** Do not use a forgiving introduction in the direction that is already socially desirable. Do not invent an authority, a statistic or a medical claim to justify the behaviour.
 - **Check:** If a forgiving introduction is used, does it point only toward the under-reported answer and contain no invented fact?
+- **Label:** Forgiving introduction pushes or invents
 - **Source:** Yan, IASS/WSS Session 1 (writing sensitive questions 10); Peytcheva and Yan 2025; Yan 2021
 
 ### assume_behavior
 - **When:** An undesirable behaviour where a yes/no filter would invite denial.
 - **Say:** Offer wording that asks how much or how often directly, with zero or never as an ordinary first-class answer. Mark it in decisions as deliberate and say it suits populations where the behaviour is common.
 - **Check:** If the item assumes the behaviour, is "none" or "never" an explicit, easy answer?
+- **Label:** None or never not easy
 - **Source:** Yan, IASS/WSS Session 1 (writing sensitive questions: assume the behaviour)
 
 ### ever_then_current
 - **When:** Ordering questions about one behaviour.
 - **Say:** For undesirable behaviour ask about ever before current or recent. For desirable behaviour ask about current before ever.
 - **Check:** Does the order of ever and current questions match the direction of desirability?
+- **Label:** Ever and current in wrong order
 - **Source:** Yan, IASS/WSS Session 1 (writing sensitive questions 9)
 
 ### familiar_longer_wording
@@ -72,6 +77,7 @@ For sensitive questions, also:
 - **When:** Asking how many or how often for an undesirable behaviour.
 - **Say:** Use an open number, or a scale whose top categories go well above what is typical so that high answers do not look extreme.
 - **Check:** Does the response format avoid making a truthful high answer look deviant?
+- **Label:** High answers made to look deviant
 - **Source:** Yan, IASS/WSS Session 1 (writing sensitive questions 11)
 
 ### face_saving_options
@@ -100,6 +106,7 @@ For sensitive questions, also:
 - **When:** An honest answer could expose the respondent to legal, social or physical risk in the stated country.
 - **Say:** Flag the item for local and ethical review before fielding and say what the risk to the respondent would be if the answer were seen. This is a flag, not a fact about the country.
 - **Check:** Is any item whose honest answer could endanger the respondent flagged for local and ethical review?
+- **Label:** Honest answer could endanger respondent
 - **Source:** Tourangeau and Yan 2007 (threat of disclosure); Yan, IASS/WSS Session 1
 
 ## Prohibitions
