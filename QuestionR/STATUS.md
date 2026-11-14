@@ -6,16 +6,18 @@ From Phase 9, what this file calls "skills" are called "reflexes" (a file is a r
 
 ## Phase 9 (2026-11-13): reflexes, no translation, simple output, Total Survey Error first
 
-**Next: Kevin tries the app (click-through at the end of this section), answers the one open
-question in "Open" below, and takes `REVIEW.md` and this file to the Claude project.**
+**Next: Kevin tries the app (click-through at the end of this section) and takes `REVIEW.md` and
+this file to the Claude project. Nothing is open: the two items I had left for Kevin were done on
+his yes.**
 Nothing is pushed. Two live runs were made, with Kevin's yes, before the follow-up: `tests/llm_check.R generate` (5
 requests, all ok) and one review of `tests/review_questionnaire.txt` (1 request, ok). `gold` was
 not run.
 
 - **Commits, branch `questionr`:** setup (prompt and design section 18) `341314a`; 9a `752e23c`; 9b
-  `62c036b`; 9c `b5574bb`; 9e `eea4b73`; 9d `c53c9a7`; 9f `18fe115`; 9g `d23f2ce`; `07674fc` (the
-  follow-up Kevin said yes to: the translation and output-language reflexes in `evaluate.md` and
-  `pm_brief.md`); and the commit that carries this file and `REVIEW.md`. 9e is before 9d because 9d's note names the diagram 9e
+  `62c036b`; 9c `b5574bb`; 9e `eea4b73`; 9d `c53c9a7`; 9f `18fe115`; 9g `d23f2ce`; `07674fc` and
+  `4da86ab` (the follow-ups Kevin said yes to: the translation and output-language reflexes in
+  `evaluate.md` and `pm_brief.md`; then the two Source lines of `cross_cultural.md` and the unused
+  `same_family_note`); and the commit that carries this file and `REVIEW.md`. 9e is before 9d because 9d's note names the diagram 9e
   draws. Before 9a I switched from `main` to `questionr` and fast-forwarded it to `4f7bf1c` (the
   merge of Phase 8): the branch was behind `main`, and the prompt says to stop if Phase 8 is not
   on it.
@@ -23,25 +25,26 @@ not run.
   features that no longer exist, 11 of them removed in 9f, and tests rewritten for the new output).
   `tests/review.R 5`: **no FAIL**, 11 of 12 code files (as before).
 
-### Done on Kevin's yes, and open
+### Done on Kevin's yes
 
-- **Done (`07674fc`).** The prompt authorised no edit of `evaluate.md` and `pm_brief.md` in 9b, so
-  9b left them with translation and output-language lines; Kevin then said yes to deleting them.
+- **`07674fc`.** The prompt authorised no edit of `evaluate.md` and `pm_brief.md` in 9b, so 9b left
+  them with translation and output-language lines; Kevin then said yes to deleting them.
   `evaluate.md` 0.5: the reflex `translation_readiness` (When, Say, Check, and a Source line that
   named TRAPD) is deleted, so a review no longer asks whether wording "would survive
   translation". `pm_brief.md` 0.2: the brief check no longer looks for "the output language and the
-  source language". Diffs below. 15 prompt hashes moved (14 Evaluate and the Evaluate revision
-  row); the other 45 did not. Both live runs below were made **before** this edit, so their
-  prompts are the ones with the old `evaluate.md` (the draft run does not use it; the review run's
-  hash is the old Evaluate one); I did not repeat them (Kevin's yes covered two runs).
-- **Open 1: `cross_cultural.md` still has two Source lines that say "translation"** (the slides'
-  topic, in a citation of a reflex that is not about translation). I did not rewrite a citation. The
-  smoke check "no page names TRAPD or translation" therefore exempts that one file and counts its
-  two lines so the number cannot grow. Say the word and I shorten them (for example to "Yan,
-  IASS/WSS Session 2 (context, culture, history)") and the exemption goes.
-- **Open 2: `same_family_note` and `model_family` (`R/ui_generate.R`) are unused.** 9c took the
-  "appraiser reviewed a draft from its own model family" notice off the screen. I left the code
-  because removing a safeguard is Kevin's call. Say delete or restore.
+  source language". Diffs below. 15 prompt hashes moved (14 Evaluate and the Evaluate revision row).
+- **`4da86ab`.** `cross_cultural.md` 0.3: its two Source lines now read "Yan, IASS/WSS Session 2
+  (context, culture, history); Haensch, IASS/WSS Session 3 (what we do not know: cultural
+  adaptation)" and "SURV632 Class 12 (adaptation)". I only took words out ("machine and AI
+  translation ignore", "low-resource languages and", "and translation"); nothing was added to a
+  citation. `model_family` and `same_family_note` (`R/ui_generate.R`), unused since 9c took the
+  "appraiser reviewed a draft from its own model family" notice off the screen, are deleted. The
+  smoke check "no page names TRAPD or translation" has no exemption now and also reads the ten
+  reflex files themselves. 28 prompt hashes moved (the country rows of the four tasks).
+- **The live runs below were made before these edits.** The draft run's prompts are those of the
+  files before `4da86ab` (country was blank, so its hashes are unchanged) and before `07674fc`
+  (the draft run does not use `evaluate.md`); the review run's hash is the old Evaluate one. I did
+  not repeat them (Kevin's yes covered two runs).
 
 ### The gold test
 
@@ -122,14 +125,14 @@ not run it.
   `plain_apostrophe`, `SEVERITY_SHOWN`, `SEVERITY_FIX`, `SEVERITY_BANDS`, `severity_band` had zero
   callers outside each other and `tests/smoke.R`. Removed with them: 11 smoke checks that tested only
   them. Kept: `reflexes_table` (zero callers in the app, but `tests/review.R` calls it, and smoke
-  checks it), `same_family_note` and `model_family` (decision 2 above), the files `tests/*` that
+  checks it), the files `tests/*` that
   `tests/llm_check.R` or `tests/review.R` write or read. The earlier removals are in 9a to 9d
   (translation code and tests, the detail views, the per-model drafts view, the severity band
   views).
 - **9g, smoke checks** (all in `tests/smoke.R`, section "Phase 9g", and the 9d/9e block): no page
   says "skill" except in its one sentence (once on Start here, once on Methodology); no page
-  names TRAPD, translation or an output language and no form field is a language (the one
-  exemption is open item 1); a rendered drafted question has only the question, its options and
+  names TRAPD, translation or an output language and no form field is a language (no
+  exemptions; the ten reflex files are read too); a rendered drafted question has only the question, its options and
   at most one line of 20 words or fewer; a rendered review shows at most two problems for a
   question and three points about the whole when the stand-in sends three problems and four
   points; the Word copy is the screen's words plus exactly the three lines, for a draft and a
@@ -145,8 +148,9 @@ not run it.
 
 ### Authorised edits to reflex files: the diffs
 
-`cross_cultural.md` (9b), then the Output format sections of `generate.md`, `evaluate.md` and
-`pm_appraise.md` (9c), then `evaluate.md` and `pm_brief.md` (the follow-up, Kevin's yes). The rename `skills` to `reflexes` is in the same diffs (9a), where the
+`cross_cultural.md` (9b, and the Source lines at the follow-up), then the Output format sections
+of `generate.md`, `evaluate.md` and `pm_appraise.md` (9c), then `evaluate.md` and `pm_brief.md`
+(the follow-up, Kevin's yes). The rename `skills` to `reflexes` is in the same diffs (9a), where the
 prose said skill. `README.md` of `www/reflexes/` changed in prose only (9a, 9b: nine lines).
 
 ```diff
@@ -155,7 +159,7 @@ prose said skill. `README.md` of `www/reflexes/` changed in prose only (9a, 9b: 
 +# Country and culture
  
 -Version: 0.1
-+Version: 0.2
++Version: 0.3
  
 -Modifier file. Sent whenever the brief names a country or the output language
 -is not English. A language model is weakest here: it knows text about places,
@@ -172,15 +176,14 @@ prose said skill. `README.md` of `www/reflexes/` changed in prose only (9a, 9b: 
  - **Say:** Mark what must be confirmed by someone who knows the setting and say exactly what they should check: the everyday term, the unit, the institution's name, whether the topic can be asked, the landmark event. Use placeholders in square brackets where 
  - **Never:** Do not state as fact what people in the country believe, do, find sensitive or call things.
  - **Check:** Is every country-specific term or assumption either taken from the brief or marked for local confirmation?
- - **Source:** Yan, IASS/WSS Session 2 (machine and AI translation ignore context, culture, history); Haensch, IASS/WSS Session 3 (what we do not know: low-resource languages and cultural adaptation)
+-- **Source:** Yan, IASS/WSS Session 2 (machine and AI translation ignore context, culture, history); Haensch, IASS/WSS Session 3 (what we do not know: low-resource languages and cultural adaptation)
++- **Source:** Yan, IASS/WSS Session 2 (context, culture, history); Haensch, IASS/WSS Session 3 (what we do not know: cultural adaptation)
  
  ### adopt_adapt_develop
 -- **When:** The item comes from, or will be used in, more than one country or language.
 -- **Say:** Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, language-driven, convention-driven or culture-driven.
-+- **When:** The item comes from, or will be used in, more than one country.
-+- **Say:** Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, convention-driven or culture-driven.
- - **Source:** Yan, IASS/WSS Session 2 (questionnaire development for 3MC surveys); SURV632 Class 12 (adaptation and translation)
- 
+-- **Source:** Yan, IASS/WSS Session 2 (questionnaire development for 3MC surveys); SURV632 Class 12 (adaptation and translation)
+-
 -### write_for_translation
 -- **When:** Writing or reviewing a source item that will be translated.
 -- **Say:** Keep the source wording translatable: no idioms, no culture-bound examples, short sentences, explicit referents, units and institutions as placeholders, scale labels that have plain equivalents.
@@ -199,7 +202,10 @@ prose said skill. `README.md` of `www/reflexes/` changed in prose only (9a, 9b: 
 -- **Never:** Do not call a model-produced version final, checked or equivalent. Do not recommend back translation as the quality check.
 -- **Check:** Does the output state what Review, Adjudication, Pretesting and Documentation still require?
 -- **Source:** Yan, IASS/WSS Session 2 (TRAPD; back translation no longer recommended; translation assessment); Haensch, IASS/WSS Session 3 (recommendation 8; 2026 GSS used a model draft inside an unchanged TRAPD process); SURV632 Class 12
--
++- **When:** The item comes from, or will be used in, more than one country.
++- **Say:** Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, convention-driven or culture-driven.
++- **Source:** Yan, IASS/WSS Session 2 (questionnaire development for 3MC surveys); SURV632 Class 12 (adaptation)
+ 
  ### response_styles
 -- **When:** Ordered scales used across cultural or language groups.
 +- **When:** Ordered scales used across cultural groups.
@@ -380,67 +386,67 @@ the Claude project.
 ### The new prompt hashes
 
 All 60 differ from Phase 8's (the reflex files, the Output formats and the message all changed);
-the follow-up edit moved 15 of them again, and these are the final ones.
+the two follow-ups moved 15 and then 28 of them again, and these are the final ones.
 Task, mode set (1 none, 2 to 6 each mode alone, 7 all five), country, hash (build_prompt, work
 step); `revision` rows are a rerun with a REVISION line:
 
 ```
 attitudinal|1||ea05aea1235a6a289cb833acdd820289731e0122612d92185b4a70594c5df4da|core.md,generate.md,attitudinal.md,mode.md
-attitudinal|1|Kenya|cf20452ce1a8b44b4a8f6e44e1d40d131f0e0d68d710cbd1a66b9f913b96f855|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|1|Kenya|a721aa3921972dd59a219723e4e02aa51d6fa1d0f1619cb17e1f75fa7ff0735e|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
 attitudinal|2||de65abd99b4d48237673051b4a5b9392c9effda10d274f9563739d921993d548|core.md,generate.md,attitudinal.md,mode.md
-attitudinal|2|Kenya|5bde2ab621cf650ad1c5dd55fed33c7f22f354429af8309cda61c264b2dd6e71|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|2|Kenya|48d12c091234653b5435659bbd52280fe7ad80085ba9b7b4a7bcbe78370366c7|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
 attitudinal|3||ed496897bbca6882c90a9bb6e9b4935da6e6640dc52ccb883996e821485dc86b|core.md,generate.md,attitudinal.md,mode.md
-attitudinal|3|Kenya|87be9708c40e620cc736d5174d910fae5cd739a70da6610c3ca1dfc210f8c475|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|3|Kenya|df471b79169fa8033d393c3146d5ce75bcaac237b48882a4e990262528aa8d7c|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
 attitudinal|4||5ec9ebf6868d3cc41c50487623a7c7372c75e095773cacfe027cb408f8544f80|core.md,generate.md,attitudinal.md,mode.md
-attitudinal|4|Kenya|f6f355b09f87a5beb05d404c459d866fbea833827d66e0a4cb513409dbd867c6|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|4|Kenya|9869e6311cb4b96adc63e455e3a92d3aa406aecdbc648ba177f5afa46396c0e5|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
 attitudinal|5||0f6e9c52890d2b7053e2ce81989df993fa2e5df85a84b5f8411193a518c0d0c3|core.md,generate.md,attitudinal.md,mode.md
-attitudinal|5|Kenya|8f18a21d59ea47816691f274e3bfc580b36b7e289762f74ce9a3cebe783120dd|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|5|Kenya|e4fd5777aec4de9c1fb6e959dfe94b30331f12115c17a6b721b5aff66b8f8474|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
 attitudinal|6||502ac499a51fe0dd9a275a342d9bd30e067d99edc38acda7db3cca81b5f30812|core.md,generate.md,attitudinal.md,mode.md
-attitudinal|6|Kenya|3d02d39cd77c6dff514f9b3a8ef2068eb551f0a352ea5b25133e0e1c4930e7b2|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|6|Kenya|e3c64ff0b808cdba4dc18c1c2b7d308c70385e396d37dd72332a8dbfb3f40b8a|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
 attitudinal|7||0159b25689cfb994f59e64982b3d7ea9aa2d2aee4552b8a3c58394431b7fe746|core.md,generate.md,attitudinal.md,mode.md
-attitudinal|7|Kenya|b2ed2d43c8674cc3239b60a222984a6d8e30b19234ab5900eaeeddb06c107954|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|7|Kenya|ea209de9b671b9249b3860d42daf988305b9e4bc0d353969ba508aee94015014|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
 behavioral|1||e99850ceda920380665d523f29495f7fbc495a88e461e432a8ba1046bb5c3df6|core.md,generate.md,behavioral.md,mode.md
-behavioral|1|Kenya|9d3c3fba9fc45ef592651127ffff659253469f50bccfd9c79e30af23a613f086|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|1|Kenya|bdc3f5674920760eb912be9342b25b8f88e2deab244908693aae83039a751360|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
 behavioral|2||80ab7490f07d4d1ae31dac7485c9f83556d27c8e60056149e08b88a44dc24207|core.md,generate.md,behavioral.md,mode.md
-behavioral|2|Kenya|11558d029bd982fbff5357ed7decd6bc066678bcb615f5942970b3dca348a673|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|2|Kenya|19871357fcafb8dc69209c0204fcb0edf22c209250c0c8e74d7f7ef6f2adb4aa|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
 behavioral|3||9f17a5647e312c783c65a29a6b8fe5a1565973d7b6dc27dcff0915097acac1c2|core.md,generate.md,behavioral.md,mode.md
-behavioral|3|Kenya|7138497c0e230371a555078a8e5ada24b04a0b5c950c0296ecc8afaf382bb9e5|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|3|Kenya|4d6ad09b863f4d16f06efc01b09ee74a0b1521a202906ad4a18bc988f7ade1cc|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
 behavioral|4||44ab172ac00a0974b2d3616fff698dd82f3528d8149e87264f4cb4923dbefdd1|core.md,generate.md,behavioral.md,mode.md
-behavioral|4|Kenya|634e18f4373e0fcbea3ba1a0bcf11beef845a87054fe7158475d50079ec3a46b|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|4|Kenya|6ae37ac5212ba31dc36665e9da56c15419a1679e587af93f48ff04fe506c89c8|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
 behavioral|5||a726e1eed180d6b513fa455102aeb7b0d48761be3b4c4c9f9c17c99f162cfa51|core.md,generate.md,behavioral.md,mode.md
-behavioral|5|Kenya|400c1674086db74d05f0e3876d76adababd92b60156fc7e41131048704ae2637|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|5|Kenya|50a4c873765152c5e73c5a5bab98fbb3b80f0d76f5a489d5d55672abde19bf1a|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
 behavioral|6||5a3d32e36e50371ddc950868b80ae2255d3f49ac8c0f7d94c8a0f504978ff94c|core.md,generate.md,behavioral.md,mode.md
-behavioral|6|Kenya|9be9fcb762fb01f5b4a555346014c7082049320eceba533e20414485a0c82d98|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|6|Kenya|283a588231aff697ae1c0fa5e08c4df1d7b871b2afa2bce1438dd81825cfb633|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
 behavioral|7||76f3604db4dff6a25c106e724a50af5e4bec9bdf60ec6de62cb94e6a7a216dd5|core.md,generate.md,behavioral.md,mode.md
-behavioral|7|Kenya|1563191e896a45926602e6c65fa52519c24726b82307dad8674c5da4d88972a7|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|7|Kenya|09237a335fa8d5c031ca49e99648360af046b40971bab56bc5bb069f9e675b26|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
 sensitive|1||968ac2840788ae14bf33b17fc78c76f4d1f30930709325bca49e647b6c028053|core.md,generate.md,sensitive.md,mode.md
-sensitive|1|Kenya|51516dcc9897c266df49e02080a72f7c4424a645f25150fd18ae67bab07c481c|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|1|Kenya|0c624f6f862067badd557112ed0dc308a60ed4cadbcc5b222c9805e5c21dc091|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
 sensitive|2||14d00549070464f23affe747ae3fc2b02f96e27a2ae991a49e25090a25163a4c|core.md,generate.md,sensitive.md,mode.md
-sensitive|2|Kenya|0d75b3db6a0f7bd316a456abd45442ec3c60b0c0e64140ba0c76c0a3db2f08c5|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|2|Kenya|38323cde8dc3621d90d30d52cf8e138dbd8ee7c3e4a45a8b2b8c6be20e857c2e|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
 sensitive|3||ec291ce3122e4647843865c703de7c54ddbe9bf0709dedd62cd558428d0ed58e|core.md,generate.md,sensitive.md,mode.md
-sensitive|3|Kenya|9b9162faecce65d1bdb24d4bbf7627aebe77984db35fbdeb334ccb707ae89a56|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|3|Kenya|c5e248559c28f28e11ba79f770ac922ad9ecf45f089614fec5cb62c416789178|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
 sensitive|4||5fd1ed139b23c29c14ac1ac1c336dae200cf8ec15ea9319cc3b85a60efb69c50|core.md,generate.md,sensitive.md,mode.md
-sensitive|4|Kenya|d6b3363393f81fe1d22c35bd3d16c98bc99690f4a6713ae327b5ab507eac6c69|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|4|Kenya|71d113fd3085fd4a56ed7bc65b90f88005002b3a11eb852f7a16627f4ed30af3|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
 sensitive|5||34b98aa52a58f4f7da94932f3cff67fdfbc898c27d8528b954e0b5bd919db261|core.md,generate.md,sensitive.md,mode.md
-sensitive|5|Kenya|c2f91de5f15fa783bbef2cdc04b69e46ea07ef8f9b1d5bcb7664be68aba59891|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|5|Kenya|6ea10e2b42b90ecd98f188f8158f37f96a8ce0dad1afc955190a06bdcbb2b674|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
 sensitive|6||1b4138c9a05767c70ff309c82801eba605cb32c774bb3b1b01d78e0565cbb001|core.md,generate.md,sensitive.md,mode.md
-sensitive|6|Kenya|92990b0ef33e7837ba8e9e56decc0d3bbb324c4bf2db3b4c8e969820780b832f|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|6|Kenya|1fcdc23d110ee3ec68f269c443dae5358e31b8a66c7232d22cc313b1b075ed5e|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
 sensitive|7||e119cb84ddd1835327f00d539a976a06a033c2ccb5d53aa6a5cd7cbbd577f27b|core.md,generate.md,sensitive.md,mode.md
-sensitive|7|Kenya|7e727c923709fade6e402abe7102b67e84a5d88344fc4c6d968e080cdccb9eb4|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|7|Kenya|cd153f07d4ba317f23067157b345fec48d90a1c73d12abdae98767f06a757160|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
 evaluate|1||b4537dedb6d011c7b019a72d592305acc44adfeb4d57a480dd70431c606ae6b8|core.md,evaluate.md,mode.md
-evaluate|1|Kenya|af31edac6f2df42fcf2eaab72ab2edf10954798a8034b2d211d7bc0434d87757|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|1|Kenya|1d0381f9b2748505fc127fba044bfebc5788eac00789a4d2d9699233852ee302|core.md,evaluate.md,mode.md,cross_cultural.md
 evaluate|2||8c51b5a2fdb697f724d160e46e2d98f676e215a0d888eddf59ebd748c87540d4|core.md,evaluate.md,mode.md
-evaluate|2|Kenya|cbc2a6b3cf527d491ba59a465a43545b7146d551add475f592d083bc0e254d24|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|2|Kenya|9a4f77f01a552c368ec94fcfa2055165a67710ba2dbce0a910e854ca0e8adcc2|core.md,evaluate.md,mode.md,cross_cultural.md
 evaluate|3||ad6b2a815e8995f5d6549f1cd18c5862e65e7c71e39ace2063f0e461122d86f7|core.md,evaluate.md,mode.md
-evaluate|3|Kenya|8e783e3c75bde8ed01256fe7a81755df3f6ff2869af24cb2a4eceb902ec23beb|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|3|Kenya|f48fd9428f3f736ec07195eea26019b2f6eeb48e34b3429b384fef6c76b0543c|core.md,evaluate.md,mode.md,cross_cultural.md
 evaluate|4||4bcf998d4b7cf87c2624354240c44a08456daf57f1e63c2fce80082f9a2b46d9|core.md,evaluate.md,mode.md
-evaluate|4|Kenya|e3a3816c0b3cc2567eba98e1056a91dadb935441241b9a676459e72497e28dd3|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|4|Kenya|c8a352582e27c9272c0ae524bf33ee3c82e43f593469e39db652f73d7da430df|core.md,evaluate.md,mode.md,cross_cultural.md
 evaluate|5||361e419f06c9fcf6cc63b40a34b6876f1cb3bd38d69e17159dacde94fa1f28fd|core.md,evaluate.md,mode.md
-evaluate|5|Kenya|b7b1bfaa1da87ccf944d951b68863a2671d77eac0c731c272773345e2cafde37|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|5|Kenya|4b3e58a346045a848ba7386b7a741316e814c5b7bbe40b2cdc2ad6ebe7b8fb05|core.md,evaluate.md,mode.md,cross_cultural.md
 evaluate|6||196d5b027072e0a25350ae3cf0b3956bb805c23752f911b285e5354e9c67090a|core.md,evaluate.md,mode.md
-evaluate|6|Kenya|d7f71cab7280d912bf0c3b9bb1f4956094e9cfdb7884456e82cb9ed0099202e6|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|6|Kenya|6e9b54b3ea1c9e1f9576dc21336830cab3ee13a69e99cf31a95f213aa2713351|core.md,evaluate.md,mode.md,cross_cultural.md
 evaluate|7||181d2c6e28575f1cea748ebee66ce2baaa27376ebc2ab9831217746c27f11d3d|core.md,evaluate.md,mode.md
-evaluate|7|Kenya|cd193cc4054291283e84e90db9ab00b330d321d916b54d4acc59d8c3eb435c62|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|7|Kenya|ee2b1065d8a1c97bafaec8ae2f6a48ea05bf4df1e2a7bcd04d95e377af7ec845|core.md,evaluate.md,mode.md,cross_cultural.md
 revision|attitudinal|96d18ea93f36da05793164ad16afb413a7e64c44546b898fc2a156abd0ef4d48
 revision|behavioral|40f05b0426385720dc1baee69fdc107f8223d65ad245159205365d22dfafeb26
 revision|sensitive|0b62001aa715a01f24e7da7907991a89875fe09cb7f2bae233fdf1d163198c21

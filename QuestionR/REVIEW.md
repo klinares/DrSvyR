@@ -2,7 +2,7 @@
 
 From Phase 9, "skills" are called "reflexes". This file keeps the old word where it records earlier work.
 
-Generated 2026-11-13 19:33 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
+Generated 2026-11-13 19:38 by tests/review.R on R version 4.6.1 (2026-06-24 ucrt).
 Packages: shiny 1.14.0, bslib 0.12.0, ellmer 0.4.2, purrr 1.2.2, dplyr 1.2.1, stringr 1.6.0, jsonlite 2.0.0, digest 0.6.39
 
 ## 1. Git
@@ -14,6 +14,8 @@ exit status: 0
 ~~~~
 Last commits:
 ~~~~
+3bda574 QuestionR Phase 9: STATUS and REVIEW after the follow-up (translation reflexes removed from evaluate.md and pm_brief.md)
+07674fc QuestionR 9b follow-up (Kevin's yes): remove translation_readiness from evaluate.md and the output language from pm_brief.md
 073f227 QuestionR Phase 9: STATUS and REVIEW, with the two live runs and the new prompt hashes
 d23f2ce QuestionR 9g: smoke checks for what the analyst can and cannot see
 18fe115 QuestionR 9f: remove coded defaults and severity bands, which nothing in the app calls
@@ -27,16 +29,15 @@ b5574bb QuestionR 9c: simple output
 d20ba49 QuestionR Phase 8: STATUS and REVIEW
 6bbba75 QuestionR 8h: hardening
 bbddebe QuestionR 8g: remove what is no longer needed
-edd4eea QuestionR 8f: no TODO text on Start here
-c01c1a5 QuestionR 8e: the skill materials are not deployed, and only the open-licensed PDF is committed
 exit status: 0
 ~~~~
 Uncommitted:
 ~~~~
+ M R/ui_generate.R
+ M REVIEW.md
  M tests/review.R
  M tests/smoke.R
- M www/reflexes/evaluate.md
- M www/reflexes/pm_brief.md
+ M www/reflexes/cross_cultural.md
 exit status: 0
 ~~~~
 Changed against main (outside QuestionR/ expect only the root README.md and CLAUDE.md):
@@ -46,23 +47,23 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/.rscignore                               |    2 +-
  QuestionR/DESIGN.md                                |  131 +-
  QuestionR/PROMPTS.md                               |  167 +++
- QuestionR/R/checks.R                               |  361 ++---
+ QuestionR/R/checks.R                               |  361 ++----
  QuestionR/R/flow.R                                 |    4 +-
  QuestionR/R/llm.R                                  |    4 +-
- QuestionR/R/output.R                               |  284 ++--
+ QuestionR/R/output.R                               |  284 ++---
  QuestionR/R/{skills.R => reflexes.R}               |  207 ++-
  QuestionR/R/ui.R                                   |    1 -
  QuestionR/R/ui_generate.R                          |  408 ++----
  QuestionR/README.md                                |   16 +-
- QuestionR/REVIEW.md                                |  874 ++++--------
- QuestionR/STATUS.md                                | 1466 ++++++++++++++++++++
+ QuestionR/REVIEW.md                                |  891 +++++--------
+ QuestionR/STATUS.md                                | 1056 ++++++++++++++++
  QuestionR/app.R                                    |    8 +-
  QuestionR/tests/llm_check.R                        |   45 +-
  QuestionR/tests/output_generate.txt                |   68 +-
  QuestionR/tests/output_review.txt                  |   61 +-
- QuestionR/tests/review.R                           |  142 +-
- QuestionR/tests/run_generate.json                  |  631 +++------
- QuestionR/tests/smoke.R                            | 1314 ++++++++----------
+ QuestionR/tests/review.R                           |  148 +--
+ QuestionR/tests/run_generate.json                  |  631 +++-------
+ QuestionR/tests/smoke.R                            | 1314 +++++++++-----------
  QuestionR/www/fw_construct.svg                     |   50 +-
  QuestionR/www/fw_example.svg                       |   55 +
  QuestionR/www/fw_sensitive.svg                     |   57 -
@@ -76,16 +77,16 @@ Changed against main (outside QuestionR/ expect only the root README.md and CLAU
  QuestionR/www/{skills => reflexes}/behavioral.md   |    0
  QuestionR/www/{skills => reflexes}/core.md         |    0
  QuestionR/www/reflexes/cross_cultural.md           |   41 +
- QuestionR/www/{skills => reflexes}/evaluate.md     |   16 +-
+ QuestionR/www/{skills => reflexes}/evaluate.md     |   22 +-
  QuestionR/www/{skills => reflexes}/generate.md     |   18 +-
  QuestionR/www/{skills => reflexes}/mode.md         |    0
  QuestionR/www/{skills => reflexes}/pm_appraise.md  |   12 +-
- QuestionR/www/{skills => reflexes}/pm_brief.md     |    0
+ QuestionR/www/{skills => reflexes}/pm_brief.md     |    4 +-
  QuestionR/www/{skills => reflexes}/sensitive.md    |    0
  QuestionR/www/skills/cross_cultural.md             |   66 -
  QuestionR/www/start.md                             |   41 +-
  README.md                                          |    2 +-
- 44 files changed, 3529 insertions(+), 3292 deletions(-)
+ 44 files changed, 3132 insertions(+), 3312 deletions(-)
 exit status: 0
 ~~~~
 
@@ -101,10 +102,10 @@ exit status: 0
 | R/output.R | 365 |
 | R/reflexes.R | 673 |
 | R/ui.R | 187 |
-| R/ui_generate.R | 809 |
+| R/ui_generate.R | 793 |
 | tests/llm_check.R | 316 |
 | tests/review.R | 659 |
-| tests/smoke.R | 3101 |
+| tests/smoke.R | 3092 |
 
 Code files counted: 11 of 12 allowed: PASS
 R/_disable_autoload.R present and empty of code: PASS
@@ -135,7 +136,7 @@ PASS means the file is byte for byte what the Claude project drafted (line endin
 | attitudinal.md | PASS | 02a273b6ffe0428629b2b6c358a40977c11cb40adeb256fe09e3a4f03eba26e4 |
 | behavioral.md | PASS | f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142 |
 | core.md | PASS | d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9 |
-| cross_cultural.md | PASS | 915d46090cf22e858cbe431bbcc54091c599df18c17efd2e5bfa97662f805f80 |
+| cross_cultural.md | PASS | f45a74c373e5af73e34e4b9808f3274115052b21e0a2c5d3409afbbbd4ce74b1 |
 | evaluate.md | PASS | 12859aecda0cd0b9d841879cd8ff1f22d3e6a67936a1f89b25ee12ba7374fea0 |
 | generate.md | PASS | f7410389ee03de9fa3bf911d7410fa182f93169d0d40b57e96c3d0fb368ab687 |
 | mode.md | PASS | 98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0 |
@@ -545,7 +546,7 @@ ok  requests sent together through ellmer's chat_async and later::run_now take a
 ok  each answer comes back in the order sent, parsed, with its own seconds; a model the endpoint refuses and a request with no key are errors in their place and the others are kept
 ok  the sending code uses only what ellmer and later document, never a package that starts other processes
 ok  the word skill is on no page except in its one sentence, once on Start here and once on the Methodology page
-ok  no page of the app names TRAPD, translation or an output language, and no form field is a language; the one reflex file that still does is cross_cultural.md (two Source lines), with a count that cannot grow
+ok  no page of the app names TRAPD, translation or an output language, and no form field is a language; none of the ten reflex files does either, and each has its panel on the page
 ok  a drafted question on the screen has the question, its answer options, and at most one line to check before use, and nothing else; every one is checked, and there are cards to check
 ok  the Word copy of drafted questions is what is on the screen, word for word, and then exactly three lines: the date, who drafted and who reviews, and the tool version
 ok  on the drafting screens, nowhere: TRAPD, translation, the word skill, a language field
@@ -726,7 +727,7 @@ Nothing else: no notes, no design decisions, no routing, no separate filter or b
 | no translation or language reflex sent (trapd, output_language, write_for_translation) | PASS |
 | form values present (Kenya, past 7 days) | PASS |
 
-hash: d4be11dd5cce556068eb9d1b81f25c4f3bb6b644fe9c38222ae1e5275636bb62
+hash: 685a224897ad1e8cc1efcdaa38dac62fb0fdee82a5469ed767f8db90198d9f33
 files: core.md, generate.md, behavioral.md, mode.md, cross_cultural.md
 characters: system 12997, user 2272
 
@@ -796,7 +797,7 @@ REFLEXES: Mode (v0.1)
 - face_to_face (Mode is face-to-face with an interviewer.) Note where a show card is needed, what the interviewer reads and does not read, and how a volunteered don't know or refusal is recorded. Flag items where an interviewer's presence invites edited answers and suggest the respondent enters those answers privately.
 - mixed_mode (More than one mode is used, or the mode may change later.) Use the same wording, format and option order in every mode, built to the limits of the most restrictive mode, usually telephone. Say whether the goal is comparison across groups or modes, which calls for identical stimuli, or the best overall estimate, which allows each mode its best form. Say that some mode differences will remain. MUST NOT: Do not write a format that exists in only one of the modes.
 
-REFLEXES: Country and culture (v0.2)
+REFLEXES: Country and culture (v0.3)
 - flag_do_not_assert (Anything that depends on the country or culture.) Mark what must be confirmed by someone who knows the setting and say exactly what they should check: the everyday term, the unit, the institution's name, whether the topic can be asked, the landmark event. Use placeholders in square brackets where a local term is needed and you were not given it. MUST NOT: Do not state as fact what people in the country believe, do, find sensitive or call things.
 - adopt_adapt_develop (The item comes from, or will be used in, more than one country.) Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, convention-driven or culture-driven.
 - response_styles (Ordered scales used across cultural groups.) Note that groups can use the same scale differently (agreeing, choosing extremes or the middle, different thresholds for the same label), so differences between groups may be differences in scale use. Prefer construct-specific, fully labelled scales and say that comparability needs to be tested before groups are compared. MUST NOT: Do not say which style a particular country or group has.
@@ -882,7 +883,7 @@ Nothing else: no notes, no design decisions, no routing, no separate filter or b
 | face_to_face kept; mixed_mode dropped | PASS |
 | cross_cultural sent | PASS |
 
-hash: add552dfbcf4f8fec6c95ac8ef4c05f5b65ed6275f047723df74b69daf6a7f40
+hash: 215fd5e9a5d87df1ae07b141ea3e0217e6a2da18ba98e1909416bd922e8d6aec
 files: core.md, generate.md, sensitive.md, mode.md, cross_cultural.md
 characters: system 13156, user 2356
 
@@ -952,7 +953,7 @@ REFLEXES: Mode (v0.1)
 - any_mode (Any mode.) Write and appraise each item as it will reach the respondent in the stated mode: seen or heard, with or without an interviewer, on what size of screen.
 - face_to_face (Mode is face-to-face with an interviewer.) Note where a show card is needed, what the interviewer reads and does not read, and how a volunteered don't know or refusal is recorded. Flag items where an interviewer's presence invites edited answers and suggest the respondent enters those answers privately.
 
-REFLEXES: Country and culture (v0.2)
+REFLEXES: Country and culture (v0.3)
 - flag_do_not_assert (Anything that depends on the country or culture.) Mark what must be confirmed by someone who knows the setting and say exactly what they should check: the everyday term, the unit, the institution's name, whether the topic can be asked, the landmark event. Use placeholders in square brackets where a local term is needed and you were not given it. MUST NOT: Do not state as fact what people in the country believe, do, find sensitive or call things.
 - adopt_adapt_develop (The item comes from, or will be used in, more than one country.) Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, convention-driven or culture-driven.
 - response_styles (Ordered scales used across cultural groups.) Note that groups can use the same scale differently (agreeing, choosing extremes or the middle, different thresholds for the same label), so differences between groups may be differences in scale use. Prefer construct-specific, fully labelled scales and say that comparability needs to be tested before groups are compared. MUST NOT: Do not say which style a particular country or group has.
