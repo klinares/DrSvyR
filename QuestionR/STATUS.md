@@ -47,8 +47,20 @@ final-question layout and the second model added about 40 lines net of what was 
 7. Parts go four calls at a time; the whole-questionnaire call joins the last group (30 questions: a group of 4, then 1).
 8. `Claude outputs/` was never tracked, so it is ignored and left on disk.
 
+## Live runs (2026-11-13, home profile, Kevin's yes; 40 calls and 1 retry)
+
+- Connection check: claude-sonnet-5-5 and claude-sonnet-4-5 both Ready.
+- gold: 27 of 27, 12.7 s, 2,167 tokens in and 1,450 out per item. Fix flags per flawed item 2.85, per
+  control item 0.29 (C7 and C8 have one each). 98 flags, every quote found. F3 needed a second
+  attempt. `tests/gold_runs/2026-11-13-2257_claude-sonnet-5-5/_flags.csv`. The first attempt wrote
+  to the Phase 8 folder of the same day and model, skipped every item and made no call; run folders
+  are now named by date, time and model.
+- review30: 5 calls, 94 s; fix flags per question 1.13 (max 3), consider 0.97 (max 3); 63 of 63
+  quotes found; no repeat attempts; all 8 deliberate faults flagged. `tests/review30.md`.
+- Write: behavioral 36 s, attitudinal 60 s, sensitive 44 s, 2 calls each, no retries; token counts
+  now recorded for single calls (draft 355 to 803 out, refine 3,128 to 5,701 out).
+
 ## Not verified
 
-- The drafter id `claude-sonnet-4-5` against the API: the connection check is a live call and waits for Kevin's yes, before any run.
-- Any live run of Phase 9: gold, review30 and the three Write runs wait for Kevin's yes.
-- The token counts of single calls are recorded since the fix at the end of Phase 8, not yet seen live.
+- A part whose `when` is "before the item" (a filter) is drawn after the stem, as the brief's layout orders parts; the behavioral run produced one.
+- Copy for Word of the new layout in a real browser.

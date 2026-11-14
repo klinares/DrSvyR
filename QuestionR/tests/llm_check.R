@@ -12,7 +12,7 @@
 #             1 call on the whole. Writes tests/review30.json and tests/review30.md.
 #   gold      each of the 27 items of tests/gold_items.csv reviewed alone (1 call each), shown the
 #             question and its options and nothing else (asserted before every call). Writes the
-#             flags to a new folder in tests/gold_runs/ and does not match them to the known
+#             flags to a new folder in tests/gold_runs/ (named by date, time and model) and does not match them to the known
 #             problems; that is done in the Claude project. An item already saved is skipped.
 #   A model id after the mode measures another main model on the same questions:
 #               tests/llm_check.R gold <model id>
@@ -98,7 +98,7 @@ if (mode == "gold") {
   gold <- utils::read.csv(text = lines[!startsWith(lines, "#")], colClasses = "character", na.strings = character(0))
   items <- unique(gold[, c("id", "set", "topic", "question", "scale", "scale_complete")])
   stopifnot("27 items expected" = nrow(items) == 27L)
-  gdir <- file.path("tests", "gold_runs", paste0(format(Sys.Date()), "_", gsub("[^A-Za-z0-9.-]", "-", m$id)))
+  gdir <- file.path("tests", "gold_runs", paste0(format(Sys.time(), "%Y-%m-%d-%H%M"), "_", gsub("[^A-Za-z0-9.-]", "-", m$id)))
   dir.create(gdir, showWarnings = FALSE, recursive = TRUE)
 
   # The options line: the scale as printed, or only its two ends when the paper gives only those.
