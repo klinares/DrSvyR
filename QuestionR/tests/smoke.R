@@ -105,13 +105,13 @@ ok("every reflex with a Check line has a Label",
 #   is, the new sums go here (tests/smoke.R prints them when they differ).
 REFLEX_SHA <- c(
   `core.md` = "5341dacfd7ac50eaa56f5b1111cf0bfec03f1103b744e7aca0df7a5670b1e91d",
-  `generate.md` = "82597d181d064f2d44591746cee2c3294a7e50de646ec536b57c57ac4a03f4b1",
+  `generate.md` = "be4664776780889b3a39a43a700f8845b0898f7c96cae92749ed0566f398e4ac",
   `attitudinal.md` = "6b5ac03131037228dfa36efabc90ac25def227aecd4a7fc71ecd14e85bf31217",
   `behavioral.md` = "2225e8f6ea521938ddc3a3529dbd6475814396205d22120fdb0d44761ce71830",
   `sensitive.md` = "f079dca7fce7782f9616944d55487eb8784c10f8e715759e8d8a760a0d47eac2",
-  `evaluate.md` = "9978d9d795b1b090f7d19e01ded618260c06a71143b40994b03eeff8dcebfd34",
+  `evaluate.md` = "c2f22c19b0afc8bff061268c9c76139d54eceb6b63ee8cd9af4ce47a329e9344",
   `mode.md` = "5a8271c5b6116040085f23d325d05446a9e66a0a9106cc327feb76c52c001026",
-  `refine.md` = "059748adccf547e710efefc9b25f209f893bcd8823709d98ad09b263afa83ec0")
+  `refine.md` = "cb7a39be5257362c5f4874f0c6743d541510555893602b25d8b5c7c0fad017d7")
 sha_now <- purrr::map_chr(rfiles, "sha")
 if (!identical(sha_now, REFLEX_SHA)) print(sha_now)
 ok("the reflex files are the ones checksummed here", identical(sha_now, REFLEX_SHA))
@@ -308,7 +308,10 @@ fake_item <- function(id) {
     Q13 = list(fl("no_presupposition", "comprehension", "consider", "Please answer even if you rent", "Renters may not be able to install panels.")),
     Q14 = list(fl("specific_concrete", "comprehension", "fix", "a typical week", "A normal week is not defined for shift workers.")),
     list())
-  list(id = id, flags = flags, rewrite = if (any(purrr::map_chr(flags, "level") == "fix")) paste("Rewrite of", id) else "")
+  fix = any(purrr::map_chr(flags, "level") == "fix")
+  list(id = id, flags = flags, summary = if (length(flags)) paste("Summary of", id) else "",
+       rewrite = if (fix) list(intro = "", stem = paste("Rewrite of", id), options = list("Yes", "No"), rows = list(),
+                               open_format = "", programming = "ASK ALL"))
 }
 review_answer <- function(user) {
   if (grepl("Reply with the \"instrument\" object only", user, fixed = TRUE))
@@ -338,35 +341,39 @@ ok("the quote check: a quote in the question is found; one that is not is kept a
    isTRUE(sh$questions[[11]]$flags[[1]]$found) && identical(sh$questions[[14]]$flags[[1]]$found, FALSE) &&
      quote_found("“greedy  energy”", "Obviously, high energy bills are caused by \"greedy energy companies\"") &&
      !quote_found("", "anything"))
-ok("the bottom line is built from the flags: counts, the main stage with its checks, and one line on the whole",
+ok("the bottom line is two lines built from the flags: how many need a fix and how many more have points to consider, the three most common faults, then the whole by position",
    identical(bottom_line(sh), c(
-     "3 of 30 questions have a problem likely to change answers, and 1 more has a point to consider.",
-     paste0("All are comprehension problems (3): ", count_phrase(unname(check_label(c("neutral_wording", "one_thing", "specific_concrete")))), "."),
-     paste0("The questionnaire as a whole: ", lc1(check_label("scale_consistency")), " (Q5, Q17)."))))
-ok("the bottom line says Most are only for more than half, else The largest group is; the whole-questionnaire ids follow the pasted order",
+     paste0("3 of 30 questions need a fix; 1 more has a point to consider. Most common: ",
+            count_phrase(unname(check_label(c("neutral_wording", "one_thing", "specific_concrete")))), "."),
+     paste0("Questions 5 and 17: ", lc1(check_label("scale_consistency")), "."))) &&
+     local({
+       q = function(id, level) list(id = id, text = id, reviewed = TRUE, flags = list(list(label = "Asks two things at once", level = level)))
+       one = list(questions = list(q("Q1", "fix"), q("Q2", "consider"), q("Q3", "consider")),
+                  instrument = list(list(label = "Scales inconsistent", questions = c("Q3", "Q1")), list(label = "A", questions = "Q2"),
+                                    list(label = "B", questions = "Q2"), list(label = "C", questions = "Q2")))
+       identical(bottom_line(one), c("1 of 3 questions needs a fix; 2 more have points to consider. Most common: asks two things at once (1).",
+                                     "Questions 1 and 3: scales inconsistent. Question 2: a. Question 2: b.")) &&
+         identical(bottom_line(list(questions = list(q("Q1", "consider")), instrument = list()))[[1]],
+                   "None of 1 question needs a fix; 1 has a point to consider.")
+     }))
+ok("the bottom line names at most the three most common faults, ties in pasted order",
+   identical(count_phrase(c("A", "B", "C", "D", "B", "E")), "b (2), a (1), c (1)") &&
+     identical(count_phrase(c("A", "B", "A")), "a (2), b (1)") && identical(and_list(c(1, 2, 3)), "1, 2 and 3"))
+ok("one card for both tabs: a filter above, the intro, the stem in bold, the options one per line, the rows under Items, an open format in words, then the parts; no programming",
    local({
-     q = function(id, stage) list(id = id, text = id, reviewed = TRUE, rewrite = "",
-                                  flags = list(list(check = "one_thing", label = "Asks two things at once", stage = stage, level = "fix", why = "w")))
-     two = list(questions = list(q("Q1", "comprehension"), q("Q2", "comprehension"), q("Q3", "retrieval"), q("Q4", "judgment")), instrument = list())
-     three = list(questions = list(q("Q1", "comprehension"), q("Q2", "comprehension"), q("Q3", "retrieval")),
-                  instrument = list(list(label = "Scales or periods inconsistent", questions = c("Q3", "Q1"))))
-     startsWith(bottom_line(two)[2], "The largest group is comprehension problems (2)") &&
-       startsWith(bottom_line(three)[2], "Most are comprehension problems (2)") &&
-       grepl("(Q1, Q3)", bottom_line(three)[3], fixed = TRUE)
-   }))
-ok("the bottom line names at most the three most common faults, ties in pasted order, then how many other kinds",
-   identical(count_phrase(c("A", "B", "C", "D", "B", "E")), "b (2), a (1), c (1), and 2 other kinds") &&
-     identical(count_phrase(c("A", "B", "C", "D")), "a (1), b (1), c (1), and 1 other kind") &&
-     identical(count_phrase(c("A", "B", "A")), "a (2), b (1)"))
-ok("a rewrite is drawn with the question on one line and each option on its own; a rewrite that does not split that way is one paragraph",
-   local({
-     one = rewrite_blocks("Do you think the government is doing enough, or not? Yes, definitely / Yes, probably / No / Don't know")
-     two = rewrite_blocks("Think about the past 7 days.\nHow many days did you drive?\n0 / 1 to 3 / 4 or more")
-     long = rewrite_blocks("How much did you spend? Look at a bill (or tick: None / Don't know if you cannot find one at all today).")
-     identical(one[[1]]$text, "Rewrite: Do you think the government is doing enough, or not?") &&
-       identical(one[[2]]$items, c("Yes, definitely", "Yes, probably", "No", "Don't know")) &&
-       identical(two[[1]]$text, "Rewrite: Think about the past 7 days. How many days did you drive?") && identical(length(two[[2]]$items), 3L) &&
-       length(long) == 1L
+     q = full_item(list(intro = "Think of last year.", stem = "How much do you trust each?", options = list("A lot", "Not at all"),
+                        rows = list("The police", "The courts"), programming = "ROTATE ROWS",
+                        parts = list(list(when = "Before the item", stem = "Heard of them?", options = list("Yes", "No")),
+                                     list(when = "if a lot", stem = "Why?", open_format = "a few words"))))
+     b = question_blocks(q)
+     h = html_of(doc_html(b))
+     t = doc_text(b)
+     open = doc_text(question_blocks(full_item(list(stem = "How many?", open_format = "a number of days"))))
+     regexpr("Heard of them?", t, fixed = TRUE) < regexpr("Think of last year.", t, fixed = TRUE) &&
+       grepl("<strong>How much do you trust each?</strong>", h, fixed = TRUE) &&
+       grepl("- A lot\n- Not at all\n\nItems\n\n- The police\n- The courts", t) &&
+       regexpr("The courts", t, fixed = TRUE) < regexpr("If a lot: Why?", t, fixed = TRUE) && !grepl("ROTATE", t, fixed = TRUE) &&
+       grepl("Answer: a number of days", open, fixed = TRUE)
    }))
 ok("what to fix first: the questions with a fix flag, most fix flags first then in order, at most five",
    identical(purrr::map_chr(fix_first(sh), "id"), c("Q11", "Q12", "Q14")) &&
@@ -374,15 +381,27 @@ ok("what to fix first: the questions with a fix flag, most fix flags first then 
 
 v_items <- function(obj, checks = c("one_thing", "plain_words"), n = 1L) tryCatch({ reply_validator("items", checks = checks, n_questions = n)(obj); "ok" }, error = conditionMessage)
 flag1 <- list(check = "one_thing", stage = "comprehension", level = "fix", quote = "and", why = "Two things.")
+rw1 <- list(intro = "", stem = "Q?", options = list("Yes", "No"), rows = list(), open_format = "", programming = "")
+q1 <- function(...) { x = list(id = "Q1", flags = list(flag1), summary = "Two things; split.", rewrite = rw1); a = list(...); x[names(a)] = a; list(x) }
+qf <- function(...) q1(flags = list(utils::modifyList(flag1, list(...))))
 ok("the validator passes a good reply and refuses: more than 8 flags, a why over 30 words, a check not sent, no quote, a bad stage or level, a question missing",
-   identical(v_items(list(items = list(list(id = "Q1", flags = list(flag1), rewrite = "x")))), "ok") &&
-     grepl("9 flags; the limit is 8", v_items(list(items = list(list(id = "Q1", flags = rep(list(flag1), 9), rewrite = "x"))))) &&
-     grepl("why of 31 words", v_items(list(items = list(list(id = 1, flags = list(utils::modifyList(flag1, list(why = paste(rep("w", 31), collapse = " ")))), rewrite = ""))))) &&
-     grepl("not in the CHECKLIST", v_items(list(items = list(list(id = 1, flags = list(utils::modifyList(flag1, list(check = "made_up"))), rewrite = ""))))) &&
-     grepl("has no quote", v_items(list(items = list(list(id = 1, flags = list(utils::modifyList(flag1, list(quote = ""))), rewrite = ""))))) &&
-     grepl("stage", v_items(list(items = list(list(id = 1, flags = list(utils::modifyList(flag1, list(stage = "memory"))), rewrite = ""))))) &&
-     grepl("fix or consider", v_items(list(items = list(list(id = 1, flags = list(utils::modifyList(flag1, list(level = "minor"))), rewrite = ""))))) &&
-     grepl("this part has 2", v_items(list(items = list(list(id = 1, flags = list(), rewrite = ""))), n = 2L)))
+   identical(v_items(list(items = q1())), "ok") &&
+     grepl("9 flags; the limit is 8", v_items(list(items = q1(flags = rep(list(flag1), 9))))) &&
+     grepl("why of 31 words", v_items(list(items = qf(why = paste(rep("w", 31), collapse = " "))))) &&
+     grepl("not in the CHECKLIST", v_items(list(items = qf(check = "made_up")))) &&
+     grepl("has no quote", v_items(list(items = qf(quote = "")))) &&
+     grepl("stage", v_items(list(items = qf(stage = "memory")))) &&
+     grepl("fix or consider", v_items(list(items = qf(level = "minor")))) &&
+     grepl("this part has 2", v_items(list(items = q1()), n = 2L)))
+ok("the validator holds a summary to 25 words and a rewrite to a question; a fix flag with no rewrite is a failed attempt; no flag needs no rewrite",
+   grepl("summary of 26 words", v_items(list(items = q1(summary = paste(rep("w", 26), collapse = " "))))) &&
+     grepl("has a fix flag and no rewrite", v_items(list(items = list(list(id = "Q1", flags = list(flag1), summary = "s", rewrite = NULL))))) &&
+     grepl("neither options nor an open_format", v_items(list(items = q1(rewrite = replace(rw1, "options", list(list())))))) &&
+     grepl("rewrite: 'stem' must be a non-empty string", v_items(list(items = q1(rewrite = replace(rw1, "stem", "")))), fixed = TRUE) &&
+     grepl("'rewrite' must be an object or null", v_items(list(items = q1(rewrite = "Q? Yes / No"))), fixed = TRUE) &&
+     grepl("'summary' is missing", v_items(list(items = list(list(id = "Q1", flags = list(), rewrite = NULL)))), fixed = TRUE) &&
+     identical(v_items(list(items = list(list(id = "Q1", flags = list(), summary = "", rewrite = NULL)))), "ok") &&
+     identical(v_items(list(items = q1(flags = list(replace(flag1, "level", "consider")), rewrite = NULL))), "ok"))
 ok("the instrument validator refuses more than three points and a point with no question",
    local({
      p = list(check = "scale_consistency", stage = "reporting", level = "fix", questions = list("Q1"), why = "x")
@@ -414,6 +433,7 @@ refine_reply <- function(n = 3L) {
     it$why = NULL
     it$changes = if (i == 2L) "Named both sides of trust." else ""
     if (i == 2L) { it$stem = "How much do you trust or distrust [council] on 2?"; it$options = list("Trust a lot", "Neither", "Distrust a lot") }
+    if (i == 3L) { it$rows = list("The mayor", "The councillors"); it$programming = "ROTATE ROWS" }
     if (i == 1L) it$parts = list(list(when = "if a great deal", stem = "Why do you trust it?", options = list(), open_format = "a few words"),
                                  list(when = "Before the item", stem = "Have you heard of [council]?", options = list("Yes", "No"), open_format = ""))
     it
@@ -549,13 +569,14 @@ local({
     st = state
     h = html_of(output$items_ui)
     r = html_of(output$results)
-    before = sub("(?s)<details.*$", "", h, perl = TRUE)
+    before = gsub("(?s)<details.*?</details>", "", h, perl = TRUE)
     ok("Write questions: the one sentence, the final items as cards with their part and nothing about how they were reached, Before you field these, and a closed How these were written",
        grepl(WRITE_NOTICE, r, fixed = TRUE) && n_in("card mb-2", h) == 3L && n_in("Remove", h) == 3L &&
          grepl("Why do you trust it?", h, fixed = TRUE) && grepl("Answer: a few words", h, fixed = TRUE) &&
          regexpr("Have you heard of [council]?", h, fixed = TRUE) < regexpr("How much do you trust [council] on 1?", h, fixed = TRUE) &&
          regexpr("How much do you trust [council] on 1?", h, fixed = TRUE) < regexpr("Why do you trust it?", h, fixed = TRUE) &&
-         grepl("<em>domain 1</em>", h, fixed = TRUE) &&
+         grepl("<em>domain 1</em>", h, fixed = TRUE) && grepl("font-weight: 600;", h, fixed = TRUE) &&
+         grepl("The councillors", before, fixed = TRUE) && !grepl("ROTATE ROWS", before, fixed = TRUE) && grepl("ROTATE ROWS", h, fixed = TRUE) &&
          grepl("<h5>Before you field these</h5>", h, fixed = TRUE) && grepl("The council", before, fixed = TRUE) &&
          !grepl("Named both sides|trust in officers|Why 1|Revised|Open question|check", before, ignore.case = TRUE) &&
          grepl("<summary>How these were written</summary>", h, fixed = TRUE) && !grepl("<details[^>]*open", h) &&
@@ -565,8 +586,8 @@ local({
     ok("the Word copy is the one sentence, the items as laid out on the page, and Before you field these",
        identical(words_of(word), words_of(see_text(paste(r, before)))) &&
          identical(words_of(word), words_of(doc_text(draft_blocks(final_items(st$items, st$edits), list("The council's name"))))) &&
-         grepl("Distrust a lot", word, fixed = TRUE))
-    session$setInputs(ed_1_p2_stem = "Have you ever heard of [council]?", ed_1_p1_o1 = "unused", ed_1_p2_o2 = "Not sure")
+         grepl("Distrust a lot", word, fixed = TRUE) && grepl("The councillors", word, fixed = TRUE) && !grepl("ROTATE", word, fixed = TRUE))
+    session$setInputs(ed_1_p2_stem = "Have you ever heard of [council]?", ed_1_p1_o1 = "unused", ed_1_p2_o2 = "Not sure", ed_3_r2 = "")
     session$flushReact()
     wb = html_of(output$bottom)
     ok("a filter part is drawn above the stem in Copy for Word too, and a part's stem and options are edited like the item's",
@@ -574,7 +595,8 @@ local({
          regexpr("Have you ever heard of [council]?", wb, fixed = TRUE) < regexpr("How much do you trust [council] on 1?", wb, fixed = TRUE) &&
          grepl("Not sure", wb, fixed = TRUE) && !grepl("unused", wb, fixed = TRUE) &&
          grepl("If a great deal: Why do you trust it?", wb, fixed = TRUE) &&
-         identical(final_items(st$items, st$edits)[[1]]$parts[[2]]$options, list("Yes", "Not sure")))
+         identical(final_items(st$items, st$edits)[[1]]$parts[[2]]$options, list("Yes", "Not sure")) &&
+         identical(final_items(st$items, st$edits)[[3]]$rows, list("The mayor")) && !grepl("The councillors", wb, fixed = TRUE))
     session$setInputs(remove = "2")
     session$flushReact()
     ok("Remove takes an item out, and out of the Word copy", n_in("card mb-2", html_of(output$items_ui)) == 2L &&

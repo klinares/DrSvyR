@@ -139,7 +139,7 @@ if (mode == "gold") {
          flags = if (length(fl)) data.frame(id = r$id, set = r$set, check = purrr::map_chr(fl, "check"), stage = purrr::map_chr(fl, "stage"),
                                             level = purrr::map_chr(fl, "level"), quote = purrr::map_chr(fl, "quote"),
                                             found = purrr::map_lgl(fl, function(x) quote_found(x$quote, shown_text(r))),
-                                            why = purrr::map_chr(fl, "why"), rewrite = b$reply$items[[1]]$rewrite %||% ""))
+                                            why = purrr::map_chr(fl, "why"), rewrite = local({ rw = b$reply$items[[1]]$rewrite; if (is.list(rw)) doc_text(question_blocks(full_item(rw))) else "" })))
   })
   calls <- do.call(rbind, purrr::map(rows, "call"))
   flags <- do.call(rbind, purrr::compact(purrr::map(rows, "flags")))

@@ -165,11 +165,11 @@ md_page <- function(path)
 
 # ---- a document as blocks, drawn twice ------------------------------------------------------
 
-# Each block has a `type`: "h" (text, level), "p" (text; marks: words to highlight; em), "list"
+# Each block has a `type`: "h" (text, level), "p" (text; marks: words to highlight; em; strong), "list"
 #   (items; tags: a small tag before each item) or "table" (head, rows).
 blk_h <- function(text, level = 2L) list(type = "h", text = text, level = level)
-blk_p <- function(text, em = FALSE, marks = character(0), indent = FALSE)
-  list(type = "p", text = text, em = em, marks = marks, indent = indent)
+blk_p <- function(text, em = FALSE, marks = character(0), indent = FALSE, strong = FALSE)
+  list(type = "p", text = text, em = em, marks = marks, indent = indent, strong = strong)
 blk_list <- function(items, tags = NULL, indent = FALSE) list(type = "list", items = as.character(items), tags = tags, indent = indent)
 blk_table <- function(head, rows) list(type = "table", head = head, rows = rows)
 
@@ -191,7 +191,8 @@ doc_html <- function(blocks)
   tagList(purrr::map(blocks, function(b) switch(b$type,
     h = if (b$level <= 2L) tags$h4(b$text) else tags$h5(b$text),
     p = tags$p(style = paste0("white-space: pre-line;", if (isTRUE(b$indent)) " margin-left: 2em;"),
-               HTML(if (b$em) paste0("<em>", marked_html(b$text, b$marks), "</em>") else marked_html(b$text, b$marks))),
+               HTML(sprintf(if (isTRUE(b$strong)) "<strong>%s</strong>" else if (b$em) "<em>%s</em>" else "%s",
+                            marked_html(b$text, b$marks)))),
     list = tags$ul(style = if (isTRUE(b$indent)) "margin-left: 2em;", purrr::imap(b$items, function(x, i)
       tags$li(if (length(b$tags)) tags$span(class = "badge text-bg-light border me-1", b$tags[[i]]), x))),
     table = tags$table(class = "table table-sm", tags$thead(tags$tr(purrr::map(b$head, tags$th))),
@@ -220,23 +221,14 @@ card_blocks <- function(q, levels = LEVELS) {
     if (!q$reviewed) list(blk_p("Not reviewed: its part did not come back.", em = TRUE))
     else if (!length(fl)) list(blk_p("None found by this review.", em = TRUE))
     else list(blk_list(purrr::map_chr(fl, "why"), tags = purrr::map_chr(fl, tag))),
-    if (nzchar(q$rewrite) && "fix" %in% levels) rewrite_blocks(q$rewrite))
+    if (!is.null(q$rewrite) && "fix" %in% levels) c(list(blk_p("Suggested wording", em = TRUE)), question_blocks(q$rewrite)))
 }
 
-# A rewrite drawn as a question: the question on one line and each option on its own. The options are
-#   its last line when that line holds " / ", else the text after its last "?"; they count as options
-#   only when there are two or more and each is at most 8 words. Otherwise the rewrite is one paragraph.
-rewrite_blocks <- function(rw) {
-  lines = trimws(strsplit(gsub("\r\n?", "\n", rw), "\n", fixed = TRUE)[[1]])
-  lines = lines[nzchar(lines)]
-  last = lines[length(lines)]
-  split_at = if (length(lines) > 1L) NA_integer_ else utils::tail(gregexpr("?", last, fixed = TRUE)[[1]], 1L)
-  head = if (length(lines) > 1L) paste(lines[-length(lines)], collapse = " ") else if (split_at > 0L) substr(last, 1, split_at) else ""
-  tail = if (length(lines) > 1L) last else if (split_at > 0L) substring(last, split_at + 1L) else ""
-  opts = trimws(strsplit(tail, " / ", fixed = TRUE)[[1]])
-  if (length(opts) < 2L || !nzchar(head) || any(purrr::map_int(opts, n_words) > 8L))
-    return(list(blk_p(paste("Rewrite:", paste(lines, collapse = " ")))))
-  list(blk_p(paste("Rewrite:", trimws(head))), blk_list(opts))
+# The questions to fix first: those with a fix-level flag, by number of fix flags and then in the
+#   order pasted, at most n.
+fix_first <- function(sh, n = 5L) {
+  qs = purrr::keep(sh$questions, function(q) n_level(q, "fix") > 0L)
+  utils::head(qs[order(-purrr::map_int(qs, n_level, level = "fix"), seq_along(qs))], n)
 }
 
 # The first words of a question, for the table.
@@ -277,36 +269,37 @@ item_remove <- function(items, uid) purrr::discard(items, function(it) identical
 
 option_text <- function(o) paste(unlist(o), collapse = " ")
 
-# An item with the analyst's changes put on it: `intro`, `stem` and `options` (new texts by the
-#   option's number). An option whose text is cleared is taken out.
+# An item with the analyst's changes put on it: `intro`, `stem`, options and rows (new texts by
+#   number). An option or a row whose text is cleared is taken out.
 apply_edits <- function(it, ed) {
   if (is.null(ed)) return(it)
   get = function(k, old) ed[[k]] %||% old
-  opts = function(os, k) {
-    now = purrr::imap_chr(purrr::map_chr(os, option_text), function(o, j) get(paste0(k, "o", j), o))
+  texts = function(xs, k) {
+    now = purrr::imap_chr(purrr::map_chr(xs %||% list(), option_text), function(o, j) get(paste0(k, j), o))
     as.list(now[nzchar(trimws(now))])
   }
   it$intro = get("intro", it$intro)
   it$stem = get("stem", it$stem)
-  it$options = opts(it$options, "")
+  it$options = texts(it$options, "o")
+  it$rows = texts(it$rows, "r")
   it$parts = purrr::imap(it$parts, function(p, j) {
     k = paste0("p", j, "_")
     p$when = get(paste0(k, "when"), p$when %||% "")
     p$stem = get(paste0(k, "stem"), p$stem %||% "")
-    p$options = opts(p$options %||% list(), k)
+    p$options = texts(p$options, paste0(k, "o"))
     p
   })
   it
 }
 
-# Every text of an item the analyst can edit, by its box name: intro, stem, o1.., and for part j
-#   pj_when, pj_stem, pj_o1..
+# Every text of an item the analyst can edit, by its box name: intro, stem, o1.., r1.. (rows), and for
+#   part j pj_when, pj_stem, pj_o1..
 item_fields <- function(it) {
-  o = function(os, k) purrr::set_names(purrr::map_chr(os, option_text), paste0(k, "o", seq_along(os)))
-  c(intro = it$intro, stem = it$stem, o(it$options, ""),
+  o = function(xs, k) purrr::set_names(purrr::map_chr(xs %||% list(), option_text), paste0(k, seq_along(xs %||% list())))
+  c(intro = it$intro, stem = it$stem, o(it$options, "o"), o(it$rows, "r"),
     unlist(purrr::imap(it$parts, function(p, j) {
       k = paste0("p", j, "_")
-      c(purrr::set_names(c(p$when %||% "", p$stem %||% ""), paste0(k, c("when", "stem"))), o(p$options %||% list(), k))
+      c(purrr::set_names(c(p$when %||% "", p$stem %||% ""), paste0(k, c("when", "stem"))), o(p$options, paste0(k, "o")))
     })))
 }
 
@@ -346,24 +339,31 @@ part_blocks <- function(p) {
     else if (nzchar(p$open_format %||% "")) list(blk_p(answer_line(p$open_format), indent = TRUE)))
 }
 
-# The final questions as blocks, under the one sentence, laid out the way each is asked: the domain it
-#   measures, any filter asked before it (indented), the intro, the stem, the options (or what an open
-#   question collects), the other parts indented, the programming line; then "Before you field these"
-#   when the editor left anything for the analyst.
+# One question laid out the way it is asked, for both tabs: any filter asked before it (indented), the
+#   intro, the stem in bold, the options one per line, the rows one per line under a small "Items"
+#   lead, what an open question collects, then the other parts, indented. The programming text is not
+#   on it.
+question_blocks <- function(q) {
+  texts = function(x) purrr::map_chr(x %||% list(), option_text)
+  opts = texts(q$options)
+  rows = texts(q$rows)
+  before = purrr::map_lgl(q$parts %||% list(), is_before)
+  c(unlist(purrr::map(q$parts[before], part_blocks), recursive = FALSE),
+    if (nzchar(q$intro %||% "")) list(blk_p(q$intro)),
+    list(blk_p(q$stem, strong = TRUE)),
+    if (length(opts)) list(blk_list(opts)),
+    if (length(rows)) list(blk_p("Items", em = TRUE), blk_list(rows)),
+    if (!length(opts) && nzchar(q$open_format %||% "")) list(blk_p(answer_line(q$open_format))),
+    unlist(purrr::map(q$parts[!before], part_blocks), recursive = FALSE))
+}
+
+# The final questions as blocks, under the one sentence: each with its domain and its card; then
+#   "Before you field these" when the editor left anything for the analyst.
 draft_blocks <- function(chosen, needs = list())
   c(list(blk_p(WRITE_NOTICE, em = TRUE)),
-    unlist(purrr::imap(chosen, function(it, i) {
-      opts = purrr::map_chr(it$options, option_text)
-      before = purrr::map_lgl(it$parts, is_before)
-      c(list(blk_h(paste("Question", i), 3L)),
-        if (nzchar(it$domain)) list(blk_p(it$domain, em = TRUE)),
-        unlist(purrr::map(it$parts[before], part_blocks), recursive = FALSE),
-        if (nzchar(it$intro)) list(blk_p(it$intro)),
-        list(blk_p(it$stem)),
-        if (length(opts)) list(blk_list(opts)) else list(blk_p(answer_line(it$open_format))),
-        unlist(purrr::map(it$parts[!before], part_blocks), recursive = FALSE),
-        if (nzchar(it$programming)) list(blk_p(paste("Programming:", it$programming), em = TRUE)))
-    }), recursive = FALSE),
+    unlist(purrr::imap(chosen, function(it, i)
+      c(list(blk_h(paste("Question", i), 3L)), if (nzchar(it$domain)) list(blk_p(it$domain, em = TRUE)), question_blocks(it))),
+      recursive = FALSE),
     if (length(needs)) list(blk_h("Before you field these", 2L), blk_list(purrr::map_chr(needs, option_text))))
 
 
@@ -522,23 +522,25 @@ copy_and_log <- function(blocks, ns, secrets = character(0))
            tags$span(class = "small me-3"),
            downloadButton(ns("get_log"), "Download the run log", class = "btn-sm btn-outline-secondary")))
 
-# One final question, numbered i, laid out the way it is asked: the intro and the stem in boxes that
-#   wrap, each option in a box, or what an open question collects; then each part, indented; then the
-#   programming line in small type; and the button that takes it out. ed is what was changed before.
+# One final question, numbered i: its domain, then the card of question_blocks() in boxes that can be
+#   edited (the stem's in bold); then, closed, its Details; and the button that takes it out. ed is
+#   what was changed before.
 item_card <- function(it, i, ns, ed = NULL) {
   id = function(k) ns(edit_input_id(it$uid, k))
-  area = function(k, value)
-    textAreaInput(id(k), NULL, value = ed[[k]] %||% value, width = "100%", resize = "vertical",
-                  rows = max(1L, ceiling(nchar(value) / 90)))
-  options_ui = function(os, open_format, k)
-    if (length(os)) purrr::imap(purrr::map_chr(os, option_text), function(o, j)
-      textInput(id(paste0(k, "o", j)), NULL, value = ed[[paste0(k, "o", j)]] %||% o, width = "100%"))
-    else tags$p(class = "mb-1", answer_line(open_format))
+  area = function(k, value, style = NULL)
+    tagAppendAttributes(textAreaInput(id(k), NULL, value = ed[[k]] %||% value, width = "100%", resize = "vertical",
+                                      rows = max(1L, ceiling(nchar(value) / 90))), style = style, .cssSelector = "textarea")
+  boxes = function(xs, k) purrr::imap(purrr::map_chr(xs %||% list(), option_text), function(o, j)
+    textInput(id(paste0(k, j)), NULL, value = ed[[paste0(k, j)]] %||% o, width = "100%"))
+  answer_ui = function(q, k)
+    tagList(boxes(q$options, paste0(k, "o")),
+            if (length(q$rows)) tagList(tags$p(class = "small text-muted mb-1", tags$em("Items")), boxes(q$rows, "r")),
+            if (!length(q$options) && nzchar(q$open_format %||% "")) tags$p(class = "mb-1", answer_line(q$open_format)))
   part_ui = function(p, j) {
     k = paste0("p", j, "_")
     tags$div(style = "margin-left: 2em;",
              textInput(id(paste0(k, "when")), NULL, value = ed[[paste0(k, "when")]] %||% (p$when %||% ""), width = "100%"),
-             area(paste0(k, "stem"), p$stem %||% ""), options_ui(p$options %||% list(), p$open_format %||% "", k))
+             area(paste0(k, "stem"), p$stem %||% ""), answer_ui(p, k))
   }
   before = purrr::map_lgl(it$parts, is_before)
   tags$div(class = "card mb-2", tags$div(
@@ -547,12 +549,18 @@ item_card <- function(it, i, ns, ed = NULL) {
     if (nzchar(it$domain)) tags$p(class = "small text-muted mb-1", tags$em(it$domain)),
     purrr::map(which(before), function(j) part_ui(it$parts[[j]], j)),
     if (nzchar(it$intro)) area("intro", it$intro),
-    area("stem", it$stem),
-    options_ui(it$options, it$open_format, ""),
+    area("stem", it$stem, style = "font-weight: 600;"),
+    answer_ui(it, ""),
     purrr::map(which(!before), function(j) part_ui(it$parts[[j]], j)),
-    if (nzchar(it$programming)) tags$p(class = "small text-muted mb-1", paste("Programming:", it$programming)),
+    item_details(it),
     set_button("Remove", "remove", it$uid, ns)))
 }
+
+# An item's Details, closed: its programming line.
+item_details <- function(it)
+  if (nzchar(it$programming))
+    tags$details(class = "mb-2", tags$summary(class = "small", "Details"),
+                 tags$p(class = "small text-muted mb-1", paste("Programming:", it$programming)))
 
 # "How these were written", closed: the two models, what the editor changed in each item, what the
 #   items leave out, and the checks the editor applied.

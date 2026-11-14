@@ -1,6 +1,6 @@
 # Generate
 
-Version: 0.6
+Version: 0.7
 
 Sent with every request to write new items, after core.md and before the task
 file. How a draft is built from the brief and what it must declare.
@@ -65,6 +65,7 @@ Return one JSON object with these fields.
   - "intro": a lead-in sentence read before the question, in English; an empty string if there is none.
   - "stem": the question as the respondent reads or hears it, in English.
   - "options": the response options in the order shown, in English; an empty list for an open question.
+  - "rows": for a list of items rated on the same options, the items, one per entry; otherwise an empty list.
   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
   - "parts": a list, usually empty: filter, branch or follow-up questions that exist only to serve this item, in the order asked. Each has "when" (who is asked it, or "before the item" for a filter), "stem", "options" (an empty list if open) and "open_format".
   - "programming": at most one line for whoever programs the survey (routing, rotation, a show card); an empty string if there is none.

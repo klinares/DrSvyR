@@ -1,6 +1,6 @@
 # Evaluate a questionnaire
 
-Version: 0.8
+Version: 0.9
 
 Task file for appraising a pasted questionnaire: an expert review, item by
 item and then as a whole. The reflexes in core.md are the item checklist; this
@@ -109,18 +109,27 @@ carries them.
 
 ## Output format
 
-Return one JSON object. Write findings in English, and write a rewrite in the language of the question. Be brief: nothing outside the fields below is shown to the analyst.
+Return one JSON object. Write in English, and write a rewrite in the language of the question. Be brief: nothing outside the fields below is shown to the analyst.
+
+Text in square brackets, or in capitals addressed to whoever programs the survey (routing, rotation, who is asked, base), is not seen by respondents. Use it to understand who is asked what. Do not flag its wording. Return it unchanged in "programming".
 
 For questions, the object is {"items": [...]}, one entry per question, in the order given. Each entry has:
 
 - "id": the question's own label, or its position.
+- "summary": at most 20 words, for an analyst who will read nothing else: what is wrong and what the rewrite does about it. An empty string when there is no flag.
 - "flags": every problem you stand behind, most damaging first; an empty list if there is none. Each flag has:
   - "check": the id of the CHECKLIST check it fails.
   - "stage": "comprehension", "retrieval", "judgment" or "reporting".
   - "level": "fix" for a fault in the question as written; "consider" for a defensible design choice, something that depends on knowledge you were not given, or sensitivity alone.
-  - "quote": words copied exactly from the question or its options.
+  - "quote": words copied exactly from the question or its options. In a list of rows, quote the row the flag is about.
   - "why": at most 25 words: what the respondent cannot do, in plain words.
-- "rewrite": one rewrite of the whole question and its options that fixes its fix-level flags and changes nothing else; an empty string when it has no fix-level flag.
+- "rewrite": the whole question rewritten to fix its fix-level flags and change nothing else, or null when it has no fix-level flag. It is an object with:
+  - "intro": a lead-in sentence; an empty string if there is none.
+  - "stem": the question as the respondent reads or hears it.
+  - "options": the response options in the order shown, one per entry; an empty list for an open question.
+  - "rows": for a list of items rated on the same options, the items, one per entry; otherwise an empty list.
+  - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
+  - "programming": the programming instructions of the original, unchanged except where a fix needs a change; an empty string if there are none.
 
 For the questionnaire as a whole, the object is {"instrument": [...]}: at most 3 flags of the same shape, each with "questions" (a list of the ids of the questions it concerns) in place of "quote".
 

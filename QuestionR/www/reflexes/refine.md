@@ -1,6 +1,6 @@
 # Refine drafts into final questions
 
-Version: 0.1
+Version: 0.2
 
 Sent to the editing call of Write questions, after core.md and with the kind
 file and mode.md. The editor is given a draft written by another model for the
@@ -51,6 +51,7 @@ Return one JSON object with these fields.
   - "intro": a lead-in sentence read before the question; an empty string if there is none.
   - "stem": the question as the respondent reads or hears it.
   - "options": the response options in the order shown; an empty list for an open question.
+  - "rows": for a list of items rated on the same options, the items, one per entry; otherwise an empty list.
   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
   - "parts": a list, usually empty: filter, branch or follow-up questions that exist only to serve this item, in the order asked. Each has "when" (who is asked it, or "before the item" for a filter), "stem", "options" (an empty list if open) and "open_format".
   - "programming": at most one line for whoever programs the survey (routing, rotation, a show card); an empty string if there is none.

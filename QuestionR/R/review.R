@@ -12,22 +12,23 @@
 
 # What a reply must hold, per kind of call: fields (top-level field -> type), each (for a list of
 #   objects, field -> type), rules (REPLY_RULES run once the shape is right). Types: text (non-empty),
-#   string, list, id (a label or a number); a trailing "?" lets a field be missing.
+#   string, list, object (null when missing), id (a label or a number); a trailing "?" lets a field
+#   be missing.
 REPLY_SCHEMAS <- list(
   draft = list(
     fields = c(items = "list", not_covered = "list?", needs_from_analyst = "list?"),
     each = list(items = c(id = "text", domain = "text", intro = "string?", stem = "text", options = "list?",
-                          open_format = "string?", parts = "list?", programming = "string?", why = "string?")),
+                          open_format = "string?", rows = "list?", parts = "list?", programming = "string?", why = "string?")),
     rules = c("item_count", "options_or_open", "item_limits")),
   refine = list(
     fields = c(items = "list", not_covered = "list?", needs_from_analyst = "list?"),
     each = list(items = c(id = "text", domain = "string?", intro = "string?", stem = "text", options = "list?",
-                          open_format = "string?", parts = "list?", programming = "string?", changes = "string?")),
+                          open_format = "string?", rows = "list?", parts = "list?", programming = "string?", changes = "string?")),
     rules = c("item_count", "options_or_open", "item_limits")),
   items = list(
     fields = c(items = "list"),
-    each = list(items = c(id = "id", flags = "list", rewrite = "string")),
-    rules = c("question_count", "flags_valid")),
+    each = list(items = c(id = "id", flags = "list", summary = "string", rewrite = "object?")),
+    rules = c("question_count", "flags_valid", "rewrites_valid")),
   instrument = list(
     fields = c(instrument = "list"),
     each = list(instrument = c(check = "text", stage = "text", level = "text", questions = "list", why = "text")),
@@ -36,12 +37,18 @@ REPLY_SCHEMAS <- list(
 # The limits R holds a review to. MAX_FLAGS is a guard against a runaway reply, not a target.
 MAX_FLAGS <- 8L
 MAX_WHY_WORDS <- 30L
+MAX_SUMMARY_WORDS <- 25L
 MAX_CHANGES_WORDS <- 20L
 MAX_INSTRUMENT_FLAGS <- 3L
 STAGES <- c("comprehension", "retrieval", "judgment", "reporting")
 LEVELS <- c("fix", "consider")
 
-TYPE_WORDS <- c(text = "a non-empty string", string = "a string", list = "a list", id = "a question label or number")
+TYPE_WORDS <- c(text = "a non-empty string", string = "a string", list = "a list", object = "an object or null",
+                id = "a question label or number")
+
+# What a rewrite must hold: a stem, and options or an open_format (REPLY_RULES$rewrites_valid).
+REWRITE_FIELDS <- c(intro = "string?", stem = "text", options = "list?", rows = "list?", open_format = "string?",
+                    programming = "string?")
 
 type_ok <- function(x, type) {
   if (is.null(x)) return(endsWith(type, "?"))
@@ -49,6 +56,7 @@ type_ok <- function(x, type) {
          text = is.character(x) && length(x) == 1L && !is.na(x) && nzchar(trimws(x)),
          string = is.character(x) && length(x) == 1L && !is.na(x),
          list = is.list(x),
+         object = is.list(x) && (!length(x) || !is.null(names(x))),
          id = (is.character(x) && length(x) == 1L && !is.na(x) && nzchar(trimws(x))) ||
            (is.numeric(x) && length(x) == 1L && !is.na(x)),
          FALSE)
@@ -120,6 +128,20 @@ REPLY_RULES <- list(
       c(if (length(it$flags) > MAX_FLAGS) paste0(where, "has ", length(it$flags), " flags; the limit is ", MAX_FLAGS),
         unlist(purrr::imap(it$flags, function(fl, j) flag_problems(fl, checks, paste0(where, "flag ", j, " ")))))
     })),
+  # A summary of at most 25 words; a rewrite that is a question (a stem, and options or an open
+  #   format); and a rewrite for every question with a fix flag.
+  rewrites_valid = function(obj, ...)
+    unlist(purrr::imap(obj$items, function(it, i) {
+      where = paste0("Question ", i, " ")
+      rw = it$rewrite
+      fix = any(purrr::map_lgl(it$flags, function(fl) is.list(fl) && identical(tolower(paste(unlist(fl$level), collapse = "")), "fix")))
+      c(if (type_ok(it$summary, "text") && n_words(it$summary) > MAX_SUMMARY_WORDS)
+          paste0(where, "has a summary of ", n_words(it$summary), " words; keep it to 20"),
+        if (fix && is.null(rw)) paste0(where, "has a fix flag and no rewrite"),
+        if (is.list(rw)) c(field_problems(rw, REWRITE_FIELDS, paste0(where, "rewrite: ")),
+                           if (!length(rw$options) && !type_ok(rw$open_format, "text"))
+                             paste0(where, "rewrite has neither options nor an open_format")))
+    })),
   instrument_valid = function(obj, checks = character(0), ...)
     c(if (length(obj$instrument) > MAX_INSTRUMENT_FLAGS)
         paste0("The reply gives ", length(obj$instrument), " points about the whole; the limit is ", MAX_INSTRUMENT_FLAGS),
@@ -149,7 +171,7 @@ reply_validator <- function(format, ...) {
 
 # ---- an item, read with defaults ---------------------------------------------------
 
-ITEM_DEFAULTS <- list(id = "", domain = "", intro = "", stem = "", options = list(), open_format = "",
+ITEM_DEFAULTS <- list(id = "", domain = "", intro = "", stem = "", options = list(), rows = list(), open_format = "",
                       parts = list(), programming = "", why = "", changes = "")
 
 # One item with every field present, so a screen never meets a missing one.
@@ -240,10 +262,11 @@ check_label <- function(id, labels = check_labels()) {
   ifelse(is.na(l), gsub("_", " ", id), l)
 }
 
-# The review, shaped from run_review()'s result: per question its id, text as pasted, flags (check,
-#   label, stage, level, quote, why, found) most damaging first, rewrite, and whether it was reviewed
-#   at all (a part that did not come back leaves its questions unreviewed, never clear); and the
-#   flags about the instrument as a whole.
+# The review, shaped from run_review()'s result: per question its id (its label, or its position),
+#   pos (its position in the questionnaire), text as pasted, flags (check, label, stage, level,
+#   quote, why, found), summary, rewrite (a full item, or NULL when it has no fix flag), and whether
+#   it was reviewed at all (a part that did not come back leaves its questions unreviewed, never
+#   clear); and the flags about the instrument as a whole.
 shape_review <- function(rv, labels = check_labels()) {
   flag = function(fl, text = NULL) {
     s = function(k) trimws(paste(unlist(fl[[k]] %||% ""), collapse = " "))
@@ -255,10 +278,11 @@ shape_review <- function(rv, labels = check_labels()) {
   items = purrr::keep(rv$batches %||% list(), function(b) identical(b$kind, "items"))
   questions = unlist(purrr::map(items, function(b) purrr::imap(b$questions, function(text, j) {
     it = if (identical(b$status, "ok")) b$reply$items[[j]]
-    rw = trimws(paste(unlist(it$rewrite %||% ""), collapse = " "))
     flags = purrr::map(it$flags %||% list(), function(fl) flag(fl, text))
-    list(id = b$ids[[j]], text = text, reviewed = !is.null(it), flags = flags,
-         rewrite = if (any(purrr::map_chr(flags, "level") == "fix")) rw else "")
+    fix = any(purrr::map_chr(flags, "level") == "fix")
+    list(id = b$ids[[j]], pos = b$first + j - 1L, text = text, reviewed = !is.null(it), flags = flags,
+         summary = trimws(paste(unlist(it$summary %||% ""), collapse = " ")),
+         rewrite = if (fix && is.list(it$rewrite)) full_item(it$rewrite))
   })), recursive = FALSE)
   inst = purrr::detect(rv$batches %||% list(), function(b) identical(b$kind, "instrument") && identical(b$status, "ok"))
   list(questions = questions %||% list(),
@@ -267,59 +291,42 @@ shape_review <- function(rv, labels = check_labels()) {
 
 n_level <- function(q, level) sum(purrr::map_chr(q$flags, "level") == level)
 
-# The questions to fix first: those with a fix-level flag, by number of fix flags and then in the
-#   order pasted, at most n.
-fix_first <- function(sh, n = 5L) {
-  qs = purrr::keep(sh$questions, function(q) n_level(q, "fix") > 0L)
-  utils::head(qs[order(-purrr::map_int(qs, n_level, level = "fix"), seq_along(qs))], n)
-}
-
-# Question ids in the order they were pasted; an id that is not a question's goes last.
-in_pasted_order <- function(x, ids) x[order(match(x, ids, nomatch = length(ids) + 1L), seq_along(x))]
-
 # A label inside a sentence: its first letter in lower case.
 lc1 <- function(x) paste0(tolower(substr(x, 1, 1)), substring(x, 2))
 
-# "a (3), b (2), c (1), and 2 other kinds": at most the top three labels with their counts, most first,
-#   ties in order of first appearance (the pasted order).
+# "1", "1 and 2", "1, 2 and 3".
+and_list <- function(x)
+  if (length(x) < 2L) paste(x) else paste(paste(utils::head(x, -1L), collapse = ", "), "and", utils::tail(x, 1L))
+
+# "a (3), b (2), c (1)": the top three labels with their counts, most first, ties in order of first
+#   appearance (the pasted order).
 count_phrase <- function(x, top = 3L) {
   x = lc1(x)
   t = table(factor(x, levels = unique(x)))
-  t = t[order(-t, seq_along(t))]
-  rest = length(t) - top
-  paste0(paste0(utils::head(names(t), top), " (", utils::head(as.integer(t), top), ")", collapse = ", "),
-         if (rest > 0L) paste0(", and ", rest, if (rest == 1L) " other kind" else " other kinds"))
+  t = utils::head(t[order(-t, seq_along(t))], top)
+  paste0(names(t), " (", as.integer(t), ")", collapse = ", ")
 }
 
-# The bottom line, built from the flags with no model call: how many questions have a problem
-#   likely to change answers (a fix-level flag), how many more have a point to consider, the
-#   stage most of the first problems are at with their checks, and one line on the instrument.
+# The bottom line, built from the flags with no model call, two lines at most: how many questions need
+#   a fix and how many more have points to consider, with the three most common faults; then, when
+#   the call on the whole returned flags, one sentence each (at most 3), naming questions by position.
 bottom_line <- function(sh) {
   qs = purrr::keep(sh$questions, function(q) q$reviewed)
   fix = purrr::keep(qs, function(q) n_level(q, "fix") > 0L)
   more = sum(purrr::map_lgl(qs, function(q) n_level(q, "fix") == 0L && length(q$flags) > 0L))
-  of = paste0(length(fix), " of ", length(qs), if (length(qs) == 1L) " question" else " questions")
-  first = c(
-    if (length(fix)) paste0(of, if (length(fix) == 1L) " has" else " have", " a problem likely to change answers")
-    else paste0("None of ", length(qs), if (length(qs) == 1L) " question" else " questions",
-                " has a problem this review would fix before fielding"),
-    if (more) paste0(more, if (length(fix)) " more" else "", if (more == 1L) " has a point" else " have points", " to consider"))
-  top = purrr::map(fix, function(q) purrr::detect(q$flags, function(fl) fl$level == "fix"))
-  stages = purrr::map_chr(top, "stage")
-  tab = table(factor(stages, levels = intersect(STAGES, stages)))
-  main = if (length(stages)) names(tab)[order(-tab, seq_along(tab))][[1]]
-  in_main = purrr::keep(top, function(fl) identical(fl$stage, main))
-  inst = sh$instrument
+  labels = unlist(purrr::map(fix, function(q) purrr::map_chr(purrr::keep(q$flags, function(fl) fl$level == "fix"), "label")))
   ids = purrr::map_chr(sh$questions, "id")
-  c(paste0(paste(first, collapse = ", and "), "."),
-    if (length(fix) == 1L) paste0("It is a ", main, " problem: ", lc1(in_main[[1]]$label), ".")
-    else if (length(fix)) paste0(if (length(in_main) == length(fix)) "All are "
-                                 else if (2L * length(in_main) > length(fix)) "Most are " else "The largest group is ",
-                                 main, " problems (", length(in_main), "): ", count_phrase(purrr::map_chr(in_main, "label")), "."),
-    if (length(inst)) paste0("The questionnaire as a whole: ",
-                             paste(purrr::map_chr(inst, function(fl)
-                               paste0(lc1(fl$label), if (length(fl$questions)) paste0(" (", paste(in_pasted_order(fl$questions, ids), collapse = ", "), ")"))),
-                               collapse = "; "), "."))
+  where = function(x) {
+    at = match(x, ids)
+    at = c(sort(unique(at[!is.na(at)])), x[is.na(at)])
+    paste0(if (length(at) == 1L) "Question " else "Questions ", and_list(at), ": ")
+  }
+  n_of = if (length(fix)) paste0(length(fix), " of ", length(qs)) else paste("None of", length(qs))
+  c(paste0(n_of, if (length(qs) == 1L) " question" else " questions", if (max(length(fix), (!length(fix)) * length(qs)) == 1L) " needs" else " need", " a fix",
+           if (more) paste0("; ", more, if (length(fix)) " more", if (more == 1L) " has a point" else " have points", " to consider"),
+           ".", if (length(labels)) paste0(" Most common: ", count_phrase(labels), ".")),
+    if (length(sh$instrument)) paste(purrr::map_chr(utils::head(sh$instrument, 3L), function(fl)
+      if (length(fl$questions)) paste0(where(fl$questions), lc1(fl$label), ".") else paste0(fl$label, ".")), collapse = " "))
 }
 
 
