@@ -5,6 +5,7 @@
 #     Rscript --no-init-file build/01_convert.R dry     # what would be converted, pages, cost; no model call
 #     Rscript --no-init-file build/01_convert.R pilot   # PILOT_FOLDER only (PDFs and its .qmd/.Rmd)
 #     Rscript --no-init-file build/01_convert.R all     # every source
+#     Rscript --no-init-file build/01_convert.R jpsm    # one source (any name in SOURCES)
 #
 #   Conversion runs at home only; its output reaches work as text, through git.
 #
@@ -595,18 +596,21 @@ dry_run <- function(all, todo, est, n_unchanged) {
 }
 
 main <- function(mode = "dry") {
-  mode = match.arg(mode, c("dry", "pilot", "all"))
+  mode = match.arg(mode, c("dry", "pilot", "all", names(SOURCES)))
   t0 = Sys.time()
   all = list_sources()
   todo = all |> filter(is.na(skip))
   if (mode == "pilot") todo = todo |> filter(source == "jpsm", str_starts(rel, paste0(PILOT_FOLDER, "/")))
+  if (mode %in% names(SOURCES)) todo = todo |> filter(source == mode)
   todo = file_facts(todo)
-  # A PDF with no pages (an empty Rplots.pdf) has nothing to convert.
+  # A PDF with no pages (an empty Rplots.pdf) has nothing to convert; one pdftools cannot read is
+  # reported and left out.
   empty = todo |> filter(ext == "pdf", pages %in% 0L)
-  all = all |> mutate(skip = if_else(path %in% empty$path, "PDF with no pages", skip))
-  todo = todo |> filter(!path %in% empty$path)
   bad = todo |> filter(ext == "pdf", is.na(pages))
-  if (nrow(bad)) stop("Unreadable PDFs: ", paste(bad$rel, collapse = ", "), call. = FALSE)
+  all = all |> mutate(skip = case_when(path %in% empty$path ~ "PDF with no pages",
+                                       path %in% bad$path ~ "PDF unreadable", .default = skip))
+  if (nrow(bad)) message("Unreadable PDFs, left out: ", paste(bad$rel, collapse = ", "))
+  todo = todo |> filter(!path %in% c(empty$path, bad$path))
   same = unchanged(todo)
   todo = todo[!same, ]
   est = est_usd_page()
