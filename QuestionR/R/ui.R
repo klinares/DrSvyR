@@ -121,7 +121,7 @@ reflexes_ui <- function(sources, dir = REFLEXES_DIR)
       tags$details(class = "ms-3", tags$summary(paste0(s$title, " (", length(rs), if (length(rs) == 1L) " rule)" else " rules)")),
         tags$ul(purrr::map(rs, function(r)
           tags$li(tags$strong(if (is.na(r$label)) gsub("_", " ", r$id) else r$label), " ",
-                  sub("^(.+?[.?!])\\s.*$", "\\1", trimws(r$say)),
+                  sub("^(.+?[.?!]) .*$", "\\1", trimws(gsub("\\s+", " ", r$say)), perl = TRUE),
                   if (!is.na(r$source)) tagList(tags$br(), tags$small(class = "text-muted", source_html(r$source, sources)))))))
     }))
 
