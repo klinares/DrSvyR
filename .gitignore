@@ -34,8 +34,11 @@ QuestionR/tests/review30.json
 QuestionR/tests/write_run.json
 QuestionR/Claude outputs/
 
-# SurvAI_Expert: caches (build/) and the store stay local; markdown/ and catalog/ until let in.
-SurvAI_Expert/data/markdown/
-SurvAI_Expert/data/catalog/
-SurvAI_Expert/data/store/
+# SurvAI_Expert: caches (data/build/) and the store (data/store/) stay local. data/markdown/ and
+#   data/catalog/ are committed. The textbook stays out of the public repository and reaches work
+#   another way: delete the practools line below to include it.
 SurvAI_Expert/data/build/
+SurvAI_Expert/data/store/
+!/SurvAI_Expert/data/markdown/
+!/SurvAI_Expert/data/catalog/
+SurvAI_Expert/data/markdown/practools/

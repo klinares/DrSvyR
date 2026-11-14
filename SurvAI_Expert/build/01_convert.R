@@ -286,6 +286,16 @@ unwrap_reply <- function(txt) {
   if (is.na(m[1, 1])) str_trim(txt) else str_trim(m[1, 2])
 }
 
+# The slide number a page ends with ("48 / 71"), dropped when the page is assembled; the cached
+#   reply keeps it. Only the last line, only N / M with N <= M, so a fraction in the text stays.
+strip_slide_number <- function(md) {
+  lines = strsplit(str_trim(md), "\n", fixed = TRUE)[[1]]
+  if (!length(lines)) return(md)
+  m = str_match(lines[length(lines)], "^\\s*(\\d{1,4})\\s*/\\s*(\\d{1,4})\\s*$")
+  if (is.na(m[1, 1]) || as.integer(m[1, 2]) > as.integer(m[1, 3])) return(md)
+  str_trim(paste(lines[-length(lines)], collapse = "\n"))
+}
+
 
 # ---- 5. the model --------------------------------------------------------------------------------
 
@@ -493,7 +503,7 @@ assemble_pdf <- function(d, text) {
     info = jsonlite::read_json(page_file(d$sha256, p, "json"))
     if (!file.exists(f)) return(list(md = "", usd = info$usd %||% 0,
                                      probs = tibble(page = p, check = "call", detail = as.character(info$error %||% "no reply"))))
-    md = read_utf8(f)
+    md = strip_slide_number(read_utf8(f))
     list(md = md, usd = info$usd %||% 0,
          probs = mutate(check_page(md, if (length(txt) == n) nchar(str_trim(txt[p])) else NA_integer_), page = p, .before = 1))
   })
