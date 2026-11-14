@@ -109,7 +109,7 @@ REFLEX_SHA <- c(
   `attitudinal.md` = "6b5ac03131037228dfa36efabc90ac25def227aecd4a7fc71ecd14e85bf31217",
   `behavioral.md` = "2225e8f6ea521938ddc3a3529dbd6475814396205d22120fdb0d44761ce71830",
   `sensitive.md` = "f079dca7fce7782f9616944d55487eb8784c10f8e715759e8d8a760a0d47eac2",
-  `evaluate.md` = "a30929c848aeaaeb8184d29140bf3abea377c5deff421c53a72ca41590629a93",
+  `evaluate.md` = "2557226d390811c0ab82b1154756f7a567a3d04136a7fe7a4642dae49c94fcd8",
   `mode.md` = "5a8271c5b6116040085f23d325d05446a9e66a0a9106cc327feb76c52c001026",
   `refine.md` = "3be1dfbf24707621c5f55dd5bc28e3899dc6905152eaf79287d276e2698d6223")
 sha_now <- purrr::map_chr(rfiles, "sha")
@@ -407,8 +407,9 @@ ok("the validator passes a good reply and refuses: more than 8 flags, a why over
      grepl("stage", v_items(list(items = qf(stage = "memory")))) &&
      grepl("fix or consider", v_items(list(items = qf(level = "minor")))) &&
      grepl("this part has 2", v_items(list(items = q1()), n = 2L)))
-ok("the validator holds a summary to 30 words and a rewrite to a question; a fix flag with no rewrite is a failed attempt; no flag needs no rewrite",
-   grepl("summary of 31 words", v_items(list(items = q1(summary = paste(rep("w", 31), collapse = " "))))) &&
+ok("the validator takes a summary up to 45 words and refuses one over, holds a rewrite to a question; a fix flag with no rewrite is a failed attempt; no flag needs no rewrite",
+   identical(v_items(list(items = q1(summary = paste(rep("w", 45), collapse = " ")))), "ok") &&
+     grepl("summary of 46 words", v_items(list(items = q1(summary = paste(rep("w", 46), collapse = " "))))) &&
      grepl("has a fix flag and no rewrite", v_items(list(items = list(list(id = "Q1", flags = list(flag1), summary = "s", rewrite = NULL))))) &&
      grepl("neither options nor an open_format", v_items(list(items = q1(rewrite = replace(rw1, "options", list(list())))))) &&
      grepl("rewrite: 'stem' must be a non-empty string", v_items(list(items = q1(rewrite = replace(rw1, "stem", "")))), fixed = TRUE) &&
@@ -672,16 +673,18 @@ ok("the Methodology page: no placeholder left, the test summary or its stand-in,
        all(purrr::map_lgl(src$markdown, function(f) grepl(paste0("href=\"reflex_materials/", f, "\" target=\"_blank\">text</a>"), meth_html, fixed = TRUE))) &&
        !grepl(".pdf\"", meth_html, fixed = TRUE)
    }))
-ok("the reflexes fold away: one closed panel, a closed panel per file, core first with the eight general guidelines in slide order, every reflex once with its Source linked",
+ok("the reflexes fold away: one closed panel, a closed panel per file under its plain name and in the page's order, general rules first with the eight general guidelines in slide order, every reflex once with its Source linked",
    local({
      n = sum(purrr::map_int(rfiles, function(s) length(s$reflexes)))
      fold = sub("(?s)^.*?(<details class=\"mb-3\">.*?)<h2>Sources</h2>.*$", "\\1", meth_html, perl = TRUE)
-     core = sub("(?s)^.*?Core \\([0-9]+ rules\\)</summary>(.*?)</details>.*$", "\\1", fold, perl = TRUE)
+     core = sub("(?s)^.*?General rules \\([0-9]+ rules\\)</summary>(.*?)</details>.*$", "\\1", fold, perl = TRUE)
      first8 = regmatches(core, gregexpr("<strong>[^<]+</strong>", core))[[1]][1:8]
-     labs = unlist(purrr::map(rfiles, function(s) purrr::map_chr(unname(s$reflexes), function(r) if (is.na(r$label)) gsub("_", " ", r$id) else r$label)))
+     labs = unlist(purrr::map(rfiles, function(s) purrr::map_chr(unname(s$reflexes), reflex_name)))
+     groups = regmatches(fold, gregexpr("<summary>[^<]+ \\([0-9]+ rules?\\)</summary>", fold))[[1]]
      grepl("<summary>Show the AI reflexes</summary>", fold, fixed = TRUE) && !grepl("<details[^>]*open", fold) &&
        n_in("<li>", fold) == n && n_in("<details class=\"ms-3\">", fold) == length(rfiles) &&
-       regexpr("Core (", fold, fixed = TRUE) < regexpr("Generate", fold, fixed = TRUE) &&
+       identical(sub("^<summary>(.*) \\(.*$", "\\1", groups), unname(REFLEX_GROUP_NAMES)) &&
+       grepl("<strong>Response process</strong>", fold, fixed = TRUE) &&
        identical(gsub("</?strong>", "", first8), unname(purrr::map_chr(rfiles[["core.md"]]$reflexes[c("plain_words", "simple_syntax", "ambiguous_words",
          "specific_concrete", "options_fit", "neutral_wording", "one_thing", "no_negation")], "label"))) &&
        all(purrr::map_lgl(unique(labs), function(l) n_in(paste0("<strong>", htmltools::htmlEscape(l), "</strong>"), fold) == sum(labs == l))) &&

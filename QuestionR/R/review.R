@@ -37,7 +37,7 @@ REPLY_SCHEMAS <- list(
 # The limits R holds a review to. MAX_FLAGS is a guard against a runaway reply, not a target.
 MAX_FLAGS <- 8L
 MAX_WHY_WORDS <- 30L
-MAX_SUMMARY_WORDS <- 30L
+MAX_SUMMARY_WORDS <- 45L
 MAX_CHANGES_WORDS <- 20L
 MAX_INSTRUMENT_FLAGS <- 3L
 STAGES <- c("comprehension", "retrieval", "judgment", "reporting")
@@ -128,8 +128,9 @@ REPLY_RULES <- list(
       c(if (length(it$flags) > MAX_FLAGS) paste0(where, "has ", length(it$flags), " flags; the limit is ", MAX_FLAGS),
         unlist(purrr::imap(it$flags, function(fl, j) flag_problems(fl, checks, paste0(where, "flag ", j, " ")))))
     })),
-  # A summary of at most 30 words; a rewrite that is a question (a stem, and options or an open
-  #   format); and a rewrite for every question with a fix flag.
+  # A summary of at most 45 words (well over the 20 asked for, so a long one never costs a repeat
+  #   call); a rewrite that is a question (a stem, and options or an open format); and a rewrite for
+  #   every question with a fix flag.
   rewrites_valid = function(obj, ...)
     unlist(purrr::imap(obj$items, function(it, i) {
       where = paste0("Question ", i, " ")

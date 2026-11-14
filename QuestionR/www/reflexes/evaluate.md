@@ -1,6 +1,6 @@
 # Evaluate a questionnaire
 
-Version: 1.0
+Version: 1.1
 
 Task file for appraising a pasted questionnaire: an expert review, item by
 item and then as a whole. The reflexes in core.md are the item checklist; this
@@ -116,7 +116,7 @@ Text in square brackets, or in capitals addressed to whoever programs the survey
 For questions, the object is {"items": [...]}, one entry per question, in the order given. Each entry has:
 
 - "id": the question's own label, or its position.
-- "summary": at most 20 words, for an analyst who will read nothing else: the faults that matter most and what the rewrite changes. Name only changes that the rewrite really makes. An empty string when there is no flag.
+- "summary": one sentence of at most 20 words, for an analyst who will read nothing else: the main fault and the main change the rewrite makes. Leave the rest to the flags. Name only a change that the rewrite really makes. An empty string when there is no flag.
 - "flags": every problem you stand behind, most damaging first; an empty list if there is none. Each flag has:
   - "check": the id of the CHECKLIST check it fails.
   - "stage": "comprehension", "retrieval", "judgment" or "reporting".

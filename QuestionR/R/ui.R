@@ -107,20 +107,29 @@ source_html <- function(text, sources)
                                            sources$markdown[sources$key == k], htmltools::htmlEscape(k)), h, fixed = TRUE),
     .init = htmltools::htmlEscape(text)))
 
-# The reflexes, folded away: one closed panel, inside it one closed panel per file (its title and
-#   number of rules), core first and within core the eight general guidelines first in the order of
-#   the slide (their Source says "general guideline N"); one entry per reflex: its Label in bold (its
-#   id in words when it has none), the first sentence of its Say, and its Source in small type.
+# The reflex files as the Methodology page names them, in its order. For the page only: the files and
+#   the prompts keep their own titles.
+REFLEX_GROUP_NAMES <- c(core.md = "General rules", generate.md = "Writing questions", attitudinal.md = "Attitude questions",
+                        behavioral.md = "Behavior questions", sensitive.md = "Sensitive questions", mode.md = "Survey mode",
+                        evaluate.md = "Reviewing a questionnaire", refine.md = "Editing drafts")
+
+# A reflex's name on the page: its Label, else its id in words with a capital ("Response process").
+reflex_name <- function(r) if (is.na(r$label)) { w = gsub("_", " ", r$id); paste0(toupper(substr(w, 1, 1)), substring(w, 2)) } else r$label
+
+# The reflexes, folded away: one closed panel, inside it one closed panel per file (its plain name
+#   and number of rules), general rules first and within them the eight general guidelines first in
+#   the order of the slide (their Source says "general guideline N"); one entry per reflex: its name
+#   in bold, the first sentence of its Say, and its Source in small type.
 reflexes_ui <- function(sources, dir = REFLEXES_DIR)
   tags$details(class = "mb-3", tags$summary("Show the AI reflexes"),
-    purrr::map(REFLEX_FILES, function(f) {
+    purrr::map(names(REFLEX_GROUP_NAMES), function(f) {
       s = read_reflex_file(f, dir)
       rs = unname(s$reflexes)
       g = suppressWarnings(as.integer(sub("^.*general guideline ([0-9]+).*$", "\\1", purrr::map_chr(rs, function(r) if (is.na(r$source)) "" else r$source))))
       rs = rs[order(is.na(g), g)]
-      tags$details(class = "ms-3", tags$summary(paste0(s$title, " (", length(rs), if (length(rs) == 1L) " rule)" else " rules)")),
+      tags$details(class = "ms-3", tags$summary(paste0(REFLEX_GROUP_NAMES[[f]], " (", length(rs), if (length(rs) == 1L) " rule)" else " rules)")),
         tags$ul(purrr::map(rs, function(r)
-          tags$li(tags$strong(if (is.na(r$label)) gsub("_", " ", r$id) else r$label), " ",
+          tags$li(tags$strong(reflex_name(r)), " ",
                   sub("^(.+?[.?!]) .*$", "\\1", trimws(gsub("\\s+", " ", r$say)), perl = TRUE),
                   if (!is.na(r$source)) tagList(tags$br(), tags$small(class = "text-muted", source_html(r$source, sources)))))))
     }))
