@@ -121,7 +121,7 @@ options(bitmapType = "cairo")
 
 # The state the modules share: key_version, which changes whenever the pasted key
 #   is saved or forgotten, so anything that depends on a key can re-run. Each task
-#   page keeps its own run in a state of its own (STATE_DEFAULTS in R/ui_tasks.R).
+#   page keeps its own run in a state of its own (STATE_DEFAULTS in R/ui.R).
 new_state <- function() reactiveValues(key_version = 0L)
 
 

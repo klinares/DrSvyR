@@ -28,3 +28,8 @@ cache/
 decisions/
 dict/
 
+
+# QuestionR: run logs of live tests stay local, and so do working notes.
+QuestionR/tests/review30.json
+QuestionR/tests/write_run.json
+QuestionR/Claude outputs/

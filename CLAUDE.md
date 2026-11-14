@@ -15,7 +15,7 @@ self-contained folder at the top level; `svysegment/` is the first and
 | `svysegment/www/reports/` `svysegment/www/logo/` | Method report PDF and office logo. Shiny serves `www/` at the site root |
 | `svysegment/data/` | LAPOP Ecuador 2023 demo `.sav`, found by `demo_survey_path()` |
 | `svysegment/tests/smoke.R` | Smoke test, kept out of the bundle by `.rscignore` |
-| `QuestionR/` | An AI reviewer and item writer for questionnaires: Evaluate questions and Write questions, one model. Read `QuestionR/README.md` and `QuestionR/STATUS.md` first; `QuestionR/archive/` holds earlier phases. Its reflex files, `www/reflexes/*.md`, are checksummed in `tests/smoke.R` and are edited in the Claude project, not by code. `tests/` is home only. Test: `Rscript --no-init-file tests/smoke.R` from inside `QuestionR/` (no API calls); `tests/llm_check.R example`, `review30` or `gold` make live calls |
+| `QuestionR/` | An AI reviewer and item writer for questionnaires: Evaluate questions and Write questions, one model. Read `QuestionR/README.md` and `QuestionR/STATUS.md` first; `QuestionR/archive/` holds earlier phases. Its reflex files, `www/reflexes/*.md`, are checksummed in `tests/smoke.R` and are edited in the Claude project, not by code. `tests/` is home only. Test: `Rscript --no-init-file tests/smoke.R` from inside `QuestionR/` (no API calls); `tests/llm_check.R review30` or `gold` make live calls |
 | `inteRn/` | Not an app: an AI coding intern for RStudio. One script, `inteRn/inteRn.R`, set up with `source("inteRn/install.R")`. Test: `Rscript --no-init-file inteRn/tests/smoke.R` (no API calls); `inteRn/tests/live.R` asks the real model (needs the key, costs a little) |
 
 ## svysegment settings (top of app.R)
