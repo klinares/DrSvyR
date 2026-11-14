@@ -586,7 +586,7 @@ local({
     h = html_of(output$items_ui)
     r = html_of(output$results)
     before = gsub("(?s)<details.*?</details>", "", h, perl = TRUE)
-    ok("Write questions: the one sentence, the final items as cards with their part and nothing about how they were reached, Before you field these, and a closed How these were written",
+    ok("Write questions: the one sentence, the final items as cards with their part and nothing else visible, a closed Details per item (programming, changes, criteria), Before you field these, and a closed How these were written",
        grepl(WRITE_NOTICE, r, fixed = TRUE) && n_in("card mb-2", h) == 3L && n_in("Remove", h) == 3L &&
          grepl("Why do you trust it?", h, fixed = TRUE) && grepl("Answer: a few words", h, fixed = TRUE) &&
          regexpr("Have you heard of [council]?", h, fixed = TRUE) < regexpr("How much do you trust [council] on 1?", h, fixed = TRUE) &&
@@ -596,8 +596,9 @@ local({
          grepl("<h5>Before you field these</h5>", h, fixed = TRUE) && grepl("The council", before, fixed = TRUE) &&
          !grepl("Named both sides|trust in officers|Why 1|Revised|Open question|check", before, ignore.case = TRUE) &&
          grepl("<summary>How these were written</summary>", h, fixed = TRUE) && !grepl("<details[^>]*open", h) &&
-         grepl("Question 2: Named both sides of trust.", h, fixed = TRUE) && grepl("Not covered: trust in officers", h, fixed = TRUE) &&
-         grepl("edited by claude-sonnet-5-5", h, fixed = TRUE) && grepl("Checks applied:", h, fixed = TRUE))
+         grepl("What the editor changed: Named both sides of trust.", h, fixed = TRUE) && grepl("Not covered: trust in officers", h, fixed = TRUE) &&
+         grepl("edited by claude-sonnet-5-5", h, fixed = TRUE) && n_in("Criteria applied:", h) == 3L && n_in("<summary class=\"small\">Details</summary>", h) == 3L &&
+         grepl("Programming: ROTATE ROWS", h, fixed = TRUE))
     word = see_text(sub("(?s)^.*?<div id=\"[^\"]*word\"[^>]*>(.*?)</div>\\s*<p class=\"mt-4\".*$", "\\1", html_of(output$bottom), perl = TRUE))
     ok("the Word copy is the one sentence, the items as laid out on the page, and Before you field these",
        identical(words_of(word), words_of(see_text(paste(r, before)))) &&

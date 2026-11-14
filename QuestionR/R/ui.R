@@ -520,8 +520,8 @@ copy_and_log <- function(blocks, ns, secrets = character(0), extra = NULL)
 
 # One final question, numbered i: its domain, then the card of question_blocks() in boxes that can be
 #   edited (the stem's in bold); then, closed, its Details; and the button that takes it out. ed is
-#   what was changed before.
-item_card <- function(it, i, ns, ed = NULL) {
+#   what was changed before; checks the labels of the criteria the editor applied.
+item_card <- function(it, i, ns, ed = NULL, checks = character(0)) {
   id = function(k) ns(edit_input_id(it$uid, k))
   area = function(k, value, style = NULL)
     tagAppendAttributes(textAreaInput(id(k), NULL, value = ed[[k]] %||% value, width = "100%", resize = "vertical",
@@ -548,29 +548,28 @@ item_card <- function(it, i, ns, ed = NULL) {
     area("stem", it$stem, style = "font-weight: 600;"),
     answer_ui(it, ""),
     purrr::map(which(!before), function(j) part_ui(it$parts[[j]], j)),
-    item_details(it),
+    item_details(it, checks),
     set_button("Remove", "remove", it$uid, ns)))
 }
 
-# An item's Details, closed: its programming line.
-item_details <- function(it)
-  if (nzchar(it$programming))
+# An item's Details, closed: its programming line, what the editor changed, and the criteria applied.
+item_details <- function(it, checks = character(0)) {
+  lines = c(if (nzchar(it$programming)) paste("Programming:", it$programming),
+            if (nzchar(it$changes)) paste("What the editor changed:", it$changes),
+            if (length(checks)) paste("Criteria applied:", paste(checks, collapse = "; ")))
+  if (length(lines))
     tags$details(class = "mb-2", tags$summary(class = "small", "Details"),
-                 tags$p(class = "small text-muted mb-1", paste("Programming:", it$programming)))
+                 tags$ul(class = "small text-muted mb-1", purrr::map(lines, tags$li)))
+}
 
-# "How these were written", closed: the two models, what the editor changed in each item, what the
-#   items leave out, and the checks the editor applied.
-written_panel <- function(w, items) {
-  r = w$refine
-  edited = identical(r$status, "ok")
-  reply = final_reply(w)
+# "How these were written", closed: the two models, and what the items leave out.
+written_panel <- function(w) {
+  edited = identical(w$refine$status, "ok")
+  not_covered = unlist(final_reply(w)$not_covered)
   tags$details(class = "mt-3", tags$summary("How these were written"),
     tags$ul(class = "small",
-      tags$li(paste0("Drafted by ", w$draft$model, if (edited) paste0("; edited by ", r$model) else "; not edited", ".")),
-      if (edited) purrr::imap(items, function(it, i)
-        tags$li(paste0("Question ", i, ": ", if (nzchar(it$changes)) it$changes else "no change by the editor"))),
-      if (length(reply$not_covered)) tags$li(paste("Not covered:", paste(unlist(reply$not_covered), collapse = "; "))),
-      if (edited && length(r$checks)) tags$li(paste("Checks applied:", paste(unique(unname(check_label(r$checks))), collapse = "; ")))))
+      tags$li(paste0("Drafted by ", w$draft$model, if (edited) paste0("; edited by ", w$refine$model) else "; not edited", ".")),
+      if (length(not_covered)) tags$li(paste("Not covered:", paste(not_covered, collapse = "; ")))))
 }
 
 
@@ -702,10 +701,11 @@ mod_task_server <- function(id, kind, app, make_ask = progress_ask, make_ask_all
       req(state$round >= 1L, kind == "draft", identical(state$draft$status, "ok"))
       w = list(draft = state$draft, refine = state$refine)
       needs = final_reply(w)$needs_from_analyst %||% list()
+      checks = if (identical(w$refine$status, "ok")) unique(unname(check_label(w$refine$checks %||% character(0))))
       tagList(
-        purrr::imap(state$items, function(it, i) item_card(it, i, session$ns, isolate(state$edits)[[it$uid]])),
+        purrr::imap(state$items, function(it, i) item_card(it, i, session$ns, isolate(state$edits)[[it$uid]], checks)),
         if (length(needs)) tagList(tags$h5("Before you field these"), tags$ul(purrr::map(needs, function(x) tags$li(option_text(x))))),
-        written_panel(w, state$items))
+        written_panel(w))
     }))
 
     blocks <- reactive({
