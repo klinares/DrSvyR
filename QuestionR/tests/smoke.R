@@ -375,6 +375,24 @@ ok("one card for both tabs: a filter above, the intro, the stem in bold, the opt
        regexpr("The courts", t, fixed = TRUE) < regexpr("If a lot: Why?", t, fixed = TRUE) && !grepl("ROTATE", t, fixed = TRUE) &&
        grepl("Answer: a number of days", open, fixed = TRUE)
    }))
+ok("a suggested wording tags only what is not in the question as pasted; the same programming text stays under Details, a changed one is shown",
+   local({
+     text = "Q9. How satisfied are you with each? [ROTATE ROWS]\nThe bus / The train / The tram\nVery satisfied / Not satisfied"
+     rw = full_item(list(stem = "How satisfied are you with each?", options = list("Very satisfied", "Not satisfied"),
+                         rows = list("The bus", "The overground train", "The tram"), programming = "[ROTATE ROWS]"))
+     q = list(id = "Q9", pos = 9L, text = text, reviewed = TRUE, summary = "One row named.", rewrite = rw,
+              flags = list(list(label = "L", level = "fix", quote = "The train", why = "w", found = TRUE)))
+     t = doc_text(fix_blocks(q))
+     q2 = q
+     q2$rewrite$programming = "[ROTATE ROWS] ASK IF USES PUBLIC TRANSPORT"
+     same = full_item(list(intro = "How satisfied are you with each?", stem = "How satisfied are you with each?", options = list("Yes", "No")))
+     n_in("(changed)", t) == 1L && grepl("- The overground train (changed)", t, fixed = TRUE) && grepl("- The bus\n", t, fixed = TRUE) &&
+       !grepl("ROTATE", t, fixed = TRUE) && grepl("Programming: [ROTATE ROWS]", doc_text(details_blocks(q)), fixed = TRUE) &&
+       grepl("Programming: [ROTATE ROWS] ASK IF USES PUBLIC TRANSPORT (changed)", doc_text(fix_blocks(q2)), fixed = TRUE) &&
+       !grepl("Programming:", doc_text(details_blocks(q2)), fixed = TRUE) &&
+       grepl("<small class=\"text-muted ms-1\">(changed)</small>", html_of(doc_html(fix_blocks(q))), fixed = TRUE) &&
+       n_in("How satisfied", doc_text(question_blocks(same))) == 1L
+   }))
 v_items <- function(obj, checks = c("one_thing", "plain_words"), n = 1L) tryCatch({ reply_validator("items", checks = checks, n_questions = n)(obj); "ok" }, error = conditionMessage)
 flag1 <- list(check = "one_thing", stage = "comprehension", level = "fix", quote = "and", why = "Two things.")
 rw1 <- list(intro = "", stem = "Q?", options = list("Yes", "No"), rows = list(), open_format = "", programming = "")
@@ -538,16 +556,15 @@ local({
          all(purrr::imap_lgl(rows, function(r, i) grepl(paste0("Question ", i, " (Q", i, ")"), r, fixed = TRUE))) &&
          n_in(">Fix</span>", h) == 3L && n_in(">None found</span>", h) == 22L && n_in(">Consider</span>", h) == 5L &&
          grepl("How this was produced", b, fixed = TRUE) && grepl("Calls: 5", b, fixed = TRUE) && !grepl("[0-9a-f]{64}", paste(h, b)))
-    ok("a question with a fix flag is open on its summary and suggested wording; its original, flags and programming are in a closed Details",
+    ok("a question with a fix flag is open on its summary and suggested wording; its original and flags are in a closed Details, and a programming text not in the original is shown, tagged",
        local({
          q11 = rows[[11]]
          open = sub("(?s)<details class=\"mb-2\">.*$", "", q11, perl = TRUE)
          startsWith(q11, "<details class=\"border-bottom py-1\" open>") && grepl("Summary of Q11", open, fixed = TRUE) &&
            grepl("<em>Suggested wording</em>", open, fixed = TRUE) && grepl("<strong>Rewrite of Q11</strong>", open, fixed = TRUE) &&
-           !grepl("Obviously|greedy|premise|ASK ALL", open) &&
+           !grepl("Obviously|greedy|premise", open) && grepl("Programming: ASK ALL", open, fixed = TRUE) && grepl("(changed)", open, fixed = TRUE) &&
            grepl("<summary class=\"small\">Details</summary>", q11, fixed = TRUE) && grepl("<mark>greedy energy companies</mark>", q11, fixed = TRUE) &&
-           grepl("Pushes toward one answer: \"greedy energy companies\". The premise is stated as fact", q11, fixed = TRUE) &&
-           grepl("Programming: ASK ALL", q11, fixed = TRUE)
+           grepl("Pushes toward one answer: \"greedy energy companies\". The premise is stated as fact", q11, fixed = TRUE)
        }) &&
          startsWith(rows[[1]], "<details class=\"border-bottom py-1\">") && grepl("Leaky", rows[[1]]) &&
          startsWith(rows[[2]], "<div class=\"border-bottom py-1\">") && !grepl("<details", rows[[2]], fixed = TRUE))

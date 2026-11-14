@@ -253,6 +253,14 @@ quote_found <- function(quote, text) {
   nzchar(q) && grepl(q, normalise_quote(text), fixed = TRUE)
 }
 
+# Whether a line of a rewrite occurs word for word in the question as pasted, after the same
+#   normalising, as whole words (an option "No" is not found in "Not").
+occurs_in <- function(x, text) {
+  q = evidence_quote(x)
+  !nzchar(q) || grepl(paste0("(^|[^[:alnum:]])", gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", q), "($|[^[:alnum:]])"),
+                      normalise_quote(text), perl = TRUE)
+}
+
 
 # ---- the review, as the analyst is shown it -------------------------------------------
 

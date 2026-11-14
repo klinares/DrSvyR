@@ -166,11 +166,16 @@ md_page <- function(path)
 # ---- a document as blocks, drawn twice ------------------------------------------------------
 
 # Each block has a `type`: "h" (text, level), "p" (text; marks: words to highlight; em; strong) or
-#   "list" (items; tags: a small tag before each item).
+#   "list" (items; tags: a small tag before each item). changed marks a paragraph, or each item of a
+#   list, that a rewrite changed: "(changed)" after it, small on the page and as it is in Word.
 blk_h <- function(text, level = 2L) list(type = "h", text = text, level = level)
-blk_p <- function(text, em = FALSE, marks = character(0), indent = FALSE, strong = FALSE)
-  list(type = "p", text = text, em = em, marks = marks, indent = indent, strong = strong)
-blk_list <- function(items, tags = NULL, indent = FALSE) list(type = "list", items = as.character(items), tags = tags, indent = indent)
+blk_p <- function(text, em = FALSE, marks = character(0), indent = FALSE, strong = FALSE, changed = FALSE)
+  list(type = "p", text = text, em = em, marks = marks, indent = indent, strong = strong, changed = changed)
+blk_list <- function(items, tags = NULL, indent = FALSE, changed = FALSE)
+  list(type = "list", items = as.character(items), tags = tags, indent = indent, changed = rep_len(changed, length(items)))
+
+CHANGED_TAG <- "(changed)"
+changed_tag <- function(on) if (isTRUE(on)) tags$small(class = "text-muted ms-1", CHANGED_TAG)
 
 # A text with each of the marked words wrapped in <mark>, the rest escaped. A mark is found
 #   whatever its case and spacing; one that is not in the text marks nothing.
@@ -191,16 +196,17 @@ doc_html <- function(blocks)
     h = if (b$level <= 2L) tags$h4(b$text) else tags$h5(b$text),
     p = tags$p(style = paste0("white-space: pre-line;", if (isTRUE(b$indent)) " margin-left: 2em;"),
                HTML(sprintf(if (isTRUE(b$strong)) "<strong>%s</strong>" else if (b$em) "<em>%s</em>" else "%s",
-                            marked_html(b$text, b$marks)))),
+                            marked_html(b$text, b$marks))), changed_tag(b$changed)),
     list = tags$ul(style = if (isTRUE(b$indent)) "margin-left: 2em;", purrr::imap(b$items, function(x, i)
-      tags$li(if (length(b$tags)) tags$span(class = "badge text-bg-light border me-1", b$tags[[i]]), x))))))
+      tags$li(if (length(b$tags)) tags$span(class = "badge text-bg-light border me-1", b$tags[[i]]), x, changed_tag(b$changed[i])))))))
 
 # The same blocks as plain text.
 doc_text <- function(blocks)
   paste(purrr::map_chr(blocks, function(b) switch(b$type,
     h = paste0(b$text, "\n", strrep(if (b$level <= 2L) "=" else "-", nchar(b$text))),
-    p = paste0(if (isTRUE(b$indent)) "    ", b$text),
-    list = paste0(if (isTRUE(b$indent)) "    ", "- ", if (length(b$tags)) paste0("[", b$tags, "] "), b$items, collapse = "\n"))),
+    p = paste0(if (isTRUE(b$indent)) "    ", b$text, if (isTRUE(b$changed)) paste0(" ", CHANGED_TAG)),
+    list = paste0(if (isTRUE(b$indent)) "    ", "- ", if (length(b$tags)) paste0("[", b$tags, "] "), b$items,
+                  ifelse(b$changed %in% TRUE, paste0(" ", CHANGED_TAG), ""), collapse = "\n"))),
     collapse = "\n\n")
 
 
@@ -218,9 +224,14 @@ CHIP_CLASS <- c(Fix = "text-bg-danger", Consider = "text-bg-warning", `None foun
                 `Not reviewed` = "text-bg-secondary")
 
 # A question with a fix flag, as it opens: its summary, then the rewrite on the one card under
-#   "Suggested wording".
-fix_blocks <- function(q)
-  c(if (nzchar(q$summary)) list(blk_p(q$summary)), list(blk_p("Suggested wording", em = TRUE)), question_blocks(q$rewrite))
+#   "Suggested wording", each line that is not in the question as pasted tagged; then its programming
+#   text, tagged, when it is not the original's.
+fix_blocks <- function(q) {
+  prog = q$rewrite$programming %||% ""
+  c(if (nzchar(q$summary)) list(blk_p(q$summary)), list(blk_p("Suggested wording", em = TRUE)),
+    question_blocks(q$rewrite, original = q$text),
+    if (!occurs_in(prog, q$text)) list(blk_p(paste("Programming:", prog), em = TRUE, changed = TRUE)))
+}
 
 # Its flags, one line each, "label: "quoted words". Why.", with the level as a small tag.
 flag_blocks <- function(q)
@@ -230,7 +241,8 @@ flag_blocks <- function(q)
 # Its Details: the question as pasted with the quoted words highlighted, the flags, the programming text.
 details_blocks <- function(q)
   c(list(blk_p(q$text, marks = purrr::map_chr(q$flags, "quote"))), flag_blocks(q),
-    if (nzchar(q$rewrite$programming %||% "")) list(blk_p(paste("Programming:", q$rewrite$programming), em = TRUE)))
+    if (nzchar(q$rewrite$programming %||% "") && occurs_in(q$rewrite$programming, q$text))
+      list(blk_p(paste("Programming:", q$rewrite$programming), em = TRUE)))
 
 # The review as it is copied to Word: the bottom line, then each question with a fix flag, its header,
 #   summary and suggested wording; with details, its flags too.
@@ -331,19 +343,23 @@ part_blocks <- function(p) {
 }
 
 # One question laid out the way it is asked, for both tabs: any filter asked before it (indented), the
-#   intro, the stem in bold, the options one per line, the rows one per line under a small "Items"
-#   lead, what an open question collects, then the other parts, indented. The programming text is not
-#   on it.
-question_blocks <- function(q) {
+#   intro (left out when it is or holds the stem), the stem in bold, the options one per line, the
+#   rows one per line under a small "Items" lead, what an open question collects, then the other
+#   parts, indented. The programming text is not on it. With the original question as pasted, a
+#   line of the intro, stem, options or rows that is not in it is tagged as changed.
+question_blocks <- function(q, original = NULL) {
   texts = function(x) purrr::map_chr(x %||% list(), option_text)
+  changed = function(x) if (is.null(original)) rep(FALSE, length(x)) else !purrr::map_lgl(x, occurs_in, text = original)
   opts = texts(q$options)
   rows = texts(q$rows)
+  intro = q$intro %||% ""
+  if (nzchar(intro) && grepl(evidence_quote(q$stem), evidence_quote(intro), fixed = TRUE)) intro = ""
   before = purrr::map_lgl(q$parts %||% list(), is_before)
   c(unlist(purrr::map(q$parts[before], part_blocks), recursive = FALSE),
-    if (nzchar(q$intro %||% "")) list(blk_p(q$intro)),
-    list(blk_p(q$stem, strong = TRUE)),
-    if (length(opts)) list(blk_list(opts)),
-    if (length(rows)) list(blk_p("Items", em = TRUE), blk_list(rows)),
+    if (nzchar(intro)) list(blk_p(intro, changed = changed(intro))),
+    list(blk_p(q$stem, strong = TRUE, changed = changed(q$stem))),
+    if (length(opts)) list(blk_list(opts, changed = changed(opts))),
+    if (length(rows)) list(blk_p("Items", em = TRUE), blk_list(rows, changed = changed(rows))),
     if (!length(opts) && nzchar(q$open_format %||% "")) list(blk_p(answer_line(q$open_format))),
     unlist(purrr::map(q$parts[!before], part_blocks), recursive = FALSE))
 }
