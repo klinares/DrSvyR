@@ -52,31 +52,47 @@ ask_all <- function(requests) llm_json_all(purrr::map(requests, function(r) c(r,
 
 
 # 2. Review each question alone, four at a time, through send_parts(), which the Evaluate tab uses
-#    for every review. Every flag goes to flags.csv and every call to calls.csv in a new run folder.
+#    for every review. What comes back is saved to reviews.json at once, before anything is done
+#    with it, so an error further down never costs the 27 calls a second time.
 if (RUN_REVIEWS) {
-  run <- file.path("tests", "gold_runs", paste0(format(Sys.time(), "%Y-%m-%d-%H%M"), "_", gsub("[^A-Za-z0-9.-]", "-", m$id)))
-  dir.create(run, recursive = TRUE)
+  run <- file.path("tests", "gold_runs", paste0(format(Sys.time(), "%Y-%m-%d-%H%M%S"), "_", gsub("[^A-Za-z0-9.-]", "-", m$id)))
+  dir.create(run, recursive = TRUE, showWarnings = FALSE)
   forms <- purrr::map(items$shown, function(txt)
     clean_form(list(task = "evaluate", research_question = "Evaluate this survey question",
                     population = "Adults in the general population", modes = "web", questionnaire = txt)))
   parts <- purrr::map(forms, function(f) c(review_plan(f$questionnaire)[[1]], list(form = f)))
   batches <- send_parts(ask_all, m, forms[[1]], parts, message = NULL, progress = say)
+  kept <- c("reply", "status", "seconds", "attempts", "refused", "error")   # the reply and its call record; no prompt, no key
+  jsonlite::write_json(purrr::map(batches, function(b) b[intersect(names(b), kept)]),
+                       file.path(run, "reviews.json"), auto_unbox = TRUE, null = "null", na = "null")
+} else {
+  # The latest run folder that holds a review (an empty folder left by a stopped run is skipped).
+  runs <- sort(list.dirs(file.path("tests", "gold_runs"), recursive = FALSE))
+  run <- utils::tail(runs[file.exists(file.path(runs, "flags.csv")) | file.exists(file.path(runs, "reviews.json"))], 1L)
+  stopifnot("No run folder with a review in it; set RUN_REVIEWS to TRUE" = length(run) == 1L)
+}
+
+# Every flag goes to flags.csv and every call to calls.csv. Built from reviews.json, so this step
+#   can be run again with RUN_REVIEWS <- FALSE if it ever stops.
+if (!file.exists(file.path(run, "flags.csv"))) {
+  batches <- jsonlite::read_json(file.path(run, "reviews.json"), simplifyVector = FALSE)
+  text_of <- function(fl, field) purrr::map_chr(fl, function(x) as.character(x[[field]] %||% ""))
   flags <- purrr::map2(batches, seq_len(nrow(items)), function(b, i) {
-    fl = b$reply$items[[1]]$flags %||% list()
-    tibble::tibble(item = items$id[i], set = items$set[i], check = purrr::map_chr(fl, "check"),
-                   label = unname(check_label(purrr::map_chr(fl, "check"))), level = purrr::map_chr(fl, "level"),
-                   quote = purrr::map_chr(fl, "quote"), quote_found = purrr::map_lgl(fl, function(x) quote_found(x$quote, items$shown[i])),
-                   why = purrr::map_chr(fl, "why"))
+    fl = if (length(b$reply$items)) b$reply$items[[1]]$flags %||% list() else list()
+    tibble::tibble(item = rep(items$id[i], length(fl)), set = rep(items$set[i], length(fl)),
+                   check = text_of(fl, "check"), label = as.character(unname(check_label(text_of(fl, "check")))),
+                   level = text_of(fl, "level"), quote = text_of(fl, "quote"),
+                   quote_found = purrr::map_lgl(fl, function(x) isTRUE(quote_found(x$quote, items$shown[i]))),
+                   why = text_of(fl, "why"))
   }) |> dplyr::bind_rows()
-  calls <- tibble::tibble(step = "review", item = items$id, status = purrr::map_chr(batches, "status"),
-                          seconds = purrr::map_dbl(batches, function(b) b$seconds %||% NA_real_),
+  calls <- tibble::tibble(step = "review", item = items$id,
+                          status = purrr::map_chr(batches, function(b) as.character(b$status %||% "failed")),
+                          seconds = purrr::map_dbl(batches, function(b) as.numeric(b$seconds %||% NA_real_)),
                           attempts = purrr::map_int(batches, function(b) as.integer(b$attempts %||% NA_integer_)),
-                          refused = purrr::map_chr(batches, function(b) paste(c(unlist(b$refused), if (b$status != "ok") b$error), collapse = " || ")))
+                          refused = purrr::map_chr(batches, function(b) paste(c(unlist(b$refused), if (!identical(b$status, "ok")) unlist(b$error)), collapse = " || ")))
   utils::write.csv(flags, file.path(run, "flags.csv"), row.names = FALSE)
   utils::write.csv(calls, file.path(run, "calls.csv"), row.names = FALSE)
   if (any(calls$status != "ok")) say(paste("Not reviewed:", paste(calls$item[calls$status != "ok"], collapse = ", ")))
-} else {
-  run <- utils::tail(sort(list.dirs(file.path("tests", "gold_runs"), recursive = FALSE)), 1L)
 }
 say(paste("Run folder:", run))
 flags <- utils::read.csv(file.path(run, "flags.csv"), colClasses = c(quote_found = "logical"))

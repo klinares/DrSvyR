@@ -641,6 +641,44 @@ local({
 ok("no key is anywhere on the page", !grepl(key_planted, page$html, fixed = TRUE))
 
 
+# ---- tests/gold_test.R: flags.csv and calls.csv from reviews.json ------------------------------
+
+# The script's own step, taken from it and run on a fixture: reviews.json written the way the
+#   script writes it, with one question with two flags, one with none, and one failed call.
+local({
+  run = tempfile("gold_run_")
+  dir.create(run)
+  fl = function(check, level, quote) list(check = check, stage = "comprehension", level = level, quote = quote, why = paste("Why", check))
+  rw = list(intro = "", stem = "Q?", options = list("Yes", "No"), rows = list(), open_format = "", programming = "")
+  batches = list(
+    list(kind = "items", user = "the prompt", status = "ok", error = NA_character_, seconds = 12.5, attempts = 2L, refused = list("too long"),
+         reply = list(items = list(list(id = "Q1", summary = "s", rewrite = rw,
+                                        flags = list(fl("one_thing", "fix", "and"), fl("plain_words", "consider", "not in the text")))))),
+    list(kind = "items", user = "the prompt", status = "ok", error = NA_character_, seconds = 8, attempts = 1L, refused = NULL,
+         reply = list(items = list(list(id = "Q1", summary = "", rewrite = NULL, flags = list())))),
+    list(kind = "items", user = "the prompt", status = "failed", error = "HTTP 500", seconds = 30, attempts = NA_integer_, refused = NULL, reply = NULL))
+  kept = c("reply", "status", "seconds", "attempts", "refused", "error")
+  jsonlite::write_json(purrr::map(batches, function(b) b[intersect(names(b), kept)]), file.path(run, "reviews.json"), auto_unbox = TRUE, null = "null", na = "null")
+  exprs = parse(file.path("tests", "gold_test.R"), keep.source = FALSE)
+  step = purrr::detect(as.list(exprs), function(e) startsWith(paste(deparse(e), collapse = " "), "if (!file.exists(file.path(run, \"flags.csv\")))"))
+  env = new.env(parent = globalenv())
+  env$run = run
+  env$say = function(msg) NULL
+  env$items = data.frame(id = c("F1", "F2", "F3"), set = c("flawed", "flawed", "control"),
+                         shown = c("Q1. Do you work and study?", "Q1. Are you well?", "Q1. Is it?"))
+  eval(step, env)
+  flags = utils::read.csv(file.path(run, "flags.csv"), colClasses = "character")
+  calls = utils::read.csv(file.path(run, "calls.csv"), colClasses = "character")
+  ok("gold_test.R builds flags.csv and calls.csv from reviews.json: two flags from one question, none from another, and a failed call recorded, not a crash",
+     !is.null(step) && nrow(flags) == 2L && all(flags$item == "F1") &&
+       identical(flags$label, unname(c(check_label("one_thing"), check_label("plain_words")))) &&
+       identical(flags$quote_found, c("TRUE", "FALSE")) && identical(names(flags), c("item", "set", "check", "label", "level", "quote", "quote_found", "why")) &&
+       identical(calls$item, c("F1", "F2", "F3")) && identical(calls$status, c("ok", "ok", "failed")) &&
+       identical(calls$attempts, c("2", "1", NA)) && identical(calls$refused, c("too long", "", "HTTP 500")) &&
+       !grepl("the prompt", paste(readLines(file.path(run, "reviews.json"), warn = FALSE), collapse = ""), fixed = TRUE))
+})
+
+
 # ---- Start here and Methodology ---------------------------------------------------------------
 
 start_html <- html_of(start_ui())
