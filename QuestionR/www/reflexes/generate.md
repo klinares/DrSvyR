@@ -1,6 +1,6 @@
 # Generate
 
-Version: 0.3
+Version: 0.4
 
 Sent with every request to write new items, after core.md and before the task
 file. How a draft is built from the brief and what it must declare.
@@ -59,19 +59,13 @@ file. How a draft is built from the brief and what it must declare.
 
 ## Output format
 
-Return one JSON object with these fields.
+Return one JSON object with this field.
 
 - "items": a list. Each item has:
   - "id": a short code, [construct abbreviation] plus a number.
   - "domain": the single domain of the construct this item measures.
-  - "intro": lead-in text read or shown before the question, or an empty string.
-  - "stem": the question, in the output language.
-  - "options": a list of response options in the order shown, in the output language; an empty list for an open question.
+  - "stem": the question as the respondent reads or hears it, including any lead-in sentence, in English.
+  - "options": a list of response options in the order shown, in English; an empty list for an open question.
   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
-  - "parts": a list, usually empty. Filter, branch or bracket questions that belong to this item, in the order asked; each has "when" (who is asked it, or "before the item" for a filter), "stem" and "options", in the output language.
-  - "programming": routing, filter, randomization and interviewer instructions, in English, as short imperative notes.
-  - "decisions": the design decisions required by declare_defaults, one short line each, in English.
-  - "source_english": when the output language is not English, the English wording the item was drafted from; otherwise an empty string.
-  - "notes": risks, what to test and how, in English.
-- "not_covered": domains of the construct left out, or an empty list.
-- "missing_from_brief": anything you needed that the brief did not say.
+
+Nothing else: no notes, no design decisions, no routing, no separate filter or branch questions. The analyst is shown the question and its answer options and nothing more, so write each stem plainly and keep it short.

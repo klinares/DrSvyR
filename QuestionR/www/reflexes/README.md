@@ -1,4 +1,4 @@
-# QuestionR skills
+# QuestionR reflexes
 
 Draft 0.2, 2026-11-11. Text files that steer every model call in QuestionR.
 The expertise lives here, not in the model: swap the model and none of it moves.
@@ -45,12 +45,11 @@ guessed.
 
 `mode.md` is filtered by R before sending: `any_mode`, the reflexes whose id
 is a mode chosen in the form, and `mixed_mode` when more than one is chosen.
-`cross_cultural.md` is sent whole whenever a country is given, or the output
-language or the source language is not English.
+`cross_cultural.md` is sent whole whenever a country is given.
 
 The user message has three labelled blocks in Buskirk, Eck and Timbrook's
 order: PREPARE (the brief: research question, construct, population, country,
-mode, output language, anything else), ASK (the task and how many items),
+mode, anything else), ASK (the task and how many items),
 CHARACTERIZE (the Output format section of `generate.md` or `evaluate.md`).
 For Evaluate two blocks sit between ASK and CHARACTERIZE: QUESTIONNAIRE (as
 pasted) and CHECKLIST (one `id: question` line per Check in force). Drafting
@@ -65,6 +64,6 @@ prompts carry no Check questions; the appraiser gets them instead.
 - Drops evaluation findings with severity below 5 into a collapsed
   "minor" list.
 - Lays the chosen items out for Word and appends the disclosure block:
-  models and versions, date, skill file versions, the prompt, which items were
+  models and versions, date, reflex file versions, the prompt, which items were
   generated or revised with AI, and the line "Expert-review appraisal by a
   language model. Not a pretest."

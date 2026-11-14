@@ -77,7 +77,7 @@ ok("the key box says where to get a key in the four sentences the design gives, 
      all(purrr::map_lgl(unname(unlist(KEY_INSTRUCTIONS)), function(x) has(htmltools::htmlEscape(x)))) && !has("TODO"))
 # Phase 3 built tabs 1 to 3, 5c the Output tab and 5d the Methodology tab: none is a placeholder now.
 ok("no tab is a placeholder any more; Start here and the Methodology tab are their markdown files, and the rules table is not drawn",
-   !grepl("Not built yet", page$html, fixed = TRUE) && grepl("What this tool does", page$html, fixed = TRUE) &&
+   !grepl("Not built yet", page$html, fixed = TRUE) && grepl("What QuestionR is for", page$html, fixed = TRUE) &&
      grepl("How QuestionR works and what stands behind it", page$html, fixed = TRUE) &&
      !grepl("The rules, file by file", page$html, fixed = TRUE) && !grepl("<code>one_thing</code>", page$html, fixed = TRUE))
 
@@ -132,27 +132,27 @@ shiny::testServer(mod_key_server, args = list(state = key_state), {
 })
 
 
-# ---- Phase 1: the skill files parse, and prompts assemble --------------------
+# ---- Phase 1: the reflex files parse, and prompts assemble --------------------
 
-skills <- check_skills()
-ok("every skill file parses", identical(names(skills), SKILL_FILES))
-ok("each skill file has a title, a version, a sha and at least one reflex",
-   purrr::every(skills, function(s)
+rfiles <- check_reflex_files()
+ok("every reflex file parses", identical(names(rfiles), REFLEX_FILES))
+ok("each reflex file has a title, a version, a sha and at least one reflex",
+   purrr::every(rfiles, function(s)
      nzchar(s$title) && nzchar(s$version) && nzchar(s$sha) && length(s$reflexes) > 0))
-ok("core.md carries the persona", !is.na(skills[["core.md"]]$persona))
+ok("core.md carries the persona", !is.na(rfiles[["core.md"]]$persona))
 ok("the four files whose reply R parses carry an Output format",
-   purrr::every(skills[SKILLS_WITH_OUTPUT], function(s) !is.na(s$output_format)))
+   purrr::every(rfiles[REFLEX_FILES_WITH_OUTPUT], function(s) !is.na(s$output_format)))
 
 # Source lines and HTML comments, taken from the raw files, to prove below that
 #   none of them reaches a prompt. Check questions likewise.
-raw_text <- purrr::map_chr(file.path(SKILLS_DIR, SKILL_FILES), function(p)
+raw_text <- purrr::map_chr(file.path(REFLEXES_DIR, REFLEX_FILES), function(p)
   paste(readLines(p, encoding = "UTF-8", warn = FALSE), collapse = "\n"))
 squash <- function(x) gsub("\\s+", " ", x)
 comment_texts <- unlist(regmatches(raw_text, gregexpr("(?s)<!--.*?-->", raw_text, perl = TRUE))) |>
   sub(pattern = "^<!--", replacement = "") |> squash() |> trimws() |> substr(1, 50)
-source_texts <- unlist(purrr::map(skills, function(s) purrr::map_chr(s$reflexes, "source")))
+source_texts <- unlist(purrr::map(rfiles, function(s) purrr::map_chr(s$reflexes, "source")))
 source_texts <- source_texts[!is.na(source_texts)]
-check_texts <- unlist(purrr::map(skills, function(s) purrr::map_chr(s$reflexes, "check")))
+check_texts <- unlist(purrr::map(rfiles, function(s) purrr::map_chr(s$reflexes, "check")))
 check_texts <- check_texts[!is.na(check_texts)]
 # The parser must have found every Source line, every Check line and every
 #   comment that is in the raw files, or the "none in any prompt" checks below
@@ -165,15 +165,15 @@ ok("the parser found every Source line, Check line and comment in the raw files"
      length(check_texts) == n_raw("(?m)^- \\*\\*Check:\\*\\*", raw_no_comments) &&
      length(comment_texts) == n_raw("<!--", raw_text))
 
-# A skill file that has lost its shape must fail with the file and the reflex
+# A reflex file that has lost its shape must fail with the file and the reflex
 #   named. The first fixture is well formed, so the others fail for their own
 #   reason and not for something common to all of them.
-try_skill <- function(body, header = c("# Fixture", "", "Version: 0.1", ""), name = "fixture.md") {
+try_reflex_file <- function(body, header = c("# Fixture", "", "Version: 0.1", ""), name = "fixture.md") {
   p = file.path(tempdir(), name)
   writeLines(c(header, body), p)
-  tryCatch(parse_skill(p), error = function(e) conditionMessage(e))
+  tryCatch(parse_reflex_file(p), error = function(e) conditionMessage(e))
 }
-good <- try_skill(c("<!-- a note for people -->", "## Reflexes", "", "### fine_one",
+good <- try_reflex_file(c("<!-- a note for people -->", "## Reflexes", "", "### fine_one",
                     "- **When:** Always.", "- **Say:** Do it.", "- **Never:** Skip it.",
                     "- **Check:** Was it done?", "- **Source:** A book.", "",
                     "## Prohibitions", "", "- Never lie.", "",
@@ -184,7 +184,7 @@ ok("a well-formed fixture parses, keeping Check and Source",
      identical(good$prohibitions, "Never lie.") && identical(good$output_format, "Return JSON."))
 
 refl <- function(...) c("## Reflexes", "", "### oops", ...)
-says <- function(msg, ...) grepl(msg, try_skill(...), fixed = TRUE)
+says <- function(msg, ...) grepl(msg, try_reflex_file(...), fixed = TRUE)
 ok("a reflex with no Say stops, naming the file and the reflex",
    says("Reflex 'oops' in fixture.md needs a When and a Say line.", refl("- **When:** Always.")))
 ok("a misspelt field name stops, naming the reflex",
@@ -212,8 +212,8 @@ ok("an unknown section stops",
 fine_reflex <- c("## Reflexes", "", "### fine_one", "- **When:** A.", "- **Say:** B.")
 ok("a Guidelines section is read: an optional heading line, then one-line bullets; bullets alone are fine",
    local({
-     with_head = try_skill(c("## Guidelines", "", "<!-- a note -->", "Guidelines:", "", "- One.", "- Two.", "", fine_reflex))
-     bare = try_skill(c("## Guidelines", "", "- Only.", "", fine_reflex))
+     with_head = try_reflex_file(c("## Guidelines", "", "<!-- a note -->", "Guidelines:", "", "- One.", "- Two.", "", fine_reflex))
+     bare = try_reflex_file(c("## Guidelines", "", "- Only.", "", fine_reflex))
      is.list(with_head) && identical(with_head$guidelines, list(heading = "Guidelines:", bullets = c("One.", "Two."))) &&
        is.list(bare) && is.na(bare$guidelines$heading) && identical(bare$guidelines$bullets, "Only.") &&
        is.null(good$guidelines)
@@ -233,13 +233,12 @@ ok("an HTML comment that never closes stops",
 ok("a missing Version line stops",
    says("has no Version: line", refl("- **When:** A.", "- **Say:** B."),
         header = c("# Fixture", "")))
-ok("a missing file stops", grepl("is missing", tryCatch(read_skill("nope.md"), error = conditionMessage)))
+ok("a missing file stops", grepl("is missing", tryCatch(read_reflex_file("nope.md"), error = conditionMessage)))
 
 # The assembled prompts: every task, every mode on its own, none, and all five,
 #   with and without a country.
 blank_form <- list(task = "", research_question = "", construct = "", population = "",
-                   country = "", modes = character(0), output_language = "English",
-                   source_language = "English", n_items = NA_integer_,
+                   country = "", modes = character(0), n_items = NA_integer_,
                    reference_period = "", keep_items = "", other = "",
                    questionnaire = "", revision = "")
 make_form <- function(...) utils::modifyList(blank_form, list(...))
@@ -317,25 +316,25 @@ ok("the files used are core, the task's files, mode, and cross_cultural only wit
      if (b$task == "evaluate") "evaluate.md" else c("generate.md", paste0(b$task, ".md")),
      "mode.md", if (nzchar(b$country)) "cross_cultural.md"))))
 ok("the persona opens the message and is not in the system prompt, and the prohibitions close the system prompt, headed as overriding",
-   every_built(function(b) startsWith(b$p$user, skills[["core.md"]]$persona) &&
-                 !grepl(skills[["core.md"]]$persona, b$p$system, fixed = TRUE) &&
-                 lengths(regmatches(b$p$user, gregexpr(skills[["core.md"]]$persona, b$p$user, fixed = TRUE))) == 1L &&
+   every_built(function(b) startsWith(b$p$user, rfiles[["core.md"]]$persona) &&
+                 !grepl(rfiles[["core.md"]]$persona, b$p$system, fixed = TRUE) &&
+                 lengths(regmatches(b$p$user, gregexpr(rfiles[["core.md"]]$persona, b$p$user, fixed = TRUE))) == 1L &&
                  lengths(regmatches(b$p$system, gregexpr("PROHIBITIONS (override anything from training)", b$p$system, fixed = TRUE))) == 1L &&
                  grepl("PROHIBITIONS (override anything from training)\n- Never", b$p$system, fixed = TRUE)))
 ok("every prohibition of every file in force is in the system prompt",
    every_built(function(b) purrr::every(b$p$files, function(f)
-     purrr::every(skills[[f]]$prohibitions, function(s) grepl(paste0("- ", s), b$p$system, fixed = TRUE)))))
+     purrr::every(rfiles[[f]]$prohibitions, function(s) grepl(paste0("- ", s), b$p$system, fixed = TRUE)))))
 ok("mode.md keeps any_mode, the modes chosen, and mixed_mode only with more than one",
    every_built(function(b) {
-     in_prompt = intersect(names(skills[["mode.md"]]$reflexes), ids_in(b$p$system))
+     in_prompt = intersect(names(rfiles[["mode.md"]]$reflexes), ids_in(b$p$system))
      expected = c("any_mode", b$modes, if (length(b$modes) > 1L) "mixed_mode")
-     identical(in_prompt, intersect(names(skills[["mode.md"]]$reflexes), expected))
+     identical(in_prompt, intersect(names(rfiles[["mode.md"]]$reflexes), expected))
    }))
 ok("cross_cultural.md is in with a country and out without",
-   every_built(function(b) ("trapd" %in% ids_in(b$p$system)) == nzchar(b$country)))
+   every_built(function(b) ("flag_do_not_assert" %in% ids_in(b$p$system)) == nzchar(b$country)))
 ok("every reflex of a drafting task file is in, and of the other task files out",
    every_built(function(b) {
-     task_ids = purrr::map(skills[c("attitudinal.md", "behavioral.md", "sensitive.md", "evaluate.md")], function(s) names(s$reflexes))
+     task_ids = purrr::map(rfiles[c("attitudinal.md", "behavioral.md", "sensitive.md", "evaluate.md")], function(s) names(s$reflexes))
      mine = task_ids[[paste0(b$task, ".md")]]
      others = unlist(task_ids[names(task_ids) != paste0(b$task, ".md")])
      all(mine %in% ids_in(b$p$system)) && !any(setdiff(others, mine) %in% ids_in(b$p$system))
@@ -348,13 +347,13 @@ ok("the message is the persona, Brief:, Task:, (for Evaluate, Questionnaire:), t
      heads = c("Brief:", "Task:", if (b$task == "evaluate") "Questionnaire:", "Guidelines:",
                if (b$task == "evaluate") "CHECKLIST", "REPLY FORMAT")
      pos = purrr::map_int(heads, function(h) as.integer(regexpr(paste0("(?m)^", h, "$"), u, perl = TRUE)))
-     all(pos > 0) && all(diff(pos) > 0) && startsWith(u, paste0(skills[["core.md"]]$persona, "\n\nBrief:\n")) &&
+     all(pos > 0) && all(diff(pos) > 0) && startsWith(u, paste0(rfiles[["core.md"]]$persona, "\n\nBrief:\n")) &&
        !grepl("(?m)^(PREPARE|ASK|CHARACTERIZE)$", u, perl = TRUE) &&
        startsWith(b$p$tail, if (b$task == "evaluate") "CHECKLIST\n" else "REPLY FORMAT\n")
    }))
 ok("a draft's message holds core.md's guidelines and then the task file's; a review's only core.md's; none is in the system prompt",
    every_built(function(b) {
-     gl = function(file) paste0("- ", skills[[file]]$guidelines$bullets)
+     gl = function(file) paste0("- ", rfiles[[file]]$guidelines$bullets)
      core_in = all(purrr::map_lgl(gl("core.md"), function(l) grepl(paste0("\n", l, "\n"), paste0("\n", b$p$message, "\n"), fixed = TRUE)))
      task_file = paste0(b$task, ".md")
      task_in = if (b$task == "evaluate") !any(grepl("Ask about a specific, clearly defined attitude object.", b$p$message, fixed = TRUE))
@@ -364,7 +363,7 @@ ok("a draft's message holds core.md's guidelines and then the task file's; a rev
        !grepl("Guidelines:", b$p$system, fixed = TRUE)
    }))
 ok("the Output format of the file that carries it is in the user message, as written",
-   every_built(function(b) grepl(skills[[if (b$task == "evaluate") "evaluate.md" else "generate.md"]]$output_format,
+   every_built(function(b) grepl(rfiles[[if (b$task == "evaluate") "evaluate.md" else "generate.md"]]$output_format,
                                  b$p$user, fixed = TRUE)))
 ok("the number of items is in the ask for the drafting tasks",
    every_built(function(b) b$task == "evaluate" ||
@@ -389,7 +388,7 @@ ok("a drafting prompt has no CHECKLIST block and no Check question in its user m
 ok("the checklist is a named character vector of the Check lines in force",
    every_built(function(b) {
      ck = b$ck
-     in_force = unlist(purrr::map(b$p$files, function(f) purrr::map_chr(skills[[f]]$reflexes, "check")))
+     in_force = unlist(purrr::map(b$p$files, function(f) purrr::map_chr(rfiles[[f]]$reflexes, "check")))
      is.character(ck) && !is.null(names(ck)) && !anyDuplicated(names(ck)) &&
        all(nzchar(ck)) && all(names(ck) %in% ids_in(b$p$system)) &&
        all(names(ck) %in% names(in_force)[!is.na(in_force)]) &&
@@ -409,7 +408,7 @@ base_hash <- h()
 changes <- list(
   research_question = "Something else entirely?", construct = "A different construct",
   population = "Adults aged 65 and over", country = "Kenya", modes = "mobile_web",
-  output_language = "French", source_language = "Spanish", n_items = 7L,
+  n_items = 7L,
   reference_period = "past year", keep_items = "Q1. An item to keep.",
   other = "Keep it short.", revision = "Make the stems shorter.")
 ok("a change to any one field of the form changes the hash",
@@ -427,17 +426,17 @@ ok("the order modes are ticked in does not matter",
              build_prompt(utils::modifyList(forms$behavioral, list(modes = c("face_to_face", "telephone"))))$hash))
 ok("a Windows line ending is the same as a newline",
    identical(h(other = "line one\r\nline two"), h(other = "line one\nline two")))
-ok("a change to a skill file changes the hash",
+ok("a change to a reflex file changes the hash",
    local({
-     dir = file.path(tempdir(), "skills_copy")
+     dir = file.path(tempdir(), "reflexes_copy")
      dir.create(dir, showWarnings = FALSE)
-     file.copy(file.path(SKILLS_DIR, SKILL_FILES), dir, overwrite = TRUE)
+     file.copy(file.path(REFLEXES_DIR, REFLEX_FILES), dir, overwrite = TRUE)
      core = file.path(dir, "core.md")
      writeLines(sub("Write plainly.", "Write plainly!", readLines(core, encoding = "UTF-8", warn = FALSE), fixed = TRUE), core)
      f = clean_form(forms$attitudinal)
-     before = skills_in_force(f)
-     after = skills_in_force(f, dir)
-     !identical(read_skill("core.md")$sha, read_skill("core.md", dir)$sha) &&
+     before = reflexes_in_force(f)
+     after = reflexes_in_force(f, dir)
+     !identical(read_reflex_file("core.md")$sha, read_reflex_file("core.md", dir)$sha) &&
        !identical(prompt_hash(assemble_system(before), assemble_message(f, before)),
                   prompt_hash(assemble_system(after), assemble_message(f, after)))
    }))
@@ -448,41 +447,23 @@ prepare_of <- function(fm) {
   sub(":.*$", "", strsplit(u, "\n", fixed = TRUE)[[1]][-1])
 }
 full <- utils::modifyList(forms$attitudinal, list(
-  country = "Kenya", output_language = "Swahili", source_language = "English",
+  country = "Kenya",
   reference_period = "past 7 days", keep_items = "Q1. Keep this.", other = "Short."))
 ok("the PREPARE labels are the contract's, in its order, each on its own line",
    identical(prepare_of(full),
              c("Research question", "Construct", "Target population", "Country",
-               "Survey mode", "Output language", "Source language", "Reference period",
+               "Survey mode", "Reference period",
                "Existing items to keep", "Other details")))
-ok("blank fields leave no PREPARE line, except Output language, which is always there",
+ok("blank fields leave no PREPARE line",
    identical(prepare_of(forms$attitudinal),
-             c("Research question", "Construct", "Target population", "Survey mode",
-               "Output language")))
-# Output language is always printed, English when blank. Source language is
-#   printed only when filled and different from the output language, compared
-#   without regard to case, with en and eng as English.
-lang_lines <- function(output, source)
-  strsplit(strsplit(build_prompt(utils::modifyList(
-    forms$attitudinal, list(output_language = output, source_language = source)))$user,
-    "\n\n", fixed = TRUE)[[1]][2], "\n", fixed = TRUE)[[1]] |>
-  grep(pattern = "language:", value = TRUE)
-ok("a blank output language prints as English, and hashes as English",
-   identical(lang_lines("", ""), "Output language: English") &&
-     identical(lang_lines(NA_character_, character(0)), "Output language: English") &&
-     identical(h(output_language = "", source_language = ""), base_hash))
-ok("the source language is left out when it is the same as the output language",
-   identical(lang_lines("English", "English"), "Output language: English") &&
-     identical(lang_lines("English", "english"), "Output language: English") &&
-     identical(lang_lines("en", "ENG"), "Output language: en") &&
-     identical(lang_lines("", "en"), "Output language: English") &&
-     identical(lang_lines("Swahili", "swahili"), "Output language: Swahili") &&
-     identical(lang_lines("Swahili", ""), "Output language: Swahili"))
-ok("the source language is printed when it differs from the output language",
-   identical(lang_lines("Swahili", "English"), c("Output language: Swahili", "Source language: English")) &&
-     identical(lang_lines("English", "Spanish"), c("Output language: English", "Source language: Spanish")) &&
-     identical(lang_lines("", "Spanish"), c("Output language: English", "Source language: Spanish")) &&
-     identical(lang_lines("French", "Spanish"), c("Output language: French", "Source language: Spanish")))
+             c("Research question", "Construct", "Target population", "Survey mode")))
+ok("a language is not a field of the form: it is refused, and no language line is in any prompt",
+   grepl("not in the contract: output_language", tryCatch(build_prompt(c(forms$attitudinal, list(output_language = "French"))), error = conditionMessage), fixed = TRUE) &&
+     !any(c("output_language", "source_language") %in% FORM_FIELDS) &&
+     every_built(function(b) !grepl("language:", b$p$user, ignore.case = TRUE)))
+ok("the form has twelve fields and every task's fields are among them",
+   length(FORM_FIELDS) == 12L && purrr::every(TASKS, function(t) all(t$fields %in% FORM_FIELDS)))
+
 ok("the survey mode line reads in words, in the fixed order of the modes",
    grepl("Survey mode: mobile web, telephone, face-to-face\n",
          build_prompt(utils::modifyList(forms$attitudinal,
@@ -493,26 +474,10 @@ ok("a REVISION line is in the ask on a rerun and nowhere else",
          build_prompt(utils::modifyList(forms$attitudinal, list(revision = "Make the stems shorter.")))$user,
          perl = TRUE) &&
      !grepl("REVISION", build_prompt(forms$attitudinal)$user, fixed = TRUE))
-has_trapd <- function(...)
-  "trapd" %in% ids_in(build_prompt(utils::modifyList(forms$attitudinal, list(...)))$system)
-ok("cross_cultural is sent for a country, a non-English output language, or a non-English source language",
-   has_trapd(country = "Kenya") && has_trapd(output_language = "Spanish") &&
-     has_trapd(source_language = "Spanish") &&
-     has_trapd(output_language = "French", source_language = "Spanish"))
-ok("cross_cultural is not sent when both languages are English or blank and no country is given",
-   !has_trapd() && !has_trapd(output_language = "", source_language = "") &&
-     !has_trapd(output_language = "en", source_language = "ENG") &&
-     !has_trapd(output_language = "english", source_language = ""))
-
-# A review of a translated questionnaire (Spanish source, English output) gets
-#   the cross-cultural rules, and their Check questions join the checklist.
-translated <- utils::modifyList(forms$evaluate, list(source_language = "Spanish"))
-tp <- build_prompt(translated)
-ok("a review with a Spanish source language: cross_cultural in, both language lines, its checks in the CHECKLIST",
-   "trapd" %in% ids_in(tp$system) && grepl("Output language: English\nSource language: Spanish", tp$user, fixed = TRUE) &&
-     "functional_equivalence" %in% names(build_checklist(translated)) &&
-     grepl("\nfunctional_equivalence: ", tp$user, fixed = TRUE) &&
-     identical(tp$files, c("core.md", "evaluate.md", "mode.md", "cross_cultural.md")))
+has_cc <- function(...)
+  "flag_do_not_assert" %in% ids_in(build_prompt(utils::modifyList(forms$attitudinal, list(...)))$system)
+ok("cross_cultural is sent for a country and for nothing else",
+   has_cc(country = "Kenya") && !has_cc() && !has_cc(country = "") && !has_cc(country = "  "))
 
 # A form that cannot make a prompt stops, saying why. It never makes a guess.
 fails <- function(msg, ...) grepl(msg, tryCatch({ build_prompt(...); "no error" }, error = conditionMessage), fixed = TRUE)
@@ -947,8 +912,8 @@ ok("TASKS has the four tasks, each with a label, a kind, files, an ask and field
 ok("a task's kind is draft or review, and only Evaluate is a review",
    purrr::every(TASKS, function(t) t$kind %in% c("draft", "review")) &&
      identical(names(purrr::keep(TASKS, function(t) t$kind == "review")), "evaluate"))
-ok("every file a task names is a skill file, core.md leads, and mode.md is in",
-   purrr::every(TASKS, function(t) all(t$files %in% SKILL_FILES) && identical(t$files[1], "core.md") &&
+ok("every file a task names is a reflex file, core.md leads, and mode.md is in",
+   purrr::every(TASKS, function(t) all(t$files %in% REFLEX_FILES) && identical(t$files[1], "core.md") &&
                   "mode.md" %in% t$files))
 ok("every field a task shows is a field of the form, and none is the task itself",
    purrr::every(TASKS, function(t) all(t$fields %in% FORM_FIELDS) && !"task" %in% t$fields))
@@ -983,15 +948,15 @@ ok("the brief check's system prompt holds the brief rules and the task's rules, 
    purrr::every(brief_built, function(b)
      inn(b$p$system, "- what_a_brief_needs (") && inn(b$p$system, "- criteria_preview (") &&
        inn(b$p$system, if (b$form$task == "evaluate") "- restraint (" else "- declare_defaults (") &&
-       !inn(b$p$system, skills[["core.md"]]$persona) && startsWith(b$p$user, skills[["core.md"]]$persona)))
+       !inn(b$p$system, rfiles[["core.md"]]$persona) && startsWith(b$p$user, rfiles[["core.md"]]$persona)))
 ok("the brief check's user message is the persona, then PREPARE, ASK, CHECKLIST, CHARACTERIZE, with pm_brief's output format",
    purrr::every(brief_built, function(b) {
      u = b$p$user
      pos = purrr::map_int(c("PREPARE", "ASK", "CHECKLIST", "CHARACTERIZE"), function(h)
        as.integer(regexpr(paste0("(?m)^", h, "$"), u, perl = TRUE)))
      all(pos > 0) && all(diff(pos) > 0) &&
-       startsWith(u, paste0(skills[["core.md"]]$persona, "\n\nPREPARE\n")) &&
-       inn(u, skills[["pm_brief.md"]]$output_format) && inn(u, "\"task_fit\"") &&
+       startsWith(u, paste0(rfiles[["core.md"]]$persona, "\n\nPREPARE\n")) &&
+       inn(u, rfiles[["pm_brief.md"]]$output_format) && inn(u, "\"task_fit\"") &&
        !inn(u, "\"source_english\"") && !inn(u, "\"trapd\"")
    }))
 ok("the brief check names the task the analyst chose, and its CHECKLIST is exactly build_checklist(form)",
@@ -1029,13 +994,13 @@ ok("the appraisal sends core and pm_appraise only, and none of the drafting rule
    identical(ap$files, c("core.md", "pm_appraise.md")) &&
      inn(ap$system, "- check_before_choosing (") && inn(ap$system, "- pick_per_domain (") &&
      !inn(ap$system, "- declare_defaults (") && !inn(ap$system, "- attitude_object (") &&
-     !inn(ap$system, skills[["core.md"]]$persona))
+     !inn(ap$system, rfiles[["core.md"]]$persona))
 ok("the appraisal's user message is the persona, then PREPARE, ASK, CANDIDATES, CHECKLIST, CHARACTERIZE, in that order",
    local({
      pos = purrr::map_int(c("PREPARE", "ASK", "CANDIDATES", "CHECKLIST", "CHARACTERIZE"), function(h)
        as.integer(regexpr(paste0("(?m)^", h, "$"), ap$user, perl = TRUE)))
-     all(pos > 0) && all(diff(pos) > 0) && inn(ap$user, skills[["pm_appraise.md"]]$output_format) &&
-       startsWith(ap$user, paste0(skills[["core.md"]]$persona, "\n\nPREPARE\n")) &&
+     all(pos > 0) && all(diff(pos) > 0) && inn(ap$user, rfiles[["pm_appraise.md"]]$output_format) &&
+       startsWith(ap$user, paste0(rfiles[["core.md"]]$persona, "\n\nPREPARE\n")) &&
        inn(ap$user, "\"selected\"")
    }))
 ok("the appraisal's CHECKLIST is exactly what the workers' files give, and their questions are not in the system prompt",
@@ -1046,7 +1011,7 @@ ok("the appraisal's CHECKLIST is exactly what the workers' files give, and their
    }))
 ok("the appraisal says how many candidates and how many items each was asked for",
    inn(ap$user, "Appraise the 3 candidate drafts") && inn(ap$user, "exactly 6 survey items"))
-ok("each candidate is one JSON line with its letter, its stems, its options, its parts and its decisions",
+ok("each candidate is one JSON line with its letter and its items' ids, domains, stems, options and open format, and nothing else of an item",
    local({
      lines = strsplit(ap$user, "\n", fixed = TRUE)[[1]]
      cl = lines[grepl("^\\{\"candidate\":", lines)]
@@ -1054,10 +1019,10 @@ ok("each candidate is one JSON line with its letter, its stems, its options, its
      length(cl) == 3L && identical(purrr::map_chr(parsed, "candidate"), c("A", "B", "C")) &&
        identical(parsed[[2]]$items[[1]]$stem, "Stem number 1 (B)?") &&
        length(parsed[[1]]$items[[2]]$options) == 3L &&
-       identical(parsed[[3]]$items[[1]]$parts[[1]]$stem, "Filter 1?") &&
-       length(parsed[[1]]$items[[1]]$decisions) == 1L && identical(parsed[[1]]$not_covered[[1]], "domain 9")
+       identical(sort(names(parsed[[1]]$items[[1]])), c("domain", "id", "open_format", "options", "stem")) &&
+       !inn(ap$user, "Filter 1?") && !inn(ap$user, "Randomize options.") && !inn(ap$user, "closed; three labelled options")
    }))
-ok("a worker's own notes never reach the appraisal, and an empty source_english is left out",
+ok("a worker's own notes never reach the appraisal",
    !inn(ap$user, "SECRET-NOTE") && !inn(ap$user, "model-x") && !inn(ap$user, "source_english") &&
      !inn(ap$user, "\"notes\""))
 ok("the appraisal is deterministic and its hash follows the candidates",
@@ -1089,7 +1054,7 @@ with_field <- function(x, ...) {
   x[names(over)] = over
   x
 }
-# A draft item with every field the skill asks for.
+# A draft item with every field the reflex file asks for.
 good_item <- function(i, ...)
   with_field(
     list(id = paste0("Q", i), domain = paste("domain", i), intro = "",
@@ -1111,10 +1076,9 @@ ok("a draft with too many or too few items fails, saying how many and how many w
    says_in(problem_of(vd, draft_of(3)), "holds 3 items; 2 were asked for") &&
      says_in(problem_of(vd, draft_of(1)), "holds 1 item; 2 were asked for") &&
      says_in(problem_of(reply_validator("draft", n_items = 1L), draft_of(2)), "1 was asked for"))
-ok("questions in an item's parts are not counted as items",
+ok("fields a draft is no longer asked for (parts, programming, decisions, notes) are ignored, not refused",
    is.na(problem_of(vd, list(items = list(
-     good_item(1, parts = list(list(when = "before the item", stem = "Do you know it?", options = list("Yes", "No")),
-                               list(when = "if yes", stem = "How well?", options = list("A", "B")))),
+     good_item(1, parts = list(list(when = "before the item", stem = "Do you know it?", options = list("Yes", "No")))),
      good_item(2))))))
 ok("a reply with no items field, or an item with no stem, id or domain, fails naming the field",
    says_in(problem_of(vd, list(not_covered = list())), "'items' is missing") &&
@@ -1141,29 +1105,20 @@ ok("a brief check with its fields passes; one with a string for complete, or a q
              "questions 1: 'ask' is missing") &&
      says_in(problem_of(vb, list(complete = TRUE)), "'criteria' is missing"))
 
-appraisal_ok <- list(selected = list(list(domain = "d", candidate = "A", id = "Q1", why = "The plainest wording.",
-                                          concerns = list(), suggestion = "")),
-                     not_covered = list(), set_notes = list(), test_first = list(),
-                     limits = "An expert review by a language model.")
+appraisal_ok <- list(selected = list(list(domain = "d", candidate = "A", id = "Q1", check_before_use = "")))
 sel1 <- function(...) with_field(appraisal_ok$selected[[1]], ...)
 sel_with <- function(...) with_field(appraisal_ok, selected = list(sel1(...)))
 va <- reply_validator("appraisal")
-ok("a recommendation with its five fields passes, empty lists included; a missing limits or selected fails",
+ok("a recommendation with its one field passes, a line to check before use or not; a missing selected fails; fields it is no longer asked for are ignored",
    is.na(problem_of(va, appraisal_ok)) &&
-     says_in(problem_of(va, appraisal_ok[names(appraisal_ok) != "limits"]), "'limits' is missing") &&
+     is.na(problem_of(va, sel_with(check_before_use = "The term is vague."))) &&
+     is.na(problem_of(va, list(selected = list(list(domain = "d", candidate = "A", id = "Q1"))))) &&
+     is.na(problem_of(va, with_field(appraisal_ok, not_covered = list("x"), set_notes = list(), test_first = list(), limits = "y"))) &&
      says_in(problem_of(va, appraisal_ok[names(appraisal_ok) != "selected"]), "'selected' is missing"))
-ok("a recommended item gives its domain, candidate and id; a concern its check, failing words, a severity from 1 to 10 and why; a note on the set its check, severity and why",
+ok("a recommended item gives its domain, candidate and id; its line to check before use is a string",
    says_in(problem_of(va, with_field(appraisal_ok, selected = list(with_field(sel1(), domain = NULL)))), "selected 1: 'domain' is missing") &&
      says_in(problem_of(va, with_field(appraisal_ok, selected = list(with_field(sel1(), id = NULL)))), "selected 1: 'id' is missing") &&
-     says_in(problem_of(va, sel_with(concerns = list(list(evidence = "x", severity = 6, why = "y")))), "does not give its check") &&
-     says_in(problem_of(va, sel_with(concerns = list(list(check = "one_thing", evidence = "x", why = "y")))), "severity from 1 to 10") &&
-     says_in(problem_of(va, sel_with(concerns = list(list(check = "one_thing", evidence = "x", severity = 11, why = "y")))), "severity from 1 to 10") &&
-     is.na(problem_of(va, sel_with(concerns = list(list(check = "one_thing", evidence = "x", severity = 4, why = "y"))))) &&
-     says_in(problem_of(va, with_field(appraisal_ok, set_notes = list(list(check = "keying", why = "y")))),
-             "set_notes 1: 'severity' is missing") &&
-     says_in(problem_of(va, with_field(appraisal_ok, set_notes = list(list(check = "keying", severity = 0, why = "y")))),
-             "set_notes 1: 'severity' must be a number from 1 to 10") &&
-     is.na(problem_of(va, with_field(appraisal_ok, set_notes = list(list(check = "keying", severity = 5, why = "y"))))))
+     says_in(problem_of(va, sel_with(check_before_use = 5)), "'check_before_use' must be a string"))
 vc_cands <- list(A = list(items = list(list(id = "Q1"), list(id = "Q2"))), B = list(items = list(list(id = "Q1"))))
 vc <- reply_validator("appraisal", candidates = vc_cands, n_items = 2L)
 pick <- function(...) purrr::map(list(...), function(x) sel1(candidate = x[[1]], id = x[[2]]))
@@ -1186,120 +1141,30 @@ ok("a new output format is one entry: the validator is built from REPLY_SCHEMAS 
 REPLY_SCHEMAS$tiny <- NULL
 
 
-# Coded defaults, against a fixture coded by hand.
-fx <- list(
-  list(what = "five labelled points and a don't know",
-       item = good_item(1, options = list("Strongly agree", "Agree", "Neither", "Disagree", "Strongly disagree", "Don't know"),
-                        decisions = list("closed", "five points, every point labelled with words")),
-       lang = "English",
-       want = list(format = "closed", n_options = 6L, n_points = 5L, points_odd = TRUE,
-                   midpoint_stated = "not stated", dont_know = TRUE,
-                   ref_period = FALSE, labels = "yes", decisions = "itemised")),
-  list(what = "four points, end labels only, a reference period, no don't know",
-       item = good_item(2, stem = "In the past 7 days, how often did you listen to the radio?",
-                        options = list("Never", "Once or twice", "Most days", "Every day"),
-                        decisions = list("closed", "four points, endpoint labels only")),
-       lang = "English",
-       want = list(format = "closed", n_options = 4L, n_points = 4L, points_odd = FALSE,
-                   midpoint_stated = "not stated", dont_know = FALSE,
-                   ref_period = TRUE, labels = "no", decisions = "itemised")),
-  list(what = "an open item",
-       item = good_item(3, stem = "How many days did you vote?", options = list(), open_format = "a number of days",
-                        decisions = list("open, numeric")),
-       lang = "English",
-       want = list(format = "open", n_options = 0L, n_points = NA_integer_, points_odd = NA,
-                   midpoint_stated = "not stated", dont_know = NA,
-                   ref_period = FALSE, labels = "not stated", decisions = "not itemised")),
-  list(what = "a curly apostrophe and a not-applicable option",
-       item = good_item(4, options = list("Yes", "No", "Not applicable", "I don’t know"), decisions = list()),
-       lang = "English",
-       want = list(format = "closed", n_options = 4L, n_points = 2L, points_odd = FALSE,
-                   midpoint_stated = "not stated", dont_know = TRUE,
-                   ref_period = FALSE, labels = "not stated", decisions = "none")),
-  list(what = "French: points, don't know and period are not coded",
-       item = good_item(5, stem = "Au cours des 7 derniers jours, avez-vous écouté la radio ?",
-                        options = list("Jamais", "Parfois", "Souvent", "Je ne sais pas"),
-                        decisions = list("closed", "every point labelled")),
-       lang = "French",
-       want = list(format = "closed", n_options = 4L, n_points = NA_integer_, points_odd = NA,
-                   midpoint_stated = "not stated", dont_know = NA,
-                   ref_period = NA, labels = "yes", decisions = "itemised")),
-  list(what = "an item with only a stem and options",
-       item = list(stem = "Do you vote?", options = list("Yes", "No")),
-       lang = "",
-       want = list(format = "closed", n_options = 2L, n_points = 2L, points_odd = FALSE,
-                   midpoint_stated = "not stated", dont_know = FALSE,
-                   ref_period = FALSE, labels = "not stated", decisions = "none")))
-purrr::walk(fx, function(x)
-  ok(paste("coded defaults match the hand-coded fixture:", x$what),
-     identical(code_defaults(x$item, x$lang), x$want)))
-ok("the coded defaults read as words for a table, with not coded where it is",
-   identical(unname(defaults_labels(code_defaults(fx[[5]]$item, "French"))[c(
-     "Scale points (no-answer options not counted)", "Odd number of points", "Don't know / no opinion", "Reference period")]),
-             rep("not coded", 4L)) &&
-     identical(unname(defaults_labels(code_defaults(fx[[1]]$item))[c("Format", "Odd number of points")]), c("closed", "yes")))
-
-# R does not call an odd count a midpoint (DESIGN.md section 13): it reports the
-#   count, whether it is odd, and what the item itself says about a midpoint.
-ok("a five-point scale whose decisions say there is no midpoint is odd and stated as no midpoint, and R does not say 'midpoint' for the count",
-   local({
-     d = code_defaults(good_item(1, options = list("Not at all", "A little", "Somewhat", "Quite", "Very"),
-                                 decisions = list("Closed; five points", "No midpoint because the construct has no middle")))
-     identical(d$points_odd, TRUE) && identical(d$midpoint_stated, "no") &&
-       !any(grepl("^Midpoint \\(odd", names(defaults_labels(d))))
-   }))
-ok("what an item says about a midpoint is read as yes, no or not stated, in the phrasings the models used",
-   identical(code_defaults(good_item(1, decisions = list("Include a midpoint: A moderate amount represents a middle level.")))$midpoint_stated, "yes") &&
-     identical(code_defaults(good_item(1, decisions = list("Closed; 5 options; no midpoint; unipolar")))$midpoint_stated, "no") &&
-     identical(code_defaults(good_item(1, decisions = list("Midpoint: no.")))$midpoint_stated, "no") &&
-     identical(code_defaults(good_item(1, decisions = list("Closed; five options.")))$midpoint_stated, "not stated"))
-ok("decisions written as one string or one entry are flagged not itemised, two or more are itemised, none is none",
-   identical(code_defaults(good_item(1, decisions = "Closed; 5 options; no midpoint; no reasons"))$decisions, "not itemised") &&
-     identical(code_defaults(good_item(1, decisions = list("one long entry; with everything")))$decisions, "not itemised") &&
-     identical(code_defaults(good_item(1, decisions = list("a", "b")))$decisions, "itemised") &&
-     identical(code_defaults(good_item(1, decisions = list()))$decisions, "none"))
-
-
 # Checks on the reviewer's recommendation.
 ck_cands <- list(A = draft_of(2), B = draft_of(1))
-ck_ids <- names(build_checklist(forms$attitudinal))
 ck_reply <- list(
   selected = list(
-    list(domain = "d1", candidate = "A", id = "Q2", why = "Plainer.", suggestion = "Say who.", concerns = list(
-      list(check = ck_ids[1], evidence = "trust", severity = 7, why = "Vague."),
-      list(check = "made_up_check", evidence = "x", severity = 3, why = "Odd."))),
-    list(domain = "d2", candidate = "B", id = "Q1", why = "The only one.", suggestion = "", concerns = list())),
-  not_covered = list("domain 9", list("domain", "10")),
-  set_notes = list(list(check = ck_ids[3], severity = 6, why = "All keyed one way."),
-                   list(check = "invented_set_check", severity = 4, why = "Odd.")),
+    list(domain = "d1", candidate = "A", id = "Q2", check_before_use = "The term trust is vague. Say whose trust you mean, and in what."),
+    list(domain = "d2", candidate = "B", id = "Q1", check_before_use = "")),
+  not_covered = list("domain 9"), set_notes = list(list(check = "keying", severity = 6, why = "All keyed one way.")),
   test_first = list(), limits = "x")
-ca <- check_appraisal(ck_reply, ck_cands, build_checklist(forms$attitudinal))
-ok("each recommended item is found in its draft by letter and id, in the order given, with its position, domain, reason and suggestion",
+ca <- check_appraisal(ck_reply, ck_cands)
+ok("each recommended item is found in its draft by letter and id, in the order given, with its position, domain and line to check; nothing else of the reply is read",
    length(ca$selected) == 2L && identical(purrr::map_chr(ca$selected, "candidate"), c("A", "B")) &&
      identical(purrr::map_chr(ca$selected, "id"), c("Q2", "Q1")) && identical(purrr::map_int(ca$selected, "position"), c(2L, 1L)) &&
-     identical(ca$selected[[1]]$domain, "d1") && identical(ca$selected[[1]]$why, "Plainer.") &&
-     identical(ca$selected[[1]]$suggestion, "Say who.") && !"stem" %in% names(ca$selected[[1]]))
-ok("a concern is read with whether its check is an id that was sent; severity 5 or above is shown, below is not, and none given is shown",
-   identical(purrr::map_lgl(ca$selected[[1]]$concerns, "known"), c(TRUE, FALSE)) &&
-     identical(purrr::map_lgl(ca$selected[[1]]$concerns, "shown"), c(TRUE, FALSE)) &&
-     identical(purrr::map_dbl(ca$selected[[1]]$concerns, "severity"), c(7, 3)) &&
-     identical(ca$selected[[1]]$concerns[[1]]$evidence, "trust") && length(ca$selected[[2]]$concerns) == 0L &&
-     isTRUE(check_appraisal(list(selected = list(list(domain = "d", candidate = "A", id = "Q1", concerns = list(list(check = ck_ids[1]))))),
-                            ck_cands, build_checklist(forms$attitudinal))$selected[[1]]$concerns[[1]]$shown))
-ok("the notes on the set are read the same way, the domains not covered are listed, and the check ids that were not sent are collected",
-   identical(purrr::map_lgl(ca$set_notes, "shown"), c(TRUE, FALSE)) && identical(purrr::map_lgl(ca$set_notes, "known"), c(TRUE, FALSE)) &&
-     identical(ca$not_covered, c("domain 9", "domain 10")) &&
-     identical(sort(ca$unknown_checks), c("invented_set_check", "made_up_check")))
-ok("an item that cannot be found in its draft is left out, not guessed at; a reply with nothing recommended has no flags",
-   length(check_appraisal(list(selected = list(list(domain = "d", candidate = "A", id = "Q9", concerns = list()),
-                                               list(domain = "d", candidate = "C", id = "Q1", concerns = list()))),
-                          ck_cands, build_checklist(forms$attitudinal))$selected) == 0L &&
-     local({
-       c0 = check_appraisal(list(selected = list(), not_covered = list(), set_notes = list()), ck_cands, build_checklist(forms$attitudinal))
-       !length(c0$selected) && !length(c0$set_notes) && !length(c0$not_covered) && !length(c0$unknown_checks)
-     }))
-
-
+     identical(ca$selected[[1]]$domain, "d1") && identical(names(ca), "selected") &&
+     identical(sort(names(ca$selected[[1]])), c("candidate", "check", "domain", "id", "position")))
+ok("the line to check before use is held to one sentence of 20 words or fewer, and is empty when the reviewer gave none",
+   identical(ca$selected[[1]]$check, "The term trust is vague.") && identical(ca$selected[[2]]$check, "") &&
+     identical(check_appraisal(list(selected = list(list(domain = "d", candidate = "A", id = "Q1",
+                                                          check_before_use = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two"))),
+                               ck_cands)$selected[[1]]$check,
+               paste0("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty", "…")))
+ok("an item that cannot be found in its draft is left out, not guessed at; a reply with nothing recommended has none",
+   length(check_appraisal(list(selected = list(list(domain = "d", candidate = "A", id = "Q9"),
+                                               list(domain = "d", candidate = "C", id = "Q1"))), ck_cands)$selected) == 0L &&
+     !length(check_appraisal(list(selected = list()), ck_cands)$selected))
 # The flow engine on a fake ask. The fake has exactly the five arguments the seam
 #   names, so a flow that passed it anything else (a key, say) would fail here.
 fl_form <- make_form(task = "attitudinal", n_items = 2L, modes = "web", population = "Adults",
@@ -1532,7 +1397,7 @@ nav_rec <- function() {
 worker_ids <- purrr::map_chr(APP_MODELS$workers, "id")
 brief_inputs <- list(task = "attitudinal", research_question = "How much do adults trust the electoral commission?",
                      construct = "Trust in the commission", population = "Adults", modes = "web",
-                     output_language = "English", source_language = "English", n_items = 2,
+                     n_items = 2,
                      workers = worker_ids)
 set_inputs <- function(session, base, ...) do.call(session$setInputs, utils::modifyList(base, list(...)))
 
@@ -1683,7 +1548,7 @@ extended <- paste(as.character(mod_brief_ui("brief")), collapse = "")
 ok("a task added to TASKS is in the dropdown, its fields are shown for it, and it assembles a prompt",
    grepl("Knowledge items", extended, fixed = TRUE) && grepl("knowledge", extended, fixed = TRUE) &&
      "knowledge" %in% task_choices() &&
-     startsWith(build_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")))$user, skills[["core.md"]]$persona) &&
+     startsWith(build_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")))$user, rfiles[["core.md"]]$persona) &&
      length(build_step_prompt(utils::modifyList(forms$attitudinal, list(task = "knowledge")), "brief")$files) == 5L)
 ok("a worker added to the model list gets its own box, and nothing else changes",
    grepl("vendor-z/extra-worker", extended, fixed = TRUE) && !grepl("vendor-z/extra-worker", brief_page, fixed = TRUE))
@@ -1711,7 +1576,7 @@ local({
     session$flushReact()
     a = build_prompt(st$form)
     b = html_of3(output$body)
-    ok("the assembled prompt is shown whole and editable, with the skill files used",
+    ok("the assembled prompt is shown whole and editable, with the reflex files used",
        grepl("senior survey methodologist", b, fixed = TRUE) && grepl("Write exactly 2 survey items", b, fixed = TRUE) &&
          grepl("textarea", b, fixed = TRUE) && grepl("core.md, generate.md", b, fixed = TRUE) &&
          grepl("Approve and run", b, fixed = TRUE) && !grepl("disabled", b, fixed = TRUE) &&
@@ -1721,10 +1586,10 @@ local({
          grepl("The prompt (you can edit this)", b, fixed = TRUE) &&
          grepl("The survey design rules are sent with this prompt every time and cannot be edited here. You can read them on the Methodology tab.",
                gsub("\\s+", " ", b), fixed = TRUE))
-    reflex_says <- unlist(purrr::map(skills[["core.md"]]$reflexes, function(r) c(r$say, r$never)), use.names = FALSE)
+    reflex_says <- unlist(purrr::map(rfiles[["core.md"]]$reflexes, function(r) c(r$say, r$never)), use.names = FALSE)
     ok("the Prompt tab has no \"System prompt\", none of core.md's Reflexes or Prohibitions, and no input named system",
        !grepl("System prompt", paste(b, html_of3(output$status)), ignore.case = TRUE) &&
-         !any(purrr::map_lgl(c(reflex_says[!is.na(reflex_says)], skills[["core.md"]]$prohibitions), function(s)
+         !any(purrr::map_lgl(c(reflex_says[!is.na(reflex_says)], rfiles[["core.md"]]$prohibitions), function(s)
            grepl(squash(s), squash(paste(b, html_of3(output$status))), fixed = TRUE))) &&
          !grepl("REFLEXES:", b, fixed = TRUE) && !grepl("PROHIBITIONS", b, fixed = TRUE) &&
          !grepl("id=\"[^\"]*-system\"", b))
@@ -1784,20 +1649,18 @@ local({
 
 
 # Tab 3, Results, and Run again.
-checklist_ids <- names(build_checklist(clean_form(fl_form)))
+
 rich_appraisal <- list(
   selected = list(
-    list(domain = "domain 1", candidate = "A", id = "Q1", why = "The plainest wording.", suggestion = "Name the institution.",
-         concerns = list(
-           list(check = checklist_ids[1], evidence = "institution 1", severity = 7, why = "The term is vague."),
-           list(check = "invented_check", evidence = "trust", severity = 3, why = "Odd."))),
-    list(domain = "domain 2", candidate = "B", id = "Q2", why = "Neutral wording.", suggestion = "",
-         concerns = list(list(check = checklist_ids[2], evidence = "a little", severity = 6, why = "A judgment call.")))),
-  not_covered = list("domain 3"),
-  set_notes = list(list(check = checklist_ids[3], severity = 6, why = "Both are keyed one way."),
-                   list(check = checklist_ids[4], severity = 3, why = "Slightly uneven.")),
-  test_first = list(list(id = "Q1", method = "a cognitive interview")),
-  limits = "An expert review by a language model, not a pretest.")
+    list(domain = "domain 1", candidate = "A", id = "Q1",
+         check_before_use = "The term institution is vague. Name the institution.",
+         why = "ZZ-WHY-NOT-SHOWN", suggestion = "ZZ-SUGGESTION-NOT-SHOWN",
+         concerns = list(list(check = "one_thing", evidence = "ZZ-EVIDENCE-NOT-SHOWN", severity = 7, why = "x"))),
+    list(domain = "domain 2", candidate = "B", id = "Q2", check_before_use = "")),
+  not_covered = list("ZZ-NOT-COVERED-NOT-SHOWN"),
+  set_notes = list(list(check = "keying", severity = 6, why = "ZZ-SET-NOTE-NOT-SHOWN")),
+  test_first = list(list(id = "Q1", method = "ZZ-TEST-FIRST-NOT-SHOWN")),
+  limits = "ZZ-LIMITS-NOT-SHOWN")
 # The screens call the project manager the app is configured with.
 pm_id <- APP_MODELS$pm$id
 reply_rich <- function(m, sys) {
@@ -1827,33 +1690,31 @@ local({
          identical(st$rounds[[1]]$schema, 1L) && identical(st$rounds[[1]]$seed, st$seed) &&
          identical(purrr::map_chr(st$set, "uid"), c("A_1", "B_2")) && identical(purrr::map_lgl(st$set, "swapped"), c(FALSE, FALSE)) &&
          length(st$edits) == 0L)
-    ok("only the recommended set is shown: each item with its domain, the reviewer's reason, its stem and every option in a text box, a button to take it out, and no tick boxes",
-       grepl("The recommended set", s, fixed = TRUE) && grepl("Why this one: The plainest wording.", s, fixed = TRUE) &&
-         grepl("domain 1", s, fixed = TRUE) && grepl("ed_A_1_stem", s, fixed = TRUE) &&
+    ok("only the recommended questions are shown, under the one sentence: each question and every option in a text box, numbered, with a button to take it out, and no tick boxes",
+       grepl("These are drafts. Test them with real respondents before fielding.", s, fixed = TRUE) &&
+         grepl("ed_A_1_stem", s, fixed = TRUE) &&
          all(purrr::map_lgl(c("ed_A_1_o1", "ed_A_1_o2", "ed_A_1_o3", "ed_B_2_stem", "ed_B_2_o3"), function(id) grepl(id, s, fixed = TRUE))) &&
+         grepl("Question 1", s, fixed = TRUE) && grepl("Question 2", s, fixed = TRUE) &&
          grepl("Question from worker", s, fixed = TRUE) && n_in3("Remove from the set", s) == 2L &&
-         !grepl("Keep this item", paste(h, s, d), fixed = TRUE) && !grepl("Candidate C", s, fixed = TRUE))
-    ok("an item's remaining concerns are in the three bands, the minor ones folded, a check that was not sent is flagged, and the reviewer's suggestion is labelled untested",
-       n_in3("Fix before fielding", s) == 1L && grepl("severity 7", s, fixed = TRUE) && grepl("Needs your judgment", s, fixed = TRUE) &&
-         grepl("severity 6", s, fixed = TRUE) && grepl("Failing words:", s, fixed = TRUE) && grepl("institution 1", s, fixed = TRUE) &&
-         grepl(build_checklist(st$form)[[checklist_ids[1]]], s, fixed = TRUE) &&
-         grepl("1 minor fail, rated below 5", s, fixed = TRUE) && grepl("not a check that was sent", s, fixed = TRUE) &&
-         grepl("A suggested change, untested: ", s, fixed = TRUE) && grepl("Name the institution.", s, fixed = TRUE))
-    ok("below the set: what no draft covered, the notes on the set as a whole in bands, what to test first, and the limits",
-       grepl("No draft item was good enough to recommend for: domain 3", s, fixed = TRUE) &&
-         grepl("About the set as a whole", s, fixed = TRUE) && grepl("Both are keyed one way.", s, fixed = TRUE) &&
-         grepl("What to test first", s, fixed = TRUE) && grepl("Item Q1: a cognitive interview", s, fixed = TRUE) &&
-         grepl("not a pretest", s, fixed = TRUE) && grepl("nothing here is validated", s, fixed = TRUE) &&
-         !grepl("Merged option|Coverage by domain", paste(h, s, d)))
-    ok("every draft is in a closed panel below, a candidate at a time with its model, each item with its coded defaults and a button to use it, except the two already in the set",
-       grepl("See all drafts (3 candidates)", d, fixed = TRUE) && !grepl("<details[^>]* open", d) &&
-         all(purrr::map_lgl(c("Candidate A", "Candidate B", "Candidate C"), function(l) grepl(l, d, fixed = TRUE))) &&
-         all(purrr::map_lgl(fl_ids, function(id) grepl(id, d, fixed = TRUE))) &&
-         n_in3("Coded defaults", d) == 6L && n_in3("Use this instead", d) == 4L && n_in3("decisions not itemised", d) == 6L &&
-         grepl("Odd number of points", d, fixed = TRUE) && grepl("Midpoint, as the item states it (self-reported)", d, fixed = TRUE))
-    ok("the page for the round shows the prompt hash and seed, the criteria that were applied, and gives the appraiser no model name",
-       grepl("Criteria that were applied", h, fixed = TRUE) && grepl(substr(build_prompt(st$form)$hash, 1, 16), h, fixed = TRUE) &&
-         grepl(as.character(st$seed), h, fixed = TRUE) &&
+         !grepl("Keep this item", paste(h, s, d), fixed = TRUE) && !grepl("Candidate", paste(h, s), fixed = TRUE))
+    ok("a recommended question has no domain, reason, model, severity, band, suggestion or reflex id on the screen",
+       !any(purrr::map_lgl(c("domain 1", "domain 2", "Why this one", "written by", "severity", "Fix before fielding", "Needs your judgment",
+                             "A suggested change", "one_thing", "Failing words", fl_ids), function(x) grepl(x, s, fixed = TRUE))))
+    ok("the one line to check before use is on the question that has one, cut to its first sentence, and not on the other",
+       n_in3("Check before use:", s) == 1L && grepl("The term institution is vague.", s, fixed = TRUE) &&
+         !grepl("Name the institution", s, fixed = TRUE) &&
+         regexpr("Check before use:", s, fixed = TRUE) < regexpr("ed_B_2_stem", s, fixed = TRUE))
+    ok("nothing else of the reviewer's reply is drawn, though the model sent it: no reasons, concerns, notes on the set, domains not covered, test first or limits",
+       !grepl("ZZ-", paste(h, s, d), fixed = TRUE) &&
+         !grepl("About the set as a whole|What to test first|No draft item was good enough", paste(h, s, d)))
+    ok("the other drafts are in a closed panel below, by domain, each with its question and options and a button to use it, except the two already in the set; no model, candidate or coded default",
+       grepl("See all drafts", d, fixed = TRUE) && !grepl("<details[^>]* open", d) &&
+         n_in3("Use this instead", d) == 4L && grepl("<h6[^>]*>domain 1</h6>", d) &&
+         !any(purrr::map_lgl(c(fl_ids, "Candidate", "Coded defaults", "decisions not itemised", "Odd number of points"), function(x) grepl(x, d, fixed = TRUE))))
+    ok("the page for the round shows no prompt hash, seed or criteria, and the appraiser was given no model name",
+       !grepl("Criteria that were applied|Prompt hash|Labels shuffled|workers returned usable drafts", h) &&
+         !grepl(substr(build_prompt(st$form)$hash, 1, 16), paste(h, s, d), fixed = TRUE) &&
+         !grepl(as.character(st$seed), paste(h, s, d), fixed = TRUE) &&
          !any(purrr::map_lgl(c(fl_ids, "vendor-"), function(x) grepl(x, fa$st$calls[[4]]$user, fixed = TRUE))))
 
     # What the analyst does. The drafts are never touched.
@@ -1875,13 +1736,13 @@ local({
     ok("taking an item out removes it from the set and the page, and what was typed in the others is put back in the boxes",
        identical(purrr::map_chr(st$set, "uid"), "A_1") && identical(names(st$edits), "A_1") &&
          n_in3("Remove from the set", s2) == 1L && grepl("A better stem?", s2, fixed = TRUE) && grepl("Somewhat", s2, fixed = TRUE) &&
-         !grepl("ed_B_2_stem", s2, fixed = TRUE) && grepl("edited", s2, fixed = TRUE))
+         !grepl("ed_B_2_stem", s2, fixed = TRUE))
     session$setInputs(swap_target = "", swap = "C_1")
     session$flushReact()
     ok("an item from the drafts used with no item chosen goes at the end of the set, marked as swapped in; one already in the set is not put in twice",
        identical(purrr::map_chr(st$set, "uid"), c("A_1", "C_1")) && identical(purrr::map_lgl(st$set, "swapped"), c(FALSE, TRUE)) &&
          identical(st$set[[2]]$candidate, "C") && st$set[[2]]$position == 1L && identical(st$set[[2]]$id, "Q1") &&
-         grepl("swapped in by you", html_of3(output$set_ui), fixed = TRUE) &&
+         grepl("ed_C_1_stem", html_of3(output$set_ui), fixed = TRUE) &&
          identical(purrr::map_chr(set_swap(st$set, st$set[[2]]), "uid"), c("A_1", "C_1")))
     session$setInputs(swap_target = "A_1", swap = "B_1")
     session$flushReact()
@@ -1915,10 +1776,11 @@ local({
     session$flushReact()
     h = html_of3(output$results)
     d = html_of3(output$drafts_ui)
-    ok("a worker that failed is listed with its reason, the other two are shown, and the reviewer covers two candidates",
-       grepl("Did not return a usable draft", h, fixed = TRUE) && grepl("canned endpoint error", h, fixed = TRUE) &&
-         grepl("2 of 3", h, fixed = TRUE) && n_in3("Coded defaults", d) == 4L &&
-         !grepl("Candidate C", d, fixed = TRUE) && identical(st$appraisal$status, "ok") && length(st$set) == 2L)
+    ok("a worker that failed is not on the screen when others came back (the record has it); the other two are shown, and the reviewer covers two candidates",
+       !grepl("Did not return a usable draft|canned endpoint error|workers returned", paste(h, d)) &&
+         n_in3("Use this instead", d) == 2L &&
+         any(purrr::map_lgl(st$drafts, function(x) grepl("canned endpoint error", x$error %||% "", fixed = TRUE))) &&
+         identical(st$appraisal$status, "ok") && length(st$set) == 2L)
   })
 })
 
@@ -1935,7 +1797,7 @@ local({
     ok("a reviewer that did not come back is said in words with its reason; there is no recommended set, the drafts are open, and the analyst can build a set from them",
        grepl("The reviewer did not come back", h, fixed = TRUE) && grepl("the appraiser is down", h, fixed = TRUE) &&
          grepl("The set is empty", html_of3(output$set_ui), fixed = TRUE) && length(st$set) == 0L &&
-         grepl("Candidate A", d, fixed = TRUE) && grepl("<details[^>]* open", d) && n_in3("Use this instead", d) == 6L)
+         grepl("See all drafts", d, fixed = TRUE) && grepl("<details[^>]* open", d) && n_in3("Use this instead", d) == 6L)
     session$setInputs(swap_target = "", swap = "A_2")
     session$flushReact()
     ok("using an item from the drafts then gives a set of one, marked as swapped in",
@@ -1989,20 +1851,8 @@ ok("no key is anywhere on the page", !grepl("pm-test-key|SECRET-KEY|or-secret-ke
 # The brief check's and the appraisal's call records reach the log, as the drafts' do.
 ok("the log keeps the brief check's and the appraisal's own call records: raw reply, tokens, attempts",
    identical(rj_back$brief$call$tokens$input, 100L) && identical(rj_back$appraisal$call$tokens$output, 50L) &&
-     grepl("criteria", rj_back$brief$call$raw, fixed = TRUE) && grepl("limits", rj_back$appraisal$call$raw, fixed = TRUE) &&
+     grepl("criteria", rj_back$brief$call$raw, fixed = TRUE) && grepl("selected", rj_back$appraisal$call$raw, fixed = TRUE) &&
      identical(rj_back$brief$call$attempts, 1L))
-
-# How three real models wrote that every point is labelled, and two ways of saying it is not.
-label_of <- function(...) code_defaults(good_item(1, decisions = list(...)))$labels
-ok("a model's own words for labelling every point are read as yes, in the phrasings the live run produced",
-   identical(label_of("Closed; 5 options; all labels present; no midpoint; unipolar direction (none to a lot)"), "yes") &&
-     identical(label_of("Label every option; labels make each response visible and distinct on the web form."), "yes") &&
-     identical(label_of("Every option has a verbal label to avoid confusion."), "yes"))
-ok("labels said to be partial or absent are read as no, and a silence is not stated",
-   identical(label_of("Label only the end points of the scale."), "no") &&
-     identical(label_of("Endpoint labels only."), "no") && identical(label_of("No labels present."), "no") &&
-     identical(label_of("Closed; five options; direction low to high."), "not stated"))
-
 
 # ---- Phase 4a: section 13's rulings ------------------------------------------------------
 
@@ -2083,39 +1933,36 @@ local({
 
 # ---- Phase 4b: the review flow and its checks --------------------------------------------
 
-finding <- function(check, evidence, severity, ...)
-  with_field(list(check = check, stage = "comprehension", evidence = evidence, problem = "A problem.",
-                  severity = severity, rewrite = "", rewrite_english = "", probe = ""), ...)
+# A review as the model sends it, with more than the analyst is shown: a third problem, a fourth
+#   point about the whole, and fields it is no longer asked for.
 rv_reply <- list(
   items = list(
-    list(id = "Q1", findings = list(
-      finding("one_thing", "local recycling", 8, rewrite = "A rewrite.", probe = "A probe."),
-      finding("not_a_check", "words that are nowhere in the questionnaire", 3))),
-    list(id = 2, findings = list())),
-  instrument = list(finding("context_and_order", "Q1 and Q2", 5)),
-  trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
-  test_first = list(list(id = "Q1", method = "cognitive interview")),
-  not_assessed = "Fit to objectives was not assessed.")
+    list(id = "Q1", verdict = "Revise", problems = list(
+      list(problem = "Two services are asked about in one question. Split it in two.", rewrite = "How satisfied are you with local recycling?"),
+      list(problem = "Street cleaning could mean sweeping or litter bins.", rewrite = "How satisfied are you with street sweeping?"),
+      list(problem = "ZZ-THIRD-PROBLEM-NOT-SHOWN", rewrite = "ZZ-THIRD-REWRITE-NOT-SHOWN"))),
+    list(id = "Q2", verdict = "Keep", problems = list())),
+  instrument = list("Questions 1 and 2 use different scales. Use one scale throughout.", "Point two.", "Point three.",
+                    "ZZ-FOURTH-POINT-NOT-SHOWN"),
+  test_first = list("ZZ-TEST-FIRST-NOT-SHOWN"), not_assessed = "ZZ-NOT-ASSESSED-NOT-SHOWN")
 
 vr <- reply_validator("review")
-ok("a review with its five fields passes: findings per question, instrument findings, TRAPD, test_first, not_assessed",
+ok("a review with its two fields passes: a verdict and problems for each question, and points about the whole; fields it is no longer asked for are ignored",
    is.na(problem_of(vr, rv_reply)) &&
-     is.na(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list()))))))
-ok("a question's id may be a label or a number, and an empty list of findings is a question with none",
-   is.na(problem_of(vr, with_field(rv_reply, items = list(list(id = 1, findings = list()), list(id = "Q2a", findings = list()))))) &&
-     says_in(problem_of(vr, with_field(rv_reply, items = list(list(findings = list())))), "'id' is missing"))
-ok("a review missing a field, or with a finding that has no check, evidence, problem or severity from 1 to 10, fails naming the question",
-   says_in(problem_of(vr, rv_reply[names(rv_reply) != "not_assessed"]), "'not_assessed' is missing") &&
-     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list(
-       finding("one_thing", "x", 6, check = NULL)))))), "question Q1 does not give its check") &&
-     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list(
-       finding("one_thing", "x", 0)))))), "severity from 1 to 10") &&
-     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list(
-       finding("one_thing", "x", "high")))))), "severity from 1 to 10") &&
-     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", findings = list(
-       finding("one_thing", "x", 6, problem = NULL)))))), "problem and a severity") &&
-     says_in(problem_of(vr, with_field(rv_reply, instrument = list(finding("context_and_order", "x", 11)))),
-             "the instrument"))
+     is.na(problem_of(vr, list(items = list(list(id = "Q1", verdict = "Keep")), instrument = list()))) &&
+     is.na(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", verdict = "keep", problems = list()))))))
+ok("a question's id may be a label or a number; a missing id, a missing field or a verdict that is not Keep or Revise fails",
+   is.na(problem_of(vr, with_field(rv_reply, items = list(list(id = 1, verdict = "Keep"), list(id = "Q2a", verdict = "Keep"))))) &&
+     says_in(problem_of(vr, with_field(rv_reply, items = list(list(verdict = "Keep")))), "'id' is missing") &&
+     says_in(problem_of(vr, rv_reply[names(rv_reply) != "instrument"]), "'instrument' is missing") &&
+     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", verdict = "Maybe")))), "must be \"Keep\" or \"Revise\"") &&
+     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1")))), "'verdict' is missing"))
+ok("a Revise with no problem fails, asking for the problem or a Keep; a point about the whole must be a sentence",
+   says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", verdict = "Revise", problems = list())))),
+           "gives no problem") &&
+     says_in(problem_of(vr, with_field(rv_reply, items = list(list(id = "Q1", verdict = "Revise", problems = list(list(rewrite = "x")))))),
+             "gives no problem") &&
+     says_in(problem_of(vr, with_field(rv_reply, instrument = list(""))), "one sentence of text"))
 
 rv_form <- forms$evaluate
 rv_ask <- function(reply = rv_reply, st = new.env()) {
@@ -2150,42 +1997,48 @@ ok("a form that is not a review, or has no questionnaire, or is over the cap, is
 ok("run_review never looks up a key and reaches no model but through ask",
    !any(c("Sys.getenv", "llm_key_for", "llm_session_key", "llm_json", "llm_complete") %in% all.names(body(run_review))))
 
-flags <- check_review(rv_reply, rv_form)
-ok("check_review gives one row per finding, questions and instrument alike, with the columns the flow needs",
-   is.data.frame(flags) && nrow(flags) == 3L &&
-     all(c("item", "scope", "check", "severity", "shown", "evidence", "evidence_found", "check_known", "stage",
-           "problem", "rewrite", "rewrite_english", "probe") %in% names(flags)) &&
-     identical(flags$item, c("Q1", "Q1", "")) && identical(flags$scope, c("question", "question", "instrument")))
-ok("a quote that is in the text, and a check that was sent, are accepted; an invented quote and an unknown check are flagged, not dropped",
-   isTRUE(flags$evidence_found[1]) && isTRUE(flags$check_known[1]) &&
-     isFALSE(flags$evidence_found[2]) && isFALSE(flags$check_known[2]) && is.na(flags$evidence_found[3]) &&
-     isTRUE(flags$check_known[3]))
-ok("a quote is found whatever its case, spacing, curly quotes or enclosing quotation marks",
+# What the analyst is shown of a review, and the limits R holds it to (DESIGN.md section 18).
+sh <- shape_review(rv_reply, rv_form$questionnaire)
+ok("shape_review gives, per question, its id, its text as pasted, a verdict and at most two problems with their rewrites; and the ids kept, and at most three points about the whole",
+   identical(names(sh), c("questions", "keep", "instrument")) && length(sh$questions) == 2L &&
+     identical(purrr::map_chr(sh$questions, "id"), c("Q1", "Q2")) &&
+     identical(purrr::map_chr(sh$questions, "verdict"), c("Revise", "Keep")) &&
+     grepl("^Q1\\. How satisfied are you with local recycling\\? Very", sh$questions[[1]]$text) && grepl("^Q2\\. Taking all things together", sh$questions[[2]]$text) &&
+     length(sh$questions[[1]]$problems) == 2L && length(sh$questions[[2]]$problems) == 0L &&
+     identical(sh$questions[[1]]$problems[[2]]$rewrite, "How satisfied are you with street sweeping?") &&
+     identical(sh$keep, "Q2") && length(sh$instrument) == 3L)
+ok("a third problem and a fourth point are dropped, whatever the model sent; so are test first and what was not assessed",
+   !grepl("ZZ-", paste(unlist(sh), collapse = " "), fixed = TRUE))
+ok("a problem is held to one sentence of 20 words or fewer, and a point about the whole to one sentence",
+   identical(sh$questions[[1]]$problems[[1]]$problem, "Two services are asked about in one question.") &&
+     identical(sh$instrument[[1]], "Questions 1 and 2 use different scales.") &&
+     identical(shape_review(list(items = list(list(id = "Q1", verdict = "Revise", problems = list(list(
+       problem = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one",
+       rewrite = "r")))), instrument = list()), "Q1. A question?")$questions[[1]]$problems[[1]]$problem,
+       paste0("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty", "…")))
+ok("a Revise with no problem to show is a Keep, and a verdict in any case is read",
    local({
-     q = with_field(rv_form, questionnaire = "Q1. How satisfied are you with the “recycling   services” and street cleaning, today?")
-     found = function(ev) check_review(list(items = list(list(id = "Q1", findings = list(finding("one_thing", ev, 6)))),
-                                            instrument = list()), q)$evidence_found
-     isTRUE(found("RECYCLING SERVICES")) && isTRUE(found("\"recycling services\"")) && isTRUE(found("‘recycling services’")) &&
-       isTRUE(found("street cleaning, today")) && isFALSE(found("recycling services and the council")) && isFALSE(found(""))
+     s1 = shape_review(list(items = list(list(id = "Q1", verdict = "Revise", problems = list(list(problem = "", rewrite = "x"))),
+                                         list(id = "Q2", verdict = "REVISE", problems = list(list(problem = "Bad.", rewrite = "Better?")))),
+                           instrument = list()), "Q1. A?\n\nQ2. B?")
+     identical(purrr::map_chr(s1$questions, "verdict"), c("Keep", "Revise")) && identical(s1$keep, "Q1")
    }))
-ok("severity 5 and above is shown, below 5 is not, and a finding with no severity is shown",
-   identical(flags$shown, c(TRUE, FALSE, TRUE)) && identical(flags$severity, c(8, 3, 5)) &&
-     isTRUE(check_review(list(items = list(list(id = "Q1", findings = list(list(check = "one_thing", evidence = "x", problem = "y")))),
-                              instrument = list()), rv_form)$shown))
-ok("a review with no findings is a data frame with no rows and the same columns",
-   local({
-     d = check_review(list(items = list(list(id = "Q1", findings = list())), instrument = list()), rv_form)
-     is.data.frame(d) && nrow(d) == 0L && all(c("item", "check", "severity", "evidence_found", "check_known") %in% names(d))
-   }))
-ok("the review's checks need the CHECKLIST that was sent: ids in it are known, others are not",
+ok("the question as pasted is found by blocks when the blank lines make as many as the ids, and by the line that begins with its id when they do not; one that is not found is empty",
+   identical(pasted_questions("Q1. First?\nYes / No\n\nQ2. Second?\nA / B", c("a", "b")), c("Q1. First?\nYes / No", "Q2. Second?\nA / B")) &&
+     identical(pasted_questions("Q1. First?\nYes / No\nQ2. Second?\nA / B\nQ10. Tenth?", c("Q1", "Q2", "Q10")),
+               c("Q1. First?\nYes / No", "Q2. Second?\nA / B", "Q10. Tenth?")) &&
+     identical(pasted_questions("Q1. First?\nQ2. Second?", c("Q1", "Q9")), c("Q1. First?\nQ2. Second?", "")) &&
+     identical(pasted_questions("1. First?\n1 Yes\n2 No\n2. Second?", c("1", "2")), c("1. First?\n1 Yes\n2 No", "2. Second?")))
+ok("the review's checks need the CHECKLIST that was sent",
    all(c("one_thing", "response_scale") %in% names(build_checklist(rv_form))) &&
      !"declare_defaults" %in% names(build_checklist(rv_form)))
 
 rr <- flow_round(rv_form, fl_pm, review = rv)
 rr_back <- jsonlite::fromJSON(as.character(flow_log_json(rr)), simplifyVector = FALSE)
-ok("a review round is a log too: the summary row, the review with its prompt hash and its call record",
+ok("a review round is a log too: the summary row, the review with its prompt hash and its call record, and the whole reply as the model sent it",
    identical(purrr::map_chr(rr_back$summary, "step"), "review") && identical(rr_back$review$hash, rv$hash) &&
-     !is.null(rr_back$review$call$seconds) && identical(rr_back$schema, 1L) && is.null(rr_back$appraisal))
+     !is.null(rr_back$review$call$seconds) && identical(rr_back$schema, 1L) && is.null(rr_back$appraisal) &&
+     grepl("ZZ-THIRD-PROBLEM-NOT-SHOWN", as.character(flow_log_json(rr)), fixed = TRUE))
 
 
 # ---- Phase 4c: the Evaluate screens ---------------------------------------------------------
@@ -2218,56 +2071,22 @@ local({
          is.null(st$seed) && length(st$rounds) == 1L &&
          identical(purrr::map_chr(st$rounds[[1]]$summary, "step"), "review") &&
          identical(st$rounds[[1]]$prompt$edited, TRUE))
-    ok("the page says it is one review, shows the prompt hash and that it was edited, and does not claim validation",
-       grepl("One review by the project manager", h, fixed = TRUE) &&
-         grepl(substr(build_prompt(st$form)$hash, 1, 16), h, fixed = TRUE) && grepl("edited; assembled hash", h, fixed = TRUE) &&
-         grepl("nothing here is validated", h, fixed = TRUE) && !grepl("Candidate", h, fixed = TRUE) &&
-         !grepl("Keep this item", h, fixed = TRUE))
-    ok("findings are shown question by question, in the order pasted, a question with a numeric id included",
-       grepl("Question Q1", h, fixed = TRUE) && grepl("Question 2", h, fixed = TRUE) &&
-         regexpr("Question Q1", h, fixed = TRUE) < regexpr("Question 2", h, fixed = TRUE))
-    ok("a finding at severity 5 or above shows its check and the check's question, severity, quote, rewrite and probe",
-       grepl("one_thing", h, fixed = TRUE) && grepl("severity 8", h, fixed = TRUE) &&
-         grepl(build_checklist(st$form)[["one_thing"]], h, fixed = TRUE) && grepl("local recycling", h, fixed = TRUE) &&
-         grepl("A rewrite, untested", h, fixed = TRUE) && grepl("A rewrite.", h, fixed = TRUE) &&
-         grepl("A probe", h, fixed = TRUE) && grepl("A probe.", h, fixed = TRUE))
-    ok("a finding below 5 is folded away, and flagged when its quote is not in the text or its check was not sent",
-       grepl("1 minor finding, rated below 5", h, fixed = TRUE) && grepl("quote not found", h, fixed = TRUE) &&
-         grepl("not a check that was sent", h, fixed = TRUE) && grepl("words that are nowhere", h, fixed = TRUE) &&
-         n_in3("not_a_check", h) == 1L && n_in3("words that are nowhere", h) == 1L)
-    ok("a question with no finding says none was found by this review, never that it has no problems",
-       grepl("No problem was found by this review.", h, fixed = TRUE) && !grepl("no problems", tolower(h), fixed = TRUE))
-    ok("instrument-level findings are shown apart, naming the questions involved",
-       grepl("The instrument as a whole", h, fixed = TRUE) && grepl("context_and_order", h, fixed = TRUE) &&
-         grepl("Questions: Q1 and Q2", h, fixed = TRUE))
-    ok("an empty TRAPD block is not drawn; what to test first and what was not assessed are",
-       !grepl("TRAPD: what is still needed", h, fixed = TRUE) && grepl("What to test first", h, fixed = TRUE) &&
-         grepl("Question Q1: cognitive interview", h, fixed = TRUE) && grepl("What this review could not judge", h, fixed = TRUE) &&
-         grepl("Fit to objectives was not assessed.", h, fixed = TRUE))
-    ok("R's checks on the review are counted: the quote that is not in the text and the check that was not sent",
-       grepl("checks on the review found", h, fixed = TRUE) && grepl("quote that is", h, fixed = TRUE) &&
-         grepl("finding cites", h, fixed = TRUE))
-    ok("the criteria that were applied are listed", grepl("Criteria that were applied", h, fixed = TRUE))
-  })
-})
-
-local({
-  st = review_state(with_field(forms$evaluate, source_language = "Spanish"))
-  trapd_reply = with_field(rv_reply, trapd = list(translation = "Two independent translations are needed.", review = "",
-                                                   adjudication = "An adjudicator must reconcile them.", pretesting = "", documentation = ""))
-  ra = rv_ask(trapd_reply)
-  shiny::testServer(mod_results_server,
-                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) ra$ask), {
-    session$flushReact()
-    approve_review(st)
-    session$flushReact()
-    h = html_of3(output$results)
-    ok("a review of translated text shows the TRAPD steps that are still needed, and only those",
-       grepl("TRAPD: what is still needed", h, fixed = TRUE) && grepl("Two independent translations are needed.", h, fixed = TRUE) &&
-         grepl("An adjudicator must reconcile them.", h, fixed = TRUE) &&
-         grepl("<strong>Translation</strong>", h, fixed = TRUE) && grepl("<strong>Adjudication</strong>", h, fixed = TRUE) &&
-         !grepl("<strong>Pretesting</strong>", h, fixed = TRUE) && !grepl("<strong>Review</strong>", h, fixed = TRUE) &&
-         grepl("functional_equivalence", paste(build_prompt(st$form)$user), fixed = TRUE))
+    ok("the review is shown under the one sentence: a question marked Revise with the question as pasted, the verdict, two problems and a suggested rewrite each",
+       grepl("These are drafts. Test them with real respondents before fielding.", h, fixed = TRUE) &&
+         grepl("Question Q1", h, fixed = TRUE) && grepl("Q1. How satisfied are you with local recycling? Very / Fairly / Not", h, fixed = TRUE) &&
+         grepl("<strong>Revise</strong>", h, fixed = TRUE) &&
+         n_in3("Problem: ", h) == 2L && grepl("Two services are asked about in one question.", h, fixed = TRUE) &&
+         grepl("Suggested rewrite: How satisfied are you with local recycling?", h, fixed = TRUE) &&
+         n_in3("Suggested rewrite: ", h) == 2L && !grepl("Split it in two", h, fixed = TRUE))
+    ok("the questions marked Keep are one line, not cards; the questionnaire as a whole has three points and no more",
+       grepl("Question Q2: keep as written", h, fixed = TRUE) && !grepl("Question Q2</h6>", h, fixed = TRUE) &&
+         grepl("The questionnaire as a whole", h, fixed = TRUE) && n_in3("Point two.", h) == 1L && n_in3("Point three.", h) == 1L &&
+         grepl("Questions 1 and 2 use different scales.", h, fixed = TRUE) && !grepl("Use one scale throughout", h, fixed = TRUE))
+    ok("nothing else of the reply is on the screen: no third problem, fourth point, test first, what was not assessed, severity, check, quote, prompt hash, round or criteria",
+       !grepl("ZZ-", h, fixed = TRUE) &&
+         !grepl("severity|Fix before fielding|Needs your judgment|What to test first|could not judge|Criteria that were applied|One review by the project manager|nothing here is validated|Quote:",
+                h) &&
+         !grepl(substr(build_prompt(st$form)$hash, 1, 16), h, fixed = TRUE) && !grepl("one_thing", h, fixed = TRUE))
   })
 })
 
@@ -2283,23 +2102,22 @@ local({
     h = html_of3(output$results)
     ok("a review that fails is said on the page in words, with its reason, and the round is still recorded",
        grepl("The review did not come back", h, fixed = TRUE) && grepl("the project manager is down", h, fixed = TRUE) &&
-         identical(st$review$status, "failed") && st$round == 1L && !grepl("Question by question", h, fixed = TRUE))
+         identical(st$review$status, "failed") && st$round == 1L && !grepl("keep as written", h, fixed = TRUE))
   })
 })
 local({
   st = review_state()
-  ra = rv_ask(list(items = list(list(id = "Q1", findings = list(
-    finding("one_thing", "local recycling", 6), finding("one_thing", "local recycling", 7)))),
-    instrument = list(), trapd = rv_reply$trapd, test_first = list("Q1"), not_assessed = ""))
+  ra = rv_ask(list(items = list(list(id = "Q1", verdict = "Keep", problems = list()),
+                                list(id = "Q2", verdict = "Keep", problems = list())), instrument = list()))
   shiny::testServer(mod_results_server,
                     args = list(state = st, go = function(tab) NULL, make_ask = function(total) ra$ask), {
     session$flushReact()
     approve_review(st)
     session$flushReact()
     h = html_of3(output$results)
-    ok("two findings on one question, a test_first given as plain ids, and no not_assessed are all drawn",
-       n_in3("severity 6", h) == 1L && n_in3("severity 7", h) == 1L && grepl("What to test first", h, fixed = TRUE) &&
-         !grepl("What this review could not judge", h, fixed = TRUE) && !grepl("quote not found", h, fixed = TRUE))
+    ok("a review that keeps every question says so in one line and has no cards and no points about the whole",
+       grepl("Questions Q1, Q2: keep as written", h, fixed = TRUE) && !grepl("<h6", h, fixed = TRUE) &&
+         !grepl("The questionnaire as a whole", h, fixed = TRUE) && !grepl("Revise", h, fixed = TRUE))
   })
 })
 
@@ -2317,59 +2135,6 @@ local({
        grepl("system and a user", tryCatch(run_review(rv_form, fl_pm, ask = ra$ask, prompt = list(user = "x")),
                                            error = conditionMessage), fixed = TRUE))
 })
-
-
-# ---- Phase 5a: severity bands and the way evidence is compared ------------------------------
-
-ok("severity_band: 7 and above fix, 5 and 6 judgment, below 5 minor, none given judgment (the cut at 5 is unchanged)",
-   identical(severity_band(c(10, 9, 7, 6, 5, 4, 1, NA)),
-             c("fix", "fix", "fix", "judgment", "judgment", "minor", "minor", "judgment")) &&
-     identical(unname(SEVERITY_BANDS), c("Fix before fielding", "Needs your judgment", "Minor")) &&
-     identical(SEVERITY_SHOWN, 5L) && identical(SEVERITY_FIX, 7L) &&
-     identical(severity_band(c(9, 6, 3)) != "minor", c(9, 6, 3) >= SEVERITY_SHOWN))
-local({
-  rows = check_review(list(items = list(list(id = "Q1", findings = list(
-    finding("one_thing", "local recycling", 5), finding("one_thing", "local recycling", 9),
-    finding("response_scale", "local recycling", 4), finding("one_thing", "local recycling", 7),
-    finding("one_thing", "local recycling", 2), finding("response_scale", "local recycling", 6)))),
-    instrument = list()), forms$evaluate)
-  h = paste(as.character(review_findings(rows, build_checklist(forms$evaluate))), collapse = "")
-  at = function(x) regexpr(x, h, fixed = TRUE)[[1]]
-  sev = function(n) regexpr(paste0("severity ", n, "<"), h, fixed = TRUE)[[1]]
-  ok("a review's findings are shown in three bands, highest first, the Minor band folded away",
-     n_in3("Fix before fielding", h) == 1L && n_in3("Needs your judgment", h) == 1L &&
-       at("Fix before fielding") < at("Needs your judgment") && at("Needs your judgment") < at("<details") &&
-       n_in3("2 minor findings, rated below 5", h) == 1L &&
-       sev(9) < sev(7) && sev(7) < at("Needs your judgment") && at("Needs your judgment") < sev(5) &&
-       sev(5) < sev(6) && sev(6) < at("<details") && sev(4) > at("<details") && sev(2) > at("<details"))
-  only_low = check_review(list(items = list(list(id = "Q1", findings = list(finding("one_thing", "local recycling", 3)))),
-                               instrument = list()), forms$evaluate)
-  h2 = paste(as.character(review_findings(only_low, build_checklist(forms$evaluate))), collapse = "")
-  ok("a question with only minor findings says none is rated 5 or above and shows no band heading",
-     grepl("No finding rated 5 or above.", h2, fixed = TRUE) && !grepl("Fix before fielding", h2, fixed = TRUE) &&
-       !grepl("Needs your judgment", h2, fixed = TRUE) && grepl("1 minor finding, rated below 5", h2, fixed = TRUE))
-  fl = function(sev) list(candidate = "A", id = "Q1", items = NULL, check = "one_thing", evidence = "x", stage = "", why = "",
-                          severity = sev, shown = is.na(sev) || sev >= 5, known = TRUE)
-  h3 = paste(as.character(fail_list(list(fl(8), fl(5), fl(3), fl(NA_real_)), build_checklist(forms$attitudinal), "none")), collapse = "")
-  ok("an appraisal's fails use the same bands: a fail with no severity is in the middle band, below 5 is folded",
-     n_in3("Fix before fielding", h3) == 1L && n_in3("Needs your judgment", h3) == 1L &&
-       n_in3("severity 8", h3) == 1L && n_in3("severity 5", h3) == 1L && n_in3("1 minor fail, rated below 5", h3) == 1L)
-})
-local({
-  q = with_field(forms$evaluate, questionnaire = "Q1. How satisfied are you with the “recycling   services” and street cleaning?
-Very satisfied / Not at all")
-  found = function(ev) check_review(list(items = list(list(id = "Q1", findings = list(finding("one_thing", ev, 6)))),
-                                         instrument = list()), q)$evidence_found
-  ok("evidence is compared without case, spacing or the kind of quotation mark, with quotes around the whole of it dropped",
-     isTRUE(found("HOW SATISFIED   are you")) && isTRUE(found("“recycling services” and street cleaning")) &&
-       isTRUE(found("\"recycling services\"")) && isTRUE(found("'recycling services'")) &&
-       isTRUE(found("“How satisfied are you with the”")))
-  ok("evidence with an ellipsis, a paraphrase, or nothing is not found, and an ellipsis is not removed",
-     isFALSE(found("How satisfied ... street cleaning")) && isFALSE(found("How satisfied … street cleaning")) &&
-       isFALSE(found("how pleased are you")) && isFALSE(found("")) && isFALSE(found("...")) &&
-       identical(evidence_quote("“How ... much”"), "how ... much"))
-})
-
 
 # ---- Phase 5b: a long questionnaire is reviewed in parts -----------------------------------------
 
@@ -2419,7 +2184,7 @@ ok("an item call has only its part of the text, the part sentence with its numbe
 ok("the instrument call has the whole questionnaire, only the four instrument checks, and the sentence that fills the other fields",
    grepl(long_text, ip_inst$user, fixed = TRUE) && identical(ck_lines(ip_inst$user), inst_ids) &&
      grepl("Review the questionnaire below as a whole", ip_inst$user, fixed = TRUE) &&
-     grepl("Fill only \"instrument\", \"trapd\", \"test_first\" and \"not_assessed\"", ip_inst$user, fixed = TRUE) &&
+     grepl("Fill only \"instrument\" in your reply", ip_inst$user, fixed = TRUE) &&
      !grepl("\none_thing: ", ip_inst$user, fixed = TRUE))
 ok("the part sentences are fixed text from the registry, so the same part gives the same prompt and hash; the system prompt is the work step's",
    identical(ip1$hash, build_step_prompt(long_form, "items", part = plan[[2]])$hash) &&
@@ -2446,11 +2211,9 @@ parts_ask <- function(fail_at = 0L, st = new.env()) {
     if (st$n == st$fail_at) stop("canned endpoint error", call. = FALSE)
     ids = regmatches(user, gregexpr("(?m)^Q[0-9]+(?=\\. )", user, perl = TRUE))[[1]]
     instrument = !grepl("\none_thing: ", user, fixed = TRUE)
-    obj = list(items = if (instrument) list() else purrr::map(ids, function(i) list(id = i, findings = list(
-                 finding("one_thing", "Canned question", 6)))),
-               instrument = if (instrument) list(finding("scale_consistency", "Q1, Q2", 5)) else list(),
-               trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
-               test_first = list(), not_assessed = if (instrument) "Nothing else." else "")
+    obj = list(items = if (instrument) list() else purrr::map(ids, function(i) list(id = i, verdict = "Revise", problems = list(
+                 list(problem = "A canned problem.", rewrite = "A canned rewrite?")))),
+               instrument = if (instrument) list("Canned point about the whole.") else list())
     if (!is.null(validate)) validate(obj)
     list(obj = obj, raw = "{}", finish = "stop", tokens = c(input = 1000, output = 500, cached_input = 0), attempts = 1L)
   })
@@ -2468,10 +2231,14 @@ ok("a long review's result has run_review's fields and batches: one per call, in
      identical(purrr::map_chr(rvl$batches, "kind"), c("items", "items", "items", "instrument")) &&
      all(purrr::map_lgl(rvl$batches, function(b) all(c("status", "hash", "seconds", "part", "first_block", "reply", "user", "error") %in% names(b)))) &&
      identical(rvl$hash, rvl$batches[[1]]$hash) && !any(duplicated(purrr::map_chr(rvl$batches, "hash"))))
-ok("the reply holds all 30 questions in the order pasted, the instrument findings and not_assessed from the instrument call only",
+ok("the reply holds all 30 questions in the order pasted, and the points about the whole from the instrument call only",
    identical(purrr::map_chr(rvl$reply$items, "id"), paste0("Q", 1:30)) &&
-     length(rvl$reply$instrument) == 1L && identical(rvl$reply$not_assessed, "Nothing else.") &&
-     identical(nrow(check_review(rvl$reply, long_form)), 31L))
+     identical(names(rvl$reply), c("items", "instrument")) && length(rvl$reply$instrument) == 1L &&
+     local({
+       sh = shape_review(rvl$reply, long_form$questionnaire)
+       length(sh$questions) == 30L && length(sh$instrument) == 1L &&
+         grepl("^Q30\\. Canned question number 30", sh$questions[[30]]$text)
+     }))
 ok("the call record of a long review adds up its calls: seconds, and tokens in and out",
    identical(attr(rvl, "call")$tokens, list(input = 4000, output = 2000)) && attr(rvl, "call")$attempts == 4L &&
      is.numeric(attr(rvl, "call")$seconds))
@@ -2561,11 +2328,10 @@ local({
          grepl("Part 2 of 3, from block 14", h, fixed = TRUE) && grepl("canned endpoint error", h, fixed = TRUE) &&
          grepl("not clear of problems", h, fixed = TRUE) && n_in3("Run this part again", h) == 1L &&
          grepl("Shiny.setInputValue(&#39;", h, fixed = TRUE) && grepl("-rerun&#39;, 2, ", h, fixed = TRUE))
-    ok("the page for a long review lists a prompt hash for each call and shows the questions that came back and the instrument findings",
-       grepl("in 3 parts and one call on the instrument as a whole", h, fixed = TRUE) &&
-         grepl("Prompt hashes, one per call", h, fixed = TRUE) && grepl("The instrument as a whole", h, fixed = TRUE) &&
+    ok("the page for a long review shows the questions that came back and the points about the whole, and no prompt hash or call count",
+       grepl("The questionnaire as a whole", h, fixed = TRUE) && grepl("Canned point about the whole.", h, fixed = TRUE) &&
          grepl("Question Q1", h, fixed = TRUE) && grepl("Question Q30", h, fixed = TRUE) && !grepl("Question Q20", h, fixed = TRUE) &&
-         grepl("scale_consistency", h, fixed = TRUE))
+         !grepl("Prompt hashes, one per call|in 3 parts and one call", h))
     pa$st$fail_at = 0L
     pa$st$n = 0L
     session$setInputs(rerun = 2L)
@@ -2586,47 +2352,58 @@ out_time <- as.POSIXct("2026-11-12 09:30:00", tz = "UTC")
 out_models <- list(pm = fl_pm, workers = fl_workers)
 plain_of <- function(x) gsub("\\s+", " ", gsub("<[^>]+>", " ", paste(as.character(x), collapse = " ")))
 
-# A drafting run with the kind of items a model really writes: an introduction, parts, programming
-#   notes, and the English source wording, in French.
+# A drafting run with the kind of items a model really writes: more than it is asked for (an
+#   introduction, parts, programming notes, decisions, notes), which the screen and the copy never show.
 rich_item <- function(n, who) list(
   id = paste0("CONF", n), domain = "Trust in the commission",
-  intro = if (n == 1L) "Nous allons vous poser quelques questions sur la commission électorale nationale." else "",
-  stem = paste0("Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle ", who, ")"),
-  options = list("Beaucoup", "Assez", "Peu", "Pas du tout"), open_format = "",
-  parts = if (n == 2L) list(list(when = "if the answer is Peu or Pas du tout", stem = "Pourquoi ?", options = list())) else list(),
-  programming = if (n == 1L) "Randomize the order of options 1 to 4; keep Pas du tout last." else "",
-  decisions = list("Four points, no midpoint."), source_english = paste0("How much do you trust the national electoral commission? (", who, ")"),
-  notes = "Test the translation of Assez.")
+  intro = if (n == 1L) "ZZ-INTRO-NOT-SHOWN" else "",
+  stem = paste0("How much do you trust the national electoral commission? (model ", who, ")"),
+  options = list("A lot", "Somewhat", "A little", "Not at all"), open_format = "",
+  parts = if (n == 2L) list(list(when = "if the answer is A little or Not at all", stem = "ZZ-PART-NOT-SHOWN", options = list())) else list(),
+  programming = if (n == 1L) "ZZ-PROGRAMMING-NOT-SHOWN" else "",
+  decisions = list("ZZ-DECISION-NOT-SHOWN"),
+  notes = "ZZ-NOTES-NOT-SHOWN")
 rich_draft <- function(m) list(items = list(rich_item(1L, worker_no(m)), rich_item(2L, worker_no(m))),
                                not_covered = list(), missing_from_brief = list())
-fr_form <- clean_form(with_field(fl_form, output_language = "French", source_language = "English"))
+fr_form <- clean_form(with_field(fl_form, country = "Kenya"))
 fr_appraisal <- list(
-  selected = list(list(domain = "trust", candidate = "A", id = "CONF1", why = "The plainest wording.", concerns = list(), suggestion = ""),
-                  list(domain = "trust again", candidate = "C", id = "CONF2", why = "Neutral.", concerns = list(), suggestion = "")),
-  not_covered = list(), set_notes = list(), test_first = list(), limits = "An expert review by a language model.")
+  selected = list(list(domain = "trust", candidate = "A", id = "CONF1", check_before_use = "The word trust may mean different things. Say whose trust."),
+                  list(domain = "trust again", candidate = "C", id = "CONF2", check_before_use = "")),
+  limits = "ZZ-LIMITS-NOT-SHOWN")
 fr_ask <- rec_ask(function(m, sys) if (identical(m$id, fl_pm$id)) { if (is_brief(sys)) brief_ok else fr_appraisal } else rich_draft(m))
 fr_brief <- run_brief(fr_form, fl_pm, ask = fr_ask$ask)
 fr_drafts <- run_drafts(fr_form, fl_workers, ask = fr_ask$ask)
 fr_ap <- run_appraisal(fr_form, fr_drafts, fl_pm, ask = fr_ask$ask, seed = 11L)
 fr_labels <- labels_of(fr_drafts, 11L)
-fr_set <- initial_set(check_appraisal(fr_ap$reply, candidates_of(fr_drafts, 11L), build_checklist(fr_form)))
+fr_set <- initial_set(check_appraisal(fr_ap$reply, candidates_of(fr_drafts, 11L)))
 fr_approved <- c(attr(fr_drafts, "prompt"), list(edited = FALSE, original_hash = attr(fr_drafts, "prompt")$hash))
-fr_out <- build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = fr_set, brief = fr_brief,
-                       approved = fr_approved, models = out_models, time = out_time)
+fr_chosen <- final_set(fr_set, list(), fr_drafts, 11L)
+fr_out <- build_output(fr_form, drafts = fr_drafts, seed = 11L, set = fr_set, time = out_time)
 fr_txt <- fr_out$text
 fr_html <- paste(as.character(fr_out$html), collapse = "")
+fr_footer <- doc_text(output_footer(out_time))
 
-ok("a drafting output has the items of the set in its order, each with its id, introduction, stem, numbered options and programming notes",
+ok("a drafting output has the questions of the set in its order, each with its number, the question and its numbered options, and the one line to check on the first",
    identical(fr_out$kind, "draft") && fr_out$n_items == 2L &&
-     regexpr("CONF1", fr_txt, fixed = TRUE) < regexpr("CONF2", fr_txt, fixed = TRUE) &&
-     grepl("Nous allons vous poser", fr_txt, fixed = TRUE) && grepl("\n1. Beaucoup\n2. Assez\n3. Peu\n4. Pas du tout", fr_txt, fixed = TRUE) &&
-     grepl("[Randomize the order of options 1 to 4; keep Pas du tout last.]", fr_txt, fixed = TRUE) &&
-     grepl(paste0("(modèle ", match(fr_labels[["A"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
-     grepl(paste0("(modèle ", match(fr_labels[["C"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
-     !grepl(paste0("(modèle ", match(fr_labels[["B"]], fl_ids), ")"), fr_txt, fixed = TRUE))
-ok("the HTML is plain: headings, paragraphs, an ordered list of options that Word keeps numbered, emphasis for the introduction, a block quote for a part",
-   grepl("<ol>", fr_html, fixed = TRUE) && grepl("<li>Beaucoup</li>", fr_html, fixed = TRUE) && grepl("<em>Nous allons", fr_html, fixed = TRUE) &&
-     grepl("<blockquote>", fr_html, fixed = TRUE) && grepl("Asked if the answer is Peu or Pas du tout: Pourquoi ?", plain_of(fr_html), fixed = TRUE) &&
+     regexpr("Question 1\n", fr_txt, fixed = TRUE) < regexpr("Question 2\n", fr_txt, fixed = TRUE) &&
+     grepl("\n1. A lot\n2. Somewhat\n3. A little\n4. Not at all", fr_txt, fixed = TRUE) &&
+     grepl(paste0("(model ", match(fr_labels[["A"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
+     grepl(paste0("(model ", match(fr_labels[["C"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
+     !grepl(paste0("(model ", match(fr_labels[["B"]], fl_ids), ")"), fr_txt, fixed = TRUE) &&
+     n_in3("Check before use: ", fr_txt) == 1L && grepl("Check before use: The word trust may mean different things.", fr_txt, fixed = TRUE) &&
+     !grepl("Say whose trust", fr_txt, fixed = TRUE) &&
+     regexpr("Check before use", fr_txt, fixed = TRUE) < regexpr("Question 2\n", fr_txt, fixed = TRUE))
+ok("nothing else of a question or of the reply is in the output: no id, domain, introduction, filter question, programming, decision, note, reason, limits, model, hash or disclosure",
+   !grepl("ZZ-|CONF1|CONF2|Trust in the commission|Disclosure|vendor-|Profile|reflex|Reflex|Prompt|hash", fr_txt))
+ok("the output opens with the one sentence and ends with the three lines: the date, who drafted and who reviewed, and the version of the tool; and the copy is exactly the screen's text and those lines",
+   startsWith(fr_txt, "These are drafts. Test them with real respondents before fielding.") &&
+     endsWith(fr_txt, "Date: 2026-11-12\n\nDrafted with QuestionR, an AI tool; reviewed by [analyst to complete]\n\nQuestionR version 0.9") &&
+     identical(fr_txt, paste(fr_out$screen_text, fr_footer, sep = "\n\n")) &&
+     !grepl("Date:|Drafted with QuestionR|QuestionR version", fr_out$screen_text) &&
+     identical(QUESTIONR_VERSION, "0.9"))
+ok("the HTML is plain: headings, paragraphs, an ordered list of options that Word keeps numbered, emphasis for the line to check",
+   grepl("<ol>", fr_html, fixed = TRUE) && grepl("<li>A lot</li>", fr_html, fixed = TRUE) &&
+     grepl("<em>Check before use:", fr_html, fixed = TRUE) && !grepl("<blockquote>", fr_html, fixed = TRUE) &&
      !grepl("<script|<style|style=|class=", fr_html) && !grepl("<table", fr_html, fixed = TRUE))
 ok("the HTML and the plain text say the same: every line of the text is in the HTML's text, in the same order",
    local({
@@ -2640,84 +2417,69 @@ ok("the HTML and the plain text say the same: every line of the text is in the H
        p = regexpr(l, substring(h, at + 1L), fixed = TRUE)[[1]]
        if (p < 0L) NA_integer_ else at + p - 1L + nchar(l)
      }, .init = 0L)
-     !is.na(end) && length(lines) > 30L
+     !is.na(end) && length(lines) > 10L
    }))
-ok("the output language not being English puts the English source wording in italics after each item",
-   grepl("English source: How much do you trust the national electoral commission?", fr_txt, fixed = TRUE) &&
-     grepl("<em>English source: How much", fr_html, fixed = TRUE) &&
-     !grepl("English source", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
-                                           set = list(set_entry("A", 1L, "Q1")),
-                                           models = out_models, time = out_time)$text, fixed = TRUE))
-ok("a language other than the source puts the TRAPD block above the disclosure block, and an English one has none",
-   grepl("TRAPD: what is still needed", fr_txt, fixed = TRUE) && grepl("first draft inside the Translation step only", fr_txt, fixed = TRUE) &&
-     grepl("Adjudication of disagreements by a named person is still needed.", fr_txt, fixed = TRUE) &&
-     regexpr("TRAPD: what is still needed", fr_txt, fixed = TRUE) < regexpr("Disclosure of the use of language models", fr_txt, fixed = TRUE) &&
-     !grepl("TRAPD", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
-                                  set = list(set_entry("A", 1L, "Q1")), models = out_models, time = out_time)$text, fixed = TRUE))
 
-skill_versions <- function(files) purrr::map_chr(files, function(x) paste0(x, " ", read_skill(x)$version))
-ok("the disclosure names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft",
-   grepl("Date: 2026-11-12 09:30", fr_txt, fixed = TRUE) && grepl(paste0("Profile: ", APP_PROFILE), fr_txt, fixed = TRUE) &&
-     grepl("Project manager model: vendor-p/pm-model (example.invalid)", fr_txt, fixed = TRUE) &&
-     all(purrr::map_lgl(fl_ids, function(id) grepl(id, fr_txt, fixed = TRUE))) &&
-     !grepl("asked that returned no usable draft", fr_txt, fixed = TRUE) &&
+# The record: what is not on the screen, in one file (DESIGN.md section 18).
+reflex_versions <- function(files) purrr::map_chr(files, function(x) paste0(x, " ", read_reflex_file(x)$version))
+disc <- function(chosen = fr_chosen, approved = fr_approved, brief = fr_brief, drafts = fr_drafts, form = fr_form)
+  doc_text(disclosure_blocks(form, chosen, drafts, fr_ap, NULL, brief, approved, models = out_models, time = out_time))
+fr_disc <- disc()
+ok("the disclosure, which now goes in the record, names the date, the profile, the project manager and each worker model by its id, and which models were asked but did not draft",
+   grepl("Date: 2026-11-12 09:30", fr_disc, fixed = TRUE) && grepl(paste0("Profile: ", APP_PROFILE), fr_disc, fixed = TRUE) &&
+     grepl("Project manager model: vendor-p/pm-model (example.invalid)", fr_disc, fixed = TRUE) &&
+     all(purrr::map_lgl(fl_ids, function(id) grepl(id, fr_disc, fixed = TRUE))) &&
+     !grepl("asked that returned no usable draft", fr_disc, fixed = TRUE) &&
      grepl("returned no usable draft: vendor-b/model-two, vendor-c/model-three", {
        bad = run_drafts(fr_form, fl_workers, ask = rec_ask(function(m, sys) if (identical(m$id, "vendor-a/model-one")) rich_draft(m) else stop("down", call. = FALSE))$ask)
-       build_output(fr_form, drafts = bad, seed = 11L, set = list(set_entry("A", 1L, "CONF1")),
-                    models = out_models, time = out_time)$text
+       disc(chosen = final_set(list(set_entry("A", 1L, "CONF1")), list(), bad, 11L), drafts = bad)
      }, fixed = TRUE))
-ok("the disclosure gives the version of each skill file used, and pm_brief.md only when the brief was checked",
-   grepl(paste0("Skill files and versions: ", paste(skill_versions(c("core.md", "generate.md", "attitudinal.md", "mode.md", "cross_cultural.md", "pm_appraise.md", "pm_brief.md")), collapse = "; ")),
-         fr_txt, fixed = TRUE) &&
-     !grepl("pm_brief.md", build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = fr_set,
-                                        approved = fr_approved, models = out_models, time = out_time)$text, fixed = TRUE) &&
-     !grepl("cross_cultural.md", build_output(clean_form(fl_form), drafts = fl_drafts, seed = 11L,
-                                              set = list(set_entry("A", 1L, "Q1")),
-                                              models = out_models, time = out_time)$text, fixed = TRUE))
+ok("the disclosure gives the version of each reflex file used, and pm_brief.md only when the brief was checked",
+   grepl(paste0("Reflex files and versions: ", paste(reflex_versions(c("core.md", "generate.md", "attitudinal.md", "mode.md", "cross_cultural.md", "pm_appraise.md", "pm_brief.md")), collapse = "; ")),
+         fr_disc, fixed = TRUE) &&
+     !grepl("pm_brief.md", disc(brief = NULL), fixed = TRUE) &&
+     !grepl("cross_cultural.md", disc(form = clean_form(fl_form)), fixed = TRUE))
 ok("the disclosure gives each prompt's hash in full, says the drafting prompt was not edited, and says it was when it was",
-   grepl(paste0("Brief check prompt: ", fr_brief$hash), fr_txt, fixed = TRUE) &&
-     grepl(paste0("Drafting prompt (not edited): ", fr_approved$hash), fr_txt, fixed = TRUE) &&
-     grepl(paste0("Appraisal prompt: ", fr_ap$hash), fr_txt, fixed = TRUE) &&
+   grepl(paste0("Brief check prompt: ", fr_brief$hash), fr_disc, fixed = TRUE) &&
+     grepl(paste0("Drafting prompt (not edited): ", fr_approved$hash), fr_disc, fixed = TRUE) &&
+     grepl(paste0("Appraisal prompt: ", fr_ap$hash), fr_disc, fixed = TRUE) &&
      local({
        ed = c(with_field(fr_approved, user = "EDITED", hash = prompt_hash(fr_approved$system, "EDITED")), list())
        ed$edited = TRUE
-       t = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = fr_set, approved = ed,
-                        models = out_models, time = out_time)$text
+       t = disc(approved = ed)
        grepl(paste0("Drafting prompt as sent (edited by the analyst): ", ed$hash), t, fixed = TRUE) &&
          grepl(paste0("Drafting prompt as assembled: ", fr_approved$original_hash), t, fixed = TRUE)
      }))
 ok("the disclosure says which candidate each item of the set came from and the model behind it, and ends with the fixed line",
-   grepl(paste0("Item 1 (CONF1): candidate A, written by ", fr_labels[["A"]]), fr_txt, fixed = TRUE) &&
-     grepl(paste0("Item 2 (CONF2): candidate C, written by ", fr_labels[["C"]]), fr_txt, fixed = TRUE) &&
-     endsWith(fr_txt, "Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.") &&
+   grepl(paste0("Item 1 (CONF1): candidate A, written by ", fr_labels[["A"]]), fr_disc, fixed = TRUE) &&
+     grepl(paste0("Item 2 (CONF2): candidate C, written by ", fr_labels[["C"]]), fr_disc, fixed = TRUE) &&
+     endsWith(fr_disc, "Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.") &&
      identical(DISCLOSURE_LINE, "Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding."))
-ok("the output takes the set as the analyst left it: an edited item has its new wording, and the disclosure says which items were edited and which were swapped in by the analyst",
+ok("the output takes the set as the analyst left it: an edited question has its new wording, and the record says which items were edited and which were swapped in",
    local({
      st_set = c(fr_set[1], list(set_entry("B", 1L, "CONF1", "x", swapped = TRUE)))
-     ed = list(A_1 = list(stem = "An edited stem?", options = list(`2` = "Somewhat")))
-     o = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = st_set, edits = ed,
-                      approved = fr_approved, models = out_models, time = out_time)$text
-     plain = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = st_set,
-                          approved = fr_approved, models = out_models, time = out_time)$text
-     grepl("An edited stem?", o, fixed = TRUE) && grepl("\n2. Somewhat\n", o, fixed = TRUE) && n_in3("Assez", o) == 1L &&
-       grepl("Item 1 (CONF1): candidate A, written by", o, fixed = TRUE) && grepl("; edited by the analyst", o, fixed = TRUE) &&
-       grepl("Item 2 (CONF1): candidate B, written by", o, fixed = TRUE) &&
-       grepl("; swapped in by the analyst, not the reviewer's choice", o, fixed = TRUE) &&
-       n_in3("edited by the analyst", o) == 1L && !grepl("edited by the analyst", plain, fixed = TRUE) &&
-       grepl("swapped in by the analyst", plain, fixed = TRUE) && !grepl("An edited stem?", plain, fixed = TRUE)
+     ed = list(A_1 = list(stem = "An edited stem?", options = list(`2` = "Moderately")))
+     o = build_output(fr_form, drafts = fr_drafts, seed = 11L, set = st_set, edits = ed, time = out_time)$text
+     plain = build_output(fr_form, drafts = fr_drafts, seed = 11L, set = st_set, time = out_time)$text
+     rec = disc(chosen = final_set(st_set, ed, fr_drafts, 11L))
+     grepl("An edited stem?", o, fixed = TRUE) && grepl("\n2. Moderately\n", o, fixed = TRUE) && n_in3("Somewhat", o) == 1L &&
+       !grepl("edited by the analyst|swapped in", o) && !grepl("An edited stem?", plain, fixed = TRUE) &&
+       grepl("Item 1 (CONF1): candidate A, written by", rec, fixed = TRUE) && grepl("; edited by the analyst", rec, fixed = TRUE) &&
+       grepl("Item 2 (CONF1): candidate B, written by", rec, fixed = TRUE) &&
+       grepl("; swapped in by the analyst, not the reviewer's choice", rec, fixed = TRUE) &&
+       n_in3("edited by the analyst", rec) == 1L
    }))
-ok("with nothing in the set, or an entry that points at nothing, the output says so and has no disclosure to make",
+ok("with nothing in the set, or an entry that points at nothing, the output says so and has no three lines",
    local({
-     none = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L, set = list(), models = out_models, time = out_time)
-     stale = build_output(fr_form, drafts = fr_drafts, appraisal = fr_ap, seed = 11L,
-                          set = list(set_entry("Z", 1L, "x"), set_entry("A", 99L, "y")),
-                          models = out_models, time = out_time)
-     grepl("There is no item in the set yet", none$text, fixed = TRUE) && none$n_items == 0L && !grepl("Disclosure", none$text, fixed = TRUE) &&
-       identical(stale$n_items, 0L) &&
-       !grepl("There is no item in the set", build_output(fr_form, drafts = fr_drafts, seed = 11L, set = fr_set, models = out_models)$text, fixed = TRUE)
+     none = build_output(fr_form, drafts = fr_drafts, seed = 11L, set = list(), time = out_time)
+     stale = build_output(fr_form, drafts = fr_drafts, seed = 11L,
+                          set = list(set_entry("Z", 1L, "x"), set_entry("A", 99L, "y")), time = out_time)
+     grepl("There is no item in the set yet", none$text, fixed = TRUE) && none$n_items == 0L &&
+       !grepl("Drafted with QuestionR", none$text, fixed = TRUE) && identical(stale$n_items, 0L) &&
+       !grepl("There is no item in the set", build_output(fr_form, drafts = fr_drafts, seed = 11L, set = fr_set)$text, fixed = TRUE)
    }))
 
-# A review: three questions, findings in each band, instrument findings, what to test first.
+# A review: three questions, two to revise and one to keep, and a point about the whole.
 ex_q <- paste("Q1. How satisfied are you with the recycling services and street cleaning provided by your council?",
               "Very satisfied / Fairly satisfied / Fairly dissatisfied / Very dissatisfied", "",
               "Q2. Do you agree that the council should spend more on libraries?", "Yes / No", "",
@@ -2725,99 +2487,92 @@ ex_q <- paste("Q1. How satisfied are you with the recycling services and street 
 ex_form <- clean_form(with_field(forms$evaluate, questionnaire = ex_q))
 ex_reply <- list(
   items = list(
-    list(id = "Q1", findings = list(
-      finding("one_thing", "recycling services and street cleaning", 8, problem = "Two services in one question.",
-              rewrite = "How satisfied are you with the recycling services?", probe = "Which service did you think of?"),
-      finding("response_scale", "Fairly satisfied / Fairly dissatisfied", 6, problem = "There is no middle option."),
-      finding("plain_words", "street cleaning", 3, problem = "Could mean sweeping or litter bins."))),
-    list(id = "Q2", findings = list(
-      finding("neutral_wording", "Do you agree that the council should", 7, problem = "Invites agreement."),
-      finding("no_presupposition", "words that are nowhere in the questionnaire", 5, problem = "Assumes an opinion."))),
-    list(id = "Q3", findings = list())),
-  instrument = list(finding("filters_and_routing", "Q2 and Q3", 5, problem = "Q3 applies only to library users.")),
-  trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
-  test_first = list(list(id = "Q1", method = "cognitive interviews")),
-  not_assessed = "Fit to objectives was not assessed: the brief names no analysis plan.")
+    list(id = "Q1", verdict = "Revise", problems = list(
+      list(problem = "Two services in one question.", rewrite = "How satisfied are you with the recycling services?"),
+      list(problem = "Street cleaning could mean sweeping or litter bins.", rewrite = "How satisfied are you with street sweeping?"))),
+    list(id = "Q2", verdict = "Revise", problems = list(
+      list(problem = "The wording invites agreement.", rewrite = "Should the council spend more, the same or less on libraries?"))),
+    list(id = "Q3", verdict = "Keep", problems = list())),
+  instrument = list("Question 3 applies only to library users. Add a filter."))
 ex_ask <- rv_ask(ex_reply)
 ex_rv <- run_review(ex_form, fl_pm, ask = ex_ask$ask)
 ex_approved <- c(build_prompt(ex_form), list(edited = FALSE, original_hash = build_prompt(ex_form)$hash))
-ex_out <- build_output(ex_form, review = ex_rv, approved = ex_approved, models = out_models, time = out_time)
+ex_out <- build_output(ex_form, review = ex_rv, time = out_time)
 ex_txt <- ex_out$text
 
-ok("a review's output is question by question, each question's findings in the severity bands, highest first, the Minor ones listed too",
-   identical(ex_out$kind, "review") &&
+ok("a review's output is the one sentence, then each question to revise with the question as pasted, the verdict, its problems and suggested rewrites, in the order pasted",
+   identical(ex_out$kind, "review") && startsWith(ex_txt, "These are drafts. Test them with real respondents before fielding.") &&
      regexpr("Question Q1", ex_txt, fixed = TRUE) < regexpr("Question Q2", ex_txt, fixed = TRUE) &&
-     regexpr("Question Q2", ex_txt, fixed = TRUE) < regexpr("Question Q3", ex_txt, fixed = TRUE) &&
-     local({
-       q1 = substr(ex_txt, regexpr("Question Q1", ex_txt, fixed = TRUE), regexpr("Question Q2", ex_txt, fixed = TRUE))
-       regexpr("Fix before fielding", q1, fixed = TRUE) < regexpr("Needs your judgment", q1, fixed = TRUE) &&
-         regexpr("Needs your judgment", q1, fixed = TRUE) < regexpr("Minor (rated below 5)", q1, fixed = TRUE) &&
-         grepl("one_thing (severity 8)", q1, fixed = TRUE) && grepl("response_scale (severity 6)", q1, fixed = TRUE) &&
-         grepl("plain_words (severity 3)", q1, fixed = TRUE)
-     }) && grepl("Question Q3\n---", ex_txt, fixed = TRUE) && grepl("No problem was found by this review.", ex_txt, fixed = TRUE))
-ok("a finding gives its quote, problem, and a rewrite and a probe each said to be untested; a quote R did not find is flagged",
-   grepl("\"recycling services and street cleaning\". Two services in one question. A rewrite, untested: How satisfied are you with the recycling services? A probe: Which service did you think of?",
-         ex_txt, fixed = TRUE) &&
-     grepl("no_presupposition (severity 5) [quote not found in the text]", ex_txt, fixed = TRUE) &&
-     !grepl("one_thing (severity 8) [quote not found", ex_txt, fixed = TRUE))
-ok("the instrument findings, what to test first and what the review could not judge follow, then the disclosure with the review prompt's hash",
-   regexpr("The instrument as a whole", ex_txt, fixed = TRUE) > regexpr("Question Q3", ex_txt, fixed = TRUE) &&
-     grepl("filters_and_routing (severity 5): Questions: Q2 and Q3.", ex_txt, fixed = TRUE) &&
-     grepl("Question Q1: cognitive interviews", ex_txt, fixed = TRUE) && grepl("the brief names no analysis plan", ex_txt, fixed = TRUE) &&
-     grepl(paste0("Review prompt (not edited): ", ex_rv$hash), ex_txt, fixed = TRUE) &&
-     !grepl("TRAPD", ex_txt, fixed = TRUE) && !grepl("worker", ex_txt, ignore.case = TRUE) &&
-     endsWith(ex_txt, DISCLOSURE_LINE) &&
-     grepl("review.*workers|Worker", ex_txt) == FALSE)
-ok("a review of translated text prints what its trapd field says is still needed, or the fixed lines when it said nothing",
-   local({
-     tf = with_field(ex_form, source_language = "Spanish")
-     said = with_field(ex_reply, trapd = list(translation = "Two independent translations are needed.", review = "",
-                                              adjudication = "", pretesting = "", documentation = ""))
-     a = build_output(tf, review = run_review(tf, fl_pm, ask = rv_ask(said)$ask), models = out_models, time = out_time)$text
-     b = build_output(tf, review = run_review(tf, fl_pm, ask = rv_ask(ex_reply)$ask), models = out_models, time = out_time)$text
-     grepl("Translation: Two independent translations are needed.", a, fixed = TRUE) && !grepl("Adjudication of disagreements", a, fixed = TRUE) &&
-       grepl("Adjudication of disagreements by a named person is still needed.", b, fixed = TRUE)
-   }))
-ok("a review in parts lists a prompt hash for each call, and one with a part missing says so at the top; no review gives a plain message",
+     grepl("Q1. How satisfied are you with the recycling services and street cleaning provided by your council?\nVery satisfied / Fairly satisfied",
+           ex_txt, fixed = TRUE) &&
+     n_in3("\n\nRevise\n", ex_txt) == 2L &&
+     grepl("Problem: Two services in one question.\n\nSuggested rewrite: How satisfied are you with the recycling services?", ex_txt, fixed = TRUE) &&
+     grepl("Problem: Street cleaning could mean sweeping or litter bins.", ex_txt, fixed = TRUE) &&
+     n_in3("Problem: ", ex_txt) == 3L && n_in3("Suggested rewrite: ", ex_txt) == 3L)
+ok("the question marked Keep is one line, the questionnaire as a whole follows, then the three lines; no severity, check, quote, band, test first, hash or disclosure",
+   grepl("Question Q3: keep as written", ex_txt, fixed = TRUE) && !grepl("Question Q3\n", ex_txt, fixed = TRUE) &&
+     regexpr("keep as written", ex_txt, fixed = TRUE) < regexpr("The questionnaire as a whole", ex_txt, fixed = TRUE) &&
+     grepl("The questionnaire as a whole\n===", ex_txt, fixed = TRUE) && grepl("- Question 3 applies only to library users.", ex_txt, fixed = TRUE) &&
+     !grepl("Add a filter", ex_txt, fixed = TRUE) &&
+     endsWith(ex_txt, fr_footer) &&
+     !grepl("severity|one_thing|Fix before fielding|Needs your judgment|Minor|test first|Disclosure|hash|worker", ex_txt, ignore.case = TRUE))
+ok("a review in parts with a part missing says so at the top; no review gives a plain message",
    local({
      pa = parts_ask(fail_at = 2L)
      part_rv = run_review(long_form, fl_pm, ask = pa$ask)
-     t = build_output(clean_form(long_form), review = part_rv, models = out_models, time = out_time)$text
-     all(purrr::map_lgl(part_rv$batches, function(b) grepl(b$hash, t, fixed = TRUE))) &&
-       grepl("Review prompt, part 1 of 3: ", t, fixed = TRUE) && grepl("Review prompt, instrument as a whole: ", t, fixed = TRUE) &&
-       grepl("PART OF THE REVIEW IS MISSING: Part 2 of 3 did not come back", t, fixed = TRUE) &&
-       grepl("There is no review to show", build_output(ex_form, review = NULL, models = out_models)$text, fixed = TRUE)
+     o = build_output(clean_form(long_form), review = part_rv, time = out_time)$text
+     grepl("PART OF THE REVIEW IS MISSING: Part 2 of 3 did not come back", o, fixed = TRUE) &&
+       regexpr("PART OF THE REVIEW IS MISSING", o, fixed = TRUE) < regexpr("Question Q1", o, fixed = TRUE) &&
+       grepl("There is no review to show", build_output(ex_form, review = NULL)$text, fixed = TRUE)
    }))
 
-# The run log: schema, no key. A planted key string is scrubbed from the output and from the log.
+# The record's disclosure for a review, with each prompt's hash.
+ok("the record's disclosure for a review in parts lists a prompt hash for each call",
+   local({
+     pa = parts_ask()
+     part_rv = run_review(long_form, fl_pm, ask = pa$ask)
+     t = doc_text(disclosure_blocks(clean_form(long_form), list(), NULL, NULL, part_rv, NULL, NULL, models = out_models, time = out_time))
+     all(purrr::map_lgl(part_rv$batches, function(b) grepl(b$hash, t, fixed = TRUE))) &&
+       grepl("Review prompt, part 1 of 3: ", t, fixed = TRUE) && grepl("Review prompt, instrument as a whole: ", t, fixed = TRUE)
+   }))
+
+# The full record: schema, no key. A planted key string is scrubbed from the output and from the record.
 key_planted <- "sk-planted-KEY-0123456789abcdef"
 leaky_rounds <- list(flow_round(fr_form, fl_pm, brief = fr_brief, drafts = fr_drafts, appraisal = fr_ap, seed = 11L,
                                 analyst = list(set = fr_set, edits = list(), final = final_set(fr_set, list(), fr_drafts, 11L))),
                      flow_round(ex_form, fl_pm, review = with_field(ex_rv, error = paste("echoed", key_planted))))
 leaky_rounds[[1]]$drafts[[1]]$call$raw <- paste0("{\"echo\": \"", key_planted, "\"}")
-log_txt <- run_log_json(leaky_rounds, profile = "home", time = out_time, secrets = c(key_planted, "short"))
+log_txt <- run_log_json(leaky_rounds, profile = "home", time = out_time, secrets = c(key_planted, "short"),
+                        disclosure = strsplit(fr_disc, "\n", fixed = TRUE)[[1]])
 log_back <- jsonlite::fromJSON(log_txt, simplifyVector = FALSE)
-ok("the run log is one JSON file with a schema, the profile, the time and every round; what the analyst did with the set is in it",
+ok("the full record is one JSON file with a schema, the version, the profile, the time, the disclosure and every round; what the analyst did with the set is in it",
    identical(log_back$schema, 1L) && identical(log_back$profile, "home") && length(log_back$rounds) == 2L &&
+     identical(log_back$version, QUESTIONR_VERSION) &&
      grepl("^2026-11-12T", log_back$written) && identical(log_back$rounds[[1]]$schema, 1L) &&
      identical(purrr::map_chr(purrr::map(log_back$rounds[[1]]$analyst$final, "item"), "id"), c("CONF1", "CONF2")) &&
-     !is.null(log_back$rounds[[1]]$drafts[[1]]$reply) && !is.null(log_back$rounds[[2]]$review$hash))
-ok("a planted key is absent from the log, which says where it was taken out, and a string too short to be a key is left alone",
+     !is.null(log_back$rounds[[1]]$drafts[[1]]$reply) && !is.null(log_back$rounds[[2]]$review$hash) &&
+     any(grepl("Disclosure of the use of language models", unlist(log_back$disclosure), fixed = TRUE)) &&
+     any(grepl(fr_ap$hash, unlist(log_back$disclosure), fixed = TRUE)))
+ok("the record holds what the screen does not: every draft with its notes and decisions, and the reviewer's whole reply",
+   grepl("ZZ-NOTES-NOT-SHOWN", log_txt, fixed = TRUE) && grepl("ZZ-DECISION-NOT-SHOWN", log_txt, fixed = TRUE) &&
+     grepl("ZZ-LIMITS-NOT-SHOWN", log_txt, fixed = TRUE) && grepl("ZZ-PROGRAMMING-NOT-SHOWN", log_txt, fixed = TRUE))
+ok("a planted key is absent from the record, which says where it was taken out, and a string too short to be a key is left alone",
    !grepl(key_planted, log_txt, fixed = TRUE) && grepl("[key removed]", log_txt, fixed = TRUE) &&
      identical(scrub_secrets("a short word", "short"), "a short word") &&
      identical(scrub_secrets(paste("x", key_planted, "y", key_planted), key_planted), "x [key removed] y [key removed]") &&
      identical(scrub_secrets("nothing here", character(0)), "nothing here"))
 ok("no output text or HTML carries a planted key: it is not in the run's data, and scrub_secrets takes it out of anything that is",
    local({
-     leak = with_field(ex_reply, not_assessed = paste("Echoed key", key_planted))
+     leak = ex_reply
+     leak$items[[1]]$problems[[1]]$problem = paste("Echoed key", key_planted)
      lr = run_review(ex_form, fl_pm, ask = rv_ask(leak)$ask)
-     o = build_output(ex_form, review = lr, models = out_models, time = out_time)
+     o = build_output(ex_form, review = lr, time = out_time)
      grepl(key_planted, o$text, fixed = TRUE) &&
        !grepl(key_planted, scrub_secrets(o$text, key_planted), fixed = TRUE) &&
        !grepl(key_planted, scrub_secrets(paste(as.character(o$html), collapse = ""), key_planted), fixed = TRUE) &&
        !grepl(key_planted, fr_txt, fixed = TRUE) && !grepl(key_planted, fr_html, fixed = TRUE)
    }))
-ok("known_keys gives the analyst's pasted key and a server key, none when there is none; the output and log functions never read a key themselves",
+ok("known_keys gives the analyst's pasted key and a server key, none when there is none; the output and record functions never read a key themselves",
    local({
      st = test_state()
      got = NULL
@@ -2837,7 +2592,7 @@ writeLines(c(fr_txt, ""), file.path("tests", "output_generate.txt"), useBytes = 
 writeLines(c(ex_txt, ""), file.path("tests", "output_review.txt"), useBytes = TRUE)
 ok("the two sample outputs are saved as tests/output_generate.txt and tests/output_review.txt",
    file.exists(file.path("tests", "output_generate.txt")) && file.exists(file.path("tests", "output_review.txt")) &&
-     grepl("Disclosure of the use of language models", paste(readLines(file.path("tests", "output_generate.txt"), encoding = "UTF-8"), collapse = "\n"), fixed = TRUE))
+     grepl("Check before use:", paste(readLines(file.path("tests", "output_generate.txt"), encoding = "UTF-8"), collapse = "\n"), fixed = TRUE))
 
 
 # The Output tab, over canned runs.
@@ -2854,36 +2609,52 @@ local({
     session$flushReact()
     h0 = html_of3(output$view)
     ok("a drafting round with nothing in the set says there is no item in it",
-       grepl("There is no item in the set yet", h0, fixed = TRUE) && !grepl("Disclosure of the use", h0, fixed = TRUE))
+       grepl("There is no item in the set yet", h0, fixed = TRUE) && !grepl("Drafted with QuestionR", h0, fixed = TRUE))
     st$set <- fr_set
     session$flushReact()
     h = html_of3(output$view)
-    ok("ticking items on Results puts them on the Output tab in HTML for Word and in a plain text box, with the disclosure block",
-       grepl("CONF1", h, fixed = TRUE) && grepl("<ol>", h, fixed = TRUE) && grepl("Disclosure of the use of language models", h, fixed = TRUE) &&
-         grepl("Select what is in the first box", h, fixed = TRUE) && grepl("<textarea", h, fixed = TRUE) &&
-         grepl(fr_ap$hash, h, fixed = TRUE) && grepl("Not a pretest", h, fixed = TRUE) &&
-         n_in3("Copy for Word", h) == 1L && n_in3("Copy plain text", h) == 1L && grepl("execCommand", h, fixed = TRUE))
+    ok("the questions of the set are on the Output tab in HTML for Word, followed by the three lines, with one button and no plain text box",
+       grepl("Question 1", h, fixed = TRUE) && grepl("<ol>", h, fixed = TRUE) &&
+         grepl("These are drafts. Test them with real respondents before fielding.", h, fixed = TRUE) &&
+         grepl("Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]", h, fixed = TRUE) &&
+         grepl("QuestionR version 0.9", h, fixed = TRUE) && grepl("Date: ", h, fixed = TRUE) &&
+         !grepl("<textarea", h, fixed = TRUE) && !grepl("Disclosure of the use", h, fixed = TRUE) && !grepl(fr_ap$hash, h, fixed = TRUE) &&
+         n_in3("Copy for Word", h) == 1L && !grepl("Copy plain text", h, fixed = TRUE) && grepl("execCommand", h, fixed = TRUE))
+    ok("every line of what build_output() gives (the screen's text and the three lines) is on the Output tab, in order",
+       local({
+         want = trimws(strsplit(sub("Date: [0-9-]+", "Date: D", build_output(fr_form, drafts = fr_drafts, seed = 11L, set = fr_set)$text),
+                                "\n", fixed = TRUE)[[1]])
+         want = sub("^([0-9]+\\. |- )", "", want[nzchar(want) & !grepl("^(=+|-+)$", want)])
+         page_txt = gsub("\\s+", " ", sub("Date: [0-9-]+", "Date: D", plain_of(h)))
+         end = purrr::reduce(want, function(at, l) {
+           if (is.na(at)) return(NA_integer_)
+           l = gsub("\\s+", " ", l)
+           p = regexpr(l, substring(page_txt, at + 1L), fixed = TRUE)[[1]]
+           if (p < 0L) NA_integer_ else at + p - 1L + nchar(l)
+         }, .init = 0L)
+         !is.na(end) && length(want) > 10L
+       }))
     st$set <- fr_set[1]
     session$flushReact()
-    ok("un-ticking an item takes it off the Output tab",
-       !grepl("CONF2", html_of3(output$view), fixed = TRUE) && grepl("CONF1", html_of3(output$view), fixed = TRUE))
+    ok("taking a question out of the set takes it off the Output tab",
+       !grepl("Question 2", html_of3(output$view), fixed = TRUE) && grepl("Question 1", html_of3(output$view), fixed = TRUE))
     st$set <- fr_set
     session$flushReact()
-    ok("the downloads are the plain text and the run log, and the page says no key is in the log",
-       grepl("Download the plain text", html_of3(output$downloads), fixed = TRUE) &&
-         grepl("Download the run log (JSON)", html_of3(output$downloads), fixed = TRUE) &&
-         grepl("No key is ever in it", html_of3(output$downloads), fixed = TRUE))
-    txt_file = output$get_text
+    ok("the one download is the full record, in one small button, and the page says what is in it",
+       n_in3("Download the full record", html_of3(output$downloads)) == 1L && grepl("btn-sm", html_of3(output$downloads), fixed = TRUE) &&
+         !grepl("plain text|run log", html_of3(output$downloads), ignore.case = TRUE) &&
+         grepl("Prompts, models, hashes, every draft and the full reply", html_of3(output$downloads), fixed = TRUE))
     log_file = output$get_log
-    txt = paste(readLines(txt_file, encoding = "UTF-8", warn = FALSE), collapse = "\n")
     log = jsonlite::fromJSON(paste(readLines(log_file, encoding = "UTF-8", warn = FALSE), collapse = "\n"), simplifyVector = FALSE)
-    ok("the text download is the output as plain text; the log download is JSON with a schema, the round and the analyst's final items",
-       grepl("CONF1", txt, fixed = TRUE) && grepl("Disclosure of the use of language models", txt, fixed = TRUE) &&
-         identical(log$schema, 1L) && length(log$rounds) == 1L && identical(purrr::map_chr(purrr::map(log$rounds[[1]]$analyst$final, "item"), "id"), c("CONF1", "CONF2")))
-    ok("a key in the session, and echoed in a model's reply, is in neither the page, nor the text download, nor the log download",
+    ok("the record download is JSON with a schema, the round, the disclosure with each prompt's hash, and the analyst's final items",
+       identical(log$schema, 1L) && length(log$rounds) == 1L &&
+         identical(purrr::map_chr(purrr::map(log$rounds[[1]]$analyst$final, "item"), "id"), c("CONF1", "CONF2")) &&
+         any(grepl("Disclosure of the use of language models", unlist(log$disclosure), fixed = TRUE)) &&
+         any(grepl(fr_ap$hash, unlist(log$disclosure), fixed = TRUE)) && any(grepl("Item 1 (CONF1)", unlist(log$disclosure), fixed = TRUE)))
+    ok("a key in the session, and echoed in a model's reply, is in neither the page nor the record download",
        key_planted %in% known_keys() &&
          grepl(key_planted, leaky_rounds[[1]]$drafts[[1]]$call$raw, fixed = TRUE) &&
-         !grepl(key_planted, h, fixed = TRUE) && !grepl(key_planted, txt, fixed = TRUE) &&
+         !grepl(key_planted, h, fixed = TRUE) &&
          !grepl(key_planted, paste(readLines(log_file, encoding = "UTF-8", warn = FALSE), collapse = "\n"), fixed = TRUE) &&
          grepl("[key removed]", paste(readLines(log_file, encoding = "UTF-8", warn = FALSE), collapse = "\n"), fixed = TRUE))
   })
@@ -2895,20 +2666,20 @@ local({
   shiny::testServer(mod_output_server, args = list(state = st), {
     session$flushReact()
     h = html_of3(output$view)
-    ok("a review's Output tab shows the review question by question in the bands, and the disclosure, with no Keep boxes",
-       grepl("Question Q1", h, fixed = TRUE) && grepl("Fix before fielding", h, fixed = TRUE) &&
-         grepl("Needs your judgment", h, fixed = TRUE) && grepl("Minor (rated below 5)", h, fixed = TRUE) &&
-         grepl("Disclosure of the use of language models", h, fixed = TRUE) && !grepl("Keep this item", h, fixed = TRUE))
+    ok("a review's Output tab shows the questions to revise with their problems and rewrites, the Keep line and the three lines, and no bands or disclosure",
+       grepl("Question Q1", h, fixed = TRUE) && grepl("Problem: Two services in one question.", h, fixed = TRUE) &&
+         grepl("Question Q3: keep as written", h, fixed = TRUE) && grepl("QuestionR version 0.9", h, fixed = TRUE) &&
+         !grepl("Fix before fielding|Needs your judgment|Minor|Disclosure of the use of language models|Keep this item", h))
     log = jsonlite::fromJSON(paste(readLines(output$get_log, encoding = "UTF-8", warn = FALSE), collapse = "\n"), simplifyVector = FALSE)
-    ok("the review's run log has its round, its prompt hash and its call record",
+    ok("the review's record has its round, its prompt hash, its call record and its disclosure",
        identical(log$rounds[[1]]$review$hash, ex_rv$hash) && !is.null(log$rounds[[1]]$review$call$seconds) &&
-         identical(purrr::map_chr(log$rounds[[1]]$summary, "step"), "review"))
+         identical(purrr::map_chr(log$rounds[[1]]$summary, "step"), "review") &&
+         any(grepl(paste0("Review prompt (not edited): ", ex_rv$hash), unlist(log$disclosure), fixed = TRUE)))
   })
 })
 ok("the page has the Output tab's boxes in place of its placeholder, and no key is anywhere on it",
    grepl("output-view", page$html, fixed = TRUE) && grepl("output-downloads", page$html, fixed = TRUE) &&
      !grepl(key_planted, page$html, fixed = TRUE))
-
 
 # ---- Phase 7c: Start here and Methodology are their files ------------------------------------------
 
@@ -2924,7 +2695,7 @@ ok("Start here is www/start.md as it is, then the key box, then a closed Setting
    md_has_headings(START_FILE, start_html) && grepl("<ol>", start_html, fixed = TRUE) &&
      grepl("<strong>Describe what you need.</strong>", start_html, fixed = TRUE) &&
      grepl("Paste your API key below.", start_html, fixed = TRUE) &&
-     regexpr("What this tool does", start_html, fixed = TRUE) < regexpr("Paste your API key below.", start_html, fixed = TRUE) &&
+     regexpr("What QuestionR is for", start_html, fixed = TRUE) < regexpr("Paste your API key below.", start_html, fixed = TRUE) &&
      regexpr("Paste your API key below.", start_html, fixed = TRUE) < regexpr("Use this key", start_html, fixed = TRUE) &&
      regexpr("Use this key", start_html, fixed = TRUE) < regexpr("<summary>\\s*<strong>Settings and connection", start_html) &&
      regexpr("<summary>\\s*<strong>Settings and connection", start_html) < regexpr("This is a pilot", start_html, fixed = TRUE) &&
@@ -2936,7 +2707,7 @@ ok("Start here is www/start.md as it is, then the key box, then a closed Setting
      grepl(paste0("<td>", APP_PROFILE, "</td>"), start_html, fixed = TRUE) &&
      grepl("It found 36 of the 48 faults (75 percent)", gsub("\\s+", " ", start_html), fixed = TRUE) &&
      grepl("so treat it as a guide, not a guarantee", gsub("\\s+", " ", start_html), fixed = TRUE) &&
-     grepl("Settings and connection", page$html, fixed = TRUE) && grepl("What this tool does", page$html, fixed = TRUE))
+     grepl("Settings and connection", page$html, fixed = TRUE) && grepl("What QuestionR is for", page$html, fixed = TRUE))
 ok("a profile with placeholders opens the Settings and connection panel by itself",
    local({
      work_open = in_child("work", c("app <- shiny::shinyAppDir('.'); invisible(app$serverFuncSource())",
@@ -2944,41 +2715,71 @@ ok("a profile with placeholders opens the Settings and connection panel by itsel
      work_open$status == 0 && grepl("<details[^>]*open[^>]*>\\s*<summary>\\s*<strong>Settings and connection", work_open$out)
    }))
 meth_html <- paste(as.character(md_page(METHODOLOGY_FILE)), collapse = "\n")
-ok("the Methodology tab is www/methodology.md as it is: its headings and its lists, and nothing else; skills_table() stays, because tests/review.R reads it",
-   md_has_headings(METHODOLOGY_FILE, meth_html) && grepl("<ul>", meth_html, fixed = TRUE) &&
+ok("the Methodology tab is www/methodology.md as it is: its headings and its table, and nothing else; reflexes_table() stays, because tests/review.R reads it",
+   md_has_headings(METHODOLOGY_FILE, meth_html) && grepl("<table", meth_html, fixed = TRUE) &&
      grepl("36 of the 48 planted faults|It found 36 of the 48 faults", meth_html) && !grepl("<code>", meth_html, fixed = TRUE) &&
      !grepl("The rules, file by file", meth_html, fixed = TRUE) && grepl("Methodology", page$html, fixed = TRUE) &&
      grepl("How QuestionR works and what stands behind it", page$html, fixed = TRUE) &&
-     is.data.frame(skills_table()) && nrow(skills_table()) > 80L && !"skills_html" %in% ls(globalenv()) &&
+     is.data.frame(reflexes_table()) && nrow(reflexes_table()) > 80L && !"reflexes_html" %in% ls(globalenv()) &&
      grepl("could not be shown", paste(as.character(md_page(file.path("www", "no_such_page.md"))), collapse = ""), fixed = TRUE))
 
-# ---- Phase 8c: the frameworks and the skill panels ---------------------------------------------
+# ---- Phase 9d and 9e: Total Survey Error first, the worked example, the shortened note ------------
 
 meth_lines <- readLines(METHODOLOGY_FILE, encoding = "UTF-8", warn = FALSE)
 meth_heads <- sub("^## ", "", grep("^## ", meth_lines, value = TRUE))
-fw_at <- which(meth_lines == "## The frameworks behind the rules")
-fw_end <- min(c(which(grepl("^## ", meth_lines) & seq_along(meth_lines) > fw_at), length(meth_lines) + 1L))
-fw_sections <- split(meth_lines[(fw_at + 1L):(fw_end - 1L)],
-                     cumsum(grepl("^### ", meth_lines[(fw_at + 1L):(fw_end - 1L)])))
-fw_sections <- fw_sections[-1]   # what comes before the first ###: the opening sentence
-ok("the frameworks section comes directly after 'What it is built on', opens with one sentence saying the skills were written from them, and 'How it was tested' is one section with that heading",
-   identical(meth_heads[which(meth_heads == "What it is built on") + 1L], "The frameworks behind the rules") &&
-     grepl("^These frameworks are what the skills were written from, and each skill below",
-           trimws(gsub("\\s+", " ", paste(meth_lines[(fw_at + 1L):(fw_at + 6L)], collapse = " ")))) &&
-     sum(meth_heads == "How it was tested") == 1L)
-ok("each framework is a diagram, then a summary of three to five sentences, then an italic line of references",
-   length(fw_sections) == 6L && purrr::every(fw_sections, function(s) {
-     body = s[-1][nzchar(trimws(s[-1]))]
-     img = grepl("^!\\[.+\\]\\(fw_[a-z]+\\.svg\\)$", body[1])
-     refs = grepl("^\\*[^*]+\\*$", body[length(body)])
-     summary_txt = gsub("\\s+", " ", paste(body[-c(1, length(body))], collapse = " "))
-     n_sentences = length(strsplit(summary_txt, "(?<=[.?!])\\s+", perl = TRUE)[[1]])
-     img && refs && n_sentences >= 3L && n_sentences <= 5L
+meth_sections <- function(heading) {
+  at = which(meth_lines == paste0("## ", heading))
+  end = min(c(which(grepl("^## ", meth_lines) & seq_along(meth_lines) > at), length(meth_lines) + 1L))
+  meth_lines[(at + 1L):(end - 1L)]
+}
+n_sentences <- function(txt) length(strsplit(gsub("\\s+", " ", trimws(txt)), "(?<=[.?!])\\s+", perl = TRUE)[[1]])
+ok("the note opens with Total Survey Error (fw_tse.svg), directly before 'What it is built on'; it names the errors QuestionR works on and those it does not",
+   identical(meth_heads[1:2], c("Total Survey Error", "What it is built on")) &&
+     identical(meth_lines[1], "# How QuestionR works and what stands behind it") &&
+     grepl("\\(fw_tse\\.svg\\)$", meth_sections("Total Survey Error")[2]) &&
+     grepl("QuestionR works on validity and measurement error", gsub("\\s+", " ", paste(meth_sections("Total Survey Error"), collapse = " "))) &&
+     grepl("does not work on coverage, sampling or nonresponse", gsub("\\s+", " ", paste(meth_sections("Total Survey Error"), collapse = " "))))
+ok("the note keeps its sections, in this order, and 'How it was tested' is one section with that exact heading",
+   identical(meth_heads, c("Total Survey Error", "What it is built on", "From construct to question",
+                           "One question, three ways to go wrong", "The response model",
+                           "Testing questions, and where AI fits", "What it cannot do", "How it was tested",
+                           "The AI reflexes behind every answer")))
+ok("each framework section is a diagram, then a short summary, then an italic line of references; the worked example is three sentences and cites the slide",
+   local({
+     fw = purrr::keep(meth_heads, function(h) any(grepl("^!\\[", meth_sections(h))))
+     ex = meth_sections("One question, three ways to go wrong")
+     ex = ex[nzchar(trimws(ex))]
+     purrr::every(fw, function(h) {
+       s = meth_sections(h)
+       body = s[nzchar(trimws(s))]
+       summary_txt = paste(body[-c(1, length(body))], collapse = " ")
+       grepl("^!\\[.+\\]\\(fw_[a-z]+\\.svg\\)$", body[1]) && grepl("^\\*[^*]+\\*$", body[length(body)]) &&
+         n_sentences(summary_txt) >= 2L && n_sentences(summary_txt) <= 5L
+     }) && length(fw) == 5L &&
+       n_sentences(paste(ex[-c(1, length(ex))], collapse = " ")) == 3L &&
+       grepl("(fw_example.svg)", ex[1], fixed = TRUE) &&
+       identical(ex[length(ex)], "*Ting Yan, Fundamentals of Questionnaire Design, IASS/WSS Webinar Session 1*")
    }))
+ok("the note is under 600 words outside the reflex table and the panels (image descriptions not counted)",
+   local({
+     txt = meth_lines[!grepl("^\\|", meth_lines)]
+     txt = gsub("!\\[[^]]*\\]\\([^)]*\\)", "", txt)
+     length(strsplit(paste(txt, collapse = " "), "\\s+")[[1]]) < 600L
+   }))
+ok("the worked example's diagram has the slide's question word for word, its three parts marked, and the three errors and validity named; the Sensitive and TRAPD diagrams are gone",
+   local({
+     d = paste(readLines(file.path("www", "fw_example.svg"), encoding = "UTF-8", warn = FALSE), collapse = "\n")
+     grepl("Last week,", d, fixed = TRUE) &&
+       grepl("did you work full-time, part-time, or did you not work at all?", d, fixed = TRUE) &&
+       all(purrr::map_lgl(c("reference period", "the concept", "answer options", "specification error", "operationalization error", "response error", "Validity"),
+                          function(p) grepl(p, d, fixed = TRUE))) &&
+       !file.exists(file.path("www", "fw_sensitive.svg")) && !file.exists(file.path("www", "fw_trapd.svg"))
+   }))
+
 ok("every .svg in www/ is well-formed XML with a title and a description, and no script",
    local({
      svgs = list.files("www", pattern = "\\.svg$", full.names = TRUE)
-     length(svgs) >= 7L && purrr::every(svgs, function(p) {
+     length(svgs) >= 6L && purrr::every(svgs, function(p) {
        d = tryCatch(xml2::read_xml(p), error = function(e) NULL)
        !is.null(d) && identical(xml2::xml_name(d), "svg") &&
          length(xml2::xml_find_all(d, "//*[local-name()='title']")) == 1L &&
@@ -2992,45 +2793,43 @@ ok("every image named in start.md and methodology.md exists in www/",
        txt = paste(readLines(p, encoding = "UTF-8", warn = FALSE), collapse = "\n")
        sub("\\)$", "", sub("^!\\[[^]]*\\]\\(", "", regmatches(txt, gregexpr("!\\[[^]]*\\]\\([^)]+\\)", txt))[[1]]))
      }))
-     length(imgs) >= 7L && all(file.exists(file.path("www", imgs)))
+     length(imgs) >= 6L && all(file.exists(file.path("www", imgs)))
    }))
 
-# The Frameworks column of the skills table: which of the six frameworks a skill file's Source lines
+# The Frameworks column of the reflex table: which of the five frameworks a reflex file's Source lines
 #   name, by the rule below; none of them is "Session guidelines".
 fw_rules <- c("Total Survey Error" = "Groves|Total Survey Error",
               "Response model" = "Tourangeau, Rips and Rasinski|response-process|response process|four-stage",
               "Construct and decomposition" = "specification and operationalization error|Fig\\. 1\\.1",
-              "Testing methods" = "testing methods|cognitive interviews",
-              "TRAPD" = "TRAPD",
-              "Sensitive questions" = "Tourangeau and Yan|Yan 2021|writing sensitive questions|[(]sensitive questions")
+              "Testing methods" = "testing methods|cognitive interviews")
 fw_of <- function(file) {
-  src = sub("^- \\*\\*Source:\\*\\*[ \\t]*", "", grep("^- \\*\\*Source:\\*\\*", readLines(file.path("www", "skills", file), encoding = "UTF-8", warn = FALSE), value = TRUE))
+  src = sub("^- \\*\\*Source:\\*\\*[ \\t]*", "", grep("^- \\*\\*Source:\\*\\*", readLines(file.path("www", "reflexes", file), encoding = "UTF-8", warn = FALSE), value = TRUE))
   hit = names(fw_rules)[vapply(fw_rules, function(p) any(grepl(p, src)), NA)]
   if (length(hit)) paste(hit, collapse = "; ") else "Session guidelines"
 }
-ok("the Frameworks column of the skills table is what each file's Source lines name, in the order of the panels",
+ok("the Frameworks column of the reflex table is what each file's Source lines name, in the order of the panels",
    local({
      rows = grep("^\\| ", meth_lines, value = TRUE)
      rows = rows[-1]   # the header
      cells = purrr::map_chr(rows, function(r) trimws(utils::tail(strsplit(r, "|", fixed = TRUE)[[1]], 1)))
-     length(cells) == length(SKILL_PANEL_ORDER) &&
-       identical(cells, unname(purrr::map_chr(SKILL_PANEL_ORDER, fw_of)))
+     length(cells) == length(REFLEX_PANEL_ORDER) &&
+       identical(cells, unname(purrr::map_chr(REFLEX_PANEL_ORDER, fw_of)))
    }))
 
-meth_panels <- paste(as.character(skill_panels()), collapse = "\n")
-ok("under the Methodology page, one closed panel for each skill file, in the order of the table, titled with the file's heading and version, holding the file as markdown without its comments, and not the README",
+meth_panels <- paste(as.character(reflex_panels()), collapse = "\n")
+ok("under the Methodology page, one closed panel for each reflex file, in the order of the table, titled with the file's heading and version, holding the file as markdown without its comments, and not the README",
    local({
      heads = gsub("\\s+", " ", regmatches(meth_panels, gregexpr("<summary>\\s*<strong>[^<]+</strong>\\s*</summary>", meth_panels))[[1]])
-     want = purrr::map_chr(SKILL_PANEL_ORDER, function(f) { s = read_skill(f); paste0("<summary> <strong>", s$title, ", version ", s$version, "</strong> </summary>") })
-     comments = unlist(purrr::map(SKILL_PANEL_ORDER, function(f) regmatches(paste(readLines(file.path(SKILLS_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"),
-                                                                           gregexpr("(?s)<!--.*?-->", paste(readLines(file.path(SKILLS_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"), perl = TRUE))[[1]]))
+     want = purrr::map_chr(REFLEX_PANEL_ORDER, function(f) { s = read_reflex_file(f); paste0("<summary> <strong>", s$title, ", version ", s$version, "</strong> </summary>") })
+     comments = unlist(purrr::map(REFLEX_PANEL_ORDER, function(f) regmatches(paste(readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"),
+                                                                           gregexpr("(?s)<!--.*?-->", paste(readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), collapse = "\n"), perl = TRUE))[[1]]))
      identical(heads, want) && length(gregexpr("<details", meth_panels, fixed = TRUE)[[1]]) == 10L &&
        !grepl("<details[^>]*open", meth_panels) && !grepl("<!--", meth_panels, fixed = TRUE) &&
        grepl("construct_first", meth_panels, fixed = TRUE) && grepl("You are a senior survey methodologist", meth_panels, fixed = TRUE) &&
        !any(purrr::map_lgl(trimws(gsub("<!--|-->", "", comments)), function(cm) grepl(substr(gsub("\\s+", " ", cm), 1, 60), gsub("\\s+", " ", meth_panels), fixed = TRUE))) &&
-       !grepl("QuestionR skills", meth_panels, fixed = TRUE) &&
-       grepl("could not be shown", paste(as.character(skill_panels(file.path("www", "no_such_dir"))), collapse = ""), fixed = TRUE) &&
-       any(grepl("skill_panels()", readLines("app.R", warn = FALSE), fixed = TRUE))
+       !grepl("QuestionR reflexes", meth_panels, fixed = TRUE) &&
+       grepl("could not be shown", paste(as.character(reflex_panels(file.path("www", "no_such_dir"))), collapse = ""), fixed = TRUE) &&
+       any(grepl("reflex_panels()", readLines("app.R", warn = FALSE), fixed = TRUE))
    }))
 
 
@@ -3054,25 +2853,6 @@ ok("a profile that still holds placeholders says which entries to fill in, the c
        work_page$status == 0 && grepl("still has placeholders", work_page$out, fixed = TRUE) &&
        is.null(placeholder_notice(llm_models())) && !grepl("placeholders to fill in", paste(as.character(start_ui()), collapse = ""), fixed = TRUE)
    }))
-local({
-  st = flow_state()
-  st$workers = fl_models("claude-haiku-5-5")
-  fa = rec_ask(function(m, sys) if (identical(m$id, pm_id)) appraisal_ok else tagged_draft(m))
-  shiny::testServer(mod_results_server,
-                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) fa$ask), {
-    session$flushReact()
-    approve_state(st)
-    session$flushReact()
-    h = html_of3(output$results)
-    ok("when the only worker is of the project manager's own family, Results says the appraiser reviewed a draft from its own family; with workers of other families it says nothing",
-       grepl("The appraiser reviewed a draft from its own model family", h, fixed = TRUE) &&
-         grepl(paste0("The appraisal was made by ", APP_MODELS$pm$id, " of a draft written by claude-haiku-5-5"), h, fixed = TRUE) &&
-         identical(model_family(c("anthropic/claude-sonnet-5.5", "claude-sonnet-5-5", "gpt-6-luna", "google/gemma-4-31b-it")),
-                   c("claude", "claude", "gpt", "gemma")) &&
-         is.null(same_family_note(APP_MODELS$pm$id, fl_ids)) && is.null(same_family_note(APP_MODELS$pm$id, character(0))) &&
-         is.null(same_family_note(APP_MODELS$pm$id, c("claude-haiku-5-5", "vendor-a/model-one"))))
-  })
-})
 
 
 # ---- Phase 7b: calls go out together ------------------------------------------------------------
@@ -3186,4 +2966,127 @@ local({
      !any(c("future", "furrr", "mirai", "parallel", "parallel_chat", "makeCluster") %in%
             all.names(c(body(llm_complete_all), body(llm_json_all)))) &&
        "chat_async" %in% all.names(body(llm_complete_all)) && "run_now" %in% all.names(body(llm_complete_all)))
+})
+
+
+# ---- Phase 9g: what the analyst can see, and what they cannot --------------------------------------
+
+# The words on a page: tags gone, a text box shown by its value, buttons and scripts left out.
+see_text <- function(h) {
+  h = gsub("(?s)<script.*?</script>", " ", paste(h, collapse = " "), perl = TRUE)
+  h = gsub("(?s)<button.*?</button>", " ", h, perl = TRUE)
+  h = gsub("<input[^>]*value=\"([^\"]*)\"[^>]*>", " \\1 ", h)
+  h = gsub("<[^>]+>", " ", h)
+  h = gsub("&amp;", "&", gsub("&lt;", "<", gsub("&gt;", ">", gsub("&#39;", "'", gsub("&quot;", "\"", h)))))
+  gsub("\\s+", " ", trimws(h))
+}
+words_of <- function(x) tolower(unlist(regmatches(x, gregexpr("[[:alnum:]]+", x))))
+AI_SKILL_SENTENCE <- "QuestionR is an AI skill. It works from written AI reflexes: short rules of survey design that every model is given."
+
+ok("the word skill is on no page except in its one sentence, once on Start here and once on the Methodology page",
+   local({
+     p = gsub("\\s+", " ", see_text(page$html))
+     n_sentence = lengths(regmatches(p, gregexpr(AI_SKILL_SENTENCE, p, fixed = TRUE)))
+     n_sentence == 2L && !grepl("skill", gsub(AI_SKILL_SENTENCE, "", p, fixed = TRUE), ignore.case = TRUE) &&
+       lengths(regmatches(see_text(start_ui()), gregexpr(AI_SKILL_SENTENCE, see_text(start_ui()), fixed = TRUE))) == 1L &&
+       lengths(regmatches(see_text(md_page(METHODOLOGY_FILE)), gregexpr(AI_SKILL_SENTENCE, see_text(md_page(METHODOLOGY_FILE)), fixed = TRUE))) == 1L
+   }))
+
+translation_pattern <- "TRAPD|translat|output language|output_language|back-translat"
+panel_html <- function(html, f) {
+  sf = read_reflex_file(f)
+  a = regexpr(paste0(sf$title, ", version ", sf$version), html, fixed = TRUE)[[1]]
+  if (a < 0L) return("")
+  from = max(gregexpr("<details", substr(html, 1L, a), fixed = TRUE)[[1]])
+  to = a + regexpr("</details>", substring(html, a), fixed = TRUE)[[1]] + 8L
+  substr(html, from, to)
+}
+ok("no page of the app names TRAPD, translation or an output language, and no form field is a language; none of the ten reflex files does either, and each has its panel on the page",
+   local({
+     html = paste(page$html, collapse = " ")
+     panels = purrr::map_chr(REFLEX_PANEL_ORDER, function(f) panel_html(html, f))
+     files = purrr::map_lgl(REFLEX_PANEL_ORDER, function(f)
+       any(grepl(translation_pattern, readLines(file.path(REFLEXES_DIR, f), encoding = "UTF-8", warn = FALSE), ignore.case = TRUE)))
+     length(panels) == 10L && all(nzchar(panels)) && !any(files) &&
+       !grepl(translation_pattern, see_text(html), ignore.case = TRUE) &&
+       !grepl("id=\"[^\"]*lang[^\"]*\"", html, ignore.case = TRUE) &&
+       !any(grepl("lang", names(clean_form(forms$attitudinal)), ignore.case = TRUE))
+   }))
+
+# A drafted question as the analyst sees it, and the Word copy of it.
+local({
+  st = flow_state()
+  fa = rec_ask(reply_rich)
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) fa$ask), {
+    session$flushReact()
+    approve_state(st)
+    session$flushReact()
+    s = html_of3(output$set_ui)
+    cards = regmatches(s, gregexpr("(?s)<div class=\"card mb-2\">.*?</div>\\s*</div>", s, perl = TRUE))[[1]]
+    parts_of <- function(card) {
+      t = gsub("(?s)<button.*?</button>", "", card, perl = TRUE)
+      t = gsub("<input[^>]*>", "[box]", t)
+      t = gsub("<[^>]+>", "\n", t)
+      l = trimws(strsplit(t, "\n", fixed = TRUE)[[1]])
+      l[nzchar(l)]
+    }
+    allowed <- function(l) grepl("^Question [0-9]+$", l) || identical(l, "[box]") || identical(l, CHECK_LABEL) ||
+      grepl("^\\[Open question", l)
+    ok("a drafted question on the screen has the question, its answer options, and at most one line to check before use, and nothing else; every one is checked, and there are cards to check",
+       length(cards) >= 2L && all(purrr::map_lgl(cards, function(cd) {
+         l = parts_of(cd)
+         check_sentence = l[which(l == CHECK_LABEL) + 1L]
+         extra = l[!purrr::map_lgl(l, allowed)]
+         sum(l == CHECK_LABEL) <= 1L && length(setdiff(extra, check_sentence)) == 0L &&
+           (!length(check_sentence) || length(strsplit(check_sentence, "\\s+")[[1]]) <= CHECK_WORDS)
+       })))
+    o = build_output(isolate(st$form), drafts = isolate(st$drafts), seed = isolate(st$seed), set = isolate(st$set), edits = isolate(st$edits))
+    tail_lines = trimws(strsplit(substring(o$text, nchar(o$screen_text) + 1L), "\n", fixed = TRUE)[[1]])
+    tail_lines = tail_lines[nzchar(tail_lines)]
+    ok("the Word copy of drafted questions is what is on the screen, word for word, and then exactly three lines: the date, who drafted and who reviews, and the tool version",
+       identical(words_of(see_text(s)), words_of(gsub("(?m)^[0-9]+[.] ", "", o$screen_text, perl = TRUE))) && startsWith(o$text, o$screen_text) &&
+         length(tail_lines) == 3L && grepl("^Date: [0-9]{4}-[0-9]{2}-[0-9]{2}$", tail_lines[1]) &&
+         identical(tail_lines[2], "Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]") &&
+         identical(tail_lines[3], paste0("QuestionR version ", QUESTIONR_VERSION)))
+    h = paste(html_of3(output$results), s, html_of3(output$drafts_ui))
+    ok("on the drafting screens, nowhere: TRAPD, translation, the word skill, a language field",
+       !grepl(translation_pattern, see_text(h), ignore.case = TRUE) && !grepl("skill", see_text(h), ignore.case = TRUE) &&
+         !grepl("lang", paste(regmatches(h, gregexpr("id=\"[^\"]*\"", h))[[1]], collapse = " "), ignore.case = TRUE))
+  })
+})
+
+# A review as the analyst sees it, when the stand-in model sends more than is allowed, and its Word copy.
+local({
+  st = review_state()
+  ra = rv_ask()
+  shiny::testServer(mod_results_server,
+                    args = list(state = st, go = function(tab) NULL, make_ask = function(total) ra$ask), {
+    session$flushReact()
+    approve_review(st)
+    session$flushReact()
+    h = html_of3(output$results)
+    sent_problems = purrr::map_int(rv_reply$items, function(i) length(i$problems))
+    sent_points = length(rv_reply$instrument)
+    cards = regmatches(h, gregexpr("(?s)<h6[^>]*>Question [^<]*</h6>.*?(?=<h6|The questionnaire as a whole|$)", h, perl = TRUE))[[1]]
+    ok("the stand-in sent more than two problems for a question and more than three points about the whole; the screen shows at most two for each question and at most three points",
+       max(sent_problems) > 2L && sent_points > 3L && length(cards) >= 1L &&
+         all(purrr::map_int(cards, function(cd) n_in3("Problem: ", cd)) <= 2L) &&
+         n_in3("Problem: ", h) == sum(pmin(sent_problems, 2L)) &&
+         local({
+           at = regexpr("The questionnaire as a whole", h, fixed = TRUE)
+           at > 0 && n_in3("<li", substring(h, at)) <= 3L
+         }))
+    o = build_output(isolate(st$form), review = isolate(st$review))
+    tail_lines = trimws(strsplit(substring(o$text, nchar(o$screen_text) + 1L), "\n", fixed = TRUE)[[1]])
+    tail_lines = tail_lines[nzchar(tail_lines)]
+    ok("the Word copy of a review is what is on the screen, word for word, and then exactly the same three lines",
+       identical(words_of(see_text(h)), words_of(o$screen_text)) && startsWith(o$text, o$screen_text) &&
+         length(tail_lines) == 3L && grepl("^Date: [0-9]{4}-[0-9]{2}-[0-9]{2}$", tail_lines[1]) &&
+         identical(tail_lines[2], "Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]") &&
+         identical(tail_lines[3], paste0("QuestionR version ", QUESTIONR_VERSION)))
+    ok("on the review screen, nowhere: TRAPD, translation, the word skill, a language field",
+       !grepl(translation_pattern, see_text(h), ignore.case = TRUE) && !grepl("skill", see_text(h), ignore.case = TRUE) &&
+         !grepl("lang", paste(regmatches(h, gregexpr("id=\"[^\"]*\"", h))[[1]], collapse = " "), ignore.case = TRUE))
+  })
 })

@@ -1,60 +1,30 @@
-Survey items
-============
+These are drafts. Test them with real respondents before fielding.
 
-First drafts by language models, as recommended by a reviewing model and left by the analyst; untested.
+Question 1
+----------
 
-CONF1
------
+How much do you trust the national electoral commission? (model 1)
 
-Nous allons vous poser quelques questions sur la commission électorale nationale.
+1. A lot
+2. Somewhat
+3. A little
+4. Not at all
 
-Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle 1)
+Check before use: The word trust may mean different things.
 
-1. Beaucoup
-2. Assez
-3. Peu
-4. Pas du tout
+Question 2
+----------
 
-[Randomize the order of options 1 to 4; keep Pas du tout last.]
+How much do you trust the national electoral commission? (model 2)
 
-English source: How much do you trust the national electoral commission? (1)
+1. A lot
+2. Somewhat
+3. A little
+4. Not at all
 
-CONF2
------
+Date: 2026-11-12
 
-Dans quelle mesure faites-vous confiance à la commission électorale nationale ? (modèle 2)
+Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]
 
-1. Beaucoup
-2. Assez
-3. Peu
-4. Pas du tout
-
-    Asked if the answer is Peu or Pas du tout: Pourquoi ?
-
-English source: How much do you trust the national electoral commission? (2)
-
-TRAPD: what is still needed
-===========================
-
-- The model's version is a first draft inside the Translation step only.
-- Review by people fluent in both languages and in survey design is still needed.
-- Adjudication of disagreements by a named person is still needed.
-- Pretesting in the target language with members of the target population is still needed.
-- Documentation of every decision, and of the model's part in it, is still needed.
-
-Disclosure of the use of language models
-========================================
-
-- Date: 2026-11-12 09:30
-- Profile: home
-- Project manager model: vendor-p/pm-model (example.invalid)
-- Worker models that drafted: vendor-a/model-one (example.invalid); vendor-b/model-two (example.invalid); vendor-c/model-three (example.invalid)
-- Skill files and versions: core.md 0.3; generate.md 0.3; attitudinal.md 0.3; mode.md 0.1; cross_cultural.md 0.1; pm_appraise.md 0.4; pm_brief.md 0.1
-- Brief check prompt: aaccce763e7134d3eae405db15ce1f7e9f956ee0b57ec327cb84149e13b4cf94
-- Drafting prompt (not edited): c5663a00236f0e4d56d563d2aade9f74d5da1c847013d775841c5d551de99095
-- Appraisal prompt: c65f2fef5822b7e84c4558f10a852be8ce9ef5ecf502113934bfe8cb870376ce
-- Item 1 (CONF1): candidate A, written by vendor-a/model-one
-- Item 2 (CONF2): candidate C, written by vendor-b/model-two
-
-Expert-review appraisal and first drafts by language models. Not a pretest. Test with real respondents before fielding.
+QuestionR version 0.9
 

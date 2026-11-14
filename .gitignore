@@ -28,9 +28,9 @@ cache/
 decisions/
 dict/
 
-# QuestionR's skill materials: the webinar slides, working papers and
+# QuestionR's reflex materials: the webinar slides, working papers and
 #   proceedings are copyrighted and stay on the maintainer's disk (the README
 #   in that folder lists them with their citations). The one openly licensed
 #   file (Martini et al. 2026, CC BY-NC-ND 4.0) is let back in by name.
-QuestionR/www/skills_materials/*.pdf
-!QuestionR/www/skills_materials/Evaluating Unedited AI-Generated Psychometric Scales.pdf
+QuestionR/www/reflex_materials/*.pdf
+!QuestionR/www/reflex_materials/Evaluating Unedited AI-Generated Psychometric Scales.pdf

@@ -16,19 +16,19 @@
 PHASE <- as.integer(c(commandArgs(trailingOnly = TRUE), "0")[1])
 CODE_BUDGET <- 12L
 
-# sha256 of each skill file with line endings normalised, as drafted in the
-#   Claude project. Updated there, and only there, when a skill changes.
-SKILL_SHA <- c(
-  "README.md" = "6d851fc5dc38f734c5754c818b25cd14a2667c090fef5150da30994456ea06cf",
+# sha256 of each reflex file with line endings normalised, as drafted in the
+#   Claude project. Updated there, and only there, when a reflex file changes.
+REFLEX_SHA <- c(
+  "README.md" = "661506b1e796079b84092555165e860dcd08eabf478c45c8819a0518b63fc8ce",
   "attitudinal.md" = "02a273b6ffe0428629b2b6c358a40977c11cb40adeb256fe09e3a4f03eba26e4",
   "behavioral.md" = "f41c9ee7abf5111010d65a0aad5885d2f9f90549edc081a18d72cbd9600bb142",
   "core.md" = "d687e2688a6efc55a15d5c3709805e9e30ced3a1ee20a150cc5476e09b4d81f9",
-  "cross_cultural.md" = "6c8a19b8c17b19808b4cfca788b3c76a7595d54a3a25a71e355391cb944bdd4d",
-  "evaluate.md" = "6d9780ab2f5af0aaac9f4761a00ae3916b10c8ba00cab674f1a7c387fbb838cb",
-  "generate.md" = "9512f3229d76fb064f316780d2291ba3a405376f19b5f1087e6c9a66d7355ee2",
+  "cross_cultural.md" = "f45a74c373e5af73e34e4b9808f3274115052b21e0a2c5d3409afbbbd4ce74b1",
+  "evaluate.md" = "12859aecda0cd0b9d841879cd8ff1f22d3e6a67936a1f89b25ee12ba7374fea0",
+  "generate.md" = "f7410389ee03de9fa3bf911d7410fa182f93169d0d40b57e96c3d0fb368ab687",
   "mode.md" = "98d2c27cd11711f142e9903a85efd65c902bef4cfa7f4d615df6b0d3df3f60e0",
-  "pm_appraise.md" = "a43e03e541f02f12d72f44d83c901faf983b0edf36fe123045da66a50aaeeb10",
-  "pm_brief.md" = "a1686dbea0a0aa619269086b5f0372b32a017fe07ae252aee20d5e52e3b4856a",
+  "pm_appraise.md" = "1bebaba53a961493eed2d1b4fa7d058d0dab53dd05d3b6113d606364ac6f4211",
+  "pm_brief.md" = "daea3b19c360b24817e5b6104a3e798c1444ff7e53b06929614f48584e3e1655",
   "sensitive.md" = "4d8b50d65e768c62143287b3f7400ff7d66695b4905b3d4e0849cc313b81a2eb")
 
 stopifnot("Run from inside QuestionR/" = file.exists("DESIGN.md"))
@@ -168,26 +168,26 @@ sec_rules <- c(
   if (nrow(bad_calls)) fence(paste0(bad_calls$pkg, "::", bad_calls$fn)))
 
 
-# ---- 4. skill files untouched --------------------------------------------------
+# ---- 4. reflex files untouched --------------------------------------------------
 
-skill_sha <- function(f) {
+reflex_sha <- function(f) {
   bytes = readBin(f, "raw", file.size(f))
   digest::digest(bytes[bytes != as.raw(13)], algo = "sha256", serialize = FALSE)
 }
-skills <- tibble::tibble(file = names(SKILL_SHA)) |>
+reflex_tbl <- tibble::tibble(file = names(REFLEX_SHA)) |>
   dplyr::mutate(
-    path = file.path("www", "skills", file),
+    path = file.path("www", "reflexes", file),
     present = file.exists(path),
-    sha = purrr::map2_chr(path, present, function(p, ok) if (ok) skill_sha(p) else NA_character_),
-    result = verdict(present & !is.na(sha) & sha == unname(SKILL_SHA[file])))
-extra_skills <- setdiff(list.files(file.path("www", "skills")), names(SKILL_SHA))
+    sha = purrr::map2_chr(path, present, function(p, ok) if (ok) reflex_sha(p) else NA_character_),
+    result = verdict(present & !is.na(sha) & sha == unname(REFLEX_SHA[file])))
+extra_reflex_files <- setdiff(list.files(file.path("www", "reflexes")), names(REFLEX_SHA))
 
-sec_skills <- c(
-  "## 4. Skill files", "",
+sec_reflex_files <- c(
+  "## 4. Reflex files", "",
   "PASS means the file is byte for byte what the Claude project drafted (line endings aside).",
-  "", md_table(dplyr::select(skills, file, result, sha)), "",
-  paste0("Files in www/skills not on the list: ",
-         if (length(extra_skills)) paste(extra_skills, collapse = ", ") else "none"))
+  "", md_table(dplyr::select(reflex_tbl, file, result, sha)), "",
+  paste0("Files in www/reflexes not on the list: ",
+         if (length(extra_reflex_files)) paste(extra_reflex_files, collapse = ", ") else "none"))
 
 
 # ---- 5. smoke test ---------------------------------------------------------------
@@ -205,8 +205,7 @@ sec_smoke <- c(
 # Four fixed forms. The field names are the contract in DESIGN.md section 5.
 blank_form <- list(
   task = "", research_question = "", construct = "", population = "",
-  country = "", modes = character(0), output_language = "English",
-  source_language = "English", n_items = NA_integer_, reference_period = "",
+  country = "", modes = character(0), n_items = NA_integer_, reference_period = "",
   keep_items = "", other = "", questionnaire = "", revision = "")
 forms <- list(
   attitudinal = utils::modifyList(blank_form, list(
@@ -219,14 +218,14 @@ forms <- list(
     research_question = "How often do adults get news from radio?",
     construct = "Frequency of radio news use",
     population = "Adults aged 18 and over", country = "Kenya",
-    modes = c("telephone", "face_to_face"), output_language = "Swahili",
+    modes = c("telephone", "face_to_face"),
     n_items = 3L, reference_period = "past 7 days")),
   sensitive = utils::modifyList(blank_form, list(
     task = "sensitive",
     research_question = "How common is paying a bribe for a public service?",
     construct = "Paying a bribe to a public official in the past 12 months",
     population = "Adults aged 18 and over", country = "Mali",
-    modes = "face_to_face", output_language = "French", n_items = 2L)),
+    modes = "face_to_face", n_items = 2L)),
   evaluate = utils::modifyList(blank_form, list(
     task = "evaluate",
     research_question = "Satisfaction with local services",
@@ -235,9 +234,6 @@ forms <- list(
       "Q1. How satisfied or dissatisfied are you with the recycling services and street cleaning provided by your local council? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied",
       "Q2. Taking all things together, how happy would you say you are? 0 Extremely unhappy ... 10 Extremely happy",
       sep = "\n"))))
-# The same review, of a questionnaire translated from Spanish for English output.
-forms$evaluate_translated <- utils::modifyList(forms$evaluate,
-                                               list(source_language = "Spanish"))
 
 has <- function(txt, s) grepl(s, txt, fixed = TRUE)
 expect <- function(what, ok) tibble::tibble(check = what, result = verdict(isTRUE(ok)))
@@ -260,9 +256,8 @@ prompt_checks <- function(name, p, again, changed) {
     expect("core reflex one_thing present", has(sys, "- one_thing (")),
     expect("any_mode present", has(sys, "- any_mode (")),
     expect("prohibitions headed as overriding", has(sys, "PROHIBITIONS (override anything from training)")),
-    expect("Output language line always present", has(usr, "Output language:")),
-    expect("reworded prohibition in force (skills 0.2)", has(sys, "Use a rule's id only in a JSON field that asks for one.")))
-  is_review = name %in% c("evaluate", "evaluate_translated")
+    expect("reworded prohibition in force (reflex files 0.2)", has(sys, "Use a rule's id only in a JSON field that asks for one.")))
+  is_review = name == "evaluate"
   common = dplyr::bind_rows(common,
     expect("existing_items_first only in drafting prompts", has(sys, "- existing_items_first (") != is_review),
     expect("CHECKLIST block only in a review, after Questionnaire: and before REPLY FORMAT",
@@ -271,7 +266,7 @@ prompt_checks <- function(name, p, again, changed) {
                                      regexpr("\nREPLY FORMAT\n", usr, fixed = TRUE))) > 0) &&
                             has(usr, "\nCHECKLIST\n")
            else !has(usr, "CHECKLIST")),
-    expect("parts field only in drafting prompts", has(usr, "\"parts\"") != is_review))
+    expect("the drafting output format (open_format) only in drafting prompts", has(usr, "\"open_format\"") != is_review))
   specific = switch(name,
     attitudinal = dplyr::bind_rows(
       expect("task file sent (attitude_object)", has(sys, "- attitude_object (")),
@@ -280,43 +275,36 @@ prompt_checks <- function(name, p, again, changed) {
              !has(sys, "- reference_period (") && !has(sys, "- forgiving_intro (")),
       expect("web kept; telephone, mobile_web, mixed_mode dropped",
              has(sys, "- web (") && !has(sys, "- telephone (") && !has(sys, "- mobile_web (") && !has(sys, "- mixed_mode (")),
-      expect("cross_cultural not sent (no country, English)", !has(sys, "- trapd (")),
+      expect("cross_cultural not sent (no country)", !has(sys, "- flag_do_not_assert (")),
       expect("blank fields left out (no Country, no Reference period line)",
              !has(usr, "Country:") && !has(usr, "Reference period:")),
-      expect("Output language: English shown; Source language left out when the same",
-             has(usr, "Output language: English") && !has(usr, "Source language:")),
       expect("number of items in the ask", has(usr, "6"))),
     behavioral = dplyr::bind_rows(
       expect("task file sent (how_many_or_how_often)", has(sys, "- how_many_or_how_often (")),
       expect("telephone, face_to_face, mixed_mode kept; web dropped",
              has(sys, "- telephone (") && has(sys, "- face_to_face (") && has(sys, "- mixed_mode (") && !has(sys, "- web (")),
-      expect("cross_cultural sent (trapd, output_language)", has(sys, "- trapd (") && has(sys, "- output_language (")),
-      expect("form values present (Kenya, Swahili, past 7 days)",
-             has(usr, "Kenya") && has(usr, "Swahili") && has(usr, "past 7 days")),
-      expect("Source language shown when it differs from the output language",
-             has(usr, "Output language: Swahili") && has(usr, "Source language: English"))),
+      expect("cross_cultural sent (flag_do_not_assert, context_and_face)", has(sys, "- flag_do_not_assert (") && has(sys, "- context_and_face (")),
+      expect("no translation or language reflex sent (trapd, output_language, write_for_translation)",
+             !has(sys, "- trapd (") && !has(sys, "- output_language (") && !has(sys, "- write_for_translation (")),
+      expect("form values present (Kenya, past 7 days)", has(usr, "Kenya") && has(usr, "past 7 days"))),
     sensitive = dplyr::bind_rows(
       expect("task file sent (forgiving_intro, respondent_safety)",
              has(sys, "- forgiving_intro (") && has(sys, "- respondent_safety (")),
       expect("face_to_face kept; mixed_mode dropped", has(sys, "- face_to_face (") && !has(sys, "- mixed_mode (")),
-      expect("cross_cultural sent", has(sys, "- trapd ("))),
+      expect("cross_cultural sent", has(sys, "- flag_do_not_assert ("))),
     evaluate = dplyr::bind_rows(
-      expect("evaluate.md sent (restraint, translation_readiness)",
-             has(sys, "- restraint (") && has(sys, "- translation_readiness (")),
+      expect("evaluate.md sent (restraint), and no translation reflex in it",
+             has(sys, "- restraint (") && !has(sys, "- translation_readiness (")),
       expect("generate.md and task drafting files not sent",
              !has(sys, "- declare_defaults (") && !has(sys, "- attitude_object (")),
       expect("questionnaire pasted under Questionnaire:, complete",
              has(usr, "Questionnaire:") && has(usr, "street cleaning provided by your local council") && has(usr, "10 Extremely happy")),
-      expect("output format asks for trapd and test_first", has(usr, "\"trapd\"") && has(usr, "\"test_first\"")),
+      expect("output format asks for a verdict per question and points about the whole", has(usr, "\"verdict\"") && has(usr, "\"instrument\"")),
       expect("checklist lines are id: question, for the reflexes in force (one_thing, paper, agree_disagree_and_grids)",
              has(usr, "\none_thing: Does the question ask about exactly one thing") &&
                has(usr, "\npaper: ") && has(usr, "\nagree_disagree_and_grids: ")),
       expect("checklist has no line for a mode not chosen", !has(usr, "\ntelephone: ")),
-      expect("cross_cultural not sent (no country, both languages English)", !has(sys, "- trapd ("))),
-    evaluate_translated = dplyr::bind_rows(
-      expect("cross_cultural sent because the source language is not English", has(sys, "- trapd (")),
-      expect("both language lines shown", has(usr, "Output language: English") && has(usr, "Source language: Spanish")),
-      expect("its checks join the checklist (functional_equivalence)", has(usr, "\nfunctional_equivalence: "))))
+      expect("cross_cultural not sent (no country)", !has(sys, "- flag_do_not_assert ("))))
   dplyr::bind_rows(common, specific)
 }
 
@@ -386,13 +374,12 @@ fake_item <- function(i) list(
   stem = paste0("Canned stem number ", i, "?"),
   options = list("None", "A little", "A lot"), open_format = "", parts = list(),
   programming = "", decisions = list("closed; three labelled options"),
-  source_english = "", notes = "")
+  notes = "")
 fake_draft <- function(n) list(items = purrr::map(seq_len(n), fake_item),
                                not_covered = list(), missing_from_brief = list())
 fake_pick <- function(i) list(domain = paste("domain", i), candidate = "A", id = paste0("TR", i),
-                              why = "Canned.", concerns = list(), suggestion = "")
-fake_appraisal <- list(selected = list(fake_pick(1), fake_pick(2)), not_covered = list(), set_notes = list(),
-                       test_first = list(), limits = "Canned.")
+                              check_before_use = "")
+fake_appraisal <- list(selected = list(fake_pick(1), fake_pick(2)))
 fake_brief <- list(complete = TRUE, questions = list(), task_fit = "",
                    criteria = list("Canned criterion."))
 fake_model <- function(id) list(api = "openai", base_url = "https://example.invalid/v1",
@@ -463,8 +450,8 @@ flow_checks <- function() {
                       regexpr("\nCHECKLIST\n", ap$user, fixed = TRUE),
                       regexpr("\nCHARACTERIZE\n", ap$user, fixed = TRUE))) > 0) &&
              has(ap$user, "\nCANDIDATES\n") && has(ap$user, "Canned stem number 1?") &&
-             has(ap$user, "\none_thing: ") && has(ap$user, "\"selected\"") && has(ap$user, "\"set_notes\"")),
-    expect("documentation checks are not in the appraisal checklist (skills 0.3)",
+             has(ap$user, "\none_thing: ") && has(ap$user, "\"selected\"") && has(ap$user, "\"check_before_use\"")),
+    expect("documentation checks are not in the appraisal checklist (reflex files 0.3)",
            !has(ap$user, "\ndeclare_defaults: ") && !has(ap$user, "\nmidpoint_and_dont_know: ")),
     expect("appraisal prompt: persona (in the message), pm_appraise rules in the system prompt, not the drafting rules",
            startsWith(ap$user, "You are a senior survey methodologist") && has(ap$system, "- pick_per_domain (") &&
@@ -503,17 +490,12 @@ sec_flow <- if (PHASE < 3L) {
 
 fake_review <- list(
   items = list(
-    list(id = "Q1", findings = list(
-      list(check = "one_thing", stage = "comprehension",
-           evidence = "the recycling services and street cleaning", problem = "Two services.",
-           severity = 8, rewrite = "x", rewrite_english = "", probe = "y"),
-      list(check = "not_a_real_check", stage = "comprehension",
-           evidence = "words that are nowhere in the questionnaire", problem = "Invented.",
-           severity = 3, rewrite = "", rewrite_english = "", probe = ""))),
-    list(id = "Q2", findings = list())),
-  instrument = list(),
-  trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
-  test_first = list(), not_assessed = "")
+    list(id = "Q1", verdict = "Revise", problems = list(
+      list(problem = "Two services.", rewrite = "x"),
+      list(problem = "Street cleaning is unclear.", rewrite = "y"),
+      list(problem = "A third problem that is not shown.", rewrite = "z"))),
+    list(id = "Q2", verdict = "Keep", problems = list())),
+  instrument = list())
 
 review_checks <- function() {
   form = forms$evaluate
@@ -522,7 +504,7 @@ review_checks <- function() {
     fake_review
   }
   rv = run_review(form, fake_pm, ask = ask)
-  flags = check_review(rv$reply, form)
+  shown = shape_review(rv$reply, form$questionnaire)
   bad_ask = function(...) stop("canned endpoint error")
   failed = run_review(form, fake_pm, ask = bad_ask)
   dplyr::bind_rows(
@@ -532,15 +514,12 @@ review_checks <- function() {
     expect("run_review uses the prompt build_prompt() gives", identical(rv$hash, build_prompt(form)$hash)),
     expect("a failed call is status failed with a reason, not an R error",
            identical(failed$status, "failed") && nzchar(paste(failed$error, collapse = " "))),
-    expect("check_review returns one row per finding with item, check, severity, evidence_found, check_known",
-           is.data.frame(flags) && nrow(flags) == 2L &&
-             all(c("item", "check", "severity", "evidence_found", "check_known") %in% names(flags))),
-    expect("a real quote and a sent check id are accepted",
-           isTRUE(flags$evidence_found[flags$check == "one_thing"]) &&
-             isTRUE(flags$check_known[flags$check == "one_thing"])),
-    expect("an invented quote and an unknown check id are flagged, not dropped",
-           isFALSE(flags$evidence_found[flags$check == "not_a_real_check"]) &&
-             isFALSE(flags$check_known[flags$check == "not_a_real_check"])))
+    expect("shape_review gives the question as pasted, a verdict, at most two problems, and the questions to keep",
+           identical(purrr::map_chr(shown$questions, "verdict"), c("Revise", "Keep")) &&
+             length(shown$questions[[1]]$problems) == 2L && identical(shown$keep, "Q2") &&
+             grepl("^Q1\\.", shown$questions[[1]]$text)),
+    expect("a third problem is dropped, and no other field of the reply is read",
+           !any(grepl("third problem", unlist(shown), fixed = TRUE)) && identical(names(shown), c("questions", "keep", "instrument"))))
 }
 
 sec_review <- if (PHASE < 4L) {
@@ -589,12 +568,8 @@ long_checks <- function() {
   canned = function(user) {
     ids = regmatches(user, gregexpr("(?m)^Q[0-9]+(?=\\. )", user, perl = TRUE))[[1]]
     instrument = !grepl("\none_thing: ", user, fixed = TRUE)
-    list(items = if (instrument) list() else purrr::map(ids, function(i) list(id = i, findings = list())),
-         instrument = if (instrument) list(list(check = "scale_consistency", stage = "instrument",
-                                                evidence = "Q1, Q2", problem = "Canned.", severity = 5,
-                                                rewrite = "", rewrite_english = "", probe = "")) else list(),
-         trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = ""),
-         test_first = list(), not_assessed = "")
+    list(items = if (instrument) list() else purrr::map(ids, function(i) list(id = i, verdict = "Keep", problems = list())),
+         instrument = if (instrument) list("Canned point about the whole.") else list())
   }
   make = function(fail_at = 0L) function(user, m, system_prompt = NULL, max_tokens = NULL,
                                          validate = NULL, ...) {
@@ -612,7 +587,7 @@ long_checks <- function() {
   calls$users = character(0)
   part = run_review(form, fake_pm, ask = make(fail_at = 2L))
   short = run_review(forms$evaluate, fake_pm, ask = make())
-  tab = skills_table()
+  tab = reflexes_table()
 
   dplyr::bind_rows(
     expect("split: more than one part, none over the limit", length(parts) > 1L && all(nchar(parts) <= 4000)),
@@ -623,7 +598,7 @@ long_checks <- function() {
     expect("long review: item calls carry no instrument checks, the instrument call carries no item checks",
            sum(grepl("\nscale_consistency: ", users_ok, fixed = TRUE)) == 1L &&
              sum(grepl("\none_thing: ", users_ok, fixed = TRUE)) == length(parts)),
-    expect("long review: status ok, all 30 items in pasted order, instrument findings kept",
+    expect("long review: status ok, all 30 items in pasted order, the points about the whole kept",
            identical(rv$status, "ok") &&
              identical(purrr::map_chr(rv$reply$items, "id"), paste0("Q", 1:30)) &&
              length(rv$reply$instrument) == 1L),
@@ -636,7 +611,7 @@ long_checks <- function() {
              sum(purrr::map_chr(part$batches, "status") == "failed") == 1L),
     expect("a short questionnaire is still one call with the Phase 4 prompt",
            identical(short$hash, build_prompt(forms$evaluate)$hash) && length(short$batches) == 1L),
-    expect("skills_table: one row per reflex with file, id, when, source",
+    expect("reflexes_table: one row per reflex with file, id, when, source",
            is.data.frame(tab) && all(c("file", "id", "when", "source") %in% names(tab)) && nrow(tab) > 80L),
     expect("www/methodology.md present", file.exists(file.path("www", "methodology.md"))))
 }
@@ -674,10 +649,11 @@ versions <- purrr::map_chr(pkgs, function(p)
 
 writeLines(c(
   paste0("# QuestionR review evidence, Phase ", PHASE), "",
+  "From Phase 9, \"skills\" are called \"reflexes\". This file keeps the old word where it records earlier work.", "",
   paste0("Generated ", format(Sys.time(), "%Y-%m-%d %H:%M"), " by tests/review.R on ",
          R.version.string, "."),
   paste0("Packages: ", paste0(pkgs, " ", versions, collapse = ", ")), "",
-  sec_git, "", sec_files, "", sec_rules, "", sec_skills, "", sec_smoke, "",
+  sec_git, "", sec_files, "", sec_rules, "", sec_reflex_files, "", sec_smoke, "",
   sec_prompts, "", sec_llm, "", sec_flow, "", sec_review, "", sec_long), "REVIEW.md", useBytes = TRUE)
 
 cat("Wrote REVIEW.md for Phase", PHASE, "\n")

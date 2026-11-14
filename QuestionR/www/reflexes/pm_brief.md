@@ -1,6 +1,6 @@
 # Project manager: brief check
 
-Version: 0.1
+Version: 0.2
 
 First step of every task, before any prompt is approved. The project manager
 reads the analyst's form and says what a designer would need to know that the
@@ -10,7 +10,7 @@ form does not say. It does not write items and does not write the prompt.
 
 ### what_a_brief_needs
 - **When:** Reading the form.
-- **Say:** Check for: the research question; the construct in a sentence, and its domains if it has several; the target population; the country; the mode or modes; the output language and the source language; for behaviour, the reference period and unit; for attitudes, the attitude object; what the estimate will be used for (a level, a comparison between groups, a trend); how many items; any existing items to keep.
+- **Say:** Check for: the research question; the construct in a sentence, and its domains if it has several; the target population; the country; the mode or modes; for behaviour, the reference period and unit; for attitudes, the attitude object; what the estimate will be used for (a level, a comparison between groups, a trend); how many items; any existing items to keep.
 - **Never:** Do not fill a gap yourself. Do not guess the mode, the population or the reference period.
 - **Source:** Haensch, IASS/WSS Session 3 (recommendation 2); Yan, IASS/WSS Session 1 (essential inputs to questionnaire design: objectives, sample, mode, processing, analysis, adjustment)
 

@@ -238,11 +238,9 @@ review_result <- function(system, batches, p = NULL) {
   }
   kinds = purrr::map_chr(batches, "kind")
   inst = purrr::detect(batches[ok & kinds == "instrument"], function(b) TRUE)
-  empty_trapd = list(translation = "", review = "", adjudication = "", pretesting = "", documentation = "")
   reply = if (any(ok)) list(
     items = unlist(purrr::map(batches[ok & kinds == "items"], function(b) unname(b$reply$items)), recursive = FALSE) %||% list(),
-    instrument = inst$reply$instrument %||% list(), trapd = inst$reply$trapd %||% empty_trapd,
-    test_first = inst$reply$test_first %||% list(), not_assessed = inst$reply$not_assessed %||% "")
+    instrument = inst$reply$instrument %||% list())
   why = purrr::map_chr(batches[!ok], function(b)
     paste0(if (identical(b$kind, "instrument")) "The instrument as a whole" else paste0("Part ", b$part, " of ", b$n_parts),
            " did not come back: ", b$error))

@@ -1,6 +1,6 @@
 # Evaluate a questionnaire
 
-Version: 0.3
+Version: 0.5
 
 Task file for appraising a pasted questionnaire: an expert review, item by
 item and then as a whole. The reflexes in core.md are the item checklist; this
@@ -75,12 +75,6 @@ items and 7 ESS control items (tests/, not shipped).
 - **Check:** Is every stated research question measured, and does every item serve one?
 - **Source:** Yan, IASS/WSS Session 2 (final checklist: objectives, sampling, mode, processing, analysis, adjustment)
 
-### translation_readiness
-- **When:** The brief names a country, a language other than English, or more than one language.
-- **Say:** For each item say what would not carry across: idioms, culture-bound examples, units, institutions, scale labels with no natural equivalent, grammatical gender. Organize the instrument-level advice by the five TRAPD steps and say which steps the pasted text shows evidence of and which the analyst must still arrange.
-- **Check:** Is the item free of wording that would not survive translation or adaptation to the stated setting?
-- **Source:** Yan, IASS/WSS Session 2 (3MC surveys; TRAPD); Metheney and Yehle 2024 as reported in Haensch, IASS/WSS Session 3; SURV632 Class 12
-
 ### severity
 - **When:** Every finding.
 - **Say:** Rate how far the problem would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for problems you would revise before fielding.
@@ -104,14 +98,12 @@ items and 7 ESS control items (tests/, not shipped).
 
 ## Output format
 
-Return one JSON object with these fields. Write findings in English whatever
-language the questionnaire is in; write rewrites in the questionnaire's
-language and, when that is not English, add the English meaning.
+Return one JSON object with these fields. Write in English. Be brief: the analyst is shown only what is below, and reads very little.
 
 - "items": a list, one entry per question in the order pasted. Each has:
   - "id": the question's own number or label, or its position.
-  - "findings": a list, empty if none. Each finding has "check" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (words copied exactly from the pasted text, with no ellipsis), "problem" (one or two sentences), "severity" (1 to 10), "rewrite" and "rewrite_english" and "probe" (empty strings when severity is below 5).
-- "instrument": a list of findings about order, routing, consistency and fit to objectives, in the same form, with the question ids involved in "evidence".
-- "trapd": an object with the keys "translation", "review", "adjudication", "pretesting", "documentation", each a short statement of what is still needed; all empty strings when the survey is in one language for one country and that language is the source language.
-- "test_first": a list of up to five question ids with the method suggested for each.
-- "not_assessed": what this review could not judge from what was pasted.
+  - "verdict": "Keep" if the question can be used as written, or "Revise" if it has a real problem. Say "Revise" only for a real problem.
+  - "problems": a list, empty when the verdict is "Keep". At most two entries, the most serious first. Each has "problem" (one sentence of 20 words or fewer, in plain words, saying what is wrong) and "rewrite" (a suggested rewrite of the question, ready to use).
+- "instrument": a list of at most three points about the questionnaire as a whole (order, routing, consistency, fit to objectives), the most important first, one sentence each; an empty list if there is nothing to say.
+
+Nothing else: no severities, no check ids, no quotes, no stages and no test plans.

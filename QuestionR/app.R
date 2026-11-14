@@ -6,7 +6,7 @@
 #     app.R        this file: settings, state, layout, server
 #     R/           function definitions only, sourced below
 #     www/         static files, served at the site root by Shiny itself:
-#                  skills/ (the text files that steer every model call) and
+#                  reflexes/ (the text files that steer every model call) and
 #                  logo/ (the office logo)
 # README.md says what the app is and how to set it up.
 
@@ -157,9 +157,9 @@ walk(sort(list.files("R", pattern = "[.]R$", full.names = TRUE)), function(f)
            error = function(e) stop("Failed loading ", f, ": ",
                                     conditionMessage(e), call. = FALSE)))
 
-# Every skill file parsed now, so one that has lost its shape stops the app here
+# Every reflex file parsed now, so one that has lost its shape stops the app here
 #   with the file and the reflex named, not at the first request that needs it.
-invisible(check_skills())
+invisible(check_reflex_files())
 
 # R/ lives in the global environment, but runApp() evaluates this file in an
 #   environment of its own, so nothing assigned here is visible to R/ unless
@@ -226,7 +226,7 @@ ui <- page_fluid(
     tabPanel(QUESTIONR_TABS[3], mod_prompt_ui("prompt")),
     tabPanel(QUESTIONR_TABS[4], mod_results_ui("results"), mod_again_ui("again")),
     tabPanel(QUESTIONR_TABS[5], mod_output_ui("output")),
-    tabPanel(QUESTIONR_TABS[6], md_page(METHODOLOGY_FILE), skill_panels())))
+    tabPanel(QUESTIONR_TABS[6], md_page(METHODOLOGY_FILE), reflex_panels())))
 
 
 # ---- 7. server --------------------------------------------------------------

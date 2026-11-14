@@ -16,7 +16,7 @@
 #   Types: text (a non-empty string), string (any string, empty allowed), logical,
 #   list. A trailing "?" lets the field be missing or null: a model may leave
 #   `options` out of an open question.
-# Only what R itself reads is required. A field a skill asks for and R does not
+# Only what R itself reads is required. A field a reflex file asks for and R does not
 #   use (an item's notes, programming, decisions) is read with a default, so a
 #   model that forgets one is not retried for it.
 REPLY_SCHEMAS <- list(
@@ -27,22 +27,21 @@ REPLY_SCHEMAS <- list(
   draft = list(
     fields = c(items = "list"),
     each = list(items = c(id = "text", domain = "text", stem = "text",
-                          options = "list?", open_format = "string?", parts = "list?")),
+                          options = "list?", open_format = "string?")),
     rules = c("item_count", "options_or_open")),
+  # The reviewer's recommendation: which items, by candidate letter and id, and for each at most one
+  #   line to check before use (DESIGN.md section 18).
   appraisal = list(
-    fields = c(selected = "list", not_covered = "list", set_notes = "list", test_first = "list",
-               limits = "string"),
-    each = list(selected = c(domain = "text", candidate = "text", id = "id", why = "string",
-                             concerns = "list", suggestion = "string?"),
-                set_notes = c(check = "text", severity = "number", why = "string")),
-    rules = c("selection_concerns", "selection_valid")),
-  # A review of pasted text (the Evaluate task). Findings sit one level further
-  #   down than `each` reaches, so a rule reads them.
+    fields = c(selected = "list"),
+    each = list(selected = c(domain = "text", candidate = "text", id = "id", check_before_use = "string?")),
+    rules = c("selection_valid")),
+  # A review of pasted text (the Evaluate task): for each question a verdict and, for Revise, up to
+  #   two problems with a rewrite; and points about the questionnaire as a whole. A rule reads the
+  #   problems, which sit one level further down than `each` reaches.
   review = list(
-    fields = c(items = "list", instrument = "list", trapd = "list", test_first = "list",
-               not_assessed = "string"),
-    each = list(items = c(id = "id", findings = "list")),
-    rules = c("finding_entries")))
+    fields = c(items = "list", instrument = "list"),
+    each = list(items = c(id = "id", verdict = "text")),
+    rules = c("review_entries")))
 
 TYPE_WORDS <- c(text = "a non-empty string", string = "a string",
                 logical = "true or false", list = "a list", number = "a number from 1 to 10",
@@ -83,8 +82,7 @@ REPLY_RULES <- list(
     n = length(obj$items)
     if (!is.null(n_items) && n != n_items)
       paste0("The reply holds ", n, if (n == 1L) " item" else " items", "; ", n_items,
-             " ", if (n_items == 1L) "was" else "were", " asked for. Questions inside ",
-             "an item's parts are not counted.")
+             " ", if (n_items == 1L) "was" else "were", " asked for.")
   },
   # An item is closed (it has options) or open (it says what is entered).
   options_or_open = function(obj, ...) {
@@ -93,18 +91,6 @@ REPLY_RULES <- list(
     if (length(bad))
       paste0("Item ", paste(purrr::map_chr(bad, function(it) it$id %||% "?"), collapse = ", "),
              " has neither options nor an open_format.")
-  },
-  # Every concern about a recommended item names its check, the failing words, a severity
-  #   from 1 to 10 and why.
-  selection_concerns = function(obj, ...) {
-    bad = purrr::keep(obj$selected, function(e)
-      !all(purrr::map_lgl(e$concerns, function(cn)
-        is.list(cn) && type_ok(cn$check, "text") && type_ok(cn$severity, "number") &&
-          type_ok(cn$evidence, "string") && type_ok(cn$why, "string"))))
-    if (length(bad))
-      paste0("A concern about ", paste(purrr::map_chr(bad, function(e) paste("item", e$id, "of", e$candidate)),
-                                      collapse = ", "),
-             " does not give its check, the failing words, a severity from 1 to 10 and why.")
   },
   # The recommendation names items that are in the drafts, none twice, and no more than were
   #   asked for. candidates is the drafts by letter, n_items the number asked for.
@@ -125,19 +111,23 @@ REPLY_RULES <- list(
         paste0("The reply recommends ", length(sel), " items; ", n_items, " ",
                if (n_items == 1L) "was" else "were", " asked for."))
   },
-  # Every finding in a review gives the check, the evidence, the problem and a
-  #   severity from 1 to 10, whether it is about a question or the instrument.
-  finding_entries = function(obj, ...) {
-    whole = function(f)
-      is.list(f) && type_ok(f$check, "text") && type_ok(f$severity, "number") &&
-        type_ok(f$evidence, "string") && type_ok(f$problem, "string")
-    bad_items = purrr::keep(obj$items, function(it) !all(purrr::map_lgl(it$findings, whole)))
-    bad_inst = !all(purrr::map_lgl(obj$instrument, whole))
-    if (length(bad_items) || bad_inst)
-      paste0("A finding for ",
-             paste(c(purrr::map_chr(bad_items, function(it) paste("question", it$id)),
-                     if (bad_inst) "the instrument"), collapse = ", "),
-             " does not give its check, evidence, problem and a severity from 1 to 10.")
+  # A verdict is Keep or Revise. A Revise has at least one problem with its sentence, and every
+  #   point about the questionnaire as a whole is a sentence.
+  review_entries = function(obj, ...) {
+    verdict = function(it) tolower(trimws(paste(unlist(it$verdict %||% ""), collapse = " ")))
+    bad_verdict = purrr::keep(obj$items, function(it) !verdict(it) %in% c("keep", "revise"))
+    thin = purrr::keep(obj$items, function(it)
+      identical(verdict(it), "revise") &&
+        !any(purrr::map_lgl(it$problems %||% list(), function(p) is.list(p) && type_ok(p$problem, "text"))))
+    bad_points = !all(purrr::map_lgl(obj$instrument, function(x)
+      (is.character(x) && length(x) == 1L && nzchar(trimws(x))) || (is.list(x) && length(unlist(x)) > 0L)))
+    ids = function(its) paste(purrr::map_chr(its, function(it) paste("question", paste(unlist(it$id %||% "?"), collapse = " "))), collapse = ", ")
+    c(if (length(bad_verdict))
+        paste0("The verdict for ", ids(bad_verdict), " must be \"Keep\" or \"Revise\"."),
+      if (length(thin))
+        paste0("A \"Revise\" for ", ids(thin), " gives no problem. Give the problem in one sentence, ",
+               "or say \"Keep\"."),
+      if (bad_points) "Each point about the questionnaire as a whole must be one sentence of text.")
   })
 
 # A validator for llm_json(): stops with a readable sentence when the reply is not
@@ -173,7 +163,7 @@ reply_validator <- function(format, ...) {
 
 ITEM_DEFAULTS <- list(
   id = "", domain = "", intro = "", stem = "", options = list(), open_format = "",
-  parts = list(), programming = "", decisions = list(), source_english = "", notes = "")
+  parts = list(), programming = "", decisions = list(), notes = "")
 
 # One item with every field present, so a screen never meets a missing one. A null
 #   becomes the default as well as an absent field.
@@ -181,168 +171,46 @@ full_item <- function(it)
   purrr::imap(ITEM_DEFAULTS, function(d, k) it[[k]] %||% d)
 
 
-# ---- coded format defaults (DESIGN.md section 7) -------------------------------------
+# ---- what the analyst is shown ---------------------------------------------------------------
 
-# Pattern lists, one per output language, English first. A language that has no
-#   list is "not coded": the cell says so, instead of guessing from words R
-#   cannot read. Adding a language is one entry in each. Matched without regard
-#   to case, with a curly apostrophe read as a straight one.
-DONT_KNOW_PATTERNS <- list(
-  english = c("don't know", "do not know", "\\bdk\\b", "no opinion", "not sure",
-              "unsure", "can't (say|choose|decide)", "cannot (say|choose|decide)",
-              "not applicable", "\\bn/a\\b", "does not apply", "no view",
-              "haven't (decided|thought)"))
+# What the analyst is shown is short (DESIGN.md section 18). The models are asked for one
+#   sentence of 20 words or fewer; R holds them to it, so a longer remark is cut to its first
+#   sentence and, if that is still long, to its first 20 words. The full reply stays in the record.
+CHECK_WORDS <- 20L
+MAX_PROBLEMS <- 2L   # problems shown for one question
+MAX_POINTS <- 3L     # points shown about the questionnaire as a whole
 
-REFERENCE_PERIOD_PATTERNS <- list(
-  english = c("\\b(past|last|previous|preceding) (\\d+|one|two|three|four|five|six|seven|ten|twelve|few|several) ?(hours?|days?|weeks?|months?|years?)",
-              "\\b(past|last|previous|preceding) (hour|day|week|month|year|night)\\b",
-              "\\byesterday\\b", "\\btoday\\b", "\\bthis (week|month|year|morning)\\b",
-              "\\bsince\\b"))
-
-# What an item's own `decisions` say about labelling every point. Self-reported:
-#   the model wrote it, and R does not check it against the options. The
-#   decisions are always written in English, whatever the output language.
-LABEL_NO_PATTERNS <- c("end ?points?[^.;]{0,25}only", "only[^.;]{0,15}end ?points?",
-                       "only the (end|first|last)", "numeric(al)? only", "numbers only",
-                       "unlabell?ed", "not (all )?labell?ed", "no (verbal )?labels?")
-LABEL_YES_PATTERNS <- c("(fully|all|every|each)[^.;]{0,40}labell?ed", "labell?ed[^.;]{0,20}(all|every|each)",
-                        "every (point|option|response)[^.;]{0,30}label", "verbal label",
-                        "label (every|each|all)", "all labels? (are |is )?present",
-                        "labels? (are |is )?(all )?present")
-
-matches_any <- function(patterns, txt)
-  any(purrr::map_lgl(patterns, function(p) grepl(p, txt, ignore.case = TRUE, perl = TRUE)))
-
-plain_apostrophe <- function(x) gsub("[\u2018\u2019]", "'", x)
-
-# One item's defaults, coded from its JSON and nothing else:
-#   format       "open" or "closed"
-#   n_options    options listed
-#   n_points     options that are scale points: not a don't-know, no-opinion or
-#                not-applicable option (English only; NA elsewhere)
-#   points_odd   whether that number is odd (NA for an open item, and where the
-#                points cannot be told from the other options). R does not call
-#                an odd count a midpoint: a unipolar scale from "none" to "a lot"
-#                has five points and no midpoint.
-#   midpoint_stated  what the item's own `decisions` say about a midpoint: "yes",
-#                "no" or "not stated". Self-reported.
-#   dont_know    such an option is there (NA for an open item, and where there
-#                is no pattern list for the output language)
-#   ref_period   the stem or its lead-in names a period (NA with no list)
-#   labels       "yes", "no" or "not stated", from the item's own decisions
-#   decisions    "itemised" (two or more separate entries), "not itemised" (one
-#                string or one entry, as a model writes when it runs them all
-#                together) or "none"
-# NA means "not coded", and is shown as that.
-code_defaults <- function(item, output_language = "English") {
-  it = full_item(item)
-  lang = lang_key(if (form_blank(output_language)) "English" else output_language)
-  options = plain_apostrophe(as.character(unlist(it$options)))
-  closed = length(options) > 0L
-  dk_patterns = DONT_KNOW_PATTERNS[[lang]]
-  period_patterns = REFERENCE_PERIOD_PATTERNS[[lang]]
-
-  is_dk = if (closed && !is.null(dk_patterns))
-    purrr::map_lgl(options, function(o) matches_any(dk_patterns, o))
-  n_points = if (closed && !is.null(dk_patterns)) sum(!is_dk) else NA_integer_
-  entries = as.character(unlist(it$decisions))
-  decisions = paste(plain_apostrophe(entries), collapse = " ; ")
-  heads = plain_apostrophe(paste(it$intro, it$stem))
-
-  list(format = if (closed) "closed" else "open",
-       n_options = length(options),
-       n_points = as.integer(n_points),
-       points_odd = if (closed && !is.na(n_points)) n_points %% 2L == 1L else NA,
-       midpoint_stated = if (matches_any(MIDPOINT_NO_PATTERNS, decisions)) "no"
-                         else if (matches_any(MIDPOINT_YES_PATTERNS, decisions)) "yes"
-                         else "not stated",
-       dont_know = if (closed && !is.null(dk_patterns)) any(is_dk) else NA,
-       ref_period = if (!is.null(period_patterns)) matches_any(period_patterns, heads) else NA,
-       labels = if (!closed) "not stated"
-                else if (matches_any(LABEL_NO_PATTERNS, decisions)) "no"
-                else if (matches_any(LABEL_YES_PATTERNS, decisions)) "yes"
-                else "not stated",
-       decisions = if (!length(entries)) "none"
-                   else if (is.list(it$decisions) && length(it$decisions) >= 2L) "itemised"
-                   else "not itemised")
+# The first sentence of a text, on one line. A sentence ends at . ! or ? followed by a space and a
+#   capital letter, a quote or a bracket.
+first_sentence <- function(x) {
+  x = trimws(gsub("\\s+", " ", paste(unlist(x %||% ""), collapse = " ")))
+  sub("^(.+?[.!?])\\s+(?=[A-Z\"'(]).*$", "\\1", x, perl = TRUE)
 }
 
-# What an item's own decisions say about a midpoint.
-MIDPOINT_NO_PATTERNS <- c("\\bno (mid-?point|middle|neutral)", "without (a )?(mid-?point|middle|neutral)",
-                          "(omit|omitted|exclude|excluded)[^.;]{0,20}(mid-?point|middle|neutral)",
-                          "mid-?point:? ?no\\b",
-                          "(not|n't) (offer|include|use|have|provide)[^.;]{0,20}(mid-?point|middle|neutral)")
-MIDPOINT_YES_PATTERNS <- c("mid-?point", "middle (option|category|position|point|answer)",
-                           "neutral (option|category|point)")
-
-# The coded defaults as label -> words, for a table.
-defaults_labels <- function(d) {
-  yes_no = function(x) if (is.na(x)) "not coded" else if (x) "yes" else "no"
-  c("Format" = d$format,
-    "Options listed" = as.character(d$n_options),
-    "Scale points (no-answer options not counted)" = if (is.na(d$n_points)) "not coded" else as.character(d$n_points),
-    "Odd number of points" = yes_no(d$points_odd),
-    "Midpoint, as the item states it (self-reported)" = d$midpoint_stated,
-    "Don't know / no opinion" = yes_no(d$dont_know),
-    "Reference period" = yes_no(d$ref_period),
-    "Every point labelled (self-reported)" = d$labels,
-    "Design decisions" = d$decisions)
+cap_words <- function(x, n = CHECK_WORDS) {
+  w = strsplit(x, " ", fixed = TRUE)[[1]]
+  if (length(w) > n) paste0(paste(w[seq_len(n)], collapse = " "), "…") else x
 }
 
-
-# ---- the reviewer's recommendation, and severity bands ------------------------------------------------------------
-
-# A concern or a finding rated below this goes in a collapsed list (pm_appraise.md,
-#   evaluate.md; DESIGN.md section 13).
-SEVERITY_SHOWN <- 5L
-
-# The three bands a finding or a fail is shown in, highest first (DESIGN.md
-#   section 14): 7 and above "Fix before fielding", 5 and 6 "Needs your
-#   judgment", below 5 "Minor" (collapsed). The cut at 5 stays what it was; a
-#   finding with no severity is shown, so it goes in the middle band.
-SEVERITY_FIX <- 7L
-SEVERITY_BANDS <- c(fix = "Fix before fielding", judgment = "Needs your judgment",
-                    minor = "Minor")
-
-# The band id ("fix", "judgment" or "minor") of each severity.
-severity_band <- function(severity)
-  ifelse(is.na(severity) | (severity >= SEVERITY_SHOWN & severity < SEVERITY_FIX), "judgment",
-         ifelse(severity >= SEVERITY_FIX, "fix", "minor"))
+# One remark as it is shown: its first sentence, in 20 words or fewer.
+one_line <- function(x, n = CHECK_WORDS) cap_words(first_sentence(x), n)
 
 # The reviewer's recommendation is the project manager's, so R checks what it can without a
-#   model (DESIGN.md sections 7 and 16). candidates is the drafts the reviewer saw, named by
-#   letter; checklist is the named vector it was sent. The reviewer returns candidate letters
-#   and item ids only: R finds each item in its draft, and copies the wording from there.
-#   Returns:
-#   selected       one entry per recommended item, in the order given: candidate, id, the
-#                  item's position in that candidate's items, domain, why, suggestion, and
-#                  concerns (one row each: check, evidence, severity, why, whether it is
-#                  shown, whether its check is an id that was sent). An item that cannot be
-#                  found is left out (the validator refuses such a reply, so none is).
-#   set_notes      rows of the same kind about the recommended set as a whole
-#   not_covered    the domains it said no candidate covered well enough
-#   unknown_checks the check ids it cited that were not sent
-check_appraisal <- function(reply, candidates, checklist) {
-  row = function(f)
-    list(check = as.character(f$check %||% ""), evidence = as.character(f$evidence %||% ""),
-         stage = "", why = as.character(f$why %||% ""), items = NULL,
-         severity = if (is.numeric(f$severity)) f$severity else NA_real_,
-         shown = !is.numeric(f$severity) || f$severity >= SEVERITY_SHOWN,
-         known = as.character(f$check %||% "") %in% names(checklist))
+#   model (DESIGN.md sections 7, 16 and 18). candidates is the drafts the reviewer saw, named by
+#   letter. The reviewer returns candidate letters and item ids, and for each a line to check
+#   before use: R finds each item in its draft, and copies the wording from there. Returns
+#   `selected`, one entry per recommended item in the order given: candidate, id, the item's
+#   position in that candidate's items, domain, and `check`, the line to check before use (one
+#   sentence of 20 words or fewer, "" when there is none). An item that cannot be found is left
+#   out (the validator refuses such a reply, so none is). No other field of the reply is read.
+check_appraisal <- function(reply, candidates) {
   ids_of = function(letter) purrr::map_chr(candidates[[letter]]$items, function(it) as.character(it$id %||% ""))
   selected = purrr::map(reply$selected %||% list(), function(e)
     list(candidate = as.character(e$candidate), id = as.character(e$id),
          position = match(as.character(e$id), ids_of(as.character(e$candidate))),
-         domain = as.character(e$domain %||% ""), why = as.character(e$why %||% ""),
-         suggestion = as.character(e$suggestion %||% ""), concerns = purrr::map(e$concerns %||% list(), row)))
-  selected = purrr::discard(selected, function(e) is.na(e$position))
-  set_notes = purrr::map(reply$set_notes %||% list(), row)
-  all_rows = c(purrr::list_flatten(purrr::map(selected, "concerns")), set_notes)
-  list(selected = selected, set_notes = set_notes,
-       not_covered = purrr::map_chr(reply$not_covered %||% list(), function(d) paste(unlist(d), collapse = " ")),
-       unknown_checks = unique(purrr::map_chr(purrr::discard(all_rows, function(r) r$known), "check")))
+         domain = as.character(e$domain %||% ""), check = one_line(e$check_before_use)))
+  list(selected = purrr::discard(selected, function(e) is.na(e$position)))
 }
-
 
 # ---- a long questionnaire, in parts (DESIGN.md section 14) ---------------------------------
 
@@ -387,65 +255,56 @@ review_plan <- function(text, max_chars) {
 }
 
 
-# ---- checks on a review ------------------------------------------------------------------
+# ---- the review, as the analyst is shown it -----------------------------------------------
 
-# How evidence is compared with the pasted text (DESIGN.md sections 7 and 14): case
-#   and runs of white space ignored, curly and straight quotes alike. A model told
-#   to copy words exactly sometimes wraps them in quotation marks, so a quote
-#   around the whole of the evidence is dropped (evidence_quote()).
-normalise_quote <- function(x)
-  gsub("\\s+", " ", tolower(trimws(plain_apostrophe(gsub("[\u201c\u201d]", "\"", x)))))
-
-# The evidence as it is looked for in the text: normalised, then without quotation
-#   marks at either end. An ellipsis is not removed, so evidence that has one is
-#   not found: evaluate.md asks for words copied exactly.
-evidence_quote <- function(x)
-  trimws(gsub("^[\"']+|[\"']+$", "", normalise_quote(x)))
-
-# The review's findings, one row each, whether about a question or the instrument:
-#   item            the question's id, or "" for an instrument finding
-#   scope           "question" or "instrument"
-#   position        the question's place in the reply (0 for the instrument), so
-#                   two questions with one id are still told apart
-#   check           the id it cites
-#   severity        1 to 10 (NA if none given)
-#   shown           severity 5 or more, or none given
-#   evidence        what it quoted
-#   evidence_found  the quote occurs in the pasted text (NA for an instrument
-#                   finding, whose evidence is a list of question ids). One that
-#                   does not is flagged, not dropped.
-#   check_known     the check is an id in the CHECKLIST that was sent
-#   stage, problem, rewrite, rewrite_english, probe   as written
-check_review <- function(reply, form) {
-  f = clean_form(form)
-  sent = names(build_checklist(f))
-  text = normalise_quote(f$questionnaire)
-  as_text = function(x) paste(unlist(x %||% ""), collapse = " ")
-  found = function(ev) {
-    q = evidence_quote(as_text(ev))
-    nzchar(q) && grepl(q, text, fixed = TRUE)
+# The text of each question as it was pasted, for the ids the review gave, in order. A
+#   questionnaire with a blank line between its questions (what the Brief tab asks for) gives
+#   its blocks when they are as many as the ids. Otherwise each question is the run of lines
+#   from the line that begins with its id to the line before the next one's. A question that
+#   cannot be found is "".
+pasted_questions <- function(questionnaire, ids) {
+  txt = trimws(gsub("\r\n?", "\n", questionnaire))
+  blocks = strsplit(txt, "\n[ \t]*\n\\s*", perl = TRUE)[[1]]
+  if (length(blocks) == length(ids)) return(trimws(blocks))
+  lines = strsplit(txt, "\n", fixed = TRUE)[[1]]
+  escape = function(s) gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", s)
+  # A line that begins with the id and a full stop, bracket or colon, else one that begins with the id
+  #   alone (an option "2 No" is not question 2 when "2. Second?" is further on).
+  find_start = function(id, from) {
+    at_of = function(pat) which(grepl(pat, lines, ignore.case = TRUE, perl = TRUE) & seq_along(lines) >= from)
+    at = at_of(paste0("^\\s*\\(?", escape(id), "[.):](\\s|$)"))
+    if (!length(at)) at = at_of(paste0("^\\s*\\(?", escape(id), "(\\s|$)"))
+    if (length(at)) at[[1]] else NA_integer_
   }
-  one = function(x, item, scope, position)
-    list(item = item, scope = scope, position = position, check = as_text(x$check),
-         severity = if (is.numeric(x$severity)) x$severity else NA_real_,
-         evidence = as_text(x$evidence),
-         evidence_found = if (scope == "question") found(x$evidence) else NA,
-         check_known = as_text(x$check) %in% sent, stage = as_text(x$stage),
-         problem = as_text(x$problem), rewrite = as_text(x$rewrite),
-         rewrite_english = as_text(x$rewrite_english), probe = as_text(x$probe))
-  rows = c(
-    purrr::list_flatten(purrr::imap(unname(reply$items %||% list()), function(it, i)
-      purrr::map(it$findings %||% list(), function(x) one(x, as_text(it$id), "question", i)))),
-    purrr::map(reply$instrument %||% list(), function(x) one(x, "", "instrument", 0L)))
-  d = data.frame(item = purrr::map_chr(rows, "item"), scope = purrr::map_chr(rows, "scope"),
-                 position = purrr::map_int(rows, "position"),
-                 check = purrr::map_chr(rows, "check"), severity = purrr::map_dbl(rows, "severity"),
-                 evidence = purrr::map_chr(rows, "evidence"),
-                 evidence_found = purrr::map_lgl(rows, "evidence_found"),
-                 check_known = purrr::map_lgl(rows, "check_known"), stage = purrr::map_chr(rows, "stage"),
-                 problem = purrr::map_chr(rows, "problem"), rewrite = purrr::map_chr(rows, "rewrite"),
-                 rewrite_english = purrr::map_chr(rows, "rewrite_english"),
-                 probe = purrr::map_chr(rows, "probe"), stringsAsFactors = FALSE)
-  d$shown = is.na(d$severity) | d$severity >= SEVERITY_SHOWN
-  d
+  starts = purrr::reduce(ids, function(acc, id)
+    c(acc, find_start(id, if (any(!is.na(acc))) max(acc, na.rm = TRUE) + 1L else 1L)), .init = integer(0))
+  ends = purrr::map_int(seq_along(starts), function(i) {
+    later = starts[seq_along(starts) > i & !is.na(starts)]
+    if (length(later)) min(later) - 1L else length(lines)
+  })
+  purrr::map_chr(seq_along(starts), function(i)
+    if (is.na(starts[[i]])) "" else trimws(paste(lines[starts[[i]]:ends[[i]]], collapse = "\n")))
+}
+
+# The review as the analyst is shown it (DESIGN.md section 18), from the parsed reply and the
+#   questionnaire as pasted. Per question: its id, its text as pasted, "Keep" or "Revise" and, for
+#   Revise, at most two problems (the first two given, most serious first), each cut to one line,
+#   with the suggested rewrite. `keep` is the ids of the questions marked Keep. `instrument` is at
+#   most three points about the questionnaire as a whole, one sentence each. A Revise with no
+#   problem is a Keep. No other field of the reply is read.
+shape_review <- function(reply, questionnaire) {
+  items = unname(reply$items %||% list())
+  ids = purrr::map_chr(items, function(it) paste(unlist(it$id %||% ""), collapse = " "))
+  texts = pasted_questions(questionnaire, ids)
+  questions = purrr::pmap(list(items, ids, texts), function(it, id, text) {
+    probs = purrr::map(it$problems %||% list(), function(p)
+      list(problem = one_line(p$problem), rewrite = trimws(paste(unlist(p$rewrite %||% ""), collapse = " "))))
+    probs = utils::head(purrr::keep(probs, function(p) nzchar(p$problem)), MAX_PROBLEMS)
+    revise = identical(tolower(trimws(paste(unlist(it$verdict %||% ""), collapse = " "))), "revise") && length(probs) > 0L
+    list(id = id, text = text, verdict = if (revise) "Revise" else "Keep", problems = if (revise) probs else list())
+  })
+  points = purrr::map_chr(utils::head(reply$instrument %||% list(), MAX_POINTS), first_sentence)
+  list(questions = questions,
+       keep = purrr::map_chr(purrr::keep(questions, function(q) identical(q$verdict, "Keep")), "id"),
+       instrument = points[nzchar(points)])
 }

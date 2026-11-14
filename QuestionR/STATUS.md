@@ -2,6 +2,1068 @@
 
 Read `DESIGN.md` first. Update this file at the end of every session.
 
+From Phase 9, what this file calls "skills" are called "reflexes" (a file is a reflex file, each rule in it a reflex). The earlier text keeps the old word, as history.
+
+## Phase 9 (2026-11-13): reflexes, no translation, simple output, Total Survey Error first
+
+**Next: Kevin tries the app (click-through at the end of this section) and takes `REVIEW.md` and
+this file to the Claude project. Nothing is open: the two items I had left for Kevin were done on
+his yes.**
+Nothing is pushed. Two live runs were made, with Kevin's yes, before the follow-up: `tests/llm_check.R generate` (5
+requests, all ok) and one review of `tests/review_questionnaire.txt` (1 request, ok). `gold` was
+not run.
+
+- **Commits, branch `questionr`:** setup (prompt and design section 18) `341314a`; 9a `752e23c`; 9b
+  `62c036b`; 9c `b5574bb`; 9e `eea4b73`; 9d `c53c9a7`; 9f `18fe115`; 9g `d23f2ce`; `07674fc` and
+  `4da86ab` (the follow-ups Kevin said yes to: the translation and output-language reflexes in
+  `evaluate.md` and `pm_brief.md`; then the two Source lines of `cross_cultural.md` and the unused
+  `same_family_note`); and the commit that carries this file and `REVIEW.md`. 9e is before 9d because 9d's note names the diagram 9e
+  draws. Before 9a I switched from `main` to `questionr` and fast-forwarded it to `4f7bf1c` (the
+  merge of Phase 8): the branch was behind `main`, and the prompt says to stop if Phase 8 is not
+  on it.
+- **Smoke:** 393 checks, all ok (410 at the end of Phase 8; the difference is the checks of
+  features that no longer exist, 11 of them removed in 9f, and tests rewritten for the new output).
+  `tests/review.R 5`: **no FAIL**, 11 of 12 code files (as before).
+
+### Done on Kevin's yes
+
+- **`07674fc`.** The prompt authorised no edit of `evaluate.md` and `pm_brief.md` in 9b, so 9b left
+  them with translation and output-language lines; Kevin then said yes to deleting them.
+  `evaluate.md` 0.5: the reflex `translation_readiness` (When, Say, Check, and a Source line that
+  named TRAPD) is deleted, so a review no longer asks whether wording "would survive
+  translation". `pm_brief.md` 0.2: the brief check no longer looks for "the output language and the
+  source language". Diffs below. 15 prompt hashes moved (14 Evaluate and the Evaluate revision row).
+- **`4da86ab`.** `cross_cultural.md` 0.3: its two Source lines now read "Yan, IASS/WSS Session 2
+  (context, culture, history); Haensch, IASS/WSS Session 3 (what we do not know: cultural
+  adaptation)" and "SURV632 Class 12 (adaptation)". I only took words out ("machine and AI
+  translation ignore", "low-resource languages and", "and translation"); nothing was added to a
+  citation. `model_family` and `same_family_note` (`R/ui_generate.R`), unused since 9c took the
+  "appraiser reviewed a draft from its own model family" notice off the screen, are deleted. The
+  smoke check "no page names TRAPD or translation" has no exemption now and also reads the ten
+  reflex files themselves. 28 prompt hashes moved (the country rows of the four tasks).
+- **The live runs below were made before these edits.** The draft run's prompts are those of the
+  files before `4da86ab` (country was blank, so its hashes are unchanged) and before `07674fc`
+  (the draft run does not use `evaluate.md`); the review run's hash is the old Evaluate one. I did
+  not repeat them (Kevin's yes covered two runs).
+
+### The gold test
+
+The shorter review format changes what the gold test can measure, so I did not touch it and did
+not run it.
+- A review now returns a verdict and at most two problems with a rewrite. There is no check id,
+  quote or severity. Matching findings to the known problems, which was done by reading, can
+  only go on the problem sentence.
+- The cap of two problems limits recall on questions with more than two planted faults (the 20
+  planted-fault questions carry 48, about 2.4 each).
+- "36 of 48" on the Methodology page therefore cannot be reproduced in the new format. The text
+  of "How it was tested" is unchanged.
+- `gold` in `tests/llm_check.R` still calls the removed `check_review`; it would stop with an error.
+
+### What changed
+
+- **Setup.** The prompt is in `PROMPTS.md` as "Phase 9" word for word; `DESIGN.md` section 18
+  records the five rulings and wins over earlier sections.
+- **9a, reflexes.** `www/skills` to `www/reflexes`, `www/skills_materials` to
+  `www/reflex_materials`, `R/skills.R` to `R/reflexes.R` (git mv). Functions, variables, run-log
+  fields, UI text, test labels and comments say reflex. Start here and the methodology note say
+  once: "QuestionR is an AI skill. It works from written AI reflexes: short rules of survey design
+  that every model is given." READMEs, `CLAUDE.md`, `DESIGN.md` sections 1 to 12, `methodology.md`,
+  `start.md`, `how_it_works.svg` ("Reflexes: written survey design rules steer every model") and
+  the prose of the reflex files are updated. A history line is at the top of STATUS.md,
+  REVIEW.md and PROMPTS.md (earlier phases keep the old word). The grep is at the end of this
+  section.
+- **9b, no translation.** The output-language and source-language fields are gone from the Brief
+  form, the form contract, the prompts, the checks and the tests. The country field stays, and the
+  reflexes on local terms, culture and context. `cross_cultural.md` is version 0.2, "Country and
+  culture" (diff below): the translation, TRAPD, back-translation, functional-equivalence and
+  output-language reflexes, their prohibitions and checks are deleted. `fw_trapd.svg`, the TRAPD
+  section of `methodology.md` and the TRAPD row of the reflex table are deleted. Removed
+  fixtures: the form `evaluate_translated`, the Swahili and French forms, the language tests and
+  the gold cases that were translation-only (none of the 27 gold items was translation-only; the
+  gold matches are untouched).
+- **9c, simple output.** Per drafted question: the question, its answer options, and at most one
+  line "Check before use:" (one sentence of 20 words or fewer, only when the reviewer found a real
+  problem). Per reviewed question: the question as pasted, "Keep" or "Revise", and for Revise at
+  most two problems (one sentence of 20 words or fewer each) with a suggested rewrite; Keep
+  questions are one line ("Questions Q1, Q2, Q9, Q14: keep as written"); then "The questionnaire
+  as a whole" with at most three one-sentence points. Above either: "These are drafts. Test them
+  with real respondents before fielding." R enforces the limits: `shape_review` and
+  `check_appraisal` read only those fields; a longer remark is cut to its first sentence and 20
+  words. Edit, remove and swap stay. The Word copy is exactly the screen plus three lines (date;
+  "Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]"; "QuestionR version
+  0.9"). The full record (prompts, models, hashes, every draft, the full appraisal) is one file
+  behind one small "Download the full record" button. `generate.md` 0.4, `evaluate.md` 0.4 and
+  `pm_appraise.md` 0.5 have a new Output format section (diffs below); no reflex or check was
+  changed in them.
+- **9d, Total Survey Error first.** Start here opens with two sentences on what QuestionR is for
+  (measurement error), then the flowchart. `methodology.md`: after the title, Total Survey Error
+  with `fw_tse.svg`, ending with the errors QuestionR works on (validity and measurement error) and
+  those it does not (coverage, sampling, nonresponse); then What it is built on; From construct to
+  question; One question, three ways to go wrong; The response model; Testing questions, and where
+  AI fits; What it cannot do; How it was tested (heading and text as before; `pilot_notice()` reads
+  it); the reflex table and panels. **588 words** outside the table and panels (image descriptions
+  not counted; with them 752). "How it keeps the AI in check" and the Sensitive section are gone
+  (neither is on your keep list); `fw_sensitive.svg` is deleted, and the "Sensitive questions" value
+  of the Frameworks column with it (the column is recomputed from Source lines with the four
+  frameworks left).
+- **9e, worked example.** `www/fw_example.svg`: the Session 1 question, "Last week, did you work
+  full-time, part-time, or did you not work at all?", with its parts marked (reference period,
+  concept, answer options), and the slide's three boxes below it (wrong concept: specification
+  error; right concept imperfectly: operationalization error; right concept "perfectly" but R's
+  response differs from R's true value: response error, with the follow-up "What is the reason you
+  didn't work at all last week?" the slide shows) and the validity bracket over the first two.
+  The wording and labels are from the slide (Session 1, slide 8, bracket from slide 14).
+  **I left out a per-part error label** (for example "reference period: recall error"): the slide
+  does not give one, so none is drawn. `fw_construct.svg` already had the same example; I did not
+  merge but took the example out of it (it keeps the decomposition tree and the errors from
+  conceptualization to analysis), so nothing is drawn twice. The methodology section has three
+  sentences and the slide's reference.
+- **9f, removed because nothing calls it.** Evidence is a scan of every top-level definition in
+  `R/` for callers in `R/` and `app.R` (the script is not in the repo): `code_defaults`,
+  `defaults_labels`, `DONT_KNOW_PATTERNS`, `REFERENCE_PERIOD_PATTERNS`, `LABEL_NO_PATTERNS`,
+  `LABEL_YES_PATTERNS`, `MIDPOINT_NO_PATTERNS`, `MIDPOINT_YES_PATTERNS`, `matches_any`,
+  `plain_apostrophe`, `SEVERITY_SHOWN`, `SEVERITY_FIX`, `SEVERITY_BANDS`, `severity_band` had zero
+  callers outside each other and `tests/smoke.R`. Removed with them: 11 smoke checks that tested only
+  them. Kept: `reflexes_table` (zero callers in the app, but `tests/review.R` calls it, and smoke
+  checks it), the files `tests/*` that
+  `tests/llm_check.R` or `tests/review.R` write or read. The earlier removals are in 9a to 9d
+  (translation code and tests, the detail views, the per-model drafts view, the severity band
+  views).
+- **9g, smoke checks** (all in `tests/smoke.R`, section "Phase 9g", and the 9d/9e block): no page
+  says "skill" except in its one sentence (once on Start here, once on Methodology); no page
+  names TRAPD, translation or an output language and no form field is a language (no
+  exemptions; the ten reflex files are read too); a rendered drafted question has only the question, its options and
+  at most one line of 20 words or fewer; a rendered review shows at most two problems for a
+  question and three points about the whole when the stand-in sends three problems and four
+  points; the Word copy is the screen's words plus exactly the three lines, for a draft and a
+  review; every `.svg` parses; every image named in a `.md` exists. Also: the methodology
+  note's section order, its under-600-word limit, the worked-example diagram's words. No other
+  check was weakened; checks of removed features were deleted, listed above.
+- **Choices I made that the prompt did not fix:** `QUESTIONR_VERSION` is "0.9"; the 20-word limit is
+  enforced by cutting to the first sentence and 20 words (the full text stays in the record); a
+  drafted question no longer shows its domain (the "parts" field is gone from the drafting
+  output format); the Methodology table's Frameworks column for Country and culture is
+  "Response model" (its Source lines say "response process") and the Sensitive and Survey mode
+  rows are "Session guidelines".
+
+### Authorised edits to reflex files: the diffs
+
+`cross_cultural.md` (9b, and the Source lines at the follow-up), then the Output format sections
+of `generate.md`, `evaluate.md` and `pm_appraise.md` (9c), then `evaluate.md` and `pm_brief.md`
+(the follow-up, Kevin's yes). The rename `skills` to `reflexes` is in the same diffs (9a), where the
+prose said skill. `README.md` of `www/reflexes/` changed in prose only (9a, 9b: nine lines).
+
+```diff
+@@ -1,49 +1,30 @@
+-# Country, culture and language
++# Country and culture
+ 
+-Version: 0.1
++Version: 0.3
+ 
+-Modifier file. Sent whenever the brief names a country or the output language
+-is not English. A language model is weakest here: it knows text about places,
+-not the places. These rules make it flag and hand off, not assert.
++Modifier file. Sent whenever the brief names a country. A language model is
++weakest here: it knows text about places, not the places. These rules make it
++flag and hand off, not assert.
+ 
+ ## Reflexes
+ 
+ ### flag_do_not_assert
+-- **When:** Anything that depends on the country, culture or language.
++- **When:** Anything that depends on the country or culture.
+ - **Say:** Mark what must be confirmed by someone who knows the setting and say exactly what they should check: the everyday term, the unit, the institution's name, whether the topic can be asked, the landmark event. Use placeholders in square brackets where 
+ - **Never:** Do not state as fact what people in the country believe, do, find sensitive or call things.
+ - **Check:** Is every country-specific term or assumption either taken from the brief or marked for local confirmation?
+-- **Source:** Yan, IASS/WSS Session 2 (machine and AI translation ignore context, culture, history); Haensch, IASS/WSS Session 3 (what we do not know: low-resource languages and cultural adaptation)
++- **Source:** Yan, IASS/WSS Session 2 (context, culture, history); Haensch, IASS/WSS Session 3 (what we do not know: cultural adaptation)
+ 
+ ### adopt_adapt_develop
+-- **When:** The item comes from, or will be used in, more than one country or language.
+-- **Say:** Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, language-driven, convention-driven or culture-driven.
+-- **Source:** Yan, IASS/WSS Session 2 (questionnaire development for 3MC surveys); SURV632 Class 12 (adaptation and translation)
+-
+-### write_for_translation
+-- **When:** Writing or reviewing a source item that will be translated.
+-- **Say:** Keep the source wording translatable: no idioms, no culture-bound examples, short sentences, explicit referents, units and institutions as placeholders, scale labels that have plain equivalents.
+-- **Check:** Is the source wording free of idiom and culture-bound content?
+-- **Source:** Yan, IASS/WSS Session 2; Metheney and Yehle 2024 as reported in Haensch, IASS/WSS Session 3
+-
+-### functional_equivalence
+-- **When:** Producing or reviewing an item in a language other than the source.
+-- **Say:** Aim for the same meaning and the same task for the respondent, not word-for-word translation. Pay most attention to response scale labels, instructions and culturally loaded terms, where translations drift most. Where a label has no natural equival
+-- **Check:** Do the stem and each response label ask the same thing of the respondent as the source version?
+-- **Source:** Yan, IASS/WSS Session 2 (AI-assisted translation deviates on scales, instructions, culturally embedded terms); SURV632 Class 12 (literal translation and functional equivalence)
+-
+-### trapd
+-- **When:** Any output in a language other than the source language, and any review of a translated instrument.
+-- **Say:** Treat a model-produced version as a first draft within the Translation step only. State what the remaining steps require: Review by people fluent in both languages and in survey design; Adjudication of disagreements by a named person; Pretesting in
+-- **Never:** Do not call a model-produced version final, checked or equivalent. Do not recommend back translation as the quality check.
+-- **Check:** Does the output state what Review, Adjudication, Pretesting and Documentation still require?
+-- **Source:** Yan, IASS/WSS Session 2 (TRAPD; back translation no longer recommended; translation assessment); Haensch, IASS/WSS Session 3 (recommendation 8; 2026 GSS used a model draft inside an unchanged TRAPD process); SURV632 Class 12
++- **When:** The item comes from, or will be used in, more than one country.
++- **Say:** Say which route applies: adopting a source item unchanged, adapting it, or developing a new one. Where adapting, name the kind of change: terminology, convention-driven or culture-driven.
++- **Source:** Yan, IASS/WSS Session 2 (questionnaire development for 3MC surveys); SURV632 Class 12 (adaptation)
+ 
+ ### response_styles
+-- **When:** Ordered scales used across cultural or language groups.
++- **When:** Ordered scales used across cultural groups.
+ - **Say:** Note that groups can use the same scale differently (agreeing, choosing extremes or the middle, different thresholds for the same label), so differences between groups may be differences in scale use. Prefer construct-specific, fully labelled scale
+ - **Never:** Do not say which style a particular country or group has.
+-- **Source:** SURV632 Class 8 (response styles) and Class 12 (reporting heterogeneity; measurement invariance); Yan, IASS/WSS Session 2 (quantitative assessment of translations)
++- **Source:** SURV632 Class 8 (response styles) and Class 12 (reporting heterogeneity; measurement invariance)
+ 
+ ### context_and_face
+ - **When:** Sensitive or evaluative items in a setting the brief describes as interviewer-administered, communal or low-privacy.
+@@ -55,12 +36,6 @@
+ - **Say:** Flag formats that assume numeracy, literacy or a calendar convention, and offer a simpler form.
+ - **Source:** Yan, IASS/WSS Session 2 (adopting: numeracy, social context)
+ 
+-### output_language
+-- **When:** The output language in the brief is not English.
+-- **Say:** Write stems, introductions and response options in the output language, in the plain register an interviewer or a general reader would use. Keep the English wording you drafted from alongside each item. Write notes, decisions and programming in Eng
+-- **Never:** Do not mix languages inside an item. Do not transliterate a term you are unsure of; use a bracketed placeholder and flag it.
+-
+ ## Prohibitions
+ 
+-- Never state a fact about a country, people or language that is not in the brief.
+-- Never describe a translated item as equivalent to its source.
++- Never state a fact about a country or its people that is not in the brief.
+```
+
+`generate.md` (version 0.4):
+
+```diff
+@@ -1,6 +1,6 @@
+ # Generate
+ 
+-Version: 0.3
++Version: 0.4
+ 
+ Sent with every request to write new items, after core.md and before the task
+ file. How a draft is built from the brief and what it must declare.
+@@ -59,19 +59,13 @@
+ 
+ ## Output format
+ 
+-Return one JSON object with these fields.
++Return one JSON object with this field.
+ 
+ - "items": a list. Each item has:
+   - "id": a short code, [construct abbreviation] plus a number.
+   - "domain": the single domain of the construct this item measures.
+-  - "intro": lead-in text read or shown before the question, or an empty string.
+-  - "stem": the question, in the output language.
+-  - "options": a list of response options in the order shown, in the output language; an empty list for an open question.
++  - "stem": the question as the respondent reads or hears it, including any lead-in sentence, in English.
++  - "options": a list of response options in the order shown, in English; an empty list for an open question.
+   - "open_format": for an open question, what is entered and its unit; otherwise an empty string.
+-  - "parts": a list, usually empty. Filter, branch or bracket questions that belong to this item, in the order asked; each has "when" (who is asked it, or "before the item" for a filter), "stem" and "options", in the output language.
+-  - "programming": routing, filter, randomization and interviewer instructions, in English, as short imperative notes.
+-  - "decisions": the design decisions required by declare_defaults, one short line each, in English.
+-  - "source_english": when the output language is not English, the English wording the item was drafted from; otherwise an empty string.
+-  - "notes": risks, what to test and how, in English.
+-- "not_covered": domains of the construct left out, or an empty list.
+-- "missing_from_brief": anything you needed that the brief did not say.
++
++Nothing else: no notes, no design decisions, no routing, no separate filter or branch questions. The analyst is shown the question and its answer options and nothing more, so write each stem plainly and keep it short.
+```
+
+`evaluate.md` (version 0.5: the Output format of 9c and the deleted `translation_readiness`):
+
+```diff
+@@ -1,6 +1,6 @@
+ # Evaluate a questionnaire
+ 
+-Version: 0.3
++Version: 0.5
+ 
+ Task file for appraising a pasted questionnaire: an expert review, item by
+ item and then as a whole. The reflexes in core.md are the item checklist; this
+@@ -75,12 +75,6 @@
+ - **Check:** Is every stated research question measured, and does every item serve one?
+ - **Source:** Yan, IASS/WSS Session 2 (final checklist: objectives, sampling, mode, processing, analysis, adjustment)
+ 
+-### translation_readiness
+-- **When:** The brief names a country, a language other than English, or more than one language.
+-- **Say:** For each item say what would not carry across: idioms, culture-bound examples, units, institutions, scale labels with no natural equivalent, grammatical gender. Organize the instrument-level advice by the five TRAPD steps and say which steps the pa
+-- **Check:** Is the item free of wording that would not survive translation or adaptation to the stated setting?
+-- **Source:** Yan, IASS/WSS Session 2 (3MC surveys; TRAPD); Metheney and Yehle 2024 as reported in Haensch, IASS/WSS Session 3; SURV632 Class 12
+-
+ ### severity
+ - **When:** Every finding.
+ - **Say:** Rate how far the problem would distort answers, from 1 (negligible) to 10 (answers meaningless). Reserve 5 and above for problems you would revise before fielding.
+@@ -104,14 +98,12 @@
+ 
+ ## Output format
+ 
+-Return one JSON object with these fields. Write findings in English whatever
+-language the questionnaire is in; write rewrites in the questionnaire's
+-language and, when that is not English, add the English meaning.
++Return one JSON object with these fields. Write in English. Be brief: the analyst is shown only what is below, and reads very little.
+ 
+ - "items": a list, one entry per question in the order pasted. Each has:
+   - "id": the question's own number or label, or its position.
+-  - "findings": a list, empty if none. Each finding has "check" (the id, from the CHECKLIST in this message, of the question the item fails; one finding per failed question), "stage" (comprehension, retrieval, judgment, reporting, or instrument), "evidence" (
+-- "instrument": a list of findings about order, routing, consistency and fit to objectives, in the same form, with the question ids involved in "evidence".
+-- "trapd": an object with the keys "translation", "review", "adjudication", "pretesting", "documentation", each a short statement of what is still needed; all empty strings when the survey is in one language for one country and that language is the source lan
+-- "test_first": a list of up to five question ids with the method suggested for each.
+-- "not_assessed": what this review could not judge from what was pasted.
++  - "verdict": "Keep" if the question can be used as written, or "Revise" if it has a real problem. Say "Revise" only for a real problem.
++  - "problems": a list, empty when the verdict is "Keep". At most two entries, the most serious first. Each has "problem" (one sentence of 20 words or fewer, in plain words, saying what is wrong) and "rewrite" (a suggested rewrite of the question, ready to us
++- "instrument": a list of at most three points about the questionnaire as a whole (order, routing, consistency, fit to objectives), the most important first, one sentence each; an empty list if there is nothing to say.
++
++Nothing else: no severities, no check ids, no quotes, no stages and no test plans.
+```
+
+`pm_appraise.md` (version 0.5):
+
+```diff
+@@ -1,6 +1,6 @@
+ # Project manager: choose the recommended set
+ 
+-Version: 0.4
++Version: 0.5
+ 
+ After the worker models return drafts. The project manager checks every
+ candidate item against the checklist, then recommends one item per domain,
+@@ -67,10 +67,8 @@
+ 
+ ## Output format
+ 
+-Return one JSON object with these fields, all text in English.
++Return one JSON object with this field, all text in English.
+ 
+-- "selected": a list, one entry per recommended item, in the order they should be asked. Each has "domain", "candidate" (A, B, C...), "id" (the item id as the candidate gave it), "why" (one sentence on why this item and not the others for the domain), "concer
+-- "not_covered": domains of the construct for which no candidate item was good enough to recommend, or an empty list.
+-- "set_notes": a list, empty if none, of objects with "check", "severity" and "why", about the recommended set as a whole.
+-- "test_first": a list of up to three objects with "id" and "method".
+-- "limits": one or two sentences as required by say_what_was_not_checked.
++- "selected": a list, one entry per recommended item, in the order they should be asked. Each has "domain", "candidate" (A, B, C...), "id" (the item id as the candidate gave it) and "check_before_use": one sentence of 20 words or fewer, in plain words, naming
++
++Nothing else: no reasons, scores, check ids, notes on the set or suggestions. The analyst is shown the chosen question and, only when it is not empty, that one line.
+```
+
+`pm_brief.md` (version 0.2; the follow-up):
+
+```diff
+@@ -1,6 +1,6 @@
+ # Project manager: brief check
+ 
+-Version: 0.1
++Version: 0.2
+ 
+ First step of every task, before any prompt is approved. The project manager
+ reads the analyst's form and says what a designer would need to know that the
+@@ -10,7 +10,7 @@
+ 
+ ### what_a_brief_needs
+ - **When:** Reading the form.
+-- **Say:** Check for: the research question; the construct in a sentence, and its domains if it has several; the target population; the country; the mode or modes; the output language and the source language; for behaviour, the reference period and unit; for attitudes, the attitude object; what the
++- **Say:** Check for: the research question; the construct in a sentence, and its domains if it has several; the target population; the country; the mode or modes; for behaviour, the reference period and unit; for attitudes, the attitude object; what the estimate will be used for (a level, a compar
+ - **Never:** Do not fill a gap yourself. Do not guess the mode, the population or the reference period.
+ - **Source:** Haensch, IASS/WSS Session 3 (recommendation 2); Yan, IASS/WSS Session 1 (essential inputs to questionnaire design: objectives, sample, mode, processing, analysis, adjustment)
+ 
+```
+
+### `tests/review.R` (the Claude project's file): the edits I had to make
+
+Each is forced by a rename or a removed feature; none loosens a check. The file's SHA table
+(`REFLEX_SHA`) now holds the new hashes of the six files that changed: `README.md`,
+`cross_cultural.md`, `evaluate.md`, `generate.md`, `pm_appraise.md`, `pm_brief.md`. Otherwise:
+`SKILL_SHA` is `REFLEX_SHA` and section 4 reads "Reflex files" (`www/reflexes`); the blank form
+and the forms lose `output_language` and `source_language`; the forms `evaluate_translated`
+and the Swahili and French ones are gone; the checks that named `trapd` or "Output language"
+now check `flag_do_not_assert` and `context_and_face` are sent and that no translation or
+language reflex is sent; the check that `evaluate.md` is sent now names `restraint` and says
+`translation_readiness` is not there; "parts field only in drafting prompts" is "the drafting output format
+(open_format) only in drafting prompts"; the review's "output format asks for trapd and
+test_first" is "asks for a verdict per question and points about the whole"; the reply-shape
+fixtures follow 9c; the history line is at the top of the `REVIEW.md` it writes. Take these to
+the Claude project.
+
+### The new prompt hashes
+
+All 60 differ from Phase 8's (the reflex files, the Output formats and the message all changed);
+the two follow-ups moved 15 and then 28 of them again, and these are the final ones.
+Task, mode set (1 none, 2 to 6 each mode alone, 7 all five), country, hash (build_prompt, work
+step); `revision` rows are a rerun with a REVISION line:
+
+```
+attitudinal|1||ea05aea1235a6a289cb833acdd820289731e0122612d92185b4a70594c5df4da|core.md,generate.md,attitudinal.md,mode.md
+attitudinal|1|Kenya|a721aa3921972dd59a219723e4e02aa51d6fa1d0f1619cb17e1f75fa7ff0735e|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|2||de65abd99b4d48237673051b4a5b9392c9effda10d274f9563739d921993d548|core.md,generate.md,attitudinal.md,mode.md
+attitudinal|2|Kenya|48d12c091234653b5435659bbd52280fe7ad80085ba9b7b4a7bcbe78370366c7|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|3||ed496897bbca6882c90a9bb6e9b4935da6e6640dc52ccb883996e821485dc86b|core.md,generate.md,attitudinal.md,mode.md
+attitudinal|3|Kenya|df471b79169fa8033d393c3146d5ce75bcaac237b48882a4e990262528aa8d7c|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|4||5ec9ebf6868d3cc41c50487623a7c7372c75e095773cacfe027cb408f8544f80|core.md,generate.md,attitudinal.md,mode.md
+attitudinal|4|Kenya|9869e6311cb4b96adc63e455e3a92d3aa406aecdbc648ba177f5afa46396c0e5|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|5||0f6e9c52890d2b7053e2ce81989df993fa2e5df85a84b5f8411193a518c0d0c3|core.md,generate.md,attitudinal.md,mode.md
+attitudinal|5|Kenya|e4fd5777aec4de9c1fb6e959dfe94b30331f12115c17a6b721b5aff66b8f8474|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|6||502ac499a51fe0dd9a275a342d9bd30e067d99edc38acda7db3cca81b5f30812|core.md,generate.md,attitudinal.md,mode.md
+attitudinal|6|Kenya|e3c64ff0b808cdba4dc18c1c2b7d308c70385e396d37dd72332a8dbfb3f40b8a|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+attitudinal|7||0159b25689cfb994f59e64982b3d7ea9aa2d2aee4552b8a3c58394431b7fe746|core.md,generate.md,attitudinal.md,mode.md
+attitudinal|7|Kenya|ea209de9b671b9249b3860d42daf988305b9e4bc0d353969ba508aee94015014|core.md,generate.md,attitudinal.md,mode.md,cross_cultural.md
+behavioral|1||e99850ceda920380665d523f29495f7fbc495a88e461e432a8ba1046bb5c3df6|core.md,generate.md,behavioral.md,mode.md
+behavioral|1|Kenya|bdc3f5674920760eb912be9342b25b8f88e2deab244908693aae83039a751360|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|2||80ab7490f07d4d1ae31dac7485c9f83556d27c8e60056149e08b88a44dc24207|core.md,generate.md,behavioral.md,mode.md
+behavioral|2|Kenya|19871357fcafb8dc69209c0204fcb0edf22c209250c0c8e74d7f7ef6f2adb4aa|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|3||9f17a5647e312c783c65a29a6b8fe5a1565973d7b6dc27dcff0915097acac1c2|core.md,generate.md,behavioral.md,mode.md
+behavioral|3|Kenya|4d6ad09b863f4d16f06efc01b09ee74a0b1521a202906ad4a18bc988f7ade1cc|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|4||44ab172ac00a0974b2d3616fff698dd82f3528d8149e87264f4cb4923dbefdd1|core.md,generate.md,behavioral.md,mode.md
+behavioral|4|Kenya|6ae37ac5212ba31dc36665e9da56c15419a1679e587af93f48ff04fe506c89c8|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|5||a726e1eed180d6b513fa455102aeb7b0d48761be3b4c4c9f9c17c99f162cfa51|core.md,generate.md,behavioral.md,mode.md
+behavioral|5|Kenya|50a4c873765152c5e73c5a5bab98fbb3b80f0d76f5a489d5d55672abde19bf1a|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|6||5a3d32e36e50371ddc950868b80ae2255d3f49ac8c0f7d94c8a0f504978ff94c|core.md,generate.md,behavioral.md,mode.md
+behavioral|6|Kenya|283a588231aff697ae1c0fa5e08c4df1d7b871b2afa2bce1438dd81825cfb633|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+behavioral|7||76f3604db4dff6a25c106e724a50af5e4bec9bdf60ec6de62cb94e6a7a216dd5|core.md,generate.md,behavioral.md,mode.md
+behavioral|7|Kenya|09237a335fa8d5c031ca49e99648360af046b40971bab56bc5bb069f9e675b26|core.md,generate.md,behavioral.md,mode.md,cross_cultural.md
+sensitive|1||968ac2840788ae14bf33b17fc78c76f4d1f30930709325bca49e647b6c028053|core.md,generate.md,sensitive.md,mode.md
+sensitive|1|Kenya|0c624f6f862067badd557112ed0dc308a60ed4cadbcc5b222c9805e5c21dc091|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|2||14d00549070464f23affe747ae3fc2b02f96e27a2ae991a49e25090a25163a4c|core.md,generate.md,sensitive.md,mode.md
+sensitive|2|Kenya|38323cde8dc3621d90d30d52cf8e138dbd8ee7c3e4a45a8b2b8c6be20e857c2e|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|3||ec291ce3122e4647843865c703de7c54ddbe9bf0709dedd62cd558428d0ed58e|core.md,generate.md,sensitive.md,mode.md
+sensitive|3|Kenya|c5e248559c28f28e11ba79f770ac922ad9ecf45f089614fec5cb62c416789178|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|4||5fd1ed139b23c29c14ac1ac1c336dae200cf8ec15ea9319cc3b85a60efb69c50|core.md,generate.md,sensitive.md,mode.md
+sensitive|4|Kenya|71d113fd3085fd4a56ed7bc65b90f88005002b3a11eb852f7a16627f4ed30af3|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|5||34b98aa52a58f4f7da94932f3cff67fdfbc898c27d8528b954e0b5bd919db261|core.md,generate.md,sensitive.md,mode.md
+sensitive|5|Kenya|6ea10e2b42b90ecd98f188f8158f37f96a8ce0dad1afc955190a06bdcbb2b674|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|6||1b4138c9a05767c70ff309c82801eba605cb32c774bb3b1b01d78e0565cbb001|core.md,generate.md,sensitive.md,mode.md
+sensitive|6|Kenya|1fcdc23d110ee3ec68f269c443dae5358e31b8a66c7232d22cc313b1b075ed5e|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+sensitive|7||e119cb84ddd1835327f00d539a976a06a033c2ccb5d53aa6a5cd7cbbd577f27b|core.md,generate.md,sensitive.md,mode.md
+sensitive|7|Kenya|cd153f07d4ba317f23067157b345fec48d90a1c73d12abdae98767f06a757160|core.md,generate.md,sensitive.md,mode.md,cross_cultural.md
+evaluate|1||b4537dedb6d011c7b019a72d592305acc44adfeb4d57a480dd70431c606ae6b8|core.md,evaluate.md,mode.md
+evaluate|1|Kenya|1d0381f9b2748505fc127fba044bfebc5788eac00789a4d2d9699233852ee302|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|2||8c51b5a2fdb697f724d160e46e2d98f676e215a0d888eddf59ebd748c87540d4|core.md,evaluate.md,mode.md
+evaluate|2|Kenya|9a4f77f01a552c368ec94fcfa2055165a67710ba2dbce0a910e854ca0e8adcc2|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|3||ad6b2a815e8995f5d6549f1cd18c5862e65e7c71e39ace2063f0e461122d86f7|core.md,evaluate.md,mode.md
+evaluate|3|Kenya|f48fd9428f3f736ec07195eea26019b2f6eeb48e34b3429b384fef6c76b0543c|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|4||4bcf998d4b7cf87c2624354240c44a08456daf57f1e63c2fce80082f9a2b46d9|core.md,evaluate.md,mode.md
+evaluate|4|Kenya|c8a352582e27c9272c0ae524bf33ee3c82e43f593469e39db652f73d7da430df|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|5||361e419f06c9fcf6cc63b40a34b6876f1cb3bd38d69e17159dacde94fa1f28fd|core.md,evaluate.md,mode.md
+evaluate|5|Kenya|4b3e58a346045a848ba7386b7a741316e814c5b7bbe40b2cdc2ad6ebe7b8fb05|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|6||196d5b027072e0a25350ae3cf0b3956bb805c23752f911b285e5354e9c67090a|core.md,evaluate.md,mode.md
+evaluate|6|Kenya|6e9b54b3ea1c9e1f9576dc21336830cab3ee13a69e99cf31a95f213aa2713351|core.md,evaluate.md,mode.md,cross_cultural.md
+evaluate|7||181d2c6e28575f1cea748ebee66ce2baaa27376ebc2ab9831217746c27f11d3d|core.md,evaluate.md,mode.md
+evaluate|7|Kenya|ee2b1065d8a1c97bafaec8ae2f6a48ea05bf4df1e2a7bcd04d95e377af7ec845|core.md,evaluate.md,mode.md,cross_cultural.md
+revision|attitudinal|96d18ea93f36da05793164ad16afb413a7e64c44546b898fc2a156abd0ef4d48
+revision|behavioral|40f05b0426385720dc1baee69fdc107f8223d65ad245159205365d22dfafeb26
+revision|sensitive|0b62001aa715a01f24e7da7907991a89875fe09cb7f2bae233fdf1d163198c21
+revision|evaluate|5d6f27f09008d8d40c186be974694d1422974c13e0fd467ed3e61c1ad42390ab
+```
+
+### Live runs (Kevin's yes)
+
+**1. `tests/llm_check.R generate`, 5 requests, all ok** (brief check, three drafts, the appraisal;
+log in `tests/run_generate.json`). Brief hash `c5d937bb...f4b`, work hash `2057605c...5d2`,
+appraisal hash `14c237e1...d21`.
+
+```
+[ OK ] brief check  claude-sonnet-5-5                     9.6 s  in 4752 out 995  finish success  attempts 1
+[ OK ] draft        google/gemma-4-31b-it                 3.7 s  in 2792 out 349  finish success  attempts 1
+[ OK ] draft        meta-llama/llama-4-maverick           5.3 s  in 2682 out 259  finish success  attempts 1
+[ OK ] draft        openai/gpt-6-luna                    51.9 s  in 2674 out 5189  finish success  attempts 1
+[ OK ] appraisal    claude-sonnet-5-5                    13.0 s  in 4155 out 1691  finish success  attempts 1
+```
+
+R's checks on the appraisal: 3 items recommended (3 asked for); 1 with a line to check before use.
+The drafts took 52.0 seconds together. Cost was not measured; my estimate was about $0.17.
+
+What the analyst sees for it, replayed through the app's own screens from the stored replies (the
+replay is `scratchpad`, not in the repo; the screen text is the app's):
+
+```
+===== RESULTS, drafting, live run: what the analyst sees
+These are drafts. Test them with real respondents before fielding.
+Question 1
+[How much do you trust or distrust the national electoral commission to report election results accurately?]
+[Trust a great deal]
+[Trust somewhat]
+[Neither trust nor distrust]
+[Distrust somewhat]
+[Distrust a great deal]
+[I have no opinion]
+>
+Question 2
+[How much do you trust or distrust the national electoral commission to treat political groups equally?]
+[Trust a great deal]
+[Trust somewhat]
+[Neither trust nor distrust]
+[Distrust somewhat]
+[Distrust a great deal]
+[I have no opinion]
+>
+Question 3
+[How much do you trust the national electoral commission to act in the best interest of the public rather than for a specific group?]
+[A great deal]
+[A lot]
+[A moderate amount]
+[A little]
+[Not at all]
+[Do not know]
+Check before use:
+'Best interest of the public' is vague, and 'rather than for a specific group' repeats the fairness item.
+>
+See all drafts
+A question you use from here goes
+[where it goes]
+fairness
+How confident are you that the national electoral commission counts votes accurately?
+- Not at all confident
+- Not very confident
+- Somewhat confident
+- Very confident
+- Extremely confident
+>
+impartiality
+Do you think the national electoral commission favours some political parties over others?
+- Yes, definitely
+- Yes, probably
+- No, probably not
+- No, definitely not
+- No opinion
+>
+competence
+How well does the national electoral commission organise national elections?
+- Very poorly
+- Somewhat poorly
+- Neither well nor poorly
+- Somewhat well
+- Very well
+>
+Consistent use of rules
+How much do you trust or distrust the national electoral commission to use the same rules for everyone?
+- Trust a great deal
+- Trust somewhat
+- Neither trust nor distrust
+- Distrust somewhat
+- Distrust a great deal
+- I have no opinion
+>
+Competence
+How much do you trust the national electoral commission to run elections correctly and without mistakes?
+- A great deal
+- A lot
+- A moderate amount
+- A little
+- Not at all
+- Do not know
+>
+Integrity
+How much do you trust the national electoral commission to be honest and fair to all political parties?
+- A great deal
+- A lot
+- A moderate amount
+- A little
+- Not at all
+- Do not know
+> 
+
+===== OUTPUT, drafting, live run: what is copied to Word
+These are drafts. Test them with real respondents before fielding.
+
+Question 1
+----------
+
+How much do you trust or distrust the national electoral commission to report election results accurately?
+
+1. Trust a great deal
+2. Trust somewhat
+3. Neither trust nor distrust
+4. Distrust somewhat
+5. Distrust a great deal
+6. I have no opinion
+
+Question 2
+----------
+
+How much do you trust or distrust the national electoral commission to treat political groups equally?
+
+1. Trust a great deal
+2. Trust somewhat
+3. Neither trust nor distrust
+4. Distrust somewhat
+5. Distrust a great deal
+6. I have no opinion
+
+Question 3
+----------
+
+How much do you trust the national electoral commission to act in the best interest of the public rather than for a specific group?
+
+1. A great deal
+2. A lot
+3. A moderate amount
+4. A little
+5. Not at all
+6. Do not know
+
+Check before use: 'Best interest of the public' is vague, and 'rather than for a specific group' repeats the fairness item.
+
+Date: 2026-11-13
+
+Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]
+
+QuestionR version 0.9
+```
+
+A drafted question is the question and its options: a stem and six options is seven lines, eight
+with the line to check. "About five lines" holds for a four-option scale and not for these six-
+option ones; the prompt for generate does not limit the number of options and I did not add a limit.
+
+**2. One review of `tests/review_questionnaire.txt`, 1 request, ok** (15 questions in one call,
+because it is under the 4,000-character batch size). Review prompt hash
+`14c13b3c3af65883bc682a0dd48880f321169cd9ee710f9eb5c739a1a8ab8684`. The form used: research
+question "Residents' use of and satisfaction with council services", population "Adults living in
+the borough", mode web, no country. Nothing was written to the repo for it.
+
+```
+Review prompt hash: 14c13b3c3af65883bc682a0dd48880f321169cd9ee710f9eb5c739a1a8ab8684
+Calls made: 1; status: ok; seconds: NA
+===== RESULTS, review, live run: what the analyst sees
+These are drafts. Test them with real respondents before fielding.
+Question Q3
+Q3. Have you used any council services in the last 12 months? Yes / No (go to Q9)
+Revise
+Problem: 'Council services' is vague; people may not know that bin collection or parks count, so they may say No.
+Suggested rewrite: In the last 12 months, have you used any of these Hartley Borough Council services: bin collection, recycling centre, library, leisure centre, parks or planning? Yes / No
+Question Q4
+Q4. Which council services have you used in the last 12 months? Tick all that apply. Bin collection / Recycling centre / Library / Leisure centre / Parks / Planning / Council tax / Other
+Revise
+Problem: No 'None of these' option; 'Council tax' is a bill everyone pays, and 'Planning' and 'Other' are unclear.
+Suggested rewrite: Which of these council services have you used in the last 12 months? Tick all that apply. Bin collection / Recycling centre / Library / Leisure centre / Parks / Planning applications or advice / Other (please write in) / None of these
+Question Q5
+Q5. How satisfied or dissatisfied are you with the cleanliness and safety of your local streets and parks? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied
+Revise
+Problem: Asks about cleanliness and safety, and streets and parks, in one question; people may feel differently about each.
+Suggested rewrite: How satisfied or dissatisfied are you with how clean your local streets are? Very satisfied / Fairly satisfied / Neither satisfied nor dissatisfied / Fairly dissatisfied / Very dissatisfied
+Question Q6
+Q6. How often do you use your local library? Never / Rarely / Sometimes / Often
+Revise
+Problem: 'Rarely', 'Sometimes' and 'Often' mean different things to different people, and no time period is given.
+Suggested rewrite: In the last 12 months, how many times have you visited a Hartley Borough Council library? Not at all / 1 to 3 times / 4 to 11 times / 12 to 51 times / 52 times or more
+Question Q7
+Q7. Don't you agree that the council should spend more on libraries? Strongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree
+Revise
+Problem: 'Don't you agree' pushes towards agreeing, and the question gives no sense of the cost or alternatives.
+Suggested rewrite: Should the council spend more, the same or less on libraries? More / The same / Less / Don't know
+Question Q8
+Q8. How much do you pay in council tax each year? Please give the amount in pounds. ______
+Revise
+Problem: Many people will not know the yearly amount, or may not pay the bill themselves; no 'don't know' option.
+Suggested rewrite: What is the yearly total on your latest council tax bill, in pounds? Please look at your bill if you can. ______ pounds / I don't know / I don't pay council tax
+Question Q10
+Q10. How much do you trust the council to spend your money wisely? A great deal / Quite a lot / Not very much / Not at all
+Revise
+Problem: 'Your money' assumes the respondent pays the council, and 'wisely' is vague.
+Suggested rewrite: How much do you trust Hartley Borough Council to spend its money well? A great deal / Quite a lot / Not very much / Not at all / Don't know
+Question Q11
+Q11. Thinking about when you last contacted the council, how long did it take them to respond? Same day / Within a week / Longer than a week / Never responded
+Revise
+Problem: Assumes everyone has contacted the council, and gives no time period.
+Suggested rewrite: In the last 12 months, have you contacted Hartley Borough Council? Yes / No / Don't remember
+Problem: 'Same day' is also 'within a week', so the options overlap.
+Suggested rewrite: When you last contacted the council, how long did it take them to first reply? Same day / 1 to 7 days later / More than 7 days later / They never replied
+Question Q12
+Q12. The council has invested in new recycling facilities. How satisfied are you with the recycling service? 1 Very dissatisfied ... 5 Very satisfied
+Revise
+Problem: States council investment as fact, which pushes answers; scale labels and direction also differ from Q5.
+Suggested rewrite: How satisfied or dissatisfied are you with the recycling service? Very satisfied / Fairly satisfied / Neither satisfied nor dissatisfied / Fairly dissatisfied / Very dissatisfied
+Question Q13
+Q13. How many hours a week do you spend volunteering for a local community group? ______ hours
+Revise
+Problem: Assumes everyone volunteers, and a weekly average is hard to work out.
+Suggested rewrite: In the last 7 days, how many hours did you spend volunteering for a local community group? Enter 0 if none. ______ hours
+Question Q15
+Q15. What is your total household income before tax? Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Prefer not to say
+Revise
+Problem: No time period or currency given, and respondents must add up everyone's income; no 'don't know' option.
+Suggested rewrite: Last year, roughly what was the total income of everyone in your household, before tax? Please give a yearly amount in pounds. Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Don't know / Prefer not to say
+Questions Q1, Q2, Q9, Q14: keep as written
+The questionnaire as a whole
+- Routing is incomplete: 'No' at Q1 has no destination, Q3 'No' skips Q4 to Q8 while Q11 and Q13 go to everyone, and Q3 and Q4 largely repeat each other.
+- Fit to objectives: only streets and recycling get satisfaction questions, none for the services listed in Q4; Q2, Q8, Q10, Q13 and Q14 do not measure use or satisfaction; the brief gives no weighting items or purpose.
+- This is an expert-review draft, not a tested instrument: try Q3, Q4, Q11 and Q15 in cognitive interviews or web probing, and make rating scales and 12-month periods consistent. 
+
+===== OUTPUT, review, live run: what is copied to Word
+These are drafts. Test them with real respondents before fielding.
+
+Question Q3
+-----------
+
+Q3. Have you used any council services in the last 12 months? Yes / No (go to Q9)
+
+Revise
+
+Problem: 'Council services' is vague; people may not know that bin collection or parks count, so they may say No.
+
+Suggested rewrite: In the last 12 months, have you used any of these Hartley Borough Council services: bin collection, recycling centre, library, leisure centre, parks or planning? Yes / No
+
+Question Q4
+-----------
+
+Q4. Which council services have you used in the last 12 months? Tick all that apply. Bin collection / Recycling centre / Library / Leisure centre / Parks / Planning / Council tax / Other
+
+Revise
+
+Problem: No 'None of these' option; 'Council tax' is a bill everyone pays, and 'Planning' and 'Other' are unclear.
+
+Suggested rewrite: Which of these council services have you used in the last 12 months? Tick all that apply. Bin collection / Recycling centre / Library / Leisure centre / Parks / Planning applications or advice / Other (please write in) / None of these
+
+Question Q5
+-----------
+
+Q5. How satisfied or dissatisfied are you with the cleanliness and safety of your local streets and parks? Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied
+
+Revise
+
+Problem: Asks about cleanliness and safety, and streets and parks, in one question; people may feel differently about each.
+
+Suggested rewrite: How satisfied or dissatisfied are you with how clean your local streets are? Very satisfied / Fairly satisfied / Neither satisfied nor dissatisfied / Fairly dissatisfied / Very dissatisfied
+
+Question Q6
+-----------
+
+Q6. How often do you use your local library? Never / Rarely / Sometimes / Often
+
+Revise
+
+Problem: 'Rarely', 'Sometimes' and 'Often' mean different things to different people, and no time period is given.
+
+Suggested rewrite: In the last 12 months, how many times have you visited a Hartley Borough Council library? Not at all / 1 to 3 times / 4 to 11 times / 12 to 51 times / 52 times or more
+
+Question Q7
+-----------
+
+Q7. Don't you agree that the council should spend more on libraries? Strongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree
+
+Revise
+
+Problem: 'Don't you agree' pushes towards agreeing, and the question gives no sense of the cost or alternatives.
+
+Suggested rewrite: Should the council spend more, the same or less on libraries? More / The same / Less / Don't know
+
+Question Q8
+-----------
+
+Q8. How much do you pay in council tax each year? Please give the amount in pounds. ______
+
+Revise
+
+Problem: Many people will not know the yearly amount, or may not pay the bill themselves; no 'don't know' option.
+
+Suggested rewrite: What is the yearly total on your latest council tax bill, in pounds? Please look at your bill if you can. ______ pounds / I don't know / I don't pay council tax
+
+Question Q10
+------------
+
+Q10. How much do you trust the council to spend your money wisely? A great deal / Quite a lot / Not very much / Not at all
+
+Revise
+
+Problem: 'Your money' assumes the respondent pays the council, and 'wisely' is vague.
+
+Suggested rewrite: How much do you trust Hartley Borough Council to spend its money well? A great deal / Quite a lot / Not very much / Not at all / Don't know
+
+Question Q11
+------------
+
+Q11. Thinking about when you last contacted the council, how long did it take them to respond? Same day / Within a week / Longer than a week / Never responded
+
+Revise
+
+Problem: Assumes everyone has contacted the council, and gives no time period.
+
+Suggested rewrite: In the last 12 months, have you contacted Hartley Borough Council? Yes / No / Don't remember
+
+Problem: 'Same day' is also 'within a week', so the options overlap.
+
+Suggested rewrite: When you last contacted the council, how long did it take them to first reply? Same day / 1 to 7 days later / More than 7 days later / They never replied
+
+Question Q12
+------------
+
+Q12. The council has invested in new recycling facilities. How satisfied are you with the recycling service? 1 Very dissatisfied ... 5 Very satisfied
+
+Revise
+
+Problem: States council investment as fact, which pushes answers; scale labels and direction also differ from Q5.
+
+Suggested rewrite: How satisfied or dissatisfied are you with the recycling service? Very satisfied / Fairly satisfied / Neither satisfied nor dissatisfied / Fairly dissatisfied / Very dissatisfied
+
+Question Q13
+------------
+
+Q13. How many hours a week do you spend volunteering for a local community group? ______ hours
+
+Revise
+
+Problem: Assumes everyone volunteers, and a weekly average is hard to work out.
+
+Suggested rewrite: In the last 7 days, how many hours did you spend volunteering for a local community group? Enter 0 if none. ______ hours
+
+Question Q15
+------------
+
+Q15. What is your total household income before tax? Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Prefer not to say
+
+Revise
+
+Problem: No time period or currency given, and respondents must add up everyone's income; no 'don't know' option.
+
+Suggested rewrite: Last year, roughly what was the total income of everyone in your household, before tax? Please give a yearly amount in pounds. Under 15,000 / 15,000 to 29,999 / 30,000 to 49,999 / 50,000 and over / Don't know / Prefer not to say
+
+Questions Q1, Q2, Q9, Q14: keep as written
+
+The questionnaire as a whole
+============================
+
+- Routing is incomplete: 'No' at Q1 has no destination, Q3 'No' skips Q4 to Q8 while Q11 and Q13 go to everyone, and Q3 and Q4 largely repeat each other.
+- Fit to objectives: only streets and recycling get satisfaction questions, none for the services listed in Q4; Q2, Q8, Q10, Q13 and Q14 do not measure use or satisfaction; the brief gives no weighting items or purpose.
+- This is an expert-review draft, not a tested instrument: try Q3, Q4, Q11 and Q15 in cognitive interviews or web probing, and make rating scales and 12-month periods consistent.
+
+Date: 2026-11-13
+
+Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]
+
+QuestionR version 0.9
+```
+
+Of the 15 questions: 11 Revise (one with two problems), 4 Keep. All problems are one sentence of
+20 words or fewer.
+
+### Screens against the stand-in model (no network)
+
+What the analyst sees and what is copied to Word, for a draft (three questions, one with a line to
+check) and for a review (two Revise, two Keep, a stand-in that sent more than allowed):
+
+```
+page
+
+===== RESULTS, drafting: what the analyst sees
+These are drafts. Test them with real respondents before fielding.
+Question 1
+[How much do you trust the commission to count votes correctly?]
+[Not at all]
+[A little]
+[Somewhat]
+[A lot]
+[Completely]
+>
+Question 2
+[How honest do you think the commission is in announcing results?]
+[Not at all]
+[A little]
+[Somewhat]
+[A lot]
+[Completely]
+Check before use:
+The word honest may mean different things to different people.
+>
+Question 3
+[How independent is the commission from the government?]
+[Not at all]
+[A little]
+[Somewhat]
+[A lot]
+[Completely]
+>
+See all drafts
+A question you use from here goes
+[where it goes]
+Honesty
+How honest do you think the commission is in announcing results?
+- Not at all
+- A little
+- Somewhat
+- A lot
+- Completely
+>
+How honest do you think the commission is in announcing results?
+- Not at all
+- A little
+- Somewhat
+- A lot
+- Completely
+>
+Independence
+How independent is the commission from the government?
+- Not at all
+- A little
+- Somewhat
+- A lot
+- Completely
+>
+How independent is the commission from the government?
+- Not at all
+- A little
+- Somewhat
+- A lot
+- Completely
+>
+Competence
+How much do you trust the commission to count votes correctly?
+- Not at all
+- A little
+- Somewhat
+- A lot
+- Completely
+>
+How much do you trust the commission to count votes correctly?
+- Not at all
+- A little
+- Somewhat
+- A lot
+- Completely
+> 
+
+===== OUTPUT, drafting: what is copied to Word
+These are drafts. Test them with real respondents before fielding.
+
+Question 1
+----------
+
+How much do you trust the commission to count votes correctly?
+
+1. Not at all
+2. A little
+3. Somewhat
+4. A lot
+5. Completely
+
+Question 2
+----------
+
+How honest do you think the commission is in announcing results?
+
+1. Not at all
+2. A little
+3. Somewhat
+4. A lot
+5. Completely
+
+Check before use: The word honest may mean different things to different people.
+
+Question 3
+----------
+
+How independent is the commission from the government?
+
+1. Not at all
+2. A little
+3. Somewhat
+4. A lot
+5. Completely
+
+Date: 2026-11-13
+
+Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]
+
+QuestionR version 0.9 
+
+===== RESULTS, review: what the analyst sees
+These are drafts. Test them with real respondents before fielding.
+Question Q1
+Q1. How satisfied or dissatisfied are you with the recycling services and street cleaning provided by your local council?
+Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied
+Revise
+Problem: It asks about two services at once, recycling and street cleaning.
+Suggested rewrite: How satisfied or dissatisfied are you with the recycling services provided by your local council?
+Problem: The scale has a middle option that some respondents will use to avoid answering.
+Suggested rewrite: Keep the middle option only if a neutral answer is meaningful.
+Question Q2
+Q2. Do you agree that the council should spend more on libraries?
+Yes / No
+Revise
+Problem: The wording invites agreement.
+Suggested rewrite: Should the council spend more, the same or less on libraries?
+Questions Q3, Q4: keep as written
+The questionnaire as a whole
+- Questions 1 and 2 use different answer formats; use one format throughout. 
+
+===== OUTPUT, review: what is copied to Word
+These are drafts. Test them with real respondents before fielding.
+
+Question Q1
+-----------
+
+Q1. How satisfied or dissatisfied are you with the recycling services and street cleaning provided by your local council?
+Very satisfied / Fairly satisfied / Neither / Fairly dissatisfied / Very dissatisfied
+
+Revise
+
+Problem: It asks about two services at once, recycling and street cleaning.
+
+Suggested rewrite: How satisfied or dissatisfied are you with the recycling services provided by your local council?
+
+Problem: The scale has a middle option that some respondents will use to avoid answering.
+
+Suggested rewrite: Keep the middle option only if a neutral answer is meaningful.
+
+Question Q2
+-----------
+
+Q2. Do you agree that the council should spend more on libraries?
+Yes / No
+
+Revise
+
+Problem: The wording invites agreement.
+
+Suggested rewrite: Should the council spend more, the same or less on libraries?
+
+Questions Q3, Q4: keep as written
+
+The questionnaire as a whole
+============================
+
+- Questions 1 and 2 use different answer formats; use one format throughout.
+
+Date: 2026-11-13
+
+Drafted with QuestionR, an AI tool; reviewed by [analyst to complete]
+
+QuestionR version 0.9
+```
+
+### Remaining hits of "skill"
+
+`grep -rniI "skill" QuestionR/ CLAUDE.md README.md` (the PDFs in `www/reflex_materials` have none):
+
+| File | Hits | Reason |
+|---|---|---|
+| `www/start.md`, `www/methodology.md` | 1 each | the allowed "AI skill" sentence |
+| `PROMPTS.md` | 69 | history: the earlier prompts and the Phase 9 prompt, word for word |
+| `DESIGN.md` | 18 | history: sections 13 to 17 record the earlier word; section 18 states the rule |
+| `REVIEW.md` | 20 | generated; it quotes the history files above and has the history line |
+| `STATUS.md` | this section and earlier phases | history files, with the line at the top; this section names the old word where it says what changed |
+| `tests/smoke.R` | 10 | the checks of the rule itself (the sentence and the pages with none) |
+| `tests/review.R` | 1 | the history line it writes at the top of `REVIEW.md` |
+| `tests/gold_summary.md` | 1 | history: the gold test's own report, written in Phase 4 |
+| `CLAUDE.md`, `README.md` (root) | 0 | none |
+
+No hit is a package or function name that is not ours.
+
+### Click-through for Kevin (Phase 9)
+
+1. **Start here:** two sentences on measurement error, the flowchart, then "QuestionR is an AI skill.
+   It works from written AI reflexes..." and the four steps. No word "skill" anywhere else.
+2. **Methodology tab:** Total Survey Error is first, with the sentence on what QuestionR does and does
+   not work on; the Last week question diagram is under "One question, three ways to go wrong"; no
+   Sensitive or TRAPD sections; the table has ten rows; ten closed reflex panels (Country and culture
+   is "version 0.2"). Count the words on screen if you doubt 588.
+3. **Brief tab:** there is a country field and no language field, in any task.
+4. **Prompt tab:** one box, and the one line under it.
+5. **Results, drafting:** each question with its options and, on at most some, "Check before use:";
+   Remove, Use this instead and the box edits all work; "See all drafts" shows only questions.
+6. **Output tab:** the Word copy equals the screen plus three lines; "Download the full record" is one
+   small button and the file has the prompts, models, hashes and every draft.
+7. **Results, review:** Revise cards with at most two problems and a rewrite each; Keep questions
+   in one line; the three points about the whole.
+8. Try a brief with a country and a review: it is no longer asked about translation, and the
+   Evaluate panel on the Methodology page has no translation reflex.
+
 ## Phase 8 (2026-11-13): what analysts see, the frameworks, and the merge prepared
 
 **Next: Kevin tries the app (click-through at the end of this section), then answers the one

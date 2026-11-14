@@ -5,6 +5,8 @@ Each ends at a review gate: bring `QuestionR/REVIEW.md` and
 `QuestionR/STATUS.md` back to the Claude project before the next one. Later
 prompts are added here after each review.
 
+From Phase 9, what the earlier phases call "skills" are called "reflexes" (a file is a reflex file, each rule in it a reflex). The earlier prompts keep the old word, as history.
+
 ## Phases 0 and 1: scaffold, skills loader, prompt assembly
 
 ```
@@ -635,4 +637,169 @@ Rules: root CLAUDE.md hard rules; no edits to www/skills/ beyond the move in
 8a; no change to what tests/review.R checks beyond what 8a forces (report the
 diff); no invented functions, arguments, figures or references; never weaken
 a test; do not push.
+```
+
+## Phase 9
+
+```
+Read CLAUDE.md, QuestionR/DESIGN.md (sections 16, 17), QuestionR/STATUS.md and
+QuestionR/www/skills/README.md. Confirm the branch is questionr and that the
+revised Phase 8 is committed. If it is not, stop and tell me.
+
+Add this prompt to QuestionR/PROMPTS.md as "## Phase 9", word for word, and add
+"## 18" to DESIGN.md recording the five rulings below. Where they disagree with
+earlier sections, section 18 wins.
+
+Kevin's rulings. Do not reinterpret them:
+1. The output overwhelms analysts. Drafted questions and questionnaire reviews
+   must be as simple as possible, for a reader who cannot take in much.
+2. TRAPD and all translation leave the app and the methodology note.
+3. The methodology note shows one worked example question from the slides, to
+   show how parts of a question affect measurement error.
+4. Total Survey Error comes first. The app exists to reduce measurement error
+   from the item and from the instrument, and it should say so up front.
+5. Naming: QuestionR, the tool, is the AI skill. What it depends on are AI
+   reflexes. Nothing else is called a skill, anywhere.
+
+One commit per item.
+
+9a. Rename skills to reflexes (ruling 5). Do this first; it touches everything.
+    - git mv QuestionR/www/skills -> QuestionR/www/reflexes;
+      QuestionR/www/skills_materials -> QuestionR/www/reflex_materials;
+      QuestionR/R/skills.R -> QuestionR/R/reflexes.R. Update .gitignore,
+      .rscignore, APP_SOURCE links and every path.
+    - Words: a file is a "reflex file"; each "### id" rule inside it is a
+      "reflex". Rename functions, variables, run-log fields, UI text, test
+      labels and comments to match (skills -> reflexes, skill -> reflex file
+      or reflex, whichever is meant). In UI text and docs use "AI reflexes"
+      on first mention and say once, on Start here and in the methodology
+      note: "QuestionR is an AI skill. It works from written AI reflexes:
+      short rules of survey design that every model is given."
+    - Update README.md (root and QuestionR), CLAUDE.md, DESIGN.md,
+      www/methodology.md, www/start.md, how_it_works.svg ("Reflexes: written
+      survey design rules steer every model"), and the reflex files' own
+      prose. Do not rewrite history in STATUS.md, REVIEW.md or earlier
+      PROMPTS.md phases: add one line at the top of each saying that from
+      Phase 9 "skills" are called "reflexes".
+    - Finish with `grep -rni "skill" QuestionR/ CLAUDE.md README.md` and list
+      every remaining hit in STATUS.md with the reason it stays (the only
+      allowed reasons: the sentence "QuestionR is an AI skill", history
+      files, and package or function names that are not ours).
+
+9b. Remove translation and TRAPD (ruling 2).
+    - Remove the output-language field from the brief, and every code path,
+      prompt line, check and test that handles a language other than
+      English or a translation. Questions are written in English.
+    - Keep the country field and the reflexes about local terms, cultural
+      sensitivity and context: only translation goes. Kevin authorises you
+      to edit www/reflexes/cross_cultural.md for this: delete the reflexes,
+      prohibitions and checks about translating, TRAPD, back translation and
+      translation review; keep the rest; bump its Version; rename its title
+      if it now says "languages". Show me the diff of that file.
+    - Delete www/fw_trapd.svg, the TRAPD section of methodology.md, and
+      TRAPD from the reflex table, start.md and every other file.
+    - If any field, test fixture or gold case existed only for translation,
+      remove it and say so.
+
+9c. Simple output (ruling 1). The rule for every screen and for what is
+    copied to Word: show the analyst only what they need to act.
+    Drafted questions, per question, nothing else:
+      - the question;
+      - its answer options;
+      - at most ONE line, "Check before use:", and only when the reviewer
+        found a real problem. One sentence, 20 words or fewer, plain words.
+    No scores, no checklist results, no per-model drafts, no reflex ids, no
+    stage names, no rationale paragraphs. The edit, remove and swap controls
+    stay.
+    Questionnaire review, per question, nothing else:
+      - the question as pasted;
+      - a verdict of two words at most: "Keep" or "Revise";
+      - if Revise: the problem in one sentence, 20 words or fewer, plain
+        words, and a suggested rewrite.
+    At most two problems per question, the most serious first; drop the
+    rest. Then one short list, "The questionnaire as a whole", with at most
+    three points, one sentence each. Questions marked Keep are folded into
+    one line ("Questions 2, 5, 7: keep as written").
+    Above either result, one sentence: "These are drafts. Test them with
+    real respondents before fielding."
+    How to get there:
+      - Kevin authorises edits to the Output format sections of
+        www/reflexes/generate.md, evaluate.md and pm_appraise.md so the
+        models return only these fields, with the word limits stated. Bump
+        the versions. Do not change any reflex or check. Show me the diffs.
+      - R enforces the limits as well: it keeps the first two problems,
+        the first three whole-questionnaire points, and does not render any
+        other field even if a model returns one.
+      - Copy for Word copies exactly what is on screen, then three lines:
+        the date, "Drafted with QuestionR, an AI tool; reviewed by
+        [analyst to complete]", and the tool version.
+      - The full record (prompts, models, hashes, every draft, the full
+        appraisal) leaves the screen and the Word copy. It goes into one
+        file behind a single small button, "Download the full record", so
+        the work stays defensible without being shown.
+      - Remove UI and code that only served the removed detail.
+    Take a screenshot-equivalent (the rendered HTML text of each result
+    page against the stand-in model) and paste both into STATUS.md so I can
+    judge the length. A drafted question should fit in about five lines.
+
+9d. Total Survey Error first (ruling 4). Kevin authorises edits to
+    www/start.md and www/methodology.md.
+    - Start here opens with two sentences: what QuestionR is for ("to
+      reduce measurement error: the gap between what you mean to measure
+      and what the answers tell you, from each question and from the
+      questionnaire as a whole"), then the flowchart.
+    - methodology.md: the first section after the title is Total Survey
+      Error, with fw_tse.svg, before "What it is built on". Its summary ends
+      by saying which errors QuestionR works on (validity and measurement
+      error) and which it does not (coverage, sampling, nonresponse).
+    - Cut the note down. Target: under 600 words outside the reflex table
+      and panels. Keep: TSE, construct to question, the response model, the
+      worked example (9e), testing methods and where AI fits, what it cannot
+      do, how it was tested (that exact heading; pilot_notice() reads it),
+      the reflex table. One short paragraph each.
+
+9e. A worked example (ruling 3). Use the Session 1 example the slides give
+    for measurement error: "Last week, did you work full-time, part-time, or
+    did you not work at all?" with its three versions (wrong concept /
+    specification error; right concept measured imperfectly /
+    operationalization error; right concept, response differs from true
+    value / response error). Read the slide pages in
+    www/reflex_materials/Quex_Design_Session1.pdf as images and take the
+    wording and the labels from the slide only. Draw www/fw_example.svg in
+    the style of the other diagrams: the question, with its parts marked
+    (reference period, the concept, the answer options) and one short label
+    on each saying what kind of error it can cause, as the slide presents
+    it. If the slide does not support a label, leave it out and tell me.
+    Put it in methodology.md under "One question, three ways to go wrong",
+    with three sentences of text and the slide's reference. If
+    fw_construct.svg already shows the same example, merge the two into one
+    diagram and delete the other.
+
+9f. Remove what 9a to 9e made unused: functions without callers, tests of
+    removed features, fixtures, the old detail views. Show the evidence for
+    each, list them in STATUS.md, and ask before deleting anything you are
+    unsure of.
+
+9g. Smoke. Update the checks the changes touch and add:
+    - no page of the app contains "skill" except the one allowed sentence;
+    - no page contains "TRAPD", "translat" or a language field;
+    - a rendered drafted question has no more than the three allowed parts;
+    - a rendered review shows at most two problems per question and three
+      whole-questionnaire points, even when the stand-in model returns more;
+    - the Word copy equals the on-screen text plus the three lines;
+    - every .svg in www/ parses and every image named in the .md files
+      exists.
+    Do not weaken any other check.
+
+Run tests/smoke.R and tests/review.R 5 until clean. The gold test compares
+review findings: say whether the shorter output format changes what it can
+measure, and if it does, stop and tell me before changing it. Then ONE live
+draft run and ONE live review of tests/review_questionnaire.txt: say the
+number of calls and wait for my yes. Paste both results as the analyst would
+see them into STATUS.md. Record the new prompt hashes. Commit with
+REVIEW.md. Do not push.
+
+Rules: root CLAUDE.md hard rules; reflex files are edited only where this
+prompt authorises it; no invented functions, arguments, figures, references
+or slide content; never weaken a test; do not push.
 ```

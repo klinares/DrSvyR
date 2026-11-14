@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 310" role="img" aria-labelledby="t d" font-family="Lato, 'Segoe UI', system-ui, -apple-system, sans-serif" xmlns:c2pa="http://c2pa.org/manifest">
   <title id="t">How QuestionR works</title>
-  <desc id="d">Six steps. The analyst describes what is needed and checks the instructions. Several AI models draft at the same time, and a reviewing model checks the drafts against the rules and recommends one set. The analyst decides, editing any question, and copies the result into Word with a record of how it was made. Written survey design rules, the skills, steer the instructions, the drafts and the review. If the result is not right, change the brief and run again.</desc>
+  <desc id="d">Six steps. The analyst describes what is needed and checks the instructions. Several AI models draft at the same time, and a reviewing model checks the drafts against the rules and recommends one set. The analyst decides, editing any question, and copies the result into Word with a record of how it was made. Written survey design rules, the reflexes, steer the instructions, the drafts and the review. If the result is not right, change the brief and run again.</desc>
 
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -92,14 +92,14 @@
     <line x1="812" y1="105" x2="842" y2="105"/>
   </g>
 
-  <!-- The skills steer steps 2 to 4 -->
+  <!-- The reflexes steer steps 2 to 4 -->
   <g stroke="#18bc9c" stroke-width="2" fill="none" marker-end="url(#s)">
     <line x1="250" y1="200" x2="250" y2="174"/>
     <line x1="415" y1="200" x2="415" y2="174"/>
     <line x1="580" y1="200" x2="580" y2="174"/>
   </g>
   <rect x="185" y="200" width="460" height="42" rx="8" fill="#ffffff" stroke="#18bc9c" stroke-width="2" stroke-dasharray="6 4"/>
-  <text x="415" y="226" text-anchor="middle" font-size="13.5px" fill="#2c3e50"><tspan font-weight="700">Skills:</tspan> written survey design rules steer every model</text>
+  <text x="415" y="226" text-anchor="middle" font-size="13.5px" fill="#2c3e50"><tspan font-weight="700">Reflexes:</tspan> written survey design rules steer every model</text>
 
   <!-- Try again -->
   <path class="flow" stroke-dasharray="5 4" marker-end="url(#a)" d="M745,172 L745,272 L85,272 L85,174"/>
