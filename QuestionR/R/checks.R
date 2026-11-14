@@ -66,7 +66,7 @@ flag_problems <- function(fl, checks, where, quoted = TRUE) {
     if (quoted && !nzchar(txt("quote"))) paste0(where, "has no quote"),
     if (!quoted && !length(fl$questions)) paste0(where, "names no question"),
     if (!nzchar(txt("why"))) paste0(where, "has no why")
-    else if (n_words(txt("why")) > MAX_WHY_WORDS) paste0(where, "has a why of ", n_words(txt("why")), " words; the limit is 25"))
+    else if (n_words(txt("why")) > MAX_WHY_WORDS) paste0(where, "has a why of ", n_words(txt("why")), " words; keep it to 25"))
 }
 
 # Checks that need more than a field's type. Each takes the parsed reply and the extra
@@ -90,7 +90,7 @@ REPLY_RULES <- list(
   draft_limits = function(obj, ...)
     c(if (length(obj$needs_from_analyst) > 3L) paste0("needs_from_analyst has ", length(obj$needs_from_analyst), " entries; the limit is 3"),
       unlist(purrr::imap(obj$items, function(it, i)
-        c(if (type_ok(it$why, "text") && n_words(it$why) > MAX_WHY_WORDS) paste0("Item ", i, " has a why of ", n_words(it$why), " words; the limit is 25"),
+        c(if (type_ok(it$why, "text") && n_words(it$why) > MAX_WHY_WORDS) paste0("Item ", i, " has a why of ", n_words(it$why), " words; keep it to 25"),
           if (type_ok(it$programming, "text") && grepl("
 ", it$programming)) paste0("Item ", i, " has more than one line of programming"))))),
   # One entry per question of the part, so a question the model skipped is never shown as clear.

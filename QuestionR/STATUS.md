@@ -15,8 +15,8 @@ design and prompt notes are in `archive/`.
   and a reply that skips a question. A quote not found in the pasted text is marked, not dropped.
   Questions are split on blank lines, else on label lines (`Q1.`, `1.`, `1)`, `A1`), packed into
   parts of at most 15 questions and 8,000 characters (paste limit 60,000), sent four at a time,
-  plus one call on the whole questionnaire when there is more than one question. Ceilings: 6,000
-  per part, 1,500 for the whole. The page: a bottom line R builds from the flags, up to five cards
+  plus one call on the whole questionnaire when there is more than one question. Ceilings: 24,000
+  per part, 8,000 for the whole, 16,000 per draft (thinking counts against them; see Live runs). The page: a bottom line R builds from the flags, up to five cards
   to fix first, a table of all questions whose rows open to every flag, a closed panel on how it was
   produced, Copy for Word and the run log.
 - **Write questions.** Call 1 drafts 1 to 6 items; call 2 sends them as a questionnaire through the
@@ -87,9 +87,29 @@ Smoke: 69 checks, all passing.
 - `not_a_pretest` asks which items need testing and by what method; no field carries it, and `short_and_ranked` says to write nothing the format does not ask for.
 - No coded defaults exist (removed in Phase 9), so Criteria applied lists check labels only.
 
+## Live runs (2026-11-13, home profile, Kevin's yes)
+
+Sonnet 5.5 thinks by default (adaptive, effort high), and its thinking counts against max_tokens.
+At the brief's ceilings (6,000 per part, 1,500 for the whole) every review30 call was cut off before
+any text. Kevin chose to keep the default effort and raise the ceilings.
+
+- example: 1 call, 6,696 tokens in, 2,120 out; 4 fix and 2 consider flags. `www/start_example.json`
+  (its seconds field reads 0.05 because of a bug fixed afterwards).
+- review30: 3 calls, 98 s by the clock; out 13,249 / 11,857 (15-question parts) and 3,528 (whole).
+  Fix flags per question 0.97 (max 3), consider 0.93 (max 2); 57 of 57 quotes found; no repeat
+  attempts; all 8 deliberate faults flagged. `tests/review30.md`, `tests/review30.json`.
+- gold: 27 of 27; 376 s in all, about 14 s, 1,922 tokens in (plus about 4,800 read from the cache)
+  and 1,416 out per item. Fix flags per flawed item 2.60, per control item 0.29 (2 of 7 controls have
+  one). 103 flags, every quote found. F2 failed first (a why over 30 words three times) and passed
+  when re-run; F2, F4, F5 and F13 needed a second attempt. `tests/gold_runs/2026-11-13_claude-sonnet-5-5/`.
+- Write questions (attitudinal, 4 items): 2 calls, 68 s; the check rewrote 2 items. `tests/write_run.json`.
+- Two bugs from the condensed llm.R, found by these runs and fixed: a single (not batched) call read
+  the chat's last turn before the request had run, so it recorded no tokens and finish "unknown"
+  (and so could not recognise a cut-off reply); a batched call recorded about zero seconds. The
+  draft call of the Write run, and the second attempts of F4, F5 and F13, have no token counts.
+
 ## Not verified
 
-- Any live call: `example`, `review30` and `gold` wait for Kevin's yes. `www/start_example.json` does not exist yet.
-- Whether the cache is read: the first group of four calls all write it; `review30` reports cached tokens.
-- The token ceiling of 6,000 for a 15-question part, until `review30`.
+- What ellmer's token fields mean with caching on: review30 reports 4 tokens in and about 7,600
+  cached per call, so whether a cache write is counted as cached input is not settled.
 - Publishing to Connect, and the work endpoint.

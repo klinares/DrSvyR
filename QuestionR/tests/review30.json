@@ -1,0 +1,752 @@
+{
+  "time": "2026-11-13T21:53:25-0500",
+  "model": "claude-sonnet-5-5",
+  "form": {
+    "task": "evaluate",
+    "research_question": "Household energy use, travel and quality of life",
+    "population": "Adults aged 18 and over living in England",
+    "modes": "web",
+    "questionnaire": "Q1. Are you aged 18 or over? This survey is only for adults.\nYes / No (end of questionnaire)\n\nQ2. In which type of home do you live at the moment? Please choose the one that fits best.\nDetached house / Semi-detached house / Terraced house / Flat or maisonette / Caravan or houseboat / Other (please say what)\n\nQ3. Do you own your home or do you rent it? Please choose one answer only.\nOwn outright / Own with a mortgage or loan / Rent from a private landlord / Rent from a council or housing association / Live rent free / Other\n\nQ4. How many people live in your household, including you? Count children and babies too.\n1 / 2 / 3 / 4 / 5 / 6 or more\n\nQ5. All things considered, how satisfied or dissatisfied are you with the heating in your home?\nVery satisfied / Fairly satisfied / Neither satisfied nor dissatisfied / Fairly dissatisfied / Very dissatisfied\n\nQ6. Thinking about last winter, how often was your home too cold for you to be comfortable?\nNever / Rarely / Sometimes / Often / Always\n\nQ7. What is the main fuel you use to heat your home? If you use more than one, choose the one you use most.\nMains gas / Electricity / Heating oil / Liquefied petroleum gas (LPG) / Wood or coal / Heat network / Other / Don't know\n\nQ8. Has your household cut back on heating to save money? Please include times when you kept the heating off on purpose.\nYes / No\n\nQ9. About how much did your household spend on gas and electricity last month? Please give the amount in pounds, and include standing charges.\nEnter a number: ______\n\nQ10. Do you think the government is doing enough to help households with their energy bills?\nDefinitely / Probably / Probably not / Definitely not\n\nQ11. Obviously, high energy bills are caused by greedy energy companies. How much do you agree or disagree with this statement?\nStrongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree\n\nQ12. Have you made any changes to your home to save energy, such as loft insulation, double glazing or a smart thermostat, and did these changes lower your bills?\nYes / No\n\nQ13. How likely are you to install solar panels on your home in the next five years? Please answer even if you rent.\nVery likely / Fairly likely / Fairly unlikely / Very unlikely\n\nQ14. Now some questions about travel. In a normal week, on how many days do you travel to your place of work?\n0 / 1 / 2 / 3 / 4 / 5 / 6 / 7\n\nQ15. How do you usually travel to your place of work? Choose the way you use for the longest part of the journey.\nCar or van / Bus or coach / Train or tram / Bicycle / Walk / Motorcycle / Other\n\nQ16. How long does your journey to work usually take, door to door? Please give your answer in minutes.\nEnter a number: ______\n\nQ17. How satisfied are you with the availability and reliability of local bus services?\nVery dissatisfied / Fairly dissatisfied / Neither / Fairly satisfied / Very satisfied\n\nQ18. How safe do you feel cycling on the roads in your neighbourhood? If you never cycle, please choose the last answer.\nVery safe / Fairly safe / Fairly unsafe / Very unsafe / I do not cycle\n\nQ19. In the past 7 days, on how many days did you walk for at least 30 minutes in one go, for any reason?\nEnter a number from 0 to 7: ______\n\nQ20. Do you have a car or van that you can use whenever you need it?\nYes / No (go to Q24)\n\nQ21. Roughly how many miles did you drive last year in total? Think of all the journeys you made, for work or otherwise.\nEnter a number: ______\n\nQ22. How old is the car or van you use most often? Give the age of the vehicle, not the year of the model.\nLess than 3 years / 3 to 5 years / 6 to 10 years / More than 10 years\n\nQ23. Would you consider switching to an electric car or van when you next change your vehicle?\nYes, definitely / Yes, maybe / No / Not sure\n\nQ24. Which of the following would encourage you to use public transport more often than you do now?\nTick all that apply: Cheaper fares / More frequent services / More direct routes / Cleaner vehicles / Safer stops and stations / Nothing would\n\nQ25. How worried are you about climate change, if at all?\nVery worried / Somewhat worried / Not very worried / Not at all worried\n\nQ26. In the last month, how often did you recycle your household waste, such as paper, glass, plastic and cans?\nEvery week / Most weeks / Occasionally / Never\n\nQ27. What is your age in years, at your last birthday?\nEnter a number: ______\n\nQ28. What was your total household income last year before tax and other deductions, from all sources?\nUnder £15,000 / £15,000 to £29,999 / £30,000 to £49,999 / £50,000 to £79,999 / £80,000 or more / Prefer not to say\n\nQ29. Which of these best describes what you were doing last week? Please choose the one that best describes your main activity.\nIn paid work / Self-employed / Unemployed and looking for work / Retired / Student / Looking after the home or family / Long-term sick or disabled / Other\n\nQ30. Overall, how would you rate your quality of life at the moment, taking everything into account?\nExcellent / Good / Fair / Poor / Very poor"
+  },
+  "message_assembled": null,
+  "message_sent": null,
+  "edited": false,
+  "summary": [
+    {
+      "call": "part 1 of 2",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "seconds": 97.2639,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 4,
+      "tokens_out": 13249,
+      "tokens_cached": 7607,
+      "error": null
+    },
+    {
+      "call": "part 2 of 2",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "seconds": 84.3434,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 4,
+      "tokens_out": 11857,
+      "tokens_cached": 7554,
+      "error": null
+    },
+    {
+      "call": "whole questionnaire",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "seconds": 28.4422,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 4,
+      "tokens_out": 3528,
+      "tokens_cached": 7540,
+      "error": null
+    }
+  ],
+  "draft": null,
+  "check": null,
+  "review": {
+    "status": "ok",
+    "error": null,
+    "batches": [
+      {
+        "kind": "items",
+        "k": 1,
+        "n": 2,
+        "first": 1,
+        "ids": ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15"],
+        "questions": ["Q1. Are you aged 18 or over? This survey is only for adults.\nYes / No (end of questionnaire)", "Q2. In which type of home do you live at the moment? Please choose the one that fits best.\nDetached house / Semi-detached house / Terraced house / Flat or maisonette / Caravan or houseboat / Other (please say what)", "Q3. Do you own your home or do you rent it? Please choose one answer only.\nOwn outright / Own with a mortgage or loan / Rent from a private landlord / Rent from a council or housing association / Live rent free / Other", "Q4. How many people live in your household, including you? Count children and babies too.\n1 / 2 / 3 / 4 / 5 / 6 or more", "Q5. All things considered, how satisfied or dissatisfied are you with the heating in your home?\nVery satisfied / Fairly satisfied / Neither satisfied nor dissatisfied / Fairly dissatisfied / Very dissatisfied", "Q6. Thinking about last winter, how often was your home too cold for you to be comfortable?\nNever / Rarely / Sometimes / Often / Always", "Q7. What is the main fuel you use to heat your home? If you use more than one, choose the one you use most.\nMains gas / Electricity / Heating oil / Liquefied petroleum gas (LPG) / Wood or coal / Heat network / Other / Don't know", "Q8. Has your household cut back on heating to save money? Please include times when you kept the heating off on purpose.\nYes / No", "Q9. About how much did your household spend on gas and electricity last month? Please give the amount in pounds, and include standing charges.\nEnter a number: ______", "Q10. Do you think the government is doing enough to help households with their energy bills?\nDefinitely / Probably / Probably not / Definitely not", "Q11. Obviously, high energy bills are caused by greedy energy companies. How much do you agree or disagree with this statement?\nStrongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree", "Q12. Have you made any changes to your home to save energy, such as loft insulation, double glazing or a smart thermostat, and did these changes lower your bills?\nYes / No", "Q13. How likely are you to install solar panels on your home in the next five years? Please answer even if you rent.\nVery likely / Fairly likely / Fairly unlikely / Very unlikely", "Q14. Now some questions about travel. In a normal week, on how many days do you travel to your place of work?\n0 / 1 / 2 / 3 / 4 / 5 / 6 / 7", "Q15. How do you usually travel to your place of work? Choose the way you use for the longest part of the journey.\nCar or van / Bus or coach / Train or tram / Bicycle / Walk / Motorcycle / Other"],
+        "hash": "9d118309534ebd13f7e136b1bb056a780c0932872796cb9c1b33ae6054ab8ac3",
+        "user": "You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist.\n\nTask: Review the questionnaire as an expert reviewer, question by question.\n\nBrief:\nResearch question: Household energy use, travel and quality of life\nTarget population: Adults aged 18 and over living in England\nSurvey mode: web\n\nGuidelines:\n- Use simple, familiar words.\n- Use simple syntax.\n- Avoid ambiguous words.\n- Be specific and concrete.\n- Make response options exhaustive and mutually exclusive.\n- Avoid leading or loaded wording.\n- Ask about one thing at a time.\n- Avoid single or double negations.\n\n[your 30 questions go here]\n\nNow review the 15 questions below, each on its own (part 1 of 2 of the questionnaire). Reply with the \"items\" object only, one entry per question, in the order given.\n\nQUESTIONNAIRE\nQ1. Are you aged 18 or over? This survey is only for adults.\nYes / No (end of questionnaire)\n\nQ2. In which type of home do you live at the moment? Please choose the one that fits best.\nDetached house / Semi-detached house / Terraced house / Flat or maisonette / Caravan or houseboat / Other (please say what)\n\nQ3. Do you own your home or do you rent it? Please choose one answer only.\nOwn outright / Own with a mortgage or loan / Rent from a private landlord / Rent from a council or housing association / Live rent free / Other\n\nQ4. How many people live in your household, including you? Count children and babies too.\n1 / 2 / 3 / 4 / 5 / 6 or more\n\nQ5. All things considered, how satisfied or dissatisfied are you with the heating in your home?\nVery satisfied / Fairly satisfied / Neither satisfied nor dissatisfied / Fairly dissatisfied / Very dissatisfied\n\nQ6. Thinking about last winter, how often was your home too cold for you to be comfortable?\nNever / Rarely / Sometimes / Often / Always\n\nQ7. What is the main fuel you use to heat your home? If you use more than one, choose the one you use most.\nMains gas / Electricity / Heating oil / Liquefied petroleum gas (LPG) / Wood or coal / Heat network / Other / Don't know\n\nQ8. Has your household cut back on heating to save money? Please include times when you kept the heating off on purpose.\nYes / No\n\nQ9. About how much did your household spend on gas and electricity last month? Please give the amount in pounds, and include standing charges.\nEnter a number: ______\n\nQ10. Do you think the government is doing enough to help households with their energy bills?\nDefinitely / Probably / Probably not / Definitely not\n\nQ11. Obviously, high energy bills are caused by greedy energy companies. How much do you agree or disagree with this statement?\nStrongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree\n\nQ12. Have you made any changes to your home to save energy, such as loft insulation, double glazing or a smart thermostat, and did these changes lower your bills?\nYes / No\n\nQ13. How likely are you to install solar panels on your home in the next five years? Please answer even if you rent.\nVery likely / Fairly likely / Fairly unlikely / Very unlikely\n\nQ14. Now some questions about travel. In a normal week, on how many days do you travel to your place of work?\n0 / 1 / 2 / 3 / 4 / 5 / 6 / 7\n\nQ15. How do you usually travel to your place of work? Choose the way you use for the longest part of the journey.\nCar or van / Bus or coach / Train or tram / Bicycle / Walk / Motorcycle / Other\n\nCHECKLIST\nconstruct_first: Does the item measure the construct or domain named in the brief and only that?\nplain_words: Would every member of the target population read each key term the same way, without a definition they do not have?\nsimple_syntax: Is the stem free of stacked clauses and of negations?\nspecific_concrete: Is it clear exactly what, whose, where and when the question is about?\none_thing: Does the question ask about exactly one thing, so that no respondent would want to answer its parts differently?\nno_presupposition: Does the question apply to every respondent who will be asked it?\nneutral_wording: Is the wording free of any push toward one answer?\noptions_fit: Can every respondent find exactly one option that is true for them?\nretrieval_and_judgment: Can the respondent retrieve the information and reach the answer without difficult recall or mental arithmetic?\nresponse_scale: Do the response options match the question and treat both directions evenly?\nagree_disagree_and_grids: If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?\nattitude_object: Is the attitude object named and bounded so that respondents will have the same thing in mind?\nspecific_before_vague: If a general item is included, is it placed before the specific items on its topic?\nconstruct_specific_options: Are the response options in the construct's own terms and not agree-disagree?\nbalanced_stem: Does the stem state both poles or both positions?\nnon_attitudes: Is there a route for respondents who have no knowledge of or opinion about the object?\nkeying: Does the set include items keyed in both directions, without negations?\ncover_the_construct: Does each item tap a distinct stated domain, with no item a rewording of another?\ncan_they_know: Is the item asking for something the respondent is likely to have stored and can retrieve?\nreference_period: Is there one stated reference period with unambiguous boundaries, short enough for the behaviour?\ndecompose_with_care: If the item is decomposed, are the sub-categories distinct, non-overlapping and memorable?\nhow_many_or_how_often: Does the wording match how respondents will arrive at the answer, counting or a rate?\nopen_number: Is a count or amount collected as an open number with a stated unit, or else with categories free of vague quantifiers?\ndoes_it_apply: Can a respondent who did not do the behaviour, or to whom it does not apply, answer truthfully?\nwhy_sensitive: Is the kind of sensitivity and the expected direction of misreporting stated?\nmode_and_privacy: Do the notes address who can hear or see the answer in the stated mode?\nforgiving_intro: If a forgiving introduction is used, does it point only toward the under-reported answer and contain no invented fact?\nassume_behavior: If the item assumes the behaviour, is \"none\" or \"never\" an explicit, easy answer?\never_then_current: Does the order of ever and current questions match the direction of desirability?\nopen_or_high_range: Does the response format avoid making a truthful high answer look deviant?\nrespondent_safety: Is any item whose honest answer could endanger the respondent flagged for local and ethical review?\nany_mode: Does the item work as written in the stated mode?\nweb: Is everything the respondent needs to answer on screen with the question?\n\nFollow every rule you were given. Reply in the format given at the end of this message.\n\nREPLY FORMAT\nReturn one JSON object. Write findings in English, and write a rewrite in the language of the question. Be brief: nothing outside the fields below is shown to the analyst.\n\nFor questions, the object is {\"items\": [...]}, one entry per question, in the order given. Each entry has:\n\n- \"id\": the question's own label, or its position.\n- \"flags\": every problem you stand behind, most damaging first; an empty list if there is none. Each flag has:\n  - \"check\": the id of the CHECKLIST check it fails.\n  - \"stage\": \"comprehension\", \"retrieval\", \"judgment\" or \"reporting\".\n  - \"level\": \"fix\" if you would revise the question before fielding; \"consider\" if the problem is real but smaller, or needs the analyst's knowledge.\n  - \"quote\": words copied exactly from the question or its options.\n  - \"why\": at most 25 words: what the respondent cannot do, in plain words.\n- \"rewrite\": one rewrite of the whole question and its options that fixes its fix-level flags and changes nothing else; an empty string when it has no fix-level flag.\n\nFor the questionnaire as a whole, the object is {\"instrument\": [...]}: at most 3 flags of the same shape, each with \"questions\" (a list of the ids of the questions it concerns) in place of \"quote\".\n\nNothing else: no severity, no probe, no test plan, no rewrite of a single flag.",
+        "checks": ["construct_first", "plain_words", "simple_syntax", "specific_concrete", "one_thing", "no_presupposition", "neutral_wording", "options_fit", "retrieval_and_judgment", "response_scale", "agree_disagree_and_grids", "attitude_object", "specific_before_vague", "construct_specific_options", "balanced_stem", "non_attitudes", "keying", "cover_the_construct", "can_they_know", "reference_period", "decompose_with_care", "how_many_or_how_often", "open_number", "does_it_apply", "why_sensitive", "mode_and_privacy", "forgiving_intro", "assume_behavior", "ever_then_current", "open_or_high_range", "respondent_safety", "any_mode", "web"],
+        "status": "ok",
+        "error": null,
+        "reply": {
+          "items": [
+            {
+              "id": "Q1",
+              "flags": [],
+              "rewrite": ""
+            },
+            {
+              "id": "Q2",
+              "flags": [],
+              "rewrite": ""
+            },
+            {
+              "id": "Q3",
+              "flags": [
+                {
+                  "check": "options_fit",
+                  "stage": "reporting",
+                  "level": "consider",
+                  "quote": "Other",
+                  "why": "Someone who part-owns and part-rents, or has another arrangement, has no clear option, and 'Other' gives no space to say what."
+                }
+              ],
+              "rewrite": ""
+            },
+            {
+              "id": "Q4",
+              "flags": [
+                {
+                  "check": "plain_words",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "your household",
+                  "why": "Respondents may count lodgers, students living away or part-time residents differently. This changes the count used for energy use per person."
+                }
+              ],
+              "rewrite": ""
+            },
+            {
+              "id": "Q5",
+              "flags": [
+                {
+                  "check": "attitude_object",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "the heating in your home",
+                  "why": "'Heating' could mean the warmth, the running cost, the controls or the equipment, so respondents may rate different things."
+                }
+              ],
+              "rewrite": ""
+            },
+            {
+              "id": "Q6",
+              "flags": [
+                {
+                  "check": "reference_period",
+                  "stage": "retrieval",
+                  "level": "fix",
+                  "quote": "last winter",
+                  "why": "Start and end of 'last winter' are not stated. Depending on when they answer, respondents may think of the current or the previous winter."
+                },
+                {
+                  "check": "response_scale",
+                  "stage": "reporting",
+                  "level": "consider",
+                  "quote": "Rarely / Sometimes / Often",
+                  "why": "Vague frequency words mean different amounts to different people, so answers are not comparable."
+                },
+                {
+                  "check": "no_presupposition",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "last winter",
+                  "why": "People who moved into this home after last winter cannot answer about this home."
+                }
+              ],
+              "rewrite": "Think about December to February of the most recent winter. In those months, how often was your home too cold for you to be comfortable? Never / Rarely / Sometimes / Often / Always"
+            },
+            {
+              "id": "Q7",
+              "flags": [
+                {
+                  "check": "plain_words",
+                  "stage": "comprehension",
+                  "level": "fix",
+                  "quote": "Heat network",
+                  "why": "Many people do not know this term, so they may skip it or pick it wrongly. It is not explained on screen."
+                },
+                {
+                  "check": "options_fit",
+                  "stage": "reporting",
+                  "level": "consider",
+                  "quote": "Wood or coal",
+                  "why": "Two different fuels share one option, so a household using only one of them cannot be told apart in the data."
+                }
+              ],
+              "rewrite": "What is the main fuel you use to heat your home? If you use more than one, choose the one you use most. Mains gas / Electricity / Heating oil / Liquefied petroleum gas (LPG) / Wood or coal / Heat network (heat piped in from a shared central boiler) / Other / Don't know"
+            },
+            {
+              "id": "Q8",
+              "flags": [
+                {
+                  "check": "reference_period",
+                  "stage": "retrieval",
+                  "level": "fix",
+                  "quote": "Has your household cut back on heating to save money?",
+                  "why": "No time period is given, so respondents may think of any time from last week to years ago."
+                }
+              ],
+              "rewrite": "In the last 12 months, has your household cut back on heating to save money? Please include times when you kept the heating off on purpose. Yes / No"
+            },
+            {
+              "id": "Q9",
+              "flags": [
+                {
+                  "check": "can_they_know",
+                  "stage": "retrieval",
+                  "level": "fix",
+                  "quote": "last month",
+                  "why": "Many households pay quarterly, by fixed direct debit or by top-up, so they may not know last month's spend. No 'don't know' route is offered."
+                },
+                {
+                  "check": "one_thing",
+                  "stage": "judgment",
+                  "level": "fix",
+                  "quote": "gas and electricity",
+                  "why": "Two separate bills must be added together in the respondent's head, which invites errors and guessing."
+                },
+                {
+                  "check": "no_presupposition",
+                  "stage": "comprehension",
+                  "level": "fix",
+                  "quote": "gas and electricity",
+                  "why": "Homes with no mains gas, or with bills included in rent, have no true answer for one or both."
+                },
+                {
+                  "check": "plain_words",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "standing charges",
+                  "why": "Not everyone knows this billing term, so some will leave the charge out."
+                }
+              ],
+              "rewrite": "About how much did your household spend last month on each of these? Look at a recent bill or your account if you can. Include standing charges (the fixed daily charge on your bill). Enter each amount in pounds. Electricity: £____ (or tick: None / Don't know). Mains gas: £____ (or tick: None / Don't know)."
+            },
+            {
+              "id": "Q10",
+              "flags": [
+                {
+                  "check": "non_attitudes",
+                  "stage": "judgment",
+                  "level": "fix",
+                  "quote": "Definitely / Probably / Probably not / Definitely not",
+                  "why": "People who do not know what help exists must still choose a side. There is no 'don't know' option."
+                },
+                {
+                  "check": "response_scale",
+                  "stage": "reporting",
+                  "level": "fix",
+                  "quote": "Definitely / Probably / Probably not / Definitely not",
+                  "why": "'Definitely' does not say what it refers to. Respondents must work out that it means yes, enough."
+                },
+                {
+                  "check": "attitude_object",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "the government is doing enough to help households",
+                  "why": "'The government' and 'help' are not specified, so respondents may think of different bodies or measures."
+                }
+              ],
+              "rewrite": "Do you think the government is doing enough to help households with their energy bills, or not? Yes, definitely / Yes, probably / No, probably not / No, definitely not / Don't know"
+            },
+            {
+              "id": "Q11",
+              "flags": [
+                {
+                  "check": "neutral_wording",
+                  "stage": "judgment",
+                  "level": "fix",
+                  "quote": "Obviously, high energy bills are caused by greedy energy companies.",
+                  "why": "'Obviously' and 'greedy' push respondents toward agreeing. The statement presents blame as established fact."
+                },
+                {
+                  "check": "agree_disagree_and_grids",
+                  "stage": "reporting",
+                  "level": "fix",
+                  "quote": "How much do you agree or disagree with this statement?",
+                  "why": "Agree-disagree invites agreeing whatever the content. A question about how much blame energy companies deserve would measure the view directly."
+                },
+                {
+                  "check": "no_presupposition",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "high energy bills are caused by",
+                  "why": "Assumes the respondent regards bills as high and that one cause explains them."
+                },
+                {
+                  "check": "non_attitudes",
+                  "stage": "judgment",
+                  "level": "consider",
+                  "quote": "Neither agree nor disagree",
+                  "why": "Respondents with no view on causes have no 'don't know' option, only a midpoint that also means a balanced view."
+                }
+              ],
+              "rewrite": "How much, if at all, do you think energy companies are to blame for the level of household energy bills? A great deal / Quite a lot / Only a little / Not at all / Don't know"
+            },
+            {
+              "id": "Q12",
+              "flags": [
+                {
+                  "check": "one_thing",
+                  "stage": "judgment",
+                  "level": "fix",
+                  "quote": "and did these changes lower your bills?",
+                  "why": "Asks what was done and what effect it had. A respondent who made changes but saw no fall cannot answer with one Yes or No."
+                },
+                {
+                  "check": "reference_period",
+                  "stage": "retrieval",
+                  "level": "fix",
+                  "quote": "Have you made any changes to your home to save energy",
+                  "why": "No time period is given. Respondents may count any change ever made, including by earlier occupants or a landlord."
+                },
+                {
+                  "check": "can_they_know",
+                  "stage": "judgment",
+                  "level": "consider",
+                  "quote": "did these changes lower your bills",
+                  "why": "Bills also change with prices and weather, so respondents can only guess what effect the changes had."
+                }
+              ],
+              "rewrite": "In the last 5 years, have you made any changes to your home to save energy, such as loft insulation, double glazing or a smart thermostat? Yes / No"
+            },
+            {
+              "id": "Q13",
+              "flags": [
+                {
+                  "check": "no_presupposition",
+                  "stage": "comprehension",
+                  "level": "fix",
+                  "quote": "Please answer even if you rent.",
+                  "why": "Renters, flat dwellers and people who already have panels may be unable to install. The instruction pushes them to give an invented answer."
+                },
+                {
+                  "check": "options_fit",
+                  "stage": "reporting",
+                  "level": "fix",
+                  "quote": "Very likely / Fairly likely / Fairly unlikely / Very unlikely",
+                  "why": "No true answer for people who already have panels or cannot install them. No 'don't know' option."
+                }
+              ],
+              "rewrite": "How likely are you to install solar panels on your home in the next five years? Very likely / Fairly likely / Fairly unlikely / Very unlikely / I already have solar panels / I cannot install them (for example, I rent or live in a flat) / Don't know"
+            },
+            {
+              "id": "Q14",
+              "flags": [
+                {
+                  "check": "no_presupposition",
+                  "stage": "comprehension",
+                  "level": "fix",
+                  "quote": "your place of work",
+                  "why": "Assumes everyone has a paid job and one workplace away from home. Retired, unemployed and home-based people have no true answer."
+                },
+                {
+                  "check": "reference_period",
+                  "stage": "retrieval",
+                  "level": "consider",
+                  "quote": "In a normal week",
+                  "why": "'Normal' is not defined, so people with changing hours or hybrid working may answer for different weeks."
+                }
+              ],
+              "rewrite": "In a normal week, on how many days do you travel to a place of work outside your home? 0 / 1 / 2 / 3 / 4 / 5 / 6 / 7 / I am not in paid work"
+            },
+            {
+              "id": "Q15",
+              "flags": [
+                {
+                  "check": "no_presupposition",
+                  "stage": "comprehension",
+                  "level": "fix",
+                  "quote": "your place of work",
+                  "why": "People who do not travel to work, or are not in work, have no true option. Routing from the previous question is not stated."
+                },
+                {
+                  "check": "specific_concrete",
+                  "stage": "judgment",
+                  "level": "consider",
+                  "quote": "longest part of the journey",
+                  "why": "It is unclear whether 'longest' means distance or time, so people using several modes may choose differently."
+                }
+              ],
+              "rewrite": "How do you usually travel to your place of work? Choose the way you use for the longest part of the journey. Car or van / Bus or coach / Train or tram / Bicycle / Walk / Motorcycle / Other / I do not travel to a place of work"
+            }
+          ]
+        },
+        "seconds": 97.2639,
+        "finish": "success",
+        "tokens": {
+          "input": 4,
+          "output": 13249,
+          "cached_input": 7607
+        },
+        "attempts": 1,
+        "raw": "{\"items\":[\n{\"id\":\"Q1\",\"flags\":[],\"rewrite\":\"\"},\n{\"id\":\"Q2\",\"flags\":[],\"rewrite\":\"\"},\n{\"id\":\"Q3\",\"flags\":[{\"check\":\"options_fit\",\"stage\":\"reporting\",\"level\":\"consider\",\"quote\":\"Other\",\"why\":\"Someone who part-owns and part-rents, or has another arrangement, has no clear option, and 'Other' gives no space to say what.\"}],\"rewrite\":\"\"},\n{\"id\":\"Q4\",\"flags\":[{\"check\":\"plain_words\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"your household\",\"why\":\"Respondents may count lodgers, students living away or part-time residents differently. This changes the count used for energy use per person.\"}],\"rewrite\":\"\"},\n{\"id\":\"Q5\",\"flags\":[{\"check\":\"attitude_object\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"the heating in your home\",\"why\":\"'Heating' could mean the warmth, the running cost, the controls or the equipment, so respondents may rate different things.\"}],\"rewrite\":\"\"},\n{\"id\":\"Q6\",\"flags\":[{\"check\":\"reference_period\",\"stage\":\"retrieval\",\"level\":\"fix\",\"quote\":\"last winter\",\"why\":\"Start and end of 'last winter' are not stated. Depending on when they answer, respondents may think of the current or the previous winter.\"},{\"check\":\"response_scale\",\"stage\":\"reporting\",\"level\":\"consider\",\"quote\":\"Rarely / Sometimes / Often\",\"why\":\"Vague frequency words mean different amounts to different people, so answers are not comparable.\"},{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"last winter\",\"why\":\"People who moved into this home after last winter cannot answer about this home.\"}],\"rewrite\":\"Think about December to February of the most recent winter. In those months, how often was your home too cold for you to be comfortable? Never / Rarely / Sometimes / Often / Always\"},\n{\"id\":\"Q7\",\"flags\":[{\"check\":\"plain_words\",\"stage\":\"comprehension\",\"level\":\"fix\",\"quote\":\"Heat network\",\"why\":\"Many people do not know this term, so they may skip it or pick it wrongly. It is not explained on screen.\"},{\"check\":\"options_fit\",\"stage\":\"reporting\",\"level\":\"consider\",\"quote\":\"Wood or coal\",\"why\":\"Two different fuels share one option, so a household using only one of them cannot be told apart in the data.\"}],\"rewrite\":\"What is the main fuel you use to heat your home? If you use more than one, choose the one you use most. Mains gas / Electricity / Heating oil / Liquefied petroleum gas (LPG) / Wood or coal / Heat network (heat piped in from a shared central boiler) / Other / Don't know\"},\n{\"id\":\"Q8\",\"flags\":[{\"check\":\"reference_period\",\"stage\":\"retrieval\",\"level\":\"fix\",\"quote\":\"Has your household cut back on heating to save money?\",\"why\":\"No time period is given, so respondents may think of any time from last week to years ago.\"}],\"rewrite\":\"In the last 12 months, has your household cut back on heating to save money? Please include times when you kept the heating off on purpose. Yes / No\"},\n{\"id\":\"Q9\",\"flags\":[{\"check\":\"can_they_know\",\"stage\":\"retrieval\",\"level\":\"fix\",\"quote\":\"last month\",\"why\":\"Many households pay quarterly, by fixed direct debit or by top-up, so they may not know last month's spend. No 'don't know' route is offered.\"},{\"check\":\"one_thing\",\"stage\":\"judgment\",\"level\":\"fix\",\"quote\":\"gas and electricity\",\"why\":\"Two separate bills must be added together in the respondent's head, which invites errors and guessing.\"},{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"level\":\"fix\",\"quote\":\"gas and electricity\",\"why\":\"Homes with no mains gas, or with bills included in rent, have no true answer for one or both.\"},{\"check\":\"plain_words\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"standing charges\",\"why\":\"Not everyone knows this billing term, so some will leave the charge out.\"}],\"rewrite\":\"About how much did your household spend last month on each of these? Look at a recent bill or your account if you can. Include standing charges (the fixed daily charge on your bill). Enter each amount in pounds. Electricity: £____ (or tick: None / Don't know). Mains gas: £____ (or tick: None / Don't know).\"},\n{\"id\":\"Q10\",\"flags\":[{\"check\":\"non_attitudes\",\"stage\":\"judgment\",\"level\":\"fix\",\"quote\":\"Definitely / Probably / Probably not / Definitely not\",\"why\":\"People who do not know what help exists must still choose a side. There is no 'don't know' option.\"},{\"check\":\"response_scale\",\"stage\":\"reporting\",\"level\":\"fix\",\"quote\":\"Definitely / Probably / Probably not / Definitely not\",\"why\":\"'Definitely' does not say what it refers to. Respondents must work out that it means yes, enough.\"},{\"check\":\"attitude_object\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"the government is doing enough to help households\",\"why\":\"'The government' and 'help' are not specified, so respondents may think of different bodies or measures.\"}],\"rewrite\":\"Do you think the government is doing enough to help households with their energy bills, or not? Yes, definitely / Yes, probably / No, probably not / No, definitely not / Don't know\"},\n{\"id\":\"Q11\",\"flags\":[{\"check\":\"neutral_wording\",\"stage\":\"judgment\",\"level\":\"fix\",\"quote\":\"Obviously, high energy bills are caused by greedy energy companies.\",\"why\":\"'Obviously' and 'greedy' push respondents toward agreeing. The statement presents blame as established fact.\"},{\"check\":\"agree_disagree_and_grids\",\"stage\":\"reporting\",\"level\":\"fix\",\"quote\":\"How much do you agree or disagree with this statement?\",\"why\":\"Agree-disagree invites agreeing whatever the content. A question about how much blame energy companies deserve would measure the view directly.\"},{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"high energy bills are caused by\",\"why\":\"Assumes the respondent regards bills as high and that one cause explains them.\"},{\"check\":\"non_attitudes\",\"stage\":\"judgment\",\"level\":\"consider\",\"quote\":\"Neither agree nor disagree\",\"why\":\"Respondents with no view on causes have no 'don't know' option, only a midpoint that also means a balanced view.\"}],\"rewrite\":\"How much, if at all, do you think energy companies are to blame for the level of household energy bills? A great deal / Quite a lot / Only a little / Not at all / Don't know\"},\n{\"id\":\"Q12\",\"flags\":[{\"check\":\"one_thing\",\"stage\":\"judgment\",\"level\":\"fix\",\"quote\":\"and did these changes lower your bills?\",\"why\":\"Asks what was done and what effect it had. A respondent who made changes but saw no fall cannot answer with one Yes or No.\"},{\"check\":\"reference_period\",\"stage\":\"retrieval\",\"level\":\"fix\",\"quote\":\"Have you made any changes to your home to save energy\",\"why\":\"No time period is given. Respondents may count any change ever made, including by earlier occupants or a landlord.\"},{\"check\":\"can_they_know\",\"stage\":\"judgment\",\"level\":\"consider\",\"quote\":\"did these changes lower your bills\",\"why\":\"Bills also change with prices and weather, so respondents can only guess what effect the changes had.\"}],\"rewrite\":\"In the last 5 years, have you made any changes to your home to save energy, such as loft insulation, double glazing or a smart thermostat? Yes / No\"},\n{\"id\":\"Q13\",\"flags\":[{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"level\":\"fix\",\"quote\":\"Please answer even if you rent.\",\"why\":\"Renters, flat dwellers and people who already have panels may be unable to install. The instruction pushes them to give an invented answer.\"},{\"check\":\"options_fit\",\"stage\":\"reporting\",\"level\":\"fix\",\"quote\":\"Very likely / Fairly likely / Fairly unlikely / Very unlikely\",\"why\":\"No true answer for people who already have panels or cannot install them. No 'don't know' option.\"}],\"rewrite\":\"How likely are you to install solar panels on your home in the next five years? Very likely / Fairly likely / Fairly unlikely / Very unlikely / I already have solar panels / I cannot install them (for example, I rent or live in a flat) / Don't know\"},\n{\"id\":\"Q14\",\"flags\":[{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"level\":\"fix\",\"quote\":\"your place of work\",\"why\":\"Assumes everyone has a paid job and one workplace away from home. Retired, unemployed and home-based people have no true answer.\"},{\"check\":\"reference_period\",\"stage\":\"retrieval\",\"level\":\"consider\",\"quote\":\"In a normal week\",\"why\":\"'Normal' is not defined, so people with changing hours or hybrid working may answer for different weeks.\"}],\"rewrite\":\"In a normal week, on how many days do you travel to a place of work outside your home? 0 / 1 / 2 / 3 / 4 / 5 / 6 / 7 / I am not in paid work\"},\n{\"id\":\"Q15\",\"flags\":[{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"level\":\"fix\",\"quote\":\"your place of work\",\"why\":\"People who do not travel to work, or are not in work, have no true option. Routing from the previous question is not stated.\"},{\"check\":\"specific_concrete\",\"stage\":\"judgment\",\"level\":\"consider\",\"quote\":\"longest part of the journey\",\"why\":\"It is unclear whether 'longest' means distance or time, so people using several modes may choose differently.\"}],\"rewrite\":\"How do you usually travel to your place of work? Choose the way you use for the longest part of the journey. Car or van / Bus or coach / Train or tram / Bicycle / Walk / Motorcycle / Other / I do not travel to a place of work\"}\n]}"
+      },
+      {
+        "kind": "items",
+        "k": 2,
+        "n": 2,
+        "first": 16,
+        "ids": ["Q16", "Q17", "Q18", "Q19", "Q20", "Q21", "Q22", "Q23", "Q24", "Q25", "Q26", "Q27", "Q28", "Q29", "Q30"],
+        "questions": ["Q16. How long does your journey to work usually take, door to door? Please give your answer in minutes.\nEnter a number: ______", "Q17. How satisfied are you with the availability and reliability of local bus services?\nVery dissatisfied / Fairly dissatisfied / Neither / Fairly satisfied / Very satisfied", "Q18. How safe do you feel cycling on the roads in your neighbourhood? If you never cycle, please choose the last answer.\nVery safe / Fairly safe / Fairly unsafe / Very unsafe / I do not cycle", "Q19. In the past 7 days, on how many days did you walk for at least 30 minutes in one go, for any reason?\nEnter a number from 0 to 7: ______", "Q20. Do you have a car or van that you can use whenever you need it?\nYes / No (go to Q24)", "Q21. Roughly how many miles did you drive last year in total? Think of all the journeys you made, for work or otherwise.\nEnter a number: ______", "Q22. How old is the car or van you use most often? Give the age of the vehicle, not the year of the model.\nLess than 3 years / 3 to 5 years / 6 to 10 years / More than 10 years", "Q23. Would you consider switching to an electric car or van when you next change your vehicle?\nYes, definitely / Yes, maybe / No / Not sure", "Q24. Which of the following would encourage you to use public transport more often than you do now?\nTick all that apply: Cheaper fares / More frequent services / More direct routes / Cleaner vehicles / Safer stops and stations / Nothing would", "Q25. How worried are you about climate change, if at all?\nVery worried / Somewhat worried / Not very worried / Not at all worried", "Q26. In the last month, how often did you recycle your household waste, such as paper, glass, plastic and cans?\nEvery week / Most weeks / Occasionally / Never", "Q27. What is your age in years, at your last birthday?\nEnter a number: ______", "Q28. What was your total household income last year before tax and other deductions, from all sources?\nUnder £15,000 / £15,000 to £29,999 / £30,000 to £49,999 / £50,000 to £79,999 / £80,000 or more / Prefer not to say", "Q29. Which of these best describes what you were doing last week? Please choose the one that best describes your main activity.\nIn paid work / Self-employed / Unemployed and looking for work / Retired / Student / Looking after the home or family / Long-term sick or disabled / Other", "Q30. Overall, how would you rate your quality of life at the moment, taking everything into account?\nExcellent / Good / Fair / Poor / Very poor"],
+        "hash": "c5c47935db0ed19fe06b14a993d9914342e509f307d46b9c0825d0a3ede96f24",
+        "user": "You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist.\n\nTask: Review the questionnaire as an expert reviewer, question by question.\n\nBrief:\nResearch question: Household energy use, travel and quality of life\nTarget population: Adults aged 18 and over living in England\nSurvey mode: web\n\nGuidelines:\n- Use simple, familiar words.\n- Use simple syntax.\n- Avoid ambiguous words.\n- Be specific and concrete.\n- Make response options exhaustive and mutually exclusive.\n- Avoid leading or loaded wording.\n- Ask about one thing at a time.\n- Avoid single or double negations.\n\n[your 30 questions go here]\n\nNow review the 15 questions below, each on its own (part 2 of 2 of the questionnaire). Reply with the \"items\" object only, one entry per question, in the order given.\n\nQUESTIONNAIRE\nQ16. How long does your journey to work usually take, door to door? Please give your answer in minutes.\nEnter a number: ______\n\nQ17. How satisfied are you with the availability and reliability of local bus services?\nVery dissatisfied / Fairly dissatisfied / Neither / Fairly satisfied / Very satisfied\n\nQ18. How safe do you feel cycling on the roads in your neighbourhood? If you never cycle, please choose the last answer.\nVery safe / Fairly safe / Fairly unsafe / Very unsafe / I do not cycle\n\nQ19. In the past 7 days, on how many days did you walk for at least 30 minutes in one go, for any reason?\nEnter a number from 0 to 7: ______\n\nQ20. Do you have a car or van that you can use whenever you need it?\nYes / No (go to Q24)\n\nQ21. Roughly how many miles did you drive last year in total? Think of all the journeys you made, for work or otherwise.\nEnter a number: ______\n\nQ22. How old is the car or van you use most often? Give the age of the vehicle, not the year of the model.\nLess than 3 years / 3 to 5 years / 6 to 10 years / More than 10 years\n\nQ23. Would you consider switching to an electric car or van when you next change your vehicle?\nYes, definitely / Yes, maybe / No / Not sure\n\nQ24. Which of the following would encourage you to use public transport more often than you do now?\nTick all that apply: Cheaper fares / More frequent services / More direct routes / Cleaner vehicles / Safer stops and stations / Nothing would\n\nQ25. How worried are you about climate change, if at all?\nVery worried / Somewhat worried / Not very worried / Not at all worried\n\nQ26. In the last month, how often did you recycle your household waste, such as paper, glass, plastic and cans?\nEvery week / Most weeks / Occasionally / Never\n\nQ27. What is your age in years, at your last birthday?\nEnter a number: ______\n\nQ28. What was your total household income last year before tax and other deductions, from all sources?\nUnder £15,000 / £15,000 to £29,999 / £30,000 to £49,999 / £50,000 to £79,999 / £80,000 or more / Prefer not to say\n\nQ29. Which of these best describes what you were doing last week? Please choose the one that best describes your main activity.\nIn paid work / Self-employed / Unemployed and looking for work / Retired / Student / Looking after the home or family / Long-term sick or disabled / Other\n\nQ30. Overall, how would you rate your quality of life at the moment, taking everything into account?\nExcellent / Good / Fair / Poor / Very poor\n\nCHECKLIST\nconstruct_first: Does the item measure the construct or domain named in the brief and only that?\nplain_words: Would every member of the target population read each key term the same way, without a definition they do not have?\nsimple_syntax: Is the stem free of stacked clauses and of negations?\nspecific_concrete: Is it clear exactly what, whose, where and when the question is about?\none_thing: Does the question ask about exactly one thing, so that no respondent would want to answer its parts differently?\nno_presupposition: Does the question apply to every respondent who will be asked it?\nneutral_wording: Is the wording free of any push toward one answer?\noptions_fit: Can every respondent find exactly one option that is true for them?\nretrieval_and_judgment: Can the respondent retrieve the information and reach the answer without difficult recall or mental arithmetic?\nresponse_scale: Do the response options match the question and treat both directions evenly?\nagree_disagree_and_grids: If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?\nattitude_object: Is the attitude object named and bounded so that respondents will have the same thing in mind?\nspecific_before_vague: If a general item is included, is it placed before the specific items on its topic?\nconstruct_specific_options: Are the response options in the construct's own terms and not agree-disagree?\nbalanced_stem: Does the stem state both poles or both positions?\nnon_attitudes: Is there a route for respondents who have no knowledge of or opinion about the object?\nkeying: Does the set include items keyed in both directions, without negations?\ncover_the_construct: Does each item tap a distinct stated domain, with no item a rewording of another?\ncan_they_know: Is the item asking for something the respondent is likely to have stored and can retrieve?\nreference_period: Is there one stated reference period with unambiguous boundaries, short enough for the behaviour?\ndecompose_with_care: If the item is decomposed, are the sub-categories distinct, non-overlapping and memorable?\nhow_many_or_how_often: Does the wording match how respondents will arrive at the answer, counting or a rate?\nopen_number: Is a count or amount collected as an open number with a stated unit, or else with categories free of vague quantifiers?\ndoes_it_apply: Can a respondent who did not do the behaviour, or to whom it does not apply, answer truthfully?\nwhy_sensitive: Is the kind of sensitivity and the expected direction of misreporting stated?\nmode_and_privacy: Do the notes address who can hear or see the answer in the stated mode?\nforgiving_intro: If a forgiving introduction is used, does it point only toward the under-reported answer and contain no invented fact?\nassume_behavior: If the item assumes the behaviour, is \"none\" or \"never\" an explicit, easy answer?\never_then_current: Does the order of ever and current questions match the direction of desirability?\nopen_or_high_range: Does the response format avoid making a truthful high answer look deviant?\nrespondent_safety: Is any item whose honest answer could endanger the respondent flagged for local and ethical review?\nany_mode: Does the item work as written in the stated mode?\nweb: Is everything the respondent needs to answer on screen with the question?\n\nFollow every rule you were given. Reply in the format given at the end of this message.\n\nREPLY FORMAT\nReturn one JSON object. Write findings in English, and write a rewrite in the language of the question. Be brief: nothing outside the fields below is shown to the analyst.\n\nFor questions, the object is {\"items\": [...]}, one entry per question, in the order given. Each entry has:\n\n- \"id\": the question's own label, or its position.\n- \"flags\": every problem you stand behind, most damaging first; an empty list if there is none. Each flag has:\n  - \"check\": the id of the CHECKLIST check it fails.\n  - \"stage\": \"comprehension\", \"retrieval\", \"judgment\" or \"reporting\".\n  - \"level\": \"fix\" if you would revise the question before fielding; \"consider\" if the problem is real but smaller, or needs the analyst's knowledge.\n  - \"quote\": words copied exactly from the question or its options.\n  - \"why\": at most 25 words: what the respondent cannot do, in plain words.\n- \"rewrite\": one rewrite of the whole question and its options that fixes its fix-level flags and changes nothing else; an empty string when it has no fix-level flag.\n\nFor the questionnaire as a whole, the object is {\"instrument\": [...]}: at most 3 flags of the same shape, each with \"questions\" (a list of the ids of the questions it concerns) in place of \"quote\".\n\nNothing else: no severity, no probe, no test plan, no rewrite of a single flag.",
+        "checks": ["construct_first", "plain_words", "simple_syntax", "specific_concrete", "one_thing", "no_presupposition", "neutral_wording", "options_fit", "retrieval_and_judgment", "response_scale", "agree_disagree_and_grids", "attitude_object", "specific_before_vague", "construct_specific_options", "balanced_stem", "non_attitudes", "keying", "cover_the_construct", "can_they_know", "reference_period", "decompose_with_care", "how_many_or_how_often", "open_number", "does_it_apply", "why_sensitive", "mode_and_privacy", "forgiving_intro", "assume_behavior", "ever_then_current", "open_or_high_range", "respondent_safety", "any_mode", "web"],
+        "status": "ok",
+        "error": null,
+        "reply": {
+          "items": [
+            {
+              "id": "Q16",
+              "flags": [
+                {
+                  "check": "no_presupposition",
+                  "stage": "comprehension",
+                  "level": "fix",
+                  "quote": "How long does your journey to work usually take, door to door?",
+                  "why": "People who do not work, or work from home, have no journey to answer about. Employment status is only asked later, in Q29."
+                },
+                {
+                  "check": "reference_period",
+                  "stage": "judgment",
+                  "level": "consider",
+                  "quote": "usually",
+                  "why": "Journey times differ by day and by mode. Respondents must pick or average their own figure, and each may do it differently."
+                }
+              ],
+              "rewrite": "How many minutes does your journey to work usually take, door to door? Enter a number of minutes: ______  Or tick: I do not travel to work (for example, I work from home or I do not have a job)"
+            },
+            {
+              "id": "Q17",
+              "flags": [
+                {
+                  "check": "one_thing",
+                  "stage": "judgment",
+                  "level": "fix",
+                  "quote": "availability and reliability of local bus services",
+                  "why": "Buses can run often but be late. Someone satisfied with one and not the other cannot give one answer."
+                },
+                {
+                  "check": "does_it_apply",
+                  "stage": "reporting",
+                  "level": "fix",
+                  "quote": "How satisfied are you with the availability and reliability of local bus services?",
+                  "why": "People who never use buses, or have none nearby, have no true answer and no don't-know or not-applicable option."
+                },
+                {
+                  "check": "response_scale",
+                  "stage": "reporting",
+                  "level": "consider",
+                  "quote": "Neither",
+                  "why": "The middle label is cut short. It is unclear whether it means neither satisfied nor dissatisfied, or no opinion."
+                }
+              ],
+              "rewrite": "Q17a. How satisfied are you with how often local buses run? Q17b. How satisfied are you with how reliable local buses are, that is, whether they run on time? Options for each: Very dissatisfied / Fairly dissatisfied / Neither satisfied nor dissatisfied / Fairly satisfied / Very satisfied / I do not use local buses / Don't know"
+            },
+            {
+              "id": "Q18",
+              "flags": [
+                {
+                  "check": "specific_concrete",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "How safe do you feel cycling on the roads in your neighbourhood?",
+                  "why": "'Safe' could mean traffic danger or fear of crime, and 'neighbourhood' has no set boundary. Different respondents will answer on different bases."
+                }
+              ],
+              "rewrite": ""
+            },
+            {
+              "id": "Q19",
+              "flags": [],
+              "rewrite": ""
+            },
+            {
+              "id": "Q20",
+              "flags": [
+                {
+                  "check": "options_fit",
+                  "stage": "judgment",
+                  "level": "fix",
+                  "quote": "a car or van that you can use whenever you need it",
+                  "why": "'Whenever you need it' is absolute. People who share a car or have a work van cannot pick Yes or No truthfully."
+                }
+              ],
+              "rewrite": "Can you use a car or van whenever you need one? Yes, whenever I need it / Yes, but only sometimes / No (go to Q24)"
+            },
+            {
+              "id": "Q21",
+              "flags": [
+                {
+                  "check": "reference_period",
+                  "stage": "comprehension",
+                  "level": "fix",
+                  "quote": "last year",
+                  "why": "It could mean the last calendar year or the last 12 months. Respondents will pick different periods."
+                },
+                {
+                  "check": "does_it_apply",
+                  "stage": "reporting",
+                  "level": "fix",
+                  "quote": "Roughly how many miles did you drive",
+                  "why": "Q20 lets through people with a vehicle who do not drive. They have no clear way to answer, and zero is not offered."
+                },
+                {
+                  "check": "can_they_know",
+                  "stage": "retrieval",
+                  "level": "consider",
+                  "quote": "Think of all the journeys you made, for work or otherwise.",
+                  "why": "Yearly mileage is rarely stored. Respondents must add up many journeys or guess, and the answer may be very rough."
+                }
+              ],
+              "rewrite": "In the last 12 months, roughly how many miles did you drive in total, in any car or van and for any reason? Enter a number of miles (enter 0 if you did not drive): ______"
+            },
+            {
+              "id": "Q22",
+              "flags": [
+                {
+                  "check": "options_fit",
+                  "stage": "reporting",
+                  "level": "fix",
+                  "quote": "3 to 5 years / 6 to 10 years",
+                  "why": "Ages between 5 and 6 years, and between 10 and 11 years, fall in no category."
+                },
+                {
+                  "check": "plain_words",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "not the year of the model",
+                  "why": "It is unclear what the 'year of the model' is or how it differs from vehicle age. Many will not know either."
+                },
+                {
+                  "check": "options_fit",
+                  "stage": "retrieval",
+                  "level": "consider",
+                  "quote": "More than 10 years",
+                  "why": "People who do not know the vehicle's age have no honest option and may guess."
+                }
+              ],
+              "rewrite": "About how old is the car or van you use most often? Less than 3 years / 3 years to less than 6 years / 6 years to less than 11 years / 11 years or more / Don't know"
+            },
+            {
+              "id": "Q23",
+              "flags": [
+                {
+                  "check": "response_scale",
+                  "stage": "reporting",
+                  "level": "fix",
+                  "quote": "Yes, maybe / No / Not sure",
+                  "why": "'Yes, maybe' and 'Not sure' overlap, and the options lean positive. 'No' has no softer version, so the scale is unbalanced."
+                },
+                {
+                  "check": "no_presupposition",
+                  "stage": "judgment",
+                  "level": "fix",
+                  "quote": "when you next change your vehicle",
+                  "why": "It assumes a future change. People with an electric vehicle already, or who will not change, have no true answer."
+                },
+                {
+                  "check": "plain_words",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "an electric car or van",
+                  "why": "Respondents may differ on whether hybrid or plug-in hybrid vehicles count as electric."
+                }
+              ],
+              "rewrite": "The next time you change your car or van, how likely are you to choose one that runs only on a battery? Very likely / Fairly likely / Fairly unlikely / Very unlikely / My vehicle already runs only on a battery / I do not expect to change my vehicle / Don't know"
+            },
+            {
+              "id": "Q24",
+              "flags": [
+                {
+                  "check": "options_fit",
+                  "stage": "reporting",
+                  "level": "consider",
+                  "quote": "Nothing would",
+                  "why": "People who already use public transport as much as they want, or cannot use it, have no fitting answer. No 'other' option."
+                },
+                {
+                  "check": "one_thing",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "Safer stops and stations",
+                  "why": "Stops (bus) and stations (train) can differ in safety. A respondent may want to tick only one."
+                }
+              ],
+              "rewrite": ""
+            },
+            {
+              "id": "Q25",
+              "flags": [],
+              "rewrite": ""
+            },
+            {
+              "id": "Q26",
+              "flags": [
+                {
+                  "check": "open_number",
+                  "stage": "reporting",
+                  "level": "fix",
+                  "quote": "Every week / Most weeks / Occasionally / Never",
+                  "why": "'Most weeks' and 'Occasionally' are vague and mean different things to different people. They also leave out the number of weeks."
+                },
+                {
+                  "check": "does_it_apply",
+                  "stage": "judgment",
+                  "level": "fix",
+                  "quote": "recycle your household waste",
+                  "why": "People with no recycling collection or facilities, or whose household member does it, cannot answer truthfully."
+                },
+                {
+                  "check": "reference_period",
+                  "stage": "retrieval",
+                  "level": "consider",
+                  "quote": "In the last month",
+                  "why": "It could mean the last calendar month or the last four weeks, and so the number of weeks differs."
+                },
+                {
+                  "check": "construct_first",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "recycle your household waste",
+                  "why": "Recycling is not energy use, travel or quality of life. The analyst should confirm it serves a stated aim."
+                }
+              ],
+              "rewrite": "In the last 4 weeks, in how many weeks did you recycle some of your household waste, such as paper, glass, plastic or cans? All 4 weeks / 3 weeks / 2 weeks / 1 week / None / I cannot recycle where I live"
+            },
+            {
+              "id": "Q27",
+              "flags": [],
+              "rewrite": ""
+            },
+            {
+              "id": "Q28",
+              "flags": [
+                {
+                  "check": "reference_period",
+                  "stage": "comprehension",
+                  "level": "fix",
+                  "quote": "last year",
+                  "why": "It could mean the last calendar year, the last tax year or the last 12 months. Income may differ across them."
+                },
+                {
+                  "check": "can_they_know",
+                  "stage": "retrieval",
+                  "level": "consider",
+                  "quote": "total household income last year before tax and other deductions, from all sources",
+                  "why": "Respondents must add every member's income from many sources, before tax. Many do not know others' income or gross figures."
+                },
+                {
+                  "check": "options_fit",
+                  "stage": "reporting",
+                  "level": "consider",
+                  "quote": "Prefer not to say",
+                  "why": "People who do not know the household's income cannot say so honestly. Only refusal is offered, not don't know."
+                }
+              ],
+              "rewrite": "Think about everyone in your household. Include income from all sources, before tax and other deductions. What was the total household income in the last 12 months? Under £15,000 / £15,000 to £29,999 / £30,000 to £49,999 / £50,000 to £79,999 / £80,000 or more / Don't know / Prefer not to say"
+            },
+            {
+              "id": "Q29",
+              "flags": [
+                {
+                  "check": "options_fit",
+                  "stage": "judgment",
+                  "level": "fix",
+                  "quote": "In paid work / Self-employed",
+                  "why": "Self-employed people are also in paid work, and students may work too. Some respondents fit more than one option."
+                },
+                {
+                  "check": "reference_period",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "last week",
+                  "why": "It could mean the last calendar week or the past 7 days. It could also mean a week that was not typical."
+                }
+              ],
+              "rewrite": "Which of these best describes your main activity in the last 7 days? In paid work as an employee / Self-employed / Unemployed and looking for work / Retired / Student / Looking after the home or family / Long-term sick or disabled / Other"
+            },
+            {
+              "id": "Q30",
+              "flags": [
+                {
+                  "check": "specific_before_vague",
+                  "stage": "judgment",
+                  "level": "consider",
+                  "quote": "Overall, how would you rate your quality of life",
+                  "why": "This general item comes last, after travel, income and work questions. Those questions may shape what respondents think about when they rate it."
+                }
+              ],
+              "rewrite": ""
+            }
+          ]
+        },
+        "seconds": 84.3434,
+        "finish": "success",
+        "tokens": {
+          "input": 4,
+          "output": 11857,
+          "cached_input": 7554
+        },
+        "attempts": 1,
+        "raw": "{\"items\":[\n{\"id\":\"Q16\",\"flags\":[\n{\"check\":\"no_presupposition\",\"stage\":\"comprehension\",\"level\":\"fix\",\"quote\":\"How long does your journey to work usually take, door to door?\",\"why\":\"People who do not work, or work from home, have no journey to answer about. Employment status is only asked later, in Q29.\"},\n{\"check\":\"reference_period\",\"stage\":\"judgment\",\"level\":\"consider\",\"quote\":\"usually\",\"why\":\"Journey times differ by day and by mode. Respondents must pick or average their own figure, and each may do it differently.\"}],\n\"rewrite\":\"How many minutes does your journey to work usually take, door to door? Enter a number of minutes: ______  Or tick: I do not travel to work (for example, I work from home or I do not have a job)\"},\n{\"id\":\"Q17\",\"flags\":[\n{\"check\":\"one_thing\",\"stage\":\"judgment\",\"level\":\"fix\",\"quote\":\"availability and reliability of local bus services\",\"why\":\"Buses can run often but be late. Someone satisfied with one and not the other cannot give one answer.\"},\n{\"check\":\"does_it_apply\",\"stage\":\"reporting\",\"level\":\"fix\",\"quote\":\"How satisfied are you with the availability and reliability of local bus services?\",\"why\":\"People who never use buses, or have none nearby, have no true answer and no don't-know or not-applicable option.\"},\n{\"check\":\"response_scale\",\"stage\":\"reporting\",\"level\":\"consider\",\"quote\":\"Neither\",\"why\":\"The middle label is cut short. It is unclear whether it means neither satisfied nor dissatisfied, or no opinion.\"}],\n\"rewrite\":\"Q17a. How satisfied are you with how often local buses run? Q17b. How satisfied are you with how reliable local buses are, that is, whether they run on time? Options for each: Very dissatisfied / Fairly dissatisfied / Neither satisfied nor dissatisfied / Fairly satisfied / Very satisfied / I do not use local buses / Don't know\"},\n{\"id\":\"Q18\",\"flags\":[\n{\"check\":\"specific_concrete\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"How safe do you feel cycling on the roads in your neighbourhood?\",\"why\":\"'Safe' could mean traffic danger or fear of crime, and 'neighbourhood' has no set boundary. Different respondents will answer on different bases.\"}],\n\"rewrite\":\"\"},\n{\"id\":\"Q19\",\"flags\":[],\"rewrite\":\"\"},\n{\"id\":\"Q20\",\"flags\":[\n{\"check\":\"options_fit\",\"stage\":\"judgment\",\"level\":\"fix\",\"quote\":\"a car or van that you can use whenever you need it\",\"why\":\"'Whenever you need it' is absolute. People who share a car or have a work van cannot pick Yes or No truthfully.\"}],\n\"rewrite\":\"Can you use a car or van whenever you need one? Yes, whenever I need it / Yes, but only sometimes / No (go to Q24)\"},\n{\"id\":\"Q21\",\"flags\":[\n{\"check\":\"reference_period\",\"stage\":\"comprehension\",\"level\":\"fix\",\"quote\":\"last year\",\"why\":\"It could mean the last calendar year or the last 12 months. Respondents will pick different periods.\"},\n{\"check\":\"does_it_apply\",\"stage\":\"reporting\",\"level\":\"fix\",\"quote\":\"Roughly how many miles did you drive\",\"why\":\"Q20 lets through people with a vehicle who do not drive. They have no clear way to answer, and zero is not offered.\"},\n{\"check\":\"can_they_know\",\"stage\":\"retrieval\",\"level\":\"consider\",\"quote\":\"Think of all the journeys you made, for work or otherwise.\",\"why\":\"Yearly mileage is rarely stored. Respondents must add up many journeys or guess, and the answer may be very rough.\"}],\n\"rewrite\":\"In the last 12 months, roughly how many miles did you drive in total, in any car or van and for any reason? Enter a number of miles (enter 0 if you did not drive): ______\"},\n{\"id\":\"Q22\",\"flags\":[\n{\"check\":\"options_fit\",\"stage\":\"reporting\",\"level\":\"fix\",\"quote\":\"3 to 5 years / 6 to 10 years\",\"why\":\"Ages between 5 and 6 years, and between 10 and 11 years, fall in no category.\"},\n{\"check\":\"plain_words\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"not the year of the model\",\"why\":\"It is unclear what the 'year of the model' is or how it differs from vehicle age. Many will not know either.\"},\n{\"check\":\"options_fit\",\"stage\":\"retrieval\",\"level\":\"consider\",\"quote\":\"More than 10 years\",\"why\":\"People who do not know the vehicle's age have no honest option and may guess.\"}],\n\"rewrite\":\"About how old is the car or van you use most often? Less than 3 years / 3 years to less than 6 years / 6 years to less than 11 years / 11 years or more / Don't know\"},\n{\"id\":\"Q23\",\"flags\":[\n{\"check\":\"response_scale\",\"stage\":\"reporting\",\"level\":\"fix\",\"quote\":\"Yes, maybe / No / Not sure\",\"why\":\"'Yes, maybe' and 'Not sure' overlap, and the options lean positive. 'No' has no softer version, so the scale is unbalanced.\"},\n{\"check\":\"no_presupposition\",\"stage\":\"judgment\",\"level\":\"fix\",\"quote\":\"when you next change your vehicle\",\"why\":\"It assumes a future change. People with an electric vehicle already, or who will not change, have no true answer.\"},\n{\"check\":\"plain_words\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"an electric car or van\",\"why\":\"Respondents may differ on whether hybrid or plug-in hybrid vehicles count as electric.\"}],\n\"rewrite\":\"The next time you change your car or van, how likely are you to choose one that runs only on a battery? Very likely / Fairly likely / Fairly unlikely / Very unlikely / My vehicle already runs only on a battery / I do not expect to change my vehicle / Don't know\"},\n{\"id\":\"Q24\",\"flags\":[\n{\"check\":\"options_fit\",\"stage\":\"reporting\",\"level\":\"consider\",\"quote\":\"Nothing would\",\"why\":\"People who already use public transport as much as they want, or cannot use it, have no fitting answer. No 'other' option.\"},\n{\"check\":\"one_thing\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"Safer stops and stations\",\"why\":\"Stops (bus) and stations (train) can differ in safety. A respondent may want to tick only one.\"}],\n\"rewrite\":\"\"},\n{\"id\":\"Q25\",\"flags\":[],\"rewrite\":\"\"},\n{\"id\":\"Q26\",\"flags\":[\n{\"check\":\"open_number\",\"stage\":\"reporting\",\"level\":\"fix\",\"quote\":\"Every week / Most weeks / Occasionally / Never\",\"why\":\"'Most weeks' and 'Occasionally' are vague and mean different things to different people. They also leave out the number of weeks.\"},\n{\"check\":\"does_it_apply\",\"stage\":\"judgment\",\"level\":\"fix\",\"quote\":\"recycle your household waste\",\"why\":\"People with no recycling collection or facilities, or whose household member does it, cannot answer truthfully.\"},\n{\"check\":\"reference_period\",\"stage\":\"retrieval\",\"level\":\"consider\",\"quote\":\"In the last month\",\"why\":\"It could mean the last calendar month or the last four weeks, and so the number of weeks differs.\"},\n{\"check\":\"construct_first\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"recycle your household waste\",\"why\":\"Recycling is not energy use, travel or quality of life. The analyst should confirm it serves a stated aim.\"}],\n\"rewrite\":\"In the last 4 weeks, in how many weeks did you recycle some of your household waste, such as paper, glass, plastic or cans? All 4 weeks / 3 weeks / 2 weeks / 1 week / None / I cannot recycle where I live\"},\n{\"id\":\"Q27\",\"flags\":[],\"rewrite\":\"\"},\n{\"id\":\"Q28\",\"flags\":[\n{\"check\":\"reference_period\",\"stage\":\"comprehension\",\"level\":\"fix\",\"quote\":\"last year\",\"why\":\"It could mean the last calendar year, the last tax year or the last 12 months. Income may differ across them.\"},\n{\"check\":\"can_they_know\",\"stage\":\"retrieval\",\"level\":\"consider\",\"quote\":\"total household income last year before tax and other deductions, from all sources\",\"why\":\"Respondents must add every member's income from many sources, before tax. Many do not know others' income or gross figures.\"},\n{\"check\":\"options_fit\",\"stage\":\"reporting\",\"level\":\"consider\",\"quote\":\"Prefer not to say\",\"why\":\"People who do not know the household's income cannot say so honestly. Only refusal is offered, not don't know.\"}],\n\"rewrite\":\"Think about everyone in your household. Include income from all sources, before tax and other deductions. What was the total household income in the last 12 months? Under £15,000 / £15,000 to £29,999 / £30,000 to £49,999 / £50,000 to £79,999 / £80,000 or more / Don't know / Prefer not to say\"},\n{\"id\":\"Q29\",\"flags\":[\n{\"check\":\"options_fit\",\"stage\":\"judgment\",\"level\":\"fix\",\"quote\":\"In paid work / Self-employed\",\"why\":\"Self-employed people are also in paid work, and students may work too. Some respondents fit more than one option.\"},\n{\"check\":\"reference_period\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"last week\",\"why\":\"It could mean the last calendar week or the past 7 days. It could also mean a week that was not typical.\"}],\n\"rewrite\":\"Which of these best describes your main activity in the last 7 days? In paid work as an employee / Self-employed / Unemployed and looking for work / Retired / Student / Looking after the home or family / Long-term sick or disabled / Other\"},\n{\"id\":\"Q30\",\"flags\":[\n{\"check\":\"specific_before_vague\",\"stage\":\"judgment\",\"level\":\"consider\",\"quote\":\"Overall, how would you rate your quality of life\",\"why\":\"This general item comes last, after travel, income and work questions. Those questions may shape what respondents think about when they rate it.\"}],\n\"rewrite\":\"\"}\n]}"
+      },
+      {
+        "kind": "instrument",
+        "k": 3,
+        "n": 2,
+        "first": 1,
+        "ids": ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13", "Q14", "Q15", "Q16", "Q17", "Q18", "Q19", "Q20", "Q21", "Q22", "Q23", "Q24", "Q25", "Q26", "Q27", "Q28", "Q29", "Q30"],
+        "questions": ["Q1. Are you aged 18 or over? This survey is only for adults.\nYes / No (end of questionnaire)", "Q2. In which type of home do you live at the moment? Please choose the one that fits best.\nDetached house / Semi-detached house / Terraced house / Flat or maisonette / Caravan or houseboat / Other (please say what)", "Q3. Do you own your home or do you rent it? Please choose one answer only.\nOwn outright / Own with a mortgage or loan / Rent from a private landlord / Rent from a council or housing association / Live rent free / Other", "Q4. How many people live in your household, including you? Count children and babies too.\n1 / 2 / 3 / 4 / 5 / 6 or more", "Q5. All things considered, how satisfied or dissatisfied are you with the heating in your home?\nVery satisfied / Fairly satisfied / Neither satisfied nor dissatisfied / Fairly dissatisfied / Very dissatisfied", "Q6. Thinking about last winter, how often was your home too cold for you to be comfortable?\nNever / Rarely / Sometimes / Often / Always", "Q7. What is the main fuel you use to heat your home? If you use more than one, choose the one you use most.\nMains gas / Electricity / Heating oil / Liquefied petroleum gas (LPG) / Wood or coal / Heat network / Other / Don't know", "Q8. Has your household cut back on heating to save money? Please include times when you kept the heating off on purpose.\nYes / No", "Q9. About how much did your household spend on gas and electricity last month? Please give the amount in pounds, and include standing charges.\nEnter a number: ______", "Q10. Do you think the government is doing enough to help households with their energy bills?\nDefinitely / Probably / Probably not / Definitely not", "Q11. Obviously, high energy bills are caused by greedy energy companies. How much do you agree or disagree with this statement?\nStrongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree", "Q12. Have you made any changes to your home to save energy, such as loft insulation, double glazing or a smart thermostat, and did these changes lower your bills?\nYes / No", "Q13. How likely are you to install solar panels on your home in the next five years? Please answer even if you rent.\nVery likely / Fairly likely / Fairly unlikely / Very unlikely", "Q14. Now some questions about travel. In a normal week, on how many days do you travel to your place of work?\n0 / 1 / 2 / 3 / 4 / 5 / 6 / 7", "Q15. How do you usually travel to your place of work? Choose the way you use for the longest part of the journey.\nCar or van / Bus or coach / Train or tram / Bicycle / Walk / Motorcycle / Other", "Q16. How long does your journey to work usually take, door to door? Please give your answer in minutes.\nEnter a number: ______", "Q17. How satisfied are you with the availability and reliability of local bus services?\nVery dissatisfied / Fairly dissatisfied / Neither / Fairly satisfied / Very satisfied", "Q18. How safe do you feel cycling on the roads in your neighbourhood? If you never cycle, please choose the last answer.\nVery safe / Fairly safe / Fairly unsafe / Very unsafe / I do not cycle", "Q19. In the past 7 days, on how many days did you walk for at least 30 minutes in one go, for any reason?\nEnter a number from 0 to 7: ______", "Q20. Do you have a car or van that you can use whenever you need it?\nYes / No (go to Q24)", "Q21. Roughly how many miles did you drive last year in total? Think of all the journeys you made, for work or otherwise.\nEnter a number: ______", "Q22. How old is the car or van you use most often? Give the age of the vehicle, not the year of the model.\nLess than 3 years / 3 to 5 years / 6 to 10 years / More than 10 years", "Q23. Would you consider switching to an electric car or van when you next change your vehicle?\nYes, definitely / Yes, maybe / No / Not sure", "Q24. Which of the following would encourage you to use public transport more often than you do now?\nTick all that apply: Cheaper fares / More frequent services / More direct routes / Cleaner vehicles / Safer stops and stations / Nothing would", "Q25. How worried are you about climate change, if at all?\nVery worried / Somewhat worried / Not very worried / Not at all worried", "Q26. In the last month, how often did you recycle your household waste, such as paper, glass, plastic and cans?\nEvery week / Most weeks / Occasionally / Never", "Q27. What is your age in years, at your last birthday?\nEnter a number: ______", "Q28. What was your total household income last year before tax and other deductions, from all sources?\nUnder £15,000 / £15,000 to £29,999 / £30,000 to £49,999 / £50,000 to £79,999 / £80,000 or more / Prefer not to say", "Q29. Which of these best describes what you were doing last week? Please choose the one that best describes your main activity.\nIn paid work / Self-employed / Unemployed and looking for work / Retired / Student / Looking after the home or family / Long-term sick or disabled / Other", "Q30. Overall, how would you rate your quality of life at the moment, taking everything into account?\nExcellent / Good / Fair / Poor / Very poor"],
+        "hash": "42dcfdf8ebebe0612f74dfa355f0946db6127c6eefa72b891d7906330fc58c8d",
+        "user": "You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist.\n\nTask: Review the questionnaire as an expert reviewer, question by question.\n\nBrief:\nResearch question: Household energy use, travel and quality of life\nTarget population: Adults aged 18 and over living in England\nSurvey mode: web\n\nGuidelines:\n- Use simple, familiar words.\n- Use simple syntax.\n- Avoid ambiguous words.\n- Be specific and concrete.\n- Make response options exhaustive and mutually exclusive.\n- Avoid leading or loaded wording.\n- Ask about one thing at a time.\n- Avoid single or double negations.\n\n[your 30 questions go here]\n\nNow review the questionnaire below as a whole: only what the CHECKLIST asks about order, routing and consistency. Reply with the \"instrument\" object only.\n\nQUESTIONNAIRE\nQ1. Are you aged 18 or over? This survey is only for adults.\nYes / No (end of questionnaire)\n\nQ2. In which type of home do you live at the moment? Please choose the one that fits best.\nDetached house / Semi-detached house / Terraced house / Flat or maisonette / Caravan or houseboat / Other (please say what)\n\nQ3. Do you own your home or do you rent it? Please choose one answer only.\nOwn outright / Own with a mortgage or loan / Rent from a private landlord / Rent from a council or housing association / Live rent free / Other\n\nQ4. How many people live in your household, including you? Count children and babies too.\n1 / 2 / 3 / 4 / 5 / 6 or more\n\nQ5. All things considered, how satisfied or dissatisfied are you with the heating in your home?\nVery satisfied / Fairly satisfied / Neither satisfied nor dissatisfied / Fairly dissatisfied / Very dissatisfied\n\nQ6. Thinking about last winter, how often was your home too cold for you to be comfortable?\nNever / Rarely / Sometimes / Often / Always\n\nQ7. What is the main fuel you use to heat your home? If you use more than one, choose the one you use most.\nMains gas / Electricity / Heating oil / Liquefied petroleum gas (LPG) / Wood or coal / Heat network / Other / Don't know\n\nQ8. Has your household cut back on heating to save money? Please include times when you kept the heating off on purpose.\nYes / No\n\nQ9. About how much did your household spend on gas and electricity last month? Please give the amount in pounds, and include standing charges.\nEnter a number: ______\n\nQ10. Do you think the government is doing enough to help households with their energy bills?\nDefinitely / Probably / Probably not / Definitely not\n\nQ11. Obviously, high energy bills are caused by greedy energy companies. How much do you agree or disagree with this statement?\nStrongly agree / Agree / Neither agree nor disagree / Disagree / Strongly disagree\n\nQ12. Have you made any changes to your home to save energy, such as loft insulation, double glazing or a smart thermostat, and did these changes lower your bills?\nYes / No\n\nQ13. How likely are you to install solar panels on your home in the next five years? Please answer even if you rent.\nVery likely / Fairly likely / Fairly unlikely / Very unlikely\n\nQ14. Now some questions about travel. In a normal week, on how many days do you travel to your place of work?\n0 / 1 / 2 / 3 / 4 / 5 / 6 / 7\n\nQ15. How do you usually travel to your place of work? Choose the way you use for the longest part of the journey.\nCar or van / Bus or coach / Train or tram / Bicycle / Walk / Motorcycle / Other\n\nQ16. How long does your journey to work usually take, door to door? Please give your answer in minutes.\nEnter a number: ______\n\nQ17. How satisfied are you with the availability and reliability of local bus services?\nVery dissatisfied / Fairly dissatisfied / Neither / Fairly satisfied / Very satisfied\n\nQ18. How safe do you feel cycling on the roads in your neighbourhood? If you never cycle, please choose the last answer.\nVery safe / Fairly safe / Fairly unsafe / Very unsafe / I do not cycle\n\nQ19. In the past 7 days, on how many days did you walk for at least 30 minutes in one go, for any reason?\nEnter a number from 0 to 7: ______\n\nQ20. Do you have a car or van that you can use whenever you need it?\nYes / No (go to Q24)\n\nQ21. Roughly how many miles did you drive last year in total? Think of all the journeys you made, for work or otherwise.\nEnter a number: ______\n\nQ22. How old is the car or van you use most often? Give the age of the vehicle, not the year of the model.\nLess than 3 years / 3 to 5 years / 6 to 10 years / More than 10 years\n\nQ23. Would you consider switching to an electric car or van when you next change your vehicle?\nYes, definitely / Yes, maybe / No / Not sure\n\nQ24. Which of the following would encourage you to use public transport more often than you do now?\nTick all that apply: Cheaper fares / More frequent services / More direct routes / Cleaner vehicles / Safer stops and stations / Nothing would\n\nQ25. How worried are you about climate change, if at all?\nVery worried / Somewhat worried / Not very worried / Not at all worried\n\nQ26. In the last month, how often did you recycle your household waste, such as paper, glass, plastic and cans?\nEvery week / Most weeks / Occasionally / Never\n\nQ27. What is your age in years, at your last birthday?\nEnter a number: ______\n\nQ28. What was your total household income last year before tax and other deductions, from all sources?\nUnder £15,000 / £15,000 to £29,999 / £30,000 to £49,999 / £50,000 to £79,999 / £80,000 or more / Prefer not to say\n\nQ29. Which of these best describes what you were doing last week? Please choose the one that best describes your main activity.\nIn paid work / Self-employed / Unemployed and looking for work / Retired / Student / Looking after the home or family / Long-term sick or disabled / Other\n\nQ30. Overall, how would you rate your quality of life at the moment, taking everything into account?\nExcellent / Good / Fair / Poor / Very poor\n\nCHECKLIST\ncontext_and_order: Is the order free of an earlier item that would shape answers to a later one?\nfilters_and_routing: Does every respondent path lead only to questions that apply?\nscale_consistency: Are scales, their direction and reference periods consistent across the instrument?\nfit_to_objectives: Is every stated research question measured, and does every item serve one?\n\nFollow every rule you were given. Reply in the format given at the end of this message.\n\nREPLY FORMAT\nReturn one JSON object. Write findings in English, and write a rewrite in the language of the question. Be brief: nothing outside the fields below is shown to the analyst.\n\nFor questions, the object is {\"items\": [...]}, one entry per question, in the order given. Each entry has:\n\n- \"id\": the question's own label, or its position.\n- \"flags\": every problem you stand behind, most damaging first; an empty list if there is none. Each flag has:\n  - \"check\": the id of the CHECKLIST check it fails.\n  - \"stage\": \"comprehension\", \"retrieval\", \"judgment\" or \"reporting\".\n  - \"level\": \"fix\" if you would revise the question before fielding; \"consider\" if the problem is real but smaller, or needs the analyst's knowledge.\n  - \"quote\": words copied exactly from the question or its options.\n  - \"why\": at most 25 words: what the respondent cannot do, in plain words.\n- \"rewrite\": one rewrite of the whole question and its options that fixes its fix-level flags and changes nothing else; an empty string when it has no fix-level flag.\n\nFor the questionnaire as a whole, the object is {\"instrument\": [...]}: at most 3 flags of the same shape, each with \"questions\" (a list of the ids of the questions it concerns) in place of \"quote\".\n\nNothing else: no severity, no probe, no test plan, no rewrite of a single flag.",
+        "checks": ["context_and_order", "filters_and_routing", "scale_consistency", "fit_to_objectives"],
+        "status": "ok",
+        "error": null,
+        "reply": {
+          "instrument": [
+            {
+              "check": "filters_and_routing",
+              "stage": "reporting",
+              "level": "fix",
+              "questions": [
+                "Q14",
+                "Q15",
+                "Q16",
+                "Q29"
+              ],
+              "why": "Retired, student, unemployed or home-based respondents have no place of work to describe, and work status is only asked at the end."
+            },
+            {
+              "check": "context_and_order",
+              "stage": "judgment",
+              "level": "fix",
+              "questions": [
+                "Q30",
+                "Q6",
+                "Q8",
+                "Q9"
+              ],
+              "why": "Overall quality of life comes after questions on cold homes, cutting back and bills, which may colour how people rate their life."
+            },
+            {
+              "check": "scale_consistency",
+              "stage": "reporting",
+              "level": "fix",
+              "questions": [
+                "Q5",
+                "Q17",
+                "Q30",
+                "Q6",
+                "Q26"
+              ],
+              "why": "Option order flips: Q5 and Q30 start positive, Q17 starts negative; Q6 starts at never, Q26 ends at never. Wrong-end clicks are likely."
+            }
+          ]
+        },
+        "seconds": 28.4422,
+        "finish": "success",
+        "tokens": {
+          "input": 4,
+          "output": 3528,
+          "cached_input": 7540
+        },
+        "attempts": 1,
+        "raw": "{\"instrument\": [\n{\"check\":\"filters_and_routing\",\"stage\":\"reporting\",\"level\":\"fix\",\"questions\":[\"Q14\",\"Q15\",\"Q16\",\"Q29\"],\"why\":\"Retired, student, unemployed or home-based respondents have no place of work to describe, and work status is only asked at the end.\"},\n{\"check\":\"context_and_order\",\"stage\":\"judgment\",\"level\":\"fix\",\"questions\":[\"Q30\",\"Q6\",\"Q8\",\"Q9\"],\"why\":\"Overall quality of life comes after questions on cold homes, cutting back and bills, which may colour how people rate their life.\"},\n{\"check\":\"scale_consistency\",\"stage\":\"reporting\",\"level\":\"fix\",\"questions\":[\"Q5\",\"Q17\",\"Q30\",\"Q6\",\"Q26\"],\"why\":\"Option order flips: Q5 and Q30 start positive, Q17 starts negative; Q6 starts at never, Q26 ends at never. Wrong-end clicks are likely.\"}\n]}"
+      }
+    ],
+    "wall": 97.6725
+  },
+  "analyst": null,
+  "wall": 97.6725
+}

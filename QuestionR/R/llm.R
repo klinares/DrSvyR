@@ -8,9 +8,10 @@
 
 # ---- settings of the call --------------------------------------------------------------
 
-# max_tokens per kind of call. A reply that reaches the ceiling is a failure, not a short answer,
+# max_tokens per kind of call; the model's thinking counts against it (Sonnet 5.5 thinks by default,
+#   at effort high). A reply that reaches the ceiling is a failure, not a short answer,
 #   and is not retried: the same prompt is cut off at the same place.
-LLM_MAX_TOKENS <- c(items = 6000L, instrument = 1500L, draft = 6000L, ping = 200L)
+LLM_MAX_TOKENS <- c(items = 24000L, instrument = 8000L, draft = 16000L, ping = 200L)
 
 # What a cut-off reply tells the analyst to do, by kind of call.
 LLM_CUTOFF_ADVICE <- c(draft = "Ask for fewer items and run again.", evaluate = "Paste fewer questions and run again.")
@@ -138,7 +139,9 @@ llm_complete <- function(m, system_prompt, user, max_tokens, key = llm_key_for(m
   on.exit(options(old), add = TRUE)
   chat = llm_chat(m, system_prompt, max_tokens, key)
   started = Sys.time()
-  llm_reply(chat, tryCatch(chat$chat(user, echo = "none"), error = function(e) llm_refuse(e, m, key)), m, started)
+  # The reply is made first: llm_reply() reads the chat's last turn, which exists only after it.
+  reply = tryCatch(chat$chat(user, echo = "none"), error = function(e) llm_refuse(e, m, key))
+  llm_reply(chat, reply, m, started)
 }
 
 # Several requests sent together in this one R process: each gets its own chat object, and

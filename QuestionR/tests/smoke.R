@@ -321,7 +321,7 @@ ok("a 30-question review is three calls, every one sending the same message and 
    identical(rv$status, "ok") && length(fa$state$calls) == 3L &&
      all(startsWith(calls_users, assemble_message(clean_form(utils::modifyList(forms$evaluate, list(questionnaire = long_q)))))) &&
      grepl("Q15.", calls_users[1], fixed = TRUE) && !grepl("Q16.", calls_users[1], fixed = TRUE) &&
-     identical(purrr::map_int(fa$state$calls, "max_tokens"), c(6000L, 6000L, 1500L)) &&
+     identical(purrr::map_int(fa$state$calls, "max_tokens"), unname(LLM_MAX_TOKENS[c("items", "items", "instrument")])) &&
      length(unique(purrr::map_chr(fa$state$calls, "system"))) == 1L)
 ok("an item call carries the question checks and not the instrument checks; the instrument call only those",
    grepl("\none_thing: ", calls_users[1], fixed = TRUE) && !grepl("\ncontext_and_order: ", calls_users[1], fixed = TRUE) &&
@@ -520,10 +520,10 @@ start_html <- html_of(start_ui())
 at <- function(x, h = start_html) regexpr(x, h, fixed = TRUE)[[1]]
 ok("Start here, in order: the two sentences, the TSE figure and its caption, the slide example, the worked example, how it works, the bullets, the key box, then the closed settings",
    all(c(at("acting as an expert reviewer"), at("fw_tse.svg"), at("It does not address interviewers"), at("start_example.svg"),
-         at("worked example will be shown here"), at("how_it_works.svg"), at("What to keep in mind"), at("Your API key"),
+         at(if (file.exists(EXAMPLE_FILE)) "Recorded from" else "worked example will be shown here"), at("how_it_works.svg"), at("What to keep in mind"), at("Your API key"),
          at("Settings and connection")) > 0L) &&
      identical(order(c(at("acting as an expert reviewer"), at("fw_tse.svg"), at("It does not address interviewers"), at("start_example.svg"),
-                       at("worked example will be shown here"), at("how_it_works.svg"), at("What to keep in mind"), at("Your API key"),
+                       at(if (file.exists(EXAMPLE_FILE)) "Recorded from" else "worked example will be shown here"), at("how_it_works.svg"), at("What to keep in mind"), at("Your API key"),
                        at("Settings and connection"))), 1:9) &&
      !grepl("<details[^>]*open", start_html) && !grepl("{{example}}", start_html, fixed = TRUE))
 ok("the worked example, once recorded, is drawn by the card Results uses, and is never written by hand",

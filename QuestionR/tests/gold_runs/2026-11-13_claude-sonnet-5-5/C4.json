@@ -1,0 +1,84 @@
+{
+  "time": "2026-11-13T21:59:46-0500",
+  "model": "claude-sonnet-5-5",
+  "form": {
+    "task": "evaluate",
+    "research_question": "Evaluate this survey question",
+    "population": "Adults in the general population",
+    "modes": "web",
+    "questionnaire": "Q1. How is your health in general? Would you say it is very good, good, fair, bad, or very bad?\nResponse options: Very good / Good / Fair / Bad / Very bad"
+  },
+  "message_assembled": null,
+  "message_sent": null,
+  "edited": false,
+  "summary": [
+    {
+      "call": "part 1 of 1",
+      "model": "claude-sonnet-5-5",
+      "status": "ok",
+      "seconds": 8.6485,
+      "finish": "success",
+      "attempts": 1,
+      "tokens_in": 1907,
+      "tokens_out": 874,
+      "tokens_cached": 4800,
+      "error": null
+    }
+  ],
+  "draft": null,
+  "check": null,
+  "review": {
+    "status": "ok",
+    "error": null,
+    "batches": [
+      {
+        "kind": "items",
+        "k": 1,
+        "n": 1,
+        "first": 1,
+        "ids": "Q1",
+        "questions": "Q1. How is your health in general? Would you say it is very good, good, fair, bad, or very bad?\nResponse options: Very good / Good / Fair / Bad / Very bad",
+        "hash": "63e368d8cbc9531bc54d5e486217fea12f79a83cb024d7e20a60d31627cab6ff",
+        "user": "You are a senior survey methodologist trained in the Total Survey Error tradition, working for a public opinion analyst who knows the subject matter and the country but is not a questionnaire design specialist.\n\nTask: Review the questionnaire as an expert reviewer, question by question.\n\nBrief:\nResearch question: Evaluate this survey question\nTarget population: Adults in the general population\nSurvey mode: web\n\nGuidelines:\n- Use simple, familiar words.\n- Use simple syntax.\n- Avoid ambiguous words.\n- Be specific and concrete.\n- Make response options exhaustive and mutually exclusive.\n- Avoid leading or loaded wording.\n- Ask about one thing at a time.\n- Avoid single or double negations.\n\n[your 1 question goes here]\n\nNow review the 1 question below, each on its own. Reply with the \"items\" object only, one entry per question, in the order given.\n\nQUESTIONNAIRE\nQ1. How is your health in general? Would you say it is very good, good, fair, bad, or very bad?\nResponse options: Very good / Good / Fair / Bad / Very bad\n\nCHECKLIST\nconstruct_first: Does the item measure the construct or domain named in the brief and only that?\nplain_words: Would every member of the target population read each key term the same way, without a definition they do not have?\nsimple_syntax: Is the stem free of stacked clauses and of negations?\nspecific_concrete: Is it clear exactly what, whose, where and when the question is about?\none_thing: Does the question ask about exactly one thing, so that no respondent would want to answer its parts differently?\nno_presupposition: Does the question apply to every respondent who will be asked it?\nneutral_wording: Is the wording free of any push toward one answer?\noptions_fit: Can every respondent find exactly one option that is true for them?\nretrieval_and_judgment: Can the respondent retrieve the information and reach the answer without difficult recall or mental arithmetic?\nresponse_scale: Do the response options match the question and treat both directions evenly?\nagree_disagree_and_grids: If the item uses agree-disagree options or sits in a grid, is that format needed, with items keyed in both directions?\nattitude_object: Is the attitude object named and bounded so that respondents will have the same thing in mind?\nspecific_before_vague: If a general item is included, is it placed before the specific items on its topic?\nconstruct_specific_options: Are the response options in the construct's own terms and not agree-disagree?\nbalanced_stem: Does the stem state both poles or both positions?\nnon_attitudes: Is there a route for respondents who have no knowledge of or opinion about the object?\nkeying: Does the set include items keyed in both directions, without negations?\ncover_the_construct: Does each item tap a distinct stated domain, with no item a rewording of another?\ncan_they_know: Is the item asking for something the respondent is likely to have stored and can retrieve?\nreference_period: Is there one stated reference period with unambiguous boundaries, short enough for the behaviour?\ndecompose_with_care: If the item is decomposed, are the sub-categories distinct, non-overlapping and memorable?\nhow_many_or_how_often: Does the wording match how respondents will arrive at the answer, counting or a rate?\nopen_number: Is a count or amount collected as an open number with a stated unit, or else with categories free of vague quantifiers?\ndoes_it_apply: Can a respondent who did not do the behaviour, or to whom it does not apply, answer truthfully?\nwhy_sensitive: Is the kind of sensitivity and the expected direction of misreporting stated?\nmode_and_privacy: Do the notes address who can hear or see the answer in the stated mode?\nforgiving_intro: If a forgiving introduction is used, does it point only toward the under-reported answer and contain no invented fact?\nassume_behavior: If the item assumes the behaviour, is \"none\" or \"never\" an explicit, easy answer?\never_then_current: Does the order of ever and current questions match the direction of desirability?\nopen_or_high_range: Does the response format avoid making a truthful high answer look deviant?\nrespondent_safety: Is any item whose honest answer could endanger the respondent flagged for local and ethical review?\nany_mode: Does the item work as written in the stated mode?\nweb: Is everything the respondent needs to answer on screen with the question?\n\nFollow every rule you were given. Reply in the format given at the end of this message.\n\nREPLY FORMAT\nReturn one JSON object. Write findings in English, and write a rewrite in the language of the question. Be brief: nothing outside the fields below is shown to the analyst.\n\nFor questions, the object is {\"items\": [...]}, one entry per question, in the order given. Each entry has:\n\n- \"id\": the question's own label, or its position.\n- \"flags\": every problem you stand behind, most damaging first; an empty list if there is none. Each flag has:\n  - \"check\": the id of the CHECKLIST check it fails.\n  - \"stage\": \"comprehension\", \"retrieval\", \"judgment\" or \"reporting\".\n  - \"level\": \"fix\" if you would revise the question before fielding; \"consider\" if the problem is real but smaller, or needs the analyst's knowledge.\n  - \"quote\": words copied exactly from the question or its options.\n  - \"why\": at most 25 words: what the respondent cannot do, in plain words.\n- \"rewrite\": one rewrite of the whole question and its options that fixes its fix-level flags and changes nothing else; an empty string when it has no fix-level flag.\n\nFor the questionnaire as a whole, the object is {\"instrument\": [...]}: at most 3 flags of the same shape, each with \"questions\" (a list of the ids of the questions it concerns) in place of \"quote\".\n\nNothing else: no severity, no probe, no test plan, no rewrite of a single flag.",
+        "checks": ["construct_first", "plain_words", "simple_syntax", "specific_concrete", "one_thing", "no_presupposition", "neutral_wording", "options_fit", "retrieval_and_judgment", "response_scale", "agree_disagree_and_grids", "attitude_object", "specific_before_vague", "construct_specific_options", "balanced_stem", "non_attitudes", "keying", "cover_the_construct", "can_they_know", "reference_period", "decompose_with_care", "how_many_or_how_often", "open_number", "does_it_apply", "why_sensitive", "mode_and_privacy", "forgiving_intro", "assume_behavior", "ever_then_current", "open_or_high_range", "respondent_safety", "any_mode", "web"],
+        "status": "ok",
+        "error": null,
+        "reply": {
+          "items": [
+            {
+              "id": "Q1",
+              "flags": [
+                {
+                  "check": "specific_concrete",
+                  "stage": "comprehension",
+                  "level": "consider",
+                  "quote": "How is your health in general?",
+                  "why": "No time frame or health type is given. Respondents may think of today, the past year, physical health only, or health compared with people their age."
+                },
+                {
+                  "check": "response_scale",
+                  "stage": "judgment",
+                  "level": "consider",
+                  "quote": "Fair",
+                  "why": "The middle label can read as mildly positive or mildly negative. Respondents who feel neither good nor bad may split between 'Good' and 'Fair' inconsistently."
+                }
+              ],
+              "rewrite": ""
+            }
+          ]
+        },
+        "seconds": 8.6485,
+        "finish": "success",
+        "tokens": {
+          "input": 1907,
+          "output": 874,
+          "cached_input": 4800
+        },
+        "attempts": 1,
+        "raw": "{\"items\":[{\"id\":\"Q1\",\"flags\":[{\"check\":\"specific_concrete\",\"stage\":\"comprehension\",\"level\":\"consider\",\"quote\":\"How is your health in general?\",\"why\":\"No time frame or health type is given. Respondents may think of today, the past year, physical health only, or health compared with people their age.\"},{\"check\":\"response_scale\",\"stage\":\"judgment\",\"level\":\"consider\",\"quote\":\"Fair\",\"why\":\"The middle label can read as mildly positive or mildly negative. Respondents who feel neither good nor bad may split between 'Good' and 'Fair' inconsistently.\"}],\"rewrite\":\"\"}]}"
+      }
+    ],
+    "wall": 8.6958
+  },
+  "analyst": null
+}
