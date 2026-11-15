@@ -157,4 +157,8 @@ topic,probability and inference basics,"Probability, random variables, distribut
 topic,hypothesis testing,"Tests of hypotheses, p-values, power and multiple testing."
 topic,research ethics,"Informed consent, IRB review, respondent burden and ethical conduct of research."
 topic,course administration,"Course logistics: schedule, grading, readings, assignments, contact."
+topic,experimental design,"Randomized and factorial experiments, split-ballot and survey experiments, treatment assignment."
+topic,dimension reduction,"Principal component analysis, factor extraction, clustering of variables and other ways to reduce many variables to few."
+topic,algorithmic fairness,"Bias and fairness of algorithms and models across groups, fairness metrics and their trade-offs."
+topic,survey management and costs,"Planning and running a survey: budgets, schedules, staffing, project management and cost control."
 topic,other,"None of the listed topics fits."

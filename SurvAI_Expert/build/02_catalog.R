@@ -35,7 +35,7 @@ BUILD_TEMPERATURE <- 0
 BUILD_MAX_TOKENS <- 4096L
 
 # The whole of step 2: these labels plus the figure lines of 01_convert.R (data/build/figures/).
-COST_CAP_USD <- 15
+COST_CAP_USD <- 15.5
 EST_USD_CALL <- 0.002        # until 10 calls have been paid
 FORMULA_EST_USD <- 0.007     # the same for formula calls (FORMULA_MODEL)
 # FORMULA_MODEL labels the groups with the most members first, until the cap less this reserve;
@@ -508,7 +508,8 @@ passage_user <- function(v, items) paste0(
   "  topic: 1 to 3 values from topic (\"other\" only when nothing fits)\n",
   "  topic_free: up to 3 short noun phrases in your own words\n",
   "Rules: a table or example that carries out a selection is stage \"sample selection\". A passage about computing an ",
-  "estimate has tse \"none\" unless it discusses an error source. Never exceed the number of values allowed for a field.\n",
+  "estimate has tse \"none\" unless it discusses an error source. A reference list, bibliography or dataset ",
+  "documentation is kind \"administrative\" and topic \"other\". Never exceed the number of values allowed for a field.\n",
   "Return a JSON array with one object per passage, in the order given.\n\nPassages:\n",
   jsonlite::toJSON(items, auto_unbox = TRUE, pretty = FALSE))
 
@@ -748,10 +749,15 @@ write_split <- function(x, name) {
   })
 }
 
+read_split <- function(name) {
+  f = c(file.path(CAT_DIR, name), file.path(CAT_DIR, PRIVATE_SOURCES, name))
+  map(f[file.exists(f)], function(x) utils::read.csv(x, colClasses = "character", na.strings = NULL, encoding = "UTF-8")) |> list_rbind()
+}
+
 src_of <- function(id) str_extract(id, "^[^/]+")
 
 main <- function(mode = "parse") {
-  mode = match.arg(mode, c("parse", "label", "estimate"))
+  mode = match.arg(mode, c("parse", "label", "estimate", "relabel"))
   t0 = Sys.time()
   docs = utils::read.csv(MANIFEST_CSV, stringsAsFactors = FALSE, colClasses = "character") |> filter(file.exists(markdown))
   message(nrow(docs), " documents in the manifest with markdown.")
@@ -769,13 +775,18 @@ main <- function(mode = "parse") {
   run = new.env()
   run$spent = spent_so_far(); run$usd = 0; run$calls = 0L; run$paid = 0L; run$errors = 0L
   run$invalid1 = 0L; run$unanswered = 0L; run$problems = tibble()
-  key = if (mode == "label") model_key() else NULL   # parse, estimate: labels from the cache only
+  key = if (mode %in% c("label", "relabel")) model_key() else NULL   # parse, estimate: labels from the cache only
   scope = P[in_scope(P), ]
   Fs = if (LABEL_SCOPE == "all") F else F |> filter(passage_id %in% scope$passage_id)
   if (mode == "estimate") return(invisible(estimate_calls(scope, Fs, P, K, cat, v)))
-  key_for = function(kind) if (kind %in% LABEL_KINDS) key else NULL
+  kinds = if (mode == "relabel") "passage" else LABEL_KINDS
+  key_for = function(kind) if (kind %in% kinds) key else NULL
+  # relabel: only passages whose topic is "other" go to the model; every other passage keeps its label
+  old = if (mode == "relabel") read_split("passages.csv") |> select(all_of(names(EMPTY_LP))) else EMPTY_LP
+  if (mode == "relabel") scope = P |> filter(passage_id %in% old$passage_id[str_detect(old$topic, "(^|;)other(;|$)")])
   lp = label_passages(scope, cat, key_for("passage"), run, v)
-  lc = label_code(K, scope, key_for("code"), run, v)
+  lp = bind_rows(lp, old |> filter(!passage_id %in% lp$passage_id))
+  lc = label_code(K, P, key_for("code"), run, v)
   lf = label_formulas(Fs, P, cat, key_for("formula"), run, v)   # last: the dearest calls
   utils::write.csv(bind_rows(tibble(kind = character(), ids = character(), kept = integer(), reason = character(), reply = character()),
                              run$problems), PROBLEMS_CSV, row.names = FALSE, na = "", fileEncoding = "UTF-8")
