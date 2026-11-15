@@ -167,7 +167,8 @@ sources_text <- function(g) {
 # stream = TRUE returns ellmer's stream generator (chunks of text) with the chat as attribute "chat".
 answer_question <- function(question, gathered, profile = MODEL_PROFILE, key = Sys.getenv(KEY_ENV), stream = FALSE) {
   m = profile_model(profile)
-  user = paste0("Question:\n", question, "\n\nSources:\n\n", sources_text(gathered))
+  no_f = if (!nrow(gathered$formulas)) "\n\nNo formula ids were given with these sources: write no {{F:...}} tokens." else ""
+  user = paste0("Question:\n", question, "\n\nSources:\n\n", sources_text(gathered), no_f)
   if (stream) { chat = model_chat(m, "answer", read_reflex("answer.md"), key); return(structure(chat$stream(user), chat = chat)) }
   call_model(m, "answer", read_reflex("answer.md"), user, key)
 }

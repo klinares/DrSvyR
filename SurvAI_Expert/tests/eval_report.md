@@ -2,7 +2,7 @@
 
 Profile **home**, model `claude-sonnet-5-5`. Store receipt: identical to data/catalog/receipt.csv.
 
-Gold: 108 questions; 3 unmapped (R scripts not in the store) and 2 that are not questions were dropped, leaving 103. 100 were planned and 40 answered (stratified by type).
+Gold: 108 questions; 3 unmapped (R scripts not in the store) and 2 that are not questions were dropped, leaving 103. 100 were planned and 39 answered (stratified by type).
 
 ## Retrieval: raw question vs planned search
 
@@ -10,60 +10,45 @@ Hit@k: the gold document is among the first k passages. Raw = the question text 
 
 | type | n | raw_hit5 | raw_hit10 | planned_hit5 | planned_hit10 |
 | --- | --- | --- | --- | --- | --- |
-| all | 100 | 0.810 | 0.920 | 0.680 | 0.790 |
-| code | 26 | 0.885 | 0.962 | 0.769 | 0.846 |
-| concept | 40 | 0.850 | 0.950 | 0.700 | 0.775 |
-| equation | 34 | 0.706 | 0.853 | 0.588 | 0.765 |
+| all | 100 | 0.810 | 0.920 | 0.820 | 0.880 |
+| code | 26 | 0.885 | 0.962 | 0.962 | 0.962 |
+| concept | 40 | 0.850 | 0.950 | 0.825 | 0.900 |
+| equation | 34 | 0.706 | 0.853 | 0.706 | 0.794 |
 
-Equation questions: a formula from the gold document (or its formula group) was among those found for 23 of 34.
+Equation questions: a formula from the gold document (or its formula group) was among those found for 20 of 34.
 
 ## Answer checks (no model)
 
 | type | n | citations_valid | formula_tokens_valid | no_display_math | with_code | code_parses | unverified_functions |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| all | 40 | 1 | 0.925 | 1 | 30 | 1 | 0 |
-| code | 13 | 1 | 0.846 | 1 | 13 | 1 | 0 |
-| concept | 14 | 1 | 0.929 | 1 | 6 | 1 | 0 |
-| equation | 13 | 1 | 1.000 | 1 | 11 | 1 | 0 |
+| all | 39 | 1 | 0.897 | 1 | 28 | 1 | 1 |
+| code | 12 | 1 | 0.667 | 1 | 12 | 1 | 0 |
+| concept | 14 | 1 | 1.000 | 1 | 6 | 1 | 1 |
+| equation | 13 | 1 | 1.000 | 1 | 10 | 1 | 0 |
 
 ## Judge (the same model)
 
 | type | n | correct | partly | incorrect | unsupported_claims | wrongly_said_missing |
 | --- | --- | --- | --- | --- | --- | --- |
-| all | 40 | 38 | 2 | 0 | 93 | 2 |
-| code | 13 | 13 | 0 | 0 | 38 | 0 |
-| concept | 14 | 13 | 1 | 0 | 21 | 0 |
-| equation | 13 | 12 | 1 | 0 | 34 | 2 |
+| all | 39 | 38 | 1 | 0 | 90 | 1 |
+| code | 12 | 12 | 0 | 0 | 36 | 1 |
+| concept | 14 | 14 | 0 | 0 | 25 | 0 |
+| equation | 13 | 12 | 1 | 0 | 29 | 0 |
 
 ## Cost and time
 
-180 model calls, about $2.13 (from token counts at the profile's prices).
+178 model calls, about $2.09 (from token counts at the profile's prices).
 
 | step | median_seconds |
 | --- | --- |
-| plan | 2.460 |
-| search | 0.132 |
-| answer | 8.638 |
+| plan | 2.441 |
+| search | 0.149 |
+| answer | 8.514 |
 
 ## Five worst answers
 
-- **What are some ways to handle variation in sample size, and how does this affect the choice of estimator for the mean?** (partly correct, 3 unsupported claims): The answer correctly says the ratio mean is appropriate when sample size is random, but it omits the passage's listed ways to handle variation (depart from epsem with weighting, create equal-size clusters, stratify by size, PPS), and it adds unsupported claims such as the bias-for-stability tradeoff, the Total Survey Error section, and the strata/fpc claims.
-- **What is the formula for calculating weights using propensity score subclassification?** (partly correct, 2 unsupported claims): The answer gives the course's PSC formula (sum of probability-sample design weights over the number of nonprobability units in subclass g) correctly as context 2, but it presents the nonresponse adjustment 1/phi_c as the 'usual meaning' of the question and leads with it, whereas the passage defines propensity score subclassification weights as the PSC formula; it also adds a few unsupported details (e.g., the final weight is the base weight divided by phi_c for respondents only, and that strata/clusters/FPC are not used in this step).
-- **How is the test statistic for a Likelihood Ratio Test calculated when comparing two nested models?** (correct, 4 unsupported claims): The answer gives the course's statistic, -2 times the difference in log-likelihoods (reduced minus full), referred to a chi-square with df equal to the parameter difference, but it adds several claims no source supports: the survey-package advice, glm/lrtest ignoring the design, the same-cases nesting check, and the length(coef()) df code.
-- **What is the formula for the relative variance of the estimated total of a proportion when using stratified simple random sampling?** (correct, 4 unsupported claims): The answer gives the correct formula, relvar(t_P) = t_P^-2 * sum_h N_h(N_h/n_h - 1)S_h^2 with S_h^2 = P_h(1-P_h)N_h/(N_h-1), matching the passage and S12, but it adds several unsourced claims about the design checks, such as the clustering and nonresponse caveats and the n_h >= 2 requirement.
-- **How do I perform ridge regression and find the optimal lambda using cross-validation in R?** (correct, 4 unsupported claims): The answer matches the course passage: it builds X and y with model.matrix, runs cv.glmnet with alpha = 0, and picks lambda.min or lambda.1se, but it adds a few claims no source supports, such as the 10-fold default, the optimism of random folds with clustered data, and the point about ridge coefficients being biased.
-
-## Update: the question fused in with the plan's queries
-
-The run above gathered with the plan's queries only. gather() now also searches the question's own words
-and fuses that ranking in with weight 3 (GATHER_RAW_WEIGHT in R/llm.R). Same 100 questions, one new plan
-each, every variant on the same plans (answers were not rerun):
-
-| variant | hit@5 | hit@10 | code hit@5 | concept hit@5 | equation hit@5 |
-| --- | --- | --- | --- | --- | --- |
-| raw question alone (part 1) | 0.81 | 0.92 | 0.885 | 0.85 | 0.706 |
-| plan queries only | 0.70 | 0.84 | 0.808 | 0.675 | 0.647 |
-| plan + question, weight 1 | 0.78 | 0.90 | 0.962 | 0.725 | 0.706 |
-| plan + question, weight 3 (now the default) | 0.81 | 0.91 | 0.962 | 0.80 | 0.706 |
-
-The weight was chosen on these same questions, so treat it as tuned, not held out.
+- **How is the variance of the population mean calculated in a stratified sampling design?** (partly correct, 2 unsupported claims): The core formula (sum of W_h^2 (1-f_h) s_h^2/n_h with independent strata) is correct and supported, but the answer's note that W_h must come from true population counts N_h 'only under proportionate allocation, where the two coincide' is a muddled and wrong claim, and the statement that proportionate allocation's design effect is below 1 is stated loosely (it is at most 1), so some content is unsupported or flawed.
+- **Under what conditions is raking an effective method for weighting?** (correct, 4 unsupported claims): The answer correctly identifies the core conditions (only margins known, no important interaction, margins capture the key structure, convergence without extreme weights), matching the passage and sources, but it adds some unsupported claims such as the truncation trade-off, reliable control totals carrying errors into the weights, the R code arguments, and the 'targets adjustment error' framing.
+- **How can I retrieve socio-demographic data for census tracts in Illinois from the ACS 5-Year dataset using R?** (correct, 4 unsupported claims): The answer matches the course passage's getCensus call (acs/acs5, region tract:*, regionin state:17, key) and adds supported extras such as the missing-value recode, tidycensus, and metadata helpers, but it also makes several unsupported claims, such as variable code meanings, that no source states.
+- **How do I fit a linear mixed-effects model that includes a random slope for the minority predictor for each school?** (correct, 4 unsupported claims): The answer gives the course's lmer call with (minority | schoolid), the random-slope model equation, the D matrix and the 0.5*chi2(1)+0.5*chi2(2) LRT, all matching the passage, but it adds several unsourced claims (singular-fit advice, lmer ignoring survey weights, few-minority-student identifiability, and the jtools assumption it flags itself).
+- **How can I check if a variable follows a normal distribution using both graphical and statistical methods in R?** (correct, 4 unsupported claims): The answer correctly recommends a histogram/density plot and Q-Q plot plus shapiro.test, with working R code, consistent with the lab passage; it adds a few claims not in the sources (Shapiro-Wilk's 3-5000 limit, large samples flagging trivial departures, the null/non-rejection caveat, and the design-based caveats) and does not wrongly claim the sources lack material."}
