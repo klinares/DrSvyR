@@ -28,21 +28,32 @@ suppressPackageStartupMessages({
 
 BUILD_MODEL <- list(api = "openai", base_url = "https://openrouter.ai/api/v1", id = "google/gemma-4-31b-it")
 BUILD_KEY_VAR <- "OPENROUTER_API_KEY"
+# Formula labels: one call per formula group, a stronger model (the one of step 1).
+FORMULA_MODEL <- list(api = "openai", base_url = "https://openrouter.ai/api/v1", id = "google/gemini-4-argon")
+MODELS <- list(BUILD_MODEL, FORMULA_MODEL) |> (function(m) set_names(m, map_chr(m, "id")))()
 BUILD_TEMPERATURE <- 0
 BUILD_MAX_TOKENS <- 4096L
 
 # The whole of step 2: these labels plus the figure lines of 01_convert.R (data/build/figures/).
 COST_CAP_USD <- 15
 EST_USD_CALL <- 0.002        # until 10 calls have been paid
+FORMULA_EST_USD <- 0.007     # the same for formula calls (FORMULA_MODEL)
+# FORMULA_MODEL labels the groups with the most members first, until the cap less this reserve;
+#   BUILD_MODEL labels the groups left over (about 0.0003 USD a call).
+FORMULA_RESERVE_USD <- 1.25
+FORMULA_OUT_TOKENS <- 250    # for the estimate
 IN_FLIGHT <- 8L
 CALL_TIMEOUT_S <- 180
 PASSAGES_PER_CALL <- 10L
 CODE_PER_CALL <- 10L
 PROMPT_TEXT_CHARS <- 4000L   # longest passage text sent
 PROMPT_CODE_CHARS <- 2500L
+PROMPT_CONTEXT_CHARS <- 1500L # each of the two passages before a formula's passage
 
-# What "label" labels: "pilot" (LABEL_PILOT below) or "all".
-LABEL_SCOPE <- "pilot"
+# What "label" labels: "pilot" (LABEL_PILOT below) or "all"; and which kinds of label it asks for
+#   (a kind left out keeps whatever labels the cache already holds).
+LABEL_SCOPE <- "all"
+LABEL_KINDS <- c("passage", "code", "formula")
 LABEL_PILOT <- list(
   function(p) str_starts(p$doc_id, "jpsm/applied_sampling_SURV625/"),
   function(p) str_starts(p$doc_id, "jpsm/total_survey_error_SURV720/lectures/"),
@@ -395,15 +406,15 @@ model_key <- function() {
   k
 }
 
-model_chat <- function(system, key) {
-  if (!identical(BUILD_MODEL$api, "openai")) stop("BUILD_MODEL$api must be 'openai' (an OpenAI-style endpoint).", call. = FALSE)
+model_chat <- function(system, key, m = BUILD_MODEL) {
+  if (!identical(m$api, "openai")) stop("The model's api must be 'openai' (an OpenAI-style endpoint).", call. = FALSE)
   ellmer::chat_openai_compatible(
-    base_url = BUILD_MODEL$base_url, name = sub("^[a-z]+://([^/]+).*$", "\\1", BUILD_MODEL$base_url), system_prompt = system,
-    credentials = function() key, model = BUILD_MODEL$id, params = ellmer::params(temperature = BUILD_TEMPERATURE),
+    base_url = m$base_url, name = sub("^[a-z]+://([^/]+).*$", "\\1", m$base_url), system_prompt = system,
+    credentials = function() key, model = m$id, params = ellmer::params(temperature = BUILD_TEMPERATURE),
     echo = "none", api_args = list(max_tokens = BUILD_MAX_TOKENS, usage = list(include = TRUE)))
 }
 
-prompt_hash <- function(system, user) digest::digest(paste(BUILD_MODEL$id, system, user, sep = "\n\u0001\n"), algo = "sha256", serialize = FALSE)
+prompt_hash <- function(system, user, model_id = BUILD_MODEL$id) digest::digest(paste(model_id, system, user, sep = "\n\u0001\n"), algo = "sha256", serialize = FALSE)
 cache_file <- function(h) file.path(CACHE_DIR, substr(h, 1, 2), paste0(h, ".json"))
 cached <- function(h) { f = cache_file(h); if (file.exists(f)) jsonlite::read_json(f) else NULL }
 
@@ -415,15 +426,20 @@ spent_so_far <- function() {
 # Replies for jobs (system, user, hash), from the cache or from BUILD_MODEL, IN_FLIGHT at a time in
 #   this one R process (chat_async, later::run_now), until COST_CAP_USD. Returns the reply text per
 #   job (NA when not available) and keeps a tally in run.
-get_replies <- function(jobs, key, run) {
+get_replies <- function(jobs, key, run, est = EST_USD_CALL) {
+  if (is.null(jobs$model_id)) jobs$model_id = BUILD_MODEL$id
   have = map(jobs$hash, cached)
   todo = which(map_lgl(have, is.null))
   if (length(todo) && is.null(key)) return(map_chr(have, function(x) x$text %||% NA_character_))
   groups = split(todo, ceiling(seq_along(todo) / IN_FLIGHT))
+  loc = new.env()   # this batch's own cost per call: the models' prices differ
+  loc$usd = 0
+  loc$n = 0L
   walk(groups, function(ix) {
-    per_call = if (run$calls >= 10) run$usd / run$calls else EST_USD_CALL
-    if (isTRUE(run$stopped) || run$spent + length(ix) * per_call > COST_CAP_USD) {
-      if (!isTRUE(run$stopped)) message(sprintf("Stopped: the next calls would pass the %.0f USD cap (%.3f spent).", COST_CAP_USD, run$spent))
+    per_call = if (loc$n >= 10) loc$usd / loc$n else est
+    cap = run$cap %||% COST_CAP_USD
+    if (isTRUE(run$stopped) || run$spent + length(ix) * per_call > cap) {
+      if (!isTRUE(run$stopped)) message(sprintf("Stopped: the next calls would pass %.2f USD (%.3f spent).", cap, run$spent))
       run$stopped = TRUE
       return(invisible())
     }
@@ -434,7 +450,7 @@ get_replies <- function(jobs, key, run) {
     state$done = rep(FALSE, length(ix))
     settle = function(i, v) { state$out[[i]] = v; state$done[[i]] = TRUE }
     iwalk(ix, function(j, i) {
-      chat = model_chat(jobs$system[j], key)
+      chat = model_chat(jobs$system[j], key, MODELS[[jobs$model_id[j]]])
       started = Sys.time()
       tryCatch(promises::then(chat$chat_async(jobs$user[j]),
                               onFulfilled = function(v) settle(i, tryCatch(cv$reply_facts(chat, v, started), error = function(e) list(error = cv$root_message(e, key)))),
@@ -449,10 +465,12 @@ get_replies <- function(jobs, key, run) {
       run$usd = run$usd + r$usd
       run$spent = run$spent + r$usd
       run$paid = run$paid + 1L
+      loc$usd = loc$usd + r$usd
+      loc$n = loc$n + 1L
       f = cache_file(jobs$hash[j])
       dir.create(dirname(f), recursive = TRUE, showWarnings = FALSE)
       jsonlite::write_json(list(kind = jobs$kind[j], text = r$text, usd = r$usd, tokens_in = r$tokens_in, tokens_out = r$tokens_out,
-                                usd_reported = r$usd_reported, finish = r$finish, model = BUILD_MODEL$id,
+                                usd_reported = r$usd_reported, finish = r$finish, model = jobs$model_id[j],
                                 at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S")), f, auto_unbox = TRUE, digits = NA)
       have[[j]] <<- list(text = r$text)
     })
@@ -481,25 +499,37 @@ passage_text <- function(lines, lf, lt, limit = PROMPT_TEXT_CHARS) {
 }
 
 passage_user <- function(v, items) paste0(
-  "Tag vocabulary (facet: value: definition):\n", vocab_block(v, c("tse", "stage", "design", "kind")), "\n\n",
+  "Tag vocabulary (facet: value: definition):\n", vocab_block(v, c("tse", "stage", "design", "kind", "topic")), "\n\n",
   "For each passage below return one JSON object with these fields:\n",
   "  id: the passage id as given\n",
   "  description: one sentence, at most 25 words, saying what the passage lets a survey researcher do or know\n",
   "  tse: up to 2 values from tse\n  stage: up to 2 values from stage\n  design: up to 2 values from design\n",
-  "  kind: 1 to 3 values from kind\n  topic_free: up to 3 short noun phrases in your own words\n",
+  "  kind: 1 to 3 values from kind\n",
+  "  topic: 1 to 3 values from topic (\"other\" only when nothing fits)\n",
+  "  topic_free: up to 3 short noun phrases in your own words\n",
+  "Rules: a table or example that carries out a selection is stage \"sample selection\". A passage about computing an ",
+  "estimate has tse \"none\" unless it discusses an error source. Never exceed the number of values allowed for a field.\n",
   "Return a JSON array with one object per passage, in the order given.\n\nPassages:\n",
   jsonlite::toJSON(items, auto_unbox = TRUE, pretty = FALSE))
 
-formula_user <- function(v, text, eqs) paste0(
+SYSTEM_FORMULA <- paste(
+  "You label displayed equations from survey methodology course materials for a searchable catalog.",
+  "Use only the tag values listed, spelled exactly as listed. Never rewrite the equation.",
+  "Reply with one JSON object only, no prose and no code fences.")
+
+formula_user <- function(v, course, doc, before, text, latex) paste0(
   "Tag vocabulary (facet: value: definition):\n", vocab_block(v, c("role", "design", "tse")), "\n\n",
-  "Below is a passage and the displayed equations it holds. For each equation return one JSON object:\n",
-  "  id: the equation id as given\n",
+  "Course: ", course, "\nDocument: ", doc, "\n\n",
+  if (nzchar(before)) paste0("Text before the passage:\n", before, "\n\n") else "",
+  "Passage:\n", text, "\n\nEquation (id f1):\n$$", latex, "$$\n\n",
+  "Return one JSON object with these fields:\n",
+  "  id: \"f1\"\n",
   "  name: a specific name, at most 10 words (e.g. \"Variance of the ratio estimator under SRS\")\n",
-  "  role: one value from role\n  design: up to 2 values from design\n  tse: up to 2 values from tse\n",
-  "  symbols: an array of {\"symbol\": ..., \"meaning\": ...}, ONLY for symbols whose meaning the passage states; omit any other symbol\n",
-  "  condition: when the equation applies, only if the passage says so, else \"\"\n",
-  "Return a JSON array with one object per equation.\n\nPassage:\n", text, "\n\nEquations:\n",
-  jsonlite::toJSON(eqs, auto_unbox = TRUE, pretty = FALSE))
+  "  role: one value from role\n  f_design: up to 2 values from design\n  f_tse: up to 2 values from tse\n",
+  "  general: true when the equation is a symbolic statement that holds beyond one example; false when it is a ",
+  "numeric worked instance or a step specific to one exercise\n",
+  "  symbols: an array of {\"symbol\": ..., \"meaning\": ...}, ONLY for symbols whose meaning is stated in the text given; omit any other symbol\n",
+  "  condition: when the equation applies, only if the text states it, else \"\"\n")
 
 code_user <- function(items) paste0(
   "For each R code block below return one JSON object: id (as given) and task (one sentence: what the code does for a survey researcher).\n",
@@ -509,7 +539,7 @@ code_user <- function(items) paste0(
 parse_reply <- function(txt) {
   if (is.na(txt)) return("no reply")
   t = str_trim(str_remove_all(txt, "^```(?:json)?\\s*|\\s*```$"))
-  t = str_sub(t, str_locate(t, fixed("["))[1] %|% 1L, nchar(t))
+  t = str_sub(t, str_locate(t, "[\\[{]")[1] %|% 1L, nchar(t))   # an array, or one object
   x = tryCatch(jsonlite::fromJSON(t, simplifyVector = FALSE), error = function(e) NULL)
   if (is.null(x) || !is.list(x)) return("not valid JSON")
   if (!is.null(names(x)) && !is.null(x$id)) x = list(x)
@@ -528,11 +558,19 @@ check_reply <- function(x, ids, v, fields) {
   if (length(bad)) paste(unique(bad), collapse = "; ") else character(0)
 }
 
-obj_problems <- function(o, v, fields) unlist(imap(fields, function(lim, f) {
-  t = as_tags(o[[f]])
-  c(if (length(t) < lim[1] || length(t) > lim[2]) sprintf("%s has %d values", f, length(t)),
-    if (f %in% v$facet) { out = setdiff(t, v$value[v$facet == f]); if (length(out)) sprintf("%s not in vocabulary: %s", f, paste(out, collapse = ", ")) })
-}))
+# Problems of one object, each naming the object and the limit broken. A field's spec is c(min, max)
+#   values, or "logical" (true or false). f_design and f_tse take the design and tse vocabulary.
+obj_problems <- function(o, v, fields) {
+  id = as.character(o$id %||% "?")
+  unlist(imap(fields, function(lim, f) {
+    if (identical(lim, "logical")) return(if (!(isTRUE(o[[f]]) || isFALSE(o[[f]]))) sprintf("%s: %s must be true or false", id, f))
+    t = as_tags(o[[f]])
+    facet = sub("^f_", "", f)
+    limit = if (lim[1] == lim[2]) sprintf("exactly %d", lim[1]) else if (lim[1] > 0) sprintf("%d to %d", lim[1], lim[2]) else sprintf("at most %d", lim[2])
+    c(if (length(t) < lim[1] || length(t) > lim[2]) sprintf("%s: %s has %d values, %s allowed", id, f, length(t), limit),
+      if (facet %in% v$facet) { out = setdiff(t, v$value[v$facet == facet]); if (length(out)) sprintf("%s: %s not in the vocabulary: %s", id, f, paste(out, collapse = ", ")) })
+  }))
+}
 
 # After the retry: the objects of a reply that are valid on their own (known id, tags in the
 #   vocabulary, counts within limits) are kept; the rest are recorded as problems.
@@ -545,22 +583,23 @@ salvage <- function(x, ids, v, fields) {
        why = paste(unique(unlist(map(x[!ok], obj_problems, v = v, fields = fields))), collapse = "; "))
 }
 
-retry_user <- function(user, why) paste0(user, "\n\nYour previous reply was not valid (", why, "). Reply again with the JSON array only, following the format exactly.")
+retry_user <- function(user, why) paste0(user, "\n\nYour previous reply was not valid: ", why, ". Reply again with JSON only, following the format and the limits exactly.")
 
 # Jobs -> replies -> one retry for invalid replies -> parsed objects per job (the valid ones only
 #   when the retry is still invalid).
-run_jobs <- function(jobs, key, run, v) {
+run_jobs <- function(jobs, key, run, v, est = EST_USD_CALL) {
   if (!nrow(jobs)) return(list())
-  jobs$hash = map2_chr(jobs$system, jobs$user, prompt_hash)
-  r1 = get_replies(jobs, key, run)
+  if (is.null(jobs$model_id)) jobs$model_id = BUILD_MODEL$id
+  jobs$hash = pmap_chr(list(jobs$system, jobs$user, jobs$model_id), prompt_hash)
+  r1 = get_replies(jobs, key, run, est)
   p1 = map(r1, parse_reply)
   why1 = pmap(list(p1, jobs$ids, jobs$fields), function(x, ids, f) check_reply(x, ids, v, f))
   bad = which(map_lgl(why1, function(w) length(w) > 0) & !is.na(r1))
   out = map2(p1, why1, function(x, w) if (length(w)) NULL else x)
   if (length(bad)) {
     j2 = jobs[bad, ] |> mutate(user = map2_chr(user, why1[bad], retry_user))
-    j2$hash = map2_chr(j2$system, j2$user, prompt_hash)
-    r2 = get_replies(j2, key, run)
+    j2$hash = pmap_chr(list(j2$system, j2$user, j2$model_id), prompt_hash)
+    r2 = get_replies(j2, key, run, est)
     p2 = map(r2, parse_reply)
     why2 = pmap(list(p2, j2$ids, j2$fields), function(x, ids, f) check_reply(x, ids, v, f))
     sv = pmap(list(p2, j2$ids, j2$fields), function(x, ids, f) salvage(x, ids, v, f))
@@ -581,9 +620,9 @@ flat <- function(x) paste(as_tags(x), collapse = ";")
 
 # Label columns, empty, so the joins work when nothing is labelled yet.
 EMPTY_LP <- tibble(passage_id = character(), description = character(), tse = character(), stage = character(),
-                   design = character(), kind = character(), topic_free = character())
-EMPTY_LF <- tibble(formula_id = character(), name = character(), role = character(), f_design = character(),
-                   f_tse = character(), symbols = character(), condition = character())
+                   design = character(), kind = character(), topic = character(), topic_free = character())
+EMPTY_LF <- tibble(group_id = character(), f_model = character(), name = character(), role = character(), f_design = character(),
+                   f_tse = character(), general = logical(), symbols = character(), condition = character())
 EMPTY_LC <- tibble(code_id = character(), task = character())
 
 label_passages <- function(P, cat, key, run, v) {
@@ -597,38 +636,63 @@ label_passages <- function(P, cat, key, run, v) {
   jobs = tibble(kind = "passage", system = SYSTEM_LABEL,
                 user = map_chr(batches, function(b) passage_user(v, map(seq_along(b), function(i) modifyList(items[[b[i]]], list(id = paste0("p", i)))))),
                 ids = map(batches, function(b) paste0("p", seq_along(b))), real = map(batches, function(b) P$passage_id[b]),
-                fields = list(list(tse = c(0, 2), stage = c(0, 2), design = c(0, 2), kind = c(1, 3), topic_free = c(0, 3))))
+                fields = list(list(tse = c(0, 2), stage = c(0, 2), design = c(0, 2), kind = c(1, 3), topic = c(1, 3), topic_free = c(0, 3))))
   res = run_jobs(jobs, key, run, v)
   map2(batches, res, function(b, x) {
     if (is.null(x) || is.character(x)) return(NULL)
     map_dfr(x, function(o) tibble(passage_id = P$passage_id[b[as.integer(str_remove(o$id, "^p"))]],
                                   description = str_squish(as.character(o$description %||% "")), tse = flat(o$tse), stage = flat(o$stage),
-                                  design = flat(o$design), kind = flat(o$kind), topic_free = flat(o$topic_free)))
+                                  design = flat(o$design), kind = flat(o$kind), topic = flat(o$topic), topic_free = flat(o$topic_free)))
   }) |> list_rbind() |> (function(x) bind_rows(EMPTY_LP, x))()
 }
 
-label_formulas <- function(F, P, cat, key, run, v) {
-  F = F |> filter(passage_id %in% P$passage_id)
+# One instance per formula group: the member whose passage is longest. Its prompt carries that
+#   passage, the two passages before it in the same document, the document title and course.
+formula_jobs <- function(F, Pall, cat, v) {
+  pidx = Pall |> group_by(doc_id) |> mutate(k = row_number()) |> ungroup() |> select(passage_id, doc_id, k, chars, line_from, line_to)
+  members = F |> count(group_id, name = "members")
+  inst = F |> left_join(select(pidx, passage_id, pchars = chars), by = "passage_id") |>
+    arrange(group_id, desc(coalesce(pchars, -1L)), formula_id) |> distinct(group_id, .keep_all = TRUE) |>
+    left_join(members, by = "group_id") |> arrange(desc(members), group_id)
+  docs = cat$docs
+  tibble(kind = "formula", system = SYSTEM_FORMULA, model_id = FORMULA_MODEL$id, group_id = inst$group_id,
+         user = pmap_chr(list(inst$doc_id, inst$passage_id, inst$latex), function(did, pid, latex) {
+           d = docs[docs$doc_id == did, ]
+           lines = cat$lines[[did]]
+           p = pidx[pidx$passage_id %in% pid, ]
+           text = if (nrow(p)) passage_text(lines, p$line_from, p$line_to) else ""
+           prev = if (nrow(p)) pidx |> filter(doc_id == did, k %in% (p$k - 2:1)) |> arrange(k) else pidx[0, ]
+           before = paste(map2_chr(prev$line_from, prev$line_to, function(a, b) passage_text(lines, a, b, PROMPT_CONTEXT_CHARS)), collapse = "\n\n")
+           formula_user(v, d$course_title, d$title, before, text, latex)
+         }),
+         ids = list("f1"), real = map(inst$group_id, function(g) g),
+         fields = list(list(role = c(1, 1), f_design = c(0, 2), f_tse = c(0, 2), general = "logical")))
+}
+
+# FORMULA_MODEL first, in order of group size, up to COST_CAP_USD - FORMULA_RESERVE_USD; every
+#   group it did not label (not reached, or still invalid after the retry) goes to BUILD_MODEL with
+#   the same prompt. On a rerun each group takes the FORMULA_MODEL reply from the cache if there is one.
+label_formulas <- function(F, Pall, cat, key, run, v) {
   if (!nrow(F)) return(EMPTY_LF)
-  byp = split(F, F$passage_id)
-  jobs = tibble(kind = "formula", system = SYSTEM_LABEL,
-                user = map_chr(byp, function(f) {
-                  p = P[P$passage_id == f$passage_id[1], ]
-                  formula_user(v, passage_text(cat$lines[[p$doc_id]], p$line_from, p$line_to),
-                               map(seq_len(nrow(f)), function(i) list(id = paste0("f", i), latex = f$latex[i])))
-                }),
-                ids = map(byp, function(f) paste0("f", seq_len(nrow(f)))), real = map(byp, function(f) f$formula_id),
-                fields = list(list(role = c(1, 1), design = c(0, 2), tse = c(0, 2))))
-  res = run_jobs(jobs, key, run, v)
-  map2(byp, res, function(f, x) {
-    if (is.null(x) || is.character(x)) return(NULL)
-    map_dfr(x, function(o) {
-      sy = keep(o$symbols %||% list(), is.list)
-      tibble(formula_id = f$formula_id[as.integer(str_remove(o$id, "^f"))], name = str_squish(as.character(o$name %||% "")),
-             role = flat(o$role), f_design = flat(o$design), f_tse = flat(o$tse),
-             symbols = paste(map_chr(sy, function(s) paste0(s$symbol %||% "", " = ", s$meaning %||% "")), collapse = "; "),
-             condition = str_squish(as.character(o$condition %||% "")))
-    })
+  jobs = formula_jobs(F, Pall, cat, v)
+  run$cap = COST_CAP_USD - FORMULA_RESERVE_USD
+  res = run_jobs(jobs, key, run, v, est = FORMULA_EST_USD)
+  run$cap = NULL
+  run$stopped = FALSE
+  done = map_lgl(res, function(x) !is.null(x) && !is.character(x) && length(x) > 0)
+  if (any(!done)) {
+    rest = jobs[!done, ] |> mutate(model_id = BUILD_MODEL$id)
+    res[!done] = run_jobs(rest, key, run, v)
+  }
+  by = if_else(done, FORMULA_MODEL$id, BUILD_MODEL$id)
+  pmap(list(jobs$group_id, res, by), function(g, x, m) {
+    if (is.null(x) || is.character(x) || !length(x)) return(NULL)
+    o = x[[1]]
+    sy = keep(o$symbols %||% list(), is.list)
+    tibble(group_id = g, f_model = m, name = str_squish(as.character(o$name %||% "")),
+           role = flat(o$role), f_design = flat(o$f_design), f_tse = flat(o$f_tse), general = isTRUE(o$general),
+           symbols = paste(map_chr(sy, function(s) paste0(s$symbol %||% "", " = ", s$meaning %||% "")), collapse = "; "),
+           condition = str_squish(as.character(o$condition %||% "")))
   }) |> list_rbind() |> (function(x) bind_rows(EMPTY_LF, x))()
 }
 
@@ -645,6 +709,26 @@ label_code <- function(K, P, key, run, v) {
     if (is.null(x) || is.character(x)) return(NULL)
     map_dfr(x, function(o) tibble(code_id = K$code_id[b[as.integer(str_remove(o$id, "^c"))]], task = str_squish(as.character(o$task %||% ""))))
   }) |> list_rbind() |> (function(x) bind_rows(EMPTY_LC, x))()
+}
+
+# Calls not yet in the cache and their cost: formulas from prompt length at FORMULA_MODEL's price,
+#   passages and code from the mean cost per call of that kind in the cache. No call is made.
+estimate_calls <- function(scope, Fs, P, K, cat, v) {
+  C = map_dfr(list.files(CACHE_DIR, pattern = "[.]json$", recursive = TRUE, full.names = TRUE), function(f) {
+    j = jsonlite::read_json(f); tibble(kind = j$kind %||% NA, usd = as.numeric(j$usd %||% 0), model = j$model %||% NA) })
+  per = C |> filter(model %in% BUILD_MODEL$id) |> group_by(kind) |> summarise(u = mean(usd), .groups = "drop")
+  fj = formula_jobs(Fs, P, cat, v)
+  fj$hash = pmap_chr(list(fj$system, fj$user, fj$model_id), prompt_hash)
+  new_f = !file.exists(map_chr(fj$hash, cache_file))
+  tokens_in = (nchar(fj$system) + nchar(fj$user))[new_f] / 3.6
+  usd_f = sum(tokens_in * cv$PRICE_PER_M[["input"]] + FORMULA_OUT_TOKENS * cv$PRICE_PER_M[["output"]]) / 1e6
+  n_p = ceiling(nrow(scope) / PASSAGES_PER_CALL)
+  n_c = ceiling(sum(K$passage_id %in% scope$passage_id & !K$is_output & K$language %in% "r") / CODE_PER_CALL)
+  est = tibble(kind = c("passage", "code", "formula"), calls = c(n_p, n_c, sum(new_f)),
+               usd = c(n_p * per$u[per$kind == "passage"] * 1.3, n_c * per$u[per$kind == "code"], usd_f))
+  print(as.data.frame(est))
+  message(sprintf("Formula prompts: %.0f input tokens on average; %.2f USD spent in step 2, cap %.0f.", mean(tokens_in), spent_so_far(), COST_CAP_USD))
+  est
 }
 
 in_scope <- function(p) {
@@ -667,7 +751,7 @@ write_split <- function(x, name) {
 src_of <- function(id) str_extract(id, "^[^/]+")
 
 main <- function(mode = "parse") {
-  mode = match.arg(mode, c("parse", "label"))
+  mode = match.arg(mode, c("parse", "label", "estimate"))
   t0 = Sys.time()
   docs = utils::read.csv(MANIFEST_CSV, stringsAsFactors = FALSE, colClasses = "character") |> filter(file.exists(markdown))
   message(nrow(docs), " documents in the manifest with markdown.")
@@ -685,16 +769,19 @@ main <- function(mode = "parse") {
   run = new.env()
   run$spent = spent_so_far(); run$usd = 0; run$calls = 0L; run$paid = 0L; run$errors = 0L
   run$invalid1 = 0L; run$unanswered = 0L; run$problems = tibble()
-  key = if (mode == "label") model_key() else NULL   # parse: labels from the cache only
+  key = if (mode == "label") model_key() else NULL   # parse, estimate: labels from the cache only
   scope = P[in_scope(P), ]
-  lp = label_passages(scope, cat, key, run, v)
-  lf = label_formulas(F, scope, cat, key, run, v)
-  lc = label_code(K, scope, key, run, v)
+  Fs = if (LABEL_SCOPE == "all") F else F |> filter(passage_id %in% scope$passage_id)
+  if (mode == "estimate") return(invisible(estimate_calls(scope, Fs, P, K, cat, v)))
+  key_for = function(kind) if (kind %in% LABEL_KINDS) key else NULL
+  lp = label_passages(scope, cat, key_for("passage"), run, v)
+  lc = label_code(K, scope, key_for("code"), run, v)
+  lf = label_formulas(Fs, P, cat, key_for("formula"), run, v)   # last: the dearest calls
   utils::write.csv(bind_rows(tibble(kind = character(), ids = character(), kept = integer(), reason = character(), reply = character()),
                              run$problems), PROBLEMS_CSV, row.names = FALSE, na = "", fileEncoding = "UTF-8")
 
   P = P |> left_join(lp, by = "passage_id")
-  F = F |> left_join(lf, by = "formula_id") |> mutate(source = src_of(doc_id), .after = doc_id)
+  F = F |> left_join(lf, by = "group_id") |> mutate(source = src_of(doc_id), .after = doc_id)
   K = K |> select(-body) |> left_join(lc, by = "code_id") |> mutate(source = src_of(doc_id), .after = doc_id)
   fur = cat$furniture |> mutate(source = src_of(doc_id), .after = doc_id)
   write_split(P, "passages.csv")
