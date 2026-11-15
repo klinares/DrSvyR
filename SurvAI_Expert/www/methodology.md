@@ -2,6 +2,23 @@
 
 How the tool works, what it was built from, and how well it did when tested.
 
+## The sources of error
+
+| Source of error | The question to ask |
+|---|---|
+| Coverage | Could everyone in the population have been reached? |
+| Sampling | How were people selected, and how much would the result change with a different sample? |
+| Nonresponse | Who did not answer, and are they different from those who did? |
+| Validity | Does the question measure what you mean to measure? |
+| Measurement | Did people answer accurately, and did the interviewer or the mode affect them? |
+| Processing | Were answers coded, edited and cleaned without changing them? |
+| Adjustment | Do the weights correct the problems above, or add new ones? |
+
+For data that was not collected by a survey, such as administrative records
+or data from apps and websites, it asks the matching questions: who ends up
+in the data, how records were linked, and how the system that produced the
+data shaped it.
+
 ## What is in the library
 
 The library is teaching material in four areas: applied sampling, survey
@@ -10,7 +27,7 @@ It holds lecture notes, slides, exercises and their solutions, a textbook on
 sample design and weighting, and open books on survey analysis.
 
 Each document was split into short passages. Every passage keeps the page it
-came from, so an answer can point you back to the original.
+came from, so that each statement in an answer can be traced to the original.
 
 <details><summary>More detail</summary>
 
@@ -35,7 +52,7 @@ came from, so an answer can point you back to the original.
    into parts, and each part is searched on its own.
 2. The library is searched, and the passages, formulas and examples that
    match best are kept.
-3. The answer is written from what was found, and each statement points to
+3. The answer is written from what was found, and each statement is tied to
    the passage it came from.
 4. The answer is checked before you see it: every source it points to must
    exist, every formula must come from the library, and any code must be
@@ -52,12 +69,20 @@ came from, so an answer can point you back to the original.
 - Formulas are never retyped by the writer of the answer. It names the
   formula it wants, and the exact formula from the library is put in its
   place.
-- A sentence that points to no passage is shown with a dotted underline.
-  Anything added from outside the library is labelled "Not from the library".
+- When a formula is shown, a short example in R that computes it follows,
+  built from the worked examples in the library.
 - Each question uses two calls to the language model: one to plan the
   search and one to write the answer.
 
 </details>
+
+## How it keeps answers accurate
+
+- It answers from the library: each statement comes from a passage it found.
+- Formulas are copied from the library exactly. They are never retyped.
+- If the library does not cover your question, it says so.
+- Anything it adds from outside the library is labelled
+  "Not from the library".
 
 ## How it was tested
 
@@ -90,7 +115,7 @@ came from, so an answer can point you back to the original.
   give it, and you run it yourself.
 - It knows only what is in the library. When the passages found do not cover
   a point, it says so.
-- It can be wrong. Read the passages it points to, especially before a
-  decision that carries weight, and ask a methodologist when it matters.
+- It can be wrong. Check what matters against a textbook or a methodologist,
+  especially before a decision that carries weight.
 - The Report reader reads the report you upload; it does not search the
   library, and a scanned report with no text layer cannot be read.

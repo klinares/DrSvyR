@@ -16,7 +16,10 @@ APP_CSS <- paste(
 # The stream and the progress note are written straight into the page while a question runs.
 APP_JS <- paste(
   "Shiny.addCustomMessageHandler('survai-html', function(m) {",
-  "  var el = document.getElementById(m.id); if (el) el.innerHTML = m.html; });")
+  "  var el = document.getElementById(m.id); if (el) el.innerHTML = m.html; });",
+  "function survaiCopy(b) { var c = b.parentElement.querySelector('code'); if (!c) return;",
+  "  navigator.clipboard.writeText(c.innerText).then(function() { b.textContent = 'Copied'; });",
+  "  setTimeout(function() { b.textContent = 'Copy'; }, 1500); }")
 
 advice_box <- function(...)
   tags$div(style = paste("background: var(--bs-tertiary-bg); border-left: 3px solid var(--bs-primary);",
@@ -40,10 +43,10 @@ office_logo <- function(file, office = "") {
 
 # ---- Start here ---------------------------------------------------------------------------------------------
 
-# The page text is www/start_here.md, edited without touching code; read for each session. The
-#   figure below it is www/fw_tse.svg, with its own <title> as alt text.
+# The page text is www/start_here.md, edited without touching code; read for each session. A line
+#   holding only a marker below is replaced by that figure from www/, with its own <title> as alt text.
 START_MD <- "www/start_here.md"
-START_FIGURE <- "fw_tse.svg"
+START_FIGURES <- c("[TSE figure]" = "fw_tse.svg", "[What it does figure]" = "what_it_does.svg")
 
 read_md <- function(file) paste(readLines(file, warn = FALSE, encoding = "UTF-8"), collapse = "
 ")
@@ -54,11 +57,18 @@ svg_title <- function(file) {
   if (is.na(t)) "" else t
 }
 
+figure_tag <- function(file)
+  as.character(tags$img(src = file, alt = svg_title(file), style = "width: 100%; max-width: 900px; display: block; margin: 1em 0;"))
+
+with_figures <- function(text, figures = START_FIGURES)
+  reduce2(names(figures), unname(figures), function(txt, marker, file)
+    str_replace_all(txt, paste0("(?m)^[ \\t]*", str_replace_all(marker, "([\\[\\]])", "\\\\\\1"), "[ \\t]*$"), figure_tag(file)),
+    .init = text)
+
 start_ui <- function(id) {
   ns = NS(id)
   tagList(
     uiOutput(ns("text")),
-    tags$img(src = START_FIGURE, alt = svg_title(START_FIGURE), style = "width: 100%; max-width: 900px; display: block; margin: 1em 0;"),
     tags$hr(),
     mod_key_ui(ns("key")),
     tags$p(textOutput(ns("calls"), inline = TRUE)))
@@ -67,7 +77,7 @@ start_ui <- function(id) {
 start_server <- function(id, state) {
   moduleServer(id, function(input, output, session) {
     mod_key_server("key", state)
-    output$text = renderUI(md_page(read_md(START_MD)))
+    output$text = renderUI(md_page(with_figures(read_md(START_MD))))
     output$calls = renderText({
       state$calls
       paste0("Each question uses 2 model calls (a plan and an answer). ",
@@ -307,6 +317,8 @@ ask_server <- function(id, state, con, asker = ask_async) {
             })
     }) |> bslib::bind_task_button("ask")
 
+    observe(state$my_data <- map(set_names(names(DATA_FIELDS)), function(f) input[[f]] %||% ""))
+
     observeEvent(input$ask, {
       q = str_squish(input$question %||% "")
       key = session_key(session$token)
@@ -344,7 +356,7 @@ ask_server <- function(id, state, con, asker = ask_async) {
       if (!is.null(r$error)) return(warn_box(tags$strong("The question could not be answered. "), r$error))
       notes = flag_notes(r$checks)
       tagList(HTML(r$html), if (length(notes)) tags$div(class = "survai-flags", map(notes, tags$div)),
-              if (nrow(r$cited)) source_lines(r$cited, ns("open")))
+              if (SHOW_SOURCES && nrow(r$cited)) source_lines(r$cited, ns("open")))
     })
 
     # a source in the list, or a citation in the answer, opens its passage in a window
@@ -360,24 +372,28 @@ ask_server <- function(id, state, con, asker = ask_async) {
 
 
 # ==== Formulas ====
-# Searches the stored formulas; no model calls.
+# Searches the stored formulas; no model calls, except "Show me how in R" (2 calls, the key needed).
 
 FORMULA_RESULTS <- 40L
+FORMULA_EXAMPLES <- 3L
 
 formulas_ui <- function(id) {
   ns = NS(id)
   v = read_vocab()
-  courses = character()   # filled in by the server, from the store
   pick = function(name, label, choices) selectizeInput(ns(name), label, choices = choices, multiple = TRUE, width = "100%")
-  bslib::layout_columns(col_widths = c(7, 5),
-    tagList(
-      textInput(ns("query"), "Search formulas", width = "100%", placeholder = "e.g. variance of the ratio estimator"),
-      bslib::layout_columns(col_widths = c(3, 3, 3, 3),
-        pick("role", "Role", v$value[v$facet == "role"]), pick("design", "Design", v$value[v$facet == "design"]),
-        pick("topic", "Topic", v$value[v$facet == "topic"]), pick("course", "Course", courses)),
-      checkboxInput(ns("general"), "General formulas only", value = TRUE),
-      uiOutput(ns("results")), uiOutput(ns("detail"))),
-    card_ui(ns("card")))
+  search = tagList(
+    textInput(ns("query"), "Search formulas", width = "100%", placeholder = "e.g. variance of the ratio estimator"),
+    if (SHOW_SOURCES) bslib::layout_columns(col_widths = c(3, 3, 3, 3),
+      pick("role", "Role", v$value[v$facet == "role"]), pick("design", "Design", v$value[v$facet == "design"]),
+      pick("topic", "Topic", v$value[v$facet == "topic"]), pick("course", "Course", character()))   # courses: from the server
+    else bslib::layout_columns(col_widths = c(4, 4, 4),
+      pick("role", "Role", v$value[v$facet == "role"]), pick("design", "Design", v$value[v$facet == "design"]),
+      pick("topic", "Topic", v$value[v$facet == "topic"])),
+    checkboxInput(ns("general"), "General formulas only", value = TRUE),
+    uiOutput(ns("results")), uiOutput(ns("detail")),
+    tags$div(id = ns("how_progress"), class = "text-muted small"), uiOutput(ns("how")))
+  if (SHOW_SOURCES) bslib::layout_columns(col_widths = c(7, 5), search, card_ui(ns("card")))
+  else tags$div(style = "max-width: 900px;", search)
 }
 
 symbol_table <- function(symbols) {
@@ -391,28 +407,47 @@ symbol_table <- function(symbols) {
 
 `%|NA%` <- function(a, b) if (is.na(a)) b else a
 
-formulas_server <- function(id, con) {
+# R code, highlighted, with a button that copies it.
+code_box <- function(code)
+  tags$div(style = "position: relative;",
+           tags$button(type = "button", class = "btn btn-sm btn-outline-secondary", style = "position: absolute; top: 4px; right: 4px;",
+                       onclick = "survaiCopy(this)", "Copy"),
+           HTML(highlight_r(code)))
+
+examples_box <- function(ex)
+  tagList(tags$h6("R examples from the library", style = "margin-top: 1em;"),
+          if (!nrow(ex)) tags$p(class = "text-muted small", "No example in the library for this formula.")
+          else map2(ex$task, ex$code, function(t, cd) tagList(if (nzchar(t %||% "")) tags$p(class = "small", tags$em(t)), code_box(cd))))
+
+formula_question <- function(name) sprintf("How do I compute %s in R?", name)
+
+formulas_server <- function(id, state, con, asker = ask_async) {
   moduleServer(id, function(input, output, session) {
     ns = session$ns
-    updateSelectizeInput(session, "course", choices = dbGetQuery(con, "SELECT DISTINCT course FROM docs WHERE course <> '' ORDER BY course")$course)
+    send = function(el, html) session$sendCustomMessage("survai-html", list(id = ns(el), html = as.character(html)))
+    if (SHOW_SOURCES) updateSelectizeInput(session, "course", choices = dbGetQuery(con, "SELECT DISTINCT course FROM docs WHERE course <> '' ORDER BY course")$course)
     found = reactive(find_formulas(con, input$query %||% "", role = input$role, design = input$design,
                                    general = if (isTRUE(input$general)) TRUE else NULL, k = FORMULA_RESULTS,
-                                   topic = input$topic, course = input$course)) |> debounce(400)
+                                   topic = input$topic, course = if (SHOW_SOURCES) input$course)) |> debounce(400)
     picked = reactiveVal(NULL)
     shown = reactiveVal(NULL)
+    how = reactiveVal(NULL)
     output$results = renderUI({
       f = found()
       if (!nrow(f)) return(tags$p(class = "text-muted", "No formula matches."))
       tags$div(style = "max-height: 320px; overflow-y: auto;", tags$ol(class = "small", map(seq_len(nrow(f)), function(i)
         tags$li(HTML(open_link(ns("pick"), f$group_id[i], htmltools::htmlEscape(f$name[i]))),
-                tags$span(class = "text-muted", paste0(" (", f$course[i], ", ", f$title[i], ")"))))))
+                if (SHOW_SOURCES) tags$span(class = "text-muted", paste0(" (", f$course[i], ", ", f$title[i], ")"))))))
     })
-    observeEvent(input$pick, picked(input$pick))
-    output$detail = renderUI({
+    observeEvent(input$pick, { picked(input$pick); how(NULL); send("how_progress", "") })
+    row = reactive({
       g = picked()
       f = found()
-      if (is.null(g) || !g %in% f$group_id) return(NULL)
-      r = f[f$group_id == g, ][1, ]
+      if (is.null(g) || !g %in% f$group_id) NULL else f[f$group_id == g, ][1, ]
+    })
+    output$detail = renderUI({
+      r = row()
+      if (is.null(r)) return(NULL)
       ids = unlist(r$place_ids)
       places = str_split_1(r$places, "; ")
       tagList(tags$hr(), tags$h5(r$name),
@@ -420,11 +455,57 @@ formulas_server <- function(id, con) {
               tags$p(class = "small", tags$strong("Role: "), r$role, "; ", tags$strong("design: "), r$design),
               symbol_table(r$symbols),
               if (nzchar(r$condition %||% "")) tags$p(class = "small", tags$strong("Condition: "), r$condition),
-              tags$p(class = "small", tags$strong(sprintf("Where it occurs (%d):", length(ids)))),
-              tags$ul(class = "small", map2(ids, places, function(p, lab) tags$li(HTML(open_link(ns("open"), p, htmltools::htmlEscape(lab)))))))
+              if (SHOW_SOURCES) tagList(
+                tags$p(class = "small", tags$strong(sprintf("Where it occurs (%d):", length(ids)))),
+                tags$ul(class = "small", map2(ids, places, function(p, lab) tags$li(HTML(open_link(ns("open"), p, htmltools::htmlEscape(lab))))))),
+              examples_box(formula_examples(con, r$place_ids, r$name, FORMULA_EXAMPLES)),
+              tags$div(style = "margin-top: 0.8em;",
+                       bslib::input_task_button(ns("how_btn"), "Show me how in R", label_busy = "Working..."),
+                       tags$span(class = "small text-muted", " Uses 2 model calls and needs your key (Start here).")))
     })
+
+    # "Show me how in R": ask() with this formula given first, and My data from the Ask tab
+    task = ExtendedTask$new(function(question, key, my_data, pin) {
+      asker(question, MODEL_PROFILE, key, con, NULL, my_data, open_input = ns("how_open"), pin = pin,
+                on_stage = function(s) send("how_progress", c(plan = "Planning the search...", search = "Searching the library...",
+                                                            answer = "Writing the answer...")[[s]]))
+    }) |> bslib::bind_task_button("how_btn")
+    observeEvent(input$how_btn, {
+      r = row()
+      key = session_key(session$token)
+      if (is.null(r)) return()
+      if (is.null(key)) return(showNotification("Paste your API key on Start here first.", type = "warning"))
+      note = call_limit_note(2L, session$token)
+      if (!is.null(note)) return(showNotification(note, type = "error", duration = NULL))
+      add_calls(2L, session$token)
+      state$calls = state$calls + 1L
+      how(NULL)
+      task$invoke(formula_question(r$name), key, state$my_data, r)
+    })
+    observeEvent(task$status(), {
+      if (task$status() == "success") { how(task$result()); send("how_progress", "") }
+      else if (task$status() == "error") {
+        send("how_progress", "")
+        how(list(error = conditionMessage(tryCatch(task$result(), error = function(e) e))))
+      }
+    })
+    output$how = renderUI({
+      r = how()
+      if (is.null(r)) return(NULL)
+      if (!is.null(r$error)) return(warn_box(tags$strong("The question could not be answered. "), r$error))
+      notes = flag_notes(r$checks)
+      tagList(tags$hr(), tags$h6(r$question), HTML(r$html), if (length(notes)) tags$div(class = "survai-flags", map(notes, tags$div)),
+              if (SHOW_SOURCES && nrow(r$cited)) source_lines(r$cited, ns("how_open")))
+    })
+    observeEvent(input$how_open, {
+      s = how()$cited
+      if (is.null(s) || !input$how_open %in% s$label) return()
+      c = source_card(con, s$passage_id[s$label == input$how_open][1])
+      if (!is.null(c)) showModal(source_modal(c, str_remove(input$how_open, "^S")))
+    })
+
     observeEvent(input$open, shown(input$open))
-    card_server("card", con, shown, empty = "Pick a formula, then a place where it occurs, to read the passage here.")
+    if (SHOW_SOURCES) card_server("card", con, shown, empty = "Pick a formula, then a place where it occurs, to read the passage here.")
   })
 }
 

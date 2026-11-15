@@ -57,40 +57,101 @@ ok("sources are renumbered in citation order, the formula's source counted where
      grepl("linearization [S1]", rn$answer, fixed = TRUE) && !anyDuplicated(rn$cited$passage_id) &&
      identical(rn$cited$label, paste0("S", seq_len(nrow(rn$cited)))))
 ok("a citation of a source that was not given shows as [?]", grepl("[?]", renumber_sources("A fact [S99].", g)$answer, fixed = TRUE))
-r <- render_answer(rn$answer, rn$gathered, "ask-open")
-ok("render_answer puts the stored formula in as MathML, with a numbered link to its source and the dotted-text legend",
+r <- render_answer(rn$answer, rn$gathered, "ask-open", show = TRUE)
+ok("sources shown: the stored formula as MathML, a numbered link to its source and the dotted-text legend",
    grepl("<math", r$html) && grepl("source \\d", r$html) && !grepl("{{F:", r$html, fixed = TRUE) && grepl("Dotted text", r$html) &&
      grepl(">1</a>]", r$html, fixed = TRUE))
-stub_ask <- function(question, profile, key, con, context, my_data, open_input, on_stage, on_text) {
+r0 <- render_answer(rn$answer, rn$gathered, "ask-open", show = FALSE)
+ok("sources hidden: the formula is shown, with no citation, no source link, no dotted text and no legend",
+   grepl("<math", r0$html) && !grepl("[S", r0$html, fixed = TRUE) && !grepl("survai-open", r0$html) && !grepl("source \\d", r0$html) &&
+     !grepl("survai-uncited|Dotted text", r0$html) && grepl("linearization.</p>", r0$html, fixed = TRUE))
+ok("sources hidden: a Check: sentence no longer names source numbers",
+   identical(hide_sources("Check: S2 and S4 give different denominators [S2, S4]."), "Check: the passages give different denominators."))
+
+ok("a formula question also gathers R code, and a pinned formula comes first", local({
+  pin = find_formulas(con, "design effect intraclass correlation", k = 1)
+  gp = gather(con, plan, pin = pin)
+  nrow(g$code) > 0 && identical(gp$formulas$group_id[1], pin$group_id) && gp$formulas$fid[1] == "F1"
+}))
+
+stub_ask <- function(question, profile, key, con, context, my_data, open_input, on_stage, on_text = function(x) NULL, pin = NULL) {
   on_stage("plan"); on_stage("search"); on_stage("answer"); on_text("The ratio estimator")
+  .stub$my_data = my_data
+  .stub$pin = pin
+  .stub$question = question
   promises::promise_resolve(ask_result(question, plan, g, canned, c(plan = 0, search = 0), open_input))
 }
+.stub <- new.env()
 
-shiny::testServer(ask_server, args = list(state = reactiveValues(key_version = 0L, calls = 0L), con = con, asker = stub_ask), {
-  set_session_key("not-a-real-key", session$token)
-  session$setInputs(question = plan$question, weight = "wt", strata = "", cluster = "", fpc = "", replicates = "",
-                    outcomes = "", design = "", ask = 1)
-  settle(session, function() !is.null(result()))
-  ok("Ask: the answer shows one collapsed Sources line with only the cited sources, and no count of uncited sentences",
-     grepl("<math", output$answer$html) && grepl(sprintf("<summary>Sources (%d)</summary>", nrow(result()$cited)), output$answer$html, fixed = TRUE) &&
-       nrow(result()$cited) < nrow(g$sources) && !grepl("no citation", output$answer$html))
-  ok("Ask: two calls counted for the session", calls_made(session$token) == 2L)
-  ok("Ask: the answer is kept for a follow-up", identical(context()$question, plan$question))
-  session$setInputs(open = "S1")
-  ok("Ask: clicking a source opens its passage in a window", identical(shown(), "S1"))
-  session$setInputs(new_topic = 1)
-  ok("Ask: New topic clears the follow-up", is.null(context()))
-})
+run_ask <- function(show) {
+  SHOW_SOURCES <<- show
+  state = reactiveValues(key_version = 0L, calls = 0L)
+  shiny::testServer(ask_server, args = list(state = state, con = con, asker = stub_ask), {
+    set_session_key("not-a-real-key", session$token)
+    session$setInputs(question = plan$question, weight = "wt", strata = "strat", cluster = "psu", fpc = "", replicates = "",
+                      outcomes = "", design = "", ask = 1)
+    settle(session, function() !is.null(result()))
+    h = output$answer$html
+    if (show) {
+      ok("Ask, sources shown: one collapsed Sources line with only the cited sources, no count of uncited sentences",
+         grepl("<math", h) && grepl(sprintf("<summary>Sources (%d)</summary>", nrow(result()$cited)), h, fixed = TRUE) &&
+           nrow(result()$cited) < nrow(g$sources) && !grepl("no citation", h))
+      ok("Ask: two calls counted for the session", calls_made(session$token) == 2L)
+      ok("Ask: the answer is kept for a follow-up", identical(context()$question, plan$question))
+      session$setInputs(open = "S1")
+      ok("Ask: clicking a source opens its passage in a window", identical(shown(), "S1"))
+      session$setInputs(new_topic = 1)
+      ok("Ask: New topic clears the follow-up", is.null(context()))
+    } else {
+      ok("Ask, sources hidden: the answer has its formula but no citations, no Sources line and no dotted text",
+         grepl("<math", h) && !grepl("<summary>Sources", h, fixed = TRUE) && !grepl("survai-open|survai-uncited", h) &&
+           result()$checks$cites == 2L)
+      ok("Ask: My data is shared with the other tabs", identical(state$my_data$cluster, "psu"))
+    }
+  })
+  state
+}
+invisible(run_ask(TRUE))
+my_state <- run_ask(FALSE)
 
-shiny::testServer(formulas_server, args = list(con = con), {
-  session$setInputs(query = "variance of the ratio estimator", role = NULL, design = NULL, topic = NULL, course = NULL, general = TRUE)
-  session$elapse(500)
-  ok("Formulas: a search lists formula groups", nrow(found()) > 0 && grepl("ratio", html_of(output$results), ignore.case = TRUE))
-  session$setInputs(pick = found()$group_id[1])
-  ok("Formulas: a formula shows its MathML, symbols and places", grepl("<math", html_of(output$detail)) && grepl("Where it occurs", html_of(output$detail)))
-  session$setInputs(open = unlist(found()$place_ids[1])[1])
-  ok("Formulas: a place opens the source card", grepl("Text file", html_of(output$`card-body`)))
-})
+run_formulas <- function(show) {
+  SHOW_SOURCES <<- show
+  ui = as.character(formulas_ui("formulas"))
+  shiny::testServer(formulas_server, args = list(state = my_state, con = con, asker = stub_ask), {
+    session$setInputs(query = "variance of the ratio estimator", role = NULL, design = NULL, topic = NULL, course = NULL, general = TRUE)
+    session$elapse(500)
+    ok(sprintf("Formulas (sources %s): a search lists formula groups", if (show) "shown" else "hidden"),
+       nrow(found()) > 0 && grepl("ratio", html_of(output$results), ignore.case = TRUE))
+    session$setInputs(pick = found()$group_id[1])
+    d = html_of(output$detail)
+    ok(sprintf("Formulas (sources %s): a formula shows its MathML, symbols, R examples and the Show me how button", if (show) "shown" else "hidden"),
+       grepl("<math", d) && grepl("R examples from the library", d) && grepl("Show me how in R", d) && grepl("2 model calls", d) &&
+         (grepl("survai-code", d) || grepl("No example in the library for this formula.", d, fixed = TRUE)))
+    if (show) {
+      ok("Formulas, sources shown: courses, documents and the places of a formula are listed",
+         grepl("Where it occurs", d) && grepl(">Course<", ui) && grepl("text-muted", html_of(output$results)))
+      session$setInputs(open = unlist(found()$place_ids[1])[1])
+      ok("Formulas: a place opens the source card", grepl("Text file", html_of(output$`card-body`)))
+    } else {
+      ok("Formulas, sources hidden: no course, document or places", !grepl("Where it occurs", d) && !grepl(">Course<", ui) &&
+           !grepl("text-muted", html_of(output$results)))
+      set_session_key("not-a-real-key", session$token)
+      session$setInputs(how_btn = 1)
+      settle(session, function() !is.null(how()))
+      ok("Formulas: Show me how in R asks about this formula, pinned first, with My data from the Ask tab",
+         identical(.stub$pin$group_id, found()$group_id[1]) && identical(.stub$my_data$weight, "wt") &&
+           grepl(found()$name[1], .stub$question, fixed = TRUE) && grepl("<math", html_of(output$how)))
+    }
+  })
+}
+run_formulas(TRUE)
+run_formulas(FALSE)
+ok("formula_examples: code from the formula's passage or its neighbours, at most 3, no output blocks", local({
+  f = find_formulas(con, "design effect intraclass correlation", k = 1)
+  ex = formula_examples(con, f$place_ids, f$name)
+  nrow(ex) <= 3L && !any(dbGetQuery(con, sprintf("SELECT is_output FROM code WHERE code_id IN (%s)",
+                                                  paste(dbQuoteString(con, c(ex$code_id, "none")), collapse = ", ")))$is_output)
+}))
 
 # A small PDF with text, made here; and a Word file when a zip program is at hand.
 pdf_file <- tempfile(fileext = ".pdf")
@@ -123,13 +184,14 @@ shiny::testServer(report_server, args = list(state = reactiveValues(key_version 
 })
 
 JARGON_RX <- "JPSM|SURV\\d|DuckDB|RAG|BM25|jpsm|practools|tidysurvey|survey package|srvyr|ellmer|shiny|Claude|store"
-ok("Start here: the figure is in www/ with its title as alt text", file.exists(file.path("www", START_FIGURE)) &&
-     grepl("Total Survey Error", svg_title(START_FIGURE)) && grepl("fw_tse.svg", as.character(start_ui("start"))))
+ok("Start here: both figures are in www/ and have a title", all(file.exists(file.path("www", START_FIGURES))) &&
+     grepl("Total Survey Error", svg_title(START_FIGURES[[1]])) && nzchar(svg_title(START_FIGURES[[2]])))
 shiny::testServer(start_server, args = list(state = reactiveValues(key_version = 0L, calls = 0L)), {
   page = paste(html_of(output$text), output$calls)
-  ok("Start here: the page text and the call line show, with no library table and no jargon",
-     grepl("Total\\s+Survey\\s+Error", page) && grepl("Not from the library", page) && !grepl("Code examples", page) &&
-       grepl("2 model calls", output$calls) && !grepl(JARGON_RX, page))
+  ok("Start here: the text with both figures in place (title as alt text), the call line, no jargon",
+     grepl("Total\\s+Survey\\s+Error", page) && grepl("How it was built", page) && !grepl("[TSE figure]", page, fixed = TRUE) &&
+       all(map_lgl(START_FIGURES, function(f) grepl(sprintf("<img src=\"%s\" alt=\"%s\"", f, svg_title(f)), page, fixed = TRUE))) &&
+       grepl("2 model calls", output$calls) && !grepl(JARGON_RX, gsub("<img[^>]*>", "", page)))
   session$setInputs(`key-key` = "not-a-real-key", `key-save` = 1)
   ok("Start here: a pasted key is held for the session", identical(session_key(session$token), "not-a-real-key"))
 })
@@ -137,7 +199,9 @@ shiny::testServer(methodology_server, args = list(con = con), {
   page = html_of(output$text)
   ok("Methodology: the page, its collapsed panels and the library table in plain words show, with no jargon",
      grepl("<details><summary>More detail</summary>", page, fixed = TRUE) && grepl("Graduate coursework in survey methodology", page) &&
-       grepl("Code examples", page) && !grepl("{{LIBRARY_TABLE}}", page, fixed = TRUE) && !grepl(JARGON_RX, page))
+       grepl("Code examples", page) && !grepl("{{LIBRARY_TABLE}}", page, fixed = TRUE) && !grepl(JARGON_RX, page) &&
+       grepl("The sources of error", page) && grepl("How it keeps answers accurate", page) && grepl("Not from the library", page) &&
+       !grepl("click|dotted", page, ignore.case = TRUE))
 })
 ok("a plan of several parts searches each part, without duplicates", local({
   p2 = clean_plan(list(intents = list("formula"), tags = list(), more_than_four = FALSE, parts = data.frame(

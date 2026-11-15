@@ -40,6 +40,11 @@ MODEL_PROFILE <- local({
 APP_SOURCE_URL <- "https://github.com/klinares/drsvyr/blob/main/SurvAI_Expert/"
 SOURCES_NOT_IN_REPO <- "practools"
 
+# Whether answers show their sources: citation numbers, the "Sources (n)" line, the source link
+#   under each formula, the dotted underline of uncited text, and, on the Formulas tab, the course,
+#   document and places of a formula. FALSE hides them; citations are still requested and checked.
+SHOW_SOURCES <- FALSE
+
 # Model calls one session may make in the last CALLS_WINDOW_HOURS; NA for no limit.
 CALLS_PER_WINDOW <- NA_integer_   # at work: 300
 CALLS_WINDOW_HOURS <- 4
@@ -102,7 +107,7 @@ walk(sort(list.files("R", pattern = "[.]R$", full.names = TRUE)), function(f)
 #   the global environment, where R/ lives.
 list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION, MODEL_PROFILES = MODEL_PROFILES, MODEL_PROFILE = MODEL_PROFILE,
               APP_SOURCE_URL = APP_SOURCE_URL, SOURCES_NOT_IN_REPO = SOURCES_NOT_IN_REPO, CALLS_PER_WINDOW = CALLS_PER_WINDOW,
-              CALLS_WINDOW_HOURS = CALLS_WINDOW_HOURS, STORE_PATH = STORE_PATH,
+              CALLS_WINDOW_HOURS = CALLS_WINDOW_HOURS, SHOW_SOURCES = SHOW_SOURCES, STORE_PATH = STORE_PATH,
               VOCAB_CSV = VOCAB_CSV, REFLEX_DIR = REFLEX_DIR, KEY_ENV = KEY_ENV), envir = globalenv())
 
 
@@ -143,7 +148,7 @@ server <- function(input, output, session) {
   state <- reactiveValues(key_version = 0L, calls = 0L)
   start_server("start", state)
   ask_server("ask", state, con)
-  formulas_server("formulas", con)
+  formulas_server("formulas", state, con)
   report_server("report", state)
   methodology_server("methodology", con)
 }

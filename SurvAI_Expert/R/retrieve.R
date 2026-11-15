@@ -133,6 +133,25 @@ formulas_in_passages <- function(con, passage_ids, general = TRUE) {
   r |> mutate(at = map_int(ats, function(a) min(match(unlist(a), passage_ids)))) |> arrange(at, group_id) |> select(-at, -ats)
 }
 
+# R examples for a formula, with no model: code from the passages where the formula occurs, then
+#   from the passages just before and after them in the same document (by line), then from
+#   find_code() on the formula's name. Output blocks are left out; at most k, one per block.
+formula_examples <- function(con, place_ids, name, k = 3L) {
+  ids = unique(unlist(place_ids))
+  near = if (length(ids)) dbGetQuery(con, sprintf(paste(
+    "WITH p AS (SELECT passage_id, doc_id FROM passages WHERE passage_id IN (%s)),",
+    "o AS (SELECT passage_id, doc_id, row_number() OVER (PARTITION BY doc_id ORDER BY line_from, passage_id) AS r",
+    "      FROM passages WHERE doc_id IN (SELECT doc_id FROM p)),",
+    "pr AS (SELECT o.doc_id, o.r FROM o JOIN p USING (passage_id)),",
+    "nb AS (SELECT o.passage_id, min(abs(o.r - pr.r)) AS dist FROM o JOIN pr ON o.doc_id = pr.doc_id AND abs(o.r - pr.r) <= 1",
+    "       GROUP BY o.passage_id)",
+    "SELECT c.code_id, c.doc_id, c.passage_id, c.task, c.packages, c.functions, c.code, nb.dist",
+    "FROM code c JOIN nb USING (passage_id) WHERE NOT c.is_output ORDER BY nb.dist, c.code_id"),
+    paste(dbQuoteString(con, ids), collapse = ", "))) |> as_tibble() else tibble()
+  found = find_code(con, name %||% "", k = k)
+  bind_rows(near, found) |> distinct(code_id, .keep_all = TRUE) |> head(k)
+}
+
 find_code <- function(con, query, packages = NULL, functions = NULL, k = 8) {
   q = query_terms(query)
   if (!length(q)) q = "\u0001"

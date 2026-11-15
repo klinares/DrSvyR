@@ -20,6 +20,7 @@ GATHER_FORMULAS <- c(one = 5L, part = 3L)            # found by the formula quer
 GATHER_FORMULA_PASSAGES <- c(one = 5L, part = 3L)    # general formulas inside the top passages are added
 GATHER_FORMULAS_MAX <- c(one = 6L, part = 3L)        # formulas kept, one per group
 GATHER_CODE <- c(one = 4L, part = 2L)
+GATHER_FORMULA_CODE <- 3L                            # code found for a part's formulas, so each formula gets an R example
 SOURCE_TEXT_CHARS <- 3000L
 
 .store <- new.env(parent = emptyenv())
@@ -168,22 +169,29 @@ part_formulas <- function(con, part, P, n, want) {
   if (nrow(Fm)) Fm |> distinct(group_id, .keep_all = TRUE) |> head(GATHER_FORMULAS_MAX[[n]]) else Fm
 }
 
-part_code <- function(con, part, n, want) {
+# One part's code: by its code query when it wants code, and, when it wants a formula, by the
+#   formula query and the names of the formulas found (GATHER_FORMULA_CODE blocks).
+part_code <- function(con, part, n, want, want_f, Fm) {
   q = if (nzchar(part$code_query)) part$code_query else paste(part$queries, collapse = " ")
-  if (want) find_code(con, q, k = GATHER_CODE[[n]]) else tibble()
+  fq = paste(c(if (nzchar(part$formula_query)) part$formula_query else paste(part$queries, collapse = " "),
+               if (nrow(Fm)) Fm$name), collapse = " ")
+  bind_rows(if (want) find_code(con, q, k = GATHER_CODE[[n]]), if (want_f) find_code(con, fq, k = GATHER_FORMULA_CODE))
 }
 
 # Each part is searched separately (GATHER_PASSAGES etc. per part), then duplicates are removed.
-gather <- function(con, plan, raw_weight = GATHER_RAW_WEIGHT) {
+#   pin: a formula group (a row of find_formulas()) given first, as F1, whatever the search finds.
+gather <- function(con, plan, raw_weight = GATHER_RAW_WEIGHT, pin = NULL) {
   parts = plan_parts(plan)
   n = if (length(parts) == 1L) "one" else "part"
   one = n == "one"
+  want_f = map_lgl(parts, function(pt) if (one) "formula" %in% plan$intents || !is.null(pin) else nzchar(pt$formula_query))
   Ps = map(parts, function(pt) part_passages(con, pt, plan$tags, GATHER_PASSAGES[[n]], raw_weight))
   P = bind_rows(Ps) |> distinct(passage_id, .keep_all = TRUE)
-  Fm = bind_rows(map2(parts, Ps, function(pt, pp)
-    part_formulas(con, pt, pp, n, if (one) "formula" %in% plan$intents else nzchar(pt$formula_query))))
+  Fp = pmap(list(parts, Ps, want_f), function(pt, pp, w) part_formulas(con, pt, pp, n, w))
+  Fm = bind_rows(pin, Fp)
   Fm = if (nrow(Fm)) Fm |> distinct(group_id, .keep_all = TRUE) |> mutate(fid = paste0("F", row_number())) else tibble()
-  Kc = bind_rows(map(parts, function(pt) part_code(con, pt, n, if (one) "code" %in% plan$intents else nzchar(pt$code_query))))
+  Kc = bind_rows(pmap(list(parts, want_f, Fp), function(pt, w, f)
+    part_code(con, pt, n, if (one) "code" %in% plan$intents else nzchar(pt$code_query), w, bind_rows(pin, f))))
   if (nrow(Kc)) Kc = Kc |> distinct(code_id, .keep_all = TRUE) |> mutate(cid = paste0("C", row_number()))
   col = function(d, x) if (x %in% names(d)) d[[x]] else character()
   src = bind_rows(tibble(kind = "passage", passage_id = P$passage_id, ref = P$passage_id),
@@ -263,12 +271,13 @@ answer_question <- function(question, gathered, profile = MODEL_PROFILE, key = S
   call_model(m, "answer", read_reflex("answer.md"), user, key)
 }
 
+# pin: a formula group to give first (the Formulas tab's "Show me how in R").
 ask <- function(question, profile = MODEL_PROFILE, key = Sys.getenv(KEY_ENV), con = store_con(), plan = NULL,
-                context = NULL, my_data = NULL) {
+                context = NULL, my_data = NULL, pin = NULL) {
   t0 = Sys.time()
   plan = plan %||% plan_question(question, profile, key, context)
   t1 = Sys.time()
-  g = gather(con, plan)
+  g = gather(con, plan, pin = pin)
   t2 = Sys.time()
   a = answer_question(question, g, profile, key, context = context, my_data = my_data)
   ask_result(question, plan, g, a, c(plan = as.numeric(difftime(t1, t0, units = "secs")), search = as.numeric(difftime(t2, t1, units = "secs"))))
@@ -323,13 +332,13 @@ answer_stream_async <- function(question, gathered, profile, key, on_text = func
 
 # plan, search, answer; on_stage("plan" | "search" | "answer") as each starts. Resolves to ask_result().
 ask_async <- function(question, profile, key, con, context = NULL, my_data = NULL, open_input = NULL,
-                      on_stage = function(s) NULL, on_text = function(x) NULL) {
+                      on_stage = function(s) NULL, on_text = function(x) NULL, pin = NULL) {
   t0 = Sys.time()
   on_stage("plan")
   promises::then(plan_question_async(question, profile, key, context), function(plan) {
     t1 = Sys.time()
     on_stage("search")
-    g = gather(con, plan)
+    g = gather(con, plan, pin = pin)
     t2 = Sys.time()
     on_stage("answer")
     promises::then(answer_stream_async(question, g, profile, key, on_text, context, my_data), function(a)

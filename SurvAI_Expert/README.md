@@ -43,7 +43,7 @@ the app: `setwd("SurvAI_Expert"); source("app.R"); ask("your question")`, with t
 | `build/02_catalog.R` | Split the markdown into passages, formulas and code, and labelled them (home only; uses a model). |
 | `build/03_store.R` | Builds the DuckDB store from `data/markdown/` and `data/catalog/`; no model, no network. |
 | `app.R` | Settings, layout and server. |
-| `R/retrieve.R` | Keyword search (BM25 in SQL), formulas, code, source cards. |
+| `R/retrieve.R` | Keyword search (BM25 in SQL), formulas, code, R examples for a formula, source cards. |
 | `R/llm.R` | Plan, gather, answer, and the app's streaming versions of the calls. |
 | `R/render.R` | Checks an answer and renders markdown, maths (KaTeX, as MathML) and code. |
 | `R/report.R` | The report reader: text from PDF or Word, split when long. |

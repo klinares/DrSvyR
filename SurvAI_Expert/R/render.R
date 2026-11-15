@@ -130,7 +130,7 @@ render_md <- function(text, formulas = NULL, open_input = NULL, math = TRUE) {
     id = str_match(one, FORMULA_TOKEN_RX)[, 2]
     i = if (!is.null(formulas) && nrow(formulas)) match(id, formulas$fid) else NA
     html = if (!math) "<em class='text-muted'>[formula from the library]</em>" else if (is.na(i)) NA_character_ else kx(formulas$latex[i], TRUE)
-    if (math && !is.na(i) && !is.na(html) && !is.null(formulas$label)) html = paste0("<div class='survai-formula'>", html,
+    if (math && !is.na(i) && !is.na(html) && "label" %in% names(formulas)) html = paste0("<div class='survai-formula'>", html,
       "<div class='small text-end'>", open_link(open_input, formulas$label[i], paste("source", str_remove(formulas$label[i], "^S"))), "</div></div>")
     paste0("\n\n", hold(if (is.na(html)) paste0("<span class='text-danger'>", htmltools::htmlEscape(one), "</span>") else html), "\n\n")
   }))
@@ -171,8 +171,21 @@ renumber_sources <- function(answer, gathered) {
   list(answer = txt, gathered = gathered, cited = cited)
 }
 
-render_answer <- function(answer, gathered, open_input = NULL) {
+# The answer without its sources showing (SHOW_SOURCES = FALSE): citations are removed, and a
+#   "Check:" sentence that names sources by number speaks of "the passages" instead.
+hide_sources <- function(answer) {
+  l = str_split_1(str_remove_all(as.character(answer), paste0("[ \t]*", CITE_RX)), "\n")
+  chk = str_detect(l, CHECK_RX)
+  l[chk] = str_replace_all(l[chk], "\\b(?:(?:sources?|passages?)\\s+)?S\\d+(?:\\s*(?:,|and|&)\\s*S\\d+)*\\b", "the passages")
+  paste(l, collapse = "\n")
+}
+
+# show: whether the sources show (SHOW_SOURCES in app.R). When they do, citations link to their
+#   passage, a formula has a source link and uncited sentences a dotted underline, with a legend;
+#   when they do not, none of that is shown.
+render_answer <- function(answer, gathered, open_input = NULL, show = SHOW_SOURCES) {
   Fm = gathered$formulas
+  if (!show) return(list(html = render_md(hide_sources(answer), Fm, NULL), uncited_marked = 0L))
   if (!is.null(Fm) && nrow(Fm)) Fm = Fm |> left_join(gathered$sources |> filter(kind == "formula") |> select(ref, label), by = c(fid = "ref"))
   mk = mark_uncited(answer)
   html = paste0(render_md(mk$text, Fm, open_input),
