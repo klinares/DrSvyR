@@ -6,6 +6,7 @@
 #     Rscript --no-init-file build/01_convert.R pilot   # PILOT_FOLDER only (PDFs and its .qmd/.Rmd)
 #     Rscript --no-init-file build/01_convert.R all     # every source
 #     Rscript --no-init-file build/01_convert.R jpsm    # one source (any name in SOURCES)
+#     Rscript --no-init-file build/01_convert.R rewrite # every document again from the cache; no model call
 #
 #   Conversion runs at home only; its output reaches work as text, through git.
 #
@@ -272,6 +273,15 @@ math_spans <- function(md) {
 # A fence line may sit in a list item ("* ```r"), as the model test's replies show.
 fence_lines <- function(md) sum(str_detect(strsplit(md, "\n", fixed = TRUE)[[1]], "^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)?```"))
 
+# A short reply is not a problem when the page is a figure or a displayed equation: pdftools spreads
+#   axis labels and formulas over many characters. The prompt asks for no description of pictures,
+#   so the figure sign is a caption line ("Figure: ...", "Figure 4.2", "Fig. 3") or a markdown image.
+figure_or_display <- function(md) {
+  prose = strip_code(md)
+  str_detect(prose, "(?im)^[\\s*#>-]*(?:figure|fig\\.)\\s*[:0-9]") || str_detect(prose, "!\\[") ||
+    str_detect(prose, DISPLAY_RX)
+}
+
 # One row per failed check: check, detail. pdf_chars is NA for documents with no PDF text.
 check_page <- function(md, pdf_chars = NA_integer_) {
   prose = str_remove_all(strip_code(md), "\\\\\\$")
@@ -279,7 +289,7 @@ check_page <- function(md, pdf_chars = NA_integer_) {
   bad = spans |> filter(is.na(map2_chr(tex, display, kx)))
   bind_rows(
     if (!nzchar(str_trim(md))) tibble(check = "empty", detail = "no text"),
-    if (!is.na(pdf_chars) && pdf_chars > 300 && nchar(md) < 0.4 * pdf_chars)
+    if (!is.na(pdf_chars) && pdf_chars > 300 && nchar(md) < 0.4 * pdf_chars && !figure_or_display(md))
       tibble(check = "short", detail = sprintf("%d characters against %d in the PDF text", nchar(md), pdf_chars)),
     if (fence_lines(md) %% 2) tibble(check = "fences", detail = "odd number of ``` lines"),
     if (str_count(prose, fixed("$$")) %% 2 || str_count(str_remove_all(prose, fixed("$$")), fixed("$")) %% 2)
@@ -409,9 +419,14 @@ convert_group <- function(g, key, run) {
     run$spent = run$spent + usd
     run$paid_usd = run$paid_usd + usd
     run$paid_pages = run$paid_pages + 1L
+    # A page sent again (an earlier call failed, or its reply was removed to resend it) keeps the
+    #   spend and attempts already recorded, so the cap still counts them.
+    jf = page_file(g$sha256[i], g$page[i], "json")
+    before = if (file.exists(jf)) jsonlite::read_json(jf) else list()
     if (is.null(pick$error)) write_utf8(unwrap_reply(pick$text), page_file(g$sha256[i], g$page[i], "md"))
-    dir.create(dirname(page_file(g$sha256[i], g$page[i], "json")), recursive = TRUE, showWarnings = FALSE)
-    jsonlite::write_json(list(usd = usd, attempts = length(tries), tokens_in = pick$tokens_in %||% NA,
+    dir.create(dirname(jf), recursive = TRUE, showWarnings = FALSE)
+    jsonlite::write_json(list(usd = usd + as.numeric(before$usd %||% 0),
+                              attempts = length(tries) + as.integer(before$attempts %||% 0L), tokens_in = pick$tokens_in %||% NA,
                               tokens_out = pick$tokens_out %||% NA, usd_reported = pick$usd_reported %||% NA, finish = pick$finish %||% NA,
                               error = pick$error %||% NA, seconds = pick$seconds %||% NA, model = BUILD_MODEL$id,
                               at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S")),
@@ -425,7 +440,7 @@ convert_pdf_pages <- function(pdfs, key, est) {
   jobs = pmap(list(pdfs$path, pdfs$sha256, pdfs$pages, text), function(p, sha, n, txt)
     tibble(path = p, sha256 = sha, page = seq_len(n),
            pdf_chars = if (length(txt) == n) nchar(str_trim(txt)) else NA_integer_)) |>
-    list_rbind()
+    list_rbind(ptype = tibble(path = character(), sha256 = character(), page = integer(), pdf_chars = integer()))
   # A page with a reply is done (even one that failed its checks twice); a page whose calls failed is tried again.
   todo = jobs |> filter(!file.exists(page_file(sha256, page, "md")))
   run = new.env()
@@ -526,10 +541,19 @@ assemble_text <- function(d) {
        probs = mutate(check_page(doc$body), page = NA_integer_, .before = 1))
 }
 
+# Redaction before writing: the fixed strings of REDACT_CSV (kept out of git), then two rules for
+#   every document: an email address becomes [email]; a Windows user folder (C:/Users/<name>/ or
+#   C:\Users\<name>\, any drive letter, backslashes single or doubled) becomes ~/. Other drive-letter
+#   paths stay as written. The pre-commit scan uses the same two patterns.
+EMAIL_RX <- "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}"
+USER_DIR_RX <- "(?i)(?<![A-Za-z0-9])[A-Z]:(?:/|\\\\{1,2})Users(?:/|\\\\{1,2})[^/\\\\\\s\"'`]+(?:/|\\\\{1,2})"
+
 redact <- function(txt) {
-  if (!file.exists(REDACT_CSV)) return(txt)
-  r = utils::read.csv(REDACT_CSV, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
-  reduce2(r$find, r$replace, function(x, f, s) str_replace_all(x, fixed(f), s), .init = txt)
+  if (file.exists(REDACT_CSV)) {
+    r = utils::read.csv(REDACT_CSV, stringsAsFactors = FALSE, colClasses = "character", encoding = "UTF-8")
+    txt = reduce2(r$find, r$replace, function(x, f, s) str_replace_all(x, fixed(f), s), .init = txt)
+  }
+  txt |> str_replace_all(EMAIL_RX, "[email]") |> str_replace_all(USER_DIR_RX, "~/")
 }
 
 # Writes each document, then merges its rows into the manifest and the problem list.
@@ -596,7 +620,7 @@ dry_run <- function(all, todo, est, n_unchanged) {
 }
 
 main <- function(mode = "dry") {
-  mode = match.arg(mode, c("dry", "pilot", "all", names(SOURCES)))
+  mode = match.arg(mode, c("dry", "pilot", "all", "rewrite", names(SOURCES)))
   t0 = Sys.time()
   all = list_sources()
   todo = all |> filter(is.na(skip))
@@ -611,6 +635,15 @@ main <- function(mode = "dry") {
                                        path %in% bad$path ~ "PDF unreadable", .default = skip))
   if (nrow(bad)) message("Unreadable PDFs, left out: ", paste(bad$rel, collapse = ", "))
   todo = todo |> filter(!path %in% c(empty$path, bad$path))
+  # rewrite: every document written again from the page cache and the sources (after a change to
+  #   redaction or the checks); no model call, nothing skipped as unchanged.
+  if (mode == "rewrite") {
+    pdfs = todo |> filter(ext == "pdf")
+    text = set_names(map(pdfs$path, function(p) tryCatch(pdftools::pdf_text(p), error = function(e) character(0))), pdfs$path)
+    rows = write_documents(todo, text)
+    message(sprintf("Rewritten in %.1f min, no model call.", as.numeric(difftime(Sys.time(), t0, units = "mins"))))
+    return(invisible(rows))
+  }
   same = unchanged(todo)
   todo = todo[!same, ]
   est = est_usd_page()
