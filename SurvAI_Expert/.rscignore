@@ -1,3 +1,5 @@
 build/
 tests/
 data/build/
+README.md
+.rscignore
