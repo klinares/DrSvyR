@@ -40,29 +40,30 @@ office_logo <- function(file, office = "") {
 
 # ---- Start here ---------------------------------------------------------------------------------------------
 
-START_LINES <- c(
-  "SurvAI Expert answers survey methodology questions from a store of course materials: lecture notes, slides, assignments, exams, a sampling and weighting textbook, and R code.",
-  "Each answer cites the passages it uses. Click a source to read the passage itself, with its formulas and code.",
-  "Formulas are shown exactly as stored in the course materials, never retyped by the model.",
-  "The Formulas page searches the stored formulas directly, with no model calls.",
-  "The Report reader turns a survey's technical report into a checklist an analyst can use.")
+# The page text is www/start_here.md, edited without touching code; read for each session.
+START_MD <- "www/start_here.md"
+
+# The library's sources in plain words, in the order shown; a source not listed shows its own name.
+SOURCE_LABELS <- c(jpsm = "Graduate coursework in survey methodology", practools = "Textbook on sample design and weighting",
+                   tidysurvey = "Open books on survey analysis and sampling", sampling = "Open books on survey analysis and sampling",
+                   training = "Training material")
 
 store_counts <- function(con) dbGetQuery(con, paste(
-  "SELECT d.source AS Source, count(DISTINCT d.id) AS Documents,",
+  "SELECT d.source, count(DISTINCT d.id) AS Documents,",
   "(SELECT count(*) FROM passages p WHERE p.source = d.source) AS Passages,",
   "(SELECT count(*) FROM formulas f WHERE f.source = d.source) AS Formulas,",
-  "(SELECT count(*) FROM code c WHERE c.source = d.source AND NOT c.is_output) AS \"Code blocks\"",
-  "FROM docs d GROUP BY d.source ORDER BY d.source"))
+  "(SELECT count(*) FROM code c WHERE c.source = d.source AND NOT c.is_output) AS \"Code examples\"",
+  "FROM docs d GROUP BY d.source")) |>
+  mutate(` ` = coalesce(unname(SOURCE_LABELS[source]), source)) |>
+  group_by(` `) |> summarise(across(c(Documents, Passages, Formulas, `Code examples`), sum)) |>
+  arrange(match(` `, unique(SOURCE_LABELS)))
 
 start_ui <- function(id) {
   ns = NS(id)
   tagList(
-    tags$h3("What this tool does"), tags$ul(map(START_LINES, tags$li)),
-    tags$h4("What is in the store"), tableOutput(ns("store")),
-    tags$h4("How to ask"),
-    tags$p("Ask one question at a time, in plain words: \"How do I compute a design effect for a cluster sample in R?\" or ",
-           "\"When is raking better than poststratification?\". Fill in My data to get R code with your own variable names. ",
-           "A follow-up question keeps the previous question and answer in mind; press New topic to start fresh."),
+    uiOutput(ns("text")),
+    tags$h4("What is in the library"), tableOutput(ns("store")),
+    tags$hr(),
     mod_key_ui(ns("key")),
     tags$p(textOutput(ns("calls"), inline = TRUE)))
 }
@@ -70,7 +71,9 @@ start_ui <- function(id) {
 start_server <- function(id, state, con) {
   moduleServer(id, function(input, output, session) {
     mod_key_server("key", state)
-    output$store = renderTable(store_counts(con), digits = 0)
+    output$text = renderUI(HTML(str_replace_all(render_md(paste(readLines(START_MD, warn = FALSE, encoding = "UTF-8"), collapse = "\n")),
+                                                "<table>", "<table class='table table-sm'>")))
+    output$store = renderTable(store_counts(con), digits = 0, big.mark = ",")
     output$calls = renderText({
       state$calls
       paste0("Each question uses 2 model calls (a plan and an answer). ",

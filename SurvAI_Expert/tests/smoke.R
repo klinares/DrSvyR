@@ -32,7 +32,7 @@ ok("no file the app runs reads a key from the environment",
 con <- store_connect(STORE_PATH)
 ok("the store opens read only and has passages, formulas and code", local({
   n = store_counts(con)
-  sum(n$Passages) > 1000 && sum(n$Formulas) > 1000 && sum(n$`Code blocks`) > 1000 &&
+  sum(n$Passages) > 1000 && sum(n$Formulas) > 1000 && sum(n$`Code examples`) > 1000 &&
     inherits(tryCatch(dbExecute(con, "CREATE TABLE x (a INTEGER)"), error = function(e) e), "error") }))
 
 # ---- canned question: plan and answer stubbed ------------------------------------------------------
@@ -113,7 +113,10 @@ shiny::testServer(report_server, args = list(state = reactiveValues(key_version 
 })
 
 shiny::testServer(start_server, args = list(state = reactiveValues(key_version = 0L, calls = 0L), con = con), {
-  ok("Start here: the store table and the call line show", grepl("jpsm", html_of(output$store)) && grepl("2 model calls", output$calls))
+  page = paste(html_of(output$text), html_of(output$store), output$calls)
+  ok("Start here: the page text, the store table in plain words and the call line show, with no jargon",
+     grepl("Total\\s+Survey\\s+Error", page) && grepl("Graduate coursework in survey methodology", page) && grepl("Code examples", page) &&
+       grepl("2 model calls", output$calls) && !grepl("JPSM|DuckDB|RAG|jpsm|practools|survey package|srvyr|ellmer", page))
   session$setInputs(`key-key` = "not-a-real-key", `key-save` = 1)
   ok("Start here: a pasted key is held for the session", identical(session_key(session$token), "not-a-real-key"))
 })
