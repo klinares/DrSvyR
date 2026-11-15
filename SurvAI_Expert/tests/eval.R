@@ -131,4 +131,11 @@ main <- function(mode = "eval") {
   invisible(res)
 }
 
-if (sys.nframe() == 0L) main(head(c(commandArgs(trailingOnly = TRUE), "eval"), 1))
+if (sys.nframe() == 0L) {
+  mode = head(c(commandArgs(trailingOnly = TRUE), "eval"), 1)
+  if (mode == "answers") {   # part 2: the app's question answering, in tests/eval_answers.R
+    source("app.R")
+    source("tests/eval_answers.R")
+    main_answers()
+  } else main(mode)
+}

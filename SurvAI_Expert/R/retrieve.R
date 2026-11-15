@@ -114,7 +114,7 @@ find_code <- function(con, query, packages = NULL, functions = NULL, k = 8) {
   dbGetQuery(con, sprintf(paste(
     "WITH cs AS (%s), ps AS (%s),",
     "sc AS (SELECT c.code_id, coalesce(cs.bm25, 0) + %f * coalesce(ps.bm25, 0) AS score FROM code c",
-    "LEFT JOIN cs USING (code_id) LEFT JOIN ps USING (passage_id) WHERE cs.bm25 IS NOT NULL OR ps.bm25 IS NOT NULL)",
+    "LEFT JOIN cs USING (code_id) LEFT JOIN ps USING (passage_id) WHERE NOT c.is_output AND (cs.bm25 IS NOT NULL OR ps.bm25 IS NOT NULL))",
     "SELECT c.code_id, c.doc_id, c.passage_id, c.task, c.packages, c.functions, sc.score, c.code",
     "FROM sc JOIN code c USING (code_id) %s ORDER BY sc.score DESC, c.code_id LIMIT %d"),
     bm25_sql(con, INDEX$code, q), bm25_sql(con, INDEX$passage, q), PARENT_WEIGHT,

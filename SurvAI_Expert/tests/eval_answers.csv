@@ -1,0 +1,1523 @@
+"id","kind","doc_id","question","answer","cites","cites_valid","tokens","tokens_valid","display_math","code_blocks","code_parses","unverified","n_unverified","verdict","unsupported_claims","wrongly_said_missing","reason","sec_plan","sec_search","sec_answer","usd_answer","usd_judge"
+"537","concept","jpsm/applications_stats_modeling_SURV617/reading_notes","How do probability-sampling estimators compare to model-dependent estimators in terms of bias and confidence interval coverage?","**Short answer:** When the assumed model is wrong, probability-sampling (design-based) estimators stay approximately unbiased, and their confidence intervals keep close to nominal coverage. Model-dependent estimators can be badly biased, and their intervals can undercover. When the model is right, the model-dependent estimator can be more efficient.
+
+**Bias**
+- Design-based estimators are randomization-consistent. They approach the population value as $n$ grows, whatever the population structure. For large samples, the validity of inference does not depend on an assumed model [S3].
+- Design-based inference with ratio or regression estimation remains correct even if the model fits poorly [S5].
+- Model-dependent estimators are unbiased only under the assumed model. They can be biased if it is misspecified, or if the model fitting the sample differs from the one describing the population [S4].
+- In the Hansen–Madow–Tepping retail-store example, the probability-sampling estimators had negligible bias, even in small samples. The model-dependent estimators were substantially biased, and the bias did not shrink as the sample grew [S1].
+- The weighting side of this: if the model is misspecified, the weighted estimator is needed unless sampling is independent of $X$. If sampling depends on $Y$ given $X$, the unweighted estimator is biased whether or not the model is correct [S7]. The unweighted estimator is consistent only when the model is correct and sampling is independent of $Y|X$ [S8].
+
+**Confidence interval coverage**
+- Model-based variance is computed over samples generated from the model. Design-based variance is computed over samples the design could produce [S5]. These generally differ [S5].
+- Under model failure, the model-based variance estimates ignore the bias and can be misleadingly small. The result is coverage well below the nominal level, such as 95% [S1].
+- Design-based intervals rely on the design for validity, so they are protected against model failure [S1][S3].
+- Not in the sources: no numeric coverage rates are given, and nothing here covers small-sample coverage when the central limit theorem is shaky. S10 only raises that as an open question.
+
+**Total Survey Error view**
+- Model dependence shifts risk into adjustment and specification error, in the form of model bias that is unmeasured and does not shrink with $n$.
+- Design-based inference controls sampling error and bias from the design. Nonresponse and volunteer samples still require models, explicit or implicit [S4].
+- In practice, model-assisted estimation is the most common compromise. A working model improves efficiency, but validity comes from the design [S6][S9].
+- Efficiency trade-off: model-dependent inference can be more efficient if the model is exactly right [S2]. Balanced samples may reduce bias for some model-based estimators but increase it for others, and they preclude designs like optimal allocation [S1][S2].
+- When model-based inference is the only option, as with volunteer internet panels, it must be used, but its validity is a serious concern [S4].
+
+**Code:** The sources give no code or formula ids, so I have not written any.
+
+**What to check in any comparison**
+- Whether selection probabilities are known, so design-based weights are valid.
+- The strata, clusters (PSUs), weights, and finite population correction used in the design-based variance.
+- Whether the model holds for every outcome $y$. The same model may not fit all of them [S4].",9,TRUE,0,TRUE,FALSE,0,TRUE,"",0,"correct",1,FALSE,"The answer matches the passage: probability-sampling estimators have negligible bias and keep near-nominal coverage, while model-dependent estimators are substantially biased with misleadingly small variances and undercoverage; the one unsupported claim is the TSE framing that model dependence shifts risk into adjustment and specification error, which no source states, and the answer correctly says the sources give no numeric coverage rates.",2.56344294548035,0.0841269493103027,8.57850408554077,0.0201445,0.0157332
+"4490","concept","jpsm/ML_social_science_SURV613/lectures/04-03-LassoRidgeRegression","What is the objective function for ridge regression?","Ridge regression picks the coefficients that minimize the residual sum of squares plus a penalty on the sum of squared coefficients (the squared $\ell_2$ norm), scaled by $\lambda$ [S2][S3]. This is a fit-versus-complexity trade-off [S2].
+
+{{F:F1}}
+
+Symbols: $y_i$ is the outcome for case $i$. $\beta_0$ is the intercept. $\beta_j$ is the coefficient on predictor $x_{ij}$. $n$ is the number of cases and $p$ the number of predictors. $\lambda$ is the penalty strength, a tuning parameter [S3]. The first term is the RSS.
+
+- **Matrix form:** $RSS(\lambda) = (\mathbf{y} - \mathbf{X}\beta)'(\mathbf{y} - \mathbf{X}\beta) + \lambda\beta'\beta$, with solution $\hat{\beta}_{ridge} = (\mathbf{X}'\mathbf{X} + \lambda\mathbf{I})^{-1}\mathbf{X}'\mathbf{y}$ [S2]. The $\lambda\mathbf{I}$ term keeps the matrix invertible even when $\mathbf{X}$ is not of full column rank [S2].
+- **Role of $\lambda$:** At $\lambda = 0$ the fit equals OLS. As $\lambda \to \infty$, coefficients shrink toward zero but not exactly to zero [S1][S3]. Ridge also shrinks the coefficients of correlated predictors toward each other [S3].
+- **Equivalent view:** Minimize RSS subject to a constraint that the coefficients cannot be too large, which is a circular constraint region for ridge [S5][S1].
+- **Elastic net:** In the elastic net, $\alpha = 0$ gives ridge [S10].
+
+```r
+library(glmnet)
+
+X <- model.matrix(medv ~ . - town - tract - cmedv, boston_train)[, -1]
+y <- boston_train$medv
+
+m1    <- glmnet(X, y, alpha = 0)       # alpha = 0 is ridge
+m1_cv <- cv.glmnet(X, y, alpha = 0)    # cross-validate lambda
+coef(m1_cv, s = ""lambda.min"")
+coef(m1_cv, s = ""lambda.1se"")
+```
+
+This code is adapted from the course example [S6] and is not design-based.
+
+What to check:
+- **Standardization:** The penalty depends on the scale of the predictors, so ridge is typically applied to standardized features [S4]. Check how your software handles this. The sources do not say what `glmnet` does by default.
+- **Tuning:** Choose $\lambda$ by cross-validation on a predictive metric [S1][S6]. The 1-SE rule gives a simpler model [S6].
+- **Survey design:** The sources do not cover strata, clusters, weights, or finite population corrections for ridge. The code above ignores the design. If your data come from a complex sample, unweighted fits can carry coverage, nonresponse, and adjustment error into the coefficients. Weighting or design-aware cross-validation is not covered here.
+- **Inference:** Ridge gives shrunken, biased estimates, so it trades some bias for lower variance. The sources give no standard errors for ridge coefficients.",7,TRUE,1,TRUE,FALSE,1,TRUE,"",0,"correct",1,FALSE,"The answer gives the correct ridge objective (RSS plus lambda times the sum of squared coefficients), the matrix form and the closed-form solution, all matching the course passage; the only unsupported claim is that unweighted fits carry coverage, nonresponse and adjustment error into the coefficients, and the answer correctly notes that the sources are silent on glmnet standardization and survey design.",2.13021922111511,0.123749971389771,10.1556398868561,0.0259985,0.0208332
+"7278","concept","jpsm/stat_mod_ML_2_SURV616/lectures/Categorical_slides","How can I calculate the common relative risk and odds ratio for a two-way table using SAS?","Use `PROC FREQ` with the `cmh` option on the two-way table. It prints ""Estimates of the Common Relative Risk (Row1/Row2)"" with the case-control odds ratio and the cohort risk ratios, each with Mantel-Haenszel and Logit estimates and 95% limits [S1].
+
+**Formulas**
+
+The odds ratio is the cross-product ratio, from the 2x2 cell counts $a, b, c, d$ [S3]:
+
+{{F:F1}}
+
+Here F1 is only a placeholder id: the sources give no formula ids, so I can't point to a stored formula. In words, OR = (a·d)/(b·c), and the relative risk is [a/(a+b)] / [c/(c+d)] [S5]. The odds ratio approximates the relative risk only when the outcome is rare [S5].
+
+**SAS code**
+
+```sas
+proc freq data=myocard order=data;
+tables aspirin*myocard / cmh;
+weight count;
+run;
+```
+
+This is the code from the source [S11]. `weight count` tells SAS that each row of the data is a cell count. `order=data` keeps the rows and columns in the order they appear in the data, so ""Row1/Row2"" and ""Col1 Risk"" refer to your first-listed levels.
+
+**How to read the output** (aspirin/myocardial infarction example, n = 22071) [S1]
+
+- Case-control (odds ratio): Mantel-Haenszel 1.8321 (1.4400, 2.3308). The Logit estimate is identical here.
+- Cohort (Col1 Risk), the relative risk of the first column outcome: 1.8178 (1.4330, 2.3059).
+- Cohort (Col2 Risk), the relative risk of the second column outcome: 0.9922 (0.9892, 0.9953).
+
+For a single 2x2 table, the Mantel-Haenszel and Logit estimates coincide [S1]. The ""common"" estimate matters when you stratify, which is not shown in these sources.
+
+**What to check**
+
+- **Row and column order:** the odds ratio is Row1/Row2. Col1 Risk is the risk of the outcome in the first column, so make sure the outcome is the first column.
+- **Study design:** for a cohort or prospective design, use the Cohort (Col1 Risk) line for the relative risk. In a case-control (retrospective) study the relative risk cannot be computed directly. Use the odds ratio, and treat it as approximating the relative risk only for a rare outcome [S9][S10].
+- **Design assumptions:** `PROC FREQ` as written treats the data as a simple random sample. There are no strata, clusters, weights or finite population correction. If the data come from a complex sample, these confidence intervals will be too narrow, a sampling-variance problem. The sources do not cover a design-based SAS procedure for this. Not from the store: `PROC SURVEYFREQ` is one option to look into.
+- **Weights:** `weight count` here holds cell frequencies, not survey weights.",6,TRUE,1,FALSE,FALSE,0,TRUE,"",0,"correct",3,FALSE,"The answer correctly gives PROC FREQ with the cmh option, the code, and the output from the passage, and the OR/RR relationship is also right; a few explanatory details go beyond the sources, such as the Row1/Col1 interpretation, the claim that CIs will be too narrow under complex sampling, and the stratification remark, but they are sound and the answer does not wrongly say material is missing.",2.62099814414978,0.113296985626221,7.52977991104126,0.0209045,0.0166812
+"782","concept","jpsm/applied_sampling_SURV625/lectures/Lecture12","Under what conditions is raking an effective method for weighting?","Raking works well when three conditions hold [S7][S8]:
+
+1. **No important interactions.** The margins must capture the key structure. Raking implies a main-effects-only model, while poststratification implies an interaction model [S5][S9]. The stronger the interaction, the more raked and poststratified weights differ [S5]. Even when a main-effects model looks imperfect, raking can still be a way to use more predictive variables, because crossing many variables in poststratification can create more classes than the sample supports [S9].
+2. **Incremental bias reduction.** After adjusting on one variable, some nonresponse bias must remain that a second variable can meaningfully reduce [S7].
+3. **Practical convergence.** The algorithm must converge reliably and quickly, without extreme weights or instability [S7]. Convergence is not always assured [S4]. Typical safeguards are truncating weights (for example to 0.5–2.0), pooling exceptional cells, and smoothing extreme weights [S4]. Raking also has a complex mean squared error and can lead to small cells [S7].
+
+**Prerequisite.** Raking is mainly useful when only the marginal distributions of the auxiliary variables are known, not the joint distribution [S1][S3][S10].
+
+**Total Survey Error view.** Raking is an adjustment to nonresponse and coverage error. It reduces bias only if the raking variables correlate with both the outcome and response propensity. Variables related to the outcome but not to response reduce variance without reducing bias. Variables related to response but not to the outcome increase variance without reducing bias [S6][S4]. It does not fix missing-not-at-random bias from an unmeasured confounder [S8]. The trade-off is that raking gives up interaction structure in exchange for fewer parameters, which lowers the risk of sparse cells and unstable weights but can leave bias if interactions matter.
+
+**Code** (adapted from the `calibrate` example in [S9]):
+
+```r
+library(survey)
+
+pop.totals <- c(
+  ""(Intercept)"" = N,
+  N.age[-1],
+  N.hisp[-1]
+)
+
+rake.dsgn <- calibrate(
+  design = nhis.dsgn,
+  formula = ~ as.factor(age.grp) + as.factor(hisp.r),
+  calfun = ""raking"",
+  population = pop.totals
+)
+```
+
+[S9] notes that `rake` gives the same answer; the sources do not show its arguments, so I do not give them here. They also do not cover diagnostics for weight spread.
+
+**Check before running:**
+- **Design:** `nhis.dsgn` in [S9] is an SRS without replacement (`srswor`) of 500 from the covered population. Confirm your own design object specifies the strata, clusters (PSUs), and base weights correctly. The finite population correction is not discussed in these sources for this example, so confirm whether it applies to your design.
+- **Population totals:** `N`, `N.age`, and `N.hisp` must come from a reliable external source and be consistent with each other, and each margin must sum to the same total. The `[-1]` drops the reference level to match the model matrix.
+- **Weights:** Look at the weight distribution after raking for extremes, and apply trimming if needed [S4].
+- **Convergence:** Confirm the calibration converged [S4][S7].
+- **Cell sizes:** Check the sample counts within margin categories [S7].
+- **Interactions:** Compare raked estimates against poststratified ones where the joint distribution is available, since a large difference signals an important interaction [S5].",9,TRUE,0,TRUE,FALSE,1,TRUE,"",0,"correct",2,FALSE,"The answer correctly gives the three conditions from S7/S8 (no important interactions, incremental bias reduction, practical convergence) and ties them to the course passage on raking's main-effects-only assumption, but it adds some unsupported material, such as the claim that raking is hurt by 'sparse cells' trade-offs in the TSE paragraph and a few design-check advice items not found in the sources.",2.02626204490662,0.0942349433898926,9.16595697402954,0.0220285,0.0149292
+"2104","concept","jpsm/design_seminar_SURV670/lectures/Week_10","What are the standard components and approximate page lengths for an NSF proposal?","An NSF proposal in this seminar's outline runs 15 pages maximum, with nine components. Page lengths below are approximate [S1].
+
+1. Title (no length given) [S1]
+2. Abstract/Summary: about 250 words, 0.5 page [S1]
+3. Hypothesis statement or goals: 1-3 sentences each, clear and well written [S1]
+4. Specific Aims: typically 2-4 aims, 1-2 pages [S1]
+5. Background & Significance: 2-3 pages. It should help the reviewer understand the problem and avoid expert-only jargon [S1]
+6. Preliminary Data: 2-3 pages [S1]
+7. Research Design and Methods: 6-8 pages, roughly half the proposal. It should describe the design and procedures in detail and give the rationale for them [S1]
+8. Conclusion/Summary: 0.5 page. It says why the research is needed, how it advances the field, and why you are excited to do it [S1]
+9. References: unlimited pages [S1]
+
+Figures, diagrams, charts, and photos count toward the page limit [S1]. The same source notes that NSF proposals go through two-stage peer review, that equity as well as scientific excellence is relevant, and that funds are limited, so only excellent proposals are funded [S1].
+
+**What to check**
+- The slide outline is a general structure, not the official solicitation. The sources do not give NSF's formal required sections, such as a project description, budget, or biographical sketches, so I can't confirm those from the store. Check the specific program solicitation for its own format and page limits.
+- The sub-lengths add up to more than 15 pages if every component is at its maximum (for example 0.5 + 2 + 3 + 3 + 8 + 0.5 = 17, before the goals statement). Treat them as ranges and trim to fit the limit.
+
+**Total Survey Error angle:** the source gives no TSE guidance for this question. If your proposal is for a survey, the Research Design and Methods section is where you would show how you will handle coverage, sampling, nonresponse, and measurement error. This is not from the store.",1,TRUE,0,TRUE,FALSE,0,TRUE,"",0,"correct",0,FALSE,"The answer lists all nine components with page lengths matching the course passage, and its caveats (outline is not the official solicitation, sub-lengths can sum past 15 pages) are reasonable and clearly flagged, with the TSE note marked as not from the store.",1.90621995925903,0.0932638645172119,6.53443288803101,0.0148085,0.0117792
+"2081","concept","jpsm/Data_visualization_SURV752/lectures/SURV752-IPSDS_3_Comparison_Comparison-1","What should I keep consistent when using multiple graphs to make comparisons?","Keep three things consistent across graphs: graph size, scales, and alignment. Colour and shape can also carry the group comparison within and across graphs [S9].
+
+**Total Survey Error lens:** this is mostly a presentation matter. It does not change any of the error sources directly. But inconsistent scales or sizes can make readers misjudge differences that are real, or see differences that are not, which undermines how the estimates are interpreted.
+
+**Scales:** the source S1 gives ""Different scales?"" with GOOD / ALSO GOOD examples. The text of those examples was not captured, so I can't say what they show. The linked Datawrapper article is on small-multiple line charts.
+
+**Practical points from the course materials:**
+- Small multiples (the same plot repeated by subgroup) are the standard format for this. They rely on a common structure so the eye can compare across panels [S6].
+- In the Gapminder homework, one `facet_grid(~year)` call gives every panel the same axes. The y-axis is fixed with `ylim(0, 85)` and the x-axis uses a shared log scale [S8].
+- When you build separate plots and combine them, set the same limits on each one. In the Wage lab, the two plots use `coord_cartesian(xlim = c(0, 320), ylim = c(0, 320))` in one and `scale_x_continuous(limits = c(20, 320))` in the other, and they are placed side by side with `grid.arrange(..., ncol = 2)` [S7]. Those two calls are not equivalent: `scale_*` limits drop data outside the range, while `coord_cartesian` only zooms. Using the same limits is the point, but use the same method in both too. This distinction is not stated in the sources (not from the store).
+- For animated or sequential views, fix the axes so changes over time are visible. In the ggvis example, invisible min and max points are added and `add_axis()` sets the tick values [S4].
+
+```r
+library(tidyverse)
+library(gridExtra)
+
+p_simple <- ggplot(Wage, aes(x = wage, y = wage_hat_simple)) +
+  geom_point(color = ""blue"", size = 0.5) +
+  coord_cartesian(xlim = c(0, 320), ylim = c(0, 320))
+
+p_multiple <- ggplot(Wage, aes(x = wage, y = wage_hat_multiple)) +
+  geom_point(color = ""red"", size = 0.5) +
+  coord_cartesian(xlim = c(0, 320), ylim = c(0, 320))
+
+grid.arrange(p_simple, p_multiple, ncol = 2)
+```
+
+This code is adapted from S7 and assumes `Wage` already has the fitted-value columns. It is not design-based, so no strata, clusters, weights, or finite population correction are involved. If you plot survey estimates, check that every panel uses the same weights and the same estimand. Otherwise the shared axes will not make the panels comparable.
+
+**What to check:** panel sizes are equal, axis limits and units are shared (or any difference is flagged), panels are aligned so values can be read across, and colour/shape mappings are the same in every panel.",5,TRUE,0,TRUE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer correctly gives the passage's three items (common graph size, common scales, helpful alignment) and the colour/shape note, but pads it with extra claims, such as the Total Survey Error framing and survey-weight advice, that no source supports.",2.11032295227051,0.0938088893890381,11.4489130973816,0.0176245,0.0113612
+"4571","concept","jpsm/ML_social_science_SURV613/lectures/08-02-GradientBoosting","What is the mathematical representation of a decision tree used as the starting point for gradient boosting?","A decision tree is written as a sum over $J$ terminal regions (leaves). Each region $R_j$ has a constant prediction $\gamma_j$, and the tree returns the constant of the region that $x$ falls in [S1][S5].
+
+{{F:F4}}
+
+Symbols: $T(x;\Theta)$ is the tree's prediction at $x$. $J$ is the number of regions. $R_j$ is the $j$th region. $\gamma_j$ is the constant prediction in region $j$. $I(x \in R_j)$ is an indicator equal to 1 when $x$ lies in $R_j$ and 0 otherwise. $\Theta = \{R_j, \gamma_j\}$ collects the tree parameters [S1][S5].
+
+Tree construction chooses $\Theta$ to minimize the loss summed within the regions [S1]:
+
+{{F:F5}}
+
+Here $L$ is the loss function and $y_i$ is the outcome for observation $i$. The source writes the loss argument as $\gamma_i$, which is presumably the constant of the region containing $x_i$.
+
+Boosting then minimizes loss over a sequence of trees. Given the previous fit $f_{m-1}(x_i)$, tree $m$ is chosen by [S1][S5]:
+
+{{F:F2}}
+
+In practice, the tree is fit by least squares to the pseudo-residuals (negative gradients $-g_{im}$) [S1][S5]:
+
+{{F:F3}}
+
+**Code:** The sources contain no R code, so I give none.
+
+**What to check:**
+- The sources define the tree and the boosting objective only. They do not say how the regions $R_j$ are found (the splitting rule), so that part is missing.
+- Nothing here addresses survey design. Strata, clusters, weights, and the finite population correction do not appear in these formulas. If your data come from a complex sample, the sources do not say how to handle the design when fitting trees.
+- In Total Survey Error terms, this is a prediction model. It does not address coverage, nonresponse, or measurement error in $y_i$ and $x_i$, and it would simply learn from any such errors in the training data.",2,TRUE,4,TRUE,FALSE,0,TRUE,"",0,"correct",0,FALSE,"The answer gives the tree representation T(x;Θ)=Σγ_j I(x∈R_j) with Θ={R_j,γ_j}, matching the course passage, and its additional boosting objective and caveats are consistent with the sources.",2.75802612304688,0.131938934326172,5.65475106239319,0.0205625,0.0207952
+"5437","concept","jpsm/PracTools_SURV745/lectures/PracTools_Chapter_4","What is the formula for calculating the required sample size for each domain when testing the difference in means?","The per-domain sample size for a one-sided test of a difference in means is below. It is the size in *each* domain, not the total [S1].
+
+{{F:F1}}
+
+Symbols:
+- $n$ is the sample size in each domain.
+- $\sigma_d$ is the square root of the population unit variance of the difference.
+- $\delta$ is the difference in means to detect, $\mu_x - \mu_y$.
+- $z_{1-\alpha}$ is the critical value for the test level.
+- $z_\beta$ is the standard normal point with area $\beta$ (the power) to its right, so for 80% power $z_\beta \approx -0.84$ [S5].
+
+It holds when both domains have the same $n$ and $V(\hat{\bar{d}}) = \sigma_d^2/n$ [S1][S11].
+
+**Getting $\sigma_d^2$**
+- Independent domains (e.g., SRS or stratified SRS with domains equal to strata): $\sigma_d^2 = \sigma_x^2 + \sigma_y^2$ [S1].
+- Correlated or overlapping domains: $\sigma_d^2 = \sigma_x^2 + \sigma_y^2 - 2\sigma_{xy}$ [S1].
+- Equal variances $\sigma_0^2$ with unit-level correlation $\rho$: $\sigma_d^2 = 2\sigma_0^2(1-\rho)$. With $\rho = 0$ this is $2\sigma_0^2$ [S1].
+
+**Two-sided tests.** The sources only say to use `power.t.test` with `type = ""two.sample""` [S4]. They do not give a two-sided closed form. For overlapping samples, the book's `nDep2sam` function takes `alt = ""one.sided""` or `""two.sided""` [S3].
+
+**Code.** This is a base-R sketch of F1 using $\sigma_d^2 = 2\sigma_0^2(1-\rho)$, plus the `power.t.test` call named in [S4]. The values are placeholders.
+
+```r
+library(tidyverse)
+
+n_per_domain <- function(sigma0_sq, rho, delta, alpha = 0.05, power = 0.80) {
+  sigma_d <- sqrt(2 * sigma0_sq * (1 - rho))
+  z_alpha <- qnorm(1 - alpha)
+  z_beta  <- qnorm(1 - power)   # negative for power > 0.5
+  ceiling((sigma_d * (z_alpha - z_beta) / delta)^2)
+}
+
+# One-sided, several detectable differences (placeholder inputs)
+c(3, 5, 8) |>
+  map_dbl(\(d) n_per_domain(sigma0_sq = 100, rho = 0, delta = d))
+
+# Two-sided, independent samples
+power.t.test(delta = 5, sd = 10, sig.level = 0.05, power = 0.80,
+             type = ""two.sample"", alternative = ""two.sided"")
+```
+
+**Check before using**
+- **Equal domain sizes.** The formula assumes the same $n$ in each domain. Unequal allocation needs a different calculation, such as `nDep2sam`, which takes the ratio `r`.
+- **Independence and overlap.** Independence gives $\rho = 0$. Overlapping or correlated samples need $\rho$ or $\sigma_{xy}$.
+- **Variance inputs.** $\sigma_0^2$ must be a unit-level variance, taken from prior data or a guess. Errors here translate directly into under- or overpowering.
+- **Design effects.** The formula is for SRS or stratified SRS. For clusters (PSUs) or unequal weights, inflate $n$ by a design effect. The sources given do not provide one, so this is not from the store.
+- **Finite population correction.** The formula ignores it, which is reasonable only when the sampling fraction is small.
+- **Nonresponse.** $n$ is the number of respondents. Inflate the number sampled for expected nonresponse and ineligibility, which is not from the store.
+- **Sidedness and the normal approximation.** F1 is a one-sided, large-sample result [S14].",6,TRUE,1,TRUE,FALSE,1,TRUE,"",0,"correct",0,FALSE,"The answer gives the correct formula n = [σ_d(z_{1-α} − z_β)/δ]^2 (4.11), correctly notes it is per domain, and gives the right σ_d² variants and the two-sided pointer to power.t.test, all matching the passage; the extra caveats are explicitly flagged as not from the store, and the R code is illustrative.",2.55225682258606,0.139263153076172,10.9957568645477,0.0302665,0.0224112
+"4685","concept","jpsm/ML_social_science_SURV613/lecture_notes","What is the purpose of the dropout rate in a neural network?","The dropout rate is the fraction of input units dropped during training, and its purpose is to prevent overfitting [S1].
+
+The sources say little beyond that. They list dropout as one hyperparameter of a neural network, alongside learning rate, number of layers and units, batch size, and activation function [S1]. As a hyperparameter, it is set before training and is not estimated from the data [S1].
+
+**Missing from the sources:** they do not explain the mechanism (units randomly zeroed at each training step), whether dropout applies at prediction time, typical values, or how to tune it. Any of that would be not from the store.
+
+**Total Survey Error framing (not from the store):** dropout is a model-side regularizer, so it does not address coverage, nonresponse, or measurement error in the survey data. If it is used when predicting survey outcomes or response propensities, it mainly reduces the variance of predictions (overfitting) at the cost of some bias. It will not correct bias from a non-representative sample.
+
+No formula or R code is needed here, since the sources give no formula id or code for dropout.
+
+**What to check:**
+- Treat the dropout rate as a hyperparameter and choose it by validation or cross-validation, not by fit on the training data [S1].
+- If you use survey data to train, decide whether to use the design weights, strata, and clusters in the loss function and in the validation splits. The sources do not cover this.",1,TRUE,0,TRUE,FALSE,0,TRUE,"",0,"correct",3,FALSE,"The answer correctly states that dropout rate is the fraction of units dropped during training to discourage overfitting, matching the course passage and S1, but it adds unsourced claims (choosing it by cross-validation, the variance/bias effect on predictions, and that it will not fix non-representative sample bias) though it flags the framing as not from the store.",1.98390913009644,0.0893938541412354,4.28871202468872,0.0097265,0.0104212
+"4218","concept","jpsm/intro_ML_big_data_SURV751/lectures/PredictionandMachineLearningNotesSVY751_part0","What are some examples of paradata that survey researchers can use to monitor a study in real time?","Paradata useful for real-time monitoring fall into a few groups. Most of them bear on nonresponse error, and some bear on measurement error.
+
+**Contact and call records (nonresponse)**
+- The time of each call or visit and its outcome, recorded as a disposition code [S3]. Disposition codes are a standard process variable for monitoring [S5].
+- Records of letters and emails sent [S4].
+- Contact rates by time of day, used to optimize calling patterns [S2]. Contact rates per calendar week by subsample are an example. In one panel survey, panel households were contacted at a much higher rate than refreshment households, a gap that can affect overall quality [S6].
+- Response rates by important subgroups, tracked over the field period. These showed the result of an intervention in the National Survey of Family Growth [S6].
+
+**Interviewer observations (nonresponse)**
+- Observations about the household or neighborhood, such as children under 15 in the household, yard upkeep, graffiti, single-family housing, or non-English speakers [S4][S9]. Observations also show which cases are underrepresented, so special recruitment effort can target them [S2].
+- Political signs during elections, which can be checked against participation [S4].
+
+**Audit trails and interview-process data (measurement)**
+- Interview length, help-key clicks, comments entered, and in some systems every keystroke [S3].
+- In web surveys: device type, operating system, response time, and navigation [S4]. Inactivity, mouse movements, multitasking, and speeding are also available [S7].
+- Audio recordings, used to assess interview quality, external distractions, and interviewers' vocal properties [S4]. Response times and respondent disfluencies could in principle trigger real-time prompts to help [S7].
+
+**Resource and process measures**
+- Measures of resources used and coding errors [S5]. These can be tracked in tables, though graphical displays and process control charts (key variables by day or week, ideally by subgroup) are often more efficient [S5][S6].
+
+**Interviewer characteristics**
+- Age, sex, and ethnicity are commonly known. Personality traits or social skills could also be collected [S3].
+
+**How they are used in real time**
+- Paradata can drive contact optimization. Wagner (2013) estimated contact probabilities for household-by-call-window combinations, prioritized cases accordingly, and re-estimated until the field period ended [S1].
+- Paradata can also feed models that predict nonresponse during the field period [S8].
+- Tradeoff: paradata-driven efforts to raise response rates target nonresponse error. They do not guarantee lower bias. Bias depends on both the nonresponse level and the respondent–nonrespondent difference [S4].
+
+The sources do not cover the quality of interviewer observations. They also do not cover costs or software for building dashboards.",9,TRUE,0,TRUE,FALSE,0,TRUE,"",0,"correct",1,FALSE,"The answer lists paradata examples that match the passage (mouse movements, response times, missing data/nonresponse indicators in web surveys) and add well-supported contact records, audit trails and observations; it misses 'inactive interviewer' and 'coverage composition' but still answers the question, with one claim (S9 for non-English speakers etc. fine) and the claim about 'Audio recordings used for interviewer vocal properties' supported, while 'help-key clicks'/'every keystroke' are supported; the statement that the sources don't cover interviewer observation quality is plausible and not wrong.",2.43192005157471,0.0910069942474365,11.1742219924927,0.0160985,0.0113892
+"6807","concept","jpsm/stat_mod_ML_1_SURV615/lectures/Old_Classnotes","Which summary statistics are used to construct a box-and-whisker plot?","A box-and-whisker plot is built from five summary statistics: the median, the upper and lower quartiles, and the upper and lower extremes (maximum and minimum) [S1]. SAS also marks the mean with a ""+"" [S1].
+
+How they are drawn [S1]:
+- The box runs from the lower quartile (bottom) to the upper quartile (top).
+- A horizontal line inside the box marks the median.
+- Whiskers run from the box to the maximum above and to the minimum below.
+
+Schematic plots use the same box but shorten the whiskers, using the interquartile range (IQR) [S1][S2]:
+- One step is 1.5 × the IQR. The inner fences lie 1 step outside the quartiles, and the outer fences lie 2 steps outside [S1].
+- Each whisker stops at the inner fence, unless all values on that side fall inside it. In that case the whisker stops at the most extreme value on that side [S2].
+- Values between the inner and outer fences are ""outside values"" and are labeled ""O"". Values beyond the outer fences are ""far out"" and are also labeled [S2].
+
+Total Survey Error: a box plot is a descriptive display, so it does not itself reduce any error source. Extreme or flagged points can reflect measurement or processing error, such as data-entry mistakes, or genuine tail values. The sources do not say which, so check before dropping them. The sources also do not say whether these summaries should be weighted for a complex sample design. Unweighted quartiles describe the sample, not the population.",2,TRUE,0,TRUE,FALSE,0,TRUE,"",0,"correct",0,FALSE,"The answer correctly names the five statistics (median, upper and lower quartiles, upper and lower extremes) as in the passage and accurately describes the drawing and schematic-plot details, with the Total Survey Error caveats explicitly framed as not covered by the sources.",2.17911505699158,0.123674154281616,4.99770784378052,0.0178645,0.0170252
+"740","concept","jpsm/applied_sampling_SURV625/lectures/Lecture1","How is the correlation between two random variables $X$ and $Y$ calculated?","The correlation is the covariance of $X$ and $Y$ divided by the square root of the product of their variances [S6]. In the notation of [S3], $\rho_{xy} = \sigma_{xy}/\sqrt{\sigma_{xx}\sigma_{yy}}$ [S3]. It ranges from -1 to 1 [S3].
+
+No formula id given states this definition, so I write it inline (the content is from [S6] and [S3]):
+
+$Corr(X,Y) = Cov(X,Y)/\sqrt{V(X)\,V(Y)}$, where $Cov(X,Y) = E[\{X-E(X)\}\{Y-E(Y)\}] = E(XY) - E(X)E(Y)$ [S6].
+
+**Related identity.** Under bivariate normality, the covariance–correlation link is:
+
+{{F:F3}}
+
+Here $\sigma_{XY}$ is the covariance, $\sigma_{XX}$ and $\sigma_{YY}$ are the variances, and $\rho_{XY}$ is the correlation [S13]. Rearranged, it gives the same definition as above.
+
+**Sample estimate.** For a simple random sample, Pearson's correlation is the sum of cross-products of deviations, $\sum (x_i-\bar{x})(y_i-\bar{y})$, divided by $\sqrt{\sum (x_i-\bar{x})^2}\,\sqrt{\sum (y_i-\bar{y})^2}$ [S5]. In [S3] the sample version is $r_{xy}$, the sample covariance over the square root of the product of the sample variances. (The denominator there is typed as $s_{xy}s_{yy}$, which looks like a typo for $s_{xx}s_{yy}$.)
+
+**R code.** For a complex design, `survey_corr()` applies the weights when estimating the correlation [S5]:
+
+```r
+library(srvyr)
+
+design |>
+  summarize(
+    r = survey_corr(
+      x = x_var,
+      y = y_var,
+      na.rm = TRUE,
+      vartype = c(""se"", ""ci""),
+      level = 0.95
+    )
+  )
+```
+
+Here `design` is a `tbl_svy` object that you create beforehand. The sources do not show how to build it, so I leave that step out.
+
+**What to check**
+- **Design:** The `design` object must carry the correct strata, clusters (PSUs), weights, and finite population correction. The sources do not say how `survey_corr()` computes its variance or uses these features, so confirm that in the package documentation (not from the store).
+- **Pearson assumptions:** Pearson's correlation assumes continuous data, a linear relationship, and bivariate normality [S10]. For ordinal or monotonic but nonlinear data, Spearman is an alternative [S10]. This is a measurement and specification issue: a mismatch means $r$ misstates the association.
+- **Nonresponse and adjustment:** Weights adjust for unequal selection and nonresponse. They do not fix measurement error in $x$ or $y$, which attenuates the correlation.",5,TRUE,1,TRUE,FALSE,1,TRUE,"",0,"correct",2,FALSE,"The core definition, Corr(X,Y)=Cov(X,Y)/sqrt(V(X)V(Y)), matches the course passage and S6, but the answer adds unsupported claims, for example that measurement error attenuates the correlation and that weights do not fix it, plus a claim that a related identity gives the definition on rearrangement.",2.88470697402954,0.125369071960449,8.06063890457153,0.0283485,0.0249432
+"3348","concept","jpsm/fund_data_coll_1_SURV621/lectures/lecture_13_Interviewers_and_Interviewing_II","How does the gender of the interviewer influence the responses given by survey participants regarding gender roles and feminist views?","Respondents tend to give more egalitarian, more pro-feminist answers to female interviewers than to male interviewers, but only on items where gender is relevant. In Total Survey Error terms, this is a measurement error source: a systematic interviewer-driven bias, not interviewer variance.
+
+**What the sources show**
+
+- Kane & Macaulay (1993): both men and women gave more egalitarian answers to female interviewers, but on different items. More men reported sharing childcare, and more women supported feminist policy, when the interviewer was female [S2].
+- Huddy et al. (1997), two pre-election surveys: the female-minus-male interviewer difference on a 10-point scale was positive on every item reported [S2].
+  - 1991: feminist identity .76 (p<.01), activity on women's issues .50 (p<.1), pro-collective action .48 (p<.1), egalitarian roles .35 (p<.1), pro-affirmative action .84 (p<.05).
+  - 1993: pro-collective action .69 (p<.05), pro-choice .82 (p<.01), anti-sexual harassment .63 (p<.05).
+  - Male and female respondents both showed interviewer-gender effects on the same questions [S2].
+- The effect is conditional. Interviewer race and gender shift answers systematically, but only for questions where that attribute is relevant [S3][S5].
+- Proposed explanations are social norms (politeness) and priming [S5]. This is consistent with a social desirability account of interviewer presence [S6][S9].
+
+**Caveats**
+
+- The sources do not give sample sizes, standard errors, or whether the interviewers were randomly assigned to respondents. Without random assignment, interviewer gender can be confounded with area, respondent mix, or other interviewer traits.
+- The Huddy effects are modest in size and several are only significant at p<.1 [S2].
+- The sources do not say which answer is closer to the truth. A ""more egalitarian"" answer to a female interviewer is a shift, and it implies bias in at least one condition.
+
+**Design implications**
+
+- Self-administration (CASI/ACASI) removes the interviewer and generally increases disclosure on sensitive items [S7][S10]. The sources show this for sensitive behaviors such as sex partners and drug use, not directly for gender-role attitudes. Applying it to gender attitudes is an inference.
+- For IVR, early hypotheses about voice gender were not supported by later research, which found no significant effect on reporting levels or response rates [S10].
+- Recording interviewer gender and, where feasible, randomizing assignment lets you estimate and adjust for the effect. That recommendation is not from the store.",7,TRUE,0,TRUE,FALSE,0,TRUE,"",0,"correct",2,FALSE,"The answer matches the passage: both men and women gave more egalitarian answers to female interviewers on different items (Kane & Macaulay), and the Huddy et al. figures are accurately reported; the main extras are the unsupported claim that ""Huddy effects are modest in size"" and the framing as a TSE measurement error versus interviewer variance, though the latter is largely supported by S3, and the answer correctly flags its own inferences.",2.15059399604797,0.0855729579925537,7.34926700592041,0.0168425,0.0133512
+"5897","concept","jpsm/sampling_1_SURV626/lectures/Unit_6_Unequal_sized_clusters","What are some ways to handle variation in sample size, and how does this affect the choice of estimator for the mean?","**Answer:** When the achieved sample size varies from sample to sample, use a ratio mean (total of $y$ divided by total of $x$, the realized sample size or a size measure) instead of the simple average. This is mainly a trade of a small bias for a more stable estimate.
+
+**Ways variation arises and is handled**
+- **Random sample size.** With unequal-sized clusters and fixed sampling rates, the achieved sample size is a random variable even under epsem selection [S3]. The sources say to use ratio estimation for the mean in this case [S9]. The estimator is $r = \sum y_\alpha / \sum x_\alpha$, where $x_\alpha$ is the number of persons in cluster $\alpha$ [S3][S4].
+- **Unknown population size.** The ratio form needs no known $N$. Weighted versions use $\sum w y / \sum w$, and with Horvitz-Thompson weights $q(y)=\sum (y_i/\pi_i)/\sum(1/\pi_i)$ [S7][S8]. $N$ can also be estimated as $t_x/\bar{X}$ [S9].
+- **Variable cell sizes in poststratification and subdomains.** The denominator is random, so the same ratio logic applies [S6][S9].
+- **Stratification.** Sample independently within strata and combine the within-stratum ratio terms [S3][S10].
+- **Auxiliary information.** Ratio or regression estimation with a variable highly correlated with $y$ can also improve precision [S6][S9].
+
+**Effect on the estimator**
+- **Bias.** The ratio mean is biased but consistent, because $E[\sum 1/\pi_i]=N$ only on average [S7][S8]. If $\sum 1/\pi_i = N$ exactly, it is unbiased [S8].
+- **Variance.** The exact variance is not known, so it is approximated by Taylor linearization [S3]:
+
+$var(r) \approx \frac{1}{x^2}[var(y)+r^2 var(x)-2r\,cov(y,x)]$ [S10]
+
+- **Weighted paired-selection case** (two PSUs per stratum, ignoring the fpc) [S11]:
+
+{{F:F1}}
+
+- **Diagnostic.** The key quantity is the cv of the achieved sample size. The sources raise it but do not give a threshold, so I cannot say what counts as satisfactory [S3][S2].
+- **Design effect.** Use the average cluster size: $1+(\bar b-1)\,\text{roh}$ [S10].
+
+**Total Survey Error trade-off**
+- The ratio mean adds a small adjustment bias but removes the extra sampling variance that comes from a random $n$.
+- Clustering inflates sampling variance through roh. This is the reason for the design effect.
+
+**Code** (combined ratio mean, ultimate-cluster variance, adapted from [S5])
+
+```r
+library(tidyverse)
+
+dat <- tibble(
+  t_y = c(5, 1, 2, 4, 2, 2, 3, 3, 4, 6),
+  t_x = c(13, 11, 7, 11, 6, 11, 5, 11, 9, 10)
+)
+
+r <- dat |> summarise(r = sum(t_y) / sum(t_x)) |> pull(r)
+
+dat |>
+  summarise(
+    var_r = (1 / sum(t_x)^2) * (n() / (n() - 1)) *
+      (sum(t_y^2) + r^2 * sum(t_x^2) - 2 * r * sum(t_y * t_x)),
+    se_r = sqrt(var_r)
+  )
+```
+
+**Check before running**
+- **Clusters:** each row is one ultimate cluster (PSU), and the clusters were drawn by SRS.
+- **Strata:** none are assumed. With strata, compute the terms within strata and sum them [S10].
+- **Weights:** none are used, so selection must be epsem. Otherwise use weighted totals.
+- **FPC:** it is ignored, which is fine only if the sampling fraction is negligible [S5].
+- **Cluster sizes:** $x$ must be the realized sample size in each cluster.
+- **Missing from the sources:** the cv(x) cutoff, and a bias formula for the ratio mean.",10,TRUE,1,TRUE,FALSE,1,TRUE,"",0,"partly correct",3,FALSE,"The answer correctly says the ratio mean is appropriate when sample size is random, but it omits the passage's listed ways to handle variation (depart from epsem with weighting, create equal-size clusters, stratify by size, PPS), and it adds unsupported claims such as the bias-for-stability tradeoff, the Total Survey Error section, and the strata/fpc claims.",2.52844095230103,0.144335985183716,12.5717740058899,0.0332465,0.0244112
+"456","equation","jpsm/applications_stats_modeling_SURV617/midterm/midterm_study_guide","How is the test statistic for a Likelihood Ratio Test calculated when comparing two nested models?","The LRT statistic is the difference in -2 log-likelihoods between the reduced (nested) model and the full model. It is referred to a chi-square distribution whose degrees of freedom equal the number of parameters dropped [S2][S3][S5].
+
+Written as a likelihood ratio (reduced over full):
+
+{{F:F2}}
+
+Here the numerator is the likelihood of the reduced model and the denominator is the likelihood of the full model [S12]. The statistic is chi-square with $q$ degrees of freedom, where $q$ is the full model's parameter count minus the reduced model's [S11]. In log-likelihood form it is the difference of the two -2 log-likelihoods:
+
+{{F:F4}}
+
+Here $\ell_{\text{reduced}}$ and $\ell_{\text{full}}$ are the log-likelihoods of the reduced and full models [S14]. For logistic regression the same quantity can be computed from deviances:
+
+{{F:F3}}
+
+This is the deviance of the reduced model minus that of the full model. Because adding terms can only lower the deviance, the statistic is always positive. If it exceeds the $100(1-\alpha)$th percentile of the chi-square distribution with $q$ degrees of freedom, there is evidence that the dropped terms matter [S10].
+
+Code, using the pattern in the sources (the model objects are placeholders for your own fits):
+
+```r
+library(lmtest)
+
+# -2 * (logLik reduced - logLik full)
+chi_square <- -2 * (logLik(logit_reduced) - logLik(logit_full)) %>% as.numeric()
+
+# difference in number of estimated parameters
+df <- length(coef(logit_full)) - length(coef(logit_reduced))
+
+# p-value: upper tail of the chi-square distribution
+p_value <- pchisq(chi_square, df = df, lower.tail = FALSE)
+
+# or pass both fits directly
+lrtest(logit_reduced, logit_full)
+```
+
+I used `pchisq` with `lower.tail = FALSE` rather than `dchisq`. `dchisq`, which [S1] uses, returns the density, not a p-value. I used `length(coef())` for the degrees of freedom instead of the `summary()$df` approach in [S1]. The `length(coef())` approach is not from the sources, so check it matches the parameter difference in your models.
+
+What to check:
+- **Nesting:** the reduced model must be the full model with $q$ parameters constrained, usually to zero, and both must be fit to the same cases. Missing data in the extra predictors can silently change the sample, which is a nonresponse and processing issue.
+- **Likelihood type:** for mixed models, fit both with ML, not REML, when testing fixed effects [S3]. These tests also assume large numbers of clusters and large samples within clusters [S2].
+- **Variance components:** testing a variance at zero is on the boundary, so use a mixture of chi-squares instead [S6][S8].
+- **Complex designs:** the sources give this statistic under SRS [S11]. If your data have strata, clusters, unequal weights or a finite population correction, `glm` and `lrtest` ignore them. The sources do not cover the design-adjusted version, so a plain LRT may understate sampling error. Use a design-based test from the `survey` package instead (not from the sources).",10,TRUE,3,TRUE,FALSE,1,TRUE,"",0,"correct",4,FALSE,"The answer gives the course's statistic, -2 times the difference in log-likelihoods (reduced minus full), referred to a chi-square with df equal to the parameter difference, but it adds several claims no source supports: the survey-package advice, glm/lrtest ignoring the design, the same-cases nesting check, and the length(coef()) df code.",2.28282999992371,0.133380889892578,8.69671201705933,0.0254785,0.0227172
+"4822","equation","jpsm/PracTools_SURV745/assignments/SURV745_Assign_4_Linares_expanded","What is the formula for the relative variance of the estimated total of a proportion when using stratified simple random sampling?","The relative variance of the estimated total of a proportion under stratified SRS without replacement is the sum over strata of $N_h(N_h/n_h - 1)S_h^2$, divided by the squared true total $t_P^2$ [S12]:
+
+{{F:F2}}
+
+In words:
+- $N_h$ and $n_h$ are the population and sample sizes in stratum $h$.
+- $P_h$ is the stratum proportion.
+- $S_h^2$ is the stratum element variance, equal to $P_h(1-P_h)N_h/(N_h-1)$.
+- $t_P$ is the true population total of the proportion, which is $\sum_h N_h P_h$.
+- $H$ is the number of strata.
+
+The sources give the same structure for a general analysis variable $j$ [S11]. The variance of the estimated proportion itself is a related quantity, not the same one. It uses $W_h^2(1-f_h)/(n_h-1)\,p_h(1-p_h)$ [S8][S5].
+
+The sources do not give a relvariance in terms of the estimated total $\hat{t}_P$. In practice you plug in estimates for $P_h$ and $t_P$, but no source covers that step.
+
+```r
+library(tidyverse)
+
+# Replace with your own strata values
+dat <- tibble(
+  N_h = c(2000000, 500000, 1000000, 290000),
+  n_h = c(3000, 800, 3000, 1200),
+  P_h = c(.6, .3, .5, .4)
+)
+
+dat |>
+  mutate(
+    S2_h = P_h * (1 - P_h) * N_h / (N_h - 1),
+    term = N_h * (N_h / n_h - 1) * S2_h
+  ) |>
+  summarise(
+    t_P = sum(N_h * P_h),
+    relvar = sum(term) / t_P^2
+  )
+```
+
+The formula and code are not from the survey or srvyr packages. They compute the formula directly from stratum-level inputs.
+
+**What to check before running it**
+- **Strata:** the strata are mutually exclusive and exhaustive, and $N_h$ is known for every stratum.
+- **Design:** the design is single-stage stratified SRS without replacement. With clusters (PSUs), this formula understates the variance.
+- **Weights:** no unequal weights are needed. Nonresponse or other adjustments would break the formula, which is an adjustment-error and nonresponse concern.
+- **Finite population correction:** it is built into the $(N_h/n_h - 1)$ term. With replacement sampling, or when the sampling fractions are negligible, the term changes.
+- **Inputs:** $P_h$ comes from prior data or from sample estimates. If prior values are off, the result reflects specification error, not true sampling error.
+- **Stratum sizes:** every $n_h$ must be at least 2 if you estimate $S_h^2$ from the sample.",4,TRUE,1,TRUE,FALSE,1,TRUE,"",0,"correct",4,FALSE,"The answer gives the correct formula, relvar(t_P) = t_P^-2 * sum_h N_h(N_h/n_h - 1)S_h^2 with S_h^2 = P_h(1-P_h)N_h/(N_h-1), matching the passage and S12, but it adds several unsourced claims about the design checks, such as the clustering and nonresponse caveats and the n_h >= 2 requirement.",2.6866090297699,0.140414953231812,7.2313060760498,0.0292465,0.0265652
+"3630","equation","jpsm/Fund_Infe_SURV740/assignments/HW4","How is the design effect calculated for an estimated proportion, and how is it used to determine the effective sample size?","**Answer:** For a proportion, the design effect is the variance of $\hat{p}$ under the actual design divided by the variance of $\hat{p}$ under SRS of the same $n$ [S1][S5]. The effective sample size is $n$ divided by deff, which is the SRS size that gives the same variance [S1][S5]. A deff above 1 means the design is less efficient than SRS, and a deff below 1 means it is more efficient [S4]. In TSE terms, deff describes the sampling-variance component. Weighting, which belongs to the adjustment error source, also feeds into it [S4]. Nonresponse and measurement error are not part of it.
+
+**Steps**
+1. Estimate the design-based variance of $\hat{p}$ using the actual strata, clusters and weights. In the equal-cluster example in [S10] this is $(1-f)s^2/a$, where $a$ is the number of clusters and $s^2$ is the variance of cluster proportions.
+2. Compute the SRS variance of the same estimate. The course examples use $(1-f)\,\hat{p}(1-\hat{p})/(n-1)$ [S10]. [S8] uses the same form with $nm-1$ in the denominator, where $nm$ is the total number of elements.
+3. Take the ratio of the two variances: $\text{deff} = V_{\text{actual}}/V_{\text{SRS}}$ [S5][S10].
+4. Divide $n$ by deff to get the effective sample size:
+
+{{F:F3}}
+
+Here $n_{eff}$ is the effective sample size, $n$ is the actual sample size, and $D^2(\bar y)$ is the design effect. For a proportion, the same idea is written as {{F:F4}}.
+
+**Cluster shortcut:** For equal-probability clusters, deff is approximately $1 + (b-1)\rho$, where $b$ is the cluster size and $\rho$ is the intraclass correlation [S3]. Inverting this gives:
+
+{{F:F2}}
+
+For planning, you can multiply the SRS sample size by deff to get a rough sample size for the complex design. For example, 100 × 1.5 = 150 [S1].
+
+```r
+library(tidyverse)
+library(survey)
+
+# Design-based variance of the proportion (ids, strata, weights, fpc as appropriate)
+des <- svydesign(ids = ~cluster, strata = ~stratum, data = dat)
+
+p_hat <- svymean(~y, des)
+var_complex <- vcov(p_hat)[1, 1]
+
+# SRS variance of the same estimate, following [S10]
+n <- nrow(dat)
+f <- 0  # set to n/N if an fpc applies
+var_srs <- (1 - f) * coef(p_hat) * (1 - coef(p_hat)) / (n - 1)
+
+deff <- var_complex / var_srs
+n_eff <- n / deff
+```
+
+[S3] also gives `svydesign` and `svymean` code for computing deff relative to an SRS design. The code above is adapted from that and from [S10]. `survey::deff()` is not in the sources, so I did not use it.
+
+**Check before running**
+- **Strata, clusters and weights:** Confirm that `stratum`, `cluster` and the weights match the real design. Here I left weights out, so add `weights =` if the data are weighted. Unequal weights add roughly $1 + CV_w^2$ to deff [S4].
+- **Finite population correction:** Decide whether it applies. If it does, use the same $f$ in both variances, or add `fpc` to the design. Otherwise deff will be distorted.
+- **SRS variance denominator:** The sources are inconsistent, using $n-1$ in some places and $nm-1$ in others, and these are the same only when $n$ is the total element count. Use the total number of elements.
+- **Domain estimates:** The shortcut $1+(b-1)\rho$ holds only for equal-sized clusters. [S9] writes $\rho$ with the wrong denominator in its formula, but its code uses $(m-1)$, which is correct.",7,TRUE,3,TRUE,FALSE,1,TRUE,"",0,"correct",2,FALSE,"The answer correctly gives deff as the ratio of actual-design variance to SRS variance of p-hat and the effective sample size as n/deff, matching the passage and sources, but it adds a few details no source supports, such as the TSE framing and the claim that nonresponse and measurement error are not part of deff.",2.95304799079895,0.143058061599731,9.95320582389832,0.0310805,0.0251812
+"4890","equation","jpsm/PracTools_SURV745/assignments/SURV745_Assign_9_Linares","How is the nonresponse adjusted weight calculated when using the estimated propensity score for individual cases?","For each responding case, the nonresponse-adjusted weight is the input weight divided by that case's estimated response propensity [S1][S11][S4].
+
+{{F:F1}}
+
+Here $d_{2i}$ is the nonresponse-adjusted weight, $d_{1i}$ is the input weight (adjusted for unknown eligibility), and $\hat{\phi}_i$ is the estimated response propensity for unit $i$. The formula applies to respondents only. The propensity comes from a binary regression of the response indicator (1 = respondent, 0 = nonrespondent) on covariates known for both groups [S1][S3]. With a logistic model, $\hat{\phi}_i$ is $e^{X_i\hat\beta}/(1+e^{X_i\hat\beta})$ [S4]. Code the model on response, not nonresponse, so the adjustment is the reciprocal of the response probability [S3].
+
+```r
+library(tidyverse)
+library(survey)
+
+# dat: one row per sampled unit (respondents + nonrespondents)
+# resp = 1/0, d1 = input weight, x1 x2 x3 = covariates known for all units
+fit <- svyglm(
+  resp ~ x1 + x2 + x3,
+  design = svydesign(ids = ~psu, strata = ~strat, weights = ~d1,
+                     data = dat, nest = TRUE),
+  family = quasibinomial()
+)
+
+dat_adj <- dat %>%
+  mutate(phi_hat = predict(fit, newdata = dat, type = ""response"")) %>%
+  filter(resp == 1) %>%
+  mutate(d2 = d1 / phi_hat)
+```
+
+The sources do not specify whether to fit the model weighted or unweighted. Exercise 13.6 uses unweighted models [S7], and `svyglm` here is one weighted option. Both are valid choices to decide on. The `svyglm` and `predict` calls come from the survey package, not from the sources.
+
+What to check before running:
+- **Weights:** `d1` must be the weight going into the nonresponse step, i.e. the base weight adjusted for unknown eligibility [S9].
+- **Strata and clusters:** `strat` and `psu` must match the actual design. If you fit an unweighted model, the design variables do not enter the model, but the later variance estimation still needs them.
+- **Finite population correction:** it plays no part in computing the weights. Set it only when you build the final design for variance estimation, and only if sampling fractions are non-negligible.
+- **Covariates:** they must be available for respondents and nonrespondents, and predict both response and the outcomes [S4].
+- **Extreme propensities:** check for very small $\hat\phi_i$, which produce very large weights. Individual inverse propensities give the widest weight spread. Grouping into propensity classes reduces that spread, and is more common in practice because models are not fully trusted [S8]. This is the usual bias-variance trade-off between nonresponse error and sampling variance.
+- **Missingness assumption:** the adjustment relies on missing at random given the covariates [S5].",8,TRUE,1,TRUE,FALSE,1,TRUE,"",0,"correct",3,TRUE,"The answer correctly gives d2i = d1i/φ̂i for respondents, with φ̂i from a binary regression on covariates known for all cases, matching the passage; it wrongly says the sources do not specify weighted versus unweighted fitting (the passage fits a weighted model), and it adds a few uncited extras such as the claim about the finite population correction.",2.45922183990479,0.131827116012573,7.67809581756592,0.0229585,0.0192572
+"3648","equation","jpsm/Fund_Infe_SURV740/assignments/HW5","What is the formula for calculating the stratified differential item functioning ($DIF_{strat}$) based on population sizes and group means?","The population parameter is the population-size-weighted average of the sex-specific high-versus-low differences [S2]:
+
+DIF_Strat = (N_men · DIF_men + N_women · DIF_women) / (N_men + N_women)
+
+Here DIF_men and DIF_women are the population mean differences between high and low risk within each sex, and N_men and N_women are the population sizes of men and women [S2].
+
+The sample (model-based) version replaces each population difference with the simple-mean difference within the sex [S11]:
+
+{{F:F1}}
+
+In words, $N_{women}$ and $N_{men}$ are the population counts. $\bar{y}_{women_{high}}$ and $\bar{y}_{women_{low}}$ are the sample means for women at high and low risk, and the men's means are defined the same way. The sex-specific differences are weighted by population size [S11].
+
+The homework also writes a version with $Pr_{high}$ and $Pr_{low}$ as weights, for a balanced population [S1]. That is a special case of the same idea, not a different formula. Note that the homework's wording for that version is loose.
+
+**Total Survey Error angle:** DIF_Strat and the overall DIF are different parameters (a specification choice). In Table 4.5-1, DIF_Strat = 0.2 and DIF = 0.34, even though both sex-specific differences equal 0.2. The gap arises because sex is related both to risk-group membership and to the mean of Y [S2][S5]. Estimating DIF_Strat with the weighted sex-specific differences tends to be as variable as dif [S3]. Unweighted OLS with sex as a covariate is the alternative the notes propose. It is approximately unbiased for DIF_Strat when there is no risk-by-sex interaction, and it is more efficient when the weight variability comes mainly from oversampling women [S3].
+
+**R code:** none of the sources give code for this, so I am not writing any.
+
+**What to check:**
+- The N values are population counts from the frame or the census, not sample sizes.
+- The sample means $\bar{y}_g$ are simple means. This is valid only if weights are constant within each sex-by-risk cell, as under stratified SRS. Otherwise use weighted means [S1][S12].
+- Each of the four sex-by-risk cells has enough sample.
+- Whether you actually want DIF_Strat rather than DIF. The notes suggest DIF_Strat when the goal is to change individuals' risk status [S5].",6,TRUE,1,TRUE,FALSE,0,TRUE,"",0,"correct",1,FALSE,"The answer correctly gives DIF_Strat = (N_men·DIF_men + N_women·DIF_women)/(N_men+N_women) and the model-based sample version, both matching the sources; the extra remark that the Pr-weighted homework version is a special case is a mild unsupported interpretation, and the rest is supported or sensible caveats.",2.3564989566803,0.139446973800659,7.12805604934692,0.0242885,0.0223092
+"6909","equation","jpsm/stat_mod_ML_2_SURV616/assignments/HW_1","How do you calculate the chi-square and the likelihood ratio test ($G^2$) statistics for goodness of fit in R?","**Answer:** For a goodness-of-fit test on a vector of counts, compute expected counts under $H_0$, then Pearson $X^2$ and $G^2$ by hand. Check Pearson against `chisq.test()`, and get the p-value from the $\chi^2$ distribution with $k-1$ df when $H_0$ is fully specified [S6][S16]. The two statistics are asymptotically equivalent and usually close [S9][S11].
+
+**Formulas**
+
+Pearson, with $O_i$ the observed and $E_i$ the expected count in category $i$:
+
+{{F:F4}}
+
+Likelihood ratio, with the same symbols:
+
+{{F:F5}}
+
+Under the null, $E_i = n p_{0i}$ [S15]. For equal probabilities across $k$ categories, $E_i = n/k$ [S16]. Both statistics are referred to a $\chi^2$ distribution [S10]. The sources do not state the df rule for a fully specified $H_0$ with $k$ categories. I use $k-1$ (not from the store), which matches the `pchisq(…, 3)` call for 4 categories in [S19].
+
+**Code**
+
+This is adapted from [S16] and [S19]. It uses purrr and vectorised arithmetic instead of loops. The `dplyr::tibble` and `pchisq` calls are standard functions, but the data frame and column names are mine.
+
+```r
+library(tidyverse)
+
+counts <- c(120, 95, 110, 75)           # observed counts
+p0     <- rep(1 / length(counts), length(counts))  # H0 probabilities
+
+dat <- tibble(
+  observed = counts,
+  expected = sum(counts) * p0
+)
+
+# Pearson X^2
+chi_square <- dat |>
+  summarise(x2 = sum((observed - expected)^2 / expected)) |>
+  pull(x2)
+
+# check against built-in
+chisq.test(dat$observed, p = p0)
+
+# Likelihood ratio G^2
+G2 <- dat |>
+  summarise(g2 = sum(2 * observed * log(observed / expected))) |>
+  pull(g2)
+
+# p-values, df = k - 1 (df rule not from the store)
+df <- nrow(dat) - 1
+c(
+  p_pearson = pchisq(chi_square, df, lower.tail = FALSE),
+  p_G2      = pchisq(G2, df, lower.tail = FALSE)
+)
+```
+
+For a 2×2 or $R \times C$ table, get expected counts with `chisq.test(tab)$expected` and use the same `sum(2 * tab * log(tab / expected))` [S18]. The df for independence is $(R-1)(C-1)$ [S4]. `DescTools::GTest()` is mentioned as a check but commented out in [S18].
+
+**What to check**
+
+- **Simple random sampling (SRS) only.** These formulas are invalid for complex survey data without design adjustment, because ignoring the design biases the estimated proportions that enter the statistics [S4]. For stratified or clustered samples, use a design-based test such as Rao-Scott [S3]. That requires the strata, clusters (PSUs), weights, and finite population correction to be declared in the design object. The sources do not give R code for this, only the Stata `mgof` output [S3].
+- **Counts, not proportions.** Both statistics need raw counts, since $n$ multiplies the result.
+- **Zero cells.** $O_i \ln(O_i/E_i)$ is undefined at $O_i = 0$. The sources do not say how to handle this.
+- **Expected counts.** The $\chi^2$ approximation is asymptotic [S10]. Small $E_i$ weakens it (not from the store).
+- **Whether $p_0$ was estimated.** If parameters were estimated from the data, df is reduced by the number of estimated parameters [S10].
+- **Interpretation.** A small p-value rejects the hypothesized distribution. In [S9] the p-value is read the wrong way round, so do not copy that wording.",10,TRUE,2,TRUE,FALSE,1,TRUE,"",0,"correct",2,FALSE,"The answer correctly gives the Pearson and G^2 formulas, expected counts E_i = n/k, a chisq.test() check and the R code, matching the course passage; its extra claims, such as the k-1 df rule and the small-expected-count caveat, are flagged as outside the sources, and the caveats about SRS and zero cells are sound statistics.",2.60723900794983,0.153432130813599,11.1737298965454,0.0309685,0.0252152
+"4804","equation","jpsm/PracTools_SURV745/assignments/SURV745_Assign_4_Linares","What is the formula for the relative variance of the estimated total of a proportion when using stratified simple random sampling?","The relvariance of the estimated total of a proportion under stratified SRS without replacement is given by F2 [S12]:
+
+{{F:F2}}
+
+In words:
+- $t_P$ is the true population total of the proportion, $\sum_h N_h P_h$.
+- $N_h$ and $n_h$ are the population and sample sizes in stratum $h$.
+- $P_h$ is the stratum proportion.
+- $S_h^2 = P_h(1-P_h)N_h/(N_h-1)$ is the stratum element variance.
+- The sum runs over the $H$ strata.
+
+The general form for any analysis variable is the same, with the stratum variance $S_{jh}^2$ in place of the proportion-specific $S_h^2$ [S11][S9].
+
+This is the variance of $\hat{t}_P$ divided by $t_P^2$. The term $N_h(N_h/n_h - 1)$ is $N_h^2(1-f_h)/n_h$, which carries the finite population correction. Because of that factor, a stratum sampled completely ($n_h = N_h$) adds nothing.
+
+The sources do not give an R implementation of this formula. The code below is not from the store; it is a direct translation of F2 with `dplyr`, and no survey-package function is needed because the formula is closed-form. It uses planning values of $P_h$, as in the newborn example [S5].
+
+```r
+library(tidyverse)
+
+dat <- tibble(
+  N_h = c(2000000, 500000, 1000000, 290000),
+  n_h = c(3000, 700, 1500, 400),   # replace with your allocation
+  P_h = c(.6, .3, .5, .4)
+)
+
+dat |>
+  mutate(
+    S2_h = P_h * (1 - P_h) * N_h / (N_h - 1),
+    v_h  = N_h * (N_h / n_h - 1) * S2_h
+  ) |>
+  summarise(
+    t_P    = sum(N_h * P_h),
+    relvar = sum(v_h) / t_P^2
+  )
+```
+
+Check before running:
+- **Strata:** the strata must be mutually exclusive and exhaustive, and $N_h$ must be known from the frame.
+- **Sampling:** the design must be single-stage SRS without replacement within each stratum. Clustering is not covered by this formula.
+- **Weights:** no weights are needed, because the design is self-weighting within strata. Nonresponse or other adjustments would change the variance, and F2 ignores them.
+- **FPC:** the $(N_h/n_h - 1)$ term already includes the finite population correction. If $n_h/N_h$ is negligible, the correction has little effect.
+- **Inputs:** $P_h$ must be known or guessed. A planning value is a specification and adjustment risk, because wrong guesses distort the relvariance. If you use sample estimates $\hat p_h$ instead, the result is an estimated relvariance, not the design value.
+- **Sample size:** $n_h$ must be at least 2 for estimation from sample data.",4,TRUE,1,TRUE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer gives the correct formula matching the course passage and S12, with correct symbol definitions, but adds unsourced claims such as the code check list items (n_h at least 2, weights not needed, nonresponse effects) and that the sources lack R code, which is arguably inaccurate since the passage contains helper functions.",2.82991504669189,0.141682147979736,10.8684148788452,0.0307665,0.0275172
+"9071","equation","practools/practical_tools_textbook","What is the formula for the bootstrap variance estimator in the Rao-Wu bootstrap?","The Rao-Wu bootstrap variance estimator is the average squared deviation of the $B$ bootstrap estimates from the full-sample estimate [S2][S3][S5]:
+
+{{F:F4}}
+
+Here $v_{boot}(\hat{\theta})$ is the bootstrap variance, $B$ is the number of bootstrap replicates, $\hat{\theta}_{(b)}$ is the estimate from replicate $b$ computed with the bootstrap weights, and $\hat{\theta}$ is the full-sample estimate. The bootstrap weights come from the replicate-weight rule:
+
+{{F:F1}}
+
+Here $d_k$ is the initial weight, $m_h$ is the number of sample PSUs in stratum $h$, $\tilde{m}_h$ is the number of PSUs drawn in the bootstrap subsample, and $m_{hi}^*$ is the number of times PSU $i$ is drawn [S4].
+
+With the common choice $\tilde{m}_h = m_h - 1$ [S3], the weight reduces to:
+
+{{F:F3}}
+
+**Source discrepancies:**
+- One lecture source divides by $B-1$ instead of $B$ [S7]. The textbook and the other course notes use $1/B$ [S2][S3][S5].
+- A survey-package-style source writes the standard error as $\sqrt{\alpha\sum_r(\hat\theta_r-\hat\theta)^2}$, with a scaling constant $\alpha$ taken from the survey documentation [S6]. With $\alpha = 1/B$ this matches the formula above. For published replicate weights, use the documented $\alpha$.
+
+**TSE note:** The bootstrap addresses sampling error only. It does not capture nonresponse or adjustment error unless you redo those weight adjustments within each replicate [S9]. The number of replicates $B$ adds Monte Carlo noise, because a larger $B$ costs more computation [S9].
+
+**R code:** The sources give no R code or function arguments for the bootstrap, so I am not writing any. I would have to invent function calls to do so.
+
+**What to check:**
+- Strata and PSU identifiers are correct, with at least 2 PSUs per stratum. Strata with $m_h = 1$ need collapsing.
+- The weights $d_k$ are the final analysis weights.
+- $\tilde{m}_h \le m_h - 1$, so that no bootstrap weight is negative [S3].
+- Finite population correction: the sources do not say how the Rao-Wu bootstrap handles it. Replicate designs in R drop the fpc [S4], and the with-replacement resampling assumes it is negligible. This point is not covered by the sources.",7,TRUE,3,TRUE,FALSE,0,TRUE,"",0,"correct",2,FALSE,"The answer gives the correct Rao-Wu variance formula (1/B times the sum of squared deviations of bootstrap estimates from the full-sample estimate), matching the passage, along with correct weight formulas; a few extras, such as the TSE note on Monte Carlo noise and the m_h=1 collapsing advice, are not clearly supported by the sources.",2.41084504127502,0.129722118377686,8.95924091339111,0.0260485,0.0235152
+"8926","equation","practools/practical_tools_textbook","How is the restriction on the relative change between input weights and calibrated weights expressed mathematically in the GREG algorithm?","The restriction is a bound on the ratio of the calibrated weight to the input weight: $L \le w_i/d_i \le U$ for every sample unit $i \in s$ [S2]. Since $w_i = d_i g_i$, this is the same as bounding the $g$-weight, $L \le g_i \le U$ [S2]. The bound is on the relative change from the input weight, not on the final weight itself [S2].
+
+None of the formula ids given contains this inequality. It appears in [S2] only as an inline display, so I write it inline here: $L \le w_i/d_i \le U$. It is added to the calibration problem as a constraint alongside the calibration equations:
+
+{{F:F1}}
+
+Here $w_i$ is the calibrated weight, $d_i$ the input weight, $g_i$ the $g$-weight, and $\mathbf{x}_i$ the vector of $p$ auxiliary variables [S11]. The distance being minimized, in the linear case, is:
+
+{{F:F3}}
+
+Here $w_i$ are the final weights and $d_i$ the input weights [S13].
+
+Unbounded GREG has nothing that prevents negative weights [S2]. If the input weights are positive, as inverse selection probabilities are, bounding with $L > 0$ keeps the calibrated weights positive [S2]. If the bounds are too tight, calibration fails, so some trial and error may be needed [S2]. In the textbook example, the bounds were 0.4 and 3. The lower bound of 0.4 moved several weights, including the negative one, to the boundary. The upper bound of 3 had no effect [S3].
+
+In TSE terms, bounding trades a little of the exact calibration fit for protection against extreme or negative weights. That protection matters for domain estimates [S2]. In the textbook example, bounded GREG had a slightly smaller SE than unbounded GREG (744,746 vs 748,596) [S3].
+
+```r
+library(survey)
+
+sam_linBD <- calibrate(design = smho_dsgn,
+                       formula = ~BEDS + SEENCNT + EOYCNT +
+                         as.factor(hosp.type),
+                       population = pop_tots,
+                       calfun = ""linear"",
+                       bounds = c(0.4, 3))
+```
+
+The `bounds` argument is the one the text names [S2]. The `calfun` and `population` arguments follow [S7]. The bound values 0.4 and 3 are from the example in [S3].
+
+Check before running:
+- **Design object:** `smho_dsgn` in [S7] has no strata or clusters (`ids = ~0`) and uses weights `~d`. Confirm this matches your design. No finite population correction is specified there either.
+- **Weights:** the input weights must be positive, for example inverse selection probabilities, so that bounded weights stay positive [S2].
+- **Population totals:** `pop_tots` must be in the same order as the model-matrix columns [S7].
+- **Bounds:** if calibration fails to converge, the bounds are probably too tight [S2].",5,TRUE,2,TRUE,FALSE,1,TRUE,"",0,"correct",2,TRUE,"The core answer, L ≤ w_i/d_i ≤ U for all i in s, equivalent to bounding g_i, matches the passage; the answer also wrongly claimed no formula id contained the inequality (true, but fine), while the extra R code and design-object caveats go beyond the sources, and the claim that bounds trade off calibration fit is not supported.",2.90000200271606,0.133019924163818,7.74538087844849,0.0249205,0.0215152
+"1553","equation","jpsm/complex_sample_data_SURV701/assignments/hw3_surv701_Linares","What is the formula for estimating the variance of the sample mean using the Jackknife Repeated Replication (JRR) method for a simple random sample?","For a simple random sample with no stratum or cluster codes, the delete-one JRR variance of the sample mean is the formula below [S1][S11]. It is a special case of the general JRR form, in which every replicate has factor $(n-1)/n$ [S12].
+
+{{F:F1}}
+
+Here $n$ is the number of observations (and replicates), $\bar{y}$ is the full-sample mean, and $\bar{y}_{(k)}$ is the mean of the remaining $n-1$ observations after deleting observation $k$.
+
+For a linear estimator like the mean, this equals the textbook SRS variance, $\frac{1}{n}\cdot\frac{\sum (y_i-\bar y)^2}{n-1}$. So the jackknife offers no advantage here [S2]. The same algebra for a total gives $N^2/(n(n-1))\sum(y_k-\bar y_s)^2$ [S2]. [S2] describes this as the *srswr* formula, so there is no finite population correction. In TSE terms, this affects only the sampling-variance estimate. It does nothing for coverage, nonresponse, or measurement error.
+
+```r
+library(tidyverse)
+library(survey)
+
+bags <- c(10.2, 7.5, 6.8, 8.1, 9.4)
+n <- length(bags)
+y_bar <- mean(bags)
+
+# delete-one replicate means
+jrr_means <- map_dbl(seq_len(n), ~ mean(bags[-.x]))
+
+var_jrr <- ((n - 1) / n) * sum((jrr_means - y_bar)^2)
+var_srs <- sum((bags - y_bar)^2) / (n - 1) / n
+
+# check with survey package
+srs_design <- svydesign(ids = ~1, data = tibble(wt = bags))
+jk_design  <- as.svrepdesign(srs_design, type = ""JK1"")
+SE(svymean(~wt, jk_design))^2
+
+c(var_jrr = var_jrr, var_srs = var_srs)
+```
+
+This code follows [S1] and [S9].
+
+**Check before running:**
+- **Strata and clusters:** There are none. Each unit is its own PSU. If stratum or cluster codes exist, use the stratified form instead, which deletes PSUs within strata [S14].
+- **Weights:** The code assumes equal weights. With unequal weights, each replicate must reweight the retained units by $n/(n-1)$ [S2].
+- **Finite population correction:** The estimator above ignores it. If the sampling fraction is non-negligible, the variance is overstated.
+- **Sampling scheme:** The data must be an SRS, or the equivalence to the textbook formula does not hold.",6,TRUE,1,TRUE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer gives the correct delete-one JRR formula, (n-1)/n times the sum of squared deviations of the replicate means from the full-sample mean, and its equivalence to the textbook SRS variance matches the course passage; the TSE remark, the claim that the variance is overstated when the sampling fraction is non-negligible, and the claim that the data must be an SRS for the equivalence are not in the sources.",2.50743007659912,0.150537967681885,6.29213094711304,0.0266085,0.0240212
+"6942","equation","jpsm/stat_mod_ML_2_SURV616/assignments/HW_4","How do you perform a likelihood ratio test to compare a full model with a reduced model?","Fit both models on the same data, take the difference in their -2 log-likelihoods (deviances), and compare it to a chi-square distribution whose df is the number of parameters dropped [S1][S6]. If the statistic exceeds the $100(1-\alpha)$th percentile, the dropped terms add information and the full model is preferred [S1]. If not, the reduced model is adequate [S5].
+
+**Formula**
+
+{{F:F3}}
+
+Here the first term is the -2 log-likelihood of the reduced model and the second is that of the full model [S13]. With deviances, this is the same as the reduced-model deviance minus the full-model deviance [S1]:
+
+{{F:F4}}
+
+The df is the number of parameters in the full model minus the number in the reduced model [S8]. This difference is never negative, because adding terms can only lower the deviance [S1].
+
+**Code**
+
+The sources use `lrtest()` (the `lmtest` package) and `anova()` with a chi-square test. The first example is a logistic model, with `glm` calls following [S17]:
+
+```r
+library(lmtest)
+
+mod_full <- glm(LOW ~ LWT + RACE + SMOKE + HT + UI + SMOKE * LWT, data = lowbwt)
+mod_red  <- glm(LOW ~ LWT + RACE + SMOKE + HT + UI, data = lowbwt)
+
+lrtest(mod_full, mod_red)
+
+# equivalent for glm objects
+anova(mod_red, mod_full, test = ""Chi"")
+```
+
+For a mixed model, fit both with ML rather than REML, then compare [S2][S16]:
+
+```r
+model_full    <- lmer(outcome ~ pred1 + pred2 + (1 | cluster), data = mydata, REML = FALSE)
+model_reduced <- lmer(outcome ~ pred1 + (1 | cluster), data = mydata, REML = FALSE)
+anova(model_reduced, model_full)
+```
+
+The `glm` calls in [S17] omit `family = binomial`, which a logistic model needs. I kept the source call as written for the example, but add the family in your own code.
+
+**What to check**
+
+- **Nested models.** The reduced model must be the full model with $q$ parameters constrained to zero [S10]. The two fits must use the same observations, so watch for rows dropped by missing data in one model but not the other (a processing/nonresponse issue).
+- **Estimation method.** For mixed models, use ML, not REML, when the fixed effects differ [S2].
+- **Variance components.** Testing a variance at zero is on the boundary, so the plain chi-square is not right. [S4] uses a 50:50 mixture of $\chi^2_1$ and $\chi^2_2$ for a random slope.
+- **Dispersion.** If the dispersion is estimated, [S3] gives an F version, dividing the scaled deviance difference by $\hat\phi$.
+- **Survey design (not covered).** None of the sources gives a design-adjusted LRT. [S8] and [S11] present the LRT only under SRS. With strata, clusters (PSUs), unequal weights, or a finite population correction, the likelihood is not the true likelihood, and the SRS chi-square will understate variance (sampling error). A design-based test (for example a Wald or Rao-Scott-type test in the `survey` package) is the usual alternative, but that is not from the store. Check your strata, PSUs, weights, and fpc before choosing.
+- **Reading the output.** A small p-value says the extra terms improve fit. It does not address specification or measurement error in the model.",12,TRUE,2,TRUE,FALSE,2,TRUE,"",0,"correct",3,FALSE,"The answer correctly describes the LRT (difference in -2 log-likelihoods or deviances, chi-square with df equal to the parameter difference), matching the course passage and sources, but it adds a few claims no source supports, such as the survey-design cautions and the SRS chi-square understating variance.",2.48229193687439,0.148897886276245,12.8934121131897,0.0282285,0.0225272
+"5607","equation","jpsm/sampling_1_SURV626/assignments/Linares_K_HW3","How is the variance of the population mean calculated in a stratified sampling design?","The variance of the stratified mean is a weighted sum of the within-stratum variances of the sample means. Each stratum is weighted by $W_h^2$, where $W_h = N_h/N$. Strata are sampled independently, so there are no covariance terms [S7]. Within each stratum, $\frac{1-f_h}{n_h}s_h^2$ is the usual SRS variance of a mean, with $f_h = n_h/N_h$ and $s_h^2$ the within-stratum sample variance [S12][S13].
+
+The estimator of the mean is:
+
+{{F:F4}}
+
+The estimated variance is:
+
+{{F:F2}}
+
+Here $W_h$ is the stratum's share of the population, $f_h$ is the stratum sampling fraction, $n_h$ is the stratum sample size, and $s_h^2$ is the sample element variance in stratum $h$. The standard error is the square root of this variance [S1]. The population-variance version, which uses $S_{Uh}^2$, is in [S15].
+
+Total Survey Error: stratification lowers sampling error when strata are homogeneous on $y$, because only within-stratum variance enters. The variance depends on the allocation $n_h$ and on how well the strata separate $y$. Stratification does not affect coverage, nonresponse, or measurement error.
+
+```r
+library(tidyverse)
+
+# dat: one row per stratum with N_h (population size), n_h (sample size),
+#      ybar_h (stratum sample mean), s2_h (stratum sample variance)
+dat |>
+  mutate(
+    W_h = N_h / sum(N_h),
+    f_h = n_h / N_h,
+    v_h = W_h^2 * (1 - f_h) * s2_h / n_h
+  ) |>
+  summarise(
+    ybar_st = sum(W_h * ybar_h),
+    var_st = sum(v_h),
+    se_st = sqrt(var_st)
+  )
+```
+
+The code above is built from the formulas in the sources. No source gives code for a stratified variance using the survey package, so none is shown here.
+
+Check before running:
+- **Strata:** they must be mutually exclusive and exhaustive, with independent SRS selection in each.
+- **Population sizes:** $N_h$ must be known for every stratum.
+- **Sample size:** $n_h \ge 2$ in every stratum, so that $s_h^2$ can be computed.
+- **Weights:** the formula assumes equal-probability selection within strata. For unequal weights within a stratum, use a design-based estimator instead.
+- **Clusters:** none are assumed. With clustered selection this formula understates the variance.
+- **FPC:** keep $1-f_h$ if sampling is without replacement and $f_h$ is not negligible. It is often ignored when $f_h$ is small [S10]. Drop it for with-replacement sampling.",6,TRUE,2,TRUE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer correctly gives Var(ȳ_st)=ΣW_h²(1−f_h)s_h²/n_h with independent strata, matching the sources and passage, but the Total Survey Error remarks and several checklist items (n_h≥2, with-replacement handling, clustering understating variance) go beyond what the sources state.",2.53542804718018,0.142425060272217,7.82417392730713,0.0269885,0.0253692
+"3723","equation","jpsm/Fund_Infe_SURV740/final/surv740_complete_study_guide","What is the formula for calculating weights using propensity score subclassification?","**Answer:** There are two contexts, and the formula depends on which you mean.
+
+**1. Nonresponse adjustment (the usual meaning).** Form classes from the estimated response propensities, compute one propensity per class, and use its reciprocal as the adjustment factor for all respondents in the class [S2][S8]. The final weight is the input weight times this factor.
+
+{{F:F1}}
+
+Here $c$ is the propensity class and $\hat{\phi}_c$ is the class's estimated response propensity or response rate [S11]. $\hat{\phi}_c$ can be computed five ways [S8]:
+- the unweighted mean propensity
+- the weighted mean propensity
+- the unweighted response rate
+- the weighted response rate
+- the median propensity
+
+**2. Nonprobability sample matched to a probability sample.** Within each subclass $g$, the weight is the sum of the probability-sample design weights divided by the number of nonprobability units [S13].
+
+{{F:F3}}
+
+Here $d_k$ is the design weight of probability-sample unit $k$ in subclass $g$, and $n_{np}(g)$ is the count of nonprobability units in $g$ [S13].
+
+**Class formation.** Steps [S6]:
+1. Fit a binary regression for response using covariates known for both respondents and nonrespondents.
+2. Sort units by $\hat{\phi}(x_i)$.
+3. Cut into classes of about equal size, counting respondents plus nonrespondents.
+
+Five classes are the usual recommendation. More classes may reduce nonresponse bias but increase weight variability, and so variance [S6].
+
+**Code.** This uses the `pclass` and `NRadjClass` functions from PracTools [S10][S7]. The data frame `dat` and its variables (`resp`, `x1`, `x2`, `id`, `base_wt`) are placeholders.
+
+```r
+library(PracTools)
+library(dplyr)
+
+pc <- pclass(
+  formula = resp ~ x1 + x2,
+  data = dat,
+  link = ""logit"",
+  numcl = 5,
+  type = ""unwtd""
+)
+
+dat <- dat %>%
+  mutate(p.class = pc$p.class, phi_hat = pc$propensities)
+
+adj <- NRadjClass(
+  ID = dat$id,
+  NRclass = dat$p.class,
+  resp = dat$resp,
+  preds = dat$phi_hat,
+  wts = dat$base_wt,
+  type = 1
+)
+```
+
+I did not use `adj` to build the final weights. The sources do not show the structure of the `NRadjClass` output, so check its output before multiplying. The final respondent weight is the base weight divided by $\hat{\phi}_c$, applied to respondents only.
+
+**What to check**
+- **Design:** Strata, clusters (PSUs), and finite population correction are not used in this step. They matter later for variance estimation. If you use `type = ""wtd""` in `pclass`, you must supply a `design` object with the correct strata, clusters, and weights [S10].
+- **Input weights:** Use base weights, adjusted for unknown eligibility if needed. `wts` is required for the weighted options (`type` 2 and 4) [S7].
+- **Coding:** `resp` must be 1 for respondents and 0 for nonrespondents [S7].
+- **Balance:** Within each class, covariate means should not differ between respondents and nonrespondents (D'Agostino check) [S9].
+- **Auxiliary variables:** They should relate to both response and the outcome. Variables related only to response increase variance without reducing bias [S1].
+- **Gap:** The sources give no formula for a causal-inference subclassification estimator, and none for variance of the adjusted weights.",9,TRUE,2,TRUE,FALSE,1,TRUE,"",0,"partly correct",2,FALSE,"The answer gives the course's PSC formula (sum of probability-sample design weights over the number of nonprobability units in subclass g) correctly as context 2, but it presents the nonresponse adjustment 1/phi_c as the 'usual meaning' of the question and leads with it, whereas the passage defines propensity score subclassification weights as the PSC formula; it also adds a few unsupported details (e.g., the final weight is the base weight divided by phi_c for respondents only, and that strata/clusters/FPC are not used in this step).",2.90726399421692,0.136268138885498,12.7346639633179,0.0268985,0.0208652
+"2385","code","jpsm/fund_comp_data_display_SURV727/code/ClusteringAndPCA","How can I retrieve socio-demographic data for census tracts in Illinois from the ACS 5-Year dataset using R?","Use the `censusapi` package's `getCensus()` with `region = ""tract:*""` and `regionin = ""state:17""` (17 is Illinois' state code). You need a free Census API key [S2]. Alternatively, `tidycensus::get_acs()` with `geography = ""tract""` and `state = ""IL""` does the same job and can return geometry [S11].
+
+TSE note: these are ACS sample estimates, not counts. Tract-level values carry sampling error, and the missing-value codes are a processing issue. This is not from the store, but the `get_acs()` output includes margins of error, so keep them.
+
+No formula applies here.
+
+```r
+library(tidyverse)
+library(censusapi)
+
+cs_key <- read_file(""census-key.txt"")   # do not hard-code or commit your key
+
+acs_il_t <- getCensus(
+  name = ""acs/acs5"",
+  vintage = 2016,
+  vars = c(""NAME"", ""B01003_001E"", ""B19013_001E"", ""B19301_001E""),
+  region = ""tract:*"",
+  regionin = ""state:17"",
+  key = cs_key
+) |>
+  mutate(across(where(is.double), ~ na_if(.x, -666666666))) |>
+  rename(pop = B01003_001E,
+         hh_income = B19013_001E,
+         income = B19301_001E)
+
+head(acs_il_t)
+```
+
+The `tidycensus` alternative follows [S11]:
+
+```r
+library(tidycensus)
+
+census_api_key(cs_key)
+
+il_tracts <- get_acs(
+  geography = ""tract"",
+  variables = c(""B19013_001""),
+  state = ""IL"",
+  year = 2016,
+  geometry = TRUE
+)
+```
+
+To find variable codes, use `listCensusMetadata(name = ""acs/acs5"", vintage = 2016, type = ""variables"")` [S2], or `View(load_variables(2019, ""acs5"", cache = TRUE))` for `tidycensus` [S12].
+
+What to check before running:
+- **Vintage:** change `vintage` (or `year`) to the 5-year period you want. The sources use 2016, 2018 and 2019 in different examples.
+- **Variable codes:** confirm them for that vintage. The sources use `B01003_001E` for total population, `B19013_001E` for median household income and `B19301_001E` for per capita income [S6].
+- **Missing codes:** the value -666666666 marks missing and must be recoded to `NA` [S6]. Dropping those rows, as [S6] does, removes tracts with no estimate. That can introduce bias, so consider whether to drop them.
+- **Design, weights, strata, clusters, FPC:** none of these apply to pulling published estimates. If you later analyze the tracts as a sample, you need to define them yourself. The sources do not say how to do that for ACS tract data, and they do not cover how to use the published margins of error.
+- **Key handling:** keep the API key out of your scripts [S4].",5,TRUE,0,TRUE,FALSE,2,TRUE,"",0,"correct",3,FALSE,"The answer matches the course passage (censusapi getCensus with region ""tract:*"", regionin ""state:17"", acs/acs5, an API key), and adds a correct tidycensus alternative; a few extra statements about margins of error, bias from dropping rows, and the 17 state code are not supported by the sources.",2.50025200843811,0.124814033508301,7.45577883720398,0.0247805,0.0201792
+"4365","code","jpsm/ML_social_science_SURV613/class_labs/regularized-regression-1","How do I perform ridge regression and find the optimal lambda using cross-validation in R?","Use `glmnet` with `alpha = 0` (ridge) and let `cv.glmnet` choose lambda by k-fold CV. Pick `lambda.min` (smallest CV error) or `lambda.1se` (simplest model within one SE of the minimum) [S3][S4]. The CV error is the average squared error on held-out folds [S7].
+
+Formula: the CV criterion from [S7] has no stored formula id, so here it is in words. It is the mean over all $n$ observations of the squared difference between $y_i$ and the prediction from the model fit without the fold containing observation $i$ (not from the store as a display formula).
+
+In TSE terms, this tuning step targets prediction error, a model/measurement-side concern. It does nothing for coverage or nonresponse. The sources note that the key is unbiased estimates of performance [S10]. It also does not account for survey design, so it is not a design-based procedure.
+
+```r
+library(glmnet)
+library(tidyverse)
+
+# X: predictors only (drop the intercept column); y: outcome
+X <- model.matrix(medv ~ . - town - tract - cmedv, boston_train)[, -1]
+y <- boston_train$medv
+
+# Ridge path with 10-fold CV (cv.glmnet default); alpha = 0 is ridge
+m1_cv <- cv.glmnet(X, y, alpha = 0)
+plot(m1_cv)
+
+bestlam1 <- m1_cv$lambda.min   # smallest CV error
+bestlam2 <- m1_cv$lambda.1se   # 1-SE rule
+
+coef(m1_cv, s = ""lambda.min"")
+coef(m1_cv, s = ""lambda.1se"")
+
+# Refit on the full training data at the chosen lambda
+m1 <- glmnet(X, y, alpha = 0, lambda = bestlam1)
+coef(m1)
+```
+
+The refit step follows the process in [S7]: choose lambda in CV, then re-fit on the full training data. The `glmnet` call with a single `lambda` is built from the pattern in [S14].
+
+What to check:
+- **Weights:** `cv.glmnet` here is unweighted. If your data come from a complex survey, the sources do not cover weighted CV. `glmnet` has a `weights` argument, but that is not from the store, and weights alone do not make the CV design-based.
+- **Strata and clusters:** the folds are random splits of rows [S7]. With clustered data, rows within a PSU are correlated, so random folds can leak information and make CV error optimistically low. Fold assignment by PSU or stratum is possible [S10 mentions stratified CV], but the sources give no code for it.
+- **FPC:** it is irrelevant to the CV error here, and no source uses it.
+- **Predictors:** `model.matrix(...)[, -1]` removes the intercept, and `glmnet` needs a matrix `X` and vector `y` [S3]. Make sure ID-like columns (here `town`, `tract`, `cmedv`) are excluded.
+- **Inference:** ridge coefficients are shrunken. The sources only caution about inference after feature selection [S9], so do not read them as unbiased estimates.",6,TRUE,0,TRUE,FALSE,1,TRUE,"",0,"correct",4,FALSE,"The answer matches the course passage: it builds X and y with model.matrix, runs cv.glmnet with alpha = 0, and picks lambda.min or lambda.1se, but it adds a few claims no source supports, such as the 10-fold default, the optimism of random folds with clustered data, and the point about ridge coefficients being biased.",2.23944520950317,0.108294010162354,11.9601500034332,0.0233625,0.0189812
+"2027","code","jpsm/Data_visualization_SURV752/assignments/Linares_k_hw2","How can I create a ggplot line chart that shows all countries in a light gray background while highlighting a few specific countries in color?","Draw the gray background lines first, then add a second `geom_line()` layer on a filtered subset of the data, mapping `color` to country. Fix the highlight colors with `scale_color_manual()`. This is the pattern in [S1] and [S11]. [S2] uses the same idea for a single highlighted country.
+
+This is a presentation choice, not a survey-estimation one. In Total Survey Error terms it touches none of the error sources. It only affects how readers perceive the data you already have.
+
+No formula applies here.
+
+```r
+library(tidyverse)
+library(viridis)
+
+# Countries to highlight (replace with your own choice)
+highlight_countries <- c(""Laos"", ""Cuba"", ""Chile"")
+
+# Named color vector so each country gets a fixed color
+highlight_colors <- viridis(
+  length(highlight_countries),
+  option = ""plasma"", begin = .2, end = .8, alpha = .8
+)
+names(highlight_colors) <- highlight_countries
+
+pr_long |>
+  ggplot(aes(x = year, y = pr_score, group = Country)) +
+  # Background: all countries in light gray
+  geom_line(color = ""grey80"", linewidth = .5, alpha = .4) +
+  # Foreground: only highlighted countries, colored
+  geom_line(
+    data = pr_long |> filter(Country %in% highlight_countries),
+    aes(color = Country),
+    linewidth = 1.5
+  ) +
+  scale_color_manual(values = highlight_colors) +
+  labs(x = """", y = ""Political Rights Score"", color = ""Country"") +
+  theme(legend.position = ""top"")
+```
+
+What to check:
+- **Data shape:** `pr_long` must be in long format, with one row per country-year and columns `year`, `pr_score`, and `Country`. `group = Country` is what makes each country a separate line.
+- **Layer order:** the gray layer must come first, or it will draw over the colored lines.
+- **Names match:** the names in `highlight_countries` must match the `Country` values exactly. Otherwise the filter returns nothing, or colors are dropped.
+- **Selection rule:** the selection criterion should be stated in the title or caption if you pick countries by a rule, such as the largest change. [S1] picks them with `slice_max()` on the change between two years. Note that [S1] sets `n = 3` while naming the object `top_4` and creating 4 colors, so keep those consistent.
+- **Version note:** use `linewidth`, as in [S1], rather than `size`, which [S2] uses in some layers. `size` is deprecated for lines in recent ggplot2.
+- **Survey design:** none of this code uses weights, strata, clusters, or a finite population correction. If your plotted scores are weighted survey estimates, compute them with the survey design first and plot the resulting estimates. The sources do not cover that step for line charts.",3,TRUE,0,TRUE,FALSE,1,TRUE,"",0,"correct",2,FALSE,"The answer reproduces the passage's pattern (gray background geom_line, filtered colored geom_line, scale_color_manual with named viridis colors) and correctly notes the n=3 vs. 4 colors inconsistency; the claims that `size` is deprecated for lines and that layer order matters are not stated in the sources, but they are accurate.",1.77867913246155,0.114477872848511,11.050243139267,0.0270165,0.0235632
+"6038","code","jpsm/stat_mod_ML_1_SURV615/assignments/SSML_project_1","How can I load the hprice dataset from the faraway package and view its summary statistics and documentation in R?","Load the data with `data(""hprice"")`, print summaries with `summary()`, and open the documentation with `?faraway::hprice` [S11][S5]. The faraway package must be installed. `library(faraway)` is not in the cited hprice snippet, but the other lab code loads the package that way [S13].
+
+```r
+library(faraway)
+library(dplyr)
+
+data(""hprice"")                # read in data from package [S11]
+
+hprice |> summary()           # summary statistics for each variable [S11]
+
+?faraway::hprice              # variable information in the Help pane [S11]
+```
+
+`?` opens the help file for a function or dataset, and the Help tab in RStudio is searchable [S9]. Another place to see the description is the faraway R manual [S12]. That is the psid example, though, and I don't have the hprice page number.
+
+**What to check**
+- **Package installed:** `data(""hprice"")` only works if faraway is installed. The faraway manual (version 1.0.7) lists the package datasets [S2]. The excerpt I have does not show the hprice entry, so I can't quote its variable definitions here.
+- **Data structure, as described in the course project:** 324 observations from 36 US metropolitan statistical areas over 9 years (1986–1994) [S5]. These are repeated measures within MSA. If you move to design-based work with the survey package, you would need to declare MSAs as clusters. The project itself says to assume the MSAs are a simple random sample [S5].
+- **Outcome variable:** `narsp` is the natural-log sale price. The project recodes it back to dollars as `homeprice` [S5]. The sources do not show that transformation code, so I won't write it here.
+- **Weights, strata and finite population correction:** `summary()` is unweighted and ignores the design. The sources give no weights, strata or finite population correction for hprice, so these summaries describe the sample only.",6,TRUE,0,TRUE,FALSE,1,TRUE,"",0,"correct",1,FALSE,"The answer correctly gives data(""hprice""), summary(), and ?faraway::hprice as in the course passage and S11, but it states that the project recodes narsp to homeprice ""as homeprice [S5]"" while saying the sources lack the code, although the passage does show it (exp(narsp)*1000), so it wrongly implies absence; also the claim that summary() ignores design is unsourced general knowledge.",2.26668381690979,0.120013952255249,8.17728114128113,0.0175965,0.0161812
+"412","code","jpsm/applications_stats_modeling_SURV617/midterm/linares_midterm","How do I fit a linear mixed-effects model that includes a random slope for the minority predictor for each school?","Put `minority` on the left of the bar in the random part of the formula: `(minority | schoolid)`. This gives each school its own intercept and its own minority slope, with an unstructured covariance between them [S6][S5].
+
+Formula (random slope and intercept model, with $X_{ij}$ as the predictor, here minority, and $j$ indexing school) [S5]:
+
+{{F:F1}}
+
+I am assuming F1 is the random slope and intercept equation from [S5]. If your store's F1 is a different formula, read this as: the outcome equals a fixed intercept plus a school random intercept, plus a fixed slope plus a school random slope times the predictor, plus a residual. The random effects (intercept deviation $u_{0j}$ and slope deviation $u_{1j}$) are bivariate normal with variances $\sigma^2_{u0}$ and $\sigma^2_{u1}$ and covariance $\sigma_{u01}$ [S4]. The residual is $e_{ij}$.
+
+```r
+library(lme4)
+library(lmerTest)
+library(purrr)
+
+# Random intercept + random minority slope per school (the S6 model)
+mod_2 <- lmer(math ~ female + grade + lowinc_cen + minority +
+                (minority | schoolid),
+              data = sust_eff, REML = TRUE)
+
+summary(mod_2)
+
+# Reduced model: random intercept only
+mod_1 <- lmer(math ~ female + grade + lowinc_cen + minority +
+                (1 | schoolid),
+              data = sust_eff, REML = TRUE)
+
+# Test H0: slope variance = 0, using the 50:50 mixture of chi-square(1) and chi-square(2)
+lrt_stat <- as.numeric(-2 * (logLik(mod_1) - logLik(mod_2)))
+p_value  <- 0.5 * (1 - pchisq(lrt_stat, df = 1)) +
+            0.5 * (1 - pchisq(lrt_stat, df = 2))
+c(lrt = lrt_stat, p = p_value)
+
+# Variance components and school-specific minority slopes
+VarCorr(mod_2)
+coef(mod_2)$schoolid %>% head()
+```
+
+The mixture LRT follows [S14] and [S6]. `rand(mod_2)` from lmerTest is an automatic alternative [S14].
+
+What to check:
+- **Random effect scope:** `schoolid` is the grouping factor, so make sure it is a factor with enough schools to estimate a slope variance. Also check that minority varies within schools. Schools with almost no minority or almost all minority students contribute little to the slope.
+- **Convergence:** random slope models can fail to converge, as in [S8]. Check for warnings and singular fits (a correlation near ±1 or a variance near 0).
+- **REML vs ML:** [S6] compares the two models with REML fits, since the fixed effects are identical. If you also change the fixed effects, refit with `REML = FALSE` before comparing.
+- **Survey design:** `lmer` ignores strata, weights, and the finite population correction. The school random effects handle the clustering of schools (primary sampling units), but not unequal selection probabilities or stratification. The sources do not cover weighted multilevel fitting, so I can't say how to handle weights here.
+- **Cross-level question:** to ask whether school low-income share explains slope variation, add `lowinc_cen*minority` to the fixed part, as in [S2].
+
+Total Survey Error: this mainly affects adjustment and sampling error. If the design is informative and unweighted, the fixed effects and variance components can be biased. A random slope also adds model-specification risk if the slope variance is poorly estimated.",6,TRUE,1,FALSE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer correctly gives `(minority | schoolid)` with the course's mod_2 specification and the mixture LRT, but it adds claims no source supports: lmer ignoring weights/strata/FPC, the REML-vs-ML refit advice, and the schools-with-few-minority-students point.",2.49313497543335,0.145941972732544,11.0330009460449,0.0366765,0.0302932
+"6118","code","jpsm/stat_mod_ML_1_SURV615/class_labs/Class2_Lab_nocode","How can I check if a variable follows a normal distribution using both graphical and statistical methods in R?","Use a histogram or density plot and a Q-Q plot to see the shape, then a Shapiro-Wilk test for a formal answer. Read the two together, because each can mislead on its own. In TSE terms, this is a check on measurement and adjustment assumptions, and it is not design-based. Normality matters for model-based inference, not for the survey weights.
+
+**Graphical methods.** A histogram or density plot shows skew, bimodality, or a heavy tail [S6][S12]. In a Q-Q plot, points should fall on the reference line if the data are normal [S10]. Points off the line suggest non-normality [S1].
+
+**Statistical method.** The Shapiro-Wilk null hypothesis is that the data come from a normal distribution [S1]. The statistic $W$ lies in $[0,1]$. Values near 1 support normality, and values much less than 1 reject it [S8]. It equals the squared correlation of the points in the Q-Q (rankit) plot [S8]:
+
+{{F:F1}}
+
+Here $X_{i:n}$ are the ordered observations, $m_{i:n}$ are the normal rankits (expected normal order statistics), and the bars denote their means. I am assuming F1 is the Shapiro-Wilk formula (S8, eq. 3.63). Check that this is the id you were given.
+
+**Caveats on the test.**
+- With large samples, even mild departures lead to rejection. With small samples, the test may lack the power to detect non-normality [S1].
+- The p-value does not tell you how to deal with a violation, so always look at the Q-Q plot too [S1].
+- In one example, the Shapiro-Wilk test did not reject normality for a clearly right-skewed variable, and the authors suspected the large sample size [S6]. Do not rely on the p-value alone.
+- Kolmogorov-Smirnov is another option. It uses the largest absolute gap between the empirical and normal distribution functions [S5]. The sources give no R code for it.
+- When checking regression residuals, non-normality matters mainly if you use the coefficients to make predictions [S1].
+
+```r
+library(tidyverse)
+
+# df: data frame; x: the variable to check
+p_hist <- df |>
+  ggplot(aes(x = x)) +
+  geom_histogram(aes(y = after_stat(density))) +
+  geom_density(fill = ""dodgerblue"", alpha = .2)
+
+p_hist
+
+qqnorm(df$x)
+qqline(df$x, col = ""red"")
+
+shapiro.test(df$x)
+```
+
+For model residuals, replace `df$x` with `resid(mod)` [S3]. `shapiro.test()` and the base Q-Q functions are the ones used in the sources. I used `after_stat(density)` in place of the sources' older `..density..`, which does the same thing.
+
+**What to check before running it.**
+- **Weights:** `shapiro.test()` and `qqnorm()` ignore survey weights. For weighted survey data, they describe the unweighted sample only. The sources do not cover weighted normality checks.
+- **Strata, clusters, and the finite population correction:** none of these enter the code. Clustered or stratified observations are not independent, so the test's assumptions are not met. The sources do not cover design-adjusted tests.
+- **Sample size:** `shapiro.test()` in base R requires a sample size between 3 and 5000. This is not from the store.
+- **Which object you test:** test the residuals for a regression assumption, and test the raw variable only if its own distribution matters.",7,TRUE,1,FALSE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer correctly pairs a histogram/density plot and Q-Q plot (qqnorm/qqline) with shapiro.test() as in the lab, and adds well-grounded caveats; it also includes some unsupported extras (the TSE framing, the claim that clustered observations are not independent so the test's assumptions fail, and a template placeholder {{F:F1}}), though it flags the 3-5000 limit as not from the store.",2.30560708045959,0.104526042938232,10.305379152298,0.0279105,0.0237212
+"3658","code","jpsm/Fund_Infe_SURV740/assignments/HW5","How can I calculate the probability that a proportion exceeds a specific value using a set of simulated draws in R?","Take the share of simulated draws of the population proportion that are at or above the threshold: `mean(prop_insured >= threshold)`. This is a Monte Carlo estimate of $P(Q(Y) \ge c)$, where $Q(Y)$ is the finite-population proportion [S5][S11]. In the homework example, 2,301 of 2,500 draws were at least 0.667, giving about 0.92 [S4].
+
+The draws come from a two-step simulation [S5]:
+1. Draw $\theta$ from the posterior, Beta$(x+1, n-x+1)$ under a uniform prior.
+2. Draw the non-sampled count from Bin$(N-n, \theta)$, then compute $Q(Y) = (x + \sum_{i=n+1}^N Y_i)/N$.
+
+Repeat both steps many times, then summarize the draws [S5].
+
+The store has no formula id for this, so here is the estimator in words, not from the store. The probability is the number of draws with $Q^{(r)} \ge c$, divided by the number of draws $R$.
+
+```r
+library(tidyverse)
+
+N <- 1000
+n <- 50
+y <- 38
+n_sims <- 2500
+threshold <- .667
+
+set.seed(41279)
+
+draws <- rbeta(n_sims, y + 1, (n - y) + 1)
+count_non_sampled <- rbinom(n_sims, N - n, draws)
+prop_insured <- (count_non_sampled + y) / N
+
+tibble(
+  Probability = mean(prop_insured >= threshold),
+  Draws = sum(prop_insured >= threshold)
+)
+```
+
+This follows the sources' code [S2][S11]. The `tibble()` output replaces the sources' `kable()` call, which needs knitr loaded.
+
+**What to check before running**
+- **Design:** The code treats the sample as a simple random sample, with no strata, clusters, or weights. Under unequal selection probabilities or clustering, this beta-binomial model is not appropriate. The sources handle those cases with different models [S3][S9].
+- **Finite population correction:** It enters through the $N-n$ non-sampled units, which are simulated and added to the observed $y$. $N$ must be the true population size.
+- **Prior:** The code assumes a uniform Beta(1,1) prior. A different prior changes the Beta parameters. For example, S6 uses Beta(23, 27).
+- **Monte Carlo error:** It shrinks as `n_sims` grows. The sources use 2,500 draws.
+- **Inequality:** `>=` versus `>` matters little here because the draws are discrete counts divided by $N$. It can still matter if the threshold falls exactly on a possible value.
+- **Total Survey Error:** This quantifies sampling uncertainty under the model only. It assumes no nonresponse, coverage, or measurement error.",6,TRUE,0,TRUE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer matches the course passage: it uses mean(prop_insured >= threshold) on the simulated draws and reports 2,301/2,500 ≈ 0.92, with the two-step beta-binomial simulation supported by the sources; the extra caveats on design, finite population correction, Monte Carlo error, discreteness of the inequality and Total Survey Error go beyond the sources.",2.47844791412354,0.108136892318726,8.3235228061676,0.0226705,0.0194252
+"5583","code","jpsm/sampling_1_SURV626/assignments/Final","How do I calculate the coefficient of variation (CV) for weights in R?","The CV of the weights is the standard deviation of the weights divided by their mean. In R that is `sd(w) / mean(w)` [S16][S2].
+
+Formulas (the weight CV, with the standard deviation it uses):
+
+{{F:F1}}
+
+{{F:F3}}
+
+Here $s_w$ is the standard deviation of the weights with an $n-1$ divisor, $\bar{w}$ is the mean weight, and $c$ is the CV. The usual use of the CV is the unequal weighting effect:
+
+{{F:F2}}
+
+This is the approximate variance inflation from unequal weights, so $c^2$ is the proportional increase. For example, an SD of 40 and a mean of 100 give a CV of 0.4 and a deff of 1.16, or 16% more variance [S6].
+
+TSE link: the CV measures how much variance (sampling error) the adjustments cost. Nonresponse and calibration weights reduce bias, and trimming them trades that bias reduction against variance.
+
+```r
+library(dplyr)
+
+# df has a column of final weights named w
+df |>
+  summarize(
+    mean_w = mean(w),
+    sd_w   = sd(w),
+    cv     = sd_w / mean_w,
+    uwe    = 1 + cv^2
+  )
+```
+
+This follows the `sd(w) / mean(w)` calculation in [S16]. The sources give no survey-package function for the weight CV, so I did not add one.
+
+What to check:
+- **Weights:** use the final weights, meaning the ones after nonresponse adjustment and calibration. Remove missing or zero weights first, because they change both $n$ and the mean.
+- **Divisor:** `sd()` uses $n-1$, matching [S2]. Kish's version in [S9] divides by $n$, so the results differ slightly in small samples.
+- **Design assumptions for the deff:** the UWE assumes stratified sampling, with weights independent of the key variables, and it is an upper bound [S2]. It ignores clustering. For clustered designs, multiply by the cluster deff [S2].
+- **Strata, clusters and fpc:** the CV of the weights does not use strata, PSUs, or the finite population correction. Those matter only if you then compute design-based variances.
+- **Rule of thumb:** no universal cutoff exists, but a deff of 1.5 or more (a CV of about 0.71) often prompts a look at trimming [S9].",4,TRUE,3,TRUE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The core answer, CV = sd(w)/mean(w) in R, matches the course passage and S16/S2, but several extras are not supported by the sources: that a deff of 1.5 corresponds to a CV of about 0.71, that missing or zero weights should be removed first, and that the CV does not use strata, PSUs, or the fpc.",2.98967099189758,0.152281999588013,7.34820508956909,0.0253025,0.0240752
+"5987","code","jpsm/stat_mod_ML_1_SURV615/assignments/HW_5","How can I compare a reduced model containing only the 'chas' variable to a full model containing both 'chas' and 'indus' to see if the more complex model is a better fit for median home values?","Use the general (nested-model) F test: fit both models with `lm()` and pass them to `anova()`, reduced first. This is exactly what the Boston homework does for `chas` vs. `chas + indus` [S4].
+
+**Hypothesis.** The null is that the full and reduced models have equal residual sum of squares, $H_0: RSS_{Full} = RSS_{Reduced}$ [S9][S8]. Rejecting it means adding `indus` reduces the residual sum of squares by more than chance would. The sources give the statistic as the drop in RSS per added parameter, divided by the full model's residual mean square, compared to an F distribution with $p-q$ and $n-p$ df [S6]. No formula id was provided, so in words, with $p$ and $q$ the parameter counts of the full and reduced models:
+
+$F = \dfrac{(RSS_{Reduced}-RSS_{Full})/(p-q)}{RSS_{Full}/(n-p)}$
+
+This is written inline from [S6], not from the store of formula ids.
+
+**Code**
+
+```r
+library(tidyverse)
+library(ISLR2)
+
+model_medv_chas       <- lm(medv ~ chas, data = Boston)
+model_medv_chas_indus <- lm(medv ~ chas + indus, data = Boston)
+
+anova(model_medv_chas, model_medv_chas_indus)
+
+# supporting fit statistics
+c(reduced = model_medv_chas, full = model_medv_chas_indus) |>
+  map_dbl(\(m) summary(m)$adj.r.squared)
+```
+
+**How to read it.** In the homework, the full model reduced the RSS by about 10,498 (F = 170.85, p < .05), going from 504 to 503 residual df. $R^2$ rose from 0.031 to 0.277 [S4]. That supports keeping `indus`. Adjusted $R^2$ and residual variance are reasonable companion checks [S7].
+
+**What to check**
+- **Nesting:** the reduced model must be a subset of the full one, fitted to the same rows. Missing values in `indus` would break this.
+- **Design:** these are ordinary least squares results. They assume independent observations with constant error variance, and the sources don't cover this. They ignore strata, clusters, weights, and finite population correction. If the data come from a complex sample, the sources don't cover the design-based version (that would use the survey package). Using `lm()` here is only valid for a simple random sample or a purely model-based analysis.
+- **Coding:** keep `chas` coded identically in both models (0/1 numeric vs. factor gives the same fit here, but be consistent).
+- **Total Survey Error:** the F test addresses only fit and sampling variability. It says nothing about measurement, coverage, or nonresponse error in `medv` or `indus`.
+- **Interpretation:** a better fit shows a linear association, not causation [S4].",5,TRUE,0,TRUE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer correctly prescribes the nested general F test via anova(reduced, full), with the right null, statistic, and homework results (RSS drop 10,498, F=170.85, R² 0.031 to 0.277), but it adds a few unsupported assertions (e.g. the 0/1 vs factor coding claim, the missing-values warning, and the claim that the homework's anova call output matches the quoted df exactly) and its code `c(reduced=model, ...) |> map_dbl` is flawed since c() on lm objects won't give a list suitable for that use.",2.64013695716858,0.131772994995117,8.38056588172913,0.0259065,0.0227832
+"716","code","jpsm/applied_sampling_SURV625/assignments/HW5","How can I use R to calculate the expected number of housing units to be selected and the associated probabilities for the possible achieved subsample sizes when using PPS?","Compute the expected subsample size as the within-cluster rate times the canvassed count, then split it between the two neighbouring integers. If the expected size is $x$, with $\lfloor x \rfloor$ its integer part, the achieved size is $\lfloor x \rfloor$ with probability $1-(x-\lfloor x \rfloor)$ and $\lfloor x \rfloor + 1$ with probability $x-\lfloor x \rfloor$. This is not from the store as a formula. [S7] and [S10] show the same logic numerically: 18.425 gives 18 with probability 0.575 and 19 with probability 0.425.
+
+**The probability step in [S1] and [S5] is wrong.** They compute `lower*expected_hu + upper*(1-expected_hu)`. That quantity is not a probability and can fall outside [0, 1]. They also ""pick the highest probability"", but under a fixed-rate PPeS design the achieved size is random, so keep both outcomes and their probabilities [S9]. The rate step in [S1], `f_h = f * N/(n * HU_total)`, followed by `f_h * housing_units`, is fine.
+
+**Formula:** no stored formula fits. The closest, {{F:F1}}, is the binomial mean $np_i$, which is a different quantity. Here the expected size is $f_h \times B$, where $f_h$ is the within-cluster sampling rate and $B$ is the canvassed housing-unit count.
+
+```r
+library(tidyverse)
+
+f <- .001  # overall selection probability
+
+# dat_linked_final needs: N (total MOS), n (clusters selected),
+# HU_total (linked-set MOS), and B_actual (canvassed housing units)
+sizes <- dat_linked_final |>
+  mutate(
+    f_h         = f * (N / (n * HU_total)),   # within-cluster rate [S1]
+    expected_hu = f_h * B_actual,
+    lower       = floor(expected_hu),
+    upper       = lower + 1,
+    p_upper     = expected_hu - lower,
+    p_lower     = 1 - p_upper
+  )
+
+# one row per possible achieved size, per cluster
+sizes |>
+  select(cluster, expected_hu, lower, upper, p_lower, p_upper) |>
+  pivot_longer(
+    c(lower, upper),
+    names_to = ""which"", values_to = ""achieved_n""
+  ) |>
+  mutate(prob = if_else(which == ""lower"", p_lower, p_upper)) |>
+  select(cluster, expected_hu, achieved_n, prob) |>
+  mutate(prob = round(prob, 3))
+```
+
+**Check before running:**
+- **Clusters:** each row must be one (possibly linked) selected cluster, with `HU_total` as the linked MOS, not a single block's MOS.
+- **Selection:** `n` is the number of clusters selected, and `N` is the sum of MOS over the frame.
+- **Weights:** the base weight is $1/f$ only if the design is epsem, meaning first-stage probability times $f_h$ equals $f$. Because the subsample is drawn at a fixed rate, the realized size varies, but the weight does not change.
+- **Strata:** the code assumes none. With strata, compute rates within each stratum.
+- **FPC:** it is not used here, and it is negligible at $f = .001$.
+- **TSE:** `B_actual` can differ from the frame MOS, which is a frame-coverage problem. That difference is what makes the realized size random. The variation in size adds to sampling variance, and it does not bias the estimates if you subsample at the rate and not at a fixed count.",5,TRUE,1,TRUE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer correctly computes the expected size as f_h times the canvassed count and splits it between floor and ceiling with probabilities matching the course example (18.425 gives 18 w.p. 0.575 and 19 w.p. 0.425), and it rightly flags the course code's probability formula as wrong; however, several extra claims (strata, FPC, TSE and bias remarks, epsem weight caveat) are not supported by the sources.}",3.17973589897156,0.175144195556641,17.3045599460602,0.0390165,0.0255772
+"3729","code","jpsm/Fund_Infe_SURV740/final/surv740_complete_study_guide","How can I calculate the design effect for a clustered sample in R?","**Answer:** Fit the clustered design with `svydesign()`, then either ask `svymean()` for `deff = TRUE`, or divide the clustered variance by the SRS variance yourself. Under equal-probability cluster sampling with $b$ elements per cluster, the design effect is approximately $1 + (b-1)\rho$ [S1]. The ratio form is the general definition.
+
+**Formulas**
+
+Design effect as a variance ratio [S12]:
+
+{{F:F2}}
+
+Here DEFF is the design effect, $var_{cluster}$ is the variance under the clustered design, and $var_{srs}$ is the variance under SRS.
+
+Intraclass correlation from the observed DEFF [S11][S15]:
+
+{{F:F5}}
+
+Here $\hat\rho$ is the estimated intraclass correlation, $d^2(\bar{y})$ is the observed DEFF, and $b$ is the cluster size. For unequal clusters, the course materials use the average cluster size [S5].
+
+Effective sample size [S13]:
+
+{{F:F3}}
+
+Here $n_{eff}$ is the effective sample size, $n$ is the sample size, and DEFF is the design effect.
+
+**Code**
+
+The sources show two routes. The first is the variance ratio against an SRS design [S16]. The second is `svymean(..., deff = TRUE)` on a design object [S17]. The code below combines them. Names such as `hw1_data`, `cluster`, and `observation` are placeholders for your own data.
+
+```r
+library(survey)
+library(tidyverse)
+
+srs_design     <- svydesign(ids = ~1,       data = hw1_data)
+cluster_design <- svydesign(ids = ~cluster, data = hw1_data)
+
+# Route 1: ratio of clustered variance to SRS variance
+var_srs  <- vcov(svymean(~observation, srs_design))[1, 1]
+var_clus <- vcov(svymean(~observation, cluster_design))[1, 1]
+deff     <- var_clus / var_srs
+
+# Route 2: let survey report it directly
+svymean(~observation, cluster_design, deff = TRUE)
+
+# ICC and effective n (b = cluster size; use mean cluster size if unequal)
+b <- hw1_data |> count(cluster) |> summarise(b = mean(n)) |> pull(b)
+n <- nrow(hw1_data)
+
+tibble(
+  deff  = deff,
+  rho   = (deff - 1) / (b - 1),
+  n_eff = n / deff
+)
+```
+
+**What to check before running**
+
+- **Clusters (PSUs):** `ids = ~cluster` must identify the primary sampling units. If ids are wrong or missing, the design is treated as SRS and DEFF is about 1.
+- **Strata:** if the design was stratified, add `strata = ~stratum`. If PSU codes repeat across strata, add `nest = TRUE` [S17][S18].
+- **Weights:** the code above is unweighted, as in the homework example [S16]. For a weighted design, add `weights = ~your_weight`. Then the SRS comparison should use the same weights, or else the DEFF mixes clustering and weighting effects.
+- **Finite population correction:** `svydesign()` applies no fpc unless you supply `fpc`. The hand-calculated SRS variance in the course examples includes $(1-f)$ [S8]. Keep the numerator and denominator consistent on this point.
+- **Estimate-specific:** DEFF and $\rho$ are specific to each variable and estimate, so recompute them for each outcome [S3].
+- **Equal clusters:** the $\rho$ formula assumes equal-probability sampling with equal cluster size $b$ [S15]. Treat it as approximate otherwise.
+
+**Total survey error note:** DEFF describes only the sampling-variance component. Clustering inflates variance when $\rho > 0$ [S1]. It says nothing about coverage, nonresponse, or measurement error.
+
+**Not in the sources:** `svydesign()` is not given an fpc argument in any code example here. Using `fpc` is general knowledge, not from the store.",11,TRUE,3,TRUE,FALSE,1,TRUE,"",0,"correct",4,FALSE,"The answer gives the correct DEFF definition (variance ratio), the 1+(b-1)rho approximation, and working R code using svydesign and svymean, matching the course passage and sources, though its practical caveats (default SRS treatment without ids, matching weights in the SRS comparison, fpc handling, and the claim that svydesign applies no fpc by default) go beyond the sources.",2.6672739982605,0.153007984161377,13.6641230583191,0.0347105,0.0267012
+"3700","code","jpsm/Fund_Infe_SURV740/final/linares_final","How can I use R to calculate the design effects for weighting and clustering across different survey designs?","**Answer:** There are two routes in R. (1) Let the survey package estimate the deff directly, either with `svymean(..., deff = TRUE)` [S17] or by dividing each design's variance by the SRS variance [S3]. (2) Compute the weighting and clustering components by hand and multiply them [S9]. Deff is the ratio of the complex-design variance to the SRS variance at the same sample size [S2]. Stratification usually lowers it, clustering raises it, and unequal weights raise it [S5][S8].
+
+**Formulas**
+
+Weighting component (Kish), valid when weights are unrelated to the outcome [S13]:
+
+{{F:F3}}
+
+Here $n$ is the sample size and $w_i$ is the weight of unit $i$. This is the same as 1 plus the squared CV of the weights [S5].
+
+Clustering component for equal-sized clusters is $1 + (b-1)\rho$ [S3], where $b$ is the cluster size and $\rho$ the intraclass correlation. Combined weighting and clustering [S15]:
+
+{{F:F5}}
+
+The symbols are the relvariance of the weights, the weighted cluster size term $n_h^*$, and the within-cluster correlation $\rho$. Effective sample size is $n_{eff} = n/\text{deff}$ [S3]. The store also gives a planning form [S11]:
+
+{{F:F1}}
+
+**Code**
+
+```r
+library(tidyverse)
+library(survey)
+
+# 1. Empirical deff for each design, relative to SRS [S3][S16]
+srs_design  <- svydesign(ids = ~1, data = dat)
+wt_design   <- svydesign(ids = ~1, weights = ~wt, data = dat)
+full_design <- svydesign(ids = ~psu, strata = ~stratum,
+                         weights = ~wt, nest = TRUE, data = dat)
+
+var_srs <- vcov(svymean(~y, srs_design))[1, 1]
+
+tibble(
+  design = c(""Weights only"", ""Full complex""),
+  deff = map_dbl(list(wt_design, full_design),
+                 ~ vcov(svymean(~y, .x))[1, 1] / var_srs)
+)
+
+# 2. Built-in deff [S17]
+svymean(~y, design = full_design, deff = TRUE)
+
+# 3. By-hand components [S9][S13]
+dat |>
+  reframe(
+    n = n(),
+    deff_weight = n * sum(wt^2) / sum(wt)^2
+  )
+
+# 4. Several designs at once, with purrr [S9]
+tibble(b = c(10, 15), rho = c(.1, .2), cv_w = c(.5, .667)) |>
+  mutate(
+    deff_weight  = 1 + cv_w^2,
+    deff_cluster = 1 + (b - 1) * rho,
+    deff_total   = deff_weight * deff_cluster
+  )
+```
+
+**What to check before running**
+
+- **Strata:** the `strata` variable must match the real sampling strata, not post hoc groupings.
+- **Clusters (PSUs):** `ids` must be the primary sampling unit. Use `nest = TRUE` if PSU codes repeat across strata [S16]. With `ids = ~1` you get no clustering effect.
+- **Weights:** use the final analysis weights. The Kish formula assumes the weights are unrelated to $y$ [S13], so it is an approximation when they are related. Also, the sources note it is a rough guide rather than an exact variance [S6].
+- **FPC:** the sources' `svydesign` calls do not pass `fpc`. If the sampling fraction is non-negligible, supply it. The SRS reference is normally with-replacement [S2], so keep numerator and denominator consistent.
+- **Product rule:** multiplying weighting and clustering deffs is a model-based approximation [S15]. It assumes no strata and a common $\rho$. Prefer the empirical ratio when you have the full design.
+- **Equal cluster sizes:** $1+(b-1)\rho$ assumes roughly equal cluster sizes [S1]. Deff is specific to each estimate, so it differs by variable [S17].
+
+**Error-source note:** Stratification, clustering and weighting all act on sampling variance. Weighting is also used for nonresponse and coverage adjustment, so it trades possible bias reduction for variance inflation.",12,TRUE,3,TRUE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer matches the course passage: it computes deff_weight = 1 + CV_w^2, deff_cluster = 1 + (b-1)rho, and their product with purrr/tibble, and it adds sound svydesign-based empirical options, but a few claims (the FPC advice, nest = TRUE semantics, 'ids=~1 gives no clustering effect') go beyond the sources.",3.07774496078491,0.171517848968506,10.9295601844788,0.0369925,0.0285952
+"1931","code","jpsm/complex_sample_data_SURV701/midterm/surv701_midterm_study_guide","What is the formula for calculating the effective sample size when accounting for design inflation?","The effective sample size is the actual sample size divided by the design effect. It is the size of a simple random sample that would give the same precision [S4][S8].
+
+{{F:F2}}
+
+Here $n_{eff}$ is the effective sample size, $n$ is the nominal sample size, and DEFF is the ratio of the complex-design variance to the SRS variance with the same $n$ [S5].
+
+**Planning version (inflating instead of deflating).** To get the sample size needed under a complex design, compute the SRS size and multiply by the design effects [S1][S10]:
+
+{{F:F1}}
+
+Here $n^*$ is the planning sample size (this source labels it the effective sample size), $deff_{weight}$ is the design effect for weighting, $deff_{cluster}$ is the design effect for clustering, and $n_{SRS}$ is the SRS sample size. The sources use $n^*$ in two senses. In [S4], $n^* = n/deff$ is the precision-equivalent SRS size. In [S1], $n^*$ is the inflated planning size. Do not mix the two.
+
+**Common components of deff** (approximations):
+- Clustering: $deff_{cluster} \approx 1 + (b-1)\rho$, where $b$ is the average cluster size and $\rho$ is the intraclass correlation [S3][S5].
+- Unequal weighting: $deff_{weight} = 1 + c^2$, where $c$ is the coefficient of variation of the weights [S1]. This is an upper bound. It assumes the weights are independent of the key variables, and it is not a full design effect because it ignores clustering and stratification [S1][S7].
+- Weights only: $n_{eff} = (\sum w_i)^2 / \sum w_i^2$ [S7].
+
+**R code**, built from the code in [S3] and [S9]. It computes deff relative to SRS, then $n_{eff}$:
+
+```r
+library(survey)
+library(tidyverse)
+
+des <- svydesign(ids = ~cluster, strata = ~stratum, weights = ~w, data = dat)
+
+d <- svymean(~observation, des, deff = TRUE)
+deff_hat <- deff(d)
+
+tibble(n = nrow(dat), deff = deff_hat) |>
+  mutate(n_eff = ceiling(n / deff))
+```
+
+The `deff = TRUE` argument and the `deff()` extractor are not shown in the sources. [S3] instead computes deff as a ratio of variances from separate designs. Check these before relying on this code.
+
+**What to check before running:**
+- **Strata, clusters, and weights.** Confirm that `stratum`, `cluster`, and `w` are correctly specified in `svydesign`. Misspecified clusters change the deff directly.
+- **Finite population correction.** It is not used above. If sampling fractions are non-negligible, supply `fpc`. The SRS reference variance in deff uses the same $n$ and, per [S8], is generally with replacement.
+- **Product of deffs.** Multiplying $deff_{weight}$ by $deff_{cluster}$ is a planning approximation [S1]. For analysis, use the design-based estimate.
+- **Variable-specific deff.** deff varies by estimate, so $n_{eff}$ does too.
+
+**Total Survey Error.** A deff above 1 reflects sampling variance. Weighting that inflates variance is usually done to reduce nonresponse or coverage bias, so the loss of precision buys a reduction in bias.",8,TRUE,2,TRUE,FALSE,1,TRUE,"",0,"correct",3,FALSE,"The answer correctly gives n_eff = n / DEFF, matching the passage and sources, and adds the planning inflation version and deff components, which are supported. Its own claims are the 'Total Survey Error' remark about weighting reducing bias, the claim that `deff = TRUE` and `deff()` are not in the sources (a hedge that is true), and the fpc advice; the bias and fpc points are unsupported by the sources.",2.37428498268127,0.155052185058594,8.42751908302307,0.0237365,0.0197772
