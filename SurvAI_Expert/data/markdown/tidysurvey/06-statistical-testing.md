@@ -9,7 +9,7 @@ original: "06-statistical-testing.Rmd"
 pages: 
 sha256: "ed17447840dfbc3a8cf6dad72d40997b0175427bc27fc142d21892d61c663cba"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # Statistical testing {#c06-statistical-testing}
@@ -210,7 +210,7 @@ Let's walk through a few examples using the RECS data.
 #### Example 1: One-sample t-test for mean {.unnumbered #stattest-ttest-ex1}  
 
 \index{Residential Energy Consumption Survey (RECS)|(} \index{t-test!one-sample t-test|(}
-RECS asks respondents to indicate what temperature they set their house to during the summer at night^[Question text: "During the summer, what is your home’s typical indoor temperature inside your home at night?" [@recs-svy]]. In our data, we have called this variable `SummerTempNight`. If we want to see if the average U.S. household sets its temperature at a value different from 68$^\circ$F^[This is the temperature that Stephanie prefers at night during the summer, and she wanted to see if she was different from the population.], we could set up the hypothesis as follows: 
+RECS asks respondents to indicate what temperature they set their house to during the summer at night^[Question text: "During the summer, what is your home’s typical indoor temperature inside your home at night?" [@recs-svy]]. In our data, we have called this variable `SummerTempNight`. If we want to see if the average U.S. household sets its temperature at a value different from 68\$^\circ\$F^[This is the temperature that Stephanie prefers at night during the summer, and she wanted to see if she was different from the population.], we could set up the hypothesis as follows: 
 
 - $H_0: \mu = 68$ where $\mu$ is the average temperature U.S. households set their thermostat to in the summer at night
 - $H_A: \mu \neq 68$
@@ -249,7 +249,7 @@ recs_des %>%
 ```
 \index{Functions in srvyr!summarize|)} \index{Functions in srvyr!survey\_mean|)} 
 
-The result is the same in both methods, so we see that the average temperature U.S. households set their thermostat to in the summer at night is `r signif(ttest_ex1$estimate + 68,3)`$^\circ$F. Looking at the output from `svyttest()`, the t-statistic is `r signif(ttest_ex1$statistic, 3)`, and \index{p-value|(} the p-value is `r pretty_p_value(ttest_ex1[["p.value"]])`, indicating that the average is statistically different from 68$^\circ$F at an $\alpha$ level of $0.05$. \index{p-value|)} 
+The result is the same in both methods, so we see that the average temperature U.S. households set their thermostat to in the summer at night is `r signif(ttest_ex1$estimate + 68,3)`$^\circ$F. Looking at the output from `svyttest()`, the t-statistic is `r signif(ttest_ex1$statistic, 3)`, and \index{p-value|(} the p-value is `r pretty_p_value(ttest_ex1[["p.value"]])`, indicating that the average is statistically different from 68\$^\circ\$F at an $\alpha$ level of $0.05$. \index{p-value|)} 
 
 If we want an 80% confidence interval for the test statistic, we can use the function `confint()` to change the confidence level. Below, we print the default confidence interval (95%), the confidence interval explicitly specifying the level as 95%, and the 80% confidence interval. When the confidence level is 95% either by default or explicitly, R returns a vector with both row and column names. However, when we specify any other confidence level, an unnamed vector is returned, with the first element being the lower bound and the second element being the upper bound of the confidence interval.
 
@@ -260,7 +260,7 @@ confint(ttest_ex1, level = 0.95)
 confint(ttest_ex1, level = 0.8) 
 ```
 
-In this case, neither confidence interval contains 0, and we draw the same conclusion from either that the average temperature households set their thermostat in the summer at night is significantly higher than 68$^\circ$F.
+In this case, neither confidence interval contains 0, and we draw the same conclusion from either that the average temperature households set their thermostat in the summer at night is significantly higher than 68\$^\circ\$F.
 
 #### Example 2: One-sample t-test for proportion {.unnumbered #stattest-ttest-ex2}
 
@@ -386,7 +386,7 @@ tidy(ttest_ex3) %>%
   print_gt_book(knitr::opts_current$get()[["label"]])
 ```
 
-The results in Table \@ref(tab:stattest-ttest-ex3-gt-tab) indicate that the difference in electrical bills for those who used A/C and those who did not is, on average, \$`r round(ttest_ex3$estimate,2)`. The difference appears to be statistically significant as the t-statistic is `r signif(ttest_ex3$statistic, 3)` and the p-value is `r pretty_p_value(ttest_ex3[["p.value"]])`. Households that used A/C spent, on average, $`r round(ttest_ex3[["estimate"]], 2) %>% unname()` more in 2020 on electricity than households without A/C.
+The results in Table \@ref(tab:stattest-ttest-ex3-gt-tab) indicate that the difference in electrical bills for those who used A/C and those who did not is, on average, \$`r round(ttest_ex3$estimate,2)`. The difference appears to be statistically significant as the t-statistic is `r signif(ttest_ex3$statistic, 3)` and the p-value is `r pretty_p_value(ttest_ex3[["p.value"]])`. Households that used A/C spent, on average, \$`r round(ttest_ex3[["estimate"]], 2) %>% unname()` more in 2020 on electricity than households without A/C.
 \index{t-test!unpaired two-sample t-test|)}
 
 #### Example 4: Paired two-sample t-test {.unnumbered #stattest-ttest-ex4}

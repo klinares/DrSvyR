@@ -9,7 +9,7 @@ original: "05-descriptive-analysis.Rmd"
 pages: 
 sha256: "a664b63a4b1ab3da5453bdd25decedc41a3d34ff6c8d5015c7d5229c8f0e13e9"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # Descriptive analyses {#c05-descriptive-analysis}
@@ -1062,7 +1062,7 @@ recs_des %>%
                                   vartype = c("se", "ci")))
 ```
 
-Based on this calculation, the estimated average amount spent on natural gas is `r recs_des  %>% summarize(NG_mean = survey_mean(DOLLARNG, vartype = c("se", "ci"))) %>% mutate(NG_mean =round(NG_mean )) %>% pull(NG_mean) %>% scales::dollar()`. Note that applying the filter to include only housing units that use natural gas yields a higher mean than when not applying the filter. This is because including housing units that do not use natural gas introduces many $0 amounts, impacting the mean calculation.
+Based on this calculation, the estimated average amount spent on natural gas is `r recs_des  %>% summarize(NG_mean = survey_mean(DOLLARNG, vartype = c("se", "ci"))) %>% mutate(NG_mean =round(NG_mean )) %>% pull(NG_mean) %>% scales::dollar()`. Note that applying the filter to include only housing units that use natural gas yields a higher mean than when not applying the filter. This is because including housing units that do not use natural gas introduces many \$0 amounts, impacting the mean calculation.
 
 ### Design effects {#desc-deff}
 

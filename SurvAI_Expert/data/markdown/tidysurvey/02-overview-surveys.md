@@ -9,7 +9,7 @@ original: "02-overview-surveys.Rmd"
 pages: 
 sha256: "f4c3d929772e5f1b35a9a0ddd6e4b49bbf808371305bcd0eed2cc45c7e2d5708"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # Overview of surveys {#c02-overview-surveys}

@@ -9,7 +9,7 @@ original: "93-AppendixD-Solutions.Rmd"
 pages: 
 sha256: "5a164146743f323564063a0339f9690203fec708993b7c434649b4f676db2583"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # Exercise solutions {#exercise-solutions}

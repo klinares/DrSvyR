@@ -9,7 +9,7 @@ original: "07-modeling.Rmd"
 pages: 
 sha256: "d47d421120bdd6269bd579542dbad2d50fdaf47397952c5ad7bbd6b6d849e7d3"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # Modeling {#c07-modeling}

@@ -9,7 +9,7 @@ original: "12-successful-survey-data-analysis.Rmd"
 pages: 
 sha256: "9d329989983740fd99672f621594967223384aa7e8227455a0cfd3b94a4d29ad"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # Successful survey analysis recommendations {#c12-recommendations}

@@ -9,7 +9,7 @@ original: "03-survey-data-documentation.Rmd"
 pages: 
 sha256: "a6194b1f1a432db86d1e75a0b19f9fface87b886458198bc1b9321ced8ee81bb"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # Survey data documentation {#c03-survey-data-documentation}

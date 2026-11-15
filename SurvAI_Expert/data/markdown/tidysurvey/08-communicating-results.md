@@ -9,7 +9,7 @@ original: "08-communicating-results.Rmd"
 pages: 
 sha256: "bf530beffa6d88cdcdce76b686f4d41815157e22bdd7de695774ff2575ebe3b6"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # (PART) Reporting {-}

@@ -9,7 +9,7 @@ original: "13-ncvs-vignette.Rmd"
 pages: 
 sha256: "439f4169beaeb52fad06a5db008fabec706967213f8d0b818cb8be185f2f4a3b"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # (PART) Vignettes {-}
@@ -210,10 +210,10 @@ Table: (\#tab:cb-crimetype) Codebook for incident variables, crime type indicato
 |  |  | 33 | Attempted forcible entry |
 |  |  | 40 | Completed motor vehicle theft |
 |  |  | 41 | Attempted motor vehicle theft |
-|  |  | 54 | Completed theft less than $10 |
-|  |  | 55 | Completed theft $10 to $49 |
-|  |  | 56 | Completed theft $50 to $249 |
-|  |  | 57 | Completed theft $250 or greater |
+|  |  | 54 | Completed theft less than \$10 |
+|  |  | 55 | Completed theft \$10 to \$49 |
+|  |  | 56 | Completed theft \$50 to \$249 |
+|  |  | 57 | Completed theft \$250 or greater |
 |  |  | 58 | Completed theft value NA |
 |  |  | 59 | Attempted theft |
 
@@ -356,23 +356,23 @@ Table: (\#tab:cb-hh) Codebook for household variables
 |V2015|Tenure|1|Owned or being bought|
 |||2|Rented for cash|
 |||3|No cash rent|
-|SC214A|Household Income|01|Less than $5,000|
-|||02|$5,000--7,499|
-|||03|$7,500--9,999|
-|||04|$10,000--12,499|
-|||05|$12,500--14,999|
-|||06|$15,000--17,499|
-|||07|$17,500--19,999|
-|||08|$20,000--24,999|
-|||09|$25,000--29,999|
-|||10|$30,000--34,999|
-|||11|$35,000--39,999|
-|||12|$40,000--49,999|
-|||13|$50,000--74,999|
-|||15|$75,000--99,999|
-|||16|$100,000--149,999|
-|||17|$150,000--199,999|
-|||18|$200,000 or more|
+|SC214A|Household Income|01|Less than \$5,000|
+|||02|\$5,000--7,499|
+|||03|\$7,500--9,999|
+|||04|\$10,000--12,499|
+|||05|\$12,500--14,999|
+|||06|\$15,000--17,499|
+|||07|\$17,500--19,999|
+|||08|\$20,000--24,999|
+|||09|\$25,000--29,999|
+|||10|\$30,000--34,999|
+|||11|\$35,000--39,999|
+|||12|\$40,000--49,999|
+|||13|\$50,000--74,999|
+|||15|\$75,000--99,999|
+|||16|\$100,000--149,999|
+|||17|\$150,000--199,999|
+|||18|\$200,000 or more|
 |V2126B|Place Size (Population) Code|00|Not in a place|
 |||13|Population under 10,000|
 |||16|10,000--49,999|

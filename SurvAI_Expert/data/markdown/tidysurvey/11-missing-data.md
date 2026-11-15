@@ -9,7 +9,7 @@ original: "11-missing-data.Rmd"
 pages: 
 sha256: "fa76bff8b375e2ccac67534544c8a46d941c2ef4372780a889b2bd6ca930529d"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # Missing data {#c11-missing-data}

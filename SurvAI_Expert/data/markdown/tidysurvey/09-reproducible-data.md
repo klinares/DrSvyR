@@ -9,7 +9,7 @@ original: "09-reproducible-data.Rmd"
 pages: 
 sha256: "d6fe273a5035183ccd618d78abde9671f78ae30cb2d9a34fdf2b52d301400f53"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # Reproducible research {#c09-reprex-data}

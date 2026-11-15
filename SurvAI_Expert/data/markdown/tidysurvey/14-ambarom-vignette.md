@@ -9,7 +9,7 @@ original: "14-ambarom-vignette.Rmd"
 pages: 
 sha256: "8c47ed43ec80922c52099190b887c3eb4c71db3c1d3158dba4459f121f8cc29f"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # AmericasBarometer vignette {#c14-ambarom-vignette}

@@ -9,7 +9,7 @@ original: "10-sample-designs-replicate-weights.Rmd"
 pages: 
 sha256: "6110ee26833bfb9b21a56d263208814d10da2573b09279c1751689375368a4f7"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # (PART) Real-life data {-}

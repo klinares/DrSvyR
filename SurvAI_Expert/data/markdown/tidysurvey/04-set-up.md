@@ -9,7 +9,7 @@ original: "04-set-up.Rmd"
 pages: 
 sha256: "f7a04b25b6027e3fd169fe1bd84d3c9f087727373d13acfc4b41c814a15d4b86"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:32"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 # (PART) Analysis {-}
