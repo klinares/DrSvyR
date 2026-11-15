@@ -9,7 +9,7 @@ original: "applied_sampling_SURV625/assignments/HW3.qmd"
 pages: 
 sha256: "47f2024c20635d349cf50e7e6c1fc0257c2ac465cee27fbee1a3ce5d31ae928c"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T14:15:59"
+converted_at: "2026-11-14T21:00:42"
 ---
 
 

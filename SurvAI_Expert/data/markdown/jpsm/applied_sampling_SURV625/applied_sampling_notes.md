@@ -9,7 +9,7 @@ original: "applied_sampling_SURV625/applied_sampling_notes.pdf"
 pages: 22
 sha256: "074674abd6cfd05960e079079ecfb4651f5bcbcbcfffba4def249512fb79441f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T14:17:41"
+converted_at: "2026-11-14T21:00:42"
 ---
 
 <!-- page 1 -->

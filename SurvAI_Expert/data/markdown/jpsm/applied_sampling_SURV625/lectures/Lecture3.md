@@ -9,7 +9,7 @@ original: "applied_sampling_SURV625/lectures/Lecture3.pdf"
 pages: 76
 sha256: "85b07a515d695f1eb38425798e6d5d9e31fceffddcba4dc6606a0199d7f6bfa0"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T16:06:31"
+converted_at: "2026-11-14T21:00:43"
 ---
 
 <!-- page 1 -->

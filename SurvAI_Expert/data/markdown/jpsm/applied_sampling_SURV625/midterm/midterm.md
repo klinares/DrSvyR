@@ -9,7 +9,7 @@ original: "applied_sampling_SURV625/midterm/midterm.qmd"
 pages: 
 sha256: "49fe44f19b2233e9b3e76fe3c2aa0cb37ed7ed89ad58e3f7e840c4756786cce5"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T14:16:00"
+converted_at: "2026-11-14T21:00:45"
 ---
 
 

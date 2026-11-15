@@ -9,7 +9,7 @@ original: "applied_sampling_SURV625/midterm/practice.qmd"
 pages: 
 sha256: "52f0bae0502337a8dc828cf6957a886dd2ec6d6dc3808a655bcef3cce0e1df4b"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T14:16:00"
+converted_at: "2026-11-14T21:00:45"
 ---
 
 

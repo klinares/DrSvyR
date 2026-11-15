@@ -1,0 +1,266 @@
+---
+id: "jpsm/ML_social_science_SURV613/class_labs/ml-toolbox"
+source: "jpsm"
+course: "SURV613"
+course_title: "Machine Learning for Social Science"
+doc_type: "lab"
+title: "ML Toolbox"
+original: "ML_social_science_SURV613/class_labs/ml-toolbox.Rmd"
+pages: 
+sha256: "21340972dae51bc5dd2b6b286ef1e5ca50330dd298605f238384acffef8c7e3f"
+converted_by: "01_convert.R (no model)"
+converted_at: "2026-11-14T21:01:05"
+---
+
+
+## Setup
+
+```r
+library(magrittr)
+library(titanic)
+library(caret)
+library(DMwR)
+library(ranger)
+library(party)
+library(caretEnsemble)
+library(SuperLearner)
+library(pROC)
+library(tidyverse)
+
+```
+
+### Data
+
+In this notebook we use the Titanic data. It includes information on a set of Titanic passengers, such as age, sex, ticket class and whether he or she survived the Titanic tragedy (Note that the `titanic` package also provides a separate test set that precludes the survival variable).
+
+Source: <https://www.kaggle.com/c/titanic/data>
+
+```r
+titanic <- titanic_train
+str(titanic)
+```
+
+We begin with some minor data preparations.
+
+```r
+titanic$Survived <- as.factor(titanic$Survived)
+levels(titanic$Survived) <- make.names(levels(factor(titanic$Survived)))
+titanic %<>%
+  select(Survived, Pclass, Sex, Age, Fare) %>%
+  na.omit(.)
+```
+
+Next we split the data into a training and a test part. This can be done by stratified random sampling with `createDataPartition()`.
+
+```r
+set.seed(3225)
+inTrain <- createDataPartition(titanic$Survived, 
+                               p = .8, 
+                               list = FALSE, 
+                               times = 1)
+titanic_train <- titanic[inTrain,]
+titanic_test <- titanic[-inTrain,]
+```
+
+### Tuning Setup
+
+In this notebook, we will consider another add-on in the tuning process. We use stratified cross-validation since we have imbalanced classes in our outcome. We therefore set up a cv-index using `createFolds()`.
+
+```r
+cvIndex <- createFolds(titanic_train$Survived, 5, returnTrain = T)
+```
+
+The cvIndex object can now be passed on to `trainControl()` to guide the tuning process in the next sections.
+
+```r
+ctrl <- trainControl(method = "cv",
+                     number = 5,
+                     index = cvIndex,
+                     summaryFunction = twoClassSummary,
+                     classProbs = TRUE,
+                     verboseIter = TRUE,
+                     savePredictions = "final")
+
+# SMOTE
+ctrl2 <- trainControl(method = "cv",
+                      number = 5,
+                      summaryFunction = twoClassSummary,
+                      classProbs = TRUE,
+                      sampling = "smote")
+```
+
+## Random Forest & Extra Trees
+
+We start with random forests and extremely randomized trees. In order to specify reasonable values for `mtry`, `model.matrix()` is a handy function as it creates dummy variables for all factors of a specified model.
+
+```r
+cols <- ncol(model.matrix(Survived ~ ., data = titanic_train))
+```
+
+Here we only consider two try-out values to limit the time needed for model tuning. We specify the tree building methods via `splitrule`.
+
+```r
+grid <- expand.grid(mtry = c(sqrt(cols), log(cols)),
+                    splitrule = c("gini", "extratrees"),
+                    min.node.size = 10)
+grid
+```
+
+Start the tuning process. We are looking for the model with the maximum ROC-AUC.
+
+```r
+rf <- train(Survived ~ .,
+            data = titanic_train,
+            method = "ranger",
+            trControl = ctrl,
+            tuneGrid = grid,
+            metric = "ROC")
+```
+
+List the tuning results.
+
+```r
+rf
+```
+
+```r
+rf_s <- train(Survived ~ .,
+              data = titanic_train,
+              method = "ranger",
+              trControl = ctrl2,
+              tuneGrid = grid,
+              metric = "ROC")
+```
+
+## Stacking
+
+We may also want to consider a meta-model that is built on top of the predictions of lower level models. Here we consider the `caretEnsemble` package. For simplicity, we only use CTREE and a logistic regression as base methods. As a first step, the lower level models have to be build.
+
+```r
+model_list <- caretList(Survived ~ .,
+                        data = titanic_train,
+                        trControl = ctrl,
+                        metric = "ROC",
+                        methodList = c("ctree", "glm"))
+```
+
+The resulting object includes the training and tuning results for both methods.
+
+```r
+model_list
+```
+
+We can briefly check the similarity of the predictions across models.
+
+```r
+as.data.frame(predict(model_list, newdata = head(titanic_train)))
+modelCor(resamples(model_list))
+```
+
+Now we build a higher level model by using the predictions of the previous models as inputs in a logistic regression. This can be implemented with `caretStack()`.
+
+```r
+glm_ensemble <- caretStack(model_list,
+                           method = "glm",
+                           metric = "ROC",
+                           trControl = trainControl(
+                             method = "cv",
+                             number = 5,
+                             savePredictions = "final",
+                             classProbs = TRUE,
+                             summaryFunction = twoClassSummary))
+```
+
+List the cross-validation results of the stacking ensemble.
+
+```r
+glm_ensemble
+```
+
+We can also access the coefficients of the meta logit model via `coef`.
+
+```r
+coef(glm_ensemble$ens_model$finalModel)
+```
+
+## Super Learner
+
+As an alternative to `caretEnsemble`, the `SuperLearner` package can be used for building a meta-ensemble model. This package needs a slightly different data setup, i.e. X and y objects for the train and test data.
+
+```r
+X_train <- titanic_train[which(names(titanic_train) != "Survived")]
+y_train <- ifelse(titanic_train$Survived == "X1", 1, 0)
+X_test <- titanic_test[which(names(titanic_test) != "Survived")]
+```
+
+The function `listWrappers()` lists the model types that we can use as individual learners.
+
+```r
+listWrappers()
+```
+
+Here we choose a null model (`SL.mean`), elastic net (`SL.glmnet`) and random forests grown by ranger (`SL.ranger`) for building our Super Learner. Details on the construction of the higher level model can be found by calling `?method.template`.
+
+```r
+sl <- SuperLearner(Y = y_train, X = X_train, 
+                   family = binomial(),
+                   SL.library = c("SL.mean", 
+                                  "SL.glmnet", 
+                                  "SL.ranger"))
+sl
+```
+
+We can also run nested Cross-Validation to get CV estimates for the performance of the individual models and the Super Learner.
+
+```r
+cv_sl <- CV.SuperLearner(Y = y_train, X = X_train, 
+                         family = binomial(), 
+                         V = 5,
+                        SL.library = c("SL.mean", 
+                                       "SL.glmnet", 
+                                       "SL.ranger",
+                                       "SL.xgboost"))
+cv_sl
+summary(cv_sl)
+```
+
+Plot the nested CV results.
+
+```r
+plot(cv_sl)
+```
+
+## Prediction
+
+Finally, we create predicted risk scores for our outcome in the test set.
+
+```r
+p_rf <- predict(rf, newdata = titanic_test, type = "prob")
+p_rf_s <- predict(rf_s, newdata = titanic_test, type = "prob")
+p_ens <- predict(glm_ensemble, newdata = titanic_test)
+p_sl <- predict(sl, X_test, onlySL = TRUE)
+```
+
+Creating ROC objects based on predicted probabilities...
+
+```r
+rf_roc <- roc(titanic_test$Survived, p_rf$X1)
+rf_s_roc <- roc(titanic_test$Survived, p_rf_s$X1)
+ens_roc <- roc(titanic_test$Survived, p_ens$X1)
+sl_roc <- roc(titanic_test$Survived, p_sl$pred[, 1])
+```
+
+...and plotting the ROC curves.
+
+```r
+ggroc(list(RF = rf_roc, 
+           Caret_Stack = ens_roc,
+           SuperLearner = sl_roc)) +
+  geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), 
+               color="darkgrey", linetype="dashed")
+```
+
+## References
+
+-   <https://cran.r-project.org/web/packages/caretEnsemble/vignettes/caretEnsemble-intro.html>
+-   <https://cran.r-project.org/web/packages/SuperLearner/vignettes/Guide-to-SuperLearner.html>
