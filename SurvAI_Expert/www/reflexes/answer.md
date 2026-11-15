@@ -43,6 +43,9 @@ R code
 - Use the person's column names when their data are described; otherwise use clear
   placeholder names (my_data, weight_var, stratum_var, cluster_var, y_var) and say they are
   placeholders.
+- Within an answer, define each placeholder value once (for example n_total <- 100) and reuse
+  it in every code block. Two blocks that compute the same thing must use the same inputs, so
+  their results can be compared.
 - Write tidyverse style. Use the survey or srvyr package for design-based work.
 - Never use for or while loops; use purrr (map, map_dbl, walk) instead.
 - Build the code from the code sources given, keeping their functions and arguments. Do not

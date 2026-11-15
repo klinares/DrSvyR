@@ -151,7 +151,7 @@ JUDGE_SYSTEM <- paste(
   "Judge correctness against the course passage and sound survey statistics: 'correct' when the answer is right",
   "and answers the question, 'partly correct' when it is right in part or misses part of the question,",
   "'incorrect' when it is wrong or does not answer. Count the claims of fact in the answer that no given source",
-  "supports (claims labelled 'not from the store' do not count). Say whether the answer wrongly said the",
+  "supports (claims labelled 'Not from the library' do not count). Say whether the answer wrongly said the",
   "sources lack material that is in fact in them. Give a one-sentence reason. Reply with JSON only.")
 
 JUDGE_SCHEMA <- list(type = "object", additionalProperties = FALSE,
