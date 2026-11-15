@@ -85,25 +85,52 @@ search_passages <- function(con, query, tags = list(), k = 12, k1 = BM25_K1, b =
     bm25_sql(con, INDEX$passage, q, k1, b), tag_where(con, tags), boost, as.integer(k))) |> as_tibble()
 }
 
-# One row per formula group: name, symbols and the parent passages all count; every place it occurs.
-find_formulas <- function(con, query, role = NULL, design = NULL, general = TRUE, k = 8) {
+# The columns of one formula group (labels are the same on every member): every place it occurs.
+FORMULA_GROUP_SQL <- paste(
+  "f.group_id, first(f.name ORDER BY f.formula_id) AS name, first(f.role ORDER BY f.formula_id) AS role,",
+  "first(f.f_design ORDER BY f.formula_id) AS design, first(f.general ORDER BY f.formula_id) AS general,",
+  "first(f.latex ORDER BY f.formula_id) AS latex, first(f.symbols ORDER BY f.formula_id) AS symbols,",
+  "first(f.condition ORDER BY f.formula_id) AS condition, first(f.passage_id ORDER BY f.formula_id) AS passage_id,",
+  "first(d.course ORDER BY f.formula_id) AS course, first(d.title ORDER BY f.formula_id) AS title, count(*) AS places_n,",
+  "string_agg(f.doc_id || coalesce(' p. ' || f.page, ' line ' || f.line_from), '; ' ORDER BY f.formula_id) AS places,",
+  "list(f.passage_id ORDER BY f.formula_id) AS place_ids")
+
+# One row per formula group: name, symbols and the parent passages all count. Filters: role, design
+#   (any of), topic (of a parent passage), course, general. An empty query lists by number of places.
+find_formulas <- function(con, query, role = NULL, design = NULL, general = TRUE, k = 8, topic = NULL, course = NULL) {
   q = query_terms(query)
-  if (!length(q)) q = "\u0001"
-  where = c(if (length(role)) sprintf("f.role IN (%s)", paste(dbQuoteString(con, role), collapse = ", ")),
+  any_q = length(q) > 0
+  if (!any_q) q = "\u0001"
+  qs = function(x) paste(dbQuoteString(con, x), collapse = ", ")
+  where = c(if (length(role)) sprintf("f.role IN (%s)", qs(role)),
             if (length(design)) sprintf("list_has_any(string_split(f.f_design, ';'), %s)", q_list(con, design)),
-            if (!is.null(general)) sprintf("f.general = %s", if (isTRUE(general)) "TRUE" else "FALSE"))
-  dbGetQuery(con, sprintf(paste(
-    "WITH fs AS (%s), ps AS (%s),",
+            if (!is.null(general)) sprintf("f.general = %s", if (isTRUE(general)) "TRUE" else "FALSE"),
+            if (length(course)) sprintf("d.course IN (%s)", qs(course)),
+            if (length(topic)) sprintf(paste("f.group_id IN (SELECT f2.group_id FROM formulas f2 JOIN passage_tags t ON t.passage_id =",
+                                             "coalesce((SELECT a.passage_id FROM passage_aliases a WHERE a.alias_id = f2.passage_id), f2.passage_id)",
+                                             "WHERE t.facet = 'topic' AND t.value IN (%s))"), qs(topic)))
+  sc = if (any_q) sprintf(paste("WITH fs AS (%s), ps AS (%s),",
     "pg AS (SELECT f.group_id, max(ps.bm25) AS pb FROM formulas f JOIN ps USING (passage_id) GROUP BY ALL),",
-    "sc AS (SELECT group_id, coalesce(fs.bm25, 0) + %f * coalesce(pg.pb, 0) AS score FROM fs FULL JOIN pg USING (group_id))",
-    "SELECT f.group_id, first(f.name ORDER BY f.formula_id) AS name, first(f.role ORDER BY f.formula_id) AS role,",
-    "first(f.f_design ORDER BY f.formula_id) AS design, first(f.general ORDER BY f.formula_id) AS general,",
-    "first(f.latex ORDER BY f.formula_id) AS latex, first(f.symbols ORDER BY f.formula_id) AS symbols,",
-    "first(f.condition ORDER BY f.formula_id) AS condition, count(*) AS places_n,",
-    "string_agg(f.doc_id || coalesce(' p. ' || f.page, ' line ' || f.line_from), '; ' ORDER BY f.formula_id) AS places, sc.score",
-    "FROM sc JOIN formulas f USING (group_id) %s GROUP BY f.group_id, sc.score ORDER BY sc.score DESC, f.group_id LIMIT %d"),
-    bm25_sql(con, INDEX$formula, q), bm25_sql(con, INDEX$passage, q), PARENT_WEIGHT,
-    if (length(where)) paste("WHERE", paste(where, collapse = " AND ")) else "", as.integer(k))) |> as_tibble()
+    "sc AS (SELECT group_id, coalesce(fs.bm25, 0) + %f * coalesce(pg.pb, 0) AS score FROM fs FULL JOIN pg USING (group_id))"),
+    bm25_sql(con, INDEX$formula, q), bm25_sql(con, INDEX$passage, q), PARENT_WEIGHT) else
+    "WITH sc AS (SELECT group_id, count(*) * 1.0 AS score FROM formulas WHERE name <> '' GROUP BY group_id)"
+  dbGetQuery(con, sprintf("%s SELECT %s, sc.score FROM sc JOIN formulas f USING (group_id) JOIN docs d ON d.id = f.doc_id %s
+                          GROUP BY f.group_id, sc.score ORDER BY sc.score DESC, f.group_id LIMIT %d",
+                          sc, FORMULA_GROUP_SQL, if (length(where)) paste("WHERE", paste(where, collapse = " AND ")) else "",
+                          as.integer(k))) |> as_tibble()
+}
+
+# The formula groups with a member inside the given passages (or a passage they stand for), in the
+#   order of the passages; general ones only by default.
+formulas_in_passages <- function(con, passage_ids, general = TRUE) {
+  if (!length(passage_ids)) return(tibble())
+  ids = paste(dbQuoteString(con, passage_ids), collapse = ", ")
+  r = dbGetQuery(con, sprintf(paste(
+    "WITH m AS (SELECT DISTINCT f.group_id, coalesce(a.passage_id, f.passage_id) AS at FROM formulas f",
+    "LEFT JOIN passage_aliases a ON a.alias_id = f.passage_id WHERE coalesce(a.passage_id, f.passage_id) IN (%s)%s)",
+    "SELECT %s, list(DISTINCT m.at) AS ats, 0.0 AS score FROM m JOIN formulas f USING (group_id) JOIN docs d ON d.id = f.doc_id GROUP BY f.group_id"),
+    ids, if (isTRUE(general)) " AND f.general" else "", FORMULA_GROUP_SQL)) |> as_tibble()
+  r |> mutate(at = map_int(ats, function(a) min(match(unlist(a), passage_ids)))) |> arrange(at, group_id) |> select(-at, -ats)
 }
 
 find_code <- function(con, query, packages = NULL, functions = NULL, k = 8) {
@@ -124,7 +151,7 @@ find_code <- function(con, query, packages = NULL, functions = NULL, k = 8) {
 # What the app's source window shows. An alias id is shown as the passage it duplicates.
 source_card <- function(con, passage_id) {
   r = dbGetQuery(con, paste(
-    "SELECT p.passage_id, d.markdown, d.title, p.heading_path, p.pages, p.description, p.text",
+    "SELECT p.passage_id, d.markdown, d.title, p.heading_path, p.pages, p.line_from, p.line_to, p.description, p.text",
     "FROM passages p JOIN docs d ON d.id = p.doc_id",
     "WHERE p.passage_id = coalesce((SELECT a.passage_id FROM passage_aliases a WHERE a.alias_id = ?), ?)"),
     params = list(passage_id, passage_id))

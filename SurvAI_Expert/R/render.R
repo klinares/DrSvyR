@@ -32,10 +32,33 @@ check_answer <- function(answer, gathered) {
   known = unique(c(gathered$known_fns, ls(baseenv(), all.names = TRUE), exports_of(c(BASE_PACKAGES, pkgs))))
   bad_cites = setdiff(cites, gathered$sources$label)
   bad_tokens = setdiff(tokens, if ("fid" %in% names(gathered$formulas)) gathered$formulas$fid else character())
+  u = prose_units(answer)
   list(cites = length(cites), bad_cites = bad_cites, cites_valid = !length(bad_cites),
        tokens = length(tokens), bad_tokens = bad_tokens, tokens_valid = !length(bad_tokens),
        display_math = str_detect(prose_only(answer), "\\$\\$|\\\\\\["),
-       code_blocks = length(blocks), code_parses = all(parses), unverified = setdiff(fns, known))
+       code_blocks = length(blocks), code_parses = all(parses), unverified = setdiff(fns, known),
+       uncited = sum(!u$cited), uncited_text = u$text[!u$cited], units = length(u$text), not_from_store = sum(u$nfs),
+       words = sum(str_count(str_remove_all(u$all, CITE_RX), "\\S+")))
+}
+
+NFS_RX <- "^(?i)[*_\\s]*not from the store:"
+
+# Sentences and bullets of the prose, each with whether it carries a citation or the "Not from
+#   the store:" label. Headings, code, formula lines and tables are left out, and so are lead-ins
+#   (ending in ":") and fragments under four words; $all keeps every prose unit, for word counts.
+prose_units <- function(answer) {
+  l = str_split_1(str_remove_all(as.character(answer), "(?s)```.*?```"), "\n")
+  l = l[!str_detect(l, "^\\s*$|^\\s*#|^\\s*\\{\\{F:|^\\s*\\||^\\s*\\*\\*[^*]+\\*\\*:?\\s*$")]
+  bullet = str_detect(l, "^\\s*([-*+]|\\d+[.)])\\s+")
+  para = cumsum(bullet | lag(bullet, default = TRUE))
+  blocks = map_chr(split(str_remove(l, "^\\s*([-*+]|\\d+[.)])\\s+"), para), paste, collapse = " ")
+  # a citation after the full stop belongs to the sentence before it
+  blocks = str_replace_all(blocks, "([.!?])\\s*((?:\\[S\\d+[^\\]]*\\]\\s*)+)", " \\2\\1 ")
+  s = str_squish(unlist(str_split(blocks, "(?<=[.!?])\\s+(?=[A-Z*_(\\[])")))
+  s = s[nzchar(s)]
+  keep_s = !str_detect(s, ":\\s*$") & str_count(s, "\\S+") >= 4
+  t = s[keep_s]
+  list(text = t, cited = str_detect(t, CITE_RX) | str_detect(t, NFS_RX), nfs = str_detect(t, NFS_RX), all = s)
 }
 
 kx <- function(expr, display = FALSE)
@@ -48,24 +71,50 @@ MATH_RX <- c(display = "(?s)\\$\\$(.+?)\\$\\$",
              paren = "(?s)\\\\\\((.+?)\\\\\\)",
              bracket = "(?s)\\\\\\[(.+?)\\\\\\]")
 
-# Formula tokens, then math, are swapped for placeholders before markdown runs, so markdown cannot
-#   mangle an underscore inside a formula; code is protected first so df$a + df$b is not math.
-render_answer <- function(answer, gathered) {
-  text = as.character(answer)
-  code = str_extract_all(text, "(?s)```.*?```|`[^`\n]+`")[[1]]
-  ctok = sprintf("CODETOKEN%04dZ", seq_along(code))
-  text = reduce2(code, ctok, function(a, cd, tk) sub(cd, tk, a, fixed = TRUE), .init = text)
+R_KEYWORDS_RX <- "\\b(function|if|else|return|TRUE|FALSE|NULL|NA|library|require)\\b"
+
+# R code as HTML with comments, strings, keywords and function calls marked (no package needed).
+highlight_r <- function(code) {
+  line = function(l) {
+    cm = str_locate(l, "#(?=[^\"']*$)")[1]
+    body = if (is.na(cm)) l else str_sub(l, 1, cm - 1)
+    b = htmltools::htmlEscape(body)
+    b = str_replace_all(b, "(&quot;.*?&quot;|&#39;.*?&#39;)", "<span class='tok-str'>\\1</span>")
+    b = str_replace_all(b, "\\b([A-Za-z.][A-Za-z0-9._]*)(?=\\()", "<span class='tok-fn'>\\1</span>")
+    b = str_replace_all(b, R_KEYWORDS_RX, "<span class='tok-kw'>\\1</span>")
+    paste0(b, if (!is.na(cm)) paste0("<span class='tok-com'>", htmltools::htmlEscape(str_sub(l, cm)), "</span>") else "")
+  }
+  paste0("<pre class='survai-code'><code>", paste(map_chr(str_split_1(code, "\n"), line), collapse = "\n"), "</code></pre>")
+}
+
+open_link <- function(open_input, label, text) if (is.null(open_input)) text else
+  sprintf("<a href='#' class='survai-open' onclick=\"Shiny.setInputValue('%s', '%s', {priority: 'event'}); return false;\">%s</a>",
+          open_input, str_replace_all(htmltools::htmlEscape(label, attribute = TRUE), "'", "\\\\'"), text)
+
+# Markdown to HTML, server side. Formula tokens, then math, are swapped for placeholders before
+#   markdown runs, so markdown cannot mangle an underscore inside a formula; code is protected first
+#   so df$a + df$b is not math. formulas: a table with fid and latex (and label, the source S# the
+#   formula links to). math = FALSE (while an answer streams) leaves maths as typed and tokens as a
+#   note. open_input: the input a citation or a formula's "source" link sets.
+render_md <- function(text, formulas = NULL, open_input = NULL, math = TRUE) {
+  text = as.character(text)
   env = new.env()
   env$m = list()
-  hold = function(html) { tk = sprintf("MATHTOKEN%04dZ", length(env$m) + 1L); env$m[[tk]] = html; tk }
-  Fm = gathered$formulas
+  hold = function(html) { tk = sprintf("HOLDTOKEN%04dZ", length(env$m) + 1L); env$m[[tk]] = html; tk }
+  text = str_replace_all(text, "(?s)```[^\\n]*\\n(.*?)```", function(m) map_chr(m, function(one)
+    paste0("\n\n", hold(highlight_r(str_remove(str_match(one, "(?s)```[^\\n]*\\n(.*?)```")[, 2], "\n$"))), "\n\n")))
+  code = str_extract_all(text, "`[^`\n]+`")[[1]]
+  ctok = sprintf("CODETOKEN%04dZ", seq_along(code))
+  text = reduce2(code, ctok, function(a, cd, tk) sub(cd, tk, a, fixed = TRUE), .init = text)
   text = str_replace_all(text, FORMULA_TOKEN_RX, function(m) map_chr(m, function(one) {
     id = str_match(one, FORMULA_TOKEN_RX)[, 2]
-    latex = if (!is.null(Fm) && nrow(Fm) && id %in% Fm$fid) Fm$latex[Fm$fid == id][1] else NA_character_
-    html = if (is.na(latex)) NA_character_ else kx(latex, TRUE)
+    i = if (!is.null(formulas) && nrow(formulas)) match(id, formulas$fid) else NA
+    html = if (!math) "<em class='text-muted'>[formula from the store]</em>" else if (is.na(i)) NA_character_ else kx(formulas$latex[i], TRUE)
+    if (math && !is.na(i) && !is.na(html) && !is.null(formulas$label)) html = paste0("<div class='survai-formula'>", html,
+      "<div class='small text-end'>", open_link(open_input, formulas$label[i], paste("source", formulas$label[i])), "</div></div>")
     paste0("\n\n", hold(if (is.na(html)) paste0("<span class='text-danger'>", htmltools::htmlEscape(one), "</span>") else html), "\n\n")
   }))
-  text = reduce(names(MATH_RX), function(txt, kind) {
+  if (math) text = reduce(names(MATH_RX), function(txt, kind) {
     disp = kind %in% c("display", "bracket")
     str_replace_all(txt, regex(MATH_RX[[kind]]), function(m) map_chr(m, function(one) {
       html = kx(str_match(one, regex(MATH_RX[[kind]]))[, 2], disp)
@@ -74,9 +123,15 @@ render_answer <- function(answer, gathered) {
     }))
   }, .init = text)
   text = reduce2(ctok, code, function(a, tk, cd) sub(tk, cd, a, fixed = TRUE), .init = text)
-  html = reduce2(names(env$m), unlist(env$m), function(a, tk, h) gsub(tk, h, a, fixed = TRUE),
-                 .init = commonmark::markdown_html(text, extensions = TRUE))
+  html = commonmark::markdown_html(text, extensions = TRUE)
+  if (!is.null(open_input)) html = str_replace_all(html, "S(\\d+)(?=[^<>]*\\])", function(s) open_link(open_input, s, s))
+  reduce2(names(env$m), unlist(env$m), function(a, tk, h) gsub(tk, h, gsub(paste0("<p>", tk, "</p>"), tk, a, fixed = TRUE), fixed = TRUE), .init = html)
+}
+
+render_answer <- function(answer, gathered, open_input = NULL) {
+  Fm = gathered$formulas
+  if (!is.null(Fm) && nrow(Fm)) Fm = Fm |> left_join(gathered$sources |> filter(kind == "formula") |> select(ref, label), by = c(fid = "ref"))
   cited = unique(unlist(str_extract_all(unlist(str_extract_all(as.character(answer), CITE_RX)), "S\\d+")))
-  list(html = html, cards = gathered$sources |> filter(label %in% cited) |>
+  list(html = render_md(answer, Fm, open_input), cards = gathered$sources |> filter(label %in% cited) |>
          select(label, kind, passage_id, markdown, title, heading, pages, description, text))
 }
