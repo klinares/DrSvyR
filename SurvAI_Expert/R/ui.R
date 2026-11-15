@@ -1,8 +1,8 @@
 # ui.R: the app's pages. What the tabs share (boxes, the office logo, the source card), the session
-#   key and call count, and the four tabs: Start here, Ask, Formulas, Report reader. Function
+#   key and call count, and the five tabs: Start here, Ask, Formulas, Report reader, Methodology. Function
 #   definitions and constants only.
 
-APP_TABS <- c("Start here", "Ask", "Formulas", "Report reader")
+APP_TABS <- c("Start here", "Ask", "Formulas", "Report reader", "Methodology")
 
 APP_CSS <- paste(
   ".survai-code { background: var(--bs-tertiary-bg); padding: 8px 10px; border-radius: 4px; font-size: 88%; overflow-x: auto; }",
@@ -40,8 +40,47 @@ office_logo <- function(file, office = "") {
 
 # ---- Start here ---------------------------------------------------------------------------------------------
 
-# The page text is www/start_here.md, edited without touching code; read for each session.
+# The page text is www/start_here.md, edited without touching code; read for each session. The
+#   figure below it is www/fw_tse.svg, with its own <title> as alt text.
 START_MD <- "www/start_here.md"
+START_FIGURE <- "fw_tse.svg"
+
+read_md <- function(file) paste(readLines(file, warn = FALSE, encoding = "UTF-8"), collapse = "
+")
+md_page <- function(text) HTML(str_replace_all(render_md(text), "<table>", "<table class='table table-sm'>"))
+
+svg_title <- function(file) {
+  t = str_match(read_md(file.path("www", file)), "<title[^>]*>([^<]*)</title>")[, 2]
+  if (is.na(t)) "" else t
+}
+
+start_ui <- function(id) {
+  ns = NS(id)
+  tagList(
+    uiOutput(ns("text")),
+    tags$img(src = START_FIGURE, alt = svg_title(START_FIGURE), style = "width: 100%; max-width: 900px; display: block; margin: 1em 0;"),
+    tags$hr(),
+    mod_key_ui(ns("key")),
+    tags$p(textOutput(ns("calls"), inline = TRUE)))
+}
+
+start_server <- function(id, state) {
+  moduleServer(id, function(input, output, session) {
+    mod_key_server("key", state)
+    output$text = renderUI(md_page(read_md(START_MD)))
+    output$calls = renderText({
+      state$calls
+      paste0("Each question uses 2 model calls (a plan and an answer). ",
+             sprintf("This session has used %d calls in the last %s hours.", calls_in_window(session$token), CALLS_WINDOW_HOURS),
+             if (!is.na(CALLS_PER_WINDOW)) sprintf(" The limit of %d is per person, so your other sessions count too.", CALLS_PER_WINDOW))
+    })
+  })
+}
+
+# ---- Methodology ------------------------------------------------------------------------------------------------
+
+# The page text is www/methodology.md; {{LIBRARY_TABLE}} in it becomes the counts table below.
+METHODOLOGY_MD <- "www/methodology.md"
 
 # The library's sources in plain words, in the order shown; a source not listed shows its own name.
 SOURCE_LABELS <- c(jpsm = "Graduate coursework in survey methodology", practools = "Textbook on sample design and weighting",
@@ -58,28 +97,19 @@ store_counts <- function(con) dbGetQuery(con, paste(
   group_by(` `) |> summarise(across(c(Documents, Passages, Formulas, `Code examples`), sum)) |>
   arrange(match(` `, unique(SOURCE_LABELS)))
 
-start_ui <- function(id) {
-  ns = NS(id)
-  tagList(
-    uiOutput(ns("text")),
-    tags$h4("What is in the library"), tableOutput(ns("store")),
-    tags$hr(),
-    mod_key_ui(ns("key")),
-    tags$p(textOutput(ns("calls"), inline = TRUE)))
+# A data frame as a markdown table, numbers with thousands separators.
+md_table_of <- function(d) {
+  cells = map(d, function(x) if (is.numeric(x)) format(x, big.mark = ",", trim = TRUE) else as.character(x))
+  rows = pmap_chr(cells, function(...) paste0("| ", paste(c(...), collapse = " | "), " |"))
+  paste(c(paste0("| ", paste(names(d), collapse = " | "), " |"), paste0("|", strrep("---|", ncol(d))), rows), collapse = "
+")
 }
 
-start_server <- function(id, state, con) {
+methodology_ui <- function(id) uiOutput(NS(id, "text"))
+
+methodology_server <- function(id, con) {
   moduleServer(id, function(input, output, session) {
-    mod_key_server("key", state)
-    output$text = renderUI(HTML(str_replace_all(render_md(paste(readLines(START_MD, warn = FALSE, encoding = "UTF-8"), collapse = "\n")),
-                                                "<table>", "<table class='table table-sm'>")))
-    output$store = renderTable(store_counts(con), digits = 0, big.mark = ",")
-    output$calls = renderText({
-      state$calls
-      paste0("Each question uses 2 model calls (a plan and an answer). ",
-             sprintf("This session has used %d calls in the last %s hours.", calls_in_window(session$token), CALLS_WINDOW_HOURS),
-             if (!is.na(CALLS_PER_WINDOW)) sprintf(" The limit of %d is per person, so your other sessions count too.", CALLS_PER_WINDOW))
-    })
+    output$text = renderUI(md_page(str_replace(read_md(METHODOLOGY_MD), fixed("{{LIBRARY_TABLE}}"), md_table_of(store_counts(con)))))
   })
 }
 
@@ -97,22 +127,35 @@ card_ui <- function(id)
            bslib::card(full_screen = TRUE, max_height = "88vh", bslib::card_header(textOutput(NS(id, "head"), inline = TRUE)),
                        bslib::card_body(uiOutput(NS(id, "body")))))
 
+# What a source card shows: c is a source_card() row.
+card_head <- function(c) paste(discard(c(c$title, c$pages), function(x) !nzchar(x %||% "")), collapse = ", ")
+card_content <- function(c)
+  tagList(if (nzchar(c$heading_path)) tags$p(tags$strong(c$heading_path)), tags$p(tags$em(c$description)),
+          HTML(render_md(c$text)), tags$hr(),
+          tags$p(class = "small", "Text file: ", tags$code(c$markdown), " ",
+                 if (is.null(source_url(c$markdown))) tags$em("Text file not in the repository")
+                 else tags$a("Open the file", href = source_url(c$markdown), target = "_blank", rel = "noopener")))
+
 # passage_id: a reactive holding the passage to show (or NULL).
 card_server <- function(id, con, passage_id, empty = "Click a source to read the passage here.") {
   moduleServer(id, function(input, output, session) {
     card = reactive({ p = passage_id(); if (is.null(p)) NULL else source_card(con, p) })
-    output$head = renderText({ c = card(); if (is.null(c)) "Source" else paste(discard(c(c$title, c$pages), function(x) !nzchar(x %||% "")), collapse = ", ") })
+    output$head = renderText({ c = card(); if (is.null(c)) "Source" else card_head(c) })
     output$body = renderUI({
       c = card()
-      if (is.null(c)) return(tags$p(class = "text-muted small", empty))
-      tagList(if (nzchar(c$heading_path)) tags$p(tags$strong(c$heading_path)), tags$p(tags$em(c$description)),
-              HTML(render_md(c$text)), tags$hr(),
-              tags$p(class = "small", "Text file: ", tags$code(c$markdown), " ",
-                     if (is.null(source_url(c$markdown))) tags$em("Text file not in the repository")
-                     else tags$a("Open the file", href = source_url(c$markdown), target = "_blank", rel = "noopener")))
+      if (is.null(c)) tags$p(class = "text-muted small", empty) else card_content(c)
     })
   })
 }
+
+# A passage in a window over the page, with a button that fills the screen with it.
+MAXIMIZE_JS <- paste("var d = this.closest('.modal-dialog'); d.classList.toggle('modal-fullscreen');",
+                     "this.textContent = d.classList.contains('modal-fullscreen') ? 'Restore' : 'Maximize';")
+source_modal <- function(c, number = NULL)
+  modalDialog(card_content(c), title = paste0(if (!is.null(number)) paste0(number, ". "), card_head(c)),
+              size = "l", easyClose = TRUE,
+              footer = tagList(tags$button(type = "button", class = "btn btn-outline-secondary", onclick = MAXIMIZE_JS, "Maximize"),
+                               modalButton("Close")))
 
 
 # ==== the session key and call count ====
@@ -188,50 +231,62 @@ mod_key_server <- function(id, state) {
 
 # ==== Ask ====
 # A question runs as an ExtendedTask (plan, search, answer); the answer streams into the page and
-#   is replaced, when complete, by the rendered answer with formulas from the store.
+#   is replaced, when complete, by the rendered answer with formulas from the library and its cited
+#   sources renumbered 1, 2, 3 in the order the answer cites them.
 
 STREAM_EVERY_S <- 0.3   # how often the streaming answer is redrawn
 
+MY_DATA_HELP <- paste(
+  "Optional. Tell the tool what the columns in your data file are called, and its example code will use your names,",
+  "so you can copy it with fewer changes. Fill in only what you have. Nothing here is uploaded: these are only names.",
+  "Weight: the column that says how many people each row stands for. Strata: the groups the sample was drawn within.",
+  "Cluster: the unit that was sampled first, such as a school or an area. Population size: only if you know how many",
+  "units exist in each group. Outcome: the column you want to estimate.")
+
 ask_ui <- function(id) {
   ns = NS(id)
+  field = function(name, label, eg) textInput(ns(name), label, placeholder = eg)
   my_data = bslib::accordion(open = FALSE, bslib::accordion_panel(
     "My data (optional)",
-    tags$p(class = "small text-muted", "Variable names from your data file, so the R code uses them."),
+    tags$p(class = "small text-muted", MY_DATA_HELP),
     bslib::layout_columns(col_widths = c(4, 4, 4),
-      textInput(ns("weight"), "Weight"), textInput(ns("strata"), "Strata"), textInput(ns("cluster"), "Cluster (PSU)"),
-      textInput(ns("fpc"), "FPC"), textInput(ns("replicates"), "Replicate weights"), textInput(ns("outcomes"), "Outcome variables")),
+      field("weight", "Weight", "e.g. finalwt"), field("strata", "Strata", "e.g. stratum"), field("cluster", "Cluster", "e.g. school_id"),
+      field("fpc", "Population size", "e.g. n_schools"), field("outcomes", "Outcome", "e.g. smokes"),
+      field("replicates", "Replicate weights", "e.g. repwt1 to repwt80")),
     textInput(ns("design"), "About the design", width = "100%",
               placeholder = "e.g. two-stage sample of schools then students, 40 strata")))
-  bslib::layout_columns(col_widths = c(7, 5),
-    tagList(
-      textAreaInput(ns("question"), "Your question", width = "100%", rows = 3),
-      my_data,
-      tags$div(style = "margin: 8px 0;", bslib::input_task_button(ns("ask"), "Ask", label_busy = "Working..."),
-               actionButton(ns("new_topic"), "New topic"), textOutput(ns("topic"), inline = TRUE)),
-      tags$div(id = ns("progress"), class = "text-muted small"),
-      tags$div(id = ns("live"), class = "survai-live"),
-      uiOutput(ns("answer"))),
-    card_ui(ns("card")))
+  tags$div(style = "max-width: 900px;",
+    textAreaInput(ns("question"), "Your question", width = "100%", rows = 3),
+    my_data,
+    tags$div(style = "margin: 8px 0;", bslib::input_task_button(ns("ask"), "Ask", label_busy = "Working..."),
+             actionButton(ns("new_topic"), "New topic"), textOutput(ns("topic"), inline = TRUE)),
+    tags$div(id = ns("progress"), class = "text-muted small"),
+    tags$div(id = ns("live"), class = "survai-live"),
+    uiOutput(ns("answer")))
 }
 
-# Plain notes for whatever check_answer() flagged.
+# Plain notes for whatever check_answer() flagged. Sentences with no citation are shown by the
+#   dotted underline, not counted here.
 flag_notes <- function(ck) {
   n = function(k, one, many) if (k == 1) one else sprintf(many, k)
-  c(if (length(ck$bad_cites)) paste("Cites a source that was not given:", paste(ck$bad_cites, collapse = ", ")),
-    if (length(ck$bad_tokens)) paste("Formula token not among the formulas given:", paste(ck$bad_tokens, collapse = ", ")),
-    if (ck$display_math) "The answer typed a display formula itself instead of using a stored one; check it against the sources.",
-    if (!ck$code_parses) "The R code does not parse as written.",
-    if (length(ck$unverified)) paste0(n(length(ck$unverified), "1 function not verified", "%d functions not verified"),
-                                       " against the store: ", paste(ck$unverified, collapse = ", ")),
-    if (ck$uncited) paste0(n(ck$uncited, "1 sentence has", "%d sentences have"), " no citation and no \"Not from the store\" label."))
+  c(if (length(ck$bad_cites)) "The answer points to a source that was not among those found.",
+    if (length(ck$bad_tokens)) "The answer refers to a formula that was not among those found.",
+    if (ck$display_math) "The answer typed a formula itself instead of using one from the library; check it against the sources.",
+    if (!ck$code_parses) "The R code does not run as written.",
+    if (length(ck$unverified)) paste0(n(length(ck$unverified), "1 function in the code is", "%d functions in the code are"),
+                                       " not in the library's examples or in R itself: ", paste(ck$unverified, collapse = ", ")))
 }
 
-source_lines <- function(src, open_input) tags$ol(class = "survai-sources small", style = "list-style: none; padding-left: 0;",
-  pmap(list(src$label, src$description, src$doc_id, src$title, src$pages), function(l, d, doc, ti, pg) {
-    course = str_match(doc, "_(SURV\\d+)/")[, 2]
-    meta = paste(discard(c(if (!is.na(course)) course, ti, pg), function(x) !nzchar(x %||% "")), collapse = ", ")
-    tags$li(HTML(open_link(open_input, l, paste0("<strong>", l, "</strong>"))), " ", d, tags$span(class = "text-muted", paste0(" (", meta, ")")))
-  }))
+# The cited sources, one line each: number, description, document. Collapsed until opened.
+source_lines <- function(cited, open_input)
+  tags$details(class = "small", style = "margin-top: 1em;",
+    tags$summary(sprintf("Sources (%d)", nrow(cited))),
+    tags$ol(class = "survai-sources", style = "list-style: none; padding-left: 0; margin-top: 0.5em;",
+      pmap(list(cited$label, cited$description, cited$title, cited$pages), function(l, d, ti, pg) {
+        doc = paste(discard(c(ti, pg), function(x) !nzchar(x %||% "")), collapse = ", ")
+        tags$li(HTML(open_link(open_input, l, paste0("<strong>", str_remove(l, "^S"), ".</strong> ", htmltools::htmlEscape(d)))),
+                tags$span(class = "text-muted", paste0(" (", doc, ")")))
+      })))
 
 ask_server <- function(id, state, con, asker = ask_async) {
   moduleServer(id, function(input, output, session) {
@@ -244,7 +299,7 @@ ask_server <- function(id, state, con, asker = ask_async) {
       last = new.env()
       last$t = Sys.time() - 10
       asker(question, MODEL_PROFILE, key, con, ctx, my_data, open_input = ns("open"),
-            on_stage = function(s) send("progress", c(plan = "Planning the search...", search = "Searching the store...",
+            on_stage = function(s) send("progress", c(plan = "Planning the search...", search = "Searching the library...",
                                                       answer = "Writing the answer...")[[s]]),
             on_text = function(txt) if (as.numeric(difftime(Sys.time(), last$t, units = "secs")) > STREAM_EVERY_S) {
               last$t = Sys.time()
@@ -289,14 +344,17 @@ ask_server <- function(id, state, con, asker = ask_async) {
       if (!is.null(r$error)) return(warn_box(tags$strong("The question could not be answered. "), r$error))
       notes = flag_notes(r$checks)
       tagList(HTML(r$html), if (length(notes)) tags$div(class = "survai-flags", map(notes, tags$div)),
-              tags$h5("Sources", style = "margin-top: 1em;"), source_lines(r$gathered$sources, ns("open")))
+              if (nrow(r$cited)) source_lines(r$cited, ns("open")))
     })
 
+    # a source in the list, or a citation in the answer, opens its passage in a window
     observeEvent(input$open, {
-      s = result()$gathered$sources
-      if (!is.null(s) && input$open %in% s$label) shown(s$passage_id[s$label == input$open][1])
+      s = result()$cited
+      if (is.null(s) || !input$open %in% s$label) return()
+      c = source_card(con, s$passage_id[s$label == input$open][1])
+      shown(input$open)
+      if (!is.null(c)) showModal(source_modal(c, str_remove(input$open, "^S")))
     })
-    card_server("card", con, shown)
   })
 }
 

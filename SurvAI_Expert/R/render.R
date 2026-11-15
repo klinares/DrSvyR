@@ -37,17 +37,18 @@ check_answer <- function(answer, gathered) {
        tokens = length(tokens), bad_tokens = bad_tokens, tokens_valid = !length(bad_tokens),
        display_math = str_detect(prose_only(answer), "\\$\\$|\\\\\\["),
        code_blocks = length(blocks), code_parses = all(parses), unverified = setdiff(fns, known),
-       uncited = sum(!u$cited), uncited_text = u$text[!u$cited], units = length(u$text), not_from_store = sum(u$nfs),
+       uncited = sum(!u$cited), uncited_text = u$text[!u$cited], units = length(u$text), not_from_library = sum(u$nfs),
        words = sum(str_count(str_remove_all(u$all, CITE_RX), "\\S+")))
 }
 
-NFS_RX <- "^(?i)[*_\\s]*not from the store:"
+# "Not from the library:" labels outside knowledge; "Not from the store:" is the older wording.
+NFS_RX <- "^(?i)[*_\\s]*not from the (library|store):"
 CHECK_RX <- "^(?i)[*_\\s]*check:"
 WHAT_TO_CHECK_RX <- "^(?i)[#*_\\s]*(what to check|check before|things to check|before (running|using|you run))\\b"
 HEADING_RX <- "^\\s*#|^\\s*\\*\\*[^*]+\\*\\*:?\\s*$"
 
 # Sentences and bullets of the prose, each with whether it carries a citation or the "Not from
-#   the store:" label (or begins "Check:", which flags sources that disagree). Headings, code,
+#   the library:" label (or begins "Check:", which flags sources that disagree). Headings, code,
 #   formula lines, tables and the lines under "What to check" (instructions to the user) are left
 #   out, and so are lead-ins (ending in ":") and fragments under four words; $all keeps every prose
 #   unit, for word counts.
@@ -128,9 +129,9 @@ render_md <- function(text, formulas = NULL, open_input = NULL, math = TRUE) {
   text = str_replace_all(text, FORMULA_TOKEN_RX, function(m) map_chr(m, function(one) {
     id = str_match(one, FORMULA_TOKEN_RX)[, 2]
     i = if (!is.null(formulas) && nrow(formulas)) match(id, formulas$fid) else NA
-    html = if (!math) "<em class='text-muted'>[formula from the store]</em>" else if (is.na(i)) NA_character_ else kx(formulas$latex[i], TRUE)
+    html = if (!math) "<em class='text-muted'>[formula from the library]</em>" else if (is.na(i)) NA_character_ else kx(formulas$latex[i], TRUE)
     if (math && !is.na(i) && !is.na(html) && !is.null(formulas$label)) html = paste0("<div class='survai-formula'>", html,
-      "<div class='small text-end'>", open_link(open_input, formulas$label[i], paste("source", formulas$label[i])), "</div></div>")
+      "<div class='small text-end'>", open_link(open_input, formulas$label[i], paste("source", str_remove(formulas$label[i], "^S"))), "</div></div>")
     paste0("\n\n", hold(if (is.na(html)) paste0("<span class='text-danger'>", htmltools::htmlEscape(one), "</span>") else html), "\n\n")
   }))
   if (math) text = reduce(names(MATH_RX), function(txt, kind) {
@@ -143,17 +144,38 @@ render_md <- function(text, formulas = NULL, open_input = NULL, math = TRUE) {
   }, .init = text)
   text = reduce2(ctok, code, function(a, tk, cd) sub(tk, cd, a, fixed = TRUE), .init = text)
   html = commonmark::markdown_html(text, extensions = TRUE)
-  if (!is.null(open_input)) html = str_replace_all(html, "S(\\d+)(?=[^<>]*\\])", function(s) open_link(open_input, s, s))
+  if (!is.null(open_input)) html = str_replace_all(html, "S(\\d+)(?=[^<>]*\\])", function(s) open_link(open_input, s, str_remove(s, "^S")))
   reduce2(names(env$m), unlist(env$m), function(a, tk, h) gsub(tk, h, gsub(paste0("<p>", tk, "</p>"), tk, a, fixed = TRUE), fixed = TRUE), .init = html)
+}
+
+# The sources renumbered in the order the answer first cites them, counting a formula token as a
+#   citation of the formula's passage: one number per passage, so a passage cited directly and
+#   through a formula keeps one number. Returns the answer with its citations rewritten (a label
+#   not among the sources becomes "?"), the sources relabelled (NA for those not cited) and the
+#   cited sources, one row per passage, in order.
+renumber_sources <- function(answer, gathered) {
+  s = gathered$sources
+  txt = as.character(answer)
+  hits = str_extract_all(txt, paste0(CITE_RX, "|", FORMULA_TOKEN_RX))[[1]]
+  refs = unlist(map(hits, function(h) if (str_detect(h, "^\\{\\{"))
+    s$label[s$kind == "formula" & s$ref == str_match(h, FORMULA_TOKEN_RX)[, 2]] else str_extract_all(h, "S\\d+")[[1]]))
+  order_p = unique(s$passage_id[match(refs[refs %in% s$label], s$label)])
+  new = set_names(ifelse(s$passage_id %in% order_p, paste0("S", match(s$passage_id, order_p)), NA_character_), s$label)
+  txt = str_replace_all(txt, CITE_RX, function(m) map_chr(m, function(one) {
+    l = unique(na.omit(new[str_extract_all(one, "S\\d+")[[1]]]))
+    if (length(l)) paste0("[", paste(l, collapse = ", "), "]") else "[?]"
+  }))
+  s$label = unname(new[s$label])
+  cited = s |> filter(!is.na(label)) |> distinct(label, .keep_all = TRUE) |> arrange(as.integer(str_remove(label, "^S")))
+  gathered$sources = s
+  list(answer = txt, gathered = gathered, cited = cited)
 }
 
 render_answer <- function(answer, gathered, open_input = NULL) {
   Fm = gathered$formulas
   if (!is.null(Fm) && nrow(Fm)) Fm = Fm |> left_join(gathered$sources |> filter(kind == "formula") |> select(ref, label), by = c(fid = "ref"))
-  cited = unique(unlist(str_extract_all(unlist(str_extract_all(as.character(answer), CITE_RX)), "S\\d+")))
   mk = mark_uncited(answer)
   html = paste0(render_md(mk$text, Fm, open_input),
-                if (mk$n) "<p class='small text-muted'><span class='survai-uncited'>Dotted text</span> is not tied to a source.</p>" else "")
-  list(html = html, uncited_marked = mk$n, cards = gathered$sources |> filter(label %in% cited) |>
-         select(label, kind, passage_id, markdown, title, heading, pages, description, text))
+                if (mk$n) "<p class='small text-muted'><span class='survai-uncited'>Dotted text</span> is not tied to a passage in the library.</p>" else "")
+  list(html = html, uncited_marked = mk$n)
 }

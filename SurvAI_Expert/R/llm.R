@@ -7,17 +7,19 @@ LLM_MAX_TOKENS <- c(plan = 4000L, answer = 16000L, judge = 6000L, report = 32000
 LLM_TIMEOUT_S <- 600
 INTENTS <- c("formula", "code", "advice", "concept")
 PLAN_LIMITS <- c(tse = 2L, stage = 2L, design = 2L, topic = 3L)
-PLAN_QUERIES <- 3L
+PLAN_QUERIES <- 3L        # per part
+PLAN_PARTS <- 4L          # a message with more distinct questions is answered for the first PLAN_PARTS
 SEARCH_DEPTH <- 30L      # passages per query before fusion
 RRF_K <- 60              # reciprocal rank fusion: score = sum of 1 / (RRF_K + rank)
 GATHER_RAW_WEIGHT <- 3        # the question itself, always fused in as one more query, with this weight (at least 1);
                               #   3 chosen on the 100 planned gold questions (hit@5 0.70 with 0, 0.81 with 3)
-GATHER_PASSAGES <- 10L
 GATHER_PER_DOC <- 3L
-GATHER_FORMULAS <- 5L          # found by the plan's formula query
-GATHER_FORMULA_PASSAGES <- 5L  # general formulas inside the top passages are added
-GATHER_FORMULAS_MAX <- 6L      # formulas kept, one per group
-GATHER_CODE <- 4L
+# What gather() keeps, for a message of one part and per part of a message of several.
+GATHER_PASSAGES <- c(one = 10L, part = 6L)
+GATHER_FORMULAS <- c(one = 5L, part = 3L)            # found by the formula query
+GATHER_FORMULA_PASSAGES <- c(one = 5L, part = 3L)    # general formulas inside the top passages are added
+GATHER_FORMULAS_MAX <- c(one = 6L, part = 3L)        # formulas kept, one per group
+GATHER_CODE <- c(one = 4L, part = 2L)
 SOURCE_TEXT_CHARS <- 3000L
 
 .store <- new.env(parent = emptyenv())
@@ -91,19 +93,34 @@ plan_schema <- function(v) {
   f = names(PLAN_LIMITS)
   tags = list(type = "object", additionalProperties = FALSE, required = as.list(f),
               properties = set_names(map(f, function(x) arr(enum(v$value[v$facet == x]))), f))
-  list(type = "object", additionalProperties = FALSE, required = list("intents", "queries", "tags", "formula_query", "code_query"),
-       properties = list(intents = arr(enum(INTENTS)), queries = arr(list(type = "string")), tags = tags,
-                         formula_query = list(type = "string"), code_query = list(type = "string")))
+  part = list(type = "object", additionalProperties = FALSE, required = list("question", "queries", "formula_query", "code_query"),
+              properties = list(question = list(type = "string"), queries = arr(list(type = "string")),
+                                formula_query = list(type = "string"), code_query = list(type = "string")))
+  list(type = "object", additionalProperties = FALSE, required = list("intents", "tags", "parts", "more_than_four"),
+       properties = list(intents = arr(enum(INTENTS)), tags = tags, parts = arr(part), more_than_four = list(type = "boolean")))
 }
 
-# Fields checked in R: unknown intents and tag values are dropped (and listed in $dropped).
+# Fields checked in R: unknown intents and tag values are dropped (and listed in $dropped); at most
+#   PLAN_PARTS parts. A single part searches with the whole message as its question. $queries,
+#   $formula_query and $code_query join the parts', for reports.
 clean_plan <- function(p, v, question) {
   tags = imap(PLAN_LIMITS, function(lim, f) unique(as.character(unlist(p$tags[[f]]))))
   ok = imap(tags, function(x, f) head(x[x %in% v$value[v$facet == f]], PLAN_LIMITS[[f]]))
-  queries = head(discard(str_squish(as.character(unlist(p$queries))), function(q) !nzchar(q)), PLAN_QUERIES)
-  list(question = question, intents = intersect(as.character(unlist(p$intents)), INTENTS),
-       queries = if (length(queries)) queries else question, tags = ok,
-       formula_query = str_squish(as.character(p$formula_query %||% "")), code_query = str_squish(as.character(p$code_query %||% "")),
+  raw = if (is.data.frame(p$parts)) pmap(p$parts, list) else p$parts %||% list()
+  parts = map(raw, function(x) {
+    q = str_squish(as.character(x$question %||% ""))
+    qs = head(discard(str_squish(as.character(unlist(x$queries))), function(y) !nzchar(y)), PLAN_QUERIES)
+    list(question = q, queries = if (length(qs)) qs else q,
+         formula_query = str_squish(as.character(x$formula_query %||% "")), code_query = str_squish(as.character(x$code_query %||% "")))
+  }) |> discard(function(x) !any(nzchar(c(x$question, x$queries))))
+  more = isTRUE(p$more_than_four) || length(parts) > PLAN_PARTS
+  parts = head(parts, PLAN_PARTS)
+  if (!length(parts)) parts = list(list(question = question, queries = question, formula_query = "", code_query = ""))
+  if (length(parts) == 1L) parts[[1]]$question = question
+  first = function(x) { x = x[nzchar(x)]; if (length(x)) x[1] else "" }
+  list(question = question, intents = intersect(as.character(unlist(p$intents)), INTENTS), tags = ok, parts = parts,
+       more_than_four = more, queries = unique(unlist(map(parts, "queries"))),
+       formula_query = first(map_chr(parts, "formula_query")), code_query = first(map_chr(parts, "code_query")),
        dropped = unlist(imap(tags, function(x, f) if (length(setdiff(x, ok[[f]]))) paste0(f, ": ", setdiff(x, ok[[f]])))))
 }
 
@@ -126,21 +143,48 @@ plan_question <- function(question, profile = MODEL_PROFILE, key = Sys.getenv(KE
 
 # ---- gather -------------------------------------------------------------------------------------------------
 
-gather <- function(con, plan, raw_weight = GATHER_RAW_WEIGHT) {
-  # the plan's queries, and the question itself: its own words find the document it came from best
-  w = c(set_names(rep(1, length(plan$queries)), plan$queries), set_names(max(1, raw_weight), plan$question))   # always searched
-  w = w[w > 0 & !duplicated(names(w))]
-  runs = imap(w, function(wt, q) search_passages(con, q, tags = plan$tags, k = SEARCH_DEPTH) |> mutate(rank = row_number(), wt = wt))
-  P = bind_rows(runs) |> group_by(passage_id) |> summarise(rrf = sum(wt / (RRF_K + rank)), doc_id = first(doc_id), .groups = "drop") |>
+# The parts of a plan; a plan made without parts (an older plan, or a test's) is one part.
+plan_parts <- function(plan) plan$parts %||%
+  list(list(question = plan$question, queries = plan$queries, formula_query = plan$formula_query %||% "", code_query = plan$code_query %||% ""))
+
+# One part's passages: its queries and its own question (its words find the document it came from
+#   best, so it is always searched, with weight raw_weight), fused, at most GATHER_PER_DOC per document.
+part_passages <- function(con, part, tags, k, raw_weight) {
+  w = c(set_names(rep(1, length(part$queries)), part$queries), set_names(max(1, raw_weight), part$question))
+  w = w[nzchar(names(w)) & !duplicated(names(w))]
+  runs = imap(w, function(wt, q) search_passages(con, q, tags = tags, k = SEARCH_DEPTH) |> mutate(rank = row_number(), wt = wt))
+  bind_rows(runs) |> group_by(passage_id) |> summarise(rrf = sum(wt / (RRF_K + rank)), doc_id = first(doc_id), .groups = "drop") |>
     arrange(desc(rrf), passage_id) |> group_by(doc_id) |> filter(row_number() <= GATHER_PER_DOC) |> ungroup() |>
-    arrange(desc(rrf), passage_id) |> head(GATHER_PASSAGES)
-  q_or = function(x) if (nzchar(x)) x else paste(plan$queries, collapse = " ")
-  # formulas: those found by the formula query, then the general ones inside the top passages
-  Fm = bind_rows(if ("formula" %in% plan$intents) find_formulas(con, q_or(plan$formula_query), k = GATHER_FORMULAS),
-                 formulas_in_passages(con, head(P$passage_id, GATHER_FORMULA_PASSAGES)))
-  Fm = if (nrow(Fm)) Fm |> distinct(group_id, .keep_all = TRUE) |> head(GATHER_FORMULAS_MAX) |> mutate(fid = paste0("F", row_number())) else tibble()
-  Kc = if ("code" %in% plan$intents) find_code(con, q_or(plan$code_query), k = GATHER_CODE) else tibble()
-  if (nrow(Kc)) Kc = Kc |> mutate(cid = paste0("C", row_number()))
+    arrange(desc(rrf), passage_id) |> head(k)
+}
+
+# One part's formulas: those found by its formula query, then the general ones inside its top
+#   passages, one per group. With one part the formula query runs when the plan wants a formula
+#   (falling back on the queries); with several, for each part that has a formula query.
+part_formulas <- function(con, part, P, n, want) {
+  q = if (nzchar(part$formula_query)) part$formula_query else paste(part$queries, collapse = " ")
+  Fm = bind_rows(if (want) find_formulas(con, q, k = GATHER_FORMULAS[[n]]),
+                 formulas_in_passages(con, head(P$passage_id, GATHER_FORMULA_PASSAGES[[n]])))
+  if (nrow(Fm)) Fm |> distinct(group_id, .keep_all = TRUE) |> head(GATHER_FORMULAS_MAX[[n]]) else Fm
+}
+
+part_code <- function(con, part, n, want) {
+  q = if (nzchar(part$code_query)) part$code_query else paste(part$queries, collapse = " ")
+  if (want) find_code(con, q, k = GATHER_CODE[[n]]) else tibble()
+}
+
+# Each part is searched separately (GATHER_PASSAGES etc. per part), then duplicates are removed.
+gather <- function(con, plan, raw_weight = GATHER_RAW_WEIGHT) {
+  parts = plan_parts(plan)
+  n = if (length(parts) == 1L) "one" else "part"
+  one = n == "one"
+  Ps = map(parts, function(pt) part_passages(con, pt, plan$tags, GATHER_PASSAGES[[n]], raw_weight))
+  P = bind_rows(Ps) |> distinct(passage_id, .keep_all = TRUE)
+  Fm = bind_rows(map2(parts, Ps, function(pt, pp)
+    part_formulas(con, pt, pp, n, if (one) "formula" %in% plan$intents else nzchar(pt$formula_query))))
+  Fm = if (nrow(Fm)) Fm |> distinct(group_id, .keep_all = TRUE) |> mutate(fid = paste0("F", row_number())) else tibble()
+  Kc = bind_rows(map(parts, function(pt) part_code(con, pt, n, if (one) "code" %in% plan$intents else nzchar(pt$code_query))))
+  if (nrow(Kc)) Kc = Kc |> distinct(code_id, .keep_all = TRUE) |> mutate(cid = paste0("C", row_number()))
   col = function(d, x) if (x %in% names(d)) d[[x]] else character()
   src = bind_rows(tibble(kind = "passage", passage_id = P$passage_id, ref = P$passage_id),
                   tibble(kind = "formula", passage_id = col(Fm, "passage_id"), ref = col(Fm, "fid")),
@@ -184,7 +228,8 @@ context_text <- function(context) {
 
 # The person's own design variables (My data on the Ask page), for the R code; empty fields left out.
 DATA_FIELDS <- c(weight = "Weight variable", strata = "Strata variable", cluster = "Cluster (PSU) variable",
-                 fpc = "FPC variable", replicates = "Replicate weight variables", outcomes = "Outcome variables",
+                 fpc = "Population size (finite population correction) variable", replicates = "Replicate weight variables",
+                 outcomes = "Outcome variables",
                  design = "About the design")
 data_text <- function(my_data) {
   x = keep(my_data %||% list(), function(v) is.character(v) && nzchar(str_squish(v)))
@@ -193,10 +238,20 @@ data_text <- function(my_data) {
   paste0("\n\nThe person's data (use these names in any R code):\n", paste0("- ", DATA_FIELDS[names(x)], ": ", str_squish(unlist(x)), collapse = "\n"))
 }
 
+# A message of several parts: the parts to answer, each under its own heading.
+parts_text <- function(plan) {
+  parts = plan_parts(plan)
+  more = if (isTRUE(plan$more_than_four)) paste0("\nThe message holds more than ", PLAN_PARTS, " questions. Answer only these ",
+                                                 PLAN_PARTS, ", and end with one line asking the person to send the others separately.") else ""
+  if (length(parts) < 2L) return(more)
+  paste0("\n\nThe message asks ", length(parts), " separate questions. Answer each under its own short heading:\n",
+         paste0(seq_along(parts), ". ", map_chr(parts, "question"), collapse = "\n"), more)
+}
+
 answer_user <- function(question, gathered, context = NULL, my_data = NULL) {
   no_f = if (!nrow(gathered$formulas)) "\n\nNo formula ids were given with these sources: write no {{F:...}} tokens." else ""
   q = if (nzchar(context_text(context))) paste0(context_text(context), question) else paste0("Question:\n", question)
-  paste0(q, data_text(my_data), "\n\nSources:\n\n", sources_text(gathered), no_f)
+  paste0(q, parts_text(gathered$plan), data_text(my_data), "\n\nSources:\n\n", sources_text(gathered), no_f)
 }
 
 # stream = TRUE returns ellmer's stream generator (chunks of text) with the chat as attribute "chat".
@@ -219,12 +274,14 @@ ask <- function(question, profile = MODEL_PROFILE, key = Sys.getenv(KEY_ENV), co
   ask_result(question, plan, g, a, c(plan = as.numeric(difftime(t1, t0, units = "secs")), search = as.numeric(difftime(t2, t1, units = "secs"))))
 }
 
-# What ask() and the app's ask_async() return: the answer checked and rendered, timings and cost.
+# What ask() and the app's ask_async() return: the answer checked (against the sources as given),
+#   then its sources renumbered in citation order and rendered; $cited lists the cited sources.
 ask_result <- function(question, plan, g, a, sec, open_input = NULL) {
-  r = render_answer(a, g, open_input)
+  rn = renumber_sources(a, g)
+  r = render_answer(rn$answer, rn$gathered, open_input)
   use = compact(list(plan = attr(plan, "usage"), answer = attr(a, "usage")))
   list(question = question, plan = plan, gathered = g, answer = as.character(a), checks = check_answer(a, g),
-       html = r$html, cards = r$cards, sec = c(sec, answer = attr(a, "usage")$sec %||% NA_real_),
+       html = r$html, cited = rn$cited, sec = c(sec, answer = attr(a, "usage")$sec %||% NA_real_),
        usd = sum(map_dbl(use, "usd")), calls = length(use))
 }
 

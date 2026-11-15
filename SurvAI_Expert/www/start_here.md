@@ -38,9 +38,9 @@ data shaped it.
 
 ## What it draws on
 
-A library of graduate-level teaching material in four areas: applied
-sampling, survey estimation, measurement error, and data science with
-survey and found data.
+A library of teaching material on how surveys are designed, carried out
+and analyzed: several thousand passages, formulas and worked examples,
+each kept with the page it came from. The Methodology tab describes it.
 
 ## How it keeps answers accurate
 
@@ -48,7 +48,7 @@ survey and found data.
   from. Click a source to read the original passage; you can enlarge it.
 - Formulas are copied from the library exactly. They are never retyped.
 - If the library does not cover your question, it says so. Anything it adds
-  from outside the library is labelled "Not from the store", and text with a
+  from outside the library is labelled "Not from the library", and text with a
   dotted underline is not tied to a source.
 
 ## What it does not do

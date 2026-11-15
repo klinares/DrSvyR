@@ -275,7 +275,7 @@ main_answers <- function() {
            cites = ck$cites, cites_valid = ck$cites_valid, tokens = ck$tokens, tokens_valid = ck$tokens_valid,
            display_math = ck$display_math, code_blocks = ck$code_blocks, code_parses = ck$code_parses,
            unverified = paste(ck$unverified, collapse = ";"), n_unverified = length(ck$unverified),
-           uncited = ck$uncited, not_from_store = ck$not_from_store, words = ck$words, formulas_given = nrow(res$gathered$formulas),
+           uncited = ck$uncited, not_from_library = ck$not_from_library, words = ck$words, formulas_given = nrow(res$gathered$formulas),
            verdict = j$verdict, unsupported_claims = as.integer(j$unsupported_claims), wrongly_said_missing = as.logical(j$wrongly_said_missing),
            reason = j$reason, sec_plan = P[[i]]$sec_plan, sec_search = res$sec[["search"]], sec_answer = res$sec[["answer"]],
            usd_answer = res$usd - P[[i]]$usd, usd_judge = attr(j, "usage")$usd %||% NA_real_)

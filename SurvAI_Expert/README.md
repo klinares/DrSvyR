@@ -47,7 +47,7 @@ the app: `setwd("SurvAI_Expert"); source("app.R"); ask("your question")`, with t
 | `R/llm.R` | Plan, gather, answer, and the app's streaming versions of the calls. |
 | `R/render.R` | Checks an answer and renders markdown, maths (KaTeX, as MathML) and code. |
 | `R/report.R` | The report reader: text from PDF or Word, split when long. |
-| `R/ui.R` | The four tabs, the source card, the session key and call count. |
+| `R/ui.R` | The five tabs (Start here, Ask, Formulas, Report reader, Methodology), the source card and window, the session key and call count. Page text is in `www/start_here.md` and `www/methodology.md`. |
 | `www/reflexes/` | What the model is told: `plan.md`, `answer.md`, `report.md`. Edit these, not the code. |
 | `tests/smoke.R` | Loads the app and runs each tab's server with the model stubbed. |
 | `tests/eval.R` | Part 1: retrieval test (no model). `tests/eval.R answers`: part 2, the answer test with a judge. |

@@ -130,7 +130,8 @@ ui <- page_fluid(
     tabPanel(APP_TABS[1], start_ui("start")),
     tabPanel(APP_TABS[2], ask_ui("ask")),
     tabPanel(APP_TABS[3], formulas_ui("formulas")),
-    tabPanel(APP_TABS[4], report_ui("report"))))
+    tabPanel(APP_TABS[4], report_ui("report")),
+    tabPanel(APP_TABS[5], methodology_ui("methodology"))))
 
 
 # ---- 6. server --------------------------------------------------------------
@@ -140,10 +141,11 @@ server <- function(input, output, session) {
   con <- store_connect(STORE_PATH)
   session$onSessionEnded(function() dbDisconnect(con))
   state <- reactiveValues(key_version = 0L, calls = 0L)
-  start_server("start", state, con)
+  start_server("start", state)
   ask_server("ask", state, con)
   formulas_server("formulas", con)
   report_server("report", state)
+  methodology_server("methodology", con)
 }
 
 
