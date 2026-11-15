@@ -9,7 +9,7 @@ original: "05-Questionnaire-Design.md"
 pages: 
 sha256: "8fb10887a878e626b84e0c465a6b012c3f3b43ba38865a8107aa36d8c3ce0b9c"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/05-Questionnaire-Design.html -->

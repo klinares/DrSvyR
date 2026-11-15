@@ -9,7 +9,7 @@ original: "04-Margin-of-Error.md"
 pages: 
 sha256: "53a29474ce3f70102109e7cb14ddc5621a376a7d626c3efa5ec081a3e3a145c1"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/04-Margin-of-Error.html -->

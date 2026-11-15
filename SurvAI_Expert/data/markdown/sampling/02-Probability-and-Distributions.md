@@ -9,7 +9,7 @@ original: "02-Probability-and-Distributions.md"
 pages: 
 sha256: "67b2bbaad8897fc9b395a300bbde7cc26967a37fadd2fcee733104373c5ca3f0"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/02-Probability-and-Distributions.html -->

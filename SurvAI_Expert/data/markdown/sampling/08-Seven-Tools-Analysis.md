@@ -9,7 +9,7 @@ original: "08-Seven-Tools-Analysis.md"
 pages: 
 sha256: "ce0f3c089b63a08a990bbf994058cc6ce7c521817d23717d2aeac7886469b5ca"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/08-Seven-Tools-Analysis.html -->

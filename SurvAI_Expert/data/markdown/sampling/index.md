@@ -9,7 +9,7 @@ original: "index.md"
 pages: 
 sha256: "709339caf1ab17b5fc4cdbb7398402549dd3a2cd496060abc49811067a9f9602"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/index.html -->

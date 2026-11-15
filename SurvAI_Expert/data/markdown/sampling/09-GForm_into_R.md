@@ -9,7 +9,7 @@ original: "09-GForm_into_R.md"
 pages: 
 sha256: "0de7dd8c7f643251b27a07c05c316834a90dc05e2e2f50a457cbc407dcf0cf73"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/09-GForm_into_R.html -->

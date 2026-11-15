@@ -9,7 +9,7 @@ original: "03-Sampling-Methods.md"
 pages: 
 sha256: "dfe19aa38626e70ee5a0a28a689c742af61a0de6f25af068caf38d2d6865a44c"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/03-Sampling-Methods.html -->

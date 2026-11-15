@@ -9,7 +9,7 @@ original: "07-Data-Validation.md"
 pages: 
 sha256: "08b337f7508b5763c5a4693c1d551f7b7ccd6eb0563391f14a321f36c4bb7ecc"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/07-Data-Validation.html -->

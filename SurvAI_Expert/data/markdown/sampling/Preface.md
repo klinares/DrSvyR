@@ -9,7 +9,7 @@ original: "Preface.md"
 pages: 
 sha256: "85655dc102bafde2799f139d8bf50d2948fd9f049719e4378a3948d2160f866d"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/Preface.html -->

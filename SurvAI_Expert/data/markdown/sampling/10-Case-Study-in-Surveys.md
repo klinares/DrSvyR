@@ -9,7 +9,7 @@ original: "10-Case-Study-in-Surveys.md"
 pages: 
 sha256: "27b88033e51bf07a9863c44de0a393286558a99391696e8ea1b5354dd834f4ef"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/10-Case-Study-in-Surveys.html -->

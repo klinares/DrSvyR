@@ -9,7 +9,7 @@ original: "06-Digital-Data-Collection.md"
 pages: 
 sha256: "1f15c49393ee778ec2d2c1e62feddf164a76147b735659b7e5b508b4c1f0a839"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:46"
 ---
 
 <!-- source: https://bookdown.org/dsciencelabs/sampling_and_survey_techniques/06-Digital-Data-Collection.html -->
