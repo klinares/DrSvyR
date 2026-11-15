@@ -42,13 +42,20 @@ check_answer <- function(answer, gathered) {
 }
 
 NFS_RX <- "^(?i)[*_\\s]*not from the store:"
+CHECK_RX <- "^(?i)[*_\\s]*check:"
+WHAT_TO_CHECK_RX <- "^(?i)[#*_\\s]*(what to check|check before|things to check|before (running|using|you run))\\b"
+HEADING_RX <- "^\\s*#|^\\s*\\*\\*[^*]+\\*\\*:?\\s*$"
 
 # Sentences and bullets of the prose, each with whether it carries a citation or the "Not from
-#   the store:" label. Headings, code, formula lines and tables are left out, and so are lead-ins
-#   (ending in ":") and fragments under four words; $all keeps every prose unit, for word counts.
+#   the store:" label (or begins "Check:", which flags sources that disagree). Headings, code,
+#   formula lines, tables and the lines under "What to check" (instructions to the user) are left
+#   out, and so are lead-ins (ending in ":") and fragments under four words; $all keeps every prose
+#   unit, for word counts.
 prose_units <- function(answer) {
   l = str_split_1(str_remove_all(as.character(answer), "(?s)```.*?```"), "\n")
-  l = l[!str_detect(l, "^\\s*$|^\\s*#|^\\s*\\{\\{F:|^\\s*\\||^\\s*\\*\\*[^*]+\\*\\*:?\\s*$")]
+  in_check = accumulate(seq_along(l), function(on, i) if (str_detect(l[i], WHAT_TO_CHECK_RX)) TRUE
+                        else if (str_detect(l[i], HEADING_RX)) FALSE else on, .init = FALSE)[-1]
+  l = l[!in_check & !str_detect(l, paste0("^\\s*$|^\\s*\\{\\{F:|^\\s*\\||", HEADING_RX))]
   bullet = str_detect(l, "^\\s*([-*+]|\\d+[.)])\\s+")
   para = cumsum(bullet | lag(bullet, default = TRUE))
   blocks = map_chr(split(str_remove(l, "^\\s*([-*+]|\\d+[.)])\\s+"), para), paste, collapse = " ")
@@ -58,7 +65,19 @@ prose_units <- function(answer) {
   s = s[nzchar(s)]
   keep_s = !str_detect(s, ":\\s*$") & str_count(s, "\\S+") >= 4
   t = s[keep_s]
-  list(text = t, cited = str_detect(t, CITE_RX) | str_detect(t, NFS_RX), nfs = str_detect(t, NFS_RX), all = s)
+  list(text = t, cited = str_detect(t, CITE_RX) | str_detect(t, NFS_RX) | str_detect(t, CHECK_RX), nfs = str_detect(t, NFS_RX), all = s)
+}
+
+# The answer's uncited factual sentences wrapped in a dotted underline, before it is rendered.
+#   A sentence is marked where it stands on one line of the answer; one split across lines is not.
+mark_uncited <- function(answer) {
+  u = prose_units(answer)
+  bad = unique(u$text[!u$cited])
+  marked = reduce(bad, function(txt, s) {
+    if (!str_detect(txt, fixed(s))) return(txt)
+    sub(s, paste0("<span class=\"survai-uncited\">", s, "</span>"), txt, fixed = TRUE)
+  }, .init = as.character(answer))
+  list(text = marked, n = str_count(marked, fixed("survai-uncited")))
 }
 
 kx <- function(expr, display = FALSE)
@@ -132,6 +151,9 @@ render_answer <- function(answer, gathered, open_input = NULL) {
   Fm = gathered$formulas
   if (!is.null(Fm) && nrow(Fm)) Fm = Fm |> left_join(gathered$sources |> filter(kind == "formula") |> select(ref, label), by = c(fid = "ref"))
   cited = unique(unlist(str_extract_all(unlist(str_extract_all(as.character(answer), CITE_RX)), "S\\d+")))
-  list(html = render_md(answer, Fm, open_input), cards = gathered$sources |> filter(label %in% cited) |>
+  mk = mark_uncited(answer)
+  html = paste0(render_md(mk$text, Fm, open_input),
+                if (mk$n) "<p class='small text-muted'><span class='survai-uncited'>Dotted text</span> is not tied to a source.</p>" else "")
+  list(html = html, uncited_marked = mk$n, cards = gathered$sources |> filter(label %in% cited) |>
          select(label, kind, passage_id, markdown, title, heading, pages, description, text))
 }

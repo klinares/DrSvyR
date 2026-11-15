@@ -1,5 +1,19 @@
 # SurvAI_Expert evaluation, 2026-11-15
 
+## In short
+
+- The tool was tested on 103 questions written from the course materials: 100 were searched and 40 answered in full.
+- 38 of the 40 answers (95%) were judged correct; none was judged incorrect.
+- Every citation pointed to a real source, and every formula shown came from the store rather than being typed by the model.
+- For 87% of the questions, the document the question was written from was among the first 10 sources found.
+- The search figures vary by a few points from run to run, because the model plans each search afresh.
+
+## How to read this
+
+- **hit@5, hit@10**: the share of questions whose source document is among the first 5 (or 10) passages found.
+- **judge**: the same model, asked to grade each answer against the course passage the question came from: correct, partly correct or incorrect.
+- **unsupported claim**: a statement of fact in an answer that none of the sources given to it supports, as counted by the judge.
+
 Profile **home**, model `claude-sonnet-5-5`. Store receipt: identical to data/catalog/receipt.csv.
 
 Gold: 108 questions; 3 unmapped (R scripts not in the store) and 2 that are not questions were dropped, leaving 103. 100 were planned and 40 answered (stratified by type).

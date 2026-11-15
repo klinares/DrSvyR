@@ -25,8 +25,10 @@ the app: `setwd("SurvAI_Expert"); source("app.R"); ask("your question")`, with t
 2. Build the store, from inside `SurvAI_Expert/`: `Rscript --no-init-file build/03_store.R`.
    It prints the receipt check: "identical" means the store matches the one built at home
    (the textbook, kept out of the repository, will show as missing and its tables differ).
-3. Fill the `work` profile in `app.R` (api, base_url, id) and set `CALLS_PER_WINDOW <- 300`
-   and `APP_SOURCE_URL` to the internal copy of the repository. Set `SURVAI_PROFILE=work`.
+3. Fill the `work` profile in `app.R` (api, base_url, id), set `CALLS_PER_WINDOW <- 300`
+   (counted over `CALLS_WINDOW_HOURS`, 4), and set `APP_SOURCE_URL` to the internal copy of the
+   repository, branch included (for example `https://<host>/<repo>/blob/main/SurvAI_Expert/`).
+   Set `SURVAI_PROFILE=work`.
 4. Check it: `Rscript --no-init-file tests/smoke.R` (no key), then
    `Rscript --no-init-file tests/eval.R answers` (makes about 180 calls; reads the key from the
    variable named by `KEY_ENV` in `app.R`) and read `tests/eval_report.md`.
@@ -42,9 +44,10 @@ the app: `setwd("SurvAI_Expert"); source("app.R"); ask("your question")`, with t
 | `build/03_store.R` | Builds the DuckDB store from `data/markdown/` and `data/catalog/`; no model, no network. |
 | `app.R` | Settings, layout and server. |
 | `R/retrieve.R` | Keyword search (BM25 in SQL), formulas, code, source cards. |
-| `R/llm.R`, `R/llm_async.R` | Plan, gather, answer; the app's streaming versions. |
+| `R/llm.R` | Plan, gather, answer, and the app's streaming versions of the calls. |
 | `R/render.R` | Checks an answer and renders markdown, maths (KaTeX, as MathML) and code. |
-| `R/ui*.R`, `R/session.R`, `R/report.R` | The four tabs, the session key and call count, the report reader. |
+| `R/report.R` | The report reader: text from PDF or Word, split when long. |
+| `R/ui.R` | The four tabs, the source card, the session key and call count. |
 | `www/reflexes/` | What the model is told: `plan.md`, `answer.md`, `report.md`. Edit these, not the code. |
 | `tests/smoke.R` | Loads the app and runs each tab's server with the model stubbed. |
-| `tests/eval.R` | Retrieval test (no model); `tests/eval.R answers` runs the answer test with a judge. |
+| `tests/eval.R` | Part 1: retrieval test (no model). `tests/eval.R answers`: part 2, the answer test with a judge. |

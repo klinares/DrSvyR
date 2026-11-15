@@ -1,5 +1,6 @@
-# ui.R: what the tabs share (boxes, the office logo, the source card) and the Start here tab.
-#   Function definitions and constants only.
+# ui.R: the app's pages. What the tabs share (boxes, the office logo, the source card), the session
+#   key and call count, and the four tabs: Start here, Ask, Formulas, Report reader. Function
+#   definitions and constants only.
 
 APP_TABS <- c("Start here", "Ask", "Formulas", "Report reader")
 
@@ -9,7 +10,8 @@ APP_CSS <- paste(
   ".tok-com { color: #6a737d; font-style: italic; } .tok-str { color: #22863a; } .tok-fn { color: #005cc5; }",
   ".tok-kw { color: #d73a49; font-weight: 600; } .survai-formula { margin: 0.6em 0; overflow-x: auto; }",
   ".survai-sources li { margin-bottom: 2px; } .survai-live { white-space: normal; opacity: 0.85; }",
-  ".survai-flags { font-size: 90%; color: var(--bs-warning-text-emphasis, #8a6d3b); }")
+  ".survai-flags { font-size: 90%; color: var(--bs-warning-text-emphasis, #8a6d3b); }",
+  ".survai-uncited { text-decoration: underline dotted; text-decoration-color: var(--bs-secondary-color); text-underline-offset: 3px; }")
 
 # The stream and the progress note are written straight into the page while a question runs.
 APP_JS <- paste(
@@ -71,18 +73,20 @@ start_server <- function(id, state, con) {
     output$store = renderTable(store_counts(con), digits = 0)
     output$calls = renderText({
       state$calls
-      paste0("Each question uses 2 model calls (a plan and an answer). Calls made this session: ", calls_made(session$token),
-             if (!is.na(CALLS_PER_WINDOW)) sprintf(" (limit %d per %d minutes).", CALLS_PER_WINDOW, CALL_WINDOW_MINUTES) else ".")
+      paste0("Each question uses 2 model calls (a plan and an answer). ",
+             sprintf("This session has used %d calls in the last %s hours.", calls_in_window(session$token), CALLS_WINDOW_HOURS),
+             if (!is.na(CALLS_PER_WINDOW)) sprintf(" The limit of %d is per person, so your other sessions count too.", CALLS_PER_WINDOW))
     })
   })
 }
 
 # ---- the source card ------------------------------------------------------------------------------------------
 
-# Where a markdown file opens: APP_SOURCE_URL with {path} and {line} filled in.
-source_url <- function(markdown, line) {
-  enc = paste(map_chr(str_split_1(markdown, "/"), function(s) utils::URLencode(s, reserved = TRUE)), collapse = "/")
-  str_replace_all(APP_SOURCE_URL, c("\\{path\\}" = enc, "\\{line\\}" = as.character(line %||% 1L)))
+# Where a markdown file opens: APP_SOURCE_URL followed by its path under SurvAI_Expert/; NULL for a
+#   source whose files are not in the repository (SOURCES_NOT_IN_REPO).
+source_url <- function(markdown) {
+  if (str_match(markdown, "^data/markdown/([^/]+)/")[, 2] %in% SOURCES_NOT_IN_REPO) return(NULL)
+  paste0(APP_SOURCE_URL, paste(map_chr(str_split_1(markdown, "/"), function(s) utils::URLencode(s, reserved = TRUE)), collapse = "/"))
 }
 
 card_ui <- function(id)
@@ -101,7 +105,314 @@ card_server <- function(id, con, passage_id, empty = "Click a source to read the
       tagList(if (nzchar(c$heading_path)) tags$p(tags$strong(c$heading_path)), tags$p(tags$em(c$description)),
               HTML(render_md(c$text)), tags$hr(),
               tags$p(class = "small", "Text file: ", tags$code(c$markdown), " ",
-                     tags$a("Open the file", href = source_url(c$markdown, c$line_from), target = "_blank", rel = "noopener")))
+                     if (is.null(source_url(c$markdown))) tags$em("Text file not in the repository")
+                     else tags$a("Open the file", href = source_url(c$markdown), target = "_blank", rel = "noopener")))
+    })
+  })
+}
+
+
+# ==== the session key and call count ====
+# The key and the call count of each Shiny session. The key is pasted on Start here and held here
+#   for the session only: never on disk, in a log, or in the environment. Calls are counted over the
+#   last CALLS_WINDOW_HOURS (app.R).
+
+.sessions <- new.env(parent = emptyenv())
+.sessions$keys <- list()
+.sessions$calls <- list()
+
+session_token <- function(session = shiny::getDefaultReactiveDomain()) if (is.null(session)) "console" else session$token
+
+session_key <- function(token = session_token()) {
+  k = .sessions$keys[[token]]
+  if (is.null(k) || !nzchar(k)) NULL else k
+}
+set_session_key <- function(key, token = session_token()) .sessions$keys[[token]] <- key
+forget_session <- function(token) { .sessions$keys[[token]] <- NULL; .sessions$calls[[token]] <- NULL }
+
+# Calls are recorded with their time; the count shown is for the whole session.
+add_calls <- function(n, token = session_token()) .sessions$calls[[token]] <- c(.sessions$calls[[token]], rep(Sys.time(), n))
+calls_made <- function(token = session_token()) length(.sessions$calls[[token]])
+calls_in_window <- function(token = session_token())
+  sum(.sessions$calls[[token]] > Sys.time() - CALLS_WINDOW_HOURS * 3600)
+
+# NULL when n more calls are allowed, else the message to show.
+call_limit_note <- function(n, token = session_token(), limit = CALLS_PER_WINDOW) {
+  if (is.na(limit) || calls_in_window(token) + n <= limit) return(NULL)
+  sprintf("This session has used %d calls in the last %s hours, and the limit is %d per person. Wait a while and try again.",
+          calls_in_window(token), CALLS_WINDOW_HOURS, limit)
+}
+
+KEY_INSTRUCTIONS <- c(
+  "Ask the person who manages the AI service for your office for a key.",
+  "Use a key issued to you, not one shared by a team, so that use can be traced to the person who made it.",
+  "If a request is refused for quota or cost, stop and ask the person who issued the key.")
+
+mod_key_ui <- function(id) {
+  ns = NS(id)
+  tagList(
+    tags$h4("Your API key"), uiOutput(ns("status")),
+    passwordInput(ns("key"), NULL, width = "100%", placeholder = "Paste your key here"),
+    actionButton(ns("save"), "Use this key", class = "btn-primary"), actionButton(ns("clear"), "Forget it"),
+    advice_box(tags$p(tags$strong("Where to get one")), map(KEY_INSTRUCTIONS, tags$p),
+               tags$p(tags$em("The key is kept for this session only. It is not saved anywhere, and closing the tab discards it."))))
+}
+
+mod_key_server <- function(id, state) {
+  moduleServer(id, function(input, output, session) {
+    token = session$token
+    changed = function(note) {
+      updateTextInput(session, "key", value = "")
+      state$key_version = state$key_version + 1L
+      showNotification(note, type = "message")
+    }
+    observeEvent(input$save, {
+      k = trimws(input$key %||% "")
+      if (!nzchar(k)) return(showNotification("Nothing pasted.", type = "warning"))
+      set_session_key(k, token)
+      changed("Key accepted for this session.")
+    })
+    observeEvent(input$clear, { .sessions$keys[[token]] <- NULL; changed("Key forgotten.") })
+    session$onSessionEnded(function() forget_session(token))
+    output$status = renderUI({
+      state$key_version
+      if (!is.null(session_key(token))) tags$p(class = "text-success", "A key you supplied is in use for this session.")
+      else warn_box("No key has been pasted. Questions and the report reader need one; the Formulas page does not.")
+    })
+  })
+}
+
+
+# ==== Ask ====
+# A question runs as an ExtendedTask (plan, search, answer); the answer streams into the page and
+#   is replaced, when complete, by the rendered answer with formulas from the store.
+
+STREAM_EVERY_S <- 0.3   # how often the streaming answer is redrawn
+
+ask_ui <- function(id) {
+  ns = NS(id)
+  my_data = bslib::accordion(open = FALSE, bslib::accordion_panel(
+    "My data (optional)",
+    tags$p(class = "small text-muted", "Variable names from your data file, so the R code uses them."),
+    bslib::layout_columns(col_widths = c(4, 4, 4),
+      textInput(ns("weight"), "Weight"), textInput(ns("strata"), "Strata"), textInput(ns("cluster"), "Cluster (PSU)"),
+      textInput(ns("fpc"), "FPC"), textInput(ns("replicates"), "Replicate weights"), textInput(ns("outcomes"), "Outcome variables")),
+    textInput(ns("design"), "About the design", width = "100%",
+              placeholder = "e.g. two-stage sample of schools then students, 40 strata")))
+  bslib::layout_columns(col_widths = c(7, 5),
+    tagList(
+      textAreaInput(ns("question"), "Your question", width = "100%", rows = 3),
+      my_data,
+      tags$div(style = "margin: 8px 0;", bslib::input_task_button(ns("ask"), "Ask", label_busy = "Working..."),
+               actionButton(ns("new_topic"), "New topic"), textOutput(ns("topic"), inline = TRUE)),
+      tags$div(id = ns("progress"), class = "text-muted small"),
+      tags$div(id = ns("live"), class = "survai-live"),
+      uiOutput(ns("answer"))),
+    card_ui(ns("card")))
+}
+
+# Plain notes for whatever check_answer() flagged.
+flag_notes <- function(ck) {
+  n = function(k, one, many) if (k == 1) one else sprintf(many, k)
+  c(if (length(ck$bad_cites)) paste("Cites a source that was not given:", paste(ck$bad_cites, collapse = ", ")),
+    if (length(ck$bad_tokens)) paste("Formula token not among the formulas given:", paste(ck$bad_tokens, collapse = ", ")),
+    if (ck$display_math) "The answer typed a display formula itself instead of using a stored one; check it against the sources.",
+    if (!ck$code_parses) "The R code does not parse as written.",
+    if (length(ck$unverified)) paste0(n(length(ck$unverified), "1 function not verified", "%d functions not verified"),
+                                       " against the store: ", paste(ck$unverified, collapse = ", ")),
+    if (ck$uncited) paste0(n(ck$uncited, "1 sentence has", "%d sentences have"), " no citation and no \"Not from the store\" label."))
+}
+
+source_lines <- function(src, open_input) tags$ol(class = "survai-sources small", style = "list-style: none; padding-left: 0;",
+  pmap(list(src$label, src$description, src$doc_id, src$title, src$pages), function(l, d, doc, ti, pg) {
+    course = str_match(doc, "_(SURV\\d+)/")[, 2]
+    meta = paste(discard(c(if (!is.na(course)) course, ti, pg), function(x) !nzchar(x %||% "")), collapse = ", ")
+    tags$li(HTML(open_link(open_input, l, paste0("<strong>", l, "</strong>"))), " ", d, tags$span(class = "text-muted", paste0(" (", meta, ")")))
+  }))
+
+ask_server <- function(id, state, con, asker = ask_async) {
+  moduleServer(id, function(input, output, session) {
+    ns = session$ns
+    context = reactiveVal(NULL)
+    result = reactiveVal(NULL)
+    shown = reactiveVal(NULL)
+    send = function(el, html) session$sendCustomMessage("survai-html", list(id = ns(el), html = as.character(html)))
+    task = ExtendedTask$new(function(question, key, ctx, my_data) {
+      last = new.env()
+      last$t = Sys.time() - 10
+      asker(question, MODEL_PROFILE, key, con, ctx, my_data, open_input = ns("open"),
+            on_stage = function(s) send("progress", c(plan = "Planning the search...", search = "Searching the store...",
+                                                      answer = "Writing the answer...")[[s]]),
+            on_text = function(txt) if (as.numeric(difftime(Sys.time(), last$t, units = "secs")) > STREAM_EVERY_S) {
+              last$t = Sys.time()
+              send("live", render_md(txt, math = FALSE))
+            })
+    }) |> bslib::bind_task_button("ask")
+
+    observeEvent(input$ask, {
+      q = str_squish(input$question %||% "")
+      key = session_key(session$token)
+      if (!nzchar(q)) return(showNotification("Type a question first.", type = "warning"))
+      if (is.null(key)) return(showNotification("Paste your API key on Start here first.", type = "warning"))
+      note = call_limit_note(2L, session$token)
+      if (!is.null(note)) return(showNotification(note, type = "error", duration = NULL))
+      add_calls(2L, session$token)
+      state$calls = state$calls + 1L
+      result(NULL)
+      send("live", "")
+      task$invoke(q, key, context(), map(set_names(names(DATA_FIELDS)), function(f) input[[f]] %||% ""))
+    })
+
+    observeEvent(task$status(), {
+      if (task$status() == "success") {
+        r = task$result()
+        result(r)
+        context(list(question = r$question, answer = r$answer))
+        send("live", "")
+        send("progress", sprintf("Planned in %.0f s, searched in %.1f s, answered in %.0f s.", r$sec[["plan"]], r$sec[["search"]], r$sec[["answer"]]))
+      } else if (task$status() == "error") {
+        send("live", "")
+        send("progress", "")
+        result(list(error = conditionMessage(tryCatch(task$result(), error = function(e) e))))
+      }
+    })
+
+    observeEvent(input$new_topic, { context(NULL); result(NULL); shown(NULL); send("progress", ""); updateTextAreaInput(session, "question", value = "") })
+    output$topic = renderText(if (is.null(context())) "" else "Follow-up: the last question and answer are kept.")
+
+    output$answer = renderUI({
+      r = result()
+      if (is.null(r)) return(NULL)
+      if (!is.null(r$error)) return(warn_box(tags$strong("The question could not be answered. "), r$error))
+      notes = flag_notes(r$checks)
+      tagList(HTML(r$html), if (length(notes)) tags$div(class = "survai-flags", map(notes, tags$div)),
+              tags$h5("Sources", style = "margin-top: 1em;"), source_lines(r$gathered$sources, ns("open")))
+    })
+
+    observeEvent(input$open, {
+      s = result()$gathered$sources
+      if (!is.null(s) && input$open %in% s$label) shown(s$passage_id[s$label == input$open][1])
+    })
+    card_server("card", con, shown)
+  })
+}
+
+
+# ==== Formulas ====
+# Searches the stored formulas; no model calls.
+
+FORMULA_RESULTS <- 40L
+
+formulas_ui <- function(id) {
+  ns = NS(id)
+  v = read_vocab()
+  courses = character()   # filled in by the server, from the store
+  pick = function(name, label, choices) selectizeInput(ns(name), label, choices = choices, multiple = TRUE, width = "100%")
+  bslib::layout_columns(col_widths = c(7, 5),
+    tagList(
+      textInput(ns("query"), "Search formulas", width = "100%", placeholder = "e.g. variance of the ratio estimator"),
+      bslib::layout_columns(col_widths = c(3, 3, 3, 3),
+        pick("role", "Role", v$value[v$facet == "role"]), pick("design", "Design", v$value[v$facet == "design"]),
+        pick("topic", "Topic", v$value[v$facet == "topic"]), pick("course", "Course", courses)),
+      checkboxInput(ns("general"), "General formulas only", value = TRUE),
+      uiOutput(ns("results")), uiOutput(ns("detail"))),
+    card_ui(ns("card")))
+}
+
+symbol_table <- function(symbols) {
+  s = str_trim(unlist(str_split(symbols %||% "", ";")))
+  s = s[nzchar(s)]
+  if (!length(s)) return(tags$p(class = "text-muted small", "No symbols are defined in the text around it."))
+  tags$table(class = "table table-sm small", tags$tbody(map(s, function(x) tags$tr(
+    tags$td(HTML(kx(str_trim(str_extract(x, "^[^=]+")), FALSE) %|NA% htmltools::htmlEscape(str_extract(x, "^[^=]+")))),
+    tags$td(str_trim(str_remove(x, "^[^=]+=\\s*")))))))
+}
+
+`%|NA%` <- function(a, b) if (is.na(a)) b else a
+
+formulas_server <- function(id, con) {
+  moduleServer(id, function(input, output, session) {
+    ns = session$ns
+    updateSelectizeInput(session, "course", choices = dbGetQuery(con, "SELECT DISTINCT course FROM docs WHERE course <> '' ORDER BY course")$course)
+    found = reactive(find_formulas(con, input$query %||% "", role = input$role, design = input$design,
+                                   general = if (isTRUE(input$general)) TRUE else NULL, k = FORMULA_RESULTS,
+                                   topic = input$topic, course = input$course)) |> debounce(400)
+    picked = reactiveVal(NULL)
+    shown = reactiveVal(NULL)
+    output$results = renderUI({
+      f = found()
+      if (!nrow(f)) return(tags$p(class = "text-muted", "No formula matches."))
+      tags$div(style = "max-height: 320px; overflow-y: auto;", tags$ol(class = "small", map(seq_len(nrow(f)), function(i)
+        tags$li(HTML(open_link(ns("pick"), f$group_id[i], htmltools::htmlEscape(f$name[i]))),
+                tags$span(class = "text-muted", paste0(" (", f$course[i], ", ", f$title[i], ")"))))))
+    })
+    observeEvent(input$pick, picked(input$pick))
+    output$detail = renderUI({
+      g = picked()
+      f = found()
+      if (is.null(g) || !g %in% f$group_id) return(NULL)
+      r = f[f$group_id == g, ][1, ]
+      ids = unlist(r$place_ids)
+      places = str_split_1(r$places, "; ")
+      tagList(tags$hr(), tags$h5(r$name),
+              tags$div(class = "survai-formula", HTML(kx(r$latex, TRUE) %|NA% htmltools::htmlEscape(r$latex))),
+              tags$p(class = "small", tags$strong("Role: "), r$role, "; ", tags$strong("design: "), r$design),
+              symbol_table(r$symbols),
+              if (nzchar(r$condition %||% "")) tags$p(class = "small", tags$strong("Condition: "), r$condition),
+              tags$p(class = "small", tags$strong(sprintf("Where it occurs (%d):", length(ids)))),
+              tags$ul(class = "small", map2(ids, places, function(p, lab) tags$li(HTML(open_link(ns("open"), p, htmltools::htmlEscape(lab)))))))
+    })
+    observeEvent(input$open, shown(input$open))
+    card_server("card", con, shown, empty = "Pick a formula, then a place where it occurs, to read the passage here.")
+  })
+}
+
+
+# ==== Report reader ====
+
+report_ui <- function(id) {
+  ns = NS(id)
+  tagList(
+    tags$p("Upload a survey's technical or methodology report (PDF or Word). It is read by the model, not searched in the store, ",
+           "and summarized in a fixed checklist: the design, the weights, variance estimation, and a design call for R, with page numbers."),
+    fileInput(ns("file"), NULL, accept = c(".pdf", ".docx"), buttonLabel = "Choose a report", width = "100%"),
+    uiOutput(ns("about")),
+    bslib::input_task_button(ns("read"), "Read the report", label_busy = "Reading..."),
+    tags$div(style = "margin-top: 1em;", uiOutput(ns("summary"))))
+}
+
+report_server <- function(id, state, reader = read_report_async) {
+  moduleServer(id, function(input, output, session) {
+    rep = reactive({ req(input$file); report_text(input$file$datapath, input$file$name) })
+    output$about = renderUI({
+      r = rep()
+      if (!is.null(r$note)) return(warn_box(r$note))
+      chars = sum(nchar(r$pages))
+      calls = report_calls(report_parts(r$pages))
+      tags$p(sprintf("%s: %s, %s characters. Reading it will use %d model call%s%s.", input$file$name,
+                     if (r$paged) paste(length(r$pages), "pages") else "a Word file (no page numbers)",
+                     format(chars, big.mark = ","), calls, if (calls == 1) "" else "s",
+                     if (calls > 1) sprintf(" (it is split into %d parts, then combined)", calls - 1L) else ""))
+    })
+    task = ExtendedTask$new(function(r, key) reader(r, MODEL_PROFILE, key)) |> bslib::bind_task_button("read")
+    observeEvent(input$read, {
+      r = rep()
+      key = session_key(session$token)
+      if (!is.null(r$note)) return(showNotification(r$note, type = "warning"))
+      if (is.null(key)) return(showNotification("Paste your API key on Start here first.", type = "warning"))
+      n = report_calls(report_parts(r$pages))
+      note = call_limit_note(n, session$token)
+      if (!is.null(note)) return(showNotification(note, type = "error", duration = NULL))
+      add_calls(n, session$token)
+      state$calls = state$calls + 1L
+      task$invoke(r, key)
+    })
+    output$summary = renderUI({
+      if (task$status() == "error") return(warn_box(tags$strong("The report could not be read. "),
+                                                    conditionMessage(tryCatch(task$result(), error = function(e) e))))
+      if (task$status() != "success") return(NULL)
+      x = task$result()
+      tagList(HTML(render_md(x$text)), tags$p(class = "small text-muted", sprintf("%d model call%s.", x$calls, if (x$calls == 1) "" else "s")))
     })
   })
 }

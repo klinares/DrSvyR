@@ -1,5 +1,4 @@
-build/
-tests/
-data/build/
+build
+tests
 README.md
 .rscignore

@@ -34,12 +34,15 @@ MODEL_PROFILE <- local({
   if (nzchar(p)) p else "home"
 })
 
-# Where a source's markdown file opens: {path} is its path under SurvAI_Expert/, {line} its first
-#   line. At work, point it at the internal copy of the repository.
-APP_SOURCE_URL <- "https://github.com/klinares/drsvyr/blob/main/SurvAI_Expert/{path}?plain=1#L{line}"
+# Where a source's markdown file opens: the full base, branch included, to which its path under
+#   SurvAI_Expert/ is added. At work, point it at the internal copy of the repository. Sources whose
+#   files are not in the repository show the passage with no link.
+APP_SOURCE_URL <- "https://github.com/klinares/drsvyr/blob/main/SurvAI_Expert/"
+SOURCES_NOT_IN_REPO <- "practools"
 
-# Model calls one session may make in CALL_WINDOW_MINUTES (R/session.R); NA for no limit.
+# Model calls one session may make in the last CALLS_WINDOW_HOURS; NA for no limit.
 CALLS_PER_WINDOW <- NA_integer_   # at work: 300
+CALLS_WINDOW_HOURS <- 4
 
 STORE_PATH <- "data/store/survai.duckdb"
 VOCAB_CSV <- "data/catalog/vocabulary.csv"
@@ -98,7 +101,8 @@ walk(sort(list.files("R", pattern = "[.]R$", full.names = TRUE)), function(f)
 # runApp() evaluates this file in an environment of its own, so the settings R/ reads are put in
 #   the global environment, where R/ lives.
 list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION, MODEL_PROFILES = MODEL_PROFILES, MODEL_PROFILE = MODEL_PROFILE,
-              APP_SOURCE_URL = APP_SOURCE_URL, CALLS_PER_WINDOW = CALLS_PER_WINDOW, STORE_PATH = STORE_PATH,
+              APP_SOURCE_URL = APP_SOURCE_URL, SOURCES_NOT_IN_REPO = SOURCES_NOT_IN_REPO, CALLS_PER_WINDOW = CALLS_PER_WINDOW,
+              CALLS_WINDOW_HOURS = CALLS_WINDOW_HOURS, STORE_PATH = STORE_PATH,
               VOCAB_CSV = VOCAB_CSV, REFLEX_DIR = REFLEX_DIR, KEY_ENV = KEY_ENV), envir = globalenv())
 
 
