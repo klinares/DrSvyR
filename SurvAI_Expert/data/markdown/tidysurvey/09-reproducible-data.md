@@ -1,0 +1,166 @@
+---
+id: "tidysurvey/09-reproducible-data"
+source: "tidysurvey"
+course: ""
+course_title: ""
+doc_type: "book"
+title: "Reproducible research"
+original: "09-reproducible-data.Rmd"
+pages: 
+sha256: "d6fe273a5035183ccd618d78abde9671f78ae30cb2d9a34fdf2b52d301400f53"
+converted_by: "01_convert.R (no model)"
+converted_at: "2026-11-14T21:01:32"
+---
+
+# Reproducible research {#c09-reprex-data}
+
+```r
+#| label: reprex-styler
+#| include: false
+#| message: false
+knitr::opts_chunk$set(tidy = 'styler')
+```
+
+## Introduction
+
+Reproducing results is an important aspect of any research. First, reproducibility serves as a form of quality assurance. If we pass an analysis project to another person, they should be able to run the entire project from start to finish and obtain the same results. They can critically assess the methodology and code while detecting potential errors. Another goal of reproducibility is enabling the verification of our analysis. When someone else is able to check our results, it ensures the integrity of the analyses by determining that the conclusions are not dependent on a particular person running the code or workflow on a particular day or in a particular environment.
+
+Not only is reproducibility a key component in ethical and accurate research, but it is also a requirement for many scientific journals. For example, the *Journal of Survey Statistics and Methodology* (JSSAM) and *Public Opinion Quarterly* (POQ) require authors to make code, data, and methodology transparent and accessible to other researchers who wish to verify or build on existing work.
+
+Reproducible research requires that the key components of analysis are available, discoverable, documented, and shared with others. The four main components that we should consider are:
+
+  - Code: source code used for data cleaning, analysis, modeling, and reporting
+  - Data: raw data used in the workflow, or if data are sensitive or proprietary, as much data as possible that would allow others to run our workflow or provide details on how to access the data (e.g., access to a restricted use file (RUF))
+  - Environment: environment of the project, including the R version, packages, operating system, and other dependencies used in the analysis
+  - Methodology: survey and analysis methodology, including rationale behind sample, questionnaire and analysis decisions, interpretations, and assumptions
+
+In Chapter \@ref(c08-communicating-results), we briefly mention how each of these is important to include in the methodology report and when communicating the findings of a study. However, to be transparent and effective analysts, we need to ensure we not only discuss these through text but also provide files and additional information when requested. Often, when starting a project, we may be eager to jump into the data and make decisions as we go without full documentation. This can be challenging if we need to go back and make changes or understand even what we did a few months ago. It benefits other analysts and potentially our future selves to document everything from the start. The good news is that many tools, practices, and project management techniques make survey analysis projects easy to reproduce. For best results, we should decide which techniques and tools to use before starting a project (or very early on).
+
+This chapter covers some of our suggestions for tools and techniques we can use in projects. This list is not comprehensive but aims to provide a starting point for those looking to create a reproducible workflow.
+
+## Project-based workflows
+
+\index{R projects|(}
+We recommend a project-based workflow for analysis projects as described by @wickham2023r4ds. A project-based workflow maintains a "source of truth" for our analyses. It helps with file system discipline by putting everything related to a project in a designated folder. Since all associated files are in a single location, they are easy to find and organize. When we reopen the project, we can recreate the environment in which we originally ran the code to reproduce our results.
+
+The RStudio IDE has built-in support for projects. When we create a project in RStudio, it creates an `.Rproj` file that stores settings specific to that project. Once we have created a project, we can create folders that help us organize our workflow. For example, a project directory could look like this:
+
+```
+| anes_analysis/
+  | anes_analysis.Rproj
+  | README.md
+  | codebooks
+    | codebook2020.pdf
+    | codebook2016.pdf
+  | rawdata
+    | anes2020_raw.csv
+    | anes2016_raw.csv
+  | scripts
+    | data-prep.R
+  | data
+    | anes2020_clean.csv
+    | anes2016_clean.csv
+  | report
+    | anes_report.Rmd
+    | anes_report.html
+    | anes_report.pdf
+```
+
+\index{here package|(}
+In a project-based workflow, all paths are relative and, by default, relative to the folder the `.Rproj` file is located in. By using relative paths, others can open and run our files even if their directory configuration differs from ours (e.g., Mac and Windows users have different directory path structures). The {here} package enables easy file referencing, and we can start by using the `here::here()` function to build the path for loading or saving data [@R-here]. Below, we ask R to read the CSV file `anes_2020.csv` in the project directory's `data` folder: 
+
+```r
+#| label: reprex-project-file-example
+#| eval: false
+anes <- 
+  read_csv(here::here("data", "anes2020_clean.csv"))
+```
+
+The combination of projects and the {here} package keep all associated files organized. This workflow makes it more likely that our analyses can be reproduced by us or our colleagues.
+\index{here package|)} \index{R projects|)}
+
+## Functions and packages
+
+We may find that we are repeating ourselves in our script, and the chance of errors increases whenever we copy and paste our code. By creating a function, we can create a consistent set of commands that reduce the likelihood of mistakes. Functions also organize our code, improve the code readability, and allow others to execute the same commands. For example, in Chapter \@ref(c13-ncvs-vignette), we create a function to run sequences of `rename()`, `filter()`, `group_by()`, and summarize statements across different variables. Creating functions helps us avoid overlooking necessary steps.
+
+A package is made up of a collection of functions. If we find ourselves sharing functions with others to replicate the same series of commands in a separate project, creating a package can be a useful tool for sharing the code along with data and documentation.
+
+## Version control with Git
+
+\index{Version control|(} \index{Git| see {Version control }}
+Often, a survey analysis project produces a lot of code. Keeping track of the latest version can become challenging, as files evolve throughout a project. If a team of analysts is working on the same script, someone may use an outdated version, resulting in incorrect results or redundant work.
+
+Version control systems like Git can help alleviate these pains. Git is a system that tracks changes in files. We can use Git to follow code evaluation and manage asynchronous work. With Git, it is easy to see any changes made in a script, revert changes, and resolve differences between code versions (called conflicts).
+
+Services such as GitHub or GitLab provide hosting and sharing of files as well as version control with Git. For example, we can visit the [GitHub repository for this book](https://github.com/tidy-survey-r/tidy-survey-book) and see the files that build the book, when they were committed to the repository, and the history of modifications over time.
+
+In addition to code scripts, platforms like GitHub can store data and documentation. They provide a way to maintain a history of data modifications through versioning and timestamps. By saving the data and documentation alongside the code, it becomes easier for others to refer to and access everything they need in one place.
+
+Using version control in analysis projects makes collaboration and maintenance more manageable. To connect Git with R, we recommend referencing the book [Happy Git and GitHub for the useR](https://happygitwithr.com/) [@git-w-R].
+
+\index{Version control|)}
+
+## Package management with {renv}
+
+\index{renv package|(} \index{Package management|see {renv package}} 
+Ensuring reproducibility involves not only using version control of code but also managing the versions of packages. If two people run the same code but use different package versions, the results might differ because of changes to those packages. For example, this book currently uses a version of the {srvyr} package from GitHub and not from CRAN. This is because the version of {srvyr} on CRAN has some bugs (errors) that result in incorrect calculations. The version on GitHub has corrected these errors, so we have asked readers to install the GitHub version to obtain the same results.
+
+One way to handle different package versions is with the {renv} package. This package allows researchers to set the versions for each used package and manage package dependencies. Specifically, {renv} creates isolated, project-specific environments that record the packages and their versions used in the code. When initiated by a new user, {renv} checks whether the installed packages are consistent with the recorded version for the project. If not, it installs the appropriate versions so that others can replicate the project's environment to rerun the code and obtain consistent results [@R-renv].
+
+\index{renv package|)}
+
+## R environments with Docker
+
+\index{Environment management|(} \index{Docker|see {Environment management}}
+Just as different versions of packages can introduce discrepancies or compatibility issues, the version of R can also prevent reproducibility. Tools such as Docker can help with this potential issue by creating isolated environments that define the version of R being used, along with other dependencies and configurations. The entire environment is bundled in a container. The container, defined by a Dockerfile, can be shared so that anybody, regardless of their local setup, can run the R code in the same environment.
+\index{Environment management|)}
+
+## Workflow management with {targets}
+
+With complex studies involving multiple code files and dependencies, it is important to ensure each step is executed in the intended sequence. We can do this manually, e.g., by numbering files to indicate the order or providing detailed documentation on the order. Alternatively, we can automate the process so the code flows sequentially. Making sure that the code runs in the correct order helps ensure that the research is reproducible. Anyone should be able to pick up the set of scripts and get the same results by following the workflow.
+
+The {targets} package is an increasingly popular workflow manager that documents, automates, and executes complex data workflows with multiple steps and dependencies. With this package, we first define the order of execution for our code, and then it consistently executes the code in that order each time it is run. One beneficial feature of {targets} is that if code changes later in the workflow, only the affected code and its downstream targets (i.e., the subsequent code files) are re-executed when we change a script. The {targets} package also provides interactive progress monitoring and reporting, allowing us to track the status and progress of our analysis pipeline [@targetslandau]. 
+
+## Documentation with Quarto and R Markdown
+
+\index{R Markdown|(} \index{Quarto|(}
+Tools like Quarto and R Markdown aid in reproducibility by creating documents that weave together code, text, and results. We can present analysis results alongside the report's narrative, so there's no need to copy and paste code output into the final documentation. By eliminating manual steps, we can reduce the chances of errors in the final output.
+
+Quarto and R Markdown documents also allow users to re-execute the underlying code when needed. Another analyst can see the steps we took, follow the scripts, and recreate the report. We can include details about our work in one place thanks to the combination of text and code, making our work transparent and easier to verify [@R-quarto; @rmarkdown2020man].
+
+### Parameterization
+
+Another useful feature of Quarto and R Markdown is the ability to reduce repetitive code by parameterizing the files. Parameters can control various aspects of the analysis, such as dates, geography, or other analysis variables. We can define and modify these parameters to explore different scenarios or inputs. For example, suppose we start by creating a document that provides survey analysis results for North Carolina but then later decide we want to look at another state. In that case, we can define a `state` parameter and rerun the same analysis for a state like Washington without having to edit the code throughout the document.
+
+Parameters can be defined in the header or code chunks of our Quarto or R Markdown documents and easily modified and documented. By manually editing code throughout the script, we reduce errors that may occur and offer a flexible way for others to replicate the analysis and explore variations.
+
+\index{R Markdown|)} \index{Quarto|)}
+
+## Other tips for reproducibility
+
+### Random number seeds  
+
+Some tasks in survey analysis require randomness, such as imputation\index{Imputation}, model training, or creating random samples. By default, the random numbers generated by R change each time we rerun the code, making it difficult to reproduce the same results. By "setting the seed," we can control the randomness and ensure that the random numbers remain consistent whenever we rerun the code. Others can use the same seed value to reproduce our random numbers and achieve the same results.
+
+In R, we can use the `set.seed()` function to control the randomness in our code. We set a seed value by providing an integer in the function argument. The following code chunk sets a seed using `999`, then runs a random number function (`runif()`) to get five random numbers from a uniform distribution.
+
+```r
+#| label: reprex-set-seed
+set.seed(999)
+runif(5)
+```
+
+Since the seed is set to `999`, running `runif(5)` multiple times always produces the same output. The choice of the seed number is up to the analyst. For example, this could be the date (`20240102`) or time of day (`1056`) when the analysis was first conducted, a phone number (`8675309`), or the first few numbers that come to mind (`369`). As long as the seed is set for a given analysis, the actual number is up to the analyst to decide. It is important to note that `set.seed()` should be used before random number generation. Run it once per program, and the seed is applied to the entire script. We recommend setting the seed at the beginning of a script, where libraries are loaded.
+
+### Descriptive names and labels
+
+\index{American National Election Studies (ANES)|(}
+Using descriptive variable names or labeling data can also assist with reproducible research. For example, in the ANES data, the variable names in the raw data all start with `V20` and are a string of numbers. To make things easier to reproduce in this book, we opted to change the variable names to be more descriptive of what they contained (e.g., `Age`).\index{American National Election Studies (ANES)|)} This can also be done with the data values themselves. \index{Categorical data|(}\index{Factor|(}One way to accomplish this is by creating factors for categorical data, which can ensure that we know that a value of `1` really means `Female`, for example.\index{Factor|)} There are other ways of handling this, such as attaching labels to the data instead of recoding variables to be descriptive (see Chapter \@ref(c11-missing-data)). \index{Categorical data|)} As with random number seeds, the exact method is up to the analyst, but providing this information can help ensure our research is reproducible.
+
+## Additional resources
+
+We can promote accuracy and verification of results by making our analysis reproducible. There are various tools and guides available to help achieve reproducibility in analysis work, a few of which were described in this chapter. Here are additional resources to explore:
+
+* [R for Data Science chapter on project-based workflows](https://r4ds.hadley.nz/workflow-scripts.html#projects)
+* [Building reproducible analytical pipelines with R](https://raps-with-r.dev/)
+* [Posit Solutions Site page on reproducible environments](https://solutions.posit.co/envs-pkgs/environments/)
