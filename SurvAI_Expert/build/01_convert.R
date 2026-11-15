@@ -467,8 +467,8 @@ qmd_to_md <- function(path) {
   body = if (length(yaml)) lines[-seq_len(yaml_end)] else lines
   m = str_match(body, "^(\\s*)(`{3,})\\s*\\{\\s*[=.]?([A-Za-z0-9_+-]+)[^}]*\\}\\s*$")
   body = if_else(is.na(m[, 1]), body, paste0(m[, 2], m[, 3], tolower(m[, 4])))
-  title = str_match(yaml, "^title:\\s*(.+?)\\s*$")[, 2] |> discard(is.na) |> head(1)
-  title = str_remove_all(title %||% "", "^[\"']|[\"']$")
+  title = str_match(yaml, "^title:\\s*(.+?)\\s*$")[, 2] |> discard(is.na)
+  title = str_remove_all(coalesce(title[1], ""), "^[\"']|[\"']$")   # no title: line gives ""
   list(title = if (nzchar(title)) title else first_heading(body, path), body = paste(body, collapse = "\n"))
 }
 
