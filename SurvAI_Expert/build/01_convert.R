@@ -7,6 +7,7 @@
 #     Rscript --no-init-file build/01_convert.R all     # every source
 #     Rscript --no-init-file build/01_convert.R jpsm    # one source (any name in SOURCES)
 #     Rscript --no-init-file build/01_convert.R rewrite # every document again from the cache; no model call
+#     Rscript --no-init-file build/01_convert.R figures # describe figures on candidate pages (FIGURE_CAP_USD)
 #
 #   Conversion runs at home only; its output reaches work as text, through git.
 #
@@ -65,6 +66,18 @@ BUILD_PROMPT <- paste(
   "Add nothing that is not on the page: no summary, no commentary, no",
   "description of pictures. Output only the markdown.")
 
+# Figure lines (mode "figures"): a page whose markdown has no description of its figure is sent
+#   again, same model, asking only for the figure. The reply is cached in FIG_DIR and appended to
+#   the page as "*[Figure: ...]*" when the document is assembled; the page reply is not changed.
+#   Candidates: pages flagged "short" first, then pages with a figure caption line.
+FIGURE_PROMPT <- paste(
+  "Describe only the figure, diagram or plot on this page image, in at most two sentences:",
+  "say what it shows, its axes, the groups it compares, and the main pattern.",
+  "Do not transcribe the text of the page.",
+  "If the page has no figure, diagram or plot, reply NONE.")
+FIGURE_CAP_USD <- 3
+FIG_CAPTION_RX <- "(?im)^[\\s*#>-]*(?:figure|fig\\.)\\s*[:0-9]"
+
 # Requests in flight at once inside this R process, and seconds before one gives up.
 IN_FLIGHT <- 8L
 CALL_TIMEOUT_S <- 120
@@ -78,6 +91,7 @@ PRICE_PER_M <- c(input = 2.00, output = 10.00)
 OUT_DIR <- "data/markdown"
 BUILD_DIR <- "data/build"
 PAGE_DIR <- file.path(BUILD_DIR, "pages")
+FIG_DIR <- file.path(BUILD_DIR, "figures")
 FILES_CACHE <- file.path(BUILD_DIR, "files.csv")
 PROBLEMS_CSV <- file.path(BUILD_DIR, "convert_problems.csv")
 MANIFEST_CSV <- "data/catalog/manifest.csv"
@@ -278,7 +292,7 @@ fence_lines <- function(md) sum(str_detect(strsplit(md, "\n", fixed = TRUE)[[1]]
 #   so the figure sign is a caption line ("Figure: ...", "Figure 4.2", "Fig. 3") or a markdown image.
 figure_or_display <- function(md) {
   prose = strip_code(md)
-  str_detect(prose, "(?im)^[\\s*#>-]*(?:figure|fig\\.)\\s*[:0-9]") || str_detect(prose, "!\\[") ||
+  str_detect(prose, FIG_CAPTION_RX) || str_detect(prose, "!\\[") || str_detect(prose, fixed("*[Figure: ")) ||
     str_detect(prose, DISPLAY_RX)
 }
 
@@ -311,6 +325,34 @@ strip_slide_number <- function(md) {
   m = str_match(lines[length(lines)], "^\\s*(\\d{1,4})\\s*/\\s*(\\d{1,4})\\s*$")
   if (is.na(m[1, 1]) || as.integer(m[1, 2]) > as.integer(m[1, 3])) return(md)
   str_trim(paste(lines[-length(lines)], collapse = "\n"))
+}
+
+# A literal dollar sign written as \$. Code (fenced or inline) and maths that renders are set
+#   aside; in what is left, a $ before a digit (or a space and a digit) is a dollar amount. If an odd number of bare $
+#   then remain, none of them can be maths delimiters, so all are escaped (an "Income in $" or a
+#   "df$var" in prose). Applied to every page and text document when it is assembled.
+escape_dollars <- function(md) {
+  if (!str_detect(md, fixed("$"))) return(md)
+  store = new.env()
+  store$x = character(0)
+  hide = function(m) {
+    if (!length(m)) return(m)
+    n0 = length(store$x)
+    store$x = c(store$x, m)
+    paste0("\u0001", n0 + seq_along(m), "\u0002")
+  }
+  hide_valid = function(m, display) {
+    ok = !is.na(map_chr(str_sub(m, if (display) 3 else 2, if (display) -3 else -2), kx, display = display))
+    out = m
+    out[ok] = hide(m[ok])
+    out
+  }
+  t = str_replace_all(md, "(?s)```.*?```|`[^`\n]+`", hide)
+  t = str_replace_all(t, DISPLAY_RX, function(m) hide_valid(m, TRUE))
+  t = str_replace_all(t, INLINE_RX, function(m) hide_valid(m, FALSE))
+  t = str_replace_all(t, "(?<!\\\\)\\$(?= ?\\d)", function(m) rep("\\$", length(m)))
+  if (str_count(t, "(?<!\\\\)\\$") %% 2) t = str_replace_all(t, "(?<!\\\\)\\$", function(m) rep("\\$", length(m)))
+  str_replace_all(t, "\u0001(\\d+)\u0002", function(m) store$x[as.integer(str_sub(m, 2, -2))])
 }
 
 
@@ -351,7 +393,7 @@ root_message <- function(e, key) {
 # Several pages in flight in this one R process, as QuestionR's llm_complete_all(): each gets its
 #   own chat object, chat_async() starts it, later::run_now() turns until all have settled.
 #   Returns, in order, the facts of each reply or list(error = message).
-send_pages <- function(pngs, key) {
+send_pages <- function(pngs, key, prompt = BUILD_PROMPT) {
   old = options(ellmer_timeout_s = CALL_TIMEOUT_S)
   on.exit(options(old), add = TRUE)
   state = new.env()
@@ -361,7 +403,7 @@ send_pages <- function(pngs, key) {
   iwalk(pngs, function(png, i) {
     chat = model_chat(BUILD_MODEL, key)
     started = Sys.time()
-    tryCatch(promises::then(chat$chat_async(BUILD_PROMPT, ellmer::content_image_file(png, resize = "none")),
+    tryCatch(promises::then(chat$chat_async(prompt, ellmer::content_image_file(png, resize = "none")),
                             onFulfilled = function(v) settle(i, tryCatch(reply_facts(chat, v, started),
                                                                          error = function(e) list(error = root_message(e, key)))),
                             onRejected = function(e) settle(i, list(error = root_message(e, key)))),
@@ -471,6 +513,84 @@ convert_pdf_pages <- function(pdfs, key, est) {
   list(text = set_names(text, pdfs$path), run = run)
 }
 
+fig_file <- function(sha, page) file.path(FIG_DIR, sha, sprintf("p%04d.json", page))
+figures_spent <- function() {
+  f = list.files(FIG_DIR, pattern = "[.]json$", recursive = TRUE, full.names = TRUE)
+  sum(map_dbl(f, function(x) as.numeric(jsonlite::read_json(x)$usd %||% 0)))
+}
+
+# The figure line of a page, or NA: no reply cached, a failed call, or NONE.
+fig_text <- function(sha, page) {
+  f = fig_file(sha, page)
+  if (!file.exists(f)) return(NA_character_)
+  t = jsonlite::read_json(f)$text %||% NA_character_
+  if (is.na(t) || str_detect(t, "^\\W*NONE\\W*$")) NA_character_ else t
+}
+
+# Pages to describe: "short" pages in the problem list first, then pages whose reply has a figure
+#   caption line; a page with a cached description (or NONE) is not sent again.
+figure_candidates <- function(pdfs) {
+  pages = pdfs |> select(id, path, sha256, pages) |>
+    reframe(path, sha256, page = seq_len(pages), .by = id)
+  short = if (file.exists(PROBLEMS_CSV)) utils::read.csv(PROBLEMS_CSV, colClasses = "character") |>
+    filter(check == "short") |> transmute(id = file, page = as.integer(page), short = TRUE) else tibble(id = character(), page = integer(), short = logical())
+  pages |> left_join(short, by = c("id", "page")) |> mutate(short = coalesce(short, FALSE)) |>
+    filter(file.exists(page_file(sha256, page, "md"))) |>
+    mutate(caption = !short & map2_lgl(sha256, page, function(s, p) str_detect(read_utf8(page_file(s, p, "md")), FIG_CAPTION_RX))) |>
+    filter(short | caption) |>
+    filter(!map2_lgl(sha256, page, function(s, p) {
+      f = fig_file(s, p)
+      file.exists(f) && is.na(jsonlite::read_json(f)$error %||% NA)
+    })) |>
+    arrange(desc(short), id, page)
+}
+
+# One call per page, IN_FLIGHT at a time, until done or FIGURE_CAP_USD.
+convert_figures <- function(cands, key) {
+  run = new.env()
+  run$spent = figures_spent()
+  run$n = 0L
+  run$usd = 0
+  message(sprintf("%d pages to describe (%d short); %.3f USD already spent on figures", nrow(cands), sum(cands$short), run$spent))
+  if (!nrow(cands)) return(invisible(run))
+  groups = split(seq_len(nrow(cands)), ceiling(seq_len(nrow(cands)) / IN_FLIGHT))
+  walk(groups, function(ix) {
+    per_page = if (run$n >= 20) run$usd / run$n else est_usd_page()
+    if (isTRUE(run$stopped) || run$spent + length(ix) * per_page > FIGURE_CAP_USD) {
+      if (!isTRUE(run$stopped)) message(sprintf("Stopped at the %.0f USD figure cap (%.3f spent).", FIGURE_CAP_USD, run$spent))
+      run$stopped = TRUE
+      return(invisible())
+    }
+    g = cands[ix, ]
+    tmp = tempfile("fig")
+    dir.create(tmp)
+    on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
+    pngs = pmap_chr(list(g$path, g$page, seq_len(nrow(g))), function(p, pg, i) {
+      f = file.path(tmp, sprintf("%02d.png", i))
+      tryCatch({ pdftools::pdf_convert(p, format = "png", pages = pg, filenames = f, dpi = BUILD_DPI, verbose = FALSE); f },
+               error = function(e) NA_character_)
+    })
+    ok = !is.na(pngs)
+    res = map(seq_along(pngs), function(i) list(error = "page could not be rendered"))
+    res[ok] = send_pages(pngs[ok], key, FIGURE_PROMPT)
+    pwalk(list(g$sha256, g$page, res), function(s, p, r) {
+      f = fig_file(s, p)
+      before = if (file.exists(f)) jsonlite::read_json(f) else list()
+      txt = if (is.null(r$error)) str_squish(str_remove_all(str_trim(r$text), "^\\*?\\[?(?:Figure:\\s*)?|\\]?\\*?$")) else NA
+      usd = (r$usd %||% 0) + as.numeric(before$usd %||% 0)
+      run$spent = run$spent + (r$usd %||% 0)
+      run$usd = run$usd + (r$usd %||% 0)
+      run$n = run$n + 1L
+      dir.create(dirname(f), recursive = TRUE, showWarnings = FALSE)
+      jsonlite::write_json(list(text = txt, usd = usd, finish = r$finish %||% NA, error = r$error %||% NA,
+                                model = BUILD_MODEL$id, at = format(Sys.time(), "%Y-%m-%dT%H:%M:%S")),
+                           f, auto_unbox = TRUE, digits = NA)
+    })
+    message(sprintf("  %d pages described, %.3f USD this run", run$n, run$usd))
+  })
+  invisible(run)
+}
+
 
 # ---- 7. .qmd, .Rmd and .md ------------------------------------------------------------------------
 
@@ -481,10 +601,23 @@ qmd_to_md <- function(path) {
   yaml = if (is.na(yaml_end) || yaml_end == 0L) character(0) else lines[seq_len(yaml_end)]
   body = if (length(yaml)) lines[-seq_len(yaml_end)] else lines
   m = str_match(body, "^(\\s*)(`{3,})\\s*\\{\\s*[=.]?([A-Za-z0-9_+-]+)[^}]*\\}\\s*$")
-  body = if_else(is.na(m[, 1]), body, paste0(m[, 2], m[, 3], tolower(m[, 4])))
+  body = close_open_fences(if_else(is.na(m[, 1]), body, paste0(m[, 2], m[, 3], tolower(m[, 4]))))
   title = str_match(yaml, "^title:\\s*(.+?)\\s*$")[, 2] |> discard(is.na)
   title = str_remove_all(coalesce(title[1], ""), "^[\"']|[\"']$")   # no title: line gives ""
   list(title = if (nzchar(title)) title else first_heading(body, path), body = paste(body, collapse = "\n"))
+}
+
+# An opening fence (one with a language, ```r) met while a block is still open closes that block
+#   first: a bare ``` line is put before it. A bare ``` toggles open/closed as usual.
+close_open_fences <- function(lines) {
+  fence = str_detect(lines, "^\\s*`{3,}")
+  opener = fence & str_detect(lines, "^\\s*`{3,}\\s*[A-Za-z{]")
+  # open_before[i]: a block is open when line i is reached
+  open_before = accumulate(seq_along(lines), function(open, i) if (!fence[i]) open else if (opener[i]) TRUE else !open,
+                           .init = FALSE)[seq_along(lines)]
+  add = opener & open_before
+  if (!any(add)) return(lines)
+  unlist(map2(lines, add, function(l, a) if (a) c(str_extract(l, "^\\s*`{3,}"), l) else l))
 }
 
 # The first level-1 heading outside code (an R comment is not a heading), else the file name.
@@ -526,6 +659,9 @@ assemble_pdf <- function(d, text) {
     if (!file.exists(f)) return(list(md = "", usd = info$usd %||% 0,
                                      probs = tibble(page = p, check = "call", detail = as.character(info$error %||% "no reply"))))
     md = strip_slide_number(read_utf8(f))
+    fig = fig_text(d$sha256, p)
+    if (!is.na(fig)) md = paste0(md, "\n\n*[Figure: ", fig, "]*")
+    md = escape_dollars(md)
     list(md = md, usd = info$usd %||% 0,
          probs = mutate(check_page(md, if (length(txt) == n) nchar(str_trim(txt[p])) else NA_integer_), page = p, .before = 1))
   })
@@ -537,6 +673,7 @@ assemble_pdf <- function(d, text) {
 
 assemble_text <- function(d) {
   doc = if (d$ext == "md") md_copy(d$path) else qmd_to_md(d$path)
+  doc$body = escape_dollars(doc$body)
   list(lines = c(header(d, doc$title, NA_integer_, "01_convert.R (no model)"), doc$body), body = doc$body, usd = 0,
        probs = mutate(check_page(doc$body), page = NA_integer_, .before = 1))
 }
@@ -620,7 +757,7 @@ dry_run <- function(all, todo, est, n_unchanged) {
 }
 
 main <- function(mode = "dry") {
-  mode = match.arg(mode, c("dry", "pilot", "all", "rewrite", names(SOURCES)))
+  mode = match.arg(mode, c("dry", "pilot", "all", "rewrite", "figures", names(SOURCES)))
   t0 = Sys.time()
   all = list_sources()
   todo = all |> filter(is.na(skip))
@@ -637,6 +774,13 @@ main <- function(mode = "dry") {
   todo = todo |> filter(!path %in% c(empty$path, bad$path))
   # rewrite: every document written again from the page cache and the sources (after a change to
   #   redaction or the checks); no model call, nothing skipped as unchanged.
+  # figures: describe the figures of candidate pages (FIGURE_CAP_USD); "rewrite" then adds the lines.
+  if (mode == "figures") {
+    run = convert_figures(figure_candidates(todo |> filter(ext == "pdf")), model_key())
+    message(sprintf("Done in %.1f min: %d pages, %.3f USD this run, %.3f USD on figures in all.",
+                    as.numeric(difftime(Sys.time(), t0, units = "mins")), run$n, run$usd, run$spent))
+    return(invisible(run))
+  }
   if (mode == "rewrite") {
     pdfs = todo |> filter(ext == "pdf")
     text = set_names(map(pdfs$path, function(p) tryCatch(pdftools::pdf_text(p), error = function(e) character(0))), pdfs$path)
