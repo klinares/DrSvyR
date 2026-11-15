@@ -9,7 +9,7 @@ original: "PracTools_SURV745/labs/Class11Lab.pdf"
 pages: 21
 sha256: "b1f3fee4b0bc23932e1f806ec9de201c1b65d40a3363117fe4ffd0e21a649565"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:08"
+converted_at: "2026-11-14T21:29:13"
 ---
 
 <!-- page 1 -->
@@ -720,6 +720,8 @@ for (h in c(1,2,3,5)){
 
 14
 
+*[Figure: The figure is a 5-by-5 scatterplot matrix comparing five variables listed along the diagonal—EXPTOTAL, BEDS, SEENCNT, EOYCNT, and FINDIRCT—with pairwise scatterplots in the upper triangle, correlation coefficients in the lower triangle, and numerical scales on the outer margins. The scatterplots reveal heavily right-skewed distributions clustered near the origin for the first four variables, binary-like values for FINDIRCT (near 1.0 and 2.0), and the strongest linear relationships between SEENCNT and EOYCNT (0.86) and between EXPTOTAL and BEDS (0.70).]*
+
 <!-- page 15 -->
 
 ```r
@@ -750,6 +752,8 @@ summary(m2)
 ```
 
 15
+
+*[Figure: The figure is a four-panel scatter plot comparing hospital expenditures in millions (y-axis) against the number of beds (x-axis) across four facility groups: "psychiatric", "residential or veterans", "general", and "multi-service, substance abuse". Each panel includes a grey lowess trend line showing that expenditures increase with the number of beds across all groups, with the steepest upward trend and highest values occurring in psychiatric hospitals.]*
 
 <!-- page 16 -->
 

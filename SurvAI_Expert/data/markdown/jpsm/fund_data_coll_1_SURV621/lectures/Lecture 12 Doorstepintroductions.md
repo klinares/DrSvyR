@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 12 Doorstepintroductions.pd
 pages: 31
 sha256: "f982ff26d7c79c3ff5c1ee4b42fa69c6fd7fc95bab1ecf75c746f6623893137f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:57"
+converted_at: "2026-11-14T21:29:00"
 ---
 
 <!-- page 1 -->

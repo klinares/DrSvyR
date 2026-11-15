@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/assignments/web_scraping.qmd"
 pages: 
 sha256: "e72a13b24708694ad5b4fee25ba1daa36ac274f8099f1402e38015615e184350"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:53"
+converted_at: "2026-11-14T21:28:56"
 ---
 
 

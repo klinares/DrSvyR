@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/Categorical slides.pdf"
 pages: 71
 sha256: "abb5f3b68de0a6b3378cce5c731e2f7d7e279b37464d8aeff78591fa5bfd714d"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:21"
+converted_at: "2026-11-14T21:29:29"
 ---
 
 <!-- page 1 -->

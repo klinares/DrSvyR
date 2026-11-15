@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/05-02-ElasticNetGroupLasso.pdf"
 pages: 7
 sha256: "d67f465519c9f8863ff5136669dfe30932e8cfdaddde5df98a660e370aa69a13"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -50,6 +50,8 @@ Coefficients $\hat{\beta}_j$
 $\|\hat{\beta}\|_1$
 
 Hastie et al. (2015)
+
+*[Figure: This figure displays two side-by-side line plots comparing elastic net coefficient paths ($\hat{\beta}_j$ on the vertical axis, ranging from -1.5 to 1.5) against the $L_1$ norm of the coefficients ($\|\hat{\beta}\|_1$ on the bottom horizontal axis, from 0 to 4) and the number of non-zero coefficients (top axis) for two parameter values: $\alpha = 1.0$ (left) and $\alpha = 0.3$ (right). In the $\alpha = 1.0$ plot, positive (orange) and negative (blue) coefficients diverge individually and cross paths as $\|\hat{\beta}\|_1$ increases, whereas in the $\alpha = 0.3$ plot, the trajectories within each color group enter the model simultaneously and remain tightly bundled together.]*
 
 <!-- page 4 -->
 

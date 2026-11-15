@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lecture_notes.pdf"
 pages: 3
 sha256: "3c1b4dd2d0244ab12df559ea2e8d17e5b3bdf3dd9b22d31a7520e05a4eed29cd"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:54"
+converted_at: "2026-11-14T21:28:56"
 ---
 
 <!-- page 1 -->

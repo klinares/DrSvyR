@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lectures/Class 11 Notes.pdf"
 pages: 35
 sha256: "a2f472545d000a935d808078891827bc0eb004283ad58ec9402a9f0d8e3034b5"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:47"
+converted_at: "2026-11-14T21:28:49"
 ---
 
 <!-- page 1 -->
@@ -209,6 +209,8 @@ Zhang & Conrad, 2013
 
 14
 
+*[Figure: This bar chart displays the percentage of persistent speeders (y-axis, ranging from 0 to 40) across five different age groups on the x-axis: 18–34, 35–44, 45–54, 55–64, and 65+. The plot shows a clear downward trend as age increases, with the 18–34 age group having the highest proportion of persistent speeders (over 40%) and the 65+ group having the lowest (near 2%).]*
+
 <!-- page 15 -->
 
 # Straightlining
@@ -284,6 +286,8 @@ Conrad et al. (2017)
 
 18
 
+*[Figure: This line graph shows the percentage of respondents who straightlined at least once (y-axis, from 0% to 40%) plotted against the number of previous questions on which speeding was detected (x-axis, from 0 to "6 or 7"). Comparing four experimental groups (Exper 1, Exper 1a, Exper 2, and Exper 3), all four lines demonstrate an upward trend where straightlining increases—most sharply after 4 or 5 instances of speeding—as the frequency of previous speeding increases.]*
+
 <!-- page 19 -->
 
 # Mode of Data Collection and Satisficing
@@ -356,6 +360,8 @@ VOICE
 \*same answer for $\ge$ 7 out of 8 statements
 
 23
+
+*[Figure: This grouped bar chart shows the percentage of respondents straightlining (y-axis, ranging from 0% to 10%) across "Human" and "Automated" administration methods (x-axis), comparing "Voice" (blue bars) and "Text" (orange bars) modes. The main pattern indicates that straightlining is more than twice as high in Voice mode (~7% Human, ~9% Automated) compared to Text mode (~3.3% Human, ~3.6% Automated), with slightly higher rates under Automated administration for both modes.]*
 
 <!-- page 24 -->
 
@@ -455,6 +461,8 @@ q14 q15 q16 q17 q18 q19 q20
 
 29
 
+*[Figure: This line plot displays the effects of prompting and commitment on mean response times in seconds (y-axis, ranging from 10 to 35) across seven questions from q14 to q20 (x-axis). It compares four groups—"Prompt - Committed", "No Prompt - Committed", "Prompt - Not Committed", and "No prompt - Not Committed"—showing that all groups peak sharply at q16, with the "Prompt - Committed" group generally exhibiting the longest response times and "No prompt - Not Committed" the shortest.]*
+
 <!-- page 30 -->
 
 # Straightlining
@@ -481,6 +489,8 @@ No Prompt - No Commitment
 Prompt-Commitment vs. Others, $p < .001$
 
 30
+
+*[Figure: This bar chart titled "Straightlining" displays the percentage of respondents on the vertical axis (ranging from 0 to 14) across four experimental groups on the horizontal axis: "Prompt - Commitment," "No Prompt - Commitment," "Prompt - No Commitment," and "No Prompt - No Commitment." The main pattern shows that the "Prompt - Commitment" group has a significantly lower rate of straightlining (just over 6%) compared to the other three groups, which all have rates around 12% to 13%.]*
 
 <!-- page 31 -->
 

@@ -9,7 +9,7 @@ original: "design_seminar_SURV670/lectures/Week 10.pdf"
 pages: 22
 sha256: "2ee58438004ca33ea1475c9e0311da562dc560229bfcdf77a2d265ad72841543"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:52"
+converted_at: "2026-11-14T21:28:55"
 ---
 
 <!-- page 1 -->

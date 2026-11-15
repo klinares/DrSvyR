@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/08-01-AdaBoost.pdf"
 pages: 6
 sha256: "b531034fe95837052e61b8bddd09207d441a126565b6501415deb8fb7fdd5ad4"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -57,6 +57,8 @@ $^1$Source: Hastie et al. 2009
 
 Machine Learning for Social Science $\quad$ Boosting I $\quad$ 3 / 6
 
+*[Figure: The diagram is a vertical flowchart illustrating the iterative process of the AdaBoost algorithm, moving upward from an initial red "Training Sample" oval through successive cyan "Weighted Sample" ovals. Each sample generates a corresponding classifier $G_m(x)$ ($G_1(x), G_2(x), \dots, G_M(x)$), which are finally combined at the top via a weighted sum formula $G(x) = \text{sign} \left[ \sum_{m=1}^M \alpha_m G_m(x) \right]$.]*
+
 <!-- page 4 -->
 
 # AdaBoost
@@ -99,6 +101,8 @@ $h_3$
 ---
 $^2$Source: Shapire & Freund 2012
 
+*[Figure: The three-part diagram illustrates the iterative process of AdaBoost using decision stumps on an unlabeled 2D plane, comparing two groups of data points represented by plus (+) and minus (-) signs across three sequential steps. In each step, a linear decision boundary ($h_1, h_2, h_3$) partitions the space into dark and light gray regions, and the main pattern shows that points misclassified in one step (highlighted with circles) increase in size to reflect higher weights in the subsequent distribution ($D_1, D_2, D_3$).]*
+
 <!-- page 6 -->
 
 AdaBoost Boosting Stumps
@@ -112,3 +116,5 @@ H = \text{sign} \left( 0.42 \quad + 0.65 \quad + 0.92 \quad \right) =
 $$
 
 Machine Learning for Social Science Boosting I 6 / 6
+
+*[Figure: The figure illustrates a visual equation showing how three weighted decision stumps (with weights 0.42, 0.65, and 0.92) are combined via a sign function to form a final composite classifier in an unlabelled 2D feature space. Each individual stump divides its square space with a single vertical or horizontal line into dark and light gray regions, and their weighted sum produces a final partitioned plot on the right that successfully separates the positive ("+") and negative ("-") data points into the dark and light gray areas, respectively.]*

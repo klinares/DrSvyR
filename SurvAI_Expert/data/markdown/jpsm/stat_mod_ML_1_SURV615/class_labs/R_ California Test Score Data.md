@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/class_labs/R_ California Test Score Data.pdf"
 pages: 2
 sha256: "f1dadfbd6c3e97f55941f273aa098076049e33403ed465bb0e0588f5f0630120"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:14"
+converted_at: "2026-11-14T21:29:21"
 ---
 
 <!-- page 1 -->

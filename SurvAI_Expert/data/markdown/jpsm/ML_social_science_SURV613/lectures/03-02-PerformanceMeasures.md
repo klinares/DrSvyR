@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/03-02-PerformanceMeasures.pdf"
 pages: 9
 sha256: "2f0688a960ac32baf0dfef40d64c760b8600276e047fc9d2243300a877715739"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -154,6 +154,8 @@ Machine Learning for Social Science
 
 Performance measures & kNN
 
+*[Figure: The figure consists of two side-by-side line plots showing classification performance measures (ranging from 0.0 to 1.0 on the vertical axes) as a function of the classification "Threshold" (ranging from 0.0 to 0.8+ on the horizontal axes), comparing Sensitivity (solid line) and Specificity (dotted line) in panel (a), and Recall (solid line) and Precision (dotted line) in panel (b). As the threshold increases, both Sensitivity and Recall decrease monotonically from 1.0 to 0.0, whereas Specificity increases smoothly from 0.0 to 1.0 and Precision generally increases (with some fluctuations) from around 0.35 to 1.0, crossing their respective counterparts near a threshold of 0.4.]*
+
 <!-- page 6 -->
 
 # Performance measures for classification
@@ -169,6 +171,8 @@ $\rightarrow$ AUC-PR: Area under the precision–recall curve
 
 Machine Learning for Social Science
 Performance measures & kNN
+
+*[Figure: The figure consists of two side-by-side line plots comparing the performance of "Classifier 1" (black line) and "Classifier 2" (grey line) across varying classification thresholds: (a) ROC curves plotting "Sensitivity" against "1 - Specificity", and (b) PR curves plotting "Precision" against "Recall". While both classifiers exhibit very similar upward trajectories in the ROC plot, the PR curve reveals a sharper distinction at low recall values (below 0.3), where Classifier 1 maintains much higher precision than Classifier 2 before both curves decline together as recall increases.]*
 
 <!-- page 7 -->
 
@@ -200,6 +204,8 @@ Top K
 
 Machine Learning for Social Science
 Performance measures & kNN
+
+*[Figure: The line plot, titled "Figure: Precision at top K," compares "Classifier 1" (black line) and "Classifier 2" (grey line) by plotting "Precision" on the vertical axis (ranging from 0.2 to 1.0) against "Top K" on the horizontal axis (ranging from 0 to 150). For both classifiers, precision generally decreases as Top K increases, with Classifier 1 starting higher near 1.0 before both curves converge and decline together from around 0.7 down to below 0.4.]*
 
 <!-- page 8 -->
 

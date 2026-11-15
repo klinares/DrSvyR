@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/Regularized Regression and Tuning.
 pages: 9
 sha256: "529eb08d6562351cb68389ed62f399780ab02181b8802fe304a1e0a58aca9a03"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->
@@ -68,6 +68,8 @@ Two ways of thinking about it:
 $\beta_1$ $\beta_2$ $\hat{\beta}$
 
 Efron & Hastie (2016)
+
+*[Figure: The figure shows two side-by-side diagrams on axes $\beta_1$ (horizontal) and $\beta_2$ (vertical) comparing the constraint regions and residual sum of squares (RSS) contours around the least squares estimate $\hat{\beta}$ for (a) $L_1$ regularization ($|\beta_1| + |\beta_2| \le t$) and (b) $L_2$ regularization ($\beta_1^2 + \beta_2^2 \le t^2$). The main pattern illustrates that the elliptical red RSS contours intersect the diamond-shaped cyan $L_1$ constraint region at a corner directly on the $\beta_2$ axis (setting $\beta_1 = 0$), whereas they intersect the circular cyan $L_2$ constraint region at a point off the axis where both parameters remain non-zero.]*
 
 <!-- page 7 -->
 

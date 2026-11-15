@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/exams/exam_3-document.pdf"
 pages: 18
 sha256: "c3ee810786720791afd968c0524bedae450a89071748beb71fdb58fb54d141ae"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:14"
+converted_at: "2026-11-14T21:29:21"
 ---
 
 <!-- page 1 -->
@@ -363,6 +363,8 @@ grid.arrange(
 ```
 
 10
+
+*[Figure: The figure is a scatter plot checking for homogeneity of variance, plotting the square root of the absolute standardized residuals (y-axis, from 0.0 to 2.0) against fitted values (x-axis, from below -10 to 10) for a single set of data points. The main pattern shows blue points scattered mostly between 0.0 and 1.5 with greater vertical dispersion on the left, accompanied by a green reference line with a gray confidence band that remains relatively flat and slightly downward-sloping around a y-value of 0.8.]*
 
 <!-- page 11 -->
 

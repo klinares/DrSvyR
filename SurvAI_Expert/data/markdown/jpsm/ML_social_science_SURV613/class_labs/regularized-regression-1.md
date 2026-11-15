@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/class_labs/regularized-regression-1.Rmd"
 pages: 
 sha256: "b33b2d9fba802e4203e5ff0814bf3ca115eca877a82bd878ce1f3134a654f5c2"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 

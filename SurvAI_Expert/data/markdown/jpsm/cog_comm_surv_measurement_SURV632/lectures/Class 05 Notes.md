@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lectures/Class 05 Notes.pdf"
 pages: 44
 sha256: "d58bedaee178b50ea0bd1aed514f86abd846cb07a09ccad1d44a2038012a52e2"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:46"
+converted_at: "2026-11-14T21:28:48"
 ---
 
 <!-- page 1 -->
@@ -621,6 +621,8 @@ Page Number
 
 41
 
+*[Figure: This bar chart shows "Judged Interestingness" on the vertical axis (ranging from 3.9 to 4.3) across four "Types of Progress Indicators" on the horizontal axis: None, Constant Speed, Slow-to-Fast, and Fast-to-Slow. The main pattern indicates that the Fast-to-Slow progress indicator resulted in a noticeably higher rating of survey interestingness (4.27) compared to the other three groups, which all scored much lower between 4.03 and 4.09.]*
+
 <!-- page 42 -->
 
 # How many minutes do you think it took to complete this survey?
@@ -635,6 +637,8 @@ Page Number
 *Note: Judgments from Rs who completed questionnaire*
 
 42
+
+*[Figure: This bar chart shows the estimated survey completion time (vertical axis, in minutes from 12.5 to 16) across different types of progress indicators (horizontal axis). Comparing the four groups—None (14.4), Constant Speed (14.0), Slow-to-Fast (15.4), and Fast-to-Slow (13.5)—the Slow-to-Fast indicator resulted in the longest perceived time while the Fast-to-Slow indicator resulted in the shortest.]*
 
 <!-- page 43 -->
 

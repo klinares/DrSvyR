@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lecture_notes.pdf"
 pages: 9
 sha256: "e5a31213f9c5d769d1f82a1b49e710e13529b475f71dcade3083ed673ec71efb"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 <!-- page 1 -->
@@ -76,6 +76,8 @@ $$\text{Err}_{\mathcal{T}} = \text{E}(L(Y, \hat{f}(X)) | \mathcal{T})$$
 * As our model gets more complex, our training error gets smaller. However, Bias increases, so test error starts to increase with complexity.
 
 Figure: Training error and test error by model complexity
+
+*[Figure: The figure is a line plot comparing training error (in blue) and test error (in red) with "Model Complexity (df)" from 0 to 35 on the horizontal axis and "Prediction Error" from 0.0 to 1.2 on the vertical axis, illustrating the transition from high bias/low variance to low bias/high variance. As model complexity increases, the training error curve steadily decreases toward zero, whereas the test error curve remains higher, initially decreasing to a minimum around 20-25 df before rising again at higher complexities.]*
 
 <!-- page 3 -->
 
@@ -237,6 +239,8 @@ Figure: Down-sampling, up-sampling, $\text{SMOTE}^1$
   * CV to train lower level candidate learners, than combine predictions to get final model.
 * For both you do a nested CV, both uses level 1 models, not base learners (that is specific to RF, boosting).
 
+*[Figure: The figure consists of a four-panel scatter plot comparing two groups, "Class1" (red circles) and "Class2" (blue squares), plotted along "Predictor A" on the horizontal axis and "Predictor B" on the vertical axis (both ranging from -2 to 2) across four sampling methods: "Original", "Downsampled", "Upsampled", and "Hybrid". The main pattern illustrates how the initially imbalanced dataset—where Class1 heavily outnumbers Class2 in the "Original" panel—is balanced by reducing the density of Class1 ("Downsampled"), duplicating points in Class2 ("Upsampled"), or generating synthetic Class2 points while reducing Class1 ("Hybrid").]*
+
 <!-- page 8 -->
 
 # Super Learner
@@ -268,6 +272,8 @@ April 15 2025 Unsupervised Learning
 * PCA
   * linear combination, if $P > N$, we may need dimension reduction before regression, PCA can be used.
   * loadings can be interpreted, but not really used in ML.
+
+*[Figure: The page contains a flowchart diagram titled "Figure: Super Learner" that illustrates the multi-step workflow of the Super Learner ensemble machine learning algorithm without using coordinate axes. It compares predictions across multiple candidate learners (such as lm, D/S/A, and RF) trained on both $V$-fold split data blocks and the entire dataset, showing how their cross-validated predictions ($Z$) are regressed against observed outcomes ($Y$) to form an optimal weighted combination for the final Super Learner model.]*
 
 <!-- page 9 -->
 

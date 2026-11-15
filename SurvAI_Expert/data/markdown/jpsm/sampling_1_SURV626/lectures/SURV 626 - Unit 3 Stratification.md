@@ -9,7 +9,7 @@ original: "sampling_1_SURV626/lectures/SURV 626 - Unit 3 Stratification.pdf"
 pages: 82
 sha256: "8e93a2c8753fb0501ffd51eab4d311fb4f9ee39fcebc3dad394c062377206523"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:12"
+converted_at: "2026-11-14T21:29:18"
 ---
 
 <!-- page 1 -->

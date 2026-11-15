@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/midterm/surv701_midterm_study_guide.qmd"
 pages: 
 sha256: "953acc5db6522dd7d616d428a6bc6f36082a9392e636b26f9aba26c543587759"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 

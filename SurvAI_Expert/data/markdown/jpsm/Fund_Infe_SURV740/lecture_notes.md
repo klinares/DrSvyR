@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/lecture_notes.pdf"
 pages: 14
 sha256: "d2653c99691ca6d2333490db8c2bcc312cb2094c6df18486bfc654a8a4794b8f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:02"
+converted_at: "2026-11-14T21:29:05"
 ---
 
 <!-- page 1 -->
@@ -93,6 +93,8 @@ $$\text{Therefore, } \text{ACE} = E(Y^1 - Y^0) = E(Y^1 | A = 1) - E(Y^0 | A = 0)
 $$E(Y | A = 1) - E(Y | A = 0) \rightarrow \text{ACE is identified, estimated by}$$
 
 $$\frac{1}{n_t} \sum_{i=1}^{n_t} Y_i - \frac{1}{n - n_t} \sum_{i=1}^{n - n_t} Y_i$$
+
+*[Figure: The image contains a handwritten directed acyclic graph (DAG) with no axes, illustrating the causal relationships between five variables: Age, (A) Exercise, Heart Disease (Y), Smoking, and Gene. The main pattern shows directed arrows pointing from Exercise and Gene directly into Heart Disease, while Age and Smoking act as common causes (confounders) with arrows pointing into both Exercise and Heart Disease.]*
 
 <!-- page 3 -->
 

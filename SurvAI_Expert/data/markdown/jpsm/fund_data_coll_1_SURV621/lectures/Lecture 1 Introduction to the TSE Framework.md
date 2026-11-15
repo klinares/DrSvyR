@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 1 Introduction to the TSE F
 pages: 27
 sha256: "0751d8e6186075767b43b9881646ba527466aa1d3cb39967cf3ebca360050e65"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:56"
+converted_at: "2026-11-14T21:28:59"
 ---
 
 <!-- page 1 -->

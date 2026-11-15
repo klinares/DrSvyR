@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/02-01-MLBasics.pdf"
 pages: 14
 sha256: "2372d07b310dc721673f63ebdc1e050414b27fa617ba4b935e6de05e15bdc13e"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -41,6 +41,8 @@ Deploy, maintain and update
 Machine Learning for Social Science
 
 ML Basics
+
+*[Figure: This diagram is a vertical flowchart illustrating the seven sequential stages of the machine learning process, without axes or group comparisons. The main pattern shows a strictly linear, top-down progression connected by downward arrows, moving from defining the "Machine Learning task" and handling data, through feature engineering, model training, and evaluation, to the final stage of "Deploy, maintain and update."]*
 
 <!-- page 3 -->
 
@@ -235,6 +237,8 @@ James et al. (2013)
 
 Machine Learning for Social Science
 ML Basics
+
+*[Figure: This two-dimensional conceptual plot illustrates the trade-off between model "Flexibility" on the x-axis and "Interpretability" on the y-axis, both ranging from "Low" to "High". It compares various machine learning methods, showing an inverse pattern where simpler methods like Subset Selection, Lasso, and Least Squares have high interpretability and low flexibility, while complex methods like Bagging, Boosting, and Support Vector Machines have high flexibility and low interpretability, with Generalized Additive Models and Trees in the middle.]*
 
 <!-- page 13 -->
 

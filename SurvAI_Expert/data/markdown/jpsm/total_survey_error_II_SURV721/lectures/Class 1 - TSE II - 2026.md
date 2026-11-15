@@ -9,7 +9,7 @@ original: "total_survey_error_II_SURV721/lectures/Class 1 - TSE II - 2026.pdf"
 pages: 32
 sha256: "93a3e4ae2ece53838acf6120f15fea0b46319ca9044495728e403c2966e874d9"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:23"
+converted_at: "2026-11-14T21:29:33"
 ---
 
 <!-- page 1 -->

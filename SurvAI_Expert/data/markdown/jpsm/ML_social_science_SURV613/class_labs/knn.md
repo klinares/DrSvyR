@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/class_labs/knn.qmd"
 pages: 
 sha256: "d19f22023f267a73a661f386090293a6cd1384358164f692b24d02b758e5ebbf"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 

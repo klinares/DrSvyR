@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 10 Mobile Web and Text (SMS
 pages: 42
 sha256: "7d06a93dd24872398354896962819bd1f306270eac60f59daa94296d028c6e9b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:56"
+converted_at: "2026-11-14T21:28:59"
 ---
 
 <!-- page 1 -->

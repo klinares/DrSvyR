@@ -9,7 +9,7 @@ original: "applied_sampling_SURV625/lectures/Lecture10.pdf"
 pages: 21
 sha256: "686d3d9e7a1c1c7092e9a3401ee2291dc159230a3dbc48d46a40c3b0a4730f31"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:42"
+converted_at: "2026-11-14T21:28:44"
 ---
 
 <!-- page 1 -->
@@ -206,6 +206,8 @@ USA90
     * 49 Non-MSA counties in north OH and south MI
     * 87 Non-MSA counties in south OH, IN and IL Along Ohio and Mississippi Rivers
     * 73 Non-MSA counties in north IL and IN
+
+*[Figure: The figure is a hierarchical tree diagram (without axes) illustrating the primary stage stratification criteria for the 1990 SRC National Sample Design in the East North Central Division of the Midwest Region. It shows how the division's 17 total strata branch into three primary groups—Self-Representing MSAs (3 strata), NSR MSAs (10 strata), and NSR Non-MSA Counties (4 strata)—which are then further subdivided into specific metropolitan areas and county clusters based on location and household population size.]*
 
 <!-- page 10 -->
 

@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/assignments/cross_validation.qmd"
 pages: 
 sha256: "8ede0d48760c602ef10f28eea89b43cbf1ee54ac055c6272a0462f7d98346a98"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 

@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/lectures/Old Classnotes.pdf"
 pages: 54
 sha256: "a773c4167a1f9c09ab2363c7b5a9568ac475b0ecb8fbd5c8ceb34b12186e5eaa"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:19"
+converted_at: "2026-11-14T21:29:27"
 ---
 
 <!-- page 1 -->
@@ -1580,6 +1580,8 @@ Precipitation [in/yr] for 70 US cities
 
 - Notes for Class #1 & 2, page 44 of 54 -
 
+*[Figure: The page contains two plots showing precipitation (in/yr) for 70 US cities: the top is a cyan histogram plotting relative density (0.000 to 0.030) on the y-axis against precipitation intervals (0 to 70) on the x-axis, and the bottom is a Normal Q-Q plot comparing the observed precipitation values (10 to 60 on the y-axis) against theoretical normal quantiles (-2 to 2 on the x-axis). The histogram reveals a main peak between 30 and 50 in/yr with a smaller secondary cluster between 10 and 20 in/yr, which corresponds to the Q-Q plot where data points closely follow the diagonal reference line in the middle range (30 to 50) but deviate below it at the lower tail and slightly above it at the upper tail.]*
+
 <!-- page 45 -->
 
 While the Rankit plot is a useful graphical tool in its own right, there is also a very useful test statistic associated with it known as the Shapiro-Wilk Statistic. The Shapiro-Wilk Statistic is given by
@@ -1682,6 +1684,8 @@ Figure 1 illustrates the situation. If $H_0$ is true and $Z$ has mean 0, the tes
 Figure 1. Normal densities of test statistics under $H_0$ and $H_A$. $\delta / \sqrt{V\{\bar{D}\}}$ is set equal to 3 in this illustration so that $E\{Z | H_A \text{ is true}\} = 3$. A 2-sided test is conducted at the 0.05 level.
 
 - Notes for Class #1 & 2, page 49 of 54 -
+
+*[Figure: The plot displays two overlapping normal probability density curves (vertical axis ranging from 0.0 to 0.4) plotted against a test statistic $Z$ (horizontal axis ranging from -2 to 6), comparing a null hypothesis distribution ($H_0$, black curve centered at $Z = 0$ with $\mu_D = 0$) and an alternative hypothesis distribution ($H_A$, red curve shifted to the right and centered at $Z = 3$ with $\mu_D = \delta$). It illustrates a hypothesis test rejection region to the right of $Z \approx 1.645$, where the small upper tail area under $H_0$ is shaded in yellow and the much larger area under $H_A$ in the same region is shaded in green (plus the overlapping yellow area).]*
 
 <!-- page 50 -->
 

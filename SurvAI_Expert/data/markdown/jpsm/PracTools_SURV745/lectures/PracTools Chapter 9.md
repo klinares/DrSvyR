@@ -9,7 +9,7 @@ original: "PracTools_SURV745/lectures/PracTools Chapter 9.pdf"
 pages: 71
 sha256: "d1a968c2dba508b6c7698b1df68290e0d8095e4f5966e9ed610d0feb2186e003"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:11"
+converted_at: "2026-11-14T21:29:17"
 ---
 
 <!-- page 1 -->
@@ -880,6 +880,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 9 52 / 71
 # Figure 9.1: Sensitivity of Optimal $n$ to $\delta$ - 1
 
 Sunghee Lee (U of Michigan) $\quad$ Prac Tools Ch. 9 $\quad$ 53 / 71
+
+*[Figure: The figure consists of a 2x2 grid of line plots showing the relationship between CV (vertical axis) and nbar, or sample units per PSU (horizontal axis, from 0 to 30), across four different values of delta (0.01, 0.05, 0.1, and 0.2). Each plot compares three curves representing cost ratios C1/C2 of 1, 2, and 3, demonstrating that as delta increases, the minimum CV (marked by a black dot) shifts toward smaller nbar values and the subsequent upward slope becomes much steeper.]*
 
 <!-- page 54 -->
 

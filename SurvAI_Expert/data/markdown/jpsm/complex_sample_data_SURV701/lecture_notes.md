@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/lecture_notes.pdf"
 pages: 7
 sha256: "ed660141d25f118bbe573e5c890c5ab83aebb2a52dbc3c38f46f6c45e3d21bed"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:49"
+converted_at: "2026-11-14T21:28:51"
 ---
 
 <!-- page 1 -->

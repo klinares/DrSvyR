@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lectures/Class 04 Notes.pdf"
 pages: 45
 sha256: "a5c8c306c809e0388ffe8f1b7c1798aafbd83672734c28d227faf6062915a95d"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:46"
+converted_at: "2026-11-14T21:28:48"
 ---
 
 <!-- page 1 -->

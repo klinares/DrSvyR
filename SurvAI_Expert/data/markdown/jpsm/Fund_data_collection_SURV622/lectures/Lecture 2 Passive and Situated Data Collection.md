@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lectures/Lecture 2 Passive and Situated 
 pages: 57
 sha256: "fa486749daeb19b92071dc239e4ad36bbc154c829ec7042a458cb438e1d89f89"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:01"
+converted_at: "2026-11-14T21:29:04"
 ---
 
 <!-- page 1 -->
@@ -253,6 +253,8 @@ Frederick Conrad
 
 16
 
+*[Figure: The diagram displays a central smartphone icon surrounded by text labels representing various built-in sensors and communication hardware. These labels are organized spatially around the device, with four red rectangular boxes grouping related sensors for short-range detection, network connectivity, motion tracking, and audiovisual input.]*
+
 <!-- page 17 -->
 
 # Passive (Sensed) Measurement (2)
@@ -398,6 +400,8 @@ Kapteyn A, Banks J, Hamer M, Smith JP, Steptoe A, van Soest A, Koster A, Htay Wa
 **Figure 1.** Illustration of daily activities in a participant with mean social integration score from 7 a.m. to 10 p.m. Orange blocks represent the number of encounters with different types of ties and green blocks represent the number of sets of behaviors this participant engaged in every 3 hr. The pies represent the percentage of time participant spent sedentary in each 3-hr block. Blue lines represent continuous activity counts assessed by the Actical.
 
 27
+
+*[Figure: The multi-panel figure tracks a single participant's daily activities across five three-hour intervals along a shared horizontal time axis from 7:00 to 22:00, comparing four metrics stacked vertically: social engagement (orange step bars, y-axis 0–5), diversity of behaviors (green step bars, y-axis 0–10), percentage of time spent sedentary (green-and-gray pie charts), and continuous physical activity counts (blue line graph, y-axis 0–4000). The main pattern shows that periods of higher social engagement and behavioral diversity between 10:00 and 19:00 correspond to lower proportions of sedentary time and higher physical activity, peaking around 13:00, compared to the morning and late evening intervals.]*
 
 <!-- page 28 -->
 

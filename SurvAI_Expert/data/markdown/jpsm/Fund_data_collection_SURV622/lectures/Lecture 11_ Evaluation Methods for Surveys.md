@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lectures/Lecture 11_ Evaluation Methods 
 pages: 51
 sha256: "9ddc226fc9f216444ce97a5e534b727cbc7111c4de32e75213399c788181d4cc"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:00"
+converted_at: "2026-11-14T21:29:03"
 ---
 
 <!-- page 1 -->

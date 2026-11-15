@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/class_labs/Class11_Lab_nocode.Rmd"
 pages: 
 sha256: "6f97ef188f0eea72a8512822b114f2cfcfc6d01772baec3d7a697f61366b8e40"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:20"
 ---
 
 
@@ -81,7 +81,7 @@ export_summs(mod1, mod2, mod3)
 
 * Eigenvalues:Also used to calculate kappa below. 
 -   Create model intercept w/o intercept, because we do not want to change what this parameter is.
--   Use eigen function to do matrix multiplication, multiply transpose of the model matrix. If in rows it changes to columns, pivoting, and multiply by itself and getting eigenvalues of the product. We have vectors and values. Get Values by e1$val
+-   Use eigen function to do matrix multiplication, multiply transpose of the model matrix. If in rows it changes to columns, pivoting, and multiply by itself and getting eigenvalues of the product. We have vectors and values. Get Values by e1\$val
 -   Big difference below, what it does to Kappa is that it will be large. 
 
 ```r

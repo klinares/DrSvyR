@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lectures/Class 10 Notes.pdf"
 pages: 29
 sha256: "503e5ee4ec4070a6c9164caa94480153bd159b598cfabfc05c34b6ecf04ba46d"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:47"
+converted_at: "2026-11-14T21:28:49"
 ---
 
 <!-- page 1 -->
@@ -387,6 +387,8 @@ Typical effect of self-administration when *R* "comfortable at start"
 
 23
 
+*[Figure: This grouped bar chart titled "Ordinary Terms" displays the "Mean Number of Requests per R" (from 0 to 4 on the y-axis) across three "Type of interface" categories on the x-axis ("One Click", "Two Clicks", and "Click and Scroll"), comparing "Useful" (green) and "Not Useful" (blue) definitions. The main pattern shows that "Useful" definitions yield a substantially higher number of requests than "Not Useful" ones (~3.65 vs. ~1.4) only in the "One Click" interface, whereas in both the "Two Clicks" and "Click and Scroll" interfaces, request rates are much lower overall (around 1 to 1.4) with "Not Useful" slightly exceeding "Useful".]*
+
 <!-- page 24 -->
 
 # Very low effort interface (mouse-overs) leads to more requests than even one click (exp. 2)
@@ -398,6 +400,8 @@ Typical effect of self-administration when *R* "comfortable at start"
 | Two Clicks | 6.5 |
 
 24
+
+*[Figure: The bar chart shows the percentage of respondents requesting definitions on the y-axis (from 0 to 40) across different user interface types on the x-axis. It compares three interface groups—"Roll-Overs," "One Click," and "Two Clicks"—revealing a sharp decrease in requests as effort increases, with "Roll-Overs" (36.5%) resulting in more than four times as many requests as "One Click" (8.9%) and "Two Clicks" (6.5%).]*
 
 <!-- page 25 -->
 
@@ -449,6 +453,8 @@ Typical effect of self-administration when *R* "comfortable at start"
 | Fast-to-Slow | 11.3 |
 
 28
+
+*[Figure: The figure is a bar chart showing the percentage of break-offs on the y-axis (from 0 to 25) across four types of progress indicators on the x-axis: None, Constant Speed, Slow-to-Fast, and Fast-to-Slow. It reveals that the Slow-to-Fast indicator has the highest break-off rate at 21.8%, while the Fast-to-Slow indicator has the lowest at 11.3% (compared to 12.7% for None and 14.4% for Constant Speed).]*
 
 <!-- page 29 -->
 

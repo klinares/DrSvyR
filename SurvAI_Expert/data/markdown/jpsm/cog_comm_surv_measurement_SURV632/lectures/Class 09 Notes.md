@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lectures/Class 09 Notes.pdf"
 pages: 37
 sha256: "b24b38e76dba6131d6195418baea8d1534135e1d16e663d85386cc3e2f0fa966"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:47"
+converted_at: "2026-11-14T21:28:49"
 ---
 
 <!-- page 1 -->
@@ -398,6 +398,8 @@ for judgments of “Fit” and “Confidence”
 * 3+ words
 
 26
+
+*[Figure: This grouped bar chart displays "Percent Agreement" on the y-axis (ranging from 55 to 90) across "Difficulty of Primary Word" ("Easy" versus "Hard") on the x-axis, comparing items of "2 words" (gray bars) against "3+ words" (black bars). The main pattern shows that for easy primary words, longer items (3+ words) have noticeably lower agreement (~76%) than 2-word items (~84%), whereas for hard primary words, overall agreement is lower and 3+ word items have slightly higher agreement (~71%) than 2-word items (~68%).]*
 
 <!-- page 27 -->
 

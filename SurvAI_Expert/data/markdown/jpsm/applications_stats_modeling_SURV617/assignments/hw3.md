@@ -9,7 +9,7 @@ original: "applications_stats_modeling_SURV617/assignments/hw3.qmd"
 pages: 
 sha256: "87a145d317f1e5c487b07d2010c5d4d8d72a249f02535de760f12af514796404"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:39"
+converted_at: "2026-11-14T21:28:40"
 ---
 
 

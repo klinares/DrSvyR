@@ -9,7 +9,7 @@ original: "total_survey_error_II_SURV721/project/Assignment_3_L2L_References.pdf
 pages: 3
 sha256: "1153934a21bf9f3d9a14a7f16223ff7bd603b0fd70317ebf180a374181cd1982"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:24"
+converted_at: "2026-11-14T21:29:33"
 ---
 
 <!-- page 1 -->

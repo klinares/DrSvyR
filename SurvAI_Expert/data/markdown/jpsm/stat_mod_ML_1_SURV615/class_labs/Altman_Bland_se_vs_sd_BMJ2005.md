@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/class_labs/Altman_Bland_se_vs_sd_BMJ2005.pdf"
 pages: 1
 sha256: "332ecfc0c6627efebe0fa43baf211e73b3a07479b58f4b998a23dde5138b1e39"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:20"
 ---
 
 <!-- page 1 -->

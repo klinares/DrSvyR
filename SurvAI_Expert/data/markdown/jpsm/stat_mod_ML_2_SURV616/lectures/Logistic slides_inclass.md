@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/Logistic slides_inclass.pdf"
 pages: 64
 sha256: "a39526df06d9188f40bf242590789b487376e41aeabd58d7193cfee2a999e410"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:23"
+converted_at: "2026-11-14T21:29:32"
 ---
 
 <!-- page 1 -->
@@ -157,6 +157,8 @@ Suzer-Gurtekin
 
 Class 5
 
+*[Figure: The image contains a scatter plot illustrating the relationship between "Temperature" on the horizontal axis (ranging from about 53 to 81) and "Log Odds" on the vertical axis (ranging from -4.0 to -1.0) for a single group of data points. The main pattern shows a clear, negatively sloped linear relationship, where the log odds steadily decrease as temperature increases.]*
+
 <!-- page 8 -->
 
 Review
@@ -173,6 +175,8 @@ We could also convert this to the probability scale:
 Suzer-Gurtekin
 
 Class 5
+
+*[Figure: The figure is a scatter plot with a fitted logistic regression curve showing "Probability of Damage" on the vertical axis (ranging from 0.0 to 1.0) against "Temperature" on the horizontal axis (ranging from 20 to 80). It compares the observed data points—which are clustered between temperatures of 50 and 85 at probabilities below 0.4—to the continuous predicted curve, illustrating the main pattern that the probability of damage decreases along an S-shaped curve from nearly 1.0 at low temperatures to nearly 0.0 at high temperatures.]*
 
 <!-- page 9 -->
 
@@ -1079,6 +1083,8 @@ Points labeled by predicted probability
 Suzer-Gurtekin
 
 Class 5
+
+*[Figure: The figure is a Receiver Operating Characteristic (ROC) curve plot titled "ROC Curve for Model" with an Area Under the Curve of 0.7462, plotting Sensitivity (0.00 to 1.00) on the y-axis against 1 - Specificity (0.00 to 1.00) on the x-axis. It compares a stepped blue curve of data points labeled by predicted probabilities against a diagonal gray reference line, showing a concave upward trend consistently above the diagonal, which indicates better-than-random predictive accuracy.]*
 
 <!-- page 43 -->
 

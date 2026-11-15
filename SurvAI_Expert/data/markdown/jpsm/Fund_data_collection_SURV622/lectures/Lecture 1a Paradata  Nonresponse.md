@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lectures/Lecture 1a Paradata  Nonrespons
 pages: 36
 sha256: "270119c05d64cb973c6b4d06f5759abf79f418ce15dbcc4e369c2adc810140dc"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:00"
+converted_at: "2026-11-14T21:29:03"
 ---
 
 <!-- page 1 -->

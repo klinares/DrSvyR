@@ -9,7 +9,7 @@ original: "applied_sampling_SURV625/lectures/Lecture3.pdf"
 pages: 76
 sha256: "85b07a515d695f1eb38425798e6d5d9e31fceffddcba4dc6606a0199d7f6bfa0"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:43"
+converted_at: "2026-11-14T21:28:45"
 ---
 
 <!-- page 1 -->
@@ -711,7 +711,7 @@ $$deff = \frac{var(\bar{y}_w)}{var_{SRS}(\bar{y})} = \frac{\frac{1 - f}{n} s_w^2
 
 $$deff = \frac{var(\bar{y}_w)}{var_{SRS}(\bar{y})} = \frac{\frac{1-f}{n} s_w^2}{\frac{1-f}{n} s^2} = \frac{s_w^2}{s^2} = 1 - \frac{\sum_h W_h (\bar{y}_h - \bar{y}_w)^2}{s^2}$$
 
-* In general deff$<$1
+* In general deff\$<\$1
 
 <!-- page 43 -->
 

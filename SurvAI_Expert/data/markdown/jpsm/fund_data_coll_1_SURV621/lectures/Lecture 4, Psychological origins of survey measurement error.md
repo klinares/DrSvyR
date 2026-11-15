@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 4, Psychological origins of
 pages: 49
 sha256: "b577d11d2a5923e52dd0607a2c5ed9af830445a58a83a8b39c86a13e5037823a"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:58"
+converted_at: "2026-11-14T21:29:00"
 ---
 
 <!-- page 1 -->
@@ -392,6 +392,8 @@ Source: Tourangeau, Rips & Rasinski (2000)
 
 22
 
+*[Figure: This scatter plot with fitted trend lines displays "Percent Correct Recall" (y-axis, from 0 to 100) over time in "Months" (x-axis, from 0 to 600). It compares memory retention across four categories—Classmate names, Teacher names, Street names, and Grades—showing that while recall declines over time for all groups, classmate and teacher names are retained much longer and more gradually than street names and grades, which drop sharply within the first 100 months.]*
+
 <!-- page 26 -->
 
 # Improving Recall
@@ -691,6 +693,8 @@ $\chi^2 = 762.76, p < 0.001$
 Zhang & Conrad, 2013
 
 41
+
+*[Figure: A bar chart titled "Figure 1. Percentage of persistent speeders by age groups" plots the "% of Persistent Speeders" on the y-axis (from 0 to 40) against five age groups on the x-axis (18–34, 35–44, 45–54, 55–64, and 65+). The chart shows a clear, steady decline in the percentage of persistent speeders as age increases, dropping from over 40% in the youngest group (18–34) to just above 0% in the oldest group (65+).]*
 
 <!-- page 47 -->
 

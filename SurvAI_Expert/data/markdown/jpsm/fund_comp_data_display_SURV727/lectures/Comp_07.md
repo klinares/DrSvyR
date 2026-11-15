@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/Comp_07.pdf"
 pages: 26
 sha256: "1f09e72593ab1995eb5d23486a0409b25bd9d90e5da2624918b849edde3b46a4"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:55"
+converted_at: "2026-11-14T21:28:57"
 ---
 
 <!-- page 1 -->
@@ -134,6 +134,8 @@ Research Objective
 Figure: Grimmer and Stewart, 2013
 
 Fundamentals of Computing and Data Display | Text Mining | 6 / 26
+
+*[Figure: The image contains a hierarchical flowchart (Fig. 1) that provides an overview of "text as data" methods, starting from acquiring and preprocessing documents to defining a research objective. The diagram branches the research objective into two main groups—Classification (which further divides into Known and Unknown Categories, then into specific dictionary, supervised, and clustering methods) and Ideological Scaling (which divides into Supervised and Unsupervised approaches)—showing a top-down progression from general text preparation to specific analytical techniques like LDA and Ensembles.]*
 
 <!-- page 7 -->
 

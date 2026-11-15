@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/class_labs/Class1_Lab_TakeHome_nocode.Rmd"
 pages: 
 sha256: "99989e5fdef5435615d245bc29de11b4666abfabee0e84ec80e8a980ae4a4fe2"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:20"
 ---
 
 
@@ -44,7 +44,7 @@ hlsk <- #readRDS(here( "UMD/classes/stat_mod_ML_1_SURV615/class_1/", "HLSK.RDS")
 
 
 2. Find the household annual income variable. What difference do you see in this, compared to income in Wage and psid? 
-- The range of income is very wide, however, it is right skewed with a few top earners of $300,000 at the top end. In this case the mean is not useful due to it's skewness, so here I report the median of $63,906 with 50% of income falling in between $23,500 and $90,000.
+- The range of income is very wide, however, it is right skewed with a few top earners of \$300,000 at the top end. In this case the mean is not useful due to it's skewness, so here I report the median of \$63,906 with 50% of income falling in between \$23,500 and \$90,000.
 ```r
 #Check the codebook from ICPSR website: 37635-0001-Codebook-ICPSR.pdf
 hlsk |> select(income) |> summary()
@@ -126,7 +126,7 @@ hlsk |> # respondents are all identified as Korean
 
   
 * What is the effect of one more year in the U.S. on immigrants' income?
-- For every 1 year in the US, we would expect Koreans to make $224 less dollars. 
+- For every 1 year in the US, we would expect Koreans to make \$224 less dollars. 
 ```r
 dat <- hlsk |> # respondents are all identified as Korean
   select(income, GQ5, AQ1_PUB) |> 

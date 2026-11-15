@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/class_labs/test_stats.pdf"
 pages: 5
 sha256: "fd2d9e71c363e60bfbdff46363c53126bc543c4b096e5c96b9ce1a87fc18213f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:14"
+converted_at: "2026-11-14T21:29:21"
 ---
 
 <!-- page 1 -->
@@ -204,3 +204,5 @@ This time we get a larger critical value of 2.7. Let's look at what this does to
 <!-- page 5 -->
 
 5
+
+*[Figure: The figure shows two side-by-side probability distribution curves plotted with an x-axis ranging from -4 to 4 and a y-axis ranging from 0.0 to 0.4, comparing significance levels of $a = 0.01$ (left) and $a = 0.05$ (right). Both plots display a symmetrical bell-shaped curve centered at $x = 0$, with the $a = 0.05$ plot showing noticeably larger red-shaded critical regions in both extreme tails compared to the smaller tail regions for $a = 0.01$.]*

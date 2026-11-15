@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/06-04-ModelBasedRecursivePartition
 pages: 15
 sha256: "0a5cc3edf80336d9e42c712f4beed6f15744c7c0175ca1cc4fc08efc8b7229b8"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -211,6 +211,8 @@ Machine Learning for Social Science
 
 Decision Trees II
 
+*[Figure: The figure consists of two side-by-side scatter plots illustrating structural change by comparing a treatment group (triangles) and a control group (circles) across the horizontal axis $z_1$ (ranging from -3 to 2) against vertical axes $\psi_\alpha$ in panel (a) and $\psi_\beta$ in panel (b) (ranging from -2 to 2). In panel (a), treatment values shift from predominantly negative to positive as $z_1$ increases past zero while control values shift in the opposite direction, whereas in panel (b), control values lie flat at zero and treatment values show the same upward step from negative to positive around $z_1 = 0$.]*
+
 <!-- page 11 -->
 
 # Model-based Recursive Partitioning
@@ -231,6 +233,8 @@ Controlling tree complexity
 Figure: Linear-regression-based tree with partial scatterplots
 
 Zeileis et al. (2008)
+
+*[Figure: This diagram shows a linear-regression-based decision tree that splits data based on `tax` and `ptratio` thresholds into five terminal nodes (Nodes 3, 6, 7, 8, and 9). Each terminal node compares two stacked partial scatterplots (with y-axes from 1 to 54, top x-axes from 0.3 to 3.9, and bottom x-axes from 6.3 to 83.5), illustrating a negative trend in the top row of plots and a generally positive trend in the bottom row across the partitioned subgroups.]*
 
 <!-- page 13 -->
 

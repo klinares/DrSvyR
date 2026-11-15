@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/lectures/Class7_Lecture.pdf"
 pages: 65
 sha256: "1a929b4147117f1fcc0eed1d2673a15e6a86ad06147027a96fe58fe7e60e2e61"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:18"
+converted_at: "2026-11-14T21:29:26"
 ---
 
 <!-- page 1 -->
@@ -973,6 +973,8 @@ Mean Wage for those in information jobs by age
 
 Mean Wage for those in industrial jobs by age
 
+*[Figure: The line plot displays the relationship between Age on the horizontal axis (ranging from under 20 to 80) and Wage on the vertical axis (ranging from below 90 to over 140), comparing workers in information jobs (dashed line) to those in industrial jobs (solid line). Both groups exhibit parallel upward linear trends where mean wages increase steadily with age at the same rate, with information jobs consistently earning a higher mean wage than industrial jobs across all ages.]*
+
 <!-- page 42 -->
 
 # Multiple categorical predictors
@@ -1314,6 +1316,8 @@ Mean Wage for married participants by age
 
 Mean Wage for those never married participants by age
 
+*[Figure: The line plot shows the linear relationship between "Age" on the horizontal axis (ranging from 0 to 80) and "Wage" on the vertical axis (marked at 80, 100, and 120), comparing married participants (upper dashed line) to never-married participants (lower solid line). Both groups exhibit an identical positive slope where mean wages increase steadily with age, while married participants consistently earn about 20 units more than never-married participants across all ages.]*
+
 <!-- page 56 -->
 
 # Model 3 – Wage, marital status, and age
@@ -1322,6 +1326,8 @@ Mean Wage for those never married participants by age
 
 Mean Wage for widowed participants by age
 
+*[Figure: This line graph shows the linear relationship between "Age" on the x-axis (ranging from 0 to 80) and "Wage" on the y-axis (ranging from below 80 to over 120). It compares the mean wage by age for two groups—never-married participants and widowed participants—using a solid black line and a closely parallel dotted black line right below it, illustrating that wages increase steadily with age at virtually the same rate for both groups.]*
+
 <!-- page 57 -->
 
 # Model 3 – Wage, marital status, and age
@@ -1329,6 +1335,8 @@ Mean Wage for widowed participants by age
 Mean Wage for divorced participants by age
 
 Mean Wage for those never married participants by age
+
+*[Figure: The line plot displays the relationship between Age on the horizontal axis (ranging from 0 to 80) and Wage on the vertical axis (marked at 80, 100, and 120), comparing divorced participants (upper dash-dotted line) with never-married participants (lower solid line). Both groups exhibit a positive, parallel linear increase in mean wage as age increases, with divorced participants consistently earning slightly higher wages than never-married participants across all ages.]*
 
 <!-- page 58 -->
 

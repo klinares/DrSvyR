@@ -9,7 +9,7 @@ original: "intro_ML_big_data_SURV751/lectures/PredictionandMachineLearningNotesS
 pages: 56
 sha256: "7be208c721974b926640f759ed2d92a0232b1fb05fec70d1bb6d73a697fe233c"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 <!-- page 1 -->
@@ -427,6 +427,8 @@ http://bits.blogs.nytimes.com/2015/03/17/ibm-introduces-twitter-fueled-data-serv
 
 0100000101000001010100000100111101010010SVY 751 Notes Big
 
+*[Figure: The page contains a visual equation diagram at the top—combining icons for Twitter, Starbucks, a mobile app/loyalty card, and a robot—and a dual-axis line plot at the bottom. The line plot compares US per capita consumption of mozzarella cheese (left y-axis, in pounds) with US civil engineering doctorates awarded (right y-axis, in degrees awarded) across the years 2000 to 2009 (x-axis), showing that both series follow a closely matching upward trend over time.]*
+
 <!-- page 14 -->
 
 Notes are for STUDENT USE ONLY. DO NOT circulate without permission from Instructors.
@@ -695,6 +697,8 @@ col.axis="navyblue")
 ```
 
 0100000101000001010100000100111101010010 SV
+
+*[Figure: The top section features a scree-type line plot with "Number of Clusters" (from 1 to 15) on the x-axis and "Total Within Cluster SS" (from 0.0 to 3.0) on the y-axis, showing a sharp drop in variance up to clusters 2, 3, and 4 (highlighted by blue circles) before leveling off. The bottom section compares two 3D scatter plots with axes for "PCT_Hispanic", "PCT_AllOther", and "PCT_Black", illustrating how a subset of unclustered red points in the left plot (outlined in blue and linked by a large arrow) is separated into a distinct blue group (Cluster 1, 9 cases) alongside the remaining red group (Cluster 2, 58 cases) in the right plot.]*
 
 <!-- page 22 -->
 
@@ -1231,6 +1235,8 @@ Notes are for STUDENT USE ONLY. DO NOT circulate without permission from Instruc
 
 0100000101000001010100
 
+*[Figure: The page shows a parallel coordinates plot titled "The Four Measures for our Flowers," displaying numeric values from 0 to 8 on the vertical axis across four flower attributes (Sepal.Length, Sepal.Width, Petal.Length, and Petal.Width) on the horizontal axis. The plot compares two groups—"Virginica" (teal lines) and "Other" (red lines)—showing that Virginica flowers generally have higher values across the measures, particularly for Petal.Length and Petal.Width, whereas a subset of "Other" flowers has much lower petal measurements.]*
+
 <!-- page 35 -->
 
 Notes are for STUDENT USE ONLY. DO NOT circulate without permission from Instructors.
@@ -1242,6 +1248,8 @@ Notes are for STUDENT USE ONLY. DO NOT circulate without permission from Instruc
 # of Neighbors
 
 010000010100000101010000010
+
+*[Figure: The top line plot with error bars shows the mean of accuracy (vertical axis, from 0.93 to 0.99) across different odd numbers of neighbors (horizontal axis, from 1 to 31), showing accuracy peaking at 11 neighbors within a high-performing green-boxed group (7 to 17 neighbors) before dropping into a lower red-boxed group (19 to 31 neighbors). The bottom figure is a 2x2 confusion matrix comparing actual classes (vertical axis) against predicted classes (horizontal axis) for "Virginica" and "Other", showing high classification accuracy with 49 and 99 correct predictions on the main diagonal and only 1 error in each off-diagonal cell.]*
 
 <!-- page 36 -->
 
@@ -1409,6 +1417,8 @@ Social Media Response Score
 # Years Active on Facebook
 
 0100000101000001010100000100111101010010 SVY
+
+*[Figure: The page displays two figures: a 3D scatter plot on top plotting "Social Media Response Score" (0–100) against "Percentage of Day with Internet Access" (0–1) and "# Years Active on Facebook" (0–10) for 50,000 observations divided into six distinct color-coded clusters, and a decision tree diagram below it. The decision tree splits the data by these internet access and Facebook activity thresholds into six terminal nodes (labeled R1 through R6), each showing a boxplot of the response score on a 0–100 vertical scale where the median score generally increases from Region 1 (~20) to Region 6 (~80).]*
 
 <!-- page 41 -->
 
@@ -2019,6 +2029,8 @@ Notes are for STUDENT USE ONLY. DO NOT circulate without permission from Instruc
 0 10 30
 
 0100000101000001010100000
+
+*[Figure: The figure consists of two side-by-side dot plots comparing variable importance in a Random Forest model using "Mean Decrease in Accuracy" (x-axis from 20 to 50) on the left and "Mean Decrease Gini Index" (x-axis from 0 to 30+) on the right, against 20 predictor variables listed on the y-axes in descending order. The main pattern shows that a small group of top variables—highlighted in boxes, specifically `R01_lmiindex`, `R01_low_response_score`, `division`, and `R01_hus`—consistently rank as the most important predictors across both metrics before importance values taper off for the remaining variables.]*
 
 <!-- page 54 -->
 

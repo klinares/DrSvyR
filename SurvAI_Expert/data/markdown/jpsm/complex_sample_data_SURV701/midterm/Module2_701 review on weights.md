@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/midterm/Module2_701 review on weights.pdf
 pages: 2
 sha256: "b8c91b062f7fa0c03e23639d43ae6bc84bda2b56f863fe4600266cda8a16b93b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 <!-- page 1 -->

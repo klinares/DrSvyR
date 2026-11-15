@@ -9,7 +9,7 @@ original: "PracTools_SURV745/lecture_notes.pdf"
 pages: 8
 sha256: "36b3ba4f5e4c6fc8aea6258caba219f60c01165a69a3e3cc588e31c9b1429178"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:09"
+converted_at: "2026-11-14T21:29:14"
 ---
 
 <!-- page 1 -->
@@ -270,6 +270,8 @@ $Z_{obs}$ in $H_0$ rejection region
     * cov is negative, variance is larger
     * if dependent more efficiency.
 * Partially overlapping samples
+
+*[Figure: The figure is a density plot comparing the normal distributions of a test statistic $Z$ (x-axis, ranging from -2 to 6) against probability density (y-axis, ranging from 0.0 to 0.4) under the null hypothesis ($H_0$, centered at $\mu = \mu_0$) and the alternative hypothesis ($H_A$, centered at $\mu = \mu_0 + \delta$), along with a hand-drawn curve sketched to the left. It illustrates how the critical value $z_{1-\alpha}$ divides the $H_0$ non-rejection and rejection regions, showing the Type I error ($\alpha$), Type II error ($\beta$), and statistical power ($1-\beta$, shaded in grey under the $H_A$ curve).]*
 
 <!-- page 7 -->
 

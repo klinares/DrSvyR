@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lecture_notes.pdf"
 pages: 7
 sha256: "22b33b326862dc604c2863d3f2de94db651cad055c8c1b475b1b7b635b9a2cd3"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:59"
+converted_at: "2026-11-14T21:29:01"
 ---
 
 <!-- page 1 -->

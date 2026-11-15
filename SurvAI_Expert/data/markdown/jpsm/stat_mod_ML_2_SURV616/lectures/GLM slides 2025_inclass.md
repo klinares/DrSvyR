@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/GLM slides 2025_inclass.pdf"
 pages: 80
 sha256: "e5ab2f7f6a4aa44b31e7e3d62096f908ab197d1ef520e12513f6905ec6cf7a8a"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:22"
+converted_at: "2026-11-14T21:29:30"
 ---
 
 <!-- page 1 -->

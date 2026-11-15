@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Week 05_Cognitive Interviewing.pdf"
 pages: 44
 sha256: "5bc660c6f0e096bd30915528190946070b13909b7dfc64cb28b87726370f0780"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:58"
+converted_at: "2026-11-14T21:29:01"
 ---
 
 <!-- page 1 -->
@@ -94,6 +94,8 @@ Consider the specific questions that you have been working on, what are the pote
 *Groves, et al., Survey Methodology, 2nd edition (2009)*
 
 5
+
+*[Figure: This flowchart illustrates the five cognitive stages of a survey respondent's response process: encoding and storage, comprehension, retrieval, judgment and estimation, and reporting an answer. While bold horizontal arrows indicate a primary progression from left to right across the five stages, curved feedback arrows loop backward from later stages (retrieval, judgment, and reporting) to earlier ones (comprehension and retrieval), accompanied by dashed callout lines connecting each stage to its definition.]*
 
 <!-- page 6 -->
 
@@ -500,6 +502,8 @@ Source: Willis (2005)
 Source: Blair & Conrad (2011)
 
 34
+
+*[Figure: The figure is a bar chart with error bars showing the mean number of unique problems identified across different sample sizes, with "Sample Size" on the x-axis (in increments of 5 from 5 to 90) and "Number Unique Problems" on the y-axis (ranging from 0 to 250). The main pattern shows that as the sample size increases, the number of unique problems steadily increases from just under 50 (at sample size 5) to slightly over 200 (at sample size 90), with the rate of increase gradually tapering off and the error bars narrowing at larger sample sizes.]*
 
 <!-- page 35 -->
 

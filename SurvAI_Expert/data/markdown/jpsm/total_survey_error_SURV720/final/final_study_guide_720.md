@@ -9,7 +9,7 @@ original: "total_survey_error_SURV720/final/final_study_guide_720.qmd"
 pages: 
 sha256: "59f7c68aba41ba3fba29189ca0f4d78fbc5521b7934397d20469e55df91b0bef"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:24"
+converted_at: "2026-11-14T21:29:33"
 ---
 
 

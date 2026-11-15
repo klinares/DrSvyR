@@ -9,7 +9,7 @@ original: "sampling_1_SURV626/lectures/SURV 626 - Unit 2 Elements-1.pdf"
 pages: 58
 sha256: "411909230e40a8007a0e6f076136f8976dfc22323a9c36d8724d67593076d7f0"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:12"
+converted_at: "2026-11-14T21:29:18"
 ---
 
 <!-- page 1 -->

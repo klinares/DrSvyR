@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/Logistic slides.pdf"
 pages: 60
 sha256: "455fd8f48e1c5aa5c58bbce3c2ad9c9216a1bbdc04fa27c85ab2872316879687"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:22"
+converted_at: "2026-11-14T21:29:31"
 ---
 
 <!-- page 1 -->
@@ -136,6 +136,8 @@ Applications
 James Wagner
 Class 5
 
+*[Figure: This scatter plot displays "Log Odds" on the vertical axis (ranging from -4.0 to -1.0) against "Temperature" on the horizontal axis (ranging from 55 to 80) for a single group of data points. The main pattern shows a strict negative linear relationship, where log odds steadily decrease from roughly -1.0 to below -4.0 as temperature increases from around 53 to 81.]*
+
 <!-- page 8 -->
 
 Review
@@ -152,6 +154,8 @@ We could also convert this to the probability scale:
 James Wagner
 
 Class 5
+
+*[Figure: The figure is a scatter plot with a fitted logistic regression curve showing the "Probability of Damage" on the vertical axis (ranging from 0.0 to 1.0) against "Temperature" on the horizontal axis (ranging from 20 to 80). The S-shaped curve demonstrates a strong negative relationship where the probability of damage starts near 1.0 at low temperatures and decreases sharply toward 0.0 as the temperature rises above 50, matching the cluster of observed data points between temperatures of 50 and 80.]*
 
 <!-- page 9 -->
 
@@ -694,6 +698,8 @@ Sensitivity
 Points labeled by predicted probability
 
 30 / 60 James Wagner Class 5
+
+*[Figure: The plot shows an ROC (Receiver Operating Characteristic) curve for a model, plotting "Sensitivity" on the vertical axis against "1 - Specificity" on the horizontal axis, both ranging from 0.00 to 1.00. It compares the model's stepped performance curve—with individual points labeled by predicted probability—against a diagonal reference line, yielding an Area Under the Curve (AUC) of 0.7462 as the curve bows upward toward the top-left corner.]*
 
 <!-- page 31 -->
 

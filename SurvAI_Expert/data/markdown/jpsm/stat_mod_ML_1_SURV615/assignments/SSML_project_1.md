@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/assignments/SSML_project_1.Rmd"
 pages: 
 sha256: "f1298fdf7bd59ba920ea4eb7c75e4c21de0d528e2a074080deffb0a12b39e16f"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:20"
 ---
 
 
@@ -45,7 +45,7 @@ hprice |> summary() # print summary statistics for each variable
 <br>
 
 ### 1. What are the mean and the variance of homeprice? What do they mean?
-- The average house sale price from 1986-1994 was $94,411, with a very high variance due to a few houses being sold for a lot more than the average. 
+- The average house sale price from 1986-1994 was \$94,411, with a very high variance due to a few houses being sold for a lot more than the average. 
 
 ```r
 hprice <- hprice |> 
@@ -75,7 +75,7 @@ CI_output <- hprice |>
 CI_output
 
 ```
-- The confidence interval of house prices (mean $94,411 [95% CI `r CI_output$lower`, `r CI_output$upper`]) implies that if we were to take repeated samples from the same population with _n_ sample sizes, we would expect the true price to be contained in this interval 95% of the time. 
+- The confidence interval of house prices (mean \$94,411 [95% CI `r CI_output$lower`, `r CI_output$upper`]) implies that if we were to take repeated samples from the same population with _n_ sample sizes, we would expect the true price to be contained in this interval 95% of the time. 
 
 <br>
 
@@ -106,7 +106,7 @@ H_A: \mu_{ajwtr=1} - \mu_{ajwtr=0} = > 0
 
 
 - First, we examine the assumption of equal variances. 
-   - Our f-test's p-value is less than .05, therefore we cannot reject the Null hypothesis, and the variances between coastal and non-coastal metropolitan areas are not equal. We can also use the confidence intervals to test the ratio of the two variances, and we can see that $1$ is not in the $95% CI; therefore, the variances are not equal and we can account for this in our two sample t-test.  
+   - Our f-test's p-value is less than .05, therefore we cannot reject the Null hypothesis, and the variances between coastal and non-coastal metropolitan areas are not equal. We can also use the confidence intervals to test the ratio of the two variances, and we can see that $1$ is not in the \$95% CI; therefore, the variances are not equal and we can account for this in our two sample t-test.  
 ```r
 var.test(homeprice ~ ajwtr, hprice, alternative = "two.sided")
 

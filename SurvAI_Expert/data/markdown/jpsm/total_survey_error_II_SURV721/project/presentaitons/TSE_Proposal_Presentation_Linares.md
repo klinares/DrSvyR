@@ -9,7 +9,7 @@ original: "total_survey_error_II_SURV721/project/presentaitons/TSE_Proposal_Pres
 pages: 3
 sha256: "0262055ef9ec5fa69ceb9a86c22b9d21d009da4a914b0e83dd0500471f12f398"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:24"
+converted_at: "2026-11-14T21:29:33"
 ---
 
 <!-- page 1 -->

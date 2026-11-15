@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lectures/Class 02 Notes.pdf"
 pages: 53
 sha256: "2aa913998354c886863608825d6a7ec40aae317318cc2c75cec5d8fbf8c23f1b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:46"
+converted_at: "2026-11-14T21:28:48"
 ---
 
 <!-- page 1 -->
@@ -41,6 +41,8 @@ Measurement Error can occur at any stage
 Coding
 
 2
+
+*[Figure: This flowchart diagram illustrates the sequential stages of responding to a question— progressing downward through Comprehension, Retrieval, Judgment and Estimation, Reporting/Mapping, and finally Coding—with bidirectional feedback arrows on the left connecting the core cognitive steps. The main pattern highlights a large star-shaped callout on the right with arrows pointing to all five stages, demonstrating that measurement error can occur at any point in the process.]*
 
 <!-- page 3 -->
 
@@ -680,6 +682,8 @@ B112 882000002
 | **Inaccurate** | 4 | 3 |
 
 28
+
+*[Figure: This stacked bar chart displays the percentage of responses (y-axis, from 0 to 100) categorized by whether interviewer-provided information is "Accurate" or "Inaccurate" (x-axis), with each bar divided into accurate and inaccurate responses. The vast majority of interviewer-provided information is accurate and leads to accurate responses (87%, plus 6% inaccurate responses), whereas inaccurate interviewer information accounts for only a small fraction of cases (4% accurate responses and 3% inaccurate responses).]*
 
 <!-- page 44 -->
 

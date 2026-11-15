@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/assignments/xgboost.qmd"
 pages: 
 sha256: "d9f5a42b847f4e9e33fff8d651ebaaaa5125b76111c8262e8d35c387857fdac9"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 

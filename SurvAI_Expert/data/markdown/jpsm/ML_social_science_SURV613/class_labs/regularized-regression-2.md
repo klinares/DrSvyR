@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/class_labs/regularized-regression-2.Rmd"
 pages: 
 sha256: "6188af3c731cbbcc9351228daaa123279328d6df00617f7a1b1493f237e52c92"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 
@@ -44,7 +44,7 @@ boston_train <- BostonHousing2[train,]
 boston_test <- BostonHousing2[-train,]
 ```
 
-A quick look on our outcome variable for the next sections, which is the Median value of owner-occupied homes in $1000's.
+A quick look on our outcome variable for the next sections, which is the Median value of owner-occupied homes in \$1000's.
 
 ```r
 summary(boston_train$medv)

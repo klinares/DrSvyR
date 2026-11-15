@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/class_examples/Module12_Model_Assisted_Inference_Gu
 pages: 
 sha256: "ebd391da592fda82177d7f1be32da743690b00659b9a352fcd15a4a03701efcc"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:01"
+converted_at: "2026-11-14T21:29:05"
 ---
 
 

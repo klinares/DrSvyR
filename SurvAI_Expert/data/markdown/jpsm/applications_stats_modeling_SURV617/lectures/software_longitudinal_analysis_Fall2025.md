@@ -9,7 +9,7 @@ original: "applications_stats_modeling_SURV617/lectures/software_longitudinal_an
 pages: 18
 sha256: "f409965187ac39e4763218b644bacb43accc3e6e3b63342bac729611c3dfa40f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:41"
+converted_at: "2026-11-14T21:28:43"
 ---
 
 <!-- page 1 -->

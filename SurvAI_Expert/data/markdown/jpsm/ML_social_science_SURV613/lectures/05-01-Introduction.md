@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/05-01-Introduction.pdf"
 pages: 7
 sha256: "1920aaa8b941b67eb049eb22df0155c0e72eda6d0c096988b0e8d08ddb7c67c1"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -115,6 +115,8 @@ Efron & Hastie (2016)
 
 Machine Learning for Social Science
 Regularized regression II
+
+*[Figure: This two-panel line plot compares the coefficient paths for five variables (funding, not-hs, college4, college, and hs) under (a) Lasso and (b) Ridge regression, plotting "Coefficients" (ranging from -5 to 10) on the y-axis against the relative $L_1$ or $L_2$ norm of the estimated coefficients (from 0.0 to 1.0) on the x-axis. The main pattern shows that as the norm ratio decreases toward zero from right to left, Ridge coefficients shrink smoothly and simultaneously toward zero, whereas Lasso coefficients follow piecewise-linear paths and hit zero sequentially at different threshold values.]*
 
 <!-- page 7 -->
 

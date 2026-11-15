@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/code/05-reddit.Rmd"
 pages: 
 sha256: "3d748d909335b1b31b1ae641b8344d67634901bf55dbf6afbd4dd1fe7f1dd37c"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:53"
+converted_at: "2026-11-14T21:28:56"
 ---
 
 

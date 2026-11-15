@@ -9,7 +9,7 @@ original: "applications_stats_modeling_SURV617/class_code/Module1_Lecture3_ess_2
 pages: 
 sha256: "27390fdde8c770b9f7aeb0bf9f443f092a7c7d3be2bdbee56b6c1a15876aa507"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:39"
+converted_at: "2026-11-14T21:28:40"
 ---
 
 

@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/12-02-OverUndersampling.pdf"
 pages: 6
 sha256: "430a9c97aa68df10ee2cc82278f89c0a395eb52e1703bf7d3c5a43da3087867c"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->
@@ -69,6 +69,8 @@ $^1$Kuhn and Johnson (2013)
 Machine Learning for Social Science
 
 ML Toolbox
+
+*[Figure: The figure is a four-panel scatter plot comparing the distributions of two groups, "Class1" (red circles) and "Class2" (blue squares), plotted with "Predictor A" on the x-axis and "Predictor B" on the y-axis across four sampling methods: "Original", "Downsampled", "Upsampled", and "Hybrid". The main pattern shows an initially imbalanced dataset where the majority Class1 is thinned out in the Downsampled panel, the minority Class2 is densely duplicated in the Upsampled panel, and both classes are adjusted to a balanced density in the Hybrid (SMOTE) panel.]*
 
 <!-- page 5 -->
 

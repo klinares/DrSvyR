@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/assignments/HW5.qmd"
 pages: 
 sha256: "892765db9b12a5e3e529108b9d3ef9d82034732315c1337ebd04a7cbc695ed1b"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:01"
+converted_at: "2026-11-14T21:29:05"
 ---
 
 

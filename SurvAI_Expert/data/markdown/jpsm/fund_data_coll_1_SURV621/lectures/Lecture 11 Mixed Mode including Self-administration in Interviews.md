@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 11 Mixed Mode including Sel
 pages: 134
 sha256: "c282c0eca3f82057ffc9a5564dff20309bb35f0509eb26863d5067a1ba4ebde6"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:57"
+converted_at: "2026-11-14T21:28:59"
 ---
 
 <!-- page 1 -->
@@ -1192,6 +1192,8 @@ Data Collection Mode
 **Figure 2.1 – Survey Life Cycle for Mixed-mode Surveys from a Quality Perspective**
 
 85
+
+*[Figure: This flowchart diagram illustrates the survey life cycle for mixed-mode surveys from a quality perspective by comparing two parallel vertical sequences: "Measurement" (progressing from Construct to Edited Response) and "Representation" (progressing from Target Population to Survey Statistic). At each step of the downward progression, horizontal arrows indicate where specific errors or methodological factors—such as validity, mode choice, measurement error, coverage error, sampling error, nonresponse error, and adjustment error—impact the process.]*
 
 <!-- page 86 -->
 

@@ -9,7 +9,7 @@ original: "PracTools_SURV745/assignments/SURV745_Assign_2_Linares.qmd"
 pages: 
 sha256: "74bcd9b4c4b82b9fe1da52cf8dd60b5068a673b6ac8434a11416a9ddf1fed3de"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 

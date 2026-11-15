@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/class_labs/Bland_Altman_one_and_twosided_BMJ199
 pages: 1
 sha256: "ca31ce00eb3b8913abccfbeef94037966778dab99ddedb278c824a836a2ea3ec"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:20"
 ---
 
 <!-- page 1 -->

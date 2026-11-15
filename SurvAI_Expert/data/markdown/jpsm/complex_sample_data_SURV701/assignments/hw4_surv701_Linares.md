@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/assignments/hw4_surv701_Linares.qmd"
 pages: 
 sha256: "88eecb75d8822425ea09e9aafcd161d007dee2688006c1e5c1c3fc47b4c0b118"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:48"
+converted_at: "2026-11-14T21:28:50"
 ---
 
 

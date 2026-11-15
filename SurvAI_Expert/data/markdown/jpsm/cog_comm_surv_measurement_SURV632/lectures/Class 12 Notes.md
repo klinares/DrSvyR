@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lectures/Class 12 Notes.pdf"
 pages: 57
 sha256: "01dd4d9ff6fc4f1ca213d109e23934d63fd4f1c9ce0851ebe956c8830353b556"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:47"
+converted_at: "2026-11-14T21:28:50"
 ---
 
 <!-- page 1 -->
@@ -834,6 +834,8 @@ $$Y_g = \tau_g + \Lambda_g \eta + \varepsilon_g$$
 * $\varepsilon$ is a $p \times 1$ vector of residuals or error terms representing the unique portion of the observed variables not explained by the common latent variables
 * $g$, group subscript, indicating that each of the parameters can differ by group
 
+*[Figure: The figure is a path diagram without axes or group comparisons that illustrates a single-factor confirmatory factor analysis (CFA) model with $p$ observed indicators. It shows an oval labeled "Latent Variable" at the top with directed arrows (labeled $\lambda_1, \lambda_2, \dots, \lambda_p$) pointing down to rectangular observed indicator boxes ($Y_1, Y_2, \dots, Y_p$), each of which also receives an upward arrow from a corresponding circular residual error term ($\varepsilon_1, \varepsilon_2, \dots, \varepsilon_p$).]*
+
 <!-- page 53 -->
 
 53
@@ -846,6 +848,8 @@ $$Y_g = \tau_g + \Lambda\eta + \varepsilon_g$$
 
 * Requires the factor loadings ($\Lambda$) to be equal across comparison groups
 * Full or partial metric invariance
+
+*[Figure: The figure is a path diagram illustrating a single-factor confirmatory factor analysis (CFA) model with no coordinate axes. It depicts a central "Latent Variable" oval with directional arrows (labeled $\lambda_1, \lambda_2, \dots, \lambda_p$) pointing to $p$ rectangular indicator variables ($Y_1, Y_2, \dots, Y_p$), each of which also receives an arrow from its own circular error term ($\varepsilon_1, \varepsilon_2, \dots, \varepsilon_p$).]*
 
 <!-- page 54 -->
 
@@ -861,6 +865,8 @@ $$Y_g = \tau + \Lambda \eta + \varepsilon_g$$
 * Final level of MI-testing that is required to be able to compare latent means across groups
 * Only with scalar invariance (at least partial scalar invariance), one can more confidently conduct latent means comparisons across groups
 
+*[Figure: The page features a path diagram illustrating a single-factor confirmatory factor analysis (CFA) model with no axes or group comparisons. It depicts a single oval labeled "Latent Variable" at the top, pointing downward via factor loading arrows ($\lambda_1, \lambda_2, \dots, \lambda_p$) to $p$ rectangular observed indicators ($Y_1, Y_2, \dots, Y_p$), each of which also receives an upward arrow from a corresponding circular error term ($\varepsilon_1, \varepsilon_2, \dots, \varepsilon_p$).]*
+
 <!-- page 55 -->
 
 55
@@ -875,6 +881,8 @@ $$Y_g = \tau + \Lambda\eta + \varepsilon$$
 * Necessary in order to attribute group differences in the covariance structure (variances and covariances/correlations) of the observed indicators to the corresponding differences at the latent variable level
 
 Melipillán, E. R., & Hu, M. (2020). Measurement Invariance Across Groups. SAGE Publications Limited. https://methods-sagepub-com-christuniversity.knimbus.com/foundations/measurement-invariance-across-groups
+
+*[Figure: The figure is a path diagram illustrating a single-factor confirmatory factor analysis (CFA) model with no coordinate axes. It shows a single oval "Latent Variable" at the top with arrows labeled $\lambda_1, \lambda_2, \dots, \lambda_p$ pointing down to rectangular observed indicator boxes ($Y_1, Y_2, \dots, Y_p$), each of which also receives an upward arrow from a circular unique residual term ($\varepsilon_1, \varepsilon_2, \dots, \varepsilon_p$).]*
 
 <!-- page 56 -->
 

@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/09-02-ModelBasedBoosting.pdf"
 pages: 13
 sha256: "b1c55632d3d0782cd6445b3a8a5dcf3f0b2ddf78e1ad2c71baa225c1e34ae943"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -104,6 +104,8 @@ $^2$Hofner et al. (2014)
 
 Machine Learning for Social Science | Boosting II | 5 / 12
 
+*[Figure: The line plot shows coefficient paths in model-based boosting, plotting "Coefficients" on the vertical axis (from below 0 to over 3) against the "Number of boosting iterations" on the horizontal axis (from 0 to 100). It compares eight variables (`anthro3b`, `anthro3a`, `kneebreadth`, `anthro3c`, `hipcirc`, `waistcirc`, `age`, and `elbowbreadth`), showing that variables enter the model at different iterations and generally increase in magnitude before leveling off, with `anthro3b` and `anthro3a` reaching the highest positive values while `elbowbreadth` becomes slightly negative after iteration 55.]*
+
 <!-- page 7 -->
 
 Model-based Boosting
@@ -144,6 +146,8 @@ $^3$Mayr et al. (2014)
 
 Machine Learning for Social Science
 Boosting II
+
+*[Figure: A 2x2 grid of scatter plots displays boosting with a P-spline base-learner, comparing the fitted model (solid red line) against a true underlying curve (dashed black line) and observed data points (open circles) across an unlabeled horizontal axis (-0.2 to 0.2) and a vertical axis $y$ (-0.10 to 0.10). Comparing four iteration steps ($m = 1$, $m = 30$, $m = 110$, and $m = 50000$), the plots show the red fitted curve progressing from an underfitted, nearly flat line at $m = 1$, to closely matching the true dashed curve at $m = 30$ and $m = 110$, and finally becoming jagged and overfitted to the noise at $m = 50000$.]*
 
 <!-- page 9 -->
 
@@ -208,6 +212,8 @@ $^4$Bergstra and Benglio (2012)
 Machine Learning for Social Science
 
 Boosting II
+
+*[Figure: The figure consists of two side-by-side diagrams comparing a "(a) Grid layout" and a "(b) Random layout" for nine sampled points across two axes labeled "Important parameter" (horizontal) and "Unimportant parameter" (vertical), with marginal curves along the top and left borders. The main pattern shows that while the 3x3 grid layout only tests three distinct values along the important parameter axis (missing the peak of the green top curve), the random layout tests nine distinct values along that same axis, successfully capturing the peak.]*
 
 <!-- page 12 -->
 

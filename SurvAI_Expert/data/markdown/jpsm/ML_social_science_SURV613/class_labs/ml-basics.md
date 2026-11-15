@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/class_labs/ml-basics.Rmd"
 pages: 
 sha256: "de1c84919de4ec257cb315f5fa18fd92e5a8fb3568eb8866fdaacc3dabf91831"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 

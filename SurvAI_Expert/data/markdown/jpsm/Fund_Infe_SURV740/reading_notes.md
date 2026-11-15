@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/reading_notes.pdf"
 pages: 14
 sha256: "0667bec6617400f65fce56fcba4a1efb37c35d4d6d968350425678763d5f2aa8"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:04"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 <!-- page 1 -->

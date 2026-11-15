@@ -9,7 +9,7 @@ original: "PracTools_SURV745/labs/Class2Lab.pdf"
 pages: 12
 sha256: "6d9a6d19c18885593224cd98712c062906171324dde80176c4f4e7f7ba279a6e"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:08"
+converted_at: "2026-11-14T21:29:13"
 ---
 
 <!-- page 1 -->

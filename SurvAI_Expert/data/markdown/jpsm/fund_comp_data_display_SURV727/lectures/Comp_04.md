@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/Comp_04.pdf"
 pages: 46
 sha256: "9bb046b530bb8eb2ab21e3c1272b056d47d5436e7c765abf7674c1328ded67b6"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:54"
+converted_at: "2026-11-14T21:28:57"
 ---
 
 <!-- page 1 -->
@@ -207,6 +207,8 @@ gather()
 > gather(cases, key = "year", value = "n", 2:4)
 ```
 
+*[Figure: The diagram illustrates how the `gather()` function reshapes a data table from wide to long format, indicated by a blue arrow pointing from a 3-row, 4-column table on the left to a 9-row, 3-column table on the right. It compares numerical values for three countries (FR, DE, and US) across the years 2011, 2012, and 2013, showing how the three separate year columns are consolidated into a single "Year" column alongside a corresponding "n" value column.]*
+
 <!-- page 11 -->
 
 Tidy data tidyr
@@ -235,6 +237,8 @@ Figure: Reshape from wide to long format
 
 Fundamentals of Computing and Data Display Data Wrangling 11 / 45
 
+*[Figure: The figure compares two data tables to illustrate reshaping data from a wide format on the left to a long format on the right for three countries (FR, DE, and US). The wide table displays the years 2011, 2012, and 2013 as separate column headers with three rows, whereas the long table consolidates the years into a single "Year" column alongside "Country" and value ("n") columns across nine rows.]*
+
 <!-- page 12 -->
 
 # tidyr
@@ -258,6 +262,8 @@ Figure: Reshape from wide to long format
 | **FR** | 2013 | 7000 |
 | **DE** | 2013 | 6200 |
 | **US** | 2013 | 13000 |
+
+*[Figure: The figure compares two color-coded tables illustrating how to reshape data for three countries (FR, DE, and US) across the years 2011, 2012, and 2013 from a wide format on the left to a long format on the right. The wide table uses separate columns for each year, whereas the long table consolidates the year headers into a single "Year" column and stacks the corresponding numerical values into a single "n" column, expanding the structure from three data rows to nine.]*
 
 <!-- page 13 -->
 
@@ -291,6 +297,8 @@ spread()
 
 Fundamentals of Computing and Data Display | Data Wrangling | 13 / 45
 
+*[Figure: The diagram illustrates reshaping a dataset from long to wide format using the `spread()` function, indicated by a blue arrow pointing from a six-row table on the left to a three-row table on the right. The left table organizes values for three cities (New York, London, and Beijing) under columns for `city`, `size` (large or small), and `amount`, while the right table pivots the `size` categories into distinct `large` and `small` columns containing the corresponding `amount` values for each city row.]*
+
 <!-- page 14 -->
 
 # tidyr
@@ -312,6 +320,8 @@ Figure: Reshape from long to wide format
 | London | 22 | 16 |
 | Beijing | 121 | 56 |
 
+*[Figure: The diagram illustrates reshaping a dataset from a long format on the left to a wide format on the right, comparing "large" and "small" size amounts across three cities (New York, London, and Beijing). Instead of traditional plot axes, it displays two tables where the left table lists `city`, `size`, and `amount` across six rows, while the right table pivots the blue `size` categories (`large` and `small`) into separate columns, reducing the data to one row per city.]*
+
 <!-- page 15 -->
 
 # tidyr
@@ -332,6 +342,8 @@ Figure: Reshape from long to wide format
 | New York | 23 | 14 |
 | London | 22 | 16 |
 | Beijing | 121 | 56 |
+
+*[Figure: The figure consists of two side-by-side tables illustrating how a dataset for three cities (New York, London, and Beijing) is reshaped from a long format to a wide format. The left table organizes the data into six rows with columns for "city", "size" (large or small), and "amount", while the right table condenses this into three rows—one per city—by pivoting the "large" and "small" categories into separate columns containing their respective amounts.]*
 
 <!-- page 16 -->
 
@@ -362,6 +374,8 @@ Figure: Split a column by dividing values at a specific character
 
 Fundamentals of Computing and Data Display Data Wrangling 16 / 45
 
+*[Figure: The figure shows a tabular representation of a dataset for Afghanistan from 1980 to 1989, illustrating how a single column (`codes` containing "new_sp_m014") is split at underscore characters into three distinct columns (`new`, `type`, and `sexage`). The original `codes` column is shown faded out, while the newly created columns alongside `country`, `year`, and `n` are displayed clearly to demonstrate the result of the `separate()` data wrangling operation.]*
+
 <!-- page 17 -->
 
 # tidyr
@@ -388,6 +402,8 @@ $\longrightarrow$
 > drop_na(x, x2)
 > # drop_na(x)
 ```
+
+*[Figure: The diagram illustrates how a data table labeled "X" with two columns (`x1` and `x2`) is transformed by removing rows with missing values (`NA`). Specifically, an arrow points from the original five-row table (with `x1` values A through E and `x2` containing `NA`s for B, C, and E) to a filtered two-row table retaining only the complete rows (A with 1, and D with 3).]*
 
 <!-- page 18 -->
 
@@ -681,6 +697,8 @@ $\rightarrow$
 Fundamentals of Computing and Data Display
 Data Wrangling
 
+*[Figure: The diagram illustrates a column selection operation on a data table, showing a five-column table (`year`, `sex`, `name`, `n`, `prop`) on the left pointing via an arrow to a smaller two-column table on the right. The `name` and `prop` columns are highlighted in blue in the original table and are the only columns retained in the resulting table, while the gray columns (`year`, `sex`, `n`) are excluded.]*
+
 <!-- page 29 -->
 
 Split-Apply-Combine dplyr
@@ -710,6 +728,8 @@ $\rightarrow$
 ```
 
 Fundamentals of Computing and Data Display Data Wrangling 28 / 45
+
+*[Figure: The diagram illustrates a row-filtering operation on a baby names data table containing the columns `year`, `sex`, `name`, `n`, and `prop`. An arrow points from the original six-row table on the left—where the fifth row (`1880`, `M`, `Garrett`, `13`, `0.0001`) is highlighted in green—to a resulting table on the right that retains only that single highlighted row.]*
 
 <!-- page 30 -->
 
@@ -764,6 +784,8 @@ $\rightarrow$
 > arrange(babynames, desc(n))
 ```
 
+*[Figure: The diagram illustrates a row-sorting transformation between two side-by-side data tables separated by a right-pointing arrow, each containing five columns (`year`, `sex`, `name`, `n`, and `prop`) and six rows color-coded in varying shades of green. It compares the initial table on the left—where rows are grouped by year—with the resulting table on the right, showing the main pattern where the rows (specifically moving the "1881 John" entry from the bottom to the third position) are reordered into strictly descending order based on the values in column `n` (and `prop`), creating a smooth dark-to-light green gradient from top to bottom.]*
+
 <!-- page 32 -->
 
 Split-Apply-Combine dplyr
@@ -794,6 +816,8 @@ $\rightarrow$
 ```
 
 Fundamentals of Computing and Data Display Data Wrangling 31 / 45
+
+*[Figure: The diagram illustrates a data summarization operation, showing a six-row input table on the left with columns for "year," "sex," "name," "n," and "prop" pointing via an arrow to a single-row output table on the right. This transformation demonstrates how multiple rows of individual name records are aggregated into a single summary row containing only two calculated columns, "total" and "max".]*
 
 <!-- page 33 -->
 
@@ -842,6 +866,8 @@ Figure: Split-apply-combine with dplyr
 
 Fundamentals of Computing and Data Display Data Wrangling 32 / 45
 
+*[Figure: This flow diagram illustrates the "split-apply-combine" data processing pattern using tabular data rather than plotted axes, comparing particle pollution amounts across three cities: New York, London, and Beijing. It shows an initial table (with columns for city, particle size, and amount) splitting into three separate city-specific tables, which are then aggregated and combined into a final summary table comparing the mean, sum, and count ($n$) of the amounts for each city, revealing that Beijing has much higher values than New York and London.]*
+
 <!-- page 34 -->
 
 Split-Apply-Combine dplyr
@@ -877,6 +903,8 @@ $\rightarrow$
 ```
 
 Fundamentals of Computing and Data Display Data Wrangling 33 / 45
+
+*[Figure: The diagram illustrates how to create new variables in a dataset by comparing two side-by-side data tables connected by a rightward arrow. The left table contains five grey columns (`year`, `sex`, `name`, `n`, `prop`), while the right table retains these exact columns and values and appends a new, blue-highlighted sixth column (`percent`) representing the `prop` values multiplied by 100 and rounded.]*
 
 <!-- page 35 -->
 
@@ -969,6 +997,8 @@ $=$
 Fundamentals of Computing and Data Display
 Data Wrangling
 
+*[Figure: The diagram illustrates a left join operation merging two data tables—a gray "band" table (with columns "name" and "band") and a green "instrument" table (with columns "name" and "plays")—into a combined three-column table ("name", "band", and "plays"). The resulting table retains all rows from the first table (Mick, John, Paul), populates matching instrument values from the second table (guitar, bass), fills in `<NA>` for unmatched rows (Mick), and drops unmatched rows from the second table (Keith).]*
+
 <!-- page 38 -->
 
 # joins
@@ -1005,6 +1035,8 @@ $=$
 > # Merge data with right_join()
 > band %>% right_join(instrument, by = "name")
 ```
+
+*[Figure: The diagram illustrates a right-join data merge operation between two two-column tables labeled "band" (columns "name" and "band" in grey) and "instrument" (columns "name" and "plays" in green) to produce a combined three-column table ("name", "band", and "plays"). The resulting table retains all rows from the green "instrument" table (John, Paul, and Keith), matching the "band" values for John and Paul from the first table while assigning `<NA>` for Keith's band and dropping Mick entirely.]*
 
 <!-- page 39 -->
 
@@ -1043,6 +1075,8 @@ $=$
 > # Merge data with full_join()
 > band %>% full_join(instrument, by = "name")
 ```
+
+*[Figure: The diagram titled "Figure: Merge data III" illustrates a full join operation that combines a gray "band" table (with columns "name" and "band") and a green "instrument" table (with columns "name" and "plays"). The resulting merged table on the right retains all unique individuals from both groups (Mick, John, Paul, and Keith) across all three columns, filling in `<NA>` for missing values where a name only appears in one of the original tables.]*
 
 <!-- page 40 -->
 
@@ -1084,6 +1118,8 @@ $=$
 
 Fundamentals of Computing and Data Display $\quad$ Data Wrangling $\quad 39 / 45$
 
+*[Figure: The diagram illustrates an inner join operation merging two tables: a grey "band" table (columns: `name`, `band`) and a green "instrument" table (columns: `name`, `plays`). The resulting table combines the columns (`name`, `band`, `plays`) and retains only the rows for "John" and "Paul" whose names appear in both original tables, excluding "Mick" and "Keith".]*
+
 <!-- page 41 -->
 
 # joins
@@ -1120,6 +1156,8 @@ $=$
 > band %>% semi_join(instrument, by = "name")
 ```
 
+*[Figure: The diagram titled "Figure: Filter data I" illustrates a `semi_join` operation between two two-column tables, "band" (with columns "name" and "band") and "instrument" (with columns "name" and "plays"), separated by a plus sign and an equals sign. The resulting table retains only the rows and columns from the "band" table where the "name" values ("John" and "Paul") match those present in the "instrument" table, filtering out non-matching entries ("Mick" and "Keith") and excluding the "plays" column.]*
+
 <!-- page 42 -->
 
 # joins
@@ -1154,6 +1192,8 @@ $=$
 > # Filter data with anti_join()
 > band %>% anti_join(instrument, by = "name")
 ```
+
+*[Figure: The diagram illustrates a relational database anti-join operation ("Filter data II") without axes, comparing a "band" table (columns: "name", "band") and an "instrument" table (columns: "name", "plays"). It shows that combining these tables filters out the overlapping rows ("John" and "Paul"), resulting in a final table containing only the unmatched row ("Mick", "Stones") from the first table.]*
 
 <!-- page 43 -->
 

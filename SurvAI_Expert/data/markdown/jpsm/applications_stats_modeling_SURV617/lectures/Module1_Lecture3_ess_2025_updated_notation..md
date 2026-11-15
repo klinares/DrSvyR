@@ -9,7 +9,7 @@ original: "applications_stats_modeling_SURV617/lectures/Module1_Lecture3_ess_202
 pages: 21
 sha256: "a357797ee59691fad8495f865071414aa8622ec9dfc45b8c1e475aa33da29390"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:39"
+converted_at: "2026-11-14T21:28:41"
 ---
 
 <!-- page 1 -->
@@ -269,6 +269,8 @@ p + geom_line()
 
 6
 
+*[Figure: The figure is a scatter plot showing `pplhlp` (from 0.0 to 10.0) on the vertical axis versus `trstplc` (from 0 to over 75) on the horizontal axis, with points shaded along a dark-to-light blue color gradient representing the `intnum` variable (ranging up to over 6000). The main pattern shows nearly all data points clustered in discrete horizontal rows between 0 and 10 on both axes, with only three isolated outlier points appearing on the far right near a `trstplc` value of 88.]*
+
 <!-- page 7 -->
 
 Interviewer Box Plots for a data subset with interviewer ID: intnum < 2000
@@ -279,6 +281,8 @@ plot(ess_sub$pplhlp ~ factor(ess_sub$intnum))
 ```
 
 7
+
+*[Figure: The figure is a line plot showing `pplhlp` (on the y-axis, ranging from 0.0 to 10.0) plotted against `trstplc` (on the x-axis, ranging from 0 to beyond 75), with lines colored according to a continuous scale for `intnum` (ranging from under 2000 to over 6000). The main pattern shows an extremely dense cluster of vertically oscillating blue lines concentrated between `trstplc` values of 0 and 10 across the entire y-axis range, along with two outlier lines extending far to the right to a `trstplc` value near 88.]*
 
 <!-- page 8 -->
 
@@ -790,6 +794,8 @@ qqline(ranef(mod3)$intnum[,2])
 ```
 
 18
+
+*[Figure: This "Normal Q–Q Plot" compares "Theoretical Quantiles" on the horizontal axis (ranging from -2 to 2) against "Sample Quantiles" on the vertical axis (ranging from -1.5 to 1.0) for a single set of data points. The plotted circles closely follow the upward-sloping diagonal reference line across the middle of the distribution, with slight deviations below the line at the lower tail and above the line at the upper tail.]*
 
 <!-- page 19 -->
 

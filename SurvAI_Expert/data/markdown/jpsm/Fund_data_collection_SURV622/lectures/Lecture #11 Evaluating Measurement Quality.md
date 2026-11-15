@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lectures/Lecture #11 Evaluating Measurem
 pages: 35
 sha256: "e6cb5a46a3014638a8972c3cffa7692aebc0a8d3b2fbd3d61fe2b1439c38f751"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:00"
+converted_at: "2026-11-14T21:29:03"
 ---
 
 <!-- page 1 -->

@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/Comp_03.pdf"
 pages: 26
 sha256: "ef9833f7f2a94bf8cdf4fc8c4881e775da8a363f1c073e49e4395aa88508ed8b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:54"
+converted_at: "2026-11-14T21:28:56"
 ---
 
 <!-- page 1 -->
@@ -161,6 +161,8 @@ Rmd $\rightarrow$ knitr $\rightarrow$ md $\rightarrow$ pandoc $\rightarrow$
 $^3$Wickham and Grolemund (2017)
 
 Fundamentals of Computing and Data Display R Markdown 9 / 26
+
+*[Figure: The page displays a horizontal workflow diagram with no axes, titled `rmarkdown::render("example.Rmd")`, illustrating the sequential document rendering process. Using rightward arrows, it shows a linear pattern where an "Rmd" file is processed by "knitr" into an "md" file, which is then converted by "pandoc" into a group of final output documents.]*
 
 <!-- page 10 -->
 

@@ -9,7 +9,7 @@ original: "Data_visualization_SURV752/lectures/SURV752-IPSDS_2_Graphical_Percept
 pages: 37
 sha256: "f30d3e3a5b4d1ab7eff1dd5c2c3ba0db8047077a6c8c070d599f10159b547fae"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:52"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 <!-- page 1 -->
@@ -212,6 +212,8 @@ Figure 4: Proportional judgment results (Exp. 1A & B). Top: Cleveland & McGill's
 (Heer & Bostock 2010)
 
 14
+
+*[Figure: The figure consists of two horizontal dot plots with 95% confidence interval error bars comparing proportional judgment accuracy ("Log Error" from 1.0 to 3.0 on the horizontal axis) across different chart types (labeled T1–T5 in the top panel for "Cleveland & McGill's Results" and T1–T9 with corresponding chart icons in the bottom panel for "Crowdsourced Results"). Both plots show a consistent pattern where log error progressively increases from T1 (standard bar charts) down through T5, with the additional chart types T6–T9 (such as pie, bubble, and treemap charts) in the crowdsourced study exhibiting the highest log errors.]*
 
 <!-- page 15 -->
 

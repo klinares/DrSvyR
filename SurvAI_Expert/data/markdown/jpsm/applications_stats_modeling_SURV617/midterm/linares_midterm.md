@@ -9,7 +9,7 @@ original: "applications_stats_modeling_SURV617/midterm/linares_midterm.qmd"
 pages: 
 sha256: "d1cb887a40e24c4463e21f5dbf85716b22467bf229efcf5002cb08ba664de88e"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:41"
+converted_at: "2026-11-14T21:28:43"
 ---
 
 

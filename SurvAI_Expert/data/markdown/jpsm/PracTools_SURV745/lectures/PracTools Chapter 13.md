@@ -9,7 +9,7 @@ original: "PracTools_SURV745/lectures/PracTools Chapter 13.pdf"
 pages: 85
 sha256: "871d9beafad1e3c3459903802ec5f91f8496839b345e81f1b47a02d6c086078f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:09"
+converted_at: "2026-11-14T21:29:15"
 ---
 
 <!-- page 1 -->
@@ -131,6 +131,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 13 6 / 85
 Sunghee Lee (U of Michigan)
 
 Prac Tools Ch. 13
+
+*[Figure: The image contains a top-down flowchart (with no coordinate axes) illustrating the five general steps in survey weighting, progressing from computing base weights for all sample units to storing the final analysis file of eligible respondents (ERs). The diagram branches through three main yes/no decision points to sequentially adjust weights and separate files for different unit groups—specifically unknown eligibility (UNK), ineligible (IN), known eligibility (KN), and eligible nonresponding (ENR) units—before optionally applying calibration estimation using external control totals.]*
 
 <!-- page 8 -->
 
@@ -830,6 +832,8 @@ To frame this mathematically, suppose that $R_i^*$ is symmetrically distributed.
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 13 55 / 85
 
+*[Figure: The plot shows a symmetrical, bell-shaped probability density curve of a latent variable for survey response, with $R^*$ on the horizontal axis (ranging from 0 to 8) and "density" on the vertical axis (ranging from 0.0 to 0.4). The curve peaks at $R^* = 4$ and is divided by a vertical threshold line at $R^* = 5$, comparing a larger unshaded region on the left representing nonrespondents ($R = 0$) with a smaller shaded tail on the right representing respondents ($R = 1$).]*
+
 <!-- page 56 -->
 
 5. Nonresponse 5.3 Propensity Score Adjustments
@@ -930,6 +934,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 13 61 / 85
 # Figure 13.3: Probabilities vs. Standardized links for logit, probit, c-log-log models
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 13 62 / 85
+
+*[Figure: The plot shows the relationship between probability on the vertical axis (ranging from 0.0 to 1.0) and the standardized link value on the horizontal axis (ranging from -4 to 4). It compares three link models—logit (solid line), probit (dashed line), and c-log-log (dotted line)—which all follow very similar S-shaped curves, with the logit and probit models almost completely overlapping while the c-log-log curve approaches 1.0 slightly more steeply at positive link values.]*
 
 <!-- page 63 -->
 

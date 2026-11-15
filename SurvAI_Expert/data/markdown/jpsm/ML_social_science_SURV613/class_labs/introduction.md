@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/class_labs/introduction.Rmd"
 pages: 
 sha256: "447c2525d673de3343e1be936b4bb7a399ced674dac7bc70c200e66adbba95e1"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 
@@ -112,7 +112,7 @@ List all variable names of the Boston Housing data.
 names(boston)
 ```
 
-Now we can access variables by using their names and the $-notation. This can be combined with conditional statements regarding rows to also filter specific observations.
+Now we can access variables by using their names and the \$-notation. This can be combined with conditional statements regarding rows to also filter specific observations.
 
 ```r
 boston$medv

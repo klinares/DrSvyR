@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/labs/Module_6_SAS_supplement.pdf"
 pages: 34
 sha256: "738cef2d4ab5af6b571e34df904f0be34c722c4e1568fc7943a9027a36ef9ffd"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:48"
+converted_at: "2026-11-14T21:28:51"
 ---
 
 <!-- page 1 -->

@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/06-01-IntroductionTrees.pdf"
 pages: 13
 sha256: "c27de9de3792d05cf63fd21c55bf60165db6a1395ed615b5c08eebdf16c5db73"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -49,6 +49,8 @@ Loh (2014)
 Machine Learning for Social Science
 Decision Trees I
 
+*[Figure: The figure consists of six scatter plots comparing the partitioning boundaries of different decision tree algorithms—(a) RPART, (b) CHAID, (c) C4.5, (g) GUIDE univariate, (j) GUIDE linear, and (k) CTREE—across an unlabeled horizontal axis (ranging from 0.5 to 2.5) and vertical axis (ranging from 1 to 7). Each plot displays the same dataset containing three distinct clusters of points (marked by crosses 'x', pluses '+', and circles 'o'), showing how five of the algorithms use orthogonal (horizontal and vertical) splits to separate the groups while "GUIDE linear" uses diagonal linear boundaries.]*
+
 <!-- page 4 -->
 
 # Classification and Regression Trees (CART)
@@ -80,6 +82,8 @@ James et al. (2013)
 
 ---
 Machine Learning for Social Science | Decision Trees I | 5 / 11
+
+*[Figure: The diagram shows a hierarchical binary decision tree with no axes that recursively splits variables $X_1$ and $X_2$ based on threshold conditions ($X_1 \le t_1$, $X_2 \le t_2$, $X_1 \le t_3$, and $X_2 \le t_4$). This branching structure partitions the data into five distinct terminal leaf nodes (or regions) labeled $R_1$ through $R_5$ at the bottom of the branches.]*
 
 <!-- page 6 -->
 
@@ -195,6 +199,8 @@ Hastie et al. (2009)
 
 Machine Learning for Social Science | Decision Trees I | 8 / 11
 
+*[Figure: This line plot compares three node impurity measures—misclassification error (green), Gini index (blue), and scaled entropy (orange)—against probability $p$ on the horizontal axis (ranging from 0.0 to 1.0) and impurity values on the vertical axis (ranging from 0.0 to 0.5). All three curves are symmetric, starting at 0.0 when $p=0.0$, peaking at 0.5 when $p=0.5$, and returning to 0.0 at $p=1.0$, with the misclassification error forming a piecewise linear triangle beneath the concave curves of the Gini index and entropy.]*
+
 <!-- page 11 -->
 
 Classification and Regression Trees (CART) | Tree growing
@@ -284,3 +290,5 @@ Figure: CART examples
 
 ---
 Machine Learning for Social Science | Decision Trees I | 11 / 11
+
+*[Figure: The figure consists of two side-by-side hierarchical dendrograms (without plotted axes) comparing examples of Classification and Regression Trees (CART): (a) a Regression tree and (b) a Classification tree. In panel (a), the tree splits sequentially on numerical thresholds for variables such as `lstat`, `dis`, `age`, and `lon` to produce continuous outcome values at the leaves (ranging from 11.72 to 47.96), whereas in panel (b), the tree splits on variables including `Sex`, `Age`, `Pclass`, and `Fare` to classify observations into binary terminal nodes (0 or 1).]*

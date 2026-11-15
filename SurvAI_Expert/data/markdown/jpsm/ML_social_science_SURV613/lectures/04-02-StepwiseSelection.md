@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/04-02-StepwiseSelection.pdf"
 pages: 5
 sha256: "99ad34a30545626dc5bfa413f86cbd904f1f9f26f26d0fe51a6330ce8899f233"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -94,3 +94,5 @@ Cross-Validation done wrong
 Figure: Correlations of $y$ with unrelated $x$'s with incorrect and correct CV
 
 Hastie et al. (2009)
+
+*[Figure: The figure consists of two stacked histograms comparing the distributions of correlations between selected predictors and an outcome under incorrect ("Wrong way", top in red) versus correct ("Right way", bottom in green) cross-validation. In both plots, the x-axis shows "Correlations of Selected Predictors with Outcome" from -1.0 to 1.0 and the y-axis shows "Frequency" from 0 to 30, illustrating that the "Wrong way" distribution is noticeably shifted toward positive correlations (peaking around 0.2 to 0.6), whereas the "Right way" distribution is more symmetrically centered around 0.0.]*

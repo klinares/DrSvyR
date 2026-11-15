@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/lecture_notes.pdf"
 pages: 14
 sha256: "917e67884befd470014bffaf0bc15e887c745f73651c075fd05897963309b556"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:15"
+converted_at: "2026-11-14T21:29:22"
 ---
 
 <!-- page 1 -->

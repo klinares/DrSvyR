@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/lectures/Module_9.pdf"
 pages: 38
 sha256: "4b809efdf2e602b7f304fe559b0b6f6691d2ac9d64b6c6b9259a95940fdcd6ac"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 <!-- page 1 -->
@@ -553,6 +553,8 @@ $^a$Gestational age is operationally defined as the difference in the date of th
 
 34
 
+*[Figure: This bubble plot with an overlaid linear regression line shows the relationship between "Weighted Mean Birthweight (g)" on the horizontal axis (ranging from 0 to 5000) and "Weighted Mean Gestational Age (weeks)" on the vertical axis (ranging from 25 to 40) across successive groups of observations represented by differently sized circles. The main pattern shows a nonlinear, concave-downward curve where gestational age increases sharply at lower birthweights before leveling off near 40 weeks among the larger groups, while the straight regression line is heavily weighted toward the large bubbles in the upper right and systematically overestimates gestational age at lower birthweights.]*
+
 <!-- page 35 -->
 
 Figure 4.3-2 is analogous to Figure 4.3-1 Unweighted
@@ -561,6 +563,8 @@ Area of bubbles ~ group sample sizes.
 **Figure 4.3-2.** Plot of mean gestational age versus mean birthweight for successive groups of approximately 500 observations. Areas of bubbles are proportional to the sample sizes of the groups. The straight line is the unweighted linear regression fit to the original (ungrouped) data.
 
 35
+
+*[Figure: This bubble scatter plot with a fitted linear regression line displays "Mean Gestational Age (weeks)" on the y-axis (ranging from 25 to 40) against "Mean Birthweight (g)" on the x-axis (ranging from 0 to 5000). It compares successive groups of approximately 500 observations (represented by equal-sized bubbles), showing a positive relationship where gestational age increases steeply with birthweight before leveling off near 40 weeks above 3000 g, deviating slightly from the straight regression line.]*
 
 <!-- page 36 -->
 

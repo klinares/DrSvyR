@@ -9,7 +9,7 @@ original: "total_survey_error_SURV720/lecture_notes.pdf"
 pages: 25
 sha256: "fe1755170f9aac4de5680576430327851a33bbba7820cdd9c11f540bd275af62"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:24"
+converted_at: "2026-11-14T21:29:33"
 ---
 
 <!-- page 1 -->
@@ -285,6 +285,8 @@ $$\text{RR4} = \frac{I + P}{(I + P) + (NC + R + O) + eU}$$
     * people more likely to respond if features of the study are emphasized, these are leverages. Different aspects of the survey will be of interest to different people.
 
 **Figure 6.4 Two sample persons with different leverages for attributes of a survey request.**
+
+*[Figure: The diagram, labeled "Figure 6.4 Two sample persons with different leverages for attributes of a survey request," uses two balance scales (without numerical axes) to compare how different survey attributes weigh on "Person 1" versus "Person 2." The main pattern shows that while Person 1's scale tips down to the right due to positive weights from "Incentive," "Authority of sponsor," and "Topic" outweighing "Burden," Person 2's scale tips down to the left as "Topic" and "Authority of sponsor" act as negative weights on the opposite side of "Incentive."]*
 
 <!-- page 11 -->
 

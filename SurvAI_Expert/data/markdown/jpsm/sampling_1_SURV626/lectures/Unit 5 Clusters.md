@@ -9,7 +9,7 @@ original: "sampling_1_SURV626/lectures/Unit 5 Clusters.pdf"
 pages: 54
 sha256: "6e5d6ae04aaa45a9130df2f75af7e462d4247b2eecb9601e6fdbddc4ae467d50"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:12"
+converted_at: "2026-11-14T21:29:19"
 ---
 
 <!-- page 1 -->
@@ -976,10 +976,10 @@ $$b_{opt} = \sqrt{\frac{c_a}{c_b} \cdot \frac{1 - roh}{roh}}$$
 
 * Household clusters (segments) an average 1/2 hour drive from interviewer homes
 * Require an average of 3 visits each
-* $3 \times \$12.50 = \$37.50$ required to pay interviewers for travel time
+* \$3 \times \$12.50 = \$37.50\$ required to pay interviewers for travel time
 * Travel averages 30 m.p.h.
-* At $\$0.31$ per mile, 6 trips of one half hour (15 miles) requires travel reimbursement of $(6 \times 15)(0.31) = \$27.90$
-* $c_a = 37.50 + 27.90 = \$65.40$
+* At \$\$0.31\$ per mile, 6 trips of one half hour (15 miles) requires travel reimbursement of \$(6 \times 15)(0.31) = \$27.90\$
+* \$c_a = 37.50 + 27.90 = \$65.40\$
 
 250
 ©2017, Raphael Nishimura and James M. Lepkoswki @ IPSDS

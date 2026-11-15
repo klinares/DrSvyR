@@ -9,7 +9,7 @@ original: "PracTools_SURV745/lectures/PracTools Chapter 14.pdf"
 pages: 43
 sha256: "a886105a0044fe6d56e5be321663bee8d35c5860d8dd73a6b593a40c5f748573"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:09"
+converted_at: "2026-11-14T21:29:15"
 ---
 
 <!-- page 1 -->
@@ -90,6 +90,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 14 5 / 43
 Scatterplots of two hypothetical relationships between a survey variable $y$ and an auxiliary $x$
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 14 6 / 43
+
+*[Figure: The figure presents two side-by-side scatterplots comparing hypothetical relationships between an auxiliary variable $x$ (horizontal axis, ranging from 20 to 80) and a survey variable $y$ (vertical axis, ranging from 50 to 90). Both plots show a positive association where $y$ increases with $x$, with the left plot illustrating a tight, slightly curved upward trend with low variance, and the right plot displaying a more dispersed, heteroscedastic trend where variance increases at higher values of $x$.]*
 
 <!-- page 7 -->
 

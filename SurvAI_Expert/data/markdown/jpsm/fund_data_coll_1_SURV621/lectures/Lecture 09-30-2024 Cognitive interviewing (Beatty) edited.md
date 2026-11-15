@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 09-30-2024 Cognitive interv
 pages: 71
 sha256: "c6f64b2c79c25ec60ce253bd0b1019126f6c45de20c0cc549ec6afea86959490"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:56"
+converted_at: "2026-11-14T21:28:58"
 ---
 
 <!-- page 1 -->

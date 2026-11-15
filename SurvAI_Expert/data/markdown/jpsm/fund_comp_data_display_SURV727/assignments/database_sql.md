@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/assignments/database_sql.qmd"
 pages: 
 sha256: "2996d95af2cee81027c006492bfeeafcb591d9b8d24ef8888d9f27d614ddd266"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:53"
+converted_at: "2026-11-14T21:28:56"
 ---
 
 

@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/14 Survival.pdf"
 pages: 22
 sha256: "502bcaf30097a477a8e2fb51f9ed4386ebe6af8562d8f313abe6dd8103f85f5e"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:20"
+converted_at: "2026-11-14T21:29:29"
 ---
 
 <!-- page 1 -->
@@ -153,6 +153,8 @@ The characteristic feature of the bath-tub hazard rate is that there is relative
 In this section we look at estimating the survivor function discussed in the previous section. We begin by looking at the method of life tables which historically is
 
 - Notes for Class #14, page 5 of 22-
+
+*[Figure: The figure, titled "Figure 1. Bath-tub Hazard Rate," is a line plot with an unlabeled horizontal axis ranging from 0 to 20 and an unlabeled vertical axis ranging from 0 to 3.5. It shows a single curve representing the hazard rate, which follows a bathtub shape by starting high at 3.5 (at x = 1), decreasing to a flat level of 2 between x = 6 and x = 15, and then steadily rising again to approximately 3.1 at x = 20.]*
 
 <!-- page 6 -->
 

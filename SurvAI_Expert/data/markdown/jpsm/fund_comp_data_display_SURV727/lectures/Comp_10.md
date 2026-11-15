@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/Comp_10.pdf"
 pages: 30
 sha256: "eae7d0366d085a50b4f72ab69274aff4acdc5c9e1be2d80c523cdc6b4f132bad"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:55"
+converted_at: "2026-11-14T21:28:57"
 ---
 
 <!-- page 1 -->
@@ -62,6 +62,8 @@ Figure: Anscombe's quartet
 
 Fundamentals of Computing and Data Display | Data display with `ggplot2` | 4 / 30
 
+*[Figure: This figure presents a 2x2 grid of scatterplots with fitted linear regression lines comparing the four datasets of "Anscombe's quartet" (Anscombe Sets 1 to 4), with *x* on the horizontal axis (ranging from roughly 4 to 19) and *y* on the vertical axis (from 3 to 13). The main pattern shows that while all four datasets produce the exact same upward-sloping linear trend line, their underlying distributions vary drastically—displaying a noisy linear relationship in Set 1, a curved parabola in Set 2, a strict linear line with one high outlier in Set 3, and a vertical cluster at *x* = 8 with one extreme right outlier in Set 4.]*
+
 <!-- page 5 -->
 
 Principles and guidelines | Principles of graphical integrity
@@ -106,6 +108,8 @@ This line, representing 27.5 miles per gallon in 1985, is 5.3 inches long.
 
 Fundamentals of Computing and Data Display Data display with `ggplot2` 6 / 30
 
+*[Figure: The figure is a perspective diagram shaped like a receding road that illustrates "The Lie Factor" by showing U.S. auto fuel economy standards in miles per gallon across the years 1978 to 1985. Years are listed along the left edge and corresponding miles-per-gallon values (rising from 18 to 27½) along the right edge, with the horizontal lines disproportionately lengthening from 0.6 inches in 1978 to 5.3 inches in 1985 to visually exaggerate the modest increase in fuel economy.]*
+
 <!-- page 7 -->
 
 Principles and guidelines
@@ -117,6 +121,8 @@ Figure: Design Variation
 
 Fundamentals of Computing and Data Display
 Data display with ggplot2
+
+*[Figure: This distorted bar chart shows OPEC oil prices in dollars per barrel on the vertical axis over time on the horizontal axis, comparing yearly averages from 1973 to 1978 against quarterly intervals in 1979. The figure illustrates a steady upward trend in prices, though the 1979 quarterly bars are drawn disproportionately wider and on an exaggerated vertical scale compared to the earlier yearly bars, visually inflating the recent price increases.]*
 
 <!-- page 8 -->
 
@@ -144,6 +150,8 @@ Principles and guidelines Principles for graphical excellence
 Figure: Self-promoting graphics – taken over by decorative forms
 
 Fundamentals of Computing and Data Display Data display with ggplot2 9 / 30
+
+*[Figure: The figure is a 3D ribbon-style area chart titled "AGE STRUCTURE OF COLLEGE ENROLLMENT" that plots the "Percent of total enrollment" on a broken vertical axis (ranging from 28–34% at the bottom and 66–72% at the top) against years from 1972 to 1976 on the horizontal axis. It compares two age groups—"UNDER 25" (in yellow and green) and "25 AND OVER" (in red and blue)—showing a complementary pattern where enrollment for students under 25 drops from 72.0% to 67.0% while enrollment for those 25 and over rises correspondingly from 28.0% to 33.0%.]*
 
 <!-- page 10 -->
 
@@ -236,6 +244,8 @@ Figure: A minimalistic example
 Fundamentals of Computing and Data Display
 Data display with `ggplot2`
 
+*[Figure: The figure is a scatter plot showing the relationship between `displ` on the horizontal axis (ranging from about 1.6 to 7) and `hwy` on the vertical axis (ranging from about 12 to 44). It displays a single ungrouped set of black points on a grey gridded background, revealing a clear negative correlation where `hwy` generally decreases as `displ` increases.]*
+
 <!-- page 15 -->
 
 ggplot2
@@ -252,6 +262,8 @@ Figure: Set aesthetic to a value
 Fundamentals of Computing and Data Display  
 Data display with ggplot2
 
+*[Figure: The figure shows an empty ggplot2 coordinate grid with "displ" on the horizontal axis (ranging from 2 to 7) and "hwy" on the vertical axis (with tick marks at 20, 30, and 40). Because no data points are rendered on the grey background grid, no groups are compared and no pattern is visible.]*
+
 <!-- page 16 -->
 
 `ggplot2`
@@ -267,6 +279,8 @@ Figure: Map aesthetic to a variable with `color`, `size`, `shape` or `alpha`
 
 Fundamentals of Computing and Data Display
 Data display with `ggplot2`
+
+*[Figure: The figure shows an empty ggplot2 coordinate grid with "displ" on the horizontal axis (ranging from 2 to 7) and "hwy" on the vertical axis (ranging from 20 to 40), accompanied by a legend for seven vehicle "class" groups (2seater, compact, midsize, minivan, pickup, subcompact, and suv). Because no data points or symbols are rendered in the plot area or the legend boxes, no data pattern is visible.]*
 
 <!-- page 17 -->
 
@@ -299,6 +313,8 @@ Figure: Specify geometrical representation with geom_functions
 Fundamentals of Computing and Data Display
 Data display with `ggplot2`
 
+*[Figure: The image shows a box plot comparing highway fuel efficiency ("hwy" on the y-axis, ranging from below 20 to over 40) across seven vehicle classes ("class" on the x-axis: 2seater, compact, midsize, minivan, pickup, subcompact, and suv). Compact, midsize, and subcompact cars have the highest median "hwy" values (around 26–27, with subcompact showing the widest spread), while pickup trucks and SUVs have the lowest median values (under 20).]*
+
 <!-- page 19 -->
 
 `ggplot2`
@@ -314,6 +330,8 @@ Figure: Geoms and aesthetics
 
 Fundamentals of Computing and Data Display  
 Data display with `ggplot2`
+
+*[Figure: The figure is a multi-line density plot showing "density" on the vertical axis (ranging from 0.0 to above 0.2) against "hwy" on the horizontal axis (spanning roughly 12 to 44), comparing seven color-coded vehicle classes: 2seater, compact, midsize, minivan, pickup, subcompact, and suv. The main pattern shows that pickups and SUVs have sharp density peaks at lower highway values around 17, minivans, 2seaters, and midsize vehicles peak sharply in the mid-20s, and compact and subcompact cars have broader distributions that extend above 40.]*
 
 <!-- page 20 -->
 
@@ -332,6 +350,8 @@ Figure: Layers of geoms
 Fundamentals of Computing and Data Display
 Data display with `ggplot2`
 
+*[Figure: The plot shows a single smoothed trend line (blue curve with a gray confidence interval band) representing the relationship between `displ` on the horizontal axis (ranging from 2 to 7) and `hwy` on the vertical axis (ranging from 20 to 40), without comparing distinct groups. The main pattern shows `hwy` decreasing steadily from above 30 to just below 20 as `displ` increases from under 2 to around 5, before curving back upward toward 25 at a `displ` of 7.]*
+
 <!-- page 21 -->
 
 `ggplot2`
@@ -347,6 +367,8 @@ Figure: Set data and mappings globally
 ```
 
 Fundamentals of Computing and Data Display | Data display with `ggplot2` | 21 / 30
+
+*[Figure: The plot shows a single smoothed trend line with a gray confidence interval band representing the relationship between `displ` on the x-axis (ranging from 2 to 7) and `hwy` on the y-axis (ranging from 20 to 40), without comparing distinct groups. The main pattern shows `hwy` decreasing steadily as `displ` increases from under 2 to about 5.2, after which the curve turns upward toward `displ` 7 with a widening confidence interval.]*
 
 <!-- page 22 -->
 
@@ -365,6 +387,8 @@ Figure: Set mappings globally and locally
 Fundamentals of Computing and Data Display
 Data display with `ggplot2`
 
+*[Figure: The figure is a `ggplot2` chart plotting a blue smoothed trend line with a gray confidence band for highway mileage (`hwy`) on the y-axis against engine displacement (`displ`) on the x-axis. Although a legend on the right lists three drivetrain groups (`drv`: `4`, `f`, `r`), no individual data points are visible, and the overall trend shows `hwy` decreasing from above 30 to below 20 as `displ` increases from 2 to 5, before rising again toward 25 at a `displ` of 7.]*
+
 <!-- page 23 -->
 
 # Global vs. local
@@ -376,6 +400,8 @@ Figure: Set data and mappings globally and locally
 >   geom_point(mapping = aes(color = drv)) +
 >   geom_smooth(data = filter(mpg, drv == "f"))
 ```
+
+*[Figure: The plot displays a blue smoothed trend line with a gray confidence interval band, plotting `hwy` on the y-axis (from 20 to 40) against `displ` on the x-axis (from 2 to 7), accompanied by a legend for `drv` groups (`4`, `f`, and `r`) although no data points are visible. The trend line shows `hwy` decreasing from above 30 to around 25 as `displ` increases from under 2 to 3, after which it remains flat at approximately 25 up to a `displ` of 5.3 with a widening confidence interval.]*
 
 <!-- page 24 -->
 
@@ -433,6 +459,8 @@ stat_count()
 Fundamentals of Computing and Data Display
 Data display with ggplot2
 
+*[Figure: The diagram illustrates a two-step data transformation process where a raw dataset table (`diamonds`, with columns `carat`, `cut`, `color`, `clarity`, `depth`, `table`, `price`, `x`, `y`, `z`) is summarized via an arrow labeled `stat_count()` into a smaller table of counts and proportions. This resulting summary table compares five diamond `cut` categories (`Fair`, `Good`, `Very Good`, `Premium`, and `Ideal`), showing that `count` values progressively increase from `Fair` (1,610) to `Ideal` (21,551) while `prop` remains 1.]*
+
 <!-- page 26 -->
 
 `ggplot2`
@@ -467,6 +495,8 @@ Data display with ggplot2
 
 Fundamentals of Computing and Data Display $\quad$ Data display with `ggplot2` $\quad$ 26 / 30
 
+*[Figure: The diagram illustrates the data transformation and aesthetic mapping steps in `ggplot2`, showing how a raw diamonds dataset table on the left is aggregated via an arrow labeled `stat_count()` into a summary table on the right comparing five `cut` categories (Fair, Good, Very Good, Premium, and Ideal) by their `count` and `prop`. In the summary table, which has no plot axes, the `count` column increases steadily from Fair (1,610) to Ideal (21,551) and is mapped by a curved arrow to five distinct colored square icons representing the `fill` aesthetic for each row's bar.]*
+
 <!-- page 27 -->
 
 `ggplot2`
@@ -499,6 +529,8 @@ Figure: Build a plot form scratch III
 
 Fundamentals of Computing and Data Display
 Data display with `ggplot2`
+
+*[Figure: This diagram illustrates how a raw dataset (left) is transformed via `stat_count()` into a summary table (middle) and then mapped to a colored bar chart (right). The bar chart plots "count" (ranging from 0 to over 20,000) on the y-axis against five diamond "cut" categories (Fair, Good, Very Good, Premium, Ideal) on the x-axis, showing a steady increase in frequency from Fair to Ideal.]*
 
 <!-- page 28 -->
 

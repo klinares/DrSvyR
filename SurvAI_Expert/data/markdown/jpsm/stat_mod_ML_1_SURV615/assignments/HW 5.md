@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/assignments/HW 5.Rmd"
 pages: 
 sha256: "ae0bbb8d092477df0505119392e65b2f59542cecef78779dbabf44315c5f4fad"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:20"
 ---
 
 
@@ -94,7 +94,7 @@ summary(model_medv_chas)
 
     -   Therefore, $\beta_0 + \beta_1) = \$36,910$ is the mean expected median value of owner-occupied homes in suburbs that bound the Charles River for suburbs with zero proportion of non-retail business acres per town.
 
--   $\beta_2$: one unit increase in proportion of non-retail business acres per town is associated with $666 decrease in the mean expected median value of owner-occupied homes while holding indus (proportion of non-retail business aces per town) constant. 
+-   $\beta_2$: one unit increase in proportion of non-retail business acres per town is associated with \$666 decrease in the mean expected median value of owner-occupied homes while holding indus (proportion of non-retail business aces per town) constant. 
 
 \
 

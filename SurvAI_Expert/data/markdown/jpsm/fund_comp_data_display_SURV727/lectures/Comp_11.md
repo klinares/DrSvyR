@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/Comp_11.pdf"
 pages: 35
 sha256: "9bccb57e5749c4e855c45b5ef8a37dea17b0e4116fcc0ea5657379ee29a88b4e"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:55"
+converted_at: "2026-11-14T21:28:58"
 ---
 
 <!-- page 1 -->
@@ -170,6 +170,8 @@ $^2$Ghani and Schierholz (2017)
 
 Fundamentals of Computing and Data Display Data exploration 10 / 35
 
+*[Figure: The scatter plot on axes X and Y illustrates the first step of the K-Means clustering algorithm, comparing unclustered data points (represented as red diamonds) with three randomly placed initial cluster centers (represented as blue circles labeled $k_1$, $k_2$, and $k_3$). The red diamonds are loosely grouped into three main areas across the plot (bottom-left, bottom-right, and top-right), while the three blue centroids are dispersed among them at various positions.]*
+
 <!-- page 11 -->
 
 Clustering K-Means
@@ -195,6 +197,8 @@ X
 $^3$Ghani and Schierholz (2017)
 
 Fundamentals of Computing and Data Display Data exploration 11 / 35
+
+*[Figure: The scatter plot illustrates the second step of the K-Means clustering algorithm along horizontal axis X and vertical axis Y. It compares three color-coded groups—green ($k_1$), red ($k_2$), and blue ($k_3$)—demonstrating the pattern where diamond-shaped data points are assigned to the group of their nearest circular cluster center, dividing the space into upper, lower-left, and lower-right regions.]*
 
 <!-- page 12 -->
 
@@ -231,6 +235,8 @@ $^4$Ghani and Schierholz (2017)
 
 Fundamentals of Computing and Data Display Data exploration 12 / 35
 
+*[Figure: The figure is a two-dimensional scatter plot with axes labeled X and Y, illustrating the third step of the K-Means clustering algorithm across three color-coded groups (green, red, and blue). It shows diamond-shaped data points and circular cluster centers ($k_1$, $k_2$, and $k_3$), with black arrows indicating the movement of each cluster center from its previous position to the geometric mean of its respective colored cluster.]*
+
 <!-- page 13 -->
 
 Clustering K-Means
@@ -255,6 +261,8 @@ X
 $^5$Ghani and Schierholz (2017)
 
 Fundamentals of Computing and Data Display Data exploration 13 / 35
+
+*[Figure: The figure is a 2D scatter plot with horizontal axis X and vertical axis Y, illustrating Step 4 of a K-Means clustering algorithm where data points are reassigned to the nearest cluster center. It compares three color-coded groups of diamond-shaped data points (green, red, and blue) clustered spatially around their respective circular centroids ($k_1$ in the upper right, $k_2$ in the lower left, and $k_3$ in the lower right), with one outlying green point in the upper left.]*
 
 <!-- page 14 -->
 
@@ -281,6 +289,8 @@ $^6$Ghani and Schierholz (2017)
 
 Fundamentals of Computing and Data Display Data exploration 14 / 35
 
+*[Figure: The scatter plot illustrates a step in the K-Means clustering algorithm along horizontal axis X and vertical axis Y, comparing three color-coded clusters (green, red, and blue) of diamond-shaped data points grouped around circular centroids labeled $k_1$, $k_2$, and $k_3$. The main pattern shows three spatially distinct clusters in the upper-right, lower-left, and lower-right regions, with arrows specifically highlighting four "Reassigned Data points" (two red and two blue) located near the boundaries between the groups.]*
+
 <!-- page 15 -->
 
 Clustering K-Means
@@ -305,6 +315,8 @@ X
 $^7$Ghani and Schierholz (2017)
 
 Fundamentals of Computing and Data Display Data exploration 15 / 35
+
+*[Figure: The figure is a two-dimensional scatter plot with axes labeled X and Y illustrating the step of re-computing cluster means in K-Means clustering. It compares three groups of diamond-shaped data points (colored green, red, and blue) located in different quadrants of the plot, showing their corresponding circular centroids ($k_1$, $k_2$, and $k_3$) shifting via black arrows toward the center of their respective clusters.]*
 
 <!-- page 16 -->
 
@@ -332,6 +344,8 @@ X
 $^8$Ghani and Schierholz (2017)
 
 Fundamentals of Computing and Data Display Data exploration 16 / 35
+
+*[Figure: The figure is a two-dimensional scatter plot with horizontal axis $X$ and vertical axis $Y$ illustrating Step 5 of the K-Means clustering algorithm, where cluster centers are moved to the cluster means. It compares three spatially distinct groups of diamond-shaped data points—colored green (upper right), red (left, with one high outlier), and blue (lower right)—each positioned around its respective circular centroid labeled $k_1$, $k_2$, and $k_3$.]*
 
 <!-- page 17 -->
 
@@ -460,6 +474,8 @@ $^9$James et al. (2013)
 
 Fundamentals of Computing and Data Display Data exploration 23 / 35
 
+*[Figure: The figure shows a hierarchical clustering dendrogram with a vertical axis scaled from 0 to 10 indicating fusion height and an unlabeled horizontal arrangement of individual observation leaves (shown as green vertical lines at the bottom). The tree structure demonstrates how numerous similar individual leaves fuse at low heights (below 4) into three main sub-clusters, two of which merge around a height of 7 before finally joining the leftmost branch near the top at a height above 10.]*
+
 <!-- page 24 -->
 
 Clustering Hierarchical Clustering
@@ -472,6 +488,8 @@ Figure: Different cuts result in different clusters$^{10}$
 $^{10}$James et al. (2013)
 
 Fundamentals of Computing and Data Display Data exploration 24 / 35
+
+*[Figure: The figure displays three side-by-side hierarchical clustering dendrograms with vertical height axes ranging from 0 to 10. It compares the resulting cluster groupings (indicated by colored leaf branches) across different horizontal cut heights: the left dendrogram has no cut (one green cluster), the middle has a dashed cut line at height 9 (yielding two purple and green clusters), and the right has a lower dashed cut line at height 5 (yielding three purple, yellow, and green clusters), illustrating that cutting the tree at lower heights increases the number of distinct clusters.]*
 
 <!-- page 25 -->
 
@@ -535,6 +553,8 @@ Figure: PCA Example
 (a) First principle component (b) Second principle component
 
 Fundamentals of Computing and Data Display Data exploration 28 / 35
+
+*[Figure: The figure presents two side-by-side scatter plots titled "PCA Example," showing "Physics Grades" on the y-axis against "Math Grades" on the x-axis (both ranging from -20 to 20) for six individuals labeled Person1 through Person6. The main pattern shows two distinct clusters of grades (Person1 and Person2 with high positive values; Person3–6 with negative values), with plot (a) fitting a solid red line of positive slope along the direction of maximum variance for the first principal component, and plot (b) adding an orthogonal dotted blue line of negative slope for the second principal component.]*
 
 <!-- page 29 -->
 
@@ -606,6 +626,8 @@ Figure: Screeplot example
 
 Fundamentals of Computing and Data Display | Data exploration | 32 / 35
 
+*[Figure: The line plot (labeled as a screeplot example) shows the "Proportion of variance explained" on the vertical axis (ranging from 0.0 to 1.0) against the "Principal Component" number (1 through 4) on the horizontal axis. The single plotted line shows a decreasing trend across the components, dropping steeply from just over 0.6 at component 1 to about 0.25 at component 2, and then leveling off below 0.1 for components 3 and 4.]*
+
 <!-- page 33 -->
 
 Principal Component Analysis
@@ -618,6 +640,8 @@ Principal Component Analysis
 * The black names represent the *scores* for the first two principle components
 
 Fundamentals of Computing and Data Display | Data exploration | 33 / 35
+
+*[Figure: The figure is a PCA biplot plotting the "First Principal Component" on the horizontal axis against the "Second Principal Component" on the vertical axis (ranging from -3 to 3 for scores on the bottom/left and -0.5 to 0.5 for loadings on the top/right). It compares U.S. states (black text labels) against four red loading vectors ("UrbanPop", "Rape", "Assault", and "Murder"), showing that the three crime vectors all point right along the first principal component while "UrbanPop" points predominantly upward along the second principal component.]*
 
 <!-- page 34 -->
 

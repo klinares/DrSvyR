@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/07-04-ExtraTrees.pdf"
 pages: 6
 sha256: "3a4da5f27d334f815f2a6b9c7d0590c3121ff126435fc87b86350964df477deb"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -50,6 +50,8 @@ Advantages of Extra-Trees
   * Simple node splitting procedure
 
 Figure: Comparison of Tree Bagging (TB) and Extra Trees (ET) models (example, Geurts et al. 2006)
+
+*[Figure: The figure consists of two vertically stacked line plots with $x$ and $y$ axes ranging from 0 to 1, comparing how Tree Bagging (TB, top plot) and Extra Trees (ET, bottom plot) approximate a V-shaped piecewise linear "True function" based on "Learning sample" data points. The main pattern shows that while the TB model produces a jagged, step-like approximation, the ET model yields a much smoother curve that closely matches the true underlying function.]*
 
 <!-- page 4 -->
 

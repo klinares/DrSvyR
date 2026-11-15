@@ -9,7 +9,7 @@ original: "sampling_1_SURV626/assignments/Linares_K_HW8.qmd"
 pages: 
 sha256: "dfe7bf7b0e496397efb874a2568088f0404407e241489face6213feacf208d10"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:11"
+converted_at: "2026-11-14T21:29:17"
 ---
 
 

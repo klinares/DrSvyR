@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/Comp_09.pdf"
 pages: 25
 sha256: "5cd2819099b17dd2614a45638e84c78379dfe84a7ce5180cbb177eb15416e01e"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:55"
+converted_at: "2026-11-14T21:28:57"
 ---
 
 <!-- page 1 -->
@@ -46,6 +46,8 @@ Figure: Number of data science jobs for popular software packages$^1$
 
 ---
 $^1$`http://r4stats.com/articles/popularity/`
+
+*[Figure: This horizontal lollipop plot compares the number of data science jobs on Indeed.com (x-axis, ranging from 0 to over 15,000) across 25 popular data science software packages and programming languages (y-axis). The chart is ordered from most to least in-demand, showing that SQL leads significantly at nearly 18,000 jobs, followed by Python, Java, Hadoop, and R, before steadily tapering off down to Caffe with near-zero listings.]*
 
 <!-- page 4 -->
 
@@ -105,6 +107,8 @@ Big NoSQL database
 
 ---
 $^3$Foster et al. 2017
+
+*[Figure: This diagram illustrates a data workflow that combines three types of database management systems in a research project, moving left-to-right without axes. It shows four groups of raw text sources (PubMed abstracts, researcher web pages, patent abstracts, and Twitter messages) first being collected into a central "Big NoSQL database," from which extracted research area data is routed into a "Domain-specific relational database" (depicted with a table) and extracted collaboration networks are routed into a "Graph database" (depicted with a node-link diagram).]*
 
 <!-- page 7 -->
 
@@ -452,6 +456,8 @@ RSQLite
 $^4$Baumer et al. 2017
 
 Fundamentals of Computing and Data Display   Databases & SQL   21 / 25
+
+*[Figure: The diagram illustrates the dependencies among five SQL-related R packages without axes. It shows a directed flow starting from "dplyr" pointing to "DBI", which then branches out with arrows pointing to "RMySQL", "RPostgreSQL", and "RSQLite".]*
 
 <!-- page 22 -->
 

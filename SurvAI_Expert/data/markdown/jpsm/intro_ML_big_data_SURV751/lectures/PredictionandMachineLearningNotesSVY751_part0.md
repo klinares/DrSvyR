@@ -9,7 +9,7 @@ original: "intro_ML_big_data_SURV751/lectures/PredictionandMachineLearningNotesS
 pages: 29
 sha256: "5cc6c2205d26953bcb0e236644ba6e9a5d04e4ded09d17645a0c39eaa5ef887f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 <!-- page 1 -->
@@ -157,6 +157,8 @@ Michael Sohn / AP
 Figure 2: A comparison of model estimates for the Mid-Atlantic Region (black) against CDC-reported ILI percentages (red), including points over which the model was fit and validated. A correlation of 0.85 was obtained over 128 points from this region to which the model was fit, while a correlation of 0.96 was obtained over 42 validation points. 95% prediction intervals are indicated.
 
 Notes
+
+*[Figure: This line graph plots "ILI percentage" on the vertical axis (ranging from 0 to 12) against years on the horizontal axis (from 2004 to 2008). It compares model estimates for the Mid-Atlantic Region (shown as a black line, with dotted prediction intervals in 2007–2008) against CDC-reported ILI percentages (shown as a red line), illustrating that both series closely track the same seasonal peaks each year.]*
 
 <!-- page 10 -->
 

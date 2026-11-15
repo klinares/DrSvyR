@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/lectures/Module12_Fall2025.pdf"
 pages: 37
 sha256: "0161bfb395d9fcd5a3c855733267a3ebabc4a51ef9bb89f96518e965d133024c"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:03"
+converted_at: "2026-11-14T21:29:07"
 ---
 
 <!-- page 1 -->
@@ -320,12 +320,16 @@ $^a$Gestational age is operationally defined as the difference in the date of th
 
 **Figure 4.3-1.** Plot of weighted mean gestational age versus weighted mean birthweight for successive groups of approximately 500 observations. Areas of bubbles are proportional to the estimated population sizes of the groups. The straight line is the weighted linear regression fit to the original (ungrouped) data.
 
+*[Figure: This bubble plot with an overlaid linear regression line shows the relationship between weighted mean gestational age in weeks (y-axis, from 25 to 40) and weighted mean birthweight in grams (x-axis, from 0 to 5000) across successive observation groups whose estimated population sizes are represented by the bubble areas. The data points reveal a nonlinear, concave-downward curve—steeply increasing at lower birthweights before leveling off near 40 weeks among the larger groups above 3000 g—which deviates markedly at the lower end from the upward-sloping linear regression line fitted to the ungrouped data.]*
+
 <!-- page 23 -->
 
 Figure 4.3-2 is analogous to Figure 4.3-1 Unweighted
 Area of bubbles ~ group sample sizes.
 
 **Figure 4.3-2.** Plot of mean gestational age versus mean birthweight for successive groups of approximately 500 observations. Areas of bubbles are proportional to the sample sizes of the groups. The straight line is the unweighted linear regression fit to the original (ungrouped) data.
+
+*[Figure: The scatter plot displays "Mean Gestational Age (weeks)" on the vertical axis (ranging from 25 to 40) against "Mean Birthweight (g)" on the horizontal axis (ranging from 0 to 5000) for successive groups of approximately 500 observations, represented as circular bubbles next to an unweighted linear regression line. The data shows a positive, concave relationship where gestational age rises steeply with birthweight up to about 3000 g before leveling off near 40 weeks, slightly deviating from the straight regression fit.]*
 
 <!-- page 24 -->
 

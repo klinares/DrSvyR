@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/midterm/Module4&5&6_701 review on VarEstP
 pages: 4
 sha256: "b9deb39030cf95cf906e32affd4b5bc161d4d456b7f3be01348c47f06dbb49da"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 <!-- page 1 -->

@@ -9,7 +9,7 @@ original: "sampling_1_SURV626/lectures/Unit 6 Unequal sized clusters.pdf"
 pages: 106
 sha256: "bb7f1faad0bcdff10fa38aeb752ccaac69b677d393e956cf5e1ccc0cf424eaf4"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:20"
 ---
 
 <!-- page 1 -->
@@ -1825,3 +1825,5 @@ Link 105-113, size = 1
 ©2017, Raphael Nishimura and James M. Lepkoswki @ IPSDS
 
 357
+
+*[Figure: The diagram shows an annotated table with columns for "Tract", "Block", and "HU's", comparing housing unit counts across blocks in tracts 28 and 29. Red circles, brackets, curved arrows, and callout boxes illustrate a linking procedure that merges blocks with zero or very small housing unit counts (such as blocks 101–113 and 213) into neighboring blocks to reach a combined cluster size of 38.]*

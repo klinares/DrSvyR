@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/04-01-IntroRegularizedRegression.p
 pages: 5
 sha256: "10c8441c9a27778f349783d4f2b06f95f9ab004c506f7017a68038024368201e"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -72,6 +72,8 @@ Kuhn & Johnson (2013)
 Machine Learning for Social Science
 
 Regularized regression I
+
+*[Figure: The figure is a three-panel line plot showing the consequences of adding non-informative predictors, with the "Number of Additional Non-Informative Predictors" (from 0 to 500) on the x-axis and "RMSE (Test Set)" (from 0.7 to 1.1) on the y-axis. It compares eight machine learning algorithms grouped into "Linear Models," "Non-Linear Models," and "Trees," demonstrating that while RMSE increases sharply with added noise for models like Neural Networks and Linear Regression, it remains relatively flat and stable for tree-based models, MARS, and lasso.]*
 
 <!-- page 5 -->
 

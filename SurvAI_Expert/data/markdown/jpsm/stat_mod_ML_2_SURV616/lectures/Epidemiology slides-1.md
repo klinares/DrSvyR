@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/Epidemiology slides-1.pdf"
 pages: 39
 sha256: "3e68ca5fc31509c473c27e90b8454c21c56f4b21c2e57dccfd9afb20896f13a1"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:21"
+converted_at: "2026-11-14T21:29:30"
 ---
 
 <!-- page 1 -->

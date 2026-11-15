@@ -9,7 +9,7 @@ original: "sampling_1_SURV626/Design summary - Sampling Cheat Sheet.pdf"
 pages: 4
 sha256: "bc5d7f757fba5d87e8f4c558e602c669b27a5fa4b91de87054bd439b684ccf77"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:11"
+converted_at: "2026-11-14T21:29:17"
 ---
 
 <!-- page 1 -->

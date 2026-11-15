@@ -9,7 +9,7 @@ original: "applications_stats_modeling_SURV617/lectures/Module2_Lecture3_Fall202
 pages: 39
 sha256: "f4243e6a0359d6f8f07753e3022d7daca4a4e32939ba37d717ca81225687cf33"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:41"
+converted_at: "2026-11-14T21:28:42"
 ---
 
 <!-- page 1 -->

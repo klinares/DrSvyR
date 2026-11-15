@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/lectures/Module_10.pdf"
 pages: 46
 sha256: "e941faa1d11909c503d9bb2f78a8678b6d79e22ab399a34a82a8be47fa392fd7"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:49"
+converted_at: "2026-11-14T21:28:52"
 ---
 
 <!-- page 1 -->
@@ -216,6 +216,8 @@ $$
 # Link Functions, $g(Z)$, for Binary Data
 
 12
+
+*[Figure: This line graph compares three link functions for binary data—Probit (solid line), Logit (dashed line), and Complementary LogLog (dotted line)—by plotting their cumulative distribution function (CDF) values from 0 to 1 on the vertical axis against $Z$ values from -4 to 4 on the horizontal axis. All three curves exhibit S-shaped monotonic growth from 0 to 1, with the symmetric Probit and Logit curves intersecting at $Z = 0$ (CDF = 0.5) while the asymmetric Complementary LogLog curve rises more gradually at negative $Z$ values and approaches 1 most rapidly at positive $Z$ values.]*
 
 <!-- page 13 -->
 
@@ -837,6 +839,8 @@ marginsplot
 
 45
 
+*[Figure: This line plot with 95% confidence interval error bars shows the "Average Marginal Effects of HS Education" (y-axis, ranging from 0 to .15) across "age at 2006 interview" (x-axis, from 50 to 90), comparing Females (solid blue line) and Males (dashed red line). Across all ages, males exhibit higher average marginal effects (peaking slightly around age 70 before declining) than females (whose values gradually decline after age 60), though their 95% confidence intervals overlap throughout.]*
+
 <!-- page 46 -->
 
 # Plotting Average Marginal Effects in Stata
@@ -851,3 +855,5 @@ Average Marginal Effects of ALD with 95% CIs
 Age Category: 1=17-29 2=30-44 3=45-59 4=60+
 
 46
+
+*[Figure: This line plot shows the average marginal effects of ALD with 95% confidence intervals (vertical axis, ranging from .1 to .3) across four age categories (horizontal axis: 1=17-29, 2=30-44, 3=45-59, 4=60+). The effect increases slightly from roughly .205 in the youngest group to around .24 in the two middle age groups before dropping sharply to under .14 for those aged 60 and older.]*

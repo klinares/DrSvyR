@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/ML Toolbox.pdf"
 pages: 10
 sha256: "5a50743c1cbd5bf078aed09f0097718d58f0257a553e26ae668af24b9a3ff4cc"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->

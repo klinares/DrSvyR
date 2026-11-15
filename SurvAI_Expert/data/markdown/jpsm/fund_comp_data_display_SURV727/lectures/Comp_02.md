@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/Comp_02.pdf"
 pages: 30
 sha256: "ad9b30acff70cfe51b726690c170581ff5c0d1d266602eb44af49f5716cf474a"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:54"
+converted_at: "2026-11-14T21:28:56"
 ---
 
 <!-- page 1 -->
@@ -51,6 +51,8 @@ $^1$`http://r4stats.com/articles/popularity/`
 
 Fundamentals of Computing and Data Display $\quad$ Data structures in R $\quad$ 3 / 30
 
+*[Figure: This line plot displays the "Number of Google Scholar Hits" on the y-axis against "Year" (from 1995 to around 2016) on the x-axis, comparing nine different statistical software packages: SPSS, R, SAS, Stata, Prism, Statistica, Minitab, Systat, and JMP. The main pattern shows SPSS dominating with a massive surge that peaks above 300,000 hits around 2009 before dropping sharply, while SAS experiences a smaller peak and decline, and R shows steady upward growth that surpasses SAS by the end of the period.]*
+
 <!-- page 4 -->
 
 # Introduction
@@ -63,6 +65,8 @@ $^2$`http://r4stats.com/articles/popularity/`
 
 Fundamentals of Computing and Data Display $\quad$ Data structures in R $\quad$ 4 / 30
 
+*[Figure: The line plot shows the "Number of Google Scholar Hits" (ranging from 0 to 50,000 on the y-axis) across "Year" (from 1995 to 2016 on the x-axis) for eight statistical software packages: R, SAS, Stata, Prism, Statistica, Minitab, Systat, and JMP. The main pattern illustrates rapid growth in citations for R and Stata, a sharp peak around 2013 followed by a steep decline for Prism, a steep drop for SAS at the end of the timeline, and more modest growth or plateauing for Statistica, Minitab, Systat, and JMP.]*
+
 <!-- page 5 -->
 
 # Introduction
@@ -70,7 +74,7 @@ Fundamentals of Computing and Data Display $\quad$ Data structures in R $\quad$ 
 Why use R?
 
 * R is free (Open Source)
-* Extensive statistical modeling capabilities (through $\sim$15,000 packages$^3$)
+* Extensive statistical modeling capabilities (through \$\sim\$15,000 packages\$^3\$)
 * Flexible programming of user functions
 * Working with multiple objects (e.g. various datasets, model results)
 * Active user community providing up-to-date functions & support
@@ -271,6 +275,8 @@ Figure: Number of R packages on CRAN$^4$
 $^4$`http://r4stats.com/articles/popularity/`
 
 Fundamentals of Computing and Data Display Data structures in R 14 / 30
+
+*[Figure: This scatter plot with a fitted blue curve shows the number of R packages on CRAN (y-axis, from 0 to over 6000) across time by Year (x-axis, from 2002 to 2015). The plot tracks a single time series and illustrates rapid, exponential-like growth, rising from nearly zero packages in 2002 to over 6,000 by around 2015.]*
 
 <!-- page 15 -->
 

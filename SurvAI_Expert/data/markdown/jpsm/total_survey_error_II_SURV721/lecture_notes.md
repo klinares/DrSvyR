@@ -9,7 +9,7 @@ original: "total_survey_error_II_SURV721/lecture_notes.pdf"
 pages: 1
 sha256: "982c7de0637e81f48d671d008aeba8904d62e4cc6ccc7f65d1cc19043b7bdf86"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:23"
+converted_at: "2026-11-14T21:29:33"
 ---
 
 <!-- page 1 -->

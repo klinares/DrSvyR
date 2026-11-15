@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/assignments/lasso.qmd"
 pages: 
 sha256: "ddff57902b7a6c39673d86de55576c6baa2cda45fe018c9fa4d3a940d5565b8f"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 

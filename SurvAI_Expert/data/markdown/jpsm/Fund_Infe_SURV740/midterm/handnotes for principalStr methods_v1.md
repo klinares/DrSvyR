@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/midterm/handnotes for principalStr methods_v1.pdf"
 pages: 6
 sha256: "2e97b71ecb5e61c75e1f61515c0f3b8ee96574e9ce9311c066a0ec97be9b19f1"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:04"
+converted_at: "2026-11-14T21:29:08"
 ---
 
 <!-- page 1 -->

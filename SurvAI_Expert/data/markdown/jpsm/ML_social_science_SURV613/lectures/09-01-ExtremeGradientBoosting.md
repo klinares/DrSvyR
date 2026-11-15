@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/09-01-ExtremeGradientBoosting.pdf"
 pages: 12
 sha256: "d57694c25d33264a0e979b00a2e2b10585a9036ae23084b025bb0ff2a7392f27"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -222,3 +222,5 @@ Figure: Speed comparison$^1$
 $^1$`https://www.r-bloggers.com/parallel-computation-with-r-and-xgboost/`
 
 Machine Learning for Social Science Boosting II 10 / 10
+
+*[Figure: This line plot shows a speed comparison by plotting "Run time (in second)" on the vertical axis against "Number of Trees" (from 0 to 400) on the horizontal axis for five implementations: Python-sklearn, R-gbm, and XGBoost using 1, 2, or 4 cores. As the number of trees increases, run time increases approximately linearly for all groups, with Python-sklearn being the slowest, followed by R-gbm, while XGBoost is significantly faster and achieves the lowest run times as the number of cores increases from 1 to 4.]*

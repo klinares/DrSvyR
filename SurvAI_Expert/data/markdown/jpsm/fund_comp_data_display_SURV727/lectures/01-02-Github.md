@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/01-02-Github.pdf"
 pages: 17
 sha256: "9219b523c1fea29b6d53c1a8d53a1265535abdece668fa471adb947812e8c074"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:54"
+converted_at: "2026-11-14T21:28:56"
 ---
 
 <!-- page 1 -->
@@ -150,6 +150,8 @@ $^1$`https://zeroturnaround.com/rebellabs/git-commands-and-best-practices-cheat-
 
 Fundamentals of Computing and Data Display
 Git and GitHub
+
+*[Figure: This flowchart illustrates a Git workflow across four horizontally aligned stages: "Working Directory," "Staging (index)," "Local Repository," and "Remote Repository." Curved arrows above the boxes depict the forward progression via "add," "commit," and "push" commands, while arrows below show reverse transitions from later stages back to earlier ones using "fetch," "pull," "reset," and "reset [commit]."]*
 
 <!-- page 9 -->
 
@@ -307,6 +309,8 @@ Figure: The commit window
 Fundamentals of Computing and Data Display
 
 Git and GitHub
+
+*[Figure: The figure is a screenshot of the "RStudio: Review Changes" commit window, which displays a list of modified and untracked files in the top-left pane alongside an empty commit message box on the top-right. The bottom pane shows a line-by-line diff view for the selected file (`git.rmd`), comparing deleted lines (highlighted in red) against newly added lines (highlighted in green).]*
 
 <!-- page 17 -->
 

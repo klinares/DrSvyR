@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/midterm/midterm_study_guide_740.qmd"
 pages: 
 sha256: "e00520d7f6b579a3aa81433bec4bc6689e9b6ec62b0138148026e5fef0578075"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:04"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 

@@ -9,7 +9,7 @@ original: "PracTools_SURV745/lectures/PracTools Chapter 18.pdf"
 pages: 36
 sha256: "eeb765517404855805953a749be3945f0d891869cf1acf55ff53350bbe55e4ac"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:10"
+converted_at: "2026-11-14T21:29:15"
 ---
 
 <!-- page 1 -->
@@ -449,6 +449,8 @@ Sunghee Lee (U of Michigan) $\quad$ Prac Tools Ch. 18 $\quad$ 21 / 36
 Sunghee Lee (U of Michigan)
 Prac Tools Ch. 18
 
+*[Figure: This figure consists of two side-by-side box plot panels showing the distributions of web estimates for "Warm feelings towards blacks" (Panel A, y-axis from 0.50 to 0.80) and "Voting participation" (Panel B, y-axis from 0.5 to 0.9). Both panels compare six different estimation methods on the x-axis ($y.R$, $y.U$, $y.D1$, $y.N1$, $y.A1$, and $y.4$) against solid ($\bar{y}.R$) and dashed ($\bar{y}.U$) horizontal reference lines, demonstrating that the four propensity score-adjusted estimates ($y.D1$ through $y.4$) shift the distributions downward from the unadjusted estimate ($y.U$) toward the reference level ($y.R$).]*
+
 <!-- page 23 -->
 
 2. Approaches to Inference 2.2 Super Population
@@ -600,6 +602,8 @@ Xbox Users vs. 2012 Exit Poll ("truth")
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 18 29 / 36
 
+*[Figure: This multi-panel line plot compares demographic, partisan, and voting distributions between Xbox users (solid line) and the 2012 Exit Poll (dashed line), plotting percentage shares (0% to 100%) on the vertical axis against categories of Sex, Race, Age, Education, State, Party ID, Ideology, and 2008 Vote on the horizontal axis. The main pattern shows dramatic differences in sex and age—with the Xbox sample being overwhelmingly male and aged 18–29 compared to the more balanced exit poll—while distributions across race, state, and ideology are much more closely aligned.]*
+
 <!-- page 30 -->
 
 2. Approaches to Inference 2.2 Super Population
@@ -611,6 +615,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 18 29 / 36
 **Fig. 2.** Daily (unadjusted) Xbox estimates of the two-party Obama support during the 45 days leading up to the 2012 presidential election, which suggest a landslide victory for Mitt Romney. The dotted blue line indicates a consensus average of traditional polls (the daily aggregated polling results from Pollster.com), the horizontal dashed line at 52% indicates the actual two-party vote share obtained by Barack Obama, and the vertical dotted lines give the dates of the three presidential debates. (For the interpretation of the references to colour in this figure legend, the reader is referred to the web version of this article.)
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 18 30 / 36
+
+*[Figure: The line plot displays the percentage of "Two-party Obama Support" (on the y-axis, ranging from 35% to over 50%) over time (from Sep. 24 to Nov. 05 on the x-axis), comparing unadjusted "Xbox Raw" estimates (solid red line) against "Pollster.com" consensus polling averages (dotted blue line). The main pattern shows that while the Pollster.com estimates remain steady and close to the actual 52% election outcome (horizontal dashed line), the unadjusted Xbox estimates are much more volatile and consistently lower, dropping sharply to around 35% in mid-October between the presidential debates (marked by vertical dotted lines).]*
 
 <!-- page 31 -->
 

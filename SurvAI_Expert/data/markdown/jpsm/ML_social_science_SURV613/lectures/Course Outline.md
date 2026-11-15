@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/Course Outline.pdf"
 pages: 11
 sha256: "2043785a0f200fd41ee9616f9b1ff5d376af1833b5fb3af39cd620cea9778b62"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->

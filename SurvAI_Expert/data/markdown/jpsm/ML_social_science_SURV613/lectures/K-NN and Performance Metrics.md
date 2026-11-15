@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/K-NN and Performance Metrics.pdf"
 pages: 16
 sha256: "4eb472285e263d9e7b785b1051a45871cf3cfe637fbbd0a1919219114b071ea4"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->

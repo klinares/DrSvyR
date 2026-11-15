@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/class_labs/Altman_Bland_normal_dist_BMJ1995.pdf
 pages: 1
 sha256: "ce3bb0ebda9f89a3a8b5f4c89c834838a79d3586ebcad5f4f8e6247f2adb2fec"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:20"
 ---
 
 <!-- page 1 -->

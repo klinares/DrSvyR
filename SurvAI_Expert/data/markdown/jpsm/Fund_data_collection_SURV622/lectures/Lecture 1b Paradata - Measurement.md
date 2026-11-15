@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lectures/Lecture 1b Paradata - Measureme
 pages: 26
 sha256: "89798cd27d647a6b70184e35d66431190df68f6da130c487661d67429be26ce2"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:00"
+converted_at: "2026-11-14T21:29:03"
 ---
 
 <!-- page 1 -->

@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/assignments/HW4.qmd"
 pages: 
 sha256: "15acf6d58b8c6faec5eaebbb8690dda53dc5c6517f1de76ed1178adcea07fb4f"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:20"
 ---
 
 

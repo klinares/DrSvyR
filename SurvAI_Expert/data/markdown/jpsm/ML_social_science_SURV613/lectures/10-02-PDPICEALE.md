@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/10-02-PDPICEALE.pdf"
 pages: 8
 sha256: "aeb3eda6a0ce2354c58e90ff19eb385bfca28bf10a47479c29699ed960a162e7"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -62,6 +62,8 @@ Figure: Partial dependence plots
 
 Machine Learning for Social Science Interpretable ML 4 / 8
 
+*[Figure: The figure shows two side-by-side 3D partial dependence surface plots comparing a "(a) CART" model and a "(b) Random Forest" model, each plotting the response variable $y$ on the vertical axis against input features $x_1$ and $x_2$ on the horizontal base axes. Both surfaces rise from low values (dark purple) to high values (green/yellow) mainly along one horizontal axis, with the CART plot displaying sharp, discrete step-like jumps and the Random Forest plot showing a much smoother, more gradual transition across many smaller steps.]*
+
 <!-- page 5 -->
 
 # Individual Conditional Expectation
@@ -86,6 +88,8 @@ Interpretable ML PDPs, ICE, ALE
 Figure: Centered ICE plot
 
 Machine Learning for Social Science Interpretable ML 6 / 8
+
+*[Figure: The figure is a Centered Individual Conditional Expectation (ICE) plot with `x` on the horizontal axis (ranging from roughly 0 to 35, with blue rug marks along the bottom) and `yhat` on the vertical axis (ranging from -25 to 0). It compares numerous individual observation curves in black against a single average trajectory in red, all originating at `yhat = 0` and showing a general downward, step-like decrease that flattens out at different levels between -5 and -28 after `x = 20`.]*
 
 <!-- page 7 -->
 
@@ -115,3 +119,5 @@ Figure: Comparison of feature effect plots
 (b) PDP
 
 Machine Learning for Social Science Interpretable ML 8 / 8
+
+*[Figure: The figure shows a side-by-side comparison of two line plots: an Accumulated Local Effects (ALE) plot on the left and a Partial Dependence Plot (PDP) on the right, both measuring the effect of the feature "lstat" (ranging from 0 to over 30 on the x-axis, with a rug plot at the bottom). The left y-axis displays "ALE of .y" (from about -5 to 6) and the right y-axis displays "Predicted .y" (from about 19 to 32), with both curves exhibiting a very similar pattern of steep decline between "lstat" values of 0 and 20 before flattening out at higher values.]*

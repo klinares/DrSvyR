@@ -9,7 +9,7 @@ original: "applied_sampling_SURV625/applied_sampling_notes.pdf"
 pages: 22
 sha256: "074674abd6cfd05960e079079ecfb4651f5bcbcbcfffba4def249512fb79441f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:42"
+converted_at: "2026-11-14T21:28:43"
 ---
 
 <!-- page 1 -->
@@ -65,6 +65,8 @@ In summary, the finite population $\mathscr{U}$ consists of units $\{1, 2, \dots
 * Sample fraction is just the sample proportion $f=n/N$.
   * Finite pop. Coef factor is $\text{fpc} = 1-f$.
 * Sampling inference
+
+*[Figure: The figure shows three circular archery targets without axes that illustrate the concepts of bias, precision, and accuracy by comparing the shot placements ('X' marks) of three groups: Archer A, Archer B, and Archer C. The main pattern shows Archer A's shots widely scattered around the center (unbiased but imprecise), Archer B's shots tightly clustered on the outer upper-right edge (precise but biased), and Archer C's shots tightly clustered right in the bull's-eye (both precise and accurate).]*
 
 <!-- page 3 -->
 

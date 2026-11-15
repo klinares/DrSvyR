@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lecture notes.pdf"
 pages: 21
 sha256: "2e24aae2dcb15fb433c60ef5e68bba1431dd49a99c274f23fde02b5ba9e53515"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:45"
+converted_at: "2026-11-14T21:28:47"
 ---
 
 <!-- page 1 -->
@@ -286,6 +286,8 @@ $$p(\text{satisficing}) = \frac{a_1(\text{Task Difficulty})}{a_2(\text{Ability})
 $\chi^2=762.76, p<0.001$
 
 *Figure 1. Percentage of persistent speeders by age groups*
+
+*[Figure: The bar chart, titled "Speeders are younger" ("Figure 1. Percentage of persistent speeders by age groups"), plots the "% of Persistent Speeders" on the y-axis (from 0 to 40) against five age groups on the x-axis (18–34, 35–44, 45–54, 55–64, and 65+). The main pattern shows a steady decrease in the percentage of persistent speeders as age increases, dropping from over 40% in the 18–34 age group to less than 5% in the 65+ group.]*
 
 <!-- page 12 -->
 

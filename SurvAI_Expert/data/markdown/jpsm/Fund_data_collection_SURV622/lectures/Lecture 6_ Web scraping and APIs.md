@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lectures/Lecture 6_ Web scraping and API
 pages: 18
 sha256: "c8315ad7c1878bc3b9c4b871bd292c873a01fcc29e141ffdebc3d531f72e8d7f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:01"
+converted_at: "2026-11-14T21:29:04"
 ---
 
 <!-- page 1 -->

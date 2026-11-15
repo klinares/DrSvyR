@@ -9,7 +9,7 @@ original: "PracTools_SURV745/lectures/PracTools Chapter 5.pdf"
 pages: 25
 sha256: "bdafe86622546bfca5b5e53ba6e653ac6a1a9244850910d8da0b9426ed9b3a7b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:10"
+converted_at: "2026-11-14T21:29:16"
 ---
 
 <!-- page 1 -->
@@ -201,13 +201,15 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 5 12 / 25
 | 9 | Pop Total | | 50,568 | | 1,834,157 | 5,316,946 | | | 21,253.90 | 9,854.87 | 2,846 | 7,289,537,243 | 16,150,771,937 | 19 |
 | 10 | Pop Mean | | | | 36 | 105 | | | 0.420 | 0.195 | | | | |
 | 11 | | | | | | | | | | relvariance of t.hat | | 0.00216684 | 0.000571 | 0.0 |
-| 12 | Budget | | | $ 300,000 | | | | | | | CV of t.h | 0.04655 | 0.0239 | |
-| 13 | Total sample cost | | | $ 300,000 | | | | | | | | | | |
+| 12 | Budget | | | \$ 300,000 | | | | | | | CV of t.h | 0.04655 | 0.0239 | |
+| 13 | Total sample cost | | | \$ 300,000 | | | | | | | | | | |
 
 Figure: 5.1 Excel spreadsheet set up for use with Solver.
 
 Sunghee Lee (U of Michigan)
 Prac Tools Ch. 5
+
+*[Figure: The figure is a screenshot of an Excel spreadsheet configured for multi-criteria sample optimization using Solver, comparing five business sectors (Manufacturing, Retail, Wholesale, Service, and Finance) across rows 3 to 7. The columns display establishment counts ($N_h$), unit costs ($c_h$), population means, standard deviations, proportions (for revenue, employees, research credit, and offshore affiliates), allocated sample sizes ($n_h$, highlighted in a box totaling 2,846), and resulting variance components constrained by a \$300,000 budget.]*
 
 <!-- page 14 -->
 
@@ -217,6 +219,8 @@ Figure: 5.2 Screenshot of Excel Solver dialogue screen.
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 5 14 / 25
 
+*[Figure: The figure shows a screenshot of the "Solver Parameters" dialogue screen in Microsoft Excel configured for a multi-criteria optimization problem. It displays a setup to minimize the objective cell `$L$11` by changing variable cells `$K$3:$K$7`, subject to six specified inequality constraints using the GRG Nonlinear solving method.]*
+
 <!-- page 15 -->
 
 2. Multi-Criteria Optimization
@@ -225,6 +229,8 @@ Figure: 5.3 Screenshot of Change Constraint screen.
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 5 15 / 25
 
+*[Figure: The figure shows a screenshot of a software dialog box titled "Add Constraint," which is captioned as a "Change Constraint screen." It contains blank input fields for "Cell Reference:" and "Constraint:" separated by a "<=" relational operator dropdown menu, along with "OK," "Add," and "Cancel" buttons at the bottom, and has no axes or data plots.]*
+
 <!-- page 16 -->
 
 2. Multi-Criteria Optimization
@@ -232,6 +238,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 5 15 / 25
 Figure: 5.4 Screenshot of Solver Options screen.
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 5 16 / 25
+
+*[Figure: The figure shows a screenshot of the "Options" dialog window for a Solver tool, featuring tabs for "All Methods," "GRG Nonlinear," and "Evolutionary." The currently active "All Methods" tab displays various configuration fields and checkboxes for constraint precision, integer constraints, and solving limits (such as max time and iterations), rather than a plot with axes or data groups.]*
 
 <!-- page 17 -->
 
@@ -284,6 +292,8 @@ Constraints
 Figure: 5.5 Solver Answer Report.
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 5 17 / 25
+
+*[Figure: This image displays a tabular "Solver Answer Report" rather than a plot with axes, showing GRG Nonlinear optimization results structured into Objective Cell, Variable Cells, and Constraints sections. It compares original and final sample sizes across five industry strata (Manufacturing, Retail, Wholesale, Service, and Finance) alongside various cost and relvariance constraints, showing how the objective relvariance is minimized from 0.01298691 to 0.00216695 by allocating the largest sample size to the Service sector (1,400) while binding on total sample cost (\$300,000) and Offshore relvariance.]*
 
 <!-- page 18 -->
 

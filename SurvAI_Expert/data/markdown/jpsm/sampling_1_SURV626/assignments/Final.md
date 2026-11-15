@@ -9,7 +9,7 @@ original: "sampling_1_SURV626/assignments/Final.qmd"
 pages: 
 sha256: "76ddc1d3c544a7657e8ca225de76593b2a82b87d2f4f3360ca6dab77a7263af2"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:11"
+converted_at: "2026-11-14T21:29:17"
 ---
 
 

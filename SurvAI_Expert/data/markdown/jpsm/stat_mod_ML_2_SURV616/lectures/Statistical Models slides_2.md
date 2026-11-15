@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/Statistical Models slides_2.pdf"
 pages: 46
 sha256: "51fedfd2256ea36934b0747694fc71cf09ae7e341607e407b22da3aef3465ee3"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:23"
+converted_at: "2026-11-14T21:29:33"
 ---
 
 <!-- page 1 -->

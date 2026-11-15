@@ -9,7 +9,7 @@ original: "Data_visualization_SURV752/lectures/Beautiful.ai - Module 4 2 variabl
 pages: 30
 sha256: "c62705665b15338b4c7e4f933ef18bbd4ce65f653b80de1104895fff0e5c486b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 <!-- page 1 -->
@@ -69,6 +69,8 @@ FIGURE 10.19 This graph shows th it's unnecessary to insert white spa between ba
 
 Few, Stephen (2012). **Show Me the Numbers. Designing Tables and Graphs to Enlighten.** (Second Edition). Analytics Press. ISBN-13 : 978-0970601971
 
+*[Figure: The image displays two sets of bar charts illustrating the visual impact of different ratios of bar width to intervening white space. The center column shows five single-series grey bar charts plotting values from 0 to 25 across months (Jan to Jun) with width-to-space ratios decreasing from 1:2 to 1:0 (highlighting 1:1.5, 1:1, and 1:0.5 in a shaded circle), while the right column compares two grouped bar charts plotting values from 0 to 350 across quarters (Q1 to Q4) for four regions (North, East, South, West) with and without white space between bars within the same category.]*
+
 <!-- page 6 -->
 
 # HEATMAP SCATTERPLOTS
@@ -115,6 +117,8 @@ https://www.nytimes.com/2021/01/21/learning/whats-going-on-in-this-graph-climate
 * Use subsamples
 
 What can we do to make our scatterplots more readable?
+
+*[Figure: The image shows an unlabeled scatterplot with a white grid background and no axis labels or tick marks, comparing a single group of blue circular data points. The main pattern is severe overplotting, where thousands of points overlap so densely that they merge into a large, opaque, multi-lobed blue blob, obscuring the underlying distribution inside the cluster.]*
 
 <!-- page 10 -->
 
@@ -419,6 +423,8 @@ Sources: OECD; World Bank; Previdência Social
 Figure 1: Intense religiosity by survey year (items used by Schnabel and Bock). Source: General Social Survey
 
 Figure 1: Intense religion by survey year with locally weighted regression lines, General Social Survey
+
+*[Figure: The image contains two side-by-side scatter plots with trend lines showing indicators of intense religiosity in the United States, plotting percentage (from 0% to 50%) on the vertical axis against survey years (from the 1970s to the 2010s) on the horizontal axis. Both graphs compare five metrics—Strong affiliation, Biblical literalism/Bible Literal, Evangelical affiliation/Evangelical, Prays frequently/Frequent Prayer, and Attends frequently/Frequent Attendance—showing that while linear trend lines (left) suggest slight long-term declines in strong affiliation, biblical literalism, and frequent attendance alongside increases in frequent prayer and peaking evangelicalism, locally weighted regression lines (right) highlight a notable peak during the "Reagan Years" (1980–1988) followed by relatively steady plateaus in recent decades.]*
 
 <!-- page 22 -->
 

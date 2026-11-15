@@ -9,7 +9,7 @@ original: "applied_sampling_SURV625/lectures/Lecture1.pdf"
 pages: 60
 sha256: "440a10f346aa33e417c643551c390ab40d9ddbab119fd0e2537f425eeb3abadf"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:42"
+converted_at: "2026-11-14T21:28:44"
 ---
 
 <!-- page 1 -->
@@ -770,6 +770,8 @@ Population data distribution
 
 Sample data distribution
 
+*[Figure: The figure presents two side-by-side histograms comparing a "Population data distribution" (left, in white bars) and a "Sample data distribution" (right, in dark red bars), both plotting "Frequency" on the vertical axis against the "Number of acres devoted to farms in 1992" on the horizontal axis. Both distributions exhibit a strong right skew with most values concentrated near zero, and each includes a vertical dashed blue line near the peak on the left side.]*
+
 <!-- page 59 -->
 
 Course introduction
@@ -777,6 +779,8 @@ Course introduction
 # Sampling distribution
 
 **Central limit theorem**!!!
+
+*[Figure: The figure shows two side-by-side histograms comparing a true "Sampling distribution" (in green on the left) with an "Estimated Sampling Distribution via bootstrapping" (in yellow on the right), both plotting "Frequency" on the y-axis against the "Mean of the number of acres devoted to farms in 1992" on the x-axis. Both distributions follow a roughly symmetric, bell-shaped normal curve centered around a vertical dashed line near 310,000–330,000 acres, though the bootstrap estimate is slightly rougher and shifted toward higher values.]*
 
 <!-- page 60 -->
 

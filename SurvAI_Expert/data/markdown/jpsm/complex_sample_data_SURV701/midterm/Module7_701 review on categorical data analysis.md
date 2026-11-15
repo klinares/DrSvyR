@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/midterm/Module7_701 review on categorical
 pages: 6
 sha256: "86d01f5a364b7c18b528efa0246f7ffe5c1de48f5552295683c29780e1fc1a0e"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 <!-- page 1 -->

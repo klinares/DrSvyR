@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/12-02-KNearestNeighbors.pdf"
 pages: 11
 sha256: "45b070df23f17a17938f6ab3d52eedbc77d2e7d7e6069b9cee5cf356200c176d"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->

@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/05-03-Tuning.pdf"
 pages: 9
 sha256: "22add11288bde4412d353ae315b63272e39ac4f882d17fb6bd8e0f5280108cf2"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -67,6 +67,8 @@ James et al. (2013)
 
 Machine Learning for Social Science Regularized regression II 4 / 9
 
+*[Figure: The diagram illustrates a 5-fold cross-validation scheme without formal axes, starting with a top horizontal bar representing an unshuffled dataset of $n$ observations and an arrow pointing down to five stacked bars representing the randomized data splits. Each of the five lower bars compares the training set (light gray) and validation set (dark gray), showing the main pattern where a different non-overlapping one-fifth segment of the data serves as the validation set in each iteration from left to right.]*
+
 <!-- page 5 -->
 
 # Tuning and Cross-Validation
@@ -90,6 +92,8 @@ Figure: Bias in CV error (Varma and Simon 2006)
 
 Machine Learning for Social Science | Regularized regression II | 5 / 9
 
+*[Figure: The figure consists of two histograms comparing cross-validation (CV) error on the training set (in blue) against the true error (in red), with the horizontal axes showing the percentage error and the vertical axes showing frequency counts. In panel (a) for standard 10-fold CV, the blue CV error distribution is noticeably shifted to the left of the narrow red true error peak around 0.5 (50%), whereas in panel (b) for Nested CV, the blue CV error distribution is centered directly around the red true error peak at 50%, demonstrating unbiased error estimation.]*
+
 <!-- page 6 -->
 
 # Tuning and Cross-Validation
@@ -105,6 +109,8 @@ Figure: "Accuracy" and "precision" of estimating model performance with differen
 Machine Learning for Social Science
 
 Regularized regression II
+
+*[Figure: The figure consists of two scatter plots comparing the performance estimation of 5-Fold CV, 10-Fold CV, and repeated 10-Fold CV, plotting Median Bias (left y-axis) and Median Variance (right y-axis) against the Number of Held-Out Data Sets (x-axis). It illustrates that while moving from 5-Fold to 10-Fold CV drops median bias to near zero where it stays across repeated runs, median variance decreases continuously as the number of held-out data sets increases through repeated 10-Fold CV.]*
 
 <!-- page 7 -->
 

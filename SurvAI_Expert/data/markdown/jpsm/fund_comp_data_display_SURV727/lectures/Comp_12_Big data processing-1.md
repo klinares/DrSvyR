@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/Comp_12_Big data processing-1
 pages: 24
 sha256: "18498700964da6c01bceafed2c98d1a37ccffe578c0a74284bb8981a1b387a6b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:55"
+converted_at: "2026-11-14T21:28:58"
 ---
 
 <!-- page 1 -->
@@ -85,6 +85,8 @@ Figure: MapReduce example$^1$
 ---
 $^1$https://www.geeksforgeeks.org/mapreduce-understanding-with-real-life-example/
 
+*[Figure: This flow diagram illustrates a MapReduce process divided vertically into three stages: the Map Phase, Shuffle Phase, and Reduce Phase. It shows how key-value pairs from six initial input splits (representing two devices each for Rajasthan, Asam, and Gujrat) are processed by mappers, routed via directional arrows, and aggregated into final summed results by two reducers ("Headquarter Dev1" and "Headquarter Dev2").]*
+
 <!-- page 6 -->
 
 MapReduce | Hadoop and Spark
@@ -107,6 +109,8 @@ $^3$Foster et al. 2017
 
 Fundamentals of Computing and Data Display | Big data processing | 6 / 24
 
+*[Figure: The two-part conceptual diagram compares a traditional computing approach (a) with Hadoop's approach (b), without any coordinate axes. It illustrates how the traditional method moves centralized data cylinders to separate processing tasks (Task 0 through Task 5), whereas Hadoop places the tasks directly onto individual distributed data cylinders, bringing computation to the data.]*
+
 <!-- page 7 -->
 
 MapReduce Hadoop and Spark
@@ -128,6 +132,8 @@ Data on HDFS
 $^4$Foster et al. 2017
 
 Fundamentals of Computing and Data Display Big data processing 7 / 24
+
+*[Figure: The diagram is a vertical flowchart illustrating the stages of the MapReduce process in Hadoop, progressing from top to bottom without coordinate axes. It shows how data on HDFS is divided into input partitions, processed in parallel by "Map" nodes into four distinct colored categories (blue, red, orange, green), shuffled and sorted to group matching colors together, and finally combined by "Reduce" nodes into output partitions written back to HDFS.]*
 
 <!-- page 8 -->
 
@@ -361,6 +367,8 @@ $^7$`https://nceas.github.io/oss-lessons/parallel-computing-in-r/parallel-comput
 
 Fundamentals of Computing and Data Display Big data processing 19 / 24
 
+*[Figure: The line plot, titled "Figure: Amdahl's law," displays "speedup" (from 0 to 20) on the vertical axis against a logarithmic "cpus" scale (marked at 8, 128, 2048, and 32768) on the horizontal axis. It compares five parallelizable proportion groups ("prop": p50, p75, p85, p90, and p95), showing that speedup increases with more CPUs before leveling off at higher asymptotes for higher proportions (up to a speedup of 20 for p95).]*
+
 <!-- page 20 -->
 
 Tools for R (do)parallel
@@ -420,6 +428,8 @@ Example workflow
 Figure: Moving data from/to Spark
 
 Fundamentals of Computing and Data Display | Big data processing | 22 / 24
+
+*[Figure: The diagram titled "Figure: Moving data from/to Spark" illustrates the specific R functions used to transfer data between a central Apache Spark block and three external systems: R (on the left), Apache Hive (top right), and a File System (bottom right). It has no coordinate axes, instead using directional arrows to show bidirectional data movement with R (`sdf_copy_to`/`dplyr::copy_to`/`DBI::dbWriteTable` vs. `sdf_collect`/`dplyr::collect`/`sdf_read_column`) and the File System (`spark_read_<fmt>` vs. `spark_write_<fmt>`), alongside unidirectional import from Hive (`tbl_cache`/`dplyr::tbl`).]*
 
 <!-- page 23 -->
 

@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/03-Lecture.pdf"
 pages: 24
 sha256: "214e0462f609fefab47f15f0b9bbdb8f4552f975e066af5f40dc35132ad6fcec"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -39,6 +39,8 @@ Deploy, maintain and update
 
 Machine Learning for Social Science
 ML Basics
+
+*[Figure: The diagram is a vertical flowchart illustrating the seven sequential stages of the machine learning process, with no axes or comparative groups. The main pattern shows a strictly linear progression connected by downward-pointing arrows, starting from defining the "Machine Learning task," moving through data preparation, feature engineering, training, and evaluation, and ending at "Deploy, maintain and update."]*
 
 <!-- page 3 -->
 
@@ -163,6 +165,8 @@ Figure: 50/25/25 Train-validation-test split
 
 Machine Learning for Social Science  ML Basics  6 / 22
 
+*[Figure: The page features two axis-free horizontal bar diagrams on the right that visually compare different methods of partitioning a dataset for machine learning. The top diagram illustrates an "80/20 train-test split" with a large "Train" section and a smaller "Test" section, while the bottom diagram shows a "50/25/25 Train-validation-test split" dividing the bar into a half-width "Train" section followed by two equal quarter-width sections labeled "Validate" and "Test."]*
+
 <!-- page 9 -->
 
 # Validation set, test set, CV
@@ -193,6 +197,8 @@ Figure: 50/25/25 Train-validation-test split
 | :---: | :---: | :---: |
 
 **Leave test data untouched until the end of analysis!**
+
+*[Figure: The page displays two axis-free horizontal bar diagrams on the right side that illustrate different proportions for splitting a dataset. The top bar compares an 80/20 split between "Train" and "Test" groups, while the bottom bar shows a 50/25/25 split among "Train," "Validate," and "Test" groups, demonstrating that the training set occupies the largest portion in both schemes.]*
 
 <!-- page 10 -->
 
@@ -256,6 +262,8 @@ James et al. (2013)
 ---
 Machine Learning for Social Science | ML Basics | 9 / 22
 
+*[Figure: This diagram illustrates the process of 5-fold cross-validation by showing how a dataset of $n$ observations (top white bar) is randomly shuffled and partitioned across five iterations (five lower horizontal bars). In each iteration, the data is split into a training set (light gray segments) and a validation set (dark gray segment), with the main pattern showing the validation fold shifting sequentially from left to right so that every fifth of the data serves as the validation set exactly once.]*
+
 <!-- page 13 -->
 
 Introduction Training and test error
@@ -280,6 +288,8 @@ Figure: Bias in CV error (Varma and Simon 2006)
 (b) Nested CV
 
 Machine Learning for Social Science ML Basics 10 / 22
+
+*[Figure: The figure contains two histograms, (a) 10-fold CV and (b) Nested CV, which plot frequency on the vertical axis against percentage error on the horizontal axis to compare cross-validation error on the training set (blue) with the true error (red). The main pattern shows that standard 10-fold CV underestimates the error (the blue distribution is shifted to the left of the red true error peak at 50%), whereas Nested CV produces an unbiased estimate where both distributions are centered around the same 50% error rate.]*
 
 <!-- page 14 -->
 
@@ -447,6 +457,8 @@ Machine Learning for Social Science
 
 ML Basics
 
+*[Figure: The figure contains two side-by-side line plots showing classification performance metrics (ranging from 0.0 to 1.0 on the vertical axes) as a function of the classification "Threshold" (ranging from 0.0 to above 0.8 on the horizontal axes), with the left plot (a) comparing "Sensitivity" (solid line) and "Specificity" (dotted line) and the right plot (b) comparing "Recall" (solid line) and "Precision" (dotted line). Across both plots, as the threshold increases, sensitivity and recall decrease monotonically from 1.0 to 0.0, whereas specificity increases from 0.0 to 1.0 and precision generally trends upward from roughly 0.35 to 1.0, intersecting their respective counterparts near a threshold of 0.4.]*
+
 <!-- page 21 -->
 
 Performance measures for regression
@@ -465,6 +477,8 @@ $\rightarrow$ AUC-PR: Area under the precision–recall curve
 Machine Learning for Social Science
 ML Basics
 
+*[Figure: The figure consists of two side-by-side line plots comparing "Classifier 1" (black line) and "Classifier 2" (gray line): (a) ROC curves plotting Sensitivity on the y-axis against 1 - Specificity on the x-axis, and (b) PR curves plotting Precision on the y-axis against Recall on the x-axis. While both classifiers show very similar, closely overlapping trajectories that rise from 0 to 1 in the ROC curve, the PR curve reveals a sharper distinction where Classifier 1 maintains a higher precision of 1.0 at low recall values (below 0.2) before both curves generally decline with锯-tooth fluctuations toward a precision of roughly 0.4 at a recall of 1.0.]*
+
 <!-- page 22 -->
 
 Performance measures for regression
@@ -482,6 +496,8 @@ How many true positives are among the high risk observations?
 Machine Learning for Social Science
 
 ML Basics
+
+*[Figure: The line plot titled "Precision at top K" displays "Precision" on the vertical axis (ranging from 0.2 to 1.0) against "Top K" on the horizontal axis (ranging from 0 to 150) for two models, "Classifier 1" (black line) and "Classifier 2" (grey line). Both classifiers follow a similar downward trend where precision decreases from around 0.8–1.0 at very low K values to roughly 0.35 near K = 145, with Classifier 1 starting slightly higher at the smallest K values before the two curves closely overlap.]*
 
 <!-- page 23 -->
 

@@ -9,7 +9,7 @@ original: "applied_sampling_SURV625/lab/stratified_example.qmd"
 pages: 
 sha256: "f29cde7c3dfe79c9e1e8b01a778132aa92be23ce56a0061a941cfc5b5e95a345"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:42"
+converted_at: "2026-11-14T21:28:43"
 ---
 
 

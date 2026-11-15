@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 8 Classic and Emerging Mode
 pages: 39
 sha256: "abf0e03221f071e84acd39bd5f4744f938315cb03556825d85cc066924332da4"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:58"
+converted_at: "2026-11-14T21:29:01"
 ---
 
 <!-- page 1 -->

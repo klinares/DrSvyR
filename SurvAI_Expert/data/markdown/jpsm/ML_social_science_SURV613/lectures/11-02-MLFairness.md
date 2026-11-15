@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/11-02-MLFairness.pdf"
 pages: 10
 sha256: "1707a08986935fd3ef9219f6b185d2ef93f7d54fffef6399ce2168280f1da539"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->
@@ -149,6 +149,8 @@ Figure: Choosing Fairness Metrics (Saleiro et al. 2018)
         * Counterfactual Fairness
 
 Machine Learning for Social Science Bias and Fairness in ML 5 / 9
+
+*[Figure: The figure is a hierarchical decision tree flowchart illustrating how to choose an appropriate machine learning fairness metric based on a series of system criteria (with no axes). It initially branches between disparate representation and disparate errors, subsequently splitting into categories based on selection proportionality (leading to Equal Selection Parity or Demographic Parity), label trustworthiness (leading to Counterfactual Fairness), and whether interventions are punitive or assistive (leading to specific false positive or false negative parity metrics).]*
 
 <!-- page 7 -->
 

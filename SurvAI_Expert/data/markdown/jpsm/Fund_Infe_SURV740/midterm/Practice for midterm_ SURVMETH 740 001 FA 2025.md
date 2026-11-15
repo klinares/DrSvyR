@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/midterm/Practice for midterm_ SURVMETH 740 001 FA 2
 pages: 5
 sha256: "eadc625207e5e94f24606f4e0f28ea0417db6670454ecc25800ba0e71d79657b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:04"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 <!-- page 1 -->

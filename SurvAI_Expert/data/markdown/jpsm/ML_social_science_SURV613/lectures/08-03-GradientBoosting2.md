@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/08-03-GradientBoosting2.pdf"
 pages: 7
 sha256: "4082d5cbb85cb3a7f90edff1500e0d4ff0fe7d8bf6b5af5186ce00f867f140a3"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -67,6 +67,8 @@ Figure: Performance by number of iterations and shrinkage$^1$
 $^1$Source: Ridgeway 2018
 
 Machine Learning for Social Science | Boosting I | 4 / 7
+
+*[Figure: The figure is a line plot showing model performance, with "Squared error" (from 0.190 to 0.210) on the y-axis and "Iterations" (from 0 to 10,000) on the x-axis. It compares five different shrinkage values (0.1, 0.05, 0.01, 0.005, and 0.001), demonstrating that smaller shrinkage values require more iterations to reach their minimum error, achieve slightly lower minimum squared error overall, and overfit much more slowly as iterations continue to increase.]*
 
 <!-- page 5 -->
 

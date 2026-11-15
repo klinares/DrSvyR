@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/final/linares_final.qmd"
 pages: 
 sha256: "ab97b58a9a8b58352c335b84bf8f673d44b664f0c069850e2bf37f007acc8760"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:02"
+converted_at: "2026-11-14T21:29:05"
 ---
 
 

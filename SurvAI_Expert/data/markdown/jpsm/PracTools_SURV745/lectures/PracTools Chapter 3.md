@@ -9,7 +9,7 @@ original: "PracTools_SURV745/lectures/PracTools Chapter 3.pdf"
 pages: 71
 sha256: "f32c59f1bf7c3149b9f5289abeb58aff67bc0e58ee6053f92e5b6809adc8d1a9"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:10"
+converted_at: "2026-11-14T21:29:16"
 ---
 
 <!-- page 1 -->
@@ -228,6 +228,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 3 14 / 71
 **Fig. 3.1:** Approximate sample sizes from Eq. (3.8) required to achieve $CV$s of 0.05 and 0.10 for population proportions ranging from 0.10 to 0.90. The population size is assumed to be large so that the finite population correction is one
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 3 15 / 71
+
+*[Figure: This line graph displays the approximate sample size ($n$) on the y-axis, ranging from 0 to 3500, plotted against the population proportion ($p_U$) on the x-axis, ranging from 0.1 to 0.9. It compares two target coefficients of variation ($\text{cv} = 0.05$ and $\text{cv} = 0.10$), showing that the required sample size decreases non-linearly as $p_U$ increases and that $\text{cv} = 0.05$ requires a substantially larger sample size than $\text{cv} = 0.10$, especially at lower $p_U$ values.]*
 
 <!-- page 16 -->
 
@@ -580,6 +582,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 3 38 / 71
 **Fig. 3.3:** Plot of total expenditures versus number of beds for the SMHO population. The *gray line* is a nonparametric smoother (lowess)
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 3 39 / 71
+
+*[Figure: The figure is a scatter plot showing the relationship between the number of "Beds" on the horizontal axis (ranging from 0 to 2500) and "Total expenditures (millions)" on the vertical axis (ranging from 0 to 500) for the SMHO population, overlaid with a gray nonparametric smoother line. Most data points are densely clustered near the origin (below 500 beds and 100 million in expenditures) with a positive upward trend, while a gray arrow in the top-right corner highlights a single extreme outlier near 2400 beds and 520 million in expenditures.]*
 
 <!-- page 40 -->
 

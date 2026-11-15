@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/class_labs/R manual_faraway.pdf"
 pages: 117
 sha256: "410287f35b68f53831a2de0f556513d5f4e1d8ec470d3760844c44e7e873904c"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:14"
+converted_at: "2026-11-14T21:29:21"
 ---
 
 <!-- page 1 -->

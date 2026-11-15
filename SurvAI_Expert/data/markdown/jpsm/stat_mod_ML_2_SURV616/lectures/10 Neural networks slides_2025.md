@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/10 Neural networks slides_2025.pdf"
 pages: 47
 sha256: "295122bdd6a78a86a8feef3de629cca58f4fb02f93abdee53d5f2d4662e15776"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:19"
+converted_at: "2026-11-14T21:29:27"
 ---
 
 <!-- page 1 -->

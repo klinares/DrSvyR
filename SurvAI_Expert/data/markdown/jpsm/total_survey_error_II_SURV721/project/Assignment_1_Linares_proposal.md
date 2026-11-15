@@ -9,7 +9,7 @@ original: "total_survey_error_II_SURV721/project/Assignment_1_Linares_proposal.p
 pages: 3
 sha256: "9ab3783cc1e8f54a198cbcde07ee55333b805be6aaf8f60e378223896fb45449"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:24"
+converted_at: "2026-11-14T21:29:33"
 ---
 
 <!-- page 1 -->

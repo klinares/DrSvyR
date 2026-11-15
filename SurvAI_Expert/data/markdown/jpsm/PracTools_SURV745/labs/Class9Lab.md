@@ -9,7 +9,7 @@ original: "PracTools_SURV745/labs/Class9Lab.pdf"
 pages: 20
 sha256: "500675cbfd2cb4811a6247277a91166102c72c0265ef58cd87b9c92528d5d613"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:08"
+converted_at: "2026-11-14T21:29:13"
 ---
 
 <!-- page 1 -->
@@ -460,6 +460,8 @@ pred %>%
 <!-- page 10 -->
 
 10
+
+*[Figure: The figure is an overlapping kernel density plot showing "density" on the vertical axis (ranging from 0 to above 5) against probability ("prob") on the horizontal axis (ranging from about 0.45 to 0.83) for four model types: logit, probit, cloglog, and svylogit. All four groups exhibit very similar, slightly left-skewed distributions that closely overlap and peak near a probability of 0.70, where vertical dashed lines indicate their nearly identical central tendencies.]*
 
 <!-- page 11 -->
 

@@ -9,7 +9,7 @@ original: "Data_visualization_SURV752/lectures/Comparisons.pdf"
 pages: 23
 sha256: "a3b4eb91e021279cf9a44fe03ae744f11e0c82a01a46ae3148289a4cbf8bc50c"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 <!-- page 1 -->
@@ -91,6 +91,8 @@ Note: Oceania excludes Australia and New Zealand. For the SDG region of Eastern 
 
 Comparing to what?
 
+*[Figure: The figure is a stacked bar chart (specifically a Marimekko chart where column widths reflect category shares) showing the percentage breakdown of granular conversation topics within seven broad categories along the horizontal axis: Multimedia, Other/Unknown, Practical Guidance, Seeking Information, Self-Expression, Technical Help, and Writing. The main pattern reveals that "Practical Guidance" (28.3%), "Writing" (28.1%), and "Seeking Information" (21.3%) dominate total conversation volume, with "Specific Info" (18.3%), "Edit Or Critique Provided Text" (10.6%), and "Tutoring Or Teaching" (10.2%) representing the largest individual subtopics.]*
+
 <!-- page 9 -->
 
 Outcome (higher is better)
@@ -134,6 +136,8 @@ Source: ILO, WHO estimates based on survey data provided by national sources (se
 Figure 2: Raw gender pay gaps using hourly wages
 
 This graph shows both mean and median gender pay gap for health industry vs other industries
+
+*[Figure: The figure consists of two four-panel bar and dot charts displaying the mean (top four panels) and median (bottom four panels) raw gender pay gap percentages using hourly wages across four geographic regions: Africa and Eastern Mediterranean, Americas, Europe, and South-East Asia and Western Pacific. In each panel, the y-axis shows the gender pay gap (%) and the x-axis lists countries grouped by income level, comparing the health sector (blue and purple bars) against other sectors (red dots), revealing that the gender pay gap is positive in almost all countries and is frequently wider in the health sector than in other sectors.]*
 
 <!-- page 11 -->
 

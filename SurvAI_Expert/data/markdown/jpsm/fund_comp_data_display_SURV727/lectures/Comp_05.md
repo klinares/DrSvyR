@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/Comp_05.pdf"
 pages: 32
 sha256: "8c4d562ef35581a7d2080bf3da2ce53a78944ae5c38615489887ff728ec2caec"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:54"
+converted_at: "2026-11-14T21:28:57"
 ---
 
 <!-- page 1 -->
@@ -90,11 +90,15 @@ Collecting Twitter and reddit Data
 
 Figure: Number of journal articles with "Twitter" in title (Web of Science database)
 
+*[Figure: The bar chart shows the number of journal articles in the Web of Science database that include "Twitter" in their title, comparing annual counts across the years 2009 to 2018. The horizontal axis lists the years in descending order from 2018 on the left to 2009 on the right, while the vertical axis measures the article count from 0 to over 600, revealing a steady increase in publications over time from almost none in 2009 to over 600 in 2018.]*
+
 <!-- page 6 -->
 
 # Twitter for research
 
 Figure: Journal articles since 2009 with "Twitter" in title (Web of Science database)
+
+*[Figure: The figure is a treemap (which has no axes) that shows the number of journal articles since 2009 with "Twitter" in the title from the Web of Science database, represented by proportionally sized colored rectangles. It compares ten different academic disciplines, revealing that "Communication" (610 articles) is by far the largest category, followed by "Computer Science Information Systems" (295) and "Information Science Library Science" (260), while fields like "Political Science" (90) have the fewest.]*
 
 <!-- page 7 -->
 
@@ -171,7 +175,7 @@ Introduction Reddit for research
 
 * Reddit data is (easily) **accessible for researchers**
 * Much less popular for research than other social media data
-  * Google Scholar: "Twitter" $\sim$7,530,000, "Reddit" $\sim$1,630,000
+  * Google Scholar: "Twitter" $\sim\$7,530,000, "Reddit" $\sim\$1,630,000
 * Examples
   * Ammari et al. (2018): Parenting roles
   * Choudhury (2014): Mental health discourse
@@ -325,6 +329,8 @@ Figure: A political retweet network (Conover et al. 2011)
 
 Fundamentals of Computing and Data Display | Collecting Twitter and reddit Data | 19 / 32
 
+*[Figure: This axis-free network graph depicts a political retweet network, comparing two distinct groups represented by red and dark blue nodes connected by edges. The main pattern shows strong polarization, with nodes tightly clustered within their own color group and relatively few connections bridging the red and blue clusters.]*
+
 <!-- page 20 -->
 
 Collecting and analyzing data | Analyzing Twitter data
@@ -388,6 +394,8 @@ Bias, 'representativeness' and replication
   * Adjustment Error
 
 Figure: Potential measurement and representation errors in digital trace data (Sen et. al 2019)
+
+*[Figure: The flowchart illustrates potential errors in digital trace data across a central vertical pipeline of five sequential stages—from Construct Definition, Platform Selection, Data Collection, and Data Preprocessing down to Data Analysis and a final Estimate. It compares two main categories of error flanking the central pipeline: "Measurement" (related to the construct, shown as yellow boxes on the left) and "Representation" (related to the target population, shown as blue boxes on the right), demonstrating how each research stage introduces specific corresponding signal or entity errors.]*
 
 <!-- page 23 -->
 

@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/exams/exam_2-document.pdf"
 pages: 18
 sha256: "2dc6d71536cd65cb9ad4d902ccc2eeb76939089db14d77331220b5a017033c6b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:14"
+converted_at: "2026-11-14T21:29:21"
 ---
 
 <!-- page 1 -->
@@ -87,6 +87,8 @@ ncol=2)
 ```
 
 3
+
+*[Figure: The figure shows two side-by-side scatter plots with regression lines ("Model w/o interaction" and "Model w/ interaction") plotting "Salary" on the y-axis against "CHits" on the x-axis, comparing two "Division" groups: "E" (solid green line) and "W" (dashed blue line). Both plots show Salary increasing with CHits, with the first model displaying nearly parallel trend lines for the two divisions, while the interaction model shows the lines diverging at higher CHits with a much steeper positive slope for Division E than for Division W.]*
 
 <!-- page 4 -->
 

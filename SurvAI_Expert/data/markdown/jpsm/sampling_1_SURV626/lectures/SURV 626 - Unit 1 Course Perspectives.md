@@ -9,7 +9,7 @@ original: "sampling_1_SURV626/lectures/SURV 626 - Unit 1 Course Perspectives.pdf
 pages: 23
 sha256: "cea3aaffbf33f24c63754df412ccbd15503824dc1558be0bcdeae09be7cfee96"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:11"
+converted_at: "2026-11-14T21:29:17"
 ---
 
 <!-- page 1 -->
@@ -433,3 +433,5 @@ $\bar{y}$
 23
 
 ©2017, Raphael Nishimura and James M. Lepkoswki @ IPSDS
+
+*[Figure: The diagram compares the probability distributions of individual sample realizations on the left (plotted over values from 0 to 9 on the x-axis and density up to 0.35 on the y-axis) with the combined sampling distribution of sample means on the right (plotted against sample mean values $\bar{y}$ from 0 to 9 on the x-axis and density up to 1.20 on the y-axis). The main pattern illustrates that while individual sample realizations exhibit wider, skewed distributions with variance $s^2$, the resulting sampling distribution of the means forms a much narrower, symmetric bell-shaped curve centered around 4.2 with a smaller variance $V(\bar{y})$.]*

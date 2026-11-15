@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/class_labs/Class7_lab_nocode.Rmd"
 pages: 
 sha256: "a0c7bf976e48a1c12e5901e1d8902dceeff3c583f12a4f9581a6781e61d4ee55"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:20"
 ---
 
 

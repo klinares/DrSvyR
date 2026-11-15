@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/02-03-DataSplitting.pdf"
 pages: 15
 sha256: "88ef243facaee335848c86d9e1486042ca9c69833f1f3b3b4d623f487c4f8fcf"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -70,6 +70,8 @@ Figure: 50/25/25 Train-validation-test split
 Machine Learning for Social Science
 Data Splitting
 
+*[Figure: The page contains two horizontal bar diagrams illustrating how a dataset is partitioned into different subsets for machine learning. The top diagram shows an "80/20 train-test split" divided into a large "Train" section and a smaller "Test" section, while the bottom diagram shows a "50/25/25 Train-validation-test split" divided into a "Train" section (half the bar) and two smaller, equal-sized "Validate" and "Test" sections.]*
+
 <!-- page 4 -->
 
 # Validation set, test set, CV
@@ -103,6 +105,8 @@ Figure: 50/25/25 Train-validation-test split
 
 ---
 Machine Learning for Social Science | Data Splitting | 3 / 14
+
+*[Figure: The image contains two axis-free horizontal bar diagrams on the right side that compare different data partitioning strategies. The top diagram illustrates an "80/20 train-test split" dividing the bar into a large "Train" section and a smaller "Test" section, while the bottom diagram shows a "50/25/25 Train-validation-test split" dividing the bar into a 50% "Train" section and two equal 25% sections for "Validate" and "Test."]*
 
 <!-- page 5 -->
 
@@ -185,6 +189,8 @@ Machine Learning for Social Science
 
 Data Splitting
 
+*[Figure: This diagram illustrates 5-fold cross-validation by showing an initial dataset of $n$ observations (top white bar) randomly shuffled and split into five stacked horizontal bars representing five iterations. Each bar compares the training set (light gray) and the validation set (dark gray), demonstrating the main pattern where a different non-overlapping fifth of the data serves as the validation set in each fold while the remaining four-fifths form the training set.]*
+
 <!-- page 9 -->
 
 # Learning curves
@@ -207,6 +213,8 @@ Figure: Learning curves
 (a) Linear regression
 
 (b) Regression trees
+
+*[Figure: The figure consists of two side-by-side line plots showing learning curves that compare training error (blue) and test error (red) for (a) linear regression and (b) regression trees, with "Training set size" (from 0 to 400) on the x-axis and "Error (log RMSE)" (from 1.0 to 3.5) on the y-axis. In both models, as the training set size increases, the initially higher test error decreases while the training error initially drops and then rises, with both errors eventually converging to a value just below 2.0 around a training set size of 300 to 400.]*
 
 <!-- page 11 -->
 

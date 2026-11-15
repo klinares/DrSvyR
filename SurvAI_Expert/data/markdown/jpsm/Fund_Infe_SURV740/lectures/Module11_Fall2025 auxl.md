@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/lectures/Module11_Fall2025 auxl.pdf"
 pages: 56
 sha256: "c0893c50bbcf8f0e9c8667458ba49144535c329127916e25e39f0e906f85fc6b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:03"
+converted_at: "2026-11-14T21:29:07"
 ---
 
 <!-- page 1 -->
@@ -405,6 +405,8 @@ In nonprobability samples, Valliant and Dever (2011) defined three populations t
 (3) Actually covered population, $F_c$, the portion of $F_{pc}$.
 
 FIG. 1. *Illustration of potential and actual coverage of a target population.*
+
+*[Figure: The figure is a nested set diagram without axes that illustrates the potential and actual coverage of a target population ($U$). It compares the not covered population ($U - F_{pc}$), potentially covered population ($F_{pc}$), actually covered population ($F_c$), and the sample ($s$), showing a hierarchical pattern where $s$ is a subset of $F_c$, which is nested within $F_{pc}$, all inside the outer oval representing $U$.]*
 
 <!-- page 32 -->
 

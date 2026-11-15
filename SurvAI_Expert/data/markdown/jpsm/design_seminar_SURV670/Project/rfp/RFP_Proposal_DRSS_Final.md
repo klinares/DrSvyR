@@ -9,7 +9,7 @@ original: "design_seminar_SURV670/Project/rfp/RFP_Proposal_DRSS_Final.qmd"
 pages: 
 sha256: "d9d0efd2e435faf525315eed7a7a70ea05bd79225792c62be7ba1b3a0b4c1628"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:53"
+converted_at: "2026-11-14T21:28:56"
 ---
 
 

@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/class_labs/R manual_ISLR.pdf"
 pages: 16
 sha256: "e86f412f20b6d4e09e51705f4ff29ba853370e7c2d37b232f35a73b86a43fcf6"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:14"
+converted_at: "2026-11-14T21:29:21"
 ---
 
 <!-- page 1 -->

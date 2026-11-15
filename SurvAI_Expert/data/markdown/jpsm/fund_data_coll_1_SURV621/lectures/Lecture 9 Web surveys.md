@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 9 Web surveys.pdf"
 pages: 36
 sha256: "68cf0afa01a2fc6821b8441b7893d5ac15df50aa0baaaa6017182c964bc14593"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:58"
+converted_at: "2026-11-14T21:29:01"
 ---
 
 <!-- page 1 -->

@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/08-02-GradientBoosting.pdf"
 pages: 11
 sha256: "826459045a7297398697c079ddd8732e04c352adc42c12a98f79f1756c809604"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->

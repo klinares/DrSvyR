@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/12-01-Stacking.pdf"
 pages: 10
 sha256: "99b8ef125c020a66c88ecaa0a6922d75f378cc914b9b5f52d727d467cc8572e6"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->
@@ -75,6 +75,8 @@ $^1$`https://burakhimmetoglu.com/2016/12/01/stacking-models-for-improved-predict
 
 Machine Learning for Social Science | ML Toolbox | 4 / 10
 
+*[Figure: This diagram illustrates the machine learning stacking process, showing how an original $m \times n$ training dataset ($X$) is fed into $M$ distinct "Level 1 Models." The predictions from these initial models ($\hat{y}^{\mu1}$ to $\hat{y}^{\mu M}$) are combined to form an $m \times M$ matrix of "Level 2 training data" ($X^{(l2)}$), which is then input into a "Level 2 model" to generate the final prediction vector ($\hat{y}^{\text{fin}}$).]*
+
 <!-- page 5 -->
 
 Stacking
@@ -130,6 +132,8 @@ $^2$https://burakhimmetoglu.com/2016/12/01/stacking-models-for-improved-predicti
 Machine Learning for Social Science
 
 ML Toolbox
+
+*[Figure: The diagram illustrates the creation of a second-level training data matrix across $M$ models ($\mu_1, \mu_2, \dots, \mu_M$) using cross-validation over $N$ data folds. It compares two iterations on the left—where fold $1$ and fold $j$ are respectively highlighted in red as the holdout folds—demonstrating the pattern of training on the remaining folds to populate the corresponding rows ($\hat{y}_{F1}$ and $\hat{y}_{Fj}$) of the prediction matrix on the right.]*
 
 <!-- page 6 -->
 
@@ -213,6 +217,8 @@ $^3$van der Laan et al. (2007)
 
 Machine Learning for Social Science | ML Toolbox | 8 / 10
 
+*[Figure: The figure is a step-by-step flowchart illustrating the "Super Learner" ensemble algorithm, showing how input data is processed from left to right through numbered stages (0 to 5) without traditional plot axes. It compares and combines multiple candidate learners (such as lm, D/S/A, and RF) across $V$ cross-validation blocks to form a prediction matrix $Z$ and observed outcomes $Y$, which are then fitted via regression and combined with full-dataset training to produce the final Super Learner model.]*
+
 <!-- page 9 -->
 
 # Extensions
@@ -259,3 +265,5 @@ $$w_i(x) = \sum_j v_{ij} f_j(x) \text{ , } b(x) = \sum_{i,j} v_{ij} f_j(x) g_i(x
 $^4$Sill et al. (2009)
 
 Machine Learning for Social Science | ML Toolbox | 10 / 10
+
+*[Figure: This two-part hierarchical diagram without axes compares the model combination architectures of "Standard Linear Stacking" (SLS) and "Feature-Weighted Linear Stacking" (FWLS) for generating a "Blended Prediction" from three base models (SVD, K-NN, and RBM). The top tree shows SLS assigning a single weight ($w_1, w_2, w_3$) directly to each of the three models, whereas the bottom tree shows FWLS expanding the structure to assign distinct weights ($v_{ij}$) to the interaction of each model with multiple features ($f_1, f_2$), accompanied by their respective summation formulas.]*

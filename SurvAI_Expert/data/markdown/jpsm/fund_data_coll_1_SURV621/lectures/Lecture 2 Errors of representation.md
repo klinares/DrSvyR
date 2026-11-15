@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 2 Errors of representation.
 pages: 32
 sha256: "6506eba64b905d51a0fb356070657a263e91d1522f7eeba54045d5ea2043d96d"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:57"
+converted_at: "2026-11-14T21:29:00"
 ---
 
 <!-- page 1 -->
@@ -114,6 +114,8 @@ Undercoverage
 Frame Population
 
 8
+
+*[Figure: This conceptual Venn-style diagram uses two overlapping rectangles (without axes) to compare the "Target Population" (shaded rectangle) and the "Frame Population" (unshaded rectangle). The overlapping area represents the "Covered Population," while the non-overlapping sections illustrate "Undercoverage" (within the target population only) and "Ineligible Units" or over-coverage (within the frame population only).]*
 
 <!-- page 9 -->
 
@@ -487,6 +489,8 @@ Nonresponse bias a characteristic of the *estimate* rather than the *survey*.
 **Figure 2.** Percentage Absolute Relative Nonresponse Bias of 959 Respondent Means by Nonresponse Rate of the 59 Surveys in Which They Were Estimated.
 
 30
+
+*[Figure: This scatter plot shows the "Percentage Absolute Relative Bias of Respondent Mean" on the vertical axis (ranging from 0 to 100) plotted against the "Nonresponse Rate" on the horizontal axis (ranging from 0 to 80) for 959 estimates across 59 surveys. The data points form vertical clusters between nonresponse rates of roughly 14 and 72, demonstrating no clear correlation between a survey's nonresponse rate and the magnitude of nonresponse bias, as most bias estimates remain below 20% regardless of the nonresponse rate.]*
 
 <!-- page 31 -->
 

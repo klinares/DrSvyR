@@ -9,7 +9,7 @@ original: "applications_stats_modeling_SURV617/midterm/midterm_study_guide.qmd"
 pages: 
 sha256: "fa17d679b90ae4fe0c8ed7da0e9ea94b145d823e76d92cdcc3f56bcc0961488c"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:41"
+converted_at: "2026-11-14T21:28:43"
 ---
 
 
@@ -1482,6 +1482,7 @@ plot(fitted(model1), resid(model1))
 abline(h = 0, lty = 2)
 
 
+```
 ```r
 qq_data <- ranef(model1)$cluster_var
 qqnorm(qq_data[,1], main = "Q-Q Plot: Random Intercepts")

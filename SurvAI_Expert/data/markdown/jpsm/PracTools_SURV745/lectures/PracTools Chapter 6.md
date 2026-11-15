@@ -9,7 +9,7 @@ original: "PracTools_SURV745/lectures/PracTools Chapter 6.pdf"
 pages: 12
 sha256: "62e3b982754ea5e74f32c5c9634c9f44429377602d6deba9e4e45b430d0cc80f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:11"
+converted_at: "2026-11-14T21:29:16"
 ---
 
 <!-- page 1 -->

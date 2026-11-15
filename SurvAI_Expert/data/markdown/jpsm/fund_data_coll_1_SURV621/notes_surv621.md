@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/notes_surv621.pdf"
 pages: 16
 sha256: "70b1627f0c7bb88ee7b550cc2659b7d8dea019162539df3b8413f0fb3a8f7a25"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:59"
+converted_at: "2026-11-14T21:29:01"
 ---
 
 <!-- page 1 -->

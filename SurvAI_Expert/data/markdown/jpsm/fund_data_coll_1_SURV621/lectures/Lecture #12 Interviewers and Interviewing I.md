@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture #12 Interviewers and Interv
 pages: 51
 sha256: "49931fc70fc25f98bf8f849d2d4d90c2e06bb4642660cc28d0966f1074323e38"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:56"
+converted_at: "2026-11-14T21:28:58"
 ---
 
 <!-- page 1 -->

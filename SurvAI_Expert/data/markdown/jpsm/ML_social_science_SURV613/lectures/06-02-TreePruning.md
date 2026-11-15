@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/06-02-TreePruning.pdf"
 pages: 11
 sha256: "7d9015b915335ef4ede993771beb10f1076398d5a79589da61b7de0d843b9375"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -54,6 +54,8 @@ Figure: CART examples
 
 Machine Learning for Social Science | Decision Trees I | 2 / 9
 
+*[Figure: The figure displays two side-by-side hierarchical decision tree diagrams titled "CART examples," comparing "(a) Regression tree" on the left and "(b) Classification tree" on the right, without standard coordinate axes. The regression tree splits on numerical variables (`lstat`, `dis`, `age`, `lon`) to yield continuous numeric terminal leaf values (ranging from 11.72 to 47.96), whereas the classification tree splits on demographic and passenger attributes (`Sex`, `Age`, `Pclass`, `Fare`) to assign observations into binary terminal classes (0 or 1).]*
+
 <!-- page 3 -->
 
 # Tree structure
@@ -63,6 +65,8 @@ Figure: Tree prediction surface (example)
 Machine Learning for Social Science
 
 Decision Trees I
+
+*[Figure: The figure is a 3D surface plot illustrating an example of a decision tree prediction surface across two input axes (`x1` and `x2`) and one vertical output axis (`yhat`). The main pattern shows a piecewise-constant, step-like structure where the predicted value (`yhat`) remains flat within rectangular regions of the `x1`-`x2` plane and jumps abruptly in height across region boundaries, reaching its highest peak in the back-right corner.]*
 
 <!-- page 4 -->
 
@@ -76,6 +80,8 @@ Figure: High variance in trees
 Machine Learning for Social Science
 
 Decision Trees I
+
+*[Figure: The plot, titled "Figure: High variance in trees," displays a single red step-function curve representing a decision tree's predictions with $x$ on the horizontal axis (ranging from 0.0 to 10.0) and $y$ on the vertical axis (marked at 2, 4, and 6). The main pattern shows three distinct vertical plateaus—around $y=2$ (for $x < 2.8$), $y=5$ (for $2.8 < x < 8.0$), and $y=7$ (for $x > 8.0$)—each exhibiting frequent, jagged fluctuations that illustrate overfitting and high variance.]*
 
 <!-- page 5 -->
 

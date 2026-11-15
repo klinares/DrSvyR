@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/lectures/Module Causal Inf4 YL.pdf"
 pages: 44
 sha256: "89a4f7fd44b408aff3f7194a42958cd7b36b4787c18286dd0cd603defeed1613"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:03"
+converted_at: "2026-11-14T21:29:06"
 ---
 
 <!-- page 1 -->
@@ -35,6 +35,8 @@ Assume no unmeasured confounders given $L$
 Figure 1.
 
 **Question: How to estimate the causal effect of A on Y?**
+
+*[Figure: Figure 1 is a directed acyclic graph (DAG) with no axes that illustrates the causal relationships among three variables: exposure $A$, outcome $Y$, and confounder $L$. The diagram shows a triangular pattern of directed arrows where $L$ points to both $A$ and $Y$ as a common cause, and $A$ points directly to $Y$.]*
 
 <!-- page 3 -->
 
@@ -307,15 +309,15 @@ In the pseudo-population, everyone is equally likely to be treated, no matter $X
 | :--- | :---: | :---: | :---: | :---: |
 | Intercept | .87 | .52 | | |
 | Age (reference: 70+) | | | | $<$.0001 |
-| $\quad \le$40 | $-1.72$ | .34 | .18 | |
-| $\quad$41–56 | $-1.54$ | .48 | .21 | |
-| $\quad$57–69 | $-.68$ | .38 | .51 | |
+| $\quad \le\$40 | $-1.72$ | .34 | .18 | |
+| $\quad\$41–56 | $-1.54$ | .48 | .21 | |
+| $\quad\$57–69 | $-.68$ | .38 | .51 | |
 | Prior permanent access? | | | | .01 |
 | $\quad$Yes | .67 | .27 | 1.94 | |
 | Upstream vein diameter (reference: $<$ 3 mm) | | | | .04 |
-| $\quad$3–4 | $-.46$ | .59 | .63 | |
-| $\quad$4–5 | $-.60$ | .64 | .55 | |
-| $\quad >$5 | $-1.27$ | .67 | .28 | |
+| $\quad\$3–4 | $-.46$ | .59 | .63 | |
+| $\quad\$4–5 | $-.60$ | .64 | .55 | |
+| $\quad >\$5 | $-1.27$ | .67 | .28 | |
 | Dependent on dialysis? | | | | .23 |
 | $\quad$Yes | $-.42$ | .35 | .66 | |
 | Cardiovascular disease? | | | | .57 |
@@ -332,6 +334,8 @@ In the pseudo-population, everyone is equally likely to be treated, no matter $X
 *Figure 1. Boxplots of distributions of continuous covariates by heparin dose.*
 
 *Figure 2. Weighted boxplots of distributions of continuous covariates by heparin dose.*
+
+*[Figure: The image shows four sets of boxplots arranged in a two-by-two grid, comparing unweighted (Figure 1, left) and weighted (Figure 2, right) distributions of continuous covariates between "low-dose or no heparin" and "high-dose heparin" groups. The y-axes measure "age" (from 20 to 100) in the top row and "upstream venous diameter" (from 2 to 12) in the bottom row, showing that weighting balances the median and interquartile ranges across the two treatment groups, which initially differed in the unweighted plots.]*
 
 <!-- page 22 -->
 
@@ -416,6 +420,8 @@ Figure 3 shows the distribution of predicted $Y$ under high-dose $A=1$
 * Substantial variation among subjects
 * The model distinguishes subjects with high success from those less likely to succeed
 
+*[Figure: The figure is a histogram showing the distribution of predicted probabilities of success, $E(Y^1|\mathbf{X}; \hat{\boldsymbol{\beta}})$, for a single group of subjects in an AVF study, with "predicted probability of success" (ranging from .2 to 1) on the horizontal axis and "Frequency" (ranging from 0 to 50) on the vertical axis. The distribution is left-skewed, with low frequencies below a probability of .6 and a sharp increase peaking at nearly 50 around a predicted probability of .9.]*
+
 <!-- page 27 -->
 
 *Table 4. Odds Ratios From Various Weighted and Unweighted Logistic Regression Models for the Association of Heparin With Surgical Success*
@@ -476,6 +482,8 @@ Dilemma:
 * If we estimate the association of $(A_1, A_2)$ with Y <u>with</u> conditioning on Z, then there is an open pathway through $\text{A}_1$-U-Y
 
 **What can we do?**
+
+*[Figure: Figure 2 is a directed acyclic graph (DAG) illustrating causal relationships among five variables without coordinate axes. It shows a sequential horizontal pathway where $A_1$ points to $Z$, $Z$ points to $A_2$, and $A_2$ points to the outcome $Y$, along with an unmeasured variable $U$ below that has directed arrows pointing up to both $Z$ and $Y$.]*
 
 <!-- page 31 -->
 

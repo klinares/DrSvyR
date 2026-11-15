@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/project/gaze_incident_proposal.pdf"
 pages: 1
 sha256: "4d0df87aa1db93c4d3f2795f06da84e80cfab76c337e79228ea2cda6b1159752"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:55"
+converted_at: "2026-11-14T21:28:58"
 ---
 
 <!-- page 1 -->

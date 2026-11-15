@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lectures/Lecture 4_ Privacy and Confiden
 pages: 28
 sha256: "83840b977543fba0554ace8fb9e411ae6ec003850ad32fc24cbbac03bd941ed9"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:01"
+converted_at: "2026-11-14T21:29:04"
 ---
 
 <!-- page 1 -->

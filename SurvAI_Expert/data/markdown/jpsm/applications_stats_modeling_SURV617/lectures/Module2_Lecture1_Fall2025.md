@@ -9,7 +9,7 @@ original: "applications_stats_modeling_SURV617/lectures/Module2_Lecture1_Fall202
 pages: 39
 sha256: "c9282cd31a718a4979f12fa2f82d539d48ff769bf7f903bafdb170d4a7303493"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:40"
+converted_at: "2026-11-14T21:28:42"
 ---
 
 <!-- page 1 -->
@@ -66,6 +66,8 @@ Email: [[email]](mailto:[email])
 * Consider this SEM (Wheaton et al. 1977):
 
 5
+
+*[Figure: The figure is a structural equation model (SEM) path diagram with no axes, comparing relationships among three latent variables in ovals (`SES66`, `Alien67`, `Alien71`), six observed indicator variables in rectangles (`educ66`, `occstat66`, `anomia67`, `pwless67`, `anomia71`, `pwless71`), and eight error terms in small circles ($\varepsilon_1$ through $\varepsilon_8$). The main pattern shows `SES66` having directed paths pointing to both `Alien67` and `Alien71`, `Alien67` having a directed path pointing to `Alien71`, and each of the three latent variables pointing to its respective pair of observed indicators.]*
 
 <!-- page 6 -->
 
@@ -486,6 +488,8 @@ $$
 
 33
 
+*[Figure: The page features a path diagram of a latent growth curve model (LGCM) showing two correlated latent variables in ovals ("Intercept" and "Slope") pointing to three observed variables in rectangles ("Y1", "Y2", and "Y3"), each with an associated error term in a circle ($\varepsilon_1$, $\varepsilon_2$, $\varepsilon_3$) and a zero in the bottom-right corner. The main pattern in the directional arrows shows the "Intercept" factor loading onto all three observed variables with fixed weights of 1, while the "Slope" factor loads onto Y1, Y2, and Y3 with linearly increasing weights of 0, 1, and 2, respectively.]*
+
 <!-- page 34 -->
 
 # Example: LGCM
@@ -530,6 +534,8 @@ $$
 * Recall the SEM on **Slide 5** (data on Canvas):
 
 37
+
+*[Figure: The image contains a structural equation model (SEM) path diagram without axes that compares three latent variables (`SES66`, `Alien67`, and `Alien71`, shown in ovals) and their corresponding observed indicator variables (shown in rectangles) and error terms ($\varepsilon_1$ through $\varepsilon_8$, shown in small circles). The main pattern illustrates directional relationships where `SES66` (measured by `educ66` and `occstat66`) directly influences both `Alien67` (measured by `anomia67` and `pwless67`) and `Alien71` (measured by `anomia71` and `pwless71`), while `Alien67` also has a direct effect on `Alien71`.]*
 
 <!-- page 38 -->
 

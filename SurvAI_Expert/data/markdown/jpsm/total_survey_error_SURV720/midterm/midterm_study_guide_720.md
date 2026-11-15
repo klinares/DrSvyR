@@ -9,7 +9,7 @@ original: "total_survey_error_SURV720/midterm/midterm_study_guide_720.qmd"
 pages: 
 sha256: "1f3e41677bafafd044dd7466afe389a1deae360fb8f2adb19e97a3ec654164dc"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:27"
+converted_at: "2026-11-14T21:29:37"
 ---
 
 

@@ -9,7 +9,7 @@ original: "PracTools_SURV745/lectures/PracTools Chapter 10.pdf"
 pages: 63
 sha256: "b22ee751fc2fd59aed2c402437f042aa9b7d5552056c18c79f7f527f1333798e"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:09"
+converted_at: "2026-11-14T21:29:14"
 ---
 
 <!-- page 1 -->
@@ -100,6 +100,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 10 4 / 63
 
 ---
 Sunghee Lee (U of Michigan) $\qquad$ Prac Tools Ch. 10 $\qquad$ 5 / 63
+
+*[Figure: The figure is a hierarchical network diagram without axes that illustrates the relationships between different United States Census geographic units, descending from "NATION" at the top to "Census Blocks" at the bottom. A central vertical spine connects the primary hierarchy (Nation, Regions, Divisions, States, Counties, Census Tracts, Block Groups, and Census Blocks), while secondary geographic divisions—such as ZIP Code Tabulation Areas, School Districts, Places, Urban Areas, and AIANNH Areas—branch off from various levels of the main spine and ultimately converge at the foundational Census Blocks level.]*
 
 <!-- page 6 -->
 
@@ -468,6 +470,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 10 27 / 63
 **Fig. 10.3:** Rotation plan for PSUs in the National Survey on Drug Use and Health
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 10 28 / 63
+
+*[Figure: The figure is a tabular diagram illustrating a rotation plan for primary sampling units (PSUs), with rows representing Subsamples 1 through 6 and columns representing Years 1 through 5. Black dots connected by horizontal lines show a staggered diagonal pattern where each subsample is active for two consecutive years (except Subsample 1 in Year 1 only and Subsample 6 in Year 5 only), resulting in two active subsamples per year with a 50% annual overlap.]*
 
 <!-- page 29 -->
 

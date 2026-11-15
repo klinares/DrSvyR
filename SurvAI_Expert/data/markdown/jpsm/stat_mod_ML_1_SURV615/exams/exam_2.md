@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/exams/exam_2.qmd"
 pages: 
 sha256: "4b6ab3b0cdd6601fbc3d9fb4e0a317d75a031d38715a13a567001634a66779d4"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:14"
+converted_at: "2026-11-14T21:29:21"
 ---
 
 ------------------------------------------------------------------------

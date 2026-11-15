@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lectures/Lecture-ML.pdf"
 pages: 89
 sha256: "a01f0b312942ec4655ec6899474bb326d3e0d2c914016c927fd9fb257d0c1593"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:00"
+converted_at: "2026-11-14T21:29:02"
 ---
 
 <!-- page 1 -->
@@ -99,6 +99,8 @@ Outcome
 * Unsuccessful
 
 Machine Learning
+
+*[Figure: The figure is an empty coordinate grid with "Miles per Gallon" (ranging from 10 to 35) on the horizontal axis and "Horsepower" (ranging from 100 to 300) on the vertical axis. A legend on the right indicates two outcome groups, "Successful" and "Unsuccessful," though no data points or symbols are currently plotted to show any pattern.]*
 
 <!-- page 8 -->
 
@@ -307,6 +309,8 @@ Unsuccessful
 
 Machine Learning 20 / 75
 
+*[Figure: The figure shows a two-dimensional coordinate plot illustrating feature space partitioning, with "Miles per Gallon" (ranging from 10 to 35) on the horizontal axis and "Horsepower" (ranging from 100 to 300) on the vertical axis. Although a legend lists two outcome groups—"Successful" and "Unsuccessful"—no individual data points are plotted, and the main feature is a horizontal dashed line across the plot at approximately 135 Horsepower that divides the space into two regions.]*
+
 <!-- page 22 -->
 
 Example Using Decision Trees
@@ -331,6 +335,8 @@ Miles per Gallon
 * Unsuccessful
 
 Machine Learning 21 / 75
+
+*[Figure: The figure shows a two-dimensional coordinate grid illustrating decision tree partitioning, with "Miles per Gallon" (ranging from 10 to 35) on the horizontal axis and "Horsepower" (ranging from 100 to 300) on the vertical axis, accompanied by a legend for "Successful" and "Unsuccessful" outcomes. Although no data points are plotted, the feature space is divided into three distinct regions by a horizontal dashed line around 135 Horsepower and a vertical dashed line around 21 Miles per Gallon extending down from the horizontal split.]*
 
 <!-- page 23 -->
 
@@ -367,6 +373,8 @@ Successful
 Unsuccessful
 
 Machine Learning
+
+*[Figure: The plot shows a coordinate space with "Miles per Gallon" (from 10 to 35) on the horizontal axis and "Horsepower" (from 100 to 300) on the vertical axis, alongside a legend comparing "Successful" and "Unsuccessful" outcome groups. Although no data points are visible, the main pattern illustrates decision tree partitioning using a horizontal dashed line around 135 Horsepower and two vertical dashed lines extending downward from that threshold near 20 and 21.5 Miles per Gallon.]*
 
 <!-- page 24 -->
 
@@ -425,6 +433,8 @@ Successful
 Unsuccessful
 
 Machine Learning
+
+*[Figure: The figure shows a plot grid with "Miles per Gallon" (from 10 to 35) on the horizontal axis and "Horsepower" (from 100 to 300) on the vertical axis, along with a legend for "Outcome" comparing "Successful" and "Unsuccessful" groups. Although no data points are plotted, the grid is partitioned by dashed black lines indicating decision boundaries: a horizontal line around 135 Horsepower and two vertical lines below it near 20 and 21 Miles per Gallon.]*
 
 <!-- page 28 -->
 

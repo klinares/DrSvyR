@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lectures/Class 07 Notes.pdf"
 pages: 35
 sha256: "0bd0bfb591bd44abecfd82f545f6d776f8ab39d310827d52eafd7fbd3d67b732"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:47"
+converted_at: "2026-11-14T21:28:49"
 ---
 
 <!-- page 1 -->
@@ -523,6 +523,8 @@ Figure 1: Health Ratings, by Picture and Condition
 \* Scale range of 1-5; a high score indicates good health
 
 36
+
+*[Figure: This line graph displays "Mean Health Rating*" (ranging from 2.8 to 3.5 on the y-axis) across three "Position of Picture" conditions ("Left of Question," "Within Header," and "Prior Screen" on the x-axis), comparing "Sick" (solid line) and "Fit" (dashed line) picture groups. The two groups follow opposite patterns: ratings for the "Sick" picture are higher at "Left of Question" and "Prior Screen" (~3.3) but dip at "Within Header" (~3.14), whereas ratings for the "Fit" picture peak at "Within Header" (~3.3, where the difference between groups is marked "NS") and drop at the other two positions (~3.05 and ~2.93).]*
 
 <!-- page 35 -->
 

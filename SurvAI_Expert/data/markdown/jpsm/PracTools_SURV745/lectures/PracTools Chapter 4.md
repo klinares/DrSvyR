@@ -9,7 +9,7 @@ original: "PracTools_SURV745/lectures/PracTools Chapter 4.pdf"
 pages: 35
 sha256: "0d273a760c82493b68142a69b749c34f15188558f60b85ba3ba6525853a1ed5a"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:10"
+converted_at: "2026-11-14T21:29:16"
 ---
 
 <!-- page 1 -->
@@ -138,6 +138,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 4 8 / 35
 **Fig. 4.1:** Normal densities of test statistics under $H_0$ and $H_A$. $\delta \Big/ \sqrt{V(\hat{y})}$ is set equal to 3 in this illustration so that $E\{t|H_A \text{ is true}\} = 3$. A 1-sided test is conducted at the 0.05 level
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 4 9 / 35
+
+*[Figure: The plot illustrates the size and power of a one-sided statistical test by comparing two overlapping normal distribution curves representing the null hypothesis ($H_0$, centered at 0) and the alternative hypothesis ($H_A$, centered at 3), with test statistic $Z$ on the horizontal axis (ranging from -2 to 6) and probability density on the vertical axis (ranging from 0.0 to 0.4). A critical value $Z_{1-\alpha}$ divides the horizontal axis into non-rejection and rejection regions, with shaded areas under the curves indicating the Type I error rate ($\alpha$, red horizontal stripes), Type II error rate ($\beta$, blue vertical stripes), and statistical power (solid gray shading under $H_A$).]*
 
 <!-- page 10 -->
 
@@ -327,6 +329,8 @@ Sunghee Lee (U of Michigan) Prac Tools Ch. 4 20 / 35
 **Fig. 4.4:** Power for sample sizes of $n = 10, 25, 50, 100$ in a two-sided test of $H_0 : \mu_D = 0$ versus $H_A : |\mu_D| = \delta$ ($\alpha = 0.05, \sigma_d = 3$)
 
 Sunghee Lee (U of Michigan) Prac Tools Ch. 4 21 / 35
+
+*[Figure: The line graph displays the statistical power (on the vertical axis, ranging from 0.2 to 1.0) of a two-sided test plotted against the effect size, Delta (on the horizontal axis, ranging from -4 to 4), comparing four different sample sizes ($n = 10, 25, 50,$ and $100$). All four curves form symmetrical U-shapes centered at a minimum power of 0.05 when Delta is 0, showing that power increases toward 1.0 as the absolute value of Delta increases, and rises much more steeply for larger sample sizes.]*
 
 <!-- page 22 -->
 

@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/lectures/Class1_lecture.pdf"
 pages: 81
 sha256: "34fcc3c20574b48174fe68e12104ac626f7043e9d7786eb4c31614219ddf9125"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:15"
+converted_at: "2026-11-14T21:29:22"
 ---
 
 <!-- page 1 -->
@@ -436,6 +436,8 @@ Uniform distribution
 
 M. W. Toews - https://commons.wikimedia.org/w/index.php?curid=1903871  
 Melikamp - https://commons.wikimedia.org/w/index.php?curid=65001875
+
+*[Figure: The figure displays two side-by-side plots of a normal distribution: a continuous blue bell curve on the left with a vertical density axis from 0.0 to 0.4 and a horizontal axis from -3σ to 3σ, and a discrete color-coded histogram on the right with a horizontal axis ranging from μ-3σ to μ+3σ. Both charts divide the data into standard deviation intervals to illustrate the empirical rule, showing a symmetrical pattern where 68% of values fall within one standard deviation of the mean (34.1% on each side), 95% within two, and 99.7% within three.]*
 
 <!-- page 41 -->
 

@@ -9,7 +9,7 @@ original: "sampling_1_SURV626/lectures/Unit 6 Unequal sized clusters PPS.pdf"
 pages: 52
 sha256: "af1b0f2df137ef66c091f588aa2984571544c4664dc89a81c4c357e99d800741"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:13"
+converted_at: "2026-11-14T21:29:19"
 ---
 
 <!-- page 1 -->
@@ -891,3 +891,5 @@ e = 2
 Link 105-113, size = 1
 
 ©2017, Raphael Nishimura and James M. Lepkoswki @ IPSDS 357
+
+*[Figure: The diagram is an annotated table listing housing unit counts ("HU's") across numbered blocks within two census tracts (28 and 29). Curved arrows, brackets, and text callouts illustrate a procedure for linking consecutive blocks with zero or very small housing unit counts (specifically blocks 101–113 in Tract 29 and blocks 212–213 in Tract 28) to reach a combined target size.]*

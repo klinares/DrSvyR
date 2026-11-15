@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/lectures/SurvMeth740_Module7_Fall2025.pdf"
 pages: 53
 sha256: "3b05f98c811b7bcd7cadd532b1eabc23575beab17e0d8a801f666424bed46efc"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:04"
+converted_at: "2026-11-14T21:29:08"
 ---
 
 <!-- page 1 -->

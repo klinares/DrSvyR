@@ -9,7 +9,7 @@ original: "stat_mod_ML_1_SURV615/exams/exam_1-document.pdf"
 pages: 17
 sha256: "d2c2f2b880d560a18ea1bb02e3850cfa30d60d723a68993b824127a7f7f70ba3"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:14"
+converted_at: "2026-11-14T21:29:21"
 ---
 
 <!-- page 1 -->
@@ -315,6 +315,8 @@ ca_schools |>
 
 10
 
+*[Figure: The figure is a multi-panel grid of notched box plots with jittered data points showing the distribution of ten quantitative variables in the California schools dataset: calworks, computer, english, expenditure, income, lunch, math, read, students, and teachers. Each panel uses an individually scaled vertical axis for the variable's values, revealing that while test scores (math, read) and lunch are fairly symmetric, variables such as computer, students, teachers, income, and english are heavily right-skewed with many high-value outliers.]*
+
 <!-- page 11 -->
 
 ### 2.3 Fit a simple linear regression model of read as a function of income and interpret the regression coefficient for the predictor. Create a scatter plot showing the relationship with a regression line (your outcome should be on the y axis). [15pt]
@@ -422,6 +424,8 @@ plot(read_inc_stu_mod, which=c(1))
 ```
 
 14
+
+*[Figure: The page contains two scatter plots: the top plot shows reading scores (`read`, y-axis, 600 to 700) against student total enrollment (`students`, x-axis, 0 to over 20,000), illustrating a non-linear distribution where most observations are densely clustered near zero enrollment across the full range of scores and thin out toward lower scores as enrollment increases. The bottom plot displays model residuals (y-axis, -40 to 40) against fitted values (x-axis, 620 to 720) for the linear model `lm(read ~ income + students)`, showing a dense cluster of points between fitted values of 640 and 670 and a red trend line that curves downward as fitted values increase.]*
 
 <!-- page 15 -->
 

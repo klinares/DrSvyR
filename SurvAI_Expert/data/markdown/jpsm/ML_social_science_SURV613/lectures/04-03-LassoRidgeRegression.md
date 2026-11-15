@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/04-03-LassoRidgeRegression.pdf"
 pages: 13
 sha256: "b70d45a2a6796b5d43c194c89c2dbfc5a9510998bca2b9ed070e0e3b850e8294"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -192,6 +192,8 @@ Machine Learning for Social Science
 
 Regularized regression I
 
+*[Figure: The figure consists of two side-by-side coordinate plots with horizontal axis $\beta_1$ and vertical axis $\beta_2$ that compare the constraint regions and residual sum of squares (RSS) contours for Lasso ($L_1$) versus Ridge ($L_2$) regularization. Both plots show red elliptical RSS contours centered at the unconstrained estimate $\hat{\beta}$, demonstrating that the contours touch the cyan diamond-shaped $L_1$ constraint region at a corner on the $\beta_2$ axis (where $\beta_1 = 0$), whereas they touch the cyan circular $L_2$ constraint region at a point away from the axes where neither parameter is zero.]*
+
 <!-- page 10 -->
 
 Lasso
@@ -213,6 +215,8 @@ Hastie et al. (2015)
 Machine Learning for Social Science
 
 Regularized regression I
+
+*[Figure: The figure consists of two side-by-side line plots comparing coefficient paths for (a) Lasso and (b) Ridge regression across five predictor variables (`funding`, `not-hs`, `college4`, `college`, and `hs`), with "Coefficients" on the vertical axes and the relative coefficient norms ($\|\hat{\beta}\|_1/\|\tilde{\beta}\|_1$ and $\|\hat{\beta}\|_2/\|\tilde{\beta}\|_2$, ranging from 0.0 to 1.0) on the horizontal axes. As the horizontal norm ratio decreases toward zero, the Ridge coefficients shrink smoothly and simultaneously toward zero, whereas the Lasso coefficients follow piecewise-linear paths that reach exactly zero sequentially at different threshold values.]*
 
 <!-- page 11 -->
 
@@ -241,6 +245,8 @@ Hastie et al. (2009)
 Machine Learning for Social Science
 
 Regularized regression I
+
+*[Figure: The figure displays five plots on unlabeled two-dimensional Cartesian axes, comparing the geometric constraint regions for different values of the penalty exponent $q$ ($q = 4, 2, 1, 0.5,$ and $0.1$). As $q$ decreases from $4$ to $0.1$, the cyan boundary transitions from a rounded square ($q=4$), to a circle ($q=2$), a diamond ($q=1$), a concave four-pointed star ($q=0.5$), and finally collapses onto the axes to form a cross ($q=0.1$).]*
 
 <!-- page 12 -->
 

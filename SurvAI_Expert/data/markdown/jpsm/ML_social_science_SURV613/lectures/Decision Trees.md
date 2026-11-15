@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/Decision Trees.pdf"
 pages: 12
 sha256: "b3f8c5797e02919864f0796a9ddd1a9610abb344abad181d0085200a6abc1f9e"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->

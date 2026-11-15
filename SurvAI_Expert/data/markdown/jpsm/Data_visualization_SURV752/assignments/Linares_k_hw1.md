@@ -9,7 +9,7 @@ original: "Data_visualization_SURV752/assignments/Linares_k_hw1.qmd"
 pages: 
 sha256: "2280598aff7f1be7f8f2845216b9ca5fd770baa2fc60f0c75ab35aa01c9f63db"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 

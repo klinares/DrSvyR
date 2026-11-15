@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 3 Errors of representation 
 pages: 38
 sha256: "5c77e4800be08b4b5f8dc7934d290698d5be520e833c231bed618b520cf50e74"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:57"
+converted_at: "2026-11-14T21:29:00"
 ---
 
 <!-- page 1 -->
@@ -299,6 +299,8 @@ Start here ->
 
 18
 
+*[Figure: The page shows a sequence of four contingency tables (labeled INITIAL, RD1, RD2, and RD3) illustrating the iterative raking process across Rural/Urban rows and Female/Male columns, alongside Survey, Control, and Census totals. Through alternating adjustments of row and column totals (highlighted in yellow), the Survey Totals progressively converge toward the target Control Totals (57 Rural, 43 Urban) and Census Totals (49 Female, 51 Male).]*
+
 <!-- page 19 -->
 
 # Raking example (continued)
@@ -391,6 +393,8 @@ Start here ->
 Source: Lee (2004).
 
 24
+
+*[Figure: Figure 1 is a block diagram illustrating the sequential stages of a volunteer panel web survey protocol without numeric axes, transitioning left-to-right across five groups: Population, Web Population, Web Survey Panel, Web Survey Sample, and Web Survey Respondent. Linked by arrows representing Coverage, Recruitment, Sampling, and Response, the main pattern shows progressively smaller and darker shaded inner boxes within the constant outer population rectangle, indicating how each step reduces the size of the participating group.]*
 
 <!-- page 25 -->
 

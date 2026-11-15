@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/lectures/Module Causal Inf1 YL.pdf"
 pages: 48
 sha256: "91891a5f10044b6c8087c627d0508461ba6ed8d2efa5022e1078ff71608d5770"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:02"
+converted_at: "2026-11-14T21:29:05"
 ---
 
 <!-- page 1 -->
@@ -531,6 +531,8 @@ Figure 1: $\text{A} \longrightarrow \text{Y}$
 
 29
 
+*[Figure: The page contains a simple causal diagram labeled "Figure 1" that shows a directed arrow pointing from variable A to variable Y, representing a direct causal effect of A on Y without any other variables or axes.]*
+
 <!-- page 30 -->
 
 Figure 2: $L \longrightarrow A \longrightarrow Y$
@@ -542,6 +544,8 @@ Figure 2: $L \longrightarrow A \longrightarrow Y$
 * Effect of L on Y is not direct but occurs through A, and A is a mediator between L and Y
 
 30
+
+*[Figure: Figure 2 shows a directed acyclic graph (DAG) with three nodes—L, A, and Y—and no axes. The diagram illustrates causal relationships with straight arrows pointing from L to A and from A to Y, as well as a curved arrow pointing directly from L to Y, representing both a fork (confounding by L) and a chain (mediation through A).]*
 
 <!-- page 31 -->
 
@@ -557,6 +561,8 @@ $L \longrightarrow A \quad Y$
 
 31
 
+*[Figure: Figure 3 is a directed acyclic graph (causal diagram) with no axes that shows the relationships among three horizontally aligned variables: L, A, and Y. It displays a straight arrow pointing from L to A and a curved arrow arching over A from L to Y, with no arrow connecting A directly to Y, illustrating that L is a common cause of both A and Y while A has no causal effect on Y.]*
+
 <!-- page 32 -->
 
 Figure 4
@@ -570,6 +576,8 @@ $$\text{A} \quad \text{Y} \longrightarrow \text{L}$$
 **Q: A and Y are marginally independent in Figure 4?**
 
 32
+
+*[Figure: The figure is a simple directed acyclic graph (DAG) labeled "Figure 4" showing three horizontally aligned nodes: A, Y, and L. It illustrates a collider structure where both node A (via a curved top arrow) and node Y (via a straight horizontal arrow) point directly into node L, with no arrow connecting A and Y directly.]*
 
 <!-- page 33 -->
 
@@ -597,6 +605,8 @@ Graphically, a box placed around variable B blocks the flow of information throu
 
 34
 
+*[Figure: The page shows a causal diagram ("Figure 5") consisting of three nodes labeled A, B, and Y arranged in a linear chain with no axes. Directed arrows point from A to B and from B to Y, with a three-sided rectangular box enclosing node B to indicate conditioning on that variable, which blocks the causal flow between A and Y.]*
+
 <!-- page 35 -->
 
 Figure 6
@@ -609,6 +619,8 @@ Figure 6
 Graphically, the flow of information between A and Y is interrupted because the fork path is $\text{A} \leftarrow \text{L} \rightarrow \text{Y}$ is blocked by the box round L.
 
 35
+
+*[Figure: Figure 6 is a causal directed acyclic graph (DAG) with no axes, comparing the causal relationships among three variables labeled L, A, and Y. It shows variable L enclosed in a square box (indicating conditioning), with directed arrows pointing from L to both A and Y, and no direct arrow between A and Y, illustrating that conditioning on the common cause L blocks the path between A and Y.]*
 
 <!-- page 36 -->
 
@@ -625,6 +637,8 @@ Graphically, A and Y are conditionally and inversely associated within levels of
 
 36
 
+*[Figure: Figure 7 is a directed acyclic graph showing three variables: A, Y, and L, where L is enclosed in a square box to indicate conditioning. A curved arrow points from A to L and a straight arrow points from Y to L, illustrating that L is a conditioned common effect (collider) of two independent variables A and Y.]*
+
 <!-- page 37 -->
 
 Figure 8
@@ -637,6 +651,8 @@ $$A \quad Y \longrightarrow L \longrightarrow \boxed{C}$$
   C: Steroids medication, whose use is a consequence of a diagnosis of lung cancer.
 
 37
+
+*[Figure: Figure 8 is a directed acyclic graph (DAG) with no axes, showing four horizontally aligned nodes labeled A, Y, L, and C (with C enclosed in a square box to indicate conditioning). The diagram illustrates a collider pattern where both A (via a curved top arrow) and Y (via a straight arrow) point directly into L, which in turn points via a straight arrow into the boxed node C.]*
 
 <!-- page 38 -->
 
@@ -706,6 +722,8 @@ $Z_1$ is ancestor of Y. Y is a descendant of $Z_1$
 
 41
 
+*[Figure: Figure 9 shows a directed acyclic graph (DAG) with no axes, comparing the causal or conditional relationships among five nodes labeled $X$, $Y$, $Z_1$, $Z_2$, and $Z_3$. The main pattern illustrates $Z_3$ as a central node receiving arrows from parent nodes $Z_1$ and $Z_2$ while sending arrows to child nodes $X$ and $Y$, alongside direct arrows from $Z_1$ to $X$ and from $Z_2$ to $Y$.]*
+
 <!-- page 42 -->
 
 Pearl’s back-door criterion is a way to <u>rule out</u> confounding via conditioning, thus identifying the causal effect of one variable on another. For identifying the causal effect of X on Y, the backdoor criterion has two parts:
@@ -731,6 +749,8 @@ Figure 10
   a) $\{W_1, W_2\}$; b) $\{Z_1, Z_2\}$; c) $\{Z_1, Z_3\}$; d) $\{Z_3, W_3\}$; e) $\{Z_3\}$
 
 43
+
+*[Figure: The image contains a directed acyclic graph (DAG) labeled "Figure 10" that has no coordinate axes and illustrates causal pathways among eight nodes: $X, Y, W_1, W_2, W_3, Z_1, Z_2,$ and $Z_3$. The diagram shows a direct causal path from $X$ to $Y$ through $W_3$ ($X \to W_3 \to Y$), alongside several confounding back-door paths connecting $X$ and $Y$ via the upper nodes $Z_1, Z_2, Z_3, W_1,$ and $W_2$.]*
 
 <!-- page 44 -->
 

@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/11-01-MLBias.pdf"
 pages: 5
 sha256: "6059db54f906c8e097858c8cd2a453920e854054257f41c43accda83a1b36452"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->
@@ -44,6 +44,8 @@ Figure: Predictive policing example (Lum and Isaac 2016)
 
 (b) Drug crimes
 
+*[Figure: The figure consists of two side-by-side geographical heatmaps of Oakland, California, comparing the spatial distribution of (a) recorded drug arrests used as training data (scaled from 0 to 200 arrests) against (b) estimated actual drug crimes (scaled from 100 to 500 users). The main pattern shows that while estimated drug crimes are widely distributed across much of the city in map (b), recorded drug arrests in map (a) are heavily concentrated in a few specific neighborhoods (marked 1 and 2), illustrating spatial bias in the policing data.]*
+
 <!-- page 4 -->
 
 # Bias in Data
@@ -53,6 +55,8 @@ Figure: Predictive policing example (Lum and Isaac 2016)
 (a) Areas targeted by PredPol
 
 (b) Targeted policing and drug use by race
+
+*[Figure: The figure consists of two parts: a map of Oakland (a) highlighting areas targeted by PredPol in red according to the number of days targeted, and two bar charts (b) comparing "white", "black", and "other" racial groups on the horizontal axis against the "Percent of population (%)" on the vertical axis. The main pattern shows that predictive policing concentrates heavily in specific neighborhoods and disproportionately targets Black and other non-white populations (top bar chart) compared to White populations, even though actual drug use rates (bottom bar chart) are roughly equal at around 15% across all three groups.]*
 
 <!-- page 5 -->
 

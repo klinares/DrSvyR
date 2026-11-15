@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/lectures/Module_1.pdf"
 pages: 46
 sha256: "efbbdca07fdbb53ed9df7fc9b2272e63ca2ee918553cbbce82cff5d2199401b8"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:49"
+converted_at: "2026-11-14T21:28:51"
 ---
 
 <!-- page 1 -->
@@ -99,7 +99,7 @@ Epidemiology. 2011 Mar;22(2):273-8. doi: 10.1097/EDE.0b013e3182093f75.
 
 # Blood lead levels, ALAD gene polymorphisms, and mortality.
 
-van Bemmel DM$^1$, Li Y, McLean J, Chang MH, Dowling NF, Graubard B, Rajaraman P.
+van Bemmel DM\$^1\$, Li Y, McLean J, Chang MH, Dowling NF, Graubard B, Rajaraman P.
 
 ## Author information
 
@@ -107,7 +107,7 @@ van Bemmel DM$^1$, Li Y, McLean J, Chang MH, Dowling NF, Graubard B, Rajaraman P
 
 **BACKGROUND:** Previous analyses from the National Health and Nutrition Examination Survey (NHANES III) have found that elevated blood lead levels may be associated with cardiovascular mortality, cancer mortality, and all-cause mortality. The 5-aminolevulinic acid dehydratase (ALAD) G177C genetic polymorphism (rs 1800435) affects lead toxicokinetics and may alter the adverse effects of lead exposure. We examined whether the ALAD G177C single nucleotide polymorphism (SNP) affects the relationship between lead and mortality.
 
-**METHODS:** We analyzed a subset of 3349 genotyped NHANES III participants at least 40 years of age. Using Cox proportional hazards regression, we estimated the relative risk of all-cause, cardiovascular disease, and cancer mortality by ALAD genotype, and by blood lead levels (<5 $\mu$g/dL vs. $\ge$5 $\mu$g/dL). We also tested whether the ALAD genotype modified the relationship between blood lead level and mortality.
+**METHODS:** We analyzed a subset of 3349 genotyped NHANES III participants at least 40 years of age. Using Cox proportional hazards regression, we estimated the relative risk of all-cause, cardiovascular disease, and cancer mortality by ALAD genotype, and by blood lead levels (<5 $\mu$g/dL vs. \$\ge\$5 $\mu$g/dL). We also tested whether the ALAD genotype modified the relationship between blood lead level and mortality.
 
 **RESULTS:** The adjusted overall relative risk for participants with the variant ALAD genotype was decreased for all-cause mortality (hazards ratio = 0.68; [95% confidence interval = 0.50-0.93]) compared with persons having the common GG genotype. There was some suggestion that higher lead levels were associated with cancer mortality (1.48 [0.92-2.38]). We observed no convincing interaction effect between ALAD genotype and blood lead level on mortality risk.
 
@@ -568,6 +568,8 @@ Mean of $y$: -5.4, 1.8, 9, 16.2, 23.4, 30.6, 37.8, 45, 52.2
 
 24
 
+*[Figure: The figure is a 3x3 grid of histograms showing sampling distributions, with "Mean of y" on the horizontal axis (ranging from -5.4 to 52.2) and "% of Sample" on the vertical axis (ranging from 0 to 0.6). It compares three sampling designs across columns (SRS, Cluster Size b=10, and Cluster Size b=50) and three sample sizes across rows (n=500, n=1000, and n=5000), illustrating that while all distributions are centered near a mean of 25, the standard deviation (spread) decreases as sample size increases and increases as cluster size increases.]*
+
 <!-- page 25 -->
 
 # Histogram of sample mean with various sample designs
@@ -664,6 +666,8 @@ $L_{weighting} =$ the relative loss of precision due to unequal weighting for sa
 100 250 500 750 1000 1250 1500 1750 2000 2250 2500
 
 29
+
+*[Figure: This line graph illustrates the general influence of survey design features on variances, plotting the "Standard Error of P" (from 0 to 0.035) on the y-axis against "Sample Size" (from 100 to 2500) on the x-axis. The main curve shows that standard error decreases exponentially as sample size increases, while overlaid arrows compare three design features by indicating that "Stratification" pushes the standard error down, whereas "Clustering" and "Weighting" push it up.]*
 
 <!-- page 30 -->
 

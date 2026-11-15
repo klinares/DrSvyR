@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/Neural Networks.pdf"
 pages: 8
 sha256: "7a168204c6c2c1e4ec6fd04da1bed9dcc7ade58bab1ab3972a89b581d2308b35"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->

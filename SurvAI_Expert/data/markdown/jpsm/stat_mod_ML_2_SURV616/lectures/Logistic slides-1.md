@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/Logistic slides-1.pdf"
 pages: 68
 sha256: "56be0edb8c24ef35bb5284479ff5dbdd39df31c7e24cd72f4f58799094fcd8da"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:22"
+converted_at: "2026-11-14T21:29:31"
 ---
 
 <!-- page 1 -->
@@ -107,6 +107,8 @@ Temperature
 James Wagner
 
 Class 4
+
+*[Figure: The image shows a line plot of a linear regression model with "Temperature" (ranging from 30 to 80) on the x-axis and "Prob of Damage" (ranging from 0.0 to 1.0) on the y-axis. It displays a single straight line for the dataset, illustrating a strong negative linear relationship where the predicted probability of damage steadily decreases from above 0.8 at low temperatures to below 0.0 around a temperature of 77.]*
 
 <!-- page 6 -->
 
@@ -318,6 +320,8 @@ James Wagner
 
 Class 4
 
+*[Figure: This scatter plot displays the predicted values from a logistic regression model, plotting "Log Odds" on the vertical axis (ranging from -4.0 to -1.0) against "Temperature" on the horizontal axis (ranging from 55 to 80) for a single group of data points. The main pattern shows a strict, negative linear relationship where the predicted log odds steadily decrease as temperature increases.]*
+
 <!-- page 16 -->
 
 Logistic Regression
@@ -347,6 +351,8 @@ Temperature
 16 / 68
 James Wagner
 Class 4
+
+*[Figure: The plot shows a logistic regression curve and observed data points (open circles) comparing the "Probability of Damage" on the y-axis (ranging from 0.0 to 1.0) against "Temperature" on the x-axis (ranging from 20 to 80). The main pattern demonstrates an S-shaped downward trend where the probability of damage starts near 1.0 at low temperatures and steadily decreases toward 0.0 as the temperature rises above 50, where all the observed data points are clustered.]*
 
 <!-- page 17 -->
 
@@ -430,6 +436,8 @@ James Wagner
 
 Class 4
 
+*[Figure: The plot displays an inverse-logistic curve and data points relating "Temperature" on the horizontal axis (ranging from 20 to 80) to "Probability of Damage" on the vertical axis (ranging from 0.0 to 1.0). The main pattern is a downward-sloping S-shaped curve where the probability of damage starts near 1.0 at low temperatures and decreases nonlinearly toward 0.0 as temperature increases, with individual data points clustered at higher temperatures near the bottom.]*
+
 <!-- page 21 -->
 
 Logistic Regression
@@ -445,6 +453,8 @@ The steepest change occurs at the middle of the curve.
 James Wagner
 
 Class 4
+
+*[Figure: The figure is a logistic regression plot with "Temperature" on the horizontal axis (ranging from 20 to 80) and "Probability of Damage" on the vertical axis (ranging from 0.0 to 1.0). It displays a single dataset of scatter points between temperatures of 50 and 80 alongside a fitted S-shaped curve that decreases from a probability near 1.0 at low temperatures to near 0.0 at high temperatures.]*
 
 <!-- page 22 -->
 

@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/10-03-SurrogateModels.pdf"
 pages: 5
 sha256: "3de02378897a3fcde2f238edba5d500cf508bdfb0c86150d9ca7feb00aca42f7"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->
@@ -87,6 +87,8 @@ effect
 
 Machine Learning for Social Science
 Interpretable ML
+
+*[Figure: The two-panel figure illustrates Local Interpretable Model-agnostic Explanations (LIME), with panel (a) showing an unlabeled two-dimensional feature space comparing two classes (red crosses vs. blue circles) separated by a complex nonlinear background boundary and approximated locally around a bold red cross by a dashed linear boundary using proximity-weighted points. Panel (b) is a horizontal bar chart with "effect" on the x-axis (ranging from -10 to 20) and "feature.value" on the y-axis, comparing three specific features (`rm=6.575`, `lstat=4.98`, and `ptratio=15.3`) and showing that `rm` has a large positive effect approaching 28 while `lstat` and `ptratio` have smaller negative effects.]*
 
 <!-- page 5 -->
 

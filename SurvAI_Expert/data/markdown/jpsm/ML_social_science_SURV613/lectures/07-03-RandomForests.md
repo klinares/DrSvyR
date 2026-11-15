@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/07-03-RandomForests.pdf"
 pages: 9
 sha256: "49c923595dc6dc6494454725b8324273c95b96766871f387453ca24b4d5c49fd"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -73,6 +73,8 @@ $^1$Hastie et al. (2009)
 Machine Learning for Social Science
 
 Bagging, Random Forests, Extra Trees
+
+*[Figure: The figure is a series of boxplots showing the distribution of "Correlation between Trees" (y-axis, ranging from 0.00 to 0.08) across different values of the "Number of Randomly Selected Splitting Variables m" (x-axis, ranging from 1 to 49). It demonstrates a clear upward, concave trend where the correlation between pairs of trees increases steadily from roughly 0.02 at $m=1$ to above 0.06 at $m=49$ as more splitting variables are randomly selected.]*
 
 <!-- page 5 -->
 
@@ -166,6 +168,8 @@ $m=\sqrt{p}$
 $^2$James et al. (2013)
 
 Machine Learning for Social Science Bagging, Random Forests, Extra Trees 7 / 8
+
+*[Figure: The figure is a line plot showing "Test Classification Error" on the vertical axis (ranging from 0.2 to 0.5) against the "Number of Trees" on the horizontal axis (ranging from 0 to 500), comparing three parameter settings: $m=p$ (yellow), $m=p/2$ (blue), and $m=\sqrt{p}$ (green). For all three groups, the test error drops sharply within the first 50 trees and then stabilizes, with $m=\sqrt{p}$ consistently achieving the lowest classification error around 0.21, while $m=p$ and $m=p/2$ plateau slightly higher around 0.24–0.26.]*
 
 <!-- page 9 -->
 

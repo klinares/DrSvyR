@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/lectures/Module Causal Inf5 YL-1.pdf"
 pages: 44
 sha256: "4593c387034b1e0071dda68e8fd3b4a0a566023d63dd4a18aac17add87aa8a58"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:03"
+converted_at: "2026-11-14T21:29:07"
 ---
 
 <!-- page 1 -->

@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/reading_notes.pdf"
 pages: 13
 sha256: "5098f444746c6d71120910c1d37017a540ea52b3cfdba164fb6096ec12385828"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:59"
+converted_at: "2026-11-14T21:29:01"
 ---
 
 <!-- page 1 -->

@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/06-03-CTREE.pdf"
 pages: 7
 sha256: "20068161a7aea4313d59464ffef205f7198c36e392543d5d559ccff20956d7ab"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -127,3 +127,5 @@ Decision Trees II
 Figure: Conditional Inference Tree of employment status with SOEP (2008) data
 
 Kopf et al. (2010)
+
+*[Figure: The figure shows a conditional inference tree analyzing employment status by splitting the data first by gender (male vs. female) and then by age ($\le 62$ vs. $> 62$ for males; $\le 60$ vs. $> 60$ for females). At the bottom, four terminal bar plots display the proportions (from 0 to 1 on the y-axis) of "full time" versus "other" employment (on the x-axis), revealing that males aged 62 or younger are predominantly employed full-time, while females aged 60 or younger have a lower full-time proportion, and both genders in the older age brackets are almost exclusively in the "other" category.]*

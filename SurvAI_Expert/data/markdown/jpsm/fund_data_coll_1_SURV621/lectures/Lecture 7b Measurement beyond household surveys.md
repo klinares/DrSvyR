@@ -9,7 +9,7 @@ original: "fund_data_coll_1_SURV621/lectures/Lecture 7b Measurement beyond house
 pages: 41
 sha256: "f3105344308b65eadf285498dcc8d27dfa99546606940a335d4f9eb3df5e0e73"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:58"
+converted_at: "2026-11-14T21:29:01"
 ---
 
 <!-- page 1 -->
@@ -421,6 +421,8 @@ Golder and Macy (2009), *Science*
 
 28
 
+*[Figure: The image contains two sets of stacked line graphs (Fig. 1 and Fig. 2) plotting positive affect (PA, top) and negative affect (NA, bottom) on the y-axis against the hour of the day (0 to 24) on the x-axis. Fig. 1 compares the seven days of the week (showing PA peaking in the morning and late night, with higher and later peaks on weekends, while NA dips in the morning), and Fig. 2 compares four English-speaking regions (Africa, India, UK/Aus, US/Can), which follow very similar diurnal trajectories across all regions.]*
+
 <!-- page 29 -->
 
 # Social Media for Detecting Depression
@@ -458,6 +460,8 @@ Source: De Choudhury et al. (2013)
 * Non-depression class
 
 31
+
+*[Figure: This grid of six line plots compares the "Depression class" (in red) and "Non-depression class" (in blue) across six tweet metrics—Volume, Replies, Negative Affect, 1st Person Pronoun, 3rd Person Pronoun, and Depression Terms—plotted on the y-axes against "Time (in days)" from 0 to over 300 on the x-axes. The main pattern shows that over time, the depression class exhibits increasing trends in negative affect, 1st person pronouns, and depression terms alongside decreasing trends in volume, replies, and 3rd person pronouns, whereas the non-depression class maintains consistently higher volume, replies, and 3rd person pronouns and lower levels of the other metrics.]*
 
 <!-- page 32 -->
 
@@ -597,6 +601,8 @@ Source: Conrad, Gagnon-Bartsch, Ferg, Schober, Pasek & Hou (2020)
 Source: Iacus & Porro (2022)
 
 40
+
+*[Figure: The line plot shows the daily oscillation of subjective well-being index values (ranging from 20 to above 50 on the vertical axis) over time from late 2019 to October 2020 (horizontal axis). It compares daily index series and dashed/dotted trend estimates between Italy (SWB-I, pink) and Japan (SWB-J, blue), illustrating that Italy consistently maintains a higher well-being index than Japan while both series exhibit an overall downward trend that flattens over time.]*
 
 <!-- page 41 -->
 

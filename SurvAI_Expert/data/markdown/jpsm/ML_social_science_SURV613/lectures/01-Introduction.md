@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/01-Introduction.pdf"
 pages: 8
 sha256: "2e8e7aee972df967a505552cf8dd3733c93c14d8b804f6f2e5b024851c825ac8"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 <!-- page 1 -->

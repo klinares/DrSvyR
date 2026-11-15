@@ -9,7 +9,7 @@ original: "total_survey_error_II_SURV721/project/Assignment_2_Linares_proposal.p
 pages: 3
 sha256: "f231f51dc95a6aef86bea849fcd5e0e0ce6e6ba4832c734d0f979539532fe524"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:24"
+converted_at: "2026-11-14T21:29:33"
 ---
 
 <!-- page 1 -->
@@ -72,6 +72,8 @@ This research makes three substantive contributions to survey methodology. First
 **Optimal Method Selection for Survey Operations**
 
 Figure 1: L2L Project Workflow
+
+*[Figure: Figure 1 is a four-stage horizontal workflow diagram titled "Latent-to-Language (L2L) Project Workflow: Core Processes" that outlines a methodology moving from left to right toward "Optimal Method Selection for Survey Operations." It progresses through (1) input data and preparation using LAPOP 2021 data, (2) L2L augmentation and missingness induction separated by a "no data leakage wall," (3) parallel modeling comparing traditional baselines (MICE, Logistic, RF, XGBoost) against LLM inference (Gemma, Claude Sonnet), and (4) TSE evaluation and trade-offs using accuracy metrics and cost-error analysis.]*
 
 <!-- page 3 -->
 

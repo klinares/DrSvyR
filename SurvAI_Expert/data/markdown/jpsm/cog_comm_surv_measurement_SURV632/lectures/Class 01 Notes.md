@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lectures/Class 01 Notes.pdf"
 pages: 28
 sha256: "361ef9ee5fe8ae00e5afc78381fcc864ffd1e3864f53433b7a38f1a0530f1652"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:45"
+converted_at: "2026-11-14T21:28:47"
 ---
 
 <!-- page 1 -->
@@ -114,6 +114,8 @@ Coding
 Measurement Error can occur at any stage
 
 7
+
+*[Figure: This flowchart diagram illustrates the cognitive stages of answering a survey question, progressing sequentially from a "Question" speech bubble through "Comprehension" (highlighted in a red box), "Retrieval," "Judgment and Estimation," and "Reporting/Mapping," which then branches out to "Coding." Feedback loops connect the main cognitive stages on the left, while a large star-shaped callout on the right connects via arrows to all five process boxes to show that measurement error can occur at any stage.]*
 
 <!-- page 8 -->
 

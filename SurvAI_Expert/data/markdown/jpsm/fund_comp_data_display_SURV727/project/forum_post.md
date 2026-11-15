@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/project/forum_post.pdf"
 pages: 1
 sha256: "2ddc2b06618696e3428543665914fc299813c67218afa16fc2bf847905efef07"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:55"
+converted_at: "2026-11-14T21:28:58"
 ---
 
 <!-- page 1 -->

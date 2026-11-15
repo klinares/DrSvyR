@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/02-RAndRStudio.pdf"
 pages: 20
 sha256: "bffc66741bd90d2fe9e62357333cbab60ca9a9af37a3556b4ebb3638e1ba1bde"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:05"
+converted_at: "2026-11-14T21:29:10"
 ---
 
 <!-- page 1 -->
@@ -26,7 +26,7 @@ R Basics
 Why use R?
 
 - R is free (Open Source)
-- Extensive statistical modeling capabilities (through $\sim$14,000 packages$^1$)
+- Extensive statistical modeling capabilities (through \$\sim\$14,000 packages\$^1\$)
 - Flexible programming of user functions
 - Working with multiple objects, i.e. various datasets & regression results
 - Active user community providing up-to-date functions & support

@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/code/paper-template.Rmd"
 pages: 
 sha256: "9a9cfee6e9bd3fbe1b1c528dd2c743fb47ff06de9a3e9784a0e0f148d58d7e33"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:00:53"
+converted_at: "2026-11-14T21:28:56"
 ---
 
 

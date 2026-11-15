@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/midterm/Module3_701 review on SECM.pdf"
 pages: 2
 sha256: "f991a7d8dc7bcde37f6455c09c3f31cefc833c42555a237a4bb0e462b0b68b29"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 <!-- page 1 -->

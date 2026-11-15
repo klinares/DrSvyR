@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/final/surv740_complete_study_guide.qmd"
 pages: 
 sha256: "bdc1f1ca131ece55404f2ce0b5661fecf2551cc1e4f2ef1970c42d3f35022835"
 converted_by: "01_convert.R (no model)"
-converted_at: "2026-11-14T21:01:02"
+converted_at: "2026-11-14T21:29:05"
 ---
 
 

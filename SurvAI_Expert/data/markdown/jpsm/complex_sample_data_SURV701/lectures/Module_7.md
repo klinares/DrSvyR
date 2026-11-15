@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/lectures/Module_7.pdf"
 pages: 44
 sha256: "aea23ade8ed8a6b882776cd1b2fe0cdd508ef5371e35ccba27768f86b84a4fc5"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:53"
 ---
 
 <!-- page 1 -->
@@ -44,6 +44,8 @@ e-mail: [email]
 (NLF: not in the labor force)
 
 3
+
+*[Figure: This bar chart displays the weighted distribution of U.S. adults by employment status, with "Proportions" (ranging from 0 to .6) on the vertical axis and the three employment categories ("Employed", "Unemployed", and "NLF" for not in the labor force) on the horizontal axis. The plot shows that the "Employed" group accounts for the largest proportion (around 0.65), followed by the "NLF" group (around 0.30), while the "Unemployed" group represents the smallest share (around 0.05).]*
 
 <!-- page 4 -->
 
@@ -271,6 +273,8 @@ mgof bp_cat = pi if age18p == 1, svy
 # Estimated distribution: Hypertension Status by Gender. Source: NHANES
 
 19
+
+*[Figure: This grouped bar chart shows the percentage distribution (y-axis, from 0 to 60) of four hypertension statuses (Normal, Pre-Hypertensive, Stage 1 Hypertensive, and Stage 2 Hypertensive) compared across Male and Female groups (x-axis). The main pattern shows that the largest proportion of males are Pre-Hypertensive (49.9%) followed by Normal (40.0%), whereas the majority of females have Normal blood pressure (53.7%) followed by Pre-Hypertensive (34.4%), with both genders exhibiting much lower percentages of Stage 1 and Stage 2 hypertension.]*
 
 <!-- page 21 -->
 

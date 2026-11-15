@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/13 Factor Analysis slides.pdf"
 pages: 55
 sha256: "a9182efe2e47d32eee0706431882997fc9a775931f9580d0b47fc04d2c1c5e55"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:20"
+converted_at: "2026-11-14T21:29:28"
 ---
 
 <!-- page 1 -->

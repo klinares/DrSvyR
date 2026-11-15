@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/record_linkage/annotated-report.pdf"
 pages: 8
 sha256: "80cafa19308a3dac5be76e01d23a3947cc24b1bab72cfb65ecf2b51481a83076"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:01"
+converted_at: "2026-11-14T21:29:04"
 ---
 
 <!-- page 1 -->
@@ -268,3 +268,5 @@ The proposed approach, based on these findings, is to not use first name, last n
 <!-- page 8 -->
 
 8
+
+*[Figure: This faceted bar chart displays "Estimate" values (from 0.00 to 1.00 on the y-axis) across "Block" types ("city" and "zip" on the x-axis), comparing two metrics ("Precision" in blue and "Sensitivity" in green) arranged in columns for "JaroWink" and "Leven" and rows for "bio", "credit_phone", "name", and "name_demo". Overall, both precision and sensitivity remain near 1.00 for the "bio" and "credit_phone" categories, whereas the "name" and "name_demo" rows exhibit more variability and lower estimates, especially a notable drop in precision for the "zip" block under "name".]*

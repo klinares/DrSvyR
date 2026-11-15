@@ -9,7 +9,7 @@ original: "Fund_Infe_SURV740/midterm/handnotes for PS methods v1.pdf"
 pages: 5
 sha256: "b922358eea1c70d20df92f2bec119430193d759bd8a8ed50dbe69b486cc5a94b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:04"
+converted_at: "2026-11-14T21:29:09"
 ---
 
 <!-- page 1 -->

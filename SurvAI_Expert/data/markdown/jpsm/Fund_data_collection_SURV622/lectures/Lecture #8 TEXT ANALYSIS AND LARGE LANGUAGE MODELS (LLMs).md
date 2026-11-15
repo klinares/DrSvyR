@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lectures/Lecture #8 TEXT ANALYSIS AND LA
 pages: 36
 sha256: "6109336879fef62497693a9a8905d50cada2661216230ee162725ace65f1f5d8"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:00"
+converted_at: "2026-11-14T21:29:03"
 ---
 
 <!-- page 1 -->

@@ -9,7 +9,7 @@ original: "complex_sample_data_SURV701/midterm/Module1_701 review on complex des
 pages: 3
 sha256: "c715e942394626a17861e0913c373607ce5e4a655290bd4dc53bb663ef7f2800"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:51"
+converted_at: "2026-11-14T21:28:54"
 ---
 
 <!-- page 1 -->

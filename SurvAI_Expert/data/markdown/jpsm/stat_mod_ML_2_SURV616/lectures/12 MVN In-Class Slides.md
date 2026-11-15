@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/12 MVN In-Class Slides.pdf"
 pages: 48
 sha256: "1780df19e9164504aa130404baf8fa385ecd0050e3de2c93286e7fd4be456e28"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:20"
+converted_at: "2026-11-14T21:29:28"
 ---
 
 <!-- page 1 -->
@@ -588,6 +588,8 @@ Math (435, 440, 445, 450, 455, 460)
 
 28 / 48  James Wagner  In-Class 12
 
+*[Figure: The plot illustrates "Confidence Regions for SAT Scores," comparing "Math" scores on the horizontal axis (ranging from 435 to 460) against "Verbal" scores on the vertical axis (ranging from 395 to 420). It compares a positively sloped elliptical confidence region against a grey rectangular region, both centered at a "+" mark near (448, 409), with thick black bars on the axes indicating the univariate intervals corresponding to the rectangle's boundaries.]*
+
 <!-- page 29 -->
 
 MVN Distribution
@@ -823,6 +825,8 @@ Hypothesis Testing
 James Wagner
 
 In-Class 12
+
+*[Figure: Figure 2 plots "Simultaneous Confidence Regions for SAT Scores," with "Math" scores (ranging from 435 to 460) on the horizontal axis and "Verbal" scores (ranging from 395 to 420) on the vertical axis. It compares three overlapping confidence regions centered around a "+" marker—a positively sloped black ellipse, a smaller solid grey rectangle, and a larger dashed bounding rectangle that aligns with thickened interval bars on both axes.]*
 
 <!-- page 40 -->
 

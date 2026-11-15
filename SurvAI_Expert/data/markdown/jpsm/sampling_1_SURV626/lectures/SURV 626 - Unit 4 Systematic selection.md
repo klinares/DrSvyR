@@ -9,7 +9,7 @@ original: "sampling_1_SURV626/lectures/SURV 626 - Unit 4 Systematic selection.pd
 pages: 34
 sha256: "be5e13fe48742af4bba2f57a20c462f7ea6139b32f2766bf1137563976f48ce7"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:12"
+converted_at: "2026-11-14T21:29:18"
 ---
 
 <!-- page 1 -->
@@ -368,6 +368,8 @@ $\text{RS} = 4$
 
 182
 ©2017, Raphael Nishimura and James M. Lepkoswki @ IPSDS
+
+*[Figure: The diagram illustrates a map of 35 numbered city blocks divided into two contrasting layouts: a regular 3-by-9 rectangular grid on the left (blocks 1–27) and eight irregularly shaped, curved regions on the right (blocks 28–35). The blocks are numbered sequentially in a serpentine pattern, with every seventh block starting from 4 (blocks 4, 11, 18, 25, and 32) highlighted in bold red text to demonstrate systematic sampling.]*
 
 <!-- page 20 -->
 

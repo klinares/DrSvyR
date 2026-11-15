@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/07-02-Bagging.pdf"
 pages: 9
 sha256: "0ea909084ad62ccefef02925eb2084c64ac93f1e5948e0684318948659d2bab0"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:06"
+converted_at: "2026-11-14T21:29:11"
 ---
 
 <!-- page 1 -->
@@ -63,6 +63,8 @@ $Z^{*B}$
 $\hat{\alpha}^{*B}$
 
 $^1$James et al. (2013)
+
+*[Figure: The diagram illustrates the statistical bootstrap process, showing no plot axes, where an "Original Data ($Z$)" table containing three observations with columns `Obs`, `X`, and `Y` is resampled with replacement to generate $B$ bootstrap datasets ($Z^{*1}, Z^{*2}, \dots, Z^{*B}$). Each resulting sample table contains repeated or reordered observations from the original data and points to a corresponding parameter estimate ($\hat{\alpha}^{*1}, \hat{\alpha}^{*2}, \dots, \hat{\alpha}^{*B}$).]*
 
 <!-- page 3 -->
 
@@ -162,6 +164,8 @@ Figure: Bagging Trees
 (b) $\text{b} = 2$
 
 (c) $\text{b} = 3$
+
+*[Figure: The figure displays three side-by-side binary decision tree diagrams (without axes) labeled "(a) b = 1", "(b) b = 2", and "(c) b = 3" to compare trees generated across three different bootstrap iterations. All three trees share the same primary root split ("Sex=male"), while their subsequent branching structures and threshold values for variables like "Age", "Fare", and "Pclass" vary across the samples before ending in 0 or 1 leaf nodes.]*
 
 <!-- page 8 -->
 

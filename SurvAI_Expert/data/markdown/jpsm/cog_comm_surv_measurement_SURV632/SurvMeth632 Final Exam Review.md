@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/SurvMeth632 Final Exam Review.pdf"
 pages: 13
 sha256: "672bc029b53cc0a4c76721dcbfdd3d9a3671ce24a1a4cd98d290428dafc26b8b"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:48"
+converted_at: "2026-11-14T21:28:50"
 ---
 
 <!-- page 1 -->

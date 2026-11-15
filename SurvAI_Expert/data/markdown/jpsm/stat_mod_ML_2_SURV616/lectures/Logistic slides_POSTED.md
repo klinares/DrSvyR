@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/Logistic slides_POSTED.pdf"
 pages: 71
 sha256: "9b320dac8f79b883d035453660cb8b722133c6214bf4ddd0ecaa8ddd382a81ea"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:23"
+converted_at: "2026-11-14T21:29:32"
 ---
 
 <!-- page 1 -->
@@ -96,6 +96,8 @@ It looks like there might be a relationship. Let's regress failure rate on tempe
 Suzer-Gurtekin
 
 Class 4
+
+*[Figure: The figure is a scatter plot with a fitted linear regression line showing the relationship between "Temperature" on the horizontal axis (ranging from 30 to 80) and "Prob of Damage" on the vertical axis (ranging from 0.0 to 1.0) for a single group of Space Shuttle O-ring data points. The main pattern shows a negative linear trend where the probability of damage decreases as temperature increases, with most observations clustered near 0.0 and 0.2 at higher temperatures, a single high-damage outlier near 53 degrees, and the regression line dropping below zero above 75 degrees.]*
 
 <!-- page 7 -->
 
@@ -298,6 +300,8 @@ Suzer-Gurtekin
 
 Class 4
 
+*[Figure: The image features a scatter plot showing predicted "Log Odds" on the vertical axis (ranging from -4.0 to -1.0) against "Temperature" on the horizontal axis (ranging from 55 to 80) for a single group of data points. The plotted open circles follow a perfectly straight, downward-sloping line, illustrating a negative linear relationship where log odds steadily decrease as temperature increases.]*
+
 <!-- page 17 -->
 
 Logistic Regression
@@ -313,6 +317,8 @@ We could also convert this to the probability scale:
 Suzer-Gurtekin
 
 Class 4
+
+*[Figure: This plot shows a logistic regression curve alongside observed data points, plotting the "Probability of Damage" on the vertical axis (ranging from 0.0 to 1.0) against "Temperature" on the horizontal axis (ranging from 20 to 80). The main pattern is a smooth, downward-sloping S-shaped curve indicating that the probability of damage starts near 1.0 at low temperatures and decreases toward 0.0 as temperature increases, fitting the cluster of observed data points between temperatures of 50 and 80.]*
 
 <!-- page 18 -->
 
@@ -417,6 +423,8 @@ Recall that the inverse-logistic function is curved:
 
 22 / 68 Suzer-Gurtekin Class 4
 
+*[Figure: The plot displays an inverse-logistic curve alongside observed data points (shown as small open squares) comparing the "Probability of Damage" on the vertical axis (ranging from 0.0 to 1.0) against "Temperature" on the horizontal axis (ranging from 20 to 80). The main pattern shows a smooth S-shaped decrease in the probability of damage from near 1.0 at low temperatures down to near 0.0 at higher temperatures (between 50 and 80), where all the observed data points are clustered.]*
+
 <!-- page 23 -->
 
 Logistic Regression
@@ -428,6 +436,8 @@ Inference
 The steepest change occurs at the middle of the curve.
 
 23 / 68 Suzer-Gurtekin Class 4
+
+*[Figure: The plot displays a logistic regression curve alongside observed data points, plotting the "Probability of Damage" on the vertical axis (ranging from 0.0 to 1.0) against "Temperature" on the horizontal axis (ranging from 20 to 80). The main pattern shows an S-shaped downward curve where the probability of damage starts near 1.0 at low temperatures, decreases steeply around the middle temperature range (40 to 50), and levels off near 0.0 at higher temperatures where most of the observed data points are clustered.]*
 
 <!-- page 24 -->
 

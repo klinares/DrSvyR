@@ -9,7 +9,7 @@ original: "design_seminar_SURV670/Project/rfp/task_5_bidders_questions_Linares.p
 pages: 1
 sha256: "f74e495ed1c4d6209cc3940c82e9ea8c32d0efb18ac3baa806d37da451a38543"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:53"
+converted_at: "2026-11-14T21:28:56"
 ---
 
 <!-- page 1 -->

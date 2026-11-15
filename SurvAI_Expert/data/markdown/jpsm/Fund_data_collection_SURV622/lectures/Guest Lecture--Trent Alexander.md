@@ -9,7 +9,7 @@ original: "Fund_data_collection_SURV622/lectures/Guest Lecture--Trent Alexander.
 pages: 56
 sha256: "bf19a688f2cbc5e0e14eecfb036bcdf25274a2c898000c3f64f8ef181e2e21f5"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:59"
+converted_at: "2026-11-14T21:29:02"
 ---
 
 <!-- page 1 -->
@@ -213,6 +213,8 @@ NBER Census Linking Project
 
 13
 
+*[Figure: This timeline diagram illustrates available large-scale U.S. Census linkages across a horizontal time axis spanning from 1850 to 2020 in ten-year increments. It compares historical linkage projects (IPUMS and NBER covering 1850–1940) with modern linkages (2000 census, 2010 census, and ACS covering 2000–2020), highlighting a prominent gap in available linked data between 1950 and 1990.]*
+
 <!-- page 14 -->
 
 # Available large-scale U.S. Census linkages
@@ -231,6 +233,8 @@ NBER Census Linking Project
 1850 1860 1870 1880 1890 1900 1910 1920 1930 1940 1950 1960 1970 1980 1990 2000 2010 2020
 
 14
+
+*[Figure: The diagram illustrates available large-scale U.S. Census linkages along a horizontal timeline spanning decennial years from 1850 to 2020. It shows the IPUMS Multigeneration Longitudinal Panel and NBER Census Linking Project covering the period from 1850 to 1940, alongside a curved blue arrow that directly links the 1940 census across the mid-century gap to the 2000 census, 2010 census, and ACS.]*
 
 <!-- page 15 -->
 
@@ -408,6 +412,8 @@ U.S. Ratio 88.6
 
 Sources: 2010 Census and 2010 Census Match Study Administrative Records Data
 
+*[Figure: This choropleth map of the United States (including insets for Alaska and Hawaii, without coordinate axes) displays the match ratio percentage between 2010 Census and Administrative Records persons by county. It categorizes counties into five percentage brackets ranging from "Less than 80.0" (orange) to "95.0 or more" (purple), showing a clear geographic pattern where the highest match ratios are heavily concentrated in the Midwest and Northeast, while lower ratios are more common in the Southwest, West, and Alaska.]*
+
 <!-- page 25 -->
 
 # Overview
@@ -434,6 +440,8 @@ NBER Census Linking Project
 1850 1860 1870 1880 1890 1900 1910 1920 1930 1940 1950 1960 1970 1980 1990 2000 2010 2020
 
 26
+
+*[Figure: The diagram shows a timeline of available large-scale U.S. Census linkages along a horizontal axis representing years from 1850 to 2020 in ten-year increments. It compares historical coverage from the IPUMS Linked Samples and NBER Census Linking Project spanning 1850–1940 with a curved arrow showing a direct linkage jumping across a gap from the 1940 census to the 2000 census, 2010 census, and ACS.]*
 
 <!-- page 27 -->
 
@@ -654,6 +662,8 @@ Women
 
 38
 
+*[Figure: This population pyramid chart shows the distribution of Protected Identification Keys (PIKs) in the 1940 Census across age brackets from 0–4 to 70+ years on the vertical axis and population counts up to 8,000,000 on the horizontal axis. It compares matched versus unmatched men (left) and women (right), illustrating that both total population counts and the proportion of matched individuals are highest among younger age groups and steadily decline with age.]*
+
 <!-- page 39 -->
 
 # Overview
@@ -697,6 +707,8 @@ NBER Census Linking Project
 1850 1860 1870 1880 1890 1900 1910 1920 1930 1940 1950 1960 1970 1980 1990 2000 2010 2020
 
 41
+
+*[Figure: This timeline diagram spans the years 1850 to 2020 in 10-year increments along a horizontal axis, comparing the time periods of different census datasets and linking projects. It shows a large block for the 1850–1940 IPUMS/NBER projects, a curved blue arrow jumping directly from the "1940 census" to the "2000 census, 2010 census, ACS" group, and a red rounded rectangle highlighting the gap on the timeline between 1960 and 1990.]*
 
 <!-- page 42 -->
 

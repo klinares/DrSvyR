@@ -9,7 +9,7 @@ original: "cog_comm_surv_measurement_SURV632/lectures/Class 06 Notes.pdf"
 pages: 37
 sha256: "6d7c5c8a842afdd50dcec5924f6ff3ea416ad8e492e41826029b971c0397c626"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:46"
+converted_at: "2026-11-14T21:28:49"
 ---
 
 <!-- page 1 -->
@@ -532,6 +532,8 @@ Rate Estimation
 31
 
 31
+
+*[Figure: This line plot shows "Median Response Time (Seconds)" on the y-axis against "Reported Frequency" (ranging from 1 to 12) on the x-axis, comparing two groups: "Episode Enumeration" (black circles) and "Rate Estimation" (grey circles). The main pattern indicates that median response time increases as reported frequency increases for both groups, with Episode Enumeration covering lower frequencies (1 to 4) and Rate Estimation covering higher frequencies (3 to 12).]*
 
 <!-- page 32 -->
 

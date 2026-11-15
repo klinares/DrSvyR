@@ -9,7 +9,7 @@ original: "applications_stats_modeling_SURV617/lectures/Module2_Lecture4_Fall202
 pages: 36
 sha256: "4e313ad60521ebd205966777c7898b2a1275903c971e3b94261ba6d47f811205"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:41"
+converted_at: "2026-11-14T21:28:42"
 ---
 
 <!-- page 1 -->
@@ -471,6 +471,8 @@ LO-MENDELL-RUBIN ADJUSTED LRT TEST
 # SEM for the ESS Example
 
 30
+
+*[Figure: This path diagram illustrates a structural equation model (SEM) with no coordinate axes, comparing two latent variables represented as ovals: "Trust" and "Immigration." The main pattern shows "Trust" measured by five observed indicator rectangles (top row) and having a direct causal arrow pointing to "Immigration," which is measured by three observed indicator rectangles (bottom row), with all endogenous variables connected to respective circular error terms ($\varepsilon_1$ through $\varepsilon_9$).]*
 
 <!-- page 31 -->
 

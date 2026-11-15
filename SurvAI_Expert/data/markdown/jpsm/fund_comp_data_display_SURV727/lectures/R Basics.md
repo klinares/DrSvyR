@@ -9,7 +9,7 @@ original: "fund_comp_data_display_SURV727/lectures/R Basics.pdf"
 pages: 10
 sha256: "64c21156c8c4d9f544668849a3abb5cec3d4a252989e945b1a0e0669e4ca1d32"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:00:55"
+converted_at: "2026-11-14T21:28:58"
 ---
 
 <!-- page 1 -->

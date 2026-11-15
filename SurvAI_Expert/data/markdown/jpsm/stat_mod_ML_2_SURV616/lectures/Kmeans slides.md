@@ -9,7 +9,7 @@ original: "stat_mod_ML_2_SURV616/lectures/Kmeans slides.pdf"
 pages: 64
 sha256: "0b72d8733538263ff3d2637c0b3b37647f7d868c612521a42befbcf3130cf66f"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:22"
+converted_at: "2026-11-14T21:29:31"
 ---
 
 <!-- page 1 -->
@@ -184,6 +184,8 @@ Figure 6: Two-dimensional visualization of the k-means two cluster solution for 
 
 10 / 64 Suzer-Gurtekin Class 9
 
+*[Figure: The scatter plot displays a two-dimensional k-means clustering solution for survey data, plotting "Principal Component 1" on the horizontal axis (ranging from -4 to 4) against "Principal Component 2" on the vertical axis (ranging from -2 to 4). It compares two groups represented by a blue shaded ellipse on the left (cluster 2) and a red shaded ellipse on the right (cluster 1), showing that the numbered green data points are primarily separated along the first principal component with a slight overlap near the center.]*
+
 <!-- page 11 -->
 
 Clustering
@@ -281,6 +283,8 @@ K-means, Cluster 2
 Figure 7: Visual representation of the cluster means on each factor. Cluster means are plotted on each factor scale. Ward's clusters are indicated by the blue triangles, Complete Link by the orange circles, and k-means by green squares. The dark shapes represent the mean for Cluster 1 and the light shapes represent the mean of Cluster 2. Neutral point was indicated with a black dash and descriptors of the ends are provided.
 
 14 / 64 Suzer-Gurtekin Class 9
+
+*[Figure: The page contains a comparison table and a multi-axis dot plot ("Figure 7") that shows cluster means across five bipolar psychological and epistemological factor scales (such as "Open Minded" to "Closed Minded"). The plot compares Cluster 1 (dark shapes) and Cluster 2 (light shapes) across three clustering methods—Ward's (blue triangles), Complete Link (orange circles), and K-means (green squares)—showing that all three methods produce consistent cluster means, with Cluster 2 generally scoring further toward the right pole on four of the five scales while both clusters overlap near the right on the "Discomfort with Ambiguity" scale.]*
 
 <!-- page 15 -->
 

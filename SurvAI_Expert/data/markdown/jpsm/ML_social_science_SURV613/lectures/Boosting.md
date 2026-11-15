@@ -9,7 +9,7 @@ original: "ML_social_science_SURV613/lectures/Boosting.pdf"
 pages: 8
 sha256: "dc0fb16ce924bd13c64cbcdf95f9cb57af49e10398eb9cc35fe9590f921baab2"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:07"
+converted_at: "2026-11-14T21:29:12"
 ---
 
 <!-- page 1 -->
