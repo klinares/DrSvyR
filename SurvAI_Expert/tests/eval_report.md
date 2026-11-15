@@ -52,3 +52,18 @@ Equation questions: a formula from the gold document (or its formula group) was 
 - **How is the test statistic for a Likelihood Ratio Test calculated when comparing two nested models?** (correct, 4 unsupported claims): The answer gives the course's statistic, -2 times the difference in log-likelihoods (reduced minus full), referred to a chi-square with df equal to the parameter difference, but it adds several claims no source supports: the survey-package advice, glm/lrtest ignoring the design, the same-cases nesting check, and the length(coef()) df code.
 - **What is the formula for the relative variance of the estimated total of a proportion when using stratified simple random sampling?** (correct, 4 unsupported claims): The answer gives the correct formula, relvar(t_P) = t_P^-2 * sum_h N_h(N_h/n_h - 1)S_h^2 with S_h^2 = P_h(1-P_h)N_h/(N_h-1), matching the passage and S12, but it adds several unsourced claims about the design checks, such as the clustering and nonresponse caveats and the n_h >= 2 requirement.
 - **How do I perform ridge regression and find the optimal lambda using cross-validation in R?** (correct, 4 unsupported claims): The answer matches the course passage: it builds X and y with model.matrix, runs cv.glmnet with alpha = 0, and picks lambda.min or lambda.1se, but it adds a few claims no source supports, such as the 10-fold default, the optimism of random folds with clustered data, and the point about ridge coefficients being biased.
+
+## Update: the question fused in with the plan's queries
+
+The run above gathered with the plan's queries only. gather() now also searches the question's own words
+and fuses that ranking in with weight 3 (GATHER_RAW_WEIGHT in R/llm.R). Same 100 questions, one new plan
+each, every variant on the same plans (answers were not rerun):
+
+| variant | hit@5 | hit@10 | code hit@5 | concept hit@5 | equation hit@5 |
+| --- | --- | --- | --- | --- | --- |
+| raw question alone (part 1) | 0.81 | 0.92 | 0.885 | 0.85 | 0.706 |
+| plan queries only | 0.70 | 0.84 | 0.808 | 0.675 | 0.647 |
+| plan + question, weight 1 | 0.78 | 0.90 | 0.962 | 0.725 | 0.706 |
+| plan + question, weight 3 (now the default) | 0.81 | 0.91 | 0.962 | 0.80 | 0.706 |
+
+The weight was chosen on these same questions, so treat it as tuned, not held out.

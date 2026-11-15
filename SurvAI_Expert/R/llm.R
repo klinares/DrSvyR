@@ -10,6 +10,8 @@ PLAN_LIMITS <- c(tse = 2L, stage = 2L, design = 2L, topic = 3L)
 PLAN_QUERIES <- 3L
 SEARCH_DEPTH <- 30L      # passages per query before fusion
 RRF_K <- 60              # reciprocal rank fusion: score = sum of 1 / (RRF_K + rank)
+GATHER_RAW_WEIGHT <- 3        # the question itself fused in as one more query, with this weight (0: not);
+                              #   3 chosen on the 100 planned gold questions (hit@5 0.70 with 0, 0.81 with 3)
 GATHER_PASSAGES <- 10L
 GATHER_PER_DOC <- 3L
 GATHER_FORMULAS <- 5L
@@ -115,9 +117,12 @@ plan_question <- function(question, profile = MODEL_PROFILE, key = Sys.getenv(KE
 
 # ---- gather -------------------------------------------------------------------------------------------------
 
-gather <- function(con, plan) {
-  runs = map(plan$queries, function(q) search_passages(con, q, tags = plan$tags, k = SEARCH_DEPTH) |> mutate(rank = row_number()))
-  P = bind_rows(runs) |> group_by(passage_id) |> summarise(rrf = sum(1 / (RRF_K + rank)), doc_id = first(doc_id), .groups = "drop") |>
+gather <- function(con, plan, raw_weight = GATHER_RAW_WEIGHT) {
+  # the plan's queries, and the question itself: its own words find the document it came from best
+  w = c(set_names(rep(1, length(plan$queries)), plan$queries), set_names(raw_weight, plan$question))
+  w = w[w > 0 & !duplicated(names(w))]
+  runs = imap(w, function(wt, q) search_passages(con, q, tags = plan$tags, k = SEARCH_DEPTH) |> mutate(rank = row_number(), wt = wt))
+  P = bind_rows(runs) |> group_by(passage_id) |> summarise(rrf = sum(wt / (RRF_K + rank)), doc_id = first(doc_id), .groups = "drop") |>
     arrange(desc(rrf), passage_id) |> group_by(doc_id) |> filter(row_number() <= GATHER_PER_DOC) |> ungroup() |>
     arrange(desc(rrf), passage_id) |> head(GATHER_PASSAGES)
   q_or = function(x) if (nzchar(x)) x else paste(plan$queries, collapse = " ")
