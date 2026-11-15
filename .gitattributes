@@ -1,1 +1,4 @@
 *.pdf binary
+# SurvAI_Expert: the store is built from these files and must be identical at work, so they are text with LF endings.
+SurvAI_Expert/data/markdown/** text eol=lf
+SurvAI_Expert/data/catalog/** text eol=lf
