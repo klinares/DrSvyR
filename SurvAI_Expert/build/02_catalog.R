@@ -1,3 +1,4 @@
+# Home only. Not needed to build the store or run the app.
 # 02_catalog.R -- HOME ONLY (.rscignore keeps build/ off Connect). Step 2 of the SurvAI_Expert
 #   build: the converted markdown (data/markdown/, from 01_convert.R) is cut into passages, and its
 #   display equations and code blocks are listed; then a model labels them. Run from SurvAI_Expert/:

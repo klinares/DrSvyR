@@ -1,3 +1,4 @@
+# Home only. Not needed to build the store or run the app.
 # 01_convert.R -- HOME ONLY (.rscignore keeps build/ off Connect). Step 1 of the SurvAI_Expert
 #   build: every source document becomes one markdown file under data/markdown/<source>/.
 #   Run from inside SurvAI_Expert/:

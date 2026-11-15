@@ -68,10 +68,10 @@ the app: `setwd("SurvAI_Expert"); source("app.R"); ask("your question")`, with t
    sources are to be shown, set `APP_SOURCE_URL` to the internal copy of the repository, branch
    included (for example `https://<host>/<repo>/blob/main/SurvAI_Expert/`). Set
    `SURVAI_PROFILE=work`.
-5. Check it: `Rscript --no-init-file tests/smoke.R` (no key, no calls), then
-   `Rscript --no-init-file tests/eval.R answers` (about 180 calls; the key is read from the
-   variable named by `KEY_ENV`) and read `tests/eval_report.md`. Without the textbook, questions
-   written from it score lower; compare with the home run committed in `tests/eval_report.md`.
+5. Check it (see "Tests" below): `Rscript --no-init-file tests/smoke.R`, then
+   `Rscript --no-init-file tests/eval.R` and `Rscript --no-init-file tests/eval.R answers`, and
+   compare `tests/eval_report.md` with the home run, `tests/eval_report_home.md`. Without the
+   textbook, questions written from it score lower.
 6. Deploy: `rsconnect::deployApp("SurvAI_Expert", appName = "SurvAI_Expert")`. `build/`, `tests/`
    and `data/build/` are left out by `.rscignore`; `data/markdown/`, `data/catalog/` and
    `data/store/` go with the app.
@@ -91,3 +91,17 @@ the app: `setwd("SurvAI_Expert"); source("app.R"); ask("your question")`, with t
 | `R/ui.R` | The five tabs, the source window, the session key and call count. |
 | `tests/smoke.R` | Loads the app and runs each tab's server with the model stubbed, under both `SHOW_SOURCES` settings. |
 | `tests/eval.R` | Part 1: retrieval test (no model). `tests/eval.R answers`: part 2, the answer test with a judge. |
+
+## Tests
+
+Run from inside `SurvAI_Expert/`, after the store is built.
+
+| Command | Calls | Reads | Writes (not in git) |
+| --- | --- | --- | --- |
+| `Rscript --no-init-file tests/smoke.R` | none, no key | the store, `www/` | nothing |
+| `Rscript --no-init-file tests/eval.R` | none | `tests/gold.csv`, the store | `tests/eval_retrieval.csv` |
+| `Rscript --no-init-file tests/eval.R answers` | about 180; key from the variable named by `KEY_ENV` | `tests/gold.csv`, the store | `tests/eval_report.md`, `tests/eval_answers.csv` |
+
+`tests/gold.csv` holds the 108 gold questions. `tests/eval_report_home.md` is the home run, kept
+in git as the baseline; each run of the eval prints its name at the end so the two can be
+compared. The three output files are rewritten by every run and are ignored by git.

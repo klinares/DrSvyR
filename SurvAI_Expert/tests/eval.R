@@ -3,13 +3,12 @@
 #   Rscript --no-init-file tests/eval.R tune     part 1, also tuning field weights, k1 and b on a random half
 #   Rscript --no-init-file tests/eval.R answers  part 2, planned retrieval, answers, checks and a judge (model
 #                                                calls; profile SURVAI_PROFILE, key from the variable KEY_ENV names)
-# Writes tests/gold.csv (from the old project's gold.rds, read only), tests/eval_retrieval.csv, and for
-#   part 2 tests/eval_report.md and tests/eval_answers.csv.
+# Reads tests/gold.csv. Writes tests/eval_retrieval.csv, and for part 2 tests/eval_report.md and
+#   tests/eval_answers.csv (outputs, not in git); the home run to compare with is tests/eval_report_home.md.
 
 suppressPackageStartupMessages({ library(tidyverse); library(DBI); library(duckdb) })
 source("R/retrieve.R")
 
-GOLD_RDS <- "D:/repos/SurvAI_Expert/eval/gold.rds"
 GOLD_CSV <- "tests/gold.csv"
 OUT_CSV <- "tests/eval_retrieval.csv"
 STORE <- "data/store/survai.duckdb"
@@ -19,15 +18,13 @@ BOOK_ID <- "practools/practical_tools_textbook"   # the old store split the text
 
 # ---- gold ---------------------------------------------------------------------------------------------------
 
+# tests/gold.csv: the gold questions (made once from the old project's gold set, emails redacted and
+#   source excerpts left out), each mapped here to its document in the manifest.
 make_gold <- function() {
   man = read_csv("data/catalog/manifest.csv", col_types = cols(.default = col_character()), progress = FALSE)
-  g = if (file.exists(GOLD_RDS)) readRDS(GOLD_RDS) else read_csv(GOLD_CSV, col_types = cols(.default = col_character()), progress = FALSE)
-  # the source excerpt (text) stays out of git: it repeats the corpus, textbook included; emails are redacted
-  g = g |> select(-any_of("text")) |>
-    mutate(across(where(is.character), function(v) str_replace_all(v, "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "[email]"))) |>
-    mutate(id = as.character(id), doc_id = coalesce(man$id[match(origin, man$original)],
-                                                         if_else(str_detect(origin, "^book/practical-tools/"), BOOK_ID, NA_character_)))
-  if (file.exists(GOLD_RDS)) write_csv(g, GOLD_CSV, na = "", eol = "\n")
+  g = read_csv(GOLD_CSV, col_types = cols(.default = col_character()), progress = FALSE) |>
+    mutate(doc_id = coalesce(man$id[match(origin, man$original)],
+                             if_else(str_detect(origin, "^book/practical-tools/"), BOOK_ID, NA_character_)))
   bad = g |> filter(is.na(doc_id))
   message(nrow(g), " gold questions; ", nrow(bad), " do not map to a document:")
   walk(unique(bad$origin), function(o) message("  ", o))
@@ -131,6 +128,7 @@ main <- function(mode = "eval") {
   write_csv(res |> left_join(g |> select(id, half, kind, doc_id), by = "id") |> select(id, half, kind, doc_id, rank, top5),
             OUT_CSV, na = "", eol = "\n")
   message(sprintf("\nSearch time: median %.0f ms, 95th percentile %.0f ms", 1000 * median(res$sec), 1000 * quantile(res$sec, 0.95)))
+  message("Wrote ", OUT_CSV, ". The home run of both parts, to compare with: ", HOME_REPORT_MD)
   invisible(res)
 }
 
@@ -143,6 +141,7 @@ ANSWER_SEED <- 20261116L
 CALL_BUDGET <- 250L
 NON_QUESTIONS <- c("2637", "8797")   # gold rows that are not questions ("What is the provided text about?", "I'm sorry, ...")
 REPORT_MD <- "tests/eval_report.md"
+HOME_REPORT_MD <- "tests/eval_report_home.md"   # the home run, kept in git, to compare with
 ANSWERS_CSV <- "tests/eval_answers.csv"
 
 JUDGE_SYSTEM <- paste(
@@ -315,6 +314,7 @@ main_answers <- function() {
             sprintf("- **%s** (%s, %s unsupported claims): %s", str_trunc(str_squish(q), 140), v, u, r)))
   writeLines(rep, REPORT_MD, useBytes = TRUE)
   message("Wrote ", REPORT_MD, " and ", ANSWERS_CSV, "; ", calls_made, " calls, about $", round(usd, 2))
+  message("Compare with the home run: ", HOME_REPORT_MD)
   invisible(list(ret = ret, answers = A))
 }
 
