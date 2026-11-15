@@ -9,7 +9,7 @@ original: "questionnaire_design_iass_wss/Quex_Design_Session2.pdf"
 pages: 50
 sha256: "6c4952e5a4d2297889f9f9c02988e22285506617457d5647b23a57939c21755e"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:47"
 ---
 
 <!-- page 1 -->
@@ -97,6 +97,8 @@ NORC Research Science
         * Perform analysis
 
 Adapted from Groves et al. 2009. *Survey methodology*. Hoboken, N.J.: Wiley.(Figure 5.1)
+
+*[Figure: The diagram is a top-down flowchart without axes that illustrates the sequential stages of a survey methodology process, starting from defining research objectives and ending with performing analysis. The main pattern shows the initial step branching into two parallel tracks—one focusing on data collection modes and questionnaire construction (with a shaded box), and the other on sampling frame and sample design—before converging back into a single linear path for data collection, coding, post-survey adjustments, and final analysis.]*
 
 <!-- page 6 -->
 

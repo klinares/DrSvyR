@@ -9,7 +9,7 @@ original: "questionnaire_design_iass_wss/Quex_Design_Session1.pdf"
 pages: 65
 sha256: "6d078ded9dbcb1e883bcb8f2e856d2aac3ff74834e695019abdfddb8766799ed"
 converted_by: "google/gemini-4-argon"
-converted_at: "2026-11-14T21:01:33"
+converted_at: "2026-11-14T21:29:47"
 ---
 
 <!-- page 1 -->
@@ -82,6 +82,8 @@ SURVEY FROM A PROCESS PERSPECTIVE
 * Perform analysis
 
 Adapted from Groves et al. 2009. *Survey methodology*. Hoboken, N.J.: Wiley.(Figure 5.1)
+
+*[Figure: The figure is a flowchart illustrating the sequential steps of the survey research process, starting from defining research objectives and ending with performing analysis. It shows two parallel branches—one for choosing data collection modes and constructing the questionnaire (highlighted in orange shading), and another for choosing a sampling frame and selecting samples—which converge at designing and implementing data collection, followed by coding data, making post-survey adjustments, and performing analysis.]*
 
 <!-- page 5 -->
 
@@ -416,6 +418,8 @@ SURVEY RESPONSE PROCESS (3)
 
 Yan (2026)
 
+*[Figure: The line graph ("Figure 1. Mean Ratings of Success by Numerical Labels and Need for Cognition") plots mean ratings of success on the vertical axis (ranging from 4.4 to 5.5) against two numerical scale label conditions ("0 to 6" and "-3 to 3") on the horizontal axis, alongside a bottom-left example of the "-3 to 3" survey scale. It compares two groups—LNC (dashed line) and HNC (solid line)—showing that while both groups report higher mean success ratings with the "-3 to 3" labels than with the "0 to 6" labels, the HNC group has higher overall ratings and a much steeper increase between the two conditions.]*
+
 <!-- page 20 -->
 
 SURVEY RESPONSE PROCESS
@@ -450,6 +454,8 @@ Comprehension $\rightarrow$ Retrieval $\rightarrow$ Judgment/estimation $\righta
 
 Survey Response Model (Tourangeau, Rips, and Rasinski, 2000)
 
+*[Figure: The image contains a horizontal flowchart diagram illustrating the four sequential stages of the survey response process. It consists of four purple rectangular boxes connected by rightward-pointing gray arrows, progressing linearly from "Comprehension" to "Retrieval," "Judgment/estimation," and finally "Reporting."]*
+
 <!-- page 22 -->
 
 SURVEY RESPONSE PROCESS
@@ -470,6 +476,8 @@ Comprehension $\rightarrow$ Retrieval $\rightarrow$ Judgment/estimation $\righta
   * Range, color, layout
 
 Survey Response Model (Tourangeau, Rips, and Rasinski, 2000)
+
+*[Figure: The figure is a horizontal process flowchart illustrating the four sequential stages of the survey response model. It shows four purple rounded rectangles connected from left to right by arrows, progressing in order from "Comprehension" to "Retrieval," "Judgment/estimation," and finally "Reporting."]*
 
 <!-- page 23 -->
 
