@@ -1,0 +1,458 @@
+---
+id: "tidysurvey/04-set-up"
+source: "tidysurvey"
+course: ""
+course_title: ""
+doc_type: "book"
+title: "(PART) Analysis"
+original: "04-set-up.Rmd"
+pages: 
+sha256: "f7a04b25b6027e3fd169fe1bd84d3c9f087727373d13acfc4b41c814a15d4b86"
+converted_by: "01_convert.R (no model)"
+converted_at: "2026-11-14T21:29:46"
+---
+
+# (PART) Analysis {-}
+
+# Getting started {#c04-getting-started}
+
+```r
+#| label: setup-styler
+#| echo: false
+#| message: false
+knitr::opts_chunk$set(tidy = 'styler')
+library(magrittr)
+library(tidyselect)
+```
+
+## Introduction
+
+This chapter provides an overview of the packages, data, and design objects we use frequently throughout this book. As mentioned in Chapter \@ref(c02-overview-surveys), understanding how a survey was conducted helps us make sense of the results and interpret findings. Therefore, we provide background on the datasets used in examples and exercises. Next, we walk through how to create the survey design objects necessary to begin an analysis. Finally, we provide an overview of the {srvyr} package and the steps needed for analysis. Please report any bugs and issues encountered while going through the book to the book's [GitHub repository](https://github.com/tidy-survey-r/tidy-survey-book).
+
+## Setup
+
+This section provides details on the required packages and data, as well as the steps for preparing survey design objects. For a streamlined learning experience, we recommend taking the time to walk through the code provided here and making sure everything is properly set up.
+
+### Packages {#setup-load-pkgs}
+
+We use several packages throughout the book, but let's install and load specific ones for this chapter. Many functions in the examples and exercises are from three packages: {tidyverse}, {survey}, and {srvyr} [@tidyverse2019; @lumley2010complex; @R-srvyr]. The packages can be installed from the Comprehensive R Archive Network (CRAN) using the code below:
+
+```r
+#| label: setup-install-core1
+#| eval: FALSE
+install.packages(c("tidyverse", "survey", "srvyr"))
+```
+
+We bundled the datasets used in the book in an R package, {srvyrexploR} [@R-srvyrexploR]. To install it from GitHub, use the {pak} package [@R-pak]:
+
+```r
+#| label: setup-install-core2
+#| eval: FALSE
+#| warning: FALSE
+install.packages("pak")
+pak::pak("tidy-survey-r/srvyrexploR")
+```
+
+After installing these packages, load them using the `library()` function:
+
+```r
+#| label: setup-pkgs-core
+#| error: FALSE
+#| warning: FALSE
+#| message: FALSE
+library(tidyverse)
+library(survey)
+library(srvyr)
+library(srvyrexploR)
+```
+
+\index{gtsummary|(} \index{gt package|(} 
+The packages {broom}, {gt}, and {gtsummary} play a role in displaying output and creating formatted tables [@R-gt; @R-broom; @gtsummarysjo]. Install them with the provided code^[Note: {broom} is already included in the tidyverse, so no separate installation is required.]:
+
+```r
+#| label: setup-install-extra
+#| eval: FALSE
+install.packages(c("gt", "gtsummary"))
+```
+
+After installing these packages, load them using the `library()` function:
+
+```r
+#| label: setup-pkgs-extra
+#| error: FALSE
+#| warning: FALSE
+#| message: FALSE
+library(broom)
+library(gt)
+library(gtsummary)
+```
+\index{gtsummary|)} \index{gt package|)} 
+
+\index{Current Population Survey (CPS)|(}
+Install and load the {censusapi} package to access the Current Population Survey (CPS), which we use to ensure accurate weighting of a key dataset in the book [@R-censusapi]. Run the code below to install {censusapi}:
+
+```r
+#| label: setup-install-census
+#| eval: FALSE
+install.packages("censusapi")
+```
+
+After installing this package, load it using the `library()` function:
+
+```r
+#| label: setup-pkgs-census
+#| error: FALSE
+#| warning: FALSE
+#| message: FALSE
+library(censusapi)
+```
+
+Note that the {censusapi} package requires a Census API key, available for free from the [U.S. Census Bureau website](https://api.census.gov/data/key_signup.html) (refer to the package documentation for more information). We recommend storing the Census API key in the R environment instead of directly in the code. To do this, run the `Sys.setenv()` script below, substituting the API key where it says `YOUR_API_KEY_HERE`.
+
+```r
+#| label: setup-census-api-setup
+#| eval: FALSE
+Sys.setenv(CENSUS_KEY = "YOUR_API_KEY_HERE")
+```
+
+Then, restart the R session. Once the Census API key is stored, we can retrieve it in our R code with `Sys.getenv("CENSUS_KEY")`.
+\index{Current Population Survey (CPS)|)}
+
+There are a few other packages used in the book in limited frequency. We list them in the Prerequisite boxes at the beginning of each chapter. As we work through the book, make sure to check the Prerequisite box and install any missing packages before proceeding.
+
+### Data
+
+The {srvyrexploR} package contains the datasets used in the book. Once installed and loaded, explore the documentation using the `help()` function. Read the descriptions of the datasets to understand what they contain:
+
+```r
+#| label: setup-datapkg-help
+#| eval: FALSE
+help(package = "srvyrexploR")
+```
+
+This book uses two main datasets: the American National Election Studies [ANES -- @debell] and the Residential Energy Consumption Survey [RECS -- @recs-2020-tech], which are included as `anes_2020` and `recs_2020` in the {srvyrexploR} package, respectively.
+
+#### American National Election Studies Data {-}
+
+\index{American National Election Studies (ANES)|(}
+American National Election Studies (ANES) collect data from election surveys dating back to 1948. These surveys contain information on public opinion and voting behavior in U.S. presidential elections and some midterm elections^[In the United States, presidential elections are held in years divisible by four. In other even years, there are elections at the federal level for Congress, which are referred to as midterm elections as they occur at the middle of the term of a president.]. They cover topics such as party affiliation, voting choice, and level of trust in the government. The 2020 survey (data used in this book) was fielded online, through live video interviews, or via computer-assisted telephone interviews (CATI). 
+
+When working with new survey data, we should review the survey documentation (see Chapter \@ref(c03-survey-data-documentation)) to understand the data collection methods. The original ANES data contains variables starting with `V20` [@debell], so to assist with our analysis throughout the book, we created descriptive variable names. For example, the respondent's age is now in a variable called `Age`, and gender is in a variable called `Gender`. These descriptive variables are included in the {srvyrexploR} package. A complete overview of all variables can be found in `r if (!knitr:::is_html_output()) 'the online Appendix ('`Appendix \@ref(anes-cb)`r if (!knitr:::is_html_output()) ')'`.
+
+Before beginning an analysis, it is useful to view the data to understand the available variables. The `dplyr::glimpse()` function produces a list of all variables, their types (e.g., function, double), and a few example values. Below, we remove variables containing a "V" followed by numbers with `select(-matches("^V\\d"))` before using `glimpse()` to get a quick overview of the data with descriptive variable names:
+
+```r
+#| label: setup-anes-glimpse
+anes_2020 %>%
+  select(-matches("^V\\d")) %>%
+  glimpse()
+```
+
+From the output, we can see there are `r nrow(anes_2020 %>% select(-matches("^V\\d"))) %>% formatC(big.mark = ",")` rows and `r ncol(anes_2020 %>% select(-matches("^V\\d"))) %>% formatC(big.mark = ",")` variables in the ANES data. This output also indicates that most of the variables are factors (e.g., `InterviewMode`), while a few variables are in double (numeric) format (e.g., `Age`).
+\index{American National Election Studies (ANES)|)}
+
+#### Residential Energy Consumption Survey Data {-}
+
+\index{Residential Energy Consumption Survey (RECS)|(}
+Residential Energy Consumption Survey (RECS) is a study that measures energy consumption and expenditure in American households. Funded by the Energy Information Administration, RECS data are collected through interviews with household members and energy suppliers. These interviews take place in person, over the phone, via mail, and on the web, with modes changing over time. The survey has been fielded 14 times between 1950 and 2020. It includes questions about appliances, electronics, heating, air conditioning (A/C), temperatures, water heating, lighting, energy bills, respondent demographics, and energy assistance. 
+
+We should read the survey documentation (see Chapter \@ref(c03-survey-data-documentation)) to understand how the data were collected and implemented. An overview of all variables can be found in `r if (!knitr:::is_html_output()) 'the online Appendix ('`Appendix \@ref(recs-cb)`r if (!knitr:::is_html_output()) ')'`. 
+
+Before starting an analysis, we recommend viewing the data to understand the types of data and variables that are included. The `dplyr::glimpse()` function produces a list of all variables, the type of the variable (e.g., function, double), and a few example values. Below, we remove the weight variables with `select(-matches("^NWEIGHT"))` before using `glimpse()` to get a quick overview of the data:
+
+```r
+#| label: setup-recs-glimpse
+recs_2020 %>% 
+  select(-matches("^NWEIGHT")) %>% 
+  glimpse()
+```
+
+From the output, we can see that the RECS data has `r nrow(recs_2020 %>% select(-matches("^NWEIGHT"))) %>% formatC(big.mark = ",")` rows and `r ncol(recs_2020 %>% select(-matches("^NWEIGHT"))) %>% formatC(big.mark = ",")` non-weight variables. This output also indicates that most of the variables are in double (numeric) format (e.g., `TOTSQFT_EN`), with some factor (e.g., `Region`), Boolean (e.g., `ACUsed`), character (e.g., `REGIONC`), and ordinal (e.g., `YearMade`) variables. \index{Residential Energy Consumption Survey (RECS)|)}
+
+### Design objects {#setup-des-obj}
+
+\index{Design object|(}The design object is the backbone for survey analysis. It is where we specify the sampling design, weights, and other necessary information to ensure we account for errors in the data. Before creating the design object, we should carefully review the survey documentation to understand how to create the design object for accurate analysis.
+
+In this section, we provide details on how to code the design object for the ANES and RECS data used in the book. However, we only provide a high-level overview to get readers started. For a deeper understanding of creating design objects for a variety of sampling designs, see Chapter \@ref(c10-sample-designs-replicate-weights).
+
+While we recommend conducting exploratory data analysis on the original data before diving into complex survey analysis (see Chapter \@ref(c12-recommendations)), the actual survey analysis and inference should be performed with the survey design objects instead of the original survey data. For example, the ANES data is called `anes_2020`. If we create a survey design object called `anes_des`, our survey analyses should begin with `anes_des` and not `anes_2020`.  Using the survey design object ensures that our calculations appropriately account for the details of the survey design.
+
+#### American National Election Studies Design Object {-}
+
+\index{American National Election Studies (ANES)|(} \index{Current Population Survey (CPS)|(}
+The ANES documentation [@debell] details the sampling and weighting implications for analyzing the survey data. From this documentation and as noted in Chapter \@ref(c03-survey-data-documentation), the 2020 ANES data are weighted to the sample, not the population. To make generalizations about the population, we need to weigh the data against the full population count. The ANES methodology recommends using the Current Population Survey (CPS) to determine the number of non-institutional U.S. citizens aged 18 or older living in the 50 U.S. states or D.C. in March 2020.
+
+We can use the {censusapi} package to obtain the information needed for the survey design object. The `getCensus()` function allows us to retrieve the CPS data for March (`cps/basic/mar`) in 2020 (`vintage = 2020`). Additionally, we extract several variables from the CPS:
+
+- month (`HRMONTH`) and year (`HRYEAR4`) of the interview: to confirm the correct time period
+- age (`PRTAGE`) of the respondent: to narrow the population to 18 and older (eligible age to vote) 
+- citizenship status (`PRCITSHP`) of the respondent: to narrow the population to only those eligible to vote
+- final person-level weight (`PWSSWGT`)
+
+Detailed information for these variables can be found in the [CPS data dictionary](https://www2.census.gov/programs-surveys/cps/datasets/2020/basic/2020_Basic_CPS_Public_Use_Record_Layout_plus_IO_Code_list.txt).
+
+```r
+#| label: setup-anes-cps-get
+#| message: false
+
+cps_state_in <- getCensus(name = "cps/basic/mar",
+                          vintage = 2020,
+                          region = "state",
+                          vars = c("HRMONTH", "HRYEAR4", 
+                                   "PRTAGE", "PRCITSHP", "PWSSWGT"), 
+                          key = Sys.getenv("CENSUS_KEY"))
+
+cps_state <- cps_state_in %>%
+  as_tibble() %>%
+  mutate(across(.cols = everything(),
+                .fns = as.numeric))
+```
+
+In the code above, we include `region = "state"`. The default region type for the CPS data is at the state level. While not required, including the region can be helpful for understanding the geographical context of the data.
+
+In `getCensus()`, we filtered the dataset by specifying the month (`HRMONTH == 3`) and year (`HRYEAR4 == 2020`) of our request. Therefore, we expect that all interviews within our output were conducted during that particular month and year. We can confirm that the data are from March 2020 by running the code below:
+
+```r
+#| label: setup-anes-cps-date
+cps_state %>%
+  distinct(HRMONTH, HRYEAR4)
+```
+
+We can narrow down the dataset using the age and citizenship variables to include only individuals who are 18 years or older (`PRTAGE >= 18`) and have U.S. citizenship (`PRCITSHIP %in% c(1:4)`):
+
+```r
+#| label: setup-anes-cps-narrowresp
+cps_narrow_resp <- cps_state %>%
+  filter(PRTAGE >= 18,
+         PRCITSHP %in% c(1:4))
+```
+
+To calculate the U.S. population from the filtered data, we sum the person weights (`PWSSWGT`):
+
+```r
+#| label: setup-anes-cps-targetpop
+targetpop <- cps_narrow_resp %>%
+  pull(PWSSWGT) %>%
+  sum()
+
+scales::comma(targetpop)
+```
+
+
+The population of interest in 2020 is `r scales::comma(targetpop)`. This result gives us what we need to create the survey design object for estimating population statistics. Using the `anes_2020` data, we adjust the weighting variable (`V200010b`) using the population of interest we just calculated (`targetpop`). We determine the proportion of the total weight for each individual weight (`V200010b / sum(V200010b)`) and then multiply that proportion by the calculated population of interest.
+\index{Current Population Survey (CPS)|)}
+
+```r
+#| label: setup-anes-adjust
+anes_adjwgt <- anes_2020 %>%
+  mutate(Weight = V200010b / sum(V200010b) * targetpop) 
+```
+\index{Stratified sampling|(} \index{Functions in srvyr!as\_survey\_design|(} \index{as\_survey\_design|see {Functions in srvyr}} \index{Clustered sampling|(} \index{Primary sampling unit|(} \index{PSU|see {Primary sampling unit}} \index{Cluster|see {Primary sampling unit}}
+Once we have the adjusted weights, we can refer to the rest of the documentation to create the survey design. The documentation indicates that the study uses a stratified cluster sampling design. Therefore, we need to specify variables for `strata` and `ids` (cluster) and fill in the `nest` argument. The documentation provides guidance on which strata and cluster variables to use depending on whether we are analyzing pre- or post-election data. In this book, we analyze post-election data, so we need to use the post-election weight `V200010b`, strata variable `V200010d`, and Primary Sampling Unit (PSU)/cluster variable `V200010c`. Additionally, we set `nest=TRUE` to ensure the clusters are nested within the strata. \index{Weighting|)}
+
+```r
+#| label: setup-anes-des
+anes_des <- anes_adjwgt %>%
+  as_survey_design(weights = Weight,
+                   strata = V200010d,
+                   ids = V200010c,
+                   nest = TRUE)
+
+anes_des
+```
+
+We can examine this new object to learn more about the survey design, such that the ANES is a "Stratified 1 - level Cluster Sampling design (with replacement) With (101) clusters." Additionally, the output displays the sampling variables and then lists the remaining variables in the dataset. This design object is used throughout this book to conduct survey analysis. \index{Stratified sampling|)} \index{Functions in srvyr!as\_survey\_design|)} \index{American National Election Studies (ANES)|)} \index{Clustered sampling|)} \index{Primary sampling unit|)}
+
+#### Residential Energy Consumption Survey Design Object {-}
+
+\index{Replicate weights|(} \index{Replicate weights!Jackknife} \index{Jackknife|see {Replicate weights}} \index{Residential Energy Consumption Survey (RECS)|(}
+The RECS documentation [@recs-2020-tech] provides information on the survey's sampling and weighting implications for analysis. The documentation shows the 2020 RECS uses Jackknife weights, where the main analytic weight is `NWEIGHT`, and the Jackknife weights are `NWEIGHT1`-`NWEIGHT60`. We can specify these in the ``weights`` and ``repweights`` arguments in the survey design object code, respectively.
+
+With Jackknife weights, additional information is required: `type`, `scale`, and `mse`.  Chapter \@ref(c10-sample-designs-replicate-weights) discusses in depth each of these arguments; but to quickly get started, the RECS documentation lets us know that `type=JK1`, `scale=59/60`, and `mse = TRUE`. \index{Functions in srvyr!as\_survey\_rep|(}We can use the following code to create the survey design object: \index{as\_survey\_rep|see {Functions in srvyr}} \index{Replicate weights!Jackknife}
+
+```r
+#| label: setup-recs-des
+
+recs_des <- recs_2020 %>%
+  as_survey_rep(
+    weights = NWEIGHT,
+    repweights = NWEIGHT1:NWEIGHT60,
+    type = "JK1",
+    scale = 59 / 60,
+    mse = TRUE
+  )
+
+recs_des
+```
+
+Viewing this new object provides information about the survey design, such that RECS is an "Unstratified cluster jacknife (JK1) with 60 replicates and MSE variances."  Additionally, the output shows the sampling variables (`NWEIGHT1`-`NWEIGHT60`) and then lists the remaining variables in the dataset. This design object is used throughout this book to conduct survey analysis. \index{Functions in srvyr!as\_survey\_rep|)} \index{Replicate weights|)} \index{Residential Energy Consumption Survey (RECS)|)}
+
+## Survey analysis process {#survey-analysis-process}
+
+\index{Survey analysis process|(}
+
+There is a general process for analyzing data to create estimates with {srvyr} package:
+
+1. Create a `tbl_svy` object (a survey object) using: `as_survey_design()` or `as_survey_rep()`
+
+2. Subset data (if needed) using `filter()` (to create subpopulations)
+
+3. Specify domains of analysis using `group_by()` 
+
+4. Within `summarize()`, specify variables to calculate, including means, totals, proportions, quantiles, and more
+
+In Section \@ref(setup-des-obj), we follow Step 1 to create the survey design objects for the ANES and RECS data featured in this book. Additional details on how to create design objects can be found in Chapter \@ref(c10-sample-designs-replicate-weights). Then, once we have the design object, we can filter the data to any subpopulation of interest (if needed). It is important to filter the data after creating the design object. This ensures that we are accurately accounting for the survey design in our calculations. Finally, we can use `group_by()`, `summarize()`, and other functions from the {survey} and {srvyr} packages to analyze the survey data by estimating means, totals, and so on.
+
+\index{Survey analysis process|)}\index{Design object|)}
+
+## Similarities between {dplyr} and {srvyr} functions {#similarities-dplyr-srvyr}
+
+The {dplyr} package from the tidyverse offers flexible and intuitive functions for data wrangling [@R-dplyr]. One of the major advantages of using {srvyr} is that it applies {dplyr}-like syntax to the {survey} package [@R-srvyr]. We can use pipes, such as `%>%` from the {magrittr} package, to specify a survey design object, apply a function, and then feed that output into the next function's first argument [@R-magrittr]. Functions follow the 'tidy' convention of snake_case function names.
+
+To help explain the similarities between {dplyr} functions and {srvyr} functions, we use the `towny` dataset from the {gt} package and `apistrat` data that comes in the {survey} package. The `towny` dataset provides population data for municipalities in Ontario, Canada on census years between 1996 and 2021. Taking a look at `towny` with `dplyr::glimpse()`, we can see the dataset has `r ncol(towny)` columns with a mix of character and numeric data.
+
+```r
+#| label: setup-towny-surveydata
+towny %>% 
+  glimpse()
+```
+
+Let's examine the `towny` object's class. We verify that it is a tibble, as indicated by `"tbl_df"`, by running the code below:
+
+```r
+#| label: setup-towny-class
+class(towny)
+```
+
+All tibbles are data.frames, but not all data.frames are tibbles. Compared to data.frames, tibbles have some advantages, with the printing behavior being a noticeable advantage. When working with tidyverse style code, we recommend making all your datasets tibbles for ease of analysis.
+
+The {survey} package contains datasets related to the California Academic Performance Index, which measures student performance in schools with at least 100 students in California. We can access these datasets by loading the {survey} package and running `data(api)`. 
+
+\index{Stratified sampling|(} \index{Functions in srvyr!as\_survey\_design|(}
+Let's work with the `apistrat` dataset, which is a stratified random sample, stratified by school type (`stype`) with three levels: `E` for elementary school, `M` for middle school, and `H` for high school. We first create the survey design object (see Chapter \@ref(c10-sample-designs-replicate-weights) for more information). The sample is stratified by the `stype` variable and the sampling weights are found in the `pw` variable. We can use this information to construct the design object, `apistrat_des`.  \index{Stratified sampling|)}
+
+```r
+#| label: setup-api-surveydata
+data(api)
+
+apistrat_des <- apistrat %>%
+  as_survey_design(strata = stype, 
+                   weights = pw)
+```
+
+When we check the class of `apistrat_des`, it is not a typical `data.frame`. Applying the `as_survey_design()` function transforms the data into a `tbl_svy`, a special class specifically for survey design objects. The {srvyr} package is designed to work with the `tbl_svy` class of objects. \index{Functions in srvyr!as\_survey\_design|)}
+
+```r
+#| label: setup-api-class
+class(apistrat_des)
+```
+
+Let's look at how {dplyr} works with regular data frames. The example below calculates the mean and median for the `land_area_km2` variable in the `towny` dataset.
+
+```r
+#| label: setup-dplyr-examp
+towny %>%
+  summarize(area_mean = mean(land_area_km2),
+            area_median = median(land_area_km2))
+```
+
+In the code below, we calculate the mean and median of the variable `api00` using `apistrat_des`. Note the similarity in the syntax. However, the standard error of the statistic is also calculated in addition to the statistic itself. \index{Functions in srvyr!survey\_mean|(} \index{Functions in srvyr!summarize|(} \index{summarize|see {Functions in srvyr}} \index{survey\_mean|see {Functions in srvyr}}
+
+```r
+#| label: setup-srvyr-examp
+apistrat_des %>%
+  summarize(api00_mean = survey_mean(api00),
+            api00_med = survey_median(api00))
+```
+
+The functions in {srvyr} also play nicely with other tidyverse functions. For example, if we wanted to select columns with shared characteristics, we can use {tidyselect} functions such as `starts_with()`, `num_range()`, etc. [@R-tidyselect]. In the examples below, we use a combination of `across()` and `starts_with()` to calculate the mean of variables starting with "population" in the `towny` data frame and those beginning with `api` in the `apistrat_des` survey object.  \index{Functions in srvyr!summarize|)}
+
+```r
+#| label: setup-dplyr-select
+towny %>%
+  summarize(across(starts_with("population"), 
+                   ~mean(.x, na.rm = TRUE)))
+```
+
+```r
+#| label: setup-srvyr-select
+apistrat_des %>%
+  summarize(across(starts_with("api"), 
+                   survey_mean))
+```
+\index{Functions in srvyr!survey\_mean|)}
+
+We have the flexibility to use {dplyr} verbs such as `mutate()`, `filter()`, and `select()` on our survey design object. As mentioned in Section \@ref(survey-analysis-process), these steps should be performed on the survey design object. This ensures our survey design is properly considered in all our calculations.
+
+```r
+#| label: setup-srvyr-mutate
+apistrat_des_mod <- apistrat_des %>%
+  mutate(api_diff = api00 - api99) %>%
+  filter(stype == "E") %>%
+  select(stype, api99, api00, api_diff, api_students = api.stu)
+
+apistrat_des_mod
+
+apistrat_des
+```
+
+Several functions in {srvyr} must be called within `srvyr::summarize()`, with the exception of \index{Functions in srvyr!survey\_count}`srvyr::survey_count()` and \index{Functions in srvyr!survey\_tally}`srvyr::survey_tally()`. This is similar to how `dplyr::count()` and `dplyr::tally()` are not called within `dplyr::summarize()`. The `summarize()` function can be used in conjunction with the `group_by()` function or `by/.by` arguments, which applies the functions on a group-by-group basis to create grouped summaries. \index{survey\_count|see {Functions in srvyr}}
+
+```r
+#| label: setup-dplyr-groupby
+towny %>%
+  group_by(csd_type) %>%
+  dplyr::summarize(area_mean = mean(land_area_km2),
+                   area_median = median(land_area_km2))
+```
+
+We use a similar setup to summarize data in {srvyr}: \index{Functions in srvyr!survey\_mean|(} \index{Functions in srvyr!survey\_median|(} \index{Functions in srvyr!summarize|(} \index{survey\_median|see {Functions in srvyr}}
+
+```r
+#| label: setup-srvyr-groupby
+apistrat_des %>%
+  group_by(stype) %>%
+  summarize(api00_mean = survey_mean(api00),
+            api00_median = survey_median(api00))
+```
+
+An alternative way to do grouped analysis on the `towny` data would be with the `.by` argument:
+
+```r
+#| label: setup-dplyr-by-alt
+towny %>%
+  dplyr::summarize(area_mean = mean(land_area_km2),
+                   area_median = median(land_area_km2), 
+                   .by=csd_type)
+```
+
+The `.by` syntax is similarly implemented in {srvyr} for grouped analysis: 
+
+```r
+#| label: setup-srvyr-by-alt
+apistrat_des %>%
+  summarize(api00_mean = survey_mean(api00),
+            api00_median = survey_median(api00),
+            .by = stype)
+```
+\index{Functions in srvyr!survey\_median|)}
+
+As mentioned above, {srvyr} functions are meant for `tbl_svy` objects. Attempting to manipulate data on non-`tbl_svy` objects, like the `towny` example shown below, results in an error. Running the code lets us know what the issue is: `Survey context not set`.
+
+```r
+#| label: setup-nsobj-error
+#| error: true
+towny %>%
+  summarize(area_mean = survey_mean(land_area_km2))
+```
+ \index{Functions in srvyr!survey\_mean|)}
+ 
+A few functions in {srvyr} have counterparts in {dplyr}, such as `srvyr::summarize()` and `srvyr::group_by()`. Unlike {srvyr}-specific verbs, {srvyr} recognizes these parallel functions if applied to a non-survey object. Instead of causing an error, the package provides the equivalent output from {dplyr}: 
+
+```r
+#| label: setup-nsobj-noerr
+towny %>%
+  srvyr::summarize(area_mean = mean(land_area_km2))
+```
+
+Because this book focuses on survey analysis, most of our pipes stem from a survey object. When we load the {dplyr} and {srvyr} packages, the functions automatically figure out the class of data and use the appropriate one from {dplyr} or {srvyr}. Therefore, we do not need to include the namespace for each function (e.g., `srvyr::summarize()`). \index{Functions in srvyr!summarize|)}

@@ -1,0 +1,1358 @@
+---
+id: "tidysurvey/05-descriptive-analysis"
+source: "tidysurvey"
+course: ""
+course_title: ""
+doc_type: "book"
+title: "Descriptive analyses"
+original: "05-descriptive-analysis.Rmd"
+pages: 
+sha256: "a664b63a4b1ab3da5453bdd25decedc41a3d34ff6c8d5015c7d5229c8f0e13e9"
+converted_by: "01_convert.R (no model)"
+converted_at: "2026-11-14T21:29:46"
+---
+
+# Descriptive analyses {#c05-descriptive-analysis}
+
+```r
+#| label: desc-styler
+#| include: false
+knitr::opts_chunk$set(tidy = 'styler')
+options(pillar.max_dec_width = 19)
+```
+
+::: {.prereqbox-header}
+`r if (knitr:::is_html_output()) '### Prerequisites {- #prereq5}'`
+:::
+
+::: {.prereqbox data-latex="{Prerequisites}"}
+For this chapter, load the following packages:
+```r
+#| label: desc-setup
+#| error: FALSE
+#| warning: FALSE
+#| message: FALSE
+library(tidyverse)
+library(srvyr)
+library(srvyrexploR)
+library(broom)
+```
+
+We are using data from ANES and RECS described in Chapter \@ref(c04-getting-started). As a reminder, here is the code to create the design objects for each to use throughout this chapter. For ANES, we need to adjust the weight so it sums to the population instead of the sample (see the ANES documentation and Chapter \@ref(c04-getting-started) for more information).
+
+```r
+#| label: desc-anes-des
+#| eval: FALSE
+targetpop <- 231592693
+
+anes_adjwgt <- anes_2020 %>%
+  mutate(Weight = Weight / sum(Weight) * targetpop)
+
+anes_des <- anes_adjwgt %>%
+  as_survey_design(
+    weights = Weight,
+    strata = Stratum,
+    ids = VarUnit,
+    nest = TRUE
+  )
+```
+
+For RECS, details are included in the RECS documentation and Chapters \@ref(c04-getting-started) and \@ref(c10-sample-designs-replicate-weights).
+
+```r
+#| label: desc-recs-des
+#| eval: FALSE
+
+recs_des <- recs_2020 %>%
+  as_survey_rep(
+    weights = NWEIGHT,
+    repweights = NWEIGHT1:NWEIGHT60,
+    type = "JK1",
+    scale = 59/60,
+    mse = TRUE
+  )
+```
+:::
+
+## Introduction
+
+\index{Point estimates|(}\index{Uncertainty estimates|(}Descriptive analyses, such as basic counts, cross-tabulations, or means, are among the first steps in making sense of our survey results. During descriptive analyses, we calculate point estimates of unknown population parameters, such as population mean, and uncertainty estimates, such as confidence intervals. By reviewing the findings, we can glean insight into the data, the underlying population, and any unique aspects of the data or population. For example, if only 10% of survey respondents are male, it could indicate a unique population, a potential error or bias, an intentional survey sampling method, or other factors. Additionally, descriptive analyses provide summaries of distribution and other measures. These analyses lay the groundwork for the next steps of running statistical tests or developing models.\index{Point estimates|)}\index{Uncertainty estimates|)}
+
+We discuss many different types of descriptive analyses in this chapter. However, it is important to know what type of data we are working with and which statistics are appropriate. In survey data, we typically consider data as one of four main types:
+
+  * \index{Categorical data|(}\index{Nominal data|see {Categorical data}}Categorical/nominal data: variables with levels or descriptions that cannot be ordered, such as the region of the country (North, South, East, and West)\index{Categorical data|)}
+  * \index{Ordinal data|(}Ordinal data: variables that can be ordered, such as those from a Likert scale (strongly disagree, disagree, agree, and strongly agree)\index{Ordinal data|)}
+  * \index{Discrete data|(}Discrete data: variables that are counted or measured, such as number of children\index{Discrete data|)}
+  * \index{Continuous data|(}Continuous data: variables that are measured and whose values can lie anywhere on an interval, such as income\index{Continuous data|)}
+
+This chapter discusses how to analyze measures of distribution (e.g., cross-tabulations), central tendency (e.g., means), relationship (e.g., ratios), and dispersion (e.g., standard deviation) using functions from the {srvyr} package [@R-srvyr].
+
+\index{Measures of distribution|(}
+
+Measures of distribution describe how often an event or response occurs. These measures include counts and totals. We cover the following functions:
+
+  * Count of observations (`survey_count()` and `survey_tally()`)
+  * Summation of variables (`survey_total()`)
+
+\index{Measures of distribution|)}
+
+\index{Central tendency|(}
+
+Measures of central tendency find the central (or average) responses. These measures include means and medians. We cover the following functions:
+
+  * Means and proportions (`survey_mean()` and `survey_prop()`) 
+  * Quantiles and medians (`survey_quantile()` and `survey_median()`)
+
+\index{Central tendency|)}
+
+\index{Relationship|(}
+
+Measures of relationship describe how variables relate to each other. These measures include correlations and ratios. We cover the following functions:
+
+  * Correlations (`survey_corr()`)
+  * Ratios (`survey_ratio()`)
+
+\index{Relationship|)}
+
+\index{Measures of dispersion|(}
+
+Measures of dispersion describe how data spread around the central tendency for continuous variables. These measures include standard deviations and variances. We cover the following functions:
+
+  * Variances and standard deviations (`survey_var()` and `survey_sd()`)
+
+\index{Measures of dispersion|(}
+
+To incorporate each of these survey functions, recall the general process for survey estimation from Chapter \@ref(c04-getting-started):  
+
+\index{Survey analysis process|(}
+
+1. Create a `tbl_svy` object using `srvyr::as_survey_design()` or `srvyr::as_survey_rep()`.
+2. Subset the data for subpopulations using `srvyr::filter()`, if needed.
+3. Specify domains of analysis using `srvyr::group_by()`, if needed.
+4. Analyze the data with survey-specific functions.
+
+\index{Survey analysis process|)}
+
+This chapter walks through how to apply the survey functions in Step 4. Note that unless otherwise specified, our estimates are weighted as a result of setting up the survey design object. 
+
+To look at the data by different subgroups, we can choose to filter and/or group the data. It is very important that we filter and group the data only after creating the design object. This ensures that the results accurately reflect the survey design. If we filter or group data before creating the survey design object, the data for those cases are not included in the survey design information and estimations of the variance, leading to inaccurate results.
+
+For the sake of simplicity, we've removed cases with missing values in the examples below. For a more detailed explanation of how to handle missing data, please refer to Chapter \@ref(c11-missing-data).
+
+## Counts and cross-tabulations
+
+\index{Functions in srvyr!survey\_tally|(} \index{Functions in srvyr!survey\_count|(} \index{survey\_tally|see {Functions in srvyr}} \index{Categorical data|(} \index{Cross-tabulation|(} \index{Measures of distribution|(} 
+Using `survey_count()` and `survey_tally()`, we can calculate the estimated population counts for a given variable or combination of variables. These summaries, often referred to as cross-tabulations or cross-tabs, are applied to categorical data. They help in estimating counts of the population size for different groups based on the survey data. 
+\index{Categorical data|)}
+
+### Syntax {#desc-count-syntax} 
+
+
+The syntax for `survey_count()` is similar to the `dplyr::count()` syntax, as mentioned in Chapter \@ref(c04-getting-started). However, as noted above, this function can only be called on `tbl_svy` objects. Let's explore the syntax: 
+
+```r
+survey_count(
+  x,
+  ...,
+  wt = NULL,
+  sort = FALSE,
+  name = "n",
+  .drop = dplyr::group_by_drop_default(x),
+  vartype = c("se", "ci", "var", "cv")
+  )
+```
+
+The arguments are:
+
+* `x`: a `tbl_svy` object created by `as_survey`
+* `...`: variables to group by, passed to `group_by`
+* `wt`: a variable to weight on in addition to the survey weights, defaults to `NULL`
+* `sort`: how to sort the variables, defaults to `FALSE`
+* `name`: the name of the count variable, defaults to `n`
+* `.drop`: whether to drop empty groups
+* `vartype`: type(s) of variation estimate to calculate including any of `c("se", "ci", "var", "cv")`, defaults to `se` (standard error) (see Section \@ref(desc-count-syntax) for more information)
+
+To generate a count or cross-tabs by different variables, we include them in the (`...`) argument. This argument can take any number of variables and breaks down the counts by all combinations of the provided variables. This is similar to `dplyr::count()`. To obtain an estimate of the overall population, we can exclude any variables from the (`...`) argument or use the `survey_tally()` function. While the `survey_tally()` function has a similar syntax to the `survey_count()` function, it does not include the (`...`) or the `.drop` arguments:
+
+```r
+survey_tally(
+  x,
+  wt,
+  sort = FALSE,
+  name = "n",
+  vartype = c("se", "ci", "var", "cv")
+)
+```
+
+Both functions include the `vartype` argument with four different values:
+
+* `se`: standard error
+    * The estimated standard deviation of the estimate
+    * Output has a column with the variable name specified in the `name` argument with a suffix of "_se"
+* `ci`: confidence interval
+    * The lower and upper limits of a confidence interval
+    * Output has two columns with the variable name specified in the `name` argument with a suffix of "_low" and "_upp"
+    * By default, this is a 95% confidence interval but can be changed by using the argument level and specifying a number between 0 and 1. For example, `level=0.8` would produce an 80% confidence interval.
+* `var`: variance
+    * The estimated variance of the estimate
+    * Output has a column with the variable name specified in the `name` argument with a suffix of "_var"
+* `cv`: coefficient of variation
+    * A ratio of the standard error and the estimate
+    * Output has a column with the variable name specified in the `name` argument with a suffix of "_cv"
+
+The confidence intervals are always calculated using a symmetric t-distribution based method, given by the formula:
+
+$$ \text{estimate} \pm t^*_{df}\times SE$$
+
+\index{Degrees of freedom|(} \index{Primary sampling unit|(} \index{Strata|(}
+where $t^*_{df}$ is the critical value from a t-distribution based on the confidence level and the degrees of freedom. By default, the degrees of freedom are based on the design or number of \index{Replicate weights}replicates, but they can be specified using the `df` argument. For survey design objects, the degrees of freedom are calculated as the number of primary sampling units (PSUs or clusters) minus the number of strata (see Chapter \@ref(c10-sample-designs-replicate-weights) for more information on PSUs, strata, and sample designs). For replicate-based objects, the degrees of freedom are calculated as one less than the rank of the matrix of replicate weight, where the number of replicates is typically the rank. Note that specifying `df = Inf` is equivalent to using a normal (z-based) confidence interval -- this is the default in {survey}. These variability types are the same for most of the survey functions, and we provide examples using different variability types throughout this chapter. \index{Degrees of freedom|)} \index{Primary sampling unit|)} \index{Strata|)}
+
+### Examples
+
+#### Example 1: Estimated population count {.unnumbered}
+
+If we want to obtain the estimated number of households in the U.S. (the population of interest) using the Residential Energy Consumption Survey (RECS) data, we can use `survey_count()`. If we do not specify any variables in the `survey_count()` function, it outputs the estimated population count (`n`) and its corresponding standard error (`n_se`). \index{Residential Energy Consumption Survey (RECS)|(}
+
+```r
+#| label: desc-count-overall
+recs_des %>%
+  survey_count() 
+```
+
+```r
+#| label: desc-count-oa-save
+#| echo: FALSE
+.est_pop <- recs_des %>%
+  survey_count() %>%
+  pull(n) %>%
+  prettyNum(big.mark = ",", digits = 20)
+```
+
+Based on this calculation, the estimated number of households in the U.S. is `r sub("\\..*", "", .est_pop)`.
+
+Alternatively, we could also use the `survey_tally()` function. The example below yields the same results as `survey_count()`. 
+
+```r
+#| label: desc-tally-oa
+recs_des %>%
+  survey_tally() 
+```
+
+#### Example 2: Estimated counts by subgroups (cross-tabs) {.unnumbered}
+
+To calculate the estimated number of observations for specific subgroups, such as Region and Division, we can include the variables of interest in the `survey_count()` function. In the example below, we calculate the estimated number of housing units by region and division. The argument `name =` in `survey_count()` allows us to change the name of the count variable in the output from the default `n` to `N`. 
+
+```r
+#| label: desc-count-group
+recs_des %>%
+  survey_count(Region, Division, name = "N") 
+```
+
+```r
+#| label: desc-count-group-save
+#| echo: FALSE
+.est_pop_div <- recs_des %>%
+  survey_count(Region, Division, name = "N")  %>%
+  mutate(N = formatC(
+    N,
+    big.mark = ",",
+    format = "f",
+    digits = 0
+  ))
+```
+
+When we run the cross-tab, we see that there are an estimated `r .est_pop_div %>% filter(Division=="New England") %>% pull(N)` housing units in the New England Division. 
+
+The code results in an error if we try to use the `survey_count()` syntax with `survey_tally()`:
+
+```r
+#| label: desc-tally-group-bad
+#| error: TRUE
+recs_des %>%
+  survey_tally(Region, Division, name = "N") 
+```
+
+Use a `group_by()` function prior to using `survey_tally()` to successfully run the cross-tab:
+
+```r
+#| label: desc-tally-group-good
+recs_des %>%
+  group_by(Region, Division) %>%
+  survey_tally(name = "N") 
+```
+\index{Functions in srvyr!survey\_count|)} \index{Cross-tabulation|)}
+
+## Totals and sums \index{Functions in srvyr!survey\_total|(} \index{survey\_total|see {Functions in srvyr}}
+
+\index{Continuous data|(}
+The `survey_total()` function is analogous to `sum`. It can be applied to continuous variables to obtain the estimated total quantity in a population. Starting from this point in the chapter, all the introduced functions must be called within `summarize()`.  \index{Functions in srvyr!summarize|(} \index{Continuous data|)}
+
+### Syntax
+
+Here is the syntax:
+
+```r
+survey_total(
+  x,
+  na.rm = FALSE,
+  vartype = c("se", "ci", "var", "cv"),
+  level = 0.95,
+  deff = FALSE,
+  df = NULL
+)
+```
+
+The arguments are:
+
+* `x`: a variable, expression, or empty
+* `na.rm`: an indicator of whether missing values should be dropped, defaults to `FALSE`
+* `vartype`: type(s) of variation estimate to calculate including any of `c("se", "ci", "var", "cv")`, defaults to `se` (standard error) (see Section \@ref(desc-count-syntax) for more information)
+* `level`: a number or a vector indicating the confidence level, defaults to 0.95
+* `deff`: a logical value stating whether the design effect should be returned, defaults to FALSE (this is described in more detail in Section \@ref(desc-deff))
+* \index{Degrees of freedom|(}`df`: (for `vartype = 'ci'`), a numeric value indicating degrees of freedom for the t-distribution\index{Degrees of freedom|)}
+
+### Examples
+
+#### Example 1: Estimated population count {.unnumbered}
+
+To calculate a population count estimate with `survey_total()`, we leave the argument `x` empty, as shown in the example below:
+
+```r
+#| label: desc-tot-nox
+recs_des %>%
+  summarize(Tot = survey_total())  
+```
+
+The estimated number of households in the U.S. is `r scales::comma(recs_des %>% summarize(Tot = survey_total()) %>% pull(Tot))`. Note that this result obtained from `survey_total()` is equivalent to the ones from the `survey_count()` and `survey_tally()` functions. However, the `survey_total()` function is called within `summarize()`, whereas \index{Functions in srvyr!survey\_count}`survey_count()` and `survey_tally()` are not.  \index{Functions in srvyr!survey\_tally|)} 
+
+#### Example 2: Overall summation of continuous variables {.unnumbered}
+
+\index{Continuous data|(}
+The distinction between `survey_total()` and `survey_count()` becomes more evident when working with continuous variables. Let's compute the total cost of electricity in whole dollars from variable `DOLLAREL`^[RECS has two components: a household survey and an energy supplier survey. For each household that responds, their energy providers are contacted to obtain their energy consumption and expenditure. This value reflects the dollars spent on electricity in 2020, according to the energy supplier. See @recs-2020-meth for more details.].
+\index{Continuous data|)}
+
+```r
+#| label: desc-tot-dollarel
+recs_des %>%
+  summarize(elec_bill = survey_total(DOLLAREL))
+```
+
+```r
+#| label: desc-tot-dollarel-save
+#| echo: FALSE
+.elbill <- recs_des %>%
+  summarize(elec_bill = survey_total(DOLLAREL)) %>%
+  mutate(across(starts_with("elec"), \(x) str_c(
+    "$", formatC(
+      x,
+      big.mark = ",",
+      format = "f",
+      digits = 0
+    )
+  )))
+```
+
+It is estimated that American residential households spent a total of `r .elbill %>% pull(elec_bill)` on electricity in 2020, and the estimate has a standard error of `r .elbill %>% pull(elec_bill_se)`.
+
+#### Example 3: Summation by groups {.unnumbered}
+
+Since we are using the {srvyr} package, we can use `group_by()` to calculate the cost of electricity for different groups. Let's examine the variations in the cost of electricity in whole dollars across regions and display the confidence interval instead of the default standard error. 
+
+```r
+#| label: desc-tot-group
+recs_des %>%
+  group_by(Region) %>%
+  summarize(elec_bill = survey_total(DOLLAREL,
+                                     vartype = "ci"))
+```
+
+```r
+#| label: desc-tot-group-save
+#| echo: FALSE
+.elbil_reg <- recs_des %>%
+  group_by(Region) %>%
+  summarize(elec_bill = survey_total(DOLLAREL,
+                                     vartype = "ci")) %>%
+  mutate(across(starts_with("elec"), \(x) str_c(
+    "$", prettyNum(round(x, 0), big.mark = ",", digits = 20)
+  )))
+```
+
+The survey results estimate that households in the Northeast spent `r .elbil_reg %>% filter(Region=="Northeast") %>% pull(elec_bill)` with a confidence interval of (`r .elbil_reg %>% filter(Region=="Northeast") %>% pull(elec_bill_low)`, `r .elbil_reg %>% filter(Region=="Northeast") %>% pull(elec_bill_upp)`) on electricity in 2020, while households in the South spent an estimated `r .elbil_reg %>% filter(Region=="South") %>% pull(elec_bill)` with a confidence interval of (`r .elbil_reg %>% filter(Region=="South") %>% pull(elec_bill_low)`, `r .elbil_reg %>% filter(Region=="South") %>% pull(elec_bill_upp)`).
+
+As we calculate these numbers, we may notice that the confidence interval of the South is larger than those of other regions. This implies that we have less certainty about the true value of electricity spending in the South. A larger confidence interval could be due to a variety of factors, such as a wider range of electricity spending in the South. We could try to analyze smaller regions within the South to identify areas that are contributing to more variability. Descriptive analyses serve as a valuable starting point for more in-depth exploration and analysis. \index{Functions in srvyr!survey\_total|)} \index{Measures of distribution|)}
+
+## Means and proportions {#desc-meanprop} 
+
+\index{Functions in srvyr!survey\_mean|(} \index{Functions in srvyr!survey\_prop|(} \index{survey\_prop|see {Functions in srvyr}} \index{Categorical data|(} \index{Continuous data|(} \index{Central tendency|(}
+Means and proportions form the foundation of many research studies. These estimates are often the first things we look for when reviewing research on a given topic. The `survey_mean()` and `survey_prop()` functions calculate means and proportions while taking into account the survey design elements. The `survey_mean()` function should be used on continuous variables of survey data, while the `survey_prop()` function should be used on categorical variables.  
+\index{Categorical data|)} \index{Continuous data|)}
+
+### Syntax {#desc-meanprop-syntax}
+
+The syntax for both means and proportions is very similar: 
+
+```r
+survey_mean(
+  x,
+  na.rm = FALSE,
+  vartype = c("se", "ci", "var", "cv"),
+  level = 0.95,
+  proportion = FALSE,
+  prop_method = c("logit", "likelihood", "asin", "beta", "mean"),
+  deff = FALSE,
+  df = NULL
+)
+
+survey_prop(
+  na.rm = FALSE,
+  vartype = c("se", "ci", "var", "cv"),
+  level = 0.95,
+  proportion = TRUE,
+  prop_method = 
+    c("logit", "likelihood", "asin", "beta", "mean", "xlogit"),
+  deff = FALSE,
+  df = NULL
+)
+```
+
+Both functions have the following arguments and defaults:
+
+  * `na.rm`: an indicator of whether missing values should be dropped, defaults to `FALSE`
+  * `vartype`: type(s) of variation estimate to calculate including any of `c("se", "ci", "var", "cv")`, defaults to `se` (standard error) (see Section \@ref(desc-count-syntax) for more information)
+  * `level`: a number or a vector indicating the confidence level, defaults to 0.95
+  * `prop_method`: Method to calculate the confidence interval for confidence intervals
+  * `deff`: a logical value stating whether the design effect should be returned, defaults to FALSE (this is described in more detail in Section \@ref(desc-deff))
+  * \index{Degrees of freedom|(}`df`: (for `vartype = 'ci'`), a numeric value indicating degrees of freedom for the t-distribution\index{Degrees of freedom|)}
+
+There are two main differences in the syntax. The `survey_mean()` function includes the first argument `x`, representing the variable or expression on which the mean should be calculated. The `survey_prop()` does not have an argument to include the variables directly. Instead, prior to `summarize()`, we must use the `group_by()` function to specify the variables of interest for `survey_prop()`. For `survey_mean()`, including a `group_by()` function allows us to obtain the means by different groups. 
+
+The other main difference is with the `proportion` argument. The `survey_mean()` function can be used to calculate both means and proportions. Its `proportion` argument defaults to `FALSE`, indicating it is used for calculating means. If we wish to calculate a proportion using `survey_mean()`, we need to set the `proportion` argument to `TRUE`. In the `survey_prop()` function, the `proportion` argument defaults to `TRUE` because the function is specifically designed for calculating proportions.
+
+In Section \@ref(desc-count-syntax), we provide an overview of different variability types. The confidence interval used for most measures, such as means and counts, is referred to as a Wald-type interval. However, for proportions, a Wald-type interval with a symmetric t-based confidence interval may not provide accurate coverage, especially when dealing with small sample sizes or proportions "near" 0 or 1. We can use other methods to calculate confidence intervals, which we specify using the `prop_method` option in `survey_prop()`. The options include:
+
+  * `logit`: fits a logistic regression model and computes a Wald-type interval on the log-odds scale, which is then transformed to the probability scale. This is the default method.
+  * `likelihood`: uses the (Rao-Scott) scaled chi-squared distribution for the log-likelihood from a binomial distribution.
+  * `asin`: uses the variance-stabilizing transformation for the binomial distribution, the arcsine square root, and then back-transforms the interval to the probability scale.
+  * `beta`: uses the incomplete beta function with an effective sample size based on the estimated variance of the proportion.
+  * `mean`: the Wald-type interval ($\pm t_{df}^*\times SE$).
+  * `xlogit`: uses a logit transformation of the proportion, calculates a Wald-type interval, and then back-transforms to the probability scale. This method is the same as those used by default in SUDAAN and SPSS.
+
+Each option yields slightly different confidence interval bounds when dealing with proportions. Please note that when working with `survey_mean()`, we do not need to specify a method unless the `proportion` argument is `TRUE`. If `proportion` is `FALSE`, it calculates a symmetric `mean` type of confidence interval.
+
+### Examples
+
+#### Example 1: One variable proportion {.unnumbered}
+
+If we are interested in obtaining the proportion of people in each region in the RECS data, we can use `group_by()` and `survey_prop()` as shown below: 
+
+```r
+#| label: desc-p-ex1
+#| message: false
+recs_des %>%
+  group_by(Region) %>%
+  summarize(p = survey_prop()) 
+```
+
+```r
+#| label: desc-p-ex1-save
+#| echo: FALSE
+.preg <- recs_des %>%
+  group_by(Region) %>%
+  summarize(p = survey_prop()) %>%
+  mutate(p = p * 100)
+```
+
+`r .preg %>% filter(Region=="Northeast") %>% pull(p) %>% signif(3)`% of the households are in the Northeast, `r .preg %>% filter(Region=="Midwest") %>% pull(p) %>% signif(3)`% are in the Midwest, and so on. Note that the proportions in column `p` add up to one.
+
+\index{Categorical data|(}
+The `survey_prop()` function is essentially the same as using `survey_mean()` with a categorical variable and without specifying a numeric variable in the `x` argument. The following code gives us the same results as above:
+\index{Categorical data|)}
+
+```r
+#| label: desc-p-ex2
+recs_des %>%
+  group_by(Region) %>%
+  summarize(p = survey_mean())
+```
+
+#### Example 2: Conditional proportions {.unnumbered}
+
+We can also obtain proportions by more than one variable. In the following example, we look at the proportion of housing units by Region and whether air conditioning (A/C) is used (`ACUsed`)^[Question text: "Is any air conditioning equipment used in your home?" [@recs-svy]].
+
+```r
+#| label: desc-pmulti-ex1
+recs_des %>%
+  group_by(Region, ACUsed) %>%
+  summarize(p = survey_prop())
+```
+
+When specifying multiple variables, the proportions are conditional. In the results above, notice that the proportions sum to 1 within each region. This can be interpreted as the proportion of housing units with A/C within each region. For example, in the Northeast region, approximately `r scales::percent(recs_des %>% group_by(Region, ACUsed) %>% summarize(p = survey_prop()) %>% filter(Region == "Northeast", ACUsed == "FALSE") %>% pull(p), accuracy = 0.1)` of housing units don't have A/C, while around `r scales::percent(recs_des %>% group_by(Region, ACUsed) %>% summarize(p = survey_prop()) %>% filter(Region == "Northeast", ACUsed == "TRUE") %>% pull(p), accuracy = 0.1)` have A/C.
+
+#### Example 3: Joint proportions {.unnumbered} 
+\index{Functions in srvyr!interact|(} \index{interact|see {Functions in srvyr}}
+
+If we're interested in a joint proportion, we use the `interact()` function. In the example below, we apply the `interact()` function to `Region` and `ACUsed`:  
+
+```r
+#| label: desc-pmulti-ex2
+recs_des %>%
+  group_by(interact(Region, ACUsed)) %>%
+  summarize(p = survey_prop())
+```
+
+In this case, all proportions sum to 1, not just within regions.  This means that `r scales::percent(recs_des %>% group_by(interact(Region, ACUsed)) %>% summarize(p = survey_prop()) %>% filter(Region == "Northeast", ACUsed == "TRUE") %>% pull(p), accuracy = 0.1)` of the population lives in the Northeast and has A/C. As noted earlier, we can use both the `survey_prop()` and `survey_mean()` functions, and they produce the same results. \index{Functions in srvyr!interact|)} \index{Functions in srvyr!survey\_prop|)}
+
+#### Example 4: Overall mean {.unnumbered}
+
+Below, we calculate the estimated average cost of electricity in the U.S. using `survey_mean()`. To include both the standard error and the confidence interval, we can include them in the `vartype` argument: 
+
+```r
+#| label: desc-mn-oa
+recs_des %>%
+  summarize(elec_bill = survey_mean(DOLLAREL,
+                                    vartype = c("se", "ci")))
+```
+
+```r
+#| label: desc-mn-oa-save
+#| echo: FALSE
+.elbill_mn <- recs_des %>%
+  summarize(elec_bill = survey_mean(DOLLAREL,
+                                    vartype = c("se", "ci"))) %>%
+  mutate(across(starts_with("elec"), \(x) str_c(
+    "$", prettyNum(round(x, 0), big.mark = ",", digits = 6)
+  )))
+```
+
+Nationally, the average household spent `r pull(.elbill_mn, elec_bill)` in 2020.
+
+#### Example 5: Means by subgroup {.unnumbered}
+
+We can also calculate the estimated average cost of electricity in the U.S. by each region.  To do this, we include a `group_by()` function with the variable of interest before the `summarize()` function: 
+
+```r
+#| label: desc-mn-group
+recs_des %>%
+  group_by(Region) %>%
+  summarize(elec_bill = survey_mean(DOLLAREL))
+```
+
+```r
+#| label: desc-mn-group-save
+#| echo: FALSE
+.elbill_mn_reg <- recs_des %>%
+  group_by(Region) %>%
+  summarize(elec_bill = survey_mean(DOLLAREL)) %>%
+  mutate(across(starts_with("elec"), \(x) str_c(
+    "$", prettyNum(round(x, 0), big.mark = ",", digits = 6)
+  )))
+```
+
+Households from the West spent approximately `r .elbill_mn_reg %>% filter(Region=="West") %>% pull(elec_bill)`, while in the South, the average spending was `r .elbill_mn_reg %>% filter(Region=="South") %>% pull(elec_bill)`. \index{Functions in srvyr!survey\_mean|)} 
+
+## Quantiles and medians 
+
+\index{Functions in srvyr!survey\_median} \index{Functions in srvyr!survey\_quantile|(} \index{survey\_quantile|see {Functions in srvyr}} \index{Continuous data|(}
+To better understand the distribution of a continuous variable like income, we can calculate quantiles at specific points. For example, computing estimates of the quartiles (25%, 50%, 75%) helps us understand how income is spread across the population. We use the `survey_quantile()` function to calculate quantiles in survey data. 
+
+Medians are useful for finding the midpoint of a continuous distribution when the data are skewed, as medians are less affected by outliers compared to means. The median is the same as the 50th percentile, meaning the value where 50% of the data are higher and 50% are lower. Because medians are a special, common case of quantiles, we have a dedicated function called `survey_median()` for calculating the median in survey data. Alternatively, we can use the `survey_quantile()` function with the `quantiles` argument set to `0.5` to achieve the same result. \index{Continuous data|)}
+
+### Syntax
+
+The syntax for `survey_quantile()` and `survey_median()` are nearly identical: 
+
+```r
+survey_quantile(
+  x,
+  quantiles,
+  na.rm = FALSE,
+  vartype = c("se", "ci", "var", "cv"),
+  level = 0.95,
+  interval_type = 
+    c("mean", "beta", "xlogit", "asin", "score", "quantile"),
+  qrule = c("math", "school", "shahvaish", "hf1", "hf2", "hf3", 
+            "hf4", "hf5", "hf6", "hf7", "hf8", "hf9"),
+  df = NULL
+)
+
+survey_median(
+  x,
+  na.rm = FALSE,
+  vartype = c("se", "ci", "var", "cv"),
+  level = 0.95,
+  interval_type = 
+    c("mean", "beta", "xlogit", "asin", "score", "quantile"),
+  qrule = c("math", "school", "shahvaish", "hf1", "hf2", "hf3", 
+            "hf4", "hf5", "hf6", "hf7", "hf8", "hf9"),
+  df = NULL
+)
+```
+
+The arguments available in both functions are:
+
+  * `x`: a variable, expression, or empty
+  * `na.rm`: an indicator of whether missing values should be dropped, defaults to `FALSE`
+  * `vartype`: type(s) of variation estimate to calculate, defaults to `se` (standard error)
+  * `level`: a number or a vector indicating the confidence level, defaults to 0.95
+  * `interval_type`: method for calculating a confidence interval
+  * `qrule`: rule for defining quantiles. The default is the lower end of the quantile interval ("math"). The midpoint of the quantile interval is the "school" rule. "hf1" to "hf9" are weighted analogs to type=1 to 9 in `quantile()`. "shahvaish" corresponds to a rule proposed by @shahvaish. See `vignette("qrule", package="survey")` for more information.
+  * \index{Degrees of freedom|(}`df`: (for `vartype = 'ci'`), a numeric value indicating degrees of freedom for the t-distribution\index{Degrees of freedom|)}
+
+The only difference between `survey_quantile()` and `survey_median()` is the inclusion of the `quantiles` argument in the `survey_quantile()` function. This argument takes a vector with values between 0 and 1 to indicate which quantiles to calculate. For example, if we wanted the quartiles of a variable, we would provide `quantiles = c(0.25, 0.5, 0.75)`. While we can specify quantiles of 0 and 1, which represent the minimum and maximum, this is not recommended. It only returns the minimum and maximum of the respondents and cannot be extrapolated to the population, as there is no valid definition of standard error. 
+
+In Section \@ref(desc-count-syntax), we provide an overview of the different variability types. The interval used in confidence intervals for most measures, such as means and counts, is referred to as a Wald-type interval. However, this is not always the most accurate interval for quantiles. Similar to confidence intervals for proportions, quantiles have various interval types, including asin, beta, mean, and xlogit (see Section \@ref(desc-meanprop-syntax)). Quantiles also have two more methods available:
+
+  * `score`: the Francisco and Fuller confidence interval based on inverting a score test (only available for design-based survey objects and not replicate-based objects)
+  * `quantile`: \index{Replicate weights|(} \index{Replicate weights!Jackknife|(}\index{Replicate weights!Bootstrap|(}\index{Bootstrap|see {Replicate weights}}\index{Replicate weights!Balanced repeated replication (BRR)|(}\index{Balanced repeated replication (BRR)|see {Replicate weights}} based on the replicates of the quantile. This is not valid for jackknife-type replicates but is available for bootstrap and BRR replicates.\index{Replicate weights|)}\index{Replicate weights!Jackknife|)}\index{Replicate weights!Bootstrap|)}\index{Replicate weights!Balanced repeated replication (BRR)|)}
+
+One note with the `score` method is that when there are numerous ties in the data, this method may produce confidence intervals that do not contain the estimate. When dealing with a high propensity for ties (e.g., many respondents are the same age), it is recommended to use another method. SUDAAN, for example, uses the `score` method but adds noise to the values to prevent issues. The documentation in the {survey} package indicates, in general, that the `score` method may have poorer performance compared to the beta and logit intervals [@lumley2010complex].
+
+### Examples
+
+#### Example 1: Overall quartiles {.unnumbered}
+
+Quantiles provide insights into the distribution of a variable. Let's look into the quartiles, specifically, the first quartile (p=0.25), the median (p=0.5), and the third quartile (p=0.75) of electric bills. 
+
+```r
+#| label: desc-quantile-oa
+#| eval: FALSE
+recs_des %>%
+  summarize(elec_bill = survey_quantile(DOLLAREL,
+                                        quantiles = c(0.25, .5, 0.75)))
+```
+
+```r
+#| label: desc-quantile-oa-print
+#| echo: FALSE
+recs_des %>%
+  summarize(elec_bill = survey_quantile(DOLLAREL,
+                                        quantiles = c(0.25, .5, 0.75))) %>%
+  print(width=Inf)
+```
+
+```r
+#| label: desc-quantile-oa-save
+#| echo: FALSE
+.elbill_quant <- recs_des %>%
+  summarize(elec_bill = survey_quantile(DOLLAREL,
+                                        quantiles = c(0.25, .5, 0.75))) %>%
+  mutate(
+    across(c(!ends_with("se")), \(x) str_c("$", prettyNum(
+    round(x, 0), big.mark = ","))),
+    across(c(ends_with("se")), \(x) str_c("$", prettyNum(
+    round(x, 2), big.mark = ",")))
+  )
+```
+
+The output above shows the values for the three quartiles of electric bill costs and their respective standard errors: the 25th percentile is `r .elbill_quant %>% pull(elec_bill_q25)` with a standard error of `r .elbill_quant %>% pull(elec_bill_q25_se)`, the 50th percentile (median) is `r .elbill_quant %>% pull(elec_bill_q50)` with a standard error of `r .elbill_quant %>% pull(elec_bill_q50_se)`, and the 75th percentile is `r .elbill_quant %>% pull(elec_bill_q75)` with a standard error of `r .elbill_quant %>% pull(elec_bill_q75_se)`.
+
+#### Example 2: Quartiles by subgroup {.unnumbered}
+
+We can estimate the quantiles of electric bills by region by using the `group_by()` function: 
+
+```r
+#| label: desc-quantile-reg
+#| eval: false
+recs_des %>%
+  group_by(Region) %>%
+  summarize(elec_bill = survey_quantile(DOLLAREL,
+                                        quantiles = c(0.25, .5, 0.75))) 
+```
+
+```r
+#| label: desc-quantile-reg-print
+#| echo: false
+recs_des %>%
+  group_by(Region) %>%
+  summarize(elec_bill = survey_quantile(DOLLAREL,
+                                        quantiles = c(0.25, .5, 0.75))) %>%
+  print(width = Inf)
+```
+
+```r
+#| label: desc-quantile-save
+#| echo: FALSE
+.elbill_quant_gp <- recs_des %>%
+  group_by(Region) %>%
+  summarize(elec_bill = survey_quantile(DOLLAREL,
+                                        quantiles = c(0.25, .5, 0.75))) %>%
+  mutate(
+    across(c(!ends_with("se") & where(is.numeric)), \(x) str_c("$", prettyNum(
+    round(x, 0), big.mark = ","))),
+    across(c(ends_with("se")), \(x) str_c("$", prettyNum(
+    round(x, 1), big.mark = ",")))
+  )
+```
+
+
+The 25th percentile for the Northeast region is `r .elbill_quant_gp %>% filter(Region=="Northeast") %>% pull(elec_bill_q25)`, while it is `r .elbill_quant_gp %>% filter(Region=="South") %>% pull(elec_bill_q25)` for the South.
+
+#### Example 3: Minimum and maximum {.unnumbered}
+
+As mentioned in the syntax section, we can specify quantiles of `0` (minimum) and `1` (maximum), and R calculates these values.  However, these are only the minimum and maximum values in the data, and there is not enough information to determine their standard errors: 
+
+```r
+#| label: desc-quantile-minmax
+recs_des %>%
+  summarize(elec_bill = survey_quantile(DOLLAREL,
+                                        quantiles = c(0, 1))) 
+
+```
+
+```r
+#| label: desc-quantile-minmax-save
+#| echo: FALSE
+.elbill_minmax <- recs_des %>%
+  summarize(elec_bill = survey_quantile(DOLLAREL,
+                                        quantiles = c(0, 1))) %>%
+    mutate(
+        across(!ends_with("se"), \(x) scales::dollar(round(x), format="d"))
+
+  )
+```
+
+The minimum cost of electricity in the dataset is -`r .elbill_minmax %>% pull(elec_bill_q00)`, while the maximum is `r .elbill_minmax %>% pull(elec_bill_q100)`, but the standard error is shown as `NaN` and `0`, respectively. Notice that the minimum cost is a negative number. This may be surprising, but some housing units with solar power sell their energy back to the grid and earn money, which is recorded as a negative expenditure.
+
+#### Example 4: Overall median {.unnumbered}
+
+We can calculate the estimated median cost of electricity in the U.S. using the `survey_median()` function: 
+
+```r
+#| label: desc-med-oa
+recs_des %>%
+  summarize(elec_bill = survey_median(DOLLAREL))
+```
+
+```r
+#| label: desc-med-oa-save
+#| echo: FALSE
+.elbill_med <- recs_des %>%
+  summarize(elec_bill = survey_median(DOLLAREL)) %>%
+  mutate(across(starts_with("elec"), \(x) str_c(
+    "$", prettyNum(round(x, 0), big.mark = ",", digits = 6)
+  )))
+```
+
+Nationally, the median household spent `r pull(.elbill_med, elec_bill)` in 2020. This is the same result as we obtained using the `survey_quantile()` function. Interestingly, the average electric bill for households that we calculated in Section \@ref(desc-meanprop) is `r pull(.elbill_mn, elec_bill)`, but the estimated median electric bill is `r pull(.elbill_med, elec_bill)`,  indicating the distribution is likely right-skewed. \index{Functions in srvyr!survey\_quantile|)}
+
+#### Example 5: Medians by subgroup {.unnumbered}
+
+We can calculate the estimated median cost of electricity in the U.S. by region using the `group_by()` function with the variable(s) of interest before the `summarize()` function, similar to when we found the mean by region. 
+
+```r
+#| label: desc-med-group
+recs_des %>%
+  group_by(Region) %>%
+  summarize(elec_bill = survey_median(DOLLAREL))
+```
+
+```r
+#| label: desc-med-group-save
+#| echo: FALSE
+.elbill_med_reg <- recs_des %>%
+  group_by(Region) %>%
+  summarize(elec_bill = survey_median(DOLLAREL)) %>%
+  mutate(across(starts_with("elec"), \(x) str_c(
+    "$", prettyNum(round(x, 0), big.mark = ",", digits = 6)
+  )))
+```
+
+We estimate that households in the Northeast spent a median of `r .elbill_med_reg %>% filter(Region=="Northeast") %>% pull(elec_bill)` on electricity, and in the South, they spent a median of `r .elbill_med_reg %>% filter(Region=="South") %>% pull(elec_bill)`. \index{Functions in srvyr!survey\_median|)} \index{Central tendency|)}
+
+## Ratios \index{Functions in srvyr!survey\_ratio|(} \index{survey\_ratio|see {Functions in srvyr}} \index{Relationship|(}
+
+A ratio is a measure of the ratio of the sum of two variables, specifically in the form of:
+
+$$ \frac{\sum x_i}{\sum y_i}.$$
+Note that the ratio is not the same as calculating the following:
+
+$$ \frac{1}{N} \sum \frac{x_i}{y_i} $$
+which can be calculated with \index{Functions in srvyr!survey\_mean|(}`survey_mean()` by creating a derived variable $z=x/y$ and then calculating the mean of $z$. 
+
+Say we wanted to assess the energy efficiency of homes in a standardized way, where we can compare homes of different sizes. We can calculate the ratio of energy consumption to the square footage of a home. This helps us meaningfully compare homes of different sizes by identifying how much energy is being used per unit of space. To calculate this ratio, we would run `survey_ratio(Energy Consumption in BTUs, Square Footage of Home)`. If, instead, we used `survey_mean(Energy Consumption in BTUs/Square Footage of Home)`, we would estimate the average energy consumption per square foot of all surveyed homes. While helpful in understanding general energy use, this statistic does not account for differences in home sizes.  
+
+### Syntax
+
+The syntax for `survey_ratio()` is as follows:
+
+```r
+survey_ratio(
+  numerator,
+  denominator,
+  na.rm = FALSE,
+  vartype = c("se", "ci", "var", "cv"),
+  level = 0.95,
+  deff = FALSE,
+  df = NULL
+)
+```
+
+The arguments are:
+
+  * `numerator`: The numerator of the ratio
+  * `denominator`: The denominator of the ratio
+  * `na.rm`: A logical value to indicate whether missing values should be dropped
+  * `vartype`: type(s) of variation estimate to calculate including any of `c("se", "ci", "var", "cv")`, defaults to `se` (standard error) (see Section \@ref(desc-count-syntax) for more information)
+  * `level`: A single number or vector of numbers indicating the confidence level
+  * `deff`: A logical value to indicate whether the design effect should be returned (this is described in more detail in Section \@ref(desc-deff))
+  * \index{Degrees of freedom|(}`df`: (For vartype = "ci" only) A numeric value indicating the degrees of freedom for t-distribution\index{Degrees of freedom|)}
+
+### Examples
+
+#### Example 1: Overall ratios {.unnumbered}
+
+Suppose we wanted to find the ratio of dollars spent on liquid propane per unit (in British thermal unit [Btu]) nationally^[The value of `DOLLARLP` reflects the annualized amount spent on liquid propane and `BTULP` reflects the annualized consumption in Btu of liquid propane [@recs-svy].]. To find the average cost to a household, we can use `survey_mean()`. However, to find the national unit rate, we can use `survey_ratio()`. In the following example, we show both methods and discuss the interpretation of each: 
+
+```r
+#| label: desc-ratio-1
+#| eval: false
+recs_des %>%
+  summarize(
+    DOLLARLP_Tot = survey_total(DOLLARLP, vartype = NULL),
+    BTULP_Tot = survey_total(BTULP, vartype = NULL),
+    DOL_BTU_Rat = survey_ratio(DOLLARLP, BTULP),
+    DOL_BTU_Avg = survey_mean(DOLLARLP / BTULP, na.rm = TRUE)
+  )
+```
+
+```r
+#| label: desc-ratio-1-print
+#| echo: false
+recs_des %>%
+  summarize(
+    DOLLARLP_Tot = survey_total(DOLLARLP, vartype = NULL),
+    BTULP_Tot = survey_total(BTULP, vartype = NULL),
+    DOL_BTU_Rat = survey_ratio(DOLLARLP, BTULP),
+    DOL_BTU_Avg = survey_mean(DOLLARLP / BTULP, na.rm = TRUE)
+  ) %>%
+  print(width = Inf)
+```
+\index{Functions in srvyr!survey\_mean|)}
+
+```r
+#| label: desc-ratio-1-save
+#| echo: FALSE
+.rat_out <- recs_des %>%
+  summarize(
+    DOLLARLP_Tot = survey_total(DOLLARLP),
+    BTULP_Tot = survey_total(BTULP),
+    DOL_BTU_Rat = survey_ratio(DOLLARLP, BTULP),
+    DOL_BTU_Avg = survey_mean(DOLLARLP / BTULP, na.rm = TRUE),
+  )
+
+num <-
+  pull(.rat_out, DOLLARLP_Tot) %>% formatC(big.mark = ",",
+                                           digits = 0,
+                                           format = "f")
+
+den <-
+  pull(.rat_out, BTULP_Tot) %>% formatC(big.mark = ",",
+                                        digits = 0,
+                                        format = "f")
+
+rat <- pull(.rat_out, DOL_BTU_Rat) %>% signif(3)
+
+avg <- pull(.rat_out, DOL_BTU_Avg) %>% signif(3)
+```
+
+The ratio of the total spent on liquid propane to the total consumption was `r rat`, but the average rate was `r avg`. With a bit of calculation, we can show that the ratio is the ratio of the totals `DOLLARLP_Tot`/`BTULP_Tot`=`r num`/`r den`=`r rat`. Although the estimated ratio can be calculated manually in this manner, the standard error requires the use of the `survey_ratio()` function. The average can be interpreted as the average rate paid by a household.
+
+#### Example 2: Ratios by subgroup {.unnumbered}
+
+As previously done with other estimates, we can use `group_by()` to examine whether this ratio varies by region. 
+
+```r
+#| label: desc-ratio-2
+recs_des %>%
+  group_by(Region) %>%
+  summarize(DOL_BTU_Rat = survey_ratio(DOLLARLP, BTULP)) %>%
+  arrange(DOL_BTU_Rat)
+```
+
+Although not a formal statistical test, it appears that the cost ratios for liquid propane are the lowest in the Midwest (`r round(recs_des %>% group_by(Region) %>% summarize(DOL_BTU_Rat = survey_ratio(DOLLARLP, BTULP)) %>% filter(Region == "Midwest") %>% pull(DOL_BTU_Rat), 4)`). \index{Functions in srvyr!survey\_ratio|)}
+
+## Correlations \index{Functions in srvyr!survey\_corr|(} \index{survey\_corr|see {Functions in srvyr}}
+
+\index{Continuous data|(}
+The correlation is a measure of the linear relationship between two continuous variables, which ranges between --1 and 1. The most commonly used method is Pearson's correlation (referred to as correlation henceforth). A sample correlation for a simple random sample is calculated as follows:
+
+$$\frac{\sum (x_i-\bar{x})(y_i-\bar{y})}{\sqrt{\sum (x_i-\bar{x})^2} \sqrt{\sum(y_i-\bar{y})^2}} $$
+
+When using `survey_corr()` for designs other than a simple random sample, the weights are applied when estimating the correlation. 
+\index{Continuous data|)}
+
+### Syntax
+
+The syntax for `survey_corr()` is as follows:
+
+```r
+survey_corr(
+  x,
+  y,
+  na.rm = FALSE,
+  vartype = c("se", "ci", "var", "cv"),
+  level = 0.95,
+  df = NULL
+)
+```
+
+The arguments are:
+
+  * `x`: A variable or expression
+  * `y`: A variable or expression
+  * `na.rm`: A logical value to indicate whether missing values should be dropped
+  * `vartype`: Type(s) of variation estimate to calculate including any of `c("se", "ci", "var", "cv")`, defaults to `se` (standard error) (see Section \@ref(desc-count-syntax) for more information)
+  * `level`: (For vartype = "ci" only) A single number or vector of numbers indicating the confidence level
+  * \index{Degrees of freedom|(}`df`: (For vartype = "ci" only) A numeric value indicating the degrees of freedom for t-distribution\index{Degrees of freedom|)}
+
+### Examples
+
+#### Example 1: Overall correlation {.unnumbered}
+
+We can calculate the correlation between the total square footage of homes (`TOTSQFT_EN`)^[Question text: "What is the square footage of your home?" [@recs-svy]] and electricity consumption (`BTUEL`)^[`BTUEL` is derived from the supplier side component of the survey where `BTUEL` represents the electricity consumption in British thermal units (Btus) converted from kilowatt hours (kWh) in a year [@recs-svy].].
+
+```r
+#| label: desc-corr-1
+#| warning: FALSE
+recs_des %>%
+  summarize(SQFT_Elec_Corr = survey_corr(TOTSQFT_EN, BTUEL))
+```
+
+The correlation between the total square footage of homes and electricity consumption is `r recs_des %>% summarize(SQFT_Elec_Corr = survey_corr(TOTSQFT_EN, BTUEL)) %>% pull(SQFT_Elec_Corr) %>% round(3)`, indicating a moderate positive relationship.
+
+#### Example 2: Correlations by subgroup {.unnumbered}
+
+We can explore the correlation between total square footage and electricity consumption based on subgroups, such as whether A/C is used (`ACUsed`).
+
+```r
+#| label: desc-corr-2
+#| warning: FALSE
+recs_des %>%
+  group_by(ACUsed) %>%
+  summarize(SQFT_Elec_Corr = survey_corr(TOTSQFT_EN, DOLLAREL))
+```
+
+For homes without A/C, there is a small positive correlation between total square footage with electricity consumption (`r recs_des %>% group_by(ACUsed) %>% summarize(SQFT_Elec_Corr = survey_corr(TOTSQFT_EN, DOLLAREL)) %>% filter(ACUsed == FALSE) %>% pull(SQFT_Elec_Corr) %>% round(3)`). For homes with A/C, the correlation of `r recs_des %>% group_by(ACUsed) %>% summarize(SQFT_Elec_Corr = survey_corr(TOTSQFT_EN, DOLLAREL)) %>% filter(ACUsed == TRUE) %>% pull(SQFT_Elec_Corr) %>% round(3)` indicates a stronger positive correlation between total square footage and electricity consumption. \index{Functions in srvyr!survey\_corr|)} \index{Relationship|)}
+
+## Standard deviation and variance \index{Functions in srvyr!survey\_sd|(} \index{Functions in srvyr!survey\_var|(} \index{survey\_sd|see {Functions in srvyr}} \index{survey\_var|see {Functions in srvyr}}
+
+\index{Measures of dispersion|(}
+All survey functions produce an estimate of the variability of a given estimate.  No additional function is needed when dealing with variable estimates. However, if we are specifically interested in population variance and standard deviation, we can use the `survey_var()` and `survey_sd()` functions. In our experience, it is not common practice to use these functions. They can be used when designing a future study to gauge population variability and inform sampling precision. 
+
+### Syntax
+
+As with non-survey data, the standard deviation estimate is the square root of the variance estimate. Therefore, the `survey_var()` and `survey_sd()` functions share the same arguments, except the standard deviation does not allow the usage of `vartype`. 
+
+```r
+survey_var(
+  x,
+  na.rm = FALSE,
+  vartype = c("se", "ci", "var"),
+  level = 0.95,
+  df = NULL
+)
+
+survey_sd(
+  x, 
+  na.rm = FALSE
+)
+```
+
+The arguments are:
+
+  * `x`: A variable or expression, or empty
+  * `na.rm`: A logical value to indicate whether missing values should be dropped
+  * `vartype`: Type(s) of variation estimate to calculate including any of `c("se", "ci", "var")`, defaults to `se` (standard error) (see Section \@ref(desc-count-syntax) for more information)
+  * `level`: (For vartype = "ci" only) A single number or vector of numbers indicating the confidence level
+  * \index{Degrees of freedom|(}`df`: (For vartype = "ci" only) A numeric value indicating the degrees of freedom for t-distribution\index{Degrees of freedom|)}
+
+### Examples
+
+#### Example 1: Overall variability {.unnumbered}
+
+Let's return to electricity bills and explore the variability in electricity expenditure. 
+
+```r
+#| label: desc-sdvar-ex1
+#| warning: FALSE
+recs_des %>%
+  summarize(var_elbill = survey_var(DOLLAREL),
+            sd_elbill = survey_sd(DOLLAREL))
+```
+
+We may encounter a warning related to deprecated underlying calculations performed by the `survey_var()` function. This warning is a result of changes in the way R handles recycling in vectorized operations. The results are still valid. They give an estimate of the population variance of electricity bills (`var_elbill`), the standard error of that variance (`var_elbill_se`), and the estimated population standard deviation of electricity bills (`sd_elbill`). Note that no standard error is associated with the standard deviation; this is the only estimate that does not include a standard error. 
+
+#### Example 2: Variability by subgroup {.unnumbered}
+
+To find out if the variability in electricity expenditure is similar across regions, we can calculate the variance by region using `group_by()`:  
+
+```r
+#| label: desc-sdvar-ex2
+#| warning: false
+recs_des %>%
+  group_by(Region) %>%
+  summarize(var_elbill = survey_var(DOLLAREL),
+            sd_elbill = survey_sd(DOLLAREL))
+```
+\index{Functions in srvyr!survey\_sd|)} \index{Functions in srvyr!survey\_var|)} \index{Measures of dispersion|)}
+
+## Additional topics
+
+### Unweighted analysis \index{Functions in srvyr!unweighted|(} \index{unweighted|see {Functions in srvyr}}
+
+Sometimes, it is helpful to calculate an unweighted estimate of a given variable. For this, we use the `unweighted()` function in the `summarize()` function. The `unweighted()` function calculates unweighted summaries from a `tbl_svy` object, providing the summary among the respondents without extrapolating to a population estimate. The `unweighted()` function can be used in conjunction with any {dplyr} functions. Here is an example looking at the average household electricity cost: \index{Functions in srvyr!survey\_mean|(} 
+
+```r
+#| label: desc-mn-unwgt
+#| warning: false
+recs_des %>%
+  summarize(elec_bill = survey_mean(DOLLAREL),
+            elec_unweight = unweighted(mean(DOLLAREL)))
+```
+\index{Functions in srvyr!survey\_mean|)}
+
+```r
+#| label: desc-mn-unwgt-save
+#| echo: FALSE
+.elbill_mn_unwgt <- recs_des %>%
+  summarize(elec_bill = survey_mean(DOLLAREL),
+            elec_unweight = unweighted(mean(DOLLAREL))) %>%
+  mutate(
+    across(c(elec_bill, elec_unweight), \(x) str_c(
+    "$", formatC(
+      x,
+      big.mark = ",",
+      format = "f",
+      digits = 0
+    ))),
+    across(c(elec_bill_se), \(x) str_c(
+    "$", formatC(
+      x,
+      big.mark = ",",
+      format = "f",
+      digits = 2
+    )))
+  )
+```
+
+It is estimated that American residential households spent an average of `r .elbill_mn_unwgt %>% pull(elec_bill)` on electricity in 2020, and the estimate has a standard error of `r .elbill_mn_unwgt %>% pull(elec_bill_se)`. The `unweighted()` function calculates the unweighted average and represents the average amount of money spent on electricity in 2020 by the respondents, which was `r .elbill_mn_unwgt %>% pull(elec_unweight)`.  \index{Functions in srvyr!unweighted|)} 
+
+### Subpopulation analysis \index{Functions in srvyr!filter|(} \index{filter|see {Functions in srvyr}}
+
+\index{Subpopulation|(}\index{Domain|see {Subpopulation}}
+We mentioned using `filter()` to subset a survey object for analysis. This operation should be done after creating the survey design object. \index{Primary sampling unit|(}Subsetting data before creating the object can lead to incorrect variability estimates, if subsetting removes an entire Primary Sampling Unit (PSU; see Chapter \@ref(c10-sample-designs-replicate-weights) for more information on PSUs and sample designs). \index{Primary sampling unit|)}
+
+Suppose we want estimates of the average amount spent on natural gas among housing units using natural gas (based on the variable `BTUNG`)^[`BTUNG` is derived from the supplier side component of the survey where `BTUNG` represents the natural gas consumption in British thermal units (Btus) in a year [@recs-svy].]. We first filter records to only include records where `BTUNG > 0` and then find the average amount spent.
+
+```r
+#| label: desc-subpop
+recs_des %>%
+  filter(BTUNG > 0) %>%
+  summarize(NG_mean = survey_mean(DOLLARNG,
+                                  vartype = c("se", "ci")))
+```
+
+The estimated average amount spent on natural gas among households that use natural gas is `r recs_des %>% filter(BTUNG > 0) %>% summarize(NG_mean = survey_mean(DOLLARNG, vartype = c("se", "ci"))) %>% mutate(NG_mean =round(NG_mean )) %>% pull(NG_mean) %>% scales::dollar()`. Let's compare this to the mean when we do not filter. 
+
+```r
+#| label: desc-subpop-2
+recs_des %>%
+  summarize(NG_mean = survey_mean(DOLLARNG,
+                                  vartype = c("se", "ci")))
+```
+
+Based on this calculation, the estimated average amount spent on natural gas is `r recs_des  %>% summarize(NG_mean = survey_mean(DOLLARNG, vartype = c("se", "ci"))) %>% mutate(NG_mean =round(NG_mean )) %>% pull(NG_mean) %>% scales::dollar()`. Note that applying the filter to include only housing units that use natural gas yields a higher mean than when not applying the filter. This is because including housing units that do not use natural gas introduces many \$0 amounts, impacting the mean calculation.
+
+### Design effects {#desc-deff}
+
+The design effect measures how the precision of an estimate is influenced by the sampling design. In other words, it measures how much more or less statistically efficient the survey design is compared to a simple random sample (SRS). It is computed by taking the ratio of the estimate's variance under the design at hand to the estimate's variance under a simple random sample without replacement. \index{Stratified sampling|(}A design effect less than 1 indicates that the design is more statistically efficient than an SRS design, which is rare but possible in a stratified sampling design where the outcome correlates with the stratification variable(s).\index{Stratified sampling|)} A design effect greater than 1 indicates that the design is less statistically efficient than an SRS design. From a design effect, we can calculate the effective sample size as follows:
+
+$$n_{eff}=\frac{n}{D_{eff}} $$
+
+where $n$ is the nominal sample size (the number of survey responses) and $D_{eff}$ is the estimated design effect. We can interpret the effective sample size $n_{eff}$ as the hypothetical sample size that a survey using an SRS design would need to achieve the same precision as the design at hand. Design effects specific to each outcome --- outcomes that are less clustered in the population have smaller design effects than outcomes that are clustered.
+
+In the {srvyr} package, design effects can be calculated for totals, proportions, means, and ratio estimates by setting the `deff` argument to `TRUE` in the corresponding functions. In the example below, we calculate the design effects for the average consumption of electricity (`BTUEL`), natural gas (`BTUNG`), liquid propane (`BTULP`), fuel oil (`BTUFO`), and wood (`BTUWOOD`) by setting `deff = TRUE`: 
+
+```r
+#| label: desc-deff
+recs_des %>%
+  summarize(across(
+    c(BTUEL, BTUNG, BTULP, BTUFO, BTUWOOD),
+    ~ survey_mean(.x, deff = TRUE, vartype = NULL)
+  )) %>%
+  select(ends_with("deff"))
+```
+
+For the values less than 1 (`BTUEL_deff` and `BTUFO_deff`), the results suggest that the survey design is more efficient than a simple random sample. For the values greater than 1 (`BTUNG_deff`, `BTULP_deff`, and `BTUWOOD_deff`), the results indicate that the survey design is less efficient than a simple random sample.
+
+\index{Design effect|)}
+
+### Creating summary rows 
+
+\index{Functions in srvyr!cascade|(} \index{cascade|see {Functions in srvyr}}
+
+When using `group_by()` in analysis, the results are returned with a row for each group or combination of groups. Often, we want both breakdowns by group and a summary row for the estimate representing the entire population. For example, we may want the average electricity consumption by region and nationally. The {srvyr} package has the convenient `cascade()` function, which adds summary rows for the total of a group. It is used instead of `summarize()` and has similar functionalities along with some additional features. 
+
+#### Syntax {.unnumbered}
+
+The syntax is as follows:
+
+```
+cascade(
+  .data, 
+  ..., 
+  .fill = NA, 
+  .fill_level_top = FALSE, 
+  .groupings = NULL
+)
+```
+
+where the arguments are:
+
+* `.data`: A `tbl_svy` object
+* `...`: Name-value pairs of summary functions (same as the `summarize()` function)
+* `.fill`: Value to fill in for group summaries (defaults to `NA`)
+* `.fill_level_top`: When filling factor variables, whether to put the value '.fill' in the first position (defaults to FALSE, placing it in the bottom)
+
+#### Example {.unnumbered}
+
+First, let's look at an example where we calculate the average household electricity cost. Then, we build on it to examine the features of the `cascade()` function. In the first example below, we calculate the average household energy cost `DOLLAREL_mn` using `survey_mean()` without modifying any of the argument defaults in the function: \index{Functions in srvyr!survey\_mean|(} 
+
+```r
+#| label: desc-casc-ex1
+recs_des %>%
+  cascade(DOLLAREL_mn = survey_mean(DOLLAREL))
+```
+
+Next, let's group the results by region by adding `group_by()` before the `cascade()` function: 
+
+```r
+#| label: desc-casc-ex2
+recs_des %>%
+  group_by(Region) %>%
+  cascade(DOLLAREL_mn = survey_mean(DOLLAREL))
+```
+
+```r
+#| label: desc-casc-ex2-save
+#| echo: false
+.ebill_reg_cascade <- recs_des %>%
+  group_by(Region) %>%
+  cascade(DOLLAREL_mn = survey_mean(DOLLAREL)) %>%
+  mutate(
+        across(c(DOLLAREL_mn), \(x) str_c(
+    "$", formatC(
+      x,
+      big.mark = ",",
+      format = "f",
+      digits = 0
+    )))
+  )
+```
+
+We can see the estimated average electricity bills by region: `r .ebill_reg_cascade %>% filter(Region=="Northeast") %>% pull(DOLLAREL_mn)` for the Northeast, `r .ebill_reg_cascade %>% filter(Region=="South") %>% pull(DOLLAREL_mn)` for the South, and so on. The last row, where `Region = NA`, is the national average electricity bill, `r .ebill_reg_cascade %>% filter(is.na(Region)) %>% pull(DOLLAREL_mn)`. However, naming the national "region" as `NA` is not very informative. We can give it a better name using the `.fill` argument. 
+
+```r
+#| label: desc-casc-ex3
+recs_des %>%
+  group_by(Region) %>%
+  cascade(DOLLAREL_mn = survey_mean(DOLLAREL),
+          .fill = "National")
+```
+
+We can move the summary row to the first row by adding `.fill_level_top = TRUE` to `cascade()`: 
+
+```r
+#| label: desc-casc-ex4
+recs_des %>%
+  group_by(Region) %>%
+  cascade(
+    DOLLAREL_mn = survey_mean(DOLLAREL),
+    .fill = "National",
+    .fill_level_top = TRUE
+  )
+```
+
+While the results remain the same, the table is now easier to interpret. \index{Functions in srvyr!cascade|)} \index{Functions in srvyr!survey\_mean|)}
+
+### Calculating estimates for many outcomes
+
+Often, we are interested in a summary statistic across many variables. Useful tools include the `across()` function in {dplyr}, shown a few times above, and the `map()` function in {purrr}.
+
+The `across()` function applies the same function to multiple columns within `summarize()`. This works well with all functions shown above, except for `survey_prop()`. In a later example, we tackle summarizing multiple proportions.
+
+#### Example 1: `across()` {.unnumbered}
+
+Suppose we want to calculate the total and average consumption, along with coefficients of variation (CV), for each fuel type. These include the reported consumption of electricity (`BTUEL`), natural gas (`BTUNG`), liquid propane (`BTULP`), fuel oil (`BTUFO`), and wood (`BTUWOOD`), as mentioned in the section on design effects. We can take advantage of the fact that these are the only variables that start with "BTU" by selecting them with `starts_with("BTU")` in the `across()` function. For each selected column (`.x`), `across()` creates a list of two functions to be applied: `survey_total()` to calculate the total and \index{Functions in srvyr!survey\_mean|(}`survey_mean()` to calculate the mean, along with their CV (`vartype = "cv"`). Finally, `.unpack = "{outer}.{inner}"` specifies that the resulting column names are a concatenation of the variable name, followed by Total or Mean, and then "coef" or "cv."  
+
+```r
+#| label: desc-multi-1
+consumption_ests <- recs_des %>%
+  summarize(across(
+    starts_with("BTU"),
+    list(
+      Total =  ~ survey_total(.x, vartype = "cv"),
+      Mean =  ~ survey_mean(.x, vartype = "cv")
+    ),
+    .unpack = "{outer}.{inner}"
+  ))
+
+consumption_ests 
+```
+\index{Functions in srvyr!survey\_mean|)}
+
+The estimated total consumption of electricity (`BTUEL`) is `r scales::comma(consumption_ests %>% pull(BTUEL_Total.coef))` (`BTUEL_Total.coef`), the estimated average consumption is `r scales::comma(consumption_ests %>% pull(BTUEL_Mean.coef))` (`BTUEL_Mean.coef`), and the CV is `r round(consumption_ests %>% pull(BTUEL_Total._cv), 5)`.
+
+In the example above, the table was quite wide. We may prefer a row for each fuel type. Using the `pivot_longer()` and `pivot_wider()` functions from {tidyr} can help us achieve this. First, we use `pivot_longer()` to make each variable a column, changing the data to a "long" format. We use the `names_to` argument to specify new column names: `FuelType`, `Stat`, and `Type`. Then, the `names_pattern` argument extracts the names in the original column names based on the regular expression pattern `BTU(.*)_(.*)\\.(.*)`. They are saved in the column names defined in `names_to`.
+
+```r
+#| label: desc-multi-2
+consumption_ests_long <- consumption_ests %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = c("FuelType", "Stat", "Type"),
+    names_pattern = "BTU(.*)_(.*)\\.(.*)"
+  )
+
+consumption_ests_long
+```
+
+Then, we use `pivot_wider()` to create a table that is nearly ready for publication. Within the function, we can make the names for each element more descriptive and informative by gluing the `Stat` and `Type` together with `names_glue`. Further details on creating publication-ready tables are covered in Chapter \@ref(c08-communicating-results).
+
+```r
+#| label: desc-multi-4
+consumption_ests_long %>%
+  mutate(Type = case_when(Type == "coef" ~ "",
+                          Type == "_cv" ~ " (CV)")) %>%
+  pivot_wider(
+    id_cols = FuelType,
+    names_from = c(Stat, Type),
+    names_glue = "{Stat}{Type}",
+    values_from = value
+  )
+```
+
+
+
+#### Example 2: Proportions with `across()` {.unnumbered}
+
+As mentioned earlier, proportions do not work as well directly with the `across()` method. If we want the proportion of houses with A/C and the proportion of houses with heating, we require two separate `group_by()` statements as shown below:
+
+```r
+#| label: desc-multip-1
+recs_des %>%
+  group_by(ACUsed) %>%
+  summarize(p = survey_prop())
+
+recs_des %>%
+  group_by(SpaceHeatingUsed) %>%
+  summarize(p = survey_prop())
+```
+
+We estimate `r scales::percent(recs_des %>% group_by(ACUsed) %>% summarize(p = survey_prop()) %>% filter(ACUsed == TRUE) %>% pull(p), accuracy = 0.1)` of households have A/C and `r scales::percent(recs_des %>% group_by(SpaceHeatingUsed) %>% summarize(p = survey_prop()) %>% filter(SpaceHeatingUsed == TRUE) %>% pull(p), accuracy = 0.1)` have heating.
+
+If we are only interested in the `TRUE` outcomes, that is, the proportion of households that have A/C and the proportion that have heating, we can simplify the code. \index{Functions in srvyr!survey\_mean|(} Applying `survey_mean()` to a logical variable is the same as using `survey_prop()`, as shown below: 
+
+```r
+#| label: desc-multip-2
+cool_heat_tab <- recs_des %>%
+  summarize(across(c(ACUsed, SpaceHeatingUsed), ~ survey_mean(.x),
+                   .unpack = "{outer}.{inner}"))
+
+cool_heat_tab
+```
+\index{Functions in srvyr!survey\_mean|)} 
+
+Note that the estimates are the same as those obtained using the separate `group_by()` statements. As before, we can use `pivot_longer()` to structure the table in a more suitable format for distribution.
+
+```r
+#| label: desc-multip-3
+cool_heat_tab %>%
+  pivot_longer(everything(),
+               names_to = c("Comfort", ".value"),
+               names_pattern = "(.*)\\.(.*)") %>%
+  rename(p = coef,
+         se = `_se`)
+```
+\index{Residential Energy Consumption Survey (RECS)|)}
+
+#### Example 3: `purrr::map()` {.unnumbered}
+
+Loops are a common tool when dealing with repetitive calculations. The {purrr} package provides the `map()` functions, which, like a loop, allow us to perform the same task across different elements [@R-purrr]. In our case, we may want to calculate proportions from the same design multiple times. A straightforward approach is to design the calculation for one variable, build a function based on that, and then apply it iteratively for the rest of the variables.
+
+\index{American National Election Studies (ANES)|(}
+Suppose we want to create a table that shows the proportion of people who express trust in their government (`TrustGovernment`)^[Question text: "How often can you trust the federal government in Washington to do what is right? (Always, most of the time, about half the time, some of the time, or never)" [@anes-svy]] as well as those that trust in people (`TrustPeople`)^[Question text: "Generally speaking, how often can you trust other people? (Always, most of the time, about half the time, some of the time, or never)" [@anes-svy]] using data from the 2020 ANES.
+
+First, we create a table for a single variable. The table includes the variable name as a column, the response, and the corresponding percentage with its standard error.  \index{Functions in srvyr!drop\_na|(} \index{drop\_na|see {Functions in srvyr}}
+
+```r
+#| label: desc-map-1
+anes_des %>%
+  drop_na(TrustGovernment) %>%
+  group_by(TrustGovernment) %>%
+  summarize(p = survey_prop() * 100) %>%
+  mutate(Variable = "TrustGovernment") %>%
+  rename(Answer = TrustGovernment) %>%
+  select(Variable, everything())
+```
+
+We estimate that `r scales::percent(anes_des %>% drop_na(TrustGovernment) %>%  group_by(TrustGovernment) %>% summarize(p = survey_prop()) %>% mutate(Variable = "TrustGovernment") %>% rename(Answer = TrustGovernment) %>% select(Variable, everything()) %>% filter(Answer == "Always") %>% pull(p), accuracy = 0.01)` of people always trust the government, `r scales::percent(anes_des %>% drop_na(TrustGovernment) %>%  group_by(TrustGovernment) %>% summarize(p = survey_prop()) %>% mutate(Variable = "TrustGovernment") %>% rename(Answer = TrustGovernment) %>% select(Variable, everything()) %>% filter(Answer == "Most of the time") %>% pull(p), accuracy = 0.01)` trust the government most of the time, and so on.
+
+Now, we want to use the original series of steps as a template to create a general function `calcps()` that can apply the same steps to other variables. We replace `TrustGovernment` with an argument for a generic variable, `var`. Referring to `var` involves a bit of tidy evaluation, an advanced skill. To learn more, we recommend @wickham2019advanced. 
+
+```r
+#| label: desc-map-2
+calcps <- function(var) {
+  anes_des %>%
+    drop_na(!!sym(var)) %>%
+    group_by(!!sym(var)) %>%
+    summarize(p = survey_prop() * 100) %>%
+    mutate(Variable = var) %>%
+    rename(Answer := !!sym(var)) %>%
+    select(Variable, everything())
+}
+```
+\index{Functions in srvyr!drop\_na|)} \index{Functions in srvyr!summarize|)} 
+
+We then apply this function to the two variables of interest, `TrustGovernment` and `TrustPeople`:
+
+```r
+#| label: desc-map-3
+calcps("TrustGovernment")
+calcps("TrustPeople")
+```
+
+Finally, we use `map()` to iterate over as many variables as needed. We feed our desired variables into `map()` along with our custom function, `calcps`. The output is a tibble with the variable names in the "Variable" column, the responses in the "Answer" column, along with the percentage and standard error. The `list_rbind()` function combines the rows into a single tibble. This example extends nicely when dealing with numerous variables for which we want percentage estimates.
+
+```r
+#| label: desc-map-4
+c("TrustGovernment", "TrustPeople") %>%
+  map(calcps) %>%
+  list_rbind()
+```
+
+In addition to our results above, we can also see the output for `TrustPeople`. While we estimate that `r scales::percent(anes_des %>% drop_na(TrustGovernment) %>%  group_by(TrustGovernment) %>% summarize(p = survey_prop()) %>% mutate(Variable = "TrustGovernment") %>% rename(Answer = TrustGovernment) %>% select(Variable, everything()) %>% filter(Answer == "Always") %>% pull(p), accuracy = 0.01)` of people always trust the government,  `r scales::percent(anes_des %>% drop_na(TrustPeople) %>%  group_by(TrustPeople) %>% summarize(p = survey_prop()) %>% mutate(Variable = "TrustPeople") %>% rename(Answer = TrustPeople) %>% select(Variable, everything()) %>% filter(Answer == "Always") %>% pull(p), accuracy = 0.01)` always trust people.
+\index{American National Election Studies (ANES)|)}
+
+## Exercises
+
+The exercises use the design objects `anes_des` and `recs_des` provided in the Prerequisites box at the beginning of the chapter.
+
+1. How many females have a graduate degree? Hint: The variables `Gender` and `Education` will be useful.
+
+2. What percentage of people identify as "Strong Democrat"? Hint: The variable `PartyID` indicates someone's party affiliation.
+
+3. What percentage of people who voted in the 2020 election identify as "Strong Republican"? Hint: The variable `VotedPres2020` indicates whether someone voted in 2020.
+
+4. What percentage of people voted in both the 2016 election and the 2020 election?  Include the logit confidence interval. Hint: The variable `VotedPres2016` indicates whether someone voted in 2016.
+
+5. What is the design effect for the proportion of people who voted early? Hint: The variable `EarlyVote2020` indicates whether someone voted early in 2020.
+
+6. What is the median temperature people set their thermostats to at night during the winter? Hint: The variable `WinterTempNight` indicates the temperature that people set their thermostat to in the winter at night.
+
+7. People sometimes set their temperature differently over different seasons and during the day. What median temperatures do people set their thermostats to in the summer and winter, both during the day and at night? Include confidence intervals. Hint: Use the variables `WinterTempDay`, `WinterTempNight`, `SummerTempDay`, and `SummerTempNight`.
+
+8. What is the correlation between the temperature that people set their temperature at during the night and during the day in the summer?
+
+9. What is the 1st, 2nd, and 3rd quartile of money spent on energy by Building America (BA) climate zone? Hint: `TOTALDOL` indicates the total amount spent on all fuel, and `ClimateRegion_BA` indicates the BA climate zones.

@@ -1,0 +1,566 @@
+---
+id: "tidysurvey/08-communicating-results"
+source: "tidysurvey"
+course: ""
+course_title: ""
+doc_type: "book"
+title: "(PART) Reporting"
+original: "08-communicating-results.Rmd"
+pages: 
+sha256: "bf530beffa6d88cdcdce76b686f4d41815157e22bdd7de695774ff2575ebe3b6"
+converted_by: "01_convert.R (no model)"
+converted_at: "2026-11-14T21:29:46"
+---
+
+# (PART) Reporting {-}
+
+# Communication of results {#c08-communicating-results}
+
+```r
+#| label: results-styler
+#| include: false
+knitr::opts_chunk$set(tidy = 'styler')
+```
+
+::: {.prereqbox-header}
+`r if (knitr:::is_html_output()) '### Prerequisites {- #prereq8}'`
+:::
+
+::: {.prereqbox data-latex="{Prerequisites}"}
+For this chapter, load the following packages:
+```r
+#| label: results-setup
+#| error: FALSE
+#| warning: FALSE
+#| message: FALSE
+library(tidyverse)
+library(survey) 
+library(srvyr) 
+library(srvyrexploR)
+library(gt)
+library(gtsummary)
+```
+
+We are using data from ANES as described in Chapter \@ref(c04-getting-started). As a reminder, here is the code to create the design objects for each to use throughout this chapter. For ANES, we need to adjust the weight so it sums to the population instead of the sample (see the ANES documentation and Chapter \@ref(c04-getting-started) for more information).
+
+```r
+#| label: results-anes-des
+#| eval: FALSE
+targetpop <- 231592693
+
+anes_adjwgt <- anes_2020 %>%
+  mutate(Weight = Weight / sum(Weight) * targetpop)
+
+anes_des <- anes_adjwgt %>%
+  as_survey_design(
+    weights = Weight,
+    strata = Stratum,
+    ids = VarUnit,
+    nest = TRUE
+  )
+```
+:::
+
+## Introduction
+
+After finishing the analysis and modeling, we proceed to the task of communicating the survey results. Our audience may range from seasoned researchers familiar with our survey data to newcomers encountering the information for the first time. We should aim to explain the methodology and analysis while presenting findings in an accessible way, and it is our responsibility to report information with care.
+
+Before beginning any dissemination of results, consider questions such as:
+
+  - How are we presenting results? Examples include a website, print, or other media. Based on the medium, we might limit or enhance the use of graphical representation. 
+  - What is the audience's familiarity with the study and/or data? Audiences can range from the general public to data experts. If we anticipate limited knowledge about the study, we should provide detailed descriptions (we discuss recommendations later in the chapter).
+  - What are we trying to communicate? It could be summary statistics, trends, patterns, or other insights. Tables may suit summary statistics, while plots are better at conveying trends and patterns.
+  - Is the audience accustomed to interpreting plots? If not, include explanatory text to guide them on how to interpret the plots effectively.
+  - What is the audience's statistical knowledge? If the audience does not have a strong statistics background, provide text on standard errors, confidence intervals, and other estimate types to enhance understanding.
+
+## Describing results through text
+
+As analysts, we often emphasize the data, and communicating results can sometimes be overlooked. To be effective communicators, we need to identify the appropriate information to share with our audience. Chapters \@ref(c02-overview-surveys) and \@ref(c03-survey-data-documentation) provide insights into factors we need to consider during analysis, and they remain relevant when presenting results to others.
+
+### Methodology
+
+If we are using existing data, methodologically sound surveys provide documentation about how the survey was fielded, the questionnaires, and other necessary information for analyses. \index{Population of interest|(}For example, the survey's methodology reports should include the population of interest, sampling procedures, response rates, questionnaire documentation, weighting, and a general overview of disclosure statements.\index{Population of interest|)} Many American organizations follow the American Association for Public Opinion Research's (AAPOR) [Transparency Initiative](https://aapor.org/standards-and-ethics/transparency-initiative). The AAPOR Transparency Initiative requires organizations to include specific details in their methodology, making it clear how we can and should analyze and interpret the results. Being transparent about these methods is vital for the scientific rigor of the field.
+
+The details provided in Chapter \@ref(c02-overview-surveys) about the survey process should be shared with the audience when presenting the results. When using publicly available data, like the examples in this book, we can often link to the methodology report in our final output. We should also provide high-level information for the audience to quickly grasp the context around the findings. For example, we can mention when and where the study was conducted, the population's age range, or other contextual details. This information helps the audience understand how generalizable the results are.
+
+Providing this material is especially important when no methodology report is available for the analyzed data. For example, if we conducted a new survey for a specific purpose, we should document and present all the pertinent information during the analysis and reporting process. Adhering to the AAPOR Transparency Initiative guidelines is a reliable method to guarantee that all essential information is communicated to the audience.
+
+### Analysis
+
+\index{American Community Survey (ACS)|(}
+Along with the survey methodology and weight calculations, we should also share our approach to preparing, cleaning, and analyzing the data. For example, in Chapter \@ref(c06-statistical-testing), we compared education distributions from the ANES survey to the American Community Survey (ACS). To make the comparison, we had to collapse the education categories provided in the ANES data to match the ACS. The process for this particular example may seem straightforward (like combining bachelor's and graduate degrees into a single category), but there are multiple ways to deal with the data. Our choice is just one of many. We should document both the original ANES question and response options and the steps we took to match them with ACS data. This transparency helps clarify our analysis to our audience.
+\index{American Community Survey (ACS)|)}
+
+\index{Missing data|(}
+Missing data is another instance where we want to be unambiguous and upfront with our audience. In this book, numerous examples and exercises remove missing data, as this is often the easiest way to handle them. However, there are circumstances where missing data holds substantive importance, and excluding them could introduce bias (see Chapter \@ref(c11-missing-data)). Being transparent about our handling of missing data is important to maintaining the integrity of our analysis and ensuring a comprehensive understanding of the results.
+\index{Missing data|)}
+
+### Results
+
+While tables and graphs are commonly used to communicate results, there are instances where text can be more effective in sharing information. Narrative details, such as context around point estimates or model coefficients, can go a long way in improving our communication. We have several strategies to effectively convey the significance of the data to the audience through text.
+
+First, we can highlight important data elements in a sentence using plain language. For example, if we were looking at election polling data conducted before an election, we could say:  
+
+> As of [DATE], an estimated XX% of registered U.S. voters say they will vote for [CANDIDATE NAME] for president in the [YEAR] general election.
+
+This sentence provides key pieces of information in a straightforward way:
+
+ 1. [DATE\]: Given that polling data are time-specific, providing the date of reference lets the audience know when these data were valid.
+ 2. Registered U.S. voters: This tells the audience who we surveyed, letting them know the population of interest.
+ 3. XX%: This part provides the estimated percentage of people voting for a specific candidate for a specific office.
+ 4. [YEAR] general election: Adding this gives more context about the election type and year. The estimate would take on a different meaning if we changed it to a primary election instead of a general election.
+ 
+We also included the word "estimated." When presenting aggregate survey results, we have errors around each estimate. We want to convey this uncertainty rather than talk in absolutes. Words like "estimated," "on average," or "around" can help communicate this uncertainty to the audience. Instead of saying "XX%," we can also say "XX% (+/- Y%)" to show the margin of error. Confidence intervals can also be incorporated into the text to assist readers.  
+
+Second, providing context and discussing the meaning behind a point estimate can help the audience glean some insight into why the data are important. For example, when comparing two values, it can be helpful to highlight if there are statistically significant differences and explain the impact and relevance of this information. This is where we should do our best to be mindful of biases and present the facts logically. 
+
+Keep in mind how we discuss these findings can greatly influence how the audience interprets them. If we include speculation, phrases like "the authors speculate" or "these findings may indicate," it relays the uncertainty around the notion while still lending a plausible solution. Additionally, we can present alternative viewpoints or competing discussion points to explain the uncertainty in the results.
+
+## Visualizing data
+
+Although discussing key findings in the text is important, presenting large amounts of data in tables or visualizations is often more digestible for the audience. Effectively combining text, tables, and graphs can be powerful in communicating results. This section provides examples of using the {gt}, {gtsummary}, and {ggplot2} packages to enhance the dissemination of results [@R-gt; @gtsummarysjo; @ggplot2wickham].
+
+### Tables
+
+\index{Publication-ready tables|see {gtsummary}} \index{Publication-ready tables|see {gt tables}} 
+
+Tables are a great way to provide a large amount of data when individual data points need to be examined. However, it is important to present tables in a reader-friendly format. Numbers should align, rows and columns should be easy to follow, and the table size should not compromise readability. Using key visualization techniques, we can create tables that are informative and nice to look at. \index{gt package|(}Many packages create easy-to-read tables (e.g., {kable} \+ {kableExtra}, {gt}, {gtsummary}, {DT}, {formattable}, {flextable}, {reactable}). We appreciate the flexibility, ability to use pipes (e.g., `%>%`), and numerous extensions of the {gt} package. While we focus on {gt} here, we encourage learning about others, as they may have additional helpful features.\index{gt package|)} \index{Replicate weights|(}\index{gtsummary|(} Please note, at this time, {gtsummary} needs additional features to be widely used for survey analysis, particularly due to its lack of ability to work with replicate designs.\index{Replicate weights|)} We provide one example using {gtsummary} and hope it evolves into a more comprehensive tool over time.\index{gtsummary|)} 
+
+#### Transitioning {srvyr} output to a {gt} table {-}
+
+\index{American National Election Studies (ANES)|(} \index{gt package|(} 
+Let's start by using some of the data we calculated earlier in this book. In Chapter \@ref(c06-statistical-testing), we looked at data on trust in government with the proportions calculated below: \index{Functions in srvyr!survey\_prop|(} \index{Functions in srvyr!summarize|(} \index{Functions in srvyr!drop\_na}
+
+```r
+#| label: results-table-raw
+trust_gov <- anes_des %>%
+  drop_na(TrustGovernment) %>%
+  group_by(TrustGovernment) %>%
+  summarize(trust_gov_p = survey_prop())
+
+trust_gov
+```
+\index{Functions in srvyr!summarize|)} \index{Functions in srvyr!survey\_prop|)}
+
+The default output generated by R may work for initial viewing inside our IDE or when creating basic output in an R Markdown or Quarto document. However, when presenting these results in other publications, such as the print version of this book or with other formal dissemination modes, modifying the display can improve our reader's experience. 
+
+Looking at the output from `trust_gov`, a couple of improvements stand out: (1) switching to percentages instead of proportions and (2) removing the variable names as column headers. The {gt} package is a good tool for implementing better labeling and creating publishable tables. Let's walk through some code as we make a few changes to improve the table's usefulness. 
+
+First, we initiate the formatted table with the `gt()` function on the `trust_gov` tibble previously created. Next, we use the argument `rowname_col()` to designate the `TrustGovernment` column as the label for each row (called the table "stub"). We apply the `cols_label()` function to create informative column labels instead of variable names and then the `tab_spanner()` function to add a label across multiple columns. In this case, we label all columns except the stub with "Trust in Government, 2020." We then format the proportions into percentages with the `fmt_percent()` function and reduce the number of decimals shown to one with `decimals = 1`. Finally, the `tab_caption()` function adds a table title for the HTML version of the book. We can use the caption for cross-referencing in R Markdown, Quarto, and bookdown, as well as adding it to the list of tables in the book. These changes are all seen in Table \@ref(tab:results-table-gt1-tab).
+
+```r
+#| label: results-table-gt1
+trust_gov_gt <- trust_gov %>%
+  gt(rowname_col = "TrustGovernment") %>%
+  cols_label(trust_gov_p = "%",
+             trust_gov_p_se = "s.e. (%)") %>%
+  tab_spanner(label = "Trust in Government, 2020",
+              columns = c(trust_gov_p, trust_gov_p_se)) %>%
+  fmt_percent(decimals = 1)
+```
+
+```r
+#| label: results-table-gt1-noeval
+#| eval: false
+trust_gov_gt %>% 
+  tab_caption("Example of {gt} table with trust in government estimate")
+```
+
+(ref:results-table-gt1-tab) Example of {gt} table with trust in government estimate
+
+```r
+#| label: results-table-gt1-tab
+#| echo: FALSE
+#| warning: FALSE
+
+trust_gov_gt %>%
+  print_gt_book(knitr::opts_current$get()[["label"]])
+```
+
+We can add a few more enhancements, such as a title (which is different from a caption^[The `tab_caption()` function is intended for usage in R Markdown, Quarto, or bookdown to add cross-references across the document. The caption is placed within the table based on the output type. The `tab_header()` function adds a title or subtitle to a table in any context, including Shiny or GitHub-flavored Markdown, without cross-referencing. The header is placed within the table object itself.]), a data source note, and a footnote with the question information, using the functions `tab_header()`, `tab_source_note()`, and `tab_footnote()`. If having the percentage sign in both the header and the cells seems redundant, we can opt for `fmt_number()` instead of `fmt_percent()` and scale the number by 100 with `scale_by = 100`. The resulting table is displayed in Table \@ref(tab:results-table-gt2-tab).
+
+```r
+#| label: results-table-gt2
+trust_gov_gt2 <- trust_gov_gt %>%
+  tab_header("American voter's trust
+             in the federal government, 2020") %>%
+  tab_source_note(
+    md("*Source*: American National Election Studies, 2020")
+  ) %>%
+  tab_footnote(
+    "Question text: How often can you trust the federal government
+    in Washington to do what is right?"
+  ) %>%
+  fmt_number(scale_by = 100,
+             decimals = 1)
+```
+
+```r
+#| label: results-table-gt2-noeval
+#| eval: false
+trust_gov_gt2
+```
+
+(ref:results-table-gt2-tab) Example of {gt} table with trust in government estimates and additional context
+
+```r
+#| label: results-table-gt2-tab
+#| echo: FALSE
+#| warning: FALSE
+
+trust_gov_gt2 %>%
+  print_gt_book(knitr::opts_current$get()[["label"]])
+```
+
+\index{gt package|)}
+
+#### Expanding tables using {gtsummary} {-}
+
+\index{Design effect|(} \index{gtsummary|(} 
+The {gtsummary} package simultaneously summarizes data and creates publication-ready tables. Initially designed for clinical trial data, it has been extended to include survey analysis in certain capacities. \index{Replicate weights|(}At this time, it is only compatible with survey objects using Taylor's Series Linearization and not replicate methods.\index{Replicate weights|)} While it offers a restricted set of summary statistics, the following are available for categorical variables:
+
+\index{Categorical data|(}
+
+  - `{n}` frequency
+  - `{N}` denominator, or respondent population
+  - `{p}` proportion (stylized as a percentage by default)
+  - `{p.std.error}` standard error of the sample proportion
+  - `{deff}` design effect of the sample proportion
+  - `{n_unweighted}` unweighted frequency
+  - `{N_unweighted}` unweighted denominator
+  - `{p_unweighted}` unweighted formatted proportion (stylized as a percentage by default)
+
+\index{Categorical data|)}
+
+The following summary statistics are available for continuous variables:
+
+\index{Continuous data|(}
+
+  - `{median}` median
+  - `{mean}` mean
+  - `{mean.std.error}` standard error of the sample mean
+  - `{deff}` design effect of the sample mean
+  - `{sd}` standard deviation
+  - `{var}` variance
+  - `{min}` minimum
+  - `{max}` maximum
+  - `{p#}` any integer percentile, where `#` is an integer from 0 to 100
+  - `{sum}` sum
+  
+\index{Continuous data|)} 
+
+\index{Design effect|)}
+In the following example, we build a table using {gtsummary}, similar to the table in the {gt} example. The main function we use is `tbl_svysummary()`. In this function, we include the variables we want to analyze in the `include` argument and define the statistics we want to display in the `statistic` argument. To specify the statistics, we apply the syntax from the {glue} package, where we enclose the variables we want to insert within curly brackets. We must specify the desired statistics using the names listed above. For example, to specify that we want the proportion followed by the standard error of the proportion in parentheses, we use `{p} ({p.std.error})`. Table \@ref(tab:results-gts-ex-1-tab) displays the resulting table.
+
+```r
+#| label: results-gts-ex-1
+anes_des_gtsum <- anes_des %>%
+  tbl_svysummary(include = TrustGovernment,
+                 statistic = list(all_categorical() ~ "{p} ({p.std.error})")) 
+```
+
+```r
+#| label: results-table-gt3-noeval
+#| eval: false
+anes_des_gtsum
+```
+
+(ref:results-gts-ex-1-tab) Example of {gtsummary} table with trust in government estimates
+
+```r
+#| label: results-gts-ex-1-tab
+#| echo: FALSE
+#| warning: FALSE
+
+anes_des_gtsum %>%
+  print_gt_book(knitr::opts_current$get()[["label"]])
+```
+
+The default table (shown in Table \@ref(tab:results-gts-ex-1-tab)) includes the weighted number of missing (or Unknown) records. The standard error is reported as a proportion, while the proportion is styled as a percentage. In the next step, we remove the Unknown category by setting the missing argument to "no" and format the standard error as a percentage using the `digits` argument. To improve the table for publication, we provide a more polished label for the "TrustGovernment" variable using the `label` argument. The resulting table is displayed in Table \@ref(tab:results-gts-ex-2-tab).
+
+```r
+#| label: results-gts-ex-2
+anes_des_gtsum2 <- anes_des %>%
+  tbl_svysummary(
+    include = TrustGovernment,
+    statistic = list(all_categorical() ~ "{p} ({p.std.error})"),
+    missing = "no",
+    digits = list(TrustGovernment ~ style_percent),
+    label = list(TrustGovernment ~ "Trust in Government, 2020")
+  )
+```
+
+```r
+#| label: results-gts-ex-2-noeval
+#| eval: false
+anes_des_gtsum2
+```
+
+(ref:results-gts-ex-2-tab) Example of {gtsummary} table with trust in government estimates with labeling and digits options
+
+```r
+#| label: results-gts-ex-2-tab
+#| echo: FALSE
+#| warning: FALSE
+
+anes_des_gtsum2 %>%
+  print_gt_book(knitr::opts_current$get()[["label"]])
+```
+
+Table \@ref(tab:results-gts-ex-2-tab) is closer to our ideal output, but we still want to make a few changes. To exclude the term "Characteristic" and the estimated population size (N), we can modify the header using the `modify_header()` function to update the `label`. Further adjustments can be made based on personal preferences, organizational guidelines, or other style guides. If we prefer having the standard error in the header, similar to the {gt} table, instead of in the footnote (the {gtsummary} default), we can make these changes by specifying `stat_0` in the `modify_header()` function. Additionally, using `modify_footnote()` with `update = everything() ~ NA` removes the standard error from the footnote. After transforming the object into a {gt} table using `as_gt()`, we can add footnotes and a title using the same methods explained in the previous section. This updated table is displayed in Table \@ref(tab:results-gts-ex-3-tab).
+
+```r
+#| label: results-gts-ex-3
+anes_des_gtsum3 <- anes_des %>%
+  tbl_svysummary(
+    include = TrustGovernment,
+    statistic = list(all_categorical() ~ "{p} ({p.std.error})"),
+    missing = "no",
+    digits = list(TrustGovernment ~ style_percent),
+    label = list(TrustGovernment ~ "Trust in Government, 2020")
+  ) %>%
+  modify_footnote(update = everything() ~ NA) %>%
+  modify_header(label = " ",
+                stat_0 = "% (s.e.)") %>%
+  as_gt() %>%
+  tab_header("American voter's trust
+             in the federal government, 2020") %>%
+  tab_source_note(
+    md("*Source*: American National Election Studies, 2020")
+  ) %>%
+  tab_footnote(
+    "Question text: How often can you trust the federal government
+    in Washington to do what is right?"
+  )
+```
+
+```r
+#| label: results-gts-ex-3-noeval
+#| eval: false
+anes_des_gtsum3
+```
+
+(ref:results-gts-ex-3-tab) Example of {gtsummary} table with trust in government estimates with more labeling options and context
+
+```r
+#| label: results-gts-ex-3-tab
+#| echo: FALSE
+#| warning: FALSE
+
+anes_des_gtsum3 %>%
+  print_gt_book(knitr::opts_current$get()[["label"]])
+```
+
+We can also include summaries of more than one variable in the table. These variables can be either categorical or continuous. In the following code and Table \@ref(tab:results-gts-ex-4-tab), we add the mean age by updating the `include`, `statistic`, and `digits` arguments.
+
+```r
+#| label: results-gts-ex-4
+#| tidy: FALSE
+anes_des_gtsum4 <- anes_des %>%
+  tbl_svysummary(
+    include = c(TrustGovernment, Age),
+    statistic = list(
+      all_categorical() ~ "{p} ({p.std.error})",
+      all_continuous() ~ "{mean} ({mean.std.error})"
+    ),
+    missing = "no",
+    digits = list(TrustGovernment ~ style_percent,
+                  Age ~ c(1, 2)),
+    label = list(TrustGovernment ~ "Trust in Government, 2020")
+  ) %>%
+  modify_footnote(update = everything() ~ NA) %>%
+  modify_header(label = " ",
+                stat_0 = "% (s.e.)") %>%
+  as_gt() %>%
+  tab_header(
+    "American voter's trust in the federal government, 2020") %>%
+  tab_source_note(
+    md("*Source*: American National Election Studies, 2020")
+  ) %>%
+  tab_footnote(
+    "Question text: How often can you trust the federal government
+    in Washington to do what is right?"
+  ) %>%
+  tab_caption("Example of {gtsummary} table with trust in government
+              estimates and average age")
+```
+
+```r
+#| label: results-gts-ex-4-noeval
+#| eval: false
+anes_des_gtsum4
+```
+
+(ref:results-gts-ex-4-tab) Example of {gtsummary} table with trust in government estimates and average age
+
+```r
+#| label: results-gts-ex-4-tab
+#| echo: FALSE
+#| warning: FALSE
+
+anes_des_gtsum4 %>%
+  print_gt_book(knitr::opts_current$get()[["label"]])
+```
+
+With {gtsummary}, we can also calculate statistics by different groups. Let's modify the previous example (displayed in Table \@ref(tab:results-gts-ex-4-tab)) to analyze data on whether a respondent voted for president in 2020. We update the `by` argument and refine the header. The resulting table is displayed in Table \@ref(tab:results-gts-ex-5-tab). \index{Functions in srvyr!drop\_na}
+
+```r
+#| label: results-gts-ex-5
+#| messages: FALSE
+anes_des_gtsum5 <- anes_des %>%
+  drop_na(VotedPres2020) %>%
+  tbl_svysummary(
+    include = TrustGovernment,
+    statistic = list(all_categorical() ~ "{p} ({p.std.error})"),
+    missing = "no",
+    digits = list(TrustGovernment ~ style_percent),
+    label = list(TrustGovernment ~ "Trust in Government, 2020"),
+    by = VotedPres2020
+  ) %>%
+  modify_footnote(update = everything() ~ NA) %>%
+  modify_header(label = " ",
+                stat_1 = "Voted",
+                stat_2 = "Didn't vote") %>%
+  modify_spanning_header(all_stat_cols() ~ "% (s.e.)") %>%
+  as_gt() %>%
+  tab_header(
+    "American voter's trust
+             in the federal government by whether they voted
+             in the 2020 presidential election"
+  ) %>%
+  tab_source_note(
+    md("*Source*: American National Election Studies, 2020")
+  ) %>%
+  tab_footnote(
+    "Question text: How often can you trust the federal government
+    in Washington to do what is right?"
+  )
+```
+
+```r
+#| label: results-gts-ex-5-noeval
+#| eval: false
+anes_des_gtsum5
+```
+
+(ref:results-gts-ex-5-tab) Example of {gtsummary} table with trust in government estimates by voting status
+
+```r
+#| label: results-gts-ex-5-tab
+#| echo: FALSE
+#| warning: FALSE
+
+anes_des_gtsum5 %>%
+    print_gt_book(knitr::opts_current$get()[["label"]])
+```
+
+\index{gtsummary|)} 
+
+### Charts and plots
+
+\index{Plots|(} \index{Charts|see {Plots }} \index{ggplot|see {Plots }} \index{Graphs| see {Plots }}
+Survey analysis can yield an abundance of printed summary statistics and models. Even with the most careful analysis, interpreting the results can be overwhelming. This is where charts and plots play a key role in our work. By transforming complex data into a visual representation, we can recognize patterns, relationships, and trends with greater ease.
+
+R has numerous packages for creating compelling and insightful charts. In this section, we focus on {ggplot2}, a member of the {tidyverse} collection of packages. Known for its power and flexibility, {ggplot2} is an invaluable tool for creating a wide range of data visualizations [@ggplot2wickham].
+
+The {ggplot2} package follows the "grammar of graphics," a framework that incrementally adds layers of chart components. This approach allows us to customize visual elements such as scales, colors, labels, and annotations to enhance the clarity of our results. After creating the survey design object, we can modify it to include additional outcomes and calculate estimates for our desired data points. Below, we create a binary variable `TrustGovernmentUsually`, which is `TRUE` when `TrustGovernment` is "Always" or "Most of the time" and `FALSE` otherwise. Then, we calculate the percentage of people who usually trust the government based on their vote in the 2020 presidential election (`VotedPres2020_selection`). We remove the cases where people did not vote or did not indicate their choice. \index{Functions in srvyr!survey\_mean|(} \index{Functions in srvyr!summarize|(} \index{Functions in srvyr!drop\_na}
+
+```r
+#| label: results-anes-prep
+anes_des_der <- anes_des %>%
+  mutate(TrustGovernmentUsually = case_when(
+    is.na(TrustGovernment) ~ NA,
+    TRUE ~ TrustGovernment %in% c("Always", "Most of the time")
+  )) %>%
+  drop_na(VotedPres2020_selection) %>%
+  group_by(VotedPres2020_selection) %>%
+  summarize(
+    pct_trust = survey_mean(
+      TrustGovernmentUsually,
+      na.rm = TRUE,
+      proportion = TRUE,
+      vartype = "ci"
+    ),
+    .groups = "drop"
+  )
+
+anes_des_der
+```
+\index{Functions in srvyr!summarize|)} \index{Functions in srvyr!survey\_mean|)}
+
+Now, we can begin creating our chart with {ggplot2}. First, we set up our plot with `ggplot()`. Next, we define the data points to be displayed using aesthetics, or `aes`. Aesthetics represent the visual properties of the objects in the plot. In the following example, we create a bar chart of the percentage of people who usually trust the government by who they voted for in the 2020 election.  To do this, we want to have who they voted for on the x-axis (`VotedPres2020_selection`) and the percent they usually trust the government on the y-axis (`pct_trust`). We specify these variables in `ggplot()` and then indicate we want a bar chart with `geom_bar()`. The resulting plot is displayed in Figure \@ref(fig:results-plot1).
+
+```r
+#| label: results-plot1
+#| fig.cap: "Bar chart of trust in government, by chosen 2020 presidential candidate"
+#| fig.alt: "Bar chart with x-axis of 'VotedPres2020_selection' with labels Biden, Trump and Other. It has y-axis 'pct_trust' with labels 0.00, 0.05, 0.10 and 0.15. The chart is a bar chart with 3 vertical bars. Bar 1 (Biden) has a height of 0.12. Bar 2 (Trump) has a height of 0.17. Bar 3 (Other) has a height of 0.06."
+p <- anes_des_der %>%
+  ggplot(aes(x = VotedPres2020_selection,
+             y = pct_trust)) +
+  geom_bar(stat = "identity")
+
+p
+```
+
+This is a great starting point: it appears that a higher percentage of people state they usually trust the government among those who voted for Trump compared to those who voted for Biden or other candidates. Now, what if we want to introduce color to better differentiate the three groups? We can add `fill` under `aesthetics`, indicating that we want to use distinct colors for each value of `VotedPres2020_selection`. In this instance, Biden and Trump are displayed in different colors in Figure \@ref(fig:results-plot2).
+
+```r
+#| label: results-plot2
+#| fig.cap: "Bar chart of trust in government by chosen 2020 presidential candidate, with colors"
+#| fig.alt: "Bar chart with x-axis of 'VotedPres2020_selection' with labels Biden, Trump and Other. It has y-axis 'pct_trust' with labels 0.00, 0.05, 0.10 and 0.15. The chart is a bar chart with 3 vertical bars. Bar 1 (Biden) has a height of 0.12 and a color of strong reddish orange. Bar 2 (Trump) has a height of 0.17 and a color of vivid yellowish green. Bar 3 (Other) has a height of 0.06 and color of brilliant blue."
+pcolor <- anes_des_der %>%
+  ggplot(aes(x = VotedPres2020_selection,
+             y = pct_trust,
+             fill = VotedPres2020_selection)) +
+  geom_bar(stat = "identity")
+
+pcolor
+```
+
+Let's say we wanted to follow proper statistical analysis practice and incorporate variability in our plot. We can add another geom, `geom_errorbar()`, to display the confidence intervals on top of our existing `geom_bar()` layer. We can add the layer using a plus sign (`+`). The resulting graph is displayed in Figure \@ref(fig:results-plot3).
+
+```r
+#| label: results-plot3
+#| fig.cap: "Bar chart of trust in government by chosen 2020 presidential candidate, with colors and error bars"
+#| fig.alt: "Bar chart with x-axis of 'VotedPres2020_selection' with labels Biden, Trump and Other. It has y-axis 'pct_trust' with labels 0.00, 0.05, 0.10 and 0.15. The chart is a bar chart with 3 vertical bars. Bar 1 (Biden) has a height of 0.12 and a color of strong reddish orange. Bar 2 (Trump) has a height of 0.17 and a color of vivid yellowish green. Bar 3 (Other) has a height of 0.06 and color of brilliant blue. Error bars are added with the Bar 1 (Biden) error ranging from 0.11 to 0.14, Bar 2 (Trump) error ranging from 0.16 to 0.19, and the Bar 3 (Other) error ranging from 0.02 to 0.14."
+pcol_error <- anes_des_der %>%
+  ggplot(aes(x = VotedPres2020_selection,
+             y = pct_trust,
+             fill = VotedPres2020_selection)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = pct_trust_low,
+                    ymax = pct_trust_upp),
+                width = .2)
+
+pcol_error
+```
+
+We can continue adding to our plot until we achieve our desired look. For example, since the color legend does not contribute meaningful information, we can eliminate it with `guides(fill = "none")`. We can also specify colors for `fill` using `scale_fill_manual()`. Inside this function, we provide a vector of values corresponding to the colors in our plot. These values are hexadecimal (hex) color codes, denoted by a leading pound sign `#` followed by six letters or numbers. The hex code `#0b3954` used below is dark blue. There are many tools online that help pick hex codes, such as htmlcolorcodes.com. Additionally, Figure \@ref(fig:results-plot4) incorporates better labels for the x and y axes (`xlab()`, `ylab()`), a title (`labs(title=)`), and a footnote with the data source (`labs(caption=)`).
+
+```r
+#| label: results-plot4
+#| fig.cap: "Bar chart of trust in government by chosen 2020 presidential candidate with colors, labels, error bars, and title"
+#| fig.alt: "Bar chart with x-axis of 'VotedPres2020_selection' with labels Biden, Trump and Other. It has y-axis 'pct_trust' with labels 0.00, 0.05, 0.10 and 0.15. The chart is a bar chart with 3 vertical bars. Bar 1 (Biden) has a height of 0.12 and a color of dark blue. Bar 2 (Trump) has a height of 0.17 and a color of very pale blue. Bar 3 (Other) has a height of 0.06 and color of moderate purple. Error bars are added with the Bar 1 (Biden) error ranging from 0.11 to 0.14, Bar 2 (Trump) error ranging from 0.16 to 0.19, and the Bar 3 (Other) error ranging from 0.02 to 0.14."
+pfull <-
+  anes_des_der %>%
+  ggplot(aes(x = VotedPres2020_selection,
+             y = pct_trust,
+             fill = VotedPres2020_selection)) +
+  geom_bar(stat = "identity") +
+  geom_errorbar(aes(ymin = pct_trust_low,
+                    ymax = pct_trust_upp),
+                width = .2) +
+  scale_fill_manual(values = c("#0b3954", "#bfd7ea", "#8d6b94")) +
+  xlab("Election choice (2020)") +
+  ylab("Usually trust the government") +
+  scale_y_continuous(labels = scales::percent) +
+  guides(fill = "none") +
+  labs(title = "Percent of voters who usually trust the government
+       by chosen 2020 presidential candidate",
+       caption = "Source: American National Election Studies, 2020")
+
+pfull
+```
+
+What we have explored in this section are just the foundational aspects of {ggplot2}, and the capabilities of this package extend far beyond what we have covered. Advanced features such as annotation, faceting, and theming allow for more sophisticated and customized visualizations. The {ggplot2} book by  @ggplot2wickham is a comprehensive guide to learning more about this powerful tool.
+\index{American National Election Studies (ANES)|)} \index{Plots|)}

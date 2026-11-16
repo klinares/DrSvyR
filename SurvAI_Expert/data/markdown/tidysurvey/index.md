@@ -1,0 +1,142 @@
+---
+id: "tidysurvey/index"
+source: "tidysurvey"
+course: ""
+course_title: ""
+doc_type: "book"
+title: "Exploring Complex Survey Data Analysis Using R"
+original: "index.Rmd"
+pages: 
+sha256: "54c95e15810d272d64d1ff78ecb900fb8ecc77eff98f24f3960094a58635f837"
+converted_by: "01_convert.R (no model)"
+converted_at: "2026-11-14T21:29:46"
+---
+
+
+
+```r
+#| include: false
+
+knitr::opts_chunk$set(fig.pos = "h!", out.extra = "")
+
+library(styler)
+options(
+  htmltools.dir.version = FALSE, formatR.indent = 2, digits = 4
+)
+if (knitr:::is_html_output()){
+  options(width=72)
+} else{
+  options(width=72)
+}
+
+library(prettyunits)
+
+book_colors <- c("#0b3954", "#087e8b", "#bfd7ea", "#ff8484", "#8d6b94")
+
+as_latex_with_caption <- function(gtobj, chunk_label) {
+  lt <- nrow(gtobj[["_data"]]) >= 5
+  gt_l <- gtobj %>% tab_options(latex.use_longtable=lt, latex.tbl.pos="H") %>% gt::as_latex()
+  caption <- paste0(
+    "\\caption{\\label{tab:", chunk_label, "}(ref:", chunk_label, ")}")
+    if (lt){
+    caption <- paste0(caption, " \\\\")
+  }
+  latex <- strsplit(gt_l[1], split = "\n")[[1]]
+  idxtable <- which(stringr::str_detect(latex, "begin") & stringr::str_detect(latex, "table"))
+  # https://tex.stackexchange.com/questions/95236/as-first-character-in-table-row 
+  idxparen <- which(stringr::str_detect(latex, "^\\("))
+  if (length(idxparen)>0){
+    latex[(idxparen-1)] <- stringr::str_c(latex[(idxparen-1)], "\\relax")
+  }
+  latex1 <- stringi::stri_replace_all(latex, regex="(?=\\d*)-{1,2}(\\d)", replacement="--$1")
+  latex2 <- c(latex1[1:idxtable], caption, latex1[-c(1:idxtable)])
+  latex3 <- paste(latex2, collapse = "\n")
+  gt_l[1] <- latex3
+  return(gt_l)
+}
+
+print_gt_book <- function(gtobj, ref){
+  if ("gtsummary" %in% class(gtobj)){
+    gtobj <- as_gt(gtobj)
+  }
+  
+  if (knitr::is_latex_output()){
+    gtobj %>%
+      as_latex_with_caption(ref)
+  } else {
+    gtobj %>% 
+      tab_caption(glue::glue("(ref:{ref})"))
+  }
+  
+  
+}
+
+```
+
+`r if (knitr:::is_html_output()) '# Welcome {-}'`
+
+```r
+#| label: index-printversion-text
+#| echo: false
+#| results: asis
+
+printversion_text <- "This is the online version of the book published by CRC Press in November 2024.  You can purchase a copy of this book directly from [Routledge](https://www.routledge.com/Exploring-Complex-Survey-Data-Analysis-Using-R-A-Tidy-Introduction-with-srvyr-and-survey/Zimmer-Powell-Velasquez/p/book/9781032302867) or your preferred bookstore. The cover artwork was designed and created by [Allison Horst](https://allisonhorst.com/)."
+
+if (knitr:::is_html_output()){
+  cat(printversion_text)
+} 
+
+rm(printversion_text)
+```
+
+
+```r
+#| label: index-printversion-coverimage
+#| echo: false
+#| fig.cap: ""
+#| fig.alt: "Image of print book cover with author names, title, and cover image"
+#| out.width: 70%
+#| fig.align: center
+
+if (knitr:::is_html_output()){
+  knitr::include_graphics(path="images/cover.png")
+}
+```
+
+`r if (knitr:::is_html_output()) '## Dedication {-}'`
+
+```r
+#| label: index-dedication-text
+#| echo: false
+#| results: asis
+
+thanks <- "To Will, Tom, and Drew, thanks for all the help with additional chores and plenty of Git consulting!"
+
+if (knitr:::is_html_output()){
+  cat(thanks)
+} else if(knitr:::is_latex_output()){
+  bb <- readLines(here::here("latex", "before_body_temp.tex"))
+  bb[which(bb=="placeholder")] <- thanks
+  writeLines(bb, here::here("latex", "before_body_ded.tex"))
+  rm(bb)
+}
+
+rm(thanks)
+```
+
+`r if (knitr:::is_html_output()) '## Citation {-}'`
+
+```r
+#| label: index-citation-text
+#| echo: false
+#| results: asis
+
+citation_text <- "To cite this book, we recommend the following citation: \n 
+Zimmer, S. A., Powell, R. J., & Velásquez, I. C. (2024). <i>Exploring Complex Survey Data Analysis Using R: A Tidy Introduction with {srvyr} and {survey}</i>. Chapman & Hall: CRC Press."
+
+if (knitr:::is_html_output()){
+  cat(citation_text)
+} 
+
+rm(citation_text)
+```
