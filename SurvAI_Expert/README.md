@@ -53,28 +53,95 @@ The store `data/store/survai.duckdb` must exist; build it once (below). From the
 the app: `setwd("SurvAI_Expert"); source("app.R"); ask("your question")`, with the key in
 `ANTHROPIC_API_KEY`.
 
-## At work
+## Getting it running at work (throwaway: delete this section once it is live)
 
-1. Pull the repository (the branch with SurvAI_Expert).
-2. Copy in the textbook, which is kept out of the repository: `data/markdown/practools/` and
-   `data/catalog/practools/`, from the home copy. If they are absent, carry on: the app works
-   without the textbook, it just cannot cite it (go to step 3).
-3. Build the store, from inside `SurvAI_Expert/`: `Rscript --no-init-file build/03_store.R`. It
-   builds from whatever sources are present and prints "Missing on disk, skipped: n documents"
-   for any that are not. It then checks the receipt, one row per table and source: "identical"
-   means the store matches the one built at home. Without the textbook, its rows show as missing
-   and the rest should still match.
-4. Fill the `work` profile in `app.R` (api, base_url, id), set `CALLS_PER_WINDOW <- 300`, and, if
-   sources are to be shown, set `APP_SOURCE_URL` to the internal copy of the repository, branch
-   included (for example `https://<host>/<repo>/blob/main/SurvAI_Expert/`). Set
-   `SURVAI_PROFILE=work`.
-5. Check it (see "Tests" below): `Rscript --no-init-file tests/smoke.R`, then
-   `Rscript --no-init-file tests/eval.R` and `Rscript --no-init-file tests/eval.R answers`, and
-   compare `tests/eval_report.md` with the home run, `tests/eval_report_home.md`. Without the
-   textbook, questions written from it score lower.
-6. Deploy: `rsconnect::deployApp("SurvAI_Expert", appName = "SurvAI_Expert")`. `build/`, `tests/`
-   and `data/build/` are left out by `.rscignore`; `data/markdown/`, `data/catalog/` and
-   `data/store/` go with the app.
+Nothing here needs the home machine. Building the store and the first two tests make no model
+calls; only steps 6 and 7 count against the limit of 300 calls per 4 hours.
+
+**1. Get the files.** Pull the repository (the branch with `SurvAI_Expert/`). Everything needed
+is in git except the store, which step 3 builds, and the textbook, which is optional:
+
+- With the textbook: copy `data/markdown/practools/` and `data/catalog/practools/` from the home
+  machine into the same places.
+- Without it: carry on. The app works; it has about 1,100 fewer passages and 550 fewer formulas.
+
+**2. Check the packages.** In R:
+
+```r
+need <- c("shiny", "bslib", "dplyr", "purrr", "stringr", "tibble", "tidyverse", "DBI", "duckdb",
+          "commonmark", "coro", "ellmer", "htmltools", "jsonlite", "katex", "later", "pdftools",
+          "promises", "tidyr", "xml2")
+setdiff(need, rownames(installed.packages()))   # install whatever this prints
+packageVersion("ellmer")                        # 0.4.2 or later
+packageVersion("duckdb")                        # home build used 1.5.5
+```
+
+**3. Build the store** (no model, no network, about 20 seconds). From inside `SurvAI_Expert/`:
+
+```
+Rscript --no-init-file build/03_store.R
+```
+
+It ends with the receipt check. Expect "identical" for every source that is present. Without the
+textbook, `practools` shows as missing and five word-count tables have fewer rows; that is
+expected. If every table differs, the DuckDB version is the likely cause: compare the row
+counts, which should still match.
+
+**4. Fill the settings at the top of `app.R`.**
+
+- `MODEL_PROFILES$work`: `api` (`"anthropic"` or `"openai"`), `base_url`, and `id` (what the work
+  endpoint calls Opus 5). Set `json` to `"output_config"` for an Anthropic endpoint, or
+  `"response_format"` for an OpenAI-style one; use `"prompt"` if neither is accepted.
+- `CALLS_PER_WINDOW <- 300`.
+- `KEY_ENV`: the name of the environment variable that holds the work key (tests and console
+  only; in the app the key is pasted on Start here).
+- `APP_CLASSIFICATION`, `APP_OFFICE`, and a logo file in `www/logo/` named as in `APP_LOGO`.
+- `APP_SOURCE_URL`: only matters if `SHOW_SOURCES` is turned on.
+
+Then tell R to use the work profile, for example in `.Renviron`: `SURVAI_PROFILE=work`.
+
+**5. Test without spending calls.** From inside `SurvAI_Expert/`:
+
+```
+Rscript --no-init-file tests/smoke.R      # expect 39 of 39
+Rscript --no-init-file tests/eval.R       # search test; home: 0.79 / 0.90, or 0.76 / 0.87 without the textbook
+```
+
+**6. Ask one question from the console (2 calls)** to confirm the profile and key work before
+the long test:
+
+```r
+setwd("SurvAI_Expert"); source("app.R")
+ask("What is the design effect from unequal weighting?")
+```
+
+A formula, an R example and no error means the model connection is right. An error about JSON or
+structured output means the `json` setting in step 4 needs the other value.
+
+**7. Run the accuracy test (about 180 calls, 25 minutes).** Start it at the beginning of a
+4-hour window and do not use the app until it finishes.
+
+```
+Rscript --no-init-file tests/eval.R answers
+```
+
+Compare `tests/eval_report.md` with the home run in `tests/eval_report_home.md`. Home, with
+Sonnet 5.5: 38 of 40 answers judged correct, none incorrect. The top of the report is written
+for reporting upward.
+
+**8. Open the app and try it.** `shiny::runApp("SurvAI_Expert")`, paste the key on Start here,
+ask a question, look up a formula, and upload one real technical report to the Report reader.
+
+**9. Deploy.**
+
+```r
+rsconnect::deployApp("SurvAI_Expert", appName = "SurvAI_Expert")
+```
+
+`.rscignore` leaves out `build/`, `tests/` and `data/build/`. The store, `data/markdown/` and
+`data/catalog/` go with the app (about 80 MB with the textbook).
+
+**10. Delete this section** and commit.
 
 ## The scripts
 
