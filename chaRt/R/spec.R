@@ -170,24 +170,66 @@ check_filter <- function(f, cb, i) {
   NULL
 }
 
-# What a column field may hold, per family: "group", "name", "measure", "time", or NULL (not allowed).
-family_roles <- function(family) switch(family,
-  bar = , dot = list(x = c("group", "name"), y = "measure", color = "group", size = NULL),
-  line = list(x = "time", y = "measure", color = c("group", "name"), size = NULL),
-  slope = list(x = c("time", "group"), y = "measure", color = c("group", "name"), size = NULL),
-  scatter = list(x = "measure", y = "measure", color = "group", size = NULL),
+# ---- the rules as tables: read by spec_check() and written out by spec_reference() ----------
+
+# What a column field may hold, per family: "group", "name", "measure", "time"; a field not listed is
+#   not used by that family. facet is checked on its own (a group, every family but slope).
+SPEC_FAMILY_ROLES <- list(
+  bar = list(x = c("group", "name"), y = "measure", color = "group"),
+  dot = list(x = c("group", "name"), y = "measure", color = "group"),
+  line = list(x = "time", y = "measure", color = c("group", "name")),
+  slope = list(x = c("time", "group"), y = "measure", color = c("group", "name")),
+  scatter = list(x = "measure", y = "measure", color = "group"),
   bubble = list(x = "measure", y = "measure", color = "group", size = "measure"),
-  histogram = list(x = "measure", y = NULL, color = NULL, size = NULL),
-  box = list(x = "group", y = "measure", color = NULL, size = NULL),
-  heatmap = list(x = c("group", "time"), y = "group", color = "measure", size = NULL))
+  histogram = list(x = "measure"),
+  box = list(x = "group", y = "measure"),
+  heatmap = list(x = c("group", "time"), y = "group", color = "measure"))
+
+# The column fields each family must have.
+SPEC_REQUIRED <- list(bar = "x", dot = "x", line = c("x", "y"), slope = c("x", "y", "color"), scatter = c("x", "y"),
+                      bubble = c("x", "y", "size"), histogram = "x", box = c("x", "y"), heatmap = c("x", "y"))
+
+# The functions each family allows. `on` names the field whose presence decides: `without` when it
+#   is absent, `with` when it is given; a family with no `on` allows `with` always.
+SPEC_FAMILY_FNS <- list(
+  bar = list(on = "y", without = c("count", "share"), with = c("sum", "mean", "median", "none")),
+  dot = list(on = "y", without = c("count", "share"), with = c("sum", "mean", "median", "none")),
+  line = list(with = c("sum", "mean", "median", "none")),
+  slope = list(with = c("sum", "mean", "median", "none")),
+  scatter = list(with = "none"), bubble = list(with = "none"), histogram = list(with = "none"), box = list(with = "none"),
+  heatmap = list(on = "color", without = "count", with = c("sum", "mean", "median")))
+
+# The families a field is for, when it is not for every family.
+SPEC_FIELD_FAMILIES <- list(
+  facet = setdiff(SPEC_FAMILIES, "slope"),
+  top_n = c("bar", "dot", "line", "slope"),
+  sort = c("bar", "dot", "box"),
+  fit = c("scatter", "bubble"),
+  rug = "scatter",
+  bins = "histogram",
+  midpoint = "heatmap",
+  log_x = c("scatter", "bubble", "histogram"),
+  log_y = c("bar", "dot", "line", "scatter", "bubble", "box"),
+  highlight = c("bar", "dot", "line", "slope", "scatter", "bubble"))
+
+# The kinds of column, in words.
+SPEC_KIND_TEXT <- c(group = paste0("a group (category, ordered, flag, or whole numbers with at most ", CODEBOOK_MAX_LEVELS, " values)"),
+                    name = "a name (id or text) with top_n", measure = "a measure (number or integer)",
+                    time = "a time (a date, or role time)")
+
+family_roles <- function(family) SPEC_FAMILY_ROLES[[family]]
+field_for <- function(field, family) is.null(SPEC_FIELD_FAMILIES[[field]]) || family %in% SPEC_FIELD_FAMILIES[[field]]
+fns_for <- function(s) {
+  t = SPEC_FAMILY_FNS[[s$family]]
+  if (!is.null(t$on) && is.null(s[[t$on]])) t$without else t$with
+}
+or_list <- function(x) if (length(x) == 1L) x else paste(paste(utils::head(x, -1L), collapse = ", "), "or", utils::tail(x, 1L))
 
 kind_ok <- function(e, kinds)
   ("group" %in% kinds && is_group_like(e)) || ("name" %in% kinds && is_name_like(e)) ||
     ("measure" %in% kinds && is_measure(e)) || ("time" %in% kinds && is_time(e))
 
-kinds_text <- function(kinds) paste(c(group = "a group (category, ordered, flag, or whole numbers with at most 30 values)",
-                                      name = "a name (id or text) with top_n", measure = "a measure (number or integer)",
-                                      time = "a time (a date, or role time)")[kinds], collapse = " or ")
+kinds_text <- function(kinds) paste(SPEC_KIND_TEXT[kinds], collapse = " or ")
 
 # The reasons a spec cannot be drawn, as sentences naming the field and the column; none when it can.
 #   Reads only the codebook. Every rule that does not need the data is here.
@@ -213,7 +255,7 @@ spec_check <- function(spec, cb, palette = chart_palette_default()) {
     if (is.null(e)) return(paste0(f, ": there is no column '", v, "' in the codebook."))
     if (identical(e$role, "ignore")) return(paste0(f, ": the column '", v, "' has the role ignore, so it cannot be used."))
     if (identical(f, "facet")) {
-      if (identical(fam, "slope")) return("facet: a slope chart cannot be split into small multiples.")
+      if (!field_for("facet", fam)) return(paste0("facet: a ", fam, " chart cannot be split into small multiples."))
       if (!is_group_like(e)) return(paste0("facet: '", v, "' is ", kind_text(e), "; small multiples need a group."))
       if (is.null(s$filter) && e$distinct > SPEC_FACET_MAX)
         return(paste0("facet: '", v, "' has ", e$distinct, " values, so ", e$distinct, " panels; at most ", SPEC_FACET_MAX, "."))
@@ -234,25 +276,20 @@ spec_check <- function(spec, cb, palette = chart_palette_default()) {
       return(paste0("x: '", v, "' has ", e$distinct, " values; a box plot takes at most ", SPEC_BOX_GROUPS, " boxes."))
     NULL
   }))
-  required = c(x = TRUE, y = !fam %in% c("bar", "dot", "histogram"), color = identical(fam, "slope"), size = identical(fam, "bubble"))
-  missing_cols = purrr::compact(purrr::imap(required, function(need, f)
-    if (need && is.null(s[[f]])) paste0(f, ": a ", fam, " chart needs a ", f, " column.")))
+  missing_cols = purrr::compact(purrr::map(SPEC_REQUIRED[[fam]], function(f)
+    if (is.null(s[[f]])) paste0(f, ": a ", fam, " chart needs a ", f, " column.")))
   out = c(out, unlist(cols), unlist(missing_cols))
   if (identical(fam, "histogram") && !is.null(s$y)) out = c(out, "y: a histogram counts its x, so it takes no y.")
 
   # The function.
   fn = s$fn
+  allowed = fns_for(s)
+  on = SPEC_FAMILY_FNS[[fam]]$on
+  case = if (is.null(on)) paste0("a ", fam, " chart") else paste0("a ", fam, " chart ", if (is.null(s[[on]])) "with no " else "with a ", on)
   fn_msg = if (!is.null(fn) && (!is_text1(fn) || !fn %in% SPEC_FNS))
     paste0("fn must be one of ", paste(SPEC_FNS, collapse = ", "), ".")
-  else switch(fam,
-    bar = , dot = if (is.null(s$y)) { if (!fn %in% c("count", "share")) paste0("fn: a ", fam, " with no y counts rows, so fn must be count or share.") }
-                  else if (is.null(fn)) paste0("fn: a ", fam, " with a y needs a function (sum, mean, median, or none).")
-                  else if (fn %in% c("count", "share")) paste0("fn: '", fn, "' counts rows and does not use y; drop y or choose sum, mean, median or none."),
-    line = , slope = if (is.null(fn)) paste0("fn: a ", fam, " chart needs a function (sum, mean, median, or none).")
-                     else if (fn %in% c("count", "share")) paste0("fn: a ", fam, " chart plots its y, so fn must be sum, mean, median or none."),
-    scatter = , bubble = , histogram = , box = if (!identical(fn, "none")) paste0("fn: a ", fam, " draws each row, so fn must be none; it is '", fn, "'."),
-    heatmap = if (is.null(s$color)) { if (!identical(fn, "count")) "fn: a heatmap with no color fills each tile with the count, so fn must be count." }
-              else if (is.null(fn) || !fn %in% c("sum", "mean", "median")) "fn: a heatmap filled with a color column needs sum, mean or median.")
+  else if (is.null(fn)) paste0("fn: ", case, " needs a function (", or_list(allowed), ").")
+  else if (!fn %in% allowed) paste0("fn: ", case, " takes ", or_list(allowed), "; it is '", fn, "'.")
   out = c(out, fn_msg)
 
   # The filter.
@@ -267,31 +304,31 @@ spec_check <- function(spec, cb, palette = chart_palette_default()) {
     unlist(purrr::map(intersect(SPEC_TEXT_FIELDS, names(s)), function(f) if (!is_text1(s[[f]])) paste0(f, ": text is needed."))),
     unlist(purrr::map(intersect(SPEC_FLAG_FIELDS, names(s)), function(f) if (!is_flag1(s[[f]])) paste0(f, ": true or false is needed."))),
     if (!is.null(s$top_n)) {
-      if (!fam %in% c("bar", "dot", "line", "slope")) paste0("top_n: a ", fam, " chart does not use top_n.")
+      if (!field_for("top_n", fam)) paste0("top_n: a ", fam, " chart does not use top_n.")
       else if (!is_whole1(s$top_n) || s$top_n < 1 || s$top_n > SPEC_TOP_MAX)
         paste0("top_n must be a whole number from 1 to ", SPEC_TOP_MAX, "; it is ", paste(values_of(s$top_n), collapse = ", "), ".")
     },
     if (!is.null(s$sort)) {
-      if (!fam %in% c("bar", "dot", "box")) paste0("sort: a ", fam, " chart is not sorted; only bar, dot and box charts are.")
+      if (!field_for("sort", fam)) paste0("sort: a ", fam, " chart is not sorted; only ", or_list(SPEC_FIELD_FAMILIES$sort), " charts are.")
       else if (!is_text1(s$sort) || !s$sort %in% SPEC_SORTS) paste0("sort must be one of ", paste(SPEC_SORTS, collapse = ", "), ".")
     },
     if (!is_text1(s$fit) || !s$fit %in% SPEC_FITS) paste0("fit must be one of ", paste(SPEC_FITS, collapse = ", "), ".")
-    else if (!identical(s$fit, "none") && !fam %in% c("scatter", "bubble")) paste0("fit: only a scatter or bubble chart takes a fitted line."),
-    if (isTRUE(s$rug) && !identical(fam, "scatter")) "rug: only a scatter chart takes a rug.",
+    else if (!identical(s$fit, "none") && !field_for("fit", fam)) paste0("fit: only a ", or_list(SPEC_FIELD_FAMILIES$fit), " chart takes a fitted line."),
+    if (isTRUE(s$rug) && !field_for("rug", fam)) paste0("rug: only a ", or_list(SPEC_FIELD_FAMILIES$rug), " chart takes a rug."),
     if (!is.null(s$bins)) {
-      if (!identical(fam, "histogram")) paste0("bins: only a histogram takes bins.")
+      if (!field_for("bins", fam)) paste0("bins: only a ", or_list(SPEC_FIELD_FAMILIES$bins), " takes bins.")
       else if (!is_whole1(s$bins) || s$bins < SPEC_BINS[1] || s$bins > SPEC_BINS[2])
         paste0("bins must be a whole number from ", SPEC_BINS[1], " to ", SPEC_BINS[2], ".")
     },
     if (isTRUE(s$free_y) && is.null(s$facet)) "free_y: only small multiples (facet) can free the y scale.",
     if (!is.null(s$midpoint)) {
-      if (!identical(fam, "heatmap")) paste0("midpoint: only a heatmap takes a midpoint (a ", fam, " chart was given one).")
+      if (!field_for("midpoint", fam)) paste0("midpoint: only a ", or_list(SPEC_FIELD_FAMILIES$midpoint), " takes a midpoint (a ", fam, " chart was given one).")
       else if (!is.numeric(s$midpoint) || length(s$midpoint) != 1L || !is.finite(s$midpoint)) "midpoint must be one number."
     },
     if (isTRUE(s$log_x) && !(is_text1(s$x) && !is.null(cb_entry(cb, s$x)) && is_measure(cb_entry(cb, s$x)) &&
-                             fam %in% c("scatter", "bubble", "histogram")))
-      paste0("log_x: only a measure on the x axis of a scatter, bubble or histogram can take a log scale."),
-    if (isTRUE(s$log_y) && !fam %in% c("bar", "dot", "line", "scatter", "bubble", "box"))
+                             field_for("log_x", fam)))
+      paste0("log_x: only a measure on the x axis of a ", or_list(SPEC_FIELD_FAMILIES$log_x), " can take a log scale."),
+    if (isTRUE(s$log_y) && !field_for("log_y", fam))
       paste0("log_y: a ", fam, " chart has no y scale to log."),
     check_highlight(s, cb))
   unique(out)
@@ -307,7 +344,7 @@ check_highlight <- function(s, cb) {
     return(paste0("highlight: in a ", fam, " chart the highlighted values are values of x ('", s$x %||% "", "'), not of '", h$column, "'."))
   if (fam %in% c("line", "slope") && !identical(h$column, s$color))
     return(paste0("highlight: in a ", fam, " chart the highlighted values are values of color ('", s$color %||% "", "'), not of '", h$column, "'."))
-  if (!fam %in% c("bar", "dot", "line", "slope", "scatter", "bubble"))
+  if (!field_for("highlight", fam))
     return(paste0("highlight: a ", fam, " chart does not take a highlight."))
   e = cb_entry(cb, h$column)
   if (is.null(e)) return(paste0("highlight: there is no column '", h$column, "' in the codebook."))
@@ -319,6 +356,65 @@ check_highlight <- function(s, cb) {
   if (is.null(typed_value(e, h$values)))
     return(paste0("highlight: the values cannot be values of '", h$column, "', ", kind_text(e), "."))
   NULL
+}
+
+
+# ---- the reference a model is given ------------------------------------------------------------
+
+# What a spec may contain, as plain text for the suggest call's system prompt: every field of
+#   SPEC_FIELDS with its allowed values, the kinds of column, and for each family the fields it
+#   takes. Written from the tables and constants spec_check() reads, so the two cannot disagree; a
+#   field with no line here stops it, so a new field cannot be left out. The same text every time.
+spec_reference <- function() {
+  quals = purrr::keep(CHART_PALETTES, function(e) identical(e$kind, "qualitative"))
+  colour_max = range(purrr::map_int(quals, "max"))
+  for_text = function(f) if (!is.null(SPEC_FIELD_FAMILIES[[f]])) paste0(" (", paste(SPEC_FIELD_FAMILIES[[f]], collapse = ", "), " only)") else ""
+  field_line = function(f) {
+    what = if (f %in% SPEC_COLUMN_FIELDS) "a column name exactly as in DATA; its kind per family below"
+      else if (f %in% SPEC_FLAG_FIELDS) "true or false"
+      else if (identical(f, "rule")) "text: the id of one reflex"
+      else if (f %in% SPEC_TEXT_FIELDS) "text"
+      else switch(f,
+        family = paste0("one of ", paste(SPEC_FAMILIES, collapse = ", ")),
+        fn = paste0("one of ", paste(SPEC_FNS, collapse = ", "), "; which ones, per family below"),
+        filter = paste0("a list of conditions, all of which a row must meet, each {\"column\": a column name, \"op\": one of ",
+                        paste(SPEC_OPS, collapse = " "), ", \"value\": one value, or a list of values for in}; ",
+                        "> >= < <= only on numbers and dates (dates as YYYY-MM-DD)"),
+        top_n = paste0("a whole number from 1 to ", SPEC_TOP_MAX, ": the groups with the largest values"),
+        sort = paste0("one of ", paste(SPEC_SORTS, collapse = ", ")),
+        fit = paste0("one of ", paste(SPEC_FITS, collapse = ", ")),
+        bins = paste0("a whole number from ", SPEC_BINS[1], " to ", SPEC_BINS[2]),
+        highlight = paste0("{\"column\": a column name, \"values\": a list of values}; in a bar or dot the column is x, ",
+                           "in a line or slope it is color, in a scatter or bubble a group or name column and no color"),
+        midpoint = "one number, the centre of a diverging fill",
+        stop("spec_reference() has no line for the field '", f, "'.", call. = FALSE))
+    extra = switch(f, log_x = "; a measure on x", free_y = "; only with facet", "")
+    paste0("- ", f, ": ", what, for_text(f), extra)
+  }
+  family_line = function(fam) {
+    roles = family_roles(fam)
+    cols = purrr::imap_chr(roles, function(kinds, f)
+      paste0(f, " ", paste(kinds, collapse = " or "), if (f %in% SPEC_REQUIRED[[fam]]) " (required)" else ""))
+    t = SPEC_FAMILY_FNS[[fam]]
+    fns = if (is.null(t$on)) paste("fn", paste(t$with, collapse = " or "))
+          else paste0("fn ", paste(t$without, collapse = " or "), " with no ", t$on, ", ", paste(t$with, collapse = " or "), " with a ", t$on)
+    paste0("- ", fam, ": ", paste(c(cols, if (field_for("facet", fam)) "facet group", fns), collapse = "; "))
+  }
+  paste(c(
+    "A spec is one JSON object. These are its only fields; a spec with any other field is refused.",
+    purrr::map_chr(SPEC_FIELDS, field_line),
+    "Kinds of column (the type in DATA decides):",
+    paste0("- ", names(SPEC_KIND_TEXT), ": ", gsub("^an? [a-z]+ [(]|[)]", "", SPEC_KIND_TEXT)),
+    "A column whose role is ignore cannot be used in any field.",
+    "Families, with the column fields each takes (a field not named is not used):",
+    purrr::map_chr(SPEC_FAMILIES, family_line),
+    "Limits:",
+    paste0("- a name column (id or text) on an axis or in color needs top_n, or a filter leaving at most ", SPEC_TOP_MAX, " values"),
+    paste0("- color in a bar or dot: at most ", SPEC_BAR_GROUPS, " values; in a scatter or bubble: at most as many as the palette ",
+           "holds (", colour_max[1], " to ", colour_max[2], ")"),
+    paste0("- facet: at most ", SPEC_FACET_MAX, " panels; box: at most ", SPEC_BOX_GROUPS, " boxes"),
+    "- when a filter is given, these counts are of the values left after it"),
+    collapse = "\n")
 }
 
 

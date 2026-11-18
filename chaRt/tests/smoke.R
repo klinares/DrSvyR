@@ -879,6 +879,40 @@ if (!inherits(messy, "error")) {
 }
 
 
+# ---- Phase 3: the spec reference ------------------------------------------------------------
+
+# spec_reference() is built from the tables spec_check() reads. Its field lines name exactly the
+#   fields spec_check() accepts, its family lines exactly the families; a field it does not list is
+#   refused, and each family it lists is not.
+ref_lines <- strsplit(spec_reference(), "\n", fixed = TRUE)[[1]]
+section_of <- function(start, end) {
+  a = which(startsWith(ref_lines, start)); b = which(startsWith(ref_lines, end))
+  ref_lines[(a + 1L):(b - 1L)]
+}
+ref_fields <- sub("^- ([a-z_]+):.*$", "\\1", section_of("A spec is one JSON object", "Kinds of column"))
+ref_families <- sub("^- ([a-z]+):.*$", "\\1", section_of("Families, with", "Limits:"))
+family_ok <- function(f) !any(grepl("^family", spec_check(list(family = f, x = "Position"), ball_g$cb)))
+check(paste0("spec_reference() lists exactly the ", length(SPEC_FIELDS), " fields and ", length(SPEC_FAMILIES),
+             " families spec_check() accepts, and says any other field is refused"),
+      identical(ref_fields, SPEC_FIELDS) && identical(ref_families, SPEC_FAMILIES) &&
+        grepl("any other field is refused", spec_reference(), fixed = TRUE) &&
+        (is.null(ball_g) || (all(purrr::map_lgl(ref_families, family_ok)) && !family_ok("pie") &&
+                               any(grepl("colour", spec_check(list(family = "bar", x = "Position", colour = "League"), ball_g$cb))))))
+fields_of_family <- function(f) {
+  line = grep(paste0("^- ", f, ": "), section_of("Families, with", "Limits:"), value = TRUE)
+  sub(" .*$", "", trimws(strsplit(sub("^- [a-z]+: ", "", line), ";", fixed = TRUE)[[1]]))
+}
+roles_agree <- purrr::map_lgl(SPEC_FAMILIES, function(f)
+  setequal(setdiff(fields_of_family(f), c("fn", "facet")), names(SPEC_FAMILY_ROLES[[f]])) &&
+    identical("facet" %in% fields_of_family(f), field_for("facet", f)) && "fn" %in% fields_of_family(f))
+check(paste0("each family line in spec_reference() names the column fields SPEC_FAMILY_ROLES gives it, and facet where it is allowed",
+             if (!all(roles_agree)) paste0(" (not: ", paste(SPEC_FAMILIES[!roles_agree], collapse = ", "), ")")),
+      all(roles_agree))
+check("spec_reference() is plain text with no R syntax, under 5,000 characters",
+      nchar(spec_reference()) < 5000L && !grepl("c(", spec_reference(), fixed = TRUE) &&
+        !grepl("<-", spec_reference(), fixed = TRUE) && !grepl("NULL|TRUE|FALSE", spec_reference()))
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")
