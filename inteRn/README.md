@@ -42,6 +42,11 @@ A short guide prints when R starts; `intern_help()` shows it again.
   `.Renviron`; only works inside your current project folder.
 - **Asks first** before running code (you choose whether it sees the output)
   or writing a file (you see the change).
+- **Protects your scripts:** it changes part of a file without retyping the
+  rest, refuses to save a version that would wipe out most of a file, and
+  backs up a file before every change. `intern_undo("script.R")` puts back
+  the version from before its last change. Backups are kept in R's own data
+  folder (on Windows, `AppData\Roaming\R`), not in your project.
 - **Checks its code** before you see it: tidyverse style with no loops, ggplot2
   only, colourblind-safe colours. Code it hasn't run is marked `# UNTESTED`.
 

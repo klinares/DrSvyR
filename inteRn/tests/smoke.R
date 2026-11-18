@@ -9,6 +9,8 @@ here = local({
   if (length(f)) dirname(normalizePath(f)) else getwd()
 })
 Sys.setenv(INTERN_HOME = normalizePath(file.path(here, ".."), winslash = "/"))
+# Backups made by the write tests go to a temporary folder, not the user's.
+Sys.setenv(R_USER_DATA_DIR = file.path(tempdir(), "intern_userdata"))
 options(intern.quiet = TRUE)
 
 results = new.env()
@@ -153,6 +155,56 @@ check("write refused without approval",
       grepl("chose not to write", w2) && !file.exists("other.R"))
 check("write outside refused", fails(core$write_file_tool(file.path(outside, "c.R"), "1")))
 
+# ---- protecting existing scripts -----------------------------------------------
+script = c("library(dplyr)", purrr::map_chr(1:20, function(i) sprintf("x%d <- %d", i, i)), "y <- x1 + x2")
+writeLines(script, "keep.R")
+options(intern.auto_approve = "Write it")
+wipe_empty = core$write_file_tool("keep.R", "")
+wipe_holder = core$write_file_tool("keep.R", paste(c(script[1:3], "# ... rest of the code unchanged ..."),
+                                                   collapse = "\n"))
+wipe_dots = core$write_file_tool("keep.R", paste(c(script[1:12], "# ..."), collapse = "\n"))
+wipe_short = core$write_file_tool("keep.R", "library(dplyr)\nz <- 1")
+check("write_file refuses empty content for an existing file", startsWith(wipe_empty, "Not written"))
+check("write_file refuses a '# ... rest unchanged' placeholder", grepl("placeholder instead of code", wipe_holder))
+check("write_file refuses a bare '# ...' placeholder", grepl("placeholder instead of code", wipe_dots))
+check("write_file refuses content that drops most of an existing file",
+      grepl("keeps only 1 of its 22 lines", wipe_short) && grepl("edit_file", wipe_short))
+check("keep.R untouched after the refusals", identical(readLines("keep.R"), script))
+check("a bare ... in R code is not a placeholder",
+      is.null(core$overwrite_problem(script, c(script, "f <- function(...) list(", "  ...", ")"), "keep.R")))
+
+invisible(utils::capture.output(e1 <- core$edit_file_tool("keep.R", "x5 <- 5", "x5 <- 50")))
+check("edit_file changes only the targeted text",
+      startsWith(e1, "Wrote") && identical(readLines("keep.R"), replace(script, 6, "x5 <- 50")))
+check("edit_file refuses text that is not found",
+      grepl("not found", core$edit_file_tool("keep.R", "x99 <- 99", "z")))
+check("edit_file refuses text that matches more than once",
+      grepl("appears 2 times", core$edit_file_tool("keep.R", "x1", "w")) ||
+        grepl("appears [0-9]+ times", core$edit_file_tool("keep.R", "x1", "w")))
+check("edit_file keeps backslashes and dollars as typed", {
+  invisible(utils::capture.output(core$edit_file_tool("keep.R", "y <- x1 + x2", "y <- gsub('\\\\d', '$1', 'a')")))
+  readLines("keep.R")[22] == "y <- gsub('\\\\d', '$1', 'a')"
+})
+check("edit_file on a missing file says to use write_file",
+      grepl("use write_file", core$edit_file_tool("nope.R", "a", "b")))
+check("edit_file is a tool the model can call",
+      "edit_file" %in% purrr::map_chr(core$intern_tools(), function(t) t@name))
+
+check("each change was backed up outside the project",
+      nrow(core$backup_index()) >= 2 && !startsWith(core$backup_dir(), normalizePath(getwd(), winslash = "/")))
+suppressMessages(intern_undo("keep.R"))
+check("intern_undo puts back the version before the last change",
+      identical(readLines("keep.R"), replace(script, 6, "x5 <- 50")))
+suppressMessages(intern_undo("keep.R"))
+check("intern_undo again undoes the undo",
+      readLines("keep.R")[22] == "y <- gsub('\\\\d', '$1', 'a')")
+writeLines(script, "keep.R")
+check("no temporary files left behind", !length(list.files(".", pattern = "intern-tmp$")))
+options(intern.auto_approve = NULL)
+check("loss warning in the approval question when much is removed",
+      grepl("removes 22 of its 22 lines", core$loss_note(script, "z <- 1")) &&
+        core$loss_note(script, replace(script, 6, "x5 <- 50")) == "")
+
 # ---- run_code ---------------------------------------------------------------
 options(intern.auto_approve = "Run")
 invisible(utils::capture.output(r <- core$run_code_tool("made <- head(toy, 5); print(made$name)")))
@@ -226,13 +278,13 @@ check("token parsed from query", identical(core$query_token("?t=abc123"), "abc12
 
 # ---- tools and chat object (no API call) -------------------------------------
 tl = core$intern_tools()
-check("8 tools defined", length(tl) == 8L)
+check("9 tools defined", length(tl) == 9L)
 check("system prompt read without comments",
       !grepl("<!--", core$intern_system_prompt()) &&
         grepl("never see data values", core$intern_system_prompt()))
 Sys.setenv(ANTHROPIC_API_KEY = "sk-ant-not-a-real-key-for-tests")
 ch = core$intern_new_chat()
-check("chat object built with tools", length(ch$get_tools()) == 8L &&
+check("chat object built with tools", length(ch$get_tools()) == 9L &&
         identical(ch$get_model(), core$INTERN_LLM$pm))
 Sys.unsetenv("ANTHROPIC_API_KEY")
 
