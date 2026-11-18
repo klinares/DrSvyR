@@ -1,5 +1,51 @@
 # chaRt: status
 
+## Phase 1b, 2026-11-17: four fixes to the data layer
+
+Branch `chart`. Not pushed. No model calls.
+
+### Built
+
+- **Values that mean missing.** `read_data(path, name, missing)` adds the analyst's values to
+  `DATA_NA`; readr matches them to whole cells after trimming (checked: `9` leaves `99` and `19`
+  alone). The Data tab has "Values that mean missing, one per line" and "Read again", which calls
+  `reread_data()`. The codebook keeps `missing_codes`; an uploaded codebook re-reads the file with
+  them before `check_codebook()` runs and fills the box. `mostly_numbers_note()` now points to the
+  box. FH read with `..` has 24 integer columns and one id, and no problems.
+- **Whole-number ids.** A whole-number column of distinct values is `id` only when it is an
+  unbroken run or its name matches `ID_NAME_PATTERN`; otherwise `integer` with `DISTINCT_NOTE`.
+- **Roles follow the type.** `role_choices()` from `ROLE_CHOICES`; the role select offers only
+  those; a type change keeps an allowed role and otherwise gives the default; `check_codebook()`
+  refuses a role the type does not allow, naming the column.
+- **Ordered levels one per line** in a `textAreaInput`, read by `parse_lines()`.
+- `tests/smoke.R`: 52 checks (the 39, 12 asked for, and 1 on what Read again carries).
+
+### Departures from the Phase 1b prompt
+
+- **Read again carries what the analyst chose, not what R chose.** A type other than R's own
+  (`detected`) and a role other than the type's default are kept, or dropped with a sentence. A
+  type or role that R chose is chosen again from the data without a note; otherwise reading FH
+  again with `..` gave 46 sentences saying text columns were now integer. Labels, their sources and
+  the row sentence are always kept. One extra smoke check covers this.
+- **A Phase 1 bug fixed:** `codebook_detail()` gave only the count of distinct values for any
+  column with more than 30 values, numbers included, so a number's range and quartiles were never
+  sent. The 30-level rule now applies only to category, flag and ordered columns, as DESIGN.md
+  section 4 says.
+- `missing_codes` is stored as text when there are codes and as an empty list (written `[]`) when
+  there are none, because the yaml package reads a one-item list back as text; this keeps the round
+  trip `identical()`.
+- The "every value is different" rule, for whole numbers as for words, needs more than
+  `CODEBOOK_MAX_LEVELS` rows, so a short file of distinct numbers is not called an id.
+- An integer column can carry both notes, joined by "; ".
+- A codebook uploaded on the Data tab now needs the data file to have been uploaded in this
+  session (the file is read again with the codebook's values); before, a profile was enough.
+
+### Noticed, not changed
+
+- FH's political rights columns hold `-2` as their minimum. It may be a code; that is the analyst's
+  call, and the box takes it if so.
+- footballdata's `Birthday` is text: its dates are not in a form readr reads as dates.
+
 ## Phase 1, 2026-11-17: Phase 0 fixes, Data and Codebook
 
 Branch `chart`. Not pushed. No model calls in the app.
