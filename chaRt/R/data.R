@@ -17,6 +17,11 @@ CODEBOOK_MAX_DETAIL <- 12L
 CODED_MAX_DISTINCT <- 10L
 CODED_NOTE <- "may be a coded category"
 
+# A whole-number column whose values are all different is an id only when they are an unbroken run
+#   or its name looks like an id's (lower-cased); otherwise it is an integer with DISTINCT_NOTE.
+ID_NAME_PATTERN <- "(^|_)(id|key|code)($|_)"
+DISTINCT_NOTE <- "every value is different; may be an identifier"
+
 # A year column: an integer whose values all lie in this range and whose name contains "year".
 YEAR_RANGE <- c(1800, 2100)
 
@@ -25,8 +30,14 @@ CODEBOOK_TYPES <- c("number", "integer", "category", "ordered", "date", "text", 
 CODEBOOK_ROLES <- c("measure", "group", "time", "id", "text", "ignore")
 LABEL_SOURCES <- c("file", "ai_guess", "user")
 
-# The values read as missing. No other value is, and none is recoded.
+# The values always read as missing. The analyst may add others (read_data(missing =)); R never
+#   decides that a value means missing, and none is recoded.
 DATA_NA <- c("", "NA")
+
+# The roles each type allows; default_role() says which one a column starts with.
+ROLE_CHOICES <- list(number = c("measure", "ignore"), integer = c("measure", "time", "ignore"),
+                     category = c("group", "ignore"), ordered = c("group", "ignore"), flag = c("group", "ignore"),
+                     date = c("time", "ignore"), id = c("id", "ignore"), text = c("text", "ignore"))
 
 # How many row numbers a parsing problem lists.
 PROBLEM_ROWS_SHOWN <- 5L
@@ -71,16 +82,28 @@ mostly_numbers_note <- function(x, name) {
   paste0("Column ", name, " is mostly numbers but also holds ", length(words), if (length(words) == 1L) " other value" else " other values",
          " (", paste0("'", utils::head(words, 3), "'", collapse = ", "), if (length(words) > 3) ", ...",
          "), so it is read as text. If ", if (length(words) == 1L) "it" else "one of them",
-         " stands for missing, recode it in the file and read it again.")
+         " stands for missing, enter it under 'Values that mean missing' and read the file again.")
 }
+
+# Text typed one item per line (values that mean missing, an order of levels): each line trimmed,
+#   blank lines dropped.
+parse_lines <- function(txt) {
+  v = trimws(unlist(strsplit(paste(txt %||% "", collapse = "\n"), "\r?\n")))
+  v[nzchar(v)]
+}
+
+parse_missing <- function(txt) unique(parse_lines(txt))
 
 # readr guesses the delimiter when delim is NULL: readr passes it to vroom, whose help says it
 #   then guesses from , tab space | : and ;. A file it cannot guess for (one column, say) is read
-#   with a comma. Types are guessed from every row (guess_max = Inf).
-read_data <- function(path, name = basename(path)) {
+#   with a comma. Types are guessed from every row (guess_max = Inf). The values in `missing` are
+#   added to DATA_NA; readr's `na` matches a whole cell, after the spaces around it are trimmed
+#   (trim_ws), never part of one.
+read_data <- function(path, name = basename(path), missing = character()) {
+  na = unique(c(DATA_NA, parse_missing(missing)))
   read = function(delim)
-    suppressWarnings(readr::read_delim(path, delim = delim, na = DATA_NA, guess_max = Inf, name_repair = "minimal",
-                                       show_col_types = FALSE, progress = FALSE))
+    suppressWarnings(readr::read_delim(path, delim = delim, na = na, guess_max = Inf, trim_ws = TRUE,
+                                       name_repair = "minimal", show_col_types = FALSE, progress = FALSE))
   data = tryCatch(read(NULL), error = function(e)
     if (grepl("guess the delimiter", conditionMessage(e), fixed = TRUE)) NULL else unreadable(name, e))
   if (is.null(data)) data = tryCatch(read(","), error = function(e) unreadable(name, e))
@@ -123,14 +146,24 @@ date_text <- function(x) if (inherits(x, "POSIXt")) format(x, "%Y-%m-%d %H:%M:%S
 
 is_whole <- function(obs) is.numeric(obs) && length(obs) > 0L && all(is.finite(obs)) && all(obs == round(obs))
 
-# R's type for a column, by the table in the Phase 1 prompt. A column readr returns as some other
-#   class (a time of day, say) is typed as its text.
-detect_type <- function(x, obs, distinct, rows) {
+# Whether every value of a column is different, in a file long enough for that to mean something.
+all_distinct <- function(obs, distinct, rows) distinct == length(obs) && rows > CODEBOOK_MAX_LEVELS
+
+# Whether a whole-number column of distinct values looks like an id: an unbroken run of values, or
+#   a name such as order_id, key or zip_code.
+whole_id <- function(obs, distinct, name)
+  (max(obs) - min(obs) + 1 == distinct) || grepl(ID_NAME_PATTERN, tolower(name))
+
+# R's type for a column. A column readr returns as some other class (a time of day, say) is typed
+#   as its text. A whole-number column of distinct values is an id only when whole_id() says so.
+detect_type <- function(x, obs, distinct, rows, name = "") {
   if (inherits(x, c("Date", "POSIXt"))) return("date")
   if (is.logical(x) || distinct == 2L) return("flag")
-  chr_or_int = is.character(x) || is.factor(x) || is_whole(obs) || !is.numeric(x)
-  if (chr_or_int && distinct == length(obs) && rows > CODEBOOK_MAX_LEVELS) return("id")
-  if (is.numeric(x)) return(if (is_whole(obs)) "integer" else "number")
+  if (is.numeric(x)) {
+    if (!is_whole(obs)) return("number")
+    return(if (all_distinct(obs, distinct, rows) && whole_id(obs, distinct, name)) "id" else "integer")
+  }
+  if (all_distinct(obs, distinct, rows)) return("id")
   if (distinct <= CODEBOOK_MAX_LEVELS) "category" else "text"
 }
 
@@ -153,12 +186,14 @@ profile_column <- function(x, name) {
   rows = length(x)
   obs = x[!is.na(x)]
   distinct = length(unique(obs))
-  type = detect_type(x, obs, distinct, rows)
+  type = detect_type(x, obs, distinct, rows, name)
+  notes = if (identical(type, "integer"))
+    c(if (distinct <= CODED_MAX_DISTINCT) CODED_NOTE, if (all_distinct(obs, distinct, rows)) DISTINCT_NOTE)
   detail = switch(type,
     date = date_facts(obs),
     flag = if (distinct) level_counts(obs),
     integer = c(number_facts(obs), if (distinct <= CODEBOOK_MAX_LEVELS) level_counts(obs),
-                if (distinct <= CODED_MAX_DISTINCT) list(note = CODED_NOTE)),
+                if (length(notes)) list(note = paste(notes, collapse = "; "))),
     number = number_facts(obs),
     id = if (is_whole(obs)) number_facts(obs),
     category = level_counts(obs),
@@ -167,6 +202,9 @@ profile_column <- function(x, name) {
 }
 
 profile_data <- function(data) unname(purrr::imap(as.list(data), profile_column))
+
+# The roles a column's current type allows.
+role_choices <- function(entry) ROLE_CHOICES[[entry$type %||% ""]] %||% "ignore"
 
 # The role a type starts with; an integer year column is time.
 default_role <- function(entry, type = entry$type) {
@@ -196,9 +234,15 @@ default_order <- function(p) {
   if (length(v) && !anyNA(num)) v[order(num)] else sort(v)
 }
 
-new_codebook <- function(profile, file, rows)
+# missing_codes is stored the way YAML gives it back: text when there are codes, an empty list
+#   (written []) when there are none. missing_codes() always gives text.
+codes_field <- function(codes) if (length(codes)) as.character(codes) else list()
+
+new_codebook <- function(profile, file, rows, missing_codes = character())
   list(chart_codebook = CODEBOOK_VERSION, file = file, rows = as.integer(rows), row_is = "",
-       columns = purrr::map(profile, codebook_entry))
+       missing_codes = codes_field(parse_missing(missing_codes)), columns = purrr::map(profile, codebook_entry))
+
+missing_codes <- function(cb) as.character(unlist(cb$missing_codes %||% list()))
 
 write_codebook <- function(cb, path) {
   yaml::write_yaml(cb, path, precision = YAML_PRECISION, fileEncoding = "UTF-8")
@@ -209,6 +253,7 @@ write_codebook <- function(cb, path) {
 read_codebook <- function(path) {
   cb = tryCatch(yaml::read_yaml(path, fileEncoding = "UTF-8"), error = function(e)
     stop("This is not a codebook chaRt can read: ", gsub("\\s+", " ", conditionMessage(e)), call. = FALSE))
+  if (is.list(cb)) cb$missing_codes = codes_field(parse_missing(as.character(unlist(cb$missing_codes))))
   ok = is.list(cb) && identical(cb$chart_codebook, CODEBOOK_VERSION) && is.list(cb$columns) &&
     all(purrr::map_lgl(cb$columns, function(e) is.list(e) && is.character(e$name) && length(e$name) == 1L))
   if (!ok) stop("This is not a codebook chaRt can read: it needs chart_codebook: 1 and a list of columns, each with a name.",
@@ -246,9 +291,9 @@ check_codebook <- function(cb, profile) {
     c(if (!type %in% type_choices(f))
         paste0("The codebook types ", e$name, " as ", if (nzchar(type)) type else "nothing", ", but its data cannot be that ",
                "(R reads it as ", f$type, "; it may be ", paste(type_choices(f), collapse = ", "), ")."),
-      if (!(e$role %||% "") %in% CODEBOOK_ROLES)
-        paste0("The codebook gives ", e$name, " the role '", e$role %||% "", "', which is not one of ",
-               paste(CODEBOOK_ROLES, collapse = ", "), "."),
+      if (type %in% type_choices(f) && !(e$role %||% "") %in% role_choices(list(type = type)))
+        paste0("The codebook gives ", e$name, " the role '", e$role %||% "", "', which a column of type ", type,
+               " cannot have (it may be ", paste(role_choices(list(type = type)), collapse = ", "), ")."),
       if (!(e$label_source %||% "") %in% LABEL_SOURCES || !is.character(e$label) || length(e$label) != 1L)
         paste0("The codebook's label for ", e$name, " is not a single label marked file, ai_guess or user."),
       if (identical(type, "ordered") && !order_ok(e$order, f))
@@ -266,7 +311,7 @@ apply_codebook <- function(cb, profile, file, rows) {
   why = check_codebook(cb, profile)
   if (length(why)) stop(paste(why, collapse = " "), call. = FALSE)
   up = stats::setNames(cb$columns, purrr::map_chr(cb$columns, "name"))
-  out = new_codebook(profile, file, rows)
+  out = new_codebook(profile, file, rows, missing_codes(cb))
   out$row_is = if (is.character(cb$row_is) && length(cb$row_is) == 1L) cb$row_is else ""
   out$columns = purrr::map(profile, function(p) {
     e = up[[p$name]]
@@ -275,16 +320,50 @@ apply_codebook <- function(cb, profile, file, rows) {
   out
 }
 
-# One column of a codebook changed by the analyst. A new label marks it user; a new type resets
-#   the role to that type's default and, for ordered, starts the order.
+# The file read again with the values that mean missing, and the analyst's codebook carried over:
+#   for every column whose name is unchanged, its label, label source and role, and its type and
+#   order when the data can still be them; and the row sentence. Returns read (data and problems),
+#   profile, codebook and notes (a sentence for each type, order or role that had to be dropped).
+reread_data <- function(path, name, missing, old = NULL) {
+  r = read_data(path, name, missing)
+  prof = profile_data(r$data)
+  cb = new_codebook(prof, name, nrow(r$data), missing)
+  if (is.null(old)) return(list(read = r, profile = prof, codebook = cb, notes = character(0)))
+  before = stats::setNames(old$columns, purrr::map_chr(old$columns, "name"))
+  carried = purrr::map(cb$columns, function(e) {
+    o = before[[e$name]]
+    if (is.null(o)) return(list(entry = e, note = NULL))
+    out = e
+    out$label = o$label
+    out$label_source = o$label_source
+    notes = character(0)
+    if (!identical(o$type, e$type)) {
+      if (o$type %in% type_choices(e)) out = edit_entry(out, type = o$type)
+      else notes = c(notes, paste0(e$name, " was ", o$type, "; read again it cannot be, so it is ", e$type, "."))
+    }
+    if (identical(out$type, "ordered") && !is.null(o$order)) {
+      if (order_ok(o$order, out)) out$order = o$order
+      else notes = c(notes, paste0("The order of ", e$name, "'s levels no longer matches its levels, so it starts again."))
+    }
+    if (o$role %in% role_choices(out)) out$role = o$role
+    else notes = c(notes, paste0(e$name, " cannot keep the role ", o$role, " as ", out$type, ", so it is ", out$role, "."))
+    list(entry = out, note = notes)
+  })
+  cb$columns = purrr::map(carried, "entry")
+  cb$row_is = old$row_is %||% ""
+  list(read = r, profile = prof, codebook = cb, notes = unlist(purrr::map(carried, "note")))
+}
+
+# One column of a codebook changed by the analyst. A new label marks it user; a new type keeps the
+#   role if the type allows it, else gives the type's default, and for ordered starts the order.
 edit_entry <- function(entry, label = NULL, type = NULL, role = NULL, order = NULL) {
   if (!is.null(label) && !identical(label, entry$label)) { entry$label = label; entry$label_source = "user" }
   if (!is.null(type) && !identical(type, entry$type) && type %in% type_choices(entry)) {
     entry$type = type
-    entry$role = default_role(entry, type)
+    if (!entry$role %in% role_choices(entry)) entry$role = default_role(entry, type)
     entry$order = if (identical(type, "ordered")) default_order(entry)
   }
-  if (!is.null(role) && role %in% CODEBOOK_ROLES) entry$role = role
+  if (!is.null(role) && role %in% role_choices(entry)) entry$role = role
   if (!is.null(order) && identical(entry$type, "ordered") && order_ok(order, entry)) entry$order = order
   entry
 }
@@ -312,7 +391,8 @@ codebook_index <- function(cb)
     paste0(e$name, " | ", e$label, " | ", e$type, " | ", e$role, " | ", sprintf("%.2f", e$missing), " missing"))
 
 # The detail of DESIGN.md section 4 for at most CODEBOOK_MAX_DETAIL named columns. An id or text
-#   column, or anything with more than CODEBOOK_MAX_LEVELS levels, is a count of distinct values.
+#   column, or a category with more than CODEBOOK_MAX_LEVELS levels, is a count of distinct values;
+#   a number keeps its range and quartiles however many values it has.
 codebook_detail <- function(cb, columns) {
   if (length(columns) > CODEBOOK_MAX_DETAIL)
     stop("At most ", CODEBOOK_MAX_DETAIL, " columns can be described at once; ", length(columns), " were asked for.", call. = FALSE)
@@ -323,13 +403,13 @@ codebook_detail <- function(cb, columns) {
     e = by_name[[nm]]
     head = paste0(e$name, " (", e$type, "): ")
     count_only = paste0(head, e$distinct, " distinct values")
-    if (e$type %in% c("id", "text") || e$distinct > CODEBOOK_MAX_LEVELS) return(count_only)
+    if (e$type %in% c("id", "text")) return(count_only)
     switch(e$type,
       number = , integer = paste0(head, "min ", format_num(e$min), ", max ", format_num(e$max), ", quartiles ",
                                   paste(format_num(e$quartiles), collapse = ", "), "; ", e$distinct, " distinct values"),
       date = paste0(head, "from ", e$min, " to ", e$max, if (!is.null(e$gap)) paste0(", most often ", e$gap, " apart")),
       category = , flag = , ordered = {
-        if (is.null(e$values)) return(count_only)
+        if (is.null(e$values) || e$distinct > CODEBOOK_MAX_LEVELS) return(count_only)
         lv = if (identical(e$type, "ordered") && !is.null(e$order)) e$order else e$values
         n = e$counts[match(lv, e$values)]
         paste0(head, length(lv), " levels", if (identical(e$type, "ordered")) " in order", ": ",
