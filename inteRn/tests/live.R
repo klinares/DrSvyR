@@ -2,7 +2,7 @@
 #   guard, approvals, the lint gate, survey designs, errors and the Viewer.
 #
 # Run from anywhere:  Rscript --no-init-file <path>/inteRn/tests/live.R [case ...]
-#   No case letters runs all of them (A to U); e.g. "B D K" runs three.
+#   No case letters runs all of them (A to V); e.g. "B D K" runs three.
 # Needs ANTHROPIC_API_KEY (or the key_var in config.R) and makes about 40 API
 #   calls with the model set in inteRn.R, so it costs a little. Uses toy data
 #   made here, in a temporary folder, never project data. The full transcript
@@ -18,6 +18,7 @@ here = local({
 })
 home = normalizePath(file.path(here, ".."), winslash = "/")
 Sys.setenv(INTERN_HOME = home)
+Sys.setenv(R_USER_DATA_DIR = file.path(tempdir(), "intern_userdata"))   # backups from file writes
 scratch = file.path(tempdir(), "intern_live")
 proj = file.path(scratch, "proj"); unlink(proj, recursive = TRUE); dir.create(proj, recursive = TRUE)
 setwd(proj)
@@ -350,6 +351,23 @@ if (run("U")) {
   r = q("U4", "Now write the svydesign() call for my data and the svymean for my main outcome.", new = FALSE)
   check("U", "uses all three design vars", all(vapply(c("wt", "stratum", "psu"), grepl, TRUE, r$text)))
   check("U", "remembers outcome q1", grepl("q1", r$text))
+}
+
+# ---- V. a small change to a long script keeps the rest of it ------------------------
+if (run("V")) {
+  long = c("library(tidyverse)", "",
+           purrr::map_chr(1:28, function(i) sprintf("step_%02d <- mtcars |> filter(cyl == %d) |> nrow()", i, 4 + 2 * (i %% 3))),
+           "", "result <- step_01 + step_02")
+  writeLines(long, "long_script.R")
+  options(intern.auto_approve = "Write it")
+  r = q("V. one-line change to a 32-line script",
+        "In long_script.R, change step_04 so it filters on cyl == 8 instead. Save the change to the file.")
+  options(intern.auto_approve = NULL)
+  after = readLines("long_script.R")
+  check("V", "used edit_file", any(grepl("^edit_file", r$tools)))
+  check("V", "the change was made", any(grepl("^step_04 <- .*cyl == 8", after)))
+  check("V", "every other line kept", identical(after[-6], long[-6]))
+  check("V", "backed up", nrow(core$backup_index()) > 0)
 }
 
 res = do.call(rbind, results)
