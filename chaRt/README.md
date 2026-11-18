@@ -45,15 +45,18 @@ set, `APP_DEFAULT_PROFILE` does.
 
 ## Data and Codebook
 
-The Data tab reads a CSV or other delimited text file (readr guesses the delimiter). Only blank
-cells and `NA` are missing; a code such as `..` or `-99` stays as it is, and a column that is
-mostly numbers with such words in it is reported. The tab lists the problems found and a table of
-the columns with R's type for each.
+The Data tab reads a CSV or other delimited text file (readr guesses the delimiter). Blank cells
+and `NA` are always missing. Any other value (`..`, `-99`) is missing only if the analyst lists it
+under "Values that mean missing" and presses "Read again"; it must match a whole cell. Reading
+again keeps the labels, roles and row sentence already entered. A column that is mostly numbers
+with a few words in it is reported. The tab lists the problems found and a table of the columns
+with R's type for each.
 
 The Codebook tab asks what one row represents (charts need it) and shows the columns, 25 to a
 page, each with its label, type, role and facts. A type can only be changed to one the data can
-be. "Download codebook.yaml" saves it; uploading the same file with that codebook on the Data tab
-brings the labels, types, roles, level orders and row sentence back. A codebook that does not match
+be, and a role to one the type allows. "Download codebook.yaml" saves it, with the values that mean
+missing; uploading the same file with that codebook on the Data tab reads the file again with
+those values and brings the labels, types, roles, level orders and row sentence back. A codebook that does not match
 the file is refused with the reasons, and nothing is merged. Every fact (missing share, distinct
 count, ranges, levels) comes from the file in hand, never from an uploaded codebook.
 
@@ -81,8 +84,8 @@ and asks for structured output in the Anthropic style and, through OpenRouter, i
 that stands in for the work endpoint. `CHART_TEST_MODEL` replaces the home model for the first two
 checks (Sonnet models only); `OPENROUTER_MODEL` replaces the OpenRouter model.
 
-On Windows, run the live check from PowerShell or RStudio, not Git Bash: Git Bash sets `HOME`, so R
-looks for `.Renviron` in the wrong folder and finds no key.
+Run the tests from PowerShell or the RStudio terminal, not Git Bash. Git Bash sets `HOME`, so R
+looks for `.Renviron` in the wrong folder and the live check finds no key.
 
 ## The probe
 
