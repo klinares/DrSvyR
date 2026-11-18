@@ -17,6 +17,7 @@ self-contained folder at the top level; `svysegment/` is the first and
 | `svysegment/tests/smoke.R` | Smoke test, kept out of the bundle by `.rscignore` |
 | `QuestionR/` | An AI reviewer and item writer for questionnaires: Evaluate questions and Write questions, one model. Read `QuestionR/README.md` and `QuestionR/STATUS.md` first; `QuestionR/archive/` holds earlier phases. Its reflex files, `www/reflexes/*.md`, are checksummed in `tests/smoke.R` and are edited in the Claude project, not by code. `tests/` is home only. Test: `Rscript --no-init-file tests/smoke.R` from inside `QuestionR/` (no API calls); `tests/llm_check.R review30` or `gold` make live calls |
 | `inteRn/` | Not an app: an AI coding intern for RStudio. One script, `inteRn/inteRn.R`, set up with `source("inteRn/install.R")`. Test: `Rscript --no-init-file inteRn/tests/smoke.R` (no API calls); `inteRn/tests/live.R` asks the real model (needs the key, costs a little) |
+| `chaRt/` | Publishable charts from a data file: codebook, chart specs drawn by one R renderer, chat refinement, HTML report. Read `chaRt/DESIGN.md` and `chaRt/STATUS.md` first; built one phase at a time (Phase 0: skeleton, key box, probe). `probe/` is a separate app published once at work. Test: `Rscript --no-init-file tests/smoke.R` from inside `chaRt/` (no API calls); `tests/llm_check.R` makes live calls |
 
 ## svysegment settings (top of app.R)
 
