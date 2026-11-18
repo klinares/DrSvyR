@@ -126,14 +126,65 @@ gallery_section <- function(item, i) {
     "**The code**\n\n", fenced(item$code, "r"), "\n")
 }
 
-gallery_qmd <- function(items, rds) paste0(
+gallery_qmd <- function(items, rds, palettes = list(), palettes_rds = NULL) paste0(
   "---\ntitle: chaRt gallery\nsubtitle: Every gold spec, static and interactive\n",
   "format:\n  html:\n    embed-resources: true\n    page-layout: full\n    toc: true\n    toc-depth: 2\n",
   "execute:\n  echo: false\n  warning: true\n  message: true\n---\n\n",
   "Each section shows one gold spec from `tests/gold_specs.yaml`: the lint's notes, the static chart beside its plotly ",
   "version at the same size, the first rows of the table that is drawn, and the R code that reproduces the chart.\n\n",
-  "```{r}\n#| include: false\nlibrary(ggplot2)\nlibrary(plotly)\ngallery <- readRDS(", deparse(rds), ")\n```\n\n",
-  paste(purrr::imap_chr(items, gallery_section), collapse = "\n\n"))
+  "```{r}\n#| include: false\nlibrary(ggplot2)\nlibrary(plotly)\ngallery <- readRDS(", deparse(rds), ")\n",
+  if (!is.null(palettes_rds)) paste0("palettes <- readRDS(", deparse(palettes_rds), ")\n"), "```\n\n",
+  paste(purrr::imap_chr(items, gallery_section), collapse = "\n\n"),
+  if (length(palettes)) paste0("\n\n", palette_section(palettes)))
+
+# The palette section: four charts, each drawn under every palette of the matching kind on offer,
+#   titled with the palette's label.
+PALETTE_CHARTS <- list(
+  list(kind = "qualitative", gold = "height against weight by foot", heading = "Football: height against weight, by foot"),
+  list(kind = "qualitative", gold = "revenue by year and region (line, 8 lines)", heading = "Panel: revenue by year, 8 regions"),
+  list(kind = "sequential", gold = "mean price by region and year (heatmap)", heading = "Panel: mean price by region and year"),
+  list(kind = "diverging", gold = "mean price by region and year (heatmap)", midpoint = 25,
+       heading = "Panel: mean price by region and year, centred on 25"))
+PALETTE_SIZE <- c(width = 6, height = 3.8)
+
+palette_items <- function(work_dir) {
+  ents = gold_entries()
+  purrr::compact(purrr::map(PALETTE_CHARTS, function(pc) {
+    en = purrr::detect(ents, function(e) grepl(pc$gold, e$name, fixed = TRUE))
+    g = if (!is.null(en)) gold_load(en, work_dir)
+    if (is.null(g)) return(NULL)
+    plots = purrr::imap(as.list(chart_palettes(pc$kind)), function(label, name) {
+      palette = chart_palette_default()
+      palette[[pc$kind]] = name
+      spec = en$spec
+      spec$title = label
+      spec$subtitle = NULL
+      if (!is.null(pc$midpoint)) spec$midpoint = pc$midpoint
+      p = tryCatch(spec_plot(spec, g$data, g$cb, palette = palette), error = function(e) e)
+      list(label = label, plot = if (inherits(p, "ggplot")) p, error = if (inherits(p, "error")) conditionMessage(p),
+           notes = if (inherits(p, "ggplot")) attr(p, "notes"))
+    })
+    list(heading = pc$heading, kind = pc$kind, plots = unname(plots))
+  }))
+}
+
+palette_section <- function(sections) {
+  px = round(PALETTE_SIZE[["width"]] * GALLERY_DPI)
+  opts = c(paste("fig-width:", PALETTE_SIZE[["width"]]), paste("fig-height:", PALETTE_SIZE[["height"]]),
+           paste("fig-dpi:", GALLERY_DPI), paste0('out-width: "', px, 'px"'))
+  chunk = function(i, j) paste0("```{r}\n", paste0("#| ", opts, collapse = "\n"), "\n", sprintf("print(palettes[[%d]]$plots[[%d]]$plot)", i, j), "\n```")
+  paste0("# Palettes\n\nEach chart below is drawn under every palette of its kind that this installation offers ",
+         "(`chart_palettes()`), titled with the palette's label. The report uses one palette of each kind throughout.\n\n",
+         paste(purrr::imap_chr(sections, function(sec, i) paste0(
+           "## ", sec$heading, " (", sec$kind, ")\n\n",
+           ":::: {style=\"display:flex; flex-wrap:wrap; gap:1.5rem; align-items:flex-start\"}\n",
+           paste(purrr::imap_chr(sec$plots, function(pl, j) paste0(
+             "::: {style=\"width:", px, "px\"}\n",
+             if (!is.null(pl$plot)) chunk(i, j) else paste0("**", pl$label, ":** could not draw this: ", pl$error),
+             if (length(pl$notes)) paste0("\n\n", paste0("- ", pl$notes, collapse = "\n")) else "",
+             "\n:::\n")), collapse = ""),
+           "::::\n")), collapse = "\n"))
+}
 
 # Quarto, as probe/app.R finds it: QUARTO_PATH, then the PATH.
 quarto_bin <- function() {
@@ -150,8 +201,11 @@ build_gallery <- function(out = GALLERY_OUT) {
   items = purrr::map(runs, gallery_item)
   rds = normalizePath(file.path(work, "gallery.rds"), winslash = "/", mustWork = FALSE)
   saveRDS(items, rds)
+  palettes = palette_items(work)
+  palettes_rds = normalizePath(file.path(work, "palettes.rds"), winslash = "/", mustWork = FALSE)
+  saveRDS(palettes, palettes_rds)
   qmd = file.path(work, "gallery.qmd")
-  writeLines(gallery_qmd(items, rds), qmd, useBytes = TRUE)
+  writeLines(gallery_qmd(items, rds, palettes, palettes_rds), qmd, useBytes = TRUE)
   Sys.setenv(QUARTO_R = R.home("bin"))
   started = Sys.time()
   said = suppressWarnings(system2(quarto_bin(), c("render", shQuote(qmd), "--to", "html", "--quiet"), stdout = TRUE, stderr = TRUE))

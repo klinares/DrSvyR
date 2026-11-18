@@ -526,6 +526,81 @@ if (!is.null(lines8)) {
 }
 
 
+# ---- Phase 2c: palettes ---------------------------------------------------------------------
+
+hex_ok <- function(x) is.character(x) && length(x) > 0L && all(grepl("^#[0-9A-F]{6}$", x))
+available <- names(CHART_PALETTES)[purrr::map_lgl(names(CHART_PALETTES), palette_available)]
+unavailable <- setdiff(names(CHART_PALETTES), available)
+cat("      palettes not available here: ", if (length(unavailable)) paste(unavailable, collapse = ", ") else "none",
+    if (length(unavailable)) " (their source package is not installed)" else "", "\n", sep = "")
+check(paste0("2c: every available palette (", length(available), " of ", length(CHART_PALETTES),
+             ") gives valid hex; a qualitative one gives exactly max distinct colours at its limit and refuses one more"),
+      all(purrr::map_lgl(available, function(k) {
+        e = CHART_PALETTES[[k]]
+        if (!identical(e$kind, "qualitative")) return(hex_ok(if (identical(e$kind, "sequential")) chart_sequential(k) else chart_diverging(k)))
+        cols = chart_palette(e$max, k)
+        hex_ok(cols) && length(unique(cols)) == e$max && inherits(tryCatch(chart_palette(e$max + 1L, k), error = function(err) err), "error")
+      })))
+
+# Without paletteer (its check stubbed): only the built-in and `colours` entries, and the gold
+#   specs still draw.
+real_paletteer_installed <- paletteer_installed
+assign("paletteer_installed", function() FALSE, envir = globalenv())
+offered_without <- unlist(purrr::map(c("qualitative", "sequential", "diverging"), function(k) names(chart_palettes(k))))
+default_without <- chart_palette_default()
+drawn_without <- purrr::map_lgl(gold, function(x) inherits(tryCatch(spec_plot(x$entry$spec, x$g$data, x$g$cb), error = function(e) e), "ggplot"))
+assign("paletteer_installed", real_paletteer_installed, envir = globalenv())
+check("2c: without paletteer, only the built-in and colours entries are offered, and every gold spec still draws",
+      setequal(offered_without, names(purrr::keep(CHART_PALETTES, function(e) !is.null(e$colours)))) &&
+        identical(default_without$diverging, "blue_red") && all(drawn_without))
+
+if (!is.null(pan_g <- purrr::detect(gold, function(x) identical(x$entry$file, "panel.csv"))$g) && !is.null(ball_g)) {
+  heat_mid <- list(family = "heatmap", x = "year", "y" = "region", color = "price", fn = "mean", midpoint = 25, title = "t")
+  p_mid <- spec_plot(heat_mid, pan_g$data, pan_g$cb)
+  fill_scale <- ggplot2::ggplot_build(p_mid)$plot$scales$get_scales("fill")
+  div <- chart_diverging()
+  code_mid <- spec_code(attr(p_mid, "spec"), pan_g$cb, pan_g$path)
+  check("2c: a heatmap with a midpoint fills with the diverging colours, centred on it; midpoint on a bar is refused",
+        identical(toupper(substr(fill_scale$map(25), 1, 7)), div[(length(div) + 1L) / 2L]) &&
+          all(purrr::map_lgl(div, function(h) grepl(h, code_mid, fixed = TRUE))) &&
+          grepl("rescale_mid(x, ..., mid = 25)", code_mid, fixed = TRUE) &&
+          any(grepl("midpoint: only a heatmap", spec_check(list(family = "bar", x = "Position", midpoint = 3), ball_g$cb), fixed = TRUE)))
+}
+if (!is.null(hw) && palette_available("tol_bright")) {
+  bright <- list(qualitative = "tol_bright", sequential = "viridis", diverging = chart_palette_default()$diverging)
+  p_b <- spec_plot(hw$x$entry$spec, hw$x$g$data, hw$x$g$cb, palette = bright)
+  code_b <- spec_code(attr(p_b, "spec"), hw$x$g$cb, hw$x$g$path, palette = bright)
+  env_b <- new.env(parent = globalenv())
+  old_wd <- setwd(dirname(hw$x$g$path))
+  run_b <- tryCatch({ suppressMessages(eval(parse(text = code_b), env_b)); TRUE }, error = function(e) FALSE)
+  setwd(old_wd)
+  check("2c: the code for a chart drawn with a non-default palette writes that palette's colours and reproduces the table",
+        all(purrr::map_lgl(chart_palette(2, "tol_bright"), function(h) grepl(h, code_b, fixed = TRUE))) &&
+          !grepl("E69F00", code_b, fixed = TRUE) && run_b && isTRUE(all.equal(plain(env_b$chart_table), plain(attr(p_b, "table")))))
+}
+
+# Printed, not judged: how far apart each qualitative palette's colours stay, and whether each
+#   sequential palette's lightness runs one way.
+if (length(find.package("colorspace", quiet = TRUE))) {
+  lab_of <- function(cols) methods::as(colorspace::hex2RGB(cols), "LAB")@coords
+  min_gap <- function(cols) round(min(stats::dist(lab_of(cols))), 1)
+  cat("\n  Colour distances (smallest CIELAB distance between two colours of the palette at its max):\n")
+  cat(sprintf("    %-20s %4s %7s %7s %7s %7s\n", "palette", "max", "normal", "deutan", "protan", "tritan"))
+  purrr::walk(purrr::keep(available, function(k) identical(CHART_PALETTES[[k]]$kind, "qualitative")), function(k) {
+    cols = chart_palette(CHART_PALETTES[[k]]$max, k)
+    cat(sprintf("    %-20s %4d %7.1f %7.1f %7.1f %7.1f\n", CHART_PALETTES[[k]]$label, length(cols), min_gap(cols),
+                min_gap(colorspace::deutan(cols)), min_gap(colorspace::protan(cols)), min_gap(colorspace::tritan(cols))))
+  })
+  cat("  Sequential palettes, lightness (CIELAB L) from end to end:\n")
+  purrr::walk(purrr::keep(available, function(k) identical(CHART_PALETTES[[k]]$kind, "sequential")), function(k) {
+    l = lab_of(chart_sequential(k))[, "L"]
+    cat(sprintf("    %-20s %s  (L %s)\n", CHART_PALETTES[[k]]$label,
+                if (all(diff(l) > 0) || all(diff(l) < 0)) "one direction" else "NOT one direction", paste(round(l), collapse = " ")))
+  })
+  cat("\n")
+} else cat("      the colorspace package is not installed: the colour-distance table is skipped\n")
+
+
 # ---- Phase 2: the lint, one check per rule ----------------------------------------------
 
 lint_of <- function(spec, g) {
