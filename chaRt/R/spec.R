@@ -31,6 +31,11 @@ SPEC_BIN_2D <- 40L           # bins on each axis of a binned scatter
 SPEC_SIZE <- c(width = 7, height = 4.5, max_height = 14, max_width = 10)
 SPEC_ROW_INCHES <- 0.28      # height of one sideways bar
 SPEC_PANEL_INCHES <- 2.2     # height of one row of panels
+SPEC_LABEL_GAP <- 0.04       # line-end labels closer than this share of the y range: a legend instead
+SPEC_HEAT_LABELS <- 40L      # a heatmap with this many cells or fewer prints each value
+SPEC_OVERLAP_SHARE <- 0.5    # more than this share of points on a shared position: points sized by count
+SPEC_LEGEND_PER_ROW <- 4L    # a legend at the top takes more rows past this many entries
+SPEC_CODE_WIDTH <- 100L      # the written code breaks an argument list only past this many characters
 
 SPEC_FAMILIES <- c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap")
 SPEC_FNS <- c("none", "count", "share", "sum", "mean", "median")
@@ -45,7 +50,7 @@ SPEC_TEXT_FIELDS <- c("title", "subtitle", "caption", "x_label", "y_label", "rul
 SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 
 # Fields the lint adds; never accepted from outside.
-SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned")
+SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".counted", ".negative", ".labels", ".legend_order", ".cell_labels")
 
 # What the plotly tooltip shows: the plotted values.
 SPEC_TOOLTIP <- c("x", "y", "colour", "fill", "size")
@@ -111,7 +116,7 @@ default_fn <- function(spec) switch(spec$family %||% "",
   heatmap = if (is.null(spec$color)) "count",
   NULL)
 
-# The defaults of the spec table, and nothing else. The sort of a bar or dot depends on the type
+# The defaults of the spec table, and nothing else. The sort of a bar, dot or box depends on the type
 #   of x, so it is decided with the codebook (effective_sort()), not here.
 spec_defaults <- function(spec) {
   d = list(fn = default_fn(spec), log_x = FALSE, log_y = FALSE, fit = "none", rug = FALSE, free_y = FALSE,
@@ -120,7 +125,7 @@ spec_defaults <- function(spec) {
 }
 
 effective_sort <- function(s, cb) {
-  if (!s$family %in% c("bar", "dot")) return(NULL)
+  if (!s$family %in% c("bar", "dot", "box")) return(NULL)
   s$sort %||% if (identical(cb_entry(cb, s$x)$type, "ordered")) "level_order" else "value_desc"
 }
 
@@ -263,7 +268,7 @@ spec_check <- function(spec, cb) {
         paste0("top_n must be a whole number from 1 to ", SPEC_TOP_MAX, "; it is ", paste(values_of(s$top_n), collapse = ", "), ".")
     },
     if (!is.null(s$sort)) {
-      if (!fam %in% c("bar", "dot")) paste0("sort: a ", fam, " chart is not sorted; only bar and dot charts are.")
+      if (!fam %in% c("bar", "dot", "box")) paste0("sort: a ", fam, " chart is not sorted; only bar, dot and box charts are.")
       else if (!is_text1(s$sort) || !s$sort %in% SPEC_SORTS) paste0("sort must be one of ", paste(SPEC_SORTS, collapse = ", "), ".")
     },
     if (!is_text1(s$fit) || !s$fit %in% SPEC_FITS) paste0("fit must be one of ", paste(SPEC_FITS, collapse = ", "), ".")
@@ -352,48 +357,70 @@ aggregate_calls <- function(s) {
       list(as.call(c(list(sym("summarise")), stats::setNames(list(agg), v), list(.by = g)))) })
 }
 
-# names(sort(tapply(value, column, sum), decreasing = ...)): the column's values ranked by their total.
-ranking_call <- function(value, column, decreasing = TRUE)
-  call("names", call("sort", call("tapply", sym(value), sym(column), sym("sum")), decreasing = decreasing))
+# ---- ranking: top_n and the order of bars, dots and boxes ---------------------------------------
 
-top_call <- function(s) {
-  if (is.null(s$top_n)) return(NULL)
-  col = ranked_column(s)
-  call("filter", call("%in%", sym(col), call("head", ranking_call(value_name(s), col), as.numeric(s$top_n))))
+# The helper column that ranks rows when an x (or a line) has several rows: its total (a box: its median).
+rank_helper <- function(s) if (identical(s$family, "box")) ".median" else ".total"
+
+mutate_call <- function(name, value, by = NULL)
+  as.call(c(list(sym("mutate")), stats::setNames(list(value), name), if (!is.null(by)) list(.by = sym(by))))
+
+# top_n and the sort as dplyr steps. When each x has one row (a bar or dot with no colour or facet),
+#   top_n is arrange(desc(value), x) |> slice_head(n = n) and the sort an arrange(); otherwise a
+#   helper column holds each x's total (a box: its median) and consecutive_id() keeps the first n.
+#   Ties are broken alphabetically. The order is then fixed with factor(). For a line or slope,
+#   top_n keeps the lines with the largest totals.
+rank_calls <- function(s, cb) {
+  fam = s$family
+  if (fam %in% c("line", "slope")) {
+    if (is.null(s$top_n)) return(NULL)
+    col = sym(s$color)
+    return(list(mutate_call(".total", call("sum", sym(value_name(s))), s$color),
+                call("arrange", call("desc", sym(".total")), col),
+                call("filter", call("<=", call("consecutive_id", col), as.numeric(s$top_n))),
+                call("select", call("-", sym(".total")))))
+  }
+  if (!fam %in% c("bar", "dot", "box")) return(NULL)
+  srt = effective_sort(s, cb)
+  e = cb_entry(cb, s$x)
+  x = sym(s$x)
+  ordered = identical(srt, "level_order") && identical(e$type, "ordered") && length(e$order) > 0L
+  single = fam %in% c("bar", "dot") && is.null(s$color) && is.null(s$facet)
+  key = sym(if (single) value_name(s) else rank_helper(s))
+  helper = if (!single)
+    list(mutate_call(rank_helper(s), call(if (identical(fam, "box")) "median" else "sum", sym(if (identical(fam, "box")) s$y else value_name(s))), s$x))
+  top = if (!is.null(s$top_n))
+    list(call("arrange", call("desc", key), x),
+         if (single) call("slice_head", n = as.numeric(s$top_n)) else call("filter", call("<=", call("consecutive_id", x), as.numeric(s$top_n))))
+  ord = if (ordered) list(mutate_call(s$x, call("factor", x, levels = e$order)), call("arrange", x))
+        else switch(srt,
+          value_desc = if (is.null(top)) list(call("arrange", call("desc", key), x)),
+          value_asc = list(call("arrange", key, x)),
+          list(call("arrange", x)))
+  fac = if (!ordered) list(mutate_call(s$x, call("factor", x, levels = if (single) x else call("unique", x))))
+  drop = if (!single) list(call("select", call("-", sym(rank_helper(s)))))
+  c(helper, top, ord, fac, drop)
 }
 
+# A column as a factor in its level order: the analyst's order for an ordered column, otherwise
+#   factor()'s own (sorted: alphabetical, or numeric for numbers).
 level_order_call <- function(e, col) {
   if (identical(e$type, "ordered") && length(e$order)) return(call("factor", sym(col), levels = e$order))
-  call("factor", sym(col), levels = call("sort", call("unique", sym(col))))
+  call("factor", sym(col))
 }
-
-sort_call <- function(s, cb) {
-  srt = effective_sort(s, cb)
-  if (is.null(srt)) return(NULL)
-  x = s$x
-  lv = switch(srt,
-    value_desc = call("factor", sym(x), levels = ranking_call(value_name(s), x, TRUE)),
-    value_asc = call("factor", sym(x), levels = ranking_call(value_name(s), x, FALSE)),
-    alphabetical = call("factor", sym(x), levels = call("sort", call("unique", sym(x)))),
-    level_order = level_order_call(cb_entry(cb, x), x))
-  as.call(c(list(sym("mutate")), stats::setNames(list(lv), x)))
-}
-
-# A bar's or dot's rows in the order they are drawn.
-arrange_call <- function(s) if (s$family %in% c("bar", "dot")) call("arrange", sym(s$x))
 
 # Columns drawn as discrete groups that would otherwise be read as continuous or in the wrong order:
-#   made factors, in order. A colour is always discrete; a box's or slope's x and a heatmap's
-#   group axes too; a facet only needs its order.
+#   made factors, in order. A colour is always discrete; a slope's x and a heatmap's rows too (in
+#   level order, alphabetical for an unordered category); a facet only needs its order.
 needs_factor <- function(e) identical(e$type, "ordered") || identical(storage_of(e), "number")
 
 factor_call <- function(s, cb) {
   fam = s$family
   want = c(if (!is.null(s$color) && !identical(fam, "heatmap")) s$color,
            if (!is.null(s$facet) && identical(cb_entry(cb, s$facet)$type, "ordered")) s$facet,
-           if (identical(fam, "box")) s$x,
-           if (identical(fam, "heatmap")) c(if (is_group_like(cb_entry(cb, s$x))) s$x, s$y))
-  need = unique(c(purrr::keep(want, function(col) needs_factor(cb_entry(cb, col))), if (identical(fam, "slope")) s$x))
+           if (identical(fam, "heatmap") && is_group_like(cb_entry(cb, s$x))) s$x)
+  need = unique(c(purrr::keep(want, function(col) needs_factor(cb_entry(cb, col))),
+                  if (identical(fam, "slope")) s$x, if (identical(fam, "heatmap")) s$y))
   if (!length(need)) return(NULL)
   as.call(c(list(sym("mutate")), stats::setNames(purrr::map(need, function(col) level_order_call(cb_entry(cb, col), col)), need)))
 }
@@ -401,16 +428,16 @@ factor_call <- function(s, cb) {
 highlight_call <- function(s, cb) {
   h = s$highlight
   if (is.null(h)) return(NULL)
-  as.call(list(sym("mutate"), highlighted = call("%in%", sym(h$column), value_call(cb_entry(cb, h$column), h$values))))
+  mutate_call("highlighted", call("%in%", sym(h$column), value_call(cb_entry(cb, h$column), h$values)))
 }
 
-# The table's steps, as calls without their data argument, in two parts: `base` (the filter and
-#   the rows left out for missing values) and `rest`. The data checks run between the two.
-table_steps <- function(s, cb) {
-  rest = c(aggregate_calls(s), list(top_call(s), sort_call(s, cb), arrange_call(s), factor_call(s, cb), highlight_call(s, cb)))
+# The table's steps, as calls without their data argument, in three parts: `base` (the filter and
+#   the rows left out for missing values), `agg` (the aggregation) and `post` (top_n, the order,
+#   factors, the highlight). The data checks run after `base`; ties are counted after `agg`.
+table_steps <- function(s, cb)
   list(base = purrr::compact(list(filter_call(s, cb), as.call(c(sym("drop_na"), purrr::map(spec_columns(s), sym))))),
-       rest = purrr::compact(rest))
-}
+       agg = aggregate_calls(s),
+       post = purrr::compact(c(rank_calls(s, cb), list(factor_call(s, cb), highlight_call(s, cb)))))
 
 # The environment the calls are evaluated in: the exports of dplyr, tidyr, ggplot2 and scales,
 #   over the global environment (where chart_theme() and the rest of R/ live).
@@ -429,6 +456,7 @@ spec_env <- function(...) {
 
 # The steps applied in turn to a data frame: f(data, ...) for each step f(...).
 run_steps <- function(data, steps, ...) {
+  if (!length(steps)) return(data)
   pipeline = purrr::reduce(steps, function(acc, st) as.call(c(list(st[[1]]), list(acc), as.list(st)[-1])), .init = sym("chart_data"))
   eval(pipeline, spec_env(chart_data = data, ...))
 }
@@ -469,8 +497,23 @@ data_checks <- function(s, base) {
   invisible(TRUE)
 }
 
+# Values that tie across the top_n cut: how many share the last value kept, and how many of them
+#   are shown. NULL when there is no top_n or no tie across the cut.
+cut_ties <- function(s, agg, out) {
+  if (is.null(s$top_n) || !s$family %in% c("bar", "dot", "line", "slope")) return(NULL)
+  col = ranked_column(s)
+  totals = tapply(agg[[value_name(s)]], as.character(agg[[col]]), sum)
+  if (length(totals) <= s$top_n) return(NULL)
+  shown = unique(as.character(out[[col]]))
+  last = min(totals[shown])
+  same = function(v) abs(v - last) <= 1e-9 * max(1, abs(last))
+  tied = sum(same(totals))
+  kept = sum(same(totals[shown]))
+  if (tied > kept) c(tied = tied, shown = kept) else NULL
+}
+
 # The table that is drawn: after the filter, the rows left out for missing values, the
-#   aggregation, top_n and the sort. Attributes rows_used, rows_dropped and groups_total.
+#   aggregation, top_n and the sort. Attributes rows_used, rows_dropped, groups_total and ties.
 spec_table <- function(spec, data, cb) {
   s = spec_defaults(spec_public(spec))
   why = spec_check(s, cb)
@@ -480,19 +523,21 @@ spec_table <- function(spec, data, cb) {
   filtered = if (is.null(s$filter)) data else run_steps(data, st$base[1])
   base = run_steps(data, st$base)
   data_checks(s, base)
-  out = if (length(st$rest)) run_steps(base, st$rest) else base
+  agg = run_steps(base, st$agg)
+  out = run_steps(agg, st$post)
   ranked = if (s$family %in% c("bar", "dot", "line", "slope")) ranked_column(s)
   structure(out, rows_used = nrow(base), rows_dropped = nrow(filtered) - nrow(base),
-            groups_total = if (!is.null(ranked)) length(unique(base[[ranked]])) else NA_integer_)
+            groups_total = if (!is.null(ranked)) length(unique(base[[ranked]])) else NA_integer_,
+            ties = cut_ties(s, agg, out))
 }
 
 
 # ---- the lint ------------------------------------------------------------------------------------
 
-# The figures the plot needs that depend on the table: the sort a bar or dot falls back on, a
+# The figures the plot needs that depend on the table: the sort a bar, dot or box falls back on, a
 #   histogram's bins when none were given, and "Top n of N" as the subtitle.
 spec_settle <- function(s, cb, table) {
-  if (s$family %in% c("bar", "dot")) s$sort = effective_sort(s, cb)
+  if (s$family %in% c("bar", "dot", "box")) s$sort = effective_sort(s, cb)
   if (identical(s$family, "histogram") && is.null(s$bins)) {
     x = table[[s$x]]
     x = if (isTRUE(s$log_x)) log10(x[x > 0]) else x
@@ -512,11 +557,27 @@ mark_count <- function(s, table) {
   nrow(table)
 }
 
+# Whether a line or slope chart's end labels fit: the end values in order, per panel, and whether
+#   any two neighbours are closer than SPEC_LABEL_GAP of the y range. With a highlight, only the
+#   highlighted lines are labelled. `order` is the lines from the highest end value down.
+label_plan <- function(s, table) {
+  v = value_name(s)
+  rows = if (!is.null(s$highlight)) table[table$highlighted, , drop = FALSE] else table
+  panel = if (!is.null(s$facet) && !identical(s$facet, s$color)) s$facet
+  ends = if (identical(s$family, "slope")) rows[as.character(rows[[s$x]]) == levels(table[[s$x]])[2], , drop = FALSE]
+         else dplyr::filter(rows, .data[[s$x]] == max(.data[[s$x]]), .by = dplyr::all_of(c(s$color, panel)))
+  gap = SPEC_LABEL_GAP * diff(range(table[[v]]))
+  groups = if (is.null(panel)) list(ends[[v]]) else split(ends[[v]], ends[[panel]])
+  close = any(purrr::map_lgl(groups, function(vals) length(vals) > 1L && any(diff(sort(vals)) < gap)))
+  list(fits = !close, order = unique(as.character(ends[[s$color]][order(-ends[[v]])])))
+}
+
 # The rules R enforces with no model call (DESIGN.md section 8). Fixes change the spec; notes are
 #   sentences for the analyst. Returns list(spec, notes).
 spec_lint <- function(spec, cb, table) {
   s = spec_settle(spec, cb, table)
   fam = s$family
+  v = value_name(s)
   nd = function(col) length(unique(table[[col]]))
   notes = character(0)
   # A bar's value axis starts at zero (the bar layers always include zero), so no log scale.
@@ -524,18 +585,49 @@ spec_lint <- function(spec, cb, table) {
     s$log_y = FALSE
     notes = c(notes, "A bar's length shows its value, so its axis starts at zero; the log scale was removed.")
   }
+  # Room below zero only when a bar drawn is below zero.
+  if (identical(fam, "bar") && any(table[[v]] < 0)) s$.negative = TRUE
+  # Ties across the top_n cut, and nothing to compare.
+  tie = attr(table, "ties")
+  if (!is.null(tie))
+    notes = c(notes, paste0(tie[["tied"]], " values tie at the cut; the ", tie[["shown"]], " shown are the first alphabetically."))
+  if (fam %in% c("bar", "dot") && nrow(table) > 1L && length(unique(table[[v]])) == 1L)
+    notes = c(notes, "Every value shown is the same.")
   # Many bars, dots or boxes, or long labels: drawn sideways.
   if (fam %in% c("bar", "dot", "box")) {
     labels = as.character(unique(table[[s$x]]))
     if (length(labels) > SPEC_FLIP_BARS || any(nchar(labels) > SPEC_FLIP_CHARS)) s$.flip = TRUE
   }
-  if (!is.null(s$color) && !identical(fam, "heatmap") && nd(s$color) > SPEC_COLOURS)
+  coloured = !is.null(s$color) && !identical(fam, "heatmap") && !identical(s$color, s$facet) && is.null(s$highlight)
+  if (coloured && nd(s$color) > SPEC_COLOURS)
     notes = c(notes, paste0(nd(s$color), " colours are hard to tell apart; highlight the few that matter, or use small multiples (facet)."))
   if (identical(fam, "line") && !is.null(s$color) && nd(s$color) > SPEC_LINES && is.null(s$highlight) && is.null(s$facet))
     notes = c(notes, paste0(nd(s$color), " lines overlap; small multiples (facet) or a highlight of the few that matter would read more easily."))
+  # End labels on a line or slope chart only when no two would touch; otherwise a legend, in the
+  #   order of the end values.
+  if (fam %in% c("line", "slope") && !is.null(s$color) && !identical(s$color, s$facet)) {
+    lab = label_plan(s, table)
+    s$.labels = lab$fits
+    if (!lab$fits) {
+      many = is.null(s$highlight) && nd(s$color) > CHART_MAX_GROUPS
+      if (many) notes = c(notes, paste0("The ", nd(s$color), " lines end too close together to be labelled and are too many to colour; highlight a few."))
+      else s$.legend_order = lab$order
+    }
+  }
+  # A heatmap with few cells prints each value in its cell.
+  if (identical(fam, "heatmap") && nrow(table) <= SPEC_HEAT_LABELS) s$.cell_labels = TRUE
   # Small multiples share their scales unless free_y asks otherwise: facet_wrap()'s scales are
   #   fixed by default, so there is nothing to change.
-  if (fam %in% c("scatter", "bubble")) {
+  # Points on repeated positions: one point per position, sized by how many rows are there.
+  if (identical(fam, "scatter") && is.null(s$highlight)) {
+    keys = table[c(s$x, s$y, s$color)]
+    shared = duplicated(keys) | duplicated(keys, fromLast = TRUE)
+    if (mean(shared) > SPEC_OVERLAP_SHARE) {
+      s$.counted = TRUE
+      notes = c(notes, "Points are sized by how many rows share the position.")
+    }
+  }
+  if (fam %in% c("scatter", "bubble") && !isTRUE(s$.counted)) {
     n = nrow(table)
     if (n > SPEC_BIN_N) {
       s$.binned = TRUE
@@ -558,6 +650,9 @@ spec_lint <- function(spec, cb, table) {
 
 
 # ---- the plot --------------------------------------------------------------------------------------
+
+# The colours a chart is drawn with: qual(n) for groups, seq for a continuous fill. From R/theme.R.
+spec_palette <- function() list(qual = chart_palette, seq = CHART_SEQUENTIAL)
 
 # How many colours a column needs, from the codebook (and top_n), so the plot and its code can be
 #   built without the data.
@@ -582,13 +677,46 @@ aes_call <- function(...) {
 
 data_where <- function(cond) call("filter", sym("chart_table"), cond)
 
-# The value axis of a bar: from zero, a little room at the top only (both ends if there are
-#   negative values), percent labels for a share.
-value_scale <- function(s, cb, axis, zero) {
-  negative = !is.null(s$y) && !s$fn %in% c("count", "share") && isTRUE(cb_entry(cb, s$y)$min < 0)
-  args = c(if (zero) list(expand = call("expansion", mult = if (negative) c(0.05, 0.05) else c(0, 0.05))),
+# A legend at the top with more entries than fit on one row: several rows.
+legend_rows <- function(aesthetic, n) {
+  if (n <= SPEC_LEGEND_PER_ROW) return(NULL)
+  as.call(c(list(sym("guides")), stats::setNames(list(call("guide_legend", nrow = ceiling(n / SPEC_LEGEND_PER_ROW))), aesthetic)))
+}
+
+# The tooltip of the plotly version: each plotted value named with its codebook label.
+tooltip_call <- function(s, cb) {
+  value = value_name(s)
+  part = function(label, col, number) {
+    shown = if (identical(col, "share")) call("paste0", call("round", call("*", 100, sym(col)), 1), "%")
+            else if (number) call("format", call("round", sym(col), 2), big.mark = ",", trim = TRUE)
+            else sym(col)
+    list(paste0(label, ": "), shown)
+  }
+  is_num = function(col) !is.null(cb_entry(cb, col)) && identical(storage_of(cb_entry(cb, col)), "number") &&
+    !needs_factor_here(s, col)
+  cols = if (s$family %in% c("scatter", "bubble")) list(list(cb_label(cb, s$x), s$x, is_num(s$x)), list(cb_label(cb, s$y), s$y, is_num(s$y)))
+         else if (identical(s$family, "heatmap")) list(list(cb_label(cb, s$x), s$x, FALSE), list(cb_label(cb, s$y), s$y, FALSE),
+                                                       list(value_label(s, cb), value, TRUE))
+         else list(list(cb_label(cb, s$x), s$x, is_num(s$x) && !s$family %in% c("bar", "dot", "slope")), list(value_label(s, cb), value, TRUE))
+  extra = purrr::compact(list(
+    if (!is.null(s$color) && !identical(s$family, "heatmap")) list(cb_label(cb, s$color), s$color, FALSE),
+    if (!is.null(s$size)) list(cb_label(cb, s$size), s$size, is_num(s$size)),
+    if (!is.null(s$facet)) list(cb_label(cb, s$facet), s$facet, FALSE),
+    if (!is.null(s$highlight) && !s$highlight$column %in% c(s$x, s$color)) list(cb_label(cb, s$highlight$column), s$highlight$column, FALSE)))
+  pieces = purrr::imap(c(cols, extra), function(p, i) c(if (i > 1) list("<br>"), part(p[[1]], p[[2]], p[[3]])))
+  as.call(c(list(sym("paste0")), unlist(pieces, recursive = FALSE)))
+}
+
+# Whether a column is drawn as a factor (so shown as its level, not as a number).
+needs_factor_here <- function(s, col) col %in% c(s$color, if (s$family %in% c("bar", "dot", "box", "slope")) s$x,
+                                                  if (identical(s$family, "heatmap")) c(s$x, s$y))
+
+# The value axis of a bar: from zero, a little room at the top only (both ends if a bar drawn is
+#   below zero), percent labels for a share.
+value_scale <- function(s, axis, zero) {
+  args = c(if (zero) list(expand = call("expansion", mult = if (isTRUE(s$.negative)) c(0.05, 0.05) else c(0, 0.05))),
            list(labels = call(if (identical(s$fn, "share")) "label_percent" else "label_comma")))
-  scale = if (length(args)) as.call(c(list(sym(paste0("scale_", axis, "_continuous"))), args))
+  scale = as.call(c(list(sym(paste0("scale_", axis, "_continuous"))), args))
   limits = if (zero) as.call(c(list(sym("expand_limits")), stats::setNames(list(0), axis)))
   purrr::compact(list(scale, limits))
 }
@@ -605,104 +733,130 @@ time_scale <- function(s, cb, room) {
             if (!is.null(expand)) list(expand = expand)))
 }
 
-bar_calls <- function(s, cb) {
+bar_calls <- function(s, cb, pal, widget) {
   v = value_name(s); flip = isTRUE(s$.flip); col = s$color
-  main = if (flip) aes_call(x = v, y = s$x, fill = col) else aes_call(x = s$x, y = v, fill = col)
+  text = if (widget) tooltip_call(s, cb)
+  main = if (flip) aes_call(x = v, y = s$x, fill = col, text = text) else aes_call(x = s$x, y = v, fill = col, text = text)
   geom = if (!is.null(s$highlight)) list(call("geom_col", aes_call(fill = "highlighted")),
                                           call("scale_fill_manual", values = highlight_values(), guide = "none"))
     else if (!is.null(col)) list(call("geom_col", position = call("position_dodge", width = 0.8), width = 0.75),
-                                 call("scale_fill_manual", values = chart_palette(colour_count(s, cb, col))))
+                                 call("scale_fill_manual", values = pal$qual(colour_count(s, cb, col))))
     else list(call("geom_col", fill = CHART_SINGLE))
-  c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, cb, if (flip) "x" else "y", TRUE),
+  c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, if (flip) "x" else "y", TRUE),
     if (flip) list(call("scale_y_discrete", limits = sym("rev"))))
 }
 
-dot_calls <- function(s, cb) {
+dot_calls <- function(s, cb, pal, widget) {
   v = value_name(s); flip = isTRUE(s$.flip); col = s$color
-  main = if (flip) aes_call(x = v, y = s$x, colour = col) else aes_call(x = s$x, y = v, colour = col)
+  text = if (widget) tooltip_call(s, cb)
+  main = if (flip) aes_call(x = v, y = s$x, colour = col, text = text) else aes_call(x = s$x, y = v, colour = col, text = text)
   geom = if (!is.null(s$highlight)) list(call("geom_point", aes_call(colour = "highlighted"), size = 3),
                                           call("scale_colour_manual", values = highlight_values(), guide = "none"))
     else if (!is.null(col)) list(call("geom_point", size = 3),
-                                 call("scale_colour_manual", values = chart_palette(colour_count(s, cb, col))))
+                                 call("scale_colour_manual", values = pal$qual(colour_count(s, cb, col))))
     else list(call("geom_point", size = 3, colour = CHART_SINGLE))
-  c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, cb, if (flip) "x" else "y", FALSE),
+  c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, if (flip) "x" else "y", FALSE),
     if (flip) list(call("scale_y_discrete", limits = sym("rev"))))
 }
 
 # A line or slope label at one end: the rows where x is at its last value (per line and panel).
-end_rows <- function(s, extra = NULL, first = FALSE) {
+end_rows <- function(s, extra = NULL) {
   x = sym(s$x)
-  at = if (identical(s$family, "slope")) call("==", x, call("[", call("levels", x), if (first) 1 else 2))
-       else call("==", x, call("max", x))
-  conds = c(extra, list(at))
-  by = if (identical(s$family, "line")) list(.by = by_arg(c(s$color, s$facet)))
-  as.call(c(list(sym("filter"), sym("chart_table")), conds, by))
+  at = if (identical(s$family, "slope")) call("==", x, call("[", call("levels", x), 2)) else call("==", x, call("max", x))
+  by = if (identical(s$family, "line")) list(.by = by_arg(unique(c(s$color, s$facet))))
+  as.call(c(list(sym("filter"), sym("chart_table")), extra, list(at), by))
 }
 
+# End labels: drawn only when the lint found that none would touch, so nothing is dropped.
 end_labels <- function(s, rows, colour = NULL)
-  as.call(c(list(sym("geom_text"), data = rows, aes_call(label = s$color), hjust = -0.15, size = 3.5, check_overlap = TRUE),
+  as.call(c(list(sym("geom_text"), data = rows, aes_call(label = s$color), hjust = -0.15, size = 3.5),
             if (!is.null(colour)) list(colour = colour)))
 
-line_calls <- function(s, cb) {
+line_calls <- function(s, cb, pal, widget) {
   v = value_name(s); col = s$color; slope = identical(s$family, "slope")
-  k = if (!is.null(col)) colour_count(s, cb, col) else 0
+  same = !is.null(col) && identical(col, s$facet)
+  labelled = isTRUE(s$.labels) && !widget
+  legend = !is.null(s$.legend_order)
+  k = if (!is.null(col) && !same) colour_count(s, cb, col) else 0
   many = k > CHART_MAX_GROUPS
-  points = function(colour = NULL)
-    if (slope) list(as.call(c(list(sym("geom_point"), size = 2.5), if (!is.null(colour)) list(colour = colour))))
-  layers = if (is.null(col)) {
-    c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v)), call("geom_line", colour = CHART_SINGLE, linewidth = 0.9)),
-      points(colour = CHART_SINGLE))
+  text = if (widget) tooltip_call(s, cb)
+  group = col %||% if (widget) 1
+  points = function(colour = NULL, data = NULL)
+    if (slope) list(as.call(c(list(sym("geom_point")), if (!is.null(data)) list(data = data), list(size = 2.5),
+                              if (!is.null(colour)) list(colour = colour))))
+  base = function(...) call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v, ...))
+  layers = if (is.null(col) || same) {
+    c(list(base(group = group, text = text), call("geom_line", colour = CHART_SINGLE, linewidth = 0.9)), points(colour = CHART_SINGLE))
   } else if (!is.null(s$highlight)) {
-    c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v, group = col)),
-           call("geom_line", data = data_where(quote(!highlighted)), colour = CHART_GREY, linewidth = 0.7),
-           call("geom_line", data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT, linewidth = 1.1)),
-      if (slope) list(call("geom_point", data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT, size = 2.5)),
-      list(end_labels(s, end_rows(s, list(quote(highlighted))), CHART_HIGHLIGHT)))
+    nh = length(values_of(s$highlight$values))
+    lit = if (legend && nh <= CHART_MAX_GROUPS)
+      c(list(call("geom_line", data = data_where(quote(highlighted)), aes_call(colour = col), linewidth = 1.1)),
+        if (slope) list(call("geom_point", data = data_where(quote(highlighted)), aes_call(colour = col), size = 2.5)),
+        list(call("scale_colour_manual", values = pal$qual(nh), breaks = s$.legend_order)))
+    else
+      c(list(call("geom_line", data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT, linewidth = 1.1)),
+        points(colour = CHART_HIGHLIGHT, data = data_where(quote(highlighted))),
+        if (labelled) list(end_labels(s, end_rows(s, list(quote(highlighted))), CHART_HIGHLIGHT)))
+    c(list(base(group = col, text = text), call("geom_line", data = data_where(quote(!highlighted)), colour = CHART_GREY, linewidth = 0.7)), lit)
   } else if (many) {
-    c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v, group = col)), call("geom_line", colour = CHART_SINGLE, linewidth = 0.7)),
-      points(colour = CHART_SINGLE), list(end_labels(s, end_rows(s), CHART_SINGLE)))
+    c(list(base(group = col, text = text), call("geom_line", colour = CHART_SINGLE, linewidth = 0.7)), points(colour = CHART_SINGLE),
+      if (labelled) list(end_labels(s, end_rows(s), CHART_SINGLE)))
   } else {
-    c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v, colour = col, group = if (slope) col)),
-           call("geom_line", linewidth = 0.9)),
-      points(), list(end_labels(s, end_rows(s)), call("scale_colour_manual", values = chart_palette(k)),
-                     call("guides", colour = "none")))
+    c(list(base(colour = col, group = col, text = text), call("geom_line", linewidth = 0.9)), points(),
+      list(as.call(c(list(sym("scale_colour_manual"), values = pal$qual(k)), if (legend) list(breaks = s$.legend_order)))),
+      if (labelled) list(end_labels(s, end_rows(s)), call("guides", colour = "none")))
   }
-  room = !is.null(col)
-  xscale = if (slope) call("scale_x_discrete", expand = call("expansion", add = c(0.3, 0.8))) else time_scale(s, cb, room)
+  room = labelled
+  xscale = if (slope) call("scale_x_discrete", expand = call("expansion", add = if (room) c(0.3, 0.8) else c(0.3, 0.3)))
+           else time_scale(s, cb, room)
   yscale = call(if (isTRUE(s$log_y)) "scale_y_log10" else "scale_y_continuous", labels = call("label_comma"))
   c(layers, purrr::compact(list(xscale)), list(yscale), if (room) list(quote(coord_cartesian(clip = "off"))))
 }
 
-scatter_calls <- function(s, cb) {
+# A highlighted point's label sits to the left of it in the right half of the x range, to the right otherwise.
+side_labels <- function(s) {
+  x = sym(s$x)
+  hjust = call("if_else", call(">", x, call("/", call("+", call("min", x), call("max", x)), 2)), 1.15, -0.15)
+  call("geom_text", data = call("filter", call("mutate", sym("chart_table"), label_hjust = hjust), quote(highlighted)),
+       aes_call(label = s$highlight$column, hjust = "label_hjust"), size = 3.5, colour = CHART_HIGHLIGHT)
+}
+
+scatter_calls <- function(s, cb, pal, widget) {
   col = s$color; bubble = identical(s$family, "bubble")
+  counted = isTRUE(s$.counted); binned = isTRUE(s$.binned)
   alpha = if (!is.null(s$.alpha)) list(alpha = s$.alpha) else if (bubble) list(alpha = 0.5)
-  main = aes_call(x = s$x, y = s$y, colour = if (!isTRUE(s$.binned)) col, size = if (bubble) s$size)
+  text = if (widget && !counted && !binned) tooltip_call(s, cb)
+  main = aes_call(x = s$x, y = s$y, colour = if (!binned) col, size = if (bubble) s$size, text = text)
   point = function(...) as.call(c(list(sym("geom_point")), list(...), alpha))
-  geom = if (isTRUE(s$.binned)) list(call("geom_bin_2d", bins = SPEC_BIN_2D), call("scale_fill_gradientn", colours = CHART_SEQUENTIAL))
+  colours = if (!is.null(col) && !binned) {
+    n = colour_count(s, cb, col)
+    purrr::compact(list(call("scale_colour_manual", values = pal$qual(n)), legend_rows("colour", n)))
+  }
+  geom = if (binned) list(call("geom_bin_2d", bins = SPEC_BIN_2D), call("scale_fill_gradientn", colours = pal$seq))
+    else if (counted) c(list(if (is.null(col)) call("geom_count", colour = CHART_SINGLE) else call("geom_count"),
+                             call("scale_size_area", max_size = 6)), colours)
     else if (!is.null(s$highlight))
-      list(point(data = data_where(quote(!highlighted)), colour = CHART_GREY),
-           point(data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT),
-           call("geom_text", data = data_where(quote(highlighted)), aes_call(label = s$highlight$column), vjust = -0.9,
-                size = 3.5, colour = CHART_HIGHLIGHT, check_overlap = TRUE))
-    else if (!is.null(col)) list(point(), call("scale_colour_manual", values = chart_palette(colour_count(s, cb, col))))
+      c(list(point(data = data_where(quote(!highlighted)), colour = CHART_GREY),
+             point(data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT)),
+        if (!widget) list(side_labels(s)))
+    else if (!is.null(col)) c(list(point()), colours)
     else list(point(colour = CHART_SINGLE))
   fit = if (!identical(s$fit, "none"))
     list(call("geom_smooth", method = if (identical(s$fit, "linear")) "lm" else "loess", formula = quote(y ~ x), se = FALSE,
               colour = "#4D4D4D", linewidth = 0.8))
   c(list(call("ggplot", sym("chart_table"), main)), geom, fit,
     if (bubble) list(call("scale_size_area", max_size = 8)),
-    if (!is.null(s$highlight) && !isTRUE(s$.binned)) list(quote(coord_cartesian(clip = "off"))),
     if (isTRUE(s$rug)) list(call("geom_rug", alpha = 0.2)),
     if (isTRUE(s$log_x)) list(quote(scale_x_log10())), if (isTRUE(s$log_y)) list(quote(scale_y_log10())))
 }
 
-histogram_calls <- function(s, cb)
+histogram_calls <- function(s, cb, pal, widget)
   c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x)),
          call("geom_histogram", bins = as.numeric(s$bins), fill = CHART_SINGLE, colour = "white"),
          call("scale_y_continuous", expand = call("expansion", mult = c(0, 0.05)))),
     if (isTRUE(s$log_x)) list(quote(scale_x_log10())))
 
-box_calls <- function(s, cb) {
+box_calls <- function(s, cb, pal, widget) {
   flip = isTRUE(s$.flip)
   main = if (flip) aes_call(x = s$y, y = s$x) else aes_call(x = s$x, y = s$y)
   c(list(call("ggplot", sym("chart_table"), main), call("geom_boxplot", fill = "#F2F2F2", colour = CHART_SINGLE, width = 0.6)),
@@ -710,11 +864,32 @@ box_calls <- function(s, cb) {
     if (isTRUE(s$log_y)) list(if (flip) quote(scale_x_log10()) else quote(scale_y_log10())))
 }
 
-heatmap_calls <- function(s, cb)
-  list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = s$y, fill = value_name(s))),
-       call("geom_tile", colour = "white", linewidth = 0.5),
-       as.call(c(list(sym("scale_fill_gradientn"), colours = CHART_SEQUENTIAL),
-                 if (identical(s$fn, "share")) list(labels = call("label_percent")))))
+# How a heatmap cell prints its value.
+cell_format <- function(s) switch(s$fn, count = call("label_comma"), share = call("label_percent", accuracy = 1),
+                                  sum = call("label_comma"), call("label_comma", accuracy = 0.1))
+
+# A cell's value in black or white, whichever stands out more against the cell's colour (its
+#   luminance from the same colour scale the fill uses).
+cell_labels <- function(s, colours) {
+  v = sym(value_name(s))
+  fill = as.call(list(call("col_numeric", colours, domain = NULL), v))
+  light = call(">", call("colSums", call("*", call("col2rgb", fill), c(0.299, 0.587, 0.114))), 140)
+  list(call("geom_text", data = mutate_call("text_colour", call("if_else", light, "black", "white")) |> insert_data(),
+            aes_call(label = as.call(list(cell_format(s), v)), colour = "text_colour"), size = 3.2),
+       quote(scale_colour_identity()))
+}
+
+# mutate(...) applied to chart_table: mutate(chart_table, ...).
+insert_data <- function(cl) as.call(c(list(cl[[1]], sym("chart_table")), as.list(cl)[-1]))
+
+heatmap_calls <- function(s, cb, pal, widget) {
+  text = if (widget) tooltip_call(s, cb)
+  c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = s$y, fill = value_name(s), text = text)),
+         call("geom_tile", colour = "white", linewidth = 0.5),
+         as.call(c(list(sym("scale_fill_gradientn"), colours = pal$seq), if (identical(s$fn, "share")) list(labels = call("label_percent")))),
+         call("scale_y_discrete", limits = sym("rev"))),
+    if (isTRUE(s$.cell_labels) && !widget) cell_labels(s, pal$seq))
+}
 
 # Which axis carries the light grid: the value axis.
 grid_of <- function(s) switch(s$family,
@@ -727,15 +902,19 @@ labs_call <- function(s, cb) {
   flip = isTRUE(s$.flip)
   xl = s$x_label %||% cb_label(cb, s$x)
   yl = s$y_label %||% if (s$family %in% c("box", "scatter", "bubble", "heatmap")) cb_label(cb, s$y) else value_label(s, cb)
+  line_legend = s$family %in% c("line", "slope") && !is.null(s$.legend_order)
   legend = purrr::compact(list(
-    colour = if (!is.null(s$color) && s$family %in% c("dot", "scatter", "bubble") && is.null(s$highlight) && !isTRUE(s$.binned)) cb_label(cb, s$color),
+    colour = if (!is.null(s$color) && ((s$family %in% c("dot", "scatter", "bubble") && is.null(s$highlight) && !isTRUE(s$.binned)) || line_legend))
+               cb_label(cb, s$color),
     fill = if (identical(s$family, "heatmap")) value_label(s, cb)
            else if (identical(s$family, "bar") && !is.null(s$color) && is.null(s$highlight)) cb_label(cb, s$color)
            else if (isTRUE(s$.binned)) "Count",
-    size = if (identical(s$family, "bubble")) cb_label(cb, s$size)))
-  args = c(purrr::compact(list(title = s$title, subtitle = s$subtitle, caption = s$caption)),
-           if (flip) list(x = yl, y = xl) else list(x = xl, y = yl), legend)
-  as.call(c(list(sym("labs")), args))
+    size = if (identical(s$family, "bubble")) cb_label(cb, s$size) else if (isTRUE(s$.counted)) "Rows"))
+  # A sideways bar or dot lists names on its y axis; that axis needs no title unless the spec gives one.
+  axes = if (flip && s$family %in% c("bar", "dot")) list(x = yl, y = s$x_label)
+         else if (flip) list(x = yl, y = xl) else list(x = xl, y = yl)
+  if (is.null(axes$y)) axes = c(axes["x"], list(y = NULL))
+  as.call(c(list(sym("labs")), purrr::compact(list(title = s$title, subtitle = s$subtitle, caption = s$caption)), axes, legend))
 }
 
 facet_call <- function(s) {
@@ -744,32 +923,42 @@ facet_call <- function(s) {
 }
 
 theme_call <- function(s) {
-  g = grid_of(s)
-  if (identical(g, "y")) quote(chart_theme()) else call("chart_theme", grid = g)
+  args = c(if (!identical(grid_of(s), "y")) list(grid = grid_of(s)),
+           if (s$family %in% c("line", "slope") && !is.null(s$.legend_order)) list(legend = "right"))
+  as.call(c(list(sym("chart_theme")), args))
 }
 
-# The plot's layers, as calls, from the spec as the lint left it and the codebook.
-plot_calls <- function(s, cb) {
-  layers = switch(s$family, bar = bar_calls(s, cb), dot = dot_calls(s, cb), line = , slope = line_calls(s, cb),
-                  scatter = , bubble = scatter_calls(s, cb), histogram = histogram_calls(s, cb), box = box_calls(s, cb),
-                  heatmap = heatmap_calls(s, cb))
-  c(layers, purrr::compact(list(facet_call(s), labs_call(s, cb), theme_call(s))))
+# The plot's layers, as calls, from the spec as the lint left it and the codebook. widget = TRUE
+#   builds the variant the plotly version is made from: no direct labels (plotly cannot place
+#   them), the legend kept, and a tooltip naming each value.
+plot_calls <- function(s, cb, pal = spec_palette(), widget = FALSE) {
+  build = switch(s$family, bar = bar_calls, dot = dot_calls, line = , slope = line_calls, scatter = , bubble = scatter_calls,
+                 histogram = histogram_calls, box = box_calls, heatmap = heatmap_calls)
+  c(build(s, cb, pal, widget), purrr::compact(list(facet_call(s), labs_call(s, cb), theme_call(s))))
 }
 
 plus_call <- function(calls) purrr::reduce(calls[-1], function(acc, cl) call("+", acc, cl), .init = calls[[1]])
 
+# Whether the widget variant carries its own tooltip text.
+widget_has_text <- function(s) s$family %in% c("bar", "dot", "line", "slope", "scatter", "bubble", "heatmap") &&
+  !isTRUE(s$.counted) && !isTRUE(s$.binned)
+
 # The ggplot for a spec. Runs the defaults, the check, the table and the lint itself, so one call
-#   is enough. Attributes: notes (the lint's sentences), spec (the spec as drawn) and table.
-spec_plot <- function(spec, data, cb) {
+#   is enough. Attributes: notes (the lint's sentences), spec (the spec as drawn), table, and
+#   widget_plot (the variant spec_widget() converts).
+spec_plot <- function(spec, data, cb, pal = spec_palette()) {
   s = spec_defaults(spec_public(spec))
   why = spec_check(s, cb)
   if (length(why)) spec_fail(paste(why, collapse = " "))
   table = spec_table(s, data, cb)
   lint = spec_lint(s, cb, table)
-  p = eval(plus_call(plot_calls(lint$spec, cb)), spec_env(chart_table = table))
+  env = spec_env(chart_table = table)
+  p = eval(plus_call(plot_calls(lint$spec, cb, pal)), env)
   attr(p, "notes") = lint$notes
   attr(p, "spec") = lint$spec
   attr(p, "table") = table
+  attr(p, "widget_plot") = eval(plus_call(plot_calls(lint$spec, cb, pal, widget = TRUE)), env)
+  attr(p, "widget_text") = widget_has_text(lint$spec)
   p
 }
 
@@ -779,47 +968,61 @@ spec_plot <- function(spec, data, cb) {
 SPEC_DELIMS <- c(",", ";", "\t", "|", " ", ":")
 
 # The delimiter that splits the file's header into as many columns as the codebook has, and the
-#   header as written; NULL when the file is not there or no delimiter fits.
-file_header <- function(file, n) {
+#   header's names as readr names them by default (blank and repeated names repaired as ...1,
+#   name...3); NULL when the file is not there or no delimiter fits.
+file_header <- function(file, n, encoding = "UTF-8") {
   if (!file.exists(file)) return(NULL)
-  header = function(d) tryCatch(names(readr::read_delim(file, delim = d, n_max = 0, name_repair = "minimal",
-                                                         col_types = readr::cols(.default = readr::col_character()),
-                                                         show_col_types = FALSE, progress = FALSE)),
-                                error = function(e) NULL)
-  d = purrr::detect(SPEC_DELIMS, function(d) length(header(d)) == n)
-  if (is.null(d)) NULL else list(delim = d, names = header(d))
+  header = function(d, repair) tryCatch(names(suppressMessages(readr::read_delim(
+    file, delim = d, n_max = 0, name_repair = repair, locale = readr::locale(encoding = encoding),
+    col_types = readr::cols(.default = readr::col_character()), show_col_types = FALSE, progress = FALSE))),
+    error = function(e) NULL)
+  d = purrr::detect(SPEC_DELIMS, function(d) length(header(d, "minimal")) == n)
+  if (is.null(d)) NULL else list(delim = d, names = header(d, "unique"))
 }
 
-# A call written out as code, wrapped at about 80 characters.
-code_text <- function(cl) paste(trimws(deparse(cl, width.cutoff = 80L), "left"), collapse = "\n    ")
+# A call written out as code: on one line when it fits in SPEC_CODE_WIDTH characters (with its
+#   indent and what follows it), otherwise wrapped.
+code_text <- function(cl, indent = 0L, suffix = "") {
+  one = deparse1(cl, collapse = " ")
+  if (indent + nchar(one) + nchar(suffix) <= SPEC_CODE_WIDTH) return(one)
+  wrap = function(cutoff) trimws(deparse(cl, width.cutoff = cutoff), "left")
+  fits = function(lines) all(nchar(lines) + c(indent, rep(indent + 4L, length(lines) - 1L)) <= SPEC_CODE_WIDTH)
+  cutoff = purrr::detect(c(70L, 60L, 50L, 40L, 30L, 20L), function(k) fits(wrap(k))) %||% 20L
+  paste(wrap(cutoff), collapse = paste0("\n", strrep(" ", indent + 4L)))
+}
 
-# R code that reads `file` as chaRt reads it (with the codebook's values that mean missing),
-#   builds the same table with dplyr and tidyr, and draws the same chart with ggplot2, ending with
-#   chart_theme(). It is written from the spec as spec_plot() left it (attr(plot, "spec")): every
-#   line is one of the calls spec_table() and spec_plot() evaluate.
-spec_code <- function(spec, cb, file) {
+# R code that reads the file (by its name, with the codebook's values that mean missing and its
+#   encoding), builds the same table with dplyr and tidyr, and draws the same chart with ggplot2,
+#   ending with chart_theme(). It is written from the spec as spec_plot() left it
+#   (attr(plot, "spec")): every line is one of the calls spec_table() and spec_plot() evaluate.
+#   `file` is where the file is now (to read its header); the code names it by cb$file only.
+spec_code <- function(spec, cb, file, pal = spec_palette()) {
   pub = spec_defaults(spec_public(spec))
   why = spec_check(pub, cb)
   if (length(why)) spec_fail(paste(why, collapse = " "))
   s = spec_defaults(spec)
   names_now = purrr::map_chr(cb$columns, "name")
-  h = file_header(file, length(names_now))
+  enc = cb$encoding %||% "UTF-8"
+  h = file_header(file, length(names_now), enc)
   renamed = if (!is.null(h)) which(h$names != names_now) else integer(0)
-  read = as.call(c(list(sym("read_delim"), file), if (!is.null(h)) list(delim = h$delim),
-                   list(na = c(DATA_NA, missing_codes(cb))), if (length(renamed)) list(name_repair = "minimal"),
+  read = as.call(c(list(sym("read_delim"), cb$file %||% basename(file)), if (!is.null(h)) list(delim = h$delim),
+                   list(na = c(DATA_NA, missing_codes(cb))),
+                   if (!enc %in% c("UTF-8", "ASCII")) list(locale = call("locale", encoding = enc)),
                    list(trim_ws = TRUE, guess_max = Inf, show_col_types = FALSE)))
-  rename = if (length(renamed)) bquote(names(chart_data)[.(as.numeric(renamed))] <- .(names_now[renamed]))
+  rename = if (length(renamed)) as.call(c(list(sym("rename")), stats::setNames(purrr::map(h$names[renamed], sym), names_now[renamed])))
   st = table_steps(s, cb)
-  steps = c(st$base, st$rest)
-  plot = plot_calls(s, cb)
-  plot_text = paste(purrr::map_chr(plot, code_text), collapse = " +\n  ")
-  libs = c("readr", "dplyr", "tidyr", "ggplot2", if (grepl("label_|breaks_", plot_text)) "scales")
+  steps = c(st$base, st$agg, st$post)
+  plot = plot_calls(s, cb, pal)
+  plot_text = paste(purrr::imap_chr(plot, function(cl, i) code_text(cl, 2L, if (i < length(plot)) " +" else "")), collapse = " +\n  ")
+  step_text = paste(purrr::imap_chr(steps, function(cl, i) code_text(cl, 2L, if (i < length(steps)) " |>" else "")), collapse = " |>\n  ")
+  libs = c("readr", "dplyr", "tidyr", "ggplot2", if (grepl("label_|breaks_|col_numeric", plot_text)) "scales")
   paste0(paste0("library(", libs, ")", collapse = "\n"), "\n\n",
          "# The data, read as chaRt reads it: these values mean missing, and column types are guessed from every row.\n",
-         "chart_data <- ", code_text(read), "\n",
-         if (!is.null(rename)) paste0("# Columns with a blank or repeated name in the file, named as in the codebook.\n", code_text(rename), "\n"),
-         "\n# The table that is drawn.\n",
-         "chart_table <- chart_data |>\n  ", paste(purrr::map_chr(steps, code_text), collapse = " |>\n  "), "\n\n",
+         "# Set the working directory to the folder that holds the file (setwd()), or write its full path here.\n",
+         "chart_data <- ", code_text(read, 14L, if (!is.null(rename)) " |>" else ""),
+         if (!is.null(rename)) paste0(" |>\n  ", code_text(rename, 2L), "  # blank or repeated names in the file, as in the codebook"),
+         "\n\n# The table that is drawn.\n",
+         "chart_table <- chart_data |>\n  ", step_text, "\n\n",
          "# The chart. chart_theme() is the house theme, in R/theme.R.\n",
          plot_text, "\n")
 }
@@ -827,13 +1030,57 @@ spec_code <- function(spec, cb, file) {
 
 # ---- the plotly version and the figure size -------------------------------------------------------
 
-# plotly::ggplotly() of a spec_plot(), built (plotly::plotly_build()) so that every warning comes now, with a tooltip of the plotted values and the mode bar cut to
-#   the download button (plotly.js's modeBarButtons, passed through plotly::config()). Warnings
-#   ggplotly() gives are not hidden: they are kept as attr(, "warnings") for the page and the tests.
+# Text in the plotly version matches the static chart at the same size: ggplotly() turns the
+#   theme's points into pixels at a smaller ratio than a 96 dpi image does.
+SPEC_PLOTLY_TEXT <- 96 / 72 / 1.215
+SPEC_WRAP_TITLE <- 50L      # plotly's default font is wider than the static chart's
+SPEC_WRAP_SUBTITLE <- 70L
+
+# Every font size in a built plotly figure, times f.
+scale_fonts <- function(x, f, in_font = FALSE) {
+  if (!is.list(x)) return(x)
+  keys = names(x) %||% rep("", length(x))
+  out = purrr::map2(x, keys, function(el, key) {
+    if (in_font && identical(key, "size") && is.numeric(el)) return(el * f)
+    scale_fonts(el, f, in_font || key %in% c("font", "tickfont", "titlefont"))
+  })
+  names(out) = names(x)
+  out
+}
+
+wrapped <- function(text, width) paste(strwrap(text, width), collapse = "<br>")
+
+# plotly::ggplotly() of a spec_plot()'s widget variant, built (plotly::plotly_build()) so that every
+#   warning comes now. The title and subtitle are both shown and wrapped, the caption below the
+#   chart, the text scaled to match the static chart, the legend on the right where it does not
+#   cover the title, the tooltip naming each value with its codebook label, and the mode bar cut
+#   to the download button. Warnings are kept as attr(, "warnings").
 spec_widget <- function(plot) {
+  s = attr(plot, "spec") %||% list()
+  wp = attr(plot, "widget_plot") %||% plot
+  tip = if (isTRUE(attr(plot, "widget_text"))) "text" else SPEC_TOOLTIP
   said = character(0)
-  w = withCallingHandlers(plotly::plotly_build(plotly::ggplotly(plot, tooltip = SPEC_TOOLTIP)),
+  w = withCallingHandlers(plotly::plotly_build(plotly::ggplotly(wp, tooltip = tip)),
                           warning = function(cond) { said <<- c(said, conditionMessage(cond)); invokeRestart("muffleWarning") })
+  w$x$layout = scale_fonts(w$x$layout, SPEC_PLOTLY_TEXT)
+  title_lines = c(if (!is.null(s$title)) paste0("<b>", wrapped(s$title, SPEC_WRAP_TITLE), "</b>"),
+                  if (!is.null(s$subtitle)) paste0("<span style=\"font-size:0.8em;color:#4D4D4D\">", wrapped(s$subtitle, SPEC_WRAP_SUBTITLE), "</span>"))
+  if (length(title_lines)) {
+    n_lines = sum(lengths(regmatches(title_lines, gregexpr("<br>", title_lines)))) + length(title_lines)
+    w$x$layout$title = utils::modifyList(w$x$layout$title %||% list(),
+                                         list(text = paste(title_lines, collapse = "<br>"), x = 0.01, xanchor = "left",
+                                              xref = "container"))
+    w$x$layout$margin$t = 30 + 22 * n_lines
+  }
+  if (!is.null(s$caption)) {
+    w$x$layout$annotations = c(w$x$layout$annotations,
+                               list(list(text = wrapped(s$caption, SPEC_WRAP_SUBTITLE), x = 0, y = 0, xref = "paper", yref = "paper",
+                                         xanchor = "left", yanchor = "top", yshift = -45, showarrow = FALSE,
+                                         font = list(size = 11, color = "#7F7F7F"))))
+    w$x$layout$margin$b = (w$x$layout$margin$b %||% 40) + 30
+  }
+  w$x$layout$legend = utils::modifyList(w$x$layout$legend %||% list(),
+                                        list(x = 1.02, y = 1, xanchor = "left", yanchor = "top", orientation = "v"))
   w = plotly::config(w, displaylogo = FALSE, modeBarButtons = list(list("toImage")))
   attr(w, "warnings") = unique(said)
   w
