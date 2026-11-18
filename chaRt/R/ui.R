@@ -464,7 +464,8 @@ label_tag <- function(e, accept_id) {
 # ---- Explore --------------------------------------------------------------------------------
 
 EXPLORE_BUSY <- "The model is choosing charts from the codebook; it does not see the rows. This can take a minute or two."
-EXPLORE_PALETTE_KINDS <- c(qualitative = "Groups", sequential = "Sequential fill", diverging = "Diverging fill")
+CSS_PPI <- 96                # a CSS inch, in CSS pixels: a static chart is shown at its size in inches
+EXPLORE_PALETTE_KINDS <-c(qualitative = "Groups", sequential = "Sequential fill", diverging = "Diverging fill")
 
 # The Explore tab: a question, or a request for suggestions, drawn as charts the renderer checked.
 mod_explore_ui <- function(id) {
@@ -537,16 +538,16 @@ mod_explore_server <- function(id, state) {
       purrr::iwalk(out$charts, function(ch, i) {
         cid = function(what) paste0("r", g, "_", what, "_", i)
         drawn = reactive(tryCatch(spec_plot(ch$spec, state$data, state$codebook, palette()), error = function(e) e))
-        size = function() {
-          p = drawn()
-          if (inherits(p, "error")) return(c(width = 7, height = 1))
-          spec_size(attr(p, "spec"), attr(p, "table"))
-        }
-        output[[cid("static")]] = renderPlot({
+        # Drawn at SPEC_DPI pixels per inch and shown at its size in inches, so it is sharper, not larger.
+        output[[cid("static")]] = renderImage({
           p = drawn()
           if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
-          print(p)
-        }, width = function() round(size()[["width"]] * 96), height = function() round(size()[["height"]] * 96), res = 96)
+          f = tempfile(fileext = ".png")
+          size = spec_png(p, f)
+          list(src = f, contentType = "image/png", alt = attr(p, "spec")$title %||% "chart",
+               width = round(size[["width"]] * CSS_PPI), height = round(size[["height"]] * CSS_PPI),
+               style = "max-width:100%; height:auto;")
+        }, deleteFile = TRUE)
         output[[cid("widget")]] = plotly::renderPlotly({
           p = drawn()
           if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
@@ -554,7 +555,7 @@ mod_explore_server <- function(id, state) {
         })
         output[[cid("view")]] = renderUI({
           if ((input[[cid("interactive")]] %||% 0L) %% 2L == 1L) plotly::plotlyOutput(ns(cid("widget")), height = "450px")
-          else plotOutput(ns(cid("static")), height = "auto")
+          else imageOutput(ns(cid("static")), height = "auto")
         })
         output[[cid("notes")]] = renderUI({
           p = drawn()
@@ -610,9 +611,10 @@ mod_explore_server <- function(id, state) {
       calls = state$calls
       n = if (is.null(calls)) 0L else nrow(calls)
       tin = if (n) sum(calls$tokens_in, na.rm = TRUE) else 0
+      tcache = if (n) sum(calls$tokens_cached, na.rm = TRUE) else 0
       tout = if (n) sum(calls$tokens_out, na.rm = TRUE) else 0
       tags$p(class = "small text-muted", paste0("Model calls this session: ", format_num(n), "; tokens in ", format_num(tin),
-                                                ", out ", format_num(tout), "."))
+                                                " (and ", format_num(tcache), " read from the cache), out ", format_num(tout), "."))
     })
   })
 }

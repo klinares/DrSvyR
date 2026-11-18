@@ -29,6 +29,10 @@ SPEC_BINS <- c(5L, 60L)      # a histogram's bins, given or chosen
 SPEC_ALPHA <- 0.3            # transparency of crowded points
 SPEC_BIN_2D <- 40L           # bins on each axis of a binned scatter
 SPEC_SIZE <- c(width = 7, height = 4.5, max_height = 14, max_width = 10)
+SPEC_DPI <- 192L             # pixels per inch of every static image; it is shown at its size in inches
+SPEC_FIT_TRIM_N <- 100L      # a fitted curve on this many rows or more is drawn only ...
+SPEC_FIT_TRIM <- c(0.01, 0.99) # ... between these percentiles of x (it is fitted on every row)
+SPEC_FIT_POINTS <- 80L       # points the trimmed curve is drawn at
 SPEC_ROW_INCHES <- 0.28      # height of one sideways bar
 SPEC_PANEL_INCHES <- 2.2     # height of one row of panels
 SPEC_LABEL_GAP <- 0.04       # line-end labels closer than this share of the y range: a legend instead
@@ -53,7 +57,8 @@ SPEC_TEXT_FIELDS <- c("title", "subtitle", "caption", "x_label", "y_label", "rul
 SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 
 # Fields the lint adds; never accepted from outside.
-SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".cell_labels")
+SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".cell_labels", ".top_n",
+                      ".fit_range")
 
 # What the plotly tooltip shows: the plotted values.
 SPEC_TOOLTIP <- c("x", "y", "colour", "fill", "size")
@@ -474,6 +479,10 @@ mutate_call <- function(name, value, by = NULL)
 #   helper column holds each x's total (a box: its median) and consecutive_id() keeps the first n.
 #   Ties are broken alphabetically. The order is then fixed with factor(). For a line or slope,
 #   top_n keeps the lines with the largest totals.
+# How many groups top_n keeps: top_n, or more when values tie at the cut and all of them fit
+#   (.top_n, set from the table).
+top_of <- function(s) s$.top_n %||% s$top_n
+
 rank_calls <- function(s, cb) {
   fam = s$family
   if (fam %in% c("line", "slope")) {
@@ -481,7 +490,7 @@ rank_calls <- function(s, cb) {
     col = sym(s$color)
     return(list(mutate_call(".total", call("sum", sym(value_name(s))), s$color),
                 call("arrange", call("desc", sym(".total")), col),
-                call("filter", call("<=", call("consecutive_id", col), as.numeric(s$top_n))),
+                call("filter", call("<=", call("consecutive_id", col), as.numeric(top_of(s)))),
                 call("select", call("-", sym(".total")))))
   }
   if (!fam %in% c("bar", "dot", "box")) return(NULL)
@@ -495,7 +504,7 @@ rank_calls <- function(s, cb) {
     list(mutate_call(rank_helper(s), call(if (identical(fam, "box")) "median" else "sum", sym(if (identical(fam, "box")) s$y else value_name(s))), s$x))
   top = if (!is.null(s$top_n))
     list(call("arrange", call("desc", key), x),
-         if (single) call("slice_head", n = as.numeric(s$top_n)) else call("filter", call("<=", call("consecutive_id", x), as.numeric(s$top_n))))
+         if (single) call("slice_head", n = as.numeric(top_of(s))) else call("filter", call("<=", call("consecutive_id", x), as.numeric(top_of(s)))))
   ord = if (ordered) list(mutate_call(s$x, call("factor", x, levels = e$order)), call("arrange", x))
         else switch(srt,
           value_desc = if (is.null(top)) list(call("arrange", call("desc", key), x)),
@@ -601,6 +610,17 @@ data_checks <- function(s, base, max_colours = chart_palette_max()) {
   invisible(TRUE)
 }
 
+# When values tie across the top_n cut and showing all of them would give at most SPEC_TOP_MAX
+#   groups: how many that is. NULL otherwise.
+tie_fit <- function(s, agg) {
+  if (is.null(s$top_n) || !s$family %in% c("bar", "dot", "line", "slope")) return(NULL)
+  totals = tapply(agg[[value_name(s)]], as.character(agg[[ranked_column(s)]]), sum)
+  if (length(totals) <= s$top_n) return(NULL)
+  last = sort(totals, decreasing = TRUE)[s$top_n]
+  m = sum(totals >= last - 1e-9 * max(1, abs(last)))
+  if (m > s$top_n && m <= SPEC_TOP_MAX) m else NULL
+}
+
 # Values that tie across the top_n cut: how many share the last value kept, and how many of them
 #   are shown. NULL when there is no top_n or no tie across the cut.
 cut_ties <- function(s, agg, out) {
@@ -617,7 +637,8 @@ cut_ties <- function(s, agg, out) {
 }
 
 # The table that is drawn: after the filter, the rows left out for missing values, the
-#   aggregation, top_n and the sort. Attributes rows_used, rows_dropped, groups_total and ties.
+#   aggregation, top_n and the sort. Attributes rows_used, rows_dropped, groups_total, ties, and
+#   top (asked and shown) when ties at the cut made top_n show more.
 spec_table <- function(spec, data, cb, palette = chart_palette_default()) {
   s = spec_defaults(spec_public(spec))
   why = spec_check(s, cb, palette)
@@ -628,11 +649,14 @@ spec_table <- function(spec, data, cb, palette = chart_palette_default()) {
   base = run_steps(data, st$base)
   data_checks(s, base, chart_palette_max(palette$qualitative))
   agg = run_steps(base, st$agg)
+  if (is.null(s$.top_n)) s$.top_n = tie_fit(s, agg)
+  if (!is.null(s$.top_n)) st$post = table_steps(s, cb)$post
   out = run_steps(agg, st$post)
   ranked = if (s$family %in% c("bar", "dot", "line", "slope")) ranked_column(s)
   structure(out, rows_used = nrow(base), rows_dropped = nrow(filtered) - nrow(base),
             groups_total = if (!is.null(ranked)) length(unique(base[[ranked]])) else NA_integer_,
-            ties = cut_ties(s, agg, out))
+            ties = cut_ties(s, agg, out),
+            top = if (!is.null(s$.top_n)) c(asked = s$top_n, shown = s$.top_n))
 }
 
 
@@ -647,8 +671,13 @@ spec_settle <- function(s, cb, table) {
     x = if (isTRUE(s$log_x)) log10(x[x > 0]) else x
     s$bins = as.integer(min(max(grDevices::nclass.FD(x), SPEC_BINS[1]), SPEC_BINS[2]))
   }
+  top = attr(table, "top")
+  if (!is.null(top)) s$.top_n = unname(top[["shown"]])
   if (!is.null(s$top_n) && is.null(s$subtitle))
-    s$subtitle = paste0("Top ", s$top_n, " of ", attr(table, "groups_total"))
+    s$subtitle = paste0("Top ", top_of(s), " of ", attr(table, "groups_total"))
+  # A fitted curve on many rows is drawn only where most of the data are.
+  if (s$family %in% c("scatter", "bubble") && !identical(s$fit, "none") && nrow(table) >= SPEC_FIT_TRIM_N)
+    s$.fit_range = signif(stats::quantile(table[[s$x]], SPEC_FIT_TRIM, names = FALSE), 4)
   s
 }
 
@@ -693,8 +722,13 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
   if (identical(fam, "bar") && any(table[[v]] < 0)) s$.negative = TRUE
   # Ties across the top_n cut, and nothing to compare.
   tie = attr(table, "ties")
+  top = attr(table, "top")
+  if (!is.null(top))
+    notes = c(notes, paste0(top[["asked"]], " was asked for; ", top[["shown"]], " are shown, because values tie at the cut."))
   if (!is.null(tie))
-    notes = c(notes, paste0(tie[["tied"]], " values tie at the cut; the ", tie[["shown"]], " shown are the first alphabetically."))
+    notes = c(notes, paste0(tie[["tied"]], " values tie at the cut; ",
+                            if (tie[["shown"]] == 1L) "the 1 shown is the first alphabetically."
+                            else paste0("the ", tie[["shown"]], " shown are the first alphabetically.")))
   if (fam %in% c("bar", "dot") && nrow(table) > 1L && length(unique(table[[v]])) == 1L)
     notes = c(notes, "Every value shown is the same.")
   # Many bars, dots or boxes, or long labels: drawn sideways.
@@ -767,7 +801,7 @@ spec_palette <- function(palette = chart_palette_default())
 #   built without the data.
 colour_count <- function(s, cb, col) {
   n = cb_entry(cb, col)$distinct
-  if (!is.null(s$top_n) && identical(col, ranked_column(s))) min(n, s$top_n) else n
+  if (!is.null(s$top_n) && identical(col, ranked_column(s))) min(n, top_of(s)) else n
 }
 
 value_label <- function(s, cb) {
@@ -965,12 +999,20 @@ scatter_calls <- function(s, cb, pal, widget) {
     else if (!is.null(col)) c(list(point()), colours)
     else list(point(colour = CHART_SINGLE))
   fit = if (!identical(s$fit, "none"))
-    list(call("geom_smooth", method = if (identical(s$fit, "linear")) "lm" else "loess", formula = quote(y ~ x), se = FALSE,
-              colour = "#4D4D4D", linewidth = 0.8))
+    list(as.call(c(list(sym("geom_smooth"), method = if (identical(s$fit, "linear")) "lm" else "loess", formula = quote(y ~ x), se = FALSE),
+                   if (!is.null(s$.fit_range)) list(xseq = fit_xseq(s)), list(colour = "#4D4D4D", linewidth = 0.8))))
   c(list(call("ggplot", sym("chart_table"), main)), geom, fit,
     if (bubble) list(call("scale_size_area", max_size = 8)),
     if (isTRUE(s$rug)) list(call("geom_rug", alpha = 0.2)),
     if (isTRUE(s$log_x)) list(quote(scale_x_log10())), if (isTRUE(s$log_y)) list(quote(scale_y_log10())))
+}
+
+# Where a trimmed curve is drawn: SPEC_FIT_POINTS values between the percentiles in .fit_range, on
+#   the log scale when x has one (geom_smooth() takes xseq on the scale's transformed values).
+fit_xseq <- function(s) {
+  r = s$.fit_range
+  if (isTRUE(s$log_x)) call("seq", call("log10", r[1]), call("log10", r[2]), length.out = SPEC_FIT_POINTS)
+  else call("seq", r[1], r[2], length.out = SPEC_FIT_POINTS)
 }
 
 histogram_calls <- function(s, cb, pal, widget)
@@ -1219,6 +1261,18 @@ spec_widget <- function(plot, palette = attr(plot, "palette") %||% chart_palette
   w = plotly::config(w, displaylogo = FALSE, modeBarButtons = list(list("toImage")))
   attr(w, "warnings") = unique(said)
   w
+}
+
+# The static chart as a PNG at SPEC_DPI pixels per inch and its size in inches: ragg when it is
+#   installed, the cairo png device otherwise. Returns the size in inches, invisibly.
+spec_png <- function(plot, file, size = spec_size(attr(plot, "spec"), attr(plot, "table")), dpi = SPEC_DPI) {
+  w = round(size[["width"]] * dpi)
+  h = round(size[["height"]] * dpi)
+  if (nzchar(find.package("ragg", quiet = TRUE))) ragg::agg_png(file, width = w, height = h, units = "px", res = dpi)
+  else grDevices::png(file, width = w, height = h, units = "px", res = dpi, type = "cairo")
+  on.exit(grDevices::dev.off())
+  print(plot)
+  invisible(size)
 }
 
 # Width and height in inches for the static figure: 7 by 4.5, taller for sideways bars with many

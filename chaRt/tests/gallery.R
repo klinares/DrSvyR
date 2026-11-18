@@ -79,8 +79,10 @@ gold_run <- function(entry, work_dir) {
 
 GALLERY_OUT <- file.path("tests", "gallery.html")
 
-# Both versions of a chart are shown at the same size in pixels: its inches at this many dots per inch.
+# Both versions of a chart are shown at the same size in pixels: its inches at this many CSS pixels
+#   per inch. The static image is drawn at SPEC_DPI, with ragg when it is installed, so it is sharper.
 GALLERY_DPI <- 96
+GALLERY_DEV <- if (nzchar(find.package("ragg", quiet = TRUE))) 'dev: "ragg_png"' else 'dev: "png"'
 
 # What the page needs from one run, without the data.
 gallery_item <- function(run) {
@@ -104,7 +106,7 @@ gallery_section <- function(item, i) {
   r = function(opts, body) paste0("```{r}\n", paste0("#| ", opts, collapse = "\n"), "\n", body, "\n```")
   px = if (!is.null(item$size)) round(item$size[["width"]] * GALLERY_DPI)
   size_opts = if (!is.null(item$size)) c(paste("fig-width:", item$size[["width"]]), paste("fig-height:", item$size[["height"]]),
-                                         paste("fig-dpi:", GALLERY_DPI), paste0('out-width: "', px, 'px"'))
+                                         paste("fig-dpi:", SPEC_DPI), GALLERY_DEV, paste0('out-width: "', px, 'px"'))
   box = paste0("::: {style=\"width:", px, "px\"}\n")
   notes = if (length(item$notes)) paste0("- ", item$notes, collapse = "\n") else "*No notes.*"
   if (!is.null(item$error))
@@ -171,7 +173,7 @@ palette_items <- function(work_dir) {
 palette_section <- function(sections) {
   px = round(PALETTE_SIZE[["width"]] * GALLERY_DPI)
   opts = c(paste("fig-width:", PALETTE_SIZE[["width"]]), paste("fig-height:", PALETTE_SIZE[["height"]]),
-           paste("fig-dpi:", GALLERY_DPI), paste0('out-width: "', px, 'px"'))
+           paste("fig-dpi:", SPEC_DPI), GALLERY_DEV, paste0('out-width: "', px, 'px"'))
   chunk = function(i, j) paste0("```{r}\n", paste0("#| ", opts, collapse = "\n"), "\n", sprintf("print(palettes[[%d]]$plots[[%d]]$plot)", i, j), "\n```")
   paste0("# Palettes\n\nEach chart below is drawn under every palette of its kind that this installation offers ",
          "(`chart_palettes()`), titled with the palette's label. The report uses one palette of each kind throughout.\n\n",
