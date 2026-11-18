@@ -81,14 +81,14 @@ Both calls need the key. The model is sent the codebook (file name, rows, what a
 column's name, label, type, role, missing share and summary), never the rows. Every reply is JSON
 that R reads and checks; none is run as code.
 
-**Suggest labels** (Codebook tab) asks for a label for every column, 40 columns to a call. A label
+**Suggest labels** (Codebook tab) asks for a label for every column, 60 columns to a call. A label
 lands only where the label is still the file's own; it is marked "AI guess", and "check this" when
 the model said it was not sure. Editing it, or ticking Accept, makes it yours; "Accept all AI
 labels on this page" does that for the page. The model's guess at what one row is fills the row box
 as a placeholder, with "Use this"; it is never set for you.
 
 **Explore** asks for charts: type a question and press Draw, or press "Suggest charts for this
-file". When more than 40 columns are in play the model first picks the 40 that bear on the
+file". When more than 60 columns are in play the model first picks the 60 that bear on the
 question. Each chart it proposes is checked by the renderer; if any is refused, the model gets one
 chance to correct it, with the reasons, and what is still refused is listed under "Could not be
 drawn". Each card shows the chart, the renderer's notes, what the model said, the rule it followed,

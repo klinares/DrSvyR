@@ -4,6 +4,8 @@
 #   live_run() labels three files and asks the suggest call twelve questions (Sonnet only, through
 #   llm_json(), the key passed in and never printed), printing what each call cost and returned,
 #   and saves everything, the raw replies included, to tests/live_replies.rds (git-ignored).
+#   Given `labelled` (the codebooks of an earlier run, live_labelled()), it makes no label call;
+#   LIVE_FILES_3B is the short run of Phase 3b, five suggest calls.
 #   live_page() writes tests/live_gallery.html (git-ignored) from that file: per question, the
 #   question, cannot, and each chart with its notes, say, rule label and spec as YAML.
 
@@ -25,6 +27,23 @@ LIVE_FILES <- list(
   list(file = "panel.csv", missing = character(0), row_is = "one region in one year",
        questions = c("How has revenue changed in each region?", "Which regions grew most between 2015 and 2024?",
                      "Do regions that sell more units charge less?", NA)))
+
+# Phase 3b's short run: five questions, on the codebooks labelled in the Phase 3 run.
+LIVE_FILES_3B <- list(
+  list(file = "FH_disaggregated.csv", missing = "..", row_is = "one country",
+       questions = "Which countries had the highest political rights scores in 2014?"),
+  list(file = "footballdata-1.csv", missing = character(0), row_is = "one player",
+       questions = c(NA, "How does attacking skill relate to defending skill?")),
+  list(file = "panel.csv", missing = character(0), row_is = "one region in one year",
+       questions = c("Which regions grew most between 2015 and 2024?", NA)))
+
+# The labelled codebook and row guess of each file in a saved run, by file name.
+live_labelled <- function(rds = LIVE_RDS) {
+  if (!file.exists(rds)) return(NULL)
+  run = readRDS(rds)
+  purrr::set_names(purrr::map(run$files, function(f) list(codebook = f$label$codebook, row_is_guess = f$label$row_is_guess)),
+                   purrr::map_chr(run$files, "file"))
+}
 
 # A file read and put through a codebook as the app would, with row_is given.
 live_load <- function(lf, work_dir) {
@@ -62,21 +81,23 @@ first_counts <- function(res, cb, data) {
   c(returned = length(checked), valid_first = sum(purrr::map_lgl(checked, "ok")))
 }
 
-fmt_calls <- function(calls) purrr::pmap_chr(calls, function(call, hash, chars, tokens_in, tokens_out, seconds, repair, ok)
-  sprintf("    %-8s%s %6.1f s, %6s chars, tokens in %6s, out %5s%s", call, if (repair) " (repair)" else "", seconds,
-          format_num(chars), format_num(tokens_in), format_num(tokens_out), if (!ok) ", FAILED" else ""))
+fmt_calls <- function(calls) purrr::pmap_chr(calls, function(call, hash, chars, tokens_in, tokens_cached, tokens_out, seconds, repair, ok)
+  sprintf("    %-8s%s %6.1f s, %6s chars, tokens in: fresh %6s, cached %6s; out %5s%s", call, if (repair) " (repair)" else "", seconds,
+          format_num(chars), format_num(tokens_in), format_num(tokens_cached), format_num(tokens_out), if (!ok) ", FAILED" else ""))
 
 # The run. say() prints a line (llm_check.R's, which scrubs the key). Returns and saves the run.
-live_run <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds = LIVE_RDS) {
+live_run <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds = LIVE_RDS, files = LIVE_FILES, labelled = NULL) {
   work = tempfile("live_")
   dir.create(work)
   asker = live_asker(key)
-  files = purrr::map(LIVE_FILES, function(lf) {
+  files = purrr::map(files, function(lf) {
     g = live_load(lf, work)
     if (is.null(g)) { say("\n---- ", lf$file, ": not found, skipped"); return(NULL) }
     say("\n---- ", lf$file, " (", format_num(nrow(g$data)), " rows, ", length(g$cb$columns), " columns; row_is '", lf$row_is, "')")
-    lab = label_columns(g$cb, ask = asker$ask, m = m)
-    say("  label_columns(): ", nrow(lab$calls), " call(s)")
+    before = labelled[[lf$file]]
+    lab = if (!is.null(before)) list(codebook = before$codebook, row_is_guess = before$row_is_guess, error = NULL, calls = tibble::tibble())
+          else label_columns(g$cb, ask = asker$ask, m = m)
+    say("  label_columns(): ", if (!is.null(before)) "not called; the labels of the earlier run are used" else paste(nrow(lab$calls), "call(s)"))
     purrr::walk(fmt_calls(lab$calls), say)
     if (!is.null(lab$error)) say("  FAILED: ", lab$error, "\n  ", substr(lab$detail %||% "", 1, 600))
     cols = purrr::map(lab$codebook$columns, function(e) list(name = e$name, label = e$label, source = e$label_source, sure = e$sure))
@@ -110,7 +131,8 @@ live_run <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds =
   say("  calls ", nrow(calls), " (", paste(names(table(calls$call)), table(calls$call), sep = " ", collapse = ", "), "; repairs ",
       sum(calls$repair), "; failed ", sum(!calls$ok), ")")
   say("  seconds ", sprintf("%.0f", sum(calls$seconds, na.rm = TRUE)), "; characters sent ", format_num(sum(calls$chars)),
-      "; tokens in ", format_num(sum(calls$tokens_in, na.rm = TRUE)), ", out ", format_num(sum(calls$tokens_out, na.rm = TRUE)))
+      "; tokens in: fresh ", format_num(sum(calls$tokens_in, na.rm = TRUE)), ", cached ", format_num(sum(calls$tokens_cached, na.rm = TRUE)),
+      "; out ", format_num(sum(calls$tokens_out, na.rm = TRUE)))
   say("  charts returned ", sum(purrr::map_int(counts, "returned"), na.rm = TRUE), "; valid first time ",
       sum(purrr::map_int(counts, "valid_first"), na.rm = TRUE), "; drawn in the end ",
       sum(purrr::map_int(runs, function(r) length(r$result$charts))), "; failed in the end ",
@@ -128,13 +150,12 @@ live_run <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds =
 
 esc <- function(x) htmltools::htmlEscape(paste(x, collapse = " "))
 
+# The static chart drawn at SPEC_DPI (spec_png(), as the app does) and shown at its size in inches.
 png_of <- function(p) {
-  sz = spec_size(attr(p, "spec"), attr(p, "table"))
   f = tempfile(fileext = ".png")
-  grDevices::png(f, width = round(sz[["width"]] * LIVE_DPI), height = round(sz[["height"]] * LIVE_DPI), res = LIVE_DPI, type = "cairo")
-  print(p)
-  grDevices::dev.off()
-  paste0("<img src=\"data:image/png;base64,", jsonlite::base64_enc(readBin(f, "raw", file.size(f))), "\" style=\"max-width:100%\">")
+  sz = spec_png(p, f)
+  paste0("<img src=\"data:image/png;base64,", jsonlite::base64_enc(readBin(f, "raw", file.size(f))), "\" width=\"",
+         round(sz[["width"]] * LIVE_DPI), "\" style=\"max-width:100%; height:auto\">")
 }
 
 live_chart_html <- function(ch, g, labels) {
@@ -155,7 +176,7 @@ live_page <- function(rds = LIVE_RDS, out = LIVE_OUT) {
   dir.create(work)
   labels = as.list(reflex_labels())
   body = purrr::map_chr(run$files, function(f) {
-    lf = purrr::detect(LIVE_FILES, function(x) identical(x$file, f$file))
+    lf = purrr::detect(c(LIVE_FILES, LIVE_FILES_3B), function(x) identical(x$file, f$file))
     g = live_load(lf, work)
     g$cb = f$label$codebook
     cols = paste0("<tr><td><code>", purrr::map_chr(f$columns, function(e) esc(e$name)), "</code></td><td>",

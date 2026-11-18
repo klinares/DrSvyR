@@ -177,10 +177,14 @@ data_head <- function(cb)
   paste0("File: ", cb$file, "; ", format_num(cb$rows), " rows; one row is: ",
          if (codebook_ready(cb)) trimws(cb$row_is) else "not yet given")
 
+# A name, label or level holding <DATA> or </DATA> (any case) would open or close the block from
+#   inside: in the block those markers are written [DATA]. The codebook is not changed.
+data_safe <- function(x) gsub("(?i)</?DATA>", "[DATA]", x, perl = TRUE)
+
 data_block <- function(cb, columns) {
-  paste(c("<DATA>", data_head(cb),
+  paste(c("<DATA>", data_safe(c(data_head(cb),
           "Columns (name | label | type | role | share missing):", codebook_index(cb),
-          if (length(columns)) c("Detail:", codebook_detail(cb, columns)),
+          if (length(columns)) c("Detail:", codebook_detail(cb, columns)))),
           "</DATA>"), collapse = "\n")
 }
 
@@ -220,8 +224,8 @@ PICK_FORMAT <- paste("Reply with one JSON object and nothing else: no markdown f
 
 assemble_pick <- function(cb, question = NULL) {
   q = clean_question(question)
-  paste(c(paste(c("<DATA>", data_head(cb), "Columns (name | label | type | role | share missing):",
-                  codebook_index(cb), "</DATA>"), collapse = "\n"),
+  paste(c(paste(c("<DATA>", data_safe(c(data_head(cb), "Columns (name | label | type | role | share missing):",
+                  codebook_index(cb))), "</DATA>"), collapse = "\n"),
           paste("QUESTION:", if (nzchar(q)) q else "(none; suggest charts)"),
           PICK_ASK, paste0("REPLY FORMAT\n", PICK_FORMAT)),
         collapse = "\n\n")
@@ -230,15 +234,15 @@ assemble_pick <- function(cb, question = NULL) {
 
 # ---- the record of a call --------------------------------------------------------------
 
-# What one call cost: which call, the prompt hash, the characters sent, the tokens in (uncached and
-#   cached input, as ellmer's turn reports them: input, output, cached input) and out, the
-#   seconds, and whether it was a repair. NA where the reply did not say.
+# What one call cost: which call, the prompt hash, the characters sent, the input tokens read
+#   fresh (tokens_in) and from the prompt cache (tokens_cached), as ellmer's turn reports them
+#   (input, output, cached input), the tokens out, the seconds, and whether it was a repair. NA
+#   where the reply did not say.
 call_record <- function(call, system_txt, user_txt, res = NULL, repair = FALSE) {
   tk = as.numeric(res$tokens %||% c(NA, NA, NA))
   tk = c(tk, rep(NA_real_, 3L))[1:3]
   tibble::tibble(call = call, hash = prompt_hash(system_txt, user_txt), chars = nchar(system_txt) + nchar(user_txt),
-                 tokens_in = if (all(is.na(tk[c(1, 3)]))) NA_real_ else sum(tk[c(1, 3)], na.rm = TRUE),
-                 tokens_out = tk[2], seconds = as.numeric(res$seconds %||% NA_real_), repair = repair,
+                 tokens_in = tk[1], tokens_cached = tk[3], tokens_out = tk[2], seconds = as.numeric(res$seconds %||% NA_real_), repair = repair,
                  ok = !is.null(res))
 }
 

@@ -11,8 +11,10 @@
 #      OpenRouter, standing in for the work endpoint;
 #   4. Phase 3: label_columns() and suggest_charts() on FH, football and panel.csv, twelve
 #      questions, through llm_json() with the home model (tests/live_gallery.R; about 20 calls).
-#      It saves tests/live_replies.rds and writes tests/live_gallery.html.
-# CHART_LIVE_STEPS chooses which run, for example "1,4"; all four by default.
+#      It saves tests/live_replies.rds and writes tests/live_gallery.html;
+#   5. Phase 3b: five suggest calls (LIVE_FILES_3B) on the codebooks labelled in the last saved
+#      run, no label call; it saves and writes the same two files.
+# CHART_LIVE_STEPS chooses which run, for example "1,5"; 1 to 4 by default.
 # Structured output is ellmer's Chat$chat_structured(..., type, echo, convert), with the type built
 #   from type_object(), type_enum(values), type_string() and type_boolean(); checked in ellmer 0.4.2.
 #   If it fails, nothing works around it: the design falls back to llm_json().
@@ -132,6 +134,26 @@ if (step_on(4)) {
   } else {
     started <- Sys.time()
     live_run(home, ANTHROPIC_KEY, say)
+    say("  wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))), " s")
+    live_page()
+  }
+}
+
+
+# ---- 5. Phase 3b: the short run ---------------------------------------------------------------
+
+if (step_on(5)) {
+  heading(5, "Phase 3b: five suggest calls")
+  if (!exists("live_run")) source(file.path("tests", "live_gallery.R"))
+  say("Model:  ", home$id, " at ", home$base_url)
+  labelled <- live_labelled()
+  if (!nzchar(ANTHROPIC_KEY)) {
+    say("Result: no call was made; ANTHROPIC_API_KEY is not set.")
+  } else if (is.null(labelled)) {
+    say("Result: no call was made; there is no earlier run in ", LIVE_RDS, " to take the labels from (run step 4 first).")
+  } else {
+    started <- Sys.time()
+    live_run(home, ANTHROPIC_KEY, say, files = LIVE_FILES_3B, labelled = labelled)
     say("  wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))), " s")
     live_page()
   }

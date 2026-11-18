@@ -10,8 +10,9 @@
 # A category with more levels than this is text, and its levels are never kept.
 CODEBOOK_MAX_LEVELS <- 30L
 
-# At most this many columns go to the model with their detail in one call.
-CODEBOOK_MAX_DETAIL <- 40L
+# At most this many columns go to the model with their detail in one call. At work the limit is on
+#   the number of calls, not on tokens, so it is set high enough that a typical file needs one.
+CODEBOOK_MAX_DETAIL <- 60L
 
 # An integer column with this many distinct values or fewer gets CODED_NOTE.
 CODED_MAX_DISTINCT <- 10L
