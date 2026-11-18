@@ -11,7 +11,8 @@ library(shiny)
 APP_CLASSIFICATION <- "UNCLASSIFIED"
 
 # The packages chaRt will need, reported with their versions.
-PROBE_PACKAGES <- c("plotly", "shinychat", "yaml", "quarto", "ragg", "htmltools")
+PROBE_PACKAGES <- c("plotly", "shinychat", "yaml", "quarto", "ragg", "htmltools", "knitr", "rmarkdown",
+                    "ggplot2", "readr", "dplyr", "tidyr", "tibble")
 
 # The three-line document rendered from inside the running app (plus the YAML fences).
 PROBE_QMD <- c("---",
@@ -19,6 +20,21 @@ PROBE_QMD <- c("---",
                "format: {html: {embed-resources: true}}",
                "---",
                "Quarto rendered this page from inside a running Shiny app.")
+
+# The render that matters for the report: one R chunk drawing a small ggplot and printing
+#   plotly::ggplotly() of it, so knitr, ggplot2, plotly and the embedded JavaScript all run.
+PROBE_QMD_R <- c("---",
+                 "title: chaRt probe with R",
+                 "format: {html: {embed-resources: true}}",
+                 "---",
+                 "```{r}",
+                 "#| echo: false",
+                 "p = ggplot2::ggplot(data.frame(x = 1:5, y = c(2, 4, 3, 5, 6)), ggplot2::aes(x, y)) + ggplot2::geom_line()",
+                 "plotly::ggplotly(p)",
+                 "```")
+
+# What the R chunk needs; the check does not run without them.
+PROBE_QMD_R_NEEDS <- c("knitr", "rmarkdown", "ggplot2", "plotly")
 
 options(bitmapType = "cairo")
 
@@ -61,15 +77,19 @@ quarto_version <- function() {
   paste(out, collapse = " ")
 }
 
-# Renders PROBE_QMD in a fresh folder under tempdir() with the Quarto command line, and says
+# Renders a document in a fresh folder under tempdir() with the Quarto command line, and says
 #   whether the HTML came out self-contained (no side folder of files) and how long it took.
-quarto_render <- function() {
+#   QUARTO_R points Quarto at the R running this app, so an R chunk runs in the same installation.
+quarto_render <- function(doc = PROBE_QMD) {
   q = quarto_bin()
   if (is.null(q)) return("no (Quarto not found)")
   dir = tempfile("probe_qmd_")
   dir.create(dir)
   qmd = file.path(dir, "probe.qmd")
-  writeLines(PROBE_QMD, qmd)
+  writeLines(doc, qmd)
+  old_r = Sys.getenv("QUARTO_R", unset = NA)
+  Sys.setenv(QUARTO_R = R.home("bin"))
+  on.exit(if (is.na(old_r)) Sys.unsetenv("QUARTO_R") else Sys.setenv(QUARTO_R = old_r), add = TRUE)
   started = Sys.time()
   # A failed command also raises a warning; its output says more, so the warning is not kept.
   out = suppressWarnings(system2(q$path, c("render", shQuote(qmd), "--to", "html", "--quiet"),
@@ -82,7 +102,14 @@ quarto_render <- function() {
                   substr(paste(out, collapse = " "), 1, 400)))
   side = dir.exists(file.path(dir, "probe_files"))
   paste0("yes, in ", sprintf("%.1f", secs), " s; ", round(file.size(html) / 1024), " KB; ",
-         if (side) "NOT self-contained (a probe_files folder was written)" else "self-contained")
+         if (side) "NOT self-contained (a probe_files folder was left)" else "self-contained, no _files folder left")
+}
+
+# The second render, with R in it; it says which packages are missing instead of running.
+quarto_render_r <- function() {
+  missing = PROBE_QMD_R_NEEDS[!vapply(PROBE_QMD_R_NEEDS, requireNamespace, logical(1), quietly = TRUE)]
+  if (length(missing)) return(paste0("no, not run: ", paste(missing, collapse = ", "), " not installed"))
+  quarto_render(PROBE_QMD_R)
 }
 
 cairo_png <- function() {
@@ -113,6 +140,7 @@ run_checks <- function() {
     list(list("Quarto found", quarto_found),
          list("Quarto version", quarto_version),
          list("A .qmd renders to self-contained HTML from the app", quarto_render),
+         list("A .qmd with an R chunk (ggplot, then ggplotly) renders to self-contained HTML", quarto_render_r),
          list("A PNG draws with type = \"cairo\"", cairo_png),
          list("tempdir() is writable", tempdir_writable)))
   data.frame(Check = vapply(rows, function(r) r[[1]], character(1)),

@@ -1,7 +1,9 @@
 # Live model check for chaRt, at home only. Makes real calls and costs a little.
 # Run from inside chaRt/:   Rscript --no-init-file tests/llm_check.R
 # The keys come from the environment (.Renviron): ANTHROPIC_API_KEY for checks 1 and 2,
-#   OPENROUTER_API_KEY for check 3. A test script may read them; the app never does.
+#   OPENROUTER_API_KEY for check 3. A test script may read them; the app never does. On Windows,
+#   run it from PowerShell or RStudio: Git Bash sets HOME, which moves R's "~" away from the
+#   Documents folder that holds .Renviron.
 # Three checks, each printing what it sent and what came back:
 #   1. ping the home model through llm_ping();
 #   2. structured output through the chat object llm_chat() builds for the home model (Anthropic);
@@ -17,8 +19,17 @@ invisible(shiny::shinyAppDir("."))
 ANTHROPIC_KEY <- Sys.getenv("ANTHROPIC_API_KEY")
 OPENROUTER_KEY <- Sys.getenv("OPENROUTER_API_KEY")
 
-# A small, cheap model on OpenRouter; OPENROUTER_MODEL overrides it.
-OPENROUTER_MODEL <- Sys.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+# A small, cheap model on OpenRouter (the one QuestionR's live runs used); OPENROUTER_MODEL
+#   overrides it.
+OPENROUTER_MODEL <- Sys.getenv("OPENROUTER_MODEL", "openai/gpt-6-luna")
+
+# CHART_TEST_MODEL replaces the home model's id for checks 1 and 2 (for example claude-sonnet-4-5).
+#   The default is the home profile's model, the one the app will call. Live tests use Sonnet
+#   models only: an Opus id stops the script before any call.
+CHART_TEST_MODEL <- Sys.getenv("CHART_TEST_MODEL")
+if (grepl("opus", CHART_TEST_MODEL, ignore.case = TRUE) || grepl("opus", APP_PROFILES$home$id, ignore.case = TRUE))
+  stop("Live tests call Sonnet models only; '", if (nzchar(CHART_TEST_MODEL)) CHART_TEST_MODEL else APP_PROFILES$home$id,
+       "' is an Opus model.", call. = FALSE)
 OPENROUTER <- list(api = "openai", base_url = "https://openrouter.ai/api/v1", id = OPENROUTER_MODEL)
 
 FAMILIES <- c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap")
@@ -73,6 +84,7 @@ structured_check <- function(m, key, route) {
 
 heading(1, "Ping the home model through llm_ping()")
 home <- APP_PROFILES$home
+if (nzchar(CHART_TEST_MODEL)) home$id <- CHART_TEST_MODEL
 say("Model:  ", home$id, " at ", home$base_url)
 say("Sent:   ", LLM_PING_PROMPT)
 if (!nzchar(ANTHROPIC_KEY)) {

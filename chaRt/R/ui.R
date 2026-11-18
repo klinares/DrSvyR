@@ -74,7 +74,7 @@ mod_connect_ui <- function(id) {
   ns <- NS(id)
   tagList(
     tags$hr(),
-    tags$h4("Models"),
+    tags$h4("Settings and connection"),
     uiOutput(ns("models")),
     actionButton(ns("check"), "Check the connection"),
     tags$p(class = "text-muted small mt-2",
