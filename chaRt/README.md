@@ -17,7 +17,7 @@ Codebook tabs (Phase 1), and the renderer, which draws every chart family from a
 | `R/llm.R` | From QuestionR: the session key, the model call, JSON repair, retry, the connection check and the key box |
 | `R/data.R` | Read a delimited file, profile and type its columns, build, write, read and check `codebook.yaml`, and the column texts a model will be sent |
 | `R/spec.R` | The plot spec: defaults, the check against the codebook, the table that is drawn, the lint, the ggplot, the plotly version, the R code that reproduces a chart, and its size. Every threshold is a constant at the top |
-| `R/theme.R` | `chart_theme()`, the Okabe-Ito palette, the viridis scale and the highlight colours. The one file replaced at work |
+| `R/theme.R` | `chart_theme()`, the palettes an analyst may choose from (`CHART_PALETTES`), the highlight colours, and `chart_palette_default()`. The one file replaced at work |
 | `R/ui.R` | The tab names, the shared helpers, the logo, Start here, the connection check, and the Data and Codebook tabs |
 | `tests/` | The smoke test, the live check, the gold specs (`gold_specs.yaml`) and the gallery (`gallery.R`), at home. Not deployed |
 | `probe/app.R` | A separate one-page app, published once at work to learn what the server can do |
@@ -32,6 +32,13 @@ shiny::runApp("chaRt")
 ```
 
 Built and tested with ellmer 0.4.2; the app stops at start-up, naming anything missing.
+
+`paletteer` is optional (`install.packages("paletteer")`). Without it the app starts and offers
+only the palettes that need no package: Okabe-Ito, viridis and a built-in blue-red. With it,
+Paul Tol's, ColorBrewer's and the viridis family's palettes are offered too; batlow and vik also
+need `scico`. A report uses one qualitative, one sequential and one diverging palette throughout;
+the model never chooses colours. The code a chart comes with writes its colours in, so it runs
+without paletteer.
 
 ## The profiles
 

@@ -1,5 +1,55 @@
 # chaRt: status
 
+## Phase 2c, 2026-11-17: colour palettes from paletteer
+
+Branch `chart`. Not pushed. No model calls. The tabs are unchanged.
+
+### What the installed paletteer (1.7.0) provides
+
+- `paletteer_d(palette, n, direction, type)` for a discrete palette and `paletteer_c(palette, n,
+  direction)` for a continuous one; the palette is named "package::palette". Also
+  `paletteer_dynamic()` and `scale_colour_paletteer_d/_c/_binned` and the fill versions.
+- Name tables: `palettes_d_names` (package, palette, length, type, novelty), `palettes_c_names`
+  (package, palette, type), `palettes_dynamic_names`, and the colours themselves in `palettes_d`.
+- A discrete palette needs only paletteer, which holds its colours (khroma's bright drew without
+  khroma). A continuous one is drawn by its source package: `viridis::` needs viridisLite
+  (installed), `scico::` needs scico (not installed, so batlow and vik cannot be drawn here).
+- Every candidate is in the tables: khroma bright, muted, vibrant (discrete) and sunset (discrete,
+  divergent); viridis magma, cividis, mako and scico batlow, vik (continuous); ColorBrewer Blues,
+  YlGnBu, RdBu, PuOr and BrBG as `RColorBrewer::` (discrete) and also as `grDevices::`
+  (continuous). The `RColorBrewer::` versions are used: they are ColorBrewer's own colours and
+  need no package beyond paletteer.
+
+### Built
+
+- `R/theme.R`: `CHART_PALETTES` (17 entries), `paletteer_installed()`, `palette_colours()`,
+  `chart_palettes(kind)`, `chart_palette(n, name)`, `chart_palette_max()`, `chart_sequential()`,
+  `chart_diverging()`, `chart_palette_default()`.
+- `R/spec.R`: `spec_check()`, `spec_table()`, `spec_plot()`, `spec_code()` and `spec_widget()` take
+  `palette`; the hard limit on colours is the chosen qualitative palette's `max`; the heatmap's
+  `midpoint` fills with the diverging palette centred on it (`rescale_mid()` as the scale's
+  rescaler, and the same in the cell-label contrast).
+- `probe/app.R` lists paletteer. It is not in `APP_PACKAGES`.
+- `tests/smoke.R`: 115 checks (111 before, 4 new) and the printed colour-distance table; the
+  gallery ends with a palette section (19 charts).
+
+### Departures
+
+- A third entry needs no package: "Blue-red (built in)", `grDevices::hcl.colors(11, "Blue-Red
+  2")`, written out. Without it there would be no diverging palette when paletteer is missing;
+  `chart_palette_default()` uses it then, and ColorBrewer RdBu otherwise.
+- `spec_check()`, `spec_table()` and `spec_lint()` also take the palette (or its max), since the
+  colour limit is now the palette's.
+- `spec_widget(plot, palette)`: the widget is converted from the plot, so it keeps the palette the
+  plot was drawn with; another palette needs a new `spec_plot()`.
+- `paletteer_installed()` uses `find.package()`, not `requireNamespace()`, which the smoke test
+  forbids in `R/` (and CLAUDE.md forbids `system.file()`).
+- `theme.R` uses base `Filter()` and `vapply()` rather than purrr, to keep the file free of
+  packages beyond ggplot2, grDevices and (optionally) paletteer.
+- A qualitative palette with fewer colours than the lines of a chart (Tol bright and vibrant hold
+  7; the panel has 8 regions) draws the lines in one colour, as for more than 8 before; the
+  palette section shows this.
+
 ## Phase 2b, 2026-11-17: renderer fixes after the gallery review
 
 Branch `chart`. Not pushed. No model calls. The tabs are unchanged.
