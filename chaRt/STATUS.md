@@ -1,5 +1,61 @@
 # chaRt: status
 
+## Phase 2b, 2026-11-17: renderer fixes after the gallery review
+
+Branch `chart`. Not pushed. No model calls. The tabs are unchanged.
+
+### Built
+
+- Static charts: ties across the `top_n` cut and equal values are noted; line and slope end labels
+  are drawn only when no two would touch (`SPEC_LABEL_GAP`), otherwise a legend on the right in
+  the order of the end values; highlight labels sit inward of their points; facet and colour on
+  one column draw one colour; yellow is the eighth colour; boxes sort by median; heatmap rows run
+  in level order, top to bottom, and up to `SPEC_HEAT_LABELS` cells print their value in black or
+  white; points mostly on shared positions are drawn with `geom_count()`; two legends stack and a
+  long one wraps; a sideways bar or dot has no title on its name axis; room below zero comes from
+  the table.
+- The code: `top_n` as `arrange(desc(value), name) |> slice_head(n = n)` (or a helper column and
+  `consecutive_id()` when an x has several rows); the order with `factor()`; no `tapply()`,
+  `sort()` or `head()`; the file by its name only; `rename()` for repaired names; one step per line,
+  wrapped only past `SPEC_CODE_WIDTH`.
+- Encoding: `read_data()` guesses it with `readr::guess_encoding()`; a Latin-family guess is read
+  as windows-1252; the problems say so; the codebook keeps `encoding`; the code passes it.
+- The widget is made from a variant of the plot with no direct labels, the legend kept and a
+  tooltip naming each value with its codebook label; the title (bold) and subtitle are shown and
+  wrapped, the caption below, the text scaled, the legend on the right.
+- `CLAUDE.md`, rule 1: `chaRt/R/spec.R` is the one file that calls dplyr, tidyr, ggplot2 and scales
+  without `pkg::`.
+- `tests/smoke.R`: 111 checks (90 before, 21 new). Two gold specs added (25 in all): a Latin-1 bar
+  and a line whose labels fit.
+
+### What still differs in the plotly version
+
+- Its default font is wider than the static chart's (heights match at the same size).
+- The legend of a line chart is alphabetical, not in end-value order (ggplotly ignores `breaks`).
+- A bubble chart's colour and size legends are merged into one list without size keys.
+- The heatmap's colour bar and the rug look as before (bar on the right, rug opaque).
+- Highlighted lines and points carry no legend: their names are in the tooltip.
+
+### Readings
+
+- "The n shown" in the tie note is how many of the tied values are shown.
+- A line chart with a highlight whose labels would touch colours the highlighted lines from the
+  palette and shows them in a legend (one highlight colour would make the legend useless).
+- More than 8 lines whose labels would touch: no labels, no legend (one colour), and a note.
+- Item 10's exception: the name axis keeps its title when the spec gives `x_label`, the field for
+  that column (the prompt says `y_label`, which is the value axis's).
+- Item 8 applies to scatter charts without a highlight (a bubble already sizes its points).
+- The tie-break is dplyr's `arrange()` order, which sorts text in the C locale (capitals first).
+- Encoding: readr guessed the Latin-1 test file as ISO-8859-2 (65%), which would turn "São" into
+  "Săo". Any Latin-family guess is read as windows-1252, and the sentence then says it is a guess.
+- A file that is not UTF-8 breaks vroom's delimiter guessing, so for such a file `read_data()`
+  takes the delimiter that splits the header into the most columns.
+
+### Not confirmed
+
+- That the plotly text scale (`SPEC_PLOTLY_TEXT`) matches on other screens; it was set from
+  ggplotly's point-to-pixel ratio and checked by eye in the gallery.
+
 ## Phase 2, 2026-11-17: the renderer
 
 Branch `chart`. Not pushed. No model calls. The tabs are unchanged.
