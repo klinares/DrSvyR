@@ -192,8 +192,8 @@ if (!inherits(messy, "error")) {
         length(sent) > 0L && !any(grepl(SECRET, sent, fixed = TRUE)))
   check(paste0("messy: ", SECRET, " appears nowhere in the saved codebook.yaml either"),
         !any(grepl(SECRET, readLines(file.path(work_dir, "messy.csv.yaml"), warn = FALSE), fixed = TRUE)))
-  too_many <- tryCatch({ codebook_detail(cb, rep(all_cols, length.out = 13L)); NULL }, error = function(e) e)
-  check("messy: asking codebook_detail() for 13 columns is an error", inherits(too_many, "error"))
+  too_many <- tryCatch({ codebook_detail(cb, rep(all_cols, length.out = CODEBOOK_MAX_DETAIL + 1L)); NULL }, error = function(e) e)
+  check(paste0("messy: asking codebook_detail() for ", CODEBOOK_MAX_DETAIL + 1L, " columns is an error"), inherits(too_many, "error"))
   renamed <- cb
   renamed$columns[[6]]$name <- "visit_day"
   why <- check_codebook(renamed, messy$profile)
@@ -476,6 +476,8 @@ if (!is.null(heat8) && !is.null(heat80)) {
         nrow(cells) == nrow(t8) && identical(dark, "white") && identical(light, "black") && !code_has(heat80$code, "geom_text"))
 }
 if (!is.null(hw)) {
+  check("3-A: the legend keys of see-through points are drawn solid",
+        code_has(hw$code, "guides(colour = guide_legend(override.aes = list(alpha = 1)))"))
   # Phase 2d replaced 2b-8 (one point per position, sized by count): every row is its own point,
   #   moved slightly with a fixed seed. The run of hw's code in the fresh process gives its points.
   jitter_note <- "Points are moved slightly so that rows sharing a position can be seen."

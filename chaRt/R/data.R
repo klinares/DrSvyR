@@ -11,7 +11,7 @@
 CODEBOOK_MAX_LEVELS <- 30L
 
 # At most this many columns go to the model with their detail in one call.
-CODEBOOK_MAX_DETAIL <- 12L
+CODEBOOK_MAX_DETAIL <- 40L
 
 # An integer column with this many distinct values or fewer gets CODED_NOTE.
 CODED_MAX_DISTINCT <- 10L

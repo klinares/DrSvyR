@@ -690,10 +690,13 @@ aes_call <- function(...) {
 
 data_where <- function(cond) call("filter", sym("chart_table"), cond)
 
-# A legend at the top with more entries than fit on one row: several rows.
-legend_rows <- function(aesthetic, n) {
-  if (n <= SPEC_LEGEND_PER_ROW) return(NULL)
-  as.call(c(list(sym("guides")), stats::setNames(list(call("guide_legend", nrow = ceiling(n / SPEC_LEGEND_PER_ROW))), aesthetic)))
+# A legend at the top with more entries than fit on one row: several rows. solid = TRUE draws the
+#   keys of see-through points without their transparency, so the colours can be told apart.
+legend_rows <- function(aesthetic, n, solid = FALSE) {
+  rows = n > SPEC_LEGEND_PER_ROW
+  if (!rows && !solid) return(NULL)
+  args = c(if (solid) list(override.aes = call("list", alpha = 1)), if (rows) list(nrow = ceiling(n / SPEC_LEGEND_PER_ROW)))
+  as.call(c(list(sym("guides")), stats::setNames(list(as.call(c(list(sym("guide_legend")), args))), aesthetic)))
 }
 
 # The tooltip of the plotly version: each plotted value named with its codebook label.
@@ -856,7 +859,7 @@ scatter_calls <- function(s, cb, pal, widget) {
   point = function(...) as.call(c(list(sym("geom_point")), list(...), alpha))
   colours = if (!is.null(col) && !binned) {
     n = colour_count(s, cb, col)
-    purrr::compact(list(call("scale_colour_manual", values = pal$qual(n)), legend_rows("colour", n)))
+    purrr::compact(list(call("scale_colour_manual", values = pal$qual(n)), legend_rows("colour", n, solid = length(alpha) > 0L)))
   }
   geom = if (binned) list(call("geom_bin_2d", bins = SPEC_BIN_2D), call("scale_fill_gradientn", colours = pal$seq))
     else if (!is.null(s$highlight))
