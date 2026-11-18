@@ -314,6 +314,25 @@ check(paste0("every gold spec (", length(gold), ") passes spec_check()"),
 check("every gold spec's spec_table() has rows",
       all(purrr::map_lgl(gold_tables, function(t) !inherits(t, "error") && nrow(t) > 0L)))
 
+# A ggplot built, with every warning and message it raised (ggplot_build() included).
+build_quietly <- function(expr) {
+  said = character(0)
+  out = withCallingHandlers(tryCatch(expr, error = function(e) e),
+                            warning = function(w) { said <<- c(said, conditionMessage(w)); invokeRestart("muffleWarning") },
+                            message = function(m) { said <<- c(said, conditionMessage(m)); invokeRestart("muffleMessage") })
+  list(value = out, said = unique(said))
+}
+gold_plots <- purrr::map(gold, function(x) {
+  p = build_quietly(spec_plot(x$entry$spec, x$g$data, x$g$cb))
+  b = if (inherits(p$value, "error")) p else build_quietly(ggplot2::ggplot_build(p$value))
+  list(name = x$entry$name, plot = p$value, error = if (inherits(b$value, "error")) conditionMessage(b$value),
+       said = c(p$said, b$said))
+})
+purrr::walk(purrr::keep(gold_plots, function(r) length(r$said) || !is.null(r$error)), function(r)
+  cat("      ", r$name, ": ", paste(c(r$error, r$said), collapse = " | "), "\n", sep = ""))
+check("every gold spec: spec_plot() builds, and ggplot_build() runs with no error, warning or message",
+      all(purrr::map_lgl(gold_plots, function(r) is.null(r$error) && !length(r$said) && inherits(r$plot, "ggplot"))))
+
 
 # ---- Phase 2: bad specs ---------------------------------------------------------------
 

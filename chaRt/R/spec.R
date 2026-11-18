@@ -218,6 +218,9 @@ spec_check <- function(spec, cb) {
                     ") or a filter that leaves at most ", SPEC_TOP_MAX, "."))
     if (identical(f, "color") && fam %in% c("bar", "dot") && is.null(s$filter) && e$distinct > SPEC_BAR_GROUPS)
       return(paste0("color: '", v, "' has ", e$distinct, " values; a ", fam, " chart takes at most ", SPEC_BAR_GROUPS, " colours."))
+    if (identical(f, "color") && fam %in% c("scatter", "bubble") && is.null(s$filter) && e$distinct > CHART_MAX_GROUPS)
+      return(paste0("color: '", v, "' has ", e$distinct, " values; points can be told apart by at most ", CHART_MAX_GROUPS,
+                    " colours. Highlight a few values or use small multiples (facet)."))
     if (identical(f, "x") && identical(fam, "box") && is.null(s$filter) && e$distinct > SPEC_BOX_GROUPS)
       return(paste0("x: '", v, "' has ", e$distinct, " values; a box plot takes at most ", SPEC_BOX_GROUPS, " boxes."))
     NULL
@@ -439,6 +442,9 @@ data_checks <- function(s, base) {
     spec_fail(paste0("facet: '", s$facet, "' has ", nd(s$facet), " values after the filter, so as many panels; at most ", SPEC_FACET_MAX, "."))
   if (fam %in% c("bar", "dot") && !is.null(s$color) && nd(s$color) > SPEC_BAR_GROUPS)
     spec_fail(paste0("color: '", s$color, "' has ", nd(s$color), " values after the filter; a ", fam, " chart takes at most ", SPEC_BAR_GROUPS, " colours."))
+  if (fam %in% c("scatter", "bubble") && !is.null(s$color) && nd(s$color) > CHART_MAX_GROUPS)
+    spec_fail(paste0("color: '", s$color, "' has ", nd(s$color), " values after the filter; points can be told apart by at most ",
+                     CHART_MAX_GROUPS, " colours."))
   if (identical(fam, "box") && nd(s$x) > SPEC_BOX_GROUPS)
     spec_fail(paste0("x: '", s$x, "' has ", nd(s$x), " values after the filter; a box plot takes at most ", SPEC_BOX_GROUPS, " boxes."))
   ranked = if (fam %in% c("bar", "dot", "line", "slope")) ranked_column(s)
@@ -478,4 +484,240 @@ spec_table <- function(spec, data, cb) {
   ranked = if (s$family %in% c("bar", "dot", "line", "slope")) ranked_column(s)
   structure(out, rows_used = nrow(base), rows_dropped = nrow(filtered) - nrow(base),
             groups_total = if (!is.null(ranked)) length(unique(base[[ranked]])) else NA_integer_)
+}
+
+
+# ---- the lint ------------------------------------------------------------------------------------
+
+# The figures the plot needs that depend on the table: the sort a bar or dot falls back on, a
+#   histogram's bins when none were given, and "Top n of N" as the subtitle.
+spec_settle <- function(s, cb, table) {
+  if (s$family %in% c("bar", "dot")) s$sort = effective_sort(s, cb)
+  if (identical(s$family, "histogram") && is.null(s$bins)) {
+    x = table[[s$x]]
+    x = if (isTRUE(s$log_x)) log10(x[x > 0]) else x
+    s$bins = as.integer(min(max(grDevices::nclass.FD(x), SPEC_BINS[1]), SPEC_BINS[2]))
+  }
+  if (!is.null(s$top_n) && is.null(s$subtitle))
+    s$subtitle = paste0("Top ", s$top_n, " of ", attr(table, "groups_total"))
+  s
+}
+
+spec_lint <- function(spec, cb, table) list(spec = spec_settle(spec, cb, table), notes = character(0))
+
+
+# ---- the plot --------------------------------------------------------------------------------------
+
+# How many colours a column needs, from the codebook (and top_n), so the plot and its code can be
+#   built without the data.
+colour_count <- function(s, cb, col) {
+  n = cb_entry(cb, col)$distinct
+  if (!is.null(s$top_n) && identical(col, ranked_column(s))) min(n, s$top_n) else n
+}
+
+value_label <- function(s, cb) {
+  if (identical(s$family, "histogram")) return("Count")
+  lab = cb_label(cb, if (identical(s$family, "heatmap")) s$color %||% s$y else s$y %||% s$x)
+  switch(s$fn, count = "Count", share = "Share of rows", sum = paste("Total", lab), mean = paste("Mean", lab),
+         median = paste("Median", lab), lab)
+}
+
+highlight_values <- function() c(`FALSE` = CHART_GREY, `TRUE` = CHART_HIGHLIGHT)
+
+aes_call <- function(...) {
+  a = purrr::compact(list(...))
+  as.call(c(list(sym("aes")), purrr::map(a, function(v) if (is.character(v)) sym(v) else v)))
+}
+
+data_where <- function(cond) call("filter", sym("chart_table"), cond)
+
+# The value axis of a bar: from zero, a little room at the top only (both ends if there are
+#   negative values), percent labels for a share.
+value_scale <- function(s, cb, axis, zero) {
+  negative = !is.null(s$y) && !s$fn %in% c("count", "share") && isTRUE(cb_entry(cb, s$y)$min < 0)
+  args = c(if (zero) list(expand = call("expansion", mult = if (negative) c(0.05, 0.05) else c(0, 0.05))),
+           list(labels = call(if (identical(s$fn, "share")) "label_percent" else "label_comma")))
+  scale = if (length(args)) as.call(c(list(sym(paste0("scale_", axis, "_continuous"))), args))
+  limits = if (zero) as.call(c(list(sym("expand_limits")), stats::setNames(list(0), axis)))
+  purrr::compact(list(scale, limits))
+}
+
+# A time axis: whole years as whole numbers, room on the right for line labels when asked.
+time_scale <- function(s, cb, room) {
+  e = cb_entry(cb, s$x)
+  expand = if (room) call("expansion", mult = c(0.02, 0.18))
+  if (identical(e$type, "date")) {
+    if (is.null(expand)) return(NULL)
+    return(call(if (identical(storage_of(e), "datetime")) "scale_x_datetime" else "scale_x_date", expand = expand))
+  }
+  as.call(c(list(sym("scale_x_continuous"), breaks = quote(function(x) unique(floor(pretty(x))))),
+            if (!is.null(expand)) list(expand = expand)))
+}
+
+bar_calls <- function(s, cb) {
+  v = value_name(s); flip = isTRUE(s$.flip); col = s$color
+  main = if (flip) aes_call(x = v, y = s$x, fill = col) else aes_call(x = s$x, y = v, fill = col)
+  geom = if (!is.null(s$highlight)) list(call("geom_col", aes_call(fill = "highlighted")),
+                                          call("scale_fill_manual", values = highlight_values(), guide = "none"))
+    else if (!is.null(col)) list(call("geom_col", position = call("position_dodge", width = 0.8), width = 0.75),
+                                 call("scale_fill_manual", values = chart_palette(colour_count(s, cb, col))))
+    else list(call("geom_col", fill = CHART_SINGLE))
+  c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, cb, if (flip) "x" else "y", TRUE),
+    if (flip) list(call("scale_y_discrete", limits = sym("rev"))))
+}
+
+dot_calls <- function(s, cb) {
+  v = value_name(s); flip = isTRUE(s$.flip); col = s$color
+  main = if (flip) aes_call(x = v, y = s$x, colour = col) else aes_call(x = s$x, y = v, colour = col)
+  geom = if (!is.null(s$highlight)) list(call("geom_point", aes_call(colour = "highlighted"), size = 3),
+                                          call("scale_colour_manual", values = highlight_values(), guide = "none"))
+    else if (!is.null(col)) list(call("geom_point", size = 3),
+                                 call("scale_colour_manual", values = chart_palette(colour_count(s, cb, col))))
+    else list(call("geom_point", size = 3, colour = CHART_SINGLE))
+  c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, cb, if (flip) "x" else "y", FALSE),
+    if (flip) list(call("scale_y_discrete", limits = sym("rev"))))
+}
+
+# A line or slope label at one end: the rows where x is at its last value (per line and panel).
+end_rows <- function(s, extra = NULL, first = FALSE) {
+  x = sym(s$x)
+  at = if (identical(s$family, "slope")) call("==", x, call("[", call("levels", x), if (first) 1 else 2))
+       else call("==", x, call("max", x))
+  conds = c(extra, list(at))
+  by = if (identical(s$family, "line")) list(.by = by_arg(c(s$color, s$facet)))
+  as.call(c(list(sym("filter"), sym("chart_table")), conds, by))
+}
+
+end_labels <- function(s, rows, colour = NULL)
+  as.call(c(list(sym("geom_text"), data = rows, aes_call(label = s$color), hjust = -0.15, size = 3.5, check_overlap = TRUE),
+            if (!is.null(colour)) list(colour = colour)))
+
+line_calls <- function(s, cb) {
+  v = value_name(s); col = s$color; slope = identical(s$family, "slope")
+  k = if (!is.null(col)) colour_count(s, cb, col) else 0
+  many = k > CHART_MAX_GROUPS
+  points = function(colour = NULL)
+    if (slope) list(as.call(c(list(sym("geom_point"), size = 2.5), if (!is.null(colour)) list(colour = colour))))
+  layers = if (is.null(col)) {
+    c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v)), call("geom_line", colour = CHART_SINGLE, linewidth = 0.9)),
+      points(colour = CHART_SINGLE))
+  } else if (!is.null(s$highlight)) {
+    c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v, group = col)),
+           call("geom_line", data = data_where(quote(!highlighted)), colour = CHART_GREY, linewidth = 0.7),
+           call("geom_line", data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT, linewidth = 1.1)),
+      if (slope) list(call("geom_point", data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT, size = 2.5)),
+      list(end_labels(s, end_rows(s, list(quote(highlighted))), CHART_HIGHLIGHT)))
+  } else if (many) {
+    c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v, group = col)), call("geom_line", colour = CHART_SINGLE, linewidth = 0.7)),
+      points(colour = CHART_SINGLE), list(end_labels(s, end_rows(s), CHART_SINGLE)))
+  } else {
+    c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v, colour = col, group = if (slope) col)),
+           call("geom_line", linewidth = 0.9)),
+      points(), list(end_labels(s, end_rows(s)), call("scale_colour_manual", values = chart_palette(k)),
+                     call("guides", colour = "none")))
+  }
+  room = !is.null(col)
+  xscale = if (slope) call("scale_x_discrete", expand = call("expansion", add = c(0.3, 0.8))) else time_scale(s, cb, room)
+  yscale = call(if (isTRUE(s$log_y)) "scale_y_log10" else "scale_y_continuous", labels = call("label_comma"))
+  c(layers, purrr::compact(list(xscale)), list(yscale), if (room) list(quote(coord_cartesian(clip = "off"))))
+}
+
+scatter_calls <- function(s, cb) {
+  col = s$color; bubble = identical(s$family, "bubble")
+  alpha = if (!is.null(s$.alpha)) list(alpha = s$.alpha) else if (bubble) list(alpha = 0.5)
+  main = aes_call(x = s$x, y = s$y, colour = if (!isTRUE(s$.binned)) col, size = if (bubble) s$size)
+  point = function(...) as.call(c(list(sym("geom_point")), list(...), alpha))
+  geom = if (isTRUE(s$.binned)) list(call("geom_bin_2d", bins = SPEC_BIN_2D), call("scale_fill_gradientn", colours = CHART_SEQUENTIAL))
+    else if (!is.null(s$highlight))
+      list(point(data = data_where(quote(!highlighted)), colour = CHART_GREY),
+           point(data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT),
+           call("geom_text", data = data_where(quote(highlighted)), aes_call(label = s$highlight$column), vjust = -0.9,
+                size = 3.5, colour = CHART_HIGHLIGHT, check_overlap = TRUE))
+    else if (!is.null(col)) list(point(), call("scale_colour_manual", values = chart_palette(colour_count(s, cb, col))))
+    else list(point(colour = CHART_SINGLE))
+  fit = if (!identical(s$fit, "none"))
+    list(call("geom_smooth", method = if (identical(s$fit, "linear")) "lm" else "loess", formula = quote(y ~ x), se = FALSE,
+              colour = "#4D4D4D", linewidth = 0.8))
+  c(list(call("ggplot", sym("chart_table"), main)), geom, fit,
+    if (bubble) list(call("scale_size_area", max_size = 8)),
+    if (!is.null(s$highlight) && !isTRUE(s$.binned)) list(quote(coord_cartesian(clip = "off"))),
+    if (isTRUE(s$rug)) list(call("geom_rug", alpha = 0.2)),
+    if (isTRUE(s$log_x)) list(quote(scale_x_log10())), if (isTRUE(s$log_y)) list(quote(scale_y_log10())))
+}
+
+histogram_calls <- function(s, cb)
+  c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x)),
+         call("geom_histogram", bins = as.numeric(s$bins), fill = CHART_SINGLE, colour = "white"),
+         call("scale_y_continuous", expand = call("expansion", mult = c(0, 0.05)))),
+    if (isTRUE(s$log_x)) list(quote(scale_x_log10())))
+
+box_calls <- function(s, cb) {
+  flip = isTRUE(s$.flip)
+  main = if (flip) aes_call(x = s$y, y = s$x) else aes_call(x = s$x, y = s$y)
+  c(list(call("ggplot", sym("chart_table"), main), call("geom_boxplot", fill = "#F2F2F2", colour = CHART_SINGLE, width = 0.6)),
+    if (flip) list(call("scale_y_discrete", limits = sym("rev"))),
+    if (isTRUE(s$log_y)) list(if (flip) quote(scale_x_log10()) else quote(scale_y_log10())))
+}
+
+heatmap_calls <- function(s, cb)
+  list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = s$y, fill = value_name(s))),
+       call("geom_tile", colour = "white", linewidth = 0.5),
+       as.call(c(list(sym("scale_fill_gradientn"), colours = CHART_SEQUENTIAL),
+                 if (identical(s$fn, "share")) list(labels = call("label_percent")))))
+
+# Which axis carries the light grid: the value axis.
+grid_of <- function(s) switch(s$family,
+  bar = , dot = , box = if (isTRUE(s$.flip)) "x" else "y",
+  scatter = , bubble = if (isTRUE(s$.binned)) "none" else "xy",
+  heatmap = "none",
+  "y")
+
+labs_call <- function(s, cb) {
+  flip = isTRUE(s$.flip)
+  xl = s$x_label %||% cb_label(cb, s$x)
+  yl = s$y_label %||% if (s$family %in% c("box", "scatter", "bubble", "heatmap")) cb_label(cb, s$y) else value_label(s, cb)
+  legend = purrr::compact(list(
+    colour = if (!is.null(s$color) && s$family %in% c("dot", "scatter", "bubble") && is.null(s$highlight) && !isTRUE(s$.binned)) cb_label(cb, s$color),
+    fill = if (identical(s$family, "heatmap")) value_label(s, cb)
+           else if (identical(s$family, "bar") && !is.null(s$color) && is.null(s$highlight)) cb_label(cb, s$color)
+           else if (isTRUE(s$.binned)) "Count",
+    size = if (identical(s$family, "bubble")) cb_label(cb, s$size)))
+  args = c(purrr::compact(list(title = s$title, subtitle = s$subtitle, caption = s$caption)),
+           if (flip) list(x = yl, y = xl) else list(x = xl, y = yl), legend)
+  as.call(c(list(sym("labs")), args))
+}
+
+facet_call <- function(s) {
+  if (is.null(s$facet)) return(NULL)
+  as.call(c(list(sym("facet_wrap"), call("vars", sym(s$facet))), if (isTRUE(s$free_y)) list(scales = "free_y")))
+}
+
+theme_call <- function(s) {
+  g = grid_of(s)
+  if (identical(g, "y")) quote(chart_theme()) else call("chart_theme", grid = g)
+}
+
+# The plot's layers, as calls, from the spec as the lint left it and the codebook.
+plot_calls <- function(s, cb) {
+  layers = switch(s$family, bar = bar_calls(s, cb), dot = dot_calls(s, cb), line = , slope = line_calls(s, cb),
+                  scatter = , bubble = scatter_calls(s, cb), histogram = histogram_calls(s, cb), box = box_calls(s, cb),
+                  heatmap = heatmap_calls(s, cb))
+  c(layers, purrr::compact(list(facet_call(s), labs_call(s, cb), theme_call(s))))
+}
+
+plus_call <- function(calls) purrr::reduce(calls[-1], function(acc, cl) call("+", acc, cl), .init = calls[[1]])
+
+# The ggplot for a spec. Runs the defaults, the check, the table and the lint itself, so one call
+#   is enough. Attributes: notes (the lint's sentences), spec (the spec as drawn) and table.
+spec_plot <- function(spec, data, cb) {
+  s = spec_defaults(spec_public(spec))
+  why = spec_check(s, cb)
+  if (length(why)) spec_fail(paste(why, collapse = " "))
+  table = spec_table(s, data, cb)
+  lint = spec_lint(s, cb, table)
+  p = eval(plus_call(plot_calls(lint$spec, cb)), spec_env(chart_table = table))
+  attr(p, "notes") = lint$notes
+  attr(p, "spec") = lint$spec
+  attr(p, "table") = table
+  p
 }
