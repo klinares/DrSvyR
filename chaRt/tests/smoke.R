@@ -913,6 +913,171 @@ check("spec_reference() is plain text with no R syntax, under 5,000 characters",
         !grepl("<-", spec_reference(), fixed = TRUE) && !grepl("NULL|TRUE|FALSE", spec_reference()))
 
 
+# ---- Phase 3: the two calls, with stand-in replies -----------------------------------------------
+
+# A stand-in for llm_json(): it hands back the next canned reply, read and checked the way
+#   llm_json() reads and checks one (parse_json_block(), then validate), and keeps what it was sent.
+#   No model is called.
+stand_in <- function(replies) {
+  env = new.env()
+  env$sent = list()
+  env$ask = function(user, m, system_prompt = NULL, max_tokens, validate = NULL) {
+    i = length(env$sent) + 1L
+    env$sent[[i]] = list(user = user, system = system_prompt)
+    raw = replies[[min(i, length(replies))]]
+    obj = parse_json_block(raw)
+    if (!is.null(validate)) validate(obj)
+    list(obj = obj, raw = raw, finish = "success", tokens = c(100, 20, 0), seconds = 0.1)
+  }
+  env
+}
+to_json <- function(x) as.character(jsonlite::toJSON(x, auto_unbox = TRUE))
+
+if (!is.null(ball_g)) {
+  b_cb <- ball_g$cb
+  b_names <- purrr::map_chr(b_cb$columns, "name")
+  b_cb$columns[[2]] <- edit_entry(b_cb$columns[[2]], label = "The analyst's own label")
+  reply <- list(labels = c(list(list(name = b_names[1], label = "First column", sure = TRUE),
+                                list(name = b_names[2], label = "Should not land", sure = TRUE),
+                                list(name = b_names[3], label = "Third column", sure = FALSE),
+                                list(name = "not_a_column", label = "Nothing", sure = TRUE))),
+                row_is_guess = "one player")
+  si <- stand_in(list(to_json(reply)))
+  lab <- label_columns(b_cb, ask = si$ask)
+  e <- lab$codebook$columns
+  check("label_columns(): labels land as ai_guess with sure kept (true and false)",
+        is.null(lab$error) && identical(e[[1]]$label, "First column") && identical(e[[1]]$label_source, "ai_guess") &&
+          identical(e[[1]]$sure, TRUE) && identical(e[[3]]$sure, FALSE) && identical(e[[3]]$label_source, "ai_guess"))
+  check("label_columns(): the analyst's label is untouched",
+        identical(e[[2]]$label, "The analyst's own label") && identical(e[[2]]$label_source, "user") && is.null(e[[2]]$sure))
+  check("label_columns(): an unknown name and a column missing from the reply do no harm; row_is is not set",
+        identical(e[4:length(e)], b_cb$columns[4:length(e)]) && length(e) == length(b_names) &&
+          identical(lab$row_is_guess, "one player") && identical(lab$codebook$row_is, b_cb$row_is))
+  check(paste0("label_columns(): the ", length(b_names), " football columns go in two calls with the label system prompt, ",
+               "each with its own columns in detail"),
+        length(si$sent) == 2L && nrow(lab$calls) == 2L && identical(si$sent[[2]]$system, assemble_system("label")) &&
+          grepl(paste0("Detail:\n", codebook_detail(b_cb, b_names[1])), si$sent[[1]]$user, fixed = TRUE) &&
+          grepl(paste0("Detail:\n", codebook_detail(b_cb, b_names[41])), si$sent[[2]]$user, fixed = TRUE) &&
+          !grepl(paste0("\n", b_names[41], " | "), si$sent[[1]]$user, fixed = TRUE))
+  lab_bad <- tryCatch(label_columns(b_cb, ask = function(...) llm_json(..., key = "stand-in", max_times = 1L,
+                                                                        complete = function(...) "I would label these columns as follows: Position is the position.")),
+                      error = function(e) e)
+  check("label_columns(): a reply that is not JSON gives one plain sentence and changes nothing",
+        !inherits(lab_bad, "error") && identical(lab_bad$error, LABEL_FAILED) && identical(lab_bad$codebook, b_cb))
+  accepted <- accept_label(e[[1]])
+  check("accept_label() makes an AI guess the analyst's and drops sure; edit_entry() does the same on an edit",
+        identical(accepted$label_source, "user") && is.null(accepted$sure) && identical(accepted$label, "First column") &&
+          is.null(edit_entry(e[[3]], label = "Mine")$sure))
+  b_path <- file.path(work_dir, "labelled.yaml")
+  write_codebook(lab$codebook, b_path)
+  check("a codebook with AI guesses is identical after a write and a read, sure included",
+        identical(read_codebook(b_path), lab$codebook))
+
+  # suggest_charts(), on the football codebook with the skill ratings ignored, so 30 columns are in play
+  #   and no pick call is made.
+  b_cb$columns[31:length(b_cb$columns)] <- purrr::map(b_cb$columns[31:length(b_cb$columns)], function(e) { e$role = "ignore"; e })
+  good1 <- list(family = "bar", x = "Position", fn = "count", title = "Players by position", rule = "bar_or_dot", say = "s")
+  good2 <- list(family = "scatter", x = "Height", y = "Weight", title = "Height and weight", rule = "made_up_rule")
+  bad1 <- list(family = "pie", x = "Position", title = "A pie")
+  fixed1 <- list(family = "dot", x = "Position", fn = "count", title = "Players by position, as dots")
+  si_good <- stand_in(list(to_json(list(charts = list(good1, good2), cannot = list()))))
+  r_good <- suggest_charts(b_cb, ball_g$data, "How many players play in each position?", ask = si_good$ask)
+  check("suggest_charts(): a good reply gives its charts, each with a table, in one call",
+        length(r_good$charts) == 2L && !length(r_good$failed) && nrow(r_good$calls) == 1L &&
+          all(purrr::map_lgl(r_good$charts, function(ch) is.data.frame(ch$table) && nrow(ch$table) > 0L)) &&
+          identical(si_good$sent[[1]]$system, assemble_system("suggest")))
+  check("suggest_charts(): an unknown rule is removed and the chart kept; a known rule stays",
+        is.null(r_good$charts[[2]]$spec$rule) && identical(r_good$charts[[1]]$spec$rule, "bar_or_dot"))
+  check("suggest_charts(): with a question the charts are not exploratory",
+        !any(purrr::map_lgl(r_good$charts, "exploratory")))
+
+  si_fix <- stand_in(list(to_json(list(charts = list(good1, bad1), cannot = list("No column gives the season."))),
+                          to_json(list(charts = list(good1, fixed1), cannot = list("No column gives the season.")))))
+  r_fix <- suggest_charts(b_cb, ball_g$data, "Positions", ask = si_fix$ask)
+  rep_user <- si_fix$sent[[2]]$user
+  check("suggest_charts(): one bad chart triggers exactly one repair, and the corrected chart is kept",
+        length(si_fix$sent) == 2L && nrow(r_fix$calls) == 2L && identical(r_fix$calls$repair, c(FALSE, TRUE)) &&
+          length(r_fix$charts) == 2L && identical(r_fix$charts[[2]]$spec$family, "dot") && !length(r_fix$failed) &&
+          isTRUE(r_fix$repaired) && identical(r_fix$cannot, "No column gives the season."))
+  check("suggest_charts(): the repair message is the first message, YOUR REPLY, PROBLEMS naming chart 2, and the request",
+        startsWith(rep_user, si_fix$sent[[1]]$user) && grepl("\n\nYOUR REPLY\n", rep_user, fixed = TRUE) &&
+          grepl("\n\nPROBLEMS\nChart 2: ", rep_user, fixed = TRUE) && !grepl("Chart 1:", rep_user, fixed = TRUE) &&
+          endsWith(rep_user, REPAIR_ASK) && identical(si_fix$sent[[2]]$system, si_fix$sent[[1]]$system))
+
+  si_still <- stand_in(list(to_json(list(charts = list(good1, bad1), cannot = list())),
+                            to_json(list(charts = list(good1, bad1), cannot = list()))))
+  r_still <- suggest_charts(b_cb, ball_g$data, "Positions", ask = si_still$ask)
+  check("suggest_charts(): a reply still bad after the repair lists that chart under failed, keeps the good one, and stops",
+        length(si_still$sent) == 2L && length(r_still$charts) == 1L && length(r_still$failed) == 1L &&
+          identical(r_still$failed[[1]]$number, 2L) && any(grepl("pie", r_still$failed[[1]]$sentences)))
+
+  si_none <- stand_in(list(to_json(list(charts = list(good1), cannot = list()))))
+  r_none <- suggest_charts(b_cb, ball_g$data, NULL, ask = si_none$ask)
+  check("suggest_charts(): with no question the charts are exploratory and the message says so",
+        length(r_none$charts) == 1L && isTRUE(r_none$charts[[1]]$exploratory) &&
+          grepl("QUESTION: (none; suggest charts)", si_none$sent[[1]]$user, fixed = TRUE))
+
+  r_junk <- suggest_charts(b_cb, ball_g$data, "Positions", ask = function(...) llm_json(..., key = "stand-in", max_times = 1L,
+                                                                                       complete = function(...) "Here are some charts I would draw."))
+  check("suggest_charts(): a reply that is not JSON gives one plain sentence and no charts",
+        identical(r_junk$error, SUGGEST_FAILED) && !length(r_junk$charts) && nrow(r_junk$calls) == 1L && !r_junk$calls$ok)
+}
+
+wide <- runs[["wide.csv"]]
+if (!inherits(wide, "error")) {
+  w_cb <- wide$codebook
+  w_names <- purrr::map_chr(w_cb$columns, "name")
+  si_wl <- stand_in(list(to_json(list(labels = list(), row_is_guess = "one row"))))
+  w_lab <- label_columns(w_cb, ask = si_wl$ask)
+  check(paste0("label_columns(): 200 columns go in ", ceiling(200 / CODEBOOK_MAX_DETAIL), " calls of at most ",
+               CODEBOOK_MAX_DETAIL, " columns each"),
+        length(si_wl$sent) == ceiling(200 / CODEBOOK_MAX_DETAIL) && nrow(w_lab$calls) == length(si_wl$sent) &&
+          grepl("v41_", si_wl$sent[[2]]$user) && !grepl("v40_", si_wl$sent[[2]]$user))
+  pick <- c("v1_number", "v8_number", "not_a_column", "v3_category")
+  w_chart <- list(family = "scatter", x = "v1_number", y = "v8_number", title = "Two numbers")
+  si_pick <- stand_in(list(to_json(list(columns = pick)), to_json(list(charts = list(w_chart), cannot = list()))))
+  r_pick <- suggest_charts(w_cb, wide$read$data, "How do v1 and v8 relate?", ask = si_pick$ask)
+  check("suggest_charts(): more than 40 columns in play make one pick call first; names not in the file are dropped",
+        identical(r_pick$calls$call, c("pick", "suggest")) && identical(r_pick$columns, c("v1_number", "v8_number", "v3_category")) &&
+          identical(si_pick$sent[[1]]$system, PICK_SYSTEM) && !grepl("Detail:", si_pick$sent[[1]]$user, fixed = TRUE) &&
+          length(r_pick$charts) == 1L)
+  check("suggest_charts(): the record of each call has its hash, characters, tokens and seconds",
+        all(grepl("^[0-9a-f]{64}$", r_pick$calls$hash)) && all(r_pick$calls$chars > 0) &&
+          identical(r_pick$calls$tokens_in, c(100, 100)) && identical(r_pick$calls$tokens_out, c(20, 20)))
+}
+
+# No model reply is evaluated. Read from the parse data, so a comment does not count: nothing in
+#   app.R or R/ turns text into code (parse, str2lang, str2expression, eval_tidy), and eval() is
+#   called only in R/spec.R, on a call R itself builds from a checked spec (run_steps() on the
+#   pipeline of dplyr steps, spec_plot() on plus_call() of the ggplot2 layers).
+calls_named <- function(names) unlist(purrr::map(code_files, function(f) {
+  pd = utils::getParseData(parse(f, keep.source = TRUE))
+  hits = pd[pd$token == "SYMBOL_FUNCTION_CALL" & pd$text %in% names, ]
+  if (nrow(hits)) paste0(f, ":", hits$line1, " ", hits$text)
+}))
+text_to_code <- calls_named(c("parse", "str2lang", "str2expression", "eval_tidy", "evalq"))
+eval_lines <- unlist(purrr::map(code_files, function(f) {
+  txt = readLines(f, warn = FALSE, encoding = "UTF-8")
+  pd = utils::getParseData(parse(f, keep.source = TRUE))
+  at = unique(pd$line1[pd$token == "SYMBOL_FUNCTION_CALL" & pd$text == "eval"])
+  if (length(at)) paste0(f, ": ", trimws(txt[at]))
+}))
+eval_allowed <- c("R/spec.R: eval(pipeline, spec_env(chart_data = data, ...))",
+                  "R/spec.R: p = eval(plus_call(plot_calls(lint$spec, cb, pal)), env)",
+                  "R/spec.R: attr(p, \"widget_plot\") = eval(plus_call(plot_calls(lint$spec, cb, pal, widget = TRUE)), env)")
+check(paste0("no file in app.R or R/ turns text into code, and eval() is used only on the calls spec.R builds",
+             if (length(text_to_code) || !setequal(eval_lines, eval_allowed))
+               paste0(" (", paste(c(text_to_code, setdiff(eval_lines, eval_allowed)), collapse = "; "), ")")),
+      !length(text_to_code) && setequal(eval_lines, eval_allowed))
+
+if (!inherits(wide, "error")) {
+  si_badpick <- stand_in(list(to_json(list(charts = list(), cannot = list()))))
+  r_badpick <- suggest_charts(w_cb, wide$read$data, "Anything", ask = si_badpick$ask)
+  check("suggest_charts(): a pick reply that cannot be read stops there with one plain sentence, and no suggest call is made",
+        identical(r_badpick$error, PICK_FAILED) && length(si_badpick$sent) == 1L && !length(r_badpick$charts))
+}
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")

@@ -275,9 +275,13 @@ default_role <- function(entry, type = entry$type) {
 profile_facts <- function(p) c(list(missing = p$missing, distinct = p$distinct, detected = p$type),
                                 p[setdiff(names(p), c("name", "type", "missing", "distinct"))])
 
+# A label that is a model's guess (label_source ai_guess) keeps `sure`, whether the model said it
+#   was sure; it goes when the analyst edits or accepts the label.
 codebook_entry <- function(p, label = p$name, label_source = "file", type = p$type, role = default_role(p, type),
-                           order = NULL)
-  c(list(name = p$name, label = label, label_source = label_source, type = type, role = role),
+                           order = NULL, sure = NULL)
+  c(list(name = p$name, label = label, label_source = label_source),
+    if (identical(label_source, "ai_guess") && !is.null(sure)) list(sure = isTRUE(sure)),
+    list(type = type, role = role),
     profile_facts(p), if (identical(type, "ordered")) list(order = order %||% default_order(p)))
 
 # An ordered column's levels to start with: numbers in numeric order, words alphabetically.
@@ -370,7 +374,8 @@ apply_codebook <- function(cb, profile, file, rows, encoding = "UTF-8") {
   out$row_is = if (is.character(cb$row_is) && length(cb$row_is) == 1L) cb$row_is else ""
   out$columns = purrr::map(profile, function(p) {
     e = up[[p$name]]
-    codebook_entry(p, label = e$label, label_source = e$label_source, type = e$type, role = e$role, order = e$order)
+    codebook_entry(p, label = e$label, label_source = e$label_source, type = e$type, role = e$role, order = e$order,
+                   sure = e$sure)
   })
   out
 }
@@ -391,6 +396,7 @@ reread_data <- function(path, name, missing, old = NULL, encoding = NULL) {
     out = e
     out$label = o$label
     out$label_source = o$label_source
+    out$sure = if (identical(o$label_source, "ai_guess")) o$sure
     # Only what the analyst chose is carried: a type other than R's own, a role other than the
     #   type's default. What R chose before is chosen again from the data now.
     notes = character(0)
@@ -419,7 +425,7 @@ reread_data <- function(path, name, missing, old = NULL, encoding = NULL) {
 # One column of a codebook changed by the analyst. A new label marks it user; a new type keeps the
 #   role if the type allows it, else gives the type's default, and for ordered starts the order.
 edit_entry <- function(entry, label = NULL, type = NULL, role = NULL, order = NULL) {
-  if (!is.null(label) && !identical(label, entry$label)) { entry$label = label; entry$label_source = "user" }
+  if (!is.null(label) && !identical(label, entry$label)) { entry$label = label; entry$label_source = "user"; entry$sure = NULL }
   if (!is.null(type) && !identical(type, entry$type) && type %in% type_choices(entry)) {
     entry$type = type
     if (!entry$role %in% role_choices(entry)) entry$role = default_role(entry, type)
@@ -427,6 +433,12 @@ edit_entry <- function(entry, label = NULL, type = NULL, role = NULL, order = NU
   }
   if (!is.null(role) && role %in% role_choices(entry)) entry$role = role
   if (!is.null(order) && identical(entry$type, "ordered") && order_ok(order, entry)) entry$order = order
+  entry
+}
+
+# An AI guess the analyst accepts as it is: it becomes theirs.
+accept_label <- function(entry) {
+  if (identical(entry$label_source, "ai_guess")) { entry$label_source = "user"; entry$sure = NULL }
   entry
 }
 

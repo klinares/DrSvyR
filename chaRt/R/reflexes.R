@@ -305,6 +305,7 @@ label_columns <- function(cb, ask = llm_json, m = APP_MODEL) {
 # ---- suggest_charts(): the Explore tab's call ------------------------------------------------
 
 SUGGEST_FAILED <- "The model's reply could not be read as charts, so nothing was drawn."
+PICK_FAILED <- "The model's reply could not be read as a choice of columns, so nothing was drawn."
 REPAIR_ASK <- "Send the whole reply again with those charts corrected or removed."
 
 validate_charts <- function(obj) {
@@ -359,7 +360,10 @@ suggest_charts <- function(cb, data, question = NULL, ask = llm_json, palette = 
     pick_user = assemble_pick(cb, q)
     pick = make_call("pick", PICK_SYSTEM, pick_user, ask, m, LLM_MAX_TOKENS[["suggest"]], validate_pick)
     records = c(records, list(pick$record))
-    chosen = if (is.null(pick$res)) character(0) else as.character(unlist(json_list(pick$res$obj$columns), use.names = FALSE))
+    if (is.null(pick$res))
+      return(list(charts = list(), cannot = character(0), failed = list(), error = PICK_FAILED, detail = pick$error,
+                  repaired = FALSE, columns = character(0), question = q, replies = list(), calls = dplyr::bind_rows(records)))
+    chosen = as.character(unlist(json_list(pick$res$obj$columns), use.names = FALSE))
     columns = utils::head(unique(intersect(chosen, in_play)), CODEBOOK_MAX_DETAIL)
   }
   system_txt = assemble_system("suggest")
