@@ -12,7 +12,7 @@ APP_CLASSIFICATION <- "UNCLASSIFIED"
 
 # The packages chaRt will need, reported with their versions.
 PROBE_PACKAGES <- c("plotly", "shinychat", "yaml", "quarto", "ragg", "htmltools", "knitr", "rmarkdown",
-                    "ggplot2", "readr", "dplyr", "tidyr", "tibble")
+                    "ggplot2", "readr", "dplyr", "tidyr", "tibble", "paletteer")
 
 # The three-line document rendered from inside the running app (plus the YAML fences).
 PROBE_QMD <- c("---",
