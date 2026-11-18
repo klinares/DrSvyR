@@ -27,11 +27,20 @@ make_panel <- function(path) {
   path
 }
 
-# Where an entry's file is: a course file, or panel.csv made in work_dir. NULL when it is absent.
+# latin1.csv: country names with accents, saved in Latin-1 (as Excel on Windows often saves).
+make_latin1 <- function(path) {
+  rows = c("country,score", "Côte d'Ivoire,3", "São Tomé,5", "Peru,4", "Chile,6", "Canada,7", "Ghana,2")
+  writeLines(iconv(rows, from = "UTF-8", to = "latin1"), path, useBytes = TRUE)
+  path
+}
+
+# Where an entry's file is: a course file, or panel.csv or latin1.csv made in work_dir. NULL when
+#   it is absent.
 gold_path <- function(entry, work_dir) {
-  if (identical(entry$file, "panel.csv")) {
-    p = file.path(work_dir, "panel.csv")
-    if (!file.exists(p)) make_panel(p)
+  makers = list(panel.csv = make_panel, latin1.csv = make_latin1)
+  if (entry$file %in% names(makers)) {
+    p = file.path(work_dir, entry$file)
+    if (!file.exists(p)) makers[[entry$file]](p)
     return(p)
   }
   p = file.path(GOLD_COURSE_DIR, entry$file)
@@ -44,7 +53,7 @@ gold_load <- function(entry, work_dir) {
   if (is.null(path)) return(NULL)
   missing = as.character(unlist(entry$missing))
   r = read_data(path, entry$file, missing)
-  cb = new_codebook(profile_data(r$data), entry$file, nrow(r$data), missing)
+  cb = new_codebook(profile_data(r$data), entry$file, nrow(r$data), missing, r$encoding)
   cb$row_is = entry$row_is
   list(path = path, data = r$data, cb = cb)
 }

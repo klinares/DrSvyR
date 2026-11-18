@@ -372,7 +372,11 @@ check("every gold spec: the code calls no function of this app except chart_them
 # Each code run in a fresh R process that has chart_theme() and nothing else from the app.
 code_dir <- file.path(work_dir, "codes")
 dir.create(code_dir)
-purrr::iwalk(gold_codes[code_ok], function(code, i) writeLines(code, file.path(code_dir, sprintf("code_%02d.R", i))))
+# The code names the file only, so each runs from the folder that holds its file.
+purrr::iwalk(which(code_ok), function(k, i) {
+  writeLines(gold_codes[[k]], file.path(code_dir, sprintf("code_%02d.R", i)), useBytes = TRUE)
+  writeLines(normalizePath(dirname(gold[[k]]$g$path), winslash = "/"), file.path(code_dir, sprintf("code_%02d.dir", i)))
+})
 runner <- file.path(work_dir, "run_codes.R")
 writeLines(c(
   "args <- commandArgs(TRUE)",
@@ -380,7 +384,8 @@ writeLines(c(
   "files <- sort(list.files(args[1], pattern = '^code_.*[.]R$', full.names = TRUE))",
   "out <- lapply(files, function(f) tryCatch({",
   "  env <- new.env(parent = globalenv())",
-  "  p <- eval(parse(f), env)",
+  "  old <- setwd(readLines(sub('[.]R$', '.dir', f))); on.exit(setwd(old))",
+  "  p <- suppressMessages(eval(parse(f, encoding = 'UTF-8'), env))",
   "  ggplot2::ggplot_build(p)",
   "  list(table = env$chart_table, built = TRUE)",
   "}, error = function(e) list(error = conditionMessage(e))))",
@@ -395,6 +400,130 @@ purrr::walk2(code_runs, gold_plots[code_ok], function(run, r) if (!is.null(run$e
 check(paste0("every gold spec: the code runs in a fresh R process with only chart_theme(), draws, and builds a table equal to spec_table() (",
              sum(code_match), " of ", sum(code_ok), ")"),
       length(code_runs) == sum(code_ok) && all(code_match))
+
+
+# ---- Phase 2b: fixes after the gallery review ----------------------------------------------
+
+gold_named <- function(pattern) {
+  k = purrr::detect_index(gold, function(x) grepl(pattern, x$entry$name, fixed = TRUE))
+  if (k) list(x = gold[[k]], plot = gold_plots[[k]]$plot, code = gold_codes[[k]], widget = gold_widgets[[k]])
+}
+layer_data_with <- function(p, column) purrr::detect(ggplot2::ggplot_build(p)$data, function(d) column %in% names(d))
+code_has <- function(code, text) is.character(code) && grepl(text, code, fixed = TRUE)
+ball_g <- purrr::detect(gold, function(x) identical(x$entry$file, "footballdata-1.csv"))$g
+fh_bar <- gold_named("FH, top 10 political rights")
+nat_bar <- gold_named("ten most common nationalities")
+lines8 <- gold_named("revenue by year and region (line, 8 lines)")
+lines3 <- gold_named("three regions far apart")
+fh_hl <- gold_named("FH, political rights against civil liberties")
+faceted <- gold_named("revenue by region (line, faceted)")
+box_g <- gold_named("panel, price by region (box)")
+heat8 <- gold_named("football, position by foot (heatmap)")
+heat80 <- gold_named("panel, mean price by region and year (heatmap)")
+hw <- gold_named("height against weight by foot")
+lat <- gold_named("latin1")
+
+if (!is.null(fh_bar) && !is.null(nat_bar)) {
+  check("2b-1: ties across the top_n cut get 'm values tie at the cut...', and equal values 'Every value shown is the same'; untied ones neither",
+        "11 values tie at the cut; the 10 shown are the first alphabetically." %in% attr(fh_bar$plot, "notes") &&
+          "Every value shown is the same." %in% attr(fh_bar$plot, "notes") &&
+          !any(grepl("tie at the cut|is the same", attr(nat_bar$plot, "notes"))))
+}
+if (!is.null(lines8) && !is.null(lines3)) {
+  s8 = attr(lines8$plot, "spec"); s3 = attr(lines3$plot, "spec")
+  ends8 = attr(lines8$plot, "table") |> dplyr::filter(year == max(year)) |> dplyr::arrange(dplyr::desc(revenue))
+  check("2b-2: 8 lines ending close together get no end labels and a legend on the right, in the order of the end values",
+        identical(s8$.labels, FALSE) && identical(s8$.legend_order, as.character(ends8$region)) &&
+          !code_has(lines8$code, "geom_text") && code_has(lines8$code, "legend = \"right\""))
+  check("2b-2: 3 lines ending far apart keep their end labels and show no legend",
+        isTRUE(s3$.labels) && code_has(lines3$code, "geom_text") && code_has(lines3$code, "guides(colour = \"none\")"))
+  check("2b-2: no gold chart uses check_overlap", !any(purrr::map_lgl(gold_codes, function(cd) code_has(cd, "check_overlap"))))
+}
+if (!is.null(fh_hl)) {
+  labs_d = layer_data_with(fh_hl$plot, "label")
+  us = labs_d[labs_d$label == "United States of America", ]
+  cn = labs_d[labs_d$label == "China", ]
+  check("2b-3: a highlight label sits left of a point in the right half of the x range, right of one in the left half",
+        nrow(us) == 1L && us$hjust > 1 && nrow(cn) == 1L && cn$hjust < 0)
+}
+if (!is.null(faceted)) {
+  check("2b-4: facet and colour on the same column: one colour, no end labels, no legend",
+        !code_has(faceted$code, "geom_text") && !code_has(faceted$code, "scale_colour_manual") && !code_has(faceted$code, "colour = region"))
+}
+check("2b-5: yellow is the eighth Okabe-Ito colour, used only with eight groups",
+      !"#F0E442" %in% chart_palette(7) && identical(chart_palette(8)[8], "#F0E442"))
+if (!is.null(box_g) && !is.null(ball_g)) {
+  t = attr(box_g$plot, "table")
+  meds = sort(tapply(t$price, as.character(t$region), median), decreasing = TRUE)
+  ordered_box = ball_g
+  pos = which(purrr::map_chr(ordered_box$cb$columns, "name") == "Position")
+  ordered_box$cb$columns[[pos]] = edit_entry(ordered_box$cb$columns[[pos]], type = "ordered")
+  t_ord = spec_table(list(family = "box", x = "Position", "y" = "Height"), ordered_box$data, ordered_box$cb)
+  t_alpha = spec_table(list(family = "box", x = "Position", "y" = "Height", sort = "alphabetical"), ball_g$data, ball_g$cb)
+  check("2b-6: boxes are sorted by median, highest first; an ordered x keeps its order; a given sort is kept",
+        identical(levels(t$region), names(meds)) && identical(levels(t_ord$Position), ordered_box$cb$columns[[pos]]$order) &&
+          identical(levels(t_alpha$Position), sort(unique(as.character(ball_g$data$Position)))))
+}
+if (!is.null(heat8) && !is.null(heat80)) {
+  t80 = attr(heat80$plot, "table")
+  cells = layer_data_with(heat8$plot, "label")
+  t8 = attr(heat8$plot, "table")
+  dark = cells$colour[cells$label == "23"]
+  light = cells$colour[cells$label == "514"]
+  check("2b-7: heatmap rows read top to bottom in level order (alphabetical here)",
+        identical(levels(t80$region), sort(unique(as.character(t80$region)))) && code_has(heat80$code, "scale_y_discrete(limits = rev)"))
+  check("2b-7: a heatmap of at most 40 cells prints each value, white on a dark cell and black on a light one; 80 cells print none",
+        nrow(cells) == nrow(t8) && identical(dark, "white") && identical(light, "black") && !code_has(heat80$code, "geom_text"))
+}
+if (!is.null(hw)) {
+  check("2b-8: points mostly on shared positions are drawn one per position, sized by count, with the note",
+        isTRUE(attr(hw$plot, "spec")$.counted) && code_has(hw$code, "geom_count") &&
+          "Points are sized by how many rows share the position." %in% attr(hw$plot, "notes"))
+}
+if (!is.null(fh_bar) && !is.null(nat_bar)) {
+  check("2b-10: a sideways bar drops the title of its name axis unless the spec gives one (x_label)",
+        code_has(fh_bar$code, "y = NULL") && code_has(nat_bar$code, "y = \"Nationality\""))
+  check("2b-11: ten bars at 40 get no room below zero (it comes from the table drawn, not the codebook)",
+        code_has(fh_bar$code, "expansion(mult = c(0, 0.05))") && !isTRUE(attr(fh_bar$plot, "spec")$.negative))
+  check("2b-12: top_n is arrange(desc(value), name) |> slice_head(); no tapply(), sort() or head() in any gold code",
+        code_has(fh_bar$code, "arrange(desc(pr_2014), Country)") && code_has(fh_bar$code, "slice_head(n = 10)") &&
+          !any(purrr::map_lgl(gold_codes, function(cd) grepl("tapply\\(|[^_]sort\\(|head\\(names", cd))))
+}
+long_lines <- unlist(purrr::map(purrr::keep(gold_codes, is.character), function(cd) {
+  ln = strsplit(cd, "\n", fixed = TRUE)[[1]]
+  ln[nchar(ln) > SPEC_CODE_WIDTH & !grepl("\"[^\"]{40,}\"", ln) & !grepl("^#", ln)]
+}))
+check(paste0("2b-12: no line of gold code passes ", SPEC_CODE_WIDTH, " characters (unless it holds a long string)",
+             if (length(long_lines)) paste0(" (", length(long_lines), " do)")), !length(long_lines))
+check("2b-13: every gold code reads its file by name only: no folder, no temporary path",
+      all(purrr::map_lgl(purrr::keep(gold_codes, is.character), function(cd) {
+        read = regmatches(cd, regexpr("read_delim\\(\"[^\"]*\"", cd))
+        length(read) == 1L && !grepl("[/\\\\]", read) && !grepl(tempdir(), cd, fixed = TRUE) && !grepl("Rtmp", cd, fixed = TRUE)
+      })))
+if (!is.null(hw)) check("2b-14: repaired column names are restored with rename(), not names(x)[i] <-",
+                        code_has(hw$code, "rename(column_1 = ...1)") && !any(purrr::map_lgl(gold_codes, function(cd) code_has(cd, "names(chart_data)"))))
+latin_path <- make_latin1(file.path(work_dir, "latin1_check.csv"))
+latin <- read_data(latin_path, "latin1_check.csv")
+check("2b-15: a Latin-1 file reads to valid UTF-8 with its accents, and the problems say how it was read",
+      all(validUTF8(latin$data$country)) && all(c("Côte d'Ivoire", "São Tomé") %in% latin$data$country) &&
+        any(startsWith(latin$problems, "The file was read as windows-1252.")) && identical(latin$encoding, "windows-1252"))
+if (!is.null(lat)) check("2b-15: the Latin-1 gold bar draws with those names, and its code passes the encoding",
+                         all(c("Côte d'Ivoire", "São Tomé") %in% as.character(attr(lat$plot, "table")$country)) &&
+                           code_has(lat$code, "locale = locale(encoding = \"windows-1252\")"))
+if (!is.null(fh_bar) && !is.null(ball_g)) {
+  cap = spec_widget(spec_plot(list(family = "bar", x = "Position", title = "A title", subtitle = "A subtitle", caption = "A caption"),
+                              ball_g$data, ball_g$cb))
+  check("2b-16: the widget shows the title and the subtitle, and the caption below the chart",
+        grepl("Top 10 of 195", fh_bar$widget$x$layout$title$text, fixed = TRUE) &&
+          grepl("A title", cap$x$layout$title$text, fixed = TRUE) && grepl("A subtitle", cap$x$layout$title$text, fixed = TRUE) &&
+          any(purrr::map_lgl(cap$x$layout$annotations, function(a) identical(a$text, "A caption"))))
+}
+if (!is.null(lines8)) {
+  modes = unlist(purrr::map(lines8$widget$x$data, "mode"))
+  check("2b-18: the widget has no direct labels, and shows the legend",
+        !any(grepl("text", modes)) && any(unlist(purrr::map(lines8$widget$x$data, "showlegend"))) &&
+          !any(unlist(purrr::map(lines3$widget$x$data, "mode")) == "text"))
+}
 
 
 # ---- Phase 2: the lint, one check per rule ----------------------------------------------

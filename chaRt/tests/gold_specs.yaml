@@ -1,6 +1,6 @@
 # Gold specs for chaRt's renderer: hand-written, each drawn by tests/smoke.R and shown in
 #   tests/gallery.html. `file` is one of the SURV752 course files (read from COURSE_DIR in the
-#   tests) or panel.csv, which the tests make with a fixed seed. `missing` lists the values that
+#   tests), or panel.csv or latin1.csv, which the tests make. `missing` lists the values that
 #   mean missing; `row_is` is what one row represents. The key "y" is quoted: YAML 1.1, which the
 #   yaml package follows, reads a bare y as TRUE.
 
@@ -291,3 +291,28 @@
     fn: sum
     interactive: true
     title: Coast earned the most over ten years
+
+- name: panel, revenue in three regions far apart (line, labels kept)
+  file: panel.csv
+  missing: []
+  row_is: one region in one year
+  spec:
+    family: line
+    x: year
+    "y": revenue
+    color: region
+    fn: sum
+    filter:
+      - {column: region, op: "in", value: ["Islands", "East", "North"]}
+    title: Islands grew fastest of the three
+
+- name: latin1, a file saved in Latin-1 (bar)
+  file: latin1.csv
+  missing: []
+  row_is: one country
+  spec:
+    family: bar
+    x: country
+    "y": score
+    fn: none
+    title: Accented names read correctly from a Latin-1 file
