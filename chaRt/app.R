@@ -54,7 +54,7 @@ library(bslib)
 library(purrr)
 
 # Called as pkg::fn() in R/ and never attached; listed so a missing one stops the app here, by name.
-APP_PACKAGES <- c("ellmer", "httr2", "jsonlite", "rlang", "S7")
+APP_PACKAGES <- c("ellmer", "httr2", "jsonlite", "readr", "rlang", "S7", "tibble", "yaml")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
@@ -111,8 +111,9 @@ options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 # ---- 5. state ---------------------------------------------------------------
 
 # The state the modules share: key_version, which changes whenever the pasted key
-#   is saved or forgotten, so anything that depends on a key can re-run.
-new_state <- function() reactiveValues(key_version = 0L)
+#   is saved or forgotten, so anything that depends on a key can re-run; the data as read, the
+#   sentences about it (problems), its profile, and the codebook the analyst edits.
+new_state <- function() reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL)
 
 
 # ---- 6. layout --------------------------------------------------------------
@@ -144,8 +145,8 @@ ui <- page_fluid(
     id = "stage", widths = c(3, 9), well = FALSE,
 
     tabPanel(CHART_TABS[1], start_ui()),
-    tabPanel(CHART_TABS[2], later_ui()),
-    tabPanel(CHART_TABS[3], later_ui()),
+    tabPanel(CHART_TABS[2], mod_data_ui("data")),
+    tabPanel(CHART_TABS[3], mod_codebook_ui("codebook")),
     tabPanel(CHART_TABS[4], later_ui()),
     tabPanel(CHART_TABS[5], later_ui()),
     tabPanel(CHART_TABS[6], later_ui())))
@@ -157,6 +158,8 @@ server <- function(input, output, session) {
   state <- new_state()
   mod_key_server("key", state)
   mod_connect_server("connect", state)
+  mod_data_server("data", state)
+  mod_codebook_server("codebook", state)
 }
 
 
