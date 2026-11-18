@@ -41,13 +41,11 @@ CHART_PALETTES <- list(
   magma = list(label = "Magma", kind = "sequential", paletteer = "viridis::magma"),
   cividis = list(label = "Cividis", kind = "sequential", paletteer = "viridis::cividis"),
   mako = list(label = "Mako", kind = "sequential", paletteer = "viridis::mako"),
-  batlow = list(label = "Batlow", kind = "sequential", paletteer = "scico::batlow"),
   blues = list(label = "ColorBrewer Blues", kind = "sequential", paletteer = "RColorBrewer::Blues"),
   ylgnbu = list(label = "ColorBrewer YlGnBu", kind = "sequential", paletteer = "RColorBrewer::YlGnBu"),
   rdbu = list(label = "ColorBrewer RdBu", kind = "diverging", paletteer = "RColorBrewer::RdBu"),
   puor = list(label = "ColorBrewer PuOr", kind = "diverging", paletteer = "RColorBrewer::PuOr"),
   brbg = list(label = "ColorBrewer BrBG", kind = "diverging", paletteer = "RColorBrewer::BrBG"),
-  vik = list(label = "Vik", kind = "diverging", paletteer = "scico::vik"),
   sunset = list(label = "Paul Tol sunset", kind = "diverging", paletteer = "khroma::sunset"),
   blue_red = list(label = "Blue-red (built in)", kind = "diverging",
                   colours = c("#4A6FE3", "#7086E1", "#8F9DE1", "#ABB4E2", "#C7CBE3", "#E2E2E2", "#E6C4C9", "#E5A5B1",
@@ -58,8 +56,8 @@ CHART_PALETTES <- list(
 paletteer_installed <- function() length(find.package("paletteer", quiet = TRUE)) > 0L
 
 # A palette's colours as #RRGGBB: its own, or paletteer's. paletteer holds a discrete palette's
-#   colours itself; a continuous one is drawn by its source package (viridisLite, scico), so it is
-#   available only when that package is installed.
+#   colours itself; a continuous one is drawn by its source package (viridisLite for the
+#   viridis family), so it is available only when that package is installed.
 palette_colours <- function(name, n = NULL) {
   e = CHART_PALETTES[[name]]
   if (is.null(e)) stop("There is no palette '", name, "'.", call. = FALSE)
