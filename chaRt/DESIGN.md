@@ -1,6 +1,6 @@
 # chaRt: design
 
-Version 0.1, 2026-11-17. Written in the Claude project (the manager); built by Claude Code, one
+Version 0.2, 2026-11-17 (section 16 records what changed after Phases 0 and 1). Written in the Claude project (the manager); built by Claude Code, one
 phase at a time. Kevin brings each phase's summary back to the project for review before the next.
 
 ## 1. What it is
@@ -299,3 +299,33 @@ column).
 2. Does it pass prompt caching through?
 3. Can a running app on Connect render Quarto? (`probe/app.R` answers this.)
 4. Are `plotly`, `shinychat` and `yaml` on the internal CRAN mirror, and which ellmer version?
+
+## 16. Changes after Phases 0 and 1 (2026-11-17)
+
+Where this section and an earlier one disagree, this section holds.
+
+1. **One reply path: JSON read by R, not ellmer's structured output.** The live check found that
+   `chat_structured()` fails on `claude-sonnet-5-5` in ellmer 0.4.2 (HTTP 400: a forced
+   `tool_choice` is not supported for this model). It works on `claude-sonnet-4-5` and in the
+   OpenAI style through OpenRouter. Every call therefore uses `llm_json()`, as QuestionR does on
+   the same model: the reply format is stated in the reflex file, R parses it, and the spec
+   validation of section 6 decides whether it is accepted. One path for home and work, and
+   nothing to find out about structured output at work (section 15, item 1, is dropped).
+2. **Quarto renders the report.** At home a `.qmd` with an R chunk and a plotly chart rendered to
+   one self-contained HTML file from inside the running app (3.7 s, about 4.8 MB, most of it the
+   plotly library). The app calls the Quarto command line, not the quarto R package. Still to be
+   confirmed on the work server with `probe/app.R`.
+3. **Values that mean missing are declared by the analyst** on the Data tab and kept in the
+   codebook as `missing_codes`. R never decides that a value means missing.
+4. **The codebook as built** differs from the sketch in section 5: each column keeps `detected`
+   (R's own type), `distinct`, and for a category its `values` and `counts`; an ordered column
+   keeps `order`; the top level keeps `missing_codes`.
+5. **A whole-number column of distinct values is an `id` only when it is an unbroken run or is
+   named like one.** A population or a revenue stays a measure.
+6. **Roles follow the type** (`role_choices()`).
+7. **An `id` column can label a chart.** With one row per country, the country column is an `id`,
+   and its values are never sent to a model. The spec may still use it for the x axis of a bar or
+   dot chart (with `top_n` of at most `CODEBOOK_MAX_LEVELS`), for point labels and for
+   `highlight`. A highlighted value comes from the analyst's own message, and R checks that it
+   exists in the column.
+8. **Tests run from PowerShell or the RStudio terminal**, not Git Bash, which hides `.Renviron`.
