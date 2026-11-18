@@ -126,6 +126,12 @@ mod_data_ui <- function(id) {
   tagList(
     fileInput(ns("file"), paste0("Data file: CSV or other delimited text, up to ", APP_MAX_UPLOAD_MB, " MB"),
               accept = c(".csv", ".tsv", ".txt", ".tab"), width = "100%"),
+    textAreaInput(ns("missing"), "Values that mean missing, one per line", rows = 2, width = "100%",
+                  placeholder = "for example: ..\n-99"),
+    tags$p(class = "text-muted small", "Blank cells and NA are always missing. Anything else is missing only if you list it here; ",
+           "a value must match a whole cell."),
+    actionButton(ns("reread"), "Read again", class = "btn-sm mb-3"),
+    uiOutput(ns("reread_note")),
     uiOutput(ns("summary")),
     tableOutput(ns("columns")),
     tags$hr(),
@@ -137,35 +143,62 @@ mod_data_server <- function(id, state) {
   moduleServer(id, function(input, output, session) {
     read_error = reactiveVal(NULL)
     codebook_note = reactiveVal(NULL)
+    reread_note = reactiveVal(NULL)
+    upload = reactiveVal(NULL)         # the data file as uploaded, kept so it can be read again
 
-    observeEvent(input$file, {
-      f = input$file
-      res = tryCatch(read_data(f$datapath, f$name), error = function(e) e)
-      codebook_note(NULL)
+    # A read, or the error it met, into the shared state.
+    take = function(res, codebook = res$codebook) {
       if (inherits(res, "error")) {
         read_error(conditionMessage(res))
         state$data = NULL; state$problems = NULL; state$profile = NULL; state$codebook = NULL
-        return()
+        return(invisible(FALSE))
       }
       read_error(NULL)
-      prof = profile_data(res$data)
-      state$data = res$data
-      state$problems = res$problems
-      state$profile = prof
-      state$codebook = new_codebook(prof, f$name, nrow(res$data))
+      state$data = res$read$data
+      state$problems = res$read$problems
+      state$profile = res$profile
+      state$codebook = codebook
+      invisible(TRUE)
+    }
+
+    observeEvent(input$file, {
+      f = input$file
+      upload(list(path = f$datapath, name = f$name))
+      codebook_note(NULL); reread_note(NULL)
+      take(tryCatch(reread_data(f$datapath, f$name, parse_missing(input$missing)), error = function(e) e))
     })
 
-    # A saved codebook is applied only when check_codebook() has nothing to say about it.
+    # The same upload read again with the values that mean missing; what the analyst entered in
+    #   the codebook is kept for every column whose name is unchanged.
+    observeEvent(input$reread, {
+      u = upload()
+      if (is.null(u)) return(reread_note(warn_box("Choose a data file first.")))
+      res = tryCatch(reread_data(u$path, u$name, parse_missing(input$missing), old = state$codebook), error = function(e) e)
+      if (take(res))
+        reread_note(if (length(res$notes)) warn_box(tags$ul(purrr::map(res$notes, tags$li)))
+                    else advice_box("Read again. Your labels, roles and row sentence are kept."))
+    })
+
+    output$reread_note = renderUI(reread_note())
+
+    # A saved codebook: the file is first read again with its missing_codes, then the codebook is
+    #   applied only when check_codebook() has nothing to say about it.
     observeEvent(input$codebook, {
-      if (is.null(state$profile)) return(codebook_note(warn_box("Read the data file first, then the codebook.")))
+      u = upload()
+      if (is.null(u)) return(codebook_note(warn_box("Read the data file first, then the codebook.")))
       up = tryCatch(read_codebook(input$codebook$datapath), error = function(e) e)
       if (inherits(up, "error")) return(codebook_note(warn_box(conditionMessage(up))))
-      why = check_codebook(up, state$profile)
+      codes = missing_codes(up)
+      res = tryCatch(reread_data(u$path, u$name, codes), error = function(e) e)
+      if (inherits(res, "error")) return(codebook_note(warn_box(conditionMessage(res))))
+      why = check_codebook(up, res$profile)
       if (length(why))
         return(codebook_note(warn_box(tags$strong("The codebook was not applied."), tags$ul(purrr::map(why, tags$li)))))
-      state$codebook = apply_codebook(up, state$profile, state$codebook$file, nrow(state$data))
-      codebook_note(advice_box("The codebook was applied: its labels, types, roles and row sentence are in use; ",
-                               "every fact comes from the file."))
+      take(res, apply_codebook(up, res$profile, u$name, nrow(res$read$data)))
+      updateTextAreaInput(session, "missing", value = paste(codes, collapse = "\n"))
+      reread_note(NULL)
+      codebook_note(advice_box("The codebook was applied: its values that mean missing, labels, types, roles and row ",
+                               "sentence are in use; every fact comes from the file."))
     })
 
     output$codebook_note = renderUI(codebook_note())
@@ -274,10 +307,10 @@ mod_codebook_server <- function(id, state) {
       if (!is.null(row_is)) new$row_is = row_is
       edited = purrr::map2(cb$columns[idx], vals, function(e, v) {
         type_changed = !is.null(v$type) && !identical(v$type, e$type)
-        order = if (!type_changed && !is.null(v$order)) trimws(strsplit(v$order, ",", fixed = TRUE)[[1]])
+        order = if (!type_changed && !is.null(v$order)) parse_lines(v$order)
         note = if (!is.null(order) && identical(e$type, "ordered") && !order_ok(order, e))
-          paste0("The order for ", e$name, " was not accepted: list exactly these levels, separated by commas: ",
-                 paste(e$values, collapse = ", "), ".")
+          paste0("The order for ", e$name, " was not accepted: list exactly these levels, one per line: ",
+                 paste(e$values, collapse = " | "), ".")
         list(entry = edit_entry(e, label = v$label, type = v$type, role = if (!type_changed) v$role, order = order),
              note = note, retyped = type_changed)
       })
@@ -300,10 +333,11 @@ codebook_row <- function(e, id)
     tags$div(class = "col-md-4", textInput(id("label"), NULL, value = e$label, width = "100%")),
     tags$div(class = "col-md-2", selectInput(id("type"), NULL, choices = type_choices(e), selected = e$type,
                                              selectize = FALSE, width = "100%")),
-    tags$div(class = "col-md-2", selectInput(id("role"), NULL, choices = CODEBOOK_ROLES, selected = e$role,
+    tags$div(class = "col-md-2", selectInput(id("role"), NULL, choices = role_choices(e), selected = e$role,
                                              selectize = FALSE, width = "100%")),
     tags$div(class = "col-md-2 small text-muted", paste("label:", e$label_source)),
     if (identical(e$type, "ordered"))
-      tags$div(class = "col-12", textInput(id("order"), "Levels in order, separated by commas",
-                                           value = paste(e$order, collapse = ", "), width = "100%")),
+      tags$div(class = "col-12", textAreaInput(id("order"), "Levels in order, one per line",
+                                               value = paste(e$order, collapse = "\n"), width = "100%",
+                                               rows = min(length(e$order), CODEBOOK_MAX_LEVELS))),
     tags$div(class = "col-12 small text-muted", facts_text(e)))
