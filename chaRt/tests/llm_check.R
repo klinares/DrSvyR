@@ -4,11 +4,15 @@
 #   OPENROUTER_API_KEY for check 3. A test script may read them; the app never does. On Windows,
 #   run it from PowerShell or RStudio: Git Bash sets HOME, which moves R's "~" away from the
 #   Documents folder that holds .Renviron.
-# Three checks, each printing what it sent and what came back:
+# Four checks, each printing what it sent and what came back:
 #   1. ping the home model through llm_ping();
 #   2. structured output through the chat object llm_chat() builds for the home model (Anthropic);
 #   3. the same request in the OpenAI style, through ellmer::chat_openai_compatible() against
-#      OpenRouter, standing in for the work endpoint.
+#      OpenRouter, standing in for the work endpoint;
+#   4. Phase 3: label_columns() and suggest_charts() on FH, football and panel.csv, twelve
+#      questions, through llm_json() with the home model (tests/live_gallery.R; about 20 calls).
+#      It saves tests/live_replies.rds and writes tests/live_gallery.html.
+# CHART_LIVE_STEPS chooses which run, for example "1,4"; all four by default.
 # Structured output is ellmer's Chat$chat_structured(..., type, echo, convert), with the type built
 #   from type_object(), type_enum(values), type_string() and type_boolean(); checked in ellmer 0.4.2.
 #   If it fails, nothing works around it: the design falls back to llm_json().
@@ -31,6 +35,9 @@ if (grepl("opus", CHART_TEST_MODEL, ignore.case = TRUE) || grepl("opus", APP_PRO
   stop("Live tests call Sonnet models only; '", if (nzchar(CHART_TEST_MODEL)) CHART_TEST_MODEL else APP_PROFILES$home$id,
        "' is an Opus model.", call. = FALSE)
 OPENROUTER <- list(api = "openai", base_url = "https://openrouter.ai/api/v1", id = OPENROUTER_MODEL)
+
+LIVE_STEPS <- trimws(strsplit(Sys.getenv("CHART_LIVE_STEPS", "1,2,3,4"), ",", fixed = TRUE)[[1]])
+step_on <- function(n) as.character(n) %in% LIVE_STEPS
 
 FAMILIES <- c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap")
 
@@ -82,9 +89,10 @@ structured_check <- function(m, key, route) {
 
 # ---- 1. ping ---------------------------------------------------------------------------
 
-heading(1, "Ping the home model through llm_ping()")
 home <- APP_PROFILES$home
 if (nzchar(CHART_TEST_MODEL)) home$id <- CHART_TEST_MODEL
+if (step_on(1)) {
+heading(1, "Ping the home model through llm_ping()")
 say("Model:  ", home$id, " at ", home$base_url)
 say("Sent:   ", LLM_PING_PROMPT)
 if (!nzchar(ANTHROPIC_KEY)) {
@@ -94,17 +102,39 @@ if (!nzchar(ANTHROPIC_KEY)) {
   say("Back:   ", p$message, " (", sprintf("%.1f", p$seconds), " s)")
   say("Result: ", if (isTRUE(p$ok)) "the home model answered." else "the ping FAILED.")
 }
+}
 
 
 # ---- 2. structured output, Anthropic style -----------------------------------------------
 
-heading(2, "Structured output, Anthropic style")
-structured_check(home, ANTHROPIC_KEY, "llm_chat() -> ellmer::chat_anthropic(), then $chat_structured()")
+if (step_on(2)) {
+  heading(2, "Structured output, Anthropic style")
+  structured_check(home, ANTHROPIC_KEY, "llm_chat() -> ellmer::chat_anthropic(), then $chat_structured()")
+}
 
 
 # ---- 3. structured output, OpenAI style --------------------------------------------------
 
-heading(3, "Structured output, OpenAI style (OpenRouter)")
-structured_check(OPENROUTER, OPENROUTER_KEY, "llm_chat() -> ellmer::chat_openai_compatible(), then $chat_structured()")
+if (step_on(3)) {
+  heading(3, "Structured output, OpenAI style (OpenRouter)")
+  structured_check(OPENROUTER, OPENROUTER_KEY, "llm_chat() -> ellmer::chat_openai_compatible(), then $chat_structured()")
+}
+
+
+# ---- 4. Phase 3: labels and suggestions ----------------------------------------------------
+
+if (step_on(4)) {
+  heading(4, "Phase 3: label_columns() and suggest_charts()")
+  source(file.path("tests", "live_gallery.R"))
+  say("Model:  ", home$id, " at ", home$base_url)
+  if (!nzchar(ANTHROPIC_KEY)) {
+    say("Result: no call was made; ANTHROPIC_API_KEY is not set.")
+  } else {
+    started <- Sys.time()
+    live_run(home, ANTHROPIC_KEY, say)
+    say("  wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))), " s")
+    live_page()
+  }
+}
 
 cat("\n")

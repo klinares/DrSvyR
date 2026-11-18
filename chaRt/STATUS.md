@@ -1,5 +1,69 @@
 # chaRt: status
 
+## Phase 3, 2026-11-18: the first model calls (labels and suggestions) and the Explore tab
+
+Branch `chart`. Not pushed. One live run, on `claude-sonnet-5-5`: 21 calls (the ping and 20).
+
+### Built
+
+- `R/reflexes.R`: QuestionR's parser, cut to the format in `www/reflexes/README.md` and as strict
+  (a stray line, a missing Version, an unknown field or section stops the app, naming the file and
+  the reflex); `CALL_FILES`, `check_reflex_files()` at start-up, `reflex_labels()`,
+  `assemble_system()`, `data_block()`, `assemble_user()`, `prompt_hash()` (sha256 with digest);
+  the pick call's words (`PICK_SYSTEM`, `PICK_ASK`, `PICK_FORMAT`); `label_columns()` and
+  `suggest_charts()`, each taking `ask = llm_json`; the record of every call.
+- `R/spec.R`: `spec_check()` reads its rules from tables (`SPEC_FAMILY_ROLES`, `SPEC_REQUIRED`,
+  `SPEC_FAMILY_FNS`, `SPEC_FIELD_FAMILIES`, `SPEC_KIND_TEXT`); `spec_reference()` writes the same
+  tables out as plain text (3,546 characters). Legend keys of see-through points are solid.
+- `R/data.R`: an `ai_guess` label keeps `sure`; `accept_label()`; editing a label drops `sure`.
+  `CODEBOOK_MAX_DETAIL` is 40.
+- `R/ui.R`: Codebook tab: "Suggest labels", "AI guess" and "check this" tags, Accept, "Accept all AI
+  labels on this page", the new count line, the row guess as a placeholder with "Use this". The
+  Explore tab. The Report tab shows how many charts were added. `busy_button()` disables a button
+  in the browser while its call runs.
+- `tests/smoke.R`: 157 checks (120 before, 37 new), with `REFLEX_SHA`. `tests/live_gallery.R` and
+  step 4 of `tests/llm_check.R`; `CHART_LIVE_STEPS` chooses the steps.
+
+### The live run
+
+20 calls (label 4, pick 4, suggest 12), no repair, no failure; 111 s; 94,493 tokens in and 12,037
+out. All 26 charts were valid the first time. The suggest system prompt is 15,477 characters, the
+same for every call. The pick call ran for every football question, since 44 columns are in play.
+
+### What the model did not follow
+
+- `suggestions`: "Leave out columns of type id or text unless they name the rows": the football
+  suggestions include a bar of Nationality (text, 86 values).
+- `sorting`: "Leave `sort` out": two bars set `sort: value_desc`.
+- `two_points_slope`: "Which regions grew most between 2015 and 2024?" got a line per region
+  (faceted, ten years), not a slope; its `say` gives the eight colours a slope would need. With 8
+  regions the rules conflict: a slope cannot be faceted and `few_colours` stops at 7.
+- `title_describes` and the prohibition ("no ... number in any field"): subtitles and `say` carry
+  counts taken from DATA ("All 8 regions", "all 80 region-years", "The 15 countries with the largest
+  2014 scores"). None states a finding.
+- `suggestions` ("each a different comparison on different columns"): the FH suggestions use
+  `pr_2014` in three of five charts.
+
+### Departures
+
+- Commit B holds all of `R/reflexes.R`, the two calls included; their stand-in tests came with D.
+  B's checks of the suggest prompt need `spec_reference()`, committed in C.
+- The no-eval check: no file in `app.R` or `R/` calls `parse()`, `str2lang()`,
+  `str2expression()`, `eval_tidy()` or `evalq()`, and the only `eval()` calls are the three in
+  `spec.R` on calls R builds from a checked spec. Read from the parse data.
+- A pick reply that cannot be read stops the request with one sentence (`PICK_FAILED`), rather than
+  going on with no column in detail.
+- The live run skipped `llm_check.R`'s structured-output checks (2 and 3); check 3 calls an OpenAI
+  model on OpenRouter.
+- The tabs were exercised with `shiny::testServer()` and a stand-in model, not in a browser.
+
+### Noticed, not changed
+
+- The tie note says "the 1 shown are the first alphabetically" when one value is shown (R/spec.R).
+- A column name or label holding the text `</DATA>` would close the DATA block early; nothing
+  escapes it.
+- `.rscignore` does not list `phase1_prompt.md` to `phase3_prompt.md`.
+
 ## Phase 2d, 2026-11-18: last renderer fixes
 
 Branch `chart`. Not pushed. No model calls. The renderer is closed.
