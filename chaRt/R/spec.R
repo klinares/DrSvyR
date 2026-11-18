@@ -44,7 +44,7 @@ SPEC_SORTS <- c("value_desc", "value_asc", "level_order", "alphabetical")
 SPEC_FITS <- c("none", "loess", "linear")
 SPEC_FIELDS <- c("family", "x", "y", "color", "size", "facet", "fn", "filter", "top_n", "sort", "log_x", "log_y",
                  "fit", "rug", "bins", "free_y", "highlight", "title", "subtitle", "caption", "x_label", "y_label",
-                 "interactive", "rule", "say")
+                 "interactive", "rule", "say", "midpoint")
 SPEC_COLUMN_FIELDS <- c("x", "y", "color", "size", "facet")
 SPEC_TEXT_FIELDS <- c("title", "subtitle", "caption", "x_label", "y_label", "rule", "say")
 SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
@@ -188,7 +188,8 @@ kinds_text <- function(kinds) paste(c(group = "a group (category, ordered, flag,
 
 # The reasons a spec cannot be drawn, as sentences naming the field and the column; none when it can.
 #   Reads only the codebook. Every rule that does not need the data is here.
-spec_check <- function(spec, cb) {
+spec_check <- function(spec, cb, palette = chart_palette_default()) {
+  max_colours = chart_palette_max(palette$qualitative)
   if (!is.list(spec) || is.null(names(spec)) || any(!nzchar(names(spec))))
     return("The spec must be a set of named fields.")
   unknown = setdiff(names(spec), SPEC_FIELDS)
@@ -223,9 +224,9 @@ spec_check <- function(spec, cb) {
                     ") or a filter that leaves at most ", SPEC_TOP_MAX, "."))
     if (identical(f, "color") && fam %in% c("bar", "dot") && is.null(s$filter) && e$distinct > SPEC_BAR_GROUPS)
       return(paste0("color: '", v, "' has ", e$distinct, " values; a ", fam, " chart takes at most ", SPEC_BAR_GROUPS, " colours."))
-    if (identical(f, "color") && fam %in% c("scatter", "bubble") && is.null(s$filter) && e$distinct > CHART_MAX_GROUPS)
-      return(paste0("color: '", v, "' has ", e$distinct, " values; points can be told apart by at most ", CHART_MAX_GROUPS,
-                    " colours. Highlight a few values or use small multiples (facet)."))
+    if (identical(f, "color") && fam %in% c("scatter", "bubble") && is.null(s$filter) && e$distinct > max_colours)
+      return(paste0("color: '", v, "' has ", e$distinct, " values; the palette colours at most ", max_colours,
+                    " groups. Highlight a few values or use small multiples (facet)."))
     if (identical(f, "x") && identical(fam, "box") && is.null(s$filter) && e$distinct > SPEC_BOX_GROUPS)
       return(paste0("x: '", v, "' has ", e$distinct, " values; a box plot takes at most ", SPEC_BOX_GROUPS, " boxes."))
     NULL
@@ -280,6 +281,10 @@ spec_check <- function(spec, cb) {
         paste0("bins must be a whole number from ", SPEC_BINS[1], " to ", SPEC_BINS[2], ".")
     },
     if (isTRUE(s$free_y) && is.null(s$facet)) "free_y: only small multiples (facet) can free the y scale.",
+    if (!is.null(s$midpoint)) {
+      if (!identical(fam, "heatmap")) paste0("midpoint: only a heatmap takes a midpoint (a ", fam, " chart was given one).")
+      else if (!is.numeric(s$midpoint) || length(s$midpoint) != 1L || !is.finite(s$midpoint)) "midpoint must be one number."
+    },
     if (isTRUE(s$log_x) && !(is_text1(s$x) && !is.null(cb_entry(cb, s$x)) && is_measure(cb_entry(cb, s$x)) &&
                              fam %in% c("scatter", "bubble", "histogram")))
       paste0("log_x: only a measure on the x axis of a scatter, bubble or histogram can take a log scale."),
@@ -462,7 +467,7 @@ run_steps <- function(data, steps, ...) {
 }
 
 # The rules that need the data, on the rows left after the filter and the missing values.
-data_checks <- function(s, base) {
+data_checks <- function(s, base, max_colours = chart_palette_max()) {
   fam = s$family
   nd = function(col) length(unique(base[[col]]))
   if (!nrow(base)) spec_fail("No rows are left once the filter is applied and rows with missing values are left out.")
@@ -470,9 +475,9 @@ data_checks <- function(s, base) {
     spec_fail(paste0("facet: '", s$facet, "' has ", nd(s$facet), " values after the filter, so as many panels; at most ", SPEC_FACET_MAX, "."))
   if (fam %in% c("bar", "dot") && !is.null(s$color) && nd(s$color) > SPEC_BAR_GROUPS)
     spec_fail(paste0("color: '", s$color, "' has ", nd(s$color), " values after the filter; a ", fam, " chart takes at most ", SPEC_BAR_GROUPS, " colours."))
-  if (fam %in% c("scatter", "bubble") && !is.null(s$color) && nd(s$color) > CHART_MAX_GROUPS)
-    spec_fail(paste0("color: '", s$color, "' has ", nd(s$color), " values after the filter; points can be told apart by at most ",
-                     CHART_MAX_GROUPS, " colours."))
+  if (fam %in% c("scatter", "bubble") && !is.null(s$color) && nd(s$color) > max_colours)
+    spec_fail(paste0("color: '", s$color, "' has ", nd(s$color), " values after the filter; the palette colours at most ",
+                     max_colours, " groups."))
   if (identical(fam, "box") && nd(s$x) > SPEC_BOX_GROUPS)
     spec_fail(paste0("x: '", s$x, "' has ", nd(s$x), " values after the filter; a box plot takes at most ", SPEC_BOX_GROUPS, " boxes."))
   ranked = if (fam %in% c("bar", "dot", "line", "slope")) ranked_column(s)
@@ -514,15 +519,15 @@ cut_ties <- function(s, agg, out) {
 
 # The table that is drawn: after the filter, the rows left out for missing values, the
 #   aggregation, top_n and the sort. Attributes rows_used, rows_dropped, groups_total and ties.
-spec_table <- function(spec, data, cb) {
+spec_table <- function(spec, data, cb, palette = chart_palette_default()) {
   s = spec_defaults(spec_public(spec))
-  why = spec_check(s, cb)
+  why = spec_check(s, cb, palette)
   if (length(why)) spec_fail(paste(why, collapse = " "))
   s = c(s, spec[intersect(names(spec), SPEC_LINT_FIELDS)])
   st = table_steps(s, cb)
   filtered = if (is.null(s$filter)) data else run_steps(data, st$base[1])
   base = run_steps(data, st$base)
-  data_checks(s, base)
+  data_checks(s, base, chart_palette_max(palette$qualitative))
   agg = run_steps(base, st$agg)
   out = run_steps(agg, st$post)
   ranked = if (s$family %in% c("bar", "dot", "line", "slope")) ranked_column(s)
@@ -574,7 +579,7 @@ label_plan <- function(s, table) {
 
 # The rules R enforces with no model call (DESIGN.md section 8). Fixes change the spec; notes are
 #   sentences for the analyst. Returns list(spec, notes).
-spec_lint <- function(spec, cb, table) {
+spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
   s = spec_settle(spec, cb, table)
   fam = s$family
   v = value_name(s)
@@ -609,7 +614,7 @@ spec_lint <- function(spec, cb, table) {
     lab = label_plan(s, table)
     s$.labels = lab$fits
     if (!lab$fits) {
-      many = is.null(s$highlight) && nd(s$color) > CHART_MAX_GROUPS
+      many = is.null(s$highlight) && nd(s$color) > max_colours
       if (many) notes = c(notes, paste0("The ", nd(s$color), " lines end too close together to be labelled and are too many to colour; highlight a few."))
       else s$.legend_order = lab$order
     }
@@ -651,8 +656,11 @@ spec_lint <- function(spec, cb, table) {
 
 # ---- the plot --------------------------------------------------------------------------------------
 
-# The colours a chart is drawn with: qual(n) for groups, seq for a continuous fill. From R/theme.R.
-spec_palette <- function() list(qual = chart_palette, seq = CHART_SEQUENTIAL)
+# The colours a chart is drawn with, from the palettes chosen for the report (R/theme.R): qual(n)
+#   for groups (at most max), seq for a continuous fill, div for a fill centred on a midpoint.
+spec_palette <- function(palette = chart_palette_default())
+  list(qual = function(n) chart_palette(n, palette$qualitative), max = chart_palette_max(palette$qualitative),
+       seq = chart_sequential(palette$sequential), div = chart_diverging(palette$diverging))
 
 # How many colours a column needs, from the codebook (and top_n), so the plot and its code can be
 #   built without the data.
@@ -778,7 +786,7 @@ line_calls <- function(s, cb, pal, widget) {
   labelled = isTRUE(s$.labels) && !widget
   legend = !is.null(s$.legend_order)
   k = if (!is.null(col) && !same) colour_count(s, cb, col) else 0
-  many = k > CHART_MAX_GROUPS
+  many = k > pal$max
   text = if (widget) tooltip_call(s, cb)
   group = col %||% if (widget) 1
   points = function(colour = NULL, data = NULL)
@@ -789,7 +797,7 @@ line_calls <- function(s, cb, pal, widget) {
     c(list(base(group = group, text = text), call("geom_line", colour = CHART_SINGLE, linewidth = 0.9)), points(colour = CHART_SINGLE))
   } else if (!is.null(s$highlight)) {
     nh = length(values_of(s$highlight$values))
-    lit = if (legend && nh <= CHART_MAX_GROUPS)
+    lit = if (legend && nh <= pal$max)
       c(list(call("geom_line", data = data_where(quote(highlighted)), aes_call(colour = col), linewidth = 1.1)),
         if (slope) list(call("geom_point", data = data_where(quote(highlighted)), aes_call(colour = col), size = 2.5)),
         list(call("scale_colour_manual", values = pal$qual(nh), breaks = s$.legend_order)))
@@ -872,7 +880,8 @@ cell_format <- function(s) switch(s$fn, count = call("label_comma"), share = cal
 #   luminance from the same colour scale the fill uses).
 cell_labels <- function(s, colours) {
   v = sym(value_name(s))
-  fill = as.call(list(call("col_numeric", colours, domain = NULL), v))
+  rescaled = if (!is.null(s$midpoint)) call("rescale_mid", v, mid = s$midpoint) else call("rescale", v)
+  fill = as.call(list(call("pal_gradient_n", colours), rescaled))
   light = call(">", call("colSums", call("*", call("col2rgb", fill), c(0.299, 0.587, 0.114))), 140)
   list(call("geom_text", data = mutate_call("text_colour", call("if_else", light, "black", "white")) |> insert_data(),
             aes_call(label = as.call(list(cell_format(s), v)), colour = "text_colour"), size = 3.2),
@@ -882,13 +891,18 @@ cell_labels <- function(s, colours) {
 # mutate(...) applied to chart_table: mutate(chart_table, ...).
 insert_data <- function(cl) as.call(c(list(cl[[1]], sym("chart_table")), as.list(cl)[-1]))
 
+# A heatmap's fill: the sequential palette, or the diverging one centred on the midpoint.
 heatmap_calls <- function(s, cb, pal, widget) {
   text = if (widget) tooltip_call(s, cb)
+  colours = if (!is.null(s$midpoint)) pal$div else pal$seq
+  rescaler = if (!is.null(s$midpoint))
+    list(rescaler = call("function", as.pairlist(alist(x = , ... = )), call("rescale_mid", sym("x"), sym("..."), mid = s$midpoint)))
   c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = s$y, fill = value_name(s), text = text)),
          call("geom_tile", colour = "white", linewidth = 0.5),
-         as.call(c(list(sym("scale_fill_gradientn"), colours = pal$seq), if (identical(s$fn, "share")) list(labels = call("label_percent")))),
+         as.call(c(list(sym("scale_fill_gradientn"), colours = colours), rescaler,
+                   if (identical(s$fn, "share")) list(labels = call("label_percent")))),
          call("scale_y_discrete", limits = sym("rev"))),
-    if (isTRUE(s$.cell_labels) && !widget) cell_labels(s, pal$seq))
+    if (isTRUE(s$.cell_labels) && !widget) cell_labels(s, colours))
 }
 
 # Which axis carries the light grid: the value axis.
@@ -944,14 +958,16 @@ widget_has_text <- function(s) s$family %in% c("bar", "dot", "line", "slope", "s
   !isTRUE(s$.counted) && !isTRUE(s$.binned)
 
 # The ggplot for a spec. Runs the defaults, the check, the table and the lint itself, so one call
-#   is enough. Attributes: notes (the lint's sentences), spec (the spec as drawn), table, and
-#   widget_plot (the variant spec_widget() converts).
-spec_plot <- function(spec, data, cb, pal = spec_palette()) {
+#   is enough. `palette` names the three palettes of the report (chart_palette_default()); the
+#   spec never chooses colours. Attributes: notes (the lint's sentences), spec (the spec as drawn),
+#   table, widget_plot (the variant spec_widget() converts) and palette.
+spec_plot <- function(spec, data, cb, palette = chart_palette_default()) {
   s = spec_defaults(spec_public(spec))
-  why = spec_check(s, cb)
+  why = spec_check(s, cb, palette)
   if (length(why)) spec_fail(paste(why, collapse = " "))
-  table = spec_table(s, data, cb)
-  lint = spec_lint(s, cb, table)
+  pal = spec_palette(palette)
+  table = spec_table(s, data, cb, palette)
+  lint = spec_lint(s, cb, table, pal$max)
   env = spec_env(chart_table = table)
   p = eval(plus_call(plot_calls(lint$spec, cb, pal)), env)
   attr(p, "notes") = lint$notes
@@ -959,6 +975,7 @@ spec_plot <- function(spec, data, cb, pal = spec_palette()) {
   attr(p, "table") = table
   attr(p, "widget_plot") = eval(plus_call(plot_calls(lint$spec, cb, pal, widget = TRUE)), env)
   attr(p, "widget_text") = widget_has_text(lint$spec)
+  attr(p, "palette") = palette
   p
 }
 
@@ -994,11 +1011,12 @@ code_text <- function(cl, indent = 0L, suffix = "") {
 # R code that reads the file (by its name, with the codebook's values that mean missing and its
 #   encoding), builds the same table with dplyr and tidyr, and draws the same chart with ggplot2,
 #   ending with chart_theme(). It is written from the spec as spec_plot() left it
-#   (attr(plot, "spec")): every line is one of the calls spec_table() and spec_plot() evaluate.
+#   (attr(plot, "spec")) and the same palette: every line is one of the calls spec_table() and
+#   spec_plot() evaluate, with the palette's colours written in, so the code runs without paletteer.
 #   `file` is where the file is now (to read its header); the code names it by cb$file only.
-spec_code <- function(spec, cb, file, pal = spec_palette()) {
+spec_code <- function(spec, cb, file, palette = chart_palette_default()) {
   pub = spec_defaults(spec_public(spec))
-  why = spec_check(pub, cb)
+  why = spec_check(pub, cb, palette)
   if (length(why)) spec_fail(paste(why, collapse = " "))
   s = spec_defaults(spec)
   names_now = purrr::map_chr(cb$columns, "name")
@@ -1012,10 +1030,10 @@ spec_code <- function(spec, cb, file, pal = spec_palette()) {
   rename = if (length(renamed)) as.call(c(list(sym("rename")), stats::setNames(purrr::map(h$names[renamed], sym), names_now[renamed])))
   st = table_steps(s, cb)
   steps = c(st$base, st$agg, st$post)
-  plot = plot_calls(s, cb, pal)
+  plot = plot_calls(s, cb, spec_palette(palette))
   plot_text = paste(purrr::imap_chr(plot, function(cl, i) code_text(cl, 2L, if (i < length(plot)) " +" else "")), collapse = " +\n  ")
   step_text = paste(purrr::imap_chr(steps, function(cl, i) code_text(cl, 2L, if (i < length(steps)) " |>" else "")), collapse = " |>\n  ")
-  libs = c("readr", "dplyr", "tidyr", "ggplot2", if (grepl("label_|breaks_|col_numeric", plot_text)) "scales")
+  libs = c("readr", "dplyr", "tidyr", "ggplot2", if (grepl("label_|breaks_|pal_gradient_n|rescale", plot_text)) "scales")
   paste0(paste0("library(", libs, ")", collapse = "\n"), "\n\n",
          "# The data, read as chaRt reads it: these values mean missing, and column types are guessed from every row.\n",
          "# Set the working directory to the folder that holds the file (setwd()), or write its full path here.\n",
@@ -1055,7 +1073,9 @@ wrapped <- function(text, width) paste(strwrap(text, width), collapse = "<br>")
 #   chart, the text scaled to match the static chart, the legend on the right where it does not
 #   cover the title, the tooltip naming each value with its codebook label, and the mode bar cut
 #   to the download button. Warnings are kept as attr(, "warnings").
-spec_widget <- function(plot) {
+#   The palette is the one the plot was drawn with (attr(plot, "palette")); a different one needs a
+#   new spec_plot(), since the widget is converted from the plot.
+spec_widget <- function(plot, palette = attr(plot, "palette") %||% chart_palette_default()) {
   s = attr(plot, "spec") %||% list()
   wp = attr(plot, "widget_plot") %||% plot
   tip = if (isTRUE(attr(plot, "widget_text"))) "text" else SPEC_TOOLTIP
