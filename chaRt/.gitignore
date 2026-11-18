@@ -1,3 +1,4 @@
 # chaRt: what a local run leaves behind. The shared rules are in the root .gitignore.
 .Rhistory
 tests/*.out
+tests/gallery.html

@@ -64,3 +64,97 @@ gold_run <- function(entry, work_dir) {
        code = if (ok) caught(spec_code(attr(plot, "spec"), g$cb, g$path)),
        size = if (ok) spec_size(attr(plot, "spec"), attr(plot, "table")))
 }
+
+
+# ---- the gallery page ---------------------------------------------------------------------------
+
+GALLERY_OUT <- file.path("tests", "gallery.html")
+
+# Both versions of a chart are shown at the same size in pixels: its inches at this many dots per inch.
+GALLERY_DPI <- 96
+
+# What the page needs from one run, without the data.
+gallery_item <- function(run) {
+  ok = inherits(run$plot, "ggplot")
+  tab = if (!inherits(run$table, "error")) run$table
+  list(name = run$entry$name, file = run$entry$file, spec = run$entry$spec,
+       error = if (!ok) conditionMessage(run$plot), notes = run$notes, plot = if (ok) run$plot,
+       widget = if (inherits(run$widget, "htmlwidget")) run$widget,
+       widget_error = if (inherits(run$widget, "error")) conditionMessage(run$widget),
+       warnings = if (inherits(run$widget, "htmlwidget")) attr(run$widget, "warnings"),
+       head = if (!is.null(tab)) as.data.frame(utils::head(tab, 10)),
+       rows = if (!is.null(tab)) c(used = attr(tab, "rows_used"), dropped = attr(tab, "rows_dropped"), shown = nrow(tab)),
+       code = if (is.character(run$code)) run$code else if (inherits(run$code, "error")) paste("# spec_code() failed:", conditionMessage(run$code)),
+       size = run$size)
+}
+
+# A fenced block of text that may itself hold backticks.
+fenced <- function(text, lang = "") paste0("````", lang, "\n", text, "\n````")
+
+gallery_section <- function(item, i) {
+  r = function(opts, body) paste0("```{r}\n", paste0("#| ", opts, collapse = "\n"), "\n", body, "\n```")
+  px = if (!is.null(item$size)) round(item$size[["width"]] * GALLERY_DPI)
+  size_opts = if (!is.null(item$size)) c(paste("fig-width:", item$size[["width"]]), paste("fig-height:", item$size[["height"]]),
+                                         paste("fig-dpi:", GALLERY_DPI), paste0('out-width: "', px, 'px"'))
+  box = paste0("::: {style=\"width:", px, "px\"}\n")
+  notes = if (length(item$notes)) paste0("- ", item$notes, collapse = "\n") else "*No notes.*"
+  if (!is.null(item$error))
+    return(paste0("## ", i, ". ", item$name, "\n\n**Could not draw this:** ", item$error, "\n"))
+  paste0(
+    "## ", i, ". ", item$name, "\n\n",
+    "`", item$file, "`, drawn at ", item$size[["width"]], " by ", item$size[["height"]], " inches.\n\n",
+    "**Lint notes**\n\n", notes, "\n\n",
+    ":::: {style=\"display:flex; flex-wrap:wrap; gap:2rem; align-items:flex-start\"}\n", box, "**Static (ggplot2)**\n\n",
+    r(size_opts, sprintf("print(gallery[[%d]]$plot)", i)), "\n:::\n",
+    box, "**Interactive (plotly)**",
+    if (length(item$warnings)) paste0(" - ggplotly() warned: ", paste(item$warnings, collapse = "; ")) else "", "\n\n",
+    if (!is.null(item$widget)) r(size_opts, sprintf("gallery[[%d]]$widget", i)) else paste("*No widget:*", item$widget_error),
+    "\n:::\n::::\n\n",
+    "**The table** (", item$rows[["shown"]], " rows drawn from ", item$rows[["used"]], " used; ", item$rows[["dropped"]],
+    " left out for missing values; the first 10 shown)\n\n",
+    r("echo: false", sprintf("knitr::kable(gallery[[%d]]$head, digits = 2)", i)), "\n\n",
+    "<details><summary>The spec</summary>\n\n", fenced(yaml::as.yaml(item$spec), "yaml"), "\n\n</details>\n\n",
+    "**The code**\n\n", fenced(item$code, "r"), "\n")
+}
+
+gallery_qmd <- function(items, rds) paste0(
+  "---\ntitle: chaRt gallery\nsubtitle: Every gold spec, static and interactive\n",
+  "format:\n  html:\n    embed-resources: true\n    page-layout: full\n    toc: true\n    toc-depth: 2\n",
+  "execute:\n  echo: false\n  warning: true\n  message: true\n---\n\n",
+  "Each section shows one gold spec from `tests/gold_specs.yaml`: the lint's notes, the static chart beside its plotly ",
+  "version at the same size, the first rows of the table that is drawn, and the R code that reproduces the chart.\n\n",
+  "```{r}\n#| include: false\nlibrary(ggplot2)\nlibrary(plotly)\ngallery <- readRDS(", deparse(rds), ")\n```\n\n",
+  paste(purrr::imap_chr(items, gallery_section), collapse = "\n\n"))
+
+# Quarto, as probe/app.R finds it: QUARTO_PATH, then the PATH.
+quarto_bin <- function() {
+  env = Sys.getenv("QUARTO_PATH")
+  if (nzchar(env) && file.exists(env)) return(env)
+  p = Sys.which("quarto")
+  if (nzchar(p)) unname(p) else stop("Quarto was not found (QUARTO_PATH or the PATH).", call. = FALSE)
+}
+
+build_gallery <- function(out = GALLERY_OUT) {
+  work = tempfile("gallery_")
+  dir.create(work)
+  runs = purrr::compact(purrr::map(gold_entries(), gold_run, work_dir = work))
+  items = purrr::map(runs, gallery_item)
+  rds = normalizePath(file.path(work, "gallery.rds"), winslash = "/", mustWork = FALSE)
+  saveRDS(items, rds)
+  qmd = file.path(work, "gallery.qmd")
+  writeLines(gallery_qmd(items, rds), qmd, useBytes = TRUE)
+  Sys.setenv(QUARTO_R = R.home("bin"))
+  started = Sys.time()
+  said = suppressWarnings(system2(quarto_bin(), c("render", shQuote(qmd), "--to", "html", "--quiet"), stdout = TRUE, stderr = TRUE))
+  html = file.path(work, "gallery.html")
+  if (!file.exists(html)) stop("Quarto did not write the gallery:\n", paste(utils::tail(said, 30), collapse = "\n"), call. = FALSE)
+  file.copy(html, out, overwrite = TRUE)
+  cat("Wrote ", out, " (", round(file.size(out) / 1e6, 1), " MB, ", length(items), " specs, ",
+      round(as.numeric(difftime(Sys.time(), started, units = "secs"))), " s to render).\n", sep = "")
+  invisible(out)
+}
+
+if (sys.nframe() == 0L) {
+  invisible(shiny::shinyAppDir("."))
+  build_gallery()
+}
