@@ -55,5 +55,5 @@ Two measures against each other: scatter, bubble, heatmap.
 - **When:** A measure on a scatter or bubble is positive and DATA shows its largest value more than about 100 times its smallest, with most values near the bottom.
 - **Say:** Set the log scale for that axis and say so in `say`.
 - **Never:** Do not use a log scale on a measure that has zero or negative values, or on the value axis of a bar.
-- **Label:** Log scale for a very wide range
+- **Label:** Log scale for a wide range
 - **Source:** General practice; not from the course materials.

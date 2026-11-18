@@ -1,6 +1,6 @@
 # chaRt: design
 
-Version 0.2, 2026-11-17 (section 16 records what changed after Phases 0 and 1). Written in the Claude project (the manager); built by Claude Code, one
+Version 0.3, 2026-11-18 (sections 16 and 17 record what changed as the phases were built). Written in the Claude project (the manager); built by Claude Code, one
 phase at a time. Kevin brings each phase's summary back to the project for review before the next.
 
 ## 1. What it is
@@ -329,3 +329,44 @@ Where this section and an earlier one disagree, this section holds.
    `highlight`. A highlighted value comes from the analyst's own message, and R checks that it
    exists in the column.
 8. **Tests run from PowerShell or the RStudio terminal**, not Git Bash, which hides `.Renviron`.
+
+## 17. Changes after Phase 2 (2026-11-18)
+
+Where this section and an earlier one disagree, this section holds.
+
+1. **The spec is flat.** `fn`, `filter`, `top_n` and `sort` are top-level fields; `scales` became
+   `log_x` and `log_y`; `highlight` is `{column, values}`; new fields `rug`, `bins`, `free_y` and,
+   for a heatmap, `midpoint`. The exact fields and what each family takes are in
+   `chaRt/phase2_prompt.md` section 1 and are printed for the model by `spec_reference()` in
+   `R/spec.R`, which is the one source.
+2. **Name-like columns (`id`, `text`) can go on an axis or in colour, with `top_n`.** Their values
+   are still never listed to a model in the DATA block. Before a chart's table goes to a model for
+   a headline or summary (Phase 5), R replaces those values with placeholders and puts them back
+   in the reply.
+3. **The static chart is the published form.** The plotly version is a second view for reading
+   values by hovering. Known differences are listed in `STATUS.md`.
+4. **Direct labels only when they fit.** End labels on lines and slopes are drawn when no two
+   would touch; otherwise a legend ordered by end value. No ggrepel.
+5. **Overplotting.** Points that mostly share positions are spread slightly at random with a fixed
+   seed and drawn transparent; many rows are drawn transparent, then binned.
+6. **Palettes** come from a curated list in `R/theme.R` (paletteer names or plain colours),
+   grouped as qualitative, sequential and diverging. The analyst chooses one of each for the whole
+   report; the model never chooses colours; the app starts without paletteer.
+7. **The generated code** is the code that drew the chart, written with dplyr, tidyr and ggplot2,
+   naming the file by its base name and carrying its encoding and missing-value codes.
+8. **Encoding** is guessed, shown, and corrected by the analyst on the Data tab; it is kept in the
+   codebook.
+9. **A title describes; a headline is checked.** When a model writes a spec it has not seen the
+   plotted values, so `title` says what is plotted and may not state a finding
+   (`title_describes` in `core.md`). The headline that states the finding is written in Phase 5
+   from the drawn chart's table, with every number checked.
+10. **Model calls as built in Phase 3:** `label` (one reflex file, `codebook.md`, with its own
+    persona); `suggest` (core, comparison, relationship, distribution, time, suggest, then the
+    spec reference); a `pick` call first only when a file has more than 40 usable columns; one
+    repair call when a spec is refused. The model proposes labels only; roles follow the type, and
+    `row_is` is offered as a guess the analyst accepts.
+11. **Reflex files** are in `www/reflexes/`, with a README giving the format. `interactive.md`,
+    `summary.md` and the chat's file come with their phases. `house.md` is still the converted
+    office skill.
+12. **Still open:** a reshape step for files with one column per year (the FH file cannot show a
+    trend without it); dates in forms readr does not recognise; reference lines and bullet graphs.

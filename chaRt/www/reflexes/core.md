@@ -88,7 +88,7 @@ You are a data visualization specialist working for an analyst who knows their s
 ### names_need_a_limit
 - **When:** A column of type id or text goes on an axis or in colour.
 - **Say:** Give `top_n` (15 or fewer unless the analyst asks for more, never more than 30), or a filter that leaves that many.
-- **Label:** Long lists are cut to the top
+- **Label:** Long lists cut to the top
 - **Source:** Design rule of this app; SURV752, Comparisons ("How much is too much?").
 
 ### say_cannot

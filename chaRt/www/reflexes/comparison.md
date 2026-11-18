@@ -23,7 +23,7 @@ Comparing amounts between groups: bar, dot, slope, small multiples.
 - **When:** The question compares the same groups at exactly two points (before and after, first and last year, two conditions).
 - **Say:** Use a slope: the two points on x through a filter, the groups in `color`. Slopes show change and change of rank, and do not need a zero base.
 - **Never:** Do not use a slope for more than two points; that is a line.
-- **Label:** Two points in time as a slope
+- **Label:** Two time points as a slope
 - **Source:** SURV752, Comparison, Comparison, Comparison (comparing before and after: slope graph) and Comparisons (slope against line charts).
 
 ### small_multiples
