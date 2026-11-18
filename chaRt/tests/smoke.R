@@ -334,6 +334,67 @@ check("every gold spec: spec_plot() builds, and ggplot_build() runs with no erro
       all(purrr::map_lgl(gold_plots, function(r) is.null(r$error) && !length(r$said) && inherits(r$plot, "ggplot"))))
 
 
+# ---- Phase 2: the lint, one check per rule ----------------------------------------------
+
+lint_of <- function(spec, g) {
+  s = spec_defaults(spec)
+  spec_lint(s, g$cb, spec_table(s, g$data, g$cb))
+}
+gold_g <- function(file) purrr::detect(gold, function(x) identical(x$entry$file, file))$g
+fh_g <- gold_g("FH_disaggregated.csv")
+ball_g <- gold_g("footballdata-1.csv")
+pan_g <- gold_g("panel.csv")
+made_g <- function(n, seed) {
+  set.seed(seed)
+  d = tibble::tibble(a = stats::rnorm(n), b = stats::rnorm(n))
+  list(data = d, cb = new_codebook(profile_data(d), "made.csv", n))
+}
+if (!is.null(ball_g)) {
+  l = lint_of(list(family = "bar", x = "Position", log_y = TRUE, title = "t"), ball_g)
+  check("lint: a bar's log scale is removed, with a note", identical(l$spec$log_y, FALSE) && any(grepl("log scale", l$notes)))
+  ordered_g = ball_g
+  pos = which(purrr::map_chr(ordered_g$cb$columns, "name") == "Position")
+  ordered_g$cb$columns[[pos]] = edit_entry(ordered_g$cb$columns[[pos]], type = "ordered")
+  check("lint: an unordered x is sorted value_desc, an ordered x level_order, when the spec gives no sort",
+        identical(lint_of(list(family = "bar", x = "Position", title = "t"), ball_g)$spec$sort, "value_desc") &&
+          identical(lint_of(list(family = "dot", x = "Position", title = "t"), ordered_g)$spec$sort, "level_order") &&
+          identical(lint_of(list(family = "bar", x = "Position", sort = "alphabetical", title = "t"), ball_g)$spec$sort, "alphabetical"))
+  check("lint: more than 8 bars, or a label longer than 12 characters, is drawn sideways; 4 short ones are not",
+        isTRUE(lint_of(list(family = "bar", x = "Nationality", top_n = 10, title = "t"), ball_g)$spec$.flip) &&
+          isTRUE(lint_of(list(family = "box", x = "Position", "y" = "Height", title = "t"),
+                         { g = ball_g; g$data$Position = paste(g$data$Position, "players"); g })$spec$.flip) &&
+          is.null(lint_of(list(family = "bar", x = "Position", title = "t"), ball_g)$spec$.flip))
+  check("lint: a missing title gets a note", any(grepl("no title", lint_of(list(family = "bar", x = "Position"), ball_g)$notes)))
+  l = lint_of(list(family = "histogram", x = "Age", title = "t"), ball_g)
+  check("lint: rows left out for missing values get the note 'k of n rows left out: missing values'",
+        any(l$notes == "37 of 1,851 rows left out: missing values."))
+  p_fixed = spec_plot(list(family = "histogram", x = "Age", facet = "League", title = "t"), ball_g$data, ball_g$cb)
+  p_free = spec_plot(list(family = "histogram", x = "Age", facet = "League", free_y = TRUE, title = "t"), ball_g$data, ball_g$cb)
+  check("lint: small multiples share one y scale unless free_y asks for one per panel",
+        length(ggplot2::ggplot_build(p_fixed)$layout$panel_scales_y) == 1L &&
+          length(ggplot2::ggplot_build(p_free)$layout$panel_scales_y) == 4L)
+}
+if (!is.null(pan_g)) {
+  l = lint_of(list(family = "line", x = "year", "y" = "revenue", color = "region", fn = "sum", title = "t"), pan_g)
+  check("lint: 8 colours get the 'highlight or facet' note", any(grepl("8 colours", l$notes)))
+  lh = lint_of(list(family = "line", x = "year", "y" = "revenue", color = "region", fn = "sum", title = "t",
+                    highlight = list(column = "region", values = "Coast")), pan_g)
+  check("lint: 8 lines with no highlight or facet get the 'small multiples or a highlight' note; with a highlight they do not",
+        any(grepl("8 lines overlap", l$notes)) && !any(grepl("lines overlap", lh$notes)))
+}
+big <- made_g(3000L, 1)
+huge <- made_g(25000L, 2)
+widget_n <- made_g(6000L, 3)
+l_big <- lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t"), big)
+l_huge <- lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t"), huge)
+check("lint: over 2,000 points are drawn transparent, with a note; over 20,000 they are binned, with a note",
+      identical(l_big$spec$.alpha, SPEC_ALPHA) && is.null(l_big$spec$.binned) && any(grepl("see-through", l_big$notes)) &&
+        isTRUE(l_huge$spec$.binned) && any(grepl("grid", l_huge$notes)))
+l_w <- lint_of(list(family = "scatter", x = "a", "y" = "b", interactive = TRUE, title = "t"), widget_n)
+check("lint: interactive with more than 5,000 marks is turned off, with a note",
+      identical(l_w$spec$interactive, FALSE) && any(grepl("interactive", l_w$notes)))
+
+
 # ---- Phase 2: bad specs ---------------------------------------------------------------
 
 # What chaRt says about a spec: spec_check()'s sentences, or the one spec_table() raises.

@@ -503,7 +503,58 @@ spec_settle <- function(s, cb, table) {
   s
 }
 
-spec_lint <- function(spec, cb, table) list(spec = spec_settle(spec, cb, table), notes = character(0))
+# How many marks a chart draws: bars, points or boxes are rows of the table; a histogram draws its
+#   bins in each panel; a binned scatter its grid.
+mark_count <- function(s, table) {
+  panels = if (!is.null(s$facet)) length(unique(table[[s$facet]])) else 1L
+  if (identical(s$family, "histogram")) return(as.integer(s$bins %||% SPEC_BINS[2]) * panels)
+  if (isTRUE(s$.binned)) return(SPEC_BIN_2D^2 * panels)
+  nrow(table)
+}
+
+# The rules R enforces with no model call (DESIGN.md section 8). Fixes change the spec; notes are
+#   sentences for the analyst. Returns list(spec, notes).
+spec_lint <- function(spec, cb, table) {
+  s = spec_settle(spec, cb, table)
+  fam = s$family
+  nd = function(col) length(unique(table[[col]]))
+  notes = character(0)
+  # A bar's value axis starts at zero (the bar layers always include zero), so no log scale.
+  if (identical(fam, "bar") && isTRUE(s$log_y)) {
+    s$log_y = FALSE
+    notes = c(notes, "A bar's length shows its value, so its axis starts at zero; the log scale was removed.")
+  }
+  # Many bars, dots or boxes, or long labels: drawn sideways.
+  if (fam %in% c("bar", "dot", "box")) {
+    labels = as.character(unique(table[[s$x]]))
+    if (length(labels) > SPEC_FLIP_BARS || any(nchar(labels) > SPEC_FLIP_CHARS)) s$.flip = TRUE
+  }
+  if (!is.null(s$color) && !identical(fam, "heatmap") && nd(s$color) > SPEC_COLOURS)
+    notes = c(notes, paste0(nd(s$color), " colours are hard to tell apart; highlight the few that matter, or use small multiples (facet)."))
+  if (identical(fam, "line") && !is.null(s$color) && nd(s$color) > SPEC_LINES && is.null(s$highlight) && is.null(s$facet))
+    notes = c(notes, paste0(nd(s$color), " lines overlap; small multiples (facet) or a highlight of the few that matter would read more easily."))
+  # Small multiples share their scales unless free_y asks otherwise: facet_wrap()'s scales are
+  #   fixed by default, so there is nothing to change.
+  if (fam %in% c("scatter", "bubble")) {
+    n = nrow(table)
+    if (n > SPEC_BIN_N) {
+      s$.binned = TRUE
+      notes = c(notes, paste0(format_num(n), " points would hide one another, so the chart shows how many fall in each cell of a grid."))
+    } else if (n > SPEC_ALPHA_N) {
+      s$.alpha = SPEC_ALPHA
+      notes = c(notes, paste0(format_num(n), " points are drawn see-through, so that where they pile up shows."))
+    }
+  }
+  if (isTRUE(s$interactive) && mark_count(s, table) > SPEC_WIDGET_N) {
+    s$interactive = FALSE
+    notes = c(notes, paste0(format_num(mark_count(s, table)), " marks are too many for the interactive version; the chart is static."))
+  }
+  if (is.null(s$title)) notes = c(notes, "The chart has no title; a title that states the finding tells the reader what to look for.")
+  dropped = attr(table, "rows_dropped") %||% 0L
+  if (dropped > 0L)
+    notes = c(notes, paste0(format_num(dropped), " of ", format_num(dropped + attr(table, "rows_used")), " rows left out: missing values."))
+  list(spec = s, notes = notes)
+}
 
 
 # ---- the plot --------------------------------------------------------------------------------------
