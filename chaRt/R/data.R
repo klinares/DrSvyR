@@ -97,22 +97,39 @@ parse_missing <- function(txt) unique(parse_lines(txt))
 # Files saved from Excel on Windows are often not UTF-8. readr::guess_encoding() names the most
 #   likely encoding with a confidence; between the Latin encodings its pick is often a near
 #   neighbour (a Latin-1 file guessed as ISO-8859-2 turns "Sao" with a tilde into a breve), so a file
-#   guessed as any of them is read as windows-1252, which holds every Latin-1 letter.
+#   guessed as any of them is read as windows-1252, which holds every Latin-1 letter. readr may
+#   also make no guess at all (a short file in ISO-8859-2, say); then a file whose first lines are
+#   not valid UTF-8 is read as windows-1252 too.
 LATIN_ENCODINGS <- c("ISO-8859-1", "ISO-8859-2", "ISO-8859-9", "ISO-8859-15", "windows-1250", "windows-1252", "windows-1254")
 ENCODING_SURE <- 0.8
+ENCODING_LINES <- 10000L     # lines looked at when readr makes no guess
 
-# The encoding a file is read with, and the sentence for the analyst when it is not UTF-8.
-file_encoding <- function(path) {
+# The encodings the analyst may choose on the Data tab instead of the guess.
+DATA_ENCODINGS <- c("UTF-8", "windows-1252", "ISO-8859-2", "ISO-8859-15")
+
+# The encoding a file is read with, and the sentence for the analyst when it is not UTF-8. A
+#   Western European file guessed as windows-1252 is right; a Central European one is not, and R
+#   cannot tell them apart, so the sentence asks the analyst to check and the Data tab lets them
+#   choose. `encoding` given (by the analyst or a codebook) is used as it is.
+file_encoding <- function(path, encoding = NULL) {
+  if (!is.null(encoding))
+    return(list(encoding = encoding,
+                note = if (!identical(encoding, "UTF-8")) paste0("The file was read as ", encoding, ", as chosen.")))
   g = tryCatch(readr::guess_encoding(path), error = function(e) NULL)
-  if (is.null(g) || !nrow(g) || g$encoding[1] %in% c("UTF-8", "ASCII")) return(list(encoding = "UTF-8", note = NULL))
+  check = "check names with accents, and choose the file's encoding if they are wrong."
+  if (is.null(g) || !nrow(g)) {
+    if (all(validUTF8(readLines(path, n = ENCODING_LINES, warn = FALSE)))) return(list(encoding = "UTF-8", note = NULL))
+    return(list(encoding = "windows-1252",
+                note = paste0("The file was read as windows-1252. This is a guess (readr could not make one); ", check)))
+  }
+  if (g$encoding[1] %in% c("UTF-8", "ASCII")) return(list(encoding = "UTF-8", note = NULL))
   top = g$encoding[1]
   sure = g$confidence[1]
   enc = if (top %in% LATIN_ENCODINGS) "windows-1252" else top
   unsure = sure < ENCODING_SURE || !identical(enc, top)
   list(encoding = enc,
        note = paste0("The file was read as ", enc, ".",
-                     if (unsure) paste0(" This is a guess (readr's best guess was ", top, ", ", round(100 * sure),
-                                        "% sure); check names with accents.")))
+                     if (unsure) paste0(" This is a guess (readr's best guess was ", top, ", ", round(100 * sure), "% sure); ", check)))
 }
 
 # For a file that is not UTF-8: the delimiter that splits its header into the most columns.
@@ -130,9 +147,9 @@ latin_delim <- function(path, encoding) {
 #   with a comma. Types are guessed from every row (guess_max = Inf). The values in `missing` are
 #   added to DATA_NA; readr's `na` matches a whole cell, after the spaces around it are trimmed
 #   (trim_ws), never part of one.
-read_data <- function(path, name = basename(path), missing = character()) {
+read_data <- function(path, name = basename(path), missing = character(), encoding = NULL) {
   na = unique(c(DATA_NA, parse_missing(missing)))
-  enc = file_encoding(path)
+  enc = file_encoding(path, encoding)
   read = function(delim)
     suppressWarnings(readr::read_delim(path, delim = delim, na = na, guess_max = Inf, trim_ws = TRUE,
                                        locale = readr::locale(encoding = enc$encoding),
@@ -286,12 +303,12 @@ write_codebook <- function(cb, path) {
   invisible(path)
 }
 
-# A codebook file read back as written; a file that is not one stops with one plain sentence.
+# A codebook file read back as written; a file that is not one stops with one plain sentence. A
+#   codebook written before Phase 2b has no encoding: it stays NULL, so its file's encoding is guessed.
 read_codebook <- function(path) {
   cb = tryCatch(yaml::read_yaml(path, fileEncoding = "UTF-8"), error = function(e)
     stop("This is not a codebook chaRt can read: ", gsub("\\s+", " ", conditionMessage(e)), call. = FALSE))
   if (is.list(cb)) cb$missing_codes = codes_field(parse_missing(as.character(unlist(cb$missing_codes))))
-  if (is.list(cb) && is.null(cb$encoding)) cb$encoding = "UTF-8"
   ok = is.list(cb) && identical(cb$chart_codebook, CODEBOOK_VERSION) && is.list(cb$columns) &&
     all(purrr::map_lgl(cb$columns, function(e) is.list(e) && is.character(e$name) && length(e$name) == 1L))
   if (!ok) stop("This is not a codebook chaRt can read: it needs chart_codebook: 1 and a list of columns, each with a name.",
@@ -362,8 +379,8 @@ apply_codebook <- function(cb, profile, file, rows, encoding = "UTF-8") {
 #   for every column whose name is unchanged, its label, label source and role, and its type and
 #   order when the data can still be them; and the row sentence. Returns read (data and problems),
 #   profile, codebook and notes (a sentence for each type, order or role that had to be dropped).
-reread_data <- function(path, name, missing, old = NULL) {
-  r = read_data(path, name, missing)
+reread_data <- function(path, name, missing, old = NULL, encoding = NULL) {
+  r = read_data(path, name, missing, encoding)
   prof = profile_data(r$data)
   cb = new_codebook(prof, name, nrow(r$data), missing, r$encoding)
   if (is.null(old)) return(list(read = r, profile = prof, codebook = cb, notes = character(0)))

@@ -130,6 +130,9 @@ mod_data_ui <- function(id) {
                   placeholder = "for example: ..\n-99"),
     tags$p(class = "text-muted small", "Blank cells and NA are always missing. Anything else is missing only if you list it here; ",
            "a value must match a whole cell."),
+    selectInput(ns("encoding"), "File encoding", choices = encoding_choices(NULL), width = "100%"),
+    tags$p(class = "text-muted small", "The encoding is guessed. If names with accents look wrong, choose another and read again: ",
+           "windows-1252 for Western European files, ISO-8859-2 for Central European ones."),
     actionButton(ns("reread"), "Read again", class = "btn-sm mb-3"),
     uiOutput(ns("reread_note")),
     uiOutput(ns("summary")),
@@ -139,12 +142,28 @@ mod_data_ui <- function(id) {
     uiOutput(ns("codebook_note")))
 }
 
+# The File encoding choices: the guess first (its value is "", its label names what the guess
+#   was), then DATA_ENCODINGS.
+encoding_choices <- function(detected) {
+  guess = if (is.null(detected)) "Detected" else paste0("Detected (", detected, ")")
+  c(stats::setNames("", guess), stats::setNames(DATA_ENCODINGS, DATA_ENCODINGS))
+}
+
 mod_data_server <- function(id, state) {
   moduleServer(id, function(input, output, session) {
     read_error = reactiveVal(NULL)
     codebook_note = reactiveVal(NULL)
     reread_note = reactiveVal(NULL)
     upload = reactiveVal(NULL)         # the data file as uploaded, kept so it can be read again
+    detected = reactiveVal(NULL)       # the encoding the guess picked for that file
+
+    # The encoding chosen on the tab: NULL for the guess.
+    chosen_encoding = function() if (nzchar(input$encoding %||% "")) input$encoding
+    # After a read: the guess's label names what it picked, and the select shows `selected`.
+    show_encoding = function(res, selected) {
+      if (is.null(selected) && !inherits(res, "error")) detected(res$read$encoding)
+      updateSelectInput(session, "encoding", choices = encoding_choices(detected()), selected = selected %||% "")
+    }
 
     # A read, or the error it met, into the shared state.
     take = function(res, codebook = res$codebook) {
@@ -164,8 +183,10 @@ mod_data_server <- function(id, state) {
     observeEvent(input$file, {
       f = input$file
       upload(list(path = f$datapath, name = f$name))
-      codebook_note(NULL); reread_note(NULL)
-      take(tryCatch(reread_data(f$datapath, f$name, parse_missing(input$missing)), error = function(e) e))
+      codebook_note(NULL); reread_note(NULL); detected(NULL)
+      res = tryCatch(reread_data(f$datapath, f$name, parse_missing(input$missing)), error = function(e) e)
+      take(res)
+      show_encoding(res, NULL)
     })
 
     # The same upload read again with the values that mean missing; what the analyst entered in
@@ -173,31 +194,36 @@ mod_data_server <- function(id, state) {
     observeEvent(input$reread, {
       u = upload()
       if (is.null(u)) return(reread_note(warn_box("Choose a data file first.")))
-      res = tryCatch(reread_data(u$path, u$name, parse_missing(input$missing), old = state$codebook), error = function(e) e)
-      if (take(res))
+      enc = chosen_encoding()
+      res = tryCatch(reread_data(u$path, u$name, parse_missing(input$missing), old = state$codebook, encoding = enc),
+                     error = function(e) e)
+      ok = take(res)
+      show_encoding(res, enc)
+      if (ok)
         reread_note(if (length(res$notes)) warn_box(tags$ul(purrr::map(res$notes, tags$li)))
                     else advice_box("Read again. Your labels, roles and row sentence are kept."))
     })
 
     output$reread_note = renderUI(reread_note())
 
-    # A saved codebook: the file is first read again with its missing_codes, then the codebook is
-    #   applied only when check_codebook() has nothing to say about it.
+    # A saved codebook: the file is first read again with its missing_codes and its encoding, then
+    #   the codebook is applied only when check_codebook() has nothing to say about it.
     observeEvent(input$codebook, {
       u = upload()
       if (is.null(u)) return(codebook_note(warn_box("Read the data file first, then the codebook.")))
       up = tryCatch(read_codebook(input$codebook$datapath), error = function(e) e)
       if (inherits(up, "error")) return(codebook_note(warn_box(conditionMessage(up))))
       codes = missing_codes(up)
-      res = tryCatch(reread_data(u$path, u$name, codes), error = function(e) e)
+      res = tryCatch(reread_data(u$path, u$name, codes, encoding = up$encoding), error = function(e) e)
       if (inherits(res, "error")) return(codebook_note(warn_box(conditionMessage(res))))
       why = check_codebook(up, res$profile)
       if (length(why))
         return(codebook_note(warn_box(tags$strong("The codebook was not applied."), tags$ul(purrr::map(why, tags$li)))))
       take(res, apply_codebook(up, res$profile, u$name, nrow(res$read$data), res$read$encoding))
       updateTextAreaInput(session, "missing", value = paste(codes, collapse = "\n"))
+      show_encoding(res, up$encoding)
       reread_note(NULL)
-      codebook_note(advice_box("The codebook was applied: its values that mean missing, labels, types, roles and row ",
+      codebook_note(advice_box("The codebook was applied: its values that mean missing, encoding, labels, types, roles and row ",
                                "sentence are in use; every fact comes from the file."))
     })
 
