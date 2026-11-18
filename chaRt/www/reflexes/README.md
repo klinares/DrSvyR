@@ -27,10 +27,13 @@ checksums, so an edit that was not meant shows up.
 R assembles every prompt in a fixed order; no model writes one, so the same file, codebook and
 question give the same prompt.
 
-| Call | Files, in order | R adds |
+| Call | Reflexes in the system prompt | R adds, in the user message |
 |---|---|---|
-| `label` (Codebook tab) | codebook | the DATA block: file name and every column's facts |
-| `suggest` (Explore tab) | core, comparison, relationship, distribution, time, suggest | the SPEC REFERENCE (written by R from `R/spec.R`), the DATA block, the analyst's question |
+| `label` (Codebook tab) | codebook | the DATA block (file name and every column's facts), codebook.md's reply format |
+| `suggest` (Explore tab) | core, comparison, relationship, distribution, time, suggest, refine | the DATA block, the analyst's question, suggest.md's reply format |
+| `refine` (the chat) | the same seven, so the system prompt is identical and is read from the cache | the DATA block (the index, and detail for the chart's own columns), the current spec, R's notes, the last exchange, the analyst's message, refine.md's reply format |
 
-The files for `refine` (the chat), `summarize` (headlines and summaries) and `interactive` come in
-later phases.
+After the reflexes and prohibitions, the system prompt of `suggest` and `refine` ends with the
+SPEC REFERENCE, written by R from `R/spec.R`.
+
+The files for `summarize` (headlines and summaries) and `interactive` come in later phases.
