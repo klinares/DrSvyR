@@ -40,6 +40,21 @@ office_logo <- function(file, office = "") {
 }
 
 
+# A button for a model call. Shiny runs the call before it draws again, so the button disables
+#   itself in the browser and shows `busy` under it; the server draws it again, enabled, when the
+#   call is done. ready = FALSE draws it disabled.
+busy_button <- function(id, label, busy, ready = TRUE, class = "btn-primary") {
+  busy_id = paste0(id, "_busy")
+  tagList(actionButton(id, label, class = class, disabled = !ready,
+                       onclick = paste0("this.disabled = true; document.getElementById('", busy_id, "').style.display = 'block';")),
+          tags$p(id = busy_id, class = "text-muted small", style = "display:none; margin-top:0.25rem;", busy))
+}
+
+# What went wrong in a call, under the sentence: the reply as llm_json() reported it.
+call_detail <- function(detail)
+  if (!is.null(detail)) tags$details(tags$summary("What the model sent back"), tags$pre(substr(detail, 1, 1500)))
+
+
 # ---- Start here --------------------------------------------------------------
 
 # The model as the page names it: the id, the API style in words and where it is called.
@@ -169,10 +184,11 @@ mod_data_server <- function(id, state) {
     take = function(res, codebook = res$codebook) {
       if (inherits(res, "error")) {
         read_error(conditionMessage(res))
-        state$data = NULL; state$problems = NULL; state$profile = NULL; state$codebook = NULL
+        state$data = NULL; state$problems = NULL; state$profile = NULL; state$codebook = NULL; state$path = NULL
         return(invisible(FALSE))
       }
       read_error(NULL)
+      state$path = isolate(upload())$path
       state$data = res$read$data
       state$problems = res$read$problems
       state$profile = res$profile
@@ -253,11 +269,12 @@ mod_data_server <- function(id, state) {
 # ---- Codebook -------------------------------------------------------------------------------
 
 CODEBOOK_PAGE_SIZE <- 25L
+LABEL_BUSY <- "The model is reading the column summaries, not the rows. This can take a minute."
 
 # The Codebook tab: what one row represents, then the columns, CODEBOOK_PAGE_SIZE to a page.
 mod_codebook_ui <- function(id) {
   ns = NS(id)
-  tagList(uiOutput(ns("status")), uiOutput(ns("page")), uiOutput(ns("footer")))
+  tagList(uiOutput(ns("status")), uiOutput(ns("suggest")), uiOutput(ns("page")), uiOutput(ns("footer")))
 }
 
 # The page is drawn from the codebook only when the page, a type or the whole codebook changes,
@@ -270,7 +287,12 @@ mod_codebook_server <- function(id, state) {
     gen = reactiveVal(0L)
     mine = reactiveVal(NULL)           # the codebook as this module last wrote it
     order_notes = reactiveVal(character(0))
+    calls_done = reactiveVal(0L)       # bumped after a label call, so its button is drawn again
+    label_note = reactiveVal(NULL)
+    guess = reactiveVal(NULL)          # the model's row_is_guess, offered while row_is is blank
     input_id = function(what, i) paste0("g", gen(), "_", what, "_", i)
+    # A codebook this module wrote, drawn again on the same page.
+    write_here = function(new) { mine(new); state$codebook = new; gen(isolate(gen()) + 1L) }
     on_page = function(cb) {
       n = length(cb$columns)
       if (!n) return(integer(0))
@@ -280,7 +302,7 @@ mod_codebook_server <- function(id, state) {
     # A codebook this module did not write (a new file, an applied codebook): start again on page 1.
     observeEvent(state$codebook, {
       if (!identical(state$codebook, mine())) {
-        mine(state$codebook); page(1L); order_notes(character(0)); gen(gen() + 1L)
+        mine(state$codebook); page(1L); order_notes(character(0)); guess(NULL); label_note(NULL); gen(gen() + 1L)
       }
     }, ignoreNULL = FALSE)
 
@@ -294,10 +316,59 @@ mod_codebook_server <- function(id, state) {
       cb = state$codebook
       if (is.null(cb)) return(tags$p(class = "text-muted", "Start on the Data tab: read a file there first."))
       unnamed = sum(purrr::map_lgl(cb$columns, function(e) identical(e$label, e$name)))
+      guessed = sum(purrr::map_lgl(cb$columns, function(e) identical(e$label_source, "ai_guess")))
       tagList(
         if (!codebook_ready(cb)) warn_box("Charts cannot be drawn until you say what one row represents."),
-        tags$p(format_num(unnamed), " of ", format_num(length(cb$columns)), " labels are still the column name."),
+        tags$p(paste0(format_num(unnamed), " of ", format_num(length(cb$columns)), " labels are still the column name; ",
+                      format_num(guessed), if (guessed == 1L) " AI guess is" else " AI guesses are", " not yet accepted.")),
         if (length(order_notes())) warn_box(tags$ul(purrr::map(order_notes(), tags$li))))
+    })
+
+    # Suggest labels: one label call per CODEBOOK_MAX_DETAIL columns. Only labels still the file's
+    #   own change; the page is drawn again where it was.
+    output$suggest = renderUI({
+      state$key_version; calls_done()
+      if (is.null(state$codebook)) return(NULL)
+      ready = llm_key_ready()
+      tags$div(class = "my-2",
+               busy_button(ns("suggest_labels"), "Suggest labels", LABEL_BUSY, ready = ready),
+               if (!ready) tags$p(class = "text-muted small", "Suggest labels needs a key. ", KEY_HINT),
+               label_note())
+    })
+
+    observeEvent(input$suggest_labels, {
+      cb = state$codebook
+      if (is.null(cb)) return()
+      res = label_columns(cb)
+      state$calls = dplyr::bind_rows(state$calls, res$calls)
+      if (!is.null(res$error)) {
+        label_note(warn_box(res$error, call_detail(res$detail)))
+      } else {
+        landed = sum(purrr::map2_lgl(cb$columns, res$codebook$columns, function(a, b) !identical(a$label, b$label)))
+        unsure = sum(purrr::map_lgl(res$codebook$columns, function(e) identical(e$label_source, "ai_guess") && identical(e$sure, FALSE)))
+        label_note(advice_box(paste0(format_num(landed), " labels were suggested",
+                                     if (unsure) paste0(", ", unsure, " of them marked 'check this'"),
+                                     ". Labels you wrote were not changed. Edit a label or tick Accept to make it yours.")))
+        guess(res$row_is_guess)
+        write_here(res$codebook)
+      }
+      calls_done(calls_done() + 1L)
+    })
+
+    observeEvent(input$use_guess, {
+      new = state$codebook
+      if (is.null(new) || is.null(guess())) return()
+      new$row_is = guess()
+      write_here(new)
+    })
+
+    observeEvent(input$accept_all, {
+      cb = state$codebook
+      if (is.null(cb)) return()
+      idx = on_page(cb)
+      new = cb
+      new$columns[idx] = purrr::map(cb$columns[idx], accept_label)
+      if (!identical(new, cb)) { mine(new); state$codebook = new }
     })
 
     output$page = renderUI({
@@ -306,13 +377,23 @@ mod_codebook_server <- function(id, state) {
       if (is.null(cb)) return(NULL)
       idx = isolate(on_page(cb))
       n = length(cb$columns)
+      offer = isolate(guess())
+      offer = if (!codebook_ready(cb) && !is.null(offer)) offer
+      # The tag beside each label follows the codebook, so it goes when the label is edited or accepted.
+      purrr::walk(idx, function(i) {
+        output[[input_id("tag", i)]] = renderUI(label_tag(state$codebook$columns[[i]], ns(input_id("accept", i))))
+      })
       tagList(
-        textInput(ns(input_id("row_is", 0L)), "What does one row represent?", value = cb$row_is, width = "100%",
-                  placeholder = "for example: one order, or one country in one year"),
+        tags$div(class = "d-flex align-items-end gap-2",
+                 tags$div(style = "flex:1;",
+                          textInput(ns(input_id("row_is", 0L)), "What does one row represent?", value = cb$row_is, width = "100%",
+                                    placeholder = offer %||% "for example: one order, or one country in one year")),
+                 if (!is.null(offer)) tags$div(class = "mb-3", actionButton(ns("use_guess"), "Use this", class = "btn-sm"))),
         tags$div(class = "d-flex align-items-center gap-2 my-2",
                  actionButton(ns("prev"), "Previous", class = "btn-sm"),
                  tags$span(paste0("Columns ", if (n) idx[1] else 0L, " to ", if (n) idx[length(idx)] else 0L, " of ", n)),
-                 actionButton(ns("next"), "Next", class = "btn-sm")),
+                 actionButton(ns("next"), "Next", class = "btn-sm"),
+                 actionButton(ns("accept_all"), "Accept all AI labels on this page", class = "btn-sm btn-outline-secondary ms-auto")),
         purrr::map(idx, function(i) codebook_row(cb$columns[[i]], function(what) ns(input_id(what, i)))))
     })
 
@@ -328,7 +409,8 @@ mod_codebook_server <- function(id, state) {
       idx = isolate(on_page(cb))
       row_is = input[[input_id("row_is", 0L)]]
       vals = purrr::map(idx, function(i) list(label = input[[input_id("label", i)]], type = input[[input_id("type", i)]],
-                                              role = input[[input_id("role", i)]], order = input[[input_id("order", i)]]))
+                                              role = input[[input_id("role", i)]], order = input[[input_id("order", i)]],
+                                              accept = input[[input_id("accept", i)]]))
       new = cb
       if (!is.null(row_is)) new$row_is = row_is
       edited = purrr::map2(cb$columns[idx], vals, function(e, v) {
@@ -337,8 +419,8 @@ mod_codebook_server <- function(id, state) {
         note = if (!is.null(order) && identical(e$type, "ordered") && !order_ok(order, e))
           paste0("The order for ", e$name, " was not accepted: list exactly these levels, one per line: ",
                  paste(e$values, collapse = " | "), ".")
-        list(entry = edit_entry(e, label = v$label, type = v$type, role = if (!type_changed) v$role, order = order),
-             note = note, retyped = type_changed)
+        entry = edit_entry(e, label = v$label, type = v$type, role = if (!type_changed) v$role, order = order)
+        list(entry = if (isTRUE(v$accept)) accept_label(entry) else entry, note = note, retyped = type_changed)
       })
       new$columns[idx] = purrr::map(edited, "entry")
       order_notes(unlist(purrr::map(edited, "note")))
@@ -361,9 +443,191 @@ codebook_row <- function(e, id)
                                              selectize = FALSE, width = "100%")),
     tags$div(class = "col-md-2", selectInput(id("role"), NULL, choices = role_choices(e), selected = e$role,
                                              selectize = FALSE, width = "100%")),
-    tags$div(class = "col-md-2 small text-muted", paste("label:", e$label_source)),
+    tags$div(class = "col-md-2 small", uiOutput(id("tag"))),
     if (identical(e$type, "ordered"))
       tags$div(class = "col-12", textAreaInput(id("order"), "Levels in order, one per line",
                                                value = paste(e$order, collapse = "\n"), width = "100%",
                                                rows = min(length(e$order), CODEBOOK_MAX_LEVELS))),
     tags$div(class = "col-12 small text-muted", facts_text(e)))
+
+# Beside a label: "AI guess" (and "check this" when the model was not sure) with an Accept box, or
+#   where the label came from.
+label_tag <- function(e, accept_id) {
+  if (is.null(e)) return(NULL)
+  if (!identical(e$label_source, "ai_guess")) return(tags$span(class = "text-muted", paste("label:", e$label_source)))
+  tagList(tags$span(class = "badge bg-warning text-dark", "AI guess"),
+          if (!isTRUE(e$sure)) tags$span(class = "text-danger ms-1", "check this"),
+          checkboxInput(accept_id, "Accept", value = FALSE))
+}
+
+
+# ---- Explore --------------------------------------------------------------------------------
+
+EXPLORE_BUSY <- "The model is choosing charts from the codebook; it does not see the rows. This can take a minute or two."
+EXPLORE_PALETTE_KINDS <- c(qualitative = "Groups", sequential = "Sequential fill", diverging = "Diverging fill")
+
+# The Explore tab: a question, or a request for suggestions, drawn as charts the renderer checked.
+mod_explore_ui <- function(id) {
+  ns = NS(id)
+  def = chart_palette_default()
+  tagList(
+    uiOutput(ns("gate")),
+    textAreaInput(ns("question"), "What do you want to see?", width = "100%", rows = 2,
+                  placeholder = "for example: Which regions grew most between 2015 and 2024?"),
+    uiOutput(ns("buttons")),
+    tags$div(class = "d-flex gap-3 flex-wrap my-2",
+             purrr::imap(EXPLORE_PALETTE_KINDS, function(label, kind)
+               selectInput(ns(paste0("pal_", kind)), label, choices = stats::setNames(names(chart_palettes(kind)), chart_palettes(kind)),
+                           selected = def[[kind]], selectize = FALSE, width = "220px"))),
+    uiOutput(ns("results")),
+    tags$hr(),
+    uiOutput(ns("foot")))
+}
+
+mod_explore_server <- function(id, state) {
+  moduleServer(id, function(input, output, session) {
+    ns = session$ns
+    res = reactiveVal(NULL)            # what suggest_charts() returned for the last request
+    rgen = reactiveVal(0L)             # one number per request, in the ids of its cards
+    calls_done = reactiveVal(0L)
+    note = reactiveVal(NULL)
+    rule_labels = reflex_labels()
+
+    # The report's palettes; changing one draws the charts again and makes no call.
+    palette = reactive(purrr::map(purrr::set_names(names(EXPLORE_PALETTE_KINDS)), function(kind)
+      input[[paste0("pal_", kind)]] %||% chart_palette_default()[[kind]]))
+    observe(state$palette <- palette())
+
+    ready = reactive(codebook_ready(state$codebook) && !is.null(state$data))
+    output$gate = renderUI({
+      if (is.null(state$codebook)) return(warn_box("Read a data file on the Data tab first."))
+      if (!codebook_ready(state$codebook)) return(warn_box("Say what one row represents on the Codebook tab first; charts are drawn only after that."))
+      NULL
+    })
+
+    output$buttons = renderUI({
+      state$key_version; calls_done()
+      can = ready() && llm_key_ready()
+      tagList(tags$div(class = "d-flex gap-2",
+                       busy_button(ns("draw"), "Draw", EXPLORE_BUSY, ready = can),
+                       busy_button(ns("suggest"), "Suggest charts for this file", EXPLORE_BUSY, ready = can, class = "btn-outline-primary")),
+              if (ready() && !llm_key_ready()) tags$p(class = "text-muted small", "Drawing needs a key. ", KEY_HINT),
+              note())
+    })
+
+    run = function(question) {
+      note(NULL)
+      out = suggest_charts(state$codebook, state$data, question, palette = palette())
+      state$calls = dplyr::bind_rows(state$calls, out$calls)
+      res(out); rgen(rgen() + 1L)
+      calls_done(calls_done() + 1L)
+    }
+    observeEvent(input$draw, {
+      q = trimws(input$question %||% "")
+      if (!nzchar(q)) { note(warn_box("Type a question first, or use Suggest charts for this file.")); return(calls_done(calls_done() + 1L)) }
+      run(q)
+    })
+    observeEvent(input$suggest, run(NULL))
+
+    # One card per chart. Its outputs are made here, with the request's number in their ids.
+    observeEvent(rgen(), {
+      out = res()
+      if (is.null(out)) return()
+      g = rgen()
+      purrr::iwalk(out$charts, function(ch, i) {
+        cid = function(what) paste0("r", g, "_", what, "_", i)
+        drawn = reactive(tryCatch(spec_plot(ch$spec, state$data, state$codebook, palette()), error = function(e) e))
+        size = function() {
+          p = drawn()
+          if (inherits(p, "error")) return(c(width = 7, height = 1))
+          spec_size(attr(p, "spec"), attr(p, "table"))
+        }
+        output[[cid("static")]] = renderPlot({
+          p = drawn()
+          if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
+          print(p)
+        }, width = function() round(size()[["width"]] * 96), height = function() round(size()[["height"]] * 96), res = 96)
+        output[[cid("widget")]] = plotly::renderPlotly({
+          p = drawn()
+          if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
+          spec_widget(p)
+        })
+        output[[cid("view")]] = renderUI({
+          if ((input[[cid("interactive")]] %||% 0L) %% 2L == 1L) plotly::plotlyOutput(ns(cid("widget")), height = "450px")
+          else plotOutput(ns(cid("static")), height = "auto")
+        })
+        output[[cid("notes")]] = renderUI({
+          p = drawn()
+          if (inherits(p, "error")) return(warn_box(conditionMessage(p)))
+          if (length(attr(p, "notes"))) tags$ul(class = "small", purrr::map(attr(p, "notes"), tags$li))
+        })
+        output[[cid("code")]] = renderUI({
+          if ((input[[cid("show_code")]] %||% 0L) %% 2L == 0L) return(NULL)
+          code = tryCatch(spec_code(ch$spec, state$codebook, state$path, palette()), error = function(e) conditionMessage(e))
+          tags$pre(class = "small", paste(code, collapse = "\n"))
+        })
+        observeEvent(input[[cid("add")]], {
+          state$report = c(state$report, list(ch$spec))
+          showNotification(paste0("Added to the report (", length(state$report), " in all)."), type = "message")
+        }, ignoreInit = TRUE)
+      })
+    })
+
+    output$results = renderUI({
+      out = res()
+      if (is.null(out)) return(NULL)
+      g = rgen()
+      cid = function(what, i) ns(paste0("r", g, "_", what, "_", i))
+      cards = purrr::imap(out$charts, function(ch, i) {
+        rule = ch$spec$rule
+        bslib::card(
+          uiOutput(cid("view", i)),
+          uiOutput(cid("notes", i)),
+          if (is_text1(ch$spec$say)) tags$p(ch$spec$say),
+          tags$p(class = "small text-muted",
+                 if (!is.null(rule) && !is.na(rule_labels[rule])) paste0("Rule: ", rule_labels[[rule]]),
+                 if (isTRUE(ch$exploratory)) tags$span(class = "badge bg-secondary ms-1", "Exploratory")),
+          tags$div(class = "d-flex gap-2 flex-wrap",
+                   actionButton(cid("add", i), "Add to report", class = "btn-sm btn-primary"),
+                   actionButton(cid("interactive", i), "Interactive view", class = "btn-sm"),
+                   actionButton(cid("show_code", i), "Show code", class = "btn-sm")),
+          uiOutput(cid("code", i)))
+      })
+      tagList(
+        if (!is.null(out$error)) warn_box(out$error, call_detail(out$detail)),
+        if (length(out$cannot)) advice_box(purrr::map(out$cannot, tags$p)),
+        if (length(cards)) do.call(bslib::layout_column_wrap, c(list(width = 1 / 2), cards)),
+        if (is.null(out$error) && !length(cards) && !length(out$cannot) && !length(out$failed))
+          tags$p(class = "text-muted", "The model returned no charts."),
+        if (length(out$failed))
+          tags$div(tags$h5("Could not be drawn"),
+                   tags$ul(purrr::map(out$failed, function(f)
+                     tags$li(tags$strong(paste0("Chart ", f$number, if (is_text1(f$spec$title)) paste0(", '", f$spec$title, "'"), ": ")),
+                             paste(f$sentences, collapse = " "))))))
+    })
+
+    output$foot = renderUI({
+      calls = state$calls
+      n = if (is.null(calls)) 0L else nrow(calls)
+      tin = if (n) sum(calls$tokens_in, na.rm = TRUE) else 0
+      tout = if (n) sum(calls$tokens_out, na.rm = TRUE) else 0
+      tags$p(class = "small text-muted", paste0("Model calls this session: ", format_num(n), "; tokens in ", format_num(tin),
+                                                ", out ", format_num(tout), "."))
+    })
+  })
+}
+
+
+# ---- Report ---------------------------------------------------------------------------------
+
+# The Report tab is a later phase; until then it shows how many charts were added to it.
+mod_report_ui <- function(id) uiOutput(NS(id)("count"))
+
+mod_report_server <- function(id, state) {
+  moduleServer(id, function(input, output, session) {
+    output$count = renderUI({
+      n = length(state$report)
+      tags$p(paste0(format_num(n), if (n == 1L) " chart has" else " charts have", " been added to the report. ", LATER_PHASE))
+    })
+  })
+}

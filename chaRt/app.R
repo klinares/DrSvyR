@@ -105,8 +105,7 @@ check_reflex_files()
 
 # ---- 4. process settings ----------------------------------------------------
 
-# Cairo for every PNG: a Linux server with no display has no X11. No plots yet; set so a later
-#   one does not fail on Connect.
+# Cairo for every PNG: a Linux server with no display has no X11.
 options(bitmapType = "cairo")
 
 # The largest upload, in bytes.
@@ -117,8 +116,11 @@ options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 
 # The state the modules share: key_version, which changes whenever the pasted key
 #   is saved or forgotten, so anything that depends on a key can re-run; the data as read, the
-#   sentences about it (problems), its profile, and the codebook the analyst edits.
-new_state <- function() reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL)
+#   sentences about it (problems), its profile, the codebook the analyst edits and the path of the
+#   upload (for the code a chart comes with); the record of every model call (calls), the specs
+#   added to the report, in order, and the report's three palettes.
+new_state <- function() reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL,
+                                       path = NULL, calls = NULL, report = list(), palette = chart_palette_default())
 
 
 # ---- 6. layout --------------------------------------------------------------
@@ -152,8 +154,8 @@ ui <- page_fluid(
     tabPanel(CHART_TABS[1], start_ui()),
     tabPanel(CHART_TABS[2], mod_data_ui("data")),
     tabPanel(CHART_TABS[3], mod_codebook_ui("codebook")),
-    tabPanel(CHART_TABS[4], later_ui()),
-    tabPanel(CHART_TABS[5], later_ui()),
+    tabPanel(CHART_TABS[4], mod_explore_ui("explore")),
+    tabPanel(CHART_TABS[5], mod_report_ui("report")),
     tabPanel(CHART_TABS[6], later_ui())))
 
 
@@ -165,6 +167,8 @@ server <- function(input, output, session) {
   mod_connect_server("connect", state)
   mod_data_server("data", state)
   mod_codebook_server("codebook", state)
+  mod_explore_server("explore", state)
+  mod_report_server("report", state)
 }
 
 
