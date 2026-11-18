@@ -334,6 +334,23 @@ check("every gold spec: spec_plot() builds, and ggplot_build() runs with no erro
       all(purrr::map_lgl(gold_plots, function(r) is.null(r$error) && !length(r$said) && inherits(r$plot, "ggplot"))))
 
 
+# ---- Phase 2: the plotly version of each gold chart -------------------------------------
+
+gold_widgets <- purrr::map(gold_plots, function(r) if (inherits(r$plot, "ggplot")) tryCatch(spec_widget(r$plot), error = function(e) e))
+widget_warnings <- unlist(purrr::map2(gold_widgets, gold_plots, function(w, r)
+  if (inherits(w, "htmlwidget") && length(attr(w, "warnings"))) paste0(r$name, ": ", attr(w, "warnings"))))
+cat("      ggplotly() warnings: ", if (length(widget_warnings)) "" else "none", "\n", sep = "")
+purrr::walk(widget_warnings, function(x) cat("        ", x, "\n", sep = ""))
+check("every gold spec: spec_widget() returns an htmlwidget (its warnings, if any, are printed above)",
+      all(purrr::map_lgl(gold_widgets, function(w) inherits(w, "htmlwidget"))))
+check("the widget's mode bar is the download button only",
+      all(purrr::map_lgl(gold_widgets, function(w) identical(w$x$config$modeBarButtons, list(list("toImage"))))))
+check("spec_size(): 7 by 4.5 by default, taller for many sideways bars and for rows of panels",
+      identical(spec_size(list(family = "bar"), data.frame()), c(width = 7, height = 4.5)) &&
+        spec_size(list(family = "bar", x = "a", .flip = TRUE), data.frame(a = letters))[["height"]] > 4.5 &&
+        spec_size(list(family = "line", facet = "a"), data.frame(a = 1:9))[["height"]] > 4.5)
+
+
 # ---- Phase 2: the code each gold chart comes with ----------------------------------------
 
 gold_codes <- purrr::map2(gold, gold_plots, function(x, r)

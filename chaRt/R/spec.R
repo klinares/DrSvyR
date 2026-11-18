@@ -823,3 +823,34 @@ spec_code <- function(spec, cb, file) {
          "# The chart. chart_theme() is the house theme, in R/theme.R.\n",
          plot_text, "\n")
 }
+
+
+# ---- the plotly version and the figure size -------------------------------------------------------
+
+# plotly::ggplotly() of a spec_plot(), built (plotly::plotly_build()) so that every warning comes now, with a tooltip of the plotted values and the mode bar cut to
+#   the download button (plotly.js's modeBarButtons, passed through plotly::config()). Warnings
+#   ggplotly() gives are not hidden: they are kept as attr(, "warnings") for the page and the tests.
+spec_widget <- function(plot) {
+  said = character(0)
+  w = withCallingHandlers(plotly::plotly_build(plotly::ggplotly(plot, tooltip = SPEC_TOOLTIP)),
+                          warning = function(cond) { said <<- c(said, conditionMessage(cond)); invokeRestart("muffleWarning") })
+  w = plotly::config(w, displaylogo = FALSE, modeBarButtons = list(list("toImage")))
+  attr(w, "warnings") = unique(said)
+  w
+}
+
+# Width and height in inches for the static figure: 7 by 4.5, taller for sideways bars with many
+#   rows and for rows of panels, wider for four or more panels across.
+spec_size <- function(spec, table) {
+  w = SPEC_SIZE[["width"]]
+  h = SPEC_SIZE[["height"]]
+  if (isTRUE(spec$.flip) && !is.null(spec$x))
+    h = max(h, 1.5 + SPEC_ROW_INCHES * length(unique(table[[spec$x]])))
+  if (!is.null(spec$facet)) {
+    panels = length(unique(table[[spec$facet]]))
+    across = ceiling(sqrt(panels))
+    h = max(h, 1.3 + SPEC_PANEL_INCHES * ceiling(panels / across))
+    if (across >= 4) w = SPEC_SIZE[["max_width"]]
+  }
+  c(width = w, height = min(h, SPEC_SIZE[["max_height"]]))
+}
