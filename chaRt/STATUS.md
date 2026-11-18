@@ -1,5 +1,39 @@
 # chaRt: status
 
+## Phase 2d, 2026-11-18: last renderer fixes
+
+Branch `chart`. Not pushed. No model calls. The renderer is closed.
+
+### Built
+
+- `R/spec.R`: a scatter with more than `SPEC_OVERLAP_SHARE` of its rows on shared positions draws
+  every row, moved at random by at most `SPEC_JITTER` (0.4) of the smallest gap between distinct
+  values on each axis (`resolution(x, zero = FALSE)`, on log10 values for a log axis), with
+  `position_jitter(seed = SPEC_JITTER_SEED)`, see-through (`SPEC_ALPHA`), and the note "Points are
+  moved slightly so that rows sharing a position can be seen." The lint field `.counted` is now
+  `.jitter`; `geom_count` and the "Rows" size legend are gone. A bubble chart with more than
+  `SPEC_BUBBLE_N` (60) bubbles gets the note "A bubble chart with this many points is hard to
+  read; filter, or use a scatter."
+- `R/theme.R`: batlow and vik removed (15 palettes, all drawable with paletteer alone).
+- `R/data.R`: `read_data(path, name, missing, encoding = NULL)` and `reread_data(..., encoding =
+  NULL)`; `NULL` is the guess. A file readr makes no guess for and whose first lines are not valid
+  UTF-8 is read as windows-1252, with the guess note. `DATA_ENCODINGS`.
+- `R/ui.R`: the Data tab's "File encoding" select ("Detected (<what was used>)", UTF-8,
+  windows-1252, ISO-8859-2, ISO-8859-15), used by "Read again". An uploaded codebook's encoding is
+  used to read its file, and the select shows it.
+- `tests/smoke.R`: 120 checks. 2b-8 (sized by count) is replaced by two 2d-1 checks; 2d-2 to 2d-5
+  are new. The colour table prints the diverging palettes.
+
+### Departures
+
+- Check 2b-8 was removed, since 2d reverses it; 120 = 115 - 1 + 6.
+- The jitter rule still skips a highlighted scatter, as 2b-8 did: the highlight's labels sit at the
+  real positions.
+- `read_codebook()` no longer fills a missing encoding with "UTF-8": a codebook written before 2b
+  has none, and its file's encoding is then guessed.
+- No guess at all from readr (it made none for the short ISO-8859-2 test file) used to mean UTF-8,
+  and the read failed; now such a file is checked for valid UTF-8 first.
+
 ## Phase 2c, 2026-11-17: colour palettes from paletteer
 
 Branch `chart`. Not pushed. No model calls. The tabs are unchanged.

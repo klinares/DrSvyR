@@ -35,8 +35,7 @@ Built and tested with ellmer 0.4.2; the app stops at start-up, naming anything m
 
 `paletteer` is optional (`install.packages("paletteer")`). Without it the app starts and offers
 only the palettes that need no package: Okabe-Ito, viridis and a built-in blue-red. With it,
-Paul Tol's, ColorBrewer's and the viridis family's palettes are offered too; batlow and vik also
-need `scico`. A report uses one qualitative, one sequential and one diverging palette throughout;
+Paul Tol's, ColorBrewer's and the viridis family's palettes are offered too. A report uses one qualitative, one sequential and one diverging palette throughout;
 the model never chooses colours. The code a chart comes with writes its colours in, so it runs
 without paletteer.
 
@@ -58,15 +57,18 @@ set, `APP_DEFAULT_PROFILE` does.
 The Data tab reads a CSV or other delimited text file (readr guesses the delimiter). Blank cells
 and `NA` are always missing. Any other value (`..`, `-99`) is missing only if the analyst lists it
 under "Values that mean missing" and presses "Read again"; it must match a whole cell. Reading
-again keeps the labels, roles and row sentence already entered. A column that is mostly numbers
+again keeps the labels, roles and row sentence already entered. The file's encoding is guessed; a
+file that is not UTF-8 is read as windows-1252, which is right for Western European files. If
+names with accents look wrong (a Central European file), choose the encoding under "File encoding"
+(UTF-8, windows-1252, ISO-8859-2 or ISO-8859-15) and press "Read again". A column that is mostly numbers
 with a few words in it is reported. The tab lists the problems found and a table of the columns
 with R's type for each.
 
 The Codebook tab asks what one row represents (charts need it) and shows the columns, 25 to a
 page, each with its label, type, role and facts. A type can only be changed to one the data can
 be, and a role to one the type allows. "Download codebook.yaml" saves it, with the values that mean
-missing; uploading the same file with that codebook on the Data tab reads the file again with
-those values and brings the labels, types, roles, level orders and row sentence back. A codebook that does not match
+missing and the encoding; uploading the same file with that codebook on the Data tab reads the file again with
+those values and that encoding, and brings the labels, types, roles, level orders and row sentence back. A codebook that does not match
 the file is refused with the reasons, and nothing is merged. Every fact (missing share, distinct
 count, ranges, levels) comes from the file in hand, never from an uploaded codebook.
 
