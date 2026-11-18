@@ -1,0 +1,293 @@
+# Gold specs for chaRt's renderer: hand-written, each drawn by tests/smoke.R and shown in
+#   tests/gallery.html. `file` is one of the SURV752 course files (read from COURSE_DIR in the
+#   tests) or panel.csv, which the tests make with a fixed seed. `missing` lists the values that
+#   mean missing; `row_is` is what one row represents. The key "y" is quoted: YAML 1.1, which the
+#   yaml package follows, reads a bare y as TRUE.
+
+- name: datasaurus, all 13 datasets
+  file: datasaurus-1.csv
+  missing: []
+  row_is: one point of one dataset
+  spec:
+    family: scatter
+    x: x
+    "y": "y"
+    facet: dataset
+    title: Thirteen datasets, thirteen shapes
+    subtitle: x against y in each dataset of the Datasaurus file
+
+- name: datasaurus, one dataset with a linear fit
+  file: datasaurus-1.csv
+  missing: []
+  row_is: one point of one dataset
+  spec:
+    family: scatter
+    x: x
+    "y": "y"
+    fit: linear
+    filter:
+      - {column: dataset, op: "==", value: 1}
+    title: A straight line says little about this shape
+    subtitle: Dataset 1, with its least-squares line
+
+- name: FH, top 10 political rights 2014 (bar)
+  file: FH_disaggregated.csv
+  missing: [".."]
+  row_is: one country
+  spec:
+    family: bar
+    x: Country
+    "y": pr_2014
+    fn: none
+    top_n: 10
+    title: Ten countries score at or near the top for political rights
+    y_label: Political rights score, 2014
+
+- name: FH, top 10 civil liberties 2014 (dot)
+  file: FH_disaggregated.csv
+  missing: [".."]
+  row_is: one country
+  spec:
+    family: dot
+    x: Country
+    "y": cl_2014
+    fn: none
+    top_n: 10
+    title: The highest civil liberties scores in 2014
+    y_label: Civil liberties score, 2014
+
+- name: FH, political rights against civil liberties (scatter, loess, highlight)
+  file: FH_disaggregated.csv
+  missing: [".."]
+  row_is: one country
+  spec:
+    family: scatter
+    x: pr_2014
+    "y": cl_2014
+    fit: loess
+    highlight:
+      column: Country
+      values: ["Norway", "China", "United States of America"]
+    title: Political rights and civil liberties rise together
+    x_label: Political rights score, 2014
+    y_label: Civil liberties score, 2014
+
+- name: FH, political rights 2014 (histogram)
+  file: FH_disaggregated.csv
+  missing: [".."]
+  row_is: one country
+  spec:
+    family: histogram
+    x: pr_2014
+    title: Political rights scores in 2014 cluster at both ends
+    x_label: Political rights score, 2014
+
+- name: football, players by position (bar, count)
+  file: footballdata-1.csv
+  missing: []
+  row_is: one player
+  spec:
+    family: bar
+    x: Position
+    title: Midfielders and defenders make up most squads
+
+- name: football, ten most common nationalities (bar, top_n)
+  file: footballdata-1.csv
+  missing: []
+  row_is: one player
+  spec:
+    family: bar
+    x: Nationality
+    top_n: 10
+    title: Spanish, Italian and English players lead
+    x_label: Nationality
+
+- name: football, mean height by position (dot)
+  file: footballdata-1.csv
+  missing: []
+  row_is: one player
+  spec:
+    family: dot
+    x: Position
+    "y": Height
+    fn: mean
+    title: Goalkeepers are the tallest players
+    y_label: Mean height (cm)
+
+- name: football, height by position (box)
+  file: footballdata-1.csv
+  missing: []
+  row_is: one player
+  spec:
+    family: box
+    x: Position
+    "y": Height
+    title: Goalkeepers stand out in height
+    y_label: Height (cm)
+
+- name: football, height against weight by foot (scatter, rug)
+  file: footballdata-1.csv
+  missing: []
+  row_is: one player
+  spec:
+    family: scatter
+    x: Height
+    "y": Weight
+    color: Foot
+    rug: true
+    title: Taller players are heavier, whichever foot they favour
+    x_label: Height (cm)
+    y_label: Weight (kg)
+
+- name: football, position by foot (heatmap)
+  file: footballdata-1.csv
+  missing: []
+  row_is: one player
+  spec:
+    family: heatmap
+    x: Position
+    "y": Foot
+    title: Right-footed midfielders are the largest group
+
+- name: football, age by league (histogram, faceted)
+  file: footballdata-1.csv
+  missing: []
+  row_is: one player
+  spec:
+    family: histogram
+    x: Age
+    facet: League
+    title: The age profile is much the same in every league
+
+- name: football, attack against defence for forwards (bubble)
+  file: footballdata-1.csv
+  missing: []
+  row_is: one player
+  spec:
+    family: bubble
+    x: Attack
+    "y": Defence
+    size: Stamina
+    color: League
+    filter:
+      - {column: Position, op: "==", value: Forward}
+    title: Forwards trade defence for attack
+    subtitle: Forwards only; size shows stamina
+
+- name: panel, revenue by year and region (line, 8 lines)
+  file: panel.csv
+  missing: []
+  row_is: one region in one year
+  spec:
+    family: line
+    x: year
+    "y": revenue
+    color: region
+    fn: sum
+    title: Revenue grew in most regions
+
+- name: panel, revenue with two regions highlighted (line)
+  file: panel.csv
+  missing: []
+  row_is: one region in one year
+  spec:
+    family: line
+    x: year
+    "y": revenue
+    color: region
+    fn: sum
+    highlight:
+      column: region
+      values: ["Coast", "Islands"]
+    title: Coast and Islands pulled ahead
+
+- name: panel, revenue by region (line, faceted)
+  file: panel.csv
+  missing: []
+  row_is: one region in one year
+  spec:
+    family: line
+    x: year
+    "y": revenue
+    color: region
+    facet: region
+    fn: sum
+    title: Each region's revenue on a common scale
+
+- name: panel, revenue first year against last (slope)
+  file: panel.csv
+  missing: []
+  row_is: one region in one year
+  spec:
+    family: slope
+    x: year
+    "y": revenue
+    color: region
+    fn: sum
+    filter:
+      - {column: year, op: "in", value: [2015, 2024]}
+    title: Revenue in 2015 and 2024
+
+- name: panel, mean price first year against last, two highlighted (slope)
+  file: panel.csv
+  missing: []
+  row_is: one region in one year
+  spec:
+    family: slope
+    x: year
+    "y": price
+    color: region
+    fn: mean
+    filter:
+      - {column: year, op: "in", value: [2015, 2024]}
+    highlight:
+      column: region
+      values: ["North", "Islands"]
+    title: Prices rose everywhere, most in North and Islands
+
+- name: panel, price against units sized by revenue, last year (bubble)
+  file: panel.csv
+  missing: []
+  row_is: one region in one year
+  spec:
+    family: bubble
+    x: units
+    "y": price
+    size: revenue
+    filter:
+      - {column: year, op: "==", value: 2024}
+    title: In 2024 the regions that sold most did not charge least
+
+- name: panel, price by region (box)
+  file: panel.csv
+  missing: []
+  row_is: one region in one year
+  spec:
+    family: box
+    x: region
+    "y": price
+    title: Prices differ more between regions than within them
+
+- name: panel, mean price by region and year (heatmap)
+  file: panel.csv
+  missing: []
+  row_is: one region in one year
+  spec:
+    family: heatmap
+    x: year
+    "y": region
+    color: price
+    fn: mean
+    title: Prices climbed year by year in every region
+
+- name: panel, total revenue by region (bar, interactive)
+  file: panel.csv
+  missing: []
+  row_is: one region in one year
+  spec:
+    family: bar
+    x: region
+    "y": revenue
+    fn: sum
+    interactive: true
+    title: Coast earned the most over ten years

@@ -300,6 +300,78 @@ if (course_present) {
 } else cat("skip  Read again on FH: the course files are not there\n")
 
 
+# ---- Phase 2: the gold specs -------------------------------------------------------
+
+source(file.path("tests", "gallery.R"))
+gold <- purrr::compact(purrr::map(gold_entries(), function(en) {
+  g = gold_load(en, work_dir)
+  if (is.null(g)) { cat("skip  gold spec '", en$name, "': its file is not there\n", sep = ""); return(NULL) }
+  list(entry = en, g = g)
+}))
+gold_tables <- purrr::map(gold, function(x) tryCatch(spec_table(x$entry$spec, x$g$data, x$g$cb), error = function(e) e))
+check(paste0("every gold spec (", length(gold), ") passes spec_check()"),
+      length(gold) > 0L && all(purrr::map_lgl(gold, function(x) !length(spec_check(x$entry$spec, x$g$cb)))))
+check("every gold spec's spec_table() has rows",
+      all(purrr::map_lgl(gold_tables, function(t) !inherits(t, "error") && nrow(t) > 0L)))
+
+
+# ---- Phase 2: bad specs ---------------------------------------------------------------
+
+# What chaRt says about a spec: spec_check()'s sentences, or the one spec_table() raises.
+refusal <- function(spec, g) {
+  why = spec_check(spec, g$cb)
+  if (length(why)) return(why)
+  t = tryCatch(spec_table(spec, g$data, g$cb), spec_error = function(e) conditionMessage(e))
+  if (is.character(t)) t else character(0)
+}
+ball <- purrr::detect(gold, function(x) identical(x$entry$file, "footballdata-1.csv"))$g
+panel_g <- purrr::detect(gold, function(x) identical(x$entry$file, "panel.csv"))$g
+bad_specs <- list(
+  list("an unknown field", ball, list(family = "bar", x = "Position", colour = "League"), "colour"),
+  list("an unknown family", ball, list(family = "pie", x = "Position"), "pie"),
+  list("a column not in the codebook", ball, list(family = "bar", x = "Pozition"), "Pozition"),
+  list("a column with role ignore", if (!is.null(ball)) { g = ball; g$cb$columns[[6]]$role = "ignore"; g },
+       list(family = "bar", x = "Position"), "ignore"),
+  list("a text column on a bar with no top_n", ball, list(family = "bar", x = "Nationality"), "top_n"),
+  list("a measure as the x of a bar", ball, list(family = "bar", x = "Height"), "Height"),
+  list("fn none where groups repeat", ball, list(family = "bar", x = "Position", "y" = "Height", fn = "none"), "fn"),
+  list("fn mean on a scatter", ball, list(family = "scatter", x = "Height", "y" = "Weight", fn = "mean"), "fn"),
+  list("a slope whose x has three values", panel_g,
+       list(family = "slope", x = "year", "y" = "revenue", color = "region", fn = "sum",
+            filter = list(list(column = "year", op = "in", value = c(2015, 2020, 2024)))), "three|3"),
+  list("a bubble with no size", ball, list(family = "bubble", x = "Attack", "y" = "Defence"), "size"),
+  list("a filter comparing a number column with a word", ball,
+       list(family = "bar", x = "Position", filter = list(list(column = "Height", op = ">", value = "tall"))), "Height"),
+  list("a facet with more panels than the limit", ball, list(family = "histogram", x = "Height", facet = "Age"), "facet"),
+  list("a highlight value not in the column", ball,
+       list(family = "bar", x = "Position", highlight = list(column = "Position", values = "Striker")), "Striker"),
+  list("top_n of 0", ball, list(family = "bar", x = "Nationality", top_n = 0), "top_n"),
+  list("top_n of 31", ball, list(family = "bar", x = "Nationality", top_n = 31), "top_n"))
+bad_specs <- purrr::keep(bad_specs, function(b) !is.null(b[[2]]))
+cat("\n  What the bad specs produced:\n")
+purrr::walk(bad_specs, function(b) {
+  why = refusal(b[[3]], b[[2]])
+  cat("    [", b[[1]], "] ", paste(why, collapse = " | "), "\n", sep = "")
+  check(paste0("bad spec refused, naming the fault: ", b[[1]]), length(why) > 0L && any(grepl(b[[4]], why)))
+})
+cat("\n")
+
+# The messy file: an id column as a name-like x with top_n draws, and no refusal of a bad spec
+#   on that file names the planted value.
+if (!inherits(messy, "error")) {
+  mg <- list(data = messy$read$data, cb = messy$codebook)
+  id_bar <- list(family = "bar", x = "record_id", top_n = 5, title = "Five records")
+  check("messy: a bar with the id column as a name-like x and top_n has a table",
+        !length(spec_check(id_bar, mg$cb)) && nrow(spec_table(id_bar, mg$data, mg$cb)) == 5L)
+  messy_bad <- list(list(family = "bar", x = "record_id"), list(family = "bar", x = "comment"), list(family = "bar", x = "city"),
+                    list(family = "line", x = "record_id", "y" = "score"), list(family = "scatter", x = "city", "y" = "comment"),
+                    list(family = "heatmap", x = "comment", "y" = "record_id"), list(family = "box", x = "city", "y" = "score"))
+  messy_msgs <- unlist(purrr::map(messy_bad, function(sp) refusal(sp, mg)))
+  check(paste0("messy: ", SECRET, " appears in none of the ", length(messy_msgs), " sentences refusing bad specs on that file"),
+        length(messy_msgs) >= length(messy_bad) && !any(grepl(SECRET, messy_msgs, fixed = TRUE)))
+}
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")
