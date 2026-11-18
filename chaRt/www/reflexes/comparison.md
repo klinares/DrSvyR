@@ -1,6 +1,6 @@
 # Comparison
 
-Version: 0.1
+Version: 0.2
 
 Comparing amounts between groups: bar, dot, slope, small multiples.
 
@@ -21,7 +21,7 @@ Comparing amounts between groups: bar, dot, slope, small multiples.
 
 ### two_points_slope
 - **When:** The question compares the same groups at exactly two points (before and after, first and last year, two conditions).
-- **Say:** Use a slope: the two points on x through a filter, the groups in `color`. Slopes show change and change of rank, and do not need a zero base.
+- **Say:** Use a slope: the two points on x through a filter, the groups in `color`. Slopes show change and change of rank, and do not need a zero base. With more than 8 groups, highlight the ones the question is about or cut the list with `top_n`.
 - **Never:** Do not use a slope for more than two points; that is a line.
 - **Label:** Two time points as a slope
 - **Source:** SURV752, Comparison, Comparison, Comparison (comparing before and after: slope graph) and Comparisons (slope against line charts).

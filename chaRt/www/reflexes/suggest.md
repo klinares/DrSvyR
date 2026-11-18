@@ -1,6 +1,6 @@
 # Suggest
 
-Version: 0.1
+Version: 0.2
 
 The Explore tab's call: the analyst's question, or a request for suggestions, becomes chart specs.
 
@@ -14,7 +14,7 @@ The Explore tab's call: the analyst's question, or a request for suggestions, be
 
 ### suggestions
 - **When:** The analyst asked for suggestions and gave no question.
-- **Say:** Give up to 6 charts, each a different comparison on different columns, the ones a reader of this file would most likely ask for first. Prefer measures and groups whose labels the analyst has confirmed. Leave out columns of type id or text unless they name the rows.
+- **Say:** Give up to 6 charts, each a different comparison on different columns, the ones a reader of this file would most likely ask for first. Prefer measures and groups whose labels the analyst has confirmed. Leave out id columns and free text; a text column of names (teams, nationalities) may be counted or ranked with `top_n`. Use any one measure in at most two of the charts.
 - **Never:** Do not present a suggestion as a finding; these charts are a starting point.
 - **Label:** A first look, not a finding
 - **Source:** Design rule of this app: charts found by looking through a file are exploratory.
