@@ -127,7 +127,9 @@ make_messy <- function(path) {
   cities[cities == "city_13"] = SECRET
   amount = as.character(round(stats::runif(n, 1, 900), 1))
   amount[c(5, 50, 90)] = c("unknown", "about 40", "unknown")
-  df = data.frame(a = sample(1:9, n, replace = TRUE), score = round(stats::rnorm(n), 2),
+  score = round(stats::rnorm(n), 2)
+  score[c(3, 30, 60)] = -99                # a missing-value code, planted in a number column
+  df = data.frame(a = sample(1:9, n, replace = TRUE), score = score,
                   score2 = round(stats::rnorm(n), 2), amount = amount, empty = NA_character_,
                   visit_date = format(as.Date("2024-03-01") + seq_len(n) - 1L), comment = comments,
                   record_id = ids, city = cities, rating = sample(1:5, n, replace = TRUE))
@@ -209,6 +211,90 @@ if (!inherits(messy, "error")) {
         identical(applied, edited) && identical(applied$columns[[10]]$label_source, "user") &&
           identical(applied$columns[[10]]$order, c("1", "2", "3", "4", "5")))
 }
+
+
+# ---- Phase 1b: values that mean missing --------------------------------------------
+
+if (course_present) {
+  fh_path <- file.path(COURSE_DIR, "FH_disaggregated.csv")
+  fh <- read_data(fh_path, "FH_disaggregated.csv", missing = "..")
+  fh_types <- purrr::map_chr(profile_data(fh$data), "type")
+  check(paste0("FH read with missing = '..': ", sum(fh_types %in% c("integer", "number")),
+               " of 25 columns are integer or number (at least 20), and no 'mostly numbers' sentence remains"),
+        sum(fh_types %in% c("integer", "number")) >= 20L && !any(grepl("mostly numbers", fh$problems, fixed = TRUE)))
+} else cat("skip  FH with missing = '..': the course files are not there\n")
+
+messy_path <- files[["messy.csv"]]
+score_of <- function(missing) {
+  p = profile_data(read_data(messy_path, "messy.csv", missing = missing)$data)
+  p[[which(purrr::map_chr(p, "name") == "score")]]
+}
+plain <- score_of(character())
+coded <- score_of("-99")
+check("messy: read plainly, -99 is the score column's minimum; read with missing = '-99' it is not, and more is missing",
+      identical(plain$min, -99) && !identical(coded$min, -99) && coded$min > -99 && coded$missing > plain$missing)
+
+nines_path <- file.path(work_dir, "nines.csv")
+writeLines(c("x", "9", "99", "19", "9", "90", "1", " 9 "), nines_path)
+nines <- read_data(nines_path, "nines.csv", missing = "9")$data$x
+check("a missing value given as 9 does not turn 99 or 19 into missing (whole cells only, spaces trimmed)",
+      sum(is.na(nines)) == 3L && all(c(99, 19, 90, 1) %in% nines))
+
+coded_cb <- new_codebook(profile_data(read_data(messy_path, "messy.csv", missing = c("-99", ".."))$data), "messy.csv",
+                         120L, c("-99", ".."))
+coded_cb_path <- file.path(work_dir, "coded.yaml")
+write_codebook(coded_cb, coded_cb_path)
+check("a codebook with missing_codes survives a write and a read unchanged",
+      identical(read_codebook(coded_cb_path), coded_cb) && identical(missing_codes(coded_cb), c("-99", "..")))
+
+
+# ---- Phase 1b: whole numbers, roles, orders, Read again -------------------------------
+
+set.seed(1752)
+made <- tibble::tibble(population = sample(100000:9000000, 200), row = 1:200, order_id = sample(1000:999999, 200),
+                       word = paste0("w", sample(100000:999999, 200)))
+made_p <- stats::setNames(profile_data(made), names(made))
+check("200 distinct large whole numbers named population: integer, with the 'may be an identifier' note",
+      identical(made_p$population$type, "integer") && identical(made_p$population$note, DISTINCT_NOTE))
+check("a run 1 to 200 named row is id", identical(made_p$row$type, "id"))
+check("200 distinct whole numbers named order_id is id", identical(made_p$order_id$type, "id"))
+check("200 distinct words is id", identical(made_p$word$type, "id"))
+
+role_table <- list(number = c("measure", "ignore"), integer = c("measure", "time", "ignore"),
+                   category = c("group", "ignore"), ordered = c("group", "ignore"), flag = c("group", "ignore"),
+                   date = c("time", "ignore"), id = c("id", "ignore"), text = c("text", "ignore"))
+check("role_choices() for each type is the table in the Phase 1b prompt",
+      all(purrr::imap_lgl(role_table, function(roles, type) identical(role_choices(list(type = type)), roles))))
+
+if (!inherits(messy, "error")) {
+  text_measure <- messy$codebook
+  text_measure$columns[[7]]$role <- "measure"
+  why_role <- check_codebook(text_measure, messy$profile)
+  check("a codebook giving the text column comment the role measure is refused, naming the column",
+        any(grepl("comment", why_role, fixed = TRUE) & grepl("measure", why_role, fixed = TRUE)))
+}
+
+comma_entry <- codebook_entry(profile_column(c("Low, very", "Medium", "High", "Medium", "High", "Low, very"), "level"))
+comma_entry <- edit_entry(comma_entry, type = "ordered")
+wanted <- c("Low, very", "Medium", "High")
+from_lines <- edit_entry(comma_entry, order = parse_lines("Low, very\nMedium\r\nHigh\n"))
+refused <- edit_entry(comma_entry, order = parse_lines("Low\nvery\nMedium\nHigh"))
+check("an ordered column with a comma inside a level accepts its order from lines, and refuses lines that are not its levels",
+      identical(from_lines$order, wanted) && identical(refused$order, comma_entry$order))
+
+if (course_present) {
+  first <- reread_data(fh_path, "FH_disaggregated.csv", character())
+  edited_cb <- first$codebook
+  edited_cb$row_is <- "one country"
+  edited_cb$columns[[1]] <- edit_entry(edited_cb$columns[[1]], label = "Country name")
+  edited_cb$columns[[13]] <- edit_entry(edited_cb$columns[[13]], label = "Political rights, 2014")
+  again <- reread_data(fh_path, "FH_disaggregated.csv", "..", old = edited_cb)
+  check("after Read again (reread_data), the edited labels, their source and the row sentence are still there",
+        identical(again$codebook$columns[[1]]$label, "Country name") &&
+          identical(again$codebook$columns[[1]]$label_source, "user") &&
+          identical(again$codebook$columns[[13]]$label, "Political rights, 2014") &&
+          identical(again$codebook$row_is, "one country") && identical(missing_codes(again$codebook), ".."))
+} else cat("skip  Read again on FH: the course files are not there\n")
 
 
 # ---- the count -------------------------------------------------------------------
