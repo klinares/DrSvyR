@@ -54,7 +54,8 @@ library(bslib)
 library(purrr)
 
 # Called as pkg::fn() in R/ and never attached; listed so a missing one stops the app here, by name.
-APP_PACKAGES <- c("ellmer", "httr2", "jsonlite", "readr", "rlang", "S7", "tibble", "yaml")
+APP_PACKAGES <- c("dplyr", "ellmer", "ggplot2", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales", "tibble",
+                  "tidyr", "yaml")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
