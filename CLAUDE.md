@@ -32,6 +32,7 @@ self-contained folder at the top level; `svysegment/` is the first and
 
 1. R code is tidyverse style. NEVER use `for` or `while` loops. Use purrr
    (`map`, `map_dbl`, `walk`, `imap`, `reduce`, `detect`, `keep`/`discard`).
+   `chaRt/R/spec.R` is the one file where dplyr, tidyr, ggplot2 and scales functions are called without `pkg::`: it builds each chart as R calls that are both evaluated (in `spec_env()`) and shown to the analyst as code, so they are written as a person would write them.
 2. Files in an app's `R/` contain only function definitions and constant
    assignments. No top-level calls, no `library()`. No two files may define
    the same name: alphabetical sourcing would silently pick a winner. `R/` is
