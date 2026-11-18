@@ -5,8 +5,9 @@ and draws charts that follow written visualization rules, lets the analyst refin
 and writes an HTML report of the charts the analyst chose, each with a short summary. The data are
 general, not survey microdata: every chart and summary describes the file, not a population.
 
-Built so far: the skeleton, the key box, the connection check and the probe (Phase 0), and the
-Data and Codebook tabs (Phase 1). `DESIGN.md` is the whole design and `STATUS.md` says what is built.
+Built so far: the skeleton, the key box, the connection check and the probe (Phase 0), the Data and
+Codebook tabs (Phase 1), and the renderer, which draws every chart family from a hand-written spec
+(Phase 2; not yet on a tab). `DESIGN.md` is the whole design and `STATUS.md` says what is built.
 
 ## What is in this folder
 
@@ -15,16 +16,18 @@ Data and Codebook tabs (Phase 1). `DESIGN.md` is the whole design and `STATUS.md
 | `app.R` | The settings, the profiles, the packages check, the layout and the server |
 | `R/llm.R` | From QuestionR: the session key, the model call, JSON repair, retry, the connection check and the key box |
 | `R/data.R` | Read a delimited file, profile and type its columns, build, write, read and check `codebook.yaml`, and the column texts a model will be sent |
+| `R/spec.R` | The plot spec: defaults, the check against the codebook, the table that is drawn, the lint, the ggplot, the plotly version, the R code that reproduces a chart, and its size. Every threshold is a constant at the top |
+| `R/theme.R` | `chart_theme()`, the Okabe-Ito palette, the viridis scale and the highlight colours. The one file replaced at work |
 | `R/ui.R` | The tab names, the shared helpers, the logo, Start here, the connection check, and the Data and Codebook tabs |
-| `tests/` | The smoke test and the live check, at home. Not deployed |
+| `tests/` | The smoke test, the live check, the gold specs (`gold_specs.yaml`) and the gallery (`gallery.R`), at home. Not deployed |
 | `probe/app.R` | A separate one-page app, published once at work to learn what the server can do |
 | `DESIGN.md`, `STATUS.md` | The design, and where the build stands |
 
 ## Install and run
 
 ```r
-install.packages(c("shiny", "bslib", "purrr", "ellmer", "httr2", "jsonlite", "readr", "rlang", "S7",
-                   "tibble", "yaml"))
+install.packages(c("shiny", "bslib", "purrr", "dplyr", "ellmer", "ggplot2", "httr2", "jsonlite",
+                   "plotly", "readr", "rlang", "S7", "scales", "tibble", "tidyr", "yaml"))
 shiny::runApp("chaRt")
 ```
 
@@ -73,12 +76,18 @@ From inside `chaRt/`:
 ```bash
 Rscript --no-init-file tests/smoke.R       # no model calls
 Rscript --no-init-file tests/llm_check.R   # live calls, at home; costs a little
+Rscript --no-init-file tests/gallery.R     # writes tests/gallery.html (git-ignored); needs Quarto
 ```
 
 The smoke test loads the app the way Connect does and checks the rules for `R/`, the loops and the
 key, and reads, profiles and round-trips the codebook of three course files (from
 `D:/repos/UMD_JPSM_coursework/Data_visualization_SURV752/assignments/`, skipped when absent), a wide
-file and a messy file it makes itself. The live check reads `ANTHROPIC_API_KEY` and
+file and a messy file it makes itself. It then draws every gold spec in `tests/gold_specs.yaml`:
+the check, the table, the ggplot, the plotly version, and the code, which it runs in a separate R
+process and compares with the table. It tests each lint rule and refuses a set of bad specs,
+printing what each refusal said. The gallery shows every gold spec as a page: its lint notes, the
+static chart beside its plotly version at the same size, the first rows of its table, and its
+code. The live check reads `ANTHROPIC_API_KEY` and
 `OPENROUTER_API_KEY` from the environment (a test may; the app never does), pings the home model,
 and asks for structured output in the Anthropic style and, through OpenRouter, in the OpenAI style
 that stands in for the work endpoint. `CHART_TEST_MODEL` replaces the home model for the first two

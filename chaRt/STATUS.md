@@ -1,5 +1,78 @@
 # chaRt: status
 
+## Phase 2, 2026-11-17: the renderer
+
+Branch `chart`. Not pushed. No model calls. The tabs are unchanged.
+
+### Built
+
+- `R/theme.R`: `chart_theme(base_size, grid)`, `chart_palette(n)` (Okabe-Ito, at most 8),
+  `chart_fill_scale()`, `chart_colour_scale()`, `CHART_HIGHLIGHT`, `CHART_GREY`, and
+  `CHART_SINGLE`, `CHART_SEQUENTIAL`, `CHART_MAX_GROUPS`.
+- `R/spec.R`: `spec_defaults()`, `spec_check()`, `spec_table()`, `spec_lint()`, `spec_plot()`,
+  `spec_widget()`, `spec_code()`, `spec_size()`. The table's steps and the plot's layers are built
+  once as R calls: `spec_table()` and `spec_plot()` evaluate them, `spec_code()` writes them out.
+- `tests/gold_specs.yaml` (23 specs, at least two per family), `tests/gallery.R` (helpers, and the
+  gallery when run as a script), `tests/gallery.html` (written, git-ignored).
+- `tests/smoke.R`: 90 checks (52 before, 38 new).
+
+### Findings
+
+- ggplotly() gave no warning for any gold spec, including once the figure is built.
+- In the plotly version: the subtitle and caption are dropped; text is about 1.4 times larger
+  than in the static chart at the same pixel size, and a long title is cut off rather than
+  wrapped; direct labels ignore `check_overlap`, `hjust` and `vjust`, so line-end labels pile up
+  and point labels sit on their points; the heatmap's colour bar moves to the right; a legend at
+  the top overlaps the title; the rug loses its transparency.
+- The yaml package reads a bare `y` (as a key or a value) as TRUE (YAML 1.1). The gold file quotes
+  it. Specs from a model arrive as JSON, which has no such problem.
+- FH's political rights scores tie at 40 for more than the top 10; `top_n` keeps the first in
+  alphabetical order among ties.
+
+### Readings of the prompt (where section 1 was ambiguous)
+
+- More than 8 colours: the palette stops at 8. A line or slope chart with more draws every line in
+  one colour with its name at the end; a scatter or bubble chart with more is refused.
+- A scatter or bubble chart takes a highlight or a color, not both.
+- "The value axis starts at zero" has no spec field to change: a bar's layers always include zero.
+  Whether there are negative values is read from the codebook's minimum of y (the plot is built
+  without the data), so the FH bars, whose column has a -2 somewhere, get a little room below zero.
+- "Small multiples share their scales": `facet_wrap()` is fixed unless `free_y`, so nothing changes.
+- The sort a bar or dot falls back on depends on x's type, so it is decided with the codebook, not
+  in `spec_defaults()`. `level_order` is the analyst's order for an ordered x, numeric order for
+  numbers, and alphabetical for an unordered category.
+- `share` is the share of rows within a facet, not within a colour.
+- The table of a scatter, bubble, histogram or box is the rows drawn (the columns in use), not
+  binned or summarised.
+- A histogram's bins when none are given: Freedman-Diaconis, kept within 5 to 60, written into
+  the spec by the lint so the code reproduces them. "Top n of N" is written the same way.
+- `top_n` and `sort` are refused outside the families that use them; `log_x` only on a measure x of
+  a scatter, bubble or histogram.
+- The "k of n rows left out" note counts n after the filter.
+
+### Departures
+
+- The lint's fixes that have no spec field (`.flip`, `.alpha`, `.binned`) are kept in the spec with
+  a leading dot; `spec_check()` refuses them from outside. `spec_code()` takes the spec as
+  `spec_plot()` left it (`attr(plot, "spec")`), since those fixes depend on the data and
+  `spec_code()` is given none. It reads the file's header to find the delimiter and the blank or
+  repeated column names to rename.
+- `chart_theme()` takes `grid` ("y", "x", "xy", "none"): the value axis differs by family, and the
+  code must end with `chart_theme()`.
+- The calls in `R/spec.R` name dplyr, tidyr, ggplot2 and scales functions without `pkg::`, so the
+  written code reads as a person writes it; they are evaluated in `spec_env()`, which holds those
+  packages' exports.
+- Additions: an `arrange()` step so a bar's table is in drawn order; comma labels on value axes;
+  `coord_cartesian(clip = "off")` where labels sit at the edge; extra gold specs (a dot, a bubble, a
+  highlighted slope and a box).
+- `base64enc` was not needed. The smoke test runs the generated code in a separate `Rscript`.
+
+### Not confirmed
+
+- How the charts look at work with the office theme, and whether plotly there behaves the same.
+- FH's `Cote d'Ivoire` is not valid UTF-8 in the file. It appears in no gold chart; how it would be
+  drawn or written into code is unchecked.
+
 ## Phase 1b, 2026-11-17: four fixes to the data layer
 
 Branch `chart`. Not pushed. No model calls.
