@@ -33,7 +33,10 @@ SPEC_ROW_INCHES <- 0.28      # height of one sideways bar
 SPEC_PANEL_INCHES <- 2.2     # height of one row of panels
 SPEC_LABEL_GAP <- 0.04       # line-end labels closer than this share of the y range: a legend instead
 SPEC_HEAT_LABELS <- 40L      # a heatmap with this many cells or fewer prints each value
-SPEC_OVERLAP_SHARE <- 0.5    # more than this share of points on a shared position: points sized by count
+SPEC_OVERLAP_SHARE <- 0.5    # more than this share of points on a shared position: points moved slightly
+SPEC_JITTER <- 0.4           # ... by at most this share of the smallest gap between values on each axis
+SPEC_JITTER_SEED <- 1L       # ... with this seed, so the chart is the same every time
+SPEC_BUBBLE_N <- 60L         # more bubbles than this: the lint speaks
 SPEC_LEGEND_PER_ROW <- 4L    # a legend at the top takes more rows past this many entries
 SPEC_CODE_WIDTH <- 100L      # the written code breaks an argument list only past this many characters
 
@@ -50,7 +53,7 @@ SPEC_TEXT_FIELDS <- c("title", "subtitle", "caption", "x_label", "y_label", "rul
 SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 
 # Fields the lint adds; never accepted from outside.
-SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".counted", ".negative", ".labels", ".legend_order", ".cell_labels")
+SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".cell_labels")
 
 # What the plotly tooltip shows: the plotted values.
 SPEC_TOOLTIP <- c("x", "y", "colour", "fill", "size")
@@ -623,24 +626,26 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
   if (identical(fam, "heatmap") && nrow(table) <= SPEC_HEAT_LABELS) s$.cell_labels = TRUE
   # Small multiples share their scales unless free_y asks otherwise: facet_wrap()'s scales are
   #   fixed by default, so there is nothing to change.
-  # Points on repeated positions: one point per position, sized by how many rows are there.
-  if (identical(fam, "scatter") && is.null(s$highlight)) {
+  if (fam %in% c("scatter", "bubble")) {
+    n = nrow(table)
+    # Points on repeated positions: every row still its own point, moved slightly at random (with a
+    #   fixed seed) and drawn see-through, so rows sharing a position can be seen.
     keys = table[c(s$x, s$y, s$color)]
     shared = duplicated(keys) | duplicated(keys, fromLast = TRUE)
-    if (mean(shared) > SPEC_OVERLAP_SHARE) {
-      s$.counted = TRUE
-      notes = c(notes, "Points are sized by how many rows share the position.")
-    }
-  }
-  if (fam %in% c("scatter", "bubble") && !isTRUE(s$.counted)) {
-    n = nrow(table)
+    jitter = identical(fam, "scatter") && is.null(s$highlight) && n <= SPEC_BIN_N && n > 0L && mean(shared) > SPEC_OVERLAP_SHARE
     if (n > SPEC_BIN_N) {
       s$.binned = TRUE
       notes = c(notes, paste0(format_num(n), " points would hide one another, so the chart shows how many fall in each cell of a grid."))
+    } else if (jitter) {
+      s$.jitter = TRUE
+      s$.alpha = SPEC_ALPHA
+      notes = c(notes, "Points are moved slightly so that rows sharing a position can be seen.")
     } else if (n > SPEC_ALPHA_N) {
       s$.alpha = SPEC_ALPHA
       notes = c(notes, paste0(format_num(n), " points are drawn see-through, so that where they pile up shows."))
     }
+    if (identical(fam, "bubble") && n > SPEC_BUBBLE_N)
+      notes = c(notes, "A bubble chart with this many points is hard to read; filter, or use a scatter.")
   }
   if (isTRUE(s$interactive) && mark_count(s, table) > SPEC_WIDGET_N) {
     s$interactive = FALSE
@@ -829,11 +834,24 @@ side_labels <- function(s) {
        aes_call(label = s$highlight$column, hjust = "label_hjust"), size = 3.5, colour = CHART_HIGHLIGHT)
 }
 
+# How far a jittered point may move on one axis: SPEC_JITTER of the smallest gap between distinct
+#   values (ggplot2::resolution(); zero = FALSE so 0 is not counted as a value), on the log scale
+#   when the axis has one, since a position adjustment works on the transformed values.
+jitter_amount <- function(col, log) {
+  v = call("$", sym("chart_table"), sym(col))
+  call("*", SPEC_JITTER, call("resolution", if (log) call("log10", v) else v, zero = FALSE))
+}
+
+jitter_call <- function(s)
+  call("position_jitter", width = jitter_amount(s$x, isTRUE(s$log_x)), height = jitter_amount(s$y, isTRUE(s$log_y)),
+       seed = SPEC_JITTER_SEED)
+
 scatter_calls <- function(s, cb, pal, widget) {
   col = s$color; bubble = identical(s$family, "bubble")
-  counted = isTRUE(s$.counted); binned = isTRUE(s$.binned)
-  alpha = if (!is.null(s$.alpha)) list(alpha = s$.alpha) else if (bubble) list(alpha = 0.5)
-  text = if (widget && !counted && !binned) tooltip_call(s, cb)
+  binned = isTRUE(s$.binned)
+  alpha = c(if (!is.null(s$.alpha)) list(alpha = s$.alpha) else if (bubble) list(alpha = 0.5),
+            if (isTRUE(s$.jitter)) list(position = jitter_call(s)))
+  text = if (widget && !binned) tooltip_call(s, cb)
   main = aes_call(x = s$x, y = s$y, colour = if (!binned) col, size = if (bubble) s$size, text = text)
   point = function(...) as.call(c(list(sym("geom_point")), list(...), alpha))
   colours = if (!is.null(col) && !binned) {
@@ -841,8 +859,6 @@ scatter_calls <- function(s, cb, pal, widget) {
     purrr::compact(list(call("scale_colour_manual", values = pal$qual(n)), legend_rows("colour", n)))
   }
   geom = if (binned) list(call("geom_bin_2d", bins = SPEC_BIN_2D), call("scale_fill_gradientn", colours = pal$seq))
-    else if (counted) c(list(if (is.null(col)) call("geom_count", colour = CHART_SINGLE) else call("geom_count"),
-                             call("scale_size_area", max_size = 6)), colours)
     else if (!is.null(s$highlight))
       c(list(point(data = data_where(quote(!highlighted)), colour = CHART_GREY),
              point(data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT)),
@@ -923,7 +939,7 @@ labs_call <- function(s, cb) {
     fill = if (identical(s$family, "heatmap")) value_label(s, cb)
            else if (identical(s$family, "bar") && !is.null(s$color) && is.null(s$highlight)) cb_label(cb, s$color)
            else if (isTRUE(s$.binned)) "Count",
-    size = if (identical(s$family, "bubble")) cb_label(cb, s$size) else if (isTRUE(s$.counted)) "Rows"))
+    size = if (identical(s$family, "bubble")) cb_label(cb, s$size)))
   # A sideways bar or dot lists names on its y axis; that axis needs no title unless the spec gives one.
   axes = if (flip && s$family %in% c("bar", "dot")) list(x = yl, y = s$x_label)
          else if (flip) list(x = yl, y = xl) else list(x = xl, y = yl)
@@ -955,7 +971,7 @@ plus_call <- function(calls) purrr::reduce(calls[-1], function(acc, cl) call("+"
 
 # Whether the widget variant carries its own tooltip text.
 widget_has_text <- function(s) s$family %in% c("bar", "dot", "line", "slope", "scatter", "bubble", "heatmap") &&
-  !isTRUE(s$.counted) && !isTRUE(s$.binned)
+  !isTRUE(s$.binned)
 
 # The ggplot for a spec. Runs the defaults, the check, the table and the lint itself, so one call
 #   is enough. `palette` names the three palettes of the report (chart_palette_default()); the
