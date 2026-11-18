@@ -386,8 +386,8 @@ writeLines(c(
   "  env <- new.env(parent = globalenv())",
   "  old <- setwd(readLines(sub('[.]R$', '.dir', f))); on.exit(setwd(old))",
   "  p <- suppressMessages(eval(parse(f, encoding = 'UTF-8'), env))",
-  "  ggplot2::ggplot_build(p)",
-  "  list(table = env$chart_table, built = TRUE)",
+  "  b <- ggplot2::ggplot_build(p)",
+  "  list(table = env$chart_table, built = TRUE, layer = b$data[[1]])",
   "}, error = function(e) list(error = conditionMessage(e))))",
   "saveRDS(out, file.path(args[1], 'results.rds'))"), runner)
 system2(file.path(R.home("bin"), "Rscript"), c("--no-init-file", shQuote(runner), shQuote(code_dir), shQuote(file.path("R", "theme.R"))),
@@ -476,10 +476,61 @@ if (!is.null(heat8) && !is.null(heat80)) {
         nrow(cells) == nrow(t8) && identical(dark, "white") && identical(light, "black") && !code_has(heat80$code, "geom_text"))
 }
 if (!is.null(hw)) {
-  check("2b-8: points mostly on shared positions are drawn one per position, sized by count, with the note",
-        isTRUE(attr(hw$plot, "spec")$.counted) && code_has(hw$code, "geom_count") &&
-          "Points are sized by how many rows share the position." %in% attr(hw$plot, "notes"))
+  # Phase 2d replaced 2b-8 (one point per position, sized by count): every row is its own point,
+  #   moved slightly with a fixed seed. The run of hw's code in the fresh process gives its points.
+  jitter_note <- "Points are moved slightly so that rows sharing a position can be seen."
+  hw_layer <- ggplot2::layer_data(hw$plot, 1L)
+  hw_again <- ggplot2::layer_data(spec_plot(hw$x$entry$spec, hw$x$g$data, hw$x$g$cb), 1L)
+  hw_run <- code_runs[[match(purrr::detect_index(gold, function(x) identical(x$entry$name, hw$x$entry$name)), which(code_ok))]]
+  hw_table <- attr(hw$plot, "table")
+  moved <- abs(hw_layer$x - hw_table$Height)
+  step_x <- ggplot2::resolution(hw_table$Height, zero = FALSE)
+  plain_hw <- spec_plot(list(family = "scatter", x = "Height", "y" = "Weight", title = "t"), hw$x$g$data, hw$x$g$cb)
+  check("2d-1: points mostly on shared positions are each drawn, moved by at most 0.4 of the gap, see-through, with the note; no size legend",
+        isTRUE(attr(hw$plot, "spec")$.jitter) && nrow(hw_layer) == nrow(hw_table) && any(moved > 0) &&
+          all(moved <= SPEC_JITTER * step_x + 1e-9) && all(hw_layer$alpha == SPEC_ALPHA) &&
+          jitter_note %in% attr(hw$plot, "notes") && code_has(hw$code, "position_jitter(") &&
+          !code_has(hw$code, "scale_size") && !code_has(hw$code, "size =") &&
+          isTRUE(attr(plain_hw, "spec")$.jitter) && jitter_note %in% attr(plain_hw, "notes"))
+  check("2d-1: the jittered chart is the same on a second call, and its code reproduces the table and the same points",
+        isTRUE(all.equal(hw_layer[c("x", "y")], hw_again[c("x", "y")])) && isTRUE(hw_run$built) &&
+          isTRUE(all.equal(plain(hw_run$table), plain(hw_table))) &&
+          isTRUE(all.equal(hw_run$layer[c("x", "y")], hw_layer[c("x", "y")], check.attributes = FALSE)))
 }
+r_text <- unlist(purrr::map(list.files("R", pattern = "[.]R$", full.names = TRUE), readLines))
+check("2d-2: geom_count appears nowhere in R/", !any(grepl("geom_count", r_text, fixed = TRUE)))
+fwd <- gold_named("attack against defence for forwards")
+pan_bubble <- gold_named("price against units sized by revenue")
+bubble_note <- "A bubble chart with this many points is hard to read; filter, or use a scatter."
+if (!is.null(fwd) && !is.null(pan_bubble))
+  check(paste0("2d-3: a bubble chart with more than 60 bubbles gets the note (", nrow(attr(fwd$plot, "table")),
+               " forwards), and one with ", nrow(attr(pan_bubble$plot, "table")), " does not; the chart is unchanged"),
+        nrow(attr(fwd$plot, "table")) > SPEC_BUBBLE_N && bubble_note %in% attr(fwd$plot, "notes") &&
+          !bubble_note %in% attr(pan_bubble$plot, "notes") && is.null(attr(fwd$plot, "spec")$.jitter) &&
+          code_has(fwd$code, "scale_size_area(max_size = 8)"))
+check("2d-4: batlow and vik are gone, and nothing in R/ names scico",
+      !any(c("batlow", "vik") %in% names(CHART_PALETTES)) && !any(grepl("scico", r_text, fixed = TRUE)))
+# A Central European file: the guess reads it as windows-1252 (wrongly); the analyst's choice
+#   reads it rightly, and the codebook, written and read back, carries the choice.
+make_latin2 <- function(path) {
+  rows = c("city,score", "Łódź,3", "Kraków,5", "Wrocław,4", "Gdańsk,6", "Poznań,7", "Szczecin,2", "Bydgoszcz,8")
+  writeLines(iconv(rows, from = "UTF-8", to = "ISO-8859-2"), path, useBytes = TRUE)
+  path
+}
+latin2_path <- make_latin2(file.path(work_dir, "latin2_check.csv"))
+l2_guess <- read_data(latin2_path, "latin2_check.csv")
+l2_chosen <- reread_data(latin2_path, "latin2_check.csv", character(), encoding = "ISO-8859-2")
+l2_yaml <- file.path(work_dir, "latin2_codebook.yaml")
+write_codebook(l2_chosen$codebook, l2_yaml)
+l2_back <- read_codebook(l2_yaml)
+l2_again <- reread_data(latin2_path, "latin2_check.csv", missing_codes(l2_back), encoding = l2_back$encoding)
+check("2d-5: an ISO-8859-2 file with 'Łódź' reads wrongly by the guess and rightly with encoding = 'ISO-8859-2'; the codebook carries it",
+      !"Łódź" %in% l2_guess$data$city && identical(l2_guess$encoding, "windows-1252") &&
+        all(c("Łódź", "Wrocław", "Gdańsk") %in% l2_chosen$read$data$city) &&
+        any(l2_chosen$read$problems == "The file was read as ISO-8859-2, as chosen.") &&
+        identical(l2_chosen$codebook$encoding, "ISO-8859-2") && identical(l2_back$encoding, "ISO-8859-2") &&
+        "Łódź" %in% l2_again$read$data$city)
+cat("      the guess read 'Łódź' as '", l2_guess$data$city[1], "'\n", sep = "")
 if (!is.null(fh_bar) && !is.null(nat_bar)) {
   check("2b-10: a sideways bar drops the title of its name axis unless the spec gives one (x_label)",
         code_has(fh_bar$code, "y = NULL") && code_has(nat_bar$code, "y = \"Nationality\""))
@@ -596,6 +647,15 @@ if (length(find.package("colorspace", quiet = TRUE))) {
     l = lab_of(chart_sequential(k))[, "L"]
     cat(sprintf("    %-20s %s  (L %s)\n", CHART_PALETTES[[k]]$label,
                 if (all(diff(l) > 0) || all(diff(l) < 0)) "one direction" else "NOT one direction", paste(round(l), collapse = " ")))
+  })
+  cat("  Diverging palettes, lightness (CIELAB L) from end to end:\n")
+  purrr::walk(purrr::keep(available, function(k) identical(CHART_PALETTES[[k]]$kind, "diverging")), function(k) {
+    l = lab_of(chart_diverging(k))[, "L"]
+    mid = (length(l) + 1L) / 2L
+    left = diff(l[seq_len(mid)]); right = diff(l[mid:length(l)])
+    centre = if (l[mid] == max(l)) "highest at the middle" else if (l[mid] == min(l)) "lowest at the middle" else "NOT extreme at the middle"
+    arms = if ((all(left > 0) && all(right < 0)) || (all(left < 0) && all(right > 0))) "each arm one direction" else "an arm NOT one direction"
+    cat(sprintf("    %-20s %s, %s  (L %s)\n", CHART_PALETTES[[k]]$label, centre, arms, paste(round(l), collapse = " ")))
   })
   cat("\n")
 } else cat("      the colorspace package is not installed: the colour-distance table is skipped\n")
