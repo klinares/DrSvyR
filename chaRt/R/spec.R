@@ -675,10 +675,26 @@ spec_settle <- function(s, cb, table) {
   if (!is.null(top)) s$.top_n = unname(top[["shown"]])
   if (!is.null(s$top_n) && is.null(s$subtitle))
     s$subtitle = paste0("Top ", top_of(s), " of ", attr(table, "groups_total"))
-  # A fitted curve on many rows is drawn only where most of the data are.
-  if (s$family %in% c("scatter", "bubble") && !identical(s$fit, "none") && nrow(table) >= SPEC_FIT_TRIM_N)
-    s$.fit_range = signif(stats::quantile(table[[s$x]], SPEC_FIT_TRIM, names = FALSE), 4)
   s
+}
+
+# Where a fitted curve is drawn. It is fitted on every row of its group (a colour, a panel, or both)
+#   and drawn only between SPEC_FIT_TRIM percentiles of x within each group of SPEC_FIT_TRIM_N rows
+#   or more. Returns list(groups = list(list(keys, range)), rest), keys naming the group's values
+#   (NULL with no groups) and rest TRUE when smaller groups are drawn untrimmed; NULL when no group
+#   is trimmed.
+fit_ranges <- function(s, table) {
+  if (!s$family %in% c("scatter", "bubble") || identical(s$fit, "none")) return(NULL)
+  q = function(x) signif(stats::quantile(x, SPEC_FIT_TRIM, names = FALSE), 4)
+  keys = unique(c(if (!isTRUE(s$.binned) && is.null(s$highlight)) s$color, s$facet))
+  if (!length(keys))
+    return(if (nrow(table) >= SPEC_FIT_TRIM_N) list(groups = list(list(keys = NULL, range = q(table[[s$x]]))), rest = FALSE))
+  parts = split(as.data.frame(table), lapply(keys, function(k) as.character(table[[k]])), drop = TRUE)
+  big = purrr::keep(unname(parts), function(d) nrow(d) >= SPEC_FIT_TRIM_N)
+  if (!length(big)) return(NULL)
+  list(groups = purrr::map(big, function(d) list(keys = purrr::set_names(purrr::map(keys, function(k) as.character(d[[k]][1])), keys),
+                                                 range = q(d[[s$x]]))),
+       rest = length(big) < length(parts))
 }
 
 # How many marks a chart draws: bars, points or boxes are rows of the table; a histogram draws its
@@ -737,7 +753,8 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
     if (length(labels) > SPEC_FLIP_BARS || any(nchar(labels) > SPEC_FLIP_CHARS)) s$.flip = TRUE
   }
   coloured = !is.null(s$color) && !identical(fam, "heatmap") && !identical(s$color, s$facet) && is.null(s$highlight)
-  if (coloured && nd(s$color) > SPEC_COLOURS)
+  # A slope names its lines at their ends, so it is noted only past the palette's own limit.
+  if (coloured && nd(s$color) > (if (identical(fam, "slope")) max_colours else SPEC_COLOURS))
     notes = c(notes, paste0(nd(s$color), " colours are hard to tell apart; highlight the few that matter, or use small multiples (facet)."))
   if (identical(fam, "line") && !is.null(s$color) && nd(s$color) > SPEC_LINES && is.null(s$highlight) && is.null(s$facet))
     notes = c(notes, paste0(nd(s$color), " lines overlap; small multiples (facet) or a highlight of the few that matter would read more easily."))
@@ -785,6 +802,7 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
   dropped = attr(table, "rows_dropped") %||% 0L
   if (dropped > 0L)
     notes = c(notes, paste0(format_num(dropped), " of ", format_num(dropped + attr(table, "rows_used")), " rows left out: missing values."))
+  s$.fit_range = fit_ranges(s, table)
   list(spec = s, notes = notes)
 }
 
@@ -885,7 +903,8 @@ bar_calls <- function(s, cb, pal, widget) {
   main = if (flip) aes_call(x = v, y = s$x, fill = col, text = text) else aes_call(x = s$x, y = v, fill = col, text = text)
   geom = if (!is.null(s$highlight)) list(call("geom_col", aes_call(fill = "highlighted")),
                                           call("scale_fill_manual", values = highlight_values(), guide = "none"))
-    else if (!is.null(col)) list(call("geom_col", position = call("position_dodge", width = 0.8), width = 0.75),
+    else if (!is.null(col)) list(call("geom_col", position = if (flip) call("position_dodge", width = 0.8, reverse = TRUE) else call("position_dodge", width = 0.8),
+                                      width = 0.75),
                                  call("scale_fill_manual", values = pal$qual(colour_count(s, cb, col))))
     else list(call("geom_col", fill = CHART_SINGLE))
   c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, if (flip) "x" else "y", TRUE),
@@ -998,22 +1017,36 @@ scatter_calls <- function(s, cb, pal, widget) {
         if (!widget) list(side_labels(s)))
     else if (!is.null(col)) c(list(point()), colours)
     else list(point(colour = CHART_SINGLE))
-  fit = if (!identical(s$fit, "none"))
-    list(as.call(c(list(sym("geom_smooth"), method = if (identical(s$fit, "linear")) "lm" else "loess", formula = quote(y ~ x), se = FALSE),
-                   if (!is.null(s$.fit_range)) list(xseq = fit_xseq(s), na.rm = TRUE), list(colour = "#4D4D4D", linewidth = 0.8))))
-  c(list(call("ggplot", sym("chart_table"), main)), geom, fit,
+  c(list(call("ggplot", sym("chart_table"), main)), geom, fit_calls(s, cb),
     if (bubble) list(call("scale_size_area", max_size = 8)),
     if (isTRUE(s$rug)) list(call("geom_rug", alpha = 0.2)),
     if (isTRUE(s$log_x)) list(quote(scale_x_log10())), if (isTRUE(s$log_y)) list(quote(scale_y_log10())))
 }
 
-# Where a trimmed curve is drawn: SPEC_FIT_POINTS values between the percentiles in .fit_range, on
-#   the log scale when x has one (geom_smooth() takes xseq on the scale's transformed values). With
-#   colour or facet groups each group's loess gives NA outside its own range; na.rm drops those.
-fit_xseq <- function(s) {
-  r = s$.fit_range
+# Where a trimmed curve is drawn: SPEC_FIT_POINTS values of x between a group's percentiles, on the
+#   log scale when x has one (geom_smooth() takes xseq on the scale's transformed values).
+fit_xseq <- function(s, r) {
   if (isTRUE(s$log_x)) call("seq", call("log10", r[1]), call("log10", r[2]), length.out = SPEC_FIT_POINTS)
   else call("seq", r[1], r[2], length.out = SPEC_FIT_POINTS)
+}
+
+# The fitted curve as geom_smooth() layers. With no trimmed group, one layer. With groups, one layer
+#   per trimmed group, on that group's rows only (data = ~ filter(.x, ...)), with its own xseq, and
+#   one layer for the smaller groups, untrimmed.
+fit_calls <- function(s, cb) {
+  if (identical(s$fit, "none")) return(list())
+  smooth = function(data = NULL, r = NULL)
+    as.call(c(list(sym("geom_smooth")), if (!is.null(data)) list(data = data),
+              list(method = if (identical(s$fit, "linear")) "lm" else "loess", formula = quote(y ~ x), se = FALSE),
+              if (!is.null(r)) list(xseq = fit_xseq(s, r)), list(colour = "#4D4D4D", linewidth = 0.8)))
+  fr = s$.fit_range
+  if (is.null(fr)) return(list(smooth()))
+  if (is.null(fr$groups[[1]]$keys)) return(list(smooth(r = fr$groups[[1]]$range)))
+  rows = function(cond) call("~", call("filter", sym(".x"), cond))
+  conds = purrr::map(fr$groups, function(g)
+    purrr::reduce(purrr::imap(g$keys, function(v, col) call("==", sym(col), value_call(cb_entry(cb, col), v))), function(a, b) call("&", a, b)))
+  c(purrr::map2(fr$groups, conds, function(g, cond) smooth(rows(cond), g$range)),
+    if (isTRUE(fr$rest)) list(smooth(rows(call("!", call("(", purrr::reduce(conds, function(a, b) call("|", a, b))))))))
 }
 
 histogram_calls <- function(s, cb, pal, widget)

@@ -1163,6 +1163,63 @@ if (!is.null(ball_g)) {
 check("3b: reflex_labels() includes axis_labels", "axis_labels" %in% names(reflex_labels()))
 
 
+# ---- Phase 4 A: three things seen in the 3b charts ------------------------------------------------
+
+# A1. A fitted curve is trimmed within each colour or facet group of SPEC_FIT_TRIM_N rows or more.
+smooth_ranges <- function(p) {
+  b = ggplot2::ggplot_build(p)
+  idx = which(purrr::map_lgl(p$layers, function(l) inherits(l$geom, "GeomSmooth")))
+  dplyr::bind_rows(purrr::map(idx, function(i) b$data[[i]]))
+}
+if (!is.null(ball_g)) {
+  p_fac <- spec_plot(list(family = "scatter", x = "Defence", y = "Attack", facet = "Position", fit = "loess", title = "t"), ball_g$data, ball_g$cb)
+  p_col <- spec_plot(list(family = "scatter", x = "Height", y = "Weight", color = "Foot", fit = "linear", title = "t"), ball_g$data, ball_g$cb)
+  inside <- function(p, key) {
+    t = attr(p, "table")
+    sm = smooth_ranges(p)
+    groups = attr(p, "spec")$.fit_range$groups
+    length(groups) >= 2L && all(purrr::map_lgl(groups, function(g) {
+      x = t[[attr(p, "spec")$x]][as.character(t[[key]]) == g$keys[[key]]]
+      q = signif(stats::quantile(x, SPEC_FIT_TRIM, names = FALSE), 4)
+      isTRUE(all.equal(g$range, q))
+    })) && nrow(sm) > 0L
+  }
+  fac_sm <- smooth_ranges(p_fac)
+  def_panel <- which(levels(factor(attr(p_fac, "table")$Position)) == "Defender")
+  cat("\n  The Defender curve runs from ", min(fac_sm$x[fac_sm$PANEL == def_panel]), " to ", max(fac_sm$x[fac_sm$PANEL == def_panel]),
+      " (all rows' 1st percentile: ", signif(stats::quantile(attr(p_fac, "table")$Defence, 0.01), 4), ").\n\n", sep = "")
+  check("4-A1: per panel (loess) and per colour (linear), each group's curve is drawn between that group's own percentiles",
+        inside(p_fac, "Position") && inside(p_col, "Foot") &&
+          min(fac_sm$x[fac_sm$PANEL == def_panel]) >= attr(p_fac, "spec")$.fit_range$groups[[1]]$range[1] - 1e-9 &&
+          min(fac_sm$x[fac_sm$PANEL == def_panel]) > stats::quantile(attr(p_fac, "table")$Defence, 0.01) + 10 &&
+          code_has(spec_code(attr(p_fac, "spec"), ball_g$cb, ball_g$path), "data = ~filter(.x, Position == \"Defender\")"))
+}
+
+# A2. A slope's colours are noted only past the palette's own limit.
+if (!is.null(pan_g)) {
+  slope8 <- list(family = "slope", x = "year", y = "revenue", color = "region", fn = "sum", title = "t",
+                 filter = list(list(column = "year", op = "in", value = c(2015, 2024))))
+  n_okabe <- attr(spec_plot(slope8, pan_g$data, pan_g$cb), "notes")
+  pal7 <- utils::modifyList(chart_palette_default(), list(qualitative = "tol_bright"))
+  n_tol <- if ("tol_bright" %in% names(chart_palettes("qualitative"))) attr(spec_plot(slope8, pan_g$data, pan_g$cb, pal7), "notes")
+  line8 <- lint_of(list(family = "line", x = "year", y = "revenue", color = "region", fn = "sum", title = "t"), pan_g)
+  check("4-A2: a slope of 8 regions has no colour note under Okabe-Ito (8 colours), has one under a 7-colour palette; a line of 8 still does",
+        !any(grepl("colours are hard", n_okabe)) && (is.null(n_tol) || any(grepl("8 colours are hard", n_tol))) &&
+          any(grepl("8 colours are hard", line8$notes)))
+}
+
+# A3. In a sideways grouped bar the first legend entry is the top bar of each group.
+if (!is.null(ball_g)) {
+  p_grp <- spec_plot(list(family = "bar", x = "Nationality", color = "Foot", fn = "count", top_n = 12, title = "t"), ball_g$data, ball_g$cb)
+  bars <- ggplot2::ggplot_build(p_grp)$data[[1]]
+  first_fill <- ggplot2::get_guide_data(p_grp, "fill")$fill[1]
+  top_is_first <- purrr::map_lgl(split(bars, round(bars$y)), function(d) nrow(d) < 2L || identical(d$fill[which.max(d$y)], first_fill))
+  check("4-A3: a sideways grouped bar puts the first legend entry's bar at the top of every group",
+        isTRUE(attr(p_grp, "spec")$.flip) && length(top_is_first) == 12L && all(top_is_first) &&
+          code_has(spec_code(attr(p_grp, "spec"), ball_g$cb, ball_g$path), "position_dodge(width = 0.8, reverse = TRUE)"))
+}
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")
