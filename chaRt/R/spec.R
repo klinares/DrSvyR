@@ -772,3 +772,54 @@ spec_plot <- function(spec, data, cb) {
   attr(p, "table") = table
   p
 }
+
+
+# ---- the code ---------------------------------------------------------------------------------------
+
+SPEC_DELIMS <- c(",", ";", "\t", "|", " ", ":")
+
+# The delimiter that splits the file's header into as many columns as the codebook has, and the
+#   header as written; NULL when the file is not there or no delimiter fits.
+file_header <- function(file, n) {
+  if (!file.exists(file)) return(NULL)
+  header = function(d) tryCatch(names(readr::read_delim(file, delim = d, n_max = 0, name_repair = "minimal",
+                                                         col_types = readr::cols(.default = readr::col_character()),
+                                                         show_col_types = FALSE, progress = FALSE)),
+                                error = function(e) NULL)
+  d = purrr::detect(SPEC_DELIMS, function(d) length(header(d)) == n)
+  if (is.null(d)) NULL else list(delim = d, names = header(d))
+}
+
+# A call written out as code, wrapped at about 80 characters.
+code_text <- function(cl) paste(trimws(deparse(cl, width.cutoff = 80L), "left"), collapse = "\n    ")
+
+# R code that reads `file` as chaRt reads it (with the codebook's values that mean missing),
+#   builds the same table with dplyr and tidyr, and draws the same chart with ggplot2, ending with
+#   chart_theme(). It is written from the spec as spec_plot() left it (attr(plot, "spec")): every
+#   line is one of the calls spec_table() and spec_plot() evaluate.
+spec_code <- function(spec, cb, file) {
+  pub = spec_defaults(spec_public(spec))
+  why = spec_check(pub, cb)
+  if (length(why)) spec_fail(paste(why, collapse = " "))
+  s = spec_defaults(spec)
+  names_now = purrr::map_chr(cb$columns, "name")
+  h = file_header(file, length(names_now))
+  renamed = if (!is.null(h)) which(h$names != names_now) else integer(0)
+  read = as.call(c(list(sym("read_delim"), file), if (!is.null(h)) list(delim = h$delim),
+                   list(na = c(DATA_NA, missing_codes(cb))), if (length(renamed)) list(name_repair = "minimal"),
+                   list(trim_ws = TRUE, guess_max = Inf, show_col_types = FALSE)))
+  rename = if (length(renamed)) bquote(names(chart_data)[.(as.numeric(renamed))] <- .(names_now[renamed]))
+  st = table_steps(s, cb)
+  steps = c(st$base, st$rest)
+  plot = plot_calls(s, cb)
+  plot_text = paste(purrr::map_chr(plot, code_text), collapse = " +\n  ")
+  libs = c("readr", "dplyr", "tidyr", "ggplot2", if (grepl("label_|breaks_", plot_text)) "scales")
+  paste0(paste0("library(", libs, ")", collapse = "\n"), "\n\n",
+         "# The data, read as chaRt reads it: these values mean missing, and column types are guessed from every row.\n",
+         "chart_data <- ", code_text(read), "\n",
+         if (!is.null(rename)) paste0("# Columns with a blank or repeated name in the file, named as in the codebook.\n", code_text(rename), "\n"),
+         "\n# The table that is drawn.\n",
+         "chart_table <- chart_data |>\n  ", paste(purrr::map_chr(steps, code_text), collapse = " |>\n  "), "\n\n",
+         "# The chart. chart_theme() is the house theme, in R/theme.R.\n",
+         plot_text, "\n")
+}

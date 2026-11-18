@@ -334,6 +334,52 @@ check("every gold spec: spec_plot() builds, and ggplot_build() runs with no erro
       all(purrr::map_lgl(gold_plots, function(r) is.null(r$error) && !length(r$said) && inherits(r$plot, "ggplot"))))
 
 
+# ---- Phase 2: the code each gold chart comes with ----------------------------------------
+
+gold_codes <- purrr::map2(gold, gold_plots, function(x, r)
+  if (inherits(r$plot, "ggplot")) tryCatch(spec_code(attr(r$plot, "spec"), x$g$cb, x$g$path), error = function(e) e))
+code_ok <- purrr::map_lgl(gold_codes, is.character)
+check("every gold spec: spec_code() returns code", all(code_ok))
+parsed <- purrr::map(gold_codes[code_ok], function(code) tryCatch(parse(text = code, keep.source = TRUE), error = function(e) e))
+check("every gold spec: the code parses", all(purrr::map_lgl(parsed, function(p) !inherits(p, "error"))))
+app_functions <- setdiff(unlist(purrr::map(r_files, function(f)
+  purrr::map_chr(purrr::keep(top_level(f), function(e) is_assignment(e) && is.call(e[[3]]) && identical(e[[3]][[1]], as.name("function"))),
+                 function(e) as.character(e[[2]])))), "chart_theme")
+code_tokens <- purrr::map(parsed, function(p) if (!inherits(p, "error")) utils::getParseData(p))
+check("every gold spec: the code has no for, while or repeat",
+      all(purrr::map_lgl(code_tokens, function(pd) !is.null(pd) && !any(pd$token %in% c("FOR", "WHILE", "REPEAT")))))
+check("every gold spec: the code calls no function of this app except chart_theme()",
+      all(purrr::map_lgl(code_tokens, function(pd) !is.null(pd) &&
+                           !length(intersect(pd$text[pd$token == "SYMBOL_FUNCTION_CALL"], app_functions)))))
+
+# Each code run in a fresh R process that has chart_theme() and nothing else from the app.
+code_dir <- file.path(work_dir, "codes")
+dir.create(code_dir)
+purrr::iwalk(gold_codes[code_ok], function(code, i) writeLines(code, file.path(code_dir, sprintf("code_%02d.R", i))))
+runner <- file.path(work_dir, "run_codes.R")
+writeLines(c(
+  "args <- commandArgs(TRUE)",
+  "theme <- new.env(); sys.source(args[2], envir = theme); assign('chart_theme', theme$chart_theme, envir = globalenv())",
+  "files <- sort(list.files(args[1], pattern = '^code_.*[.]R$', full.names = TRUE))",
+  "out <- lapply(files, function(f) tryCatch({",
+  "  env <- new.env(parent = globalenv())",
+  "  p <- eval(parse(f), env)",
+  "  ggplot2::ggplot_build(p)",
+  "  list(table = env$chart_table, built = TRUE)",
+  "}, error = function(e) list(error = conditionMessage(e))))",
+  "saveRDS(out, file.path(args[1], 'results.rds'))"), runner)
+system2(file.path(R.home("bin"), "Rscript"), c("--no-init-file", shQuote(runner), shQuote(code_dir), shQuote(file.path("R", "theme.R"))),
+        stdout = FALSE, stderr = FALSE)
+code_runs <- if (file.exists(file.path(code_dir, "results.rds"))) readRDS(file.path(code_dir, "results.rds")) else list()
+plain <- function(t) { t = as.data.frame(t); attributes(t) = attributes(t)[c("names", "class", "row.names")]; t }
+code_match <- purrr::map2_lgl(code_runs, gold_plots[code_ok], function(run, r)
+  isTRUE(run$built) && isTRUE(all.equal(plain(run$table), plain(attr(r$plot, "table")))))
+purrr::walk2(code_runs, gold_plots[code_ok], function(run, r) if (!is.null(run$error)) cat("      ", r$name, ": ", run$error, "\n", sep = ""))
+check(paste0("every gold spec: the code runs in a fresh R process with only chart_theme(), draws, and builds a table equal to spec_table() (",
+             sum(code_match), " of ", sum(code_ok), ")"),
+      length(code_runs) == sum(code_ok) && all(code_match))
+
+
 # ---- Phase 2: the lint, one check per rule ----------------------------------------------
 
 lint_of <- function(spec, g) {
