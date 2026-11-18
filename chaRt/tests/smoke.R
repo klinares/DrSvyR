@@ -1131,9 +1131,12 @@ if (!is.null(ball_g) && !is.null(pan_g)) {
   r_up <- smooth_x(p_up)
   cat("  The curve on Defence runs from ", r_ad[1], " to ", r_ad[2], "; the data from ", min(attr(p_ad, "table")$Defence), " to ",
       max(attr(p_ad, "table")$Defence), ".\n", sep = "")
-  check("3b-C2: on 1,851 rows the curve's x range is inside the 1st and 99th percentiles, and the code draws it there",
+  p_grp <- spec_plot(list(family = "scatter", x = "Defence", y = "Attack", facet = "Position", fit = "loess", title = "t"), ball_g$data, ball_g$cb)
+  grp_said <- character(0)
+  withCallingHandlers(ggplot2::ggplot_build(p_grp), warning = function(w) { grp_said <<- c(grp_said, conditionMessage(w)); invokeRestart("muffleWarning") })
+  check("3b-C2: on 1,851 rows the curve's x range is inside the 1st and 99th percentiles, the code draws it there, and a faceted fit builds with no warning",
         r_ad[1] >= signif(q_ad[1], 4) - 1e-9 && r_ad[2] <= signif(q_ad[2], 4) + 1e-9 && r_ad[1] > min(attr(p_ad, "table")$Defence) &&
-          code_has(spec_code(attr(p_ad, "spec"), ball_g$cb, ball_g$path), "xseq = seq("))
+          code_has(spec_code(attr(p_ad, "spec"), ball_g$cb, ball_g$path), "xseq = seq(") && !length(grp_said))
   check("3b-C2: on 80 rows the curve is not trimmed: it spans the whole range of x",
         isTRUE(all.equal(r_up, range(attr(p_up, "table")$units))) && is.null(attr(p_up, "spec")$.fit_range))
 }

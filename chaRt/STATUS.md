@@ -1,5 +1,57 @@
 # chaRt: status
 
+## Phase 3b, 2026-11-18: fixes after the first live run
+
+Branch `chart`. Not pushed. One live run on `claude-sonnet-5-5`: 5 calls.
+
+### Built
+
+- Reflex files `core.md`, `comparison.md` and `suggest.md` at version 0.2 (new reflex
+  `axis_labels`); checksums in `REFLEX_SHA`.
+- `R/spec.R`: `SPEC_DPI` (192) and `spec_png()`, which draws a chart at its size in inches with
+  `ragg::agg_png()` when ragg is installed and `grDevices::png(type = "cairo")` otherwise. The
+  Explore tab shows it with `renderImage()` at its size in CSS inches (96 CSS pixels each);
+  both galleries draw at `SPEC_DPI` (the gallery through knitr's `ragg_png` device).
+- Ties at the `top_n` cut are all shown when they make at most `SPEC_TOP_MAX`, with the note "n was
+  asked for; m are shown, because values tie at the cut."; the lint field `.top_n` carries m into
+  the subtitle ("Top m of N"), the colours and the code (`slice_head(n = m)`). Otherwise top_n
+  and the old note, which now says "the 1 shown is" for one value.
+- A fitted curve on `SPEC_FIT_TRIM_N` (100) rows or more is fitted on every row and drawn at
+  `SPEC_FIT_POINTS` (80) values between the 1st and 99th percentiles of x, through
+  `geom_smooth(xseq = seq(...), na.rm = TRUE)` (`.fit_range`; on the log10 scale when `log_x`).
+  The code does the same.
+- `R/reflexes.R`: `data_safe()` writes `<DATA>` and `</DATA>` (any case) as `[DATA]` inside the
+  DATA block and the pick call's block. The call record has `tokens_in` (fresh) and
+  `tokens_cached`; the Explore tab's foot shows both.
+- `R/data.R`: `CODEBOOK_MAX_DETAIL` is 60.
+- `tests/smoke.R`: 166 checks (157 and 9 new). `tests/llm_check.R` step 5 and `LIVE_FILES_3B`
+  in `tests/live_gallery.R`: five suggest calls on the codebooks labelled in the saved run.
+
+### The live run
+
+5 calls, no repair, no failure, 37 s; input tokens 14,972 fresh and 21,700 from the cache; 4,409
+out. The first call wrote the cache; each of the other four read the system prompt from it
+(5,425 tokens). All 15 charts were valid the first time. No spec repeats a column's label as an
+axis title or restates `top_n` in a subtitle, and no measure is in more than two suggested charts.
+"Which regions grew most" is now a slope of the 8 regions.
+
+### Departures
+
+- Three Phase 2b checks and two Phase 3 checks expected the old behaviour (10 bars for FH's top
+  10, where 11 tie; 40 columns to a call); they now expect the new one. The count is unchanged.
+- The live run used the labels of the Phase 3 run (saved in `tests/live_replies.rds`), so it made
+  no label call: the prompt's five calls are all suggest calls.
+- `na.rm = TRUE` on the trimmed curve: with colour or facet groups, each group's loess is NA where
+  xseq runs past its own data, and ggplot2 warned (seen in the live page; a check now covers it).
+- The tabs were checked with `shiny::testServer()`, not in a browser.
+
+### Noticed, not changed
+
+- The slope of 8 regions gets the lint note "8 colours are hard to tell apart; highlight the few
+  that matter, or use small multiples (facet)", which `few_colours` v0.2 now allows for a slope.
+- With colour groups and `fit: linear`, each group's line runs across the whole trimmed range,
+  past its own data.
+
 ## Phase 3, 2026-11-18: the first model calls (labels and suggestions) and the Explore tab
 
 Branch `chart`. Not pushed. One live run, on `claude-sonnet-5-5`: 21 calls (the ping and 20).

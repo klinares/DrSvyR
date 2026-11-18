@@ -1000,7 +1000,7 @@ scatter_calls <- function(s, cb, pal, widget) {
     else list(point(colour = CHART_SINGLE))
   fit = if (!identical(s$fit, "none"))
     list(as.call(c(list(sym("geom_smooth"), method = if (identical(s$fit, "linear")) "lm" else "loess", formula = quote(y ~ x), se = FALSE),
-                   if (!is.null(s$.fit_range)) list(xseq = fit_xseq(s)), list(colour = "#4D4D4D", linewidth = 0.8))))
+                   if (!is.null(s$.fit_range)) list(xseq = fit_xseq(s), na.rm = TRUE), list(colour = "#4D4D4D", linewidth = 0.8))))
   c(list(call("ggplot", sym("chart_table"), main)), geom, fit,
     if (bubble) list(call("scale_size_area", max_size = 8)),
     if (isTRUE(s$rug)) list(call("geom_rug", alpha = 0.2)),
@@ -1008,7 +1008,8 @@ scatter_calls <- function(s, cb, pal, widget) {
 }
 
 # Where a trimmed curve is drawn: SPEC_FIT_POINTS values between the percentiles in .fit_range, on
-#   the log scale when x has one (geom_smooth() takes xseq on the scale's transformed values).
+#   the log scale when x has one (geom_smooth() takes xseq on the scale's transformed values). With
+#   colour or facet groups each group's loess gives NA outside its own range; na.rm drops those.
 fit_xseq <- function(s) {
   r = s$.fit_range
   if (isTRUE(s$log_x)) call("seq", call("log10", r[1]), call("log10", r[2]), length.out = SPEC_FIT_POINTS)

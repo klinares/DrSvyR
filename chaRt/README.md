@@ -36,6 +36,8 @@ shiny::runApp("chaRt")
 
 Built and tested with ellmer 0.4.2; the app stops at start-up, naming anything missing.
 
+`ragg` is optional too: with it, static charts are drawn with ragg, otherwise with the cairo device; either way at 192 pixels per inch, shown at their size in inches.
+
 `paletteer` is optional (`install.packages("paletteer")`). Without it the app starts and offers
 only the palettes that need no package: Okabe-Ito, viridis and a built-in blue-red. With it,
 Paul Tol's, ColorBrewer's and the viridis family's palettes are offered too. A report uses one qualitative, one sequential and one diverging palette throughout;
@@ -133,7 +135,7 @@ and asks for structured output in the Anthropic style and, through OpenRouter, i
 that stands in for the work endpoint. Its fourth check labels FH, football and a made-up panel
 file and asks twelve questions of the suggest call (about 20 calls), printing what each call cost
 and returned; it saves the replies to `tests/live_replies.rds` and writes `tests/live_gallery.html`
-(both git-ignored). `CHART_LIVE_STEPS` chooses the checks (for example `1,4`). `CHART_TEST_MODEL`
+(both git-ignored). Its fifth check asks five questions on the codebooks labelled in the last saved run (no label call). Each call prints its input tokens read fresh and from the prompt cache. `CHART_LIVE_STEPS` chooses the checks (for example `1,5`). `CHART_TEST_MODEL`
 replaces the home model for checks 1, 2 and 4 (Sonnet models only); `OPENROUTER_MODEL` replaces the
 OpenRouter model.
 
