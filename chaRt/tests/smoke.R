@@ -787,12 +787,12 @@ if (!inherits(messy, "error")) {
 #   Claude project and copied in is noticed. Update it here when a file changes on purpose.
 REFLEX_SHA <- c(
   "codebook.md" = "c7f66548e3d4cb3448f8dc4a1942a2649d0b733d612b1ec78c39d92562ee9709",
-  "core.md" = "893c93725d802a3926515b25257f224636f6dc4f5b2b7f04a7b8a57e7a268b9b",
-  "comparison.md" = "5b70b19ff86c0e7983db63bd5ac0a5416a1e53377a0c146952045cd200420be6",
+  "core.md" = "6b62ea4b3cc6dfc60f6ac66e2cab06a72bb4c4dc83f85dbb1af375e467f5d23b",
+  "comparison.md" = "2acdf70491399e79bbee31dcd7026870d515004d72ce0dd9226b9a69b82d68cd",
   "relationship.md" = "63fa0ce4d7efc55a8548e5831713ac3764cc3661ae9516fa50031be6a39a34f2",
   "distribution.md" = "fedaa1f13d77fb92ce9e8b177fbf88b9e2caec07cadda6b6c2901da51c62a6d5",
   "time.md" = "c907e5546557b6fedb91623a8c83588ac10af738946d00ea35458e74961988a9",
-  "suggest.md" = "4f06bf67365d9e47d75a6f3f510e6b2fb8b3935a1c08e49880c548f97f8ead1e")
+  "suggest.md" = "afb054bf78bded38853d4b368fd7c7100a8118577235c8d0315ed34fb0599df2")
 
 rfiles <- tryCatch(check_reflex_files(), error = function(e) e)
 check(paste0("every reflex file parses (", if (inherits(rfiles, "error")) conditionMessage(rfiles) else length(rfiles), ")"),
