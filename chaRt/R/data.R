@@ -94,6 +94,37 @@ parse_lines <- function(txt) {
 
 parse_missing <- function(txt) unique(parse_lines(txt))
 
+# Files saved from Excel on Windows are often not UTF-8. readr::guess_encoding() names the most
+#   likely encoding with a confidence; between the Latin encodings its pick is often a near
+#   neighbour (a Latin-1 file guessed as ISO-8859-2 turns "Sao" with a tilde into a breve), so a file
+#   guessed as any of them is read as windows-1252, which holds every Latin-1 letter.
+LATIN_ENCODINGS <- c("ISO-8859-1", "ISO-8859-2", "ISO-8859-9", "ISO-8859-15", "windows-1250", "windows-1252", "windows-1254")
+ENCODING_SURE <- 0.8
+
+# The encoding a file is read with, and the sentence for the analyst when it is not UTF-8.
+file_encoding <- function(path) {
+  g = tryCatch(readr::guess_encoding(path), error = function(e) NULL)
+  if (is.null(g) || !nrow(g) || g$encoding[1] %in% c("UTF-8", "ASCII")) return(list(encoding = "UTF-8", note = NULL))
+  top = g$encoding[1]
+  sure = g$confidence[1]
+  enc = if (top %in% LATIN_ENCODINGS) "windows-1252" else top
+  unsure = sure < ENCODING_SURE || !identical(enc, top)
+  list(encoding = enc,
+       note = paste0("The file was read as ", enc, ".",
+                     if (unsure) paste0(" This is a guess (readr's best guess was ", top, ", ", round(100 * sure),
+                                        "% sure); check names with accents.")))
+}
+
+# For a file that is not UTF-8: the delimiter that splits its header into the most columns.
+DELIM_CANDIDATES <- c(",", ";", "\t", "|")
+latin_delim <- function(path, encoding) {
+  widths = purrr::map_int(DELIM_CANDIDATES, function(d) tryCatch(
+    ncol(readr::read_delim(path, delim = d, n_max = 0, locale = readr::locale(encoding = encoding), name_repair = "minimal",
+                           col_types = readr::cols(.default = readr::col_character()), show_col_types = FALSE, progress = FALSE)),
+    error = function(e) 0L))
+  DELIM_CANDIDATES[which.max(widths)]
+}
+
 # readr guesses the delimiter when delim is NULL: readr passes it to vroom, whose help says it
 #   then guesses from , tab space | : and ;. A file it cannot guess for (one column, say) is read
 #   with a comma. Types are guessed from every row (guess_max = Inf). The values in `missing` are
@@ -101,10 +132,15 @@ parse_missing <- function(txt) unique(parse_lines(txt))
 #   (trim_ws), never part of one.
 read_data <- function(path, name = basename(path), missing = character()) {
   na = unique(c(DATA_NA, parse_missing(missing)))
+  enc = file_encoding(path)
   read = function(delim)
     suppressWarnings(readr::read_delim(path, delim = delim, na = na, guess_max = Inf, trim_ws = TRUE,
+                                       locale = readr::locale(encoding = enc$encoding),
                                        name_repair = "minimal", show_col_types = FALSE, progress = FALSE))
-  data = tryCatch(read(NULL), error = function(e)
+  # vroom guesses the delimiter from the raw bytes, which fails on a file that is not UTF-8; then
+  #   the delimiter is the candidate that splits the header into the most columns.
+  first = if (identical(enc$encoding, "UTF-8")) NULL else latin_delim(path, enc$encoding)
+  data = tryCatch(read(first), error = function(e)
     if (grepl("guess the delimiter", conditionMessage(e), fixed = TRUE)) NULL else unreadable(name, e))
   if (is.null(data)) data = tryCatch(read(","), error = function(e) unreadable(name, e))
   bad = readr::problems(data)
@@ -116,12 +152,12 @@ read_data <- function(path, name = basename(path), missing = character()) {
            paste(utils::head(rows_bad, PROBLEM_ROWS_SHOWN), collapse = ", "), if (length(rows_bad) > PROBLEM_ROWS_SHOWN) ", ...",
            "); values there may be missing or in the wrong column.")
   empty_cols = names(data)[purrr::map_lgl(data, function(x) nrow(data) > 0L && all(is.na(x)))]
-  problems = c(names_fixed$notes, parse_note,
+  problems = c(enc$note, names_fixed$notes, parse_note,
                purrr::map_chr(empty_cols, function(nm) paste0("Column ", nm, " is entirely missing.")),
                unlist(purrr::imap(as.list(data), mostly_numbers_note)),
                if (!nrow(data)) "The file has no rows.",
                if (ncol(data) == 1L) "The file has only one column; if it should have more, its delimiter may not be one readr recognises.")
-  list(data = data, problems = as.character(problems))
+  list(data = data, problems = as.character(problems), encoding = enc$encoding)
 }
 
 
@@ -238,9 +274,10 @@ default_order <- function(p) {
 #   (written []) when there are none. missing_codes() always gives text.
 codes_field <- function(codes) if (length(codes)) as.character(codes) else list()
 
-new_codebook <- function(profile, file, rows, missing_codes = character())
+new_codebook <- function(profile, file, rows, missing_codes = character(), encoding = "UTF-8")
   list(chart_codebook = CODEBOOK_VERSION, file = file, rows = as.integer(rows), row_is = "",
-       missing_codes = codes_field(parse_missing(missing_codes)), columns = purrr::map(profile, codebook_entry))
+       missing_codes = codes_field(parse_missing(missing_codes)), encoding = encoding,
+       columns = purrr::map(profile, codebook_entry))
 
 missing_codes <- function(cb) as.character(unlist(cb$missing_codes %||% list()))
 
@@ -254,6 +291,7 @@ read_codebook <- function(path) {
   cb = tryCatch(yaml::read_yaml(path, fileEncoding = "UTF-8"), error = function(e)
     stop("This is not a codebook chaRt can read: ", gsub("\\s+", " ", conditionMessage(e)), call. = FALSE))
   if (is.list(cb)) cb$missing_codes = codes_field(parse_missing(as.character(unlist(cb$missing_codes))))
+  if (is.list(cb) && is.null(cb$encoding)) cb$encoding = "UTF-8"
   ok = is.list(cb) && identical(cb$chart_codebook, CODEBOOK_VERSION) && is.list(cb$columns) &&
     all(purrr::map_lgl(cb$columns, function(e) is.list(e) && is.character(e$name) && length(e$name) == 1L))
   if (!ok) stop("This is not a codebook chaRt can read: it needs chart_codebook: 1 and a list of columns, each with a name.",
@@ -307,11 +345,11 @@ check_codebook <- function(cb, profile) {
 
 # The codebook for the file in hand with what an uploaded one decides: label, label_source,
 #   type, role, an ordered column's order and row_is. Every fact comes from the profile.
-apply_codebook <- function(cb, profile, file, rows) {
+apply_codebook <- function(cb, profile, file, rows, encoding = "UTF-8") {
   why = check_codebook(cb, profile)
   if (length(why)) stop(paste(why, collapse = " "), call. = FALSE)
   up = stats::setNames(cb$columns, purrr::map_chr(cb$columns, "name"))
-  out = new_codebook(profile, file, rows, missing_codes(cb))
+  out = new_codebook(profile, file, rows, missing_codes(cb), encoding)
   out$row_is = if (is.character(cb$row_is) && length(cb$row_is) == 1L) cb$row_is else ""
   out$columns = purrr::map(profile, function(p) {
     e = up[[p$name]]
@@ -327,7 +365,7 @@ apply_codebook <- function(cb, profile, file, rows) {
 reread_data <- function(path, name, missing, old = NULL) {
   r = read_data(path, name, missing)
   prof = profile_data(r$data)
-  cb = new_codebook(prof, name, nrow(r$data), missing)
+  cb = new_codebook(prof, name, nrow(r$data), missing, r$encoding)
   if (is.null(old)) return(list(read = r, profile = prof, codebook = cb, notes = character(0)))
   before = stats::setNames(old$columns, purrr::map_chr(old$columns, "name"))
   carried = purrr::map(cb$columns, function(e) {

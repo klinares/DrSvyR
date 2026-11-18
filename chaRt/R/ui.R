@@ -194,7 +194,7 @@ mod_data_server <- function(id, state) {
       why = check_codebook(up, res$profile)
       if (length(why))
         return(codebook_note(warn_box(tags$strong("The codebook was not applied."), tags$ul(purrr::map(why, tags$li)))))
-      take(res, apply_codebook(up, res$profile, u$name, nrow(res$read$data)))
+      take(res, apply_codebook(up, res$profile, u$name, nrow(res$read$data), res$read$encoding))
       updateTextAreaInput(session, "missing", value = paste(codes, collapse = "\n"))
       reread_note(NULL)
       codebook_note(advice_box("The codebook was applied: its values that mean missing, labels, types, roles and row ",
