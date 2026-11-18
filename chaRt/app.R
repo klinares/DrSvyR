@@ -54,7 +54,7 @@ library(bslib)
 library(purrr)
 
 # Called as pkg::fn() in R/ and never attached; listed so a missing one stops the app here, by name.
-APP_PACKAGES <- c("dplyr", "ellmer", "ggplot2", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales", "tibble",
+APP_PACKAGES <- c("digest", "dplyr", "ellmer", "ggplot2", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales", "tibble",
                   "tidyr", "yaml")
 
 local({
@@ -97,6 +97,10 @@ walk(sort(list.files("R", pattern = "[.]R$", full.names = TRUE)), function(f)
 list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION, APP_PROFILE = APP_PROFILE, APP_PROFILES = APP_PROFILES,
               APP_MODEL = APP_MODEL, APP_MAX_UPLOAD_MB = APP_MAX_UPLOAD_MB),
          envir = globalenv())
+
+# Every reflex file in www/reflexes/ parsed now, so one that has lost its shape stops the app here,
+#   naming the file and the reflex, not in the middle of a call.
+check_reflex_files()
 
 
 # ---- 4. process settings ----------------------------------------------------
