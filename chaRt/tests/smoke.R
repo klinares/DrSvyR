@@ -287,13 +287,16 @@ if (course_present) {
   edited_cb <- first$codebook
   edited_cb$row_is <- "one country"
   edited_cb$columns[[1]] <- edit_entry(edited_cb$columns[[1]], label = "Country name")
-  edited_cb$columns[[13]] <- edit_entry(edited_cb$columns[[13]], label = "Political rights, 2014")
+  edited_cb$columns[[13]] <- edit_entry(edited_cb$columns[[13]], label = "Political rights, 2014", role = "time")
   again <- reread_data(fh_path, "FH_disaggregated.csv", "..", old = edited_cb)
   check("after Read again (reread_data), the edited labels, their source and the row sentence are still there",
         identical(again$codebook$columns[[1]]$label, "Country name") &&
           identical(again$codebook$columns[[1]]$label_source, "user") &&
           identical(again$codebook$columns[[13]]$label, "Political rights, 2014") &&
           identical(again$codebook$row_is, "one country") && identical(missing_codes(again$codebook), ".."))
+  check("after Read again, a role the analyst chose is kept, and types R itself chose are re-chosen without a note",
+        identical(again$codebook$columns[[13]]$role, "time") && identical(again$codebook$columns[[2]]$type, "integer") &&
+          identical(again$codebook$columns[[2]]$role, "measure") && !length(again$notes))
 } else cat("skip  Read again on FH: the course files are not there\n")
 
 

@@ -336,17 +336,24 @@ reread_data <- function(path, name, missing, old = NULL) {
     out = e
     out$label = o$label
     out$label_source = o$label_source
+    # Only what the analyst chose is carried: a type other than R's own, a role other than the
+    #   type's default. What R chose before is chosen again from the data now.
     notes = character(0)
-    if (!identical(o$type, e$type)) {
+    own_type = !identical(o$type, o$detected %||% o$type)
+    own_role = !identical(o$role, default_role(o, o$type))
+    if (own_type && !identical(o$type, e$type)) {
       if (o$type %in% type_choices(e)) out = edit_entry(out, type = o$type)
-      else notes = c(notes, paste0(e$name, " was ", o$type, "; read again it cannot be, so it is ", e$type, "."))
+      else notes = c(notes, paste0("You made ", e$name, " ", o$type, "; read again it cannot be, so it is ", e$type, "."))
     }
     if (identical(out$type, "ordered") && !is.null(o$order)) {
       if (order_ok(o$order, out)) out$order = o$order
-      else notes = c(notes, paste0("The order of ", e$name, "'s levels no longer matches its levels, so it starts again."))
+      else notes = c(notes, paste0("The order you gave ", e$name, "'s levels no longer matches its levels, so it starts again."))
     }
-    if (o$role %in% role_choices(out)) out$role = o$role
-    else notes = c(notes, paste0(e$name, " cannot keep the role ", o$role, " as ", out$type, ", so it is ", out$role, "."))
+    if (own_role) {
+      if (o$role %in% role_choices(out)) out$role = o$role
+      else notes = c(notes, paste0("You gave ", e$name, " the role ", o$role, ", which a column of type ", out$type,
+                                   " cannot have, so it is ", out$role, "."))
+    }
     list(entry = out, note = notes)
   })
   cb$columns = purrr::map(carried, "entry")
