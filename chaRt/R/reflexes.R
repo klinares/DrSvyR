@@ -581,3 +581,150 @@ refine_chart <- function(chart, message, cb, data, last = NULL, ask = llm_json, 
   done("failed", again$bad$sentences, repaired = TRUE)
 }
 
+
+# ---- summarize_charts(): headlines and summaries -------------------------------------------------------
+
+SUMMARY_BATCH <- 8L
+SUMMARY_FAILED <- "The model's reply could not be read, so no headline or summary was written."
+SUMMARY_MISSING <- "The model's reply had no headline and summary for this chart, so none was written."
+SUMMARY_NO_TABLE <- "The chart's table could not be made, so no headline or summary was written."
+SUMMARY_REPAIR_ASK <- paste("Send the reply again for these charts only: every number from that chart's FACTS, as written or rounded,",
+                            "none of the words that are not allowed, and only that chart's tokens.")
+# The forbidden words that suggest a cause; the others reach beyond the file.
+SUMMARY_CAUSE_WORDS <- c("cause", "causes", "caused", "leads to", "drives", "due to", "because of", "effect", "impact")
+
+# The hash of a spec, so a headline can be matched to the spec it was written for.
+spec_hash <- function(spec)
+  digest::digest(enc2utf8(as.character(jsonlite::toJSON(spec_public(spec), auto_unbox = TRUE, digits = NA))), algo = "sha256", serialize = FALSE)
+
+# A name, label or value holding <CHARTS> or </CHARTS> (any case) would open or close the block from
+#   inside: in the block those markers are written [CHARTS].
+charts_safe <- function(x) gsub("(?i)</?CHARTS>", "[CHARTS]", x, perl = TRUE)
+
+# Tokens back to names, and names to tokens (longest name first, so one name inside another is not
+#   split).
+names_back <- function(x, names) {
+  if (!length(names) || is.null(x)) return(x)
+  purrr::reduce(names(names), function(acc, tok) gsub(tok, names[[tok]], acc, fixed = TRUE), .init = x)
+}
+names_out <- function(x, names) {
+  if (!length(names) || is.null(x)) return(x)
+  o = order(-nchar(names))
+  purrr::reduce(o, function(acc, i) gsub(names[[i]], names(names)[i], acc, fixed = TRUE), .init = x)
+}
+
+# What one chart gives the summarize call: id, title (names as tokens), facts, spec and the spec's
+#   hash; or error, one sentence, when its table cannot be made.
+summary_input <- function(chart, cb, data, palette = chart_palette_default()) {
+  s = spec_defaults(spec_public(chart$spec))
+  t = tryCatch(spec_table(s, data, cb, palette), error = function(e) e)
+  if (inherits(t, "error")) return(list(id = chart$id, spec = chart$spec, hash = spec_hash(chart$spec), error = SUMMARY_NO_TABLE))
+  lint = spec_lint(s, cb, t, chart_palette_max(palette$qualitative))
+  f = spec_facts(lint$spec, t, cb, isTRUE(chart$exploratory))
+  list(id = chart$id, title = names_out(chart$spec$title %||% "(none)", f$names), facts = f, spec = chart$spec, hash = spec_hash(chart$spec))
+}
+
+# The user message: the CHARTS block (what a row is, then each chart's id, title and FACTS), then
+#   summary.md's reply format.
+assemble_summary <- function(inputs, cb) {
+  blocks = purrr::map_chr(inputs, function(x) paste0("CHART ", x$id, "\nTitle: ", x$title, "\nFACTS\n", x$facts$text))
+  row_is = if (codebook_ready(cb)) trimws(cb$row_is) else "not yet given"
+  paste(c(paste(c("<CHARTS>", charts_safe(c(paste0("One row is: ", row_is), "", paste(blocks, collapse = "\n\n"))), "</CHARTS>"), collapse = "\n"),
+          reply_format("summarize")),
+        collapse = "\n\n")
+}
+
+validate_summary <- function(obj) {
+  if (!is.list(obj) || !is.list(obj$charts)) stop("The reply has no list called charts.", call. = FALSE)
+  invisible(TRUE)
+}
+
+# The reply's entries with a headline and a summary, by id (the first of each id).
+summary_entries <- function(obj) {
+  e = purrr::keep(json_list(obj$charts), function(x) is.list(x) && is_text1(x$id) && is_text1(x$headline) && is_text1(x$summary) &&
+                    nzchar(trimws(x$headline)) && nzchar(trimws(x$summary)))
+  e = purrr::set_names(e, purrr::map_chr(e, "id"))
+  e[!duplicated(names(e))]
+}
+
+# The problems of a headline and summary against a chart's facts: numbers not in them, forbidden
+#   words, and tokens that are not the chart's. Each field is checked on its own.
+summary_problems <- function(headline, summary, facts_text, spec, tokens = character(0)) {
+  fields = c(headline %||% "", summary %||% "")
+  found = unlist(regmatches(fields, gregexpr("\\[\\[N[0-9]+\\]\\]", fields)))
+  list(numbers = unique(unlist(purrr::map(fields, function(x) check_numbers(x, facts_text, spec)))),
+       words = unique(unlist(purrr::map(fields, check_words))),
+       tokens = unique(setdiff(found, tokens)))
+}
+summary_ok <- function(p) !length(p$numbers) && !length(p$words) && !length(p$tokens)
+
+# The problems as the analyst reads them, one sentence each.
+problem_sentences <- function(p)
+  c(if (length(p$numbers)) paste0(p$numbers, " is not a number in this chart's data"),
+    purrr::map_chr(p$words, function(w) if (w %in% SUMMARY_CAUSE_WORDS) paste0("'", w, "' suggests a cause") else paste0("'", w, "' reaches beyond the rows of this file")),
+    if (length(p$tokens)) paste0(p$tokens, " is not a name in this chart"))
+
+# The problems as the repair call is told them, for one chart.
+problem_line <- function(id, p)
+  paste0("Chart ", id, ": ", paste(c(
+    if (length(p$numbers)) paste0("numbers that are not in its FACTS: ", paste(p$numbers, collapse = ", ")),
+    if (length(p$words)) paste0("words that are not allowed: ", paste(p$words, collapse = ", ")),
+    if (length(p$tokens)) paste0("tokens that are not known: ", paste(p$tokens, collapse = ", "))), collapse = "; "), ".")
+
+# One batch of at most SUMMARY_BATCH charts: one call, every reply checked, one repair call for the
+#   charts that failed, checked again. Returns list(results, records).
+summarize_batch <- function(batch, cb, system_txt, ask, m) {
+  user_txt = assemble_summary(batch, cb)
+  first = make_call("summarize", system_txt, user_txt, ask, m, LLM_MAX_TOKENS[["summarize"]], validate_summary)
+  records = list(first$record)
+  judge = function(x, e) if (is.null(e)) NULL else
+    list(entry = e, problems = summary_problems(e$headline, e$summary, x$facts$text, x$spec, names(x$facts$names)))
+  finish = function(x, j, repaired = FALSE, text = SUMMARY_MISSING, detail = NULL) {
+    if (is.null(j)) return(list(id = x$id, headline = NULL, summary = NULL, checked = FALSE, problems = character(0), hash = x$hash,
+                                text = text, detail = detail, repaired = repaired))
+    nm = x$facts$names
+    list(id = x$id, headline = names_back(trimws(j$entry$headline), nm), summary = names_back(trimws(j$entry$summary), nm),
+         checked = summary_ok(j$problems), problems = names_back(problem_sentences(j$problems), nm), hash = x$hash,
+         text = NULL, detail = NULL, repaired = repaired)
+  }
+  if (is.null(first$res))
+    return(list(results = purrr::map(batch, function(x) finish(x, NULL, text = SUMMARY_FAILED, detail = first$error)), records = records))
+  entries = summary_entries(first$res$obj)
+  judged = purrr::map(batch, function(x) judge(x, entries[[x$id]]))
+  bad = which(purrr::map_lgl(judged, function(j) !is.null(j) && !summary_ok(j$problems)))
+  if (!length(bad)) return(list(results = purrr::map2(batch, judged, finish), records = records))
+  repair_user = paste(assemble_summary(batch[bad], cb),
+                      paste0("YOUR REPLY\n", jsonlite::toJSON(list(charts = unname(purrr::map(judged[bad], "entry"))), auto_unbox = TRUE)),
+                      paste0("PROBLEMS\n", paste(purrr::map2_chr(batch[bad], judged[bad], function(x, j) problem_line(x$id, j$problems)), collapse = "\n")),
+                      SUMMARY_REPAIR_ASK, sep = "\n\n")
+  second = make_call("summarize", system_txt, repair_user, ask, m, LLM_MAX_TOKENS[["summarize"]], validate_summary, repair = TRUE)
+  records = c(records, list(second$record))
+  again = if (!is.null(second$res)) summary_entries(second$res$obj) else list()
+  results = purrr::map(seq_along(batch), function(i) {
+    if (!i %in% bad) return(finish(batch[[i]], judged[[i]]))
+    j2 = judge(batch[[i]], again[[batch[[i]]$id]])
+    finish(batch[[i]], j2 %||% judged[[i]], repaired = TRUE)
+  })
+  list(results = results, records = records)
+}
+
+# Headlines and summaries for charts (each a chart as new_chart() makes it, with `exploratory` when
+#   it was suggested), from their facts only. The system prompt is summary.md alone, the same for
+#   every call. Up to SUMMARY_BATCH charts in one call, more in further calls, one after another.
+#   Every headline and summary is checked (check_numbers(), check_words(), the tokens); the charts
+#   that fail get one repair call, and no second. Names are put back for the tokens. Returns
+#   charts, by id in the order given (id, headline, summary, checked, problems, hash of the spec they
+#   were written for, text: a sentence when none was written, detail, repaired), and calls.
+summarize_charts <- function(charts, cb, data, ask = llm_json, palette = chart_palette_default(), m = APP_MODEL) {
+  system_txt = assemble_system("summarize")
+  inputs = purrr::map(unname(charts), function(ch) summary_input(ch, cb, data, palette))
+  usable = purrr::keep(inputs, function(x) is.null(x$error))
+  batches = unname(split(usable, ceiling(seq_along(usable) / SUMMARY_BATCH)))
+  done = purrr::map(batches, function(b) summarize_batch(b, cb, system_txt, ask, m))
+  got = unlist(purrr::map(done, "results"), recursive = FALSE)
+  got = purrr::set_names(got, purrr::map_chr(got, "id"))
+  out = purrr::map(inputs, function(x) got[[x$id]] %||%
+    list(id = x$id, headline = NULL, summary = NULL, checked = FALSE, problems = character(0), hash = x$hash, text = x$error, detail = NULL,
+         repaired = FALSE))
+  list(charts = purrr::set_names(out, purrr::map_chr(inputs, "id")), calls = dplyr::bind_rows(purrr::map(done, function(d) dplyr::bind_rows(d$records))))
+}
