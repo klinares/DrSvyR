@@ -1476,7 +1476,7 @@ facts_scatter <- function(s, cb, t, nm) {
   }
   hl = if (!is.null(s$highlight)) {
     d = t[t$highlighted, , drop = FALSE]
-    paste0("Highlighted point ", nm(s$highlight$column, d[[s$highlight$column]]), ": ", lab(s$x), " ", num(d[[s$x]]), ", ", lab(s$y), " ", num(d[[s$y]]))
+    paste0("Highlighted point ", nm(s$highlight$column, d[[s$highlight$column]]), ": ", lab(s$x), " = ", num(d[[s$x]]), "; ", lab(s$y), " = ", num(d[[s$y]]))
   }
   c(paste0("Points: ", fact_count(nrow(t))),
     paste0("Range of ", lab(s$x), ": ", num(min(x)), " to ", num(max(x))),

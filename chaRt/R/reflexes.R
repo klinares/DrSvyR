@@ -613,24 +613,23 @@ names_out <- function(x, names) {
   purrr::reduce(o, function(acc, i) gsub(names[[i]], names(names)[i], acc, fixed = TRUE), .init = x)
 }
 
-# What one chart gives the summarize call: id, title (names as tokens), facts, spec and the spec's
-#   hash; or error, one sentence, when its table cannot be made.
+# What one chart gives the summarize call: id, title (names as tokens), what a row of its file is,
+#   facts, spec and the spec's hash; or error, one sentence, when its table cannot be made.
 summary_input <- function(chart, cb, data, palette = chart_palette_default()) {
   s = spec_defaults(spec_public(chart$spec))
   t = tryCatch(spec_table(s, data, cb, palette), error = function(e) e)
   if (inherits(t, "error")) return(list(id = chart$id, spec = chart$spec, hash = spec_hash(chart$spec), error = SUMMARY_NO_TABLE))
   lint = spec_lint(s, cb, t, chart_palette_max(palette$qualitative))
   f = spec_facts(lint$spec, t, cb, isTRUE(chart$exploratory))
-  list(id = chart$id, title = names_out(chart$spec$title %||% "(none)", f$names), facts = f, spec = chart$spec, hash = spec_hash(chart$spec))
+  list(id = chart$id, title = names_out(chart$spec$title %||% "(none)", f$names), row_is = if (codebook_ready(cb)) trimws(cb$row_is) else "not yet given",
+       facts = f, spec = chart$spec, hash = spec_hash(chart$spec))
 }
 
-# The user message: the CHARTS block (what a row is, then each chart's id, title and FACTS), then
-#   summary.md's reply format.
-assemble_summary <- function(inputs, cb) {
-  blocks = purrr::map_chr(inputs, function(x) paste0("CHART ", x$id, "\nTitle: ", x$title, "\nFACTS\n", x$facts$text))
-  row_is = if (codebook_ready(cb)) trimws(cb$row_is) else "not yet given"
-  paste(c(paste(c("<CHARTS>", charts_safe(c(paste0("One row is: ", row_is), "", paste(blocks, collapse = "\n\n"))), "</CHARTS>"), collapse = "\n"),
-          reply_format("summarize")),
+# The user message: the CHARTS block (each chart's id, title, what a row of its file is, and FACTS),
+#   then summary.md's reply format.
+assemble_summary <- function(inputs) {
+  blocks = purrr::map_chr(inputs, function(x) paste0("CHART ", x$id, "\nTitle: ", x$title, "\nOne row is: ", x$row_is, "\nFACTS\n", x$facts$text))
+  paste(c(paste(c("<CHARTS>", charts_safe(paste(blocks, collapse = "\n\n")), "</CHARTS>"), collapse = "\n"), reply_format("summarize")),
         collapse = "\n\n")
 }
 
@@ -673,8 +672,8 @@ problem_line <- function(id, p)
 
 # One batch of at most SUMMARY_BATCH charts: one call, every reply checked, one repair call for the
 #   charts that failed, checked again. Returns list(results, records).
-summarize_batch <- function(batch, cb, system_txt, ask, m) {
-  user_txt = assemble_summary(batch, cb)
+summarize_batch <- function(batch, system_txt, ask, m) {
+  user_txt = assemble_summary(batch)
   first = make_call("summarize", system_txt, user_txt, ask, m, LLM_MAX_TOKENS[["summarize"]], validate_summary)
   records = list(first$record)
   judge = function(x, e) if (is.null(e)) NULL else
@@ -693,7 +692,7 @@ summarize_batch <- function(batch, cb, system_txt, ask, m) {
   judged = purrr::map(batch, function(x) judge(x, entries[[x$id]]))
   bad = which(purrr::map_lgl(judged, function(j) !is.null(j) && !summary_ok(j$problems)))
   if (!length(bad)) return(list(results = purrr::map2(batch, judged, finish), records = records))
-  repair_user = paste(assemble_summary(batch[bad], cb),
+  repair_user = paste(assemble_summary(batch[bad]),
                       paste0("YOUR REPLY\n", jsonlite::toJSON(list(charts = unname(purrr::map(judged[bad], "entry"))), auto_unbox = TRUE)),
                       paste0("PROBLEMS\n", paste(purrr::map2_chr(batch[bad], judged[bad], function(x, j) problem_line(x$id, j$problems)), collapse = "\n")),
                       SUMMARY_REPAIR_ASK, sep = "\n\n")
@@ -716,12 +715,15 @@ summarize_batch <- function(batch, cb, system_txt, ask, m) {
 #   charts, by id in the order given (id, headline, summary, checked, problems, hash of the spec they
 #   were written for, text: a sentence when none was written, detail, repaired, and with a text the
 #   facts with names and the spec, for checking the analyst's edits), and calls.
-summarize_charts <- function(charts, cb, data, ask = llm_json, palette = chart_palette_default(), m = APP_MODEL) {
+summarize_charts <- function(charts, cb, data, ask = llm_json, palette = chart_palette_default(), m = APP_MODEL)
+  summarize_inputs(purrr::map(unname(charts), function(ch) summary_input(ch, cb, data, palette)), ask, m)
+
+# The same, from summary_input()s, which may come from different files.
+summarize_inputs <- function(inputs, ask = llm_json, m = APP_MODEL) {
   system_txt = assemble_system("summarize")
-  inputs = purrr::map(unname(charts), function(ch) summary_input(ch, cb, data, palette))
   usable = purrr::keep(inputs, function(x) is.null(x$error))
   batches = unname(split(usable, ceiling(seq_along(usable) / SUMMARY_BATCH)))
-  done = purrr::map(batches, function(b) summarize_batch(b, cb, system_txt, ask, m))
+  done = purrr::map(batches, function(b) summarize_batch(b, system_txt, ask, m))
   got = unlist(purrr::map(done, "results"), recursive = FALSE)
   got = purrr::set_names(got, purrr::map_chr(got, "id"))
   out = purrr::map(inputs, function(x) got[[x$id]] %||%

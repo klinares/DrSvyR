@@ -1,5 +1,57 @@
 # chaRt: status
 
+## Phase 5, 2026-11-18: headlines and summaries, every number checked
+
+Branch `chart`. Not pushed. One live run on `claude-sonnet-5-5`: 4 calls (2 and 2 repairs).
+
+### Built
+
+- Reflex files: `summary.md` (new, 10 reflexes, the `summarize` call's only file) and `refine.md`
+  0.2; checksums in `REFLEX_SHA`.
+- `R/spec.R`: a group whose x has fewer than `SPEC_FIT_MIN_DISTINCT` (10) different values, or whose
+  fit raises a warning or an error (`fit_works()`), gets no curve and the note "No curve for
+  <group>: too few different values of <x>." (a failed fit: "the curve could not be fitted."); the
+  code leaves it out too. `spec_facts(spec, table, cb, exploratory)`: the facts of each family,
+  from the plotted table, names of id and text columns as tokens; `fact_num()` and the other
+  formatters write each value one way.
+- `R/reflexes.R`: `check_numbers()` (values, not strings; rounding keeps two significant digits;
+  filter and top_n values; years in the facts; one to twelve as words) and `check_words()` with
+  `SUMMARY_FORBIDDEN`. `summarize_charts()` and `summarize_inputs()`: batches of `SUMMARY_BATCH`
+  (8), one repair for the charts that failed, names put back, `checked`, and the spec's hash
+  (`spec_hash()`).
+- `R/ui.R`: the "Headline and summary" box in the wide view (Write, two boxes checked on every
+  edit, the one-line result, "The chart has changed since this was written." with Write again);
+  the title box checked the same way; the headline above a card's chart; the report button above
+  the cards. `app.R`: `stories` in the shared state.
+- `tests/smoke.R`: 213 checks (184, the summarize prompt check, and 28 for Phase 5).
+  `tests/llm_check.R` step 7 and `live_summary()` in `tests/live_gallery.R`; the page has a
+  "Phase 5" section.
+
+### The live run
+
+Ten charts, all checked in the end: 7 at once, 3 after a repair. The repairs were for 1,851 (the
+model added rows used and rows left out), "one" (in "the only positive one", read as the number 1)
+and 8 (the number of regions, which a bar's facts do not state). Input tokens 7,343 fresh and
+3,537 from the cache (the 1,179-token system prompt, after the first call).
+
+### Departures
+
+- `spec_facts()` takes `exploratory`, which a chart holds and its spec does not.
+- The CHARTS block gives "One row is" for each chart, so the live run can send charts of three
+  files in one batch through `summarize_inputs()`; `summarize_charts()` is that for one file.
+- A chart missing from a reply is not sent in the repair call; only charts whose text failed are.
+- A fit that fails with enough different values gets its own note, not the "too few" one.
+- The report button counts the charts it will send, not all the report's charts.
+- The wide view was checked with `shiny::testServer()`, not in a browser.
+
+### Noticed, not changed
+
+- A histogram's top bin can reach past the data (34.8 to 45.2 on scores that end at 40); the facts
+  give the bin's edges as ggplot2 draws them.
+- A heatmap's row and column "mean" is the mean of the cells, not of the rows behind them, and the
+  facts do not say so; the model wrote it as the goalkeepers' mean age.
+- "one" as a pronoun fails the number check.
+
 ## Phase 4, 2026-11-18: the chat that refines a chart
 
 Branch `chart`. Not pushed. One live run on `claude-sonnet-5-5`: 14 calls.

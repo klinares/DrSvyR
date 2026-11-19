@@ -6,7 +6,8 @@
 #   and saves everything, the raw replies included, to tests/live_replies.rds (git-ignored).
 #   Given `labelled` (the codebooks of an earlier run, live_labelled()), it makes no label call;
 #   LIVE_FILES_3B is the short run of Phase 3b, five suggest calls. live_refine() is Phase 4's run of
-#   chat turns (LIVE_REFINE), saved beside the rest as `phase4` and shown under its own heading.
+#   chat turns (LIVE_REFINE), saved beside the rest as `phase4` and shown under its own heading;
+#   live_summary() is Phase 5's ten headlines and summaries (LIVE_SUMMARY), saved as `phase5`.
 #   live_page() writes tests/live_gallery.html (git-ignored) from that file: per question, the
 #   question, cannot, and each chart with its notes, say, rule label and spec as YAML.
 
@@ -231,6 +232,109 @@ live_phase4_html <- function(p4, work) {
 }
 
 
+# ---- Phase 5: headlines and summaries on hand-written charts --------------------------------------
+
+# Ten charts from hand-written specs (no other call), across three files; the last is exploratory.
+LIVE_SUMMARY <- list(
+  list(file = "FH_disaggregated.csv", missing = "..", row_is = "one country", charts = list(
+    list(id = "fh_bar", spec = list(family = "bar", x = "Country", y = "pr_2014", fn = "none", top_n = 10,
+                                    title = "Countries with the highest political rights scores, 2014")),
+    list(id = "fh_scatter", spec = list(family = "scatter", x = "cl_2014", y = "pr_2014", fit = "loess",
+                                        highlight = list(column = "Country", values = list("Norway", "Cuba")),
+                                        title = "Political rights against civil liberties, 2014")),
+    list(id = "fh_hist", spec = list(family = "histogram", x = "pr_2014", title = "Political rights scores, 2014")))),
+  list(file = "footballdata-1.csv", missing = character(0), row_is = "one player", charts = list(
+    list(id = "fb_box", spec = list(family = "box", x = "Position", y = "Height", title = "Height by position")),
+    list(id = "fb_nat", spec = list(family = "bar", x = "Nationality", fn = "count", top_n = 15, title = "The 15 most common nationalities")),
+    list(id = "fb_heat", spec = list(family = "heatmap", x = "Position", y = "League", color = "Age", fn = "mean",
+                                     title = "Mean age by league and position")),
+    list(id = "fb_scatter", spec = list(family = "scatter", x = "Defence", y = "Attack", color = "Position",
+                                        title = "Attack against defence, by position")))),
+  list(file = "panel.csv", missing = character(0), row_is = "one region in one year", charts = list(
+    list(id = "pn_slope", spec = list(family = "slope", x = "year", y = "revenue", color = "region", fn = "sum",
+                                      filter = list(list(column = "year", op = "in", value = list(2015, 2024))),
+                                      title = "Revenue by region, 2015 and 2024")),
+    list(id = "pn_line", spec = list(family = "line", x = "year", y = "revenue", color = "region", facet = "region", fn = "sum",
+                                     title = "Revenue by year, one panel per region")),
+    list(id = "pn_bar", exploratory = TRUE, spec = list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Total revenue by region")))))
+
+# The summaries, through summarize_inputs() and llm_json() with the key, on the codebooks labelled
+#   in the saved run when it has them. Prints each call, each chart's facts, headline, summary and
+#   checks, and the totals; adds the run to the saved file as `phase5`. Returns the results.
+live_summary <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds = LIVE_RDS, labelled = live_labelled(rds)) {
+  work = tempfile("live5_")
+  dir.create(work)
+  asker = live_asker(key)
+  files = purrr::compact(purrr::map(LIVE_SUMMARY, function(ls) {
+    g = live_load(ls, work)
+    if (is.null(g)) { say("\n---- ", ls$file, ": not found, skipped"); return(NULL) }
+    g$cb = labelled[[ls$file]]$codebook %||% g$cb
+    g$cb$row_is = ls$row_is
+    list(ls = ls, g = g)
+  }))
+  inputs = unlist(purrr::map(files, function(f) purrr::map(f$ls$charts, function(ch) {
+    chart = new_chart(ch$id, ch$spec)
+    chart$exploratory = isTRUE(ch$exploratory)
+    c(summary_input(chart, f$g$cb, f$g$data), list(file = f$ls$file, exploratory = chart$exploratory))
+  })), recursive = FALSE)
+  res = summarize_inputs(inputs, ask = asker$ask, m = m)
+  say("\n---- Calls")
+  purrr::walk(fmt_calls(res$calls), say)
+  charts = purrr::map(inputs, function(x) {
+    r = res$charts[[x$id]]
+    say("\n---- ", x$id, " (", x$file, "): ", x$spec$title, if (isTRUE(x$exploratory)) " [exploratory]")
+    if (!is.null(x$error)) { say("  ", x$error); return(list(id = x$id, file = x$file, spec = x$spec, error = x$error)) }
+    say("  FACTS")
+    purrr::walk(strsplit(x$facts$text, "\n", fixed = TRUE)[[1]], function(l) say("    ", l))
+    if (length(x$facts$names)) say("    (names: ", paste(names(x$facts$names), x$facts$names, sep = " = ", collapse = "; "), ")")
+    if (is.null(r$headline)) say("  NO TEXT: ", r$text)
+    else say("  HEADLINE: ", r$headline, "\n  SUMMARY:  ", r$summary)
+    say("  CHECK:    ", if (isTRUE(r$checked)) "every number is in the facts; no forbidden word" else paste(r$problems, collapse = "; "),
+        if (isTRUE(r$repaired)) " (after a repair)" else "")
+    list(id = x$id, file = x$file, spec = x$spec, exploratory = x$exploratory, facts = x$facts$text, names = x$facts$names,
+         headline = r$headline, summary = r$summary, checked = r$checked, problems = r$problems, text = r$text, repaired = r$repaired)
+  })
+  calls = res$calls
+  ok = purrr::map_lgl(charts, function(ch) isTRUE(ch$checked))
+  say("\n---- Totals")
+  say("  charts ", length(charts), " (checked ", sum(ok), ", not checked ", length(charts) - sum(ok), ", repaired ",
+      sum(purrr::map_lgl(charts, function(ch) isTRUE(ch$repaired))), "); calls ", nrow(calls), "; repairs ", sum(calls$repair),
+      "; seconds ", sprintf("%.0f", sum(calls$seconds, na.rm = TRUE)))
+  say("  tokens in: fresh ", format_num(sum(calls$tokens_in, na.rm = TRUE)), ", cached ", format_num(sum(calls$tokens_cached, na.rm = TRUE)),
+      "; out ", format_num(sum(calls$tokens_out, na.rm = TRUE)))
+  run = if (file.exists(rds)) readRDS(rds) else list(files = list(), calls = NULL)
+  run$phase5 = list(model = m$id, when = format(Sys.time(), "%Y-%m-%d %H:%M"), charts = charts, calls = calls, log = asker$log,
+                    codebooks = purrr::set_names(purrr::map(files, function(f) f$g$cb), purrr::map_chr(files, function(f) f$ls$file)))
+  saveRDS(run, rds)
+  say("  saved ", rds, " (phase5: ", length(asker$log), " raw replies)")
+  invisible(charts)
+}
+
+# The Phase 5 section of the page: each chart with its headline above it, its summary and the
+#   checks under it, then its facts.
+live_phase5_html <- function(p5, work) {
+  if (is.null(p5)) return("")
+  body = purrr::map_chr(p5$charts, function(ch) {
+    lf = purrr::detect(LIVE_SUMMARY, function(x) identical(x$file, ch$file))
+    g = live_load(lf, work)
+    cb = p5$codebooks[[ch$file]] %||% g$cb
+    p = tryCatch(spec_plot(ch$spec, g$data, cb), error = function(e) e)
+    paste0("<div class=\"card\"><p class=\"muted\">", esc(ch$id), " &middot; ", esc(ch$file), if (isTRUE(ch$exploratory)) " &middot; Exploratory", "</p>",
+           "<h3>", esc(ch$headline %||% "(no headline)"), "</h3>",
+           if (inherits(p, "error")) paste0("<p class=\"bad\">Could not draw: ", esc(conditionMessage(p)), "</p>") else png_of(p),
+           "<p>", esc(ch$summary %||% ch$text %||% ch$error), "</p>",
+           "<p class=\"", if (isTRUE(ch$checked)) "muted" else "bad", "\">",
+           if (isTRUE(ch$checked)) "Every number matches the chart's data." else esc(paste(ch$problems, collapse = "; ")),
+           if (isTRUE(ch$repaired)) " (after a repair)", "</p>",
+           "<details><summary>Facts</summary><pre>", esc(ch$facts %||% ""), "</pre>",
+           if (length(ch$names)) paste0("<p class=\"muted\">", esc(paste(names(ch$names), ch$names, sep = " = ", collapse = "; ")), "</p>"),
+           "</details></div>")
+  })
+  paste0("<h1>Phase 5</h1><p class=\"muted\">", esc(p5$model), ", ", esc(p5$when), "; ", nrow(p5$calls), " calls.</p>",
+         "<div class=\"grid\">", paste(body, collapse = ""), "</div>")
+}
+
+
 # ---- the page ---------------------------------------------------------------------------------------
 
 esc <- function(x) htmltools::htmlEscape(paste(x, collapse = " "))
@@ -291,7 +395,7 @@ live_page <- function(rds = LIVE_RDS, out = LIVE_OUT) {
               "td,th{padding:2px 8px;text-align:left;border-bottom:1px solid #eee}pre{white-space:pre-wrap}")
   html = paste0("<!doctype html><html><head><meta charset=\"utf-8\"><title>chaRt live run</title><style>", css, "</style></head><body>",
                 "<h1>chaRt Phase 3 live run</h1><p class=\"muted\">", esc(run$model), ", ", esc(run$when), "; ", nrow(run$calls), " calls.</p>",
-                paste(body, collapse = ""), live_phase4_html(run$phase4, work), "</body></html>")
+                paste(body, collapse = ""), live_phase4_html(run$phase4, work), live_phase5_html(run$phase5, work), "</body></html>")
   writeLines(html, out, useBytes = TRUE)
   cat("Wrote ", out, " (", round(file.size(out) / 1e6, 1), " MB).\n", sep = "")
   invisible(out)

@@ -105,6 +105,15 @@ one question back, or says what the chat cannot do (colours, a pie, undoing). Ev
 change can be undone, and Reset returns to the chart as first drawn. A chart added to the report
 and refined afterwards is the refined one in the report.
 
+**Headline and summary**, under the chart in the wide view: "Write headline and summary" makes one
+call. R computes the chart's facts from its table (the model never sees rows, and names in id or
+text columns are sent as tokens), the model writes from those facts only, and R checks every number
+and the forbidden words; a reply that fails is sent back once with the problems. Both texts can be
+edited, and every edit is checked again with no call; a failed check warns and never blocks. When
+the chart changes, the box says so and offers "Write again". The title box is checked the same way.
+Once a chart is in the report, a button above the cards writes for every report chart that has no
+headline or has changed since.
+
 The rules the model follows are the reflex files in `www/reflexes/`. They are read when the app
 starts; a file that has lost its shape stops the app there, naming the file and the rule.
 
@@ -134,7 +143,7 @@ process and compares with the table. It tests each lint rule and refuses a set o
 printing what each refusal said. It checks that every reflex file parses and has the checksum the
 test holds (update `REFLEX_SHA` in `tests/smoke.R` when a file changes on purpose), that the
 system prompts hold no Source, Label or comment text, that `spec_reference()` covers exactly what
-`spec_check()` accepts, and runs both calls against stand-in replies. The gallery shows every gold spec as a page: its lint notes, the
+`spec_check()` accepts, and runs the calls against stand-in replies. The gallery shows every gold spec as a page: its lint notes, the
 static chart beside its plotly version at the same size, the first rows of its table, and its
 code. The live check reads `ANTHROPIC_API_KEY` and
 `OPENROUTER_API_KEY` from the environment (a test may; the app never does), pings the home model,
@@ -142,7 +151,7 @@ and asks for structured output in the Anthropic style and, through OpenRouter, i
 that stands in for the work endpoint. Its fourth check labels FH, football and a made-up panel
 file and asks twelve questions of the suggest call (about 20 calls), printing what each call cost
 and returned; it saves the replies to `tests/live_replies.rds` and writes `tests/live_gallery.html`
-(both git-ignored). Its fifth check asks five questions on the codebooks labelled in the last saved run (no label call). Each call prints its input tokens read fresh and from the prompt cache. Its sixth check sends fourteen chat turns to three hand-written charts and shows them on the page under "Phase 4". `CHART_LIVE_STEPS` chooses the checks (for example `1,6`). `CHART_TEST_MODEL`
+(both git-ignored). Its fifth check asks five questions on the codebooks labelled in the last saved run (no label call). Each call prints its input tokens read fresh and from the prompt cache. Its sixth check sends fourteen chat turns to three hand-written charts and shows them on the page under "Phase 4". Its seventh asks for headlines and summaries of ten hand-written charts on three files (two calls and any repairs) and shows them under "Phase 5". `CHART_LIVE_STEPS` chooses the checks (for example `1,7`). `CHART_TEST_MODEL`
 replaces the home model for checks 1, 2 and 4 (Sonnet models only); `OPENROUTER_MODEL` replaces the
 OpenRouter model.
 

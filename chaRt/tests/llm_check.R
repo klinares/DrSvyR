@@ -16,6 +16,8 @@
 #      run, no label call; it saves and writes the same two files.
 #   6. Phase 4: fourteen chat turns on three hand-written charts (LIVE_REFINE), through
 #      refine_chart(); saved beside the rest and shown on the page under "Phase 4".
+#   7. Phase 5: headlines and summaries for ten hand-written charts on three files (LIVE_SUMMARY),
+#      through summarize_inputs(): two calls and any repairs; saved and shown under "Phase 5".
 # CHART_LIVE_STEPS chooses which run, for example "1,6"; 1 to 4 by default.
 # Structured output is ellmer's Chat$chat_structured(..., type, echo, convert), with the type built
 #   from type_object(), type_enum(values), type_string() and type_boolean(); checked in ellmer 0.4.2.
@@ -172,6 +174,22 @@ if (step_on(6)) {
   } else {
     started <- Sys.time()
     live_refine(home, ANTHROPIC_KEY, say)
+    say("  wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))), " s")
+    live_page()
+  }
+}
+
+# ---- 7. Phase 5: headlines and summaries ------------------------------------------------------------
+
+if (step_on(7)) {
+  heading(7, "Phase 5: summarize_inputs() on ten charts")
+  if (!exists("live_summary")) source(file.path("tests", "live_gallery.R"))
+  say("Model:  ", home$id, " at ", home$base_url)
+  if (!nzchar(ANTHROPIC_KEY)) {
+    say("Result: no call was made; ANTHROPIC_API_KEY is not set.")
+  } else {
+    started <- Sys.time()
+    live_summary(home, ANTHROPIC_KEY, say)
     say("  wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))), " s")
     live_page()
   }
