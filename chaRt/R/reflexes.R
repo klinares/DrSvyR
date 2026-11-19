@@ -406,3 +406,106 @@ suggest_charts <- function(cb, data, question = NULL, ask = llm_json, palette = 
   res$replies = list(first = first$res$raw, repair = second$res$raw)
   res
 }
+
+
+# ---- refine_chart(): the chat beside one chart ----------------------------------------------------
+
+REFINE_FAILED <- "The model's reply could not be read, so the chart was not changed."
+REFINE_NOT_ONE <- "The model's reply did not give exactly one of a spec, a question or a reason it cannot, so the chart was not changed."
+REFINE_REPAIR_ASK <- "Send the whole reply again with the spec corrected, or give ask or cannot instead."
+
+# A chart on the Explore tab: its id, the spec as the model or the analyst last left it (no dot-fields),
+#   R's notes for it, the spec it was first drawn with, and the specs before this one (the latest
+#   last), for Undo.
+new_chart <- function(id, spec, notes = character(0))
+  list(id = id, spec = spec_public(spec), notes = as.character(notes), first = spec_public(spec), history = list())
+
+# An accepted change: the spec before it goes onto the chart's history.
+chart_apply <- function(chart, spec, notes = character(0)) {
+  chart$history = c(chart$history, list(chart$spec))
+  chart$spec = spec_public(spec)
+  chart$notes = as.character(notes)
+  chart
+}
+
+# Undo: back one spec. Reset: the spec the chart was first drawn with, the present one kept on the
+#   history so Undo can bring it back. Neither calls a model; the notes are for the page to redraw.
+chart_undo <- function(chart) {
+  n = length(chart$history)
+  if (!n) return(chart)
+  chart$spec = chart$history[[n]]
+  chart$history = chart$history[-n]
+  chart
+}
+chart_reset <- function(chart) {
+  if (identical(chart$spec, chart$first)) return(chart)
+  chart_apply(chart, chart$first, chart$notes)
+}
+
+# The columns a spec names, filters included, that are in the codebook.
+chart_columns <- function(spec, cb) {
+  fl = spec$filter
+  fl = if (!is.null(names(fl))) list(fl) else fl
+  cols = unique(c(spec_columns(spec), unlist(purrr::map(fl, "column"), use.names = FALSE)))
+  intersect(cols, purrr::map_chr(cb$columns, "name"))
+}
+
+# The user message of a chat turn: the DATA block (the index, and detail for the spec's own
+#   columns), CURRENT SPEC, NOTES, LAST EXCHANGE (one turn back, when there was one), ANALYST: and
+#   the message, then refine.md's reply format.
+assemble_refine <- function(chart, message, cb, last = NULL) {
+  notes = if (length(chart$notes)) paste0("- ", chart$notes, collapse = "\n") else "none"
+  paste(c(data_block(cb, chart_columns(chart$spec, cb)),
+          paste0("CURRENT SPEC\n", jsonlite::toJSON(spec_public(chart$spec), auto_unbox = TRUE, digits = NA)),
+          paste0("NOTES\n", notes),
+          if (!is.null(last)) paste0("LAST EXCHANGE\nANALYST: ", clean_question(last$message), "\nREPLY: ", last$reply),
+          paste("ANALYST:", clean_question(message)),
+          reply_format("refine")),
+        collapse = "\n\n")
+}
+
+# What a reply is: exactly one of spec, ask and cannot, or a failure.
+refine_kind <- function(obj) {
+  has = c(spec = is.list(obj$spec) && !is.null(names(obj$spec)), ask = is_text1(obj$ask) && nzchar(obj$ask),
+          cannot = is_text1(obj$cannot) && nzchar(obj$cannot))
+  if (sum(has) != 1L) "failed" else names(has)[has]
+}
+
+# One chat turn on one chart. The reply gives exactly one of spec, ask and cannot. A spec is checked
+#   as a suggested chart is (an unknown rule removed, spec_check(), spec_table(), the lint); if it is
+#   refused, one repair call with the sentences, and no second. Returns chart (changed only for an
+#   accepted spec, the old spec on its history), kind ("spec", "ask", "cannot" or "failed"), text
+#   (say, the question, the reason, or the sentences), new_notes (lint notes the chart did not have),
+#   last (this exchange, for the next turn), repaired, detail and calls.
+refine_chart <- function(chart, message, cb, data, last = NULL, ask = llm_json, palette = chart_palette_default(), m = APP_MODEL) {
+  system_txt = assemble_system("refine")
+  user_txt = assemble_refine(chart, message, cb, last)
+  rule_ids = suggest_rule_ids()
+  first = make_call("refine", system_txt, user_txt, ask, m, LLM_MAX_TOKENS[["refine"]])
+  records = list(first$record)
+  done = function(kind, text, new = chart, notes = character(0), repaired = FALSE, detail = NULL)
+    list(chart = new, kind = kind, text = text, new_notes = setdiff(notes, chart$notes),
+         last = list(message = clean_question(message), reply = paste(text, collapse = " ")),
+         repaired = repaired, detail = detail, calls = dplyr::bind_rows(records))
+  read = function(res, repaired) {
+    kind = refine_kind(res$obj)
+    if (identical(kind, "failed")) return(done("failed", REFINE_NOT_ONE, repaired = repaired, detail = substr(res$raw, 1, 600)))
+    if (!identical(kind, "spec")) return(done(kind, trimws(res$obj[[kind]]), repaired = repaired))
+    checked = check_chart(res$obj$spec, cb, data, palette, rule_ids)
+    if (!checked$ok) return(list(bad = checked))
+    say = if (is_text1(res$obj$say) && nzchar(res$obj$say)) trimws(res$obj$say) else "The chart was changed."
+    done("spec", say, chart_apply(chart, checked$spec, checked$notes), checked$notes, repaired = repaired)
+  }
+  if (is.null(first$res)) return(done("failed", REFINE_FAILED, detail = first$error))
+  out = read(first$res, FALSE)
+  if (is.null(out$bad)) return(out)
+  repair_user = paste(user_txt, paste0("YOUR REPLY\n", first$res$raw), paste0("PROBLEMS\n", paste(out$bad$sentences, collapse = " ")),
+                      REFINE_REPAIR_ASK, sep = "\n\n")
+  second = make_call("refine", system_txt, repair_user, ask, m, LLM_MAX_TOKENS[["refine"]], repair = TRUE)
+  records = c(records, list(second$record))
+  if (is.null(second$res)) return(done("failed", out$bad$sentences, repaired = TRUE, detail = second$error))
+  again = read(second$res, TRUE)
+  if (is.null(again$bad)) return(again)
+  done("failed", again$bad$sentences, repaired = TRUE)
+}
+
