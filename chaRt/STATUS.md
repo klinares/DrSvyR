@@ -1,5 +1,71 @@
 # chaRt: status
 
+## Phase 4, 2026-11-18: the chat that refines a chart
+
+Branch `chart`. Not pushed. One live run on `claude-sonnet-5-5`: 14 calls.
+
+### Built
+
+- Reflex files: `refine.md` (new, 7 reflexes) and `suggest.md` 0.3; checksums in `REFLEX_SHA`.
+- `R/spec.R`: a fitted curve is trimmed to the 1st and 99th percentiles of x within each colour or
+  facet group of `SPEC_FIT_TRIM_N` rows or more (`fit_ranges()`, `fit_calls()`: one
+  `geom_smooth(data = ~ filter(.x, ...), xseq = ...)` per such group, one untrimmed layer for the
+  smaller groups), for loess and linear. A slope's colour note comes only past the palette's own
+  limit. A sideways grouped bar dodges with `position_dodge(reverse = TRUE)`, so the first legend
+  entry is the top bar.
+- `R/reflexes.R`: `CHART_FILES` (seven files) for both `suggest` and `refine`, so their system
+  prompts are identical; `CALL_REPLY` and `reply_format()` end each user message with its own
+  file's reply format. `refine_chart()`, `assemble_refine()`, `refine_kind()`, `new_chart()`,
+  `chart_apply()`, `chart_undo()`, `chart_reset()`, `chart_columns()`.
+- `R/ui.R`: charts get ids (`state$charts`); the report holds ids. Each card has "Refine", which
+  opens the wide view: the chart, its notes and rule, Interactive view, Show code and Add to report
+  on the left; Back to all charts, five wording boxes (`updateOn = "blur"`) with Apply wording, Undo
+  and Reset, and a shinychat chat on the right. Each chart keeps its chat, history and last
+  exchange. `mod_explore_server()` takes `ask`, for the test's stand-in.
+- `app.R`: shinychat in `APP_PACKAGES`; `charts` in the shared state.
+- `tests/smoke.R`: 184 checks (166 and 18 new). `tests/llm_check.R` step 6 and `live_refine()` in
+  `tests/live_gallery.R`; the page has a "Phase 4" section.
+
+### shinychat 0.4.0, as installed
+
+- `chat_ui(id, ..., messages, greeting, placeholder, width, height, fill, icon_assistant,
+  enable_cancel, footer)`: `messages` is a list of `list(role, content)`.
+- The analyst's message arrives as `input[[paste0(id, "_user_input")]]`.
+- `chat_append_message(id, msg, chunk = FALSE, operation, icon, session)` appends one complete
+  message (`msg = list(role, content)`).
+- The client disables its own input from the moment a message is sent until a complete message is
+  appended (`inputDisabled` in its JavaScript); there is no server function to disable it, and none
+  is needed.
+
+### The live run
+
+14 turns: 8 specs, 2 questions back, 4 cannot, no failure, no repair; 36 s. Input tokens 24,283
+fresh and 80,080 from the cache: after the first call every turn read the 6,160-token system prompt
+from the cache, across all three files.
+
+### Against refine.md
+
+- `smallest_change`: "just show 2015 against 2024" also changed the line to a slope.
+- "add a straight line instead of the curve" on a chart with no curve: the say speaks of the
+  curve becoming a line.
+- "title it Islands pulled ahead": the title was copied exactly, but the say adds that the title
+  states a finding not checked against the values, which `analyst_words` says is not the model's
+  concern.
+
+### Departures
+
+- The live run used the codebooks labelled in the saved run, so it made no label call; it is saved
+  in `tests/live_replies.rds` as `phase4`, beside the Phase 3b run.
+- A refine reply is not passed to `llm_json()` with a validate function, so a reply with more
+  than one of spec, ask and cannot, or none, fails at once instead of being retried.
+- The wide view and the chat were checked with `shiny::testServer()`, not in a browser.
+
+### Noticed, not changed
+
+- The football goalkeepers' Attack has 8 distinct values; a loess curve on that group fails
+  however it is drawn, and ggplot2 leaves it out with warnings (the 3b chart of attack against
+  defence coloured by position).
+
 ## Phase 3b, 2026-11-18: fixes after the first live run
 
 Branch `chart`. Not pushed. One live run on `claude-sonnet-5-5`: 5 calls.

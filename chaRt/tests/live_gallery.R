@@ -5,7 +5,8 @@
 #   llm_json(), the key passed in and never printed), printing what each call cost and returned,
 #   and saves everything, the raw replies included, to tests/live_replies.rds (git-ignored).
 #   Given `labelled` (the codebooks of an earlier run, live_labelled()), it makes no label call;
-#   LIVE_FILES_3B is the short run of Phase 3b, five suggest calls.
+#   LIVE_FILES_3B is the short run of Phase 3b, five suggest calls. live_refine() is Phase 4's run of
+#   chat turns (LIVE_REFINE), saved beside the rest as `phase4` and shown under its own heading.
 #   live_page() writes tests/live_gallery.html (git-ignored) from that file: per question, the
 #   question, cannot, and each chart with its notes, say, rule label and spec as YAML.
 
@@ -146,6 +147,90 @@ live_run <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds =
 }
 
 
+# ---- Phase 4: chat turns on hand-written charts --------------------------------------------------
+
+# Three charts drawn from hand-written specs (no suggest call), each with the analyst's messages in
+#   order; every turn works on the chart as the turn before left it.
+LIVE_REFINE <- list(
+  list(file = "footballdata-1.csv", missing = character(0), row_is = "one player",
+       spec = list(family = "bar", x = "Position", fn = "count", title = "Players by position"),
+       turns = c("make it a dot plot", "only the Bundesliga and LaLiga", "split it by league instead of filtering",
+                 "make it a pie chart", "use red and blue")),
+  list(file = "panel.csv", missing = character(0), row_is = "one region in one year",
+       spec = list(family = "line", x = "year", y = "revenue", color = "region", fn = "none", title = "Revenue by year and region"),
+       turns = c("highlight Islands and Coast", "just show 2015 against 2024", "sort the regions alphabetically",
+                 "title it Islands pulled ahead", "undo that")),
+  list(file = "FH_disaggregated.csv", missing = "..", row_is = "one country",
+       spec = list(family = "scatter", x = "cl_2014", y = "pr_2014", title = "Political rights against civil liberties, 2014"),
+       turns = c("label Norway and Cuba", "add a straight line instead of the curve", "show it over time", "group them")))
+
+# The chat turns, through refine_chart() and llm_json() with the key, on the codebooks labelled in
+#   the saved run when it has them. Prints each turn and the totals, and adds the run to the saved
+#   file as `phase4`, beside what is there. Returns the turns.
+live_refine <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds = LIVE_RDS, labelled = live_labelled(rds)) {
+  work = tempfile("live4_")
+  dir.create(work)
+  asker = live_asker(key)
+  charts = purrr::map(LIVE_REFINE, function(lr) {
+    g = live_load(lr, work)
+    if (is.null(g)) { say("\n---- ", lr$file, ": not found, skipped"); return(NULL) }
+    cb = labelled[[lr$file]]$codebook %||% g$cb
+    start = check_chart(lr$spec, cb, g$data, chart_palette_default(), suggest_rule_ids())
+    say("\n---- ", lr$file, ": ", lr$spec$family, " - ", lr$spec$title, if (!start$ok) paste0(" (REFUSED: ", paste(start$sentences, collapse = " "), ")"))
+    if (!start$ok) return(NULL)
+    chart0 = new_chart(lr$file, start$spec, start$notes)
+    steps = purrr::accumulate(lr$turns, function(acc, msg) {
+      r = refine_chart(acc$chart, msg, cb, g$data, last = acc$last, ask = asker$ask, m = m)
+      say("\n  ANALYST: ", msg)
+      purrr::walk(fmt_calls(r$calls), say)
+      say("    came back: ", r$kind, if (isTRUE(r$repaired)) " (after a repair)" else "", "\n    reply: ", refine_reply(r))
+      if (identical(r$kind, "spec")) say("    spec:\n", paste0("      ", strsplit(yaml::as.yaml(r$chart$spec), "\n", fixed = TRUE)[[1]], collapse = "\n"))
+      list(chart = r$chart, last = r$last, message = msg, result = r)
+    }, .init = list(chart = chart0, last = NULL, message = NULL, result = NULL))
+    list(file = lr$file, cb = cb, start = chart0, turns = purrr::map(steps[-1], function(st)
+      list(message = st$message, kind = st$result$kind, text = refine_reply(st$result), repaired = st$result$repaired,
+           spec = st$chart$spec, accepted = identical(st$result$kind, "spec"), calls = st$result$calls)))
+  })
+  charts = purrr::compact(charts)
+  turns = unlist(purrr::map(charts, "turns"), recursive = FALSE)
+  calls = dplyr::bind_rows(purrr::map(turns, "calls"))
+  kinds = table(factor(purrr::map_chr(turns, "kind"), levels = c("spec", "ask", "cannot", "failed")))
+  say("\n---- Totals")
+  say("  turns ", length(turns), " (", paste(names(kinds), kinds, collapse = ", "), "); calls ", nrow(calls), "; repairs ", sum(calls$repair),
+      "; seconds ", sprintf("%.0f", sum(calls$seconds, na.rm = TRUE)))
+  say("  tokens in: fresh ", format_num(sum(calls$tokens_in, na.rm = TRUE)), ", cached ", format_num(sum(calls$tokens_cached, na.rm = TRUE)),
+      "; out ", format_num(sum(calls$tokens_out, na.rm = TRUE)))
+  run = if (file.exists(rds)) readRDS(rds) else list(files = list(), calls = NULL)
+  run$phase4 = list(model = m$id, when = format(Sys.time(), "%Y-%m-%d %H:%M"), charts = charts, calls = calls, log = asker$log)
+  saveRDS(run, rds)
+  say("  saved ", rds, " (phase4: ", length(asker$log), " raw replies)")
+  invisible(charts)
+}
+
+# The Phase 4 section of the page: each chart as first drawn, then each turn with the reply, and the
+#   chart after every accepted turn.
+live_phase4_html <- function(p4, work) {
+  if (is.null(p4)) return("")
+  draw = function(spec, g, cb) {
+    p = tryCatch(spec_plot(spec, g$data, cb), error = function(e) e)
+    if (inherits(p, "error")) paste0("<p class=\"bad\">Could not draw: ", esc(conditionMessage(p)), "</p>")
+    else paste0(png_of(p), if (length(attr(p, "notes"))) paste0("<ul class=\"notes\">", paste0("<li>", purrr::map_chr(attr(p, "notes"), esc), "</li>", collapse = ""), "</ul>"))
+  }
+  body = purrr::map_chr(p4$charts, function(ch) {
+    lr = purrr::detect(LIVE_REFINE, function(x) identical(x$file, ch$file))
+    g = live_load(lr, work)
+    turns = purrr::map_chr(ch$turns, function(t)
+      paste0("<div class=\"card\"><p><b>Analyst:</b> ", esc(t$message), "</p><p class=\"muted\">", esc(t$kind),
+             if (isTRUE(t$repaired)) ", after a repair", "</p><p>", esc(t$text), "</p>",
+             if (isTRUE(t$accepted)) paste0(draw(t$spec, g, ch$cb), "<details><summary>Spec</summary><pre>", esc(yaml::as.yaml(t$spec)), "</pre></details>"),
+             "</div>"))
+    paste0("<h3>", esc(ch$file), ": ", esc(ch$start$spec$title), "</h3><div class=\"grid\"><div class=\"card\"><p class=\"muted\">As first drawn</p>",
+           draw(ch$start$spec, g, ch$cb), "</div>", paste(turns, collapse = ""), "</div>")
+  })
+  paste0("<h1>Phase 4</h1><p class=\"muted\">", esc(p4$model), ", ", esc(p4$when), "; ", nrow(p4$calls), " calls.</p>", paste(body, collapse = ""))
+}
+
+
 # ---- the page ---------------------------------------------------------------------------------------
 
 esc <- function(x) htmltools::htmlEscape(paste(x, collapse = " "))
@@ -206,7 +291,7 @@ live_page <- function(rds = LIVE_RDS, out = LIVE_OUT) {
               "td,th{padding:2px 8px;text-align:left;border-bottom:1px solid #eee}pre{white-space:pre-wrap}")
   html = paste0("<!doctype html><html><head><meta charset=\"utf-8\"><title>chaRt live run</title><style>", css, "</style></head><body>",
                 "<h1>chaRt Phase 3 live run</h1><p class=\"muted\">", esc(run$model), ", ", esc(run$when), "; ", nrow(run$calls), " calls.</p>",
-                paste(body, collapse = ""), "</body></html>")
+                paste(body, collapse = ""), live_phase4_html(run$phase4, work), "</body></html>")
   writeLines(html, out, useBytes = TRUE)
   cat("Wrote ", out, " (", round(file.size(out) / 1e6, 1), " MB).\n", sep = "")
   invisible(out)

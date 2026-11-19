@@ -30,7 +30,7 @@ Explore tab (Phase 3). `DESIGN.md` is the whole design and `STATUS.md` says what
 
 ```r
 install.packages(c("shiny", "bslib", "purrr", "digest", "dplyr", "ellmer", "ggplot2", "httr2", "jsonlite",
-                   "plotly", "readr", "rlang", "S7", "scales", "tibble", "tidyr", "yaml"))
+                   "plotly", "readr", "rlang", "S7", "scales", "shinychat", "tibble", "tidyr", "yaml"))
 shiny::runApp("chaRt")
 ```
 
@@ -98,6 +98,13 @@ and buttons to add it to the report, to switch to the interactive view and to sh
 three palette selects change the colours of every chart without a new call. The foot of the tab
 counts the calls and tokens of the session.
 
+**Refine** opens one chart in a wide view. Its title, subtitle, caption and axis titles are edited
+in boxes, with no model call (a blank box is the default). The chat beside it takes a change in
+words ("make it a dot plot", "highlight Islands and Coast"); the model revises the chart's spec, asks
+one question back, or says what the chat cannot do (colours, a pie, undoing). Every accepted
+change can be undone, and Reset returns to the chart as first drawn. A chart added to the report
+and refined afterwards is the refined one in the report.
+
 The rules the model follows are the reflex files in `www/reflexes/`. They are read when the app
 starts; a file that has lost its shape stops the app there, naming the file and the rule.
 
@@ -135,7 +142,7 @@ and asks for structured output in the Anthropic style and, through OpenRouter, i
 that stands in for the work endpoint. Its fourth check labels FH, football and a made-up panel
 file and asks twelve questions of the suggest call (about 20 calls), printing what each call cost
 and returned; it saves the replies to `tests/live_replies.rds` and writes `tests/live_gallery.html`
-(both git-ignored). Its fifth check asks five questions on the codebooks labelled in the last saved run (no label call). Each call prints its input tokens read fresh and from the prompt cache. `CHART_LIVE_STEPS` chooses the checks (for example `1,5`). `CHART_TEST_MODEL`
+(both git-ignored). Its fifth check asks five questions on the codebooks labelled in the last saved run (no label call). Each call prints its input tokens read fresh and from the prompt cache. Its sixth check sends fourteen chat turns to three hand-written charts and shows them on the page under "Phase 4". `CHART_LIVE_STEPS` chooses the checks (for example `1,6`). `CHART_TEST_MODEL`
 replaces the home model for checks 1, 2 and 4 (Sonnet models only); `OPENROUTER_MODEL` replaces the
 OpenRouter model.
 
