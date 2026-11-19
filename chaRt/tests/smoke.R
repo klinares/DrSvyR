@@ -1480,6 +1480,36 @@ if (!inherits(messy, "error")) {
 }
 
 
+
+# ---- Phase 5 C: the number check and the word check -------------------------------------------------
+
+c5_facts <- paste("Filter: year is one of 2015, 2024", "Rows used: 1,200", "Highest: Midfielder (657)", "Lowest: Goalkeeper (191)",
+                  "Highest as a multiple of the lowest: 3.44", "Share of the total: Midfielder 12.0%; Defender 32.4%",
+                  "Fitted y at the 10th percentile: 9,350", "Highlighted point [[N2]]: x 40", sep = "\n")
+c5_spec <- list(family = "bar", x = "Position", filter = list(list(column = "year", op = "in", value = list(2015, 2024))))
+c5_ok <- function(text) !length(check_numbers(text, c5_facts, c5_spec))
+check("5-C: check_numbers(): a fact as written passes (657, 3.44, 9,350)", c5_ok("Midfielders number 657, 3.44 times the goalkeepers; 9,350 at most."))
+check("5-C: check_numbers(): a fact rounded to fewer digits passes (3.4, 9,400, 32%), but not to one significant digit (3)",
+      c5_ok("about 3.4 times") && c5_ok("about 9,400") && c5_ok("32% of them") && identical(check_numbers("about 3 times", c5_facts, c5_spec), "3"))
+check("5-C: check_numbers(): a fact rounded wrongly fails (3.5 for 3.44)", identical(check_numbers("3.5 times as many", c5_facts, c5_spec), "3.5"))
+check("5-C: check_numbers(): a difference of two facts fails (466 = 657 - 191)", identical(check_numbers("466 more midfielders", c5_facts, c5_spec), "466"))
+check("5-C: check_numbers(): \"1,200\", \"1200\" and \"1.2 thousand\" are the same number as the fact 1,200",
+      c5_ok("1,200 rows") && c5_ok("1200 rows") && c5_ok("1.2 thousand rows"))
+check("5-C: check_numbers(): \"12%\" and \"12 percent\" are both the fact 12.0%; 13% is not",
+      c5_ok("12% are midfielders") && c5_ok("12 percent are midfielders") && identical(check_numbers("13% are", c5_facts, c5_spec), "13%"))
+check("5-C: check_numbers(): \"three\" is checked as 3, which is not a fact; 40 is one",
+      identical(check_numbers("three groups", c5_facts, c5_spec), "three") && c5_ok("x of 40"))
+check("5-C: check_numbers(): a year in the spec's filter passes (2024), and so does a year in the facts; 2019 does not",
+      c5_ok("from 2015 to 2024") && identical(check_numbers("in 2019", c5_facts, c5_spec), "2019"))
+check("5-C: check_numbers(): \"1st\", \"10th\" and the digits of \"[[N2]]\" are not numbers",
+      c5_ok("the 1st and the 10th, and [[N2]] and [[N17]]"))
+c5_found <- purrr::map(SUMMARY_FORBIDDEN, function(w) check_words(paste0("This ", toupper(substr(w, 1, 1)), substr(w, 2, nchar(w)), " here.")))
+check("5-C: check_words(): each forbidden word is caught as a whole word, in any case; \"effective\", \"causeway\", \"impactful\" are not",
+      all(purrr::map2_lgl(c5_found, SUMMARY_FORBIDDEN, function(f, w) identical(f, w))) &&
+        !length(check_words("An effective causeway, impactful and representational.")) &&
+        identical(check_words("Height LEADS   TO weight"), "leads to"))
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")

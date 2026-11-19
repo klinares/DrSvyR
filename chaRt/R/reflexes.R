@@ -266,6 +266,78 @@ make_call <- function(call, system_txt, user_txt, ask, m, max_tokens, validate =
 json_list <- function(x) if (is.null(x)) list() else if (is.list(x) && is.null(names(x))) x else list(x)
 
 
+# ---- the number check and the word check -------------------------------------------------------------
+#   svysegment's idea (validate_numbers() in svysegment/R/llm.R): every number a model writes is looked
+#   for in what it was given, at the precision it was written. Here what it was given is the chart's
+#   FACTS, numbers are compared as values, and a rounding must keep two significant digits.
+
+# Number words checked as numbers.
+NUMBER_WORDS <- c(one = 1, two = 2, three = 3, four = 4, five = 5, six = 6, seven = 7, eight = 8, nine = 9, ten = 10,
+                  eleven = 11, twelve = 12)
+NUMBER_SCALES <- c(thousand = 1e3, million = 1e6, billion = 1e9)
+# The words summary.md forbids, matched as whole words in any case.
+SUMMARY_FORBIDDEN <- c("cause", "causes", "caused", "leads to", "drives", "due to", "because of", "effect", "impact",
+                       "significant", "significantly", "representative")
+
+# The numbers in a text: list(text, value, unit, sig) for each, where unit is the place of its last
+#   written digit (a whole number ending in zeros counts as rounded to them) and sig its significant
+#   digits. Tokens ([[N1]]) and ordinals (1st, 10th) are not numbers; an ISO date counts as its year;
+#   "12%", "12 percent" and "12 per cent" are 12; "1.2 thousand" is 1200; one to twelve as words are
+#   numbers. A minus sign is kept in `text` only: values are compared without their sign.
+text_numbers <- function(text) {
+  t = gsub("\\[\\[N[0-9]+\\]\\]", " ", paste(text, collapse = " "))
+  t = gsub("(?<![0-9])([12][0-9]{3})-[01][0-9](-[0-3][0-9])?(?![0-9])", "\\1", t, perl = TRUE)
+  t = gsub("(?i)(?<![A-Za-z0-9_.])[0-9][0-9,]*(st|nd|rd|th)\\b", " ", t, perl = TRUE)
+  words = paste0("(?i)\\b(", paste(names(NUMBER_WORDS), collapse = "|"), ")\\b")
+  word_hits = regmatches(t, gregexpr(words, t, perl = TRUE))[[1]]
+  t = gsub(words, " ", t, perl = TRUE)
+  pattern = paste0("(?<![A-Za-z0-9_.,])[-−]?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:[.][0-9]+)?(?![A-Za-z0-9_]|,[0-9])",
+                   "(?:\\s*(?:%|percent\\b|per cent\\b))?(?:\\s+(?:", paste(names(NUMBER_SCALES), collapse = "|"), ")\\b)?")
+  hits = regmatches(t, gregexpr(pattern, t, perl = TRUE))[[1]]
+  nums = purrr::map(hits, function(h) {
+    scale = NUMBER_SCALES[regmatches(h, regexpr(paste(names(NUMBER_SCALES), collapse = "|"), h))]
+    scale = if (length(scale)) unname(scale) else 1
+    digits = gsub("[^0-9.]", "", sub("\\s.*$", "", gsub("[%]", "", h)))
+    dec = if (grepl(".", digits, fixed = TRUE)) nchar(sub("^.*[.]", "", digits)) else 0L
+    plain = gsub(".", "", digits, fixed = TRUE)
+    zeros = if (dec == 0L) nchar(sub("^[0-9]*?(0*)$", "\\1", plain)) else 0L
+    zeros = min(zeros, nchar(plain) - 1L)
+    sig = nchar(sub("0+$", "", sub("^0+", "", plain)))
+    if (dec > 0L) sig = nchar(sub("^0+", "", plain))
+    list(text = trimws(h), value = as.numeric(digits) * scale, unit = (if (dec > 0L) 10^-dec else 10^zeros) * scale, sig = max(sig, 1L))
+  })
+  c(nums, purrr::map(word_hits, function(w) list(text = w, value = unname(NUMBER_WORDS[tolower(w)]), unit = 1, sig = 1L)))
+}
+
+# The numbers in `text` that are not allowed. A number is allowed when it is one of the numbers in
+#   `facts` (as a value: "1,200", "1200" and "1.2 thousand" are one number), or one of them rounded to
+#   fewer digits keeping at least two significant, or a value in the spec's filter or top_n, or a
+#   year that appears in the facts (inside a column name too, as in pr_2014).
+check_numbers <- function(text, facts, spec = list()) {
+  found = text_numbers(text)
+  if (!length(found)) return(character(0))
+  known = abs(purrr::map_dbl(text_numbers(facts), "value"))
+  fl = spec$filter
+  fl = if (!is.null(names(fl))) list(fl) else fl
+  given = abs(suppressWarnings(as.numeric(c(unlist(purrr::map(fl, function(f) values_of(f$value)), use.names = FALSE), spec$top_n))))
+  years = as.numeric(regmatches(facts, gregexpr("(?<![0-9])[12][0-9]{3}(?![0-9])", facts, perl = TRUE))[[1]])
+  same = function(x, pool) any(abs(pool - x) <= 1e-9 * max(1, x))
+  bad = purrr::discard(found, function(n) {
+    x = abs(n$value)
+    same(x, known) || same(x, given[!is.na(given)]) || (x == round(x) && x >= 1000 && x < 3000 && n$unit == 1 && same(x, years)) ||
+      (n$sig >= 2L && any(abs(known - x) <= n$unit / 2 + 1e-9 * max(1, x)))
+  })
+  unique(purrr::map_chr(bad, "text"))
+}
+
+# The forbidden words of summary.md that `text` uses, as whole words in any case.
+check_words <- function(text) {
+  t = paste(text, collapse = " ")
+  purrr::keep(SUMMARY_FORBIDDEN, function(w)
+    grepl(paste0("(?i)(?<![A-Za-z])", gsub(" ", "\\\\s+", w), "(?![A-Za-z])"), t, perl = TRUE))
+}
+
+
 # ---- label_columns(): the Codebook tab's call ----------------------------------------------
 
 LABEL_FAILED <- "The model's reply could not be read as labels, so no label was changed."
