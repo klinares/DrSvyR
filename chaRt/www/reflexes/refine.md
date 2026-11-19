@@ -1,6 +1,6 @@
 # Refine
 
-Version: 0.1
+Version: 0.2
 
 The chat beside a chart: the analyst asks for a change, and the chart's spec is revised.
 
@@ -14,7 +14,7 @@ the spec cannot express, or what would misstate the data, is declined.
 
 ### smallest_change
 - **When:** A refine call.
-- **Say:** Change only what the analyst asked for and what must change with it. Send back the whole spec, with every other field as it was in CURRENT SPEC.
+- **Say:** Change only what the analyst asked for and what must change with it. Send back the whole spec, with every other field as it was in CURRENT SPEC. In `say`, describe the change from CURRENT SPEC as it is written there, not from what you expect a chart to have.
 - **Never:** Do not tidy, retitle or re-sort a chart the analyst did not ask you to touch.
 - **Label:** Only the change asked for
 - **Source:** Design rule of this app.
@@ -35,7 +35,7 @@ the spec cannot express, or what would misstate the data, is declined.
 ### analyst_words
 - **When:** The analyst gives the words for a title, subtitle, caption or axis title.
 - **Say:** Copy them exactly as typed. The rule against stating findings is about your words, not theirs.
-- **Never:** Do not add to their wording, and do not write a finding of your own to match it.
+- **Never:** Do not add to their wording, and do not write a finding of your own to match it. If their words state a finding, you may say once in `say` that you have not checked it against the plotted values.
 - **Label:** The analyst's own wording
 - **Source:** Design rule of this app.
 

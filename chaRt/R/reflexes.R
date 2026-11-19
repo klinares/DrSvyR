@@ -18,10 +18,10 @@ REFLEXES_DIR <- file.path("www", "reflexes")
 #   chart calls share their seven files, so their system prompts are identical and a chat turn reads
 #   from the cache what a suggest call wrote.
 CHART_FILES <- c("core.md", "comparison.md", "relationship.md", "distribution.md", "time.md", "suggest.md", "refine.md")
-CALL_FILES <- list(label = "codebook.md", suggest = CHART_FILES, refine = CHART_FILES)
+CALL_FILES <- list(label = "codebook.md", suggest = CHART_FILES, refine = CHART_FILES, summarize = "summary.md")
 
 # The file whose Output format ends each call's user message.
-CALL_REPLY <- c(label = "codebook.md", suggest = "suggest.md", refine = "refine.md")
+CALL_REPLY <- c(label = "codebook.md", suggest = "suggest.md", refine = "refine.md", summarize = "summary.md")
 
 # Every reflex file, by name, so a missing one is an error and the README is not read as one.
 REFLEX_FILES <- unique(unlist(CALL_FILES, use.names = FALSE))

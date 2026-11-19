@@ -793,7 +793,8 @@ REFLEX_SHA <- c(
   "distribution.md" = "fedaa1f13d77fb92ce9e8b177fbf88b9e2caec07cadda6b6c2901da51c62a6d5",
   "time.md" = "c907e5546557b6fedb91623a8c83588ac10af738946d00ea35458e74961988a9",
   "suggest.md" = "9f32f48e4b4dd9b969187af1bb4bb4f198dcba49ea9465d0738aa5e565e915f3",
-  "refine.md" = "0469d8feb96f0018b222e2366ba369f2d2444531c7c7a24f5a591b1ba2b906de")
+  "refine.md" = "25497b74faa082fdc4823c481a078c620ce7fbaf3232a89825ec6d084663d9ad",
+  "summary.md" = "1dedcb1f7f4bc14ac6bf93e14747f7ca5cee431b69d3f37913ba30adc966ee0e")
 
 rfiles <- tryCatch(check_reflex_files(), error = function(e) e)
 check(paste0("every reflex file parses (", if (inherits(rfiles, "error")) conditionMessage(rfiles) else length(rfiles), ")"),
