@@ -1343,6 +1343,29 @@ if (!is.null(ball_g)) {
 }
 
 
+
+# ---- Phase 5 A: a curve that cannot be fitted says so ------------------------------------------------
+
+if (!is.null(ball_g)) {
+  a5_said <- character(0)
+  a5_p <- withCallingHandlers({
+    p = spec_plot(list(family = "scatter", x = "Attack", y = "Defence", color = "Position", fit = "loess", title = "t"), ball_g$data, ball_g$cb)
+    ggplot2::ggplot_build(p)
+    p
+  }, warning = function(w) { a5_said <<- c(a5_said, conditionMessage(w)); invokeRestart("muffleWarning") })
+  a5_layers <- purrr::keep(attr(a5_p, "widget_plot")$layers, function(l) inherits(l$geom, "GeomSmooth"))
+  a5_code <- spec_code(attr(a5_p, "spec"), ball_g$cb, ball_g$path)
+  a5_none <- spec_plot(list(family = "scatter", x = "Attack", y = "Defence", fit = "linear", title = "t",
+                            filter = list(list(column = "Position", op = "==", value = "Goalkeeper"))), ball_g$data, ball_g$cb)
+  check("5-A: the goalkeepers get no curve and the note, with no warning; the code leaves their curve out too; with no groups, 'No curve: ...'",
+        "No curve for Goalkeeper: too few different values of Attack." %in% attr(a5_p, "notes") && !length(a5_said) &&
+          length(purrr::keep(a5_p$layers, function(l) inherits(l$geom, "GeomSmooth"))) == 3L && length(a5_layers) == 3L &&
+          !code_has(a5_code, "Goalkeeper") && lengths(gregexpr("geom_smooth(", a5_code, fixed = TRUE)) == 3L &&
+          "No curve: too few different values of Attack." %in% attr(a5_none, "notes") &&
+          !any(purrr::map_lgl(a5_none$layers, function(l) inherits(l$geom, "GeomSmooth"))))
+}
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")

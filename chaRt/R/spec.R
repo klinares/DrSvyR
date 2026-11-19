@@ -33,6 +33,7 @@ SPEC_DPI <- 192L             # pixels per inch of every static image; it is show
 SPEC_FIT_TRIM_N <- 100L      # a fitted curve on this many rows or more is drawn only ...
 SPEC_FIT_TRIM <- c(0.01, 0.99) # ... between these percentiles of x (it is fitted on every row)
 SPEC_FIT_POINTS <- 80L       # points the trimmed curve is drawn at
+SPEC_FIT_MIN_DISTINCT <- 10L # a group whose x has fewer different values than this gets no curve
 SPEC_ROW_INCHES <- 0.28      # height of one sideways bar
 SPEC_PANEL_INCHES <- 2.2     # height of one row of panels
 SPEC_LABEL_GAP <- 0.04       # line-end labels closer than this share of the y range: a legend instead
@@ -678,23 +679,52 @@ spec_settle <- function(s, cb, table) {
   s
 }
 
+# Whether a curve can be fitted to one group's rows as geom_smooth() fits it, on the scales' own
+#   values: "few" when x has fewer than SPEC_FIT_MIN_DISTINCT different values, "failed" when the
+#   fit or its prediction raises a warning or an error, otherwise "ok".
+fit_works <- function(s, x, y) {
+  keep = (!isTRUE(s$log_x) | x > 0) & (!isTRUE(s$log_y) | y > 0)
+  x = if (isTRUE(s$log_x)) log10(x[keep]) else x[keep]
+  y = if (isTRUE(s$log_y)) log10(y[keep]) else y[keep]
+  if (length(unique(x)) < SPEC_FIT_MIN_DISTINCT) return("few")
+  d = data.frame(x = x, y = y)
+  ok = tryCatch({
+    f = if (identical(s$fit, "linear")) stats::lm(y ~ x, d) else stats::loess(y ~ x, d)
+    all(is.finite(stats::predict(f, data.frame(x = seq(min(x), max(x), length.out = SPEC_FIT_POINTS)))))
+  }, warning = function(w) FALSE, error = function(e) FALSE)
+  if (isTRUE(ok)) "ok" else "failed"
+}
+
 # Where a fitted curve is drawn. It is fitted on every row of its group (a colour, a panel, or both)
 #   and drawn only between SPEC_FIT_TRIM percentiles of x within each group of SPEC_FIT_TRIM_N rows
-#   or more. Returns list(groups = list(list(keys, range)), rest), keys naming the group's values
-#   (NULL with no groups) and rest TRUE when smaller groups are drawn untrimmed; NULL when no group
-#   is trimmed.
+#   or more; a group that cannot be fitted (fit_works()) gets no curve. Returns list(groups =
+#   list(list(keys, range)), skip = list(list(keys, why)), rest), keys naming the group's values
+#   (NULL with no groups), skip the groups with no curve and rest TRUE when other groups are drawn
+#   untrimmed in one layer; NULL when no group is trimmed or left out.
 fit_ranges <- function(s, table) {
   if (!s$family %in% c("scatter", "bubble") || identical(s$fit, "none")) return(NULL)
   q = function(x) signif(stats::quantile(x, SPEC_FIT_TRIM, names = FALSE), 4)
   keys = unique(c(if (!isTRUE(s$.binned) && is.null(s$highlight)) s$color, s$facet))
-  if (!length(keys))
-    return(if (nrow(table) >= SPEC_FIT_TRIM_N) list(groups = list(list(keys = NULL, range = q(table[[s$x]]))), rest = FALSE))
-  parts = split(as.data.frame(table), lapply(keys, function(k) as.character(table[[k]])), drop = TRUE)
-  big = purrr::keep(unname(parts), function(d) nrow(d) >= SPEC_FIT_TRIM_N)
-  if (!length(big)) return(NULL)
-  list(groups = purrr::map(big, function(d) list(keys = purrr::set_names(purrr::map(keys, function(k) as.character(d[[k]][1])), keys),
-                                                 range = q(d[[s$x]]))),
-       rest = length(big) < length(parts))
+  parts = if (!length(keys)) list(as.data.frame(table))
+          else unname(split(as.data.frame(table), lapply(keys, function(k) as.character(table[[k]])), drop = TRUE))
+  plan = purrr::map(parts, function(d)
+    list(keys = if (length(keys)) purrr::set_names(purrr::map(keys, function(k) as.character(d[[k]][1])), keys),
+         why = fit_works(s, d[[s$x]], d[[s$y]]),
+         range = if (nrow(d) >= SPEC_FIT_TRIM_N) q(d[[s$x]])))
+  ok = purrr::keep(plan, function(g) identical(g$why, "ok"))
+  trimmed = purrr::keep(ok, function(g) !is.null(g$range))
+  skip = purrr::discard(plan, function(g) identical(g$why, "ok"))
+  if (!length(trimmed) && !length(skip)) return(NULL)
+  list(groups = purrr::map(trimmed, function(g) g[c("keys", "range")]), skip = purrr::map(skip, function(g) g[c("keys", "why")]),
+       rest = length(ok) > length(trimmed))
+}
+
+# The note for each group with no curve.
+fit_notes <- function(s, cb) {
+  xl = s$x_label %||% cb_label(cb, s$x)
+  purrr::map_chr(s$.fit_range$skip, function(g)
+    paste0("No curve", if (length(g$keys)) paste0(" for ", paste(unlist(g$keys), collapse = ", ")), ": ",
+           if (identical(g$why, "few")) paste0("too few different values of ", xl, ".") else "the curve could not be fitted."))
 }
 
 # How many marks a chart draws: bars, points or boxes are rows of the table; a histogram draws its
@@ -803,6 +833,7 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
   if (dropped > 0L)
     notes = c(notes, paste0(format_num(dropped), " of ", format_num(dropped + attr(table, "rows_used")), " rows left out: missing values."))
   s$.fit_range = fit_ranges(s, table)
+  notes = c(notes, fit_notes(s, cb))
   list(spec = s, notes = notes)
 }
 
@@ -1032,7 +1063,7 @@ fit_xseq <- function(s, r) {
 
 # The fitted curve as geom_smooth() layers. With no trimmed group, one layer. With groups, one layer
 #   per trimmed group, on that group's rows only (data = ~ filter(.x, ...)), with its own xseq, and
-#   one layer for the smaller groups, untrimmed.
+#   one layer for the other groups, untrimmed. A group that cannot be fitted is in no layer.
 fit_calls <- function(s, cb) {
   if (identical(s$fit, "none")) return(list())
   smooth = function(data = NULL, r = NULL)
@@ -1041,12 +1072,14 @@ fit_calls <- function(s, cb) {
               if (!is.null(r)) list(xseq = fit_xseq(s, r)), list(colour = "#4D4D4D", linewidth = 0.8)))
   fr = s$.fit_range
   if (is.null(fr)) return(list(smooth()))
-  if (is.null(fr$groups[[1]]$keys)) return(list(smooth(r = fr$groups[[1]]$range)))
+  if (is.null(c(fr$groups, fr$skip)[[1]]$keys)) return(if (length(fr$skip)) list() else list(smooth(r = fr$groups[[1]]$range)))
   rows = function(cond) call("~", call("filter", sym(".x"), cond))
-  conds = purrr::map(fr$groups, function(g)
-    purrr::reduce(purrr::imap(g$keys, function(v, col) call("==", sym(col), value_call(cb_entry(cb, col), v))), function(a, b) call("&", a, b)))
+  cond_of = function(g)
+    purrr::reduce(purrr::imap(g$keys, function(v, col) call("==", sym(col), value_call(cb_entry(cb, col), v))), function(a, b) call("&", a, b))
+  conds = purrr::map(fr$groups, cond_of)
+  others = c(conds, purrr::map(fr$skip, cond_of))
   c(purrr::map2(fr$groups, conds, function(g, cond) smooth(rows(cond), g$range)),
-    if (isTRUE(fr$rest)) list(smooth(rows(call("!", call("(", purrr::reduce(conds, function(a, b) call("|", a, b))))))))
+    if (isTRUE(fr$rest)) list(smooth(rows(call("!", call("(", purrr::reduce(others, function(a, b) call("|", a, b))))))))
 }
 
 histogram_calls <- function(s, cb, pal, widget)
