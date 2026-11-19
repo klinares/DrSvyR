@@ -121,7 +121,7 @@ options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 #   drawn this session, by id (charts); the ids added to the report, in order; and the report's
 #   three palettes.
 new_state <- function() reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL,
-                                       path = NULL, calls = NULL, charts = list(), report = character(0),
+                                       path = NULL, calls = NULL, charts = list(), report = character(0), stories = list(),
                                        palette = chart_palette_default())
 
 

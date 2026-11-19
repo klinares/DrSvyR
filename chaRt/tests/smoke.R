@@ -1589,6 +1589,66 @@ if (!is.null(ball_g)) {
 }
 
 
+
+# ---- Phase 5 E: headlines and summaries on the Explore tab, with shiny::testServer() ----------------------
+
+if (!is.null(ball_g)) {
+  e_bar <- list(family = "bar", x = "Position", fn = "count", title = "Players by position")
+  e_sc <- list(family = "scatter", x = "Height", y = "Weight", title = "Height and weight")
+  e_si <- stand_by(function(user, i) {
+    if (!grepl("<CHARTS>", user, fixed = TRUE)) return(to_json(list(charts = list(e_bar, e_sc), cannot = list())))
+    to_json(list(charts = purrr::map(sent_ids(user), function(id)
+      list(id = id, headline = "Midfielders are the largest group", summary = "Of the 1,851 players, midfielders are the most."))))
+  })
+  e_state <- shiny::reactiveValues(key_version = 0L, data = ball_g$data, problems = NULL, profile = NULL, codebook = ball_g$cb,
+                                   path = ball_g$path, calls = NULL, charts = list(), report = character(0), stories = list(),
+                                   palette = chart_palette_default())
+  e_out <- new.env()
+  set_in <- function(session, id, what, value) do.call(session$setInputs, stats::setNames(list(value), paste0(id, "_", what)))
+  shiny::testServer(mod_explore_server, args = list(state = e_state, ask = e_si$ask), {
+    session$setInputs(pal_qualitative = "okabe_ito", pal_sequential = "viridis", pal_diverging = chart_palette_default()$diverging)
+    session$setInputs(question = "How many players in each position?", draw = 1)
+    ids <- shown()
+    a <- ids[1]; b <- ids[2]
+    set_in(session, a, "refine", 1)
+    before_write <- grepl("Write headline and summary", as.character(output[[paste0(a, "_story")]]$html), fixed = TRUE)
+    set_in(session, a, "write", 1)
+    story_html <- as.character(output[[paste0(a, "_story")]]$html)
+    e_out$write <- before_write && length(e_si$sent) == 2L && identical(e_state$stories[[a]]$headline, "Midfielders are the largest group") &&
+      grepl("Of the 1,851 players, midfielders are the most.", story_html, fixed = TRUE) && grepl(paste0(a, "_s_head"), story_html, fixed = TRUE) &&
+      grepl(SUMMARY_ALL_OK, as.character(output[[paste0(a, "_s_check")]]$html), fixed = TRUE) && nrow(e_state$calls) == 2L
+    set_in(session, a, "s_sum", "Of the 1,851 players, 658 are midfielders, which drives the totals.")
+    e_out$edit <- length(e_si$sent) == 2L && nrow(e_state$calls) == 2L &&
+      grepl("658 is not a number in this chart's data; 'drives' suggests a cause.", as.character(output[[paste0(a, "_s_check")]]$html), fixed = TRUE) &&
+      identical(e_state$stories[[a]]$summary, "Of the 1,851 players, 658 are midfielders, which drives the totals.")
+    set_in(session, a, "s_sum", "Of the 1,851 players, 657 are midfielders.")
+    e_out$edit_back <- grepl(SUMMARY_ALL_OK, as.character(output[[paste0(a, "_s_check")]]$html), fixed = TRUE)
+    set_in(session, a, "w_title", "Midfielders outnumber goalkeepers by 466")
+    e_out$title <- grepl("466 is not a number in this chart's data", as.character(output[[paste0(a, "_title_check")]]$html), fixed = TRUE)
+    stale_html <- as.character(output[[paste0(a, "_story")]]$html)
+    e_out$stale <- isTRUE(stale[[a]]) && grepl(SUMMARY_STALE, stale_html, fixed = TRUE) && grepl("Write again", stale_html, fixed = TRUE) &&
+      identical(e_state$stories[[a]]$headline, "Midfielders are the largest group") && length(e_si$sent) == 2L
+    set_in(session, a, "rewrite", 1)
+    e_out$rewrite <- length(e_si$sent) == 3L && !isTRUE(stale[[a]]) && identical(e_state$stories[[a]]$hash, spec_hash(e_state$charts[[a]]$spec))
+    set_in(session, a, "add", 1)
+    session$setInputs(back = 1)
+    set_in(session, b, "add", 1)
+    button <- as.character(output$report_button$html)
+    session$setInputs(write_report = 1)
+    e_out$report <- grepl("Write headlines and summaries for the report (1 chart)", button, fixed = TRUE) && length(e_si$sent) == 4L &&
+      identical(sent_ids(e_si$sent[[4]]$user), b) && !is.null(e_state$stories[[b]]) &&
+      grepl("Midfielders are the largest group", as.character(output[[paste0(a, "_headline")]]$html), fixed = TRUE)
+  })
+  check("5-E: Write headline and summary makes one call and fills the two boxes, with the line that every number matches", isTRUE(e_out$write))
+  check("5-E: editing the summary to a number not in the facts (and a cause word) shows the warning and makes no call; editing it back clears it",
+        isTRUE(e_out$edit) && isTRUE(e_out$edit_back))
+  check("5-E: the title box is checked the same way: a title with 466 (a difference of two facts) shows the warning", isTRUE(e_out$title))
+  check("5-E: changing the spec marks the text as out of date, with Write again, and keeps the old text; Write again makes one call",
+        isTRUE(e_out$stale) && isTRUE(e_out$rewrite))
+  check("5-E: the report button counts and sends only the report charts that need it; a card shows its headline", isTRUE(e_out$report))
+}
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")

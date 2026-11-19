@@ -493,6 +493,23 @@ REFINE_GREETING <- paste(
   "Ask for a change to the chart's form, its grouping, a filter, a highlight, or how many are shown (top n).",
   "Colours are set by the palette boxes above the charts, and the wording by the boxes above this chat.", sep = "\n\n")
 
+SUMMARY_BUSY <- "The model is writing from the chart's facts, which R computed; every number it writes is checked. This takes a few seconds."
+SUMMARY_ALL_OK <- "Every number matches the chart's data."
+SUMMARY_STALE <- "The chart has changed since this was written."
+
+# A story: the headline and summary of a chart as last written or edited, with the hash of the spec
+#   they were written for, the facts (names as they are) and that spec, and the problems the checks
+#   found. Checked again on every edit, with no model call.
+recheck_story <- function(st)
+  utils::modifyList(st, list(problems = problem_sentences(summary_problems(st$headline, st$summary, st$facts, st$spec))))
+
+# The one line under a headline and summary, or under a title: all well, or what is not, in the
+#   warning colour.
+check_line <- function(problems, ok = SUMMARY_ALL_OK) {
+  if (!length(problems)) return(if (!is.null(ok)) tags$p(class = "small text-success mb-0", ok))
+  tags$p(class = "small mb-0", style = "color: var(--bs-warning-text-emphasis, #8a5a00);", paste0(paste(problems, collapse = "; "), "."))
+}
+
 # The text a chat turn appends: for a new spec its say and the notes it did not have before; for ask
 #   or cannot the text; for a failure the sentences.
 refine_reply <- function(r) {
@@ -515,6 +532,9 @@ mod_explore_server <- function(id, state, ask = llm_json) {
     made$ids = character(0)
     made$n = 0L
     rule_labels = reflex_labels()
+    ver = reactiveValues()             # per chart: bumped when its headline and summary are written
+    stale = reactiveValues()           # per chart: TRUE when its spec changed since they were written
+    story_note = reactiveValues()      # per chart: the sentence when none could be written
 
     # The report's palettes; changing one draws the charts again and makes no call.
     palette = reactive(purrr::map(purrr::set_names(names(EXPLORE_PALETTE_KINDS)), function(kind)
@@ -549,6 +569,23 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       spec = isolate(chart_of(chart_id))$spec
       purrr::walk(names(WORDING_FIELDS), function(f) updateTextInput(session, cid(chart_id, paste0("w_", f)), value = spec[[f]] %||% ""))
     }
+    story_of = function(chart_id) state$stories[[chart_id]]
+    set_story = function(chart_id, st) { ss = isolate(state$stories) %||% list(); ss[[chart_id]] = st; state$stories = ss }
+    needs_story = function(chart_id) is.null(story_of(chart_id)) || !identical(story_of(chart_id)$hash, spec_hash(chart_of(chart_id)$spec))
+
+    # Headlines and summaries for these charts: summarize_charts() once; a chart that got none keeps
+    #   any text it had, and its sentence is shown.
+    write_stories = function(chart_ids) {
+      out = summarize_charts(purrr::map(chart_ids, function(i) isolate(chart_of(i))), state$codebook, state$data, ask = ask, palette = palette())
+      state$calls = dplyr::bind_rows(state$calls, out$calls)
+      purrr::walk(out$charts, function(r) {
+        if (is.null(r$headline)) { story_note[[r$id]] = r$text; return(invisible()) }
+        set_story(r$id, list(headline = r$headline, summary = r$summary, hash = r$hash, facts = r$facts, spec = r$spec, problems = r$problems))
+        story_note[[r$id]] = NULL
+        ver[[r$id]] = (isolate(ver[[r$id]]) %||% 0L) + 1L
+      })
+    }
+
     toggle = function(chart_id, what) { t = isolate(toggles[[chart_id]]) %||% list(); t[[what]] = !isTRUE(t[[what]]); toggles[[chart_id]] = t }
 
     # A chart's outputs and observers, made once, the first time it is drawn.
@@ -601,6 +638,50 @@ mod_explore_server <- function(id, state, ask = llm_json) {
         showNotification(paste0("Added to the report (", length(state$report), " in all)."), type = "message")
       })
       observeEvent(input[[cid(chart_id, "refine")]], open(chart_id))
+
+      # Headline and summary: written by one call; edited in their boxes and checked again with no
+      #   call; marked out of date when the spec changes, the old text kept until written again.
+      observe(stale[[chart_id]] <- !is.null(story_of(chart_id)) && !identical(story_of(chart_id)$hash, spec_hash(chart_of(chart_id)$spec)))
+      output[[cid(chart_id, "story")]] = renderUI({
+        ver[[chart_id]]
+        is_stale = stale[[chart_id]]
+        note_now = story_note[[chart_id]]
+        st = isolate(story_of(chart_id))
+        if (is.null(st))
+          return(tagList(busy_button(ns(cid(chart_id, "write")), "Write headline and summary", SUMMARY_BUSY, ready = llm_key_ready(),
+                                     class = "btn-sm btn-outline-primary"),
+                         if (!is.null(note_now)) warn_box(note_now)))
+        tagList(textInput(ns(cid(chart_id, "s_head")), "Headline", value = st$headline, width = "100%", updateOn = "blur"),
+                textAreaInput(ns(cid(chart_id, "s_sum")), "Summary", value = st$summary, width = "100%", rows = 4, updateOn = "blur"),
+                uiOutput(ns(cid(chart_id, "s_check"))),
+                if (isTRUE(is_stale))
+                  tags$div(class = "mt-2", tags$p(class = "small mb-1", SUMMARY_STALE),
+                           busy_button(ns(cid(chart_id, "rewrite")), "Write again", SUMMARY_BUSY, ready = llm_key_ready(), class = "btn-sm btn-outline-primary")),
+                if (!is.null(note_now)) warn_box(note_now))
+      })
+      output[[cid(chart_id, "s_check")]] = renderUI(check_line(story_of(chart_id)$problems))
+      output[[cid(chart_id, "headline")]] = renderUI({
+        h = story_of(chart_id)$headline
+        if (is_text1(h) && nzchar(h)) tags$p(class = "fw-semibold mb-1", h)
+      })
+      observeEvent(input[[cid(chart_id, "write")]], write_stories(chart_id))
+      observeEvent(input[[cid(chart_id, "rewrite")]], write_stories(chart_id))
+      purrr::iwalk(c(s_head = "headline", s_sum = "summary"), function(field, box)
+        observeEvent(input[[cid(chart_id, box)]], {
+          st = isolate(story_of(chart_id))
+          v = input[[cid(chart_id, box)]]
+          if (is.null(st) || identical(v, st[[field]])) return()
+          st[[field]] = v
+          set_story(chart_id, recheck_story(st))
+        }, ignoreInit = TRUE))
+      # The title box is checked the same way, against the chart's facts as it is now.
+      output[[cid(chart_id, "title_check")]] = renderUI({
+        title = input[[cid(chart_id, "w_title")]] %||% chart_of(chart_id)$spec$title %||% ""
+        if (!nzchar(trimws(title))) return(NULL)
+        x = summary_input(chart_of(chart_id), state$codebook, state$data, palette())
+        if (!is.null(x$error)) return(NULL)
+        check_line(problem_sentences(summary_problems(title, NULL, names_back(x$facts$text, x$facts$names), x$spec)), ok = NULL)
+      })
 
       # Wording: applied when a box is left or "Apply wording" is pressed; no model call.
       apply_wording = function() {
@@ -669,6 +750,10 @@ mod_explore_server <- function(id, state, ask = llm_json) {
     })
     observeEvent(input$suggest, run(NULL))
     observeEvent(input$back, open(NULL))
+    observeEvent(input$write_report, {
+      todo = purrr::keep(state$report, needs_story)
+      if (length(todo)) write_stories(todo)
+    })
 
     chart_buttons = function(chart_id, refine = TRUE)
       tags$div(class = "d-flex gap-2 flex-wrap",
@@ -684,11 +769,13 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       t = isolate(talk[[chart_id]])
       bslib::layout_columns(col_widths = c(7, 5),
         tags$div(uiOutput(ns(cid(chart_id, "view"))), uiOutput(ns(cid(chart_id, "notes"))), uiOutput(ns(cid(chart_id, "about"))),
+                 tags$div(class = "border rounded p-2 my-2", tags$h6("Headline and summary"), uiOutput(ns(cid(chart_id, "story")))),
                  chart_buttons(chart_id, refine = FALSE), uiOutput(ns(cid(chart_id, "code")))),
         tags$div(actionButton(ns("back"), "Back to all charts", class = "btn-sm mb-2"),
                  tags$h5("Wording"),
                  purrr::imap(WORDING_FIELDS, function(label, f)
-                   textInput(ns(cid(chart_id, paste0("w_", f))), label, value = ch$spec[[f]] %||% "", width = "100%", updateOn = "blur")),
+                   tagList(textInput(ns(cid(chart_id, paste0("w_", f))), label, value = ch$spec[[f]] %||% "", width = "100%", updateOn = "blur"),
+                           if (identical(f, "title")) uiOutput(ns(cid(chart_id, "title_check"))))),
                  tags$div(class = "d-flex gap-2 mb-3",
                           actionButton(ns(cid(chart_id, "apply")), "Apply wording", class = "btn-sm"),
                           actionButton(ns(cid(chart_id, "undo")), "Undo", class = "btn-sm"),
@@ -703,9 +790,10 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       if (is.null(out)) return(NULL)
       if (!is.null(open())) return(wide_view(open()))
       cards = purrr::map(shown(), function(chart_id)
-        bslib::card(uiOutput(ns(cid(chart_id, "view"))), uiOutput(ns(cid(chart_id, "notes"))), uiOutput(ns(cid(chart_id, "about"))),
+        bslib::card(uiOutput(ns(cid(chart_id, "headline"))), uiOutput(ns(cid(chart_id, "view"))), uiOutput(ns(cid(chart_id, "notes"))), uiOutput(ns(cid(chart_id, "about"))),
                     chart_buttons(chart_id), uiOutput(ns(cid(chart_id, "code")))))
       tagList(
+        uiOutput(ns("report_button")),
         if (!is.null(out$error)) warn_box(out$error, call_detail(out$detail)),
         if (length(out$cannot)) advice_box(purrr::map(out$cannot, tags$p)),
         if (length(cards)) do.call(bslib::layout_column_wrap, c(list(width = 1 / 2), cards)),
@@ -716,6 +804,15 @@ mod_explore_server <- function(id, state, ask = llm_json) {
                    tags$ul(purrr::map(out$failed, function(f)
                      tags$li(tags$strong(paste0("Chart ", f$number, if (is_text1(f$spec$title)) paste0(", '", f$spec$title, "'"), ": ")),
                              paste(f$sentences, collapse = " "))))))
+    })
+
+    # Above the cards, once a chart is in the report: write for every report chart that has no
+    #   headline or whose spec has changed since it was written.
+    output$report_button = renderUI({
+      if (!length(state$report)) return(NULL)
+      n = length(purrr::keep(state$report, needs_story))
+      busy_button(ns("write_report"), paste0("Write headlines and summaries for the report (", n, if (n == 1L) " chart)" else " charts)"),
+                  SUMMARY_BUSY, ready = n > 0L && llm_key_ready(), class = "btn-outline-primary mb-2")
     })
 
     output$foot = renderUI({

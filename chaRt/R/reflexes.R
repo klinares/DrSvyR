@@ -685,7 +685,7 @@ summarize_batch <- function(batch, cb, system_txt, ask, m) {
     nm = x$facts$names
     list(id = x$id, headline = names_back(trimws(j$entry$headline), nm), summary = names_back(trimws(j$entry$summary), nm),
          checked = summary_ok(j$problems), problems = names_back(problem_sentences(j$problems), nm), hash = x$hash,
-         text = NULL, detail = NULL, repaired = repaired)
+         text = NULL, detail = NULL, repaired = repaired, facts = names_back(x$facts$text, nm), spec = x$spec)
   }
   if (is.null(first$res))
     return(list(results = purrr::map(batch, function(x) finish(x, NULL, text = SUMMARY_FAILED, detail = first$error)), records = records))
@@ -714,7 +714,8 @@ summarize_batch <- function(batch, cb, system_txt, ask, m) {
 #   Every headline and summary is checked (check_numbers(), check_words(), the tokens); the charts
 #   that fail get one repair call, and no second. Names are put back for the tokens. Returns
 #   charts, by id in the order given (id, headline, summary, checked, problems, hash of the spec they
-#   were written for, text: a sentence when none was written, detail, repaired), and calls.
+#   were written for, text: a sentence when none was written, detail, repaired, and with a text the
+#   facts with names and the spec, for checking the analyst's edits), and calls.
 summarize_charts <- function(charts, cb, data, ask = llm_json, palette = chart_palette_default(), m = APP_MODEL) {
   system_txt = assemble_system("summarize")
   inputs = purrr::map(unname(charts), function(ch) summary_input(ch, cb, data, palette))
