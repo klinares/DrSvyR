@@ -485,13 +485,35 @@ mod_explore_ui <- function(id) {
     uiOutput(ns("foot")))
 }
 
-mod_explore_server <- function(id, state) {
+
+# The wording a chart's spec carries, edited in boxes with no model call; a blank box is R's default.
+WORDING_FIELDS <- c(title = "Title", subtitle = "Subtitle", caption = "Caption", x_label = "X-axis title", y_label = "Y-axis title")
+
+REFINE_GREETING <- paste(
+  "Ask for a change to the chart's form, its grouping, a filter, a highlight, or how many are shown (top n).",
+  "Colours are set by the palette boxes above the charts, and the wording by the boxes above this chat.", sep = "\n\n")
+
+# The text a chat turn appends: for a new spec its say and the notes it did not have before; for ask
+#   or cannot the text; for a failure the sentences.
+refine_reply <- function(r) {
+  if (identical(r$kind, "spec")) return(paste(c(r$text, if (length(r$new_notes)) paste("Note:", r$new_notes)), collapse = "\n\n"))
+  paste(r$text, collapse = " ")
+}
+
+# ask is the function that asks the model (llm_json, or a stand-in in a test).
+mod_explore_server <- function(id, state, ask = llm_json) {
   moduleServer(id, function(input, output, session) {
     ns = session$ns
     res = reactiveVal(NULL)            # what suggest_charts() returned for the last request
-    rgen = reactiveVal(0L)             # one number per request, in the ids of its cards
+    shown = reactiveVal(character(0))  # the ids of that request's charts, in order
+    open = reactiveVal(NULL)           # the id of the chart in the wide view, or NULL for the cards
     calls_done = reactiveVal(0L)
     note = reactiveVal(NULL)
+    toggles = reactiveValues()         # per chart: interactive view, code shown
+    talk = reactiveValues()            # per chart: the chat's messages and the last exchange
+    made = new.env()                   # the charts whose outputs and observers exist
+    made$ids = character(0)
+    made$n = 0L
     rule_labels = reflex_labels()
 
     # The report's palettes; changing one draws the charts again and makes no call.
@@ -516,11 +538,128 @@ mod_explore_server <- function(id, state) {
               note())
     })
 
+    cid = function(chart_id, what) paste0(chart_id, "_", what)
+    chart_of = function(chart_id) state$charts[[chart_id]]
+    set_chart = function(chart) { cs = isolate(state$charts) %||% list(); cs[[chart$id]] = chart; state$charts = cs }
+    notes_for = function(spec) {
+      r = check_chart(spec, isolate(state$codebook), isolate(state$data), isolate(palette()), suggest_rule_ids())
+      if (isTRUE(r$ok)) r$notes else character(0)
+    }
+    fill_wording = function(chart_id) {
+      spec = isolate(chart_of(chart_id))$spec
+      purrr::walk(names(WORDING_FIELDS), function(f) updateTextInput(session, cid(chart_id, paste0("w_", f)), value = spec[[f]] %||% ""))
+    }
+    toggle = function(chart_id, what) { t = isolate(toggles[[chart_id]]) %||% list(); t[[what]] = !isTRUE(t[[what]]); toggles[[chart_id]] = t }
+
+    # A chart's outputs and observers, made once, the first time it is drawn.
+    make_chart = function(chart_id) {
+      if (chart_id %in% made$ids) return(invisible())
+      made$ids = c(made$ids, chart_id)
+      drawn = reactive(tryCatch(spec_plot(chart_of(chart_id)$spec, state$data, state$codebook, palette()), error = function(e) e))
+      # Drawn at SPEC_DPI pixels per inch and shown at its size in inches, so it is sharper, not larger.
+      output[[cid(chart_id, "static")]] = renderImage({
+        p = drawn()
+        if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
+        f = tempfile(fileext = ".png")
+        size = spec_png(p, f)
+        list(src = f, contentType = "image/png", alt = attr(p, "spec")$title %||% "chart",
+             width = round(size[["width"]] * CSS_PPI), height = round(size[["height"]] * CSS_PPI),
+             style = "max-width:100%; height:auto;")
+      }, deleteFile = TRUE)
+      output[[cid(chart_id, "widget")]] = plotly::renderPlotly({
+        p = drawn()
+        if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
+        spec_widget(p)
+      })
+      output[[cid(chart_id, "view")]] = renderUI({
+        if (isTRUE(toggles[[chart_id]]$interactive)) plotly::plotlyOutput(ns(cid(chart_id, "widget")), height = "450px")
+        else imageOutput(ns(cid(chart_id, "static")), height = "auto")
+      })
+      output[[cid(chart_id, "notes")]] = renderUI({
+        p = drawn()
+        if (inherits(p, "error")) return(warn_box(conditionMessage(p)))
+        if (length(attr(p, "notes"))) tags$ul(class = "small", purrr::map(attr(p, "notes"), tags$li))
+      })
+      output[[cid(chart_id, "about")]] = renderUI({
+        ch = chart_of(chart_id)
+        rule = ch$spec$rule
+        tagList(if (is_text1(ch$spec$say)) tags$p(ch$spec$say),
+                tags$p(class = "small text-muted",
+                       if (!is.null(rule) && !is.na(rule_labels[rule])) paste0("Rule: ", rule_labels[[rule]]),
+                       if (isTRUE(ch$exploratory)) tags$span(class = "badge bg-secondary ms-1", "Exploratory")))
+      })
+      output[[cid(chart_id, "code")]] = renderUI({
+        if (!isTRUE(toggles[[chart_id]]$code)) return(NULL)
+        code = tryCatch(spec_code(chart_of(chart_id)$spec, state$codebook, state$path, palette()), error = function(e) conditionMessage(e))
+        tags$pre(class = "small", paste(code, collapse = "\n"))
+      })
+      observeEvent(input[[cid(chart_id, "interactive")]], toggle(chart_id, "interactive"))
+      observeEvent(input[[cid(chart_id, "show_code")]], toggle(chart_id, "code"))
+      observeEvent(input[[cid(chart_id, "add")]], {
+        if (chart_id %in% state$report) return(showNotification("This chart is already in the report.", type = "message"))
+        state$report = c(state$report, chart_id)
+        showNotification(paste0("Added to the report (", length(state$report), " in all)."), type = "message")
+      })
+      observeEvent(input[[cid(chart_id, "refine")]], open(chart_id))
+
+      # Wording: applied when a box is left or "Apply wording" is pressed; no model call.
+      apply_wording = function() {
+        ch = isolate(chart_of(chart_id))
+        spec = ch$spec
+        spec = purrr::reduce(names(WORDING_FIELDS), function(sp, f) {
+          v = isolate(input[[cid(chart_id, paste0("w_", f))]])
+          if (is.null(v)) return(sp)
+          v = trimws(v)
+          sp[[f]] = if (nzchar(v)) v
+          sp
+        }, .init = spec)
+        if (!identical(spec, ch$spec)) set_chart(chart_apply(ch, spec, notes_for(spec)))
+      }
+      purrr::walk(c(paste0("w_", names(WORDING_FIELDS)), "apply"), function(w) observeEvent(input[[cid(chart_id, w)]], apply_wording(), ignoreInit = TRUE))
+
+      # Undo and Reset: no model call.
+      observeEvent(input[[cid(chart_id, "undo")]], {
+        ch = chart_undo(chart_of(chart_id))
+        ch$notes = notes_for(ch$spec)
+        set_chart(ch); fill_wording(chart_id)
+      })
+      observeEvent(input[[cid(chart_id, "reset")]], {
+        ch = chart_reset(chart_of(chart_id))
+        ch$notes = notes_for(ch$spec)
+        set_chart(ch); fill_wording(chart_id)
+      })
+
+      # The chat. shinychat disables its input from the moment a message is sent until a complete
+      #   message is appended, so a second message cannot be sent while the call runs.
+      chat_id = cid(chart_id, "chat")
+      observeEvent(input[[paste0(chat_id, "_user_input")]], {
+        msg = trimws(input[[paste0(chat_id, "_user_input")]])
+        if (!nzchar(msg)) return()
+        t = isolate(talk[[chart_id]]) %||% list(messages = list(), last = NULL)
+        r = refine_chart(chart_of(chart_id), msg, state$codebook, state$data, last = t$last, ask = ask, palette = palette())
+        state$calls = dplyr::bind_rows(state$calls, r$calls)
+        if (identical(r$kind, "spec")) { set_chart(r$chart); fill_wording(chart_id) }
+        reply = refine_reply(r)
+        t$messages = c(t$messages, list(list(role = "user", content = msg), list(role = "assistant", content = reply)))
+        t$last = r$last
+        talk[[chart_id]] = t
+        shinychat::chat_append_message(chat_id, list(role = "assistant", content = reply), chunk = FALSE)
+      })
+    }
+
     run = function(question) {
       note(NULL)
-      out = suggest_charts(state$codebook, state$data, question, palette = palette())
+      out = suggest_charts(state$codebook, state$data, question, ask = ask, palette = palette())
       state$calls = dplyr::bind_rows(state$calls, out$calls)
-      res(out); rgen(rgen() + 1L)
+      ids = purrr::map_chr(out$charts, function(ch) {
+        made$n = made$n + 1L
+        chart = new_chart(paste0("c", made$n), ch$spec, ch$notes)
+        chart$exploratory = isTRUE(ch$exploratory)
+        set_chart(chart)
+        chart$id
+      })
+      purrr::walk(ids, make_chart)
+      res(out); shown(unname(ids)); open(NULL)
       calls_done(calls_done() + 1L)
     }
     observeEvent(input$draw, {
@@ -529,71 +668,43 @@ mod_explore_server <- function(id, state) {
       run(q)
     })
     observeEvent(input$suggest, run(NULL))
+    observeEvent(input$back, open(NULL))
 
-    # One card per chart. Its outputs are made here, with the request's number in their ids.
-    observeEvent(rgen(), {
-      out = res()
-      if (is.null(out)) return()
-      g = rgen()
-      purrr::iwalk(out$charts, function(ch, i) {
-        cid = function(what) paste0("r", g, "_", what, "_", i)
-        drawn = reactive(tryCatch(spec_plot(ch$spec, state$data, state$codebook, palette()), error = function(e) e))
-        # Drawn at SPEC_DPI pixels per inch and shown at its size in inches, so it is sharper, not larger.
-        output[[cid("static")]] = renderImage({
-          p = drawn()
-          if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
-          f = tempfile(fileext = ".png")
-          size = spec_png(p, f)
-          list(src = f, contentType = "image/png", alt = attr(p, "spec")$title %||% "chart",
-               width = round(size[["width"]] * CSS_PPI), height = round(size[["height"]] * CSS_PPI),
-               style = "max-width:100%; height:auto;")
-        }, deleteFile = TRUE)
-        output[[cid("widget")]] = plotly::renderPlotly({
-          p = drawn()
-          if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
-          spec_widget(p)
-        })
-        output[[cid("view")]] = renderUI({
-          if ((input[[cid("interactive")]] %||% 0L) %% 2L == 1L) plotly::plotlyOutput(ns(cid("widget")), height = "450px")
-          else imageOutput(ns(cid("static")), height = "auto")
-        })
-        output[[cid("notes")]] = renderUI({
-          p = drawn()
-          if (inherits(p, "error")) return(warn_box(conditionMessage(p)))
-          if (length(attr(p, "notes"))) tags$ul(class = "small", purrr::map(attr(p, "notes"), tags$li))
-        })
-        output[[cid("code")]] = renderUI({
-          if ((input[[cid("show_code")]] %||% 0L) %% 2L == 0L) return(NULL)
-          code = tryCatch(spec_code(ch$spec, state$codebook, state$path, palette()), error = function(e) conditionMessage(e))
-          tags$pre(class = "small", paste(code, collapse = "\n"))
-        })
-        observeEvent(input[[cid("add")]], {
-          state$report = c(state$report, list(ch$spec))
-          showNotification(paste0("Added to the report (", length(state$report), " in all)."), type = "message")
-        }, ignoreInit = TRUE)
-      })
-    })
+    chart_buttons = function(chart_id, refine = TRUE)
+      tags$div(class = "d-flex gap-2 flex-wrap",
+               actionButton(ns(cid(chart_id, "add")), "Add to report", class = "btn-sm btn-primary"),
+               actionButton(ns(cid(chart_id, "interactive")), "Interactive view", class = "btn-sm"),
+               actionButton(ns(cid(chart_id, "show_code")), "Show code", class = "btn-sm"),
+               if (refine) actionButton(ns(cid(chart_id, "refine")), "Refine", class = "btn-sm btn-outline-primary"))
+
+    # The wide view of one chart: the chart, its notes and rule on the left; on the right "Back to
+    #   all charts", the wording boxes, Undo and Reset, and the chat.
+    wide_view = function(chart_id) {
+      ch = isolate(chart_of(chart_id))
+      t = isolate(talk[[chart_id]])
+      bslib::layout_columns(col_widths = c(7, 5),
+        tags$div(uiOutput(ns(cid(chart_id, "view"))), uiOutput(ns(cid(chart_id, "notes"))), uiOutput(ns(cid(chart_id, "about"))),
+                 chart_buttons(chart_id, refine = FALSE), uiOutput(ns(cid(chart_id, "code")))),
+        tags$div(actionButton(ns("back"), "Back to all charts", class = "btn-sm mb-2"),
+                 tags$h5("Wording"),
+                 purrr::imap(WORDING_FIELDS, function(label, f)
+                   textInput(ns(cid(chart_id, paste0("w_", f))), label, value = ch$spec[[f]] %||% "", width = "100%", updateOn = "blur")),
+                 tags$div(class = "d-flex gap-2 mb-3",
+                          actionButton(ns(cid(chart_id, "apply")), "Apply wording", class = "btn-sm"),
+                          actionButton(ns(cid(chart_id, "undo")), "Undo", class = "btn-sm"),
+                          actionButton(ns(cid(chart_id, "reset")), "Reset", class = "btn-sm")),
+                 tags$h5("Chat"),
+                 shinychat::chat_ui(ns(cid(chart_id, "chat")), messages = t$messages, greeting = REFINE_GREETING, height = "420px",
+                                    placeholder = "What should change?")))
+    }
 
     output$results = renderUI({
       out = res()
       if (is.null(out)) return(NULL)
-      g = rgen()
-      cid = function(what, i) ns(paste0("r", g, "_", what, "_", i))
-      cards = purrr::imap(out$charts, function(ch, i) {
-        rule = ch$spec$rule
-        bslib::card(
-          uiOutput(cid("view", i)),
-          uiOutput(cid("notes", i)),
-          if (is_text1(ch$spec$say)) tags$p(ch$spec$say),
-          tags$p(class = "small text-muted",
-                 if (!is.null(rule) && !is.na(rule_labels[rule])) paste0("Rule: ", rule_labels[[rule]]),
-                 if (isTRUE(ch$exploratory)) tags$span(class = "badge bg-secondary ms-1", "Exploratory")),
-          tags$div(class = "d-flex gap-2 flex-wrap",
-                   actionButton(cid("add", i), "Add to report", class = "btn-sm btn-primary"),
-                   actionButton(cid("interactive", i), "Interactive view", class = "btn-sm"),
-                   actionButton(cid("show_code", i), "Show code", class = "btn-sm")),
-          uiOutput(cid("code", i)))
-      })
+      if (!is.null(open())) return(wide_view(open()))
+      cards = purrr::map(shown(), function(chart_id)
+        bslib::card(uiOutput(ns(cid(chart_id, "view"))), uiOutput(ns(cid(chart_id, "notes"))), uiOutput(ns(cid(chart_id, "about"))),
+                    chart_buttons(chart_id), uiOutput(ns(cid(chart_id, "code")))))
       tagList(
         if (!is.null(out$error)) warn_box(out$error, call_detail(out$detail)),
         if (length(out$cannot)) advice_box(purrr::map(out$cannot, tags$p)),
@@ -622,7 +733,8 @@ mod_explore_server <- function(id, state) {
 
 # ---- Report ---------------------------------------------------------------------------------
 
-# The Report tab is a later phase; until then it shows how many charts were added to it.
+# The Report tab is a later phase; until then it shows how many charts were added to it. The report
+#   holds chart ids, so a chart refined after it was added is the refined one.
 mod_report_ui <- function(id) uiOutput(NS(id)("count"))
 
 mod_report_server <- function(id, state) {

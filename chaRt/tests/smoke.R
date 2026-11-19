@@ -1290,6 +1290,58 @@ if (!is.null(ball_g)) {
 }
 
 
+# ---- Phase 4 D: the Explore tab, with shiny::testServer() and a stand-in ------------------------------
+
+if (!is.null(ball_g)) {
+  d_bar <- list(family = "bar", x = "Position", fn = "count", title = "Players by position")
+  d_sc <- list(family = "scatter", x = "Height", y = "Weight", title = "Height and weight")
+  d_si <- stand_in(list(to_json(list(charts = list(d_bar, d_sc), cannot = list())),
+                        to_json(list(spec = utils::modifyList(d_bar, list(family = "dot", title = "Players by position, as dots")),
+                                     say = "Now a dot plot."))))
+  d_state <- shiny::reactiveValues(key_version = 0L, data = ball_g$data, problems = NULL, profile = NULL, codebook = ball_g$cb,
+                                   path = ball_g$path, calls = NULL, charts = list(), report = character(0), palette = chart_palette_default())
+  d_out <- new.env()   # testServer() runs its code in an environment of its own; results are kept here
+  shiny::testServer(mod_explore_server, args = list(state = d_state, ask = d_si$ask), {
+    session$setInputs(pal_qualitative = "okabe_ito", pal_sequential = "viridis", pal_diverging = chart_palette_default()$diverging)
+    session$setInputs(question = "How many players in each position?", draw = 1)
+    ids <- shown()
+    a <- ids[1]; b <- ids[2]
+    first_spec <- d_state$charts[[a]]$spec
+    calls_after_draw <- nrow(d_state$calls)
+    do.call(session$setInputs, stats::setNames(list(1), paste0(a, "_add")))
+    do.call(session$setInputs, stats::setNames(list(1), paste0(a, "_refine")))
+    d_out$opened <- identical(open(), a) && grepl("Back to all charts", as.character(output$results$html)) &&
+      grepl(paste0(a, "_chat"), as.character(output$results$html))
+    do.call(session$setInputs, stats::setNames(list("A title of my own"), paste0(a, "_w_title")))
+    d_out$wording <- identical(d_state$charts[[a]]$spec$title, "A title of my own") && nrow(d_state$calls) == calls_after_draw &&
+      length(d_state$charts[[a]]$history) == 1L
+    do.call(session$setInputs, stats::setNames(list(""), paste0(a, "_w_title")))
+    blank_title <- is.null(d_state$charts[[a]]$spec$title)
+    do.call(session$setInputs, stats::setNames(list("A title of my own"), paste0(a, "_w_title")))
+    do.call(session$setInputs, stats::setNames(list("make it a dot plot"), paste0(a, "_chat_user_input")))
+    d_out$chat <- identical(d_state$charts[[a]]$spec$family, "dot") && nrow(d_state$calls) == calls_after_draw + 1L &&
+      identical(talk[[a]]$messages[[2]]$content, "Now a dot plot.") && identical(talk[[a]]$last$message, "make it a dot plot")
+    d_out$report <- identical(d_state$report, a) && identical(d_state$charts[[d_state$report[1]]]$spec$family, "dot")
+    do.call(session$setInputs, stats::setNames(list(1), paste0(a, "_undo")))
+    after_undo <- d_state$charts[[a]]$spec
+    do.call(session$setInputs, stats::setNames(list(1), paste0(a, "_reset")))
+    d_out$undo_reset <- blank_title && identical(after_undo$family, "bar") && identical(after_undo$title, "A title of my own") &&
+      identical(d_state$charts[[a]]$spec, first_spec) && nrow(d_state$calls) == calls_after_draw + 1L
+    session$setInputs(back = 1)
+    do.call(session$setInputs, stats::setNames(list(1), paste0(b, "_refine")))
+    do.call(session$setInputs, stats::setNames(list("Height against weight"), paste0(b, "_w_title")))
+    d_out$separate <- length(d_state$charts[[b]]$history) == 1L && identical(d_state$charts[[b]]$spec$title, "Height against weight") &&
+      length(d_state$charts[[a]]$history) == 4L && is.null(talk[[b]])
+  })
+  check("4-D: Refine opens the chart in the wide view, with Back to all charts and its own chat", isTRUE(d_out$opened))
+  check("4-D: a wording box changes the spec and pushes history, with no call recorded; a blank box removes the field", isTRUE(d_out$wording))
+  check("4-D: a chat turn replaces the spec with the reply's, appends its say, and keeps the exchange for the next turn", isTRUE(d_out$chat))
+  check("4-D: a chart refined after Add to report is the refined one in the report list (which holds ids)", isTRUE(d_out$report))
+  check("4-D: Undo restores the spec before, Reset the first spec, neither with a call", isTRUE(d_out$undo_reset))
+  check("4-D: two charts keep separate histories and chats", isTRUE(d_out$separate))
+}
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")

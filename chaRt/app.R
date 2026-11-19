@@ -54,7 +54,7 @@ library(bslib)
 library(purrr)
 
 # Called as pkg::fn() in R/ and never attached; listed so a missing one stops the app here, by name.
-APP_PACKAGES <- c("digest", "dplyr", "ellmer", "ggplot2", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales", "tibble",
+APP_PACKAGES <- c("digest", "dplyr", "ellmer", "ggplot2", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales", "shinychat", "tibble",
                   "tidyr", "yaml")
 
 local({
@@ -117,10 +117,12 @@ options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 # The state the modules share: key_version, which changes whenever the pasted key
 #   is saved or forgotten, so anything that depends on a key can re-run; the data as read, the
 #   sentences about it (problems), its profile, the codebook the analyst edits and the path of the
-#   upload (for the code a chart comes with); the record of every model call (calls), the specs
-#   added to the report, in order, and the report's three palettes.
+#   upload (for the code a chart comes with); the record of every model call (calls); every chart
+#   drawn this session, by id (charts); the ids added to the report, in order; and the report's
+#   three palettes.
 new_state <- function() reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL,
-                                       path = NULL, calls = NULL, report = list(), palette = chart_palette_default())
+                                       path = NULL, calls = NULL, charts = list(), report = character(0),
+                                       palette = chart_palette_default())
 
 
 # ---- 6. layout --------------------------------------------------------------
