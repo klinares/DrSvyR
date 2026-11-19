@@ -792,7 +792,8 @@ REFLEX_SHA <- c(
   "relationship.md" = "63fa0ce4d7efc55a8548e5831713ac3764cc3661ae9516fa50031be6a39a34f2",
   "distribution.md" = "fedaa1f13d77fb92ce9e8b177fbf88b9e2caec07cadda6b6c2901da51c62a6d5",
   "time.md" = "c907e5546557b6fedb91623a8c83588ac10af738946d00ea35458e74961988a9",
-  "suggest.md" = "9f32f48e4b4dd9b969187af1bb4bb4f198dcba49ea9465d0738aa5e565e915f3")
+  "suggest.md" = "9f32f48e4b4dd9b969187af1bb4bb4f198dcba49ea9465d0738aa5e565e915f3",
+  "refine.md" = "0469d8feb96f0018b222e2366ba369f2d2444531c7c7a24f5a591b1ba2b906de")
 
 rfiles <- tryCatch(check_reflex_files(), error = function(e) e)
 check(paste0("every reflex file parses (", if (inherits(rfiles, "error")) conditionMessage(rfiles) else length(rfiles), ")"),
@@ -1217,6 +1218,20 @@ if (!is.null(ball_g)) {
   check("4-A3: a sideways grouped bar puts the first legend entry's bar at the top of every group",
         isTRUE(attr(p_grp, "spec")$.flip) && length(top_is_first) == 12L && all(top_is_first) &&
           code_has(spec_code(attr(p_grp, "spec"), ball_g$cb, ball_g$path), "position_dodge(width = 0.8, reverse = TRUE)"))
+}
+
+
+# ---- Phase 4 B: one system prompt for both chart calls ---------------------------------------------
+
+if (!inherits(messy, "error")) {
+  b_cols <- purrr::map_chr(messy$codebook$columns, "name")
+  ends_with_own <- function(call, user) endsWith(user, paste0("REPLY FORMAT\n", read_reflex_file(CALL_REPLY[[call]])$output_format))
+  check("4-B: the suggest and refine system prompts are identical; suggest and label messages end with their own file's reply format",
+        identical(assemble_system("suggest"), assemble_system("refine")) && identical(CALL_FILES$suggest, CALL_FILES$refine) &&
+          "refine.md" %in% CALL_FILES$suggest &&
+          ends_with_own("suggest", assemble_user("suggest", messy$codebook, b_cols, "q")) &&
+          ends_with_own("label", assemble_user("label", messy$codebook, b_cols)) &&
+          !grepl('"ask"', assemble_user("suggest", messy$codebook, b_cols, "q"), fixed = TRUE))
 }
 
 

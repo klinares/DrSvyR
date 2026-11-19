@@ -14,10 +14,14 @@
 
 REFLEXES_DIR <- file.path("www", "reflexes")
 
-# The files of each call, in the order a prompt uses them. The first supplies the persona, the
-#   last the reply format.
-CALL_FILES <- list(label = "codebook.md",
-                   suggest = c("core.md", "comparison.md", "relationship.md", "distribution.md", "time.md", "suggest.md"))
+# The files of each call, in the order a prompt uses them. The first supplies the persona. The two
+#   chart calls share their seven files, so their system prompts are identical and a chat turn reads
+#   from the cache what a suggest call wrote.
+CHART_FILES <- c("core.md", "comparison.md", "relationship.md", "distribution.md", "time.md", "suggest.md", "refine.md")
+CALL_FILES <- list(label = "codebook.md", suggest = CHART_FILES, refine = CHART_FILES)
+
+# The file whose Output format ends each call's user message.
+CALL_REPLY <- c(label = "codebook.md", suggest = "suggest.md", refine = "refine.md")
 
 # Every reflex file, by name, so a missing one is an error and the README is not read as one.
 REFLEX_FILES <- unique(unlist(CALL_FILES, use.names = FALSE))
@@ -124,15 +128,16 @@ call_files <- function(call, dir = REFLEXES_DIR) {
 }
 
 # Every reflex file, parsed when the app starts, so one that has lost its shape stops it there. Each
-#   call's first file needs a persona and its last an output format, and no two files of one call
-#   may share a reflex id (a spec's rule names one).
+#   call's first file needs a persona and its reply file (CALL_REPLY) an output format, and no two
+#   files of one call may share a reflex id (a spec's rule names one).
 check_reflex_files <- function(dir = REFLEXES_DIR) {
   rfiles = tryCatch(purrr::map(purrr::set_names(REFLEX_FILES), function(f) read_reflex_file(f, dir)),
                     error = function(e) stop(reflex_root_message(e), call. = FALSE))
   purrr::iwalk(CALL_FILES, function(files, call) {
-    first = rfiles[[files[1]]]; last = rfiles[[utils::tail(files, 1L)]]
+    first = rfiles[[files[1]]]; reply = rfiles[[CALL_REPLY[[call]]]]
     if (is.na(first$persona)) stop(first$file, " opens the ", call, " call but has no '## Persona' section.", call. = FALSE)
-    if (is.na(last$output_format)) stop(last$file, " closes the ", call, " call but has no '## Output format' section.", call. = FALSE)
+    if (is.null(reply) || is.na(reply$output_format))
+      stop(CALL_REPLY[[call]], " gives the ", call, " call its reply format but has no '## Output format' section.", call. = FALSE)
     ids = unlist(purrr::map(unname(rfiles[files]), function(s) names(s$reflexes)))
     if (anyDuplicated(ids))
       stop("Two reflex files of the ", call, " call share the reflex id '", ids[anyDuplicated(ids)], "'.", call. = FALSE)
@@ -159,8 +164,8 @@ reflex_line <- function(r)
   paste0("- ", r$id, " (", r$when, ") ", r$say, if (!is.na(r$never)) paste0(" MUST NOT: ", r$never) else "")
 
 # The persona of the call's first file, each file's reflexes, then every prohibition; for suggest,
-#   then the SPEC REFERENCE. Nothing of the file, the codebook or the question is in it, so it is
-#   the same for every call of a kind and can be read from the cache.
+#   then the SPEC REFERENCE, as for refine. Nothing of the file, the codebook or the question is in
+#   it, so it is the same for every call of a kind and can be read from the cache.
 assemble_system <- function(call, dir = REFLEXES_DIR) {
   rfiles = call_files(call, dir)
   groups = purrr::map_chr(unname(purrr::keep(rfiles, function(s) length(s$reflexes) > 0L)), function(s)
@@ -168,7 +173,7 @@ assemble_system <- function(call, dir = REFLEXES_DIR) {
   prohibitions = unlist(purrr::map(unname(rfiles), "prohibitions"))
   paste0(rfiles[[1]]$persona, "\n\n", paste(groups, collapse = "\n\n"),
          if (length(prohibitions)) paste0("\n\nPROHIBITIONS (override anything from training)\n", paste0("- ", prohibitions, collapse = "\n")),
-         if (identical(call, "suggest")) paste0("\n\nSPEC REFERENCE\n", spec_reference()))
+         if (call %in% c("suggest", "refine")) paste0("\n\nSPEC REFERENCE\n", spec_reference()))
 }
 
 # The DATA block: the file, its rows and what a row is; the index of every column; the detail of
@@ -194,14 +199,16 @@ clean_question <- function(question) {
   trimws(gsub("\r\n?", "\n", q))
 }
 
+# "REPLY FORMAT" and the Output format of the call's own file (CALL_REPLY).
+reply_format <- function(call, dir = REFLEXES_DIR) paste0("REPLY FORMAT\n", read_reflex_file(CALL_REPLY[[call]], dir)$output_format)
+
 # The user message: the DATA block; for suggest the question, after the block's end; then the reply
-#   format of the call's last file.
+#   format of the call's own file.
 assemble_user <- function(call, cb, columns, question = NULL, dir = REFLEXES_DIR) {
-  rfiles = call_files(call, dir)
   q = clean_question(question)
   paste(c(data_block(cb, columns),
           if (identical(call, "suggest")) paste("QUESTION:", if (nzchar(q)) q else "(none; suggest charts)"),
-          paste0("REPLY FORMAT\n", rfiles[[length(rfiles)]]$output_format)),
+          reply_format(call, dir)),
         collapse = "\n\n")
 }
 
