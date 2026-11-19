@@ -1366,6 +1366,120 @@ if (!is.null(ball_g)) {
 }
 
 
+
+# ---- Phase 5 B: spec_facts() ----------------------------------------------------------------------
+
+# The numbers in a text, as the test reads them (digits inside a word, a [[N1]] token or an ordinal
+#   are not numbers), each with the half unit of its last written digit: a whole number ending in
+#   zeros is read as rounded to them.
+b5_numbers <- function(txt) {
+  hits = regmatches(txt, gregexpr("(?<![A-Za-z0-9_.\\[])-?[0-9][0-9,]*([.][0-9]+)?(?![A-Za-z0-9_\\]])", txt, perl = TRUE))[[1]]
+  purrr::map(hits, function(h) {
+    plain = gsub(",", "", h)
+    dec = if (grepl(".", plain, fixed = TRUE)) nchar(sub("^.*[.]", "", plain)) else 0L
+    zeros = if (dec == 0L) nchar(sub("^-?[0-9]*?(0*)$", "\\1", plain)) else 0L
+    list(text = h, value = as.numeric(plain), tol = 0.5 * 10^(if (dec > 0L) -dec else min(zeros, nchar(sub("^-", "", plain)) - 1L)) + 1e-9)
+  })
+}
+# The numbers of facts that no value the test computed explains.
+b5_unexplained <- function(facts, pool) {
+  pool = as.numeric(pool[is.finite(pool)])
+  purrr::map_chr(purrr::keep(b5_numbers(facts), function(n) !any(abs(pool - n$value) <= n$tol)), "text")
+}
+# What the test computes from the table for each family, on its own, with base R.
+b5_pool <- function(s, t, p) {
+  t = as.data.frame(t)
+  v = value_name(spec_defaults(s))
+  common = c(attr(t, "rows_used"), attr(t, "rows_dropped"), attr(t, "groups_total"), s$top_n, attr(t, "top"),
+             suppressWarnings(as.numeric(unlist(purrr::map(s$filter, "value")))))
+  fam = s$family
+  if (fam %in% c("bar", "dot")) {
+    x = t[[v]]
+    tot = sum(x)
+    out = c(x, max(x), min(x), sum(x == max(x)), max(x) / min(x), tot, 100 * x / tot)
+    if (identical(s$fn, "share")) out = c(out, 100 * x)
+  } else if (identical(fam, "line")) {
+    out = unlist(purrr::map(split(t, as.character(t[[s$color]])), function(d) {
+      d = d[order(d[[s$x]]), ]; y = d[[v]]; n = length(y)
+      c(y, y[n] - y[1], 100 * (y[n] - y[1]) / y[1], d[[s$x]])
+    }))
+  } else if (identical(fam, "slope")) {
+    lv = levels(t[[s$x]])
+    a = t[t[[s$x]] == lv[1], ]; b = t[t[[s$x]] == lv[2], ]
+    b = b[match(as.character(a[[s$color]]), as.character(b[[s$color]])), ]
+    chg = b[[v]] - a[[v]]
+    out = c(a[[v]], b[[v]], chg, 100 * chg / a[[v]], rank(-a[[v]], ties.method = "min"), rank(-b[[v]], ties.method = "min"),
+            nrow(a), sum(chg > 0), sum(chg < 0), as.numeric(lv))
+  } else if (fam %in% c("scatter", "bubble")) {
+    x = t[[s$x]]; y = t[[s$y]]
+    keys = unique(c(s$color, s$facet))
+    grp = if (length(keys)) unlist(purrr::map(split(t, t[keys], drop = TRUE), function(d) c(nrow(d), stats::cor(d[[s$x]], d[[s$y]]))))
+    fit = if (!identical(spec_defaults(s)$fit, "none")) {
+      xq = stats::quantile(x, c(0.1, 0.3, 0.5, 0.7, 0.9), names = FALSE)
+      f = if (identical(s$fit, "linear")) stats::lm(y ~ x, data.frame(x = x, y = y)) else stats::loess(y ~ x, data.frame(x = x, y = y))
+      c(xq, stats::predict(f, data.frame(x = xq)))
+    }
+    hl = if (!is.null(s$highlight)) c(x[t$highlighted], y[t$highlighted])
+    out = c(nrow(t), range(x), range(y), stats::cor(x, y), stats::cor(x, y, method = "spearman"), grp, fit, hl,
+            if (identical(fam, "bubble")) range(t[[s$size]]))
+  } else if (identical(fam, "histogram")) {
+    x = t[[s$x]]
+    b = ggplot2::layer_data(p)
+    top = b[which.max(b$count), ]
+    out = c(length(x), range(x), stats::quantile(x, c(0.25, 0.5, 0.75)), mean(x), top$xmin, top$xmax, top$count)
+  } else if (identical(fam, "box")) {
+    out = unlist(purrr::map(split(t[[s$y]], as.character(t[[s$x]])), function(y) c(length(y), stats::quantile(y, c(0, 0.25, 0.5, 0.75, 1)))))
+  } else if (identical(fam, "heatmap")) {
+    out = c(t[[v]], tapply(t[[v]], as.character(t[[s$x]]), mean), tapply(t[[v]], as.character(t[[s$y]]), mean),
+            tapply(t[[v]], as.character(t[[s$x]]), sum), tapply(t[[v]], as.character(t[[s$y]]), sum), SPEC_FACTS_CELLS,
+            suppressWarnings(as.numeric(c(as.character(t[[s$x]]), as.character(t[[s$y]])))))
+  }
+  c(common, out)
+}
+
+b5_specs <- c(bar = "football, players by position (bar, count)", dot = "FH, top 10 civil liberties 2014 (dot)",
+              line = "panel, revenue by year and region (line, 8 lines)", slope = "panel, revenue first year against last (slope)",
+              scatter = "FH, political rights against civil liberties (scatter, loess, highlight)",
+              bubble = "panel, price against units sized by revenue, last year (bubble)", histogram = "FH, political rights 2014 (histogram)",
+              box = "football, height by position (box)", heatmap = "panel, mean price by region and year (heatmap)")
+b5_runs <- purrr::compact(purrr::imap(b5_specs, function(name, fam) {
+  x = purrr::detect(gold, function(x) identical(x$entry$name, name))
+  if (is.null(x)) return(NULL)
+  t = spec_table(x$entry$spec, x$g$data, x$g$cb)
+  p = spec_plot(x$entry$spec, x$g$data, x$g$cb)
+  f1 = spec_facts(attr(p, "spec"), t, x$g$cb)
+  f2 = spec_facts(attr(p, "spec"), t, x$g$cb)
+  list(family = fam, facts = f1, same = identical(f1, f2), bad = b5_unexplained(f1$text, b5_pool(x$entry$spec, t, p)),
+       count = length(b5_numbers(f1$text)), cb = x$g$cb, table = t)
+}))
+purrr::walk(b5_runs, function(r)
+  cat("  ", r$family, ": ", r$count, " numbers in the facts", if (length(r$bad)) paste0("; not recomputed: ", paste(r$bad, collapse = ", ")), "\n", sep = ""))
+check(paste0("5-B: spec_facts() for one gold spec of each family (", length(b5_runs), "): every number in it is recomputed from spec_table() by the test"),
+      length(b5_runs) == 9L && all(purrr::map_lgl(b5_runs, function(r) !length(r$bad) && r$count > 3L)))
+check("5-B: spec_facts() twice on the same chart gives the same text and names",
+      length(b5_runs) == 9L && all(purrr::map_lgl(b5_runs, "same")))
+b5_dot <- purrr::detect(b5_runs, function(r) identical(r$family, "dot"))
+if (!is.null(b5_dot)) {
+  b5_names <- as.character(b5_dot$table$Country)
+  check("5-B: a chart with a name-like x (Country) has a token for each name and no name in its facts",
+        length(b5_dot$facts$names) == length(b5_names) && setequal(unname(b5_dot$facts$names), b5_names) &&
+          all(grepl("^\\[\\[N[0-9]+\\]\\]$", names(b5_dot$facts$names))) &&
+          !any(purrr::map_lgl(b5_names, function(n) grepl(n, b5_dot$facts$text, fixed = TRUE))))
+}
+if (!inherits(messy, "error")) {
+  b5_mcb <- messy$codebook
+  b5_mspecs <- c(purrr::map(c("city", "record_id", "comment"), function(col) list(family = "bar", x = col, fn = "count", top_n = 30, title = "t")),
+                 list(list(family = "scatter", x = "score", y = "score_1", highlight = list(column = "record_id", values = list(SECRET)), title = "t")))
+  b5_texts <- purrr::map_chr(b5_mspecs, function(sp) {
+    t = tryCatch(spec_table(sp, messy$read$data, b5_mcb), error = function(err) NULL)
+    if (is.null(t)) return(NA_character_)
+    spec_facts(sp, t, b5_mcb)$text
+  })
+  check("5-B: for the messy file SECRET_VALUE_123 is nowhere in the facts of a bar of each name column, nor of a scatter highlighting it",
+        !anyNA(b5_texts) && !any(grepl(SECRET, b5_texts, fixed = TRUE)) && grepl("Highlighted point [[N1]]", b5_texts[4], fixed = TRUE))
+}
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")

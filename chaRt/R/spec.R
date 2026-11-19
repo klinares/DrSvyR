@@ -1270,6 +1270,316 @@ spec_code <- function(spec, cb, file, palette = chart_palette_default()) {
 }
 
 
+# ---- the facts a summary may use ------------------------------------------------------------------
+
+SPEC_FACTS_SERIES <- 8L        # a line chart with more series than this: facts for the highlighted ones and ...
+SPEC_FACTS_EXTREMES <- 3L      # ... this many with the largest and the smallest change
+SPEC_FACTS_CELLS <- 5L         # a heatmap with more than SPEC_HEAT_LABELS cells: this many highest and lowest
+SPEC_FACTS_GROUP_N <- 10L      # a correlation within a group of at least this many rows
+SPEC_FACTS_FIT_AT <- c(0.1, 0.3, 0.5, 0.7, 0.9) # the fitted y at these percentiles of x
+
+# How a number is written in the facts, always the same way for the same value: a measure to 3
+#   significant digits, with thousands separators when its axis shows them; a count whole, with
+#   separators; a percentage to one decimal; a correlation to two.
+fact_num <- function(x, comma = TRUE) purrr::map_chr(x, function(v) {
+  if (is.na(v)) return("not defined")
+  v = signif(v, 3)
+  format(if (v == 0) 0 else v, big.mark = if (comma) "," else "", scientific = FALSE, trim = TRUE, digits = 15)
+})
+fact_count <- function(x) purrr::map_chr(x, function(v) format(round(v), big.mark = ",", scientific = FALSE, trim = TRUE))
+fact_fixed <- function(x, digits, suffix = "") purrr::map_chr(x, function(v) {
+  if (is.na(v)) return("not defined")
+  r = round(v, digits)
+  paste0(formatC(if (abs(r) < 10^-digits / 2) 0 else r, format = "f", digits = digits, big.mark = ","), suffix)
+})
+fact_pct <- function(x) fact_fixed(x, 1L, "%")
+fact_r <- function(x) fact_fixed(x, 2L)
+
+# A time as its axis shows it: a date as written, a whole number (a year) without separators.
+fact_time <- function(x) {
+  if (inherits(x, c("Date", "POSIXt")) || is.factor(x) || is.character(x)) return(as.character(x))
+  purrr::map_chr(x, function(v) if (isTRUE(v == round(v))) format(v, scientific = FALSE, trim = TRUE) else fact_num(v, FALSE))
+}
+
+# The plotted value as the chart's value axis shows it.
+fact_value_fmt <- function(s) {
+  comma = s$family %in% c("bar", "dot", "line", "slope", "heatmap")
+  switch(s$fn, count = fact_count, share = function(x) fact_pct(100 * x), function(x) fact_num(x, comma))
+}
+
+# Names of id and text columns become tokens, [[N1]], [[N2]], in order of first appearance; other
+#   values are written as they are. Returns list(name = function(column, values), map = function()),
+#   map giving token = name.
+fact_namer <- function(cb) {
+  env = new.env(parent = emptyenv())
+  env$map = character(0)
+  name = function(col, v) {
+    v = as.character(v)
+    e = cb_entry(cb, col)
+    if (is.null(e) || !is_name_like(e)) return(v)
+    purrr::map_chr(v, function(x) {
+      hit = names(env$map)[env$map == x]
+      if (length(hit)) return(hit[1])
+      tok = paste0("[[N", length(env$map) + 1L, "]]")
+      env$map = c(env$map, stats::setNames(x, tok))
+      tok
+    })
+  }
+  list(name = name, map = function() env$map)
+}
+
+# A table's rows split by a column, in the order the chart shows them (a factor's levels, otherwise
+#   first appearance).
+fact_split <- function(t, col) {
+  v = t[[col]]
+  keys = if (is.factor(v)) intersect(levels(v), as.character(v)) else unique(as.character(v))
+  purrr::set_names(purrr::map(keys, function(k) t[as.character(v) == k, , drop = FALSE]), keys)
+}
+
+fact_same <- function(a, b) abs(a - b) <= 1e-9 * max(1, abs(b))
+
+# What is plotted, in words, and the rows behind it.
+facts_head <- function(s, cb, table, nm, exploratory) {
+  lab = function(col) cb_label(cb, col)
+  fam = s$family
+  what = switch(fam,
+    scatter = , bubble = paste0(lab(s$y), " against ", lab(s$x), if (identical(fam, "bubble")) paste0(", sized by ", lab(s$size))),
+    histogram = paste0("Count of rows by ", lab(s$x)),
+    box = paste0(lab(s$y), " by ", lab(s$x)),
+    heatmap = paste0(value_label(s, cb), " by ", lab(s$x), " (columns) and ", lab(s$y), " (rows)"),
+    line = , slope = paste0(value_label(s, cb), " by ", lab(s$x), if (!is.null(s$color)) paste0(", one line for each ", lab(s$color))),
+    paste0(value_label(s, cb), " by ", lab(s$x)))
+  colour = if (!is.null(s$color) && fam %in% c("bar", "dot", "scatter", "bubble")) paste0(", coloured by ", lab(s$color))
+  facet = if (!is.null(s$facet)) paste0(", in panels by ", lab(s$facet))
+  ops = c("==" = "is", "!=" = "is not", ">" = "is more than", ">=" = "is at least", "<" = "is less than", "<=" = "is at most", "in" = "is one of")
+  fl = s$filter
+  fl = if (!is.null(names(fl))) list(fl) else fl
+  filters = purrr::map_chr(fl, function(f)
+    paste0("Filter: ", lab(f$column), " ", ops[[f$op]], " ", paste(nm(f$column, values_of(f$value)), collapse = ", ")))
+  shown = if (!is.null(s$top_n))
+    paste0("Shown: the top ", top_of(s), " of ", fact_count(attr(table, "groups_total")), " values of ", lab(ranked_column(s)))
+  h = s$highlight
+  dropped = attr(table, "rows_dropped") %||% 0L
+  c(paste0("Plotted: ", what, colour, facet),
+    filters, shown,
+    if (!is.null(h)) paste0("Highlighted: ", paste(nm(h$column, values_of(h$values)), collapse = ", "), " (", lab(h$column), ")"),
+    if (!identical(s$fit, "none") && fam %in% c("scatter", "bubble")) paste0("Fitted curve: ", if (identical(s$fit, "linear")) "a straight line" else "loess"),
+    paste0("Rows used: ", fact_count(attr(table, "rows_used"))),
+    if (dropped > 0L) paste0("Rows left out for missing values: ", fact_count(dropped)),
+    paste0("Exploratory: ", if (isTRUE(exploratory)) "yes" else "no"))
+}
+
+# Highest, lowest, ties, the multiple and, for a count or sum, the total and the top three shares,
+#   of values `vals` named `labs`.
+facts_extremes <- function(s, vals, labs, fmt) {
+  hi = max(vals); lo = min(vals)
+  at_hi = labs[fact_same(vals, hi)]; at_lo = labs[fact_same(vals, lo)]
+  tot = sum(vals)
+  top = utils::head(order(-vals), 3L)
+  c(paste0("Highest: ", paste(at_hi, collapse = ", "), " (", fmt(hi), ")"),
+    paste0("Groups at the highest value: ", length(at_hi)),
+    paste0("Lowest: ", paste(at_lo, collapse = ", "), " (", fmt(lo), ")"),
+    if (hi > 0 && lo > 0) paste0("Highest as a multiple of the lowest: ", fact_num(hi / lo, FALSE)),
+    if (s$fn %in% c("count", "sum") && tot > 0) {
+      of = if (!is.null(s$top_n)) " of the values shown" else ""
+      c(paste0("Total", of, ": ", fmt(tot)),
+        paste0("Share of the total", of, ": ", paste0(labs[top], " ", fact_pct(100 * vals[top] / tot), collapse = "; ")))
+    })
+}
+
+facts_bars <- function(s, cb, t, nm, fmt) {
+  v = value_name(s)
+  xs = nm(s$x, t[[s$x]])
+  if (is.null(s$color))
+    return(c("Values:", paste0("- ", xs, ": ", fmt(t[[v]])), facts_extremes(s, t[[v]], xs, fmt)))
+  cs = nm(s$color, t[[s$color]])
+  within = purrr::imap(fact_split(t, s$x), function(d, k)
+    c(paste0("Within ", nm(s$x, k), ":"), paste0("  ", facts_extremes(s, d[[v]], nm(s$color, d[[s$color]]), fmt))))
+  c("Values:", paste0("- ", xs, ", ", cs, ": ", fmt(t[[v]])), facts_extremes(s, t[[v]], paste0(xs, ", ", cs), fmt), unlist(within))
+}
+
+facts_lines <- function(s, cb, t, nm, fmt) {
+  v = value_name(s)
+  series = if (is.null(s$color)) list(`The line` = t) else fact_split(t, s$color)
+  one = purrr::imap(series, function(d, k) {
+    d = d[order(d[[s$x]]), , drop = FALSE]
+    n = nrow(d); y = d[[v]]; tm = fact_time(d[[s$x]])
+    i_hi = which.max(y); i_lo = which.min(y)
+    who = if (is.null(s$color)) k else nm(s$color, k)
+    list(name = who, change = y[n] - y[1], highlighted = isTRUE(any(d$highlighted)),
+         text = paste0(who, ": first ", fmt(y[1]), " (", tm[1], "), last ", fmt(y[n]), " (", tm[n], "), change ",
+                       fmt(y[n] - y[1]), if (y[1] > 0) paste0(" (", fact_pct(100 * (y[n] - y[1]) / y[1]), ")"),
+                       ", highest ", fmt(y[i_hi]), " (", tm[i_hi], "), lowest ", fmt(y[i_lo]), " (", tm[i_lo], ")"))
+  })
+  chg = purrr::map_dbl(one, "change")
+  keep = if (length(one) > SPEC_FACTS_SERIES)
+    sort(unique(c(which(purrr::map_lgl(one, "highlighted")), utils::head(order(-chg), SPEC_FACTS_EXTREMES), utils::head(order(chg), SPEC_FACTS_EXTREMES))))
+    else seq_along(one)
+  c(if (length(keep) < length(one))
+      paste0("Lines described: ", length(keep), " of ", length(one), ", the highlighted ones and those with the largest and smallest change"),
+    unname(purrr::map_chr(one[keep], "text")),
+    if (length(one) > 1L && max(chg) > 0) paste0("Rose most: ", one[[which.max(chg)]]$name, " (", fmt(max(chg)), ")"),
+    if (length(one) > 1L && min(chg) < 0) paste0("Fell most: ", one[[which.min(chg)]]$name, " (", fmt(min(chg)), ")"))
+}
+
+facts_slope <- function(s, cb, t, nm, fmt) {
+  v = value_name(s)
+  lv = intersect(levels(t[[s$x]]), as.character(t[[s$x]]))
+  at = function(l) { d = t[as.character(t[[s$x]]) == l, , drop = FALSE]; stats::setNames(d[[v]], as.character(d[[s$color]])) }
+  a = at(lv[1]); b = at(lv[2])
+  ids = intersect(names(a), names(b))
+  a = a[ids]; b = b[ids]; chg = b - a
+  rank_of = function(x) rank(-x, ties.method = "min")
+  ra = rank_of(a); rb = rank_of(b)
+  shown = nm(s$color, ids)
+  c(paste0("Start: ", lv[1], "; end: ", lv[2]),
+    paste0(shown, ": start ", fmt(a), ", end ", fmt(b), ", change ", fmt(chg),
+           ifelse(a > 0, paste0(" (", fact_pct(100 * chg / a), ")"), ""), ", rank ", ra, " of ", length(ids), " at start and ", rb, " at end"),
+    if (max(chg) > 0) paste0("Largest rise: ", shown[which.max(chg)], " (", fmt(max(chg)), ")"),
+    if (min(chg) < 0) paste0("Largest fall: ", shown[which.min(chg)], " (", fmt(min(chg)), ")"),
+    paste0("Lines that rose: ", sum(chg > 0), "; lines that fell: ", sum(chg < 0), if (any(chg == 0)) paste0("; unchanged: ", sum(chg == 0))))
+}
+
+# The groups of a scatter's rows for a set of columns, each with its name in the facts.
+fact_groups <- function(t, keys, nm) {
+  if (!length(keys)) return(list(list(d = t, who = NULL)))
+  parts = unname(split(t, lapply(keys, function(k) if (is.factor(t[[k]])) t[[k]] else factor(t[[k]])), drop = TRUE))
+  purrr::map(parts, function(d) list(d = d, who = paste(purrr::map_chr(keys, function(col) nm(col, d[[col]][1])), collapse = ", ")))
+}
+
+facts_scatter <- function(s, cb, t, nm) {
+  lab = function(col) cb_label(cb, col)
+  num = function(x) fact_num(x, FALSE)
+  x = t[[s$x]]; y = t[[s$y]]
+  cor_of = function(a, b, method) if (length(a) < 3L || stats::sd(a) == 0 || stats::sd(b) == 0) NA_real_ else stats::cor(a, b, method = method)
+  keys = unique(c(s$color, s$facet))
+  grp = if (length(keys))
+    unlist(purrr::map(purrr::keep(fact_groups(t, keys, nm), function(g) nrow(g$d) >= SPEC_FACTS_GROUP_N), function(g)
+      paste0("Pearson correlation for ", g$who, " (", fact_count(nrow(g$d)), " rows): ", fact_r(cor_of(g$d[[s$x]], g$d[[s$y]], "pearson")))))
+  fit = if (!identical(s$fit, "none")) {
+    fkeys = unique(c(if (!isTRUE(s$.binned) && is.null(s$highlight)) s$color, s$facet))
+    unlist(purrr::map(fact_groups(t, fkeys, nm), function(g) {
+      d = g$d
+      who = if (!is.null(g$who)) paste0(" for ", g$who) else ""
+      if (!identical(fit_works(s, d[[s$x]], d[[s$y]]), "ok")) return(paste0("Fitted curve", who, ": none drawn"))
+      tx = function(v) if (isTRUE(s$log_x)) log10(v) else v
+      ty = function(v) if (isTRUE(s$log_y)) log10(v) else v
+      keep = (!isTRUE(s$log_x) | d[[s$x]] > 0) & (!isTRUE(s$log_y) | d[[s$y]] > 0)
+      dd = data.frame(x = tx(d[[s$x]][keep]), y = ty(d[[s$y]][keep]))
+      f = if (identical(s$fit, "linear")) stats::lm(y ~ x, dd) else stats::loess(y ~ x, dd)
+      xq = stats::quantile(d[[s$x]][keep], SPEC_FACTS_FIT_AT, names = FALSE)
+      yq = stats::predict(f, data.frame(x = tx(xq)))
+      yq = if (isTRUE(s$log_y)) 10^yq else yq
+      paste0("Fitted ", lab(s$y), who, " at the 10th, 30th, 50th, 70th and 90th percentiles of ", lab(s$x), " (", paste(num(xq), collapse = ", "),
+             "): ", paste(num(yq), collapse = ", "))
+    }))
+  }
+  hl = if (!is.null(s$highlight)) {
+    d = t[t$highlighted, , drop = FALSE]
+    paste0("Highlighted point ", nm(s$highlight$column, d[[s$highlight$column]]), ": ", lab(s$x), " ", num(d[[s$x]]), ", ", lab(s$y), " ", num(d[[s$y]]))
+  }
+  c(paste0("Points: ", fact_count(nrow(t))),
+    paste0("Range of ", lab(s$x), ": ", num(min(x)), " to ", num(max(x))),
+    paste0("Range of ", lab(s$y), ": ", num(min(y)), " to ", num(max(y))),
+    if (identical(s$family, "bubble")) paste0("Range of ", lab(s$size), ": ", num(min(t[[s$size]])), " to ", num(max(t[[s$size]]))),
+    paste0("Pearson correlation: ", fact_r(cor_of(x, y, "pearson"))),
+    paste0("Spearman correlation: ", fact_r(cor_of(x, y, "spearman"))),
+    grp, fit, hl)
+}
+
+# A histogram's facts; its bins are the ones ggplot2 draws (the same breaks in every panel).
+facts_histogram <- function(s, cb, t, nm) {
+  num = function(x) fact_num(x, FALSE)
+  p = ggplot2::ggplot(t, ggplot2::aes(x = .data[[s$x]])) + ggplot2::geom_histogram(bins = as.numeric(s$bins)) +
+    if (isTRUE(s$log_x)) ggplot2::scale_x_log10()
+  if (!is.null(s$facet)) p = p + ggplot2::facet_wrap(ggplot2::vars(.data[[s$facet]]))
+  built = ggplot2::ggplot_build(p)
+  bins = built$data[[1]]
+  back = function(v) if (isTRUE(s$log_x)) 10^v else v
+  panels = if (is.null(s$facet)) list(list(d = t, b = bins, head = NULL))
+    else {
+      lay = built$layout$layout
+      purrr::map(seq_len(nrow(lay)), function(i) {
+        k = as.character(lay[[s$facet]][i])
+        list(d = t[as.character(t[[s$facet]]) == k, , drop = FALSE], b = bins[bins$PANEL == lay$PANEL[i], , drop = FALSE],
+             head = paste0("Panel ", cb_label(cb, s$facet), " = ", nm(s$facet, k), ":"))
+      })
+    }
+  unlist(purrr::map(panels, function(pn) {
+    x = pn$d[[s$x]]
+    q = stats::quantile(x, c(0.25, 0.5, 0.75), names = FALSE)
+    top = pn$b[which.max(pn$b$count), ]
+    body = c(paste0("Rows: ", fact_count(length(x))), paste0("Minimum: ", num(min(x))), paste0("Lower quartile: ", num(q[1])),
+             paste0("Median: ", num(q[2])), paste0("Upper quartile: ", num(q[3])), paste0("Maximum: ", num(max(x))), paste0("Mean: ", num(mean(x))),
+             paste0("Bin with the most rows: ", num(back(top$xmin)), " to ", num(back(top$xmax)), ", ", fact_count(top$count), " rows"))
+    c(pn$head, if (is.null(pn$head)) body else paste0("  ", body))
+  }))
+}
+
+facts_box <- function(s, cb, t, nm) {
+  num = function(x) fact_num(x, FALSE)
+  groups = fact_split(t, s$x)
+  med = purrr::map_dbl(groups, function(d) stats::median(d[[s$y]]))
+  shown = nm(s$x, names(groups))
+  c(unname(purrr::map2_chr(groups, shown, function(d, k) {
+      y = d[[s$y]]; q = stats::quantile(y, c(0.25, 0.5, 0.75), names = FALSE)
+      paste0(k, ": rows ", fact_count(length(y)), ", median ", num(q[2]), ", quartiles ", num(q[1]), " and ", num(q[3]),
+             ", minimum ", num(min(y)), ", maximum ", num(max(y)))
+    })),
+    paste0("Highest median: ", paste(shown[fact_same(med, max(med))], collapse = ", "), " (", num(max(med)), ")"),
+    paste0("Lowest median: ", paste(shown[fact_same(med, min(med))], collapse = ", "), " (", num(min(med)), ")"))
+}
+
+facts_heatmap <- function(s, cb, t, nm, fmt) {
+  v = value_name(s)
+  lab = function(col) cb_label(cb, col)
+  cell = paste0(nm(s$y, t[[s$y]]), ", ", nm(s$x, t[[s$x]]), ": ", fmt(t[[v]]))
+  cells = if (nrow(t) <= SPEC_HEAT_LABELS) c("Cells (row, column: value):", paste0("- ", cell))
+    else {
+      o = order(-t[[v]])
+      c(paste0("Highest ", SPEC_FACTS_CELLS, " cells (row, column: value):"), paste0("- ", cell[utils::head(o, SPEC_FACTS_CELLS)]),
+        paste0("Lowest ", SPEC_FACTS_CELLS, " cells (row, column: value):"), paste0("- ", cell[utils::head(rev(o), SPEC_FACTS_CELLS)]))
+    }
+  how = if (s$fn %in% c("count", "sum")) "total" else "mean"
+  by = function(col, word) {
+    g = fact_split(t, col)
+    a = purrr::map_dbl(g, function(d) if (identical(how, "total")) sum(d[[v]]) else mean(d[[v]]))
+    k = nm(col, names(g))
+    c(paste0(word, " (", lab(col), ") with the highest ", how, ": ", paste(k[fact_same(a, max(a))], collapse = ", "), " (", fmt(max(a)), ")"),
+      paste0(word, " (", lab(col), ") with the lowest ", how, ": ", paste(k[fact_same(a, min(a))], collapse = ", "), " (", fmt(min(a)), ")"))
+  }
+  c(cells, by(s$y, "Row"), by(s$x, "Column"))
+}
+
+# The facts a headline and summary may use, computed by R from the plotted table (spec_table()) and
+#   the spec, never by a model: plain text, one fact per line, each number written as R wants it
+#   quoted. The values of id and text columns are tokens ([[N1]], ...). With facet, families other
+#   than scatter, bubble and histogram give their facts within each panel. `exploratory` is the
+#   chart's, which the spec does not hold. Returns list(text, names), names giving token = name.
+spec_facts <- function(spec, table, cb, exploratory = FALSE) {
+  s = spec_settle(spec_defaults(spec_public(spec)), cb, table)
+  s$.binned = spec$.binned
+  namer = fact_namer(cb)
+  nm = namer$name
+  fmt = fact_value_fmt(s)
+  head = facts_head(s, cb, table, nm, exploratory)
+  body_of = function(t) switch(s$family,
+    bar = , dot = facts_bars(s, cb, t, nm, fmt),
+    line = facts_lines(s, cb, t, nm, fmt),
+    slope = facts_slope(s, cb, t, nm, fmt),
+    box = facts_box(s, cb, t, nm),
+    heatmap = facts_heatmap(s, cb, t, nm, fmt))
+  t = as.data.frame(table)
+  body = if (s$family %in% c("scatter", "bubble")) facts_scatter(s, cb, t, nm)
+    else if (identical(s$family, "histogram")) facts_histogram(s, cb, t, nm)
+    else if (!is.null(s$facet) && !identical(s$facet, s$color))
+      unlist(purrr::imap(utils::head(fact_split(t, s$facet), SPEC_FACET_MAX), function(d, k)
+        c(paste0("Panel ", cb_label(cb, s$facet), " = ", nm(s$facet, k), ":"), paste0("  ", body_of(d)))))
+    else body_of(t)
+  list(text = paste(c(head, body), collapse = "\n"), names = namer$map())
+}
+
+
 # ---- the plotly version and the figure size -------------------------------------------------------
 
 # Text in the plotly version matches the static chart at the same size: ggplotly() turns the
