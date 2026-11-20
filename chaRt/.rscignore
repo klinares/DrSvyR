@@ -7,4 +7,5 @@ STATUS.md
 .rscignore
 .gitignore
 manager
-phase*_prompt.md
+phase6_prompt.md
+phase6b_prompt.md
