@@ -455,11 +455,10 @@ problems_text <- function(checked) {
 }
 
 # A chart on the canvas: its id, the spec as the model or the analyst last left it (no dot-fields),
-#   R's notes for it, the spec it was first drawn with, and the specs before this one (the latest
-#   last), for Undo. The canvas of chat_turn() is a list of these, in the order shown; `selected` is
+#   R's notes for it, and the specs before this one (the latest last), for Undo. The canvas of chat_turn() is a list of these, in the order shown; `selected` is
 #   the id of one of them, or NULL.
 new_chart <- function(id, spec, notes = character(0))
-  list(id = id, spec = spec_public(spec), notes = as.character(notes), first = spec_public(spec), history = list())
+  list(id = id, spec = spec_public(spec), notes = as.character(notes), history = list())
 
 # An accepted change: the spec before it goes onto the chart's history.
 chart_apply <- function(chart, spec, notes = character(0)) {
@@ -469,18 +468,13 @@ chart_apply <- function(chart, spec, notes = character(0)) {
   chart
 }
 
-# Undo: back one spec. Reset: the spec the chart was first drawn with, the present one kept on the
-#   history so Undo can bring it back. Neither calls a model; the notes are for the page to redraw.
+# Undo: back one spec. No model is called; the notes are for the page to redraw.
 chart_undo <- function(chart) {
   n = length(chart$history)
   if (!n) return(chart)
   chart$spec = chart$history[[n]]
   chart$history = chart$history[-n]
   chart
-}
-chart_reset <- function(chart) {
-  if (identical(chart$spec, chart$first)) return(chart)
-  chart_apply(chart, chart$first, chart$notes)
 }
 
 # The columns a spec names, filters included, that are in the codebook.

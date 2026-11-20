@@ -11,8 +11,7 @@
 # max_tokens per kind of call; the model's thinking counts against it (Sonnet 5.5 thinks by default,
 #   at effort high). A reply that reaches the ceiling is a failure, not a short answer,
 #   and is not retried: the same prompt is cut off at the same place.
-#   label, suggest, refine and summarize are placeholders until the calls are built (Phases 3 to 5).
-LLM_MAX_TOKENS <- c(label = 8000L, chat = 8000L, suggest = 8000L, refine = 8000L, summarize = 8000L, ping = 200L)
+LLM_MAX_TOKENS <- c(label = 8000L, chat = 8000L, summarize = 8000L, ping = 200L)
 
 # Seconds before a request gives up (ellmer reads the option ellmer_timeout_s).
 LLM_TIMEOUT_S <- 600

@@ -1,15 +1,13 @@
-# The Phase 3 live run and its page. Helpers sourced by tests/llm_check.R, which makes the calls;
-#   run as a script, this file only rebuilds the page from the saved run, with no call:
+# The live runs of chaRt and their page. Helpers sourced by tests/llm_check.R, which makes the calls;
+#   run as a script, this file only rebuilds the page from the saved runs, with no call:
 #     Rscript --no-init-file tests/live_gallery.R
-#   live_run() labels three files and asks the suggest call twelve questions (Sonnet only, through
-#   llm_json(), the key passed in and never printed), printing what each call cost and returned,
-#   and saves everything, the raw replies included, to tests/live_replies.rds (git-ignored).
-#   Given `labelled` (the codebooks of an earlier run, live_labelled()), it makes no label call;
-#   LIVE_FILES_3B is the short run of Phase 3b, five suggest calls. live_refine() is Phase 4's run of
-#   chat turns (LIVE_REFINE), saved beside the rest as `phase4` and shown under its own heading;
-#   live_summary() is Phase 5's ten headlines and summaries (LIVE_SUMMARY), saved as `phase5`.
-#   live_page() writes tests/live_gallery.html (git-ignored) from that file: per question, the
-#   question, cannot, and each chart with its notes, say, rule label and spec as YAML.
+#   live_summary() is Phase 5's ten headlines and summaries (LIVE_SUMMARY), saved as `phase5`; live_chat() is Phase 6's
+#   twelve chat turns on tests/data/orders.csv (LIVE_TURNS) and then a headline and summary for every chart on the canvas,
+#   saved as `phase6`. Both go through llm_json() with the key (Sonnet only, the key passed in and never printed), print what
+#   each call cost and returned, and save everything, the raw replies included, to tests/live_replies.rds (git-ignored).
+#   live_page() writes tests/live_gallery.html (git-ignored) from that file, one section for each run it holds: Phase 5 (each
+#   chart with its headline above it, its summary and checks, its facts) and Phase 6 (the canvas as it ended).
+#   The Phase 3 and Phase 4 runs (live_run(), live_refine()) went with the suggest and refine calls they tested.
 
 source(file.path("tests", "gallery.R"))   # gold_path(): the course files and panel.csv
 
@@ -17,29 +15,7 @@ LIVE_RDS <- file.path("tests", "live_replies.rds")
 LIVE_OUT <- file.path("tests", "live_gallery.html")
 LIVE_DPI <- 96
 
-# The files, how each is read, what a row is, and the questions (NA: no question).
-LIVE_FILES <- list(
-  list(file = "FH_disaggregated.csv", missing = "..", row_is = "one country",
-       questions = c("Which countries had the highest political rights scores in 2014?",
-                     "How do political rights and civil liberties go together in 2014?",
-                     "How have political rights changed since 2003?", NA)),
-  list(file = "footballdata-1.csv", missing = character(0), row_is = "one player",
-       questions = c("Are goalkeepers taller than other players?", "Which nationalities are most common?",
-                     "How does height relate to weight, and does it differ by foot?", NA)),
-  list(file = "panel.csv", missing = character(0), row_is = "one region in one year",
-       questions = c("How has revenue changed in each region?", "Which regions grew most between 2015 and 2024?",
-                     "Do regions that sell more units charge less?", NA)))
-
-# Phase 3b's short run: five questions, on the codebooks labelled in the Phase 3 run.
-LIVE_FILES_3B <- list(
-  list(file = "FH_disaggregated.csv", missing = "..", row_is = "one country",
-       questions = "Which countries had the highest political rights scores in 2014?"),
-  list(file = "footballdata-1.csv", missing = character(0), row_is = "one player",
-       questions = c(NA, "How does attacking skill relate to defending skill?")),
-  list(file = "panel.csv", missing = character(0), row_is = "one region in one year",
-       questions = c("Which regions grew most between 2015 and 2024?", NA)))
-
-# The labelled codebook and row guess of each file in a saved run, by file name.
+# The labelled codebook and row guess of each file in a saved run, by file name (the Phase 3 run, which Phase 5 still uses).
 live_labelled <- function(rds = LIVE_RDS) {
   if (!file.exists(rds)) return(NULL)
   run = readRDS(rds)
@@ -57,11 +33,21 @@ live_load <- function(lf, work_dir) {
   list(path = path, data = r$data, cb = cb)
 }
 
-# llm_json() with the key, keeping every raw reply (and every failure) in order.
-live_asker <- function(key) {
+# llm_json() with the key, keeping every raw reply (and every failure) in order, and counting the calls. With max_calls, the
+#   call after the last one allowed is not made: it fails with a sentence and `stopped` is set, so a runner can stop.
+live_asker <- function(key, max_calls = Inf) {
   env = new.env()
   env$log = list()
+  env$n = 0L
+  env$stopped = FALSE
+  env$refused = 0L
   env$ask = function(user, m, system_prompt = NULL, max_tokens, validate = NULL) {
+    if (env$n >= max_calls) {
+      env$stopped = TRUE
+      env$refused = env$refused + 1L
+      stop("The limit of ", max_calls, " calls is reached, so no further call is made.", call. = FALSE)
+    }
+    env$n = env$n + 1L
     r = tryCatch(llm_json(user, m, system_prompt = system_prompt, max_tokens = max_tokens, validate = validate, key = key),
                  error = function(e) e)
     failed = inherits(r, "error")
@@ -73,162 +59,14 @@ live_asker <- function(key) {
   env
 }
 
-# How the first reply of a suggest call did before any repair: charts returned, and how many passed.
-first_counts <- function(res, cb, data) {
-  raw = res$replies$first
-  if (is.null(raw)) return(c(returned = 0L, valid_first = 0L))
-  obj = tryCatch(parse_json_block(clean_model_reply(raw)), error = function(e) NULL)
-  if (is.null(obj)) return(c(returned = NA_integer_, valid_first = NA_integer_))
-  checked = check_reply(obj, cb, data, chart_palette_default(), suggest_rule_ids())
-  c(returned = length(checked), valid_first = sum(purrr::map_lgl(checked, "ok")))
-}
-
 fmt_calls <- function(calls) purrr::pmap_chr(calls, function(call, hash, chars, tokens_in, tokens_cached, tokens_out, seconds, repair, ok)
   sprintf("    %-8s%s %6.1f s, %6s chars, tokens in: fresh %6s, cached %6s; out %5s%s", call, if (repair) " (repair)" else "", seconds,
           format_num(chars), format_num(tokens_in), format_num(tokens_cached), format_num(tokens_out), if (!ok) ", FAILED" else ""))
 
-# The run. say() prints a line (llm_check.R's, which scrubs the key). Returns and saves the run.
-live_run <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds = LIVE_RDS, files = LIVE_FILES, labelled = NULL) {
-  work = tempfile("live_")
-  dir.create(work)
-  asker = live_asker(key)
-  files = purrr::map(files, function(lf) {
-    g = live_load(lf, work)
-    if (is.null(g)) { say("\n---- ", lf$file, ": not found, skipped"); return(NULL) }
-    say("\n---- ", lf$file, " (", format_num(nrow(g$data)), " rows, ", length(g$cb$columns), " columns; row_is '", lf$row_is, "')")
-    before = labelled[[lf$file]]
-    lab = if (!is.null(before)) list(codebook = before$codebook, row_is_guess = before$row_is_guess, error = NULL, calls = tibble::tibble())
-          else label_columns(g$cb, ask = asker$ask, m = m)
-    say("  label_columns(): ", if (!is.null(before)) "not called; the labels of the earlier run are used" else paste(nrow(lab$calls), "call(s)"))
-    purrr::walk(fmt_calls(lab$calls), say)
-    if (!is.null(lab$error)) say("  FAILED: ", lab$error, "\n  ", substr(lab$detail %||% "", 1, 600))
-    cols = purrr::map(lab$codebook$columns, function(e) list(name = e$name, label = e$label, source = e$label_source, sure = e$sure))
-    purrr::walk(cols, function(e) say(sprintf("    %-22s %-45s %s", e$name, e$label,
-                                              if (identical(e$source, "ai_guess")) paste("sure:", tolower(e$sure)) else paste0("(", e$source, ")"))))
-    say("  row_is_guess: ", lab$row_is_guess %||% "(none)")
-    cb = lab$codebook
-    runs = purrr::map(lf$questions, function(q) {
-      q = if (is.na(q)) NULL else q
-      say("\n  Q: ", q %||% "(no question)")
-      res = suggest_charts(cb, g$data, q, ask = asker$ask, m = m)
-      fc = first_counts(res, cb, g$data)
-      purrr::walk(fmt_calls(res$calls), say)
-      say("    charts returned ", fc[["returned"]], "; valid first time ", fc[["valid_first"]],
-          "; valid after repair ", if (isTRUE(res$repaired)) length(res$charts) else "(no repair)",
-          "; drawn ", length(res$charts), "; failed ", length(res$failed))
-      if (!is.null(res$error)) say("    ERROR: ", res$error, "\n    ", substr(res$detail %||% "", 1, 600))
-      purrr::walk(res$cannot, function(x) say("    cannot: ", x))
-      purrr::walk(res$failed, function(f) say("    failed chart ", f$number, ": ", paste(f$sentences, collapse = " ")))
-      purrr::walk(res$charts, function(ch) say("    drew: ", ch$spec$family, " - ", ch$spec$title %||% "(no title)",
-                                               if (!is.null(ch$spec$rule)) paste0(" [", ch$spec$rule, "]") else ""))
-      list(question = q, result = res, counts = fc)
-    })
-    list(file = lf$file, row_is = lf$row_is, path_name = basename(g$path), label = lab, columns = cols, runs = runs)
-  })
-  files = purrr::compact(files)
-  runs = unlist(purrr::map(files, "runs"), recursive = FALSE)
-  calls = dplyr::bind_rows(c(purrr::map(files, function(f) f$label$calls), purrr::map(runs, function(r) r$result$calls)))
-  counts = purrr::map(runs, "counts")
-  say("\n---- Totals")
-  say("  calls ", nrow(calls), " (", paste(names(table(calls$call)), table(calls$call), sep = " ", collapse = ", "), "; repairs ",
-      sum(calls$repair), "; failed ", sum(!calls$ok), ")")
-  say("  seconds ", sprintf("%.0f", sum(calls$seconds, na.rm = TRUE)), "; characters sent ", format_num(sum(calls$chars)),
-      "; tokens in: fresh ", format_num(sum(calls$tokens_in, na.rm = TRUE)), ", cached ", format_num(sum(calls$tokens_cached, na.rm = TRUE)),
-      "; out ", format_num(sum(calls$tokens_out, na.rm = TRUE)))
-  say("  charts returned ", sum(purrr::map_int(counts, "returned"), na.rm = TRUE), "; valid first time ",
-      sum(purrr::map_int(counts, "valid_first"), na.rm = TRUE), "; drawn in the end ",
-      sum(purrr::map_int(runs, function(r) length(r$result$charts))), "; failed in the end ",
-      sum(purrr::map_int(runs, function(r) length(r$result$failed))), "; cannot sentences ",
-      sum(purrr::map_int(runs, function(r) length(r$result$cannot))))
-  run = list(model = m$id, when = format(Sys.time(), "%Y-%m-%d %H:%M"), system_suggest = assemble_system("suggest"),
-             files = files, calls = calls, log = asker$log)
-  saveRDS(run, rds)
-  say("  saved ", rds, " (", length(asker$log), " raw replies)")
-  invisible(run)
-}
-
-
-# ---- Phase 4: chat turns on hand-written charts --------------------------------------------------
-
-# Three charts drawn from hand-written specs (no suggest call), each with the analyst's messages in
-#   order; every turn works on the chart as the turn before left it.
-LIVE_REFINE <- list(
-  list(file = "footballdata-1.csv", missing = character(0), row_is = "one player",
-       spec = list(family = "bar", x = "Position", fn = "count", title = "Players by position"),
-       turns = c("make it a dot plot", "only the Bundesliga and LaLiga", "split it by league instead of filtering",
-                 "make it a pie chart", "use red and blue")),
-  list(file = "panel.csv", missing = character(0), row_is = "one region in one year",
-       spec = list(family = "line", x = "year", y = "revenue", color = "region", fn = "none", title = "Revenue by year and region"),
-       turns = c("highlight Islands and Coast", "just show 2015 against 2024", "sort the regions alphabetically",
-                 "title it Islands pulled ahead", "undo that")),
-  list(file = "FH_disaggregated.csv", missing = "..", row_is = "one country",
-       spec = list(family = "scatter", x = "cl_2014", y = "pr_2014", title = "Political rights against civil liberties, 2014"),
-       turns = c("label Norway and Cuba", "add a straight line instead of the curve", "show it over time", "group them")))
-
-# The chat turns, through refine_chart() and llm_json() with the key, on the codebooks labelled in
-#   the saved run when it has them. Prints each turn and the totals, and adds the run to the saved
-#   file as `phase4`, beside what is there. Returns the turns.
-live_refine <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds = LIVE_RDS, labelled = live_labelled(rds)) {
-  work = tempfile("live4_")
-  dir.create(work)
-  asker = live_asker(key)
-  charts = purrr::map(LIVE_REFINE, function(lr) {
-    g = live_load(lr, work)
-    if (is.null(g)) { say("\n---- ", lr$file, ": not found, skipped"); return(NULL) }
-    cb = labelled[[lr$file]]$codebook %||% g$cb
-    start = check_chart(lr$spec, cb, g$data, chart_palette_default(), suggest_rule_ids())
-    say("\n---- ", lr$file, ": ", lr$spec$family, " - ", lr$spec$title, if (!start$ok) paste0(" (REFUSED: ", paste(start$sentences, collapse = " "), ")"))
-    if (!start$ok) return(NULL)
-    chart0 = new_chart(lr$file, start$spec, start$notes)
-    steps = purrr::accumulate(lr$turns, function(acc, msg) {
-      r = refine_chart(acc$chart, msg, cb, g$data, last = acc$last, ask = asker$ask, m = m)
-      say("\n  ANALYST: ", msg)
-      purrr::walk(fmt_calls(r$calls), say)
-      say("    came back: ", r$kind, if (isTRUE(r$repaired)) " (after a repair)" else "", "\n    reply: ", refine_reply(r))
-      if (identical(r$kind, "spec")) say("    spec:\n", paste0("      ", strsplit(yaml::as.yaml(r$chart$spec), "\n", fixed = TRUE)[[1]], collapse = "\n"))
-      list(chart = r$chart, last = r$last, message = msg, result = r)
-    }, .init = list(chart = chart0, last = NULL, message = NULL, result = NULL))
-    list(file = lr$file, cb = cb, start = chart0, turns = purrr::map(steps[-1], function(st)
-      list(message = st$message, kind = st$result$kind, text = refine_reply(st$result), repaired = st$result$repaired,
-           spec = st$chart$spec, accepted = identical(st$result$kind, "spec"), calls = st$result$calls)))
-  })
-  charts = purrr::compact(charts)
-  turns = unlist(purrr::map(charts, "turns"), recursive = FALSE)
-  calls = dplyr::bind_rows(purrr::map(turns, "calls"))
-  kinds = table(factor(purrr::map_chr(turns, "kind"), levels = c("spec", "ask", "cannot", "failed")))
-  say("\n---- Totals")
-  say("  turns ", length(turns), " (", paste(names(kinds), kinds, collapse = ", "), "); calls ", nrow(calls), "; repairs ", sum(calls$repair),
-      "; seconds ", sprintf("%.0f", sum(calls$seconds, na.rm = TRUE)))
+# The calls of a run, as the totals line says them.
+fmt_totals <- function(calls, say) {
   say("  tokens in: fresh ", format_num(sum(calls$tokens_in, na.rm = TRUE)), ", cached ", format_num(sum(calls$tokens_cached, na.rm = TRUE)),
       "; out ", format_num(sum(calls$tokens_out, na.rm = TRUE)))
-  run = if (file.exists(rds)) readRDS(rds) else list(files = list(), calls = NULL)
-  run$phase4 = list(model = m$id, when = format(Sys.time(), "%Y-%m-%d %H:%M"), charts = charts, calls = calls, log = asker$log)
-  saveRDS(run, rds)
-  say("  saved ", rds, " (phase4: ", length(asker$log), " raw replies)")
-  invisible(charts)
-}
-
-# The Phase 4 section of the page: each chart as first drawn, then each turn with the reply, and the
-#   chart after every accepted turn.
-live_phase4_html <- function(p4, work) {
-  if (is.null(p4)) return("")
-  draw = function(spec, g, cb) {
-    p = tryCatch(spec_plot(spec, g$data, cb), error = function(e) e)
-    if (inherits(p, "error")) paste0("<p class=\"bad\">Could not draw: ", esc(conditionMessage(p)), "</p>")
-    else paste0(png_of(p), if (length(attr(p, "notes"))) paste0("<ul class=\"notes\">", paste0("<li>", purrr::map_chr(attr(p, "notes"), esc), "</li>", collapse = ""), "</ul>"))
-  }
-  body = purrr::map_chr(p4$charts, function(ch) {
-    lr = purrr::detect(LIVE_REFINE, function(x) identical(x$file, ch$file))
-    g = live_load(lr, work)
-    turns = purrr::map_chr(ch$turns, function(t)
-      paste0("<div class=\"card\"><p><b>Analyst:</b> ", esc(t$message), "</p><p class=\"muted\">", esc(t$kind),
-             if (isTRUE(t$repaired)) ", after a repair", "</p><p>", esc(t$text), "</p>",
-             if (isTRUE(t$accepted)) paste0(draw(t$spec, g, ch$cb), "<details><summary>Spec</summary><pre>", esc(yaml::as.yaml(t$spec)), "</pre></details>"),
-             "</div>"))
-    paste0("<h3>", esc(ch$file), ": ", esc(ch$start$spec$title), "</h3><div class=\"grid\"><div class=\"card\"><p class=\"muted\">As first drawn</p>",
-           draw(ch$start$spec, g, ch$cb), "</div>", paste(turns, collapse = ""), "</div>")
-  })
-  paste0("<h1>Phase 4</h1><p class=\"muted\">", esc(p4$model), ", ", esc(p4$when), "; ", nrow(p4$calls), " calls.</p>", paste(body, collapse = ""))
 }
 
 
@@ -300,9 +138,8 @@ live_summary <- function(m, key, say = function(...) cat(..., "\n", sep = ""), r
   say("  charts ", length(charts), " (checked ", sum(ok), ", not checked ", length(charts) - sum(ok), ", repaired ",
       sum(purrr::map_lgl(charts, function(ch) isTRUE(ch$repaired))), "); calls ", nrow(calls), "; repairs ", sum(calls$repair),
       "; seconds ", sprintf("%.0f", sum(calls$seconds, na.rm = TRUE)))
-  say("  tokens in: fresh ", format_num(sum(calls$tokens_in, na.rm = TRUE)), ", cached ", format_num(sum(calls$tokens_cached, na.rm = TRUE)),
-      "; out ", format_num(sum(calls$tokens_out, na.rm = TRUE)))
-  run = if (file.exists(rds)) readRDS(rds) else list(files = list(), calls = NULL)
+  fmt_totals(calls, say)
+  run = if (file.exists(rds)) readRDS(rds) else list()
   run$phase5 = list(model = m$id, when = format(Sys.time(), "%Y-%m-%d %H:%M"), charts = charts, calls = calls, log = asker$log,
                     codebooks = purrr::set_names(purrr::map(files, function(f) f$g$cb), purrr::map_chr(files, function(f) f$ls$file)))
   saveRDS(run, rds)
@@ -335,6 +172,194 @@ live_phase5_html <- function(p5, work) {
 }
 
 
+# ---- Phase 6: twelve chat turns on orders.csv, then a headline and summary for every chart ---------------
+
+LIVE_ORDERS <- file.path("tests", "data", "orders.csv")
+LIVE_ORDERS_MISSING <- c("-99", "N/A")      # the file's own codes for missing
+LIVE_ORDERS_ROW <- "one order"
+LIVE_MAX_CALLS <- 20L                       # planned: 1 label, 12 turns, their repairs, and 1 summary call per 8 charts
+
+# The twelve turns, in order: what the analyst sends, and what is selected when it is sent. select is "keep" (as the turn before
+#   left it), "none" (nothing selected), or a turn number k: the first chart (in reply order) that turn k added; if it added none,
+#   nothing is selected and the run says so. A spec reply changes the selected chart in place, as the app does.
+LIVE_TURNS <- list(
+  list(message = "How has revenue changed by region?", select = "none"),
+  list(message = "highlight West", select = 1L),
+  list(message = "only 2024", select = "keep"),
+  list(message = "which products sell the most units?", select = "keep"),
+  list(message = "make it a bar chart", select = "none"),
+  list(message = "how many orders were returned?", select = "none"),
+  list(message = "what is in this file?", select = "none"),
+  list(message = "do cheaper items sell in larger quantities?", select = "none"),
+  list(message = "colour by channel", select = 8L),
+  list(message = SUGGEST_MESSAGE, select = "keep"),
+  list(message = "is satisfaction lower when shipping takes longer?", select = "none"),
+  list(message = "make it a pie chart", select = 11L))
+
+# What a reply says, as plain text: a charts reply gives each chart's say and the cannot sentences; the others their text.
+live_reply_text <- function(r) {
+  if (!identical(r$kind, "charts")) return(paste(r$text, collapse = " "))
+  says = purrr::keep(purrr::map_chr(r$charts, function(ch) if (is_text1(ch$spec$say)) ch$spec$say else NA_character_), Negate(is.na))
+  paste(c(says, r$cannot), collapse = " | ")
+}
+
+live_yaml <- function(spec, indent = "      ") paste0(indent, strsplit(yaml::as.yaml(spec), "\n", fixed = TRUE)[[1]], collapse = "\n")
+
+# One turn: select as the turn says, send it through chat_turn(), and keep the canvas, the history and the last exchange as the
+#   app does (newest first; a spec reply replaces the selected chart). Returns the state for the next turn, with this turn's record.
+live_turn <- function(st, i, cb, data, m, asker, say) {
+  turn = LIVE_TURNS[[i]]
+  if (isTRUE(asker$stopped)) return(c(st[setdiff(names(st), "skipped")], list(skipped = c(st$skipped, i))))
+  selected = if (identical(turn$select, "keep")) st$selected else if (identical(turn$select, "none")) NULL else st$first_added[[as.character(turn$select)]]
+  note = if (is.numeric(turn$select) && is.null(selected)) paste0("turn ", turn$select, " added no chart, so nothing is selected")
+  say("\n---- Turn ", i, ": ", turn$message)
+  say("  selected: ", if (is.null(selected)) "nothing" else paste0(selected, " (", chart_title(purrr::detect(st$canvas, function(ch) identical(ch$id, selected)), selected), ")"),
+      if (!is.null(note)) paste0("  [", note, "]"))
+  r = chat_turn(turn$message, st$canvas, selected, cb, data, last = st$last, ask = asker$ask, palette = chart_palette_default(), m = m)
+  calls = r$calls
+  say("  seconds ", sprintf("%.1f", sum(calls$seconds, na.rm = TRUE)), "; tokens in: fresh ", format_num(sum(calls$tokens_in, na.rm = TRUE)), ", cached ",
+      format_num(sum(calls$tokens_cached, na.rm = TRUE)), "; out ", format_num(sum(calls$tokens_out, na.rm = TRUE)), "; calls ", nrow(calls), "; repairs ", sum(calls$repair))
+  if (isTRUE(asker$stopped)) say("  STOPPED: the call limit was reached in this turn; a call that was refused is listed below as failed, and was not made.")
+  say("  came back: ", r$kind, if (isTRUE(r$repaired)) " (after a repair)")
+  say("  text: ", live_reply_text(r))
+  say("  next: ", if (length(r$`next`)) paste(r$`next`, collapse = " | ") else "(none)")
+  if (length(r$problems)) say("  numbers not in DATA: ", paste(r$problems, collapse = ", "))
+  if (!is.null(r$detail)) say("  detail: ", substr(r$detail, 1, 400))
+  added = if (identical(r$kind, "charts")) purrr::imap(r$charts, function(ch, j) {
+    x = new_chart(paste0("c", st$n + j), ch$spec, ch$notes)
+    x$exploratory = isTRUE(ch$exploratory)
+    x
+  }) else list()
+  canvas = if (identical(r$kind, "spec") && !is.null(r$chart)) purrr::map(st$canvas, function(ch) if (identical(ch$id, r$chart$id)) r$chart else ch) else st$canvas
+  canvas = c(added, canvas)
+  purrr::walk(added, function(ch) say("  added ", ch$id, if (isTRUE(ch$exploratory)) " [exploratory]", ":\n", live_yaml(ch$spec)))
+  if (identical(r$kind, "spec") && !is.null(r$chart)) say("  changed ", r$chart$id, ":\n", live_yaml(r$chart$spec))
+  purrr::walk(r$failed, function(f) say("  not drawn: chart ", f$number, if (is_text1(f$spec$title)) paste0(" (", f$spec$title, ")"), ": ", paste(f$sentences, collapse = " ")))
+  purrr::walk(fmt_calls(calls), say)
+  record = list(n = i, message = turn$message, selected = selected, note = note, kind = r$kind, text = live_reply_text(r), `next` = r$`next`, repaired = r$repaired,
+                repairs = sum(calls$repair), seconds = sum(calls$seconds, na.rm = TRUE), added = purrr::map_chr(added, "id"),
+                added_specs = purrr::map(added, "spec"), changed = if (identical(r$kind, "spec")) r$chart, failed = r$failed, cannot = r$cannot,
+                problems = r$problems, detail = r$detail, replies = r$replies, calls = calls)
+  list(canvas = canvas, selected = selected, last = r$last, n = st$n + length(added),
+       first_added = c(st$first_added, stats::setNames(list(if (length(added)) added[[1]]$id), as.character(i))),
+       turns = c(st$turns, list(record)), skipped = st$skipped)
+}
+
+# The run: the file read with its codes for missing, labelled (one label call), one order a row; the twelve turns; then a headline
+#   and summary for every chart on the canvas. Calls are counted as they go: the call after max_calls is not made, the run stops
+#   there and prints what was done. Prints each turn, each text with its check, and the totals; adds the run to the saved file as
+#   `phase6`. Sonnet only (the id is checked again here). Returns the run.
+live_chat <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds = LIVE_RDS, max_calls = LIVE_MAX_CALLS, path = LIVE_ORDERS) {
+  if (grepl("opus", m$id, ignore.case = TRUE)) stop("Live tests call Sonnet models only; '", m$id, "' is an Opus model.", call. = FALSE)
+  if (!file.exists(path)) return(say("Result: no call was made; ", path, " is not there."))
+  started = Sys.time()
+  asker = live_asker(key, max_calls)
+  read = reread_data(path, basename(path), LIVE_ORDERS_MISSING)
+  data = read$read$data
+  say("\n---- ", basename(path), " (", format_num(nrow(data)), " rows, ", length(read$codebook$columns), " columns; missing: ", paste(LIVE_ORDERS_MISSING, collapse = ", "),
+      "; call limit ", max_calls, ")")
+  lab = label_columns(read$codebook, ask = asker$ask, m = m)
+  say("  label_columns(): ", nrow(lab$calls), " call(s)")
+  purrr::walk(fmt_calls(lab$calls), say)
+  if (!is.null(lab$error)) {
+    say("  FAILED: ", lab$error, "\n  ", substr(lab$detail %||% "", 1, 600), "\n  The run stops here: nothing can be asked without labels.")
+    return(invisible(NULL))
+  }
+  cb = lab$codebook
+  cb$row_is = LIVE_ORDERS_ROW
+  say("  labels proposed: ", sum(purrr::map_lgl(cb$columns, function(e) identical(e$label_source, "ai_guess"))), "; row_is_guess: ", lab$row_is_guess %||% "(none)",
+      "; row_is set to '", LIVE_ORDERS_ROW, "'")
+
+  st = purrr::reduce(seq_along(LIVE_TURNS), function(st, i) live_turn(st, i, cb, data, m, asker, say),
+                     .init = list(canvas = list(), selected = NULL, last = NULL, n = 0L, first_added = list(), turns = list(), skipped = integer(0)))
+  canvas = st$canvas
+  turns = st$turns
+  if (length(st$skipped)) say("\n---- STOPPED: the limit of ", max_calls, " calls was reached; turns ", paste(st$skipped, collapse = ", "), " were not run.")
+
+  # a headline and summary for every chart on the canvas, in batches of SUMMARY_BATCH charts, one call each (a repair adds one)
+  batches = ceiling(length(canvas) / SUMMARY_BATCH)
+  stories = list()
+  summary_calls = tibble::tibble()
+  if (!length(canvas)) say("\n---- No chart on the canvas, so no summary call.")
+  else if (isTRUE(asker$stopped) || asker$n + batches > max_calls) {
+    asker$stopped = TRUE
+    say("\n---- STOPPED before the summary call: ", length(canvas), " charts need ", batches, " call(s) and ", asker$n, " of ", max_calls, " calls are used.")
+  } else {
+    say("\n---- Headlines and summaries for ", length(canvas), " charts (", batches, " call(s) planned)")
+    out = summarize_charts(canvas, cb, data, ask = asker$ask, palette = chart_palette_default(), m = m)
+    summary_calls = out$calls
+    purrr::walk(fmt_calls(out$calls), say)
+    stories = purrr::map(canvas, function(ch) {
+      s = out$charts[[ch$id]]
+      say("\n  ", ch$id, if (isTRUE(ch$exploratory)) " [exploratory]", ": ", chart_title(ch, "(no title)"))
+      if (is.null(s$headline)) say("    NO TEXT: ", s$text) else say("    HEADLINE: ", s$headline, "\n    SUMMARY:  ", s$summary)
+      say("    CHECK:    ", if (isTRUE(s$checked)) "every number is in the facts; no forbidden word" else paste(s$problems, collapse = "; "),
+          if (isTRUE(s$repaired)) " (after a repair)" else "")
+      list(id = ch$id, headline = s$headline, summary = s$summary, checked = s$checked, problems = s$problems, repaired = s$repaired, text = s$text)
+    })
+  }
+
+  calls = dplyr::bind_rows(lab$calls, purrr::map(turns, "calls"), summary_calls)
+  kinds = table(factor(purrr::map_chr(turns, "kind"), levels = c("charts", "spec", "ask", "cannot", "tell", "failed")))
+  secs = sum(calls$seconds, na.rm = TRUE)
+  say("\n---- Totals")
+  say("  calls made ", asker$n, " of ", max_calls, " allowed (records: ", paste(names(table(calls$call)), table(calls$call), sep = " ", collapse = ", "), "); repairs ", sum(calls$repair),
+      "; failed ", sum(!calls$ok), if (asker$refused) paste0(" (", asker$refused, " of them refused at the limit and not made)"))
+  say("  turns run ", length(turns), " of ", length(LIVE_TURNS), " (", paste(names(kinds), kinds, collapse = ", "), ")")
+  fmt_totals(calls, say)
+  say("  seconds in calls ", sprintf("%.0f", secs), "; wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))))
+  say("  headlines and summaries: ", length(stories), " (checked ", sum(purrr::map_lgl(stories, function(s) isTRUE(s$checked))), ", not checked ",
+      length(stories) - sum(purrr::map_lgl(stories, function(s) isTRUE(s$checked))), ")")
+  run = if (file.exists(rds)) readRDS(rds) else list()
+  run$phase6 = list(model = m$id, when = format(Sys.time(), "%Y-%m-%d %H:%M"), file = basename(path), missing = LIVE_ORDERS_MISSING, cb = cb,
+                    row_is_guess = lab$row_is_guess, turns = turns, canvas = canvas, stories = stories, calls = calls, log = asker$log,
+                    stopped = isTRUE(asker$stopped), skipped = st$skipped, max_calls = max_calls)
+  saveRDS(run, rds)
+  say("  saved ", rds, " (phase6: ", length(asker$log), " raw replies)")
+  invisible(run$phase6)
+}
+
+# The Phase 6 section of the page: the turns in a table, then the canvas as it ended, newest first: the three value boxes as
+#   text, and each card with its headline above the chart, its summary and notes under it, its rule and "Exploratory".
+live_phase6_html <- function(p6) {
+  if (is.null(p6)) return("")
+  data = reread_data(LIVE_ORDERS, p6$file, p6$missing)$read$data
+  cb = p6$cb
+  labels = as.list(reflex_labels())
+  time = purrr::detect(cb$columns, function(e) identical(e$role, "time"))
+  period = if (!is.null(time) && time$name %in% names(data)) {
+    rng = range(data[[time$name]], na.rm = TRUE)
+    paste(if (inherits(rng, c("Date", "POSIXt"))) date_text(rng) else format(rng, big.mark = "", scientific = FALSE, trim = TRUE), collapse = " to ")
+  }
+  boxes = paste0("<p><b>Rows</b> ", format_num(nrow(data)), " &middot; <b>Columns</b> ", format_num(ncol(data)), " &middot; <b>", if (!is.null(period)) "Period" else "File",
+                 "</b> ", esc(period %||% p6$file), "</p>")
+  turns = paste0("<table><tr><th>Turn</th><th>Selected</th><th>Message</th><th>Reply</th><th>Repairs</th><th>Seconds</th><th>Text</th></tr>",
+                 paste0(purrr::map_chr(p6$turns, function(t)
+                   paste0("<tr><td>", t$n, "</td><td>", esc(t$selected %||% "none"), "</td><td>", esc(t$message), "</td><td>", esc(t$kind), if (length(t$added)) paste0(" (+", length(t$added), ")"),
+                          "</td><td>", t$repairs, "</td><td>", sprintf("%.1f", t$seconds), "</td><td>", esc(t$text),
+                          if (length(t$failed)) paste0("<br><span class=\"bad\">not drawn: ", esc(paste(purrr::map_chr(t$failed, function(f) paste(f$sentences, collapse = " ")), collapse = " | ")), "</span>"),
+                          if (length(t$`next`)) paste0("<br><span class=\"muted\">next: ", esc(paste(t$`next`, collapse = " | ")), "</span>"), "</td></tr>")), collapse = ""), "</table>")
+  cards = purrr::map_chr(p6$canvas, function(ch) {
+    s = purrr::detect(p6$stories, function(x) identical(x$id, ch$id))
+    p = tryCatch(spec_plot(ch$spec, data, cb), error = function(e) e)
+    rule = ch$spec$rule
+    paste0("<div class=\"card\"><h3>", esc(s$headline %||% chart_title(ch, "Untitled chart")), "</h3>",
+           if (!is.null(s$headline)) paste0("<p class=\"muted\">", esc(chart_title(ch, "")), "</p>"),
+           if (inherits(p, "error")) paste0("<p class=\"bad\">Could not draw: ", esc(conditionMessage(p)), "</p>") else png_of(p),
+           if (!is.null(s)) paste0("<p>", esc(s$summary %||% s$text), "</p>"),
+           if (!is.null(s)) paste0("<p class=\"", if (isTRUE(s$checked)) "muted" else "bad", "\">", if (isTRUE(s$checked)) "Every number matches the chart's data." else esc(paste(s$problems, collapse = "; ")),
+                                   if (isTRUE(s$repaired)) " (after a repair)", "</p>"),
+           if (length(ch$notes)) paste0("<ul class=\"notes\">", paste0("<li>", purrr::map_chr(ch$notes, esc), "</li>", collapse = ""), "</ul>"),
+           "<p class=\"muted\">", esc(ch$id), " &middot; ", if (!is.null(rule)) paste0("Rule: ", esc(labels[[rule]] %||% rule), " (", esc(rule), ")") else "No rule",
+           if (isTRUE(ch$exploratory)) " &middot; Exploratory", "</p>",
+           "<details><summary>Spec</summary><pre>", esc(yaml::as.yaml(ch$spec)), "</pre></details></div>")
+  })
+  paste0("<h1>Phase 6</h1><p class=\"muted\">", esc(p6$model), ", ", esc(p6$when), "; ", nrow(p6$calls), " calls (limit ", p6$max_calls, ")",
+         if (isTRUE(p6$stopped)) "; STOPPED at the call limit", ".</p>", turns, "<h2>The canvas as it ended</h2>", boxes,
+         "<div class=\"grid\">", paste(cards, collapse = ""), "</div>")
+}
+
+
 # ---- the page ---------------------------------------------------------------------------------------
 
 esc <- function(x) htmltools::htmlEscape(paste(x, collapse = " "))
@@ -347,55 +372,17 @@ png_of <- function(p) {
          round(sz[["width"]] * LIVE_DPI), "\" style=\"max-width:100%; height:auto\">")
 }
 
-live_chart_html <- function(ch, g, labels) {
-  p = tryCatch(spec_plot(ch$spec, g$data, g$cb), error = function(e) e)
-  rule = ch$spec$rule
-  paste0("<div class=\"card\">",
-         if (inherits(p, "error")) paste0("<p class=\"bad\">Could not draw again: ", esc(conditionMessage(p)), "</p>") else png_of(p),
-         if (length(ch$notes)) paste0("<ul class=\"notes\">", paste0("<li>", purrr::map_chr(ch$notes, esc), "</li>", collapse = ""), "</ul>"),
-         if (!is.null(ch$spec$say)) paste0("<p><b>say:</b> ", esc(ch$spec$say), "</p>"),
-         "<p class=\"muted\">", if (!is.null(rule)) paste0("Rule: ", esc(labels[[rule]] %||% rule), " (", esc(rule), ")") else "No rule",
-         if (isTRUE(ch$exploratory)) " &middot; Exploratory", "</p>",
-         "<details><summary>Spec</summary><pre>", esc(yaml::as.yaml(ch$spec)), "</pre></details></div>")
-}
-
 live_page <- function(rds = LIVE_RDS, out = LIVE_OUT) {
   run = readRDS(rds)
   work = tempfile("live_page_")
   dir.create(work)
-  labels = as.list(reflex_labels())
-  body = purrr::map_chr(run$files, function(f) {
-    lf = purrr::detect(c(LIVE_FILES, LIVE_FILES_3B), function(x) identical(x$file, f$file))
-    g = live_load(lf, work)
-    g$cb = f$label$codebook
-    cols = paste0("<tr><td><code>", purrr::map_chr(f$columns, function(e) esc(e$name)), "</code></td><td>",
-                  purrr::map_chr(f$columns, function(e) esc(e$label)), "</td><td>",
-                  purrr::map_chr(f$columns, function(e) if (identical(e$source, "ai_guess")) tolower(as.character(e$sure)) else esc(e$source)),
-                  "</td></tr>", collapse = "")
-    qs = purrr::map_chr(f$runs, function(r) {
-      res = r$result
-      paste0("<h3>", esc(r$question %||% "(no question: suggest charts)"), "</h3>",
-             "<p class=\"muted\">", nrow(res$calls), " call(s), ", sprintf("%.0f", sum(res$calls$seconds, na.rm = TRUE)), " s; ",
-             "returned ", r$counts[["returned"]], ", valid first time ", r$counts[["valid_first"]],
-             if (isTRUE(res$repaired)) ", repaired", "</p>",
-             if (!is.null(res$error)) paste0("<p class=\"bad\">", esc(res$error), "</p>"),
-             if (length(res$cannot)) paste0("<div class=\"cannot\"><b>cannot</b><ul>", paste0("<li>", purrr::map_chr(res$cannot, esc), "</li>", collapse = ""), "</ul></div>"),
-             "<div class=\"grid\">", paste(purrr::map_chr(res$charts, live_chart_html, g = g, labels = labels), collapse = ""), "</div>",
-             if (length(res$failed)) paste0("<h4>Could not be drawn</h4><ul>", paste0("<li>Chart ", purrr::map_chr(res$failed, function(x) as.character(x$number)), ": ",
-                                                                                   purrr::map_chr(res$failed, function(x) esc(x$sentences)), "</li>", collapse = ""), "</ul>"))
-    })
-    paste0("<h2>", esc(f$file), "</h2><p>One row is: ", esc(f$row_is), "; the model guessed: ", esc(f$label$row_is_guess %||% "(none)"), "</p>",
-           "<details><summary>Labels proposed</summary><table><tr><th>Column</th><th>Label</th><th>Sure</th></tr>", cols, "</table></details>",
-           paste(qs, collapse = ""))
-  })
   css = paste("body{font-family:system-ui,sans-serif;max-width:1500px;margin:1rem auto;padding:0 1rem;color:#222}",
               ".grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(640px,1fr));gap:1rem}",
               ".card{border:1px solid #ccc;border-radius:6px;padding:.75rem}.muted{color:#666;font-size:.9em}",
               ".notes{font-size:.9em}.cannot{background:#f4f4f4;padding:.5rem 1rem;border-radius:6px}.bad{color:#b00}",
-              "td,th{padding:2px 8px;text-align:left;border-bottom:1px solid #eee}pre{white-space:pre-wrap}")
-  html = paste0("<!doctype html><html><head><meta charset=\"utf-8\"><title>chaRt live run</title><style>", css, "</style></head><body>",
-                "<h1>chaRt Phase 3 live run</h1><p class=\"muted\">", esc(run$model), ", ", esc(run$when), "; ", nrow(run$calls), " calls.</p>",
-                paste(body, collapse = ""), live_phase4_html(run$phase4, work), live_phase5_html(run$phase5, work), "</body></html>")
+              "td,th{padding:2px 8px;text-align:left;border-bottom:1px solid #eee;vertical-align:top}pre{white-space:pre-wrap}")
+  html = paste0("<!doctype html><html><head><meta charset=\"utf-8\"><title>chaRt live runs</title><style>", css, "</style></head><body>",
+                "<h1>chaRt live runs</h1>", live_phase5_html(run$phase5, work), live_phase6_html(run$phase6), "</body></html>")
   writeLines(html, out, useBytes = TRUE)
   cat("Wrote ", out, " (", round(file.size(out) / 1e6, 1), " MB).\n", sep = "")
   invisible(out)

@@ -4,21 +4,22 @@
 #   OPENROUTER_API_KEY for check 3. A test script may read them; the app never does. On Windows,
 #   run it from PowerShell or RStudio: Git Bash sets HOME, which moves R's "~" away from the
 #   Documents folder that holds .Renviron.
-# Four checks, each printing what it sent and what came back:
+# Five checks, each printing what it sent and what came back:
 #   1. ping the home model through llm_ping();
 #   2. structured output through the chat object llm_chat() builds for the home model (Anthropic);
 #   3. the same request in the OpenAI style, through ellmer::chat_openai_compatible() against
 #      OpenRouter, standing in for the work endpoint;
-#   4. Phase 3: label_columns() and suggest_charts() on FH, football and panel.csv, twelve
-#      questions, through llm_json() with the home model (tests/live_gallery.R; about 20 calls).
-#      It saves tests/live_replies.rds and writes tests/live_gallery.html;
-#   5. Phase 3b: five suggest calls (LIVE_FILES_3B) on the codebooks labelled in the last saved
-#      run, no label call; it saves and writes the same two files.
-#   6. Phase 4: fourteen chat turns on three hand-written charts (LIVE_REFINE), through
-#      refine_chart(); saved beside the rest and shown on the page under "Phase 4".
 #   7. Phase 5: headlines and summaries for ten hand-written charts on three files (LIVE_SUMMARY),
-#      through summarize_inputs(): two calls and any repairs; saved and shown under "Phase 5".
-# CHART_LIVE_STEPS chooses which run, for example "1,6"; 1 to 4 by default.
+#      through summarize_inputs(): two calls and any repairs; saved to tests/live_replies.rds and
+#      shown on tests/live_gallery.html under "Phase 5" (tests/live_gallery.R);
+#   8. Phase 6: tests/data/orders.csv read with -99 and N/A as missing, label_columns(), one row is "one
+#      order", then twelve turns through chat_turn() (LIVE_TURNS, selecting as the plan says) and a headline
+#      and summary for every chart on the canvas. Calls are counted and the run stops at 20 (LIVE_MAX_CALLS).
+#      Saved as `phase6` beside the rest and shown on the page under "Phase 6".
+#   (Steps 4 to 6, the Phase 3 and 4 runs of the suggest and refine calls, went with those calls; the numbers
+#   of the others are kept.)
+# CHART_LIVE_STEPS chooses which run, for example "1,8"; 1 to 3 by default (steps 7 and 8 cost more, so they
+#   are asked for).
 # Structured output is ellmer's Chat$chat_structured(..., type, echo, convert), with the type built
 #   from type_object(), type_enum(values), type_string() and type_boolean(); checked in ellmer 0.4.2.
 #   If it fails, nothing works around it: the design falls back to llm_json().
@@ -42,7 +43,7 @@ if (grepl("opus", CHART_TEST_MODEL, ignore.case = TRUE) || grepl("opus", APP_PRO
        "' is an Opus model.", call. = FALSE)
 OPENROUTER <- list(api = "openai", base_url = "https://openrouter.ai/api/v1", id = OPENROUTER_MODEL)
 
-LIVE_STEPS <- trimws(strsplit(Sys.getenv("CHART_LIVE_STEPS", "1,2,3,4"), ",", fixed = TRUE)[[1]])
+LIVE_STEPS <- trimws(strsplit(Sys.getenv("CHART_LIVE_STEPS", "1,2,3"), ",", fixed = TRUE)[[1]])
 step_on <- function(n) as.character(n) %in% LIVE_STEPS
 
 FAMILIES <- c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap")
@@ -80,7 +81,7 @@ structured_check <- function(m, key, route) {
   if (!nzchar(key)) return(say("Result: no call was made; the key for this route is not set."))
   started = Sys.time()
   out = tryCatch({
-    chat = llm_chat(m, SPEC_SYSTEM, LLM_MAX_TOKENS[["suggest"]], key)
+    chat = llm_chat(m, SPEC_SYSTEM, LLM_MAX_TOKENS[["chat"]], key)
     chat$chat_structured(SPEC_ASK, type = SPEC_TYPE, echo = "none")
   }, error = function(e) e)
   secs = as.numeric(difftime(Sys.time(), started, units = "secs"))
@@ -127,58 +128,6 @@ if (step_on(3)) {
 }
 
 
-# ---- 4. Phase 3: labels and suggestions ----------------------------------------------------
-
-if (step_on(4)) {
-  heading(4, "Phase 3: label_columns() and suggest_charts()")
-  source(file.path("tests", "live_gallery.R"))
-  say("Model:  ", home$id, " at ", home$base_url)
-  if (!nzchar(ANTHROPIC_KEY)) {
-    say("Result: no call was made; ANTHROPIC_API_KEY is not set.")
-  } else {
-    started <- Sys.time()
-    live_run(home, ANTHROPIC_KEY, say)
-    say("  wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))), " s")
-    live_page()
-  }
-}
-
-
-# ---- 5. Phase 3b: the short run ---------------------------------------------------------------
-
-if (step_on(5)) {
-  heading(5, "Phase 3b: five suggest calls")
-  if (!exists("live_run")) source(file.path("tests", "live_gallery.R"))
-  say("Model:  ", home$id, " at ", home$base_url)
-  labelled <- live_labelled()
-  if (!nzchar(ANTHROPIC_KEY)) {
-    say("Result: no call was made; ANTHROPIC_API_KEY is not set.")
-  } else if (is.null(labelled)) {
-    say("Result: no call was made; there is no earlier run in ", LIVE_RDS, " to take the labels from (run step 4 first).")
-  } else {
-    started <- Sys.time()
-    live_run(home, ANTHROPIC_KEY, say, files = LIVE_FILES_3B, labelled = labelled)
-    say("  wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))), " s")
-    live_page()
-  }
-}
-
-# ---- 6. Phase 4: chat turns ---------------------------------------------------------------------
-
-if (step_on(6)) {
-  heading(6, "Phase 4: refine_chart() on three charts")
-  if (!exists("live_refine")) source(file.path("tests", "live_gallery.R"))
-  say("Model:  ", home$id, " at ", home$base_url)
-  if (!nzchar(ANTHROPIC_KEY)) {
-    say("Result: no call was made; ANTHROPIC_API_KEY is not set.")
-  } else {
-    started <- Sys.time()
-    live_refine(home, ANTHROPIC_KEY, say)
-    say("  wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))), " s")
-    live_page()
-  }
-}
-
 # ---- 7. Phase 5: headlines and summaries ------------------------------------------------------------
 
 if (step_on(7)) {
@@ -191,6 +140,21 @@ if (step_on(7)) {
     started <- Sys.time()
     live_summary(home, ANTHROPIC_KEY, say)
     say("  wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))), " s")
+    live_page()
+  }
+}
+
+
+# ---- 8. Phase 6: the chat, twelve turns on orders.csv ------------------------------------------------
+
+if (step_on(8)) {
+  heading(8, "Phase 6: chat_turn() on tests/data/orders.csv, twelve turns, then headlines and summaries")
+  if (!exists("live_chat")) source(file.path("tests", "live_gallery.R"))
+  say("Model:  ", home$id, " at ", home$base_url)
+  if (!nzchar(ANTHROPIC_KEY)) {
+    say("Result: no call was made; ANTHROPIC_API_KEY is not set.")
+  } else {
+    live_chat(home, ANTHROPIC_KEY, say)
     live_page()
   }
 }

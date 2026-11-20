@@ -1,5 +1,102 @@
 # chaRt: status
 
+## Phase 6, 2026-11-19: facts fixes, one call for every message, the chat-first screen
+
+Branch `chart`. Not pushed. The live run (step 8 of `tests/llm_check.R`) is to be filled after the live run.
+
+### Built
+
+- Part A, the facts. The top histogram bin is clipped to the data's minimum and maximum. A heatmap's
+  row and column lines are worked out from the rows of the data with the spec's own function
+  ("All rows in Goalkeeper: mean 28.7"; `spec_facts()` takes `data`, and without it leaves those lines
+  out, never falling back to the mean of the cells). Every family states "Groups shown" and "Rows after
+  the filter". When every plotted value is the same: "Every value shown: v", and no Lowest or multiple.
+  A line or slope series gets "end is m times start" when both are positive. One correlation (Pearson);
+  the Spearman only when the two differ by more than 0.1, with a line saying the relationship is not a
+  straight line. `check_numbers()` no longer reads "one" as a number. `check_words()` allows "doubled",
+  "tripled", "quadrupled", "twice", "halved" and "half" only when the chart's facts hold a multiple that
+  supports the word. The probe reports av, gganimate, gifski, ffmpeg, an MP4 encoded from ten PNG frames,
+  Quarto, and a `format: dashboard` document, plain and with `embed-resources: true`.
+- Part B, one call for every message. `chat_turn(message, canvas, selected, cb, data, last, ask, palette,
+  m)` in `R/reflexes.R` replaces `suggest_charts()` and `refine_chart()`. The reply has exactly one of
+  `charts`, `spec`, `ask`, `cannot`, `tell`, and may have up to three `next` strings of at most six
+  words. `CALL_FILES$chat` is core, comparison, relationship, distribution, time, suggest, refine,
+  chat; the reply format is `chat.md`'s; the system prompt is identical on every turn. The user message
+  is DATA, CANVAS, SELECTED, LAST EXCHANGE, `ANALYST:` and the message, REPLY FORMAT; `data_safe()`
+  covers the new markers. The suggestion message `(suggest charts for this file)` alone marks charts
+  exploratory. A `spec` with nothing selected is a failed reply with a sentence and no call; a `tell`
+  with a number that is not in DATA gets one repair, then the warning.
+- Part C, the screen. `app_ui()` in `R/ui.R`: the classification banner above `bslib::page_navbar()`
+  with the logo, title, Source code link and dark-mode switch in the bar, and four pages: Start here,
+  Data (the file, then the data dictionary; the download is `data_dictionary.yaml`), Explore and
+  Methodology. Explore is `bslib::layout_sidebar()` with shinychat in a 38% sidebar and the canvas on
+  the right: three value boxes, a card for each chart (full screen, newest first, two to a row) with
+  Select, Undo, Interactive, Code, Edit text, Headline and Remove; Style; "Suggest charts" and "Write
+  headlines" under the chat; setup written by R in the chat with no model call except "Label the
+  columns". The old Explore tab, wide view, report list and Phase 4 and 5 screens are gone;
+  `state$report` is `state$canvas`.
+- Part D, the checks and the fixes the manager asked for after Part C.
+  - What reaches the chat is escaped (see below). `md_text()` is stricter than in Part C, `one_line()`
+    puts a `next` entry on one line, `suggestion_list()` escapes the text twice (as attribute and as
+    markdown).
+  - Setup texts are matched exactly in R and acted on only while their button is on offer: a "Treat"
+    text for a value the file does not hold (or already treated) does nothing and says so; so do the
+    label text once labelled and a row guess no longer on offer. An analyst's own message that
+    merely contains such a text goes to `chat_turn()`.
+  - A headline and summary are stored with a data version (a digest of the data when written). The same
+    file read again keeps the canvas; if the data changed the charts are drawn again from it, their notes
+    are made again, every text is marked "The data has changed since this was written, so its numbers
+    may no longer hold." and the chat says how many. The spec-hash rule is unchanged.
+  - The footer buttons ("Suggest charts", "Write headlines", and each card's Headline) were drawn very
+    faint in dark mode: the theme's outline-primary colour is `#2c3e50` on `#212529`. A style change in
+    `EXPLORE_CSS` gives class `chart-call` the page's emphasis colour (black on light, white on dark) for
+    text and border, the body colour when disabled, at opacity .65. Wording and behaviour are unchanged.
+  - Removed: `chart_reset()` and `new_chart()$first` (no Reset button), the `suggest` and `refine`
+    entries of `LLM_MAX_TOKENS`, `tests/llm_check.R` steps 4, 5 and 6, and in `tests/live_gallery.R`
+    `live_run()`, `live_refine()`, `LIVE_FILES`, `LIVE_FILES_3B`, `LIVE_REFINE`, `first_counts()`,
+    `live_phase4_html()` and `live_chart_html()`. The page keeps Phase 5 and gains Phase 6.
+  - `tests/llm_check.R` step 8 and `live_chat()` in `tests/live_gallery.R`: `tests/data/orders.csv` read
+    with `-99` and `N/A` as missing, one label call, row is "one order", twelve turns through `chat_turn()`
+    with the selecting the plan says, then `summarize_charts()` for every chart on the canvas; calls are
+    counted and the run stops at 20 (`LIVE_MAX_CALLS`); saved as `phase6`, shown under "Phase 6".
+  - `tests/smoke.R`: a section "Phase 6 D" (13 checks, 6-D 1 to 13); 280 checks in all, 280 pass. Single
+    mutations of `R/ui.R` (29, in scratch) each make at least one 6-D check fail.
+
+### What shinychat 0.4.0 does with a message
+
+`lib/shiny/shinychat.js` draws an assistant message with remark, remark-rehype (`allowDangerousHtml`)
+and rehype-raw, and no sanitiser: a tag in the text becomes an element (an `<img onerror>` would run),
+a markdown link can carry a `javascript:` address, and `<span class="suggestion submit"
+data-suggestion="...">` is a button whose click sends the text as the analyst. Only the analyst's own
+messages (role "user") go through rehype-sanitize and show raw HTML as text. So R escapes everything
+that is not its own wording. In the text, `md_text()` backslashes every ASCII punctuation mark
+(CommonMark's one escape for all of them) and writes `&`, `<`, `>` as entities; in a suggestion the
+`data-suggestion` value is `htmltools::htmlEscape(attribute = TRUE)`. A bare `http://` address, or a
+`www.` one, may still become a plain link (http and https only, opened in a new tab with `noopener`).
+
+### The live run
+
+To be filled after the live run.
+
+### Departures
+
+- bsicons is not installed: card buttons carry words, not icons.
+- A different file clears the canvas, the selection, the texts and the last exchange; the same file read
+  again keeps them.
+- "Changed since this was written" compares the spec's hash, so Undo back to the spec a text was written
+  for clears the mark; a data change does not clear.
+- "Label the columns" is matched exactly (it was matched ignoring case) and is on offer only while its
+  button is: after the label step, or when the dictionary was ready from the start, the text says so and
+  makes no call.
+- Phase 3 and Phase 4 sections are no longer on the live page (their runs went with the suggest and
+  refine calls); the saved run still holds them.
+
+### Not seen
+
+Nobody has seen the screen with a file in it in a browser: what a click does on a card, the suggestion
+cards, the buttons being disabled during a call, and the dark-mode buttons are covered by
+`shiny::testServer()` and by reading the code only. Kevin's own run is the check.
+
 ## Phase 5, 2026-11-18: headlines and summaries, every number checked
 
 Branch `chart`. Not pushed. One live run on `claude-sonnet-5-5`: 4 calls (2 and 2 repairs).

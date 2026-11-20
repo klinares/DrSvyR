@@ -1695,7 +1695,7 @@ if (!is.null(ball_g)) {
   check("6-B 7: tell still wrong after the repair: no second repair; the text is returned with the numbers in problems for the warning line",
         identical(k_tell_still$r$kind, "tell") && length(k_tell_still$si$sent) == 2L && identical(k_tell_still$r$problems, "8,888") &&
           identical(k_tell_still$r$text, "The file has 8,888 rows.") && grepl("Not every number here", chat_reply_text(k_tell_still$r), fixed = TRUE) &&
-          grepl("8,888", chat_reply_text(k_tell_still$r), fixed = TRUE) && !grepl("Not every number", chat_reply_text(k_tell$r), fixed = TRUE))
+          grepl(md_text("8,888"), chat_reply_text(k_tell_still$r), fixed = TRUE) && !grepl("Not every number", chat_reply_text(k_tell$r), fixed = TRUE))
   k_tell_down <- b6_run(list(list(tell = "The file has 9,999 rows."), "not json at all"), "what is in this file?")
   check("6-B 8: tell wrong and the repair call fails: the first text is returned with its numbers in problems",
         identical(k_tell_down$r$kind, "tell") && identical(k_tell_down$r$text, "The file has 9,999 rows.") && identical(k_tell_down$r$problems, "9,999") &&
@@ -1908,7 +1908,7 @@ c6_chat_calls <- function(si) purrr::keep(si$sent, function(s) grepl("\nANALYST:
 c6_has <- function(x, pat) any(grepl(pat, x, fixed = TRUE))
 
 check("6-C 1: the helpers: a word among the numbers is a candidate for missing (once, not a number); md_text() keeps a '<' or '&' from starting a tag; the messy file gives its words",
-      identical(missing_candidates(c6_read$read$data), "N/A") && identical(md_text("a <b> & c"), "a &lt;b> &amp; c") &&
+      identical(missing_candidates(c6_read$read$data), "N/A") && identical(md_text("a <b> & c"), "a &lt;b&gt; &amp; c") &&
         (inherits(messy, "error") || setequal(missing_candidates(messy$read$data), c("unknown", "about 40"))) &&
         identical(treat_text("-99"), "Treat '-99' as missing") && identical(row_text("one order"), "A row is one order"))
 
@@ -1921,16 +1921,16 @@ a_out <- new.env()
 shiny::testServer(mod_explore_server, args = list(state = a_state, ask = a_si$ask), {
   session$flushReact()
   first <- made$log
-  a_out$read <- length(first) == 2L && grepl("Read sales.csv: 240 rows, 5 columns.", first[[1]]$content, fixed = TRUE) &&
+  a_out$read <- length(first) == 2L && grepl(paste0("Read ", md_text("sales.csv"), ": 240 rows, 5 columns."), first[[1]]$content, fixed = TRUE) &&
     grepl("Column units is mostly numbers", first[[1]]$content, fixed = TRUE) &&
-    grepl("<span class=\"suggestion submit\" data-suggestion=\"Treat &#39;N/A&#39; as missing\">Treat 'N/A' as missing</span>", first[[1]]$content, fixed = TRUE) &&
+    grepl(paste0("<span class=\"suggestion submit\" data-suggestion=\"Treat &#39;N/A&#39; as missing\">", md_text("Treat 'N/A' as missing"), "</span>"), first[[1]]$content, fixed = TRUE) &&
     grepl("Label the columns", first[[2]]$content, fixed = TRUE) && grepl("class=\"suggestion submit\"", first[[2]]$content, fixed = TRUE) &&
     length(a_si$sent) == 0L && is.null(a_state$calls) && identical(treat(), "N/A")
   data_before <- a_state$data
   session$setInputs(chat_user_input = "Treat 'N/A' as missing")
   a_out$treat <- identical(missing_codes(a_state$codebook), "N/A") && is.numeric(a_state$data$units) && !identical(a_state$data, data_before) &&
     sum(is.na(a_state$data$units)) == 3L && length(a_si$sent) == 0L && is.null(a_state$calls) && length(treat()) == 0L &&
-    grepl("Read sales.csv again with 'N/A' as missing: 240 rows, 5 columns.", made$log[[3]]$content, fixed = TRUE) &&
+    grepl(paste0("Read ", md_text("sales.csv"), " again with '", md_text("N/A"), "' as missing: 240 rows, 5 columns."), made$log[[3]]$content, fixed = TRUE) &&
     length(made$log) == 4L && grepl("Label the columns", made$log[[4]]$content, fixed = TRUE) &&
     identical(a_state$codebook$columns[[1]]$label, "region") && identical(a_state$codebook$row_is, "")
   session$setInputs(chat_user_input = "Label the columns")
@@ -1986,7 +1986,7 @@ shiny::testServer(mod_explore_server, args = list(state = b_state, ask = b_ask),
   last_ids <- function() sent_ids(b_si$sent[[sent_n()]]$user)
 
   # the ready message and the canvas before anything is drawn
-  b_out$ready <- length(made$log) == 2L && grepl("Read sales.csv: 240 rows, 5 columns.", made$log[[1]]$content, fixed = TRUE) &&
+  b_out$ready <- length(made$log) == 2L && grepl(paste0("Read ", md_text("sales.csv"), ": 240 rows, 5 columns."), made$log[[1]]$content, fixed = TRUE) &&
     identical(made$log[[2]]$content, SETUP_READY) && sent_n() == 0L && grepl("No charts yet", html("cards"), fixed = TRUE)
   boxes <- html("boxes")
   b_out$boxes <- length(gregexpr("bslib-value-box", boxes, fixed = TRUE)[[1]]) >= 3L && cell(boxes, "Rows") && cell(boxes, "240") && cell(boxes, "Columns") && cell(boxes, "5") && cell(boxes, "Period") &&
@@ -2040,7 +2040,7 @@ shiny::testServer(mod_explore_server, args = list(state = b_state, ask = b_ask),
   c1_changed <- b_state$charts$c1
   b_out$change <- identical(c1_changed$spec$family, "dot") && length(c1_changed$history) == 1L && identical(c1_changed$history[[1]]$family, "bar") &&
     identical(b_state$charts$c2, c2_before) && identical(b_state$charts$c3, c3_before) && identical(b_state$canvas, c("c3", "c1", "c2")) &&
-    grepl("<SELECTED>\nc1\nCURRENT SPEC", sent_change, fixed = TRUE) && grepl("Now a dot plot.", made$log[[length(made$log)]]$content, fixed = TRUE) &&
+    grepl("<SELECTED>\nc1\nCURRENT SPEC", sent_change, fixed = TRUE) && grepl(md_text("Now a dot plot."), made$log[[length(made$log)]]$content, fixed = TRUE) &&
     identical(selected(), "c1") && !grepl("disabled[^>]*c1_undo", html("c1_card")) && grepl("Orders by region, as dots", html("c1_card"), fixed = TRUE)
   # a charts reply with a chart selected leaves it untouched
   session$setInputs(chat_user_input = "show channels as well")
@@ -2161,7 +2161,7 @@ shiny::testServer(mod_explore_server, args = list(state = b_state, ask = b_ask),
   b_state$data <- other$read$data; b_state$codebook <- other_cb
   session$flushReact()
   b_out$fresh <- length(b_state$canvas) == 0L && length(b_state$charts) == 0L && length(b_state$stories) == 0L && is.null(selected()) && is.null(last()) &&
-    grepl("A different file was read", made$log[[1]]$content, fixed = TRUE) && grepl("Read other.csv: 240 rows", made$log[[2]]$content, fixed = TRUE) &&
+    grepl("A different file was read", made$log[[1]]$content, fixed = TRUE) && grepl(paste0("Read ", md_text("other.csv"), ": 240 rows"), made$log[[2]]$content, fixed = TRUE) &&
     identical(made$log[[3]]$content, SETUP_READY) && length(made$log) == 3L
 })
 check("6-C 7: the Explore server starts ready: the read line, then the 'ask a question' line; the canvas says there are no charts; three plain value boxes (rows, columns, the period of the time column)",
@@ -2207,9 +2207,16 @@ shiny::testServer(mod_explore_server, args = list(state = k_state), {
   asked <- made$log[[length(made$log)]]$content
   session$setInputs(suggest = 1)
   session$setInputs(write_headlines = 1)
-  session$setInputs(chat_user_input = "Label the columns")
   k_out$ok <- grepl("needs a key", asked, fixed = TRUE) && grepl(KEY_HINT, asked, fixed = TRUE) && length(k_state$canvas) == 0L &&
-    is.null(k_state$calls) && grepl("Labelling needs a key", made$log[[length(made$log)]]$content, fixed = TRUE) && length(made$busy_log) == 8L
+    is.null(k_state$calls) && length(made$busy_log) == 6L
+})
+# Label the columns is on offer only while the data dictionary is not ready, so its own server starts with a file that has no row sentence.
+kl_state <- c6_state(cb = c6_cb)
+shiny::testServer(mod_explore_server, args = list(state = kl_state), {
+  session$flushReact()
+  session$setInputs(chat_user_input = "Label the columns")
+  k_out$ok <- isTRUE(k_out$ok) && grepl("Labelling needs a key", made$log[[length(made$log)]]$content, fixed = TRUE) && is.null(kl_state$calls) &&
+    length(made$busy_log) == 2L
 })
 check("6-C 26: with no key a question, Suggest charts, Write headlines and Label the columns make no call and say a key is needed", isTRUE(k_out$ok) && identical(.llm_state$calls, k_calls))
 
@@ -2274,9 +2281,240 @@ check("6-C 31: the data dictionary's download button says data_dictionary.yaml a
         grepl("filename = \"data_dictionary.yaml\"", paste(deparse(mod_codebook_server), collapse = " "), fixed = TRUE) &&
         !grepl("\"codebook.yaml\"", paste(deparse(mod_codebook_server), collapse = " "), fixed = TRUE))
 check("6-C 32: chat_reply_text() adds a line for a chart that was not drawn, and the reply of a charts turn lists each say as a short list",
-      grepl("Chart 2 (Bad one) was not drawn: pie is not a family.", chat_reply_text(list(kind = "charts", charts = list(list(spec = list(say = "By region."))), cannot = character(0),
+      grepl(paste0("Chart 2 (Bad one) was not drawn: ", md_text("pie is not a family.")), chat_reply_text(list(kind = "charts", charts = list(list(spec = list(say = "By region."))), cannot = character(0),
                                                                                               failed = list(list(number = 2L, spec = list(title = "Bad one"), sentences = "pie is not a family.")))), fixed = TRUE) &&
-        grepl("^- By region.\n\nAdded to the canvas.", chat_reply_text(list(kind = "charts", charts = list(list(spec = list(say = "By region."))), cannot = character(0), failed = list()))))
+        grepl("^- By region\\\\.\n\nAdded to the canvas.", chat_reply_text(list(kind = "charts", charts = list(list(spec = list(say = "By region."))), cannot = character(0), failed = list()))))
+
+
+# ---- Phase 6 D: what reaches the chat is escaped, setup texts are matched exactly, a data change marks the texts ------------
+#
+# shinychat 0.4.0 draws an assistant message as markdown with raw HTML on and no sanitiser, so a value from the analyst's file or
+#   a model's words must arrive as visible text: no tag, no suggestion span, no markdown link. The fixture below has a file name, a
+#   column name, two odd values and a row guess that are all markup; what a reader sees is worked back from what was appended.
+
+d6_odd1 <- "\"><img src=x onerror=1>"
+d6_odd2 <- "it's \"x\""
+d6_file <- "odd <i> & 'name'.csv"
+d6_units <- "units <u>"
+d6_guess <- "one <b>order</b> per \"row\""
+d6_bad <- "<span class=\"suggestion submit\" data-suggestion=\"x\">x</span>"
+d6_img <- "<img src=x onerror=1>"
+d6_path <- file.path(work_dir, "d6_orders.csv")
+local({
+  set.seed(62)
+  n = 240L
+  units = as.character(sample(1:20, n, replace = TRUE))
+  units[c(4, 40)] = d6_odd1
+  units[c(80, 81)] = d6_odd2
+  units[100] = "N/A"
+  amount = round(stats::runif(n, 10, 500))
+  amount[c(7, 70, 140)] = -99
+  d = data.frame(region = sample(c("East", "West", "North", "South"), n, replace = TRUE), channel = sample(c("Web", "Store", "Phone"), n, replace = TRUE),
+                 units = units, amount = amount, price = round(stats::runif(n, 5, 80), 2), year = sample(2019:2024, n, replace = TRUE),
+                 ref = as.character(sample(1:50, n, replace = TRUE)))
+  d$ref[c(10, 11)] = "two\nlines"                # a word that cannot sit on a button: it holds a newline
+  names(d)[3] = d6_units
+  readr::write_csv(d, d6_path)
+})
+d6_read <- reread_data(d6_path, d6_file, character())
+d6_cb <- d6_read$codebook                     # row_is blank: not ready
+d6_cb_ready <- utils::modifyList(d6_cb, list(row_is = "one order"))
+d6_names <- names(d6_read$read$data)
+d6_state <- function(cb = d6_cb_ready, read = d6_read)
+  shiny::reactiveValues(key_version = 0L, data = read$read$data, problems = read$read$problems, profile = read$profile, codebook = cb,
+                        path = d6_path, calls = NULL, charts = list(), canvas = character(0), stories = list(), palette = chart_palette_default())
+d6_replies <- list(
+  "q ask" = list(ask = paste("Pick one", d6_bad), `next` = list(d6_bad, "[go](javascript:alert(1))")),
+  "q tell" = list(tell = paste("The file is", d6_bad)),
+  "q charts" = list(charts = list(utils::modifyList(c6_bar, list(say = d6_bad, title = "<b>Bars</b> by region"))), cannot = list(d6_bad)),
+  "q cannot" = list(cannot = d6_bad),
+  "q next" = list(ask = "Which?", `next` = list("by region\nthen channel", "a\t\tb")),
+  "q fail" = list(charts = list(list(family = "pie", x = "region", title = d6_img))),
+  "q md" = list(ask = "[click](javascript:alert(1)) ![i](http://x.test/y.png) *bold* `code` <b>x</b>\n\n# head\n- item\n1. one", `next` = list("[a](javascript:b)")),
+  "q hist" = list(charts = list(list(family = "histogram", x = "amount", title = "Amounts"), c6_bar)))
+d6_reply <- function(user, i) {
+  if (grepl("<CHARTS>", user, fixed = TRUE))
+    return(to_json(list(charts = purrr::map(sent_ids(user), function(id) list(id = id, headline = "A headline.", summary = "It has 999 orders.")))))
+  if (grepl("\nANALYST: ", user, fixed = TRUE)) return(to_json(d6_replies[[c6_msg(user)]] %||% list(ask = "Which?")))
+  to_json(list(labels = purrr::map(d6_names, function(n) list(name = n, label = paste("Label of", n), sure = TRUE)), row_is_guess = d6_guess))
+}
+# What a reader sees of a message: the backslashes and the entities undone. What a click sends: the data-suggestion values, decoded the way
+#   a browser decodes an attribute. What is left of a message once its genuine suggestion spans are taken out.
+d6_unhtml <- function(x) {
+  x = gsub("&quot;", "\"", x, fixed = TRUE)
+  x = gsub("&#39;", "'", x, fixed = TRUE)
+  x = gsub("&lt;", "<", x, fixed = TRUE)
+  x = gsub("&gt;", ">", x, fixed = TRUE)
+  gsub("&amp;", "&", x, fixed = TRUE)
+}
+d6_seen <- function(x) d6_unhtml(gsub("\\\\([[:punct:]])", "\\1", x))
+d6_sugg <- function(content) d6_unhtml(regmatches(content, gregexpr("(?<=data-suggestion=\")[^\"]*(?=\")", content, perl = TRUE))[[1]])
+d6_shown <- function(content) d6_seen(regmatches(content, gregexpr("(?<=\">)[^<]*(?=</span>)", content, perl = TRUE))[[1]])
+d6_bare <- function(content) gsub("</span>", "", gsub("<span class=\"suggestion submit\" data-suggestion=\"[^\"<>]*\">", "", content, perl = TRUE), fixed = TRUE)
+d6_clean <- function(content) !grepl("<", d6_bare(content), fixed = TRUE)
+d6_n_spans <- function(content) lengths(gregexpr("<span", content, fixed = TRUE)) * grepl("<span", content, fixed = TRUE)
+
+check("6-D 1: md_text() makes text safe for the chat: every ASCII punctuation mark is backslashed, '&', '<' and '>' become entities, and what a reader sees is the text as it was",
+      identical(md_text("[a](javascript:b) ![i](x) *b* _c_ `d` # e <f> & \"g\" 'h' - i 1. j | k ~l"),
+                "\\[a\\]\\(javascript\\:b\\) \\!\\[i\\]\\(x\\) \\*b\\* \\_c\\_ \\`d\\` \\# e &lt;f&gt; &amp; \\\"g\\\" \\'h\\' \\- i 1\\. j \\| k \\~l") &&
+        identical(d6_seen(md_text(d6_bad)), d6_bad) && identical(d6_seen(md_text(d6_odd1)), d6_odd1) && identical(d6_seen(md_text(d6_odd2)), d6_odd2) &&
+        identical(md_text(character(0)), character(0)) && identical(one_line(c("a\n\nb  c", " d ")), c("a b c", "d")))
+
+# ---- the setup messages: every value from the file is escaped, and the buttons still send the exact value ---------------
+
+d1_si <- stand_by(d6_reply)
+d1_state <- d6_state(cb = d6_cb)
+d1_out <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = d1_state, ask = d1_si$ask), {
+  session$flushReact()
+  m1 <- made$log[[1]]$content
+  offered <- d6_sugg(m1)
+  d1_out$read <- length(made$log) == 2L && !grepl("<img", m1, fixed = TRUE) && !grepl("<u>", m1, fixed = TRUE) && !grepl("<i>", m1, fixed = TRUE) && d6_clean(m1) &&
+    d6_n_spans(m1) == 3L && setequal(offered, treat_text(c(d6_odd1, d6_odd2, "N/A"))) && setequal(d6_shown(m1), offered) &&
+    grepl(d6_file, d6_seen(m1), fixed = TRUE) && grepl(d6_units, d6_seen(m1), fixed = TRUE) && grepl(d6_odd1, d6_seen(m1), fixed = TRUE) &&
+    grepl(paste0("Read ", md_text(d6_file), ": 240 rows, 7 columns."), m1, fixed = TRUE) && d6_clean(made$log[[2]]$content) && !grepl("two", paste(offered, collapse = " "), fixed = TRUE) &&
+    length(d1_si$sent) == 0L && is.null(d1_state$calls) && setequal(treat(), c(d6_odd1, d6_odd2, "N/A"))
+  # the Treat button for the value with both quotes, then the one that is markup: each re-reads the file with exactly that value
+  click2 <- offered[d6_shown(m1) == treat_text(d6_odd2)]
+  session$setInputs(chat_user_input = click2)
+  d1_out$treat2 <- identical(click2, treat_text(d6_odd2)) && identical(missing_codes(d1_state$codebook), d6_odd2) &&
+    sum(is.na(d1_state$data[[d6_units]])) == 2L && length(d1_si$sent) == 0L && is.null(d1_state$calls)
+  m3 <- made$log[[length(made$log) - 1L]]$content
+  click1 <- d6_sugg(m3)[d6_shown(m3) == treat_text(d6_odd1)]
+  session$setInputs(chat_user_input = click1)
+  m4 <- made$log[[length(made$log) - 1L]]$content
+  d1_out$treat1 <- identical(click1, treat_text(d6_odd1)) && setequal(missing_codes(d1_state$codebook), c(d6_odd2, d6_odd1)) &&
+    sum(is.na(d1_state$data[[d6_units]])) == 4L && length(d1_si$sent) == 0L && !grepl("<img", m4, fixed = TRUE) && d6_clean(m4) &&
+    grepl(paste0("again with '", md_text(d6_odd1), "' as missing"), m4, fixed = TRUE) && grepl(d6_odd1, d6_seen(m4), fixed = TRUE) && identical(treat(), "N/A")
+  # Label the columns, then the row guess, which is markup: the button sends exactly the guess
+  session$setInputs(chat_user_input = "Label the columns")
+  lab <- made$log[[length(made$log)]]$content
+  d1_out$guess <- length(d1_si$sent) == 1L && d6_clean(lab) && !grepl("<b>", lab, fixed = TRUE) && identical(d6_sugg(lab), row_text(d6_guess)) &&
+    identical(d6_shown(lab), row_text(d6_guess)) && !isTRUE(ready())
+  session$setInputs(chat_user_input = d6_sugg(lab))
+  d1_out$row <- identical(d1_state$codebook$row_is, d6_guess) && isTRUE(ready()) && length(d1_si$sent) == 1L && d6_clean(made$log[[length(made$log) - 1L]]$content)
+
+  # an analyst's own message that merely contains a setup text goes to the model; a setup text is acted on only while its button is on offer
+  data0 <- d1_state$data; n0 <- length(d1_si$sent); log0 <- length(made$log)
+  session$setInputs(chat_user_input = "why does it say Treat 'N/A' as missing?")
+  d1_out$contains <- length(d1_si$sent) == n0 + 1L && identical(d1_state$data, data0) && identical(treat(), "N/A") && grepl("ANALYST: why does it say Treat 'N/A' as missing?\n", d1_si$sent[[n0 + 1L]]$user, fixed = TRUE)
+  session$setInputs(chat_user_input = "please Label the columns now")
+  session$setInputs(chat_user_input = paste("A row is", d6_guess, "or not?"))
+  d1_out$contains2 <- length(d1_si$sent) == n0 + 3L && identical(d1_state$data, data0)
+  session$setInputs(chat_user_input = "Treat 'ZZ' as missing")
+  d1_out$unknown <- length(d1_si$sent) == n0 + 3L && identical(d1_state$data, data0) && identical(treat(), "N/A") && identical(missing_codes(d1_state$codebook), c(d6_odd2, d6_odd1)) &&
+    grepl("No button offers 'ZZ' now", made$log[[length(made$log)]]$content, fixed = TRUE) && grepl("the model was not asked", made$log[[length(made$log)]]$content, fixed = TRUE)
+  session$setInputs(chat_user_input = "Treat 'N/A' as missing")
+  data1 <- d1_state$data
+  d1_out$offered_works <- !identical(data1, data0) && is.numeric(data1[[d6_units]]) && length(d1_si$sent) == n0 + 3L && length(treat()) == 0L
+  session$setInputs(chat_user_input = "Treat 'N/A' as missing")
+  d1_out$gone <- identical(d1_state$data, data1) && length(d1_si$sent) == n0 + 3L && grepl(paste0("No button offers '", md_text("N/A"), "' now"), made$log[[length(made$log)]]$content, fixed = TRUE)
+  calls0 <- nrow(d1_state$calls)
+  session$setInputs(chat_user_input = "Label the columns")
+  d1_out$label_gone <- nrow(d1_state$calls) == calls0 && length(d1_si$sent) == n0 + 3L && grepl("not on offer now", made$log[[length(made$log)]]$content, fixed = TRUE)
+  session$setInputs(chat_user_input = row_text(d6_guess))
+  d1_out$row_gone <- length(d1_si$sent) == n0 + 3L && identical(d1_state$codebook$row_is, d6_guess) && grepl("That row guess is not on offer now", made$log[[length(made$log)]]$content, fixed = TRUE)
+})
+check("6-D 2: a file name, a column name, a value and a problem line that are markup arrive as visible text, the three Treat suggestions are the only spans, and what each sends is the exact text",
+      isTRUE(d1_out$read))
+check("6-D 3: the Treat button for a value holding a single and a double quote, and for the value '\"><img src=x onerror=1>', re-reads the file with exactly that value, with no model call",
+      isTRUE(d1_out$treat2) && isTRUE(d1_out$treat1))
+check("6-D 4: a row guess that is markup arrives as visible text and its button sets row_is to exactly the guess", isTRUE(d1_out$guess) && isTRUE(d1_out$row))
+check("6-D 5: an analyst's own message that merely contains a setup text ('why does it say Treat ... as missing?', 'please Label the columns now', 'A row is ... or not?') goes to the model, and changes nothing",
+      isTRUE(d1_out$contains) && isTRUE(d1_out$contains2))
+check("6-D 6: a Treat text for a value the file does not hold does nothing and says so, with no model call; the same text for a value already treated, the label text once labelled, and a row guess no longer on offer, the same",
+      isTRUE(d1_out$unknown) && isTRUE(d1_out$offered_works) && isTRUE(d1_out$gone) && isTRUE(d1_out$label_gone) && isTRUE(d1_out$row_gone))
+
+# ---- the model's words: say, ask, cannot, tell, next and a failure's sentences -------------------------------------------
+
+d2_si <- stand_by(d6_reply)
+d2_state <- d6_state()
+d2_out <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = d2_state, ask = d2_si$ask), {
+  session$flushReact()
+  last_msg <- function() made$log[[length(made$log)]]$content
+  ask_msg <- function(q) { session$setInputs(chat_user_input = q); last_msg() }
+  a <- ask_msg("q ask")
+  d2_out$ask <- d6_clean(a) && d6_n_spans(a) == 2L && identical(d6_sugg(a), c(d6_bad, "[go](javascript:alert(1))")) && identical(d6_shown(a), c(d6_bad, "[go](javascript:alert(1))")) &&
+    grepl(paste("Pick one", d6_bad), d6_seen(sub("\n\n- .*$", "", a)), fixed = TRUE) && !grepl("data-suggestion=\"x\"", a, fixed = TRUE)
+  t <- ask_msg("q tell")
+  d2_out$tell <- !grepl("<", t, fixed = TRUE) && identical(d6_seen(t), paste("The file is", d6_bad))
+  ch <- ask_msg("q charts")
+  d2_out$charts <- !grepl("<", ch, fixed = TRUE) && lengths(gregexpr(md_text(d6_bad), ch, fixed = TRUE)) == 2L && grepl("Added to the canvas.", ch, fixed = TRUE) &&
+    identical(d2_state$charts$c1$spec$title, "<b>Bars</b> by region")
+  cn <- ask_msg("q cannot")
+  d2_out$cannot <- !grepl("<", cn, fixed = TRUE) && identical(d6_seen(cn), d6_bad)
+  nx <- ask_msg("q next")
+  d2_out$next_line <- identical(d6_sugg(nx), c("by region then channel", "a b")) && d6_n_spans(nx) == 2L && d6_clean(nx)
+  fl <- ask_msg("q fail")
+  d2_out$fail <- !grepl("<", fl, fixed = TRUE) && grepl(paste0("Chart 1 (", d6_img, ") was not drawn: "), d6_seen(fl), fixed = TRUE)
+  md <- ask_msg("q md")
+  d2_out$markdown <- d6_clean(md) && !grepl("(?<!\\\\)[][()*`!#]", d6_bare(md), perl = TRUE) && !grepl("](", d6_bare(md), fixed = TRUE) &&
+    identical(d6_sugg(md), "[a](javascript:b)") && grepl("[click](javascript:alert(1)) ![i](http://x.test/y.png) *bold* `code` <b>x</b>\n\n# head\n- item\n1. one",
+                                                         d6_seen(sub("\n\n- .*$", "", md)), fixed = TRUE)
+  # a chart's title in the line that checks its headline
+  c6_set(session, "c1", "headline", 1)
+  hl <- last_msg()
+  d2_out$headline <- grepl("Check the text of ", hl, fixed = TRUE) && !grepl("<", hl, fixed = TRUE) && grepl("<b>Bars</b> by region", d6_seen(hl), fixed = TRUE)
+})
+check("6-D 7: the model's ask and next: text that is a suggestion span or markup arrives as visible text, a next entry is one suggestion that sends exactly that text, and a next entry with a newline or tabs is put on one line",
+      isTRUE(d2_out$ask) && isTRUE(d2_out$next_line))
+check("6-D 8: the model's tell, say, cannot and a failed chart's title and sentences (a span, an img tag) arrive as visible text, with no tag of their own", isTRUE(d2_out$tell) && isTRUE(d2_out$charts) && isTRUE(d2_out$cannot) && isTRUE(d2_out$fail))
+check("6-D 9: model text holding markdown (a link with a javascript address, an image, emphasis, code, a heading, a list) arrives with every mark escaped; a chart title in the headline check line is escaped too",
+      isTRUE(d2_out$markdown) && isTRUE(d2_out$headline))
+
+# ---- the same file read again: the canvas stays, a change in the data marks every written text -------------------------------
+
+d3_si <- stand_by(d6_reply)
+d3_state <- d6_state()
+d3_out <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = d3_state, ask = d3_si$ask), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  png_digest <- function(id) digest::digest(output[[paste0(id, "_static")]]$src)
+  session$setInputs(chat_user_input = "q hist")
+  session$setInputs(write_headlines = 1)
+  ids <- d3_state$canvas
+  before <- png_digest("c1")
+  notes0 <- d3_state$charts$c1$notes
+  stories0 <- d3_state$stories
+  d3_out$written <- identical(ids, c("c1", "c2")) && length(stories0) == 2L && all(purrr::map_lgl(stories0, function(s) is_text1(s$data) && nzchar(s$data))) &&
+    !any(purrr::map_lgl(ids, needs_story)) && !grepl("has changed since", html("c1_card"), fixed = TRUE)
+  # the file read again and nothing changed: the texts are still current, and nothing is said
+  log0 <- length(made$log)
+  d3_state$data <- d6_read$read$data
+  session$flushReact()
+  d3_out$same <- length(made$log) == log0 && !any(purrr::map_lgl(ids, needs_story))
+  # the file read again with -99 as missing: the charts stay, are drawn from the new data, and every text is marked
+  res <- reread_data(d6_path, d6_file, "-99", old = d3_state$codebook)
+  d3_state$data <- res$read$data; d3_state$problems <- res$read$problems; d3_state$profile <- res$profile; d3_state$codebook <- res$codebook
+  session$flushReact()
+  said <- made$log[[length(made$log)]]$content
+  d3_out$changed <- identical(d3_state$canvas, ids) && length(d3_state$charts) == 2L && identical(d3_state$stories, stories0) &&
+    all(purrr::map_lgl(ids, needs_story)) && all(purrr::map_lgl(ids, function(i) grepl(SUMMARY_STALE_DATA, html(paste0(i, "_card")), fixed = TRUE))) &&
+    !grepl(SUMMARY_STALE, html("c1_card"), fixed = TRUE) && grepl("A headline.", html("c1_card"), fixed = TRUE) && grepl("It has 999 orders.", html("c1_card"), fixed = TRUE) &&
+    grepl("The data changed, so the 2 charts on the canvas were drawn again from it. 2 headlines and summaries are marked as changed since written", said, fixed = TRUE) &&
+    !identical(png_digest("c1"), before) && length(notes0) == 0L && any(grepl("left out", d3_state$charts$c1$notes)) && any(grepl("left out", html("c1_notes")))
+  # Write headlines writes them again, from the new data, and clears the marks
+  n_sent <- length(d3_si$sent)
+  session$setInputs(write_headlines = 2)
+  d3_out$rewritten <- length(d3_si$sent) > n_sent && identical(sent_ids(d3_si$sent[[n_sent + 1L]]$user), ids) && !any(purrr::map_lgl(ids, needs_story)) &&
+    !grepl("has changed since", html("c1_card"), fixed = TRUE) && !identical(d3_state$stories$c1$data, stories0$c1$data)
+})
+check("6-D 10: a headline and summary are written with a data version; the file read again with nothing changed leaves them current and says nothing",
+      isTRUE(d3_out$written) && isTRUE(d3_out$same))
+check("6-D 11: the same file read again with different missing values keeps the canvas, draws the charts again from the new data, keeps each text and marks it 'changed since this was written', and says so in the chat",
+      isTRUE(d3_out$changed))
+check("6-D 12: Write headlines after such a re-read sends every chart (all are marked), and the new texts are current for the new data", isTRUE(d3_out$rewritten))
+
+# ---- the footer buttons: readable in dark and light mode, enabled and disabled ------------------------------------------------------
+
+check("6-D 13: Suggest charts and Write headlines keep their words and their chart-call class, and the style gives them the page's emphasis colour (black on light, white on dark) in place of the theme's primary, in both states",
+      grepl(">Suggest charts<", c6_ui, fixed = TRUE) && grepl(">Write headlines<", c6_ui, fixed = TRUE) &&
+        grepl("class=\"[^\"]*chart-call[^\"]*\" id=\"explore-suggest\"", c6_ui) && grepl("class=\"[^\"]*chart-call[^\"]*\" id=\"explore-write_headlines\"", c6_ui) &&
+        grepl("\\.chart-call \\{[^}]*--bs-btn-color: var\\(--bs-emphasis-color\\)[^}]*--bs-btn-border-color: var\\(--bs-emphasis-color\\)", EXPLORE_CSS) &&
+        grepl("--bs-btn-disabled-color: var\\(--bs-body-color\\)[^}]*--bs-btn-disabled-opacity: \\.65", EXPLORE_CSS) &&
+        !grepl("opacity: \\.5;", EXPLORE_CSS) && grepl("chart-call:disabled \\{ cursor: not-allowed; \\}", EXPLORE_CSS))
 
 
 # ---- the count -------------------------------------------------------------------

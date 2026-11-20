@@ -525,6 +525,7 @@ WORDING_FIELDS <- c(title = "Title", subtitle = "Subtitle", caption = "Caption",
 
 SUMMARY_ALL_OK <- "Every number matches the chart's data."
 SUMMARY_STALE <- "The chart has changed since this was written."
+SUMMARY_STALE_DATA <- "The data has changed since this was written, so its numbers may no longer hold."
 
 # What R says in the chat during setup. Each is a sentence R writes; none is ever sent to a model.
 SETUP_WELCOME <- paste("Start on the Data page: choose a data file there. Setup then goes on here, in this chat,",
@@ -552,35 +553,46 @@ check_line <- function(problems, ok = SUMMARY_ALL_OK) {
 # The warning line under a description of the file that holds a number DATA does not give.
 TELL_WARNING <- "Not every number here is in the description of the file: "
 
-# The text a chat turn appends: for charts each chart's say as a short list and "Added to the canvas.", then
-#   any reason for a chart it could not draw; for a new spec its say and the notes it did not have before; for
-#   ask, cannot and tell the text (a tell with a number that is not in the description of the file has the
-#   warning line under it); for a failure the sentences.
+# Text from a model or a file, made safe for a chat message. shinychat 0.4.0 draws an assistant message as markdown
+#   with raw HTML switched on and no sanitiser (see the note above say() in mod_explore_server()), so anything that is
+#   not R's own wording passes through here first: every ASCII punctuation mark gets a backslash (the one escape
+#   CommonMark gives them all, so no emphasis, link, image, code, list, heading or table can start), and "&", "<" and ">"
+#   become entities (so no tag or entity can start). The reader sees the text as it was.
+md_text <- function(x)
+  htmltools::htmlEscape(gsub("([!\"#$%'()*+,./:;=?@\\[\\\\\\]^_`{|}~-])", "\\\\\\1", as.character(x), perl = TRUE))
+
+# A reply's text on one line: the whitespace inside it, a newline above all, becomes one space.
+one_line <- function(x) trimws(gsub("[[:space:]]+", " ", as.character(x)))
+
+# The text a chat turn appends, as markdown that is safe to show: for charts each chart's say as a short list and
+#   "Added to the canvas.", then any reason for a chart it could not draw; for a new spec its say and the notes it did
+#   not have before; for ask, cannot and tell the text (a tell with a number that is not in the description of the file
+#   has the warning line under it); for a failure the sentences. Whatever the model wrote goes through md_text().
 chat_reply_text <- function(r) {
   if (identical(r$kind, "charts")) {
     says = purrr::keep(purrr::map_chr(r$charts, function(ch) if (is_text1(ch$spec$say)) ch$spec$say else NA_character_), Negate(is.na))
     not_drawn = purrr::map_chr(r$failed, function(f)
-      paste0("Chart ", f$number, if (is_text1(f$spec$title)) paste0(" (", f$spec$title, ")"), " was not drawn: ", paste(f$sentences, collapse = " ")))
-    return(paste(c(if (length(says)) paste0("- ", says, collapse = "\n"), if (length(r$charts)) "Added to the canvas.", r$cannot, not_drawn),
+      paste0("Chart ", f$number, if (is_text1(f$spec$title)) paste0(" (", md_text(f$spec$title), ")"), " was not drawn: ", md_text(paste(f$sentences, collapse = " "))))
+    return(paste(c(if (length(says)) paste0("- ", md_text(says), collapse = "\n"), if (length(r$charts)) "Added to the canvas.", md_text(r$cannot), not_drawn),
                  collapse = "\n\n"))
   }
-  if (identical(r$kind, "spec")) return(paste(c(r$text, if (length(r$new_notes)) paste("Note:", r$new_notes)), collapse = "\n\n"))
-  paste(c(paste(r$text, collapse = " "), if (identical(r$kind, "tell") && length(r$problems)) paste0(TELL_WARNING, paste(r$problems, collapse = ", "), ".")),
+  if (identical(r$kind, "spec")) return(paste(c(md_text(r$text), if (length(r$new_notes)) paste("Note:", md_text(r$new_notes))), collapse = "\n\n"))
+  paste(c(md_text(paste(r$text, collapse = " ")),
+          if (identical(r$kind, "tell") && length(r$problems)) paste0(TELL_WARNING, md_text(paste(r$problems, collapse = ", ")), ".")),
         collapse = "\n\n")
 }
 
-# Text from a model or a file, put in a chat message: a "<" or "&" in it cannot start a tag or an entity.
-md_text <- function(x) gsub("<", "&lt;", gsub("&", "&amp;", x, fixed = TRUE), fixed = TRUE)
-
-# Clickable suggestions: shinychat 0.4.0 draws a markdown list whose every item is a span of class
-#   "suggestion" as a grid of cards; class "submit" sends the text as the analyst's message on a click
-#   (without it the click only fills the box), and data-suggestion is the text sent.
+# Clickable suggestions: shinychat 0.4.0 draws a markdown list whose every item is a span of class "suggestion" as a
+#   grid of cards; class "submit" sends the text as the analyst's message on a click (without it the click only fills
+#   the box), and data-suggestion is the text sent. The text is escaped for both places it lands: as an attribute value
+#   (quotes and all) and as markdown in the span.
 suggestion_list <- function(texts)
-  paste0("- <span class=\"suggestion submit\" data-suggestion=\"", purrr::map_chr(texts, htmltools::htmlEscape, attribute = TRUE), "\">",
-         purrr::map_chr(texts, htmltools::htmlEscape), "</span>", collapse = "\n")
+  paste0("- <span class=\"suggestion submit\" data-suggestion=\"", htmltools::htmlEscape(texts, attribute = TRUE), "\">", md_text(texts), "</span>",
+         collapse = "\n")
 
 # The words of the setup buttons: what a click sends, which R recognizes and answers without a model call.
 treat_text <- function(value) paste0("Treat '", value, "' as missing")
+TREAT_PATTERN <- "^Treat '(.*)' as missing$"
 row_text <- function(guess) paste0("A row is ", guess)
 
 # A chart's title for the chat and the screen reader, or `fallback` when it has none.
@@ -626,7 +638,14 @@ copy_js <- function(code_id)
 EXPLORE_CSS <- "
 .chart-card { cursor: pointer; }
 .chart-card.chart-selected { border: 2px solid var(--bs-primary); box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .25); }
-.chart-call:disabled { opacity: .5; cursor: not-allowed; }
+.chart-call {
+  --bs-btn-color: var(--bs-emphasis-color); --bs-btn-border-color: var(--bs-emphasis-color);
+  --bs-btn-hover-color: var(--bs-body-bg); --bs-btn-hover-bg: var(--bs-emphasis-color); --bs-btn-hover-border-color: var(--bs-emphasis-color);
+  --bs-btn-active-color: var(--bs-body-bg); --bs-btn-active-bg: var(--bs-emphasis-color); --bs-btn-active-border-color: var(--bs-emphasis-color);
+  --bs-btn-disabled-color: var(--bs-body-color); --bs-btn-disabled-bg: transparent; --bs-btn-disabled-border-color: var(--bs-body-color);
+  --bs-btn-disabled-opacity: .65;
+}
+.chart-call:disabled { cursor: not-allowed; }
 .chart-canvas { padding: .75rem 1rem; }
 "
 EXPLORE_JS <- "
@@ -698,12 +717,18 @@ mod_explore_server <- function(id, state, ask = llm_json) {
     made$ready_for = NULL              # the key the "ask a question" line was said for
     made$reread = NULL                 # the value the file was last read again with, for the message
     made$notes = character(0)
-    made$log = list()                  # every message R put in the chat (role, content), for the tests
+    made$data_key = NULL               # the digest of the data last read, to tell a read that changed it
+    made$label_offer = FALSE           # whether the "Label the columns" button is on offer
+    made$rows_offered = character(0)   # the row guesses that were offered, whichever is on offer now
+    made$log = list()                 # every message R put in the chat (role, content), for the tests
     made$busy_log = logical(0)         # TRUE when a call started, FALSE when it was done
     made$chart = new.env()             # per chart: the chart, its headline and summary, whether it is selected
     made$story = new.env()             #   and whether its interactive view is shown, each a reactiveVal, so a change to
     made$sel = new.env()               #   one chart draws only that chart again
     made$interactive = new.env()
+
+    # The data as it is now, as a digest: a text is written from the data of that moment and is stale when this changes.
+    data_key = reactive(if (!is.null(state$data)) digest::digest(state$data))
 
     cid = function(chart_id, what) paste0(chart_id, "_", what)
     ready = reactive(codebook_ready(state$codebook) && !is.null(state$data))
@@ -723,9 +748,14 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       force(code)
     }
 
-    # A message in the chat: R's own text (a "<" or "&" in it made harmless), then clickable suggestions.
+    # A message in the chat: markdown, then clickable suggestions. shinychat 0.4.0 (lib/shiny/shinychat.js) draws an
+    #   assistant message through remark, remark-rehype with allowDangerousHtml and rehype-raw, with no sanitiser: a tag in
+    #   the text becomes a real element, an <img onerror> would run, a markdown link may carry a javascript: address, and a
+    #   span of class "suggestion" is a button that sends text as the analyst. (Only the analyst's own messages, role "user",
+    #   are sanitised and shown as text.) So `text` is R's own wording, and every piece that comes from a file or a model is
+    #   put through md_text() where it is joined in; the suggestions are escaped by suggestion_list().
     say = function(text, suggestions = character(0), role = "assistant") {
-      body = paste(c(md_text(paste(text, collapse = "\n\n")), if (length(suggestions)) suggestion_list(suggestions)), collapse = "\n\n")
+      body = paste(c(paste(text, collapse = "\n\n"), if (length(suggestions)) suggestion_list(suggestions)), collapse = "\n\n")
       made$log = c(made$log, list(list(role = role, content = body)))
       shinychat::chat_append_message("chat", list(role = role, content = body), chunk = FALSE)
       invisible()
@@ -747,9 +777,17 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       state$stories = ss
       if (!is.null(made$story[[chart_id]])) made$story[[chart_id]](st)
     }
+    # A text is current while the chart's spec is the one it was written for (its hash) and the data is the data it was
+    #   written from (`data`, the digest of the data then); either one changing makes it stale. `why` says which.
+    story_stale = function(st, chart, data_now) {
+      if (is.null(st)) return(NA_character_)
+      if (!identical(st$hash, spec_hash(chart$spec))) return("chart")
+      if (!identical(st$data, data_now)) return("data")
+      NA_character_
+    }
     needs_story = function(chart_id) {
       st = story_of(chart_id)
-      is.null(st) || !identical(st$hash, spec_hash(chart_of(chart_id)$spec))
+      is.null(st) || !is.na(story_stale(st, chart_of(chart_id), isolate(data_key())))
     }
     set_selected = function(chart_id) {
       old = isolate(selected())
@@ -800,7 +838,8 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       state$calls = dplyr::bind_rows(isolate(state$calls), out$calls)
       purrr::walk(out$charts, function(r) {
         if (is.null(r$headline)) { story_note[[r$id]] = r$text; return(invisible()) }
-        set_story(r$id, list(headline = r$headline, summary = r$summary, hash = r$hash, facts = r$facts, spec = r$spec, problems = r$problems))
+        set_story(r$id, list(headline = r$headline, summary = r$summary, hash = r$hash, data = isolate(data_key()), facts = r$facts,
+                             spec = r$spec, problems = r$problems))
         story_note[[r$id]] = NULL
       })
       out
@@ -811,8 +850,8 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       title_of = function(i) chart_title(chart_of(i), i)
       paste(c(if (length(got)) paste0("Wrote the headline and summary for ", length(got), if (length(got) == 1L) " chart." else " charts."),
               purrr::map_chr(purrr::keep(got, function(r) length(r$problems) > 0L),
-                             function(r) paste0("Check the text of ", title_of(r$id), ": ", paste(r$problems, collapse = "; "), ".")),
-              purrr::map_chr(missed, function(r) paste0(title_of(r$id), ": ", r$text))), collapse = "\n\n")
+                             function(r) paste0("Check the text of ", md_text(title_of(r$id)), ": ", md_text(paste(r$problems, collapse = "; ")), ".")),
+              purrr::map_chr(missed, function(r) paste0(md_text(title_of(r$id)), ": ", md_text(r$text)))), collapse = "\n\n")
     }
 
     # ---- the chat -----------------------------------------------------------------------------------
@@ -835,18 +874,27 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       last(r$last)
       if (identical(r$kind, "spec") && !is.null(r$chart)) set_chart(r$chart)
       if (identical(r$kind, "charts")) add_charts(r$charts)
-      say(chat_reply_text(r), r$`next`)
+      say(chat_reply_text(r), one_line(r$`next`))
       invisible(r)
     }
 
-    # The setup buttons are suggestions whose text R recognizes; a click is not a question for the model.
+    # The setup buttons are suggestions whose text R recognizes, matched exactly, and a click is not a question for the
+    #   model. A text is acted on only while its button is on offer: a "Treat" text for a value that is not offered now
+    #   (the file does not hold it, or it was already treated) does nothing and says so, as do the label text once the
+    #   label step is done (or was never offered) and a row text that is not the guess on offer. Any other message, one
+    #   that merely contains such a text included, is the analyst's own and goes to chat_turn().
     setup_action = function(msg) {
       m = trimws(msg)
       value = purrr::detect(treat(), function(w) identical(m, treat_text(w)))
       if (!is.null(value)) return(function() treat_missing(value))
-      if (identical(tolower(m), tolower(SETUP_LABEL))) return(label_now)
+      if (grepl(TREAT_PATTERN, m, perl = TRUE))
+        return(function() say(paste0("No button offers '", md_text(sub(TREAT_PATTERN, "\\1", m, perl = TRUE)), "' now: the file holds no such value among its numbers, ",
+                                     "or it is already treated as missing. Nothing was changed and the model was not asked.")))
+      if (identical(m, SETUP_LABEL)) return(if (isTRUE(made$label_offer)) label_now else function()
+        say("The Label the columns button is not on offer now: the columns were labelled already, or the data dictionary did not need it. Edit the labels on the Data page, which also has Suggest labels."))
       g = guess()
       if (!is.null(g) && identical(m, row_text(g))) return(function() use_guess(g))
+      if (m %in% made$rows_offered) return(function() say("That row guess is not on offer now. Write what one row is on the Data page."))
       NULL
     }
 
@@ -886,12 +934,12 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       if (is.null(cb) || !is_text1(path) || !file.exists(path))
         return(say("The file is no longer there to read again. Choose it again on the Data page."))
       res = tryCatch(reread_data(path, cb$file, unique(c(missing_codes(cb), value)), old = cb, encoding = cb$encoding), error = function(e) e)
-      if (inherits(res, "error")) return(say(conditionMessage(res)))
+      if (inherits(res, "error")) return(say(md_text(conditionMessage(res))))
       same = identical(res$read$data, isolate(state$data))
       made$reread = if (!same) value
       made$notes = res$notes
       state$data = res$read$data; state$problems = res$read$problems; state$profile = res$profile; state$codebook = res$codebook
-      if (same) say(paste0("Nothing changed: no cell is exactly '", value, "'."))
+      if (same) say(paste0("Nothing changed: no cell is exactly '", md_text(value), "'."))
       invisible()
     }
 
@@ -902,12 +950,14 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       if (needs_key()) return(say(paste("Labelling needs a key.", KEY_HINT)))
       res = label_columns(cb, ask = ask)
       state$calls = dplyr::bind_rows(isolate(state$calls), res$calls)
-      if (!is.null(res$error)) return(say(res$error))
+      if (!is.null(res$error)) return(say(md_text(res$error)))
+      made$label_offer = FALSE
       landed = sum(purrr::map2_lgl(cb$columns, res$codebook$columns, function(a, b) !identical(a$label, b$label)))
       unsure = sum(purrr::map_lgl(res$codebook$columns, function(e) identical(e$label_source, "ai_guess") && identical(e$sure, FALSE)))
       state$codebook = res$codebook
       g = if (!codebook_ready(res$codebook)) res$row_is_guess
       guess(g)
+      if (!is.null(g)) made$rows_offered = union(made$rows_offered, row_text(g))
       say(c(paste0(format_num(landed), if (landed == 1L) " label was" else " labels were", " proposed",
                    if (unsure) paste0(", ", unsure, " of them marked 'check this'"),
                    ". Labels you wrote were not changed. Review and edit them on the Data page. ", DATA_PAGE_LINK),
@@ -921,7 +971,7 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       cb$row_is = g
       guess(NULL)
       state$codebook = cb
-      say(paste0("One row is ", g, "."))
+      say(paste0("One row is ", md_text(g), "."))
     }
 
     # A file was read (or read again): what was read and what was wrong with it, a button for each value that may
@@ -939,25 +989,42 @@ mod_explore_server <- function(id, state, ask = llm_json) {
         shinychat::chat_clear("chat")
         say("A different file was read, so the canvas and the conversation start again.")
       }
-      if (fresh) made$ready_for = NULL
+      if (fresh) { made$ready_for = NULL; made$rows_offered = character(0) }
       made$key = key
-      words = missing_candidates(data)
+      # The same file read again keeps the canvas. When the data changed, the charts are drawn again from it (they read the
+      #   data as it is) with their notes made again, and every written headline and summary is stale (story_stale()), as
+      #   its numbers may no longer hold.
+      dk = data_key()
+      changed = !fresh && !identical(made$data_key, dk)
+      made$data_key = dk
+      if (changed) purrr::walk(isolate(state$canvas), function(i) {
+        ch = chart_of(i)
+        ch$notes = notes_for(ch$spec)
+        set_chart(ch)
+      })
+      n_texts = if (changed) sum(purrr::map_lgl(isolate(state$canvas), function(i) !is.null(story_of(i)))) else 0L
+      # A value on a button must be one line, to sit in the markup of one suggestion.
+      words = purrr::discard(missing_candidates(data), function(w) grepl("[\r\n]", w))
       treat(words)
       again = made$reread
       made$reread = NULL
       problems = state$problems
-      say(c(paste0("Read ", cb$file, if (!is.null(again)) paste0(" again with '", again, "' as missing"), ": ", format_num(nrow(data)), " rows, ",
+      say(c(paste0("Read ", md_text(cb$file), if (!is.null(again)) paste0(" again with '", md_text(again), "' as missing"), ": ", format_num(nrow(data)), " rows, ",
                    format_num(ncol(data)), " columns."),
-            if (length(problems)) paste0("- ", problems, collapse = "
-") else "No problems found.",
-            if (length(made$notes)) paste0("- ", made$notes, collapse = "
-"),
+            if (length(problems)) paste0("- ", md_text(problems), collapse = "\n") else "No problems found.",
+            if (length(made$notes)) paste0("- ", md_text(made$notes), collapse = "\n"),
+            if (changed && length(isolate(state$canvas)))
+              paste0("The data changed, so the ", length(isolate(state$canvas)), if (length(isolate(state$canvas)) == 1L) " chart on the canvas was" else " charts on the canvas were",
+                     " drawn again from it.", if (n_texts) paste0(" ", n_texts, if (n_texts == 1L) " headline and summary is" else " headlines and summaries are",
+                                                                  " marked as changed since written, because their numbers may no longer hold. Press Write headlines to write them again.")),
             if (length(words)) "If one of these stands for missing, press it and the file is read again:"),
           if (length(words)) treat_text(words))
       made$notes = character(0)
+      made$label_offer = FALSE
       if (codebook_ready(cb)) {
         if (!identical(made$ready_for, key)) { made$ready_for = key; say(SETUP_READY) }
       } else {
+        made$label_offer = TRUE
         say(c("Next, the data dictionary: each column needs a label, and it needs to say what one row represents.",
               "The model can propose both from the column summaries; it does not see the rows. You can also fill them in on the Data page."),
             SETUP_LABEL)
@@ -1059,7 +1126,7 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       interactive = isTRUE(made$interactive[[chart_id]]())
       note = story_note[[chart_id]]
       title = chart_title(ch, "Untitled chart")
-      stale = !is.null(st) && !identical(st$hash, spec_hash(ch$spec))
+      stale = story_stale(st, ch, data_key())
       rule = ch$spec$rule
       label = if (is_text1(rule) && !is.na(rule_labels[rule])) rule_labels[[rule]]
       btn = function(what, text, class = "btn-outline-secondary", ...)
@@ -1085,7 +1152,7 @@ mod_explore_server <- function(id, state, ask = llm_json) {
           uiOutput(ns(cid(chart_id, "view"))),
           uiOutput(ns(cid(chart_id, "notes"))),
           if (!is.null(st)) tags$p(class = "mb-1", st$summary),
-          if (stale) tags$p(class = "small mb-1", style = warn_style, SUMMARY_STALE),
+          if (!is.na(stale)) tags$p(class = "small mb-1", style = warn_style, if (identical(stale, "chart")) SUMMARY_STALE else SUMMARY_STALE_DATA),
           if (!is.null(st) && length(st$problems)) check_line(st$problems, ok = NULL),
           if (!is.null(note)) tags$p(class = "small mb-1", style = warn_style, note),
           tags$p(class = "small text-muted mb-0",
