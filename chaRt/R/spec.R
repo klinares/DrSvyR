@@ -59,7 +59,7 @@ SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 
 # Fields the lint adds; never accepted from outside.
 SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".cell_labels", ".top_n",
-                      ".fit_range")
+                      ".fit_range", ".n_colours")
 
 # What the plotly tooltip shows: the plotted values.
 SPEC_TOOLTIP <- c("x", "y", "colour", "fill", "size")
@@ -240,7 +240,7 @@ kinds_text <- function(kinds) paste(SPEC_KIND_TEXT[kinds], collapse = " or ")
 # The reasons a spec cannot be drawn, as sentences naming the field and the column; none when it can.
 #   Reads only the codebook. Every rule that does not need the data is here.
 spec_check <- function(spec, cb, palette = chart_palette_default()) {
-  max_colours = chart_palette_max(palette$qualitative)
+  max_colours = palette_groups_max(palette)
   if (!is.list(spec) || is.null(names(spec)) || any(!nzchar(names(spec))))
     return("The spec must be a set of named fields.")
   unknown = setdiff(names(spec), SPEC_FIELDS)
@@ -648,7 +648,7 @@ spec_table <- function(spec, data, cb, palette = chart_palette_default()) {
   st = table_steps(s, cb)
   filtered = if (is.null(s$filter)) data else run_steps(data, st$base[1])
   base = run_steps(data, st$base)
-  data_checks(s, base, chart_palette_max(palette$qualitative))
+  data_checks(s, base, palette_groups_max(palette))
   agg = run_steps(base, st$agg)
   if (is.null(s$.top_n)) s$.top_n = tie_fit(s, agg)
   if (!is.null(s$.top_n)) st$post = table_steps(s, cb)$post
@@ -834,6 +834,9 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
     notes = c(notes, paste0(format_num(dropped), " of ", format_num(dropped + attr(table, "rows_used")), " rows left out: missing values."))
   s$.fit_range = fit_ranges(s, table)
   notes = c(notes, fit_notes(s, cb))
+  # How many colours the drawn table needs (after the filter and top_n), so a palette is chosen for
+  #   what is shown, not for every value the codebook lists.
+  if (!is.null(s$color) && !identical(fam, "heatmap")) s$.n_colours = nd(s$color)
   list(spec = s, notes = notes)
 }
 
@@ -841,14 +844,29 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
 # ---- the plot --------------------------------------------------------------------------------------
 
 # The colours a chart is drawn with, from the palettes chosen for the report (R/theme.R): qual(n)
-#   for groups (at most max), seq for a continuous fill, div for a fill centred on a midpoint.
+#   for groups (at most max; the default palette when the chosen one has fewer than n colours, see
+#   palette_for_n()), seq for a continuous fill, div for a fill centred on a midpoint.
 spec_palette <- function(palette = chart_palette_default())
-  list(qual = function(n) chart_palette(n, palette$qualitative), max = chart_palette_max(palette$qualitative),
+  list(qual = function(n) chart_palette(n, palette_for_n(n, palette$qualitative)), max = palette_groups_max(palette),
        seq = chart_sequential(palette$sequential), div = chart_diverging(palette$diverging))
+
+# The note for a chart whose groups outnumber the chosen qualitative palette's colours, so it is
+#   drawn with the default palette instead; NULL otherwise.
+palette_note <- function(s, cb, palette = chart_palette_default()) {
+  coloured = !is.null(s$color) && is.null(s$highlight) && !identical(s$family, "heatmap") && !isTRUE(s$.binned)
+  if (!coloured) return(NULL)
+  n = colour_count(s, cb, s$color)
+  q = palette$qualitative
+  used = palette_for_n(n, q)
+  if (identical(used, q)) return(NULL)
+  paste0("The palette ", CHART_PALETTES[[q]]$label, " has ", chart_palette_max(q), " colours and this chart needs ", n,
+         ", so it is drawn with ", CHART_PALETTES[[used]]$label, ".")
+}
 
 # How many colours a column needs, from the codebook (and top_n), so the plot and its code can be
 #   built without the data.
 colour_count <- function(s, cb, col) {
+  if (!is.null(s$.n_colours) && identical(col, s$color)) return(s$.n_colours)
   n = cb_entry(cb, col)$distinct
   if (!is.null(s$top_n) && identical(col, ranked_column(s))) min(n, top_of(s)) else n
 }
@@ -1194,7 +1212,7 @@ spec_plot <- function(spec, data, cb, palette = chart_palette_default()) {
   lint = spec_lint(s, cb, table, pal$max)
   env = spec_env(chart_table = table)
   p = eval(plus_call(plot_calls(lint$spec, cb, pal)), env)
-  attr(p, "notes") = lint$notes
+  attr(p, "notes") = c(palette_note(lint$spec, cb, palette), lint$notes)
   attr(p, "spec") = lint$spec
   attr(p, "table") = table
   attr(p, "widget_plot") = eval(plus_call(plot_calls(lint$spec, cb, pal, widget = TRUE)), env)

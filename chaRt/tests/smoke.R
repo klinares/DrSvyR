@@ -1207,8 +1207,9 @@ if (!is.null(pan_g)) {
   pal7 <- utils::modifyList(chart_palette_default(), list(qualitative = "tol_bright"))
   n_tol <- if ("tol_bright" %in% names(chart_palettes("qualitative"))) attr(spec_plot(slope8, pan_g$data, pan_g$cb, pal7), "notes")
   line8 <- lint_of(list(family = "line", x = "year", y = "revenue", color = "region", fn = "sum", title = "t"), pan_g)
-  check("4-A2: a slope of 8 regions has no colour note under Okabe-Ito (8 colours), has one under a 7-colour palette; a line of 8 still does",
-        !any(grepl("colours are hard", n_okabe)) && (is.null(n_tol) || any(grepl("8 colours are hard", n_tol))) &&
+  check("4-A2: a slope of 8 regions has no colour note under Okabe-Ito (8 colours); under a 7-colour palette it is drawn with Okabe-Ito and says so (Phase 6b); a line of 8 still has the note",
+        !any(grepl("colours are hard", n_okabe)) &&
+          (is.null(n_tol) || (any(grepl("has 7 colours and this chart needs 8, so it is drawn with Okabe-Ito", n_tol, fixed = TRUE)) && !any(grepl("colours are hard", n_tol)))) &&
           any(grepl("8 colours are hard", line8$notes)))
 }
 
@@ -2253,7 +2254,7 @@ check("6-C 28: the Explore UI renders with the chat (shinychat), the two always-
         regexpr("explore-write_headlines", c6_ui, fixed = TRUE) > regexpr("explore-suggest", c6_ui, fixed = TRUE) &&
         grepl(">Suggest charts<", c6_ui, fixed = TRUE) && grepl(">Write headlines<", c6_ui, fixed = TRUE) && grepl("id=\"explore-boxes\"", c6_ui, fixed = TRUE) &&
         grepl("id=\"explore-cards\"", c6_ui, fixed = TRUE) && grepl("bslib-sidebar-layout", c6_ui, fixed = TRUE) && grepl("38%", c6_ui, fixed = TRUE) &&
-        grepl("class=\"[^\"]*chart-call[^\"]*\" id=\"explore-suggest\"", c6_ui) && grepl("class=\"[^\"]*chart-call[^\"]*\" id=\"explore-write_headlines\"", c6_ui) &&
+        grepl("class=\"[^\"]*chart-call[^\"]*\"[^>]* id=\"explore-suggest\"", c6_ui) && grepl("class=\"[^\"]*chart-call[^\"]*\"[^>]* id=\"explore-write_headlines\"", c6_ui) &&
         grepl("addCustomMessageHandler('chart-busy'", c6_ui, fixed = TRUE) && grepl("disabled = !!on", c6_ui, fixed = TRUE) &&
         grepl("Start on the Data page", c6_ui, fixed = TRUE))
 check("6-C 29: the page is a navbar with the banner above it, the logo and title and the Source code link and dark-mode switch in the bar, and four pages: Start here, Data, Explore, Methodology",
@@ -2511,7 +2512,7 @@ check("6-D 12: Write headlines after such a re-read sends every chart (all are m
 
 check("6-D 13: Suggest charts and Write headlines keep their words and their chart-call class, and the style gives them the page's emphasis colour (black on light, white on dark) in place of the theme's primary, in both states",
       grepl(">Suggest charts<", c6_ui, fixed = TRUE) && grepl(">Write headlines<", c6_ui, fixed = TRUE) &&
-        grepl("class=\"[^\"]*chart-call[^\"]*\" id=\"explore-suggest\"", c6_ui) && grepl("class=\"[^\"]*chart-call[^\"]*\" id=\"explore-write_headlines\"", c6_ui) &&
+        grepl("class=\"[^\"]*chart-call[^\"]*\"[^>]* id=\"explore-suggest\"", c6_ui) && grepl("class=\"[^\"]*chart-call[^\"]*\"[^>]* id=\"explore-write_headlines\"", c6_ui) &&
         grepl("\\.chart-call \\{[^}]*--bs-btn-color: var\\(--bs-emphasis-color\\)[^}]*--bs-btn-border-color: var\\(--bs-emphasis-color\\)", EXPLORE_CSS) &&
         grepl("--bs-btn-disabled-color: var\\(--bs-body-color\\)[^}]*--bs-btn-disabled-opacity: \\.65", EXPLORE_CSS) &&
         !grepl("opacity: \\.5;", EXPLORE_CSS) && grepl("chart-call:disabled \\{ cursor: not-allowed; \\}", EXPLORE_CSS))
@@ -2573,6 +2574,139 @@ check("6-D 18: R/ui.R has one chat_append_message() call, inside say(), and ever
         all(purrr::map_lgl(c("chat_reply_text", "story_line", "suggestion_list"), function(h) grepl("md_text(", ui_def(h), fixed = TRUE))) &&
         grepl("htmlEscape(texts, attribute = TRUE)", ui_def("suggestion_list"), fixed = TRUE) && grepl("htmlEscape", ui_def("md_text"), fixed = TRUE) &&
         say_safe(quote(paste0("a ", md_text(x)))) && !say_safe(quote(res$error)) && !say_safe(quote(paste0("a ", cb$file))) && !say_safe(quote(some_value)))
+
+
+
+# ---- Phase 6b 1: palettes through paletteer, the colour-vision mark, the fallback, the warning --------------------------------
+
+p6_names <- names(CHART_PALETTES)
+p6_pal <- purrr::keep(p6_names, function(k) !is.null(CHART_PALETTES[[k]]$paletteer))
+p6_tab <- c(paste0(paletteer::palettes_d_names$package, "::", paletteer::palettes_d_names$palette),
+            paste0(paletteer::palettes_c_names$package, "::", paletteer::palettes_c_names$palette))
+check(paste0("6b-1: every listed palette (", length(p6_names), ", of which ", length(p6_pal), " through paletteer) has its name in the installed paletteer's tables and resolves to valid colours"),
+      all(purrr::map_chr(p6_pal, function(k) CHART_PALETTES[[k]]$paletteer) %in% p6_tab) && all(purrr::map_lgl(p6_names, palette_available)) &&
+        all(purrr::map_lgl(p6_names, function(k) all(grepl("^#[0-9A-F]{6}$", palette_swatch(k))) && length(palette_swatch(k)) >= 5L)))
+if (length(find.package("colorspace", quiet = TRUE))) {
+  p6_cvd <- purrr::map_dbl(p6_names, palette_cvd)
+  p6_off <- p6_names[abs(p6_cvd - CHART_PALETTE_CVD[p6_names]) > 0.05 | is.na(CHART_PALETTE_CVD[p6_names])]
+  cat("  Colour-vision check (worst of deutan, protan, tritan; CIE2000; n = ", CHART_CVD_N, "; mark ", CHART_CVD_MARK, "):\n", sep = "")
+  purrr::walk(c("qualitative", "sequential", "diverging"), function(kind) {
+    ks = purrr::keep(p6_names, function(k) identical(CHART_PALETTES[[k]]$kind, kind))
+    cat("    ", kind, ": ", paste0(ks, " ", CHART_PALETTE_CVD[ks], ifelse(CHART_PALETTE_CVD[ks] >= CHART_CVD_MARK, "", " (below)"), collapse = ", "), "\n", sep = "")
+  })
+  check(paste0("6b-1: the stored colour-vision result of every palette matches palette_cvd() recomputed now", if (length(p6_off)) paste0(" (differs: ", paste(p6_off, collapse = ", "), ")")),
+        !length(p6_off) && setequal(names(CHART_PALETTE_CVD), p6_names))
+} else cat("skip  6b-1: colorspace is not installed, so the stored colour-vision results are not recomputed\n")
+p6_groups <- purrr::map(c(qualitative = "qualitative", sequential = "sequential", diverging = "diverging"), chart_palette_groups)
+p6_ids <- unname(unlist(purrr::map(p6_groups, function(g) purrr::map(g, unname))))
+p6_labels <- unname(unlist(purrr::map(p6_groups, function(g) purrr::map(g, names))))
+p6_ticked <- p6_ids[endsWith(p6_labels, CHART_CVD_TICK)]
+check("6b-1: the selects group the palettes by source, the default first, and the mark sits beside exactly the palettes that pass",
+      setequal(p6_ticked, purrr::keep(p6_names, palette_passes)) && !"ylgnbu" %in% p6_ticked && "okabe_ito" %in% p6_ticked &&
+        identical(unname(p6_groups$qualitative[[1]][1]), "okabe_ito") && "MetBrewer" %in% names(p6_groups$qualitative) &&
+        setequal(unname(unlist(p6_groups$qualitative)), names(chart_palettes("qualitative"))) &&
+        setequal(unname(unlist(p6_groups$sequential)), names(chart_palettes("sequential"))))
+if (!is.null(pan_g)) {
+  p6_line <- list(family = "line", x = "year", y = "revenue", color = "region", fn = "sum", title = "t")
+  p6_small <- utils::modifyList(chart_palette_default(), list(qualitative = "pnwc_moth"))
+  p6_plot <- spec_plot(p6_line, pan_g$data, pan_g$cb, p6_small)
+  p6_cols <- unique(ggplot2::ggplot_build(p6_plot)$data[[1]]$colour)
+  p6_code <- spec_code(attr(p6_plot, "spec"), pan_g$cb, pan_g$path, p6_small)
+  p6_ok_plot <- spec_plot(utils::modifyList(p6_line, list(filter = list(list(column = "region", op = "in", value = list("North", "South", "East"))))),
+                          pan_g$data, pan_g$cb, p6_small)
+  check("6b-1: a qualitative palette with fewer colours than a chart needs is not stretched: the chart (8 regions, Moth has 5) is drawn and coded with Okabe-Ito and its notes say so",
+        all(p6_cols %in% chart_palette(8, "okabe_ito")) && length(p6_cols) == 8L &&
+          any(grepl("The palette Moth has 5 colours and this chart needs 8, so it is drawn with Okabe-Ito.", attr(p6_plot, "notes"), fixed = TRUE)) &&
+          grepl(chart_palette(8, "okabe_ito")[8], p6_code, fixed = TRUE) && !any(grepl("The palette Moth", attr(p6_ok_plot, "notes"), fixed = TRUE)))
+}
+p6_sw <- paste(as.character(palette_swatch_script(c("okabe_ito", "metb_veronese", "viridis"))), collapse = "")
+p6_src <- paste(readLines(file.path("R", "ui.R"), encoding = "UTF-8"), collapse = "
+")
+check("6b-1: each Style select is a selectize input whose options show a strip of the palette's colours before its name (render option); the strip's colours are the palette's, and the name goes through escape()",
+      grepl("selectizeInput(ns(paste0(\"pal_\", kind)), label, choices = chart_palette_groups(kind)", p6_src, fixed = TRUE) &&
+        grepl("options = list(render = I(PALETTE_SWATCH_RENDER))", p6_src, fixed = TRUE) &&
+        grepl("option: function(item, escape) { return window.chartSwatchRow(item, escape); }", PALETTE_SWATCH_RENDER, fixed = TRUE) &&
+        grepl("item: function(item, escape) { return window.chartSwatchRow(item, escape); }", PALETTE_SWATCH_RENDER, fixed = TRUE) &&
+        all(purrr::map_lgl(palette_swatch("metb_veronese"), function(h) grepl(h, p6_sw, fixed = TRUE))) &&
+        grepl("\"okabe_ito\":[\"#E69F00\"", p6_sw, fixed = TRUE) && grepl("escape(item.label)", p6_sw, fixed = TRUE) &&
+        grepl("<span class=\"chart-swatches\" aria-hidden=\"true\">", p6_sw, fixed = TRUE))
+p6_si <- stand_by(d6_reply)
+p6_out <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = d6_state(), ask = p6_si$ask), {
+  session$flushReact()
+  w <- function() paste(as.character(output$style_warning$html), collapse = "")
+  session$setInputs(style = 1)
+  p6_out$default_quiet <- !nzchar(w())
+  session$setInputs(pal_sequential = "ylgnbu")
+  p6_out$warned <- grepl(PALETTE_CVD_WARNING, w(), fixed = TRUE)
+  session$setInputs(pal_sequential = "viridis", pal_qualitative = "metb_veronese")
+  p6_out$passing_quiet <- !nzchar(w()) && identical(palette()$qualitative, "metb_veronese") && length(p6_si$sent) == 0L
+})
+check("6b-1: choosing a palette that fails the colour-vision check shows the one line under Style; the defaults and a passing palette show none; no model call",
+      isTRUE(p6_out$default_quiet) && isTRUE(p6_out$warned) && isTRUE(p6_out$passing_quiet))
+assign("paletteer_installed", function() FALSE, envir = globalenv())
+p6_groups_without <- purrr::map(c("qualitative", "sequential", "diverging"), chart_palette_groups)
+p6_drawn_without <- if (!is.null(pan_g)) inherits(tryCatch(spec_plot(p6_line, pan_g$data, pan_g$cb), error = function(e) e), "ggplot") else TRUE
+p6_ui_without <- tryCatch(nchar(as.character(app_ui("UNCLASSIFIED", "x.png", "", "https://example.org"))) > 0L, error = function(e) FALSE)
+assign("paletteer_installed", real_paletteer_installed, envir = globalenv())
+check("6b-1: without paletteer the selects offer only the built-in palettes, a chart still draws and the page still builds",
+      setequal(unname(unlist(p6_groups_without)), names(purrr::keep(CHART_PALETTES, function(e) !is.null(e$colours)))) &&
+        isTRUE(p6_drawn_without) && isTRUE(p6_ui_without))
+
+
+
+# ---- Phase 6b 2: the working line ---------------------------------------------------------------------------------------------
+
+w6_page <- paste(as.character(app_ui("UNCLASSIFIED", "x.png", "", "https://example.org")), collapse = "")
+w6_explore <- paste(as.character(mod_explore_ui("explore")), collapse = "")
+w6_line <- regmatches(w6_explore, regexpr("<div class=\"chart-working\"[^>]*>", w6_explore))
+check("6b-2: the working line is in the page under the chat's input: hidden, role=\"status\", aria-live polite, three dots hidden from screen readers, and words",
+      length(w6_line) == 1L && grepl("role=\"status\"", w6_line) && grepl("aria-live=\"polite\"", w6_line) && grepl("hidden", w6_line) &&
+        lengths(gregexpr("chart-working-dot\" aria-hidden=\"true\"", w6_explore, fixed = TRUE)) == 3L &&
+        grepl("chart-working-words\">Thinking<", w6_explore, fixed = TRUE) &&
+        regexpr("chart-working", w6_explore) > regexpr("Write headlines", w6_explore))
+check("6b-2: the script shows the line from the browser on a chat send, a suggestion or a call button, adds 'still working' after 8 seconds, and hides it on chart-busy and when Shiny is idle or disconnected; the dots stop for reduced motion",
+      grepl("work(wordsFor(e.value))", EXPLORE_JS, fixed = TRUE) && grepl("work(words)", EXPLORE_JS, fixed = TRUE) &&
+        grepl("b.getAttribute('data-working')", EXPLORE_JS, fixed = TRUE) && grepl(paste0("}, ", WORKING_LATER_MS, ");"), EXPLORE_JS, fixed = TRUE) &&
+        WORKING_LATER_MS == 8000L && grepl("if (!on) done();", EXPLORE_JS, fixed = TRUE) &&
+        grepl("on('shiny:idle shiny:disconnected', function () { done(); })", EXPLORE_JS, fixed = TRUE) &&
+        grepl("@media (prefers-reduced-motion: reduce) { .chart-working-dot { animation: none;", EXPLORE_CSS, fixed = TRUE) &&
+        grepl(WORKING_LATER, EXPLORE_JS, fixed = TRUE))
+w6_btn <- function(html, id) regmatches(html, regexpr(paste0("<button[^>]*id=\"", id, "\"[^>]*>"), html))
+check("6b-2: Suggest charts, Write headlines and a card's Headline carry their words (Thinking, Writing headlines, Writing a headline)",
+      grepl("data-working=\"Thinking\"", w6_btn(w6_explore, "explore-suggest"), fixed = TRUE) &&
+        grepl("data-working=\"Writing headlines\"", w6_btn(w6_explore, "explore-write_headlines"), fixed = TRUE) &&
+        grepl("btn(\"headline\", \"Headline\", \"btn-outline-primary chart-call\", `data-working` = WORKING_WORDS[[\"headline\"]])",
+              paste(readLines(file.path("R", "ui.R"), encoding = "UTF-8"), collapse = "\n"), fixed = TRUE))
+if (length(find.package("V8", quiet = TRUE))) {
+  w6_fn <- regmatches(EXPLORE_JS, regexpr("(?s)var WORDS = .*?;\\n", EXPLORE_JS, perl = TRUE))
+  w6_words <- regmatches(EXPLORE_JS, regexpr("(?s)function wordsFor\\(text\\) \\{.*?\\n  \\}\\n", EXPLORE_JS, perl = TRUE))
+  w6_ctx <- V8::v8()
+  w6_ctx$eval(paste(w6_fn, w6_words))
+  w6_say <- function(x) w6_ctx$call("wordsFor", x)
+  check("6b-2: the script's own wordsFor(), run in V8: a question and a suggestion give 'Thinking', 'Label the columns' gives 'Labelling columns', a Treat or row button 'Working'",
+        identical(w6_say("how has revenue changed?"), "Thinking") && identical(w6_say("Label the columns"), "Labelling columns") &&
+          identical(w6_say("Treat 'N/A' as missing"), "Working") && identical(w6_say("A row is one order"), "Working") &&
+          identical(w6_say("why does it say Label the columns"), "Thinking") && identical(w6_say(SUGGEST_MESSAGE), "Thinking"))
+} else cat("skip  6b-2: V8 is not installed, so the script's wordsFor() is not run\n")
+w6_si <- stand_by(d6_reply)
+w6_out <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = d6_state(), ask = w6_si$ask), {
+  session$flushReact()
+  log0 <- length(made$log)
+  session$setInputs(chat_user_input = "q hist")
+  added <- made$log[(log0 + 1L):length(made$log)]
+  w6_out$quiet <- !any(purrr::map_lgl(added, function(m) any(purrr::map_lgl(WORKING_WORDS, function(w) identical(trimws(m$content), w))))) &&
+    identical(last()$message, "q hist") && identical(made$busy_log[(length(made$busy_log) - 1L):length(made$busy_log)], c(TRUE, FALSE)) && !busy()
+})
+check("6b-2: the working line adds nothing to the chat's messages: after a turn the chat holds the reply only, LAST EXCHANGE is the question and its reply, and busy was set and cleared",
+      isTRUE(w6_out$quiet) && !any(grepl("WORKING_WORDS", deparse(body(mod_explore_server)), fixed = TRUE) &
+                                     grepl("say(", deparse(body(mod_explore_server)), fixed = TRUE)))
+check("6b-2: shiny's page-level pulse is on as a second signal (useBusyIndicators(spinners = FALSE, pulse = TRUE, fade = FALSE)); no spinner on the cards",
+      grepl("shiny::useBusyIndicators(spinners = FALSE, pulse = TRUE, fade = FALSE)", paste(readLines(file.path("R", "ui.R"), encoding = "UTF-8"), collapse = "
+"), fixed = TRUE) &&
+        grepl("document.documentElement.dataset.shinyBusyPulse = 'true'", w6_page, fixed = TRUE) &&
+        grepl("delete document.documentElement.dataset.shinyBusySpinners", w6_page, fixed = TRUE))
 
 
 # ---- the count -------------------------------------------------------------------

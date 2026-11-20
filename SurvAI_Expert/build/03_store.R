@@ -74,11 +74,11 @@ build <- function(con) {
   P = read_cat("passages.csv") |> filter(doc_id %in% docs$id) |>
     mutate(across(c(page_from, page_to, line_from, line_to, chars), as.integer), pages = pages_label(page_from, page_to))
   P$text = pmap_chr(list(P$doc_id, P$line_from, P$line_to), function(d, a, b) slice_text(lines[[d]], a, b, drop[[d]]))
-  # duplicates: one row per text, a public source's passage kept before a private one's
-  P = P |> arrange(source %in% PRIVATE_SOURCES, passage_id) |> mutate(dup = duplicated(text) & nzchar(text))
-  kept = P |> filter(!dup) |> select(-dup)
-  aliases = P |> filter(dup) |> select(alias_id = passage_id, alias_doc_id = doc_id, text) |>
-    left_join(kept |> select(passage_id, text), by = "text") |> select(alias_id, passage_id, alias_doc_id) |> arrange(alias_id)
+  # duplicates: one row per text (spacing ignored, case kept: R is case-sensitive), a public source's passage kept before a private one's
+  P = P |> arrange(source %in% PRIVATE_SOURCES, passage_id) |> mutate(key = str_squish(text), dup = duplicated(key) & nzchar(key))
+  kept = P |> filter(!dup) |> select(-dup, -key)
+  aliases = P |> filter(dup) |> select(alias_id = passage_id, alias_doc_id = doc_id, key) |>
+    left_join(P |> filter(!dup) |> select(passage_id, key), by = "key") |> select(alias_id, passage_id, alias_doc_id) |> arrange(alias_id)
   kept = kept |> arrange(passage_id)
 
   Fm = read_cat("formulas.csv") |> filter(doc_id %in% docs$id) |>
@@ -86,6 +86,15 @@ build <- function(con) {
   K = read_cat("code.csv") |> filter(doc_id %in% docs$id) |>
     mutate(across(c(line_from, line_to, page), as.integer), across(c(is_output, parses), as.logical)) |> arrange(code_id)
   K$code = pmap_chr(list(K$doc_id, K$line_from, K$line_to), function(d, a, b) code_text(lines[[d]], a, b))
+  # duplicates: one row per code text, a public source's block kept before a private one's. Output blocks
+  #   (is_output) stay as they are: short outputs repeat by chance and the code index never looks at them.
+  #   Kall keeps every block for the passage-level function terms below.
+  Kall = K
+  K = K |> arrange(source %in% PRIVATE_SOURCES, code_id) |>
+    mutate(key = if_else(is_output, NA_character_, code), dup = !is.na(key) & nzchar(key) & duplicated(key))
+  code_aliases = K |> filter(dup) |> select(alias_id = code_id, alias_doc_id = doc_id, key) |>
+    left_join(K |> filter(!dup) |> select(code_id, key), by = "key") |> select(alias_id, code_id, alias_doc_id) |> arrange(alias_id)
+  K = K |> filter(!dup) |> select(-dup, -key) |> arrange(code_id)
   # labels and functions of an alias's passage count for the passage it duplicates
   canon = function(pid) coalesce(aliases$passage_id[match(pid, aliases$alias_id)], pid)
 
@@ -99,7 +108,7 @@ build <- function(con) {
 
   # keyword index: passages by field (weights applied in SQL, so tests can retune them), formula groups, code
   fname = Fm |> mutate(pid = canon(passage_id)) |> group_by(pid) |> summarise(x = paste(unique(name), collapse = " "))
-  fnk = K |> mutate(pid = canon(passage_id)) |> group_by(pid) |> summarise(x = str_replace_all(paste(functions, collapse = " "), ";", " "))
+  fnk = Kall |> mutate(pid = canon(passage_id)) |> group_by(pid) |> summarise(x = str_replace_all(paste(functions, collapse = " "), ";", " "))
   tf = list(field_terms(kept$passage_id, kept$heading_path, "heading"), field_terms(kept$passage_id, kept$description, "description"),
             field_terms(kept$passage_id, str_replace_all(paste(kept$topic, kept$topic_free), ";", " "), "topic"),
             field_terms(fname$pid, fname$x, "formula"), field_terms(fnk$pid, fnk$x, "fn"),
@@ -114,7 +123,7 @@ build <- function(con) {
                      field_terms(Kc$code_id, str_replace_all(Kc$packages, ";", " "), "packages"), field_terms(Kc$code_id, Kc$code, "code")) |>
     weighted_terms(CODE_WEIGHTS, "code_id")
 
-  out = list(docs = docs, passages = kept |> mutate(text_hash = NA_character_), passage_aliases = aliases, passage_tags = tags,
+  out = list(docs = docs, passages = kept |> mutate(text_hash = NA_character_), passage_aliases = aliases, code_aliases = code_aliases, passage_tags = tags,
              formulas = Fm, formula_symbols = sym, code = K, code_functions = fns, term_fields = tf,
              formula_terms = fterms, code_terms = cterms, vocabulary = read_cat("vocabulary.csv"), furniture = fur)
   iwalk(out, function(x, nm) dbWriteTable(con, nm, as.data.frame(x), overwrite = TRUE))
@@ -127,7 +136,7 @@ build <- function(con) {
 # ---- receipt ------------------------------------------------------------------------------------------------
 
 SOURCE_OF <- c(docs = "source", passages = "source", formulas = "source", code = "source", furniture = "source",
-               passage_aliases = "split_part(alias_id, '/', 1)", passage_tags = "split_part(passage_id, '/', 1)",
+               passage_aliases = "split_part(alias_id, '/', 1)", code_aliases = "split_part(alias_id, '/', 1)", passage_tags = "split_part(passage_id, '/', 1)",
                formula_symbols = "split_part(formula_id, '/', 1)", code_functions = "split_part(code_id, '/', 1)",
                term_fields = "split_part(passage_id, '/', 1)", terms = "split_part(passage_id, '/', 1)",
                passage_len = "split_part(passage_id, '/', 1)", code_terms = "split_part(code_id, '/', 1)",
@@ -161,7 +170,7 @@ main <- function() {
   dbExecute(con, "CHECKPOINT")
   compare_receipt(r)
   write_csv(r, RECEIPT_CSV, eol = "\n")
-  counts = r |> filter(tbl %in% c("docs", "passages", "passage_aliases", "formulas", "code", "terms")) |>
+  counts = r |> filter(tbl %in% c("docs", "passages", "passage_aliases", "formulas", "code", "code_aliases", "terms")) |>
     select(tbl, source, rows) |> pivot_wider(names_from = tbl, values_from = rows, values_fill = 0L)
   print(as.data.frame(counts))
   message(sprintf("Built in %.1f s; %s is %.1f MB.", as.numeric(difftime(Sys.time(), t0, units = "secs")), STORE, file.size(STORE) / 2^20))

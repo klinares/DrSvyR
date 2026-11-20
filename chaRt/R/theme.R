@@ -22,34 +22,104 @@ CHART_SEQUENTIAL <- c("#440154", "#443A83", "#31688E", "#21908C", "#35B779", "#8
 #   diverging palette has a centre colour).
 CHART_CONTINUOUS_N <- c(sequential = 7L, diverging = 11L)
 
-# The palettes an analyst may choose from: a short list of palettes made or flagged for colour-
-#   vision deficiency (tests/smoke.R prints how far apart their colours stay under simulated
-#   deficiency). Each entry has a label, a kind (qualitative, sequential or diverging), and either
-#   `colours` (hex, needing nothing: an office palette goes here) or `paletteer` (the name as
-#   paletteer takes it); a qualitative one also `max`, how many groups it can show. All the
-#   paletteer names below are in the installed paletteer's tables (1.7.0). Okabe-Ito is the
-#   grDevices::palette.colors() set with grey left out (a highlight's background) and yellow last
-#   (hard to see on white, used only with eight groups). Blue-red is grDevices::hcl.colors(11,
-#   "Blue-Red 2"), the fallback diverging palette when paletteer is not installed.
+# The palettes an analyst may choose from. Each entry has a label, a source (the select groups by
+#   it), a kind (qualitative, sequential or diverging), and either `colours` (hex, needing nothing:
+#   an office palette goes here) or `paletteer` (the name as paletteer takes it); a qualitative one
+#   also `max`, how many groups it can show. Every paletteer name below is in the installed
+#   paletteer's tables (1.7.0); paletteer holds a discrete palette's colours itself, so the source
+#   package need not be installed, while a continuous one (viridis, ggthemes' continuous sets) needs
+#   its package. Okabe-Ito is the grDevices::palette.colors() set with grey left out (a highlight's
+#   background) and yellow last (hard to see on white, used only with eight groups). Blue-red is
+#   grDevices::hcl.colors(11, "Blue-Red 2"), the fallback diverging palette without paletteer. The
+#   Phase 6b additions pass the colour-vision check (CHART_CVD_MARK) and, for a qualitative palette,
+#   serve at least five groups under it.
 CHART_PALETTES <- list(
-  okabe_ito = list(label = "Okabe-Ito", kind = "qualitative", max = 8L,
+  okabe_ito = list(label = "Okabe-Ito", source = "Built in", kind = "qualitative", max = 8L,
                    colours = c("#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7", "#000000", "#F0E442")),
-  tol_bright = list(label = "Paul Tol bright", kind = "qualitative", max = 7L, paletteer = "khroma::bright"),
-  tol_muted = list(label = "Paul Tol muted", kind = "qualitative", max = 9L, paletteer = "khroma::muted"),
-  tol_vibrant = list(label = "Paul Tol vibrant", kind = "qualitative", max = 7L, paletteer = "khroma::vibrant"),
-  viridis = list(label = "Viridis", kind = "sequential", colours = CHART_SEQUENTIAL),
-  magma = list(label = "Magma", kind = "sequential", paletteer = "viridis::magma"),
-  cividis = list(label = "Cividis", kind = "sequential", paletteer = "viridis::cividis"),
-  mako = list(label = "Mako", kind = "sequential", paletteer = "viridis::mako"),
-  blues = list(label = "ColorBrewer Blues", kind = "sequential", paletteer = "RColorBrewer::Blues"),
-  ylgnbu = list(label = "ColorBrewer YlGnBu", kind = "sequential", paletteer = "RColorBrewer::YlGnBu"),
-  rdbu = list(label = "ColorBrewer RdBu", kind = "diverging", paletteer = "RColorBrewer::RdBu"),
-  puor = list(label = "ColorBrewer PuOr", kind = "diverging", paletteer = "RColorBrewer::PuOr"),
-  brbg = list(label = "ColorBrewer BrBG", kind = "diverging", paletteer = "RColorBrewer::BrBG"),
-  sunset = list(label = "Paul Tol sunset", kind = "diverging", paletteer = "khroma::sunset"),
-  blue_red = list(label = "Blue-red (built in)", kind = "diverging",
+  tol_bright = list(label = "Paul Tol bright", source = "khroma (Paul Tol, Crameri)", kind = "qualitative", max = 7L, paletteer = "khroma::bright"),
+  tol_muted = list(label = "Paul Tol muted", source = "khroma (Paul Tol, Crameri)", kind = "qualitative", max = 9L, paletteer = "khroma::muted"),
+  tol_vibrant = list(label = "Paul Tol vibrant", source = "khroma (Paul Tol, Crameri)", kind = "qualitative", max = 7L, paletteer = "khroma::vibrant"),
+  khro_mediumcontrast = list(label = "Paul Tol medium contrast", source = "khroma (Paul Tol, Crameri)", kind = "qualitative", max = 6L, paletteer = "khroma::mediumcontrast"),
+  ggth_classic_color_blind = list(label = "Tableau Classic Color Blind", source = "ggthemes", kind = "qualitative", max = 10L, paletteer = "ggthemes::Classic_Color_Blind"),
+  ggth_stata_economist = list(label = "Stata Economist", source = "ggthemes", kind = "qualitative", max = 15L, paletteer = "ggthemes::stata_economist"),
+  ggth_excel_office_theme = list(label = "Excel Office Theme", source = "ggthemes", kind = "qualitative", max = 6L, paletteer = "ggthemes::excel_Office_Theme"),
+  metb_archambault = list(label = "Archambault", source = "MetBrewer", kind = "qualitative", max = 7L, paletteer = "MetBrewer::Archambault"),
+  metb_veronese = list(label = "Veronese", source = "MetBrewer", kind = "qualitative", max = 7L, paletteer = "MetBrewer::Veronese"),
+  metb_johnson = list(label = "Johnson", source = "MetBrewer", kind = "qualitative", max = 5L, paletteer = "MetBrewer::Johnson"),
+  natp_kingscanyon = list(label = "Kings Canyon", source = "NatParksPalettes", kind = "qualitative", max = 6L, paletteer = "NatParksPalettes::KingsCanyon"),
+  natp_deathvalley = list(label = "Death Valley", source = "NatParksPalettes", kind = "qualitative", max = 7L, paletteer = "NatParksPalettes::DeathValley"),
+  natp_torres = list(label = "Torres", source = "NatParksPalettes", kind = "qualitative", max = 10L, paletteer = "NatParksPalettes::Torres"),
+  nord_algoma_forest = list(label = "Algoma Forest", source = "nord", kind = "qualitative", max = 7L, paletteer = "nord::algoma_forest"),
+  nord_moose_pond = list(label = "Moose Pond", source = "nord", kind = "qualitative", max = 8L, paletteer = "nord::moose_pond"),
+  pnwc_moth = list(label = "Moth", source = "PNWColors", kind = "qualitative", max = 5L, paletteer = "PNWColors::Moth"),
+  pnwc_bay = list(label = "Bay", source = "PNWColors", kind = "qualitative", max = 5L, paletteer = "PNWColors::Bay"),
+  rcar_safe = list(label = "Safe", source = "CARTOColors", kind = "qualitative", max = 12L, paletteer = "rcartocolor::Safe"),
+  wesa_darjeeling2 = list(label = "Darjeeling 2", source = "wesanderson", kind = "qualitative", max = 5L, paletteer = "wesanderson::Darjeeling2"),
+  wesa_isleofdogs1 = list(label = "Isle of Dogs 1", source = "wesanderson", kind = "qualitative", max = 6L, paletteer = "wesanderson::IsleofDogs1"),
+  wesa_isleofdogs2 = list(label = "Isle of Dogs 2", source = "wesanderson", kind = "qualitative", max = 5L, paletteer = "wesanderson::IsleofDogs2"),
+  viridis = list(label = "Viridis", source = "viridis", kind = "sequential", colours = CHART_SEQUENTIAL),
+  magma = list(label = "Magma", source = "viridis", kind = "sequential", paletteer = "viridis::magma"),
+  cividis = list(label = "Cividis", source = "viridis", kind = "sequential", paletteer = "viridis::cividis"),
+  mako = list(label = "Mako", source = "viridis", kind = "sequential", paletteer = "viridis::mako"),
+  blues = list(label = "ColorBrewer Blues", source = "ColorBrewer", kind = "sequential", paletteer = "RColorBrewer::Blues"),
+  ylgnbu = list(label = "ColorBrewer YlGnBu", source = "ColorBrewer", kind = "sequential", paletteer = "RColorBrewer::YlGnBu"),
+  khro_smoothrainbow = list(label = "Paul Tol smooth rainbow", source = "khroma (Paul Tol, Crameri)", kind = "sequential", paletteer = "khroma::smoothrainbow"),
+  khro_oslo = list(label = "Crameri Oslo", source = "khroma (Paul Tol, Crameri)", kind = "sequential", paletteer = "khroma::oslo"),
+  khro_grayc = list(label = "Crameri grayC", source = "khroma (Paul Tol, Crameri)", kind = "sequential", paletteer = "khroma::grayC"),
+  ggth_classic_blue = list(label = "Tableau Classic Blue", source = "ggthemes", kind = "sequential", paletteer = "ggthemes::Classic Blue"),
+  ggth_gray_warm = list(label = "Tableau Gray Warm", source = "ggthemes", kind = "sequential", paletteer = "ggthemes::Gray Warm"),
+  ggth_classic_gray = list(label = "Tableau Classic Gray", source = "ggthemes", kind = "sequential", paletteer = "ggthemes::Classic Gray"),
+  nord_halifax_harbor = list(label = "Halifax Harbor", source = "nord", kind = "sequential", paletteer = "nord::halifax_harbor"),
+  pnwc_lake = list(label = "Lake", source = "PNWColors", kind = "sequential", paletteer = "PNWColors::Lake"),
+  pnwc_mushroom = list(label = "Mushroom", source = "PNWColors", kind = "sequential", paletteer = "PNWColors::Mushroom"),
+  pnwc_winter = list(label = "Winter", source = "PNWColors", kind = "sequential", paletteer = "PNWColors::Winter"),
+  rcar_darkmint = list(label = "DarkMint", source = "CARTOColors", kind = "sequential", paletteer = "rcartocolor::DarkMint"),
+  rcar_brwnyl = list(label = "BrwnYl", source = "CARTOColors", kind = "sequential", paletteer = "rcartocolor::BrwnYl"),
+  rcar_bluyl = list(label = "BluYl", source = "CARTOColors", kind = "sequential", paletteer = "rcartocolor::BluYl"),
+  rdbu = list(label = "ColorBrewer RdBu", source = "ColorBrewer", kind = "diverging", paletteer = "RColorBrewer::RdBu"),
+  puor = list(label = "ColorBrewer PuOr", source = "ColorBrewer", kind = "diverging", paletteer = "RColorBrewer::PuOr"),
+  brbg = list(label = "ColorBrewer BrBG", source = "ColorBrewer", kind = "diverging", paletteer = "RColorBrewer::BrBG"),
+  sunset = list(label = "Paul Tol sunset", source = "khroma (Paul Tol, Crameri)", kind = "diverging", paletteer = "khroma::sunset"),
+  khro_vanimo = list(label = "Crameri Vanimo", source = "khroma (Paul Tol, Crameri)", kind = "diverging", paletteer = "khroma::vanimo"),
+  khro_vik = list(label = "Crameri Vik", source = "khroma (Paul Tol, Crameri)", kind = "diverging", paletteer = "khroma::vik"),
+  khro_bam = list(label = "Crameri Bam", source = "khroma (Paul Tol, Crameri)", kind = "diverging", paletteer = "khroma::bam"),
+  ggth_red_blue_white = list(label = "Tableau Red-Blue-White", source = "ggthemes", kind = "diverging", paletteer = "ggthemes::Red-Blue-White Diverging"),
+  ggth_orange_blue_white = list(label = "Tableau Orange-Blue-White", source = "ggthemes", kind = "diverging", paletteer = "ggthemes::Orange-Blue-White Diverging"),
+  ggth_classic_orange_white_blue = list(label = "Tableau Classic Orange-White-Blue", source = "ggthemes", kind = "diverging", paletteer = "ggthemes::Classic Orange-White-Blue"),
+  nord_silver_mine = list(label = "Silver Mine", source = "nord", kind = "diverging", paletteer = "nord::silver_mine"),
+  pnwc_shuksan2 = list(label = "Shuksan 2", source = "PNWColors", kind = "diverging", paletteer = "PNWColors::Shuksan2"),
+  pnwc_anemone = list(label = "Anemone", source = "PNWColors", kind = "diverging", paletteer = "PNWColors::Anemone"),
+  rcar_earth = list(label = "Earth", source = "CARTOColors", kind = "diverging", paletteer = "rcartocolor::Earth"),
+  rcar_armyrose = list(label = "ArmyRose", source = "CARTOColors", kind = "diverging", paletteer = "rcartocolor::ArmyRose"),
+  rcar_geyser = list(label = "Geyser", source = "CARTOColors", kind = "diverging", paletteer = "rcartocolor::Geyser"),
+  blue_red = list(label = "Blue-red", source = "Built in", kind = "diverging",
                   colours = c("#4A6FE3", "#7086E1", "#8F9DE1", "#ABB4E2", "#C7CBE3", "#E2E2E2", "#E6C4C9", "#E5A5B1",
                               "#E28699", "#DB6581", "#D33F6A")))
+
+# The colour-vision check (Phase 6b): the smallest CIE2000 difference between any two of a palette's
+#   first CHART_CVD_N colours (a sequential or diverging palette: CHART_CVD_N colours spread along
+#   it, as charts draw it) after simulating deuteranopia, protanopia and tritanopia, the worst of
+#   the three. A palette passes at CHART_CVD_MARK or more: the mark Kevin approved on 2026-11-20, the
+#   highest round number that the four palettes chosen first for colour-vision deficiency pass.
+CHART_CVD_N <- 5L
+CHART_CVD_MARK <- 8
+
+# The check's result for each palette, written out so the app needs neither colorspace nor
+#   paletteer to show the marks; tests/smoke.R recomputes every one with palette_cvd().
+CHART_PALETTE_CVD <- c(okabe_ito = 12.1, tol_bright = 8.7, tol_muted = 17.7, tol_vibrant = 8.6,
+  khro_mediumcontrast = 12.1, ggth_classic_color_blind = 16.9, ggth_stata_economist = 13.7,
+  ggth_excel_office_theme = 12.2, metb_archambault = 15.7, metb_veronese = 15.6,
+  metb_johnson = 14.6, natp_kingscanyon = 21.7, natp_deathvalley = 15.8, natp_torres = 15.3,
+  nord_algoma_forest = 9.4, nord_moose_pond = 8.6, pnwc_moth = 13.2, pnwc_bay = 11.6,
+  rcar_safe = 17.7, wesa_darjeeling2 = 13.9, wesa_isleofdogs1 = 12.2, wesa_isleofdogs2 = 8.4,
+  viridis = 13.4, magma = 14.2, cividis = 13.0, mako = 13.9, blues = 9.9, ylgnbu = 7.0,
+  khro_smoothrainbow = 17.0, khro_oslo = 19.4, khro_grayc = 18.4, ggth_classic_blue = 11.1,
+  ggth_gray_warm = 11.0, ggth_classic_gray = 10.5, nord_halifax_harbor = 8.3, pnwc_lake = 13.5,
+  pnwc_mushroom = 12.6, pnwc_winter = 11.9, rcar_darkmint = 12.9, rcar_brwnyl = 12.0,
+  rcar_bluyl = 11.2, rdbu = 22.9, puor = 24.7, brbg = 13.7, sunset = 18.7, khro_vanimo = 27.9,
+  khro_vik = 28.2, khro_bam = 24.1, ggth_red_blue_white = 25.2, ggth_orange_blue_white = 25.1,
+  ggth_classic_orange_white_blue = 23.5, nord_silver_mine = 8.5, pnwc_shuksan2 = 15.0,
+  pnwc_anemone = 8.3, rcar_earth = 15.2, rcar_armyrose = 12.5, rcar_geyser = 11.4, blue_red = 13.9)
 
 # Whether paletteer is installed (find.package(), since R/ loads no namespace at start-up). One
 #   function, so a test can stand in for a machine without it.
@@ -67,7 +137,11 @@ palette_colours <- function(name, n = NULL) {
   discrete = e$paletteer %in% paste0(d$package, "::", d$palette)
   cols = if (discrete) paletteer::paletteer_d(e$paletteer)
          else paletteer::paletteer_c(e$paletteer, n %||% CHART_CONTINUOUS_N[[e$kind]])
-  toupper(substr(as.character(cols), 1, 7))
+  cols = toupper(substr(as.character(cols), 1, 7))
+  # A long discrete scale (Crameri's have 256 colours) drawn as a continuous one keeps n of them,
+  #   evenly spaced, so the written code stays short.
+  if (!identical(e$kind, "qualitative") && !is.null(n) && length(cols) > n) cols = cols[unique(round(seq(1, length(cols), length.out = n)))]
+  cols
 }
 
 palette_available <- function(name) isTRUE(tryCatch(length(palette_colours(name)) > 0L, error = function(e) FALSE))
@@ -85,6 +159,54 @@ chart_palettes <- function(kind) {
   ordered = c(intersect(first, on_offer), setdiff(on_offer, first))
   stats::setNames(vapply(ordered, function(k) CHART_PALETTES[[k]]$label, character(1)), ordered)
 }
+
+# The palettes on offer for a kind, grouped by source for a select: list(source = c(label = name)),
+#   the default's group first and the default first in it. A palette that passes the colour-vision
+#   check carries the mark CHART_CVD_TICK after its label.
+CHART_CVD_TICK <- " \u2713"
+palette_passes <- function(name) isTRUE(CHART_PALETTE_CVD[name] >= CHART_CVD_MARK)
+chart_palette_groups <- function(kind) {
+  on_offer = names(chart_palettes(kind))
+  label = function(k) paste0(CHART_PALETTES[[k]]$label, if (palette_passes(k)) CHART_CVD_TICK else "")
+  src = vapply(on_offer, function(k) CHART_PALETTES[[k]]$source, character(1))
+  groups = split(on_offer, factor(src, levels = unique(src)))
+  lapply(groups, function(ks) stats::setNames(ks, vapply(ks, label, character(1))))
+}
+
+# The colour-vision check of a set of colours: the smallest CIE2000 difference between two of them
+#   under simulated deuteranopia, protanopia and tritanopia (colorspace::deutan(), protan(),
+#   tritan(); farver::compare_colour(method = "cie2000")), the worst of the three; NA when
+#   colorspace is not installed.
+cvd_gap <- function(cols) {
+  if (!length(find.package("colorspace", quiet = TRUE)) || length(cols) < 2L) return(NA_real_)
+  one = function(x) {
+    m = farver::compare_colour(farver::decode_colour(x), from_space = "rgb", method = "cie2000")
+    min(m[upper.tri(m)])
+  }
+  min(one(colorspace::deutan(cols)), one(colorspace::protan(cols)), one(colorspace::tritan(cols)))
+}
+
+# The check for a named palette, as charts use it: the first CHART_CVD_N colours of a qualitative
+#   palette, CHART_CVD_N spread along a sequential or diverging one. Rounded to one decimal.
+palette_cvd <- function(name, n = CHART_CVD_N) {
+  e = CHART_PALETTES[[name]]
+  cols = palette_colours(name, if (identical(e$kind, "qualitative")) NULL else 11L)
+  cols = if (identical(e$kind, "qualitative")) utils::head(cols, n) else grDevices::colorRampPalette(cols)(n)
+  round(cvd_gap(cols), 1)
+}
+
+# The qualitative palette a chart that needs n colours is drawn with: the chosen one, or the
+#   default when the chosen one has fewer than n colours (it is not stretched), as long as the
+#   default has enough.
+palette_for_n <- function(n, name = chart_palette_default()$qualitative) {
+  def = chart_palette_default()$qualitative
+  if (n > chart_palette_max(name) && n <= chart_palette_max(def)) def else name
+}
+
+# The most groups a chart can colour with a report's palettes: the chosen qualitative palette's
+#   max, or the default's when that is larger (palette_for_n()).
+palette_groups_max <- function(palette = chart_palette_default())
+  max(chart_palette_max(palette$qualitative), chart_palette_max(chart_palette_default()$qualitative))
 
 # n colours of a qualitative palette; an error past its max.
 chart_palette <- function(n, name = chart_palette_default()$qualitative) {

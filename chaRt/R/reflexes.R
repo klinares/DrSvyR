@@ -440,8 +440,8 @@ check_chart <- function(spec, cb, data, palette, rule_ids) {
   s = spec_defaults(spec_public(spec))
   table = tryCatch(spec_table(s, data, cb, palette), spec_error = function(e) e)
   if (inherits(table, "error")) return(list(ok = FALSE, spec = spec, sentences = conditionMessage(table)))
-  lint = spec_lint(s, cb, table, chart_palette_max(palette$qualitative))
-  list(ok = TRUE, spec = spec, table = table, notes = lint$notes, sentences = character(0))
+  lint = spec_lint(s, cb, table, palette_groups_max(palette))
+  list(ok = TRUE, spec = spec, table = table, notes = c(palette_note(lint$spec, cb, palette), lint$notes), sentences = character(0))
 }
 
 check_reply <- function(obj, cb, data, palette, rule_ids)
@@ -687,7 +687,7 @@ summary_input <- function(chart, cb, data, palette = chart_palette_default()) {
   s = spec_defaults(spec_public(chart$spec))
   t = tryCatch(spec_table(s, data, cb, palette), error = function(e) e)
   if (inherits(t, "error")) return(list(id = chart$id, spec = chart$spec, hash = spec_hash(chart$spec), error = SUMMARY_NO_TABLE))
-  lint = spec_lint(s, cb, t, chart_palette_max(palette$qualitative))
+  lint = spec_lint(s, cb, t, palette_groups_max(palette))
   f = spec_facts(lint$spec, t, cb, isTRUE(chart$exploratory), data)
   list(id = chart$id, title = names_out(chart$spec$title %||% "(none)", f$names), row_is = if (codebook_ready(cb)) trimws(cb$row_is) else "not yet given",
        facts = f, spec = chart$spec, hash = spec_hash(chart$spec))

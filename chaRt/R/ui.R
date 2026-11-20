@@ -23,6 +23,8 @@ app_ui <- function(classification, logo, office, source_url)
                            "font-weight:700; letter-spacing:0.06em;",
                            "padding:5px 0; font-size:13px;"),
              classification),
+    # shiny's page-level pulse while the server is busy, as a second signal; no spinners on the cards.
+    shiny::useBusyIndicators(spinners = FALSE, pulse = TRUE, fade = FALSE),
     bslib::page_navbar(
       title = tags$span(class = "d-inline-flex align-items-center gap-3",
                         office_logo(logo, office),
@@ -517,6 +519,34 @@ label_tag <- function(e, accept_id) {
 
 CSS_PPI <- 96                # a CSS inch, in CSS pixels: a static chart is shown at its size in inches
 EXPLORE_PALETTE_KINDS <- c(qualitative = "Groups", sequential = "Sequential fill", diverging = "Diverging fill")
+PALETTE_CVD_LEGEND <- paste0("A", CHART_CVD_TICK, " marks a palette whose colours stay apart for readers with the three common ",
+                             "colour-vision differences (the check in R/theme.R).")
+PALETTE_CVD_WARNING <- "This palette is hard to tell apart for some readers with colour-vision differences."
+
+# The colours shown beside a palette's name in the Style selects: up to eight of a qualitative
+#   palette, seven along a sequential or diverging one.
+palette_swatch <- function(name) {
+  e = CHART_PALETTES[[name]]
+  cols = if (identical(e$kind, "qualitative")) utils::head(palette_colours(name), 8L) else palette_colours(name, 7L)
+  cols[grepl("^#[0-9A-F]{6}$", cols)]
+}
+
+# selectize.js's render option for the Style selects: each option and the chosen item show a strip of
+#   the palette's colours before its name. The colours come from window.chartSwatches, written by
+#   palette_swatch_script(); the name goes through selectize's escape().
+PALETTE_SWATCH_RENDER <- paste0("{option: function(item, escape) { return window.chartSwatchRow(item, escape); }, ",
+                                "item: function(item, escape) { return window.chartSwatchRow(item, escape); }}")
+palette_swatch_script <- function(names) {
+  sw = stats::setNames(lapply(names, palette_swatch), names)
+  tags$script(HTML(paste0(
+    "window.chartSwatches = ", jsonlite::toJSON(sw), ";\n",
+    "window.chartSwatchRow = function(item, escape) {\n",
+    "  var c = (window.chartSwatches || {})[item.value] || [];\n",
+    "  var s = c.filter(function(h) { return /^#[0-9A-F]{6}$/.test(h); }).map(function(h) {\n",
+    "    return '<span class=\"chart-swatch\" style=\"background:' + h + '\"></span>'; }).join('');\n",
+    "  return '<div><span class=\"chart-swatches\" aria-hidden=\"true\">' + s + '</span>' + escape(item.label) + '</div>';\n",
+    "};")))
+}
 EXPLORE_PLACEHOLDER <- "Ask a question about your data"
 EXPLORE_WIDTH <- "38%"
 
@@ -638,9 +668,21 @@ copy_js <- function(code_id)
 
 # The screen's own style and script, once. Buttons with class chart-call (Suggest charts, Write headlines, each
 #   card's Headline) are disabled when one is clicked or a message is sent in the chat, and enabled again when
-#   the server says its call is done ("chart-busy"), so two calls cannot overlap. A link to #open-data-page
-#   opens the Data page.
+#   the server says its call is done ("chart-busy"), so two calls cannot overlap. At the same moment, in the
+#   browser and without the server (which is busy until the call ends), the working line at the foot of the
+#   chat shows three dots and words for the action (WORKING_WORDS; a button's data-working); after
+#   WORKING_LATER_MS it adds WORKING_LATER. It goes when the server re-enables the buttons, and also when
+#   Shiny reports the server idle or disconnected, so a call that fails does not leave it showing. The line has
+#   role="status", so a screen reader announces it, and its dots stay still when the system asks for reduced
+#   motion. It is not a chat message: nothing is added to the chat's messages. A link to #open-data-page opens
+#   the Data page.
+WORKING_WORDS <- c(chat = "Thinking", suggest = "Thinking", headlines = "Writing headlines", headline = "Writing a headline",
+                   label = "Labelling columns", setup = "Working")
+WORKING_LATER <- ", still working"
+WORKING_LATER_MS <- 8000L
 EXPLORE_CSS <- "
+.chart-swatches { display: inline-flex; margin-right: .4rem; vertical-align: middle; }
+.chart-swatch { display: inline-block; width: .8rem; height: .8rem; border: 1px solid rgba(0, 0, 0, .15); }
 .chart-card { cursor: pointer; }
 .chart-card.chart-selected { border: 2px solid var(--bs-primary); box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .25); }
 .chart-call {
@@ -652,13 +694,46 @@ EXPLORE_CSS <- "
 }
 .chart-call:disabled { cursor: not-allowed; }
 .chart-canvas { padding: .75rem 1rem; }
+.chart-working { font-size: .875rem; color: var(--bs-secondary-color); margin-top: .5rem; }
+.chart-working[hidden] { display: none; }
+.chart-working-dot { display: inline-block; width: .4rem; height: .4rem; margin-right: .2rem; border-radius: 50%;
+  background: currentColor; animation: chart-working-pulse 1.2s infinite ease-in-out; }
+.chart-working-dot:nth-child(2) { animation-delay: .2s; }
+.chart-working-dot:nth-child(3) { animation-delay: .4s; margin-right: .5rem; }
+@keyframes chart-working-pulse { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .chart-working-dot { animation: none; opacity: .7; } }
 "
-EXPLORE_JS <- "
+EXPLORE_JS <- paste0("
 (function () {
   if (window.chartExplore) return;
   window.chartExplore = true;
+  var WORDS = ", jsonlite::toJSON(as.list(WORKING_WORDS), auto_unbox = TRUE), ";
+  var LATER = ", jsonlite::toJSON(WORKING_LATER, auto_unbox = TRUE), ";
+  var timer = null;
+  function line() { return document.querySelector('.chart-working'); }
+  function work(words) {
+    var el = line();
+    if (!el) return;
+    var lab = el.querySelector('.chart-working-words');
+    if (lab) lab.textContent = words;
+    el.hidden = false;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function () { if (lab && !el.hidden) lab.textContent = words + LATER; }, ", WORKING_LATER_MS, ");
+  }
+  function done() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    var el = line();
+    if (el) el.hidden = true;
+  }
+  function wordsFor(text) {
+    text = String(text || '');
+    if (text === 'Label the columns') return WORDS.label;
+    if (/^Treat '.*' as missing$/.test(text) || /^A row is /.test(text)) return WORDS.setup;
+    return WORDS.chat;
+  }
   function busy(on) {
     document.querySelectorAll('.chart-call').forEach(function (b) { b.disabled = !!on; });
+    if (!on) done();
   }
   document.addEventListener('click', function (e) {
     var link = e.target.closest('a[href=\"#open-data-page\"]');
@@ -669,18 +744,28 @@ EXPLORE_JS <- "
       return;
     }
     var b = e.target.closest('.chart-call');
-    if (b && !b.disabled) setTimeout(function () { busy(true); }, 0);
+    if (b && !b.disabled) {
+      var words = b.getAttribute('data-working') || WORDS.chat;
+      setTimeout(function () { busy(true); work(words); }, 0);
+    }
   }, true);
   if (window.jQuery) {
     jQuery(document).on('shiny:inputchanged', function (e) {
-      if (e.name && /chat_user_input$/.test(e.name)) busy(true);
+      if (e.name && /chat_user_input$/.test(e.name)) { busy(true); work(wordsFor(e.value)); }
     });
+    jQuery(document).on('shiny:idle shiny:disconnected', function () { done(); });
   }
   if (window.Shiny && Shiny.addCustomMessageHandler) {
     Shiny.addCustomMessageHandler('chart-busy', function (m) { busy(m.on); });
   }
 })();
-"
+")
+
+# The working line under the chat's input: hidden until a call starts (see EXPLORE_JS).
+working_line <- function()
+  tags$div(class = "chart-working", role = "status", `aria-live` = "polite", hidden = NA,
+           tags$span(class = "chart-working-dot", `aria-hidden` = "true"), tags$span(class = "chart-working-dot", `aria-hidden` = "true"),
+           tags$span(class = "chart-working-dot", `aria-hidden` = "true"), tags$span(class = "chart-working-words", WORKING_WORDS[["chat"]]))
 
 # The Explore screen: the chat (shinychat) in a sidebar 38% wide that is always open and stacks above the canvas
 #   in a narrow window; Suggest charts and Write headlines sit under its input.
@@ -694,9 +779,12 @@ mod_explore_ui <- function(id) {
       shinychat::chat_ui(
         ns("chat"), width = "100%", fill = TRUE, placeholder = EXPLORE_PLACEHOLDER,
         messages = list(list(role = "assistant", content = SETUP_WELCOME)),
-        footer = tags$div(class = "d-flex flex-wrap gap-2 mt-2",
-                          actionButton(ns("suggest"), "Suggest charts", class = "btn-sm btn-outline-primary chart-call"),
-                          actionButton(ns("write_headlines"), "Write headlines", class = "btn-sm btn-outline-primary chart-call")))),
+        footer = tags$div(tags$div(class = "d-flex flex-wrap gap-2 mt-2",
+                                   actionButton(ns("suggest"), "Suggest charts", class = "btn-sm btn-outline-primary chart-call",
+                                                `data-working` = WORKING_WORDS[["suggest"]]),
+                                   actionButton(ns("write_headlines"), "Write headlines", class = "btn-sm btn-outline-primary chart-call",
+                                                `data-working` = WORKING_WORDS[["headlines"]])),
+                          working_line()))),
     tags$div(class = "chart-canvas",
              uiOutput(ns("gate")), uiOutput(ns("boxes")), uiOutput(ns("bar")), uiOutput(ns("cards")), uiOutput(ns("foot"))),
     tags$style(HTML(EXPLORE_CSS)),
@@ -1068,7 +1156,15 @@ mod_explore_server <- function(id, state, ask = llm_json) {
                tags$span(class = "text-muted small", paste0(format_num(n), if (n == 1L) " chart" else " charts")),
                if (!is.null(chosen))
                  tagList(tags$span(class = "small", paste0("Selected: ", chosen)),
-                         actionButton(ns("deselect"), "Deselect", class = "btn-sm btn-outline-secondary")))
+                         actionButton(ns("deselect"), "Deselect", class = "btn-sm btn-outline-secondary")),
+               uiOutput(ns("style_warning"), class = "w-100"))
+    })
+
+    # One line under Style when a chosen palette does not pass the colour-vision check.
+    output$style_warning = renderUI({
+      p = palette()
+      if (all(purrr::map_lgl(unlist(p), palette_passes))) return(NULL)
+      tags$p(class = "small mb-0", style = "color: var(--bs-warning-text-emphasis, #8a5a00);", PALETTE_CVD_WARNING)
     })
 
     output$cards = renderUI({
@@ -1095,9 +1191,11 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       showModal(modalDialog(
         title = "Style", easyClose = TRUE, footer = modalButton("Close"),
         tags$p(class = "small text-muted", "The palettes colour every chart on the canvas. Changing one draws the charts again; no model call is made."),
+        tags$p(class = "small text-muted", PALETTE_CVD_LEGEND),
+        palette_swatch_script(unlist(purrr::map(names(EXPLORE_PALETTE_KINDS), function(kind) names(chart_palettes(kind))))),
         purrr::imap(EXPLORE_PALETTE_KINDS, function(label, kind)
-          selectInput(ns(paste0("pal_", kind)), label, choices = stats::setNames(names(chart_palettes(kind)), chart_palettes(kind)),
-                      selected = pal[[kind]], selectize = FALSE, width = "100%"))))
+          selectizeInput(ns(paste0("pal_", kind)), label, choices = chart_palette_groups(kind), selected = pal[[kind]],
+                         width = "100%", options = list(render = I(PALETTE_SWATCH_RENDER))))))
     })
     purrr::walk(names(EXPLORE_PALETTE_KINDS), function(kind)
       observeEvent(input[[paste0("pal_", kind)]], {
@@ -1150,7 +1248,7 @@ mod_explore_server <- function(id, state, ask = llm_json) {
                    btn("interactive", if (interactive) "Static" else "Interactive"),
                    btn("code", "Code"),
                    btn("edit", "Edit text"),
-                   btn("headline", "Headline", "btn-outline-primary chart-call"),
+                   btn("headline", "Headline", "btn-outline-primary chart-call", `data-working` = WORKING_WORDS[["headline"]]),
                    btn("remove", "Remove", "btn-outline-danger"))),
         bslib::card_body(
           fillable = FALSE, fill = FALSE,
