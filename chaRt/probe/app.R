@@ -40,6 +40,13 @@ PROBE_QMD_DASHBOARD <- c("---",
                          "---",
                          "Quarto rendered this dashboard from inside a running Shiny app.")
 
+# The same dashboard asked to embed its resources, as the export must be one file.
+PROBE_QMD_DASHBOARD_EMBED <- c("---",
+                               "title: chaRt probe dashboard",
+                               "format: {dashboard: {embed-resources: true}}",
+                               "---",
+                               "Quarto rendered this dashboard from inside a running Shiny app.")
+
 # What the R chunk needs; the check does not run without them.
 PROBE_QMD_R_NEEDS <- c("knitr", "rmarkdown", "ggplot2", "plotly")
 
@@ -122,6 +129,9 @@ quarto_render_r <- function() {
 # A format: dashboard document, rendered with the format the document names.
 quarto_render_dashboard <- function() quarto_render(PROBE_QMD_DASHBOARD, to = NULL)
 
+# The same, with embed-resources: true under the dashboard format.
+quarto_render_dashboard_embed <- function() quarto_render(PROBE_QMD_DASHBOARD_EMBED, to = NULL)
+
 # Whether an ffmpeg program is on the PATH (av brings its own copy of the libraries, so this is for
 #   the command line only).
 ffmpeg_found <- function() {
@@ -184,6 +194,7 @@ run_checks <- function() {
          list("A .qmd renders to self-contained HTML from the app", quarto_render),
          list("A .qmd with an R chunk (ggplot, then ggplotly) renders to self-contained HTML", quarto_render_r),
          list("A format: dashboard document renders from the app", quarto_render_dashboard),
+         list("The same dashboard with embed-resources: true renders from the app", quarto_render_dashboard_embed),
          list("An ffmpeg program is on the PATH", ffmpeg_found),
          list("Ten PNG frames encode to an MP4 with av", av_mp4),
          list("A PNG draws with type = \"cairo\"", cairo_png),

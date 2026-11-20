@@ -1,6 +1,7 @@
 # reflexes.R for chaRt
-# Reads the reflex files in www/reflexes/ and assembles every prompt, then makes the two calls of
-#   Phase 3: label_columns() (the Codebook tab) and suggest_charts() (the Explore tab). R does the
+# Reads the reflex files in www/reflexes/ and assembles every prompt, then makes the calls:
+#   label_columns() (the Codebook tab), chat_turn() (every message the analyst sends) and
+#   summarize_charts() (headlines and summaries). R does the
 #   assembly and no model does, so the same file, codebook and question give the same prompt,
 #   character for character. The parser is QuestionR's (R/reflexes.R), cut to the format in
 #   www/reflexes/README.md: Title, Version, Persona, Reflexes (When, Say, Never, Label, Source),
@@ -14,14 +15,14 @@
 
 REFLEXES_DIR <- file.path("www", "reflexes")
 
-# The files of each call, in the order a prompt uses them. The first supplies the persona. The two
-#   chart calls share their seven files, so their system prompts are identical and a chat turn reads
-#   from the cache what a suggest call wrote.
-CHART_FILES <- c("core.md", "comparison.md", "relationship.md", "distribution.md", "time.md", "suggest.md", "refine.md")
-CALL_FILES <- list(label = "codebook.md", suggest = CHART_FILES, refine = CHART_FILES, summarize = "summary.md")
+# The files of each call, in the order a prompt uses them. The first supplies the persona. Every
+#   message the analyst sends is one `chat` call, so its system prompt is the same on every turn and
+#   is read from the cache. suggest.md and refine.md hold rules only; chat.md has the reply format.
+CHAT_FILES <- c("core.md", "comparison.md", "relationship.md", "distribution.md", "time.md", "suggest.md", "refine.md", "chat.md")
+CALL_FILES <- list(label = "codebook.md", chat = CHAT_FILES, summarize = "summary.md")
 
 # The file whose Output format ends each call's user message.
-CALL_REPLY <- c(label = "codebook.md", suggest = "suggest.md", refine = "refine.md", summarize = "summary.md")
+CALL_REPLY <- c(label = "codebook.md", chat = "chat.md", summarize = "summary.md")
 
 # Every reflex file, by name, so a missing one is an error and the README is not read as one.
 REFLEX_FILES <- unique(unlist(CALL_FILES, use.names = FALSE))
@@ -153,8 +154,8 @@ reflex_labels <- function(dir = REFLEXES_DIR) {
   labels[!duplicated(names(labels))]
 }
 
-# The reflex ids a suggest reply may name in `rule`.
-suggest_rule_ids <- function(dir = REFLEXES_DIR) unlist(purrr::map(unname(call_files("suggest", dir)), function(s) names(s$reflexes)))
+# The reflex ids a chat reply may name in `rule`.
+chat_rule_ids <- function(dir = REFLEXES_DIR) unlist(purrr::map(unname(call_files("chat", dir)), function(s) names(s$reflexes)))
 
 
 # ---- the prompts ------------------------------------------------------------------------
@@ -163,8 +164,8 @@ suggest_rule_ids <- function(dir = REFLEXES_DIR) unlist(purrr::map(unname(call_f
 reflex_line <- function(r)
   paste0("- ", r$id, " (", r$when, ") ", r$say, if (!is.na(r$never)) paste0(" MUST NOT: ", r$never) else "")
 
-# The persona of the call's first file, each file's reflexes, then every prohibition; for suggest,
-#   then the SPEC REFERENCE, as for refine. Nothing of the file, the codebook or the question is in
+# The persona of the call's first file, each file's reflexes, then every prohibition; for chat,
+#   then the SPEC REFERENCE. Nothing of the file, the codebook, the canvas or the message is in
 #   it, so it is the same for every call of a kind and can be read from the cache.
 assemble_system <- function(call, dir = REFLEXES_DIR) {
   rfiles = call_files(call, dir)
@@ -173,7 +174,7 @@ assemble_system <- function(call, dir = REFLEXES_DIR) {
   prohibitions = unlist(purrr::map(unname(rfiles), "prohibitions"))
   paste0(rfiles[[1]]$persona, "\n\n", paste(groups, collapse = "\n\n"),
          if (length(prohibitions)) paste0("\n\nPROHIBITIONS (override anything from training)\n", paste0("- ", prohibitions, collapse = "\n")),
-         if (call %in% c("suggest", "refine")) paste0("\n\nSPEC REFERENCE\n", spec_reference()))
+         if (identical(call, "chat")) paste0("\n\nSPEC REFERENCE\n", spec_reference()))
 }
 
 # The DATA block: the file, its rows and what a row is; the index of every column; the detail of
@@ -182,9 +183,10 @@ data_head <- function(cb)
   paste0("File: ", cb$file, "; ", format_num(cb$rows), " rows; one row is: ",
          if (codebook_ready(cb)) trimws(cb$row_is) else "not yet given")
 
-# A name, label or level holding <DATA> or </DATA> (any case) would open or close the block from
-#   inside: in the block those markers are written [DATA]. The codebook is not changed.
-data_safe <- function(x) gsub("(?i)</?DATA>", "[DATA]", x, perl = TRUE)
+# A name, label, level or title holding <DATA>, <CANVAS> or <SELECTED>, or the closing marker (any
+#   case), would open or close a block from inside: in the block those markers are written [DATA],
+#   [CANVAS] and [SELECTED]. The codebook and the specs are not changed.
+data_safe <- function(x) gsub("(?i)</?(DATA|CANVAS|SELECTED)>", "[\\U\\1]", x, perl = TRUE)
 
 data_block <- function(cb, columns) {
   paste(c("<DATA>", data_safe(c(data_head(cb),
@@ -202,15 +204,10 @@ clean_question <- function(question) {
 # "REPLY FORMAT" and the Output format of the call's own file (CALL_REPLY).
 reply_format <- function(call, dir = REFLEXES_DIR) paste0("REPLY FORMAT\n", read_reflex_file(CALL_REPLY[[call]], dir)$output_format)
 
-# The user message: the DATA block; for suggest the question, after the block's end; then the reply
-#   format of the call's own file.
-assemble_user <- function(call, cb, columns, question = NULL, dir = REFLEXES_DIR) {
-  q = clean_question(question)
-  paste(c(data_block(cb, columns),
-          if (identical(call, "suggest")) paste("QUESTION:", if (nzchar(q)) q else "(none; suggest charts)"),
-          reply_format(call, dir)),
-        collapse = "\n\n")
-}
+# The user message of the label call: the DATA block, then the reply format of the call's own file.
+#   (A chat turn's is assemble_chat().)
+assemble_user <- function(call, cb, columns, dir = REFLEXES_DIR)
+  paste(c(data_block(cb, columns), reply_format(call, dir)), collapse = "\n\n")
 
 # sha256 of the system prompt and the user message. A change to any word of either changes it.
 prompt_hash <- function(system_txt, user_txt)
@@ -402,21 +399,33 @@ label_columns <- function(cb, ask = llm_json, m = APP_MODEL) {
 }
 
 
-# ---- suggest_charts(): the Explore tab's call ------------------------------------------------
+# ---- chat_turn(): one call for every message the analyst sends ------------------------------------
 
-SUGGEST_FAILED <- "The model's reply could not be read as charts, so nothing was drawn."
+# What the Suggest charts button sends. Only this exact message makes the charts of a reply exploratory.
+SUGGEST_MESSAGE <- "(suggest charts for this file)"
+
 PICK_FAILED <- "The model's reply could not be read as a choice of columns, so nothing was drawn."
 REPAIR_ASK <- "Send the whole reply again with those charts corrected or removed."
+CHAT_SPEC_REPAIR_ASK <- "Send the whole reply again with the spec corrected, or give ask or cannot instead."
+CHAT_TELL_REPAIR_ASK <- "Send the whole reply again with the text corrected: use only numbers that DATA gives, or none."
+CHAT_FAILED <- "The model's reply could not be read, so nothing was changed."
+CHAT_NOT_ONE <- paste("The model's reply did not give exactly one of charts, a changed chart, a question, a reason it cannot,",
+                      "or a description of the file, so nothing was changed.")
+CHAT_NO_SELECTION <- "No chart is selected, so there is nothing to change. Click a chart first."
 
-validate_charts <- function(obj) {
-  if (!is.list(obj) || (!is.null(obj$charts) && !is.list(obj$charts)) || (!is.null(obj$cannot) && !is.list(obj$cannot)))
-    stop("The reply needs a list called charts and a list called cannot.", call. = FALSE)
-  if (is.null(obj$charts) && is.null(obj$cannot)) stop("The reply has neither charts nor cannot.", call. = FALSE)
-  invisible(TRUE)
-}
+# `next`: at most this many suggestions, each of at most this many words.
+CHAT_NEXT_MAX <- 3L
+CHAT_NEXT_WORDS <- 6L
 
 validate_pick <- function(obj) {
   if (!is.list(obj) || !is.list(obj$columns)) stop("The reply has no list called columns.", call. = FALSE)
+  invisible(TRUE)
+}
+
+# Only that the reply is an object. Which kind it is, is judged by chat_kinds(): a reply that
+#   validate refuses would be asked for again by llm_json(), and a reply of two kinds is not retried.
+validate_chat <- function(obj) {
+  if (!is.list(obj)) stop("The reply is not a JSON object.", call. = FALSE)
   invisible(TRUE)
 }
 
@@ -445,67 +454,10 @@ problems_text <- function(checked) {
   paste(purrr::map_chr(bad, function(i) paste0("Chart ", i, ": ", paste(checked[[i]]$sentences, collapse = " "))), collapse = "\n")
 }
 
-# The analyst's question, or a request for suggestions, as chart specs. Columns in play are those
-#   not ignored; past CODEBOOK_MAX_DETAIL a pick call chooses which get detail. One suggest call;
-#   every chart is checked; if any fails, one repair call with the reply and the problems, checked
-#   the same way, and no second. Returns charts (spec, table, notes, exploratory) that passed;
-#   cannot; failed (number, spec, sentences) for charts that still did not; error (one sentence
-#   when no reply could be read); columns (those described in detail); calls (the records).
-suggest_charts <- function(cb, data, question = NULL, ask = llm_json, palette = chart_palette_default(), m = APP_MODEL) {
-  q = clean_question(question)
-  in_play = purrr::map_chr(purrr::keep(cb$columns, function(e) !identical(e$role, "ignore")), "name")
-  records = list()
-  columns = in_play
-  if (length(in_play) > CODEBOOK_MAX_DETAIL) {
-    pick_user = assemble_pick(cb, q)
-    pick = make_call("pick", PICK_SYSTEM, pick_user, ask, m, LLM_MAX_TOKENS[["suggest"]], validate_pick)
-    records = c(records, list(pick$record))
-    if (is.null(pick$res))
-      return(list(charts = list(), cannot = character(0), failed = list(), error = PICK_FAILED, detail = pick$error,
-                  repaired = FALSE, columns = character(0), question = q, replies = list(), calls = dplyr::bind_rows(records)))
-    chosen = as.character(unlist(json_list(pick$res$obj$columns), use.names = FALSE))
-    columns = utils::head(unique(intersect(chosen, in_play)), CODEBOOK_MAX_DETAIL)
-  }
-  system_txt = assemble_system("suggest")
-  user_txt = assemble_user("suggest", cb, columns, q)
-  first = make_call("suggest", system_txt, user_txt, ask, m, LLM_MAX_TOKENS[["suggest"]], validate_charts)
-  records = c(records, list(first$record))
-  out = function(checked, obj, error = NULL, detail = NULL, repaired = FALSE) {
-    good = purrr::keep(checked, "ok")
-    bad = which(!purrr::map_lgl(checked, "ok"))
-    list(charts = purrr::map(good, function(x) list(spec = x$spec, table = x$table, notes = x$notes, exploratory = !nzchar(q))),
-         cannot = if (is.null(obj)) character(0) else cannot_of(obj),
-         failed = purrr::map(bad, function(i) list(number = i, spec = checked[[i]]$spec, sentences = checked[[i]]$sentences)),
-         error = error, detail = detail, repaired = repaired, columns = columns, question = q,
-         replies = purrr::compact(list(first = first$res$raw)), calls = dplyr::bind_rows(records))
-  }
-  if (is.null(first$res)) return(out(list(), NULL, SUGGEST_FAILED, first$error))
-  rule_ids = suggest_rule_ids()
-  checked = check_reply(first$res$obj, cb, data, palette, rule_ids)
-  if (all(purrr::map_lgl(checked, "ok"))) return(out(checked, first$res$obj))
-  repair_user = paste(user_txt, paste0("YOUR REPLY\n", first$res$raw), paste0("PROBLEMS\n", problems_text(checked)), REPAIR_ASK,
-                      sep = "\n\n")
-  second = make_call("suggest", system_txt, repair_user, ask, m, LLM_MAX_TOKENS[["suggest"]], validate_charts, repair = TRUE)
-  records = c(records, list(second$record))
-  if (is.null(second$res)) {
-    res = out(checked, first$res$obj, detail = second$error, repaired = TRUE)
-    return(res)
-  }
-  res = out(check_reply(second$res$obj, cb, data, palette, rule_ids), second$res$obj, repaired = TRUE)
-  res$replies = list(first = first$res$raw, repair = second$res$raw)
-  res
-}
-
-
-# ---- refine_chart(): the chat beside one chart ----------------------------------------------------
-
-REFINE_FAILED <- "The model's reply could not be read, so the chart was not changed."
-REFINE_NOT_ONE <- "The model's reply did not give exactly one of a spec, a question or a reason it cannot, so the chart was not changed."
-REFINE_REPAIR_ASK <- "Send the whole reply again with the spec corrected, or give ask or cannot instead."
-
-# A chart on the Explore tab: its id, the spec as the model or the analyst last left it (no dot-fields),
+# A chart on the canvas: its id, the spec as the model or the analyst last left it (no dot-fields),
 #   R's notes for it, the spec it was first drawn with, and the specs before this one (the latest
-#   last), for Undo.
+#   last), for Undo. The canvas of chat_turn() is a list of these, in the order shown; `selected` is
+#   the id of one of them, or NULL.
 new_chart <- function(id, spec, notes = character(0))
   list(id = id, spec = spec_public(spec), notes = as.character(notes), first = spec_public(spec), history = list())
 
@@ -539,64 +491,169 @@ chart_columns <- function(spec, cb) {
   intersect(cols, purrr::map_chr(cb$columns, "name"))
 }
 
-# The user message of a chat turn: the DATA block (the index, and detail for the spec's own
-#   columns), CURRENT SPEC, NOTES, LAST EXCHANGE (one turn back, when there was one), ANALYST: and
-#   the message, then refine.md's reply format.
-assemble_refine <- function(chart, message, cb, last = NULL) {
+# The selected chart, from the canvas by its id; NULL for none or an id that is not on it.
+selected_chart <- function(canvas, selected)
+  if (is_text1(selected)) purrr::detect(unname(canvas), function(ch) identical(ch$id, selected))
+
+# One canvas line: id | title | family | the columns it uses. Names and titles only, never a value.
+canvas_line <- function(chart, cb) {
+  one = function(x) data_safe(trimws(gsub("\\s+", " ", x)))
+  title = if (is_text1(chart$spec$title) && nzchar(trimws(chart$spec$title))) chart$spec$title else "(no title)"
+  cols = chart_columns(chart$spec, cb)
+  paste(one(chart$id), one(title), one(chart$spec$family %||% "unknown"), if (length(cols)) paste(one(cols), collapse = ", ") else "none", sep = " | ")
+}
+
+# The CANVAS block: a line for each chart, or "empty". Its marker cannot be opened or closed from inside.
+canvas_block <- function(canvas, cb)
+  paste(c("<CANVAS>", if (length(canvas)) purrr::map_chr(unname(canvas), canvas_line, cb = cb) else "empty", "</CANVAS>"), collapse = "\n")
+
+# The SELECTED block: the chart's id, CURRENT SPEC, NOTES; or "none".
+selected_block <- function(chart) {
+  if (is.null(chart)) return("<SELECTED>\nnone\n</SELECTED>")
   notes = if (length(chart$notes)) paste0("- ", chart$notes, collapse = "\n") else "none"
-  paste(c(data_block(cb, chart_columns(chart$spec, cb)),
-          paste0("CURRENT SPEC\n", jsonlite::toJSON(spec_public(chart$spec), auto_unbox = TRUE, digits = NA)),
-          paste0("NOTES\n", notes),
-          if (!is.null(last)) paste0("LAST EXCHANGE\nANALYST: ", clean_question(last$message), "\nREPLY: ", last$reply),
+  json = jsonlite::toJSON(spec_public(chart$spec), auto_unbox = TRUE, digits = NA)
+  paste0("<SELECTED>\n", data_safe(paste(chart$id, "CURRENT SPEC", json, "NOTES", notes, sep = "\n")), "\n</SELECTED>")
+}
+
+# The user message of a chat turn, in this order: the DATA block (the index, and detail for
+#   `columns`), CANVAS, SELECTED, LAST EXCHANGE (one turn back, when there was one), ANALYST: and the
+#   message (outside every block), then chat.md's reply format.
+assemble_chat <- function(message, canvas, chart, cb, columns, last = NULL, dir = REFLEXES_DIR)
+  paste(c(data_block(cb, columns),
+          canvas_block(canvas, cb),
+          selected_block(chart),
+          if (!is.null(last)) paste0("LAST EXCHANGE\nANALYST: ", data_safe(clean_question(last$message)), "\nREPLY: ", data_safe(last$reply)),
           paste("ANALYST:", clean_question(message)),
-          reply_format("refine")),
+          reply_format("chat", dir)),
         collapse = "\n\n")
+
+# Which of charts, spec, ask, cannot and tell a reply gives. `charts` counts when it holds a chart;
+#   `cannot` is a kind of its own only when no chart came with it.
+chat_kinds <- function(obj) {
+  text = function(x) is_text1(x) && nzchar(trimws(x))
+  charts = is.list(obj[["charts"]]) && length(obj[["charts"]]) > 0L
+  has = c(charts = charts,
+          spec = is.list(obj[["spec"]]) && length(obj[["spec"]]) > 0L && !is.null(names(obj[["spec"]])),
+          ask = text(obj[["ask"]]), tell = text(obj[["tell"]]),
+          cannot = !charts && length(cannot_of(obj)) > 0L)
+  names(has)[has]
 }
 
-# What a reply is: exactly one of spec, ask and cannot, or a failure.
-refine_kind <- function(obj) {
-  has = c(spec = is.list(obj$spec) && !is.null(names(obj$spec)), ask = is_text1(obj$ask) && nzchar(obj$ask),
-          cannot = is_text1(obj$cannot) && nzchar(obj$cannot))
-  if (sum(has) != 1L) "failed" else names(has)[has]
+# `next`: the strings of at most CHAT_NEXT_WORDS words, the first CHAT_NEXT_MAX of them; anything else is dropped.
+next_of <- function(obj) {
+  x = purrr::keep(json_list(obj[["next"]]), function(e) is_text1(e) && nzchar(trimws(e)) && length(strsplit(trimws(e), "\\s+")[[1]]) <= CHAT_NEXT_WORDS)
+  as.character(utils::head(trimws(unlist(x, use.names = FALSE)), CHAT_NEXT_MAX))
 }
 
-# One chat turn on one chart. The reply gives exactly one of spec, ask and cannot. A spec is checked
-#   as a suggested chart is (an unknown rule removed, spec_check(), spec_table(), the lint); if it is
-#   refused, one repair call with the sentences, and no second. Returns chart (changed only for an
-#   accepted spec, the old spec on its history), kind ("spec", "ask", "cannot" or "failed"), text
-#   (say, the question, the reason, or the sentences), new_notes (lint notes the chart did not have),
-#   last (this exchange, for the next turn), repaired, detail and calls.
-refine_chart <- function(chart, message, cb, data, last = NULL, ask = llm_json, palette = chart_palette_default(), m = APP_MODEL) {
-  system_txt = assemble_system("refine")
-  user_txt = assemble_refine(chart, message, cb, last)
-  rule_ids = suggest_rule_ids()
-  first = make_call("refine", system_txt, user_txt, ask, m, LLM_MAX_TOKENS[["refine"]])
-  records = list(first$record)
-  done = function(kind, text, new = chart, notes = character(0), repaired = FALSE, detail = NULL)
-    list(chart = new, kind = kind, text = text, new_notes = setdiff(notes, chart$notes),
-         last = list(message = clean_question(message), reply = paste(text, collapse = " ")),
-         repaired = repaired, detail = detail, calls = dplyr::bind_rows(records))
-  read = function(res, repaired) {
-    kind = refine_kind(res$obj)
-    if (identical(kind, "failed")) return(done("failed", REFINE_NOT_ONE, repaired = repaired, detail = substr(res$raw, 1, 600)))
-    if (!identical(kind, "spec")) return(done(kind, trimws(res$obj[[kind]]), repaired = repaired))
-    checked = check_chart(res$obj$spec, cb, data, palette, rule_ids)
-    if (!checked$ok) return(list(bad = checked))
-    say = if (is_text1(res$obj$say) && nzchar(res$obj$say)) trimws(res$obj$say) else "The chart was changed."
-    done("spec", say, chart_apply(chart, checked$spec, checked$notes), checked$notes, repaired = repaired)
+# One chat turn. `message` is what the analyst sent, `canvas` the charts on the canvas (as new_chart()
+#   makes them), `selected` the id of the selected chart or NULL, `last` the turn before
+#   (list(message, reply), as this function returns it). Columns in play are those not ignored; past
+#   CODEBOOK_MAX_DETAIL a pick call first chooses which get detail (the selected chart's columns
+#   always do). The reply gives exactly one of charts, spec, ask, cannot and tell, and may give `next`:
+#   - charts: each is checked (an unknown rule removed, spec_check(), spec_table(), the lint); if any
+#     fails, one repair call, checked the same way; those still failing are listed as not drawn.
+#     They are exploratory only when the message is exactly SUGGEST_MESSAGE.
+#   - spec: only with a chart selected (else a failed reply, no call); checked and repaired the same
+#     way; accepted, it replaces the selected chart's spec and the old one goes on its history.
+#   - ask, cannot: text, nothing changes. tell: text checked with check_numbers() against the DATA
+#     block that was sent; a number not in it gets one repair, then the text is returned with the
+#     numbers in `problems`.
+#   - more than one kind, or none: a failed reply, one sentence, no retry.
+#   Returns kind ("charts", "spec", "ask", "cannot", "tell" or "failed"), text (the reply's words, or
+#   the sentences of a failure), charts (spec, table, notes, exploratory), failed (number, spec,
+#   sentences, for charts not drawn), cannot, chart (the selected chart after the turn, changed only
+#   by an accepted spec; NULL with none selected), new_notes (lint notes the chart did not have),
+#   next, problems, last (this exchange, for the next turn), repaired, detail, columns (those given
+#   detail), replies (the raw replies) and calls (the records).
+chat_turn <- function(message, canvas, selected, cb, data, last = NULL, ask = llm_json, palette = chart_palette_default(), m = APP_MODEL) {
+  q = clean_question(message)
+  chart = selected_chart(canvas, selected)
+  in_play = purrr::map_chr(purrr::keep(cb$columns, function(e) !identical(e$role, "ignore")), "name")
+  records = list()
+  columns = in_play
+  replies = list()
+  done = function(kind, text = character(0), charts = list(), failed = list(), cannot = character(0), chart_after = chart,
+                  new_notes = character(0), nxt = character(0), problems = character(0), repaired = FALSE, detail = NULL) {
+    said = switch(kind,
+      charts = paste(c(if (length(charts)) paste0("Added to the canvas: ", paste(purrr::map_chr(charts, function(ch) ch$spec$title %||% ch$spec$family), collapse = "; "), "."),
+                       cannot), collapse = " "),
+      paste(text, collapse = " "))
+    list(kind = kind, text = text, charts = charts, failed = failed, cannot = cannot, chart = chart_after, new_notes = new_notes,
+         `next` = nxt, problems = problems, last = list(message = q, reply = said), repaired = repaired, detail = detail,
+         columns = columns, replies = replies, calls = dplyr::bind_rows(records))
   }
-  if (is.null(first$res)) return(done("failed", REFINE_FAILED, detail = first$error))
+  if (length(in_play) > CODEBOOK_MAX_DETAIL) {
+    pick = make_call("pick", PICK_SYSTEM, assemble_pick(cb, if (!identical(q, SUGGEST_MESSAGE)) q), ask, m, LLM_MAX_TOKENS[["chat"]], validate_pick)
+    records = c(records, list(pick$record))
+    if (is.null(pick$res)) {
+      columns = character(0)
+      return(done("failed", PICK_FAILED, detail = pick$error))
+    }
+    chosen = as.character(unlist(json_list(pick$res$obj$columns), use.names = FALSE))
+    columns = utils::head(unique(intersect(c(if (!is.null(chart)) chart_columns(chart$spec, cb), chosen), in_play)), CODEBOOK_MAX_DETAIL)
+  }
+  system_txt = assemble_system("chat")
+  user_txt = assemble_chat(q, canvas, chart, cb, columns, last)
+  facts_text = data_block(cb, columns)
+  rule_ids = chat_rule_ids()
+  exploratory = identical(q, SUGGEST_MESSAGE)
+
+  # One reply read. A reply that needs a repair, on the first reading, comes back as list(bad = what
+  #   to tell the model, ask = what to ask of it, fallback = the result if the repair does not help).
+  read = function(res, repaired) {
+    obj = res$obj
+    kinds = chat_kinds(obj)
+    if (length(kinds) != 1L) return(done("failed", CHAT_NOT_ONE, repaired = repaired, detail = substr(res$raw, 1, 600)))
+    nxt = next_of(obj)
+    need = function(final, bad, ask_for) if (repaired || is.null(bad)) final else list(bad = bad, ask = ask_for, fallback = final)
+    switch(kinds,
+      ask = done("ask", trimws(obj[["ask"]]), nxt = nxt, repaired = repaired),
+      cannot = done("cannot", paste(cannot_of(obj), collapse = " "), nxt = nxt, repaired = repaired),
+      tell = {
+        text = trimws(obj[["tell"]])
+        problems = check_numbers(text, facts_text)
+        need(done("tell", text, nxt = nxt, problems = problems, repaired = repaired),
+             if (length(problems)) paste0("numbers that are not in DATA: ", paste(problems, collapse = ", ")), CHAT_TELL_REPAIR_ASK)
+      },
+      spec = {
+        if (is.null(chart)) return(done("failed", CHAT_NO_SELECTION, repaired = repaired))
+        checked = check_chart(obj[["spec"]], cb, data, palette, rule_ids)
+        if (!checked$ok)
+          return(need(done("failed", checked$sentences, repaired = repaired), paste(checked$sentences, collapse = " "), CHAT_SPEC_REPAIR_ASK))
+        say = if (is_text1(obj[["say"]]) && nzchar(trimws(obj[["say"]]))) trimws(obj[["say"]]) else "The chart was changed."
+        done("spec", say, chart_after = chart_apply(chart, checked$spec, checked$notes), new_notes = setdiff(checked$notes, chart$notes),
+             nxt = nxt, repaired = repaired)
+      },
+      charts = {
+        checked = check_reply(obj, cb, data, palette, rule_ids)
+        bad = which(!purrr::map_lgl(checked, "ok"))
+        final = done("charts", charts = purrr::map(purrr::keep(checked, "ok"), function(x) list(spec = x$spec, table = x$table, notes = x$notes, exploratory = exploratory)),
+                     failed = purrr::map(bad, function(i) list(number = i, spec = checked[[i]]$spec, sentences = checked[[i]]$sentences)),
+                     cannot = cannot_of(obj), nxt = nxt, repaired = repaired)
+        need(final, if (length(bad)) problems_text(checked), REPAIR_ASK)
+      })
+  }
+
+  first = make_call("chat", system_txt, user_txt, ask, m, LLM_MAX_TOKENS[["chat"]], validate_chat)
+  records = c(records, list(first$record))
+  if (is.null(first$res)) return(done("failed", CHAT_FAILED, detail = first$error))
+  replies = list(first = first$res$raw)
   out = read(first$res, FALSE)
-  if (is.null(out$bad)) return(out)
-  repair_user = paste(user_txt, paste0("YOUR REPLY\n", first$res$raw), paste0("PROBLEMS\n", paste(out$bad$sentences, collapse = " ")),
-                      REFINE_REPAIR_ASK, sep = "\n\n")
-  second = make_call("refine", system_txt, repair_user, ask, m, LLM_MAX_TOKENS[["refine"]], repair = TRUE)
+  if (is.null(out[["bad"]])) return(out)
+  repair_user = paste(user_txt, paste0("YOUR REPLY\n", first$res$raw), paste0("PROBLEMS\n", out[["bad"]]), out[["ask"]], sep = "\n\n")
+  second = make_call("chat", system_txt, repair_user, ask, m, LLM_MAX_TOKENS[["chat"]], validate_chat, repair = TRUE)
   records = c(records, list(second$record))
-  if (is.null(second$res)) return(done("failed", out$bad$sentences, repaired = TRUE, detail = second$error))
-  again = read(second$res, TRUE)
-  if (is.null(again$bad)) return(again)
-  done("failed", again$bad$sentences, repaired = TRUE)
+  if (is.null(second$res)) {
+    fallback = out[["fallback"]]
+    fallback$repaired = TRUE
+    fallback$detail = second$error
+    fallback$calls = dplyr::bind_rows(records)
+    return(fallback)
+  }
+  replies = list(first = first$res$raw, repair = second$res$raw)
+  read(second$res, TRUE)
 }
+
 
 
 # ---- summarize_charts(): headlines and summaries -------------------------------------------------------

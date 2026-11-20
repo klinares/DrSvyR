@@ -510,18 +510,31 @@ check_line <- function(problems, ok = SUMMARY_ALL_OK) {
   tags$p(class = "small mb-0", style = "color: var(--bs-warning-text-emphasis, #8a5a00);", paste0(paste(problems, collapse = "; "), "."))
 }
 
-# The text a chat turn appends: for a new spec its say and the notes it did not have before; for ask
-#   or cannot the text; for a failure the sentences.
-refine_reply <- function(r) {
+# What the old Explore screen says when its chat is answered with a new question (Part C replaces the screen).
+OLD_SCREEN_NEW_CHART <- "That is a new question, not a change to this chart. Ask it with Draw above."
+
+# The warning line under a description of the file that holds a number DATA does not give.
+TELL_WARNING <- "Not every number here is in the description of the file: "
+
+# The text a chat turn appends: for charts each chart's say as a short list and "Added to the canvas.";
+#   for a new spec its say and the notes it did not have before; for ask, cannot and tell the text (a
+#   tell with a number that is not in the description of the file has the warning line under it);
+#   for a failure the sentences.
+chat_reply_text <- function(r) {
+  if (identical(r$kind, "charts")) {
+    says = purrr::keep(purrr::map_chr(r$charts, function(ch) if (is_text1(ch$spec$say)) ch$spec$say else NA_character_), Negate(is.na))
+    return(paste(c(if (length(says)) paste0("- ", says, collapse = "\n"), if (length(r$charts)) "Added to the canvas.", r$cannot), collapse = "\n\n"))
+  }
   if (identical(r$kind, "spec")) return(paste(c(r$text, if (length(r$new_notes)) paste("Note:", r$new_notes)), collapse = "\n\n"))
-  paste(r$text, collapse = " ")
+  paste(c(paste(r$text, collapse = " "), if (identical(r$kind, "tell") && length(r$problems)) paste0(TELL_WARNING, paste(r$problems, collapse = ", "), ".")),
+        collapse = "\n\n")
 }
 
 # ask is the function that asks the model (llm_json, or a stand-in in a test).
 mod_explore_server <- function(id, state, ask = llm_json) {
   moduleServer(id, function(input, output, session) {
     ns = session$ns
-    res = reactiveVal(NULL)            # what suggest_charts() returned for the last request
+    res = reactiveVal(NULL)            # what the last Draw or Suggest charts gave, as the page shows it
     shown = reactiveVal(character(0))  # the ids of that request's charts, in order
     open = reactiveVal(NULL)           # the id of the chart in the wide view, or NULL for the cards
     calls_done = reactiveVal(0L)
@@ -562,7 +575,7 @@ mod_explore_server <- function(id, state, ask = llm_json) {
     chart_of = function(chart_id) state$charts[[chart_id]]
     set_chart = function(chart) { cs = isolate(state$charts) %||% list(); cs[[chart$id]] = chart; state$charts = cs }
     notes_for = function(spec) {
-      r = check_chart(spec, isolate(state$codebook), isolate(state$data), isolate(palette()), suggest_rule_ids())
+      r = check_chart(spec, isolate(state$codebook), isolate(state$data), isolate(palette()), chat_rule_ids())
       if (isTRUE(r$ok)) r$notes else character(0)
     }
     fill_wording = function(chart_id) {
@@ -717,10 +730,10 @@ mod_explore_server <- function(id, state, ask = llm_json) {
         msg = trimws(input[[paste0(chat_id, "_user_input")]])
         if (!nzchar(msg)) return()
         t = isolate(talk[[chart_id]]) %||% list(messages = list(), last = NULL)
-        r = refine_chart(chart_of(chart_id), msg, state$codebook, state$data, last = t$last, ask = ask, palette = palette())
+        r = chat_turn(msg, list(chart_of(chart_id)), chart_id, state$codebook, state$data, last = t$last, ask = ask, palette = palette())
         state$calls = dplyr::bind_rows(state$calls, r$calls)
         if (identical(r$kind, "spec")) { set_chart(r$chart); fill_wording(chart_id) }
-        reply = refine_reply(r)
+        reply = if (identical(r$kind, "charts")) OLD_SCREEN_NEW_CHART else chat_reply_text(r)
         t$messages = c(t$messages, list(list(role = "user", content = msg), list(role = "assistant", content = reply)))
         t$last = r$last
         talk[[chart_id]] = t
@@ -728,9 +741,11 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       })
     }
 
-    run = function(question) {
+    # Draw and Suggest charts: one message, with nothing selected, to an empty canvas. This screen
+    #   shows the charts of the last request only, so it never sends its canvas.
+    run = function(message) {
       note(NULL)
-      out = suggest_charts(state$codebook, state$data, question, ask = ask, palette = palette())
+      out = chat_turn(message, list(), NULL, state$codebook, state$data, ask = ask, palette = palette())
       state$calls = dplyr::bind_rows(state$calls, out$calls)
       ids = purrr::map_chr(out$charts, function(ch) {
         made$n = made$n + 1L
@@ -740,7 +755,9 @@ mod_explore_server <- function(id, state, ask = llm_json) {
         chart$id
       })
       purrr::walk(ids, make_chart)
-      res(out); shown(unname(ids)); open(NULL)
+      res(list(error = if (identical(out$kind, "failed")) paste(out$text, collapse = " "), detail = out$detail,
+               cannot = if (out$kind %in% c("ask", "cannot", "tell")) chat_reply_text(out) else out$cannot, failed = out$failed))
+      shown(unname(ids)); open(NULL)
       calls_done(calls_done() + 1L)
     }
     observeEvent(input$draw, {
@@ -748,7 +765,7 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       if (!nzchar(q)) { note(warn_box("Type a question first, or use Suggest charts for this file.")); return(calls_done(calls_done() + 1L)) }
       run(q)
     })
-    observeEvent(input$suggest, run(NULL))
+    observeEvent(input$suggest, run(SUGGEST_MESSAGE))
     observeEvent(input$back, open(NULL))
     observeEvent(input$write_report, {
       todo = purrr::keep(state$report, needs_story)
