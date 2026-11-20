@@ -1,5 +1,125 @@
 # chaRt: status
 
+## Phase 6b, 2026-11-20: more palettes, a working signal, a clean folder
+
+Branch `chart`. Not pushed. No model call. Kevin approved the proposals at the STOP ("Go, as
+proposed"). The palette and working-line work went in under Kevin's own commit aef2456 ("adding
+shiny app"), which also holds the two SurvAI_Expert files; then 4d2ae05 (old prompts removed) and
+f04add3 (`.rscignore`).
+
+### Files changed and removed (7f8a3de..HEAD, added / removed)
+
+| File | Lines |
+|---|---|
+| `R/theme.R` | +147 / -25 |
+| `R/ui.R` | +111 / -13 |
+| `tests/smoke.R` | +138 / -4 |
+| `R/spec.R` | +24 / -6 |
+| `R/reflexes.R` | +3 / -3 |
+| `.rscignore` | +2 / -2 |
+| `phase6b_prompt.md` | +126 (Kevin's prompt) |
+| Removed: `phase0_prompt.md`, `phase1_prompt.md`, `phase1b_prompt.md`, `phase2_prompt.md`, `phase2b_prompt.md`, `phase2c_prompt.md`, `phase2d_prompt.md`, `phase3_prompt.md`, `phase3b_prompt.md`, `phase4_prompt.md`, `phase5_prompt.md` | -1,512 |
+
+Also removed, untracked: `data/chaRt_test_orders.csv`, a byte-for-byte copy of
+`tests/data/orders.csv` that nothing read and that `.rscignore` would have shipped. Left, as the
+prompt says: the generated files in `tests/` (already git-ignored), `.Rhistory`, and the mailbox's
+`q-*`, `a-*` and `done-6.md`.
+
+### Smoke test
+
+298 of 298 (285 before; 13 new):
+
+```
+ok    6b-1: every listed palette (58, of which 55 through paletteer) has its name in the installed paletteer's tables and resolves to valid colours
+ok    6b-1: the stored colour-vision result of every palette matches palette_cvd() recomputed now
+ok    6b-1: the selects group the palettes by source, the default first, and the mark sits beside exactly the palettes that pass
+ok    6b-1: a qualitative palette with fewer colours than a chart needs is not stretched: the chart (8 regions, Moth has 5) is drawn and coded with Okabe-Ito and its notes say so
+ok    6b-1: each Style select is a selectize input whose options show a strip of the palette's colours before its name (render option); the strip's colours are the palette's, and the name goes through escape()
+ok    6b-1: choosing a palette that fails the colour-vision check shows the one line under Style; the defaults and a passing palette show none; no model call
+ok    6b-1: without paletteer the selects offer only the built-in palettes, a chart still draws and the page still builds
+ok    6b-2: the working line is in the page under the chat's input: hidden, role="status", aria-live polite, three dots hidden from screen readers, and words
+ok    6b-2: the script shows the line from the browser on a chat send, a suggestion or a call button, adds 'still working' after 8 seconds, and hides it on chart-busy and when Shiny is idle or disconnected; the dots stop for reduced motion
+ok    6b-2: Suggest charts, Write headlines and a card's Headline carry their words (Thinking, Writing headlines, Writing a headline)
+ok    6b-2: the script's own wordsFor(), run in V8: a question and a suggestion give 'Thinking', 'Label the columns' gives 'Labelling columns', a Treat or row button 'Working'
+ok    6b-2: the working line adds nothing to the chat's messages: after a turn the chat holds the reply only, LAST EXCHANGE is the question and its reply, and busy was set and cleared
+ok    6b-2: shiny's page-level pulse is on as a second signal (useBusyIndicators(spinners = FALSE, pulse = TRUE, fade = FALSE)); no spinner on the cards
+```
+
+Two existing checks changed: 4-A2 (an 8-region slope under a 7-colour palette is now drawn with
+Okabe-Ito and says so, in place of the "8 colours" note), and the button regexes of 6-C 28 and
+6-D 13 (a `data-working` attribute now sits between `class` and `id`). Scratch runs with the work
+undone made every new check fail except four that match fixed text in the page and script (the
+script check, the button words, nothing appended to the chat, the pulse).
+
+### Palettes now offered
+
+The check: the smallest CIE2000 difference (`farver::compare_colour(method = "cie2000")`) between
+any two of a palette's first five colours (five spread along a sequential or diverging one) after
+simulating deuteranopia, protanopia and tritanopia (`colorspace::deutan()`, `protan()`, `tritan()`),
+the worst of the three. The mark (a tick after the name) is 8 or more (`CHART_CVD_MARK`, approved).
+The results are written out in `CHART_PALETTE_CVD`, so the app needs neither colorspace nor
+paletteer to show the marks; the smoke test recomputes them.
+
+- Qualitative: Built in: Okabe-Ito (12.1, default). khroma: Paul Tol bright (8.7), muted (17.7),
+  vibrant (8.6), medium contrast (12.1). ggthemes: Tableau Classic Color Blind (16.9), Stata
+  Economist (13.7), Excel Office Theme (12.2). MetBrewer: Archambault (15.7), Veronese (15.6),
+  Johnson (14.6). NatParksPalettes: Kings Canyon (21.7), Death Valley (15.8), Torres (15.3). nord:
+  Algoma Forest (9.4), Moose Pond (8.6). PNWColors: Moth (13.2), Bay (11.6). CARTOColors: Safe
+  (17.7). wesanderson: Darjeeling 2 (13.9), Isle of Dogs 1 (12.2), Isle of Dogs 2 (8.4). All marked.
+- Sequential: viridis: Viridis (13.4, default), Magma (14.2), Cividis (13.0), Mako (13.9).
+  ColorBrewer: Blues (9.9), YlGnBu (7.0, not marked). khroma: Paul Tol smooth rainbow (17.0),
+  Crameri Oslo (19.4), grayC (18.4). ggthemes: Tableau Classic Blue (11.1), Gray Warm (11.0),
+  Classic Gray (10.5). nord: Halifax Harbor (8.3). PNWColors: Lake (13.5), Mushroom (12.6), Winter
+  (11.9). CARTOColors: DarkMint (12.9), BrwnYl (12.0), BluYl (11.2).
+- Diverging: ColorBrewer: RdBu (22.9, default), PuOr (24.7), BrBG (13.7). khroma: Paul Tol sunset
+  (18.7), Crameri Vanimo (27.9), Vik (28.2), Bam (24.1). ggthemes: Tableau Red-Blue-White (25.2),
+  Orange-Blue-White (25.1), Classic Orange-White-Blue (23.5). nord: Silver Mine (8.5). PNWColors:
+  Shuksan 2 (15.0), Anemone (8.3). CARTOColors: Earth (15.2), ArmyRose (12.5), Geyser (11.4).
+  Built in: Blue-red (13.9, the fallback without paletteer).
+
+The selects group by source, with the default's group first; each option and the chosen item show
+a strip of the palette's colours before the name (selectize.js's `render` option through
+`selectizeInput(options = list(render = I(...)))`). A chosen palette that fails puts one line under
+Style: "This palette is hard to tell apart for some readers with colour-vision differences." A
+qualitative palette with fewer colours than a chart draws is not stretched: that chart uses the
+default palette and its notes say so. The colour count is now the drawn table's (`.n_colours`, set
+by the lint), not the codebook's, so a chart filtered to fewer groups keeps the chosen palette.
+
+### Finding: rsconnect does not expand patterns in `.rscignore`
+
+rsconnect 1.11.2's `listDeploymentFiles()` showed `phase6_prompt.md` and `phase6b_prompt.md` in a
+deployment although `.rscignore` listed `phase*_prompt.md`. `.rscignore` now names each prompt; a
+new prompt file must be added to it by name. With that, a deployment carries `app.R`, `R/` and
+`www/reflexes/` only: no tests, prompts, mailbox, probe or documents.
+
+### Seen in the browser (the `chart` preview; no key typed)
+
+- Style dialog (a small file handed to the Data page, "one sale" typed as the row): the legend
+  line with the tick; three selectize selects, each chosen palette with its swatch strip and tick;
+  the Groups list open, grouped Built in, khroma (Paul Tol, Crameri), ggthemes, MetBrewer,
+  NatParksPalettes, nord, PNWColors, CARTOColors, wesanderson, each option with its strip; choosing
+  ColorBrewer YlGnBu (no tick) put the warning line under Style on the canvas.
+- Working line: recorded with a MutationObserver, not seen by eye. On a chat send and on Suggest
+  charts it appeared with "Thinking" and went about 7 to 10 ms later, when the "needs a key" reply
+  came back. A long call, the "still working" words after 8 seconds, the reduced-motion dots and
+  shiny's pulse were not seen.
+
+### Not confirmed, and departures
+
+- Not confirmed: the working line during a real call of several seconds; that a screen reader
+  announces it; the pulse; how shinychat's own pending dots and the working line look together.
+- The lightest-colour contrast is not shown in the app: every qualitative palette offered,
+  Okabe-Ito included, has a lightest colour under 3 to 1 on white, so a note would stand beside
+  every one. It is in the STOP table.
+- `khroma::okabeito` is left out (the built-in Okabe-Ito is the same set); Paul Tol muted stays
+  under its old name.
+- The working line also goes when Shiny reports the server idle or disconnected, so a failed call
+  does not leave it showing.
+- STATUS.md was not shortened: the prompt asked for the shorter file as a proposal only.
+- Kevin's commit aef2456 holds `SurvAI_Expert/build/03_store.R` and
+  `SurvAI_Expert/data/catalog/receipt.csv`, which earlier phases kept out of every commit; it has
+  not been pushed, and I have not changed it.
+
 ## Phase 6, 2026-11-19: facts fixes, one call for every message, the chat-first screen
 
 Branch `chart`. Not pushed. One live run on `claude-sonnet-5-5` (step 8 of `tests/llm_check.R`): 16 calls.
