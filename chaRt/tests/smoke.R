@@ -2347,7 +2347,7 @@ d6_unhtml <- function(x) {
   x = gsub("&gt;", ">", x, fixed = TRUE)
   gsub("&amp;", "&", x, fixed = TRUE)
 }
-d6_seen <- function(x) d6_unhtml(gsub("\\\\([[:punct:]])", "\\1", x))
+d6_seen <- function(x) d6_unhtml(gsub("\\\\([[:punct:]])", "\\1", gsub("<span>@</span>", "@", x, fixed = TRUE)))
 d6_sugg <- function(content) d6_unhtml(regmatches(content, gregexpr("(?<=data-suggestion=\")[^\"]*(?=\")", content, perl = TRUE))[[1]])
 d6_shown <- function(content) d6_seen(regmatches(content, gregexpr("(?<=\">)[^<]*(?=</span>)", content, perl = TRUE))[[1]])
 d6_bare <- function(content) gsub("</span>", "", gsub("<span class=\"suggestion submit\" data-suggestion=\"[^\"<>]*\">", "", content, perl = TRUE), fixed = TRUE)
@@ -2515,6 +2515,64 @@ check("6-D 13: Suggest charts and Write headlines keep their words and their cha
         grepl("\\.chart-call \\{[^}]*--bs-btn-color: var\\(--bs-emphasis-color\\)[^}]*--bs-btn-border-color: var\\(--bs-emphasis-color\\)", EXPLORE_CSS) &&
         grepl("--bs-btn-disabled-color: var\\(--bs-body-color\\)[^}]*--bs-btn-disabled-opacity: \\.65", EXPLORE_CSS) &&
         !grepl("opacity: \\.5;", EXPLORE_CSS) && grepl("chart-call:disabled \\{ cursor: not-allowed; \\}", EXPLORE_CSS))
+
+
+# ---- nothing in model or file text becomes a link ------------------------------------------------------------------------------
+#
+# GFM turns http://, https://, www. and e-mail addresses into links by itself. Each form is rendered with commonmark (extensions = TRUE,
+#   which implements the GFM autolinks; shinychat's own remark is not available here): the plain text must make an <a>, so the check can
+#   fail, and the text through md_text() must make none and must still read as it was (the backslashes and the <span>@</span> undone).
+
+d7_link <- function(md) grepl("<a ", commonmark::markdown_html(md, extensions = TRUE), fixed = TRUE)
+d7_form <- function(x) d7_link(x) && !d7_link(md_text(x)) && identical(d6_seen(md_text(x)), x)
+check("6-D 14: an http:// address in model or file text arrives with no link (the plain text does make one), and reads as it was",
+      d7_form("see http://evil.test/x?a=1&b=2 now") && d7_form("HTTP://EVIL.TEST/X"))
+check("6-D 15: an https:// address arrives with no link, and reads as it was", d7_form("see https://evil.test/x#top now") && d7_form("Https://Evil.Test"))
+check("6-D 16: a www. address arrives with no link, and reads as it was", d7_form("go to www.evil.test/path now") && !d7_link(md_text("WWW.EVIL.TEST and www.a.b")))
+check("6-D 17: an e-mail address arrives with no link, and reads as it was (the '@' is written as <span>@</span>, so no character is added or hidden)",
+      d7_form("write a.b@evil.test now") && d7_form("X@Y.ORG, and c_d+e@f.g.test") && identical(md_text("a@b"), "a<span>@</span>b") &&
+        !grepl("[^ -~]", md_text("a@b http://x.test www.y.test")))
+
+# ---- every text that reaches chat_append_message() was made safe ----------------------------------------------------------------
+#
+# R/ui.R is read as code. Exactly one chat_append_message() call exists in R/ and app.R, inside say(), and it sends what say() built from its
+#   `text` and its suggestions. Every say() call's text must be built only from: a string, a SETUP_* constant or one of the named symbols below,
+#   md_text(), the helpers that call md_text() (chat_reply_text(), story_line()), numbers (format_num(), length(), nrow(), ncol()), and
+#   paste(), paste0(), c(), if and ( over those. Its suggestions go through suggestion_list(), which escapes. Anything else, a value from a file
+#   or a model passed bare, fails.
+ui_all <- parse(if (exists("ui_file_override")) ui_file_override else "R/ui.R", keep.source = FALSE)   # the override is for a scratch mutation run only
+ui_find <- function(e, names) {
+  if (is.expression(e) || is.list(e)) return(unlist(purrr::map(as.list(e), ui_find, names = names), recursive = FALSE))
+  if (!is.call(e)) return(list())
+  f <- e[[1]]
+  nm <- if (is.symbol(f)) as.character(f) else if (is.call(f) && identical(f[[1]], as.name("::"))) as.character(f[[3]]) else ""
+  c(if (nm %in% names) list(e), unlist(purrr::map(as.list(e), ui_find, names = names), recursive = FALSE))
+}
+SAY_OK_SYMBOLS <- c("KEY_HINT", "DATA_PAGE_LINK", "what", "landed", "unsure", "n_texts")
+SAY_OK_HELPERS <- c("md_text", "chat_reply_text", "story_line")
+say_safe <- function(e) {
+  if (is.character(e) || is.numeric(e) || is.logical(e) || is.null(e)) return(TRUE)
+  if (is.symbol(e)) return(grepl("^SETUP_", as.character(e)) || as.character(e) %in% SAY_OK_SYMBOLS)
+  if (!is.call(e)) return(FALSE)
+  nm <- if (is.symbol(e[[1]])) as.character(e[[1]]) else ""
+  if (nm %in% c(SAY_OK_HELPERS, "format_num", "length", "nrow", "ncol")) return(TRUE)
+  if (identical(nm, "if")) return(all(purrr::map_lgl(as.list(e)[-c(1L, 2L)], say_safe)))     # the condition is not text
+  nm %in% c("paste", "paste0", "c", "(", "{") && all(purrr::map_lgl(as.list(e)[-1L], say_safe))
+}
+ui_def <- function(name) {
+  d <- purrr::keep(ui_find(ui_all, c("<-", "=")), function(e) is.symbol(e[[2]]) && identical(as.character(e[[2]]), name))
+  if (length(d)) paste(deparse(d[[1]]), collapse = " ")
+}
+ui_say_calls <- ui_find(ui_all, "say")
+ui_append <- ui_find(ui_all, "chat_append_message")
+ui_text_ok <- purrr::map_lgl(ui_say_calls, function(cl) say_safe(cl[[2]]))
+ui_other_appends <- purrr::map_lgl(setdiff(c(r_files, "app.R"), "R/ui.R"), function(f) grepl("chat_append_message(", paste(readLines(f, warn = FALSE), collapse = "\n"), fixed = TRUE))
+check("6-D 18: R/ui.R has one chat_append_message() call, inside say(), and every say() call's text is built only through md_text(), a helper that calls it (chat_reply_text, story_line), a constant or a number",
+      length(ui_append) == 1L && !any(ui_other_appends) && grepl("chat_append_message", ui_def("say"), fixed = TRUE) && length(ui_say_calls) >= 20L &&
+        all(ui_text_ok) && grepl("suggestion_list(suggestions)", ui_def("say"), fixed = TRUE) &&
+        all(purrr::map_lgl(c("chat_reply_text", "story_line", "suggestion_list"), function(h) grepl("md_text(", ui_def(h), fixed = TRUE))) &&
+        grepl("htmlEscape(texts, attribute = TRUE)", ui_def("suggestion_list"), fixed = TRUE) && grepl("htmlEscape", ui_def("md_text"), fixed = TRUE) &&
+        say_safe(quote(paste0("a ", md_text(x)))) && !say_safe(quote(res$error)) && !say_safe(quote(paste0("a ", cb$file))) && !say_safe(quote(some_value)))
 
 
 # ---- the count -------------------------------------------------------------------

@@ -14,7 +14,7 @@
 #      shown on tests/live_gallery.html under "Phase 5" (tests/live_gallery.R);
 #   8. Phase 6: tests/data/orders.csv read with -99 and N/A as missing, label_columns(), one row is "one
 #      order", then twelve turns through chat_turn() (LIVE_TURNS, selecting as the plan says) and a headline
-#      and summary for every chart on the canvas. Calls are counted and the run stops at 20 (LIVE_MAX_CALLS).
+#      and summary for every chart on the canvas. Calls are counted and the run stops at 24 (LIVE_MAX_CALLS).
 #      Saved as `phase6` beside the rest and shown on the page under "Phase 6".
 #   (Steps 4 to 6, the Phase 3 and 4 runs of the suggest and refine calls, went with those calls; the numbers
 #   of the others are kept.)

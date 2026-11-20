@@ -177,7 +177,7 @@ live_phase5_html <- function(p5, work) {
 LIVE_ORDERS <- file.path("tests", "data", "orders.csv")
 LIVE_ORDERS_MISSING <- c("-99", "N/A")      # the file's own codes for missing
 LIVE_ORDERS_ROW <- "one order"
-LIVE_MAX_CALLS <- 20L                       # planned: 1 label, 12 turns, their repairs, and 1 summary call per 8 charts
+LIVE_MAX_CALLS <- 24L                       # the manager allowed up to 24 for the one run (a-004); planned: 1 label, 12 turns, their repairs, 1 summary call per 8 charts
 
 # The twelve turns, in order: what the analyst sends, and what is selected when it is sent. select is "keep" (as the turn before
 #   left it), "none" (nothing selected), or a turn number k: the first chart (in reply order) that turn k added; if it added none,

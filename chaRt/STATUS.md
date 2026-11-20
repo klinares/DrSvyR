@@ -2,7 +2,7 @@
 
 ## Phase 6, 2026-11-19: facts fixes, one call for every message, the chat-first screen
 
-Branch `chart`. Not pushed. The live run (step 8 of `tests/llm_check.R`) is to be filled after the live run.
+Branch `chart`. Not pushed. One live run on `claude-sonnet-5-5` (step 8 of `tests/llm_check.R`): 16 calls.
 
 ### Built
 
@@ -58,25 +58,52 @@ Branch `chart`. Not pushed. The live run (step 8 of `tests/llm_check.R`) is to b
   - `tests/llm_check.R` step 8 and `live_chat()` in `tests/live_gallery.R`: `tests/data/orders.csv` read
     with `-99` and `N/A` as missing, one label call, row is "one order", twelve turns through `chat_turn()`
     with the selecting the plan says, then `summarize_charts()` for every chart on the canvas; calls are
-    counted and the run stops at 20 (`LIVE_MAX_CALLS`); saved as `phase6`, shown under "Phase 6".
-  - `tests/smoke.R`: a section "Phase 6 D" (13 checks, 6-D 1 to 13); 280 checks in all, 280 pass. Single
+    counted and the run stops at 24 (`LIVE_MAX_CALLS`; the manager allowed 24 for the one run); saved as `phase6`, shown under "Phase 6".
+  - `tests/smoke.R`: a section "Phase 6 D" (18 checks, 6-D 1 to 18); 285 checks in all, 285 pass. Single
     mutations of `R/ui.R` (29, in scratch) each make at least one 6-D check fail.
 
-### What shinychat 0.4.0 does with a message
+### Finding: shinychat 0.4.0 does not sanitise assistant messages
 
-`lib/shiny/shinychat.js` draws an assistant message with remark, remark-rehype (`allowDangerousHtml`)
-and rehype-raw, and no sanitiser: a tag in the text becomes an element (an `<img onerror>` would run),
-a markdown link can carry a `javascript:` address, and `<span class="suggestion submit"
-data-suggestion="...">` is a button whose click sends the text as the analyst. Only the analyst's own
-messages (role "user") go through rehype-sanitize and show raw HTML as text. So R escapes everything
-that is not its own wording. In the text, `md_text()` backslashes every ASCII punctuation mark
-(CommonMark's one escape for all of them) and writes `&`, `<`, `>` as entities; in a suggestion the
-`data-suggestion` value is `htmltools::htmlEscape(attribute = TRUE)`. A bare `http://` address, or a
-`www.` one, may still become a plain link (http and https only, opened in a new tab with `noopener`).
+File: `lib/shiny/shinychat.js` in the installed package (`C:/Users/keval/AppData/Local/R/win-library/4.6/shinychat/`).
+An assistant message is drawn through remark, remark-rehype with `allowDangerousHtml` and rehype-raw, and
+no sanitiser. Three facts follow:
+
+1. Raw HTML in the text is allowed: a tag becomes a real element, so an `<img onerror=...>` in a file
+   value or a model reply would run.
+2. `javascript:` links are kept: a markdown link keeps its address (the link handler only adds
+   `target` and `rel` to http and https links and does not filter the scheme).
+3. Any element with class `suggestion` (or a `data-suggestion` attribute) becomes a clickable card, and with
+   class `submit` a click sends its text as the analyst's message. Text from a file or a model could
+   therefore put words in the analyst's mouth.
+
+Only the analyst's own messages (role "user") go through rehype-sanitize. Nothing in the R side of
+`chat_append_message()` escapes anything.
+
+**The rule that follows: no text from a file or from the model reaches `chat_append_message()` except
+through `md_text()`.** `md_text()` backslashes every ASCII punctuation mark (CommonMark's one escape for
+all of them) and writes `&`, `<`, `>` as entities, so no emphasis, link, image, code, list, heading, table,
+tag or entity can start; it also stops autolinks: the backslash on `:` and `.` stops `http://`, `https://`
+and `www.`, and an e-mail address (found in the text after the escapes are undone, so nothing but a break
+in the text stops it) has its `@` written as `<span>@</span>`, which the reader sees and copies as a plain
+`@`, with no invisible character (checked against commonmark with `extensions = TRUE`, which implements
+the GFM autolinks, not against shinychat's own remark). A suggestion's `data-suggestion` value is
+`htmltools::htmlEscape(attribute = TRUE)` and its text goes through `md_text()` too; a `next` entry is put on
+one line. `say()` in `R/ui.R` is the only place that calls `chat_append_message()` and takes R's own wording
+only. `tests/smoke.R` (6-D 18) reads `R/ui.R` as code and fails if there is a second
+`chat_append_message()` call, or a `say()` call whose text is not built only from strings, `SETUP_*`
+constants, a few named symbols, numbers, `md_text()` or the helpers that call it (`chat_reply_text()`,
+`story_line()`), joined by `paste()`, `paste0()`, `c()` and `if`. Later phases keep to this rule.
 
 ### The live run
 
-To be filled after the live run.
+`tests/data/orders.csv`, read with -99 and N/A as missing: one label call, twelve chat turns, then
+headlines and summaries for the 11 charts on the canvas. 16 calls of the 24 allowed: 1 label, 12
+chat, 3 summarize (2 batches and 1 repair). No chat turn needed a repair, and every turn came back
+as the kind the prompt expected: turn 4 added a chart, turn 5 asked which chart, turn 6 answered
+with a chart, turn 7 told, turn 12 refused the pie. The one repair was for "half" in a histogram's
+summary ("the middle half"), which the facts do not back with a multiple. 11 of 11 texts checked.
+Input tokens 38,767 fresh and 80,282 from the cache (the 6,924-token system prompt after the first
+turn); 13,192 out; 116 s in calls.
 
 ### Departures
 

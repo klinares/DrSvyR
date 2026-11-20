@@ -200,7 +200,7 @@ repairs) and shows them on `tests/live_gallery.html` under "Phase 5". Step 8 (Ph
 `tests/data/orders.csv` (3,000 synthetic orders, 22 columns; `-99` and `N/A` mean missing; a row is
 one order), makes one label call, sends twelve messages through `chat_turn()` as an analyst would
 (selecting and deselecting a chart as the plan says), then asks for a headline and summary for every
-chart on the canvas. It counts its calls and stops at 20, and prints for each turn the seconds, fresh
+chart on the canvas. It counts its calls and stops at 24, and prints for each turn the seconds, fresh
 and cached tokens, the kind of reply, repairs, the text, `next` and the specs as YAML, then each
 headline and summary with its check result and the totals. Each call prints its input tokens read
 fresh and from the prompt cache. Steps 7 and 8 save to `tests/live_replies.rds` and write
