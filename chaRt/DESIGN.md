@@ -1,6 +1,6 @@
 # chaRt: design
 
-Version 0.3, 2026-11-18 (sections 16 and 17 record what changed as the phases were built). Written in the Claude project (the manager); built by Claude Code, one
+Version 0.4, 2026-11-19 (sections 16 to 18 record what changed as the phases were built). Written in the Claude project (the manager); built by Claude Code, one
 phase at a time. Kevin brings each phase's summary back to the project for review before the next.
 
 ## 1. What it is
@@ -370,3 +370,65 @@ Where this section and an earlier one disagree, this section holds.
     office skill.
 12. **Still open:** a reshape step for files with one column per year (the FH file cannot show a
     trend without it); dates in forms readr does not recognise; reference lines and bullet graphs.
+
+## 18. The chat-first redesign (ruled 2026-11-18 and 19, after Kevin used the app)
+
+Where this section and an earlier one disagree, this section holds. The engine is unchanged: the
+spec, the renderer, the lint, the palettes, the reflex files, the facts and the number check.
+
+**What Kevin ruled.**
+
+1. The app lives on Posit Connect and should feel like Shiny Assistant: the analyst explores the
+   data from a chat, with a few buttons where typing is slower.
+2. The charts as first built look plain and are not publishable. The target is newsroom quality:
+   the look of a finished bslib dashboard (cards, value boxes, one typeface, annotation on the
+   chart, restraint).
+3. The export is a dashboard HTML file with professionally built charts. It is fixed: readers do
+   not filter it.
+4. More palettes, MetBrewer among them.
+5. The machine-readable file is `data_dictionary.yaml`. The codebook is an HTML file for people.
+6. Motion and interactivity are wanted, within Tufte's principles.
+
+**The screen.** A navigation bar with Start here, Data, Explore and Methodology. Explore is two
+columns: the chat on the left, the canvas on the right. The canvas is the dashboard being built:
+value boxes across the top and one card per chart. Clicking a card selects it. There is no
+separate report list.
+
+**One call for every message** (`chat_turn()`, reflex file `chat.md`). The reply is exactly one
+of: `charts` (added to the canvas), `spec` (the selected chart revised), `ask`, `cannot`, `tell`
+(a few sentences about the file, from the DATA block only). It may carry `next`, up to three
+suggested follow-ups shown as buttons. The `suggest` and `refine` calls are folded into it; their
+reflex files keep their rules. The system prompt is the same on every turn and is cached.
+
+**What the chat does not do.** It has no long memory: each turn is given the canvas, the selected
+chart and one exchange back. It never states a figure about the data: a question that wants a
+number is answered with the chart that shows it, and the figure appears in that chart's checked
+facts and headline. Setup messages (what was read, problems, the buttons for missing values,
+labels and the row sentence) are written by R with no model call.
+
+**Headlines and summaries** (Phase 5, built): `spec_facts()` computes what may be said,
+`summarize_charts()` writes a headline and a short summary, `check_numbers()` and `check_words()`
+check them and anything the analyst types. The number check catches an invented number; it cannot
+catch a true number in a wrong sentence, so the facts state the comparisons and the analyst reads
+each summary beside its chart.
+
+**Phases from here.**
+
+| Phase | Builds |
+|---|---|
+| 6 | Facts fixes; `chat_turn()`; the chat-first screen |
+| 7 | The look of the charts: named styles after the SURV752 redesign handout (Tukey, The Economist, FiveThirtyEight, Newspaper, dark), a bundled open typeface, direct value labels, a source line, one accent colour against grey, annotations drawn by R from the facts, single-series charts that follow the palette, MetBrewer palettes that pass the colour-vision table |
+| 8 | The export: a Quarto dashboard HTML file (value boxes, cards with headline, chart and summary), `data_dictionary.yaml`, and `codebook.html` written by R with one entry per column and a small distribution chart |
+| 9 | More chart forms taught in the course (sparkline tables, bullet graphs, bubble trails), then dumbbell and rank-over-time |
+| 10 | Motion through plotly: a time column drives the frames; fixed axes; the reader plays, pauses and scrubs; past positions stay as a trail; the last frame is the static chart |
+| 11 | Start here, Methodology, the work skill converter, rehearsal at work |
+
+**The stance on motion.** Animation is used where time is the story and never to decorate. The
+evidence as recalled, to be verified before it is cited in the Methodology page: Robertson and
+others (2008) found animated trend displays less accurate for analysis than small multiples or
+traces, though liked; Heer and Robertson (2007) found simple staged transitions help. The course's
+own bubble-trail handout shows the static alternative.
+
+**Still open:** a reshape step for one-column-per-year files; grouping raw dates into months or
+quarters (the spec cannot); Quarto's dashboard format on the work server (the probe must report
+the Quarto version there).

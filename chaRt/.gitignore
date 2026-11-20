@@ -4,3 +4,5 @@ tests/*.out
 tests/gallery.html
 tests/live_gallery.html
 tests/live_replies.rds
+manager/*
+!manager/README.md

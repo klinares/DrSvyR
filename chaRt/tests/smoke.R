@@ -792,9 +792,10 @@ REFLEX_SHA <- c(
   "relationship.md" = "63fa0ce4d7efc55a8548e5831713ac3764cc3661ae9516fa50031be6a39a34f2",
   "distribution.md" = "fedaa1f13d77fb92ce9e8b177fbf88b9e2caec07cadda6b6c2901da51c62a6d5",
   "time.md" = "c907e5546557b6fedb91623a8c83588ac10af738946d00ea35458e74961988a9",
-  "suggest.md" = "9f32f48e4b4dd9b969187af1bb4bb4f198dcba49ea9465d0738aa5e565e915f3",
-  "refine.md" = "25497b74faa082fdc4823c481a078c620ce7fbaf3232a89825ec6d084663d9ad",
-  "summary.md" = "1dedcb1f7f4bc14ac6bf93e14747f7ca5cee431b69d3f37913ba30adc966ee0e")
+  "suggest.md" = "510448474300239e9f90e7cc3ed540e57e5e48fbe4e4fa3e6ec3c22d964efb29",
+  "refine.md" = "1f4c0a3135ecf090ba83732356db29143db157b3d990e95ad1543d3986ea082b",
+  "summary.md" = "b32e0563d508d7e14b5055d44f3174fabdf46c8fc65b3fcb630bac55f8add81b",
+  "chat.md" = "e978258b6d2d463003bfd8926ac34a151447157bb4b7ef1f5c9917b40a0295a3")
 
 rfiles <- tryCatch(check_reflex_files(), error = function(e) e)
 check(paste0("every reflex file parses (", if (inherits(rfiles, "error")) conditionMessage(rfiles) else length(rfiles), ")"),

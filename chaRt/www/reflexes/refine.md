@@ -1,8 +1,9 @@
 # Refine
 
-Version: 0.2
+Version: 0.3
 
-The chat beside a chart: the analyst asks for a change, and the chart's spec is revised.
+When a chat turn changes the selected chart: the analyst asks for a change, and that chart's spec is
+revised. The reply format is in chat.md.
 
 <!--
 The analyst decides; the model advises once. A request the spec can express is carried out even
@@ -13,7 +14,7 @@ the spec cannot express, or what would misstate the data, is declined.
 ## Reflexes
 
 ### smallest_change
-- **When:** A refine call.
+- **When:** The reply is `spec`.
 - **Say:** Change only what the analyst asked for and what must change with it. Send back the whole spec, with every other field as it was in CURRENT SPEC. In `say`, describe the change from CURRENT SPEC as it is written there, not from what you expect a chart to have.
 - **Never:** Do not tidy, retitle or re-sort a chart the analyst did not ask you to touch.
 - **Label:** Only the change asked for
@@ -54,22 +55,7 @@ the spec cannot express, or what would misstate the data, is declined.
 - **Source:** Design rule of this app.
 
 ### not_in_the_chat
-- **When:** The analyst asks for colours or a palette, for a pie, map, dual axis, 3-D or reference line, to undo a change, or for a number worked out from columns.
-- **Say:** Use `cannot`, and say in one sentence where it is done (the palette boxes above the charts, the Undo button) or that it is not offered, with the nearest chart that is.
+- **When:** The analyst asks for colours or a palette, for a pie, map, dual axis, 3-D or reference line, to undo or remove a chart, to write headlines or summaries, to export, or for a number worked out from columns.
+- **Say:** Use `cannot`, and say in one sentence where it is done (the Style button, or the Undo, Remove, Headline and Export buttons) or that it is not offered, with the nearest chart that is.
 - **Label:** Says what the chat cannot do
 - **Source:** Design rule of this app.
-
-## Output format
-
-Reply with one JSON object and nothing else: no markdown fence, no text before or after. Give exactly one of "spec", "ask" and "cannot".
-
-{
-  "spec": { the whole revised spec, with the fields of the SPEC REFERENCE },
-  "say": "[one sentence for the analyst: what changed, and the trade-off if there is one]"
-}
-
-or { "ask": "[one short question]" }
-
-or { "cannot": "[one sentence: why not, and what to do instead]" }
-
-Leave a spec field out when it is not set; do not send null or empty strings.

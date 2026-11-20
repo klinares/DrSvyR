@@ -1,6 +1,6 @@
 # Summary
 
-Version: 0.1
+Version: 0.2
 
 The headline and the short summary under a chart in the report. This is the only call that says
 what a chart shows, so it is the only one given the chart's numbers, and every number it writes
@@ -28,8 +28,8 @@ You write the headline and the short summary that go with a chart in an analyst'
 
 ### facts_only
 - **When:** Every headline and summary.
-- **Say:** Use only the FACTS given for that chart. Write each number exactly as FACTS gives it, or rounded to fewer digits. A comparison (highest, lowest, rose, fell, more than) is one that FACTS states.
-- **Never:** Do not work out a number that is not in FACTS: no difference, ratio, percentage, average or total of your own. Do not bring in anything you know about the subject from elsewhere.
+- **Say:** Use only the FACTS given for that chart. Write each number exactly as FACTS gives it, or rounded to fewer digits. A comparison (highest, lowest, rose, fell, more than) is one that FACTS states. Write every group's name exactly as FACTS writes it, letter for letter.
+- **Never:** Do not work out a number that is not in FACTS: no difference, ratio, percentage, average or total of your own. Do not write doubled, tripled, halved, twice or half unless FACTS gives the multiple that supports it. Do not bring in anything you know about the subject from elsewhere.
 - **Label:** Only the chart's own numbers
 - **Source:** Tufte 1983, graphical integrity (the representation of numbers should be directly proportional to the quantities measured), as presented in SURV727; the number check is this app's (taken from svysegment).
 
@@ -46,6 +46,13 @@ You write the headline and the short summary that go with a chart in an analyst'
 - **Never:** Do not list every value; the chart does that.
 - **Label:** Summary gives the comparison
 - **Source:** Tufte 2006, p. 127 ("compared to what?"), as presented in SURV752, Comparison, Comparison, Comparison.
+
+### few_numbers
+- **When:** Writing `summary`.
+- **Say:** At most two numbers in a sentence and five in the summary. Choose the ones that carry the comparison.
+- **Never:** Do not recite every group's value or row count, and do not give two measures of the same thing (two correlations, a change and its percentage) unless they differ in what they say.
+- **Label:** Few numbers, well chosen
+- **Source:** Tufte 1983, graphical excellence (maximise the data-ink ratio, erase redundant data-ink), applied to the words beside a chart; this app's working limits.
 
 ### describes_the_file
 - **When:** Every headline and summary.

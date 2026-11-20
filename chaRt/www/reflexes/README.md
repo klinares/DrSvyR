@@ -18,7 +18,7 @@ checksums, so an edit that was not meant shows up.
   - `- **Source:**` where the rule comes from. Shown on the Methodology page. Never sent. A rule
     that is not from the course materials says so.
 - `## Prohibitions`: one bullet each.
-- `## Output format`: the reply format, sent as written (codebook.md, suggest.md).
+- `## Output format`: the reply format, sent as written (codebook.md, chat.md, summary.md).
 - HTML comments are notes for people and are stripped before anything is sent.
 - No real data values in examples. Use [placeholders].
 
@@ -29,11 +29,11 @@ question give the same prompt.
 
 | Call | Reflexes in the system prompt | R adds, in the user message |
 |---|---|---|
-| `label` (Codebook tab) | codebook | the DATA block (file name and every column's facts), codebook.md's reply format |
-| `suggest` (Explore tab) | core, comparison, relationship, distribution, time, suggest, refine | the DATA block, the analyst's question, suggest.md's reply format |
-| `refine` (the chat) | the same seven, so the system prompt is identical and is read from the cache | the DATA block (the index, and detail for the chart's own columns), the current spec, R's notes, the last exchange, the analyst's message, refine.md's reply format |
+| `label` (a button) | codebook | the DATA block (file name and every column's facts), codebook.md's reply format |
+| `chat` (every message the analyst types) | core, comparison, relationship, distribution, time, suggest, refine, chat | the DATA block, the CANVAS (each chart's id, title, family and columns), the SELECTED chart's spec and notes or "none", the last exchange, the analyst's message, chat.md's reply format |
+| `summarize` (a button) | summary | the CHARTS block (each chart's id, title, row and facts), summary.md's reply format |
 
-After the reflexes and prohibitions, the system prompt of `suggest` and `refine` ends with the
-SPEC REFERENCE, written by R from `R/spec.R`.
+After the reflexes and prohibitions, the system prompt of `chat` ends with the SPEC REFERENCE,
+written by R from `R/spec.R`. It is the same for every turn, so it is read from the cache.
 
-The files for `summarize` (headlines and summaries) and `interactive` come in later phases.
+suggest.md and refine.md hold rules only; the one reply format for a chat turn is in chat.md.
