@@ -271,8 +271,8 @@ json_list <- function(x) if (is.null(x)) list() else if (is.list(x) && is.null(n
 #   for in what it was given, at the precision it was written. Here what it was given is the chart's
 #   FACTS, numbers are compared as values, and a rounding must keep two significant digits.
 
-# Number words checked as numbers.
-NUMBER_WORDS <- c(one = 1, two = 2, three = 3, four = 4, five = 5, six = 6, seven = 7, eight = 8, nine = 9, ten = 10,
+# Number words checked as numbers ("one" is not: it is nearly always a pronoun).
+NUMBER_WORDS <- c(two = 2, three = 3, four = 4, five = 5, six = 6, seven = 7, eight = 8, nine = 9, ten = 10,
                   eleven = 11, twelve = 12)
 NUMBER_SCALES <- c(thousand = 1e3, million = 1e6, billion = 1e9)
 # The words summary.md forbids, matched as whole words in any case.
@@ -282,7 +282,7 @@ SUMMARY_FORBIDDEN <- c("cause", "causes", "caused", "leads to", "drives", "due t
 # The numbers in a text: list(text, value, unit, sig) for each, where unit is the place of its last
 #   written digit (a whole number ending in zeros counts as rounded to them) and sig its significant
 #   digits. Tokens ([[N1]]) and ordinals (1st, 10th) are not numbers; an ISO date counts as its year;
-#   "12%", "12 percent" and "12 per cent" are 12; "1.2 thousand" is 1200; one to twelve as words are
+#   "12%", "12 percent" and "12 per cent" are 12; "1.2 thousand" is 1200; two to twelve as words are
 #   numbers. A minus sign is kept in `text` only: values are compared without their sign.
 text_numbers <- function(text) {
   t = gsub("\\[\\[N[0-9]+\\]\\]", " ", paste(text, collapse = " "))
@@ -330,11 +330,28 @@ check_numbers <- function(text, facts, spec = list()) {
   unique(purrr::map_chr(bad, "text"))
 }
 
-# The forbidden words of summary.md that `text` uses, as whole words in any case.
-check_words <- function(text) {
+# Words that state a multiple, each with the test a multiple of the facts must pass: at least 2, 3,
+#   4 and 2, at most 0.5 and 0.5.
+MULTIPLE_WORDS <- list(doubled = function(m) m >= 2, tripled = function(m) m >= 3, quadrupled = function(m) m >= 4,
+                       twice = function(m) m >= 2, halved = function(m) m <= 0.5, half = function(m) m <= 0.5)
+
+# The multiples the facts state: the number of each "Highest as a multiple of the lowest: m" and
+#   "end is m times start" (fact_num() and fact_times() write them without separators).
+facts_multiples <- function(facts) {
+  hits = regmatches(facts, gregexpr("(?<=multiple of the lowest: )[0-9.]+|(?<=end is )[0-9.]+(?= times start)", facts, perl = TRUE))
+  suppressWarnings(as.numeric(unlist(hits)))
+}
+
+# The words of summary.md that `text` uses, as whole words in any case: the forbidden ones, and the
+#   words of MULTIPLE_WORDS unless `facts` (the chart's facts as text) state a multiple that supports
+#   them. With no facts none is stated.
+check_words <- function(text, facts = NULL) {
   t = paste(text, collapse = " ")
-  purrr::keep(SUMMARY_FORBIDDEN, function(w)
-    grepl(paste0("(?i)(?<![A-Za-z])", gsub(" ", "\\\\s+", w), "(?![A-Za-z])"), t, perl = TRUE))
+  uses = function(w) grepl(paste0("(?i)(?<![A-Za-z])", gsub(" ", "\\\\s+", w), "(?![A-Za-z])"), t, perl = TRUE)
+  m = facts_multiples(facts)
+  m = m[!is.na(m)]
+  c(purrr::keep(SUMMARY_FORBIDDEN, uses),
+    purrr::keep(names(MULTIPLE_WORDS), function(w) uses(w) && !any(MULTIPLE_WORDS[[w]](m))))
 }
 
 
@@ -620,7 +637,7 @@ summary_input <- function(chart, cb, data, palette = chart_palette_default()) {
   t = tryCatch(spec_table(s, data, cb, palette), error = function(e) e)
   if (inherits(t, "error")) return(list(id = chart$id, spec = chart$spec, hash = spec_hash(chart$spec), error = SUMMARY_NO_TABLE))
   lint = spec_lint(s, cb, t, chart_palette_max(palette$qualitative))
-  f = spec_facts(lint$spec, t, cb, isTRUE(chart$exploratory))
+  f = spec_facts(lint$spec, t, cb, isTRUE(chart$exploratory), data)
   list(id = chart$id, title = names_out(chart$spec$title %||% "(none)", f$names), row_is = if (codebook_ready(cb)) trimws(cb$row_is) else "not yet given",
        facts = f, spec = chart$spec, hash = spec_hash(chart$spec))
 }
@@ -652,7 +669,7 @@ summary_problems <- function(headline, summary, facts_text, spec, tokens = chara
   fields = c(headline %||% "", summary %||% "")
   found = unlist(regmatches(fields, gregexpr("\\[\\[N[0-9]+\\]\\]", fields)))
   list(numbers = unique(unlist(purrr::map(fields, function(x) check_numbers(x, facts_text, spec)))),
-       words = unique(unlist(purrr::map(fields, check_words))),
+       words = unique(unlist(purrr::map(fields, function(x) check_words(x, facts_text)))),
        tokens = unique(setdiff(found, tokens)))
 }
 summary_ok <- function(p) !length(p$numbers) && !length(p$words) && !length(p$tokens)
@@ -660,7 +677,10 @@ summary_ok <- function(p) !length(p$numbers) && !length(p$words) && !length(p$to
 # The problems as the analyst reads them, one sentence each.
 problem_sentences <- function(p)
   c(if (length(p$numbers)) paste0(p$numbers, " is not a number in this chart's data"),
-    purrr::map_chr(p$words, function(w) if (w %in% SUMMARY_CAUSE_WORDS) paste0("'", w, "' suggests a cause") else paste0("'", w, "' reaches beyond the rows of this file")),
+    purrr::map_chr(p$words, function(w)
+      if (w %in% SUMMARY_CAUSE_WORDS) paste0("'", w, "' suggests a cause")
+      else if (w %in% names(MULTIPLE_WORDS)) paste0("'", w, "' is a comparison the chart's facts do not state.")
+      else paste0("'", w, "' reaches beyond the rows of this file")),
     if (length(p$tokens)) paste0(p$tokens, " is not a name in this chart"))
 
 # The problems as the repair call is told them, for one chart.

@@ -1388,10 +1388,11 @@ b5_unexplained <- function(facts, pool) {
   purrr::map_chr(purrr::keep(b5_numbers(facts), function(n) !any(abs(pool - n$value) <= n$tol)), "text")
 }
 # What the test computes from the table for each family, on its own, with base R.
-b5_pool <- function(s, t, p) {
+b5_pool <- function(s, t, p, data) {
   t = as.data.frame(t)
   v = value_name(spec_defaults(s))
-  common = c(attr(t, "rows_used"), attr(t, "rows_dropped"), attr(t, "groups_total"), s$top_n, attr(t, "top"),
+  common = c(attr(t, "rows_used"), attr(t, "rows_dropped"), attr(t, "rows_used") + attr(t, "rows_dropped"), attr(t, "groups_total"), s$top_n, attr(t, "top"),
+             purrr::map_int(intersect(c(s$x, s$y, s$color, s$facet), names(t)), function(col) length(unique(t[[col]]))),
              suppressWarnings(as.numeric(unlist(purrr::map(s$filter, "value")))))
   fam = s$family
   if (fam %in% c("bar", "dot")) {
@@ -1402,7 +1403,7 @@ b5_pool <- function(s, t, p) {
   } else if (identical(fam, "line")) {
     out = unlist(purrr::map(split(t, as.character(t[[s$color]])), function(d) {
       d = d[order(d[[s$x]]), ]; y = d[[v]]; n = length(y)
-      c(y, y[n] - y[1], 100 * (y[n] - y[1]) / y[1], d[[s$x]])
+      c(y, y[n] - y[1], 100 * (y[n] - y[1]) / y[1], d[[s$x]], signif(y[n] / y[1], 2))
     }))
   } else if (identical(fam, "slope")) {
     lv = levels(t[[s$x]])
@@ -1410,7 +1411,7 @@ b5_pool <- function(s, t, p) {
     b = b[match(as.character(a[[s$color]]), as.character(b[[s$color]])), ]
     chg = b[[v]] - a[[v]]
     out = c(a[[v]], b[[v]], chg, 100 * chg / a[[v]], rank(-a[[v]], ties.method = "min"), rank(-b[[v]], ties.method = "min"),
-            nrow(a), sum(chg > 0), sum(chg < 0), as.numeric(lv))
+            nrow(a), sum(chg > 0), sum(chg < 0), as.numeric(lv), signif(b[[v]] / a[[v]], 2))
   } else if (fam %in% c("scatter", "bubble")) {
     x = t[[s$x]]; y = t[[s$y]]
     keys = unique(c(s$color, s$facet))
@@ -1431,8 +1432,9 @@ b5_pool <- function(s, t, p) {
   } else if (identical(fam, "box")) {
     out = unlist(purrr::map(split(t[[s$y]], as.character(t[[s$x]])), function(y) c(length(y), stats::quantile(y, c(0, 0.25, 0.5, 0.75, 1)))))
   } else if (identical(fam, "heatmap")) {
-    out = c(t[[v]], tapply(t[[v]], as.character(t[[s$x]]), mean), tapply(t[[v]], as.character(t[[s$y]]), mean),
-            tapply(t[[v]], as.character(t[[s$x]]), sum), tapply(t[[v]], as.character(t[[s$y]]), sum), SPEC_FACTS_CELLS,
+    dd = data[stats::complete.cases(data[, c(s$x, s$y, s$color)]), ]
+    by_rows = function(f) c(tapply(dd[[s$color %||% s$x]], as.character(dd[[s$x]]), f), tapply(dd[[s$color %||% s$x]], as.character(dd[[s$y]]), f))
+    out = c(t[[v]], by_rows(length), if (!is.null(s$color)) c(by_rows(mean), by_rows(sum), by_rows(stats::median)), SPEC_FACTS_CELLS,
             suppressWarnings(as.numeric(c(as.character(t[[s$x]]), as.character(t[[s$y]])))))
   }
   c(common, out)
@@ -1448,9 +1450,9 @@ b5_runs <- purrr::compact(purrr::imap(b5_specs, function(name, fam) {
   if (is.null(x)) return(NULL)
   t = spec_table(x$entry$spec, x$g$data, x$g$cb)
   p = spec_plot(x$entry$spec, x$g$data, x$g$cb)
-  f1 = spec_facts(attr(p, "spec"), t, x$g$cb)
-  f2 = spec_facts(attr(p, "spec"), t, x$g$cb)
-  list(family = fam, facts = f1, same = identical(f1, f2), bad = b5_unexplained(f1$text, b5_pool(x$entry$spec, t, p)),
+  f1 = spec_facts(attr(p, "spec"), t, x$g$cb, data = x$g$data)
+  f2 = spec_facts(attr(p, "spec"), t, x$g$cb, data = x$g$data)
+  list(family = fam, facts = f1, same = identical(f1, f2), bad = b5_unexplained(f1$text, b5_pool(x$entry$spec, t, p, x$g$data)),
        count = length(b5_numbers(f1$text)), cb = x$g$cb, table = t)
 }))
 purrr::walk(b5_runs, function(r)
@@ -1648,6 +1650,91 @@ if (!is.null(ball_g)) {
         isTRUE(e_out$stale) && isTRUE(e_out$rewrite))
   check("5-E: the report button counts and sends only the report charts that need it; a card shows its headline", isTRUE(e_out$report))
 }
+
+
+# ---- Phase 6 A: facts fixes and the checks --------------------------------------------------------
+
+# One check for each item; the facts are read back from the text and recomputed by the test.
+a6_line <- function(text, start) { l = strsplit(text, "\n", fixed = TRUE)[[1]]; l[startsWith(l, start)] }
+a6_facts <- function(spec, g) spec_facts(spec, spec_table(spec, g$data, g$cb), g$cb, data = g$data)$text
+a6_num <- function(x) format(signif(x, 3), trim = TRUE, scientific = FALSE)
+a6_fh <- purrr::detect(gold, function(x) identical(x$entry$name, "FH, political rights 2014 (histogram)"))
+if (!is.null(a6_fh)) {
+  a6_p <- spec_plot(a6_fh$entry$spec, a6_fh$g$data, a6_fh$g$cb)
+  a6_bins <- ggplot2::layer_data(a6_p)
+  a6_top <- a6_bins[which.max(a6_bins$count), ]
+  a6_x <- spec_table(a6_fh$entry$spec, a6_fh$g$data, a6_fh$g$cb)[[a6_fh$entry$spec$x]]
+  a6_bin <- a6_line(a6_facts(a6_fh$entry$spec, a6_fh$g), "Bin with the most rows")
+  a6_edges <- as.numeric(regmatches(a6_bin, gregexpr("-?[0-9.]+(?= to |,)", a6_bin, perl = TRUE))[[1]])
+  check("6-A 1: the bin with the most rows is reported with its edges clipped to the data's minimum and maximum, though ggplot2 draws it wider",
+        a6_top$xmax > max(a6_x) && identical(a6_edges[1:2], signif(c(max(a6_top$xmin, min(a6_x)), min(a6_top$xmax, max(a6_x))), 3)))
+}
+if (!is.null(ball_g)) {
+  a6_d <- ball_g$data
+  a6_heat <- list(family = "heatmap", x = "Position", y = "Foot", color = "Age", fn = "mean", title = "t")
+  a6_ok <- a6_d[!is.na(a6_d$Age) & !is.na(a6_d$Foot), ]
+  a6_cells <- spec_table(a6_heat, a6_d, ball_g$cb)
+  a6_row_mean <- mean(a6_ok$Age[a6_ok$Position == "Goalkeeper"])
+  a6_cell_mean <- mean(a6_cells$Age[a6_cells$Position == "Goalkeeper"])
+  a6_hf <- a6_facts(a6_heat, ball_g)
+  a6_med <- a6_facts(utils::modifyList(a6_heat, list(fn = "median")), ball_g)
+  a6_cnt <- a6_facts(list(family = "heatmap", x = "Position", y = "Foot", fn = "count", title = "t"), ball_g)
+  check("6-A 2: a heatmap column's value is the spec's function of all its rows (the goalkeepers' mean age, not the mean of two cells; median; count), worded 'All rows in ...'",
+        a6_num(a6_row_mean) != a6_num(a6_cell_mean) &&
+          grepl(paste0("All rows in Goalkeeper: mean ", a6_num(a6_row_mean)), a6_hf, fixed = TRUE) &&
+          grepl(paste0("All rows in Goalkeeper: median ", a6_num(stats::median(a6_ok$Age[a6_ok$Position == "Goalkeeper"]))), a6_med, fixed = TRUE) &&
+          grepl(paste0("All rows in Midfielder: count ", format(sum(a6_d$Position == "Midfielder"), big.mark = ",")), a6_cnt, fixed = TRUE))
+  a6_sc <- a6_facts(list(family = "scatter", x = "Height", y = "Weight", color = "Position", title = "t"), ball_g)
+  a6_hist <- a6_facts(list(family = "histogram", x = "Age", title = "t"), ball_g)
+  check("6-A 3: 'Groups shown' and 'Rows after the filter' (rows used plus rows left out) are in the facts of a bar, heatmap and scatter; a histogram has no groups",
+        "Groups shown: 4" %in% a6_line(a6_facts(list(family = "bar", x = "Position", fn = "count", title = "t"), ball_g), "Groups shown") &&
+          "Groups shown: 2 rows and 4 columns" %in% a6_line(a6_hf, "Groups shown") &&
+          paste0("Groups shown: ", length(unique(a6_d$Position))) %in% a6_line(a6_sc, "Groups shown") &&
+          !length(a6_line(a6_hist, "Groups shown")) &&
+          paste0("Rows after the filter: ", format(nrow(a6_d[!is.na(a6_d$Foot), ]), big.mark = ",")) %in% a6_line(a6_hf, "Rows after the filter") &&
+          paste0("Rows used: ", format(nrow(a6_ok), big.mark = ",")) %in% a6_line(a6_hf, "Rows used") &&
+          "Rows left out for missing values: 37" %in% a6_line(a6_hf, "Rows left out"))
+}
+a6_same <- facts_extremes(list(fn = "mean"), c(5, 5, 5), c("a", "b", "c"), fact_num)
+a6_diff <- facts_extremes(list(fn = "mean"), c(5, 6, 5), c("a", "b", "c"), fact_num)
+check("6-A 4: when every plotted value is the same, 'Every value shown: v' replaces Lowest and the multiple; differing values keep them",
+      "Every value shown: 5" %in% a6_same && !any(grepl("^Lowest|multiple", a6_same)) &&
+        !any(grepl("^Every value", a6_diff)) && any(grepl("^Lowest", a6_diff)) && "Highest as a multiple of the lowest: 1.2" %in% a6_diff)
+a6_df <- data.frame(g = rep(c("up", "neg", "flat"), each = 3), year = rep(1:3, 3), v = c(10, 14, 18, -2, 1, 4, 5, 5, 5))
+a6_nm <- function(col, v) as.character(v)
+a6_lines <- facts_lines(list(family = "line", x = "year", y = "v", color = "g", fn = "mean"), NULL, a6_df, a6_nm, fact_num)
+a6_slope_t <- a6_df[a6_df$year != 2, ]
+a6_slope_t$year <- factor(a6_slope_t$year)
+a6_slopes <- facts_slope(list(family = "slope", x = "year", y = "v", color = "g", fn = "mean"), NULL, a6_slope_t, a6_nm, fact_num)
+check("6-A 5: a line and a slope give 'end is m times start' to two significant digits when start and end are both positive, and not otherwise",
+      any(grepl("^up: .*end is 1.8 times start", a6_lines)) && !any(grepl("^neg: .*times start", a6_lines)) && any(grepl("^flat: .*end is 1 times start", a6_lines)) &&
+        any(grepl("^up: .*end is 1.8 times start", a6_slopes)) && !any(grepl("^neg: .*times start", a6_slopes)))
+a6_df_curve <- data.frame(x = 1:30, y = exp((1:30) / 3))
+a6_df_line <- data.frame(x = 1:30, y = 2 * (1:30) + rep(c(1, -1), 15))
+a6_g <- function(df) list(data = df, cb = new_codebook(profile_data(df), "x.csv", nrow(df), character(0), "UTF-8"))
+a6_scatter <- list(family = "scatter", x = "x", y = "y", title = "t", fit = "none")
+a6_curve <- a6_facts(a6_scatter, a6_g(a6_df_curve))
+a6_straight <- a6_facts(a6_scatter, a6_g(a6_df_line))
+check("6-A 6: a scatter gives the Pearson correlation, and the Spearman with 'The two differ, ...' only when they differ by more than 0.1",
+      grepl("Pearson correlation: 0.70", a6_curve, fixed = TRUE) && grepl("Spearman correlation: 1.00", a6_curve, fixed = TRUE) &&
+        grepl("The two differ, so the relationship is not a straight line.", a6_curve, fixed = TRUE) &&
+        grepl("Pearson correlation: ", a6_straight, fixed = TRUE) && !grepl("Spearman|The two differ", a6_straight))
+check("6-A 7: check_numbers(): 'one' is not a number (one of them, no one), 'two' to 'twelve' still are",
+      c5_ok("one of the players, and no one else; this one") && identical(check_numbers("two groups", c5_facts, c5_spec), "two") &&
+        identical(check_numbers("eleven groups", c5_facts, c5_spec), "eleven") && !"one" %in% names(NUMBER_WORDS))
+a6_f2 <- "Highest as a multiple of the lowest: 3.44"
+a6_f05 <- "Midfielder: first 10 (2015), last 5 (2024), change -5 (-50.0%), end is 0.5 times start, highest 10"
+a6_ws <- c(doubled = "It doubled.", tripled = "It tripled.", quadrupled = "It quadrupled.", twice = "Twice as many.", halved = "It halved.", half = "Half of them.")
+a6_says <- function(facts) names(a6_ws)[purrr::map_lgl(a6_ws, function(w) length(check_words(w, facts)) > 0L)]
+check("6-A 8: check_words(): doubled, tripled, quadrupled, twice, halved and half need a multiple in the facts (at least 2, 3, 4, 2; at most 0.5, 0.5); the sentence names the word",
+      setequal(a6_says(NULL), names(a6_ws)) && setequal(a6_says(a6_f2), c("quadrupled", "halved", "half")) &&
+        setequal(a6_says(a6_f05), c("doubled", "tripled", "quadrupled", "twice")) &&
+        identical(problem_sentences(summary_problems("It doubled", "", "Rows used: 5", list()))[1], "'doubled' is a comparison the chart's facts do not state.") &&
+        !length(check_words("It doubled", a6_f2)) && isTRUE(summary_ok(summary_problems("It doubled", "Twice as many.", a6_f2, list()))))
+a6_probe <- paste(readLines(file.path("probe", "app.R"), encoding = "UTF-8"), collapse = "\n")
+check("6-A 10: the probe lists av, gganimate and gifski in PROBE_PACKAGES, and checks ffmpeg, an MP4 from av and a Quarto dashboard",
+      grepl("PROBE_PACKAGES <- c\\([^)]*\"av\"[^)]*\"gganimate\"[^)]*\"gifski\"", a6_probe) && grepl("Sys.which(\"ffmpeg\")", a6_probe, fixed = TRUE) &&
+        grepl("av_encode_video", a6_probe, fixed = TRUE) && grepl("format: dashboard", a6_probe, fixed = TRUE))
 
 
 # ---- the count -------------------------------------------------------------------

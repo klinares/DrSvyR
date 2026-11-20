@@ -12,7 +12,7 @@ APP_CLASSIFICATION <- "UNCLASSIFIED"
 
 # The packages chaRt will need, reported with their versions.
 PROBE_PACKAGES <- c("plotly", "shinychat", "yaml", "quarto", "ragg", "htmltools", "knitr", "rmarkdown",
-                    "ggplot2", "readr", "dplyr", "tidyr", "tibble", "paletteer")
+                    "ggplot2", "readr", "dplyr", "tidyr", "tibble", "paletteer", "av", "gganimate", "gifski")
 
 # The three-line document rendered from inside the running app (plus the YAML fences).
 PROBE_QMD <- c("---",
@@ -32,6 +32,13 @@ PROBE_QMD_R <- c("---",
                  "p = ggplot2::ggplot(data.frame(x = 1:5, y = c(2, 4, 3, 5, 6)), ggplot2::aes(x, y)) + ggplot2::geom_line()",
                  "plotly::ggplotly(p)",
                  "```")
+
+# A Quarto dashboard, the smallest one.
+PROBE_QMD_DASHBOARD <- c("---",
+                         "title: chaRt probe dashboard",
+                         "format: dashboard",
+                         "---",
+                         "Quarto rendered this dashboard from inside a running Shiny app.")
 
 # What the R chunk needs; the check does not run without them.
 PROBE_QMD_R_NEEDS <- c("knitr", "rmarkdown", "ggplot2", "plotly")
@@ -80,7 +87,7 @@ quarto_version <- function() {
 # Renders a document in a fresh folder under tempdir() with the Quarto command line, and says
 #   whether the HTML came out self-contained (no side folder of files) and how long it took.
 #   QUARTO_R points Quarto at the R running this app, so an R chunk runs in the same installation.
-quarto_render <- function(doc = PROBE_QMD) {
+quarto_render <- function(doc = PROBE_QMD, to = "html") {
   q = quarto_bin()
   if (is.null(q)) return("no (Quarto not found)")
   dir = tempfile("probe_qmd_")
@@ -92,7 +99,7 @@ quarto_render <- function(doc = PROBE_QMD) {
   on.exit(if (is.na(old_r)) Sys.unsetenv("QUARTO_R") else Sys.setenv(QUARTO_R = old_r), add = TRUE)
   started = Sys.time()
   # A failed command also raises a warning; its output says more, so the warning is not kept.
-  out = suppressWarnings(system2(q$path, c("render", shQuote(qmd), "--to", "html", "--quiet"),
+  out = suppressWarnings(system2(q$path, c("render", shQuote(qmd), if (!is.null(to)) c("--to", to), "--quiet"),
                                  stdout = TRUE, stderr = TRUE))
   secs = as.numeric(difftime(Sys.time(), started, units = "secs"))
   status = if (is.null(attr(out, "status"))) 0L else attr(out, "status")
@@ -110,6 +117,41 @@ quarto_render_r <- function() {
   missing = PROBE_QMD_R_NEEDS[!vapply(PROBE_QMD_R_NEEDS, requireNamespace, logical(1), quietly = TRUE)]
   if (length(missing)) return(paste0("no, not run: ", paste(missing, collapse = ", "), " not installed"))
   quarto_render(PROBE_QMD_R)
+}
+
+# A format: dashboard document, rendered with the format the document names.
+quarto_render_dashboard <- function() quarto_render(PROBE_QMD_DASHBOARD, to = NULL)
+
+# Whether an ffmpeg program is on the PATH (av brings its own copy of the libraries, so this is for
+#   the command line only).
+ffmpeg_found <- function() {
+  path = Sys.which("ffmpeg")
+  if (nzchar(path)) paste("yes,", unname(path)) else "no (not on the PATH)"
+}
+
+# Ten small PNG frames drawn here, encoded into an MP4 in tempdir() by av. The function and its
+#   arguments (av_encode_video(input, output, framerate)) are looked for in the installed av first,
+#   since av was not installed where this probe was written; without them the answer says so.
+av_mp4 <- function() {
+  if (!requireNamespace("av", quietly = TRUE)) return("no, not run: av not installed")
+  ok = "av_encode_video" %in% getNamespaceExports("av") &&
+    all(c("input", "output", "framerate") %in% names(formals(getExportedValue("av", "av_encode_video"))))
+  if (!ok) return("no, not run: this av has no av_encode_video(input, output, framerate)")
+  dir = tempfile("probe_frames_")
+  dir.create(dir)
+  frames = file.path(dir, sprintf("frame%02d.png", 1:10))
+  lapply(seq_along(frames), function(i) {
+    grDevices::png(frames[i], width = 320, height = 240, type = "cairo")
+    graphics::plot(1:10, (1:10) * i / 10, ylim = c(0, 10), main = paste("chaRt probe, frame", i))
+    grDevices::dev.off()
+  })
+  out = file.path(dir, "probe.mp4")
+  started = Sys.time()
+  getExportedValue("av", "av_encode_video")(frames, out, framerate = 5)
+  secs = as.numeric(difftime(Sys.time(), started, units = "secs"))
+  if (file.exists(out) && file.size(out) > 0)
+    paste0("yes, in ", sprintf("%.1f", secs), " s; ", round(file.size(out) / 1024, 1), " KB")
+  else "no (no file was written)"
 }
 
 cairo_png <- function() {
@@ -141,6 +183,9 @@ run_checks <- function() {
          list("Quarto version", quarto_version),
          list("A .qmd renders to self-contained HTML from the app", quarto_render),
          list("A .qmd with an R chunk (ggplot, then ggplotly) renders to self-contained HTML", quarto_render_r),
+         list("A format: dashboard document renders from the app", quarto_render_dashboard),
+         list("An ffmpeg program is on the PATH", ffmpeg_found),
+         list("Ten PNG frames encode to an MP4 with av", av_mp4),
          list("A PNG draws with type = \"cairo\"", cairo_png),
          list("tempdir() is writable", tempdir_writable)))
   data.frame(Check = vapply(rows, function(r) r[[1]], character(1)),
