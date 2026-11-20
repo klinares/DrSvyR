@@ -1298,59 +1298,6 @@ if (!is.null(ball_g)) {
 }
 
 
-# ---- Phase 4 D: the Explore tab, with shiny::testServer() and a stand-in ------------------------------
-
-if (!is.null(ball_g)) {
-  d_bar <- list(family = "bar", x = "Position", fn = "count", title = "Players by position")
-  d_sc <- list(family = "scatter", x = "Height", y = "Weight", title = "Height and weight")
-  d_si <- stand_in(list(to_json(list(charts = list(d_bar, d_sc), cannot = list())),
-                        to_json(list(spec = utils::modifyList(d_bar, list(family = "dot", title = "Players by position, as dots")),
-                                     say = "Now a dot plot."))))
-  d_state <- shiny::reactiveValues(key_version = 0L, data = ball_g$data, problems = NULL, profile = NULL, codebook = ball_g$cb,
-                                   path = ball_g$path, calls = NULL, charts = list(), report = character(0), palette = chart_palette_default())
-  d_out <- new.env()   # testServer() runs its code in an environment of its own; results are kept here
-  shiny::testServer(mod_explore_server, args = list(state = d_state, ask = d_si$ask), {
-    session$setInputs(pal_qualitative = "okabe_ito", pal_sequential = "viridis", pal_diverging = chart_palette_default()$diverging)
-    session$setInputs(question = "How many players in each position?", draw = 1)
-    ids <- shown()
-    a <- ids[1]; b <- ids[2]
-    first_spec <- d_state$charts[[a]]$spec
-    calls_after_draw <- nrow(d_state$calls)
-    do.call(session$setInputs, stats::setNames(list(1), paste0(a, "_add")))
-    do.call(session$setInputs, stats::setNames(list(1), paste0(a, "_refine")))
-    d_out$opened <- identical(open(), a) && grepl("Back to all charts", as.character(output$results$html)) &&
-      grepl(paste0(a, "_chat"), as.character(output$results$html))
-    do.call(session$setInputs, stats::setNames(list("A title of my own"), paste0(a, "_w_title")))
-    d_out$wording <- identical(d_state$charts[[a]]$spec$title, "A title of my own") && nrow(d_state$calls) == calls_after_draw &&
-      length(d_state$charts[[a]]$history) == 1L
-    do.call(session$setInputs, stats::setNames(list(""), paste0(a, "_w_title")))
-    blank_title <- is.null(d_state$charts[[a]]$spec$title)
-    do.call(session$setInputs, stats::setNames(list("A title of my own"), paste0(a, "_w_title")))
-    do.call(session$setInputs, stats::setNames(list("make it a dot plot"), paste0(a, "_chat_user_input")))
-    d_out$chat <- identical(d_state$charts[[a]]$spec$family, "dot") && nrow(d_state$calls) == calls_after_draw + 1L &&
-      identical(talk[[a]]$messages[[2]]$content, "Now a dot plot.") && identical(talk[[a]]$last$message, "make it a dot plot")
-    d_out$report <- identical(d_state$report, a) && identical(d_state$charts[[d_state$report[1]]]$spec$family, "dot")
-    do.call(session$setInputs, stats::setNames(list(1), paste0(a, "_undo")))
-    after_undo <- d_state$charts[[a]]$spec
-    do.call(session$setInputs, stats::setNames(list(1), paste0(a, "_reset")))
-    d_out$undo_reset <- blank_title && identical(after_undo$family, "bar") && identical(after_undo$title, "A title of my own") &&
-      identical(d_state$charts[[a]]$spec, first_spec) && nrow(d_state$calls) == calls_after_draw + 1L
-    session$setInputs(back = 1)
-    do.call(session$setInputs, stats::setNames(list(1), paste0(b, "_refine")))
-    do.call(session$setInputs, stats::setNames(list("Height against weight"), paste0(b, "_w_title")))
-    d_out$separate <- length(d_state$charts[[b]]$history) == 1L && identical(d_state$charts[[b]]$spec$title, "Height against weight") &&
-      length(d_state$charts[[a]]$history) == 4L && is.null(talk[[b]])
-  })
-  check("4-D: Refine opens the chart in the wide view, with Back to all charts and its own chat", isTRUE(d_out$opened))
-  check("4-D: a wording box changes the spec and pushes history, with no call recorded; a blank box removes the field", isTRUE(d_out$wording))
-  check("4-D: a chat turn replaces the spec with the reply's, appends its say, and keeps the exchange for the next turn", isTRUE(d_out$chat))
-  check("4-D: a chart refined after Add to report is the refined one in the report list (which holds ids)", isTRUE(d_out$report))
-  check("4-D: Undo restores the spec before, Reset the first spec, neither with a call", isTRUE(d_out$undo_reset))
-  check("4-D: two charts keep separate histories and chats", isTRUE(d_out$separate))
-}
-
-
-
 # ---- Phase 5 A: a curve that cannot be fitted says so ------------------------------------------------
 
 if (!is.null(ball_g)) {
@@ -1597,65 +1544,6 @@ if (!is.null(ball_g)) {
           grepl("\nFACTS\nPlotted: Count by Position", u_inj, fixed = TRUE) && grepl("</CHARTS>\n\nREPLY FORMAT\n", u_inj, fixed = TRUE))
 }
 
-
-
-# ---- Phase 5 E: headlines and summaries on the Explore tab, with shiny::testServer() ----------------------
-
-if (!is.null(ball_g)) {
-  e_bar <- list(family = "bar", x = "Position", fn = "count", title = "Players by position")
-  e_sc <- list(family = "scatter", x = "Height", y = "Weight", title = "Height and weight")
-  e_si <- stand_by(function(user, i) {
-    if (!grepl("<CHARTS>", user, fixed = TRUE)) return(to_json(list(charts = list(e_bar, e_sc), cannot = list())))
-    to_json(list(charts = purrr::map(sent_ids(user), function(id)
-      list(id = id, headline = "Midfielders are the largest group", summary = "Of the 1,851 players, midfielders are the most."))))
-  })
-  e_state <- shiny::reactiveValues(key_version = 0L, data = ball_g$data, problems = NULL, profile = NULL, codebook = ball_g$cb,
-                                   path = ball_g$path, calls = NULL, charts = list(), report = character(0), stories = list(),
-                                   palette = chart_palette_default())
-  e_out <- new.env()
-  set_in <- function(session, id, what, value) do.call(session$setInputs, stats::setNames(list(value), paste0(id, "_", what)))
-  shiny::testServer(mod_explore_server, args = list(state = e_state, ask = e_si$ask), {
-    session$setInputs(pal_qualitative = "okabe_ito", pal_sequential = "viridis", pal_diverging = chart_palette_default()$diverging)
-    session$setInputs(question = "How many players in each position?", draw = 1)
-    ids <- shown()
-    a <- ids[1]; b <- ids[2]
-    set_in(session, a, "refine", 1)
-    before_write <- grepl("Write headline and summary", as.character(output[[paste0(a, "_story")]]$html), fixed = TRUE)
-    set_in(session, a, "write", 1)
-    story_html <- as.character(output[[paste0(a, "_story")]]$html)
-    e_out$write <- before_write && length(e_si$sent) == 2L && identical(e_state$stories[[a]]$headline, "Midfielders are the largest group") &&
-      grepl("Of the 1,851 players, midfielders are the most.", story_html, fixed = TRUE) && grepl(paste0(a, "_s_head"), story_html, fixed = TRUE) &&
-      grepl(SUMMARY_ALL_OK, as.character(output[[paste0(a, "_s_check")]]$html), fixed = TRUE) && nrow(e_state$calls) == 2L
-    set_in(session, a, "s_sum", "Of the 1,851 players, 658 are midfielders, which drives the totals.")
-    e_out$edit <- length(e_si$sent) == 2L && nrow(e_state$calls) == 2L &&
-      grepl("658 is not a number in this chart's data; 'drives' suggests a cause.", as.character(output[[paste0(a, "_s_check")]]$html), fixed = TRUE) &&
-      identical(e_state$stories[[a]]$summary, "Of the 1,851 players, 658 are midfielders, which drives the totals.")
-    set_in(session, a, "s_sum", "Of the 1,851 players, 657 are midfielders.")
-    e_out$edit_back <- grepl(SUMMARY_ALL_OK, as.character(output[[paste0(a, "_s_check")]]$html), fixed = TRUE)
-    set_in(session, a, "w_title", "Midfielders outnumber goalkeepers by 466")
-    e_out$title <- grepl("466 is not a number in this chart's data", as.character(output[[paste0(a, "_title_check")]]$html), fixed = TRUE)
-    stale_html <- as.character(output[[paste0(a, "_story")]]$html)
-    e_out$stale <- isTRUE(stale[[a]]) && grepl(SUMMARY_STALE, stale_html, fixed = TRUE) && grepl("Write again", stale_html, fixed = TRUE) &&
-      identical(e_state$stories[[a]]$headline, "Midfielders are the largest group") && length(e_si$sent) == 2L
-    set_in(session, a, "rewrite", 1)
-    e_out$rewrite <- length(e_si$sent) == 3L && !isTRUE(stale[[a]]) && identical(e_state$stories[[a]]$hash, spec_hash(e_state$charts[[a]]$spec))
-    set_in(session, a, "add", 1)
-    session$setInputs(back = 1)
-    set_in(session, b, "add", 1)
-    button <- as.character(output$report_button$html)
-    session$setInputs(write_report = 1)
-    e_out$report <- grepl("Write headlines and summaries for the report (1 chart)", button, fixed = TRUE) && length(e_si$sent) == 4L &&
-      identical(sent_ids(e_si$sent[[4]]$user), b) && !is.null(e_state$stories[[b]]) &&
-      grepl("Midfielders are the largest group", as.character(output[[paste0(a, "_headline")]]$html), fixed = TRUE)
-  })
-  check("5-E: Write headline and summary makes one call and fills the two boxes, with the line that every number matches", isTRUE(e_out$write))
-  check("5-E: editing the summary to a number not in the facts (and a cause word) shows the warning and makes no call; editing it back clears it",
-        isTRUE(e_out$edit) && isTRUE(e_out$edit_back))
-  check("5-E: the title box is checked the same way: a title with 466 (a difference of two facts) shows the warning", isTRUE(e_out$title))
-  check("5-E: changing the spec marks the text as out of date, with Write again, and keeps the old text; Write again makes one call",
-        isTRUE(e_out$stale) && isTRUE(e_out$rewrite))
-  check("5-E: the report button counts and sends only the report charts that need it; a card shows its headline", isTRUE(e_out$report))
-}
 
 
 # ---- Phase 6 A: facts fixes and the checks --------------------------------------------------------
@@ -1963,6 +1851,432 @@ a6_uf <- a6_facts(list(family = "heatmap", x = "g", y = "h", color = "v", fn = "
 check("6-A 2 (small fixture): column a is worded 'All rows in a: mean 15' (its rows), not 20 (its cells), and row p 'mean 20', not 30",
       grepl("All rows in a: mean 15", a6_uf, fixed = TRUE) && grepl("All rows in p: mean 20", a6_uf, fixed = TRUE) &&
         !grepl("All rows in a: mean 20", a6_uf, fixed = TRUE) && !grepl("All rows in p: mean 30", a6_uf, fixed = TRUE))
+
+
+# ---- Phase 6 C: the Explore screen -------------------------------------------------------------------
+#
+# The screen is a bslib page_navbar() with four pages; Explore is a chat (shinychat) beside a canvas of cards. shiny::testServer() runs
+#   the server with a stand-in for the model (stand_by()); no model is called. What testServer cannot do, and so is not tested here:
+#   the browser (what a click on a card or on a button inside it does, the buttons being disabled while a call runs, how the
+#   suggestions and the layout look). Those are covered by reading the code and by the lead's look at the screens.
+
+# A small sales file: 240 orders, a word ("N/A") among the units, a year column (the time role).
+c6_path <- file.path(work_dir, "sales.csv")
+c6_names <- c("region", "channel", "units", "price", "year")
+local({
+  set.seed(61)
+  n = 240L
+  sales = data.frame(region = sample(c("East", "West", "North", "South"), n, replace = TRUE),
+                     channel = sample(c("Web", "Store", "Phone"), n, replace = TRUE),
+                     units = as.character(sample(1:20, n, replace = TRUE)), price = round(stats::runif(n, 5, 80), 2),
+                     year = sample(2019:2024, n, replace = TRUE))
+  sales$units[c(4, 40, 80)] = "N/A"
+  readr::write_csv(sales, c6_path)
+})
+c6_read <- reread_data(c6_path, "sales.csv", character())
+c6_cb <- c6_read$codebook                     # row_is blank: not ready
+c6_cb_ready <- utils::modifyList(c6_cb, list(row_is = "one order"))
+c6_state <- function(cb = c6_cb_ready, read = c6_read)
+  shiny::reactiveValues(key_version = 0L, data = read$read$data, problems = read$read$problems, profile = read$profile, codebook = cb,
+                        path = c6_path, calls = NULL, charts = list(), canvas = character(0), stories = list(),
+                        palette = chart_palette_default())
+c6_set <- function(session, id, what, value) do.call(session$setInputs, stats::setNames(list(value), paste0(id, "_", what)))
+
+c6_bar <- list(family = "bar", x = "region", fn = "count", title = "Orders by region")
+c6_hist <- list(family = "histogram", x = "price", title = "Price of an order")
+c6_dot <- list(family = "dot", x = "region", fn = "count", title = "Orders by region, as dots")
+c6_bar2 <- list(family = "bar", x = "channel", fn = "count", title = "Orders by channel")
+c6_bar3 <- list(family = "bar", x = "channel", fn = "count", title = "Orders by channel, again")
+c6_replies <- list(
+  "How many orders in each region?" = list(charts = list(c6_bar, c6_hist)),
+  "Orders by channel too" = list(charts = list(c6_bar2)),
+  "make it a dot plot" = list(spec = c6_dot, say = "Now a dot plot."),
+  "show channels as well" = list(charts = list(c6_bar3)),
+  "(suggest charts for this file)" = list(charts = list(c6_bar2)),
+  "how do things look?" = list(ask = "Which part?", `next` = list("by region", "by channel")))
+c6_msg <- function(user) sub("(?s)^.*\nANALYST: (.*)\n\nREPLY FORMAT\n.*$", "\\1", user, perl = TRUE)
+# A stand-in that answers each kind of call: a summary call, a chat turn (by the message) and a label call.
+c6_reply <- function(user, i) {
+  if (grepl("<CHARTS>", user, fixed = TRUE))
+    return(to_json(list(charts = purrr::map(sent_ids(user), function(id)
+      list(id = id, headline = "A headline written for this chart", summary = "A summary written for this chart.")))))
+  if (grepl("\nANALYST: ", user, fixed = TRUE)) return(to_json(c6_replies[[c6_msg(user)]] %||% list(ask = "Which?")))
+  to_json(list(labels = purrr::map(c6_names, function(n) list(name = n, label = paste("Label of", n), sure = !identical(n, "year"))),
+               row_is_guess = "one order"))
+}
+c6_chat_calls <- function(si) purrr::keep(si$sent, function(s) grepl("\nANALYST: ", s$user, fixed = TRUE))
+c6_has <- function(x, pat) any(grepl(pat, x, fixed = TRUE))
+
+check("6-C 1: the helpers: a word among the numbers is a candidate for missing (once, not a number); md_text() keeps a '<' or '&' from starting a tag; the messy file gives its words",
+      identical(missing_candidates(c6_read$read$data), "N/A") && identical(md_text("a <b> & c"), "a &lt;b> &amp; c") &&
+        (inherits(messy, "error") || setequal(missing_candidates(messy$read$data), c("unknown", "about 40"))) &&
+        identical(treat_text("-99"), "Treat '-99' as missing") && identical(row_text("one order"), "A row is one order"))
+
+
+# ---- setup: R's messages, the missing value, the label call, the row guess -------------------------------------------
+
+a_si <- stand_by(c6_reply)
+a_state <- c6_state(cb = c6_cb)
+a_out <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = a_state, ask = a_si$ask), {
+  session$flushReact()
+  first <- made$log
+  a_out$read <- length(first) == 2L && grepl("Read sales.csv: 240 rows, 5 columns.", first[[1]]$content, fixed = TRUE) &&
+    grepl("Column units is mostly numbers", first[[1]]$content, fixed = TRUE) &&
+    grepl("<span class=\"suggestion submit\" data-suggestion=\"Treat &#39;N/A&#39; as missing\">Treat 'N/A' as missing</span>", first[[1]]$content, fixed = TRUE) &&
+    grepl("Label the columns", first[[2]]$content, fixed = TRUE) && grepl("class=\"suggestion submit\"", first[[2]]$content, fixed = TRUE) &&
+    length(a_si$sent) == 0L && is.null(a_state$calls) && identical(treat(), "N/A")
+  data_before <- a_state$data
+  session$setInputs(chat_user_input = "Treat 'N/A' as missing")
+  a_out$treat <- identical(missing_codes(a_state$codebook), "N/A") && is.numeric(a_state$data$units) && !identical(a_state$data, data_before) &&
+    sum(is.na(a_state$data$units)) == 3L && length(a_si$sent) == 0L && is.null(a_state$calls) && length(treat()) == 0L &&
+    grepl("Read sales.csv again with 'N/A' as missing: 240 rows, 5 columns.", made$log[[3]]$content, fixed = TRUE) &&
+    length(made$log) == 4L && grepl("Label the columns", made$log[[4]]$content, fixed = TRUE) &&
+    identical(a_state$codebook$columns[[1]]$label, "region") && identical(a_state$codebook$row_is, "")
+  session$setInputs(chat_user_input = "Label the columns")
+  lab <- made$log[[length(made$log)]]$content
+  a_out$label <- length(a_si$sent) == 1L && nrow(a_state$calls) == 1L && identical(a_state$calls$call, "label") &&
+    identical(a_state$codebook$columns[[1]]$label, "Label of region") && identical(a_state$codebook$columns[[1]]$label_source, "ai_guess") &&
+    grepl("5 labels were proposed, 1 of them marked 'check this'.", lab, fixed = TRUE) && grepl("#open-data-page", lab, fixed = TRUE) &&
+    grepl("You can edit it on the Data page.", lab, fixed = TRUE) && grepl("data-suggestion=\"A row is one order\"", lab, fixed = TRUE) &&
+    identical(a_state$codebook$row_is, "") && !isTRUE(ready())
+  session$setInputs(chat_user_input = "A row is one order")
+  a_out$row <- length(a_si$sent) == 1L && identical(a_state$codebook$row_is, "one order") && isTRUE(ready()) &&
+    identical(made$log[[length(made$log)]]$content, SETUP_READY) && nrow(a_state$calls) == 1L
+  # now questions: the last exchange is the analyst's message and the model's reply, never a setup line
+  session$setInputs(chat_user_input = "How many orders in each region?")
+  session$setInputs(chat_user_input = "Orders by channel too")
+  users <- purrr::map_chr(c6_chat_calls(a_si), "user")
+  setup_lines <- c("Read sales.csv", "Treat 'N/A'", "Treat &#39;N/A&#39;", "stands for missing", "Label the columns", "Next, the data dictionary",
+                   SETUP_READY, "A row is one order", "labels were proposed", "Start on the Data page", "Open the Data page")
+  a_out$last <- length(users) == 2L && !grepl("LAST EXCHANGE", users[1], fixed = TRUE) &&
+    grepl("LAST EXCHANGE\nANALYST: How many orders in each region?\nREPLY: Added to the canvas: Orders by region; Price of an order.\n\nANALYST: Orders by channel too",
+          users[2], fixed = TRUE) && lengths(gregexpr("LAST EXCHANGE", users[2], fixed = TRUE)) == 1L &&
+    !any(purrr::map_lgl(setup_lines, function(x) c6_has(c(users, purrr::map_chr(a_si$sent, "user")), x))) &&
+    identical(last(), list(message = "Orders by channel too", reply = "Added to the canvas: Orders by channel."))
+  a_out$calls_n <- nrow(a_state$calls)
+})
+check("6-C 2: a file read says 'Read <file>: n rows, m columns.', the problems, a clickable suggestion for each value that may mean missing and the Label button, with no model call",
+      isTRUE(a_out$read))
+check("6-C 3: 'Treat N/A as missing' (a click is the text sent) reads the file again with it, says so, makes no model call and does not go to the model",
+      isTRUE(a_out$treat))
+check("6-C 4: 'Label the columns' makes exactly one label call, applies the labels, says how many were proposed and how many say 'check this', links to the Data page and offers the row guess",
+      isTRUE(a_out$label))
+check("6-C 5: 'A row is <guess>' sets row_is with no call, and the line 'Ask a question about your data, or press Suggest charts.' follows",
+      isTRUE(a_out$row))
+check("6-C 6: LAST EXCHANGE is only the analyst's last message and the reply to it; none of R's setup lines is in any message sent to the model",
+      isTRUE(a_out$last) && identical(a_out$calls_n, 3L))
+
+
+# ---- the canvas: questions, cards, selecting, changing, Undo, Remove, Edit text, headlines ------------------------
+
+b_si <- stand_by(c6_reply)
+b_probe <- new.env()
+b_probe$busy <- logical(0)
+b_ask <- function(...) { b_probe$busy <- c(b_probe$busy, isTRUE(b_probe$now())); b_si$ask(...) }
+b_state <- c6_state()
+b_out <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = b_state, ask = b_ask), {
+  b_probe$now <- function() isolate(busy())
+  session$flushReact()
+  html <- function(name) gsub("&#39;", "'", paste(as.character(output[[name]]$html), collapse = ""), fixed = TRUE)
+  cell <- function(h, txt) grepl(paste0(">\\s*", txt, "\\s*<"), h)
+  sent_n <- function() length(b_si$sent)
+  calls_n <- function() nrow(b_state$calls) %||% 0L
+  last_ids <- function() sent_ids(b_si$sent[[sent_n()]]$user)
+
+  # the ready message and the canvas before anything is drawn
+  b_out$ready <- length(made$log) == 2L && grepl("Read sales.csv: 240 rows, 5 columns.", made$log[[1]]$content, fixed = TRUE) &&
+    identical(made$log[[2]]$content, SETUP_READY) && sent_n() == 0L && grepl("No charts yet", html("cards"), fixed = TRUE)
+  boxes <- html("boxes")
+  b_out$boxes <- length(gregexpr("bslib-value-box", boxes, fixed = TRUE)[[1]]) >= 3L && cell(boxes, "Rows") && cell(boxes, "240") && cell(boxes, "Columns") && cell(boxes, "5") && cell(boxes, "Period") &&
+    grepl("2019 to 2024", boxes, fixed = TRUE) && !grepl("sales.csv", boxes, fixed = TRUE)
+
+  # a question adds cards, newest first
+  session$setInputs(chat_user_input = "How many orders in each region?")
+  after_q1 <- b_state$canvas
+  say1 <- made$log[[length(made$log)]]$content
+  session$setInputs(chat_user_input = "Orders by channel too")
+  b_out$cards <- identical(after_q1, c("c1", "c2")) && identical(b_state$canvas, c("c3", "c1", "c2")) &&
+    identical(b_state$charts$c1$spec$family, "bar") && identical(b_state$charts$c2$spec$family, "histogram") &&
+    identical(b_state$charts$c3$spec$title, "Orders by channel") && sent_n() == 2L && calls_n() == 2L && !isTRUE(b_state$charts$c1$exploratory) &&
+    grepl("Added to the canvas.", say1, fixed = TRUE) && grepl("c3_card", html("cards"), fixed = TRUE) &&
+    regexpr("c3_card", html("cards"), fixed = TRUE) < regexpr("c1_card", html("cards"), fixed = TRUE) &&
+    regexpr("c1_card", html("cards"), fixed = TRUE) < regexpr("c2_card", html("cards"), fixed = TRUE) &&
+    grepl("3 charts", html("bar"), fixed = TRUE) && cell(html("bar"), "Style")
+  card1 <- html("c1_card")
+  b_out$card <- grepl("Orders by region", card1, fixed = TRUE) && all(purrr::map_lgl(c("Select", "Undo", "Interactive", "Code", "Edit text", "Headline", "Remove"),
+                                                                                        function(w) cell(card1, w))) &&
+    grepl("data-full-screen", card1, fixed = TRUE) && grepl("bslib-full-screen-enter", card1, fixed = TRUE) && grepl("disabled[^>]*c1_undo", card1) &&
+    grepl("data-chart-id=\"c1\"", card1, fixed = TRUE) && grepl("onclick=\"if (event.target.closest('button, a, input, select, textarea, label", card1, fixed = TRUE) &&
+    grepl("Shiny.setInputValue(", card1, fixed = TRUE) && grepl("c1_view", card1, fixed = TRUE) && grepl("c1_headline[^>]*chart-call|chart-call[^>]*c1_headline", card1) &&
+    !grepl("chart-selected", card1, fixed = TRUE)
+
+  # selecting: a click on the card, again to clear; the Select button (the keyboard way); Deselect
+  session$setInputs(card_click = list(id = "c1", t = 1))
+  sel1 <- selected(); ph1 <- placeholder(); card_sel <- html("c1_card")
+  session$setInputs(card_click = list(id = "c1", t = 2))
+  sel2 <- selected(); ph2 <- placeholder()
+  c6_set(session, "c1", "select", 1)
+  sel3 <- selected()
+  c6_set(session, "c1", "select", 2)
+  sel4 <- selected()
+  session$setInputs(card_click = list(id = "c2", t = 3))
+  sel5 <- selected(); bar5 <- html("bar")
+  session$setInputs(deselect = 1)
+  sel6 <- selected()
+  session$setInputs(card_click = list(id = "nonsense", t = 4))
+  sel7 <- selected()
+  session$setInputs(card_click = list(id = "c1", t = 5))
+  b_out$select <- identical(sel1, "c1") && identical(ph1, "Change Orders by region, or ask something new") && grepl("chart-selected", card_sel, fixed = TRUE) &&
+    cell(card_sel, "Deselect") && is.null(sel2) && identical(ph2, EXPLORE_PLACEHOLDER) && identical(sel3, "c1") && is.null(sel4) &&
+    identical(sel5, "c2") && grepl("Selected: Price of an order", bar5, fixed = TRUE) && cell(bar5, "Deselect") && is.null(sel6) && is.null(sel7) &&
+    identical(selected(), "c1") && !grepl("chart-selected", html("c2_card"), fixed = TRUE)
+
+  # selecting then changing replaces that card's chart and pushes the old spec; the others are untouched
+  c2_before <- b_state$charts$c2; c3_before <- b_state$charts$c3
+  session$setInputs(chat_user_input = "make it a dot plot")
+  sent_change <- b_si$sent[[sent_n()]]$user
+  c1_changed <- b_state$charts$c1
+  b_out$change <- identical(c1_changed$spec$family, "dot") && length(c1_changed$history) == 1L && identical(c1_changed$history[[1]]$family, "bar") &&
+    identical(b_state$charts$c2, c2_before) && identical(b_state$charts$c3, c3_before) && identical(b_state$canvas, c("c3", "c1", "c2")) &&
+    grepl("<SELECTED>\nc1\nCURRENT SPEC", sent_change, fixed = TRUE) && grepl("Now a dot plot.", made$log[[length(made$log)]]$content, fixed = TRUE) &&
+    identical(selected(), "c1") && !grepl("disabled[^>]*c1_undo", html("c1_card")) && grepl("Orders by region, as dots", html("c1_card"), fixed = TRUE)
+  # a charts reply with a chart selected leaves it untouched
+  session$setInputs(chat_user_input = "show channels as well")
+  b_out$untouched <- identical(b_state$charts$c1, c1_changed) && identical(b_state$canvas, c("c4", "c3", "c1", "c2")) &&
+    identical(b_state$charts$c4$spec$title, "Orders by channel, again") && identical(selected(), "c1") &&
+    grepl("<SELECTED>\nc1\nCURRENT SPEC", b_si$sent[[sent_n()]]$user, fixed = TRUE)
+
+  # Undo: no call; with no history it does nothing
+  n_calls <- calls_n(); n_sent <- sent_n()
+  c6_set(session, "c1", "undo", 1)
+  after_undo <- b_state$charts$c1
+  c6_set(session, "c1", "undo", 2)
+  b_out$undo <- identical(after_undo$spec$family, "bar") && identical(after_undo$spec, c1_changed$history[[1]]) && length(after_undo$history) == 0L &&
+    identical(b_state$charts$c1, after_undo) && calls_n() == n_calls && sent_n() == n_sent && grepl("disabled[^>]*c1_undo", html("c1_card"))
+
+  # Edit text: the wording changes the spec with no call, and each box has its check line
+  c6_set(session, "c1", "edit", 1)
+  c6_set(session, "c1", "w_title", "Top 99 regions")
+  warn_title <- html("c1_chk_title")
+  c6_set(session, "c1", "w_title", "Orders per region")
+  ok_title <- html("c1_chk_title")
+  c6_set(session, "c1", "w_subtitle", "Counted over all the rows")
+  c6_set(session, "c1", "apply", 1)
+  c1_worded <- b_state$charts$c1
+  b_out$wording <- grepl("99 is not a number in this chart's data", warn_title, fixed = TRUE) && grepl(SUMMARY_ALL_OK, ok_title, fixed = TRUE) &&
+    identical(c1_worded$spec$title, "Orders per region") && identical(c1_worded$spec$subtitle, "Counted over all the rows") &&
+    length(c1_worded$history) == 1L && identical(c1_worded$history[[1]], after_undo$spec) && calls_n() == n_calls && sent_n() == n_sent &&
+    grepl("Orders per region", html("c1_card"), fixed = TRUE)
+  c6_set(session, "c1", "w_subtitle", "")
+  c6_set(session, "c1", "apply", 2)
+  b_out$blank <- is.null(b_state$charts$c1$spec$subtitle) && length(b_state$charts$c1$history) == 2L && calls_n() == n_calls
+
+  # a headline for one chart: one call, that chart only
+  c6_set(session, "c2", "headline", 1)
+  story2 <- b_state$stories$c2
+  b_out$headline <- sent_n() == n_sent + 1L && identical(last_ids(), "c2") && identical(story2$headline, "A headline written for this chart") &&
+    identical(story2$hash, spec_hash(b_state$charts$c2$spec)) && calls_n() == n_calls + 1L && grepl("A headline written for this chart", html("c2_card"), fixed = TRUE) &&
+    grepl("A summary written for this chart.", html("c2_card"), fixed = TRUE) && !grepl(SUMMARY_STALE, html("c2_card"), fixed = TRUE) &&
+    grepl("Price of an order", html("c2_card"), fixed = TRUE) && grepl("Wrote the headline and summary for 1 chart.", made$log[[length(made$log)]]$content, fixed = TRUE)
+  # Edit text: headline and summary boxes are checked with no call
+  c6_set(session, "c2", "edit", 1)
+  c6_set(session, "c2", "s_sum", "There are 9,999 orders, which drives the total.")
+  chk_sum <- html("c2_chk_sum")
+  edited <- b_state$stories$c2$summary
+  c6_set(session, "c2", "s_head", "A different headline")
+  chk_head_ok <- html("c2_chk_head")
+  c6_set(session, "c2", "s_sum", "A summary written for this chart.")
+  b_out$story_edit <- grepl("9,999 is not a number in this chart's data; 'drives' suggests a cause.", chk_sum, fixed = TRUE) &&
+    identical(edited, "There are 9,999 orders, which drives the total.") && grepl(SUMMARY_ALL_OK, chk_head_ok, fixed = TRUE) &&
+    identical(b_state$stories$c2$headline, "A different headline") && grepl(SUMMARY_ALL_OK, html("c2_chk_sum"), fixed = TRUE) &&
+    sent_n() == n_sent + 1L && calls_n() == n_calls + 1L && !grepl(SUMMARY_STALE, html("c2_card"), fixed = TRUE)
+  b_out$a_headline <- sent_n() == n_sent + 1L
+
+  # a changed chart is marked; Write headlines sends only the charts that need it (c2 has current text)
+  c6_set(session, "c1", "headline", 1)
+  n2 <- sent_n()
+  story1_hash <- b_state$stories$c1$hash
+  session$setInputs(chat_user_input = "make it a dot plot")    # c1 is selected, changes again
+  marked <- html("c1_card")
+  hl_before <- b_state$stories$c1$headline
+  b_out$marked <- grepl(SUMMARY_STALE, marked, fixed = TRUE) && identical(b_state$stories$c1$headline, hl_before) &&
+    !identical(story1_hash, spec_hash(b_state$charts$c1$spec)) && !grepl(SUMMARY_STALE, html("c2_card"), fixed = TRUE)
+  n3 <- sent_n()
+  session$setInputs(write_headlines = 1)
+  b_out$write <- sent_n() == n3 + 1L && identical(last_ids(), c("c4", "c3", "c1")) && !is.null(b_state$stories$c4) && !is.null(b_state$stories$c3) &&
+    !grepl(SUMMARY_STALE, html("c1_card"), fixed = TRUE) && grepl("Wrote the headline and summary for 3 charts.", made$log[[length(made$log)]]$content, fixed = TRUE) &&
+    identical(made$log[[length(made$log) - 1L]], list(role = "user", content = "Write headlines")) &&
+    identical(b_state$stories$c2$headline, "A different headline") && !any(purrr::map_lgl(c("c1", "c2", "c3", "c4"), function(i) needs_story(i)))
+  n4 <- sent_n()
+  session$setInputs(write_headlines = 2)
+  b_out$write_none <- sent_n() == n4 && grepl("Every chart on the canvas already has a headline", made$log[[length(made$log)]]$content, fixed = TRUE)
+  # Undo marks it too
+  c6_set(session, "c1", "undo", 3)
+  b_out$undo_marked <- grepl(SUMMARY_STALE, html("c1_card"), fixed = TRUE) && needs_story("c1") && !needs_story("c2")
+  c6_set(session, "c1", "headline", 2)
+  b_out$rewrite <- !grepl(SUMMARY_STALE, html("c1_card"), fixed = TRUE) && !needs_story("c1")
+
+  # Interactive and Code: no call
+  n5 <- sent_n()
+  c6_set(session, "c3", "interactive", 1)
+  interactive_on <- html("c3_view"); interactive_btn <- html("c3_card")
+  c6_set(session, "c3", "interactive", 2)
+  c6_set(session, "c3", "code", 1)
+  b_out$views <- grepl("plotly", interactive_on, fixed = TRUE) && cell(interactive_btn, "Static") && grepl("c3_static", html("c3_view"), fixed = TRUE) && sent_n() == n5
+
+  # Suggest charts: the fixed message, exploratory charts
+  session$setInputs(suggest = 1)
+  b_out$suggest <- identical(c6_msg(b_si$sent[[sent_n()]]$user), SUGGEST_MESSAGE) && isTRUE(b_state$charts[[b_state$canvas[1]]]$exploratory) &&
+    grepl("Exploratory", html(paste0(b_state$canvas[1], "_card")), fixed = TRUE) &&
+    identical(made$log[[length(made$log) - 1L]], list(role = "user", content = "Suggest charts")) && !isTRUE(b_state$charts$c3$exploratory)
+
+  # Style: no call; a palette change is kept
+  n6 <- sent_n()
+  session$setInputs(style = 1)
+  alt <- setdiff(names(chart_palettes("sequential")), chart_palette_default()$sequential)[1]
+  session$setInputs(pal_sequential = alt)
+  b_out$style <- identical(palette()$sequential, alt) && identical(b_state$palette$sequential, alt) && sent_n() == n6 &&
+    identical(palette()$qualitative, chart_palette_default()$qualitative)
+
+  # Remove: the selected chart goes and the selection is cleared; another chart's removal keeps the selection
+  session$setInputs(card_click = list(id = "c3", t = 6))
+  sel_c3 <- selected()
+  c6_set(session, "c3", "remove", 1)
+  removed <- is.null(selected()) && !"c3" %in% b_state$canvas && is.null(b_state$charts$c3) && is.null(b_state$stories$c3) &&
+    identical(placeholder(), EXPLORE_PLACEHOLDER) && !grepl("c3_card", html("cards"), fixed = TRUE)
+  session$setInputs(card_click = list(id = "c1", t = 7))
+  c6_set(session, "c2", "remove", 1)
+  b_out$remove <- identical(sel_c3, "c3") && removed && identical(selected(), "c1") && !"c2" %in% b_state$canvas && is.null(b_state$charts$c2)
+
+  # the calls: every one ran with busy TRUE, and busy is FALSE after; the log pairs each start with its end
+  b_out$busy <- length(b_probe$busy) == length(b_si$sent) && all(b_probe$busy) && !isolate(busy()) && length(made$busy_log) > 0L &&
+    all(made$busy_log == rep(c(TRUE, FALSE), length.out = length(made$busy_log))) && length(made$busy_log) %% 2L == 0L
+  b_out$busy_n <- length(b_probe$busy)
+
+  # a different file clears the canvas and the conversation, and says so
+  other <- reread_data(c6_path, "other.csv", character())
+  other_cb <- utils::modifyList(other$codebook, list(row_is = "one order"))
+  b_state$data <- other$read$data; b_state$codebook <- other_cb
+  session$flushReact()
+  b_out$fresh <- length(b_state$canvas) == 0L && length(b_state$charts) == 0L && length(b_state$stories) == 0L && is.null(selected()) && is.null(last()) &&
+    grepl("A different file was read", made$log[[1]]$content, fixed = TRUE) && grepl("Read other.csv: 240 rows", made$log[[2]]$content, fixed = TRUE) &&
+    identical(made$log[[3]]$content, SETUP_READY) && length(made$log) == 3L
+})
+check("6-C 7: the Explore server starts ready: the read line, then the 'ask a question' line; the canvas says there are no charts; three plain value boxes (rows, columns, the period of the time column)",
+      isTRUE(b_out$ready) && isTRUE(b_out$boxes))
+check("6-C 8: a question adds cards, newest first (ids c3, c1, c2 after two questions), with the reply's say and 'Added to the canvas.' in the chat",
+      isTRUE(b_out$cards))
+check("6-C 9: a card has Select, Undo (disabled with no history), Interactive, Code, Edit text, Headline (a chart-call button) and Remove, a full screen button, its id, and a click handler that ignores clicks on buttons, links and boxes",
+      isTRUE(b_out$card))
+check("6-C 10: clicking a card selects it (accent class, Deselect on it, the chat placeholder 'Change <title>, or ask something new'), clicking it again, its Select button or Deselect clears; an unknown id does nothing",
+      isTRUE(b_out$select))
+check("6-C 11: selecting then changing replaces that card's chart and pushes the old spec onto its history; the other cards are untouched and the selection stays",
+      isTRUE(b_out$change))
+check("6-C 12: a charts reply with a chart selected adds the new chart on top and leaves the selected chart untouched (history too)", isTRUE(b_out$untouched))
+check("6-C 13: Undo restores the spec before with no call; with no history it does nothing", isTRUE(b_out$undo))
+check("6-C 14: Edit text: the wording changes the spec in one history step with no call, each box has the one-line check (a number not in the facts is named), a blank box removes the field",
+      isTRUE(b_out$wording) && isTRUE(b_out$blank))
+check("6-C 15: Headline on one card makes one call for that chart only and shows the headline over the title, the summary and no stale line",
+      isTRUE(b_out$headline))
+check("6-C 16: Edit text on the headline and summary boxes: a number not in the facts and a cause word are flagged with no call, and the text is kept; correcting it clears the line",
+      isTRUE(b_out$story_edit) && isTRUE(b_out$a_headline))
+check("6-C 17: a chart changed after its text was written shows 'The chart has changed since this was written.' and keeps the old text; the chart with current text does not",
+      isTRUE(b_out$marked))
+check("6-C 18: Write headlines sends one call with only the charts that have none or have changed (not the one with current text); a second press sends nothing and says so",
+      isTRUE(b_out$write) && isTRUE(b_out$write_none))
+check("6-C 19: Undo on a chart whose text was written marks it changed since it was written; Headline on it writes again and clears the mark",
+      isTRUE(b_out$undo_marked) && isTRUE(b_out$rewrite))
+check("6-C 20: Interactive swaps in the plotly output (the button then says Static) and Code opens its dialog, neither with a call", isTRUE(b_out$views))
+check("6-C 21: Suggest charts sends exactly the suggestion message, its charts are exploratory, and the click shows as the analyst's line in the chat", isTRUE(b_out$suggest))
+check("6-C 22: Style: a palette chosen in its dialog is kept and shared through state, with no call", isTRUE(b_out$style))
+check("6-C 23: Remove takes the chart off the canvas, state and stories; removing the selected chart clears the selection, removing another keeps it", isTRUE(b_out$remove))
+check("6-C 24: every model call ran with the busy flag set and it is clear afterwards, each start logged with its end", isTRUE(b_out$busy) && b_out$busy_n >= 8L)
+check("6-C 25: a different file clears the canvas, the selection and the last exchange, and the chat starts again with the read line", isTRUE(b_out$fresh))
+
+
+# ---- with no key, nothing is asked -----------------------------------------------------------------------------------
+
+k_calls <- .llm_state$calls
+k_state <- c6_state()
+k_out <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = k_state), {
+  session$flushReact()
+  session$setInputs(chat_user_input = "How many orders in each region?")
+  asked <- made$log[[length(made$log)]]$content
+  session$setInputs(suggest = 1)
+  session$setInputs(write_headlines = 1)
+  session$setInputs(chat_user_input = "Label the columns")
+  k_out$ok <- grepl("needs a key", asked, fixed = TRUE) && grepl(KEY_HINT, asked, fixed = TRUE) && length(k_state$canvas) == 0L &&
+    is.null(k_state$calls) && grepl("Labelling needs a key", made$log[[length(made$log)]]$content, fixed = TRUE) && length(made$busy_log) == 8L
+})
+check("6-C 26: with no key a question, Suggest charts, Write headlines and Label the columns make no call and say a key is needed", isTRUE(k_out$ok) && identical(.llm_state$calls, k_calls))
+
+# Before the file is read, and before the dictionary says what a row is.
+n_out <- new.env()
+n_state <- shiny::reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL, path = NULL, calls = NULL, charts = list(),
+                                 canvas = character(0), stories = list(), palette = chart_palette_default())
+n_si <- stand_by(c6_reply)
+shiny::testServer(mod_explore_server, args = list(state = n_state, ask = n_si$ask), {
+  session$flushReact()
+  gate_none <- as.character(output$gate$html)
+  session$setInputs(chat_user_input = "How many orders in each region?")
+  said_none <- made$log[[length(made$log)]]$content
+  n_state$data <- c6_read$read$data; n_state$codebook <- c6_cb; n_state$problems <- c6_read$read$problems; n_state$path <- c6_path
+  session$flushReact()
+  gate_row <- as.character(output$gate$html)
+  session$setInputs(chat_user_input = "How many orders in each region?")
+  said_row <- made$log[[length(made$log)]]$content
+  n_out$ok <- grepl("Read a data file on the Data page first", gate_none, fixed = TRUE) && grepl("Read a data file on the Data page first", said_none, fixed = TRUE) &&
+    grepl("does not say what one row represents", gate_row, fixed = TRUE) && grepl("does not say what one row represents", said_row, fixed = TRUE) &&
+    length(n_si$sent) == 0L && length(n_state$canvas) == 0L && !any(grepl("_card", as.character(output$cards$html), fixed = TRUE))
+})
+check("6-C 27: before a file is read, and before the dictionary says what one row is, the canvas says what is missing and a question makes no call", isTRUE(n_out$ok))
+
+
+# ---- the screen builds ----------------------------------------------------------------------------------------------
+
+c6_ui <- as.character(mod_explore_ui("explore"))
+c6_page <- paste(as.character(app_ui("TEST BANNER", "office_logo.png", "An Office", "https://example.org/source")), collapse = "")
+c6_nav_at <- regexpr("<nav", c6_page, fixed = TRUE)[1]
+check("6-C 28: the Explore UI renders with the chat (shinychat), the two always-present buttons under its input, the value boxes' place, the card area, a 38% sidebar that is always open, and the script that disables the call buttons",
+      grepl("<shiny-chat-container[^>]*id=\"explore-chat\"", c6_ui) && grepl("<shiny-chat-footer>", c6_ui, fixed = TRUE) &&
+        regexpr("explore-suggest", c6_ui, fixed = TRUE) > regexpr("<shiny-chat-footer>", c6_ui, fixed = TRUE) &&
+        regexpr("explore-write_headlines", c6_ui, fixed = TRUE) > regexpr("explore-suggest", c6_ui, fixed = TRUE) &&
+        grepl(">Suggest charts<", c6_ui, fixed = TRUE) && grepl(">Write headlines<", c6_ui, fixed = TRUE) && grepl("id=\"explore-boxes\"", c6_ui, fixed = TRUE) &&
+        grepl("id=\"explore-cards\"", c6_ui, fixed = TRUE) && grepl("bslib-sidebar-layout", c6_ui, fixed = TRUE) && grepl("38%", c6_ui, fixed = TRUE) &&
+        grepl("class=\"[^\"]*chart-call[^\"]*\" id=\"explore-suggest\"", c6_ui) && grepl("class=\"[^\"]*chart-call[^\"]*\" id=\"explore-write_headlines\"", c6_ui) &&
+        grepl("addCustomMessageHandler('chart-busy'", c6_ui, fixed = TRUE) && grepl("disabled = !!on", c6_ui, fixed = TRUE) &&
+        grepl("Start on the Data page", c6_ui, fixed = TRUE))
+check("6-C 29: the page is a navbar with the banner above it, the logo and title and the Source code link and dark-mode switch in the bar, and four pages: Start here, Data, Explore, Methodology",
+      c6_nav_at > 0 && regexpr("TEST BANNER", c6_page, fixed = TRUE)[1] < c6_nav_at && grepl("navbar", c6_page, fixed = TRUE) &&
+        identical(CHART_TABS, c("Start here", "Data", "Explore", "Methodology")) &&
+        all(purrr::map_lgl(CHART_TABS, function(p) grepl(paste0("data-value=\"", p, "\""), c6_page, fixed = TRUE))) &&
+        !grepl("data-value=\"Codebook\"", c6_page, fixed = TRUE) && !grepl("data-value=\"Report\"", c6_page, fixed = TRUE) &&
+        grepl("href=\"https://example.org/source\"", c6_page, fixed = TRUE) && grepl("Source code", c6_page, fixed = TRUE) && grepl("id=\"dark_mode\"", c6_page, fixed = TRUE) &&
+        regexpr("id=\"dark_mode\"", c6_page, fixed = TRUE)[1] < regexpr("<div class=\"tab-content", c6_page, fixed = TRUE)[1] &&
+        grepl("An Office", c6_page, fixed = TRUE) && grepl(">chaRt<", c6_page, fixed = TRUE))
+check("6-C 30: the Data page holds the data file and the data dictionary one under the other and says 'data dictionary'; the download is data_dictionary.yaml; no 'Codebook' tab or 'Report' page is left",
+      grepl("Data file", c6_page, fixed = TRUE) && regexpr("Data file", c6_page, fixed = TRUE)[1] < regexpr(">Data dictionary<", c6_page, fixed = TRUE)[1] &&
+        regexpr("id=\"data-file\"", c6_page, fixed = TRUE)[1] < regexpr("id=\"codebook-status\"", c6_page, fixed = TRUE)[1] &&
+        grepl("a saved data_dictionary.yaml", c6_page, fixed = TRUE) && !grepl("Download codebook.yaml", c6_page, fixed = TRUE) &&
+        !exists("mod_report_ui") && !exists("mod_report_server") && !exists("OLD_SCREEN_NEW_CHART") &&
+        all(c("mod_data_ui", "mod_codebook_ui", "mod_explore_ui", "start_ui", "later_ui") %in% ls(globalenv())))
+c6_dd <- new.env()
+local({
+  st = shiny::reactiveValues(codebook = c6_cb_ready, data = c6_read$read$data)
+  shiny::testServer(mod_codebook_server, args = list(state = st), {
+    c6_dd$footer <- as.character(output$footer$html)
+  })
+})
+check("6-C 31: the data dictionary's download button says data_dictionary.yaml and the file it saves is named that", grepl("Download data_dictionary.yaml", c6_dd$footer, fixed = TRUE) &&
+        grepl("filename = \"data_dictionary.yaml\"", paste(deparse(mod_codebook_server), collapse = " "), fixed = TRUE) &&
+        !grepl("\"codebook.yaml\"", paste(deparse(mod_codebook_server), collapse = " "), fixed = TRUE))
+check("6-C 32: chat_reply_text() adds a line for a chart that was not drawn, and the reply of a charts turn lists each say as a short list",
+      grepl("Chart 2 (Bad one) was not drawn: pie is not a family.", chat_reply_text(list(kind = "charts", charts = list(list(spec = list(say = "By region."))), cannot = character(0),
+                                                                                              failed = list(list(number = 2L, spec = list(title = "Bad one"), sentences = "pie is not a family.")))), fixed = TRUE) &&
+        grepl("^- By region.\n\nAdded to the canvas.", chat_reply_text(list(kind = "charts", charts = list(list(spec = list(say = "By region."))), cannot = character(0), failed = list()))))
 
 
 # ---- the count -------------------------------------------------------------------

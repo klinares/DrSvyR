@@ -72,14 +72,26 @@ repair_names <- function(nms) {
   list(names = fixed, notes = unlist(notes))
 }
 
+# The words of a column of text whose values are mostly numbers (at least half of its different
+#   values read as numbers, not all of them); none for any other column.
+mostly_numbers_words <- function(x) {
+  if (!is.character(x)) return(character(0))
+  obs = unique(x[!is.na(x)])
+  num = !is.na(suppressWarnings(as.numeric(obs)))
+  if (!length(obs) || mean(num) < 0.5 || all(num)) return(character(0))
+  obs[!num]
+}
+
+# The words that may stand for missing in a file, as the note below names them: the first three of
+#   each column that is mostly numbers, each word once, in column order.
+missing_candidates <- function(data)
+  unique(unlist(purrr::map(as.list(data), function(x) utils::head(mostly_numbers_words(x), 3L)), use.names = FALSE)) %||% character(0)
+
 # A column of text whose values are mostly numbers: a missing-value code such as ".." or -99 written
 #   as a word keeps it from being read as numbers. Said, not fixed: the code is the analyst's call.
 mostly_numbers_note <- function(x, name) {
-  if (!is.character(x)) return(NULL)
-  obs = unique(x[!is.na(x)])
-  num = !is.na(suppressWarnings(as.numeric(obs)))
-  if (!length(obs) || mean(num) < 0.5 || all(num)) return(NULL)
-  words = obs[!num]
+  words = mostly_numbers_words(x)
+  if (!length(words)) return(NULL)
   paste0("Column ", name, " is mostly numbers but also holds ", length(words), if (length(words) == 1L) " other value" else " other values",
          " (", paste0("'", utils::head(words, 3), "'", collapse = ", "), if (length(words) > 3) ", ...",
          "), so it is read as text. If ", if (length(words) == 1L) "it" else "one of them",

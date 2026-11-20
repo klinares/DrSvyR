@@ -1,16 +1,45 @@
 # ui.R for chaRt
-# What the analyst sees. Phase 0: the shared helpers, the office logo, the tab names, Start here and
-#   the connection check. advice_box, warn_box, office_logo, model_label, mod_connect_ui and
-#   mod_connect_server are copied from QuestionR/R/ui.R unchanged. Function definitions and
-#   constants only.
+# What the analyst sees: the shared helpers, the office logo, the four pages (Start here, Data,
+#   Explore, Methodology), the connection check, the Data page (the file, then its data dictionary) and
+#   the Explore screen (a chat on the left, the canvas of charts on the right). advice_box, warn_box,
+#   office_logo, model_label, mod_connect_ui and mod_connect_server are copied from QuestionR/R/ui.R
+#   unchanged. Function definitions and constants only.
 
 
-# ---- the tabs ----------------------------------------------------------------
+# ---- the pages ---------------------------------------------------------------
 
-CHART_TABS <- c("Start here", "Data", "Codebook", "Explore", "Report", "Methodology")
+CHART_TABS <- c("Start here", "Data", "Explore", "Methodology")
 
-# What a tab that a later phase builds says until then.
+# What a page that a later phase builds says until then.
 LATER_PHASE <- "Built in a later phase."
+
+# The whole page: the classification banner above a navbar page. The logo, title, Source code link and
+#   dark-mode switch are in the bar. bslib::page_navbar() has no place above its bar, so the banner is
+#   the first thing in the page, before the bar; only Explore fills the window, the others scroll.
+app_ui <- function(classification, logo, office, source_url)
+  tagList(
+    tags$div(class = "chart-classification",
+             style = paste("background:#b40404; color:#fff; text-align:center;",
+                           "font-weight:700; letter-spacing:0.06em;",
+                           "padding:5px 0; font-size:13px;"),
+             classification),
+    bslib::page_navbar(
+      title = tags$span(class = "d-inline-flex align-items-center gap-3",
+                        office_logo(logo, office),
+                        tags$span(class = "d-inline-flex flex-column lh-sm",
+                                  tags$span(class = "fs-4 fw-semibold", "chaRt"),
+                                  tags$span(class = "small fw-normal d-none d-xl-inline",
+                                            "Publishable charts from a data file, drawn to written visualization rules."))),
+      id = "stage", window_title = "chaRt", fillable = CHART_TABS[3],
+      theme = bslib::bs_theme(version = 5, preset = "flatly"),
+      bslib::nav_panel(CHART_TABS[1], tags$div(class = "container py-3", start_ui())),
+      bslib::nav_panel(CHART_TABS[2], tags$div(class = "container py-3", data_page_ui())),
+      bslib::nav_panel(CHART_TABS[3], mod_explore_ui("explore")),
+      bslib::nav_panel(CHART_TABS[4], tags$div(class = "container py-3", later_ui())),
+      bslib::nav_spacer(),
+      bslib::nav_item(tags$a("Source code", href = source_url, target = "_blank", rel = "noopener",
+                             class = "btn btn-outline-secondary btn-sm")),
+      bslib::nav_item(bslib::input_dark_mode(id = "dark_mode"))))
 
 
 # ---- shared helpers (from QuestionR) -----------------------------------------
@@ -69,10 +98,10 @@ model_label <- function(m)
 # Start here: what the tool does, the key box, then the connection check.
 start_ui <- function()
   tagList(
-    tags$p("chaRt builds a codebook for a data file you bring, proposes and draws publishable charts ",
-           "that follow written visualization rules, lets you refine a chart by chat, and writes an HTML ",
-           "report of the charts you choose, each with a short summary of what it shows. Every chart and ",
-           "summary describes the file, not a population."),
+    tags$p("chaRt builds a data dictionary for a data file you bring, proposes and draws publishable charts ",
+           "that follow written visualization rules, and lets you change a chart by chat. Charts collect ",
+           "on a canvas, each with a headline and a short summary of what it shows. Every chart and ",
+           "summary describes the file, not a population. Start on the Data page, then go to Explore."),
     mod_key_ui("key"),
     mod_connect_ui("connect"))
 
@@ -135,7 +164,18 @@ mod_connect_server <- function(id, state, ping = llm_ping) {
 
 # ---- Data -----------------------------------------------------------------------------------
 
-# The Data tab: a delimited file, what R found in it, and an optional saved codebook.
+# The Data page: the file, what R found in it, and its data dictionary, one under the other.
+data_page_ui <- function()
+  tagList(tags$h4("Data file"),
+          mod_data_ui("data"),
+          tags$hr(),
+          tags$h4("Data dictionary"),
+          tags$p(class = "text-muted small",
+                 "The data dictionary says what one row represents and gives each column a label, a type and a role. ",
+                 "Charts are drawn only after it says what one row represents."),
+          mod_codebook_ui("codebook"))
+
+# The data file: a delimited file, what R found in it, and an optional saved data dictionary.
 mod_data_ui <- function(id) {
   ns = NS(id)
   tagList(
@@ -153,7 +193,7 @@ mod_data_ui <- function(id) {
     uiOutput(ns("summary")),
     tableOutput(ns("columns")),
     tags$hr(),
-    fileInput(ns("codebook"), "Optional: a saved codebook.yaml for this file", accept = c(".yaml", ".yml"), width = "100%"),
+    fileInput(ns("codebook"), "Optional: a saved data_dictionary.yaml for this file", accept = c(".yaml", ".yml"), width = "100%"),
     uiOutput(ns("codebook_note")))
 }
 
@@ -222,11 +262,19 @@ mod_data_server <- function(id, state) {
 
     output$reread_note = renderUI(reread_note())
 
+    # Values that mean missing added elsewhere (the chat's "Treat ... as missing" reads the file again)
+    #   are shown in the box, so that Read again here keeps them.
+    observeEvent(missing_codes(state$codebook), {
+      codes = missing_codes(state$codebook)
+      if (!identical(codes, parse_missing(input$missing)))
+        updateTextAreaInput(session, "missing", value = paste(codes, collapse = "\n"))
+    })
+
     # A saved codebook: the file is first read again with its missing_codes and its encoding, then
     #   the codebook is applied only when check_codebook() has nothing to say about it.
     observeEvent(input$codebook, {
       u = upload()
-      if (is.null(u)) return(codebook_note(warn_box("Read the data file first, then the codebook.")))
+      if (is.null(u)) return(codebook_note(warn_box("Read the data file first, then the data dictionary.")))
       up = tryCatch(read_codebook(input$codebook$datapath), error = function(e) e)
       if (inherits(up, "error")) return(codebook_note(warn_box(conditionMessage(up))))
       codes = missing_codes(up)
@@ -234,12 +282,12 @@ mod_data_server <- function(id, state) {
       if (inherits(res, "error")) return(codebook_note(warn_box(conditionMessage(res))))
       why = check_codebook(up, res$profile)
       if (length(why))
-        return(codebook_note(warn_box(tags$strong("The codebook was not applied."), tags$ul(purrr::map(why, tags$li)))))
+        return(codebook_note(warn_box(tags$strong("The data dictionary was not applied."), tags$ul(purrr::map(why, tags$li)))))
       take(res, apply_codebook(up, res$profile, u$name, nrow(res$read$data), res$read$encoding))
       updateTextAreaInput(session, "missing", value = paste(codes, collapse = "\n"))
       show_encoding(res, up$encoding)
       reread_note(NULL)
-      codebook_note(advice_box("The codebook was applied: its values that mean missing, encoding, labels, types, roles and row ",
+      codebook_note(advice_box("The data dictionary was applied: its values that mean missing, encoding, labels, types, roles and row ",
                                "sentence are in use; every fact comes from the file."))
     })
 
@@ -271,7 +319,7 @@ mod_data_server <- function(id, state) {
 CODEBOOK_PAGE_SIZE <- 25L
 LABEL_BUSY <- "The model is reading the column summaries, not the rows. This can take a minute."
 
-# The Codebook tab: what one row represents, then the columns, CODEBOOK_PAGE_SIZE to a page.
+# The data dictionary: what one row represents, then the columns, CODEBOOK_PAGE_SIZE to a page.
 mod_codebook_ui <- function(id) {
   ns = NS(id)
   tagList(uiOutput(ns("status")), uiOutput(ns("suggest")), uiOutput(ns("page")), uiOutput(ns("footer")))
@@ -314,7 +362,7 @@ mod_codebook_server <- function(id, state) {
 
     output$status = renderUI({
       cb = state$codebook
-      if (is.null(cb)) return(tags$p(class = "text-muted", "Start on the Data tab: read a file there first."))
+      if (is.null(cb)) return(tags$p(class = "text-muted", "Read a data file above first."))
       unnamed = sum(purrr::map_lgl(cb$columns, function(e) identical(e$label, e$name)))
       guessed = sum(purrr::map_lgl(cb$columns, function(e) identical(e$label_source, "ai_guess")))
       tagList(
@@ -397,8 +445,8 @@ mod_codebook_server <- function(id, state) {
         purrr::map(idx, function(i) codebook_row(cb$columns[[i]], function(what) ns(input_id(what, i)))))
     })
 
-    output$footer = renderUI(if (!is.null(state$codebook)) downloadButton(ns("download"), "Download codebook.yaml"))
-    output$download = downloadHandler(filename = "codebook.yaml", content = function(file) write_codebook(state$codebook, file))
+    output$footer = renderUI(if (!is.null(state$codebook)) downloadButton(ns("download"), "Download data_dictionary.yaml"))
+    output$download = downloadHandler(filename = "data_dictionary.yaml", content = function(file) write_codebook(state$codebook, file))
 
     # Every box on the page, read together; what differs from the codebook is written to it. A
     #   changed type redraws the page, since it changes the role and may add the order box.
@@ -463,39 +511,30 @@ label_tag <- function(e, accept_id) {
 
 # ---- Explore --------------------------------------------------------------------------------
 
-EXPLORE_BUSY <- "The model is choosing charts from the codebook; it does not see the rows. This can take a minute or two."
+# Two columns that fill the window: the chat on the left (about 38% of the width), the canvas on the right.
+#   The chat does the setup (R writes those messages, no model call) and carries every question; the canvas is
+#   the value boxes, then one card for each chart, two to a row, newest first.
+
 CSS_PPI <- 96                # a CSS inch, in CSS pixels: a static chart is shown at its size in inches
-EXPLORE_PALETTE_KINDS <-c(qualitative = "Groups", sequential = "Sequential fill", diverging = "Diverging fill")
-
-# The Explore tab: a question, or a request for suggestions, drawn as charts the renderer checked.
-mod_explore_ui <- function(id) {
-  ns = NS(id)
-  def = chart_palette_default()
-  tagList(
-    uiOutput(ns("gate")),
-    textAreaInput(ns("question"), "What do you want to see?", width = "100%", rows = 2,
-                  placeholder = "for example: Which regions grew most between 2015 and 2024?"),
-    uiOutput(ns("buttons")),
-    tags$div(class = "d-flex gap-3 flex-wrap my-2",
-             purrr::imap(EXPLORE_PALETTE_KINDS, function(label, kind)
-               selectInput(ns(paste0("pal_", kind)), label, choices = stats::setNames(names(chart_palettes(kind)), chart_palettes(kind)),
-                           selected = def[[kind]], selectize = FALSE, width = "220px"))),
-    uiOutput(ns("results")),
-    tags$hr(),
-    uiOutput(ns("foot")))
-}
-
+EXPLORE_PALETTE_KINDS <- c(qualitative = "Groups", sequential = "Sequential fill", diverging = "Diverging fill")
+EXPLORE_PLACEHOLDER <- "Ask a question about your data"
+EXPLORE_WIDTH <- "38%"
 
 # The wording a chart's spec carries, edited in boxes with no model call; a blank box is R's default.
 WORDING_FIELDS <- c(title = "Title", subtitle = "Subtitle", caption = "Caption", x_label = "X-axis title", y_label = "Y-axis title")
 
-REFINE_GREETING <- paste(
-  "Ask for a change to the chart's form, its grouping, a filter, a highlight, or how many are shown (top n).",
-  "Colours are set by the palette boxes above the charts, and the wording by the boxes above this chat.", sep = "\n\n")
-
-SUMMARY_BUSY <- "The model is writing from the chart's facts, which R computed; every number it writes is checked. This takes a few seconds."
 SUMMARY_ALL_OK <- "Every number matches the chart's data."
 SUMMARY_STALE <- "The chart has changed since this was written."
+
+# What R says in the chat during setup. Each is a sentence R writes; none is ever sent to a model.
+SETUP_WELCOME <- paste("Start on the Data page: choose a data file there. Setup then goes on here, in this chat,",
+                       "with no model call except \"Label the columns\". After that, ask a question about your data.")
+SETUP_LABEL <- "Label the columns"
+SETUP_READY <- "Ask a question about your data, or press Suggest charts."
+DATA_PAGE_LINK <- "[Open the Data page](#open-data-page)"
+SETUP_NEED_DATA <- paste("Read a data file on the Data page first.", DATA_PAGE_LINK)
+SETUP_NEED_ROW <- paste("The data dictionary does not say what one row represents yet, and charts are drawn only after it does.",
+                        "Press \"Label the columns\" and then the row guess, or write it on the Data page.", DATA_PAGE_LINK)
 
 # A story: the headline and summary of a chart as last written or edited, with the hash of the spec
 #   they were written for, the facts (names as they are) and that spec, and the problems the checks
@@ -510,102 +549,566 @@ check_line <- function(problems, ok = SUMMARY_ALL_OK) {
   tags$p(class = "small mb-0", style = "color: var(--bs-warning-text-emphasis, #8a5a00);", paste0(paste(problems, collapse = "; "), "."))
 }
 
-# What the old Explore screen says when its chat is answered with a new question (Part C replaces the screen).
-OLD_SCREEN_NEW_CHART <- "That is a new question, not a change to this chart. Ask it with Draw above."
-
 # The warning line under a description of the file that holds a number DATA does not give.
 TELL_WARNING <- "Not every number here is in the description of the file: "
 
-# The text a chat turn appends: for charts each chart's say as a short list and "Added to the canvas.";
-#   for a new spec its say and the notes it did not have before; for ask, cannot and tell the text (a
-#   tell with a number that is not in the description of the file has the warning line under it);
-#   for a failure the sentences.
+# The text a chat turn appends: for charts each chart's say as a short list and "Added to the canvas.", then
+#   any reason for a chart it could not draw; for a new spec its say and the notes it did not have before; for
+#   ask, cannot and tell the text (a tell with a number that is not in the description of the file has the
+#   warning line under it); for a failure the sentences.
 chat_reply_text <- function(r) {
   if (identical(r$kind, "charts")) {
     says = purrr::keep(purrr::map_chr(r$charts, function(ch) if (is_text1(ch$spec$say)) ch$spec$say else NA_character_), Negate(is.na))
-    return(paste(c(if (length(says)) paste0("- ", says, collapse = "\n"), if (length(r$charts)) "Added to the canvas.", r$cannot), collapse = "\n\n"))
+    not_drawn = purrr::map_chr(r$failed, function(f)
+      paste0("Chart ", f$number, if (is_text1(f$spec$title)) paste0(" (", f$spec$title, ")"), " was not drawn: ", paste(f$sentences, collapse = " ")))
+    return(paste(c(if (length(says)) paste0("- ", says, collapse = "\n"), if (length(r$charts)) "Added to the canvas.", r$cannot, not_drawn),
+                 collapse = "\n\n"))
   }
   if (identical(r$kind, "spec")) return(paste(c(r$text, if (length(r$new_notes)) paste("Note:", r$new_notes)), collapse = "\n\n"))
   paste(c(paste(r$text, collapse = " "), if (identical(r$kind, "tell") && length(r$problems)) paste0(TELL_WARNING, paste(r$problems, collapse = ", "), ".")),
         collapse = "\n\n")
 }
 
+# Text from a model or a file, put in a chat message: a "<" or "&" in it cannot start a tag or an entity.
+md_text <- function(x) gsub("<", "&lt;", gsub("&", "&amp;", x, fixed = TRUE), fixed = TRUE)
+
+# Clickable suggestions: shinychat 0.4.0 draws a markdown list whose every item is a span of class
+#   "suggestion" as a grid of cards; class "submit" sends the text as the analyst's message on a click
+#   (without it the click only fills the box), and data-suggestion is the text sent.
+suggestion_list <- function(texts)
+  paste0("- <span class=\"suggestion submit\" data-suggestion=\"", purrr::map_chr(texts, htmltools::htmlEscape, attribute = TRUE), "\">",
+         purrr::map_chr(texts, htmltools::htmlEscape), "</span>", collapse = "\n")
+
+# The words of the setup buttons: what a click sends, which R recognizes and answers without a model call.
+treat_text <- function(value) paste0("Treat '", value, "' as missing")
+row_text <- function(guess) paste0("A row is ", guess)
+
+# A chart's title for the chat and the screen reader, or `fallback` when it has none.
+chart_title <- function(chart, fallback = "this chart") {
+  t = chart$spec$title
+  if (is_text1(t) && nzchar(trimws(t))) trimws(t) else fallback
+}
+
+# Three plain value boxes from the data, no model call: rows, columns, and the period of the first column with
+#   the time role (its first and last value), else the file name.
+canvas_boxes <- function(data, cb) {
+  time = purrr::detect(cb$columns, function(e) identical(e$role, "time"))
+  period = if (!is.null(time) && time$name %in% names(data)) tryCatch({
+    x = data[[time$name]]
+    rng = range(x, na.rm = TRUE)
+    both = if (inherits(rng, c("Date", "POSIXt"))) date_text(rng) else format(rng, big.mark = "", scientific = FALSE, trim = TRUE)
+    paste(both, collapse = " to ")
+  }, error = function(e) NULL)
+  box = function(title, value) bslib::value_box(title, value, fill = FALSE)
+  do.call(bslib::layout_column_wrap,
+          c(list(width = 1 / 3, fill = FALSE, class = "chart-boxes"),
+            list(box("Rows", format_num(nrow(data))), box("Columns", format_num(ncol(data))),
+                 if (!is.null(period)) box("Period", period) else box("File", cb$file %||% ""))))
+}
+
+# A click on a card selects it, unless it lands on a button, link, box or the full screen button, which have
+#   their own meaning. The value carries the time, so the same card clicked twice still reaches the server.
+card_click_js <- function(input_id)
+  paste0("if (event.target.closest('button, a, input, select, textarea, label, .js-plotly-plot, .bslib-full-screen-enter')) return; ",
+         "Shiny.setInputValue('", input_id, "', {id: this.dataset.chartId, t: Date.now()}, {priority: 'event'});")
+
+# The copy button of the Code dialog.
+copy_js <- function(code_id)
+  paste0("var t = document.getElementById('", code_id, "'); var s = t.innerText; ",
+         "if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(s); } ",
+         "else { var r = document.createRange(); r.selectNodeContents(t); var g = window.getSelection(); g.removeAllRanges(); ",
+         "g.addRange(r); document.execCommand('copy'); } this.textContent = 'Copied';")
+
+# The screen's own style and script, once. Buttons with class chart-call (Suggest charts, Write headlines, each
+#   card's Headline) are disabled when one is clicked or a message is sent in the chat, and enabled again when
+#   the server says its call is done ("chart-busy"), so two calls cannot overlap. A link to #open-data-page
+#   opens the Data page.
+EXPLORE_CSS <- "
+.chart-card { cursor: pointer; }
+.chart-card.chart-selected { border: 2px solid var(--bs-primary); box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .25); }
+.chart-call:disabled { opacity: .5; cursor: not-allowed; }
+.chart-canvas { padding: .75rem 1rem; }
+"
+EXPLORE_JS <- "
+(function () {
+  if (window.chartExplore) return;
+  window.chartExplore = true;
+  function busy(on) {
+    document.querySelectorAll('.chart-call').forEach(function (b) { b.disabled = !!on; });
+  }
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('a[href=\"#open-data-page\"]');
+    if (link) {
+      e.preventDefault();
+      var tab = document.querySelector('.navbar [data-value=\"Data\"]');
+      if (tab) tab.click();
+      return;
+    }
+    var b = e.target.closest('.chart-call');
+    if (b && !b.disabled) setTimeout(function () { busy(true); }, 0);
+  }, true);
+  if (window.jQuery) {
+    jQuery(document).on('shiny:inputchanged', function (e) {
+      if (e.name && /chat_user_input$/.test(e.name)) busy(true);
+    });
+  }
+  if (window.Shiny && Shiny.addCustomMessageHandler) {
+    Shiny.addCustomMessageHandler('chart-busy', function (m) { busy(m.on); });
+  }
+})();
+"
+
+# The Explore screen: the chat (shinychat) in a sidebar 38% wide that is always open and stacks above the canvas
+#   in a narrow window; Suggest charts and Write headlines sit under its input.
+mod_explore_ui <- function(id) {
+  ns = NS(id)
+  bslib::layout_sidebar(
+    fillable = TRUE,
+    sidebar = bslib::sidebar(
+      id = ns("side"), width = EXPLORE_WIDTH, open = list(desktop = "always", mobile = "always-above"),
+      fillable = TRUE, resizable = FALSE, padding = 12, max_height_mobile = "70vh",
+      shinychat::chat_ui(
+        ns("chat"), width = "100%", fill = TRUE, placeholder = EXPLORE_PLACEHOLDER,
+        messages = list(list(role = "assistant", content = SETUP_WELCOME)),
+        footer = tags$div(class = "d-flex flex-wrap gap-2 mt-2",
+                          actionButton(ns("suggest"), "Suggest charts", class = "btn-sm btn-outline-primary chart-call"),
+                          actionButton(ns("write_headlines"), "Write headlines", class = "btn-sm btn-outline-primary chart-call")))),
+    tags$div(class = "chart-canvas",
+             uiOutput(ns("gate")), uiOutput(ns("boxes")), uiOutput(ns("bar")), uiOutput(ns("cards")), uiOutput(ns("foot"))),
+    tags$style(HTML(EXPLORE_CSS)),
+    tags$script(HTML(EXPLORE_JS)))
+}
+
 # ask is the function that asks the model (llm_json, or a stand-in in a test).
 mod_explore_server <- function(id, state, ask = llm_json) {
   moduleServer(id, function(input, output, session) {
     ns = session$ns
-    res = reactiveVal(NULL)            # what the last Draw or Suggest charts gave, as the page shows it
-    shown = reactiveVal(character(0))  # the ids of that request's charts, in order
-    open = reactiveVal(NULL)           # the id of the chart in the wide view, or NULL for the cards
-    calls_done = reactiveVal(0L)
-    note = reactiveVal(NULL)
-    toggles = reactiveValues()         # per chart: interactive view, code shown
-    talk = reactiveValues()            # per chart: the chat's messages and the last exchange
-    made = new.env()                   # the charts whose outputs and observers exist
-    made$ids = character(0)
-    made$n = 0L
     rule_labels = reflex_labels()
-    ver = reactiveValues()             # per chart: bumped when its headline and summary are written
-    stale = reactiveValues()           # per chart: TRUE when its spec changed since they were written
-    story_note = reactiveValues()      # per chart: the sentence when none could be written
-
-    # The report's palettes; changing one draws the charts again and makes no call.
-    palette = reactive(purrr::map(purrr::set_names(names(EXPLORE_PALETTE_KINDS)), function(kind)
-      input[[paste0("pal_", kind)]] %||% chart_palette_default()[[kind]]))
-    observe(state$palette <- palette())
-
-    ready = reactive(codebook_ready(state$codebook) && !is.null(state$data))
-    output$gate = renderUI({
-      if (is.null(state$codebook)) return(warn_box("Read a data file on the Data tab first."))
-      if (!codebook_ready(state$codebook)) return(warn_box("Say what one row represents on the Codebook tab first; charts are drawn only after that."))
-      NULL
-    })
-
-    output$buttons = renderUI({
-      state$key_version; calls_done()
-      can = ready() && llm_key_ready()
-      tagList(tags$div(class = "d-flex gap-2",
-                       busy_button(ns("draw"), "Draw", EXPLORE_BUSY, ready = can),
-                       busy_button(ns("suggest"), "Suggest charts for this file", EXPLORE_BUSY, ready = can, class = "btn-outline-primary")),
-              if (ready() && !llm_key_ready()) tags$p(class = "text-muted small", "Drawing needs a key. ", KEY_HINT),
-              note())
-    })
+    selected = reactiveVal(NULL)       # the id of the selected chart, or NULL
+    last = reactiveVal(NULL)           # the analyst's last message and the model's reply text to it, and nothing else
+    busy = reactiveVal(FALSE)          # TRUE while a call to the model runs
+    palette = reactiveVal(chart_palette_default())
+    treat = reactiveVal(character(0))  # the values the chat offers to treat as missing
+    guess = reactiveVal(NULL)          # the model's guess at what one row is, offered while the dictionary has none
+    story_note = reactiveValues()      # per chart: the sentence when no headline could be written
+    made = new.env()
+    made$n = 0L                        # charts made, for their ids
+    made$ids = character(0)            # the charts whose outputs and observers exist
+    made$key = NULL                    # the file read last: its name and column names
+    made$ready_for = NULL              # the key the "ask a question" line was said for
+    made$reread = NULL                 # the value the file was last read again with, for the message
+    made$notes = character(0)
+    made$log = list()                  # every message R put in the chat (role, content), for the tests
+    made$busy_log = logical(0)         # TRUE when a call started, FALSE when it was done
+    made$chart = new.env()             # per chart: the chart, its headline and summary, whether it is selected
+    made$story = new.env()             #   and whether its interactive view is shown, each a reactiveVal, so a change to
+    made$sel = new.env()               #   one chart draws only that chart again
+    made$interactive = new.env()
 
     cid = function(chart_id, what) paste0(chart_id, "_", what)
-    chart_of = function(chart_id) state$charts[[chart_id]]
-    set_chart = function(chart) { cs = isolate(state$charts) %||% list(); cs[[chart$id]] = chart; state$charts = cs }
+    ready = reactive(codebook_ready(state$codebook) && !is.null(state$data))
+    needs_key = function() identical(ask, llm_json) && !llm_key_ready()
+    warn_style = "color: var(--bs-warning-text-emphasis, #8a5a00);"
+
+    # A call to the model is running: every Suggest charts, Write headlines and Headline button is disabled in the
+    #   browser from the click (see EXPLORE_JS), and enabled again here when the call is done, however it ends.
+    with_busy = function(code) {
+      busy(TRUE)
+      made$busy_log = c(made$busy_log, TRUE)
+      on.exit({
+        busy(FALSE)
+        made$busy_log = c(made$busy_log, FALSE)
+        session$sendCustomMessage("chart-busy", list(on = FALSE))
+      })
+      force(code)
+    }
+
+    # A message in the chat: R's own text (a "<" or "&" in it made harmless), then clickable suggestions.
+    say = function(text, suggestions = character(0), role = "assistant") {
+      body = paste(c(md_text(paste(text, collapse = "\n\n")), if (length(suggestions)) suggestion_list(suggestions)), collapse = "\n\n")
+      made$log = c(made$log, list(list(role = role, content = body)))
+      shinychat::chat_append_message("chat", list(role = role, content = body), chunk = FALSE)
+      invisible()
+    }
+
+    # ---- the charts and their texts -------------------------------------------------------------
+
+    chart_of = function(chart_id) isolate(state$charts)[[chart_id]]
+    story_of = function(chart_id) isolate(state$stories)[[chart_id]]
+    set_chart = function(chart) {
+      cs = isolate(state$charts) %||% list()
+      cs[[chart$id]] = chart
+      state$charts = cs
+      if (!is.null(made$chart[[chart$id]])) made$chart[[chart$id]](chart)
+    }
+    set_story = function(chart_id, st) {
+      ss = isolate(state$stories) %||% list()
+      ss[[chart_id]] = st
+      state$stories = ss
+      if (!is.null(made$story[[chart_id]])) made$story[[chart_id]](st)
+    }
+    needs_story = function(chart_id) {
+      st = story_of(chart_id)
+      is.null(st) || !identical(st$hash, spec_hash(chart_of(chart_id)$spec))
+    }
+    set_selected = function(chart_id) {
+      old = isolate(selected())
+      if (identical(old, chart_id)) return(invisible())
+      selected(chart_id)
+      if (!is.null(old) && !is.null(made$sel[[old]])) made$sel[[old]](FALSE)
+      if (!is.null(chart_id) && !is.null(made$sel[[chart_id]])) made$sel[[chart_id]](TRUE)
+    }
+    toggle_selected = function(chart_id) set_selected(if (identical(isolate(selected()), chart_id)) NULL else chart_id)
     notes_for = function(spec) {
       r = check_chart(spec, isolate(state$codebook), isolate(state$data), isolate(palette()), chat_rule_ids())
       if (isTRUE(r$ok)) r$notes else character(0)
     }
-    fill_wording = function(chart_id) {
-      spec = isolate(chart_of(chart_id))$spec
-      purrr::walk(names(WORDING_FIELDS), function(f) updateTextInput(session, cid(chart_id, paste0("w_", f)), value = spec[[f]] %||% ""))
-    }
-    story_of = function(chart_id) state$stories[[chart_id]]
-    set_story = function(chart_id, st) { ss = isolate(state$stories) %||% list(); ss[[chart_id]] = st; state$stories = ss }
-    needs_story = function(chart_id) is.null(story_of(chart_id)) || !identical(story_of(chart_id)$hash, spec_hash(chart_of(chart_id)$spec))
 
-    # Headlines and summaries for these charts: summarize_charts() once; a chart that got none keeps
-    #   any text it had, and its sentence is shown.
+    # New charts go to the top of the canvas, in the order the reply gave them.
+    add_charts = function(charts) {
+      ids = purrr::map_chr(charts, function(ch) {
+        made$n = made$n + 1L
+        chart = new_chart(paste0("c", made$n), ch$spec, ch$notes)
+        chart$exploratory = isTRUE(ch$exploratory)
+        set_chart(chart)
+        make_chart(chart$id)
+        chart$id
+      })
+      state$canvas = c(unname(ids), isolate(state$canvas))
+      invisible(ids)
+    }
+
+    # Removing the selected chart clears the selection.
+    remove_chart = function(chart_id) {
+      if (identical(isolate(selected()), chart_id)) set_selected(NULL)
+      cs = isolate(state$charts); cs[[chart_id]] = NULL; state$charts = cs
+      ss = isolate(state$stories); ss[[chart_id]] = NULL; state$stories = ss
+      state$canvas = setdiff(isolate(state$canvas), chart_id)
+    }
+
+    reset_canvas = function() {
+      set_selected(NULL)
+      state$charts = list(); state$stories = list(); state$canvas = character(0)
+      last(NULL)
+    }
+
+    # Headlines and summaries for these charts: one summarize_charts() call, written from facts R computed. A
+    #   chart that got none keeps any text it had, and its sentence is shown on its card.
     write_stories = function(chart_ids) {
-      out = summarize_charts(purrr::map(chart_ids, function(i) isolate(chart_of(i))), state$codebook, state$data, ask = ask, palette = palette())
-      state$calls = dplyr::bind_rows(state$calls, out$calls)
+      out = summarize_charts(unname(purrr::map(chart_ids, chart_of)), isolate(state$codebook), isolate(state$data), ask = ask,
+                             palette = isolate(palette()))
+      state$calls = dplyr::bind_rows(isolate(state$calls), out$calls)
       purrr::walk(out$charts, function(r) {
         if (is.null(r$headline)) { story_note[[r$id]] = r$text; return(invisible()) }
         set_story(r$id, list(headline = r$headline, summary = r$summary, hash = r$hash, facts = r$facts, spec = r$spec, problems = r$problems))
         story_note[[r$id]] = NULL
-        ver[[r$id]] = (isolate(ver[[r$id]]) %||% 0L) + 1L
       })
+      out
+    }
+    story_line = function(out) {
+      got = purrr::keep(out$charts, function(r) !is.null(r$headline))
+      missed = purrr::keep(out$charts, function(r) is.null(r$headline))
+      title_of = function(i) chart_title(chart_of(i), i)
+      paste(c(if (length(got)) paste0("Wrote the headline and summary for ", length(got), if (length(got) == 1L) " chart." else " charts."),
+              purrr::map_chr(purrr::keep(got, function(r) length(r$problems) > 0L),
+                             function(r) paste0("Check the text of ", title_of(r$id), ": ", paste(r$problems, collapse = "; "), ".")),
+              purrr::map_chr(missed, function(r) paste0(title_of(r$id), ": ", r$text))), collapse = "\n\n")
     }
 
-    toggle = function(chart_id, what) { t = isolate(toggles[[chart_id]]) %||% list(); t[[what]] = !isTRUE(t[[what]]); toggles[[chart_id]] = t }
+    # ---- the chat -----------------------------------------------------------------------------------
 
-    # A chart's outputs and observers, made once, the first time it is drawn.
+    # Whether a message may go to the model; if not, the chat says why. `what` names the action for the key sentence.
+    send_ok = function(what = "Asking") {
+      if (is.null(isolate(state$data)) || is.null(isolate(state$codebook))) { say(SETUP_NEED_DATA); return(FALSE) }
+      if (!codebook_ready(isolate(state$codebook))) { say(SETUP_NEED_ROW); return(FALSE) }
+      if (needs_key()) { say(paste(what, "needs a key.", KEY_HINT)); return(FALSE) }
+      TRUE
+    }
+
+    # One chat turn: the canvas (newest first), the selected chart and the last exchange go with the message. The
+    #   last exchange is this message and the reply's text, never anything R wrote in the chat during setup.
+    run_turn = function(msg) {
+      canvas = unname(purrr::map(isolate(state$canvas), chart_of))
+      r = chat_turn(msg, canvas, isolate(selected()), isolate(state$codebook), isolate(state$data), last = isolate(last()), ask = ask,
+                    palette = isolate(palette()))
+      state$calls = dplyr::bind_rows(isolate(state$calls), r$calls)
+      last(r$last)
+      if (identical(r$kind, "spec") && !is.null(r$chart)) set_chart(r$chart)
+      if (identical(r$kind, "charts")) add_charts(r$charts)
+      say(chat_reply_text(r), r$`next`)
+      invisible(r)
+    }
+
+    # The setup buttons are suggestions whose text R recognizes; a click is not a question for the model.
+    setup_action = function(msg) {
+      m = trimws(msg)
+      value = purrr::detect(treat(), function(w) identical(m, treat_text(w)))
+      if (!is.null(value)) return(function() treat_missing(value))
+      if (identical(tolower(m), tolower(SETUP_LABEL))) return(label_now)
+      g = guess()
+      if (!is.null(g) && identical(m, row_text(g))) return(function() use_guess(g))
+      NULL
+    }
+
+    handle_message = function(msg) {
+      action = setup_action(msg)
+      if (!is.null(action)) return(invisible(action()))
+      if (send_ok()) run_turn(msg)
+      invisible()
+    }
+
+    observeEvent(input$chat_user_input, {
+      msg = trimws(input$chat_user_input)
+      if (nzchar(msg)) with_busy(handle_message(msg))
+    })
+
+    observeEvent(input$suggest, with_busy({
+      say("Suggest charts", role = "user")
+      if (send_ok()) run_turn(SUGGEST_MESSAGE)
+    }))
+
+    observeEvent(input$write_headlines, with_busy({
+      say("Write headlines", role = "user")
+      if (send_ok("Writing headlines")) {
+        todo = purrr::keep(isolate(state$canvas), needs_story)
+        if (!length(todo)) say(if (length(isolate(state$canvas))) "Every chart on the canvas already has a headline and summary that match it."
+                               else "There are no charts on the canvas yet.")
+        else say(story_line(write_stories(todo)))
+      }
+    }))
+
+    # ---- setup: R's own messages --------------------------------------------------------------------
+
+    # Treat a value as missing: the file is read again with it, as the Data page does, and the new read is said.
+    treat_missing = function(value) {
+      cb = isolate(state$codebook)
+      path = isolate(state$path)
+      if (is.null(cb) || !is_text1(path) || !file.exists(path))
+        return(say("The file is no longer there to read again. Choose it again on the Data page."))
+      res = tryCatch(reread_data(path, cb$file, unique(c(missing_codes(cb), value)), old = cb, encoding = cb$encoding), error = function(e) e)
+      if (inherits(res, "error")) return(say(conditionMessage(res)))
+      same = identical(res$read$data, isolate(state$data))
+      made$reread = if (!same) value
+      made$notes = res$notes
+      state$data = res$read$data; state$problems = res$read$problems; state$profile = res$profile; state$codebook = res$codebook
+      if (same) say(paste0("Nothing changed: no cell is exactly '", value, "'."))
+      invisible()
+    }
+
+    # The one setup call: labels for the columns, and the model's guess at what one row is.
+    label_now = function() {
+      cb = isolate(state$codebook)
+      if (is.null(cb)) return(say(SETUP_NEED_DATA))
+      if (needs_key()) return(say(paste("Labelling needs a key.", KEY_HINT)))
+      res = label_columns(cb, ask = ask)
+      state$calls = dplyr::bind_rows(isolate(state$calls), res$calls)
+      if (!is.null(res$error)) return(say(res$error))
+      landed = sum(purrr::map2_lgl(cb$columns, res$codebook$columns, function(a, b) !identical(a$label, b$label)))
+      unsure = sum(purrr::map_lgl(res$codebook$columns, function(e) identical(e$label_source, "ai_guess") && identical(e$sure, FALSE)))
+      state$codebook = res$codebook
+      g = if (!codebook_ready(res$codebook)) res$row_is_guess
+      guess(g)
+      say(c(paste0(format_num(landed), if (landed == 1L) " label was" else " labels were", " proposed",
+                   if (unsure) paste0(", ", unsure, " of them marked 'check this'"),
+                   ". Labels you wrote were not changed. Review and edit them on the Data page. ", DATA_PAGE_LINK),
+            if (!is.null(g)) "The model also guessed what one row is. You can edit it on the Data page."),
+          if (!is.null(g)) row_text(g))
+    }
+
+    use_guess = function(g) {
+      cb = isolate(state$codebook)
+      if (is.null(cb)) return(say(SETUP_NEED_DATA))
+      cb$row_is = g
+      guess(NULL)
+      state$codebook = cb
+      say(paste0("One row is ", g, "."))
+    }
+
+    # A file was read (or read again): what was read and what was wrong with it, a button for each value that may
+    #   mean missing, and the next step. A different file starts the canvas and the conversation again.
+    observeEvent(state$data, {
+      data = state$data
+      cb = state$codebook
+      if (is.null(data) || is.null(cb)) return()
+      key = list(file = cb$file, columns = names(data))
+      fresh = !identical(made$key, key)
+      if (fresh && !is.null(made$key)) {
+        reset_canvas()
+        guess(NULL)
+        made$log = list()
+        shinychat::chat_clear("chat")
+        say("A different file was read, so the canvas and the conversation start again.")
+      }
+      if (fresh) made$ready_for = NULL
+      made$key = key
+      words = missing_candidates(data)
+      treat(words)
+      again = made$reread
+      made$reread = NULL
+      problems = state$problems
+      say(c(paste0("Read ", cb$file, if (!is.null(again)) paste0(" again with '", again, "' as missing"), ": ", format_num(nrow(data)), " rows, ",
+                   format_num(ncol(data)), " columns."),
+            if (length(problems)) paste0("- ", problems, collapse = "
+") else "No problems found.",
+            if (length(made$notes)) paste0("- ", made$notes, collapse = "
+"),
+            if (length(words)) "If one of these stands for missing, press it and the file is read again:"),
+          if (length(words)) treat_text(words))
+      made$notes = character(0)
+      if (codebook_ready(cb)) {
+        if (!identical(made$ready_for, key)) { made$ready_for = key; say(SETUP_READY) }
+      } else {
+        say(c("Next, the data dictionary: each column needs a label, and it needs to say what one row represents.",
+              "The model can propose both from the column summaries; it does not see the rows. You can also fill them in on the Data page."),
+            SETUP_LABEL)
+      }
+    })
+
+    # The dictionary became ready (a row guess pressed, or the row written on the Data page).
+    observeEvent(ready(), {
+      if (isTRUE(ready()) && !is.null(made$key) && !identical(made$ready_for, made$key)) {
+        made$ready_for = made$key
+        say(SETUP_READY)
+      }
+    }, ignoreInit = TRUE)
+
+    # ---- the canvas ---------------------------------------------------------------------------------
+
+    output$gate = renderUI({
+      if (is.null(state$codebook) || is.null(state$data))
+        return(warn_box("Read a data file on the Data page first. ", tags$a(href = "#open-data-page", "Open the Data page")))
+      if (!codebook_ready(state$codebook))
+        return(warn_box("The data dictionary does not say what one row represents yet, and charts are drawn only after it does. ",
+                        "Press \"Label the columns\" in the chat and then the row guess, or write it on the Data page. ",
+                        tags$a(href = "#open-data-page", "Open the Data page")))
+      NULL
+    })
+
+    output$boxes = renderUI(if (!is.null(state$data) && !is.null(state$codebook)) canvas_boxes(state$data, state$codebook))
+
+    output$bar = renderUI({
+      if (!ready()) return(NULL)
+      n = length(state$canvas)
+      sel = selected()
+      chosen = if (!is.null(sel) && !is.null(made$chart[[sel]])) chart_title(made$chart[[sel]](), sel)
+      tags$div(class = "d-flex align-items-center flex-wrap gap-2 my-2",
+               actionButton(ns("style"), "Style", class = "btn-sm btn-outline-secondary"),
+               tags$span(class = "text-muted small", paste0(format_num(n), if (n == 1L) " chart" else " charts")),
+               if (!is.null(chosen))
+                 tagList(tags$span(class = "small", paste0("Selected: ", chosen)),
+                         actionButton(ns("deselect"), "Deselect", class = "btn-sm btn-outline-secondary")))
+    })
+
+    output$cards = renderUI({
+      if (!ready()) return(NULL)
+      ids = state$canvas
+      if (!length(ids)) return(tags$p(class = "text-muted", "No charts yet. Ask a question, or press Suggest charts."))
+      do.call(bslib::layout_column_wrap,
+              c(list(width = 1 / 2, fill = FALSE, heights_equal = "row"), purrr::map(ids, function(i) uiOutput(ns(cid(i, "card"))))))
+    })
+
+    output$foot = renderUI({
+      calls = state$calls
+      n = if (is.null(calls)) 0L else nrow(calls)
+      tin = if (n) sum(calls$tokens_in, na.rm = TRUE) else 0
+      tcache = if (n) sum(calls$tokens_cached, na.rm = TRUE) else 0
+      tout = if (n) sum(calls$tokens_out, na.rm = TRUE) else 0
+      tags$p(class = "small text-muted mt-3", paste0("Model calls this session: ", format_num(n), "; tokens in ", format_num(tin),
+                                                     " (and ", format_num(tcache), " read from the cache), out ", format_num(tout), "."))
+    })
+
+    # Style: the three palettes, in a dialog; changing one draws the charts again and makes no model call.
+    observeEvent(input$style, {
+      pal = isolate(palette())
+      showModal(modalDialog(
+        title = "Style", easyClose = TRUE, footer = modalButton("Close"),
+        tags$p(class = "small text-muted", "The palettes colour every chart on the canvas. Changing one draws the charts again; no model call is made."),
+        purrr::imap(EXPLORE_PALETTE_KINDS, function(label, kind)
+          selectInput(ns(paste0("pal_", kind)), label, choices = stats::setNames(names(chart_palettes(kind)), chart_palettes(kind)),
+                      selected = pal[[kind]], selectize = FALSE, width = "100%"))))
+    })
+    purrr::walk(names(EXPLORE_PALETTE_KINDS), function(kind)
+      observeEvent(input[[paste0("pal_", kind)]], {
+        p = isolate(palette())
+        v = input[[paste0("pal_", kind)]]
+        if (!identical(p[[kind]], v)) { p[[kind]] = v; palette(p) }
+      }, ignoreInit = TRUE))
+    observe(state$palette <- palette())
+
+    # Selecting: a click on a card (see card_click_js), the card's Select button, or Deselect. The chat's placeholder
+    #   follows the selected chart.
+    observeEvent(input$card_click, {
+      i = input$card_click$id
+      if (is_text1(i) && i %in% isolate(state$canvas)) toggle_selected(i)
+    })
+    observeEvent(input$deselect, set_selected(NULL))
+    placeholder = reactive({
+      sel = selected()
+      if (is.null(sel) || is.null(made$chart[[sel]])) return(EXPLORE_PLACEHOLDER)
+      paste0("Change ", chart_title(made$chart[[sel]]()), ", or ask something new")
+    })
+    observe(shinychat::update_chat_user_input("chat", placeholder = placeholder()))
+
+    # ---- one card -----------------------------------------------------------------------------------
+
+    card_ui = function(chart_id) {
+      ch = made$chart[[chart_id]]()
+      if (is.null(ch)) return(NULL)
+      st = made$story[[chart_id]]()
+      sel = isTRUE(made$sel[[chart_id]]())
+      interactive = isTRUE(made$interactive[[chart_id]]())
+      note = story_note[[chart_id]]
+      title = chart_title(ch, "Untitled chart")
+      stale = !is.null(st) && !identical(st$hash, spec_hash(ch$spec))
+      rule = ch$spec$rule
+      label = if (is_text1(rule) && !is.na(rule_labels[rule])) rule_labels[[rule]]
+      btn = function(what, text, class = "btn-outline-secondary", ...)
+        actionButton(ns(cid(chart_id, what)), text, class = paste("btn-sm", class), ...)
+      head = if (!is.null(st) && is_text1(st$headline) && nzchar(st$headline))
+        tags$div(tags$div(class = "fw-semibold", st$headline), tags$div(class = "small text-muted", title))
+      else tags$div(class = "fw-semibold", title)
+      bslib::card(
+        full_screen = TRUE, fill = FALSE, class = paste("chart-card", if (sel) "chart-selected"),
+        `data-chart-id` = chart_id, onclick = card_click_js(ns("card_click")),
+        bslib::card_header(
+          class = "d-flex flex-column gap-2", head,
+          tags$div(class = "d-flex flex-wrap gap-1",
+                   btn("select", if (sel) "Deselect" else "Select", if (sel) "btn-primary" else "btn-outline-primary"),
+                   btn("undo", "Undo", disabled = !length(ch$history)),
+                   btn("interactive", if (interactive) "Static" else "Interactive"),
+                   btn("code", "Code"),
+                   btn("edit", "Edit text"),
+                   btn("headline", "Headline", "btn-outline-primary chart-call"),
+                   btn("remove", "Remove", "btn-outline-danger"))),
+        bslib::card_body(
+          fillable = FALSE, fill = FALSE,
+          uiOutput(ns(cid(chart_id, "view"))),
+          uiOutput(ns(cid(chart_id, "notes"))),
+          if (!is.null(st)) tags$p(class = "mb-1", st$summary),
+          if (stale) tags$p(class = "small mb-1", style = warn_style, SUMMARY_STALE),
+          if (!is.null(st) && length(st$problems)) check_line(st$problems, ok = NULL),
+          if (!is.null(note)) tags$p(class = "small mb-1", style = warn_style, note),
+          tags$p(class = "small text-muted mb-0",
+                 if (!is.null(label)) paste0("Rule: ", label),
+                 if (isTRUE(ch$exploratory)) tags$span(class = "badge bg-secondary ms-1", "Exploratory"))))
+    }
+
+    # A chart's outputs and observers, made once, when it is added.
     make_chart = function(chart_id) {
       if (chart_id %in% made$ids) return(invisible())
       made$ids = c(made$ids, chart_id)
-      drawn = reactive(tryCatch(spec_plot(chart_of(chart_id)$spec, state$data, state$codebook, palette()), error = function(e) e))
+      made$chart[[chart_id]] = reactiveVal(chart_of(chart_id))
+      made$story[[chart_id]] = reactiveVal(story_of(chart_id))
+      made$sel[[chart_id]] = reactiveVal(FALSE)
+      made$interactive[[chart_id]] = reactiveVal(FALSE)
+      drawn = reactive(tryCatch(spec_plot(made$chart[[chart_id]]()$spec, state$data, state$codebook, palette()), error = function(e) e))
+      # The facts the checks in the Edit text dialog compare against, from the chart as it is now.
+      facts = reactive({
+        x = summary_input(made$chart[[chart_id]](), state$codebook, state$data, palette())
+        if (is.null(x$error)) list(text = names_back(x$facts$text, x$facts$names), spec = x$spec)
+      })
+
+      output[[cid(chart_id, "card")]] = renderUI(card_ui(chart_id))
       # Drawn at SPEC_DPI pixels per inch and shown at its size in inches, so it is sharper, not larger.
       output[[cid(chart_id, "static")]] = renderImage({
         p = drawn()
@@ -622,240 +1125,101 @@ mod_explore_server <- function(id, state, ask = llm_json) {
         spec_widget(p)
       })
       output[[cid(chart_id, "view")]] = renderUI({
-        if (isTRUE(toggles[[chart_id]]$interactive)) plotly::plotlyOutput(ns(cid(chart_id, "widget")), height = "450px")
+        if (isTRUE(made$interactive[[chart_id]]())) plotly::plotlyOutput(ns(cid(chart_id, "widget")), height = "450px")
         else imageOutput(ns(cid(chart_id, "static")), height = "auto")
       })
       output[[cid(chart_id, "notes")]] = renderUI({
         p = drawn()
         if (inherits(p, "error")) return(warn_box(conditionMessage(p)))
-        if (length(attr(p, "notes"))) tags$ul(class = "small", purrr::map(attr(p, "notes"), tags$li))
+        if (length(attr(p, "notes"))) tags$ul(class = "small text-muted", purrr::map(attr(p, "notes"), tags$li))
       })
-      output[[cid(chart_id, "about")]] = renderUI({
-        ch = chart_of(chart_id)
-        rule = ch$spec$rule
-        tagList(if (is_text1(ch$spec$say)) tags$p(ch$spec$say),
-                tags$p(class = "small text-muted",
-                       if (!is.null(rule) && !is.na(rule_labels[rule])) paste0("Rule: ", rule_labels[[rule]]),
-                       if (isTRUE(ch$exploratory)) tags$span(class = "badge bg-secondary ms-1", "Exploratory")))
-      })
-      output[[cid(chart_id, "code")]] = renderUI({
-        if (!isTRUE(toggles[[chart_id]]$code)) return(NULL)
-        code = tryCatch(spec_code(chart_of(chart_id)$spec, state$codebook, state$path, palette()), error = function(e) conditionMessage(e))
-        tags$pre(class = "small", paste(code, collapse = "\n"))
-      })
-      observeEvent(input[[cid(chart_id, "interactive")]], toggle(chart_id, "interactive"))
-      observeEvent(input[[cid(chart_id, "show_code")]], toggle(chart_id, "code"))
-      observeEvent(input[[cid(chart_id, "add")]], {
-        if (chart_id %in% state$report) return(showNotification("This chart is already in the report.", type = "message"))
-        state$report = c(state$report, chart_id)
-        showNotification(paste0("Added to the report (", length(state$report), " in all)."), type = "message")
-      })
-      observeEvent(input[[cid(chart_id, "refine")]], open(chart_id))
 
-      # Headline and summary: written by one call; edited in their boxes and checked again with no
-      #   call; marked out of date when the spec changes, the old text kept until written again.
-      observe(stale[[chart_id]] <- !is.null(story_of(chart_id)) && !identical(story_of(chart_id)$hash, spec_hash(chart_of(chart_id)$spec)))
-      output[[cid(chart_id, "story")]] = renderUI({
-        ver[[chart_id]]
-        is_stale = stale[[chart_id]]
-        note_now = story_note[[chart_id]]
-        st = isolate(story_of(chart_id))
-        if (is.null(st))
-          return(tagList(busy_button(ns(cid(chart_id, "write")), "Write headline and summary", SUMMARY_BUSY, ready = llm_key_ready(),
-                                     class = "btn-sm btn-outline-primary"),
-                         if (!is.null(note_now)) warn_box(note_now)))
-        tagList(textInput(ns(cid(chart_id, "s_head")), "Headline", value = st$headline, width = "100%", updateOn = "blur"),
-                textAreaInput(ns(cid(chart_id, "s_sum")), "Summary", value = st$summary, width = "100%", rows = 4, updateOn = "blur"),
-                uiOutput(ns(cid(chart_id, "s_check"))),
-                if (isTRUE(is_stale))
-                  tags$div(class = "mt-2", tags$p(class = "small mb-1", SUMMARY_STALE),
-                           busy_button(ns(cid(chart_id, "rewrite")), "Write again", SUMMARY_BUSY, ready = llm_key_ready(), class = "btn-sm btn-outline-primary")),
-                if (!is.null(note_now)) warn_box(note_now))
+      # The buttons of the header.
+      observeEvent(input[[cid(chart_id, "select")]], toggle_selected(chart_id))
+      observeEvent(input[[cid(chart_id, "interactive")]], {
+        rv = made$interactive[[chart_id]]
+        rv(!isTRUE(isolate(rv())))
       })
-      output[[cid(chart_id, "s_check")]] = renderUI(check_line(story_of(chart_id)$problems))
-      output[[cid(chart_id, "headline")]] = renderUI({
-        h = story_of(chart_id)$headline
-        if (is_text1(h) && nzchar(h)) tags$p(class = "fw-semibold mb-1", h)
+      observeEvent(input[[cid(chart_id, "undo")]], {
+        ch = chart_of(chart_id)
+        if (is.null(ch) || !length(ch$history)) return()
+        ch = chart_undo(ch)
+        ch$notes = notes_for(ch$spec)
+        set_chart(ch)
       })
-      observeEvent(input[[cid(chart_id, "write")]], write_stories(chart_id))
-      observeEvent(input[[cid(chart_id, "rewrite")]], write_stories(chart_id))
+      observeEvent(input[[cid(chart_id, "remove")]], remove_chart(chart_id))
+      observeEvent(input[[cid(chart_id, "headline")]], with_busy(if (send_ok("Writing a headline")) say(story_line(write_stories(chart_id)))))
+
+      # Code: a dialog with the R code of this chart and a button that copies it.
+      observeEvent(input[[cid(chart_id, "code")]], {
+        ch = chart_of(chart_id)
+        if (is.null(ch)) return()
+        code = tryCatch(spec_code(ch$spec, isolate(state$codebook), isolate(state$path), isolate(palette())), error = function(e) conditionMessage(e))
+        code_id = ns(cid(chart_id, "code_text"))
+        showModal(modalDialog(
+          title = paste0("Code: ", chart_title(ch)), size = "l", easyClose = TRUE,
+          tags$pre(id = code_id, class = "small", paste(code, collapse = "\n")),
+          footer = tagList(tags$button(type = "button", class = "btn btn-sm btn-outline-primary", onclick = copy_js(code_id), "Copy code"),
+                           modalButton("Close"))))
+      })
+
+      # Edit text: the five wording boxes, and the headline and summary when they are written. No model call. Each box
+      #   is checked against the chart's facts as it is left; the wording is applied with the button, a headline or
+      #   summary as its box is left.
+      observeEvent(input[[cid(chart_id, "edit")]], {
+        ch = chart_of(chart_id)
+        if (is.null(ch)) return()
+        st = story_of(chart_id)
+        box = function(f) ns(cid(chart_id, f))
+        showModal(modalDialog(
+          title = paste0("Edit text: ", chart_title(ch)), size = "l", easyClose = FALSE,
+          tags$p(class = "small text-muted", "No model call is made here. Each box is checked against the chart's data when you leave it."),
+          purrr::imap(WORDING_FIELDS, function(label, f)
+            tagList(textInput(box(paste0("w_", f)), label, value = ch$spec[[f]] %||% "", width = "100%", updateOn = "blur"),
+                    uiOutput(box(paste0("chk_", f))))),
+          if (!is.null(st))
+            tagList(tags$hr(),
+                    textInput(box("s_head"), "Headline", value = st$headline, width = "100%", updateOn = "blur"), uiOutput(box("chk_head")),
+                    textAreaInput(box("s_sum"), "Summary", value = st$summary, width = "100%", rows = 4, updateOn = "blur"), uiOutput(box("chk_sum"))),
+          footer = tagList(modalButton("Close"), actionButton(box("apply"), "Apply wording", class = "btn-primary"))))
+      })
+      purrr::walk(names(WORDING_FIELDS), function(f)
+        output[[cid(chart_id, paste0("chk_", f))]] = renderUI({
+          txt = input[[cid(chart_id, paste0("w_", f))]] %||% made$chart[[chart_id]]()$spec[[f]] %||% ""
+          x = facts()
+          if (!nzchar(trimws(txt)) || is.null(x)) return(NULL)
+          check_line(problem_sentences(summary_problems(txt, NULL, x$text, x$spec)))
+        }))
+      output[[cid(chart_id, "chk_head")]] = renderUI({
+        st = made$story[[chart_id]]()
+        if (!is.null(st)) check_line(problem_sentences(summary_problems(st$headline, NULL, st$facts, st$spec)))
+      })
+      output[[cid(chart_id, "chk_sum")]] = renderUI({
+        st = made$story[[chart_id]]()
+        if (!is.null(st)) check_line(problem_sentences(summary_problems(NULL, st$summary, st$facts, st$spec)))
+      })
       purrr::iwalk(c(s_head = "headline", s_sum = "summary"), function(field, box)
         observeEvent(input[[cid(chart_id, box)]], {
-          st = isolate(story_of(chart_id))
+          st = story_of(chart_id)
           v = input[[cid(chart_id, box)]]
           if (is.null(st) || identical(v, st[[field]])) return()
           st[[field]] = v
           set_story(chart_id, recheck_story(st))
         }, ignoreInit = TRUE))
-      # The title box is checked the same way, against the chart's facts as it is now.
-      output[[cid(chart_id, "title_check")]] = renderUI({
-        title = input[[cid(chart_id, "w_title")]] %||% chart_of(chart_id)$spec$title %||% ""
-        if (!nzchar(trimws(title))) return(NULL)
-        x = summary_input(chart_of(chart_id), state$codebook, state$data, palette())
-        if (!is.null(x$error)) return(NULL)
-        check_line(problem_sentences(summary_problems(title, NULL, names_back(x$facts$text, x$facts$names), x$spec)), ok = NULL)
-      })
-
-      # Wording: applied when a box is left or "Apply wording" is pressed; no model call.
-      apply_wording = function() {
-        ch = isolate(chart_of(chart_id))
-        spec = ch$spec
+      observeEvent(input[[cid(chart_id, "apply")]], {
+        ch = chart_of(chart_id)
+        if (is.null(ch)) return()
         spec = purrr::reduce(names(WORDING_FIELDS), function(sp, f) {
-          v = isolate(input[[cid(chart_id, paste0("w_", f))]])
+          v = input[[cid(chart_id, paste0("w_", f))]]
           if (is.null(v)) return(sp)
           v = trimws(v)
           sp[[f]] = if (nzchar(v)) v
           sp
-        }, .init = spec)
+        }, .init = ch$spec)
         if (!identical(spec, ch$spec)) set_chart(chart_apply(ch, spec, notes_for(spec)))
-      }
-      purrr::walk(c(paste0("w_", names(WORDING_FIELDS)), "apply"), function(w) observeEvent(input[[cid(chart_id, w)]], apply_wording(), ignoreInit = TRUE))
-
-      # Undo and Reset: no model call.
-      observeEvent(input[[cid(chart_id, "undo")]], {
-        ch = chart_undo(chart_of(chart_id))
-        ch$notes = notes_for(ch$spec)
-        set_chart(ch); fill_wording(chart_id)
+        removeModal()
       })
-      observeEvent(input[[cid(chart_id, "reset")]], {
-        ch = chart_reset(chart_of(chart_id))
-        ch$notes = notes_for(ch$spec)
-        set_chart(ch); fill_wording(chart_id)
-      })
-
-      # The chat. shinychat disables its input from the moment a message is sent until a complete
-      #   message is appended, so a second message cannot be sent while the call runs.
-      chat_id = cid(chart_id, "chat")
-      observeEvent(input[[paste0(chat_id, "_user_input")]], {
-        msg = trimws(input[[paste0(chat_id, "_user_input")]])
-        if (!nzchar(msg)) return()
-        t = isolate(talk[[chart_id]]) %||% list(messages = list(), last = NULL)
-        r = chat_turn(msg, list(chart_of(chart_id)), chart_id, state$codebook, state$data, last = t$last, ask = ask, palette = palette())
-        state$calls = dplyr::bind_rows(state$calls, r$calls)
-        if (identical(r$kind, "spec")) { set_chart(r$chart); fill_wording(chart_id) }
-        reply = if (identical(r$kind, "charts")) OLD_SCREEN_NEW_CHART else chat_reply_text(r)
-        t$messages = c(t$messages, list(list(role = "user", content = msg), list(role = "assistant", content = reply)))
-        t$last = r$last
-        talk[[chart_id]] = t
-        shinychat::chat_append_message(chat_id, list(role = "assistant", content = reply), chunk = FALSE)
-      })
+      invisible()
     }
-
-    # Draw and Suggest charts: one message, with nothing selected, to an empty canvas. This screen
-    #   shows the charts of the last request only, so it never sends its canvas.
-    run = function(message) {
-      note(NULL)
-      out = chat_turn(message, list(), NULL, state$codebook, state$data, ask = ask, palette = palette())
-      state$calls = dplyr::bind_rows(state$calls, out$calls)
-      ids = purrr::map_chr(out$charts, function(ch) {
-        made$n = made$n + 1L
-        chart = new_chart(paste0("c", made$n), ch$spec, ch$notes)
-        chart$exploratory = isTRUE(ch$exploratory)
-        set_chart(chart)
-        chart$id
-      })
-      purrr::walk(ids, make_chart)
-      res(list(error = if (identical(out$kind, "failed")) paste(out$text, collapse = " "), detail = out$detail,
-               cannot = if (out$kind %in% c("ask", "cannot", "tell")) chat_reply_text(out) else out$cannot, failed = out$failed))
-      shown(unname(ids)); open(NULL)
-      calls_done(calls_done() + 1L)
-    }
-    observeEvent(input$draw, {
-      q = trimws(input$question %||% "")
-      if (!nzchar(q)) { note(warn_box("Type a question first, or use Suggest charts for this file.")); return(calls_done(calls_done() + 1L)) }
-      run(q)
-    })
-    observeEvent(input$suggest, run(SUGGEST_MESSAGE))
-    observeEvent(input$back, open(NULL))
-    observeEvent(input$write_report, {
-      todo = purrr::keep(state$report, needs_story)
-      if (length(todo)) write_stories(todo)
-    })
-
-    chart_buttons = function(chart_id, refine = TRUE)
-      tags$div(class = "d-flex gap-2 flex-wrap",
-               actionButton(ns(cid(chart_id, "add")), "Add to report", class = "btn-sm btn-primary"),
-               actionButton(ns(cid(chart_id, "interactive")), "Interactive view", class = "btn-sm"),
-               actionButton(ns(cid(chart_id, "show_code")), "Show code", class = "btn-sm"),
-               if (refine) actionButton(ns(cid(chart_id, "refine")), "Refine", class = "btn-sm btn-outline-primary"))
-
-    # The wide view of one chart: the chart, its notes and rule on the left; on the right "Back to
-    #   all charts", the wording boxes, Undo and Reset, and the chat.
-    wide_view = function(chart_id) {
-      ch = isolate(chart_of(chart_id))
-      t = isolate(talk[[chart_id]])
-      bslib::layout_columns(col_widths = c(7, 5),
-        tags$div(uiOutput(ns(cid(chart_id, "view"))), uiOutput(ns(cid(chart_id, "notes"))), uiOutput(ns(cid(chart_id, "about"))),
-                 tags$div(class = "border rounded p-2 my-2", tags$h6("Headline and summary"), uiOutput(ns(cid(chart_id, "story")))),
-                 chart_buttons(chart_id, refine = FALSE), uiOutput(ns(cid(chart_id, "code")))),
-        tags$div(actionButton(ns("back"), "Back to all charts", class = "btn-sm mb-2"),
-                 tags$h5("Wording"),
-                 purrr::imap(WORDING_FIELDS, function(label, f)
-                   tagList(textInput(ns(cid(chart_id, paste0("w_", f))), label, value = ch$spec[[f]] %||% "", width = "100%", updateOn = "blur"),
-                           if (identical(f, "title")) uiOutput(ns(cid(chart_id, "title_check"))))),
-                 tags$div(class = "d-flex gap-2 mb-3",
-                          actionButton(ns(cid(chart_id, "apply")), "Apply wording", class = "btn-sm"),
-                          actionButton(ns(cid(chart_id, "undo")), "Undo", class = "btn-sm"),
-                          actionButton(ns(cid(chart_id, "reset")), "Reset", class = "btn-sm")),
-                 tags$h5("Chat"),
-                 shinychat::chat_ui(ns(cid(chart_id, "chat")), messages = t$messages, greeting = REFINE_GREETING, height = "420px",
-                                    placeholder = "What should change?")))
-    }
-
-    output$results = renderUI({
-      out = res()
-      if (is.null(out)) return(NULL)
-      if (!is.null(open())) return(wide_view(open()))
-      cards = purrr::map(shown(), function(chart_id)
-        bslib::card(uiOutput(ns(cid(chart_id, "headline"))), uiOutput(ns(cid(chart_id, "view"))), uiOutput(ns(cid(chart_id, "notes"))), uiOutput(ns(cid(chart_id, "about"))),
-                    chart_buttons(chart_id), uiOutput(ns(cid(chart_id, "code")))))
-      tagList(
-        uiOutput(ns("report_button")),
-        if (!is.null(out$error)) warn_box(out$error, call_detail(out$detail)),
-        if (length(out$cannot)) advice_box(purrr::map(out$cannot, tags$p)),
-        if (length(cards)) do.call(bslib::layout_column_wrap, c(list(width = 1 / 2), cards)),
-        if (is.null(out$error) && !length(cards) && !length(out$cannot) && !length(out$failed))
-          tags$p(class = "text-muted", "The model returned no charts."),
-        if (length(out$failed))
-          tags$div(tags$h5("Could not be drawn"),
-                   tags$ul(purrr::map(out$failed, function(f)
-                     tags$li(tags$strong(paste0("Chart ", f$number, if (is_text1(f$spec$title)) paste0(", '", f$spec$title, "'"), ": ")),
-                             paste(f$sentences, collapse = " "))))))
-    })
-
-    # Above the cards, once a chart is in the report: write for every report chart that has no
-    #   headline or whose spec has changed since it was written.
-    output$report_button = renderUI({
-      if (!length(state$report)) return(NULL)
-      n = length(purrr::keep(state$report, needs_story))
-      busy_button(ns("write_report"), paste0("Write headlines and summaries for the report (", n, if (n == 1L) " chart)" else " charts)"),
-                  SUMMARY_BUSY, ready = n > 0L && llm_key_ready(), class = "btn-outline-primary mb-2")
-    })
-
-    output$foot = renderUI({
-      calls = state$calls
-      n = if (is.null(calls)) 0L else nrow(calls)
-      tin = if (n) sum(calls$tokens_in, na.rm = TRUE) else 0
-      tcache = if (n) sum(calls$tokens_cached, na.rm = TRUE) else 0
-      tout = if (n) sum(calls$tokens_out, na.rm = TRUE) else 0
-      tags$p(class = "small text-muted", paste0("Model calls this session: ", format_num(n), "; tokens in ", format_num(tin),
-                                                " (and ", format_num(tcache), " read from the cache), out ", format_num(tout), "."))
-    })
-  })
-}
-
-
-# ---- Report ---------------------------------------------------------------------------------
-
-# The Report tab is a later phase; until then it shows how many charts were added to it. The report
-#   holds chart ids, so a chart refined after it was added is the refined one.
-mod_report_ui <- function(id) uiOutput(NS(id)("count"))
-
-mod_report_server <- function(id, state) {
-  moduleServer(id, function(input, output, session) {
-    output$count = renderUI({
-      n = length(state$report)
-      tags$p(paste0(format_num(n), if (n == 1L) " chart has" else " charts have", " been added to the report. ", LATER_PHASE))
-    })
   })
 }

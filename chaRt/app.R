@@ -16,7 +16,7 @@ APP_CLASSIFICATION <- "UNCLASSIFIED"
 APP_LOGO <- "office_logo.png"
 APP_OFFICE <- ""
 
-# Largest data file the Data tab accepts, in megabytes.
+# Largest data file the Data page accepts, in megabytes.
 APP_MAX_UPLOAD_MB <- 50
 
 # Where the "Source code" button in the header links to. At work, point it at the internal copy.
@@ -54,8 +54,8 @@ library(bslib)
 library(purrr)
 
 # Called as pkg::fn() in R/ and never attached; listed so a missing one stops the app here, by name.
-APP_PACKAGES <- c("digest", "dplyr", "ellmer", "ggplot2", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales", "shinychat", "tibble",
-                  "tidyr", "yaml")
+APP_PACKAGES <- c("digest", "dplyr", "ellmer", "ggplot2", "htmltools", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales", "shinychat",
+                  "tibble", "tidyr", "yaml")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
@@ -116,49 +116,19 @@ options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 
 # The state the modules share: key_version, which changes whenever the pasted key
 #   is saved or forgotten, so anything that depends on a key can re-run; the data as read, the
-#   sentences about it (problems), its profile, the codebook the analyst edits and the path of the
-#   upload (for the code a chart comes with); the record of every model call (calls); every chart
-#   drawn this session, by id (charts); the ids added to the report, in order; and the report's
-#   three palettes.
+#   sentences about it (problems), its profile, the data dictionary the analyst edits (codebook) and the
+#   path of the upload (for the code a chart comes with); the record of every model call (calls); every
+#   chart drawn this session, by id (charts), and the ids of those on the canvas, newest first (canvas);
+#   the headline and summary written for a chart, by id (stories); and the three palettes.
 new_state <- function() reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL,
-                                       path = NULL, calls = NULL, charts = list(), report = character(0), stories = list(),
+                                       path = NULL, calls = NULL, charts = list(), canvas = character(0), stories = list(),
                                        palette = chart_palette_default())
 
 
 # ---- 6. layout --------------------------------------------------------------
 
-ui <- page_fluid(
-  theme = bs_theme(version = 5, preset = "flatly"),
-  title = "chaRt",
-
-  # Above everything, on every tab.
-  tags$div(
-    style = paste("background:#b40404; color:#fff; text-align:center;",
-                  "font-weight:700; letter-spacing:0.06em;",
-                  "padding:5px 0; font-size:13px;"),
-    APP_CLASSIFICATION),
-
-  div(
-    style = "display:flex; align-items:center; gap:1rem; margin:0.5rem 0;",
-    tags$a("Source code", href = APP_SOURCE_URL, target = "_blank", rel = "noopener",
-           class = "btn btn-outline-secondary btn-sm"),
-    office_logo(APP_LOGO, APP_OFFICE),
-    div(tags$h2("chaRt", style = "margin:0;"),
-        tags$p(tags$em("Publishable charts from a data file, drawn to written visualization rules."),
-               style = "margin:0;")),
-    div(style = "margin-left:auto;", input_dark_mode(id = "dark_mode"))),
-
-  tags$hr(),
-
-  navlistPanel(
-    id = "stage", widths = c(3, 9), well = FALSE,
-
-    tabPanel(CHART_TABS[1], start_ui()),
-    tabPanel(CHART_TABS[2], mod_data_ui("data")),
-    tabPanel(CHART_TABS[3], mod_codebook_ui("codebook")),
-    tabPanel(CHART_TABS[4], mod_explore_ui("explore")),
-    tabPanel(CHART_TABS[5], mod_report_ui("report")),
-    tabPanel(CHART_TABS[6], later_ui())))
+# The banner, then the navbar page: Start here, Data, Explore, Methodology (R/ui.R).
+ui <- app_ui(APP_CLASSIFICATION, APP_LOGO, APP_OFFICE, APP_SOURCE_URL)
 
 
 # ---- 7. server --------------------------------------------------------------
@@ -170,7 +140,6 @@ server <- function(input, output, session) {
   mod_data_server("data", state)
   mod_codebook_server("codebook", state)
   mod_explore_server("explore", state)
-  mod_report_server("report", state)
 }
 
 
