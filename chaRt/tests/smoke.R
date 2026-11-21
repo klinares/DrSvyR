@@ -4106,6 +4106,20 @@ check("7b-13: the gold bar spec's title names the region its table puts highest 
         exists("d7_sheet") && grepl("<h2>Phase 7b</h2>", d7_sheet, fixed = TRUE) && grepl("heatmap, cell values, Newspaper", d7_sheet, fixed = TRUE) &&
         length(PHASE7B_LOOK) == 6L && setequal(purrr::map_int(PHASE7B_LOOK, "item"), c(1L, 2L, 3L, 4L, 6L, 8L)))
 
+# 14. a reply with text after its JSON (Phase 7b's live run: the model wrote its object, then "Wait, I must check that
+#   headline..." and a second object): the first complete object is read
+e7_first <- "{\"charts\": [{\"id\": \"c1\", \"headline\": \"West ended at 69,700 {its high}\", \"summary\": \"A \\\"quoted\\\" } brace.\"}]}"
+e7_after <- paste0("Here it is: ", e7_first, "  Wait, I must check that headline. {\"charts\": [{\"id\": \"c1\", \"headline\": \"Another\"}]}")
+e7_parsed <- tryCatch(parse_json_block(e7_after), error = function(e) e)
+e7_cut <- tryCatch(parse_json_block("{\"charts\": [{\"id\": \"c1\", \"headline\": \"Cut off"), error = function(e) e)
+e7_via <- tryCatch(llm_json("u", APP_PROFILES$home, max_tokens = 10, key = "stand-in", max_times = 1L,
+                            complete = function(...) structure(e7_after, finish = "success"))$obj, error = function(e) e)
+check("7b-14: a reply with text after its JSON object, braces and quotes inside its strings, and a second object after it, is read as its first complete object (by parse_json_block() and by llm_json()); a reply cut off inside a string is still repaired as before",
+      !inherits(e7_parsed, "error") && identical(e7_parsed$charts[[1]]$headline, "West ended at 69,700 {its high}") &&
+        identical(e7_parsed$charts[[1]]$summary, "A \"quoted\" } brace.") && !inherits(e7_via, "error") && identical(e7_via, e7_parsed) &&
+        identical(json_first_object("no object here"), character(0)) && identical(json_first_object("{\"a\": 1"), character(0)) &&
+        !inherits(e7_cut, "error") && identical(e7_cut$charts[[1]]$headline, "Cut off"))
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")

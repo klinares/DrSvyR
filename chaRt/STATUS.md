@@ -69,7 +69,15 @@ it. Summary 2 (same chart and facts), checked clean, no repair:
   has 35 monthly points and the other regions have 36."
 In this one reply summary.md 0.3 did what it asks: the headline rests on the peak and the change over the last year,
 not on the first and last month, and "9.3 times its start" stands beside the year-earlier change. One reply is not a
-test of the rule. Open: the parser should take the first complete JSON object and ignore what follows it.
+test of the rule.
+
+**The reply parser, fixed afterwards.** `parse_json_block()` (R/llm.R) now tries `json_first_object()` when the whole
+span from the first `{` to the last `}` does not parse: the first complete object, found by scanning outside strings, so
+braces and quotes inside a value do not end it, and what the model wrote after it is not read. The quote and closing
+repairs still apply after it, so a reply cut off inside a string is repaired as before. Check 7b-14 covers a reply with
+text and a second object after its JSON, through `parse_json_block()` and `llm_json()`, and the cut-off reply; with the
+repair undone, that check alone fails (395 of 396); smoke is **396 of 396**. The actual failing reply was not saved in
+full, so the fix is checked on a made-up reply of the same shape, not on that one.
 
 **Not confirmed.** The plotly versions of the changed charts (bare axis, merged end labels) were not seen in a browser;
 the box measure is of the string's box, not its ink (tolerance 0.02 inch); the rug's band is not kept on a log axis;

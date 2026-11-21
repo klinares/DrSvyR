@@ -198,6 +198,30 @@ repair_json_close <- function(txt) {
   paste0(txt, paste(rev(ifelse(st$open == "{", "}", "]")), collapse = ""))
 }
 
+# The first complete JSON object in the text: from its first "{" to the "}" that closes it, outside strings. A model
+#   sometimes writes its object and then goes on ("Wait, I must check that headline..."), and the text after the object,
+#   with braces of its own, breaks the parse of everything up to the last "}" (seen in Phase 7b's live run). character(0)
+#   when no object closes. What the model wrote after its object is not read; the reply is checked as any other.
+json_first_object <- function(txt) {
+  start = regexpr("\\{", txt)
+  if (start < 0) return(character(0))
+  rest = substr(txt, start, nchar(txt))
+  st = purrr::reduce(strsplit(rest, "", fixed = TRUE)[[1]], function(s, c1) {
+    if (s$end > 0L) return(s)
+    s$i = s$i + 1L
+    if (s$esc) { s$esc = FALSE; return(s) }
+    if (s$ins) {
+      if (identical(c1, "\\")) s$esc = TRUE else if (identical(c1, "\"")) s$ins = FALSE
+      return(s)
+    }
+    if (identical(c1, "\"")) s$ins = TRUE
+    else if (c1 %in% c("{", "[")) s$depth = s$depth + 1L
+    else if (c1 %in% c("}", "]")) { s$depth = s$depth - 1L; if (s$depth == 0L) s$end = s$i }
+    s
+  }, .init = list(i = 0L, ins = FALSE, esc = FALSE, depth = 0L, end = 0L))
+  if (st$end > 0L) substr(rest, 1L, st$end) else character(0)
+}
+
 # The object pulled out by pattern, since some models wrap it in prose or fences; with no closing
 #   brace, everything from the first one.
 json_candidate <- function(txt, pattern) {
@@ -212,8 +236,12 @@ parse_json_block <- function(txt, pattern = "(?s)\\{.*\\}") {
   if (!length(m)) stop("No JSON found in the model reply:\n", txt, call. = FALSE)
   obj = try(jsonlite::fromJSON(m, simplifyVector = FALSE), silent = TRUE)
   if (!inherits(obj, "try-error")) return(obj)
-  # Escaping first: a stray quote changes where the scan thinks strings end, and a reply can need both.
-  done = purrr::compact(purrr::map(list(repair_json_quotes(m), repair_json_close(m), repair_json_close(repair_json_quotes(m))),
+  # The first complete object, for text written after it (json_first_object()); then the quote and closing repairs, escaping
+  #   first: a stray quote changes where the scan thinks strings end, and a reply can need both.
+  first = json_first_object(m)
+  fixes = c(if (length(first)) list(first, json_first_object(repair_json_quotes(m))),
+            list(repair_json_quotes(m), repair_json_close(m), repair_json_close(repair_json_quotes(m))))
+  done = purrr::compact(purrr::map(purrr::compact(purrr::map(fixes, function(f) if (length(f)) f)),
     function(fixed) {
       if (identical(fixed, m)) return(NULL)
       r = try(jsonlite::fromJSON(fixed, simplifyVector = FALSE), silent = TRUE)
