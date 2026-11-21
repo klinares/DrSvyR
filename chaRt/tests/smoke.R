@@ -1621,10 +1621,10 @@ check("6-A 7: check_numbers(): 'one' is not a number (one of them, no one), 'two
         identical(check_numbers("eleven groups", c5_facts, c5_spec), "eleven") && !"one" %in% names(NUMBER_WORDS))
 a6_f2 <- "Highest as a multiple of the lowest: 3.44"
 a6_f05 <- "Midfielder: first 10 (2015), last 5 (2024), change -5 (-50.0%), end is 0.5 times start, highest 10"
-a6_ws <- c(doubled = "It doubled.", tripled = "It tripled.", quadrupled = "It quadrupled.", twice = "Twice as many.", halved = "It halved.", half = "Half of them.")
+a6_ws <- c(doubled = "It doubled.", tripled = "It tripled.", quadrupled = "It quadrupled.", twice = "Twice as many.", halved = "It halved.")
 a6_says <- function(facts) names(a6_ws)[purrr::map_lgl(a6_ws, function(w) length(check_words(w, facts)) > 0L)]
-check("6-A 8: check_words(): doubled, tripled, quadrupled, twice, halved and half need a multiple in the facts (at least 2, 3, 4, 2; at most 0.5, 0.5); the sentence names the word",
-      setequal(a6_says(NULL), names(a6_ws)) && setequal(a6_says(a6_f2), c("quadrupled", "halved", "half")) &&
+check("6-A 8: check_words(): doubled, tripled, quadrupled, twice and halved need a multiple in the facts (at least 2, 3, 4, 2; at most 0.5); the sentence names the word",
+      setequal(a6_says(NULL), names(a6_ws)) && setequal(a6_says(a6_f2), c("quadrupled", "halved")) &&
         setequal(a6_says(a6_f05), c("doubled", "tripled", "quadrupled", "twice")) &&
         identical(problem_sentences(summary_problems("It doubled", "", "Rows used: 5", list()))[1], "'doubled' is a comparison the chart's facts do not state.") &&
         !length(check_words("It doubled", a6_f2)) && isTRUE(summary_ok(summary_problems("It doubled", "Twice as many.", a6_f2, list()))))
@@ -2707,6 +2707,84 @@ check("6b-2: shiny's page-level pulse is on as a second signal (useBusyIndicator
 "), fixed = TRUE) &&
         grepl("document.documentElement.dataset.shinyBusyPulse = 'true'", w6_page, fixed = TRUE) &&
         grepl("delete document.documentElement.dataset.shinyBusySpinners", w6_page, fixed = TRUE))
+
+
+# ---- Phase 7 A: fixes from the reviews ------------------------------------------------------------------------------------------
+
+# 1. Line facts: highest and lowest with when, the year-earlier comparison, points per series, fewer than three points.
+a7_mo <- seq(as.Date("2023-01-01"), by = "month", length.out = 24)
+a7_a <- c(10, 12, 9, 15, 11, 13, 14, 20, 18, 16, 17, 19, 21, 22, 19, 25, 24, 23, 26, 30, 28, 27, 29, 31)
+a7_df <- rbind(data.frame(month = a7_mo, series = "alpha", v = a7_a),
+               data.frame(month = a7_mo[1:12], series = "beta", v = 100 - (1:12)),
+               data.frame(month = a7_mo[1:2], series = "gamma", v = c(5, 6)))
+a7_lf <- a6_facts(list(family = "line", x = "month", y = "v", color = "series", fn = "none", title = "t"), a6_g(a7_df))
+a7_alpha <- a6_line(a7_lf, "alpha:")
+a7_beta <- a6_line(a7_lf, "beta:")
+a7_gamma <- a6_line(a7_lf, "gamma:")
+a7_qdf <- data.frame(q = seq(as.Date("2023-03-01"), by = "quarter", length.out = 6), v = c(1, 2, 3, 4, 5, 7))
+a7_qf <- a6_facts(list(family = "line", x = "q", y = "v", fn = "none", title = "t"), a6_g(a7_qdf))
+a7_ydf <- data.frame(year = 2015:2024, v = c(3, 4, 5, 4, 6, 7, 8, 7, 9, 10))
+a7_yf <- a6_facts(list(family = "line", x = "year", y = "v", fn = "none", title = "t"), a6_g(a7_ydf))
+check("7A-1: a line's facts give 'Points per series: n' (a range when series differ), each series' highest and lowest with when, and a series of fewer than three points no highest or lowest",
+      "Points per series: 2 to 24" %in% a6_line(a7_lf, "Points per series") && "Points per series: 6" %in% a6_line(a7_qf, "Points per series") &&
+        grepl("highest 31 (2024-12-01), lowest 9 (2023-03-01)", a7_alpha, fixed = TRUE) && grepl("highest 99 (2023-01-01), lowest 88 (2023-12-01)", a7_beta, fixed = TRUE) &&
+        grepl("only 2 points, so no highest or lowest is given", a7_gamma, fixed = TRUE) && !grepl("highest|lowest ", sub("so no highest or lowest is given", "", a7_gamma, fixed = TRUE)))
+check("7A-1: a monthly or quarterly series over more than one year gives the last value against the same period a year earlier; a series of one year, or a yearly one, gives none",
+      grepl("a year before the last point (2023-12-01) it was 19, change over the year 12 (63.2%)", a7_alpha, fixed = TRUE) &&
+        grepl("a year before the last point (2023-06-01) it was 2, change over the year 5 (250.0%)", a6_line(a7_qf, "The line:"), fixed = TRUE) &&
+        !grepl("a year before", a7_beta, fixed = TRUE) && !grepl("a year before", a7_gamma, fixed = TRUE) && !any(grepl("a year before", strsplit(a7_yf, "\n")[[1]])) &&
+        identical(fact_period(a7_mo), "month") && identical(fact_period(a7_qdf$q), "quarter") && is.null(fact_period(a7_ydf$year)))
+
+# 2. Correlation on the scale drawn.
+set.seed(7)
+a7_lx <- seq(0, 4, length.out = 40)
+a7_sdf <- data.frame(x = exp(a7_lx), y = exp(exp(a7_lx) / 3))
+a7_sp <- list(family = "scatter", x = "x", y = "y", title = "t", fit = "none")
+a7_s_lin <- a6_facts(a7_sp, a6_g(a7_sdf))
+a7_s_log <- a6_facts(utils::modifyList(a7_sp, list(log_x = TRUE, log_y = TRUE)), a6_g(a7_sdf))
+a7_s_logx <- a6_facts(utils::modifyList(a7_sp, list(log_x = TRUE)), a6_g(a7_sdf))
+a7_r <- function(a, b) formatC(round(stats::cor(a, b), 2), format = "f", digits = 2)
+check("7A-2: with log_x or log_y the Pearson correlation is computed on the logged values and worded 'on the log scale shown'; Spearman is unchanged and the 'not a straight line' sentence names the scale",
+      paste0("Pearson correlation on the log scale shown: ", a7_r(log10(a7_sdf$x), log10(a7_sdf$y))) %in% a6_line(a7_s_log, "Pearson") &&
+        paste0("Pearson correlation on the log scale shown: ", a7_r(log10(a7_sdf$x), a7_sdf$y)) %in% a6_line(a7_s_logx, "Pearson") &&
+        paste0("Pearson correlation: ", a7_r(a7_sdf$x, a7_sdf$y)) %in% a6_line(a7_s_lin, "Pearson") && !grepl("log scale", a7_s_lin) &&
+        identical(a6_line(a7_s_log, "Spearman"), a6_line(a7_s_lin, "Spearman")) && length(a6_line(a7_s_lin, "Spearman")) == 1L &&
+        "The two differ, so the relationship is not a straight line." %in% a6_line(a7_s_lin, "The two differ") &&
+        "The two differ, so the relationship is not a straight line on the log scale shown." %in% a6_line(a7_s_logx, "The two differ"))
+
+# 3. check_words(): "half" is not a multiple word.
+check("7A-3: check_words() lets 'the middle half' pass with or without facts, 'halved' still needs a multiple of 0.5 or less, and 'half' is not in MULTIPLE_WORDS",
+      !length(check_words("Most values sit in the middle half of the range.")) && !length(check_words("Half of them are older.", "Rows used: 5")) &&
+        identical(check_words("It halved.", "Rows used: 5"), "halved") && !length(check_words("It halved.", a6_f05)) &&
+        !"half" %in% names(MULTIPLE_WORDS) && "halved" %in% names(MULTIPLE_WORDS))
+
+# 5. The colour-vision check at every n.
+if (length(find.package("colorspace", quiet = TRUE))) {
+  a7_q <- purrr::keep(names(CHART_PALETTES), function(k) identical(CHART_PALETTES[[k]]$kind, "qualitative"))
+  a7_off <- purrr::keep(a7_q, function(k) {
+    fresh = purrr::map_dbl(2:CHART_PALETTES[[k]]$max, function(n) palette_cvd(k, n))
+    !identical(length(CHART_PALETTE_CVD_N[[k]]), length(fresh)) || any(abs(CHART_PALETTE_CVD_N[[k]] - fresh) > 0.05)
+  })
+  check(paste0("7A-5: the stored colour-vision result of every qualitative palette at every n from 2 to its max (", length(a7_q), " palettes) matches palette_cvd() recomputed now, and n = 5 is the one the Style tick uses",
+               if (length(a7_off)) paste0(" (differs: ", paste(a7_off, collapse = ", "), ")")),
+        !length(a7_off) && setequal(names(CHART_PALETTE_CVD_N), a7_q) &&
+          all(purrr::map_lgl(a7_q, function(k) abs(palette_cvd_at(k, CHART_CVD_N) - CHART_PALETTE_CVD[[k]]) < 0.05)) &&
+          is.na(palette_cvd_at("okabe_ito", 1L)) && is.na(palette_cvd_at("okabe_ito", 9L)))
+} else cat("skip  7A-5: colorspace is not installed, so the stored per-n colour-vision results are not recomputed\n")
+if (!is.null(pan_g)) {
+  a7_line_spec <- list(family = "line", x = "year", y = "revenue", color = "region", fn = "sum", title = "t")
+  a7_stata <- utils::modifyList(chart_palette_default(), list(qualitative = "ggth_stata_economist"))
+  a7_note <- "Some of these 8 colours are hard to tell apart for readers with colour-vision differences."
+  a7_p8 <- spec_plot(a7_line_spec, pan_g$data, pan_g$cb, a7_stata)
+  a7_p3 <- spec_plot(utils::modifyList(a7_line_spec, list(filter = list(list(column = "region", op = "in", value = list("North", "South", "East"))))),
+                     pan_g$data, pan_g$cb, a7_stata)
+  a7_pd <- spec_plot(a7_line_spec, pan_g$data, pan_g$cb)
+  a7_chk <- check_chart(a7_line_spec, pan_g$cb, pan_g$data, a7_stata, chat_rule_ids())
+  check("7A-5: a chart that draws n colours from a palette whose result at n is under the mark gets the note with n filled in (spec_plot() and check_chart()); a passing n and the default palette get none",
+        palette_cvd_at("ggth_stata_economist", 8L) < CHART_CVD_MARK && palette_cvd_at("ggth_stata_economist", 3L) >= CHART_CVD_MARK &&
+          a7_note %in% attr(a7_p8, "notes") && a7_note %in% a7_chk$notes && !any(grepl("colour-vision", attr(a7_p3, "notes"))) &&
+          !any(grepl("colour-vision", attr(a7_pd, "notes"))))
+}
 
 
 # ---- the count -------------------------------------------------------------------

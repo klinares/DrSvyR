@@ -328,9 +328,9 @@ check_numbers <- function(text, facts, spec = list()) {
 }
 
 # Words that state a multiple, each with the test a multiple of the facts must pass: at least 2, 3,
-#   4 and 2, at most 0.5 and 0.5.
+#   4 and 2, at most 0.5. "half" is not here: it is also a part ("the middle half"), not only a multiple.
 MULTIPLE_WORDS <- list(doubled = function(m) m >= 2, tripled = function(m) m >= 3, quadrupled = function(m) m >= 4,
-                       twice = function(m) m >= 2, halved = function(m) m <= 0.5, half = function(m) m <= 0.5)
+                       twice = function(m) m >= 2, halved = function(m) m <= 0.5)
 
 # The multiples the facts state: the number of each "Highest as a multiple of the lowest: m" and
 #   "end is m times start" (fact_num() and fact_times() write them without separators).

@@ -121,6 +121,42 @@ CHART_PALETTE_CVD <- c(okabe_ito = 12.1, tol_bright = 8.7, tol_muted = 17.7, tol
   ggth_classic_orange_white_blue = 23.5, nord_silver_mine = 8.5, pnwc_shuksan2 = 15.0,
   pnwc_anemone = 8.3, rcar_earth = 15.2, rcar_armyrose = 12.5, rcar_geyser = 11.4, blue_red = 13.9)
 
+# The same check for every number of colours a qualitative palette can show, 2 to its `max`: element
+#   n - 1 is the result for the first n colours (read it with palette_cvd_at()). The value at n =
+#   CHART_CVD_N is the one in CHART_PALETTE_CVD; tests/smoke.R recomputes every one with palette_cvd().
+#   A sequential or diverging palette is drawn with CHART_CONTINUOUS_N colours spread along it and
+#   keeps its one result above.
+CHART_PALETTE_CVD_N <- list(
+  okabe_ito = c(50.6, 12.2, 12.1, 12.1, 11.1, 11.1, 11.1),
+  tol_bright = c(24.9, 8.7, 8.7, 8.7, 8.7, 8.7),
+  tol_muted = c(33.6, 22.6, 17.7, 17.7, 11.8, 11.8, 11.8, 11.6),
+  tol_vibrant = c(50.3, 19.5, 8.6, 8.6, 8.6, 8.6),
+  khro_mediumcontrast = c(12.1, 12.1, 12.1, 12.1, 12.1),
+  ggth_classic_color_blind = c(52.6, 27.4, 20.9, 16.9, 12.4, 10.8, 10.8, 10.8, 9.4),
+  ggth_stata_economist = c(29.0, 13.7, 13.7, 13.7, 9.1, 5.0, 5.0, 5.0, 5.0, 5.0, 4.6, 4.1, 3.2, 3.2),
+  ggth_excel_office_theme = c(53.0, 25.6, 12.7, 12.2, 6.2),
+  metb_archambault = c(42.2, 15.7, 15.7, 15.7, 7.1, 7.1),
+  metb_veronese = c(15.6, 15.6, 15.6, 15.6, 8.0, 8.0),
+  metb_johnson = c(14.6, 14.6, 14.6, 14.6),
+  natp_kingscanyon = c(22.0, 21.7, 21.7, 21.7, 16.8),
+  natp_deathvalley = c(19.7, 18.6, 18.6, 15.8, 15.0, 11.0),
+  natp_torres = c(30.0, 30.0, 29.0, 15.3, 9.0, 4.1, 4.1, 4.1, 2.1),
+  nord_algoma_forest = c(25.7, 13.8, 11.4, 9.4, 9.4, 7.6),
+  nord_moose_pond = c(13.4, 8.6, 8.6, 8.6, 4.3, 4.3, 4.3),
+  pnwc_moth = c(13.5, 13.5, 13.5, 13.2),
+  pnwc_bay = c(18.5, 18.5, 11.6, 11.6),
+  rcar_safe = c(29.2, 22.6, 17.7, 17.7, 11.6, 11.6, 11.6, 11.6, 11.5, 6.0, 5.3),
+  wesa_darjeeling2 = c(44.9, 13.9, 13.9, 13.9),
+  wesa_isleofdogs1 = c(30.0, 16.5, 16.5, 12.2, 4.5),
+  wesa_isleofdogs2 = c(16.9, 10.7, 10.7, 8.4))
+
+# The stored check of the first n colours of a qualitative palette; NA when n is outside 2 to its max
+#   or the palette has no stored result.
+palette_cvd_at <- function(name, n) {
+  v = CHART_PALETTE_CVD_N[[name]]
+  if (is.null(v) || n < 2L || n > length(v) + 1L) NA_real_ else v[[n - 1L]]
+}
+
 # Whether paletteer is installed (find.package(), since R/ loads no namespace at start-up). One
 #   function, so a test can stand in for a machine without it.
 paletteer_installed <- function() length(find.package("paletteer", quiet = TRUE)) > 0L

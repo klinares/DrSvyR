@@ -858,9 +858,12 @@ palette_note <- function(s, cb, palette = chart_palette_default()) {
   n = colour_count(s, cb, s$color)
   q = palette$qualitative
   used = palette_for_n(n, q)
-  if (identical(used, q)) return(NULL)
-  paste0("The palette ", CHART_PALETTES[[q]]$label, " has ", chart_palette_max(q), " colours and this chart needs ", n,
-         ", so it is drawn with ", CHART_PALETTES[[used]]$label, ".")
+  c(if (!identical(used, q))
+      paste0("The palette ", CHART_PALETTES[[q]]$label, " has ", chart_palette_max(q), " colours and this chart needs ", n,
+             ", so it is drawn with ", CHART_PALETTES[[used]]$label, "."),
+    # The colour-vision check at the number of colours drawn, for the palette actually used.
+    if (isTRUE(palette_cvd_at(used, n) < CHART_CVD_MARK))
+      paste0("Some of these ", n, " colours are hard to tell apart for readers with colour-vision differences."))
 }
 
 # How many colours a column needs, from the codebook (and top_n), so the plot and its code can be
@@ -1293,7 +1296,8 @@ spec_code <- function(spec, cb, file, palette = chart_palette_default()) {
 SPEC_FACTS_SERIES <- 8L        # a line chart with more series than this: facts for the highlighted ones and ...
 SPEC_FACTS_EXTREMES <- 3L      # ... this many with the largest and the smallest change
 SPEC_FACTS_CELLS <- 5L         # a heatmap with more than SPEC_HEAT_LABELS cells: this many highest and lowest
-SPEC_FACTS_GROUP_N <- 10L      # a correlation within a group of at least this many rows
+SPEC_FACTS_LINE_POINTS <- 3L   # a line with fewer points than this gets no highest or lowest
+SPEC_FACTS_GROUP_N <- 10L     # a correlation within a group of at least this many rows
 SPEC_FACTS_FIT_AT <- c(0.1, 0.3, 0.5, 0.7, 0.9) # the fitted y at these percentiles of x
 
 # How a number is written in the facts, always the same way for the same value: a measure to 3
@@ -1438,6 +1442,30 @@ facts_bars <- function(s, cb, t, nm, fmt) {
   c("Values:", paste0("- ", xs, ", ", cs, ": ", fmt(t[[v]])), facts_extremes(s, t[[v]], paste0(xs, ", ", cs), fmt), unlist(within))
 }
 
+# The step between a series' dates when the series is monthly or quarterly ("month", "quarter"),
+#   judged by the median gap between its dates; NULL for anything else, a number (a year) included.
+fact_period <- function(x) {
+  if (!inherits(x, c("Date", "POSIXt")) || length(x) < 3L) return(NULL)
+  gap = stats::median(as.numeric(diff(as.Date(x))))
+  if (isTRUE(gap >= 28 && gap <= 31)) "month" else if (isTRUE(gap >= 89 && gap <= 92)) "quarter"
+}
+
+# For a monthly or quarterly series that covers more than one year: the last value against the point
+#   exactly a year before it, as text to append to the series' line ("" otherwise). `x` is the
+#   series' sorted dates, `y` its values and `tm` the dates as written. A series that covers the year
+#   but has no point on that date says so.
+fact_year_before <- function(x, y, tm, fmt) {
+  if (is.null(fact_period(x))) return("")
+  d = as.Date(x)
+  n = length(d)
+  before = seq(d[n], by = "-1 year", length.out = 2L)[2]
+  if (before < d[1]) return("")
+  j = match(before, d)
+  if (is.na(j)) return(", no point a year before the last one")
+  paste0(", a year before the last point (", tm[j], ") it was ", fmt(y[j]), ", change over the year ", fmt(y[n] - y[j]),
+         if (y[j] > 0) paste0(" (", fact_pct(100 * (y[n] - y[j]) / y[j]), ")"))
+}
+
 facts_lines <- function(s, cb, t, nm, fmt) {
   v = value_name(s)
   series = if (is.null(s$color)) list(`The line` = t) else fact_split(t, s$color)
@@ -1446,17 +1474,23 @@ facts_lines <- function(s, cb, t, nm, fmt) {
     n = nrow(d); y = d[[v]]; tm = fact_time(d[[s$x]])
     i_hi = which.max(y); i_lo = which.min(y)
     who = if (is.null(s$color)) k else nm(s$color, k)
-    list(name = who, change = y[n] - y[1], highlighted = isTRUE(any(d$highlighted)),
+    # A series of fewer than three points has no highest or lowest worth naming.
+    extremes = if (n >= SPEC_FACTS_LINE_POINTS) paste0(", highest ", fmt(y[i_hi]), " (", tm[i_hi], "), lowest ", fmt(y[i_lo]), " (", tm[i_lo], ")")
+      else paste0(", only ", fact_count(n), if (n == 1L) " point" else " points", ", so no highest or lowest is given")
+    list(name = who, change = y[n] - y[1], highlighted = isTRUE(any(d$highlighted)), points = n,
          text = paste0(who, ": first ", fmt(y[1]), " (", tm[1], "), last ", fmt(y[n]), " (", tm[n], "), change ",
                        fmt(y[n] - y[1]), if (y[1] > 0) paste0(" (", fact_pct(100 * (y[n] - y[1]) / y[1]), ")"),
                        if (y[1] > 0 && y[n] > 0) paste0(", end is ", fact_times(y[n] / y[1]), " times start"),
-                       ", highest ", fmt(y[i_hi]), " (", tm[i_hi], "), lowest ", fmt(y[i_lo]), " (", tm[i_lo], ")"))
+                       extremes, fact_year_before(d[[s$x]], y, tm, fmt)))
   })
+  pts = purrr::map_int(one, "points")
+  per_series = paste0("Points per series: ", if (min(pts) == max(pts)) fact_count(min(pts)) else paste0(fact_count(min(pts)), " to ", fact_count(max(pts))))
   chg = purrr::map_dbl(one, "change")
   keep = if (length(one) > SPEC_FACTS_SERIES)
     sort(unique(c(which(purrr::map_lgl(one, "highlighted")), utils::head(order(-chg), SPEC_FACTS_EXTREMES), utils::head(order(chg), SPEC_FACTS_EXTREMES))))
     else seq_along(one)
-  c(if (length(keep) < length(one))
+  c(per_series,
+    if (length(keep) < length(one))
       paste0("Lines described: ", length(keep), " of ", length(one), ", the highlighted ones and those with the largest and smallest change"),
     unname(purrr::map_chr(one[keep], "text")),
     if (length(one) > 1L && max(chg) > 0) paste0("Rose most: ", one[[which.max(chg)]]$name, " (", fmt(max(chg)), ")"),
@@ -1493,11 +1527,23 @@ facts_scatter <- function(s, cb, t, nm) {
   lab = function(col) cb_label(cb, col)
   num = function(x) fact_num(x, FALSE)
   x = t[[s$x]]; y = t[[s$y]]
-  cor_of = function(a, b, method) if (length(a) < 3L || stats::sd(a) == 0 || stats::sd(b) == 0) NA_real_ else stats::cor(a, b, method = method)
+  # Pearson is computed on the scale the chart draws: log10 of an axis that is logged (rows with a
+  #   value of zero or less are not drawn there); Spearman uses ranks, so the scale does not matter.
+  logged = isTRUE(s$log_x) || isTRUE(s$log_y)
+  shown = function(a, b, method) {
+    if (!identical(method, "pearson") || !logged) return(list(a = a, b = b))
+    ok = (!isTRUE(s$log_x) | a > 0) & (!isTRUE(s$log_y) | b > 0)
+    list(a = if (isTRUE(s$log_x)) log10(a[ok]) else a[ok], b = if (isTRUE(s$log_y)) log10(b[ok]) else b[ok])
+  }
+  cor_of = function(a, b, method) {
+    p = shown(a, b, method)
+    if (length(p$a) < 3L || stats::sd(p$a) == 0 || stats::sd(p$b) == 0) NA_real_ else stats::cor(p$a, p$b, method = method)
+  }
+  pearson_word = if (logged) "Pearson correlation on the log scale shown" else "Pearson correlation"
   keys = unique(c(s$color, s$facet))
   grp = if (length(keys))
     unlist(purrr::map(purrr::keep(fact_groups(t, keys, nm), function(g) nrow(g$d) >= SPEC_FACTS_GROUP_N), function(g)
-      paste0("Pearson correlation for ", g$who, " (", fact_count(nrow(g$d)), " rows): ", fact_r(cor_of(g$d[[s$x]], g$d[[s$y]], "pearson")))))
+      paste0(pearson_word, " for ", g$who, " (", fact_count(nrow(g$d)), " rows): ", fact_r(cor_of(g$d[[s$x]], g$d[[s$y]], "pearson")))))
   fit = if (!identical(s$fit, "none")) {
     fkeys = unique(c(if (!isTRUE(s$.binned) && is.null(s$highlight)) s$color, s$facet))
     unlist(purrr::map(fact_groups(t, fkeys, nm), function(g) {
@@ -1525,9 +1571,10 @@ facts_scatter <- function(s, cb, t, nm) {
     paste0("Range of ", lab(s$x), ": ", num(min(x)), " to ", num(max(x))),
     paste0("Range of ", lab(s$y), ": ", num(min(y)), " to ", num(max(y))),
     if (identical(s$family, "bubble")) paste0("Range of ", lab(s$size), ": ", num(min(t[[s$size]])), " to ", num(max(t[[s$size]]))),
-    paste0("Pearson correlation: ", fact_r(pearson)),
+    paste0(pearson_word, ": ", fact_r(pearson)),
     if (isTRUE(abs(spearman - pearson) > 0.1))
-      c(paste0("Spearman correlation: ", fact_r(spearman)), "The two differ, so the relationship is not a straight line."),
+      c(paste0("Spearman correlation: ", fact_r(spearman)),
+        paste0("The two differ, so the relationship is not a straight line", if (logged) " on the log scale shown", ".")),
     grp, fit, hl)
 }
 
