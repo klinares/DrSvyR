@@ -210,7 +210,7 @@ CHART_CONTINUOUS_N <- c(sequential = 7L, diverging = 11L)
 #   Phase 6b additions pass the colour-vision check (CHART_CVD_MARK) and, for a qualitative palette,
 #   serve at least five groups under it.
 CHART_PALETTES <- list(
-  okabe_ito = list(label = "Okabe-Ito", source = "Built in", kind = "qualitative", max = 8L,
+  okabe_ito = list(label = "Okabe-Ito", source = "Built in", kind = "qualitative", max = 8L, single = "#0072B2",
                    colours = c("#E69F00", "#56B4E9", "#009E73", "#0072B2", "#D55E00", "#CC79A7", "#000000", "#F0E442")),
   tol_bright = list(label = "Paul Tol bright", source = "khroma (Paul Tol, Crameri)", kind = "qualitative", max = 7L, paletteer = "khroma::bright"),
   tol_muted = list(label = "Paul Tol muted", source = "khroma (Paul Tol, Crameri)", kind = "qualitative", max = 9L, paletteer = "khroma::muted"),
@@ -451,6 +451,15 @@ palette_cvd <- function(name, n = CHART_CVD_N) {
 # The colours of a qualitative palette that a style shows, in order: the first `max` of them, swapped
 #   (style_marks()), without those too near the style's background and, on a style with a swap, without any
 #   that is under CHART_VISIBLE_DE from an earlier one kept.
+# The colour of a chart with one series (Phase 7b): the palette entry's own `single` when it has one (Okabe-Ito's blue),
+#   else its first usable colour; in a style, under the same rule as every colour (style_marks(): lightened on Dark when it is
+#   under 3 to 1 on the background).
+palette_single <- function(name, style = CHART_STYLE_DEFAULT) {
+  own = CHART_PALETTES[[name]]$single
+  if (is.null(own)) return(palette_usable(name, style)[[1]])
+  style_marks(own, style)[[1]]
+}
+
 palette_usable <- function(name, style = CHART_STYLE_DEFAULT) {
   st = chart_style(style)
   own = utils::head(palette_colours(name), chart_palette_max(name))

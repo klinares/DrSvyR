@@ -3084,10 +3084,12 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
       b7_hex(if (sp$family %in% c("bar", "histogram")) b$fill else b$colour)[[1]]
     })
   })
-  b7_expected <- purrr::map_chr(c("okabe_ito", "tol_bright", "metb_veronese", "natp_torres"), function(q) b7_hex(palette_colours(q))[[1]])
+  # Phase 7b: a palette entry may carry `single` (Okabe-Ito's blue); without it, the first colour
+  b7_expected <- purrr::map_chr(c("okabe_ito", "tol_bright", "metb_veronese", "natp_torres"), function(q) b7_hex(CHART_PALETTES[[q]]$single %||% palette_colours(q)[[1]])[[1]])
   b7_line_code <- spec_code(attr(spec_plot(b7_single_specs$bar, pan_g$data, pan_g$cb, b7_pal("clean", "tol_bright")), "spec"), pan_g$cb, pan_g$path, b7_pal("clean", "tol_bright"))
-  check("7B-4: a chart with one series and no colour column is drawn, in every family, in the chosen qualitative palette's first colour (four palettes), never a fixed blue, and its code writes that colour",
-        all(purrr::map2_lgl(b7_firsts, b7_expected, function(got, want) all(got == want))) && !any(unlist(b7_firsts) == "#0072B2") &&
+  check("7B-4: a chart with one series and no colour column is drawn, in every family, in the chosen qualitative palette's own single colour (Okabe-Ito's blue, Phase 7b) or else its first colour (four palettes), and its code writes that colour",
+        all(purrr::map2_lgl(b7_firsts, b7_expected, function(got, want) all(got == want))) && identical(b7_expected[[1]], "#0072B2") &&
+          all(b7_expected[-1] == purrr::map_chr(c("tol_bright", "metb_veronese", "natp_torres"), function(q) b7_hex(palette_colours(q))[[1]])) &&
           grepl(b7_expected[[2]], b7_line_code, fixed = TRUE) && !grepl("CHART_SINGLE", paste(readLines(file.path("R", "spec.R"), warn = FALSE), collapse = "\n"), fixed = TRUE) &&
           !exists("CHART_SINGLE") && !exists("CHART_GREY"))
 
@@ -3465,9 +3467,9 @@ if (c7_ok) {
   c7_ta <- attr(c7_pa, "table")
   c7_fa <- c7_fmt(c7_pa)
   c7_la <- c7_labels(c7_pa)
-  c7_ann_bar <- purrr::keep(c7_la, function(l) grepl(":", l))
-  check("7C-2: a bar's annotation is R's: the highest and lowest bars are found in the table and named with their value in the facts' number format; the bar's own value label is not written twice; no word of it comes from the spec",
-        setequal(c7_ann_bar, c(paste0("Highest: ", c7_fa(max(c7_ta$revenue))), paste0("Lowest: ", c7_fa(min(c7_ta$revenue))))) &&
+  c7_ann_bar <- purrr::keep(c7_la, function(l) grepl("^(Highest|Lowest)", l))
+  check("7C-2: a bar's annotation is R's: the highest and lowest bars are found in the table and named with their value in the facts' number format (over an upright bar on two lines, Phase 7b); the bar's own value label is not written twice; no word of it comes from the spec",
+        setequal(c7_ann_bar, c(paste0("Highest\n", c7_fa(max(c7_ta$revenue))), paste0("Lowest\n", c7_fa(min(c7_ta$revenue))))) &&
           !c7_fa(max(c7_ta$revenue)) %in% c7_la && !c7_fa(min(c7_ta$revenue)) %in% c7_la && length(c7_la) == nrow(c7_ta) &&
           length(attr(c7_pa, "spec")$.annotate) == 2L && !any(grepl("Highest", unlist(c7_bar8)), na.rm = TRUE))
   # a line chart: the highlighted series, else the series with the highest value; two kinds on one point share one entry
@@ -3478,11 +3480,16 @@ if (c7_ok) {
   c7_tl <- attr(c7_pc, "table")
   c7_coast <- c7_tl[c7_tl$region == "Coast", ]
   c7_rings <- function(p) { b = ggplot2::ggplot_build(p); i = which(c7_geoms(p) == "GeomPoint" & vapply(b$data, function(d) isTRUE(all(d$shape == 1)), NA)); b$data[i] }
-  check("7C-2: on a line chart annotate marks the highlighted series (here Coast, the higher of the two highlighted), else the series with the highest value (Islands of three); highest and lowest give a ring and the value with its year; two kinds on one point (highest and latest) make one annotation",
-        any(c7_labels(c7_pc) == paste0("Highest: ", fact_num(max(c7_coast$revenue)), " (", c7_coast$year[which.max(c7_coast$revenue)], ")")) &&
+  # Phase 7b: a marked point that is its line's last point, on a line with an end label, is said in the end label ("Coast  88,600, highest")
+  c7_hi_last <- c7_coast$year[which.max(c7_coast$revenue)] == max(c7_coast$year)
+  c7_hi_want <- if (c7_hi_last) paste0("Coast  ", fact_num(max(c7_coast$revenue)), ", highest") else paste0("Highest: ", fact_num(max(c7_coast$revenue)), " (", c7_coast$year[which.max(c7_coast$revenue)], ")")
+  check("7C-2: on a line chart annotate marks the highlighted series (here Coast, the higher of the two highlighted), else the series with the highest value (Islands of three); highest and lowest give a ring and the value with its year, or join the end label when the point is the line's last; two kinds on one point (highest and latest) make one annotation",
+        c7_hi_last && any(c7_labels(c7_pc) == c7_hi_want) && !any(startsWith(c7_labels(c7_pc), "Highest: ")) &&
           any(c7_labels(c7_pc) == paste0("Lowest: ", fact_num(min(c7_coast$revenue)), " (", c7_coast$year[which.min(c7_coast$revenue)], ")")) &&
           length(c7_rings(c7_pc)) == 2L && all(abs(c7_rings(c7_pc)[[1]]$y - max(c7_coast$revenue)) < 1e-6) &&
-          any(startsWith(c7_labels(c7_pn), "Highest: 116,000")) && length(attr(c7_pm, "spec")$.annotate) == 1L && any(startsWith(c7_labels(c7_pm), "Highest and latest: ")))
+          any(c7_labels(c7_pn) == "Islands  116,000, highest") && !any(startsWith(c7_labels(c7_pn), "Highest")) &&
+          length(attr(c7_pm, "spec")$.annotate) == 1L && isTRUE(attr(c7_pm, "spec")$.annotate[[1]]$merged) && any(endsWith(c7_labels(c7_pm), ", highest")) &&
+          !any(startsWith(c7_labels(c7_pm), "Highest and latest: ")))
   # many lines: the series is one the facts describe, so the numbers written are in them
   c7_many <- local({
     d = expand.grid(year = 2001:2004, g = paste0("g", 1:12), stringsAsFactors = FALSE)
@@ -3591,7 +3598,8 @@ if (c7_ok) {
   c7_battery <- list(bar = c7_p8, dot = c7_dot, bar_annotated = c7_pa, bar_grouped = c7_pg_on, line_annotated = c7_pc, line_end_labels = c7_pl3, scatter_annotated = c7_psa,
                      scatter_names = c7_ps_on, heatmap = c7_ph)
   c7_w <- purrr::map(c7_battery, spec_widget)
-  c7_wtexts <- function(w) unlist(purrr::map(w$x$data, function(tr) if (identical(tr$mode, "text")) as.character(tr$text)))
+  # plotly writes a line break as <br /> (an upright bar's annotation is on two lines, Phase 7b)
+  c7_wtexts <- function(w) gsub("<br />", "\n", unlist(purrr::map(w$x$data, function(tr) if (identical(tr$mode, "text")) as.character(tr$text))), fixed = TRUE)
   c7_wpos <- function(w) unique(unlist(purrr::map(w$x$data, function(tr) if (identical(tr$mode, "text")) tr$textposition)))
   c7_wnotes <- purrr::map(c7_w, function(w) attr(w, "notes"))
   c7_lost <- purrr::map2(c7_battery, c7_w, function(p, w) setdiff(c7_labels(p), c7_wtexts(w)))
@@ -3619,7 +3627,12 @@ if (c7_ok) {
                            count = list(p = c7_plot(c7_kinds$count), g = pan_g), share = list(p = c7_plot(c7_kinds$share), g = pan_g),
                            mean_dot = list(p = c7_plot(c7_kinds$mean), g = pan_g), line1 = list(p = c7_pl1, g = pan_g),
                            flip13 = list(p = c7_p13_on, g = ball_g), merged = list(p = c7_pm, g = pan_g), eight = list(p = c7_sy_on, g = c7_syn)))
-  c7_tokens <- function(labels) unlist(regmatches(labels, gregexpr("[0-9][0-9,]*([.][0-9]+)?%?", labels)))
+  # A tie's count ("one of 2 points", Phase 7b) is counted by R from the table drawn; the facts do not hold it, so it is set aside here.
+  c7_tokens <- function(labels) {
+    labels = gsub("(, |\n)one of [0-9]+ (points|bars|dots)", "", labels)
+    # a comma after a number is the sentence's ("Coast  88,700, highest"), not the number's
+    sub(",$", "", unlist(regmatches(labels, gregexpr("[0-9][0-9,]*([.][0-9]+)?%?", labels))))
+  }
   c7_in_facts <- function(tokens, facts) purrr::map_lgl(tokens, function(tk) grepl(paste0("(?<![0-9,.])", gsub("[.]", "[.]", tk), "(?![0-9])"), facts, perl = TRUE))
   c7_checked <- purrr::map(c7_num_battery, function(x) {
     s = attr(x$p, "spec"); t = attr(x$p, "table")
@@ -3627,6 +3640,7 @@ if (c7_ok) {
     tk = c7_tokens(c7_labels(x$p))
     list(n = length(tk), missing = tk[!c7_in_facts(tk, facts)])
   })
+  purrr::iwalk(c7_checked, function(x, k) if (length(x$missing)) cat("  7C-6 ", k, ": not in the facts: ", paste(x$missing, collapse = ", "), "\n", sep = ""))
   check(paste0("7C-6: every number R writes on a chart for labels and annotate is in that chart's facts, digit for digit (", length(c7_num_battery), " charts, ",
                sum(purrr::map_int(c7_checked, "n")), " numbers: bars, dots, grouped and panelled bars, lines with ends and annotations, a scatter, names, a heatmap, counts, shares, means)"),
         all(purrr::map_int(c7_checked, "n") > 0L | names(c7_checked) %in% c("names")) && !length(unlist(purrr::map(c7_checked, "missing"))) &&
@@ -3667,7 +3681,7 @@ if (c7_ok) {
   check("7C-1: labels and annotate read from YAML: a list of kinds or one kind, labels written as on or off (YAML 1.1 reads a bare on or off as TRUE or FALSE, which mean the same here) are accepted and drawn",
         !length(spec_check(c7_y_on, pan_g$cb)) && !length(spec_check(c7_y_off, pan_g$cb)) && isTRUE(c7_y_off$labels == FALSE) &&
           length(c7_labels(c7_y_p)) == nrow(attr(c7_y_p, "table")) && identical(attr(c7_y_q, "spec")$labels, "off") && !isTRUE(attr(c7_y_q, "spec")$.value_labels) &&
-          identical(c7_labels(c7_y_q), paste0("Highest: ", c7_fmt(c7_y_q)(max(attr(c7_y_q, "table")$revenue)))))
+          identical(c7_labels(c7_y_q), paste0("Highest\n", c7_fmt(c7_y_q)(max(attr(c7_y_q, "table")$revenue)))))
 }
 
 if (c7_ok) {

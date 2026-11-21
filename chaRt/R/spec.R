@@ -46,6 +46,7 @@ SPEC_LEGEND_PER_ROW <- 4L    # a legend at the top takes more rows past this man
 SPEC_CODE_WIDTH <- 100L      # the written code breaks an argument list only past this many characters
 SPEC_LABELS <- c("auto", "on", "off")
 SPEC_ANNOTATE <- c("highest", "lowest", "first", "latest")
+SPEC_ANNOTATE_PANELS <- 6L   # a line chart in more panels than this marks no point (one mark in each panel would crowd it)
 SPEC_ANNOTATE_MAX <- 2L      # kinds an annotate may hold
 SPEC_LABEL_MARKS <- 12L      # labels auto: values on the marks of a bar or dot chart of at most this many marks, with no panels
 SPEC_LABEL_SERIES <- 7L      # ... names (and values) at the ends of a line chart of at most this many series
@@ -71,7 +72,7 @@ SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 # Fields the lint adds; never accepted from outside.
 SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".cell_labels", ".top_n",
                       ".fit_range", ".n_colours", ".annotate", ".value_labels", ".names", ".label_rows", ".widget_rows", ".repel",
-                      ".end_value", ".source", ".widget_left_out", ".end_room")
+                      ".end_value", ".source", ".widget_left_out", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor")
 
 # What the plotly tooltip shows: the plotted values.
 SPEC_TOOLTIP <- c("x", "y", "colour", "fill", "size")
@@ -87,6 +88,16 @@ is_whole1 <- function(x) is.numeric(x) && length(x) == 1L && is.finite(x) && x =
 
 cb_entry <- function(cb, name) purrr::detect(cb$columns, function(e) identical(e$name, name))
 cb_label <- function(cb, name) cb_entry(cb, name)$label %||% name
+
+# A column's name as a title on the chart (Phase 7b): its label in the data dictionary; where it has none (the label is still the
+#   column name), the name with underscores as spaces and a capital first letter ("unit_price" as "Unit price"). `capital =
+#   FALSE` for a name inside a phrase ("Total unit price").
+col_title <- function(cb, name, capital = TRUE) {
+  l = cb_label(cb, name)
+  if (!identical(l, name) || !is.character(l)) return(l)
+  l = gsub("_", " ", l, fixed = TRUE)
+  if (capital) paste0(toupper(substring(l, 1, 1)), substring(l, 2)) else l
+}
 
 # The kinds of column the spec rules speak of.
 is_group_like <- function(e) e$type %in% c("category", "ordered", "flag") ||
@@ -816,9 +827,9 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
   # End labels on a line or slope chart only when no two would touch; otherwise a legend, in the
   #   order of the end values.
   #   `labels` decides first: off writes none, auto writes them for at most SPEC_LABEL_SERIES lines (a line chart), on
-  #   whenever they fit. The value joins the name when both fit SPEC_LABEL_CHARS and no annotation already says it.
+  #   whenever they fit. The value joins the name when both fit SPEC_LABEL_CHARS (a marked last point always carries it:
+  #   lint_marks() merges the mark into the end label).
   mode = s$labels %||% "auto"
-  ann_latest = "latest" %in% values_of(s$annotate)
   if (fam %in% c("line", "slope") && !is.null(s$color) && !identical(s$color, s$facet)) {
     lab = label_plan(s, table)
     n_lab = if (!is.null(s$highlight)) length(unique(as.character(table[[s$color]][table$highlighted]))) else nd(s$color)
@@ -836,13 +847,18 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
       }
     } else {
       text = paste0(as.character(lab$ends[[s$color]]), "  ", fact_value_fmt(s)(lab$ends[[v]]))
-      s$.end_value = !ann_latest && all(nchar(text) <= SPEC_LABEL_CHARS)
+      s$.end_value = all(nchar(text) <= SPEC_LABEL_CHARS)
       s$.end_room = end_room(if (isTRUE(s$.end_value)) text else as.character(lab$ends[[s$color]]))
     }
   }
+  # A line chart's first and last x, so its time axis prints no tick past the data (time_scale()). Dates as text.
+  if (identical(fam, "line") && !is.null(s$x) && nrow(table)) {
+    xr = range(table[[s$x]], na.rm = TRUE)
+    s$.x_range = if (inherits(xr, "Date")) format(xr) else if (is.numeric(xr)) as.numeric(xr)
+  }
   # A line chart of one series, in no panels, writes its last value at the end.
   if (identical(fam, "line") && is.null(s$color) && is.null(s$facet)) {
-    s$.labels = !identical(mode, "off") && !ann_latest
+    s$.labels = !identical(mode, "off")
     s$.end_value = TRUE
     s$.end_room = end_room(fact_value_fmt(s)(table[[v]][which.max(as.numeric(table[[s$x]]))]))
   }
@@ -975,10 +991,22 @@ annotation_series <- function(s, t) {
 # The annotations of a chart, resolved against the table: one entry for each point marked (two kinds that fall on the
 #   same point share one entry), with the row of the table, the series it is in (a line with colours), how its text
 #   sits against the point (hjust, vjust) and how its x is written. NULL when there is none.
-annotation_groups <- function(s, cb, t) {
+#   A line chart in panels (Phase 7b) marks the point in each panel, from that panel's rows, when there are at most
+#   SPEC_ANNOTATE_PANELS panels (each entry then carries its panel); with more, none (lint_marks() says why).
+annotation_groups <- function(s, cb, t, whole = t) {
   fam = s$family
   kinds = as.character(values_of(s$annotate))
   if (!length(kinds) || !length(annotate_kinds(fam))) return(NULL)
+  if (identical(fam, "line") && !is.null(s$facet) && !identical(s$facet, s$color)) {
+    panels = unique(as.character(t[[s$facet]]))
+    if (length(panels) > SPEC_ANNOTATE_PANELS) return(NULL)
+    inner = s
+    inner$facet = NULL
+    return(unlist(purrr::map(panels, function(k) {
+      at = which(as.character(t[[s$facet]]) == k)
+      purrr::map(annotation_groups(inner, cb, t[at, , drop = FALSE], whole = t), function(g) { g$row = at[[g$row]]; g$panel = k; g })
+    }), recursive = FALSE))
+  }
   v = if (fam %in% c("scatter", "bubble")) s$y else value_name(s)
   series = if (identical(fam, "line") && !is.null(s$color) && !identical(s$color, s$facet)) annotation_series(s, t)
   d = t
@@ -988,16 +1016,34 @@ annotation_groups <- function(s, cb, t) {
   at = function(k) switch(k, highest = which.max(d[[v]]), lowest = which.min(d[[v]]), first = 1L, latest = nrow(d))
   rows = purrr::map_int(kinds, at)
   flip = isTRUE(s$.flip)
-  xs = if (!is.null(s$x) && fam %in% c("line", "scatter", "bubble")) as.numeric(t[[s$x]])
+  # where a point stands in its panel, against the scales of the whole chart (panels share them)
+  xs = if (!is.null(s$x) && fam %in% c("line", "scatter", "bubble")) as.numeric(whole[[s$x]])
+  ylog = isTRUE(s$log_y) && fam %in% c("line", "scatter", "bubble")
+  ys = if (ylog) log10(whole[[v]]) else as.numeric(whole[[v]])
   x_text = if (identical(fam, "line")) { x = t[[s$x]]; if (inherits(x, c("Date", "POSIXt"))) "text" else if (all(x == round(x))) "whole" else "number" }
+  # Where the text goes (Phase 7b): wholly inside the panel. Across the panel it runs away from the nearer edge: from a
+  #   point (or bar) in the left third it runs right (hjust 0), in the right third left (hjust 1), in the middle it is
+  #   centred. Up and down: a point near the top of the panel has its text below it, one near the bottom above it (clear of
+  #   the bottom edge and of a rug), others above for a highest and below for a lowest. A bar's text sits past the bar's end.
+  lev = if (fam %in% c("bar", "dot")) nlevels(t[[s$x]]) %||% length(unique(t[[s$x]]))
   purrr::map(unname(split(seq_along(kinds), factor(rows, levels = unique(rows)))), function(i) {
     r = rows[[i[[1]]]]
     val = d[[v]][r]
-    low = identical(kinds[[i[[1]]]], "lowest") || (fam %in% c("bar", "dot") && val < 0)
-    frac = if (!is.null(xs) && diff(range(xs)) > 0) (as.numeric(d[[s$x]][r]) - min(xs)) / diff(range(xs)) else 0.5
-    list(kinds = kinds[i], row = d$.row[[r]], series = series, x_text = x_text,
-         hjust = if (fam %in% c("bar", "dot")) (if (flip) (if (low) 1.15 else -0.15) else 0.5) else if (frac < 1 / 3) 0 else if (frac > 2 / 3) 1 else 0.5,
-         vjust = if (fam %in% c("bar", "dot") && flip) 0.5 else if (low) (if (fam %in% c("bar", "dot")) 1.4 else 2.2) else (if (identical(fam, "dot")) -1.2 else if (identical(fam, "bar")) -0.4 else -1.2))
+    # a bar's or dot's words sit past its end (below or left only for a negative value); a point's lowest sits below it
+    low = if (fam %in% c("bar", "dot")) val < 0 else identical(kinds[[i[[1]]]], "lowest")
+    across = if (fam %in% c("bar", "dot")) (as.integer(factor(d[[s$x]], levels = levels(factor(t[[s$x]]))))[r] - 0.5) / max(1L, lev)
+             else if (!is.null(xs) && diff(range(xs)) > 0) (as.numeric(d[[s$x]][r]) - min(xs)) / diff(range(xs)) else 0.5
+    up = if (diff(range(ys, na.rm = TRUE)) > 0) ((if (ylog) log10(val) else val) - min(ys, na.rm = TRUE)) / diff(range(ys, na.rm = TRUE)) else 0.5
+    side = if (across < 1 / 3) 0 else if (across > 2 / 3) 1 else 0.5
+    # A tie: the point marked is one of several with the same highest or lowest value (in the same series).
+    tied = if (kinds[[i[[1]]]] %in% c("highest", "lowest")) sum(d[[v]] == val, na.rm = TRUE) else 1L
+    # an upright bar or dot has its words centred over it, on lines of their own (annotation_lines()), so they never run over
+    #   a neighbour
+    hj = if (fam %in% c("bar", "dot")) (if (flip) (if (low) 1.15 else -0.15) else 0.5) else side
+    vj = if (fam %in% c("bar", "dot")) (if (flip) 0.5 else if (low) (if (identical(fam, "bar")) 1.4 else 2.2) else (if (identical(fam, "dot")) -1.2 else -0.4))
+         else if (up > 0.85) 2.2 else if (up < 0.15) -1.2 else if (low) 2.2 else -1.2
+    list(kinds = kinds[i], row = d$.row[[r]], series = series, x_text = x_text, tied = tied,
+         unit = switch(fam, bar = "bars", dot = "dots", "points"), hjust = hj, vjust = vj)
   })
 }
 
@@ -1011,12 +1057,17 @@ annotation_groups <- function(s, cb, t) {
 SPEC_LABEL_CHAR_IN <- 0.6 * SPEC_LABEL_MM * 2.845 / 72     # one character of a label, in inches
 SPEC_LABEL_HEIGHT_IN <- 1.2 * SPEC_LABEL_MM * 2.845 / 72   # one line of a label
 SPEC_LABEL_PAD_IN <- 0.03
+# One character of an end label for the room it is given (end_room()): the bundled sans at the label's size measures about
+#   0.063 inches a character (Phase 7b, from drawn charts), so this is a little over; the estimate above, for collisions, is wider.
+SPEC_LABEL_CHAR_END_IN <- 0.5 * SPEC_LABEL_MM * 2.845 / 72
 
 label_box <- function(ax, ay, text, hjust, vjust) {
-  w = nchar(text) * SPEC_LABEL_CHAR_IN
+  lines = strsplit(as.character(text), "\n", fixed = TRUE)
+  w = purrr::map_dbl(lines, function(l) max(nchar(l), 0L)) * SPEC_LABEL_CHAR_IN
+  h = pmax(1L, lengths(lines)) * SPEC_LABEL_HEIGHT_IN
   x0 = ax - hjust * w
-  y0 = ay - vjust * SPEC_LABEL_HEIGHT_IN
-  data.frame(x0 = x0, x1 = x0 + w, y0 = y0, y1 = y0 + SPEC_LABEL_HEIGHT_IN)
+  y0 = ay - vjust * h
+  data.frame(x0 = x0, x1 = x0 + w, y0 = y0, y1 = y0 + h)
 }
 
 boxes_meet <- function(a, b)
@@ -1113,9 +1164,24 @@ annotation_text <- function(g, s, t) {
   v = if (fam %in% c("scatter", "bubble")) s$y else value_name(s)
   fmt = fact_value_fmt(s)
   words = paste(g$kinds, collapse = " and ")
+  tie = annotation_tie(g)
+  if (annotation_lines(s)) return(paste0(toupper(substring(words, 1, 1)), substring(words, 2), "\n", fmt(t[[v]][g$row]), if (nzchar(tie)) paste0("\n", sub("^, ", "", tie))))
   paste0(toupper(substring(words, 1, 1)), substring(words, 2), ": ", fmt(t[[v]][g$row]),
-         if (identical(fam, "line")) paste0(" (", fact_time(t[[s$x]][g$row]), ")"))
+         if (identical(fam, "line")) paste0(" (", fact_time(t[[s$x]][g$row]), ")"), tie)
 }
+
+# Whether an annotation's words go on lines of their own (the kind, the value, a tie): over an upright bar or dot, where one
+#   line would be wider than the mark and run over its neighbours.
+annotation_lines <- function(s) s$family %in% c("bar", "dot") && !isTRUE(s$.flip)
+
+# The words a marked point adds to its line's end label: the kinds other than latest (the end is the latest), and a tie.
+end_words <- function(g) {
+  k = setdiff(g$kinds, "latest")
+  paste0(if (length(k)) paste0(", ", paste(k, collapse = " and ")), annotation_tie(g))
+}
+
+# The words that say a marked point is one of several tied at the highest or lowest value: ", one of 2 points".
+annotation_tie <- function(g) if ((g$tied %||% 1L) > 1L) paste0(", one of ", g$tied, " ", g$unit %||% "points") else ""
 
 # What a chart writes on its marks, decided from the table (Part C): the annotations, the value labels of a bar or
 #   dot, the names on a scatter's or bubble's highlighted points, and the cell values of a heatmap; the lint fields
@@ -1129,6 +1195,54 @@ lint_marks <- function(s, cb, table) {
   notes = character(0)
   s$.repel = ggrepel_installed()
   s$.annotate = annotation_groups(s, cb, t)
+  # A line chart in panels: one mark in each panel when there are at most SPEC_ANNOTATE_PANELS, each only if its number is in the
+  #   chart's facts (which describe each panel's lines); with more panels, none.
+  if (identical(fam, "line") && !is.null(s$facet) && !identical(s$facet, s$color) && length(values_of(s$annotate))) {
+    np = length(unique(as.character(t[[s$facet]])))
+    if (np > SPEC_ANNOTATE_PANELS)
+      notes = c(notes, paste0("No point is marked: the chart has ", np, " panels, and a mark is drawn in each panel only when there are at most ",
+                              SPEC_ANNOTATE_PANELS, "."))
+    else if (length(s$.annotate)) {
+      facts = spec_facts(s, table, cb)$text
+      fmt = fact_value_fmt(s)
+      found = purrr::map_lgl(s$.annotate, function(g) grepl(fmt(t[[value_name(s)]][g$row]), facts, fixed = TRUE))
+      if (!all(found))
+        notes = c(notes, paste0("The mark in ", or_list(paste0("the ", purrr::map_chr(s$.annotate[!found], "panel"), " panel")),
+                                " was not drawn: its value is not among the chart's facts."))
+      s$.annotate = s$.annotate[found]
+    }
+  }
+  # A marked point that is the last point of a line with an end label: the end label carries the words ("Islands  116,000,
+  #   highest") and no second text is drawn; the ring stays (Phase 7b).
+  if (identical(fam, "line") && isTRUE(s$.labels) && length(s$.annotate)) {
+    named = !is.null(s$color) && !identical(s$color, s$facet)
+    last_of = function(r) {
+      same = if (named) as.character(t[[s$color]]) == as.character(t[[s$color]][r]) else rep(TRUE, n)
+      if (!is.null(s$facet)) same = same & as.character(t[[s$facet]]) == as.character(t[[s$facet]][r])
+      as.numeric(t[[s$x]][r]) == max(as.numeric(t[[s$x]][same]))
+    }
+    labelled = function(r) is.null(s$highlight) || isTRUE(t$highlighted[r])
+    s$.annotate = purrr::map(s$.annotate, function(g) {
+      g$merged = last_of(g$row) && labelled(g$row)
+      if (g$merged) g$at = list(color = if (named) as.character(t[[s$color]][g$row]), facet = if (!is.null(s$facet)) as.character(t[[s$facet]][g$row]))
+      g
+    })
+    if (any(purrr::map_lgl(s$.annotate, "merged"))) {
+      ends = purrr::keep(seq_len(n), function(r) last_of(r) && labelled(r))
+      txt = purrr::map_chr(ends, function(r) {
+        g = purrr::detect(s$.annotate, function(g) isTRUE(g$merged) && g$row == r)
+        paste0(if (named) paste0(as.character(t[[s$color]][r]), "  "), if (isTRUE(s$.end_value) || !is.null(g)) fact_value_fmt(s)(t[[value_name(s)]][r]),
+               if (!is.null(g)) end_words(g))
+      })
+      s$.end_room = end_room(txt)
+    }
+  }
+  # A rug draws ticks along the bottom and left edges, 3% of the panel deep; a label moved by ggrepel is kept above and right
+  #   of a band twice that deep (the axes' expansion: 0.12 on y with an annotation, 0.05 on x). Not on a log axis.
+  if (fam %in% c("scatter", "bubble") && isTRUE(s$rug) && length(s$.annotate) && !isTRUE(s$log_x) && !isTRUE(s$log_y)) {
+    edge = function(v, mult) { r = range(v, na.rm = TRUE); d = if (diff(r) > 0) diff(r) else 1; r[1] - mult * d + 0.06 * (1 + 2 * mult) * d }
+    s$.rug_floor = c(x = signif(edge(t[[s$x]], 0.05), 4), y = signif(edge(t[[s$y]], 0.12), 4))
+  }
   ann_rows = purrr::map_int(s$.annotate %||% list(), "row")
   ann_text = purrr::map_chr(s$.annotate %||% list(), function(g) annotation_text(g, s, t))
   ann_h = purrr::map_dbl(s$.annotate %||% list(), "hjust")
@@ -1144,6 +1258,22 @@ lint_marks <- function(s, cb, table) {
   if (fam %in% c("bar", "dot")) {
     show = identical(mode, "on") || (identical(mode, "auto") && n <= SPEC_LABEL_MARKS && is.null(s$facet))
     if (any(t[[value_name(s)]] < 0)) s$.negative = TRUE
+    # Room past the marks' ends for what is written there (Phase 7b): the share of the value axis the longest text standing
+    #   past its mark needs (its width on a sideways chart, its height on an upright one), at least the 0.12 always given.
+    vals = t[[value_name(s)]]
+    if (length(ann_rows) || show) {
+      size = panel_inches(s, t)
+      along = if (isTRUE(s$.flip)) size[["w"]] else size[["h"]]
+      lo = min(0, vals); hi = max(0, vals); span = if (hi > lo) hi - lo else 1
+      texts = c(ann_text, if (show) fact_value_fmt(s)(vals[setdiff(seq_len(n), ann_rows)]))
+      at = c(vals[ann_rows], if (show) vals[setdiff(seq_len(n), ann_rows)])
+      bold = c(rep(1.12, length(ann_rows)), rep(1, length(texts) - length(ann_rows)))
+      parts = strsplit(texts, "\n", fixed = TRUE)
+      long = if (isTRUE(s$.flip)) purrr::map_dbl(parts, function(l) max(nchar(l))) * SPEC_LABEL_CHAR_IN * bold + 0.08
+             else (lengths(parts) + 1.2) * SPEC_LABEL_HEIGHT_IN
+      need = if (length(texts)) max((abs(at) - 0) / span + long / along) - max(abs(c(lo, hi))) / span else 0
+      s$.value_room = round(max(0.12, need + 0.03), 2)
+    }
     cand = setdiff(seq_len(n), ann_rows)
     if (show && n > 0L) {
       fit = fit_value_labels(s, t, cand, ann_rows, ann_text, ann_h, ann_v)
@@ -1158,6 +1288,9 @@ lint_marks <- function(s, cb, table) {
         s$.value_labels = TRUE
         s$.label_rows = restrict(fit, seq_len(n))
         if (left_out(cand, fit)) notes = c(notes, say_left_out(left_out(cand, fit), "value label", FALSE))
+        # Every mark carries its value (a value label or an annotation): the value axis keeps its title and loses its
+        #   numbers and ticks, which would only repeat them. When any is missing the axis stays whole.
+        s$.value_axis_bare = setequal(union(fit, ann_rows), seq_len(n))
       }
     }
   }
@@ -1213,7 +1346,7 @@ spec_palette <- function(palette = chart_palette_default()) {
   qual = function(n) chart_palette(n, palette_for_n(n, palette$qualitative, style), style)
   list(qual = qual, max = palette_groups_max(palette),
        seq = chart_sequential(palette$sequential), div = chart_diverging(palette$diverging),
-       style = style, single = qual(1L)[[1]], grey = st$grey, fit = st$fit, outline = st$outline, box_fill = st$box_fill,
+       style = style, single = palette_single(palette_for_n(1L, palette$qualitative, style), style), grey = st$grey, fit = st$fit, outline = st$outline, box_fill = st$box_fill,
        rug = st$text_2, label = st$text_2, strong = st$text, fonts = chart_font_values(chart_theme_calls(style)))
 }
 
@@ -1254,11 +1387,14 @@ colour_count <- function(s, cb, col) {
   if (!is.null(s$top_n) && identical(col, ranked_column(s))) min(n, top_of(s)) else n
 }
 
-value_label <- function(s, cb) {
+#   `title = TRUE` for a title on the chart: a column with no label is written as col_title() writes it ("Total unit price"); the
+#   facts and the tooltip keep the dictionary's label as it is (title = FALSE), so their words do not change.
+value_label <- function(s, cb, title = FALSE) {
   if (identical(s$family, "histogram")) return("Count")
-  lab = cb_label(cb, if (identical(s$family, "heatmap")) s$color %||% s$y else s$y %||% s$x)
+  col = if (identical(s$family, "heatmap")) s$color %||% s$y else s$y %||% s$x
+  lab = if (title) col_title(cb, col, capital = FALSE) else cb_label(cb, col)
   switch(s$fn, count = "Count", share = "Share of rows", sum = paste("Total", lab), mean = paste("Mean", lab),
-         median = paste("Median", lab), lab)
+         median = paste("Median", lab), if (title) col_title(cb, col) else lab)
 }
 
 highlight_values <- function(pal) c(`FALSE` = pal$grey, `TRUE` = CHART_HIGHLIGHT)
@@ -1312,25 +1448,37 @@ needs_factor_here <- function(s, col) col %in% c(s$color, if (s$family %in% c("b
 value_scale <- function(s, axis, zero) {
   # room on the value axis for the labels and annotations that stand past a mark's end
   written = isTRUE(s$.value_labels) || length(s$.annotate) > 0L
+  room = s$.value_room %||% 0.12
   args = c(if (zero) list(expand = call("expansion", mult = if (isTRUE(s$.negative)) c(0.05, 0.05) else c(0, 0.05)))
-           else if (written) list(expand = call("expansion", mult = c(0.05, 0.12))),
+           else if (written) list(expand = call("expansion", mult = c(0.05, room))),
            list(labels = call(if (identical(s$fn, "share")) "label_percent" else "label_comma")))
-  if (written && zero) args$expand = call("expansion", mult = c(if (isTRUE(s$.negative)) 0.12 else 0, 0.12))
+  if (written && zero) args$expand = call("expansion", mult = c(if (isTRUE(s$.negative)) room else 0, room))
   scale = as.call(c(list(sym(paste0("scale_", axis, "_continuous"))), args))
   limits = if (zero) as.call(c(list(sym("expand_limits")), stats::setNames(list(0), axis)))
   purrr::compact(list(scale, limits))
 }
 
 # A time axis: whole years as whole numbers, room on the right for line labels when asked.
+#   The breaks stay within the data's first and last x (Phase 7b): the room for end labels comes from the expansion, and a
+#   tick past the data (a year with no value) is not printed.
 time_scale <- function(s, cb, room) {
   e = cb_entry(cb, s$x)
   expand = if (room) call("expansion", mult = c(0.02, s$.end_room %||% 0.18))
+  r = s$.x_range
+  # pretty() of the data's own range (not of the widened limits), kept within it
+  within = function(b, lo, hi) call("{", call("<-", sym("b"), b), call("[", sym("b"), call("&", call(">=", sym("b"), lo), call("<=", sym("b"), hi))))
   if (identical(e$type, "date")) {
-    if (is.null(expand)) return(NULL)
-    return(call(if (identical(storage_of(e), "datetime")) "scale_x_datetime" else "scale_x_date", expand = expand))
+    if (identical(storage_of(e), "datetime")) return(if (!is.null(expand)) call("scale_x_datetime", expand = expand))
+    breaks = if (!is.null(r)) {
+      lo = call("as.Date", r[[1]]); hi = call("as.Date", r[[2]])
+      call("function", as.pairlist(alist(x = )), within(call("pretty", call("c", lo, hi)), lo, hi))
+    }
+    if (is.null(expand) && is.null(breaks)) return(NULL)
+    return(as.call(c(list(sym("scale_x_date")), if (!is.null(breaks)) list(breaks = breaks), if (!is.null(expand)) list(expand = expand))))
   }
-  as.call(c(list(sym("scale_x_continuous"), breaks = quote(function(x) unique(floor(pretty(x))))),
-            if (!is.null(expand)) list(expand = expand)))
+  breaks = if (!is.null(r)) call("function", as.pairlist(alist(x = )), within(call("unique", call("floor", call("pretty", call("c", r[[1]], r[[2]])))), r[[1]], r[[2]]))
+           else quote(function(x) unique(floor(pretty(x))))
+  as.call(c(list(sym("scale_x_continuous"), breaks = breaks), if (!is.null(expand)) list(expand = expand)))
 }
 
 bar_calls <- function(s, cb, pal, widget) {
@@ -1362,7 +1510,13 @@ dot_calls <- function(s, cb, pal, widget) {
 
 # How much room a time axis leaves on its right for end labels, as a share of the axis: the longest label (characters, at
 #   the label's size) over a panel about 5.8 inches wide, and at least the 0.18 an end label of a name has always had.
-end_room <- function(text) round(max(0.18, max(nchar(text)) * SPEC_LABEL_CHAR_IN / 5.8 + 0.04), 2)
+#   ggplot2's expansion is a share of the data's range, not of the panel: room r on the right of a panel P inches wide
+#   gives r * P / (1.02 + r) inches, so the label's width w (with the 0.15 of it the label stands off its point) needs
+#   r = 1.02 * w / (P - w) (Phase 7b; the earlier share of the panel left long labels running past it).
+end_room <- function(text) {
+  w = 1.15 * max(nchar(text)) * SPEC_LABEL_CHAR_END_IN + 0.05
+  round(min(1.5, max(0.18, 1.02 * w / max(0.5, 5.8 - w))), 2)
+}
 
 # A line or slope label at one end: the rows where x is at its last value (per line and panel).
 end_rows <- function(s, extra = NULL) {
@@ -1375,8 +1529,19 @@ end_rows <- function(s, extra = NULL) {
 # End labels: drawn only when the lint found that none would touch, so nothing is dropped.
 end_labels <- function(s, rows, colour = NULL) {
   name = if (!is.null(s$color) && !identical(s$color, s$facet)) sym(s$color)
-  value = if (isTRUE(s$.end_value)) value_text_call(s, value_name(s))
+  num = value_text_call(s, value_name(s))
+  value = if (isTRUE(s$.end_value)) num
+  # A marked last point: its words join its line's end label (and its value, if the end labels carry none).
+  merged = purrr::keep(s$.annotate %||% list(), function(g) isTRUE(g$merged))
+  extra = purrr::reduce(merged, function(prev, g) {
+    words = if (is.null(value)) call("paste0", "  ", num, end_words(g)) else end_words(g)
+    conds = c(if (!is.null(name)) list(call("==", name, g$at$color)),
+              if (!is.null(s$facet) && !identical(s$facet, s$color)) list(call("==", sym(s$facet), g$at$facet)))
+    if (!length(conds)) return(words)
+    call("if_else", purrr::reduce(conds, function(a, b) call("&", a, b)), words, prev)
+  }, .init = "")
   label = if (!is.null(name) && !is.null(value)) call("paste0", name, "  ", value) else name %||% value
+  if (length(merged)) label = call("paste0", label, extra)
   as.call(c(list(sym("geom_text"), data = rows, aes_call(label = label), hjust = -0.15, size = SPEC_LABEL_MM, family = sym("chart_font")),
             if (!is.null(colour)) list(colour = colour)))
 }
@@ -1539,11 +1704,22 @@ heatmap_calls <- function(s, cb, pal, widget) {
     list(rescaler = call("function", as.pairlist(alist(x = , ... = )), call("rescale_mid", sym("x"), sym("..."), mid = s$midpoint)))
   c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = s$y, fill = value_name(s), text = text)),
          call("geom_tile", colour = pal$outline, linewidth = 0.5),
-         as.call(c(list(sym("scale_fill_gradientn"), colours = colours), rescaler,
+         as.call(c(list(sym("scale_fill_gradientn"), colours = colours), rescaler, list(breaks = HEAT_BREAKS),
                    if (identical(s$fn, "share")) list(labels = call("label_percent")))),
-         call("scale_y_discrete", limits = sym("rev"))),
+         call("scale_y_discrete", limits = sym("rev")),
+         # a colour bar long enough for its labels (the guide's own theme, so the style's theme does not undo it)
+         quote(guides(fill = guide_colourbar(theme = theme(legend.key.width = unit(2.4, "in")))))),
     if (isTRUE(s$.cell_labels)) cell_labels(s, colours))
 }
+
+# A heatmap legend's breaks (Phase 7b): four to six round values inside the colour scale's range (pretty() asked for six; for
+#   ten when fewer than four fall inside), where the default gave two. Base R only, so the printed code runs as it is.
+HEAT_BREAKS <- quote(function(x) {
+  inside = function(b) b[b >= x[1] & b <= x[2]]
+  b = inside(pretty(x, n = 6))
+  if (length(b) < 4) b = inside(pretty(x, n = 10))
+  utils::head(b, 6)
+})
 
 # Which axis carries the light grid: the value axis.
 grid_of <- function(s) switch(s$family,
@@ -1555,16 +1731,17 @@ grid_of <- function(s) switch(s$family,
 
 labs_call <- function(s, cb) {
   flip = isTRUE(s$.flip)
-  xl = s$x_label %||% cb_label(cb, s$x)
-  yl = s$y_label %||% if (s$family %in% c("box", "scatter", "bubble", "heatmap")) cb_label(cb, s$y) else value_label(s, cb)
+  # Titles from the data dictionary's labels (col_title()), unless the model or analyst gave one.
+  xl = s$x_label %||% if (!is.null(s$x)) col_title(cb, s$x)
+  yl = s$y_label %||% if (s$family %in% c("box", "scatter", "bubble", "heatmap")) col_title(cb, s$y) else value_label(s, cb, title = TRUE)
   line_legend = s$family %in% c("line", "slope") && !is.null(s$.legend_order)
   legend = purrr::compact(list(
     colour = if (!is.null(s$color) && ((s$family %in% c("dot", "scatter", "bubble") && is.null(s$highlight) && !isTRUE(s$.binned)) || line_legend))
-               cb_label(cb, s$color),
-    fill = if (identical(s$family, "heatmap")) value_label(s, cb)
-           else if (identical(s$family, "bar") && !is.null(s$color) && is.null(s$highlight)) cb_label(cb, s$color)
+               col_title(cb, s$color),
+    fill = if (identical(s$family, "heatmap")) value_label(s, cb, title = TRUE)
+           else if (identical(s$family, "bar") && !is.null(s$color) && is.null(s$highlight)) col_title(cb, s$color)
            else if (isTRUE(s$.binned)) "Count",
-    size = if (identical(s$family, "bubble")) cb_label(cb, s$size)))
+    size = if (identical(s$family, "bubble")) col_title(cb, s$size)))
   # A sideways bar or dot lists names on its y axis; that axis needs no title unless the spec gives one.
   axes = if (flip && s$family %in% c("bar", "dot")) list(x = yl, y = s$x_label)
          else if (flip) list(x = yl, y = xl) else list(x = xl, y = yl)
@@ -1590,7 +1767,15 @@ theme_calls <- function(s, pal, widget = FALSE)
   c(chart_theme_calls(pal$style, grid = grid_of(s),
                       legend = if (s$family %in% c("line", "slope") && !is.null(s$.legend_order)) "right" else "top",
                       lift = lift_axis(s)),
+    bare_axis_call(s),
     if (!widget) chart_style_layers(pal$style))
+
+# A bar or dot chart whose every mark carries its value: the value axis's numbers and ticks go (its title stays).
+bare_axis_call <- function(s) {
+  if (!isTRUE(s$.value_axis_bare)) return(NULL)
+  a = if (isTRUE(s$.flip)) "x" else "y"
+  list(as.call(c(list(sym("theme")), stats::setNames(list(quote(element_blank()), quote(element_blank())), paste0(c("axis.text.", "axis.ticks."), a)))))
+}
 
 # One text layer of the labels R writes: geom_text(), or ggrepel::geom_text_repel() in the static chart when ggrepel was
 #   installed at the lint (.repel) and `repel` is wanted (not for the labels of a bar or dot, which R places itself); the
@@ -1633,7 +1818,9 @@ value_label_calls <- function(s, cb, pal, widget) {
 #   or its first or latest x; the table's own highest or lowest for a bar, dot, scatter or bubble.
 annotation_data <- function(s, g) {
   v = if (s$family %in% c("scatter", "bubble")) s$y else value_name(s)
-  base = if (!is.null(g$series)) call("filter", sym("chart_table"), call("==", sym(s$color), g$series)) else sym("chart_table")
+  conds = c(if (!is.null(g$series)) list(call("==", sym(s$color), g$series)),
+            if (!is.null(g$panel)) list(call("==", sym(s$facet), g$panel)))
+  base = if (length(conds)) call("filter", sym("chart_table"), purrr::reduce(conds, function(a, b) call("&", a, b))) else sym("chart_table")
   if (identical(s$family, "line")) base = call("arrange", base, sym(s$x))
   switch(g$kinds[[1]],
     highest = call("slice_max", base, sym(v), n = 1, with_ties = FALSE),
@@ -1647,8 +1834,12 @@ annotation_data <- function(s, g) {
 annotation_label <- function(s, g) {
   v = if (s$family %in% c("scatter", "bubble")) s$y else value_name(s)
   words = paste(g$kinds, collapse = " and ")
+  tie = annotation_tie(g)
+  if (annotation_lines(s))
+    return(as.call(c(list(sym("paste0"), paste0(toupper(substring(words, 1, 1)), substring(words, 2), "\n"), value_text_call(s, v)),
+                     if (nzchar(tie)) list(paste0("\n", sub("^, ", "", tie))))))
   as.call(c(list(sym("paste0"), paste0(toupper(substring(words, 1, 1)), substring(words, 2), ": "), value_text_call(s, v)),
-            if (identical(s$family, "line")) list(" (", x_text_call(s, g$x_text), ")")))
+            if (identical(s$family, "line")) list(" (", x_text_call(s, g$x_text), ")"), if (nzchar(tie)) list(tie)))
 }
 
 # What an annotate marks: a ring round a point (line, dot, scatter, bubble; a bar has no point, so only its words),
@@ -1660,8 +1851,12 @@ annotation_calls <- function(s, cb, pal, widget) {
     data = annotation_data(s, g)
     ring = if (!identical(s$family, "bar"))
       list(call("geom_point", data = data, shape = 1, size = 4, stroke = 1, colour = CHART_HIGHLIGHT))
-    c(ring, list(label_layer(s, widget, data, aes_call(label = annotation_label(s, g)), pal$strong, bold = TRUE,
-                             repel = !s$family %in% c("bar", "dot"), hjust = g$hjust, vjust = g$vjust)))
+    # merged into its line's end label (lint_marks()): the ring only, in the static chart; the plotly version has no end labels
+    if (isTRUE(g$merged) && !widget) return(ring)
+    # a label moved by ggrepel keeps clear of a rug's band (xlim, ylim in the data's units, worked out by the lint)
+    clear = if (!widget && isTRUE(s$.repel) && !is.null(s$.rug_floor)) list(xlim = c(s$.rug_floor[["x"]], NA), ylim = c(s$.rug_floor[["y"]], NA))
+    c(ring, list(do.call(label_layer, c(list(s, widget, data, aes_call(label = annotation_label(s, g)), pal$strong, bold = TRUE,
+                                             repel = !s$family %in% c("bar", "dot"), hjust = g$hjust, vjust = g$vjust), clear), quote = TRUE)))
   }), recursive = FALSE)
 }
 
@@ -2247,6 +2442,8 @@ font_stacks <- function(x, in_font = FALSE) {
   keys = names(x) %||% rep("", length(x))
   out = purrr::map2(x, keys, function(el, key) {
     if (in_font && identical(key, "family") && is.character(el)) return(font_css(el))
+    # a blank axis text (a value axis with every value written on its marks) comes back from ggplotly() with no family: the chart's sans
+    if (in_font && identical(key, "family") && length(el) == 1L && is.na(el)) return(font_css(chart_font_family("sans")))
     font_stacks(el, in_font || key %in% c("font", "tickfont", "titlefont"))
   })
   names(out) = names(x)
