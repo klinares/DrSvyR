@@ -1,6 +1,6 @@
 # Refine
 
-Version: 0.3
+Version: 0.4
 
 When a chat turn changes the selected chart: the analyst asks for a change, and that chart's spec is
 revised. The reply format is in chat.md.
@@ -54,8 +54,15 @@ the spec cannot express, or what would misstate the data, is declined.
 - **Label:** Asks when the request is unclear
 - **Source:** Design rule of this app.
 
+### marks_on_the_chart
+- **When:** The analyst asks to show or hide the values on the marks, or to point out the highest, lowest, first or latest value; or their question is about one of those.
+- **Say:** Set `labels` to `on` or `off`, and put in `annotate` up to two of the kinds the SPEC REFERENCE lists. R works out where each goes and what number it carries.
+- **Never:** Do not write a number or a name into `annotate`, and do not move one into the title instead.
+- **Label:** Labels and marks drawn by R
+- **Source:** Design rule of this app (R, not the model, writes every number on a chart).
+
 ### not_in_the_chat
-- **When:** The analyst asks for colours or a palette, for a pie, map, dual axis, 3-D or reference line, to undo or remove a chart, to write headlines or summaries, to export, or for a number worked out from columns.
+- **When:** The analyst asks for colours, a palette or a chart style, for a pie, map, dual axis, 3-D or reference line, to undo or remove a chart, to write headlines or summaries, to export, or for a number worked out from columns.
 - **Say:** Use `cannot`, and say in one sentence where it is done (the Style button, or the Undo, Remove, Headline and Export buttons) or that it is not offered, with the nearest chart that is.
 - **Label:** Says what the chat cannot do
 - **Source:** Design rule of this app.
