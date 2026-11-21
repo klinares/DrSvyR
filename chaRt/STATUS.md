@@ -13,6 +13,25 @@ later reader of this file needs before then.
   middle colour (or one of the two middle colours when the length is even) and its two end colours are within 20
   lightness units. MetBrewer's diverging sets kept: Benedictus, Cassatt1, Cassatt2, Demuth, Ingres, Isfahan1, Johnson,
   Juarez, Moreau, OKeeffe1, Troy; dropped as diverging: Hiroshige, Hokusai1, Homer1, VanGogh1, Veronese.
+- **Part C: words and numbers on the chart, all written by R.** Two spec fields, `labels` (auto, on, off) and `annotate` (up to
+  two of highest, lowest, first, latest), in `spec_check()`, `spec_reference()`, `spec_code()` and the YAML (a bare `on` or
+  `off` in YAML reads as TRUE or FALSE; both mean the same here). Every number on a label or annotation is written by the
+  facts' own number functions (`fact_num()`, `fact_count()`, `fact_fixed()`, made of base R so the written code carries a copy),
+  and a check finds each one in the chart's facts. The facts are unchanged.
+  - **ggrepel** (0.9.8, installed) moves apart the names on a scatter's or bubble's highlighted points and the words of an
+    annotation on a line, scatter or bubble. It cannot place a label against a bar (it knows the label's anchor, not the
+    bar), so the value labels of a bar or dot are placed by R at the end of the mark, with or without ggrepel, and the ones
+    that would collide are left out and counted in the notes. Without ggrepel the point labels are treated the same way: only
+    the names and annotations that fit a rough layout of the panel (in inches, from the label's characters) are drawn, the
+    others are counted in the notes, with "ggrepel, which moves labels apart, is not installed". The line-end labels are
+    unchanged by ggrepel: ends that touch get a legend in the order of their values, as before.
+  - **The source line** is written by R into the caption when the analyst has not written one ("Source: <the dictionary's
+    source, else the file name>. <n> rows; <the filter in words>; <m> left out for missing values."); the analyst's caption
+    replaces it and the notes say so. The data dictionary has an optional file-level `source` (Data page box and YAML).
+  - **The Code dialog prints the chart as drawn** (the linted spec, the chosen palette and style), not the stored spec.
+  - **The interactive version** keeps value labels, annotations, the names on points and a heatmap's cell values as text
+    traces (placed above their mark, to the right of a sideways bar); it drops the line-end labels (it has a legend) and
+    the names that would run into another, and says so in the card's notes while it is shown.
 - **A colour that cannot be seen is not drawn** (a-006). In any style a palette colour under 10 dE (CIE2000) from the
   style's background is skipped and the palette's usable count for that style drops (`palette_usable()` in
   `R/theme.R`); on Dark the swap of a too-dark colour for the light one comes first, then a swapped colour that repeats

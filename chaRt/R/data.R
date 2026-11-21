@@ -315,6 +315,15 @@ new_codebook <- function(profile, file, rows, missing_codes = character(), encod
 
 missing_codes <- function(cb) as.character(unlist(cb$missing_codes %||% list()))
 
+# The optional `source` of the file, one of the codebook's file-level fields (beside row_is): where the data come from, as
+#   the source line under every chart says it ("Source: <this>."). A blank one is no field at all; the field sits after row_is.
+codebook_source <- function(cb, source = NULL) {
+  cb$source = NULL
+  src = if (is.character(source) && length(source) == 1L && !is.na(source)) trimws(source) else ""
+  if (nzchar(src)) cb = append(cb, list(source = src), after = match("row_is", names(cb)))
+  cb
+}
+
 write_codebook <- function(cb, path) {
   yaml::write_yaml(cb, path, precision = YAML_PRECISION, fileEncoding = "UTF-8")
   invisible(path)
@@ -371,7 +380,8 @@ check_codebook <- function(cb, profile) {
       if (identical(type, "ordered") && !order_ok(e$order, f))
         paste0("The codebook orders the levels of ", e$name, ", but not exactly the levels it has in the file."))
   })
-  c(purrr::map_chr(setdiff(in_cb, in_file), function(nm) paste0("The codebook has a column ", nm, " that is not in the file.")),
+  c(if (!is.null(cb$source) && !(is.character(cb$source) && length(cb$source) == 1L && !is.na(cb$source))) "The codebook's source is not one line of text.",
+    purrr::map_chr(setdiff(in_cb, in_file), function(nm) paste0("The codebook has a column ", nm, " that is not in the file.")),
     purrr::map_chr(setdiff(in_file, in_cb), function(nm) paste0("The file has a column ", nm, " that is not in the codebook.")),
     if (anyDuplicated(in_cb)) "The codebook names a column more than once.",
     unlist(per_column))
@@ -385,6 +395,7 @@ apply_codebook <- function(cb, profile, file, rows, encoding = "UTF-8") {
   up = stats::setNames(cb$columns, purrr::map_chr(cb$columns, "name"))
   out = new_codebook(profile, file, rows, missing_codes(cb), encoding)
   out$row_is = if (is.character(cb$row_is) && length(cb$row_is) == 1L) cb$row_is else ""
+  out = codebook_source(out, cb$source)
   out$columns = purrr::map(profile, function(p) {
     e = up[[p$name]]
     codebook_entry(p, label = e$label, label_source = e$label_source, type = e$type, role = e$role, order = e$order,
@@ -432,6 +443,7 @@ reread_data <- function(path, name, missing, old = NULL, encoding = NULL) {
   })
   cb$columns = purrr::map(carried, "entry")
   cb$row_is = old$row_is %||% ""
+  cb = codebook_source(cb, old$source)
   list(read = r, profile = prof, codebook = cb, notes = unlist(purrr::map(carried, "note")))
 }
 

@@ -451,6 +451,9 @@ mod_codebook_server <- function(id, state) {
                           textInput(ns(input_id("row_is", 0L)), "What does one row represent?", value = cb$row_is, width = "100%",
                                     placeholder = offer %||% "for example: one order, or one country in one year")),
                  if (!is.null(offer)) tags$div(class = "mb-3", actionButton(ns("use_guess"), "Use this", class = "btn-sm"))),
+        textInput(ns(input_id("source", 0L)), "Source of the data (optional)", value = cb$source %||% "", width = "100%",
+                  placeholder = "for example: Statistics Canada, Labour Force Survey, 2023"),
+        tags$p(class = "small text-muted", "Written under every chart as \"Source: ...\". With none, the file name is used."),
         tags$div(class = "d-flex align-items-center gap-2 my-2",
                  actionButton(ns("prev"), "Previous", class = "btn-sm"),
                  tags$span(paste0("Columns ", if (n) idx[1] else 0L, " to ", if (n) idx[length(idx)] else 0L, " of ", n)),
@@ -470,11 +473,13 @@ mod_codebook_server <- function(id, state) {
       if (is.null(cb)) return()
       idx = isolate(on_page(cb))
       row_is = input[[input_id("row_is", 0L)]]
+      source = input[[input_id("source", 0L)]]
       vals = purrr::map(idx, function(i) list(label = input[[input_id("label", i)]], type = input[[input_id("type", i)]],
                                               role = input[[input_id("role", i)]], order = input[[input_id("order", i)]],
                                               accept = input[[input_id("accept", i)]]))
       new = cb
       if (!is.null(row_is)) new$row_is = row_is
+      if (!is.null(source)) new = codebook_source(new, source)
       edited = purrr::map2(cb$columns[idx], vals, function(e, v) {
         type_changed = !is.null(v$type) && !identical(v$type, e$type)
         order = if (!type_changed && !is.null(v$order)) parse_lines(v$order)
@@ -1384,7 +1389,8 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       output[[cid(chart_id, "notes")]] = renderUI({
         p = drawn()
         if (inherits(p, "error")) return(warn_box(conditionMessage(p)))
-        if (length(attr(p, "notes"))) tags$ul(class = "small text-muted", purrr::map(attr(p, "notes"), tags$li))
+        shown = c(attr(p, "notes"), if (isTRUE(made$interactive[[chart_id]]())) widget_notes(attr(p, "spec")))
+        if (length(shown)) tags$ul(class = "small text-muted", purrr::map(shown, tags$li))
       })
 
       # The buttons of the header.
@@ -1407,7 +1413,11 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       observeEvent(input[[cid(chart_id, "code")]], {
         ch = chart_of(chart_id)
         if (is.null(ch)) return()
-        code = tryCatch(spec_code(ch$spec, isolate(state$codebook), isolate(state$path), isolate(palette())), error = function(e) conditionMessage(e))
+        # The chart as drawn: the spec as the lint left it (sideways bars, end labels, the legend's order, the source line), the
+        #   palette and style chosen, so the code gives the card's chart.
+        p = drawn()
+        code = if (inherits(p, "error")) conditionMessage(p)
+               else tryCatch(spec_code(attr(p, "spec"), isolate(state$codebook), isolate(state$path), isolate(palette())), error = function(e) conditionMessage(e))
         code_id = ns(cid(chart_id, "code_text"))
         showModal(modalDialog(
           title = paste0("Code: ", chart_title(ch)), size = "l", easyClose = TRUE,

@@ -557,8 +557,8 @@ cat("      the guess read 'Łódź' as '", l2_guess$data$city[1], "'\n", sep = "
 if (!is.null(fh_bar) && !is.null(nat_bar)) {
   check("2b-10: a sideways bar drops the title of its name axis unless the spec gives one (x_label)",
         code_has(fh_bar$code, "y = NULL") && code_has(nat_bar$code, "y = \"Nationality\""))
-  check("2b-11: ten bars at 40 get no room below zero (it comes from the table drawn, not the codebook)",
-        code_has(fh_bar$code, "expansion(mult = c(0, 0.05))") && !isTRUE(attr(fh_bar$plot, "spec")$.negative))
+  check("2b-11: ten bars at 40 get no room below zero, and room above for their value labels (it comes from the table drawn, not the codebook; Phase 7 C: 0.12 above where it was 0.05)",
+        code_has(fh_bar$code, "expansion(mult = c(0, 0.12))") && !isTRUE(attr(fh_bar$plot, "spec")$.negative))
   check("2b-12: top_n is arrange(desc(value), name) |> slice_head(); no tapply(), sort() or head() in any gold code",
         code_has(fh_bar$code, "arrange(desc(pr_2014), Country)") && code_has(fh_bar$code, "slice_head(n = 11)") &&
           !any(purrr::map_lgl(gold_codes, function(cd) grepl("tapply\\(|[^_]sort\\(|head\\(names", cd))))
@@ -3131,7 +3131,7 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
 
   # 6. the plotly version and the written code follow the style
   b7_rgba <- function(hex) { v = grDevices::col2rgb(hex)[, 1]; paste0("rgba(", paste(v, collapse = ","), ",1)") }
-  b7_wspec <- list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "A title", subtitle = "A subtitle", caption = "A caption")
+  b7_wspec <- list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "A title", subtitle = "A subtitle", caption = "A caption", labels = "off")
   b7_widgets <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) spec_widget(spec_plot(b7_wspec, pan_g$data, pan_g$cb, b7_pal(s))))
   b7_has <- function(x, pat) grepl(pat, x, fixed = TRUE)
   check("7B-6: spec_widget() follows the style: the figure's paper and plot colours are the style's, the title's colour and family, the subtitle's colour and the caption's colour are the style's (Source Serif 4 for Newspaper's title and subtitle), and the bundled families come with their generic fallback",
@@ -3270,6 +3270,467 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE) && palette
           all(purrr::map_lgl(c0_all$dark, function(cols) all(b7_ratio(cols, CHART_STYLES$dark$background) >= CHART_MARK_CONTRAST))) &&
           identical(c0_d$cols, b7_hex(palette_colours("okabe_ito")[1:5])) && any(grepl("has 4 colours", c0_d$notes, fixed = TRUE)))
 } else cat("skip  7C-0: panel.csv, colorspace or paletteer is not available\n")
+
+
+# ---- Phase 7 C: words and numbers on the chart, all written by R ---------------------------------------------------------------
+
+c7_ok <- !is.null(pan_g) && !is.null(ball_g) && requireNamespace("colorspace", quietly = TRUE) && requireNamespace("ggrepel", quietly = TRUE)
+if (c7_ok) {
+  c7_pal <- function(style = "clean") utils::modifyList(chart_palette_default(), list(style = style))
+  c7_plot <- function(sp, g = pan_g, style = "clean") spec_plot(sp, g$data, g$cb, c7_pal(style))
+  c7_texts <- function(p) purrr::keep(ggplot2::ggplot_build(p)$data, function(d) "label" %in% names(d))
+  c7_labels <- function(p) unlist(purrr::map(c7_texts(p), function(d) as.character(d$label)))
+  c7_geoms <- function(p) purrr::map_chr(p$layers, function(l) class(l$geom)[1])
+  c7_blank <- function(th, el) inherits(b7_calc(th, el), "ggplot2::element_blank")
+  c7_in <- function(col, ...) list(list(column = col, op = "in", value = list(...)))
+  # run `expr` as on a machine without ggrepel
+  c7_without_ggrepel <- function(expr) {
+    old = ggrepel_installed
+    assign("ggrepel_installed", function() FALSE, envir = globalenv())
+    on.exit(assign("ggrepel_installed", old, envir = globalenv()))
+    force(expr)
+  }
+  c7_fmt <- function(p) fact_value_fmt(attr(p, "spec"))
+  c7_bar8 <- list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "t")
+  c7_bar13 <- list(family = "bar", x = "Nationality", top_n = 13, fn = "count", title = "t")
+  c7_bar_panels <- list(family = "bar", x = "region", y = "revenue", fn = "sum", facet = "year", title = "t", filter = c7_in("year", 2021, 2022, 2023, 2024))
+  c7_grouped <- list(family = "bar", x = "region", y = "revenue", fn = "sum", color = "year", title = "t", filter = c7_in("year", 2015, 2016, 2017))
+  c7_lines3 <- list(family = "line", x = "year", y = "revenue", fn = "sum", color = "region", title = "t", filter = c7_in("region", "North", "Coast", "Islands"))
+  c7_lines8 <- list(family = "line", x = "year", y = "revenue", fn = "sum", color = "region", title = "t")
+  c7_line1 <- list(family = "line", x = "year", y = "revenue", fn = "sum", title = "t")
+  c7_scatter <- list(family = "scatter", x = "price", y = "units", title = "t")
+  c7_heat <- list(family = "heatmap", x = "year", y = "region", fn = "mean", color = "price", title = "t", filter = list(list(column = "year", op = ">=", value = 2021)))
+
+  # 1. labels: auto, on, off
+  c7_p8 <- c7_plot(c7_bar8)
+  c7_s8 <- attr(c7_p8, "spec")
+  c7_t8 <- attr(c7_p8, "table")
+  c7_td <- c7_texts(c7_p8)[[1]]
+  c7_th8 <- c7_p8$theme
+  check("7C-1: labels auto writes the value on every bar of a bar chart of 8 marks with no panels, in the facts' own number format; the value axis loses its grid and keeps its title, and the labels take the style's text colour and the chart's font",
+        identical(c7_labels(c7_p8), c7_fmt(c7_p8)(c7_t8$revenue)) && isTRUE(c7_s8$.value_labels) &&
+          c7_blank(c7_th8, "panel.grid.major.y") && c7_blank(c7_th8, "panel.grid.major.x") && identical(c7_p8$labels$y, "Total revenue") &&
+          all(b7_hex(c7_td$colour) == CHART_STYLES$clean$text_2) && all(c7_td$family == chart_font_family("sans")))
+  c7_p13 <- c7_plot(c7_bar13, ball_g)
+  c7_p13_on <- c7_plot(utils::modifyList(c7_bar13, list(labels = "on")), ball_g)
+  c7_pp <- c7_plot(c7_bar_panels)
+  c7_pp_on <- c7_plot(utils::modifyList(c7_bar_panels, list(labels = "on")))
+  c7_p8_off <- c7_plot(utils::modifyList(c7_bar8, list(labels = "off")))
+  check("7C-1: labels auto writes no value on a bar chart of 13 marks or on one in panels (on does, off never does), and without labels the value axis keeps its grid",
+        nrow(attr(c7_p13, "table")) == 13L && !length(c7_labels(c7_p13)) && length(c7_labels(c7_p13_on)) == 13L &&
+          !length(c7_labels(c7_pp)) && length(c7_labels(c7_pp_on)) > 0L && !length(c7_labels(c7_p8_off)) &&
+          !c7_blank(c7_p13$theme, "panel.grid.major.x") && !c7_blank(c7_p8_off$theme, "panel.grid.major.y") &&
+          !isTRUE(attr(c7_p8_off, "spec")$.value_labels))
+  # the facts' format for each kind of value: a sum to three digits with commas, a count whole, a share as a percentage, a mean
+  c7_kinds <- list(sum = c7_bar8, count = list(family = "bar", x = "region", fn = "count", title = "t"),
+                   share = list(family = "bar", x = "region", fn = "share", title = "t"),
+                   mean = list(family = "dot", x = "region", y = "price", fn = "mean", title = "t"))
+  c7_kind_ok <- purrr::map_lgl(c7_kinds, function(sp) {
+    p = c7_plot(sp); t = attr(p, "table"); v = value_name(attr(p, "spec"))
+    identical(c7_labels(p), c7_fmt(p)(t[[v]]))
+  })
+  c7_share <- c7_labels(c7_plot(c7_kinds$share))
+  check("7C-1: the number on a label is written by the same function as in the facts, for a sum, a count, a share (percentage to one decimal) and a mean (dot chart); every label of the bar chart is in the facts text",
+        all(c7_kind_ok) && all(grepl("%$", c7_share)) && all(!grepl("[.][0-9]{2}", c7_share)) &&
+          all(purrr::map_lgl(c7_labels(c7_p8), function(l) grepl(paste0("(?<![0-9,.])", gsub("[.]", "[.]", l), "(?![0-9])"), spec_facts(c7_s8, c7_t8, pan_g$cb)$text, perl = TRUE))))
+
+  # the end of a line
+  c7_pl3 <- c7_plot(c7_lines3)
+  c7_pl8 <- c7_plot(c7_lines8)
+  c7_pl1 <- c7_plot(c7_line1)
+  c7_end3 <- attr(c7_pl3, "table") |> dplyr::filter(year == max(year))
+  check("7C-1: labels auto writes the series name and its value at the end of each line of a line chart of at most 7 series (in the series' colour, in place of the legend); a single line gets its last value; 8 lines that end close together get a legend",
+        setequal(c7_labels(c7_pl3), paste0(c7_end3$region, "  ", fact_num(c7_end3$revenue))) && isTRUE(attr(c7_pl3, "spec")$.end_value) &&
+          all(c7_pl3$theme$legend.position == "top") && isTRUE(attr(c7_pl3, "spec")$.end_room > 0.18) && grepl(paste0("expansion(mult = c(0.02, ", attr(c7_pl3, "spec")$.end_room, "))"), spec_code(attr(c7_pl3, "spec"), pan_g$cb, pan_g$path), fixed = TRUE) && identical(c7_labels(c7_pl1), fact_num(attr(c7_pl1, "table") |> dplyr::filter(year == max(year)) |> dplyr::pull(revenue))) &&
+          !length(c7_labels(c7_pl8)) && identical(attr(c7_pl8, "spec")$.labels, FALSE) && !is.null(attr(c7_pl8, "spec")$.legend_order))
+  # more than 7 series, ends far apart: a synthetic file of eight series
+  c7_syn <- local({
+    d = expand.grid(year = 2001:2004, g = paste0("g", 1:8), stringsAsFactors = FALSE)
+    d$v = (match(d$g, paste0("g", 1:8))) * 100 + (d$year - 2000) * 3
+    r = list(data = d, cb = new_codebook(profile_data(d), "syn.csv", nrow(d), character(0)))
+    r$cb$row_is = "one series in one year"
+    r
+  })
+  c7_syn_spec <- list(family = "line", x = "year", y = "v", color = "g", fn = "sum", title = "t")
+  c7_sy <- function(mode) { sp = c7_syn_spec; if (!is.null(mode)) sp$labels = mode; spec_plot(sp, c7_syn$data, c7_syn$cb, chart_palette_default()) }
+  c7_sy_auto <- c7_sy(NULL); c7_sy_on <- c7_sy("on"); c7_sy_off <- c7_sy("off")
+  check("7C-1: with eight series whose ends are far apart, auto writes no end labels (a legend, and a note) and on writes them; off writes none and says nothing of it",
+        identical(attr(c7_sy_auto, "spec")$.labels, FALSE) && any(grepl("8 lines are too many to label at their ends", attr(c7_sy_auto, "notes"), fixed = TRUE)) &&
+          !length(c7_labels(c7_sy_auto)) && length(c7_labels(c7_sy_on)) == 8L && isTRUE(attr(c7_sy_on, "spec")$.labels) &&
+          !length(c7_labels(c7_sy_off)) && !any(grepl("too many to label", attr(c7_sy_off, "notes"), fixed = TRUE)) && !is.null(attr(c7_sy_off, "spec")$.legend_order))
+  c7_pl1_off <- c7_plot(utils::modifyList(c7_line1, list(labels = "off")))
+
+  # heatmap cells
+  c7_ph <- c7_plot(c7_heat)
+  c7_th <- c7_texts(c7_ph)[[1]]
+  c7_fill <- ggplot2::ggplot_build(c7_ph)$data[[1]]$fill
+  c7_lum <- colSums(grDevices::col2rgb(c7_fill) * c(0.299, 0.587, 0.114))
+  c7_big <- utils::modifyList(c7_heat, list(filter = NULL, labels = "on"))
+  c7_pbig <- c7_plot(c7_big)
+  check("7C-1: a heatmap of at most 40 cells writes each cell's value in black on a light cell and white on a dark one, in the facts' number format; off writes none; on with more cells than that writes none and says so",
+        identical(sort(c7_labels(c7_ph)), sort(fact_num(attr(c7_ph, "table")$price))) && all(c7_th$colour == ifelse(c7_lum > 140, "black", "white")) &&
+          any(c7_th$colour == "black") && any(c7_th$colour == "white") &&
+          !length(c7_labels(c7_plot(utils::modifyList(c7_heat, list(labels = "off"))))) &&
+          !length(c7_labels(c7_pbig)) && any(grepl("Values are not written in the cells", attr(c7_pbig, "notes"), fixed = TRUE)))
+
+  # labels must not run into one another or into a mark
+  c7_pg_off <- c7_without_ggrepel(c7_plot(utils::modifyList(c7_grouped, list(labels = "on"))))
+  c7_pg_on <- c7_plot(utils::modifyList(c7_grouped, list(labels = "on")))
+  c7_sg <- attr(c7_pg_off, "spec")
+  c7_sp8 <- c7_without_ggrepel(c7_plot(c7_bar8))
+  check("7C-1: value labels that would run into each other or into a bar are left out, with or without ggrepel (it cannot place a label against a bar), and the notes say how many; bars with room keep every label",
+        length(c7_labels(c7_pg_off)) > 0L && length(c7_labels(c7_pg_off)) < nrow(attr(c7_pg_off, "table")) &&
+          any(grepl("value labels were left out because they would run into another label or a mark", attr(c7_pg_off, "notes"), fixed = TRUE)) &&
+          identical(c7_labels(c7_pg_off), c7_labels(c7_pg_on)) && !any(grepl("ggrepel", attr(c7_pg_on, "notes"), fixed = TRUE)) &&
+          identical(c7_labels(c7_sp8), c7_labels(c7_p8)) && !any(grepl("left out", attr(c7_sp8, "notes"), fixed = TRUE)))
+  c7_hl <- list(family = "scatter", x = "price", y = "units", title = "t", highlight = list(column = "year", values = list(2015, 2016)))
+  c7_ps_on <- c7_plot(c7_hl)
+  c7_ps_off <- c7_without_ggrepel(c7_plot(c7_hl))
+  c7_rep_layers <- function(p) sum(c7_geoms(p) == "GeomTextRepel")
+  check("7C-1: names on highlighted points are moved apart by ggrepel when it is installed (all 16 drawn, a GeomTextRepel layer) and, without it, only those that fit are drawn and the notes say how many were left out and that ggrepel is not installed",
+        c7_rep_layers(c7_ps_on) == 1L && length(c7_labels(c7_ps_on)) == 16L && !any(grepl("left out", attr(c7_ps_on, "notes"), fixed = TRUE)) &&
+          c7_rep_layers(c7_ps_off) == 0L && "GeomText" %in% c7_geoms(c7_ps_off) && length(c7_labels(c7_ps_off)) < 16L && length(c7_labels(c7_ps_off)) > 0L &&
+          any(grepl("names were left out because they would run into another label or a mark; ggrepel, which moves labels apart, is not installed", attr(c7_ps_off, "notes"), fixed = TRUE)) &&
+          !any(c7_geoms(c7_p8) == "GeomTextRepel") && !any(c7_geoms(c7_pg_on) == "GeomTextRepel"))
+  cat("      without ggrepel: ", length(c7_labels(c7_pg_off)), " of ", nrow(attr(c7_pg_off, "table")), " value labels kept on the grouped bars (with it, the same); ",
+      length(c7_labels(c7_ps_off)), " of 16 names kept on the highlighted points (with it, 16, moved apart)\n", sep = "")
+}
+
+if (c7_ok) {
+  # the chart draws (a PNG) with and without ggrepel
+  c7_png <- function(p) { f = tempfile(fileext = ".png"); spec_png(p, f); file.exists(f) && file.size(f) > 1000 }
+  check("7C-1: the chart still draws, to a PNG, without ggrepel as with it (value labels, names, annotations)",
+        c7_png(c7_ps_off) && c7_png(c7_ps_on) && c7_png(c7_pg_off) && c7_png(c7_without_ggrepel(c7_plot(utils::modifyList(c7_scatter, list(annotate = list("highest", "lowest")))))))
+
+  # 2. annotate
+  c7_chk <- function(sp, ann) spec_check(c(sp, list(annotate = ann)), pan_g$cb)
+  c7_ref <- spec_reference()
+  c7_others <- list(histogram = list(family = "histogram", x = "price"), box = list(family = "box", x = "region", y = "revenue"), heatmap = c7_heat,
+                    slope = list(family = "slope", x = "year", y = "revenue", color = "region", fn = "sum", filter = c7_in("year", 2015, 2024)))
+  check("7C-2: annotate is checked by spec_check(): a bar, dot, scatter or bubble takes highest and lowest, a line all four; a family that cannot take a kind refuses it with a sentence; more than two kinds, a repeated kind, an unknown kind and any text are refused",
+        !length(c7_chk(c7_bar8, list("highest", "lowest"))) && !length(c7_chk(c7_bar8, list())) && !length(c7_chk(c7_lines3, list("first", "latest"))) && !length(c7_chk(c7_scatter, "highest")) &&
+          !length(c7_chk(list(family = "dot", x = "region", y = "revenue", fn = "sum"), list("lowest"))) &&
+          any(grepl("annotate: a bar chart can mark its highest or lowest value, not its first one", c7_chk(c7_bar8, list("first")), fixed = TRUE)) &&
+          any(grepl("annotate: a scatter chart can mark its highest or lowest value, not its latest one \\(highest and lowest refer to y", c7_chk(c7_scatter, "latest"))) &&
+          all(purrr::map_lgl(c7_others, function(sp) any(grepl("cannot mark a highest, lowest, first or latest value", c7_chk(sp, list("highest")), fixed = TRUE)))) &&
+          any(grepl("at most 2", c7_chk(c7_lines3, list("highest", "lowest", "first")), fixed = TRUE)) &&
+          any(grepl("at most 2 different kinds", c7_chk(c7_lines3, list("highest", "highest")), fixed = TRUE)) &&
+          any(grepl("'peak' is not a kind", c7_chk(c7_lines3, list("peak")), fixed = TRUE)) &&
+          any(grepl("'Sales peaked in 2020' is not a kind", c7_chk(c7_bar8, "Sales peaked in 2020"), fixed = TRUE)) &&
+          grepl("- labels: one of auto, on, off", c7_ref, fixed = TRUE) && grepl("- annotate: a list of at most 2 of highest, lowest, first, latest", c7_ref, fixed = TRUE) &&
+          grepl("never write the text", c7_ref, fixed = TRUE) && grepl("^- labels: .*\\(bar, dot, line, slope, scatter, bubble, heatmap only\\)", strsplit(c7_ref, "\n")[[1]][grepl("^- labels", strsplit(c7_ref, "\n")[[1]])]))
+  # what R finds and writes
+  c7_pa <- c7_plot(utils::modifyList(c7_bar8, list(annotate = list("highest", "lowest"))))
+  c7_ta <- attr(c7_pa, "table")
+  c7_fa <- c7_fmt(c7_pa)
+  c7_la <- c7_labels(c7_pa)
+  c7_ann_bar <- purrr::keep(c7_la, function(l) grepl(":", l))
+  check("7C-2: a bar's annotation is R's: the highest and lowest bars are found in the table and named with their value in the facts' number format; the bar's own value label is not written twice; no word of it comes from the spec",
+        setequal(c7_ann_bar, c(paste0("Highest: ", c7_fa(max(c7_ta$revenue))), paste0("Lowest: ", c7_fa(min(c7_ta$revenue))))) &&
+          !c7_fa(max(c7_ta$revenue)) %in% c7_la && !c7_fa(min(c7_ta$revenue)) %in% c7_la && length(c7_la) == nrow(c7_ta) &&
+          length(attr(c7_pa, "spec")$.annotate) == 2L && !any(grepl("Highest", unlist(c7_bar8)), na.rm = TRUE))
+  # a line chart: the highlighted series, else the series with the highest value; two kinds on one point share one entry
+  c7_hl_line <- utils::modifyList(c7_lines8, list(highlight = list(column = "region", values = list("North", "Coast"))))
+  c7_pc <- c7_plot(utils::modifyList(c7_hl_line, list(annotate = list("highest", "lowest"))))
+  c7_pn <- c7_plot(utils::modifyList(c7_lines3, list(annotate = list("highest"))))
+  c7_pm <- c7_plot(utils::modifyList(c7_hl_line, list(annotate = list("highest", "latest"))))
+  c7_tl <- attr(c7_pc, "table")
+  c7_coast <- c7_tl[c7_tl$region == "Coast", ]
+  c7_rings <- function(p) { b = ggplot2::ggplot_build(p); i = which(c7_geoms(p) == "GeomPoint" & vapply(b$data, function(d) isTRUE(all(d$shape == 1)), NA)); b$data[i] }
+  check("7C-2: on a line chart annotate marks the highlighted series (here Coast, the higher of the two highlighted), else the series with the highest value (Islands of three); highest and lowest give a ring and the value with its year; two kinds on one point (highest and latest) make one annotation",
+        any(c7_labels(c7_pc) == paste0("Highest: ", fact_num(max(c7_coast$revenue)), " (", c7_coast$year[which.max(c7_coast$revenue)], ")")) &&
+          any(c7_labels(c7_pc) == paste0("Lowest: ", fact_num(min(c7_coast$revenue)), " (", c7_coast$year[which.min(c7_coast$revenue)], ")")) &&
+          length(c7_rings(c7_pc)) == 2L && all(abs(c7_rings(c7_pc)[[1]]$y - max(c7_coast$revenue)) < 1e-6) &&
+          any(startsWith(c7_labels(c7_pn), "Highest: 116,000")) && length(attr(c7_pm, "spec")$.annotate) == 1L && any(startsWith(c7_labels(c7_pm), "Highest and latest: ")))
+  # many lines: the series is one the facts describe, so the numbers written are in them
+  c7_many <- local({
+    d = expand.grid(year = 2001:2004, g = paste0("g", 1:12), stringsAsFactors = FALSE)
+    k = match(d$g, paste0("g", 1:12))
+    d$v = ifelse(d$g == "g12", 1000 + (d$year - 2000), 100 + k * (d$year - 2000) * ifelse(k %% 2 == 0, 1, -1) + 500)
+    r = list(data = d, cb = new_codebook(profile_data(d), "many.csv", nrow(d), character(0)))
+    r$cb$row_is = "one series in one year"
+    r
+  })
+  c7_many_p <- spec_plot(list(family = "line", x = "year", y = "v", color = "g", fn = "sum", title = "t", annotate = list("highest")), c7_many$data, c7_many$cb, chart_palette_default())
+  c7_many_f <- spec_facts(attr(c7_many_p, "spec"), attr(c7_many_p, "table"), c7_many$cb)$text
+  c7_many_s <- attr(c7_many_p, "spec")$.annotate[[1]]$series
+  check("7C-2: with more than 8 lines and no highlight the annotated line is one the facts describe (g12 has the highest value but a small change; the facts describe the lines that changed most, so another is named), and its numbers are in the facts",
+        grepl(paste0("\n", c7_many_s, ": first "), paste0("\n", c7_many_f), fixed = TRUE) && !identical(c7_many_s, "g12") &&
+          !grepl("\ng12: first ", paste0("\n", c7_many_f), fixed = TRUE) && grepl("Lines described: 6 of 12", c7_many_f, fixed = TRUE))
+  # a scatter: highest and lowest refer to y
+  c7_psa <- c7_plot(utils::modifyList(c7_scatter, list(annotate = list("highest", "lowest"))))
+  c7_tsa <- attr(c7_psa, "table")
+  check("7C-2: on a scatter annotate marks the highest and lowest y with a ring and the y value (no x: the facts do not hold it), moved by ggrepel when it is installed",
+        setequal(c7_labels(c7_psa), c(paste0("Highest: ", fact_num(max(c7_tsa$units), FALSE)), paste0("Lowest: ", fact_num(min(c7_tsa$units), FALSE)))) &&
+          length(c7_rings(c7_psa)) == 2L && sort(vapply(c7_rings(c7_psa), function(d) d$y, 1)) [1] == min(c7_tsa$units) && c7_rep_layers(c7_psa) == 2L &&
+          sum(c7_geoms(c7_without_ggrepel(c7_plot(utils::modifyList(c7_scatter, list(annotate = list("highest", "lowest")))))) == "GeomText") == 2L)
+
+  # 3. highlighted points carry their names
+  c7_hl9 <- list(family = "scatter", x = "price", y = "units", title = "t", highlight = list(column = "year", values = as.list(2015:2023)))
+  c7_p9 <- c7_plot(c7_hl9)
+  c7_p9_on <- c7_plot(utils::modifyList(c7_hl9, list(labels = "on")))
+  c7_p9_off <- c7_plot(utils::modifyList(c7_hl, list(labels = "off")))
+  c7_tx <- c7_texts(c7_ps_on)[[1]]
+  c7_hlt <- attr(c7_ps_on, "table")
+  check("7C-3: highlighted points of a scatter carry their names (the highlight column's value, drawn from the data, in the style's text colour and the chart's font) when the highlight names at most 8 values; for 9 values auto writes none and says so, on writes them, off never does",
+        identical(sort(c7_labels(c7_ps_on)), sort(as.character(c7_hlt$year[c7_hlt$highlighted]))) && all(b7_hex(c7_tx$colour) == CHART_STYLES$clean$text) && all(c7_tx$family == chart_font_family("sans")) &&
+          !length(c7_labels(c7_p9)) && any(grepl("The highlight names 9 values; names are written on the points only for 8 or fewer", attr(c7_p9, "notes"), fixed = TRUE)) &&
+          length(c7_labels(c7_p9_on)) == sum(attr(c7_p9_on, "table")$highlighted) && !length(c7_labels(c7_p9_off)))
+  check("7C-3: a scatter or bubble with no highlight refuses labels on with a sentence; a box plot and a histogram refuse it; auto and off are accepted everywhere",
+        any(grepl("names only on highlighted points", spec_check(utils::modifyList(c7_scatter, list(labels = "on")), pan_g$cb), fixed = TRUE)) &&
+          any(grepl("a box chart has no marks to write values on", spec_check(utils::modifyList(c7_others$box, list(labels = "on")), pan_g$cb), fixed = TRUE)) &&
+          any(grepl("labels must be one of auto, on, off", spec_check(utils::modifyList(c7_bar8, list(labels = "some")), pan_g$cb), fixed = TRUE)) &&
+          all(purrr::map_lgl(c(list(c7_bar8, c7_scatter), c7_others), function(sp) !length(spec_check(utils::modifyList(sp, list(labels = "off")), pan_g$cb)) &&
+                               !length(spec_check(utils::modifyList(sp, list(labels = "auto")), pan_g$cb)))))
+
+  # 4. the source line
+  c7_cap <- function(p) p$labels$caption
+  c7_pf <- c7_plot(c7_lines3)
+  c7_tiny <- local({
+    d = data.frame(g = c("a", "b", "c", "d"), v = c(1, 2, NA, 4))
+    r = list(data = d, cb = new_codebook(profile_data(d), "tiny.csv", nrow(d), character(0)))
+    r$cb$row_is = "one thing"
+    r
+  })
+  c7_tiny_sp <- list(family = "bar", x = "g", y = "v", fn = "sum", title = "t")
+  c7_pt <- spec_plot(c7_tiny_sp, c7_tiny$data, c7_tiny$cb)
+  c7_cb_src <- codebook_source(pan_g$cb, "Statistics Canada, Labour Force Survey, 2023.")
+  c7_pd <- spec_plot(c7_bar8, pan_g$data, c7_cb_src)
+  c7_own <- utils::modifyList(c7_bar8, list(caption = "My own words."))
+  c7_po <- c7_plot(c7_own)
+  c7_one <- local({ d = data.frame(g = "a", v = 3); list(data = d, cb = utils::modifyList(new_codebook(profile_data(d), "one.csv", 1L, character(0)), list(row_is = "one thing"))) })
+  c7_p1 <- spec_plot(list(family = "bar", x = "g", y = "v", fn = "sum", title = "t"), c7_one$data, c7_one$cb)
+  check("7C-4: every chart has a source line in its caption written by R: 'Source: <file>. <n> rows<; the filter in words><; m left out for missing values>.'; the dictionary's source replaces the file name; a single row says 'row'",
+        identical(c7_cap(c7_p8), "Source: panel.csv. 80 rows.") && isTRUE(attr(c7_p8, "spec")$.source) &&
+          identical(c7_cap(c7_pf), "Source: panel.csv. 30 rows; region is one of North, Coast, Islands.") &&
+          identical(c7_cap(c7_pt), "Source: tiny.csv. 3 rows; 1 left out for missing values.") &&
+          identical(c7_cap(c7_pd), "Source: Statistics Canada, Labour Force Survey, 2023. 80 rows.") && identical(c7_cap(c7_p1), "Source: one.csv. 1 row.") &&
+          !any(grepl("Source:", attr(c7_p8, "notes"))))
+  c7_own_code <- spec_code(attr(c7_po, "spec"), pan_g$cb, pan_g$path, c7_pal())
+  c7_stored <- check_chart(c7_bar8, pan_g$cb, pan_g$data, c7_pal(), chat_rule_ids())
+  check("7C-4: the analyst's own caption replaces the source line and the notes say so; the source line is the chart as drawn, not the stored spec (which holds no caption), and is in the written code",
+        identical(c7_cap(c7_po), "My own words.") && "Your caption replaces the source line." %in% attr(c7_po, "notes") && is.null(attr(c7_po, "spec")$.source) &&
+          !grepl("Source:", c7_own_code, fixed = TRUE) && grepl("My own words.", c7_own_code, fixed = TRUE) &&
+          is.null(c7_stored$spec$caption) && is.null(new_chart("c1", c7_bar8)$spec$caption) &&
+          grepl("caption = \"Source: panel.csv. 80 rows.\"", spec_code(attr(c7_p8, "spec"), pan_g$cb, pan_g$path, c7_pal()), fixed = TRUE))
+  # the data dictionary's file-level `source`
+  c7_yaml <- tempfile(fileext = ".yaml")
+  write_codebook(c7_cb_src, c7_yaml)
+  c7_back <- read_codebook(c7_yaml)
+  c7_prof <- profile_data(pan_g$data)
+  c7_applied <- apply_codebook(c7_back, c7_prof, "panel.csv", nrow(pan_g$data))
+  c7_blank <- codebook_source(c7_cb_src, "  ")
+  c7_reread <- reread_data(pan_g$path, "panel.csv", character(0), old = c7_cb_src)
+  c7_ui <- new.env()
+  local({
+    st = shiny::reactiveValues(codebook = pan_g$cb, data = pan_g$data)
+    shiny::testServer(mod_codebook_server, args = list(state = st), {
+      session$flushReact()
+      id = input_id("source", 0L)
+      do.call(session$setInputs, stats::setNames(list("  Statistics Canada, 2023.  "), id))
+      c7_ui$set <- st$codebook$source
+      c7_ui$after_row <- names(st$codebook)[match("source", names(st$codebook)) - 1L]
+      do.call(session$setInputs, stats::setNames(list(""), id))
+      c7_ui$cleared <- is.null(st$codebook$source)
+      c7_ui$page <- paste(as.character(output$page$html), collapse = "")
+    })
+  })
+  check("7C-4: the data dictionary has an optional file-level `source`, beside row_is: written to data_dictionary.yaml and read back unchanged, kept when a dictionary is applied or the file is read again, absent when blank, refused when it is not one line of text; the Data page has a box for it that sets it and clears it",
+        any(grepl("^source: Statistics Canada", readLines(c7_yaml, encoding = "UTF-8"))) && identical(c7_back$source, c7_cb_src$source) && identical(c7_applied$source, c7_cb_src$source) &&
+          is.null(c7_blank$source) && identical(c7_reread$codebook$source, c7_cb_src$source) && identical(names(c7_cb_src)[match("source", names(c7_cb_src)) - 1L], "row_is") &&
+          is.null(pan_g$cb$source) && !"source" %in% names(read_codebook({ f = tempfile(fileext = ".yaml"); write_codebook(pan_g$cb, f); f })) &&
+          any(grepl("source is not one line of text", check_codebook(utils::modifyList(c7_back, list(source = 3)), c7_prof), fixed = TRUE)) &&
+          identical(c7_ui$set, "Statistics Canada, 2023.") && identical(c7_ui$after_row, "row_is") && isTRUE(c7_ui$cleared) &&
+          grepl("Source of the data (optional)", c7_ui$page, fixed = TRUE))
+}
+
+if (c7_ok) {
+  # 5. the plotly version: labels and annotations survive, or the notes say which did not
+  c7_dot <- c7_plot(list(family = "dot", x = "region", y = "revenue", fn = "sum", title = "t", top_n = 8))
+  c7_battery <- list(bar = c7_p8, dot = c7_dot, bar_annotated = c7_pa, bar_grouped = c7_pg_on, line_annotated = c7_pc, line_end_labels = c7_pl3, scatter_annotated = c7_psa,
+                     scatter_names = c7_ps_on, heatmap = c7_ph)
+  c7_w <- purrr::map(c7_battery, spec_widget)
+  c7_wtexts <- function(w) unlist(purrr::map(w$x$data, function(tr) if (identical(tr$mode, "text")) as.character(tr$text)))
+  c7_wpos <- function(w) unique(unlist(purrr::map(w$x$data, function(tr) if (identical(tr$mode, "text")) tr$textposition)))
+  c7_wnotes <- purrr::map(c7_w, function(w) attr(w, "notes"))
+  c7_lost <- purrr::map2(c7_battery, c7_w, function(p, w) setdiff(c7_labels(p), c7_wtexts(w)))
+  check("7C-5: spec_widget() keeps the value labels, the annotations and the heatmap's cell values as text traces in plotly (the same words as the static chart), and every label that is not in it is named by a note: nothing is lost without a sentence",
+        all(purrr::map_lgl(c7_w, function(w) !length(attr(w, "warnings")))) &&
+          setequal(c7_wtexts(c7_w$bar), c7_labels(c7_p8)) && setequal(c7_wtexts(c7_w$dot), c7_labels(c7_dot)) && setequal(c7_wtexts(c7_w$bar_annotated), c7_labels(c7_pa)) &&
+          setequal(c7_wtexts(c7_w$bar_grouped), c7_labels(c7_pg_on)) && setequal(c7_wtexts(c7_w$scatter_annotated), c7_labels(c7_psa)) && setequal(c7_wtexts(c7_w$heatmap), c7_labels(c7_ph)) &&
+          any(startsWith(c7_wtexts(c7_w$line_annotated), "Highest: ")) && any(startsWith(c7_wtexts(c7_w$line_annotated), "Lowest: ")) &&
+          all(purrr::map2_lgl(c7_lost, c7_wnotes, function(lost, notes) !length(lost) || length(notes) > 0L)) &&
+          !length(c7_wnotes$heatmap) && length(c7_wnotes$bar) == 1L)
+  check("7C-5: what plotly does not keep is said: the names and values at the line ends (it has a legend), the names ggrepel moved apart that would run into another (left out, counted), a label's place (above its mark, to the right of a sideways bar) and weight; plotly gets each text trace's position and the chart's font",
+        any(grepl("names and values at the line ends are not drawn in the interactive version", c7_wnotes$line_end_labels, fixed = TRUE)) &&
+          all(c7_lost$line_end_labels == setdiff(c7_labels(c7_pl3), c7_wtexts(c7_w$line_end_labels))) && length(c7_lost$line_end_labels) == 3L &&
+          any(grepl("labels that the static chart moves apart are left out of the interactive version because they would run into another label or a mark", c7_wnotes$scatter_names, fixed = TRUE)) &&
+          length(c7_wtexts(c7_w$scatter_names)) < length(c7_labels(c7_ps_on)) && all(c7_wtexts(c7_w$scatter_names) %in% c7_labels(c7_ps_on)) &&
+          any(grepl("not bold and sits above its mark", c7_wnotes$bar, fixed = TRUE)) && identical(c7_wpos(c7_w$bar), "top center") && identical(c7_wpos(c7_w$heatmap), "middle center") &&
+          identical(c7_wpos(spec_widget(c7_plot(list(family = "bar", x = "Nationality", top_n = 13, fn = "count", title = "t", labels = "on"), ball_g))), "middle right") &&
+          all(purrr::map_lgl(c7_w$bar$x$data, function(tr) !identical(tr$mode, "text") || grepl(chart_font_family("sans"), tr$textfont$family, fixed = TRUE))) &&
+          identical(attr(c7_w$bar, "notes"), widget_notes(attr(c7_p8, "spec"))))
+
+  # 6. every number R writes for a label or an annotation is in the chart's facts
+  c7_many_sp <- list(family = "line", x = "year", y = "v", color = "g", fn = "sum", title = "t", annotate = list("highest"))
+  c7_num_battery <- c(purrr::map(c7_battery, function(p) list(p = p, g = if (identical(p, c7_battery$bar_grouped)) pan_g else pan_g)),
+                      list(many = list(p = c7_many_p, g = c7_many),
+                           count = list(p = c7_plot(c7_kinds$count), g = pan_g), share = list(p = c7_plot(c7_kinds$share), g = pan_g),
+                           mean_dot = list(p = c7_plot(c7_kinds$mean), g = pan_g), line1 = list(p = c7_pl1, g = pan_g),
+                           flip13 = list(p = c7_p13_on, g = ball_g), merged = list(p = c7_pm, g = pan_g), eight = list(p = c7_sy_on, g = c7_syn)))
+  c7_tokens <- function(labels) unlist(regmatches(labels, gregexpr("[0-9][0-9,]*([.][0-9]+)?%?", labels)))
+  c7_in_facts <- function(tokens, facts) purrr::map_lgl(tokens, function(tk) grepl(paste0("(?<![0-9,.])", gsub("[.]", "[.]", tk), "(?![0-9])"), facts, perl = TRUE))
+  c7_checked <- purrr::map(c7_num_battery, function(x) {
+    s = attr(x$p, "spec"); t = attr(x$p, "table")
+    facts = spec_facts(s, t, x$g$cb, FALSE, x$g$data)$text
+    tk = c7_tokens(c7_labels(x$p))
+    list(n = length(tk), missing = tk[!c7_in_facts(tk, facts)])
+  })
+  check(paste0("7C-6: every number R writes on a chart for labels and annotate is in that chart's facts, digit for digit (", length(c7_num_battery), " charts, ",
+               sum(purrr::map_int(c7_checked, "n")), " numbers: bars, dots, grouped and panelled bars, lines with ends and annotations, a scatter, names, a heatmap, counts, shares, means)"),
+        all(purrr::map_int(c7_checked, "n") > 0L | names(c7_checked) %in% c("names")) && !length(unlist(purrr::map(c7_checked, "missing"))) &&
+          # the test can fail: a wrong number is not found
+          !all(c7_in_facts("99,999", spec_facts(attr(c7_p8, "spec"), attr(c7_p8, "table"), pan_g$cb)$text)))
+  # facts and checks are unchanged by Part C: the same facts with and without labels and annotate
+  c7_without <- function(sp) sp[setdiff(names(sp), c("labels", "annotate"))]
+  c7_facts_of <- function(sp, g = pan_g) { p = spec_plot(sp, g$data, g$cb, c7_pal()); spec_facts(attr(p, "spec"), attr(p, "table"), g$cb, FALSE, g$data)$text }
+  c7_with <- list(utils::modifyList(c7_bar8, list(labels = "on", annotate = list("highest", "lowest"))), utils::modifyList(c7_lines3, list(annotate = list("highest", "latest"))),
+                  utils::modifyList(c7_hl, list(labels = "on", annotate = list("highest"))), utils::modifyList(c7_heat, list(labels = "off")), utils::modifyList(c7_grouped, list(labels = "on")),
+                  utils::modifyList(c7_hl_line, list(annotate = list("lowest"))))
+  check("7C-6: the facts of a chart are the same with labels and annotate as without them (six charts), and the Phase 7 A facts lines are still there (points per series, highest, lowest)",
+        all(purrr::map_lgl(c7_with, function(sp) identical(c7_facts_of(sp), c7_facts_of(c7_without(sp))))) &&
+          grepl("Points per series: 10", c7_facts_of(c7_with[[2]]), fixed = TRUE) && grepl(", highest ", c7_facts_of(c7_with[[2]]), fixed = TRUE) && grepl(", lowest ", c7_facts_of(c7_with[[2]]), fixed = TRUE))
+
+  # every style: the labels use its text colours and font, and the heatmap's cell text is black or white by lightness
+  c7_style_ok <- purrr::map_lgl(stats::setNames(names(CHART_STYLES), names(CHART_STYLES)), function(s) {
+    st = CHART_STYLES[[s]]
+    p = c7_plot(utils::modifyList(c7_bar8, list(annotate = list("highest"))), pan_g, s)
+    d = c7_texts(p)
+    h = c7_plot(c7_heat, pan_g, s)
+    fill = ggplot2::ggplot_build(h)$data[[1]]$fill
+    lum = colSums(grDevices::col2rgb(fill) * c(0.299, 0.587, 0.114))
+    cells = c7_texts(h)[[1]]
+    lines = c7_plot(c7_lines3, pan_g, s)
+    all(b7_hex(d[[1]]$colour) == st$text_2) && all(b7_hex(d[[2]]$colour) == st$text) && all(d[[2]]$fontface == "bold") && all(c(d[[1]]$family, d[[2]]$family) == chart_font_family("sans")) &&
+      all(cells$family == chart_font_family("sans")) && all(cells$colour == ifelse(lum > 140, "black", "white")) &&
+      all(c7_texts(lines)[[1]]$family == chart_font_family("sans"))
+  })
+  check("7C-1: in each of the six styles the value labels take the style's secondary text colour, an annotation its text colour in bold, every label the chart's font, and a heatmap's cell values are black on a light cell and white on a dark one",
+        all(c7_style_ok) && length(c7_style_ok) == 6L)
+
+  # the YAML
+  c7_y_on <- yaml::yaml.load("family: bar\nx: region\n\"y\": revenue\nfn: sum\ntitle: t\nlabels: \"on\"\nannotate: [highest, lowest]\n")
+  c7_y_off <- yaml::yaml.load("family: bar\nx: region\n\"y\": revenue\nfn: sum\ntitle: t\nlabels: off\nannotate: highest\n")
+  c7_y_p <- c7_plot(c7_y_on)
+  c7_y_q <- c7_plot(c7_y_off)
+  check("7C-1: labels and annotate read from YAML: a list of kinds or one kind, labels written as on or off (YAML 1.1 reads a bare on or off as TRUE or FALSE, which mean the same here) are accepted and drawn",
+        !length(spec_check(c7_y_on, pan_g$cb)) && !length(spec_check(c7_y_off, pan_g$cb)) && isTRUE(c7_y_off$labels == FALSE) &&
+          length(c7_labels(c7_y_p)) == nrow(attr(c7_y_p, "table")) && identical(attr(c7_y_q, "spec")$labels, "off") && !isTRUE(attr(c7_y_q, "spec")$.value_labels) &&
+          identical(c7_labels(c7_y_q), paste0("Highest: ", c7_fmt(c7_y_q)(max(attr(c7_y_q, "table")$revenue)))))
+}
+
+if (c7_ok) {
+  # The code for the chart as drawn (the Code dialog prints it): run alone in a fresh R process, it gives the card's layers, scales,
+  #   orientation and labels. The summary below is computed by the same function in both processes.
+  c7_sum_file <- file.path(work_dir, "c7_plot_summary.R")
+  writeLines(c(
+    "plot_summary <- function(p) {",
+    "  b <- ggplot2::ggplot_build(p)",
+    "  limits <- function(s) if (is.null(s)) NA_character_ else paste(format(s$get_limits()), collapse = '|')",
+    "  labs <- ggplot2::get_labs(p)",
+    "  list(layers = vapply(p$layers, function(l) class(l$geom)[1], ''),",
+    "       stats = vapply(p$layers, function(l) class(l$stat)[1], ''),",
+    "       positions = vapply(p$layers, function(l) class(l$position)[1], ''),",
+    "       rows = vapply(b$data, nrow, 1L),",
+    "       labels = lapply(b$data, function(d) if ('label' %in% names(d)) as.character(d$label)),",
+    "       colours = lapply(b$data, function(d) sort(unique(toupper(as.character(c(d$colour, d$fill)))))),",
+    "       fonts = lapply(b$data, function(d) if ('family' %in% names(d)) unique(d$family)),",
+    "       flipped = lapply(b$data, function(d) unique(d$flipped_aes)),",
+    "       scale_x = limits(b$layout$panel_scales_x[[1]]), scale_y = limits(b$layout$panel_scales_y[[1]]),",
+    "       scales = vapply(p$scales$scales, function(s) paste(s$aesthetics[1], class(s)[1]), ''),",
+    "       coord = class(b$layout$coord)[1], facet = class(b$layout$facet)[1],",
+    "       text = vapply(c('title', 'subtitle', 'caption', 'x', 'y', 'colour', 'fill'), function(k) as.character(labs[[k]] %||% NA_character_), ''),",
+    "       legend = p$theme$legend.position)",
+    "}"), c7_sum_file)
+  source(c7_sum_file)
+  c7_runner <- file.path(work_dir, "c7_run_summary.R")
+  writeLines(c(
+    "args <- commandArgs(TRUE)",
+    "source(args[2])",
+    "f <- function(x) file.path(args[3], x)",
+    "systemfonts::register_font('Inter', plain = f('Inter-Regular.ttf'), bold = f('Inter-Bold.ttf'))",
+    "systemfonts::register_font('Inter SemiBold', plain = f('Inter-SemiBold.ttf'), bold = f('Inter-Bold.ttf'))",
+    "systemfonts::register_font('Source Serif 4', plain = f('SourceSerif4-Regular.ttf'), bold = f('SourceSerif4-Bold.ttf'))",
+    "systemfonts::register_font('Source Serif 4 SemiBold', plain = f('SourceSerif4-Semibold.ttf'), bold = f('SourceSerif4-Bold.ttf'))",
+    "files <- sort(list.files(args[1], pattern = '^code_.*[.]R$', full.names = TRUE))",
+    "out <- lapply(files, function(f) tryCatch({",
+    "  env <- new.env(parent = globalenv())",
+    "  old <- setwd(readLines(sub('[.]R$', '.dir', f))); on.exit(setwd(old))",
+    "  p <- suppressMessages(eval(parse(f, encoding = 'UTF-8'), env))",
+    "  plot_summary(p)",
+    "}, error = function(e) list(error = conditionMessage(e))))",
+    "saveRDS(out, file.path(args[1], 'summary.rds'))"), c7_runner)
+  c7_run_codes <- function(name, codes, paths) {
+    dir = file.path(work_dir, name)
+    dir.create(dir, showWarnings = FALSE)
+    purrr::iwalk(codes, function(code, i) {
+      writeLines(code, file.path(dir, sprintf("code_%02d.R", i)), useBytes = TRUE)
+      writeLines(normalizePath(dirname(paths[[i]]), winslash = "/"), file.path(dir, sprintf("code_%02d.dir", i)))
+    })
+    system2(file.path(R.home("bin"), "Rscript"), c("--no-init-file", shQuote(c7_runner), shQuote(dir), shQuote(c7_sum_file), shQuote(normalizePath(file.path("www", "fonts"), winslash = "/"))), stdout = FALSE, stderr = FALSE)
+    if (file.exists(file.path(dir, "summary.rds"))) readRDS(file.path(dir, "summary.rds")) else list()
+  }
+  c7_cases <- list(
+    flip_labels = list(sp = utils::modifyList(c7_bar13, list(labels = "on")), g = ball_g),
+    lines_legend = list(sp = c7_lines8, g = pan_g),
+    lines_ends_annotated = list(sp = utils::modifyList(c7_lines3, list(annotate = list("highest", "lowest"))), g = pan_g),
+    scatter_names_annotated = list(sp = utils::modifyList(c7_hl, list(annotate = list("highest"))), g = pan_g),
+    heatmap_cells = list(sp = c7_heat, g = pan_g),
+    grouped_dropped = list(sp = utils::modifyList(c7_grouped, list(labels = "on")), g = pan_g),
+    own_caption = list(sp = c7_own, g = pan_g),
+    dot_annotated = list(sp = list(family = "dot", x = "region", y = "revenue", fn = "sum", title = "t", top_n = 8, annotate = list("lowest")), g = pan_g),
+    share_bars = list(sp = c7_kinds$share, g = pan_g),
+    dark_lines = list(sp = c7_lines3, g = pan_g, style = "dark"))
+  c7_card <- purrr::map(c7_cases, function(x) spec_plot(x$sp, x$g$data, x$g$cb, c7_pal(x$style %||% "clean")))
+  c7_codes <- purrr::map2(c7_cases, c7_card, function(x, p) spec_code(attr(p, "spec"), x$g$cb, x$g$path, c7_pal(x$style %||% "clean")))
+  c7_paths <- purrr::map_chr(c7_cases, function(x) x$g$path)
+  c7_runs <- c7_run_codes("c7_drawn", unname(c7_codes), unname(c7_paths))
+  c7_same <- purrr::map_lgl(seq_along(c7_cases), function(i) length(c7_runs) >= i && is.null(c7_runs[[i]]$error) && isTRUE(all.equal(c7_runs[[i]], plot_summary(c7_card[[i]]))))
+  purrr::walk(seq_along(c7_runs), function(i) if (!is.null(c7_runs[[i]]$error)) cat("      ", names(c7_cases)[i], ": ", c7_runs[[i]]$error, "\n", sep = ""))
+  cat("      the printed code, run in a fresh R process, gives the card's layers, scales, orientation and labels: ", sum(c7_same), " of ", length(c7_cases), "\n", sep = "")
+  # the same specs as the card stores them (no lint fields), printed: a sideways bar, the end labels and the legend's order are lost
+  c7_stored_codes <- purrr::map(c7_cases, function(x) tryCatch(spec_code(x$sp, x$g$cb, x$g$path, c7_pal(x$style %||% "clean")), error = function(e) "stop('the stored spec cannot be printed')"))
+  c7_stored_runs <- c7_run_codes("c7_stored", unname(c7_stored_codes), unname(c7_paths))
+  c7_stored_same <- stats::setNames(purrr::map_lgl(seq_along(c7_cases), function(i) length(c7_stored_runs) >= i && is.null(c7_stored_runs[[i]]$error) && isTRUE(all.equal(c7_stored_runs[[i]], plot_summary(c7_card[[i]])))), names(c7_cases))
+  cat("      the code of the stored spec gives the card's chart for: ", paste(names(c7_stored_same)[c7_stored_same], collapse = ", "), "
+", sep = "")
+  check("7C-3b: the code printed for a chart as drawn (the linted spec, the chosen palette and style) runs alone in a fresh R process and gives the same layers, scales, orientation and labels as the card's plot, for ten charts: sideways bars with labels, a legend's order, line ends and annotations, names and annotations on a scatter, heatmap cells, dropped labels, an analyst's caption, dots, shares, Dark",
+        length(c7_runs) == length(c7_cases) && all(c7_same))
+  check("7C-3b: the same check can fail: the code of the stored spec (which holds none of what the lint decided) does not give the card's chart for a sideways bar, line ends, names or any other chart where the lint decided something",
+        !c7_stored_same[["flip_labels"]] && !c7_stored_same[["lines_ends_annotated"]] && !c7_stored_same[["scatter_names_annotated"]] && sum(!c7_stored_same) >= 5L)
+  # the Code dialog prints the linted spec: the dialog's text is the code of attr(drawn plot, "spec")
+  if (exists("c6_state") && exists("stand_by")) {
+    c7_chart <- list(family = "line", x = "year", y = "price", color = "region", fn = "mean", title = "Price by region", annotate = list("highest"))
+    c7_si <- stand_by(function(user, i) to_json(list(charts = list(c7_chart))))
+    c7_state <- c6_state()
+    c7_dlg <- new.env()
+    assign("showModal", function(ui, session = NULL) assign("modal", ui, envir = c7_dlg), envir = globalenv())
+    tryCatch(shiny::testServer(mod_explore_server, args = list(state = c7_state, ask = c7_si$ask), {
+      session$flushReact()
+      session$setInputs(chat_user_input = "price by region over the years")
+      session$setInputs(c1_code = 1)
+    }), finally = rm("showModal", envir = globalenv()))
+    c7_pre <- if (!is.null(c7_dlg$modal)) regmatches(paste(as.character(c7_dlg$modal), collapse = ""), regexpr("(?s)<pre[^>]*>.*?</pre>", paste(as.character(c7_dlg$modal), collapse = ""), perl = TRUE))
+    c7_text <- if (length(c7_pre)) gsub("&amp;", "&", gsub("&quot;", "\"", gsub("&#39;", "'", gsub("&gt;", ">", gsub("&lt;", "<", sub("(?s)^<pre[^>]*>(.*)</pre>$", "\\1", c7_pre, perl = TRUE))))), fixed = TRUE)
+    c7_now <- shiny::isolate(list(spec = c7_state$charts[[1]]$spec, data = c7_state$data, cb = c7_state$codebook, palette = c7_state$palette))
+    c7_want <- spec_code(attr(spec_plot(c7_now$spec, c7_now$data, c7_now$cb, c7_now$palette), "spec"), c7_now$cb, c6_path, c7_now$palette)
+    c7_naive <- spec_code(c7_now$spec, c7_now$cb, c6_path, c7_now$palette)
+    check("7C-3b: the Code dialog of a card shows the code of the chart as drawn: its text is spec_code() of the linted spec (end labels, legend, annotation, source line), and not what the stored spec alone would print",
+          length(c7_text) == 1L && identical(c7_text, c7_want) && !identical(c7_text, c7_naive) && grepl("geom_text", c7_text, fixed = TRUE) && grepl("slice_max(", c7_text, fixed = TRUE) &&
+            grepl("caption = \"Source: sales.csv.", c7_text, fixed = TRUE) && !grepl("Source:", c7_naive, fixed = TRUE) &&
+            grepl("attr(p, \"spec\")", paste(readLines(file.path("R", "ui.R"), encoding = "UTF-8"), collapse = "\n"), fixed = TRUE))
+  }
+}
 
 # ---- the count -------------------------------------------------------------------
 
