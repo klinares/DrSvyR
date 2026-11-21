@@ -845,14 +845,15 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
 
 # The colours a chart is drawn with, from the palettes chosen for the report (R/theme.R): qual(n)
 #   for groups (at most max; the default palette when the chosen one has fewer than n colours, see
-#   palette_for_n(); on a dark style a colour too dark to see is swapped for a light one), seq for a
+#   palette_for_n(); in a style, a colour too dark to see is swapped for a light one and a colour too near the
+#   background is skipped, see palette_usable() in R/theme.R), seq for a
 #   continuous fill, div for a fill centred on a midpoint, and the style's own values: single (a series
 #   with no groups: the chosen palette's first colour), grey (behind a highlight), fit, outline, box_fill,
 #   rug and the values of the font variables its theme uses.
 spec_palette <- function(palette = chart_palette_default()) {
   style = palette$style %||% CHART_STYLE_DEFAULT
   st = chart_style(style)
-  qual = function(n) style_marks(chart_palette(n, palette_for_n(n, palette$qualitative)), style)
+  qual = function(n) chart_palette(n, palette_for_n(n, palette$qualitative, style), style)
   list(qual = qual, max = palette_groups_max(palette),
        seq = chart_sequential(palette$sequential), div = chart_diverging(palette$diverging),
        style = style, single = qual(1L)[[1]], grey = st$grey, fit = st$fit, outline = st$outline, box_fill = st$box_fill,
@@ -866,13 +867,26 @@ palette_note <- function(s, cb, palette = chart_palette_default()) {
   if (!coloured) return(NULL)
   n = colour_count(s, cb, s$color)
   q = palette$qualitative
-  used = palette_for_n(n, q)
+  style = palette$style %||% CHART_STYLE_DEFAULT
+  used = palette_for_n(n, q, style)
+  usable = palette_usable_max(q, style)
   c(if (!identical(used, q))
-      paste0("The palette ", CHART_PALETTES[[q]]$label, " has ", chart_palette_max(q), " colours and this chart needs ", n,
+      paste0("The palette ", CHART_PALETTES[[q]]$label, " has ", usable, if (usable == 1L) " colour" else " colours",
+             if (usable < chart_palette_max(q)) " that show against this style's background" else "", " and this chart needs ", n,
              ", so it is drawn with ", CHART_PALETTES[[used]]$label, "."),
-    # The colour-vision check at the number of colours drawn, for the palette actually used.
-    if (isTRUE(palette_cvd_at(used, n) < CHART_CVD_MARK))
+    # The colour-vision check at the number of colours drawn, on the colours actually used (swapped and
+    #   skipped ones included), for the palette actually used.
+    if (n <= palette_usable_max(used, style) && isTRUE(palette_cvd_used(used, n, style) < CHART_CVD_MARK))
       paste0("Some of these ", n, " colours are hard to tell apart for readers with colour-vision differences."))
+}
+
+# The colour-vision result of the first n colours of a qualitative palette as a style draws them: the stored
+#   result (palette_cvd_at()) when they are the palette's own first n colours, otherwise computed on the colours
+#   used (cvd_gap(); NA without colorspace).
+palette_cvd_used <- function(name, n, style = CHART_STYLE_DEFAULT) {
+  used = chart_palette(n, name, style)
+  own = utils::head(palette_colours(name), n)
+  if (identical(toupper(used), toupper(own))) palette_cvd_at(name, n) else round(cvd_gap(used), 1)
 }
 
 # How many colours a column needs, from the codebook (and top_n), so the plot and its code can be

@@ -160,6 +160,18 @@ style_marks <- function(cols, style = CHART_STYLE_DEFAULT) {
   ifelse(chart_contrast(cols, st$background) < CHART_MARK_CONTRAST, st$swap, cols)
 }
 
+# A colour that cannot be seen is not drawn: a palette colour under CHART_VISIBLE_DE (CIE2000 difference,
+#   farver) from a style's background (Stata's #FFFFFF and Moth's #F0F0E4 on white) is skipped, and the
+#   palette's usable count for that style drops by one. The rules combine in this order: the swap first (on
+#   Dark a colour too dark to see becomes the light `swap` colour, so it is kept, not skipped); then a swapped
+#   colour that repeats an earlier one is skipped (two groups would otherwise share one colour); then the skip
+#   for any colour still under CHART_VISIBLE_DE from the background.
+CHART_VISIBLE_DE <- 10
+
+# CIE2000 colour difference of each colour in `a` from the colour `b`.
+chart_colour_distance <- function(a, b)
+  as.numeric(farver::compare_colour(farver::decode_colour(a), farver::decode_colour(b), from_space = "rgb", method = "cie2000"))
+
 # Viridis, written out (viridisLite::viridis(7)) so the default needs no package.
 CHART_SEQUENTIAL <- c("#440154", "#443A83", "#31688E", "#21908C", "#35B779", "#8FD744", "#FDE725")
 
@@ -186,7 +198,7 @@ CHART_PALETTES <- list(
   tol_vibrant = list(label = "Paul Tol vibrant", source = "khroma (Paul Tol, Crameri)", kind = "qualitative", max = 7L, paletteer = "khroma::vibrant"),
   khro_mediumcontrast = list(label = "Paul Tol medium contrast", source = "khroma (Paul Tol, Crameri)", kind = "qualitative", max = 6L, paletteer = "khroma::mediumcontrast"),
   ggth_classic_color_blind = list(label = "Tableau Classic Color Blind", source = "ggthemes", kind = "qualitative", max = 10L, paletteer = "ggthemes::Classic_Color_Blind"),
-  ggth_stata_economist = list(label = "Stata Economist", source = "ggthemes", kind = "qualitative", max = 15L, paletteer = "ggthemes::stata_economist"),
+  ggth_stata_economist = list(label = "Stata blue-grey", source = "ggthemes", kind = "qualitative", max = 15L, paletteer = "ggthemes::stata_economist"),
   ggth_excel_office_theme = list(label = "Excel Office Theme", source = "ggthemes", kind = "qualitative", max = 6L, paletteer = "ggthemes::excel_Office_Theme"),
   metb_archambault = list(label = "Archambault", source = "MetBrewer", kind = "qualitative", max = 7L, paletteer = "MetBrewer::Archambault"),
   metb_veronese = list(label = "Veronese", source = "MetBrewer", kind = "qualitative", max = 7L, paletteer = "MetBrewer::Veronese"),
@@ -229,11 +241,13 @@ CHART_PALETTES <- list(
   rcar_brwnyl = list(label = "BrwnYl", source = "CARTOColors", kind = "sequential", paletteer = "rcartocolor::BrwnYl"),
   rcar_bluyl = list(label = "BluYl", source = "CARTOColors", kind = "sequential", paletteer = "rcartocolor::BluYl"),
   # MetBrewer records no kind for its palettes (paletteer's table lists all 56 as qualitative). The kind of the
-  #   sequential and diverging MetBrewer palettes below is OURS, by the lightness rule (see metb_lightness_kind()
-  #   in tests/smoke.R): CIELAB lightness of the colours in MetBrewer's stored order moves one way (at most one
-  #   step of under 3 units back) for a sequential one, or has a single extreme in the middle third with ends
-  #   more than 60 degrees apart in hue for a diverging one; each is offered only if, drawn as a ramp, it reaches
-  #   the colour-vision mark. It is not MetBrewer's classification.
+  #   sequential and diverging MetBrewer palettes below is OURS, by the lightness rule (see m7_kind() in
+  #   tests/smoke.R): CIELAB lightness of the colours in MetBrewer's stored order moves one way (at most one
+  #   step of under 3 units back) for a sequential one; for a diverging one it has a single extreme that is the
+  #   middle colour (odd length) or one of the two middle colours (even length), the two end colours within 20
+  #   lightness units of each other (so that equal distances from a heatmap's midpoint look equal), and the ends
+  #   more than 60 degrees apart in hue; each is offered only if, drawn as a ramp, it reaches the colour-vision
+  #   mark. It is not MetBrewer's classification.
   metb_hokusai2_seq = list(label = "Hokusai2", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::Hokusai2"),
   metb_hokusai3_seq = list(label = "Hokusai3", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::Hokusai3"),
   metb_tam_seq = list(label = "Tam", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::Tam"),
@@ -258,9 +272,6 @@ CHART_PALETTES <- list(
   metb_cassatt1_div = list(label = "Cassatt1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Cassatt1"),
   metb_cassatt2_div = list(label = "Cassatt2", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Cassatt2"),
   metb_demuth_div = list(label = "Demuth", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Demuth"),
-  metb_hiroshige_div = list(label = "Hiroshige", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Hiroshige"),
-  metb_hokusai1_div = list(label = "Hokusai1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Hokusai1"),
-  metb_homer1_div = list(label = "Homer1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Homer1"),
   metb_ingres_div = list(label = "Ingres", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Ingres"),
   metb_isfahan1_div = list(label = "Isfahan1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Isfahan1"),
   metb_johnson_div = list(label = "Johnson", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Johnson"),
@@ -268,8 +279,6 @@ CHART_PALETTES <- list(
   metb_moreau_div = list(label = "Moreau", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Moreau"),
   metb_okeeffe1_div = list(label = "OKeeffe1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::OKeeffe1"),
   metb_troy_div = list(label = "Troy", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Troy"),
-  metb_vangogh1_div = list(label = "VanGogh1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::VanGogh1"),
-  metb_veronese_div = list(label = "Veronese", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Veronese"),
   blue_red = list(label = "Blue-red", source = "Built in", kind = "diverging",
                   colours = c("#4A6FE3", "#7086E1", "#8F9DE1", "#ABB4E2", "#C7CBE3", "#E2E2E2", "#E6C4C9", "#E5A5B1",
                               "#E28699", "#DB6581", "#D33F6A")))
@@ -298,7 +307,7 @@ CHART_PALETTE_CVD <- c(okabe_ito = 12.1, tol_bright = 8.7, tol_muted = 17.7, tol
   khro_vik = 28.2, khro_bam = 24.1, ggth_red_blue_white = 25.2, ggth_orange_blue_white = 25.1,
   ggth_classic_orange_white_blue = 23.5, nord_silver_mine = 8.5, pnwc_shuksan2 = 15.0,
   pnwc_anemone = 8.3, rcar_earth = 15.2, rcar_armyrose = 12.5, rcar_geyser = 11.4, blue_red = 13.9,
-  metb_isfahan1 = 13.3, metb_cassatt2 = 12.0, metb_moreau = 10.7, metb_renoir = 10.6, metb_tsimshian = 10.0, metb_lakota = 9.9, metb_klimt = 9.7, metb_benedictus_div = 15.8, metb_cassatt1_div = 15.9, metb_cassatt2_div = 18.4, metb_demuth_div = 21.0, metb_hiroshige_div = 14.4, metb_hokusai1_div = 8.2, metb_hokusai2_seq = 10.5, metb_hokusai3_seq = 9.0, metb_homer1_div = 14.4, metb_ingres_div = 15.5, metb_isfahan1_div = 19.7, metb_johnson_div = 14.6, metb_juarez_div = 9.1, metb_moreau_div = 17.4, metb_okeeffe1_div = 28.1, metb_tam_seq = 10.8, metb_troy_div = 12.2, metb_vangogh1_div = 9.8, metb_vangogh3_seq = 11.9, metb_veronese_div = 12.1)
+  metb_isfahan1 = 13.3, metb_cassatt2 = 12.0, metb_moreau = 10.7, metb_renoir = 10.6, metb_tsimshian = 10.0, metb_lakota = 9.9, metb_klimt = 9.7, metb_benedictus_div = 15.8, metb_cassatt1_div = 15.9, metb_cassatt2_div = 18.4, metb_demuth_div = 21.0, metb_hokusai2_seq = 10.5, metb_hokusai3_seq = 9.0, metb_ingres_div = 15.5, metb_isfahan1_div = 19.7, metb_johnson_div = 14.6, metb_juarez_div = 9.1, metb_moreau_div = 17.4, metb_okeeffe1_div = 28.1, metb_tam_seq = 10.8, metb_troy_div = 12.2, metb_vangogh3_seq = 11.9)
 
 # The same check for every number of colours a qualitative palette can show, 2 to its `max`: element
 #   n - 1 is the result for the first n colours (read it with palette_cvd_at()). The value at n =
@@ -417,25 +426,45 @@ palette_cvd <- function(name, n = CHART_CVD_N) {
   round(cvd_gap(cols), 1)
 }
 
+# The colours of a qualitative palette that a style shows, in order: the first `max` of them, swapped
+#   (style_marks()), without a swapped colour that repeats an earlier one, and without those too near the
+#   style's background (CHART_VISIBLE_DE).
+palette_usable <- function(name, style = CHART_STYLE_DEFAULT) {
+  own = utils::head(palette_colours(name), chart_palette_max(name))
+  cols = style_marks(own, style)
+  cols = cols[!(cols != own & duplicated(cols))]
+  cols[chart_colour_distance(cols, chart_style(style)$background) >= CHART_VISIBLE_DE]
+}
+
+# How many groups a qualitative palette can colour in a style: its number of usable colours. With no
+#   style (or when the colours cannot be read), its `max`.
+palette_usable_max <- function(name, style = NULL) {
+  if (is.null(style)) return(chart_palette_max(name))
+  tryCatch(length(palette_usable(name, style)), error = function(e) chart_palette_max(name))
+}
+
 # The qualitative palette a chart that needs n colours is drawn with: the chosen one, or the
-#   default when the chosen one has fewer than n colours (it is not stretched), as long as the
-#   default has enough.
-palette_for_n <- function(n, name = chart_palette_default()$qualitative) {
+#   default when the chosen one has fewer than n usable colours in the style (it is not stretched), as
+#   long as the default has enough.
+palette_for_n <- function(n, name = chart_palette_default()$qualitative, style = NULL) {
   def = chart_palette_default()$qualitative
-  if (n > chart_palette_max(name) && n <= chart_palette_max(def)) def else name
+  if (n > palette_usable_max(name, style) && n <= palette_usable_max(def, style)) def else name
 }
 
 # The most groups a chart can colour with a report's palettes: the chosen qualitative palette's
-#   max, or the default's when that is larger (palette_for_n()).
+#   usable count in its style, or the default's when that is larger (palette_for_n()).
 palette_groups_max <- function(palette = chart_palette_default())
-  max(chart_palette_max(palette$qualitative), chart_palette_max(chart_palette_default()$qualitative))
+  max(palette_usable_max(palette$qualitative, palette$style), palette_usable_max(chart_palette_default()$qualitative, palette$style))
 
-# n colours of a qualitative palette; an error past its max.
-chart_palette <- function(n, name = chart_palette_default()$qualitative) {
+# n colours of a qualitative palette; an error past its max. With a style, the colours that style shows
+#   (palette_usable()), and an error past their number.
+chart_palette <- function(n, name = chart_palette_default()$qualitative, style = NULL) {
   e = CHART_PALETTES[[name]]
   if (is.null(e) || !identical(e$kind, "qualitative")) stop("'", name, "' is not a qualitative palette.", call. = FALSE)
-  if (n > e$max) stop("The palette ", e$label, " colours at most ", e$max, " groups; ", n, " were asked for.", call. = FALSE)
-  palette_colours(name)[seq_len(n)]
+  most = palette_usable_max(name, style)
+  if (n > most) stop("The palette ", e$label, " colours at most ", most, " groups", if (!is.null(style) && most < e$max) " in this style",
+                     "; ", n, " were asked for.", call. = FALSE)
+  if (is.null(style)) palette_colours(name)[seq_len(n)] else palette_usable(name, style)[seq_len(n)]
 }
 
 # The most groups a qualitative palette shows.

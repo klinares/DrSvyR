@@ -2635,9 +2635,9 @@ if (!is.null(pan_g)) {
   p6_code <- spec_code(attr(p6_plot, "spec"), pan_g$cb, pan_g$path, p6_small)
   p6_ok_plot <- spec_plot(utils::modifyList(p6_line, list(filter = list(list(column = "region", op = "in", value = list("North", "South", "East"))))),
                           pan_g$data, pan_g$cb, p6_small)
-  check("6b-1: a qualitative palette with fewer colours than a chart needs is not stretched: the chart (8 regions, Moth has 5) is drawn and coded with Okabe-Ito and its notes say so",
+  check("6b-1: a qualitative palette with fewer colours than a chart needs is not stretched: the chart (8 regions, Moth has 5, of which 4 show on white) is drawn and coded with Okabe-Ito and its notes say so",
         all(p6_cols %in% chart_palette(8, "okabe_ito")) && length(p6_cols) == 8L &&
-          any(grepl("The palette Moth has 5 colours and this chart needs 8, so it is drawn with Okabe-Ito.", attr(p6_plot, "notes"), fixed = TRUE)) &&
+          any(grepl("The palette Moth has 4 colours that show against this style's background and this chart needs 8, so it is drawn with Okabe-Ito.", attr(p6_plot, "notes"), fixed = TRUE)) &&
           grepl(chart_palette(8, "okabe_ito")[8], p6_code, fixed = TRUE) && !any(grepl("The palette Moth", attr(p6_ok_plot, "notes"), fixed = TRUE)))
 }
 p6_sw <- paste(as.character(palette_swatch_script(c("okabe_ito", "metb_veronese", "viridis"))), collapse = "")
@@ -2863,7 +2863,9 @@ if (length(find.package("MetBrewer", quiet = TRUE)) && length(find.package("colo
     lab = m7_lch(toupper(substr(MetBrewer::MetPalettes[[p]][[1]], 1, 7)))
     v = lab$l; n = length(v)
     if (sign(v[n] - v[1]) != 0 && m7_few(m7_back(v, sign(v[n] - v[1])))) return("sequential")
-    mid = function(k) (k - 1) / (n - 1) >= 1 / 3 && (k - 1) / (n - 1) <= 2 / 3 && k > 1 && k < n
+    # balanced (a-006): the one extreme is the middle colour (odd length) or one of the two middle colours (even
+    #   length), and the two end colours are within 20 lightness units of each other
+    mid = function(k) (if (n %% 2L == 1L) k == (n + 1L) / 2L else k %in% c(n / 2L, n / 2L + 1L)) && abs(v[1] - v[n]) <= 20
     one = function(k, dir) m7_few(c(m7_back(v[1:k], dir), m7_back(v[k:n], -dir)))
     peak = mid(which.max(v)) && one(which.max(v), 1)
     trough = mid(which.min(v)) && one(which.min(v), -1)
@@ -2886,9 +2888,29 @@ if (length(find.package("MetBrewer", quiet = TRUE)) && length(find.package("colo
   })
   # every candidate by the lightness rule is either offered with its kind or fails the mark; nothing offered fails the rule
   m7_wanted <- paste0("metb_", tolower(m7_all), ifelse(purrr::map_chr(m7_all, m7_kind) == "sequential", "_seq", "_div"))[!is.na(m7_scored) & m7_scored >= CHART_CVD_MARK]
-  check(paste0("7A-6: the MetBrewer sequential and diverging palettes offered (", length(m7_names), ") are exactly those whose kind, by the lightness rule on CIELAB L of the stored colours, is sequential or diverging and whose ramp reaches the colour-vision mark; each is under source MetBrewer with the kind the rule gives"),
+  check(paste0("7A-6: the MetBrewer sequential and diverging palettes offered (", length(m7_names), ") are exactly those whose kind, by the lightness rule on CIELAB L of the stored colours (a diverging one balanced: its extreme at the middle, its ends within 20 L units), is sequential or diverging and whose ramp reaches the colour-vision mark; each is under source MetBrewer with the kind the rule gives"),
         setequal(m7_names, m7_wanted) && all(purrr::map2_lgl(m7_cont, m7_have, function(e, p) identical(e$kind, m7_kind(p)) && identical(e$source, "MetBrewer"))) &&
           all(purrr::map_lgl(m7_names, function(k) isTRUE(CHART_PALETTE_CVD[[k]] >= CHART_CVD_MARK))))
+  # a-006: diverging means balanced. Kept and dropped as the manager's table said; the dropped five stay out as diverging
+  #   (Veronese stays a qualitative set), and a balanced test is shown to be able to fail on their lightness sequences.
+  m7_keep <- c("Benedictus", "Cassatt1", "Cassatt2", "Demuth", "Ingres", "Isfahan1", "Johnson", "Juarez", "Moreau", "OKeeffe1", "Troy")
+  m7_drop <- c("Hiroshige", "Hokusai1", "Homer1", "VanGogh1", "Veronese")
+  m7_div_have <- m7_have[purrr::map_chr(m7_cont, "kind") == "diverging"]
+  check("7A-6: diverging means balanced: the MetBrewer diverging palettes offered are exactly Benedictus, Cassatt1, Cassatt2, Demuth, Ingres, Isfahan1, Johnson, Juarez, Moreau, OKeeffe1 and Troy; Hiroshige, Hokusai1, Homer1, VanGogh1 and Veronese are not offered as diverging",
+        setequal(unname(m7_div_have), m7_keep) && !any(m7_drop %in% m7_div_have) && !any(paste0("metb_", tolower(m7_drop), "_div") %in% names(CHART_PALETTES)) &&
+          !any(paste0("metb_", tolower(m7_drop), "_div") %in% names(CHART_PALETTE_CVD)) && !is.null(CHART_PALETTES$metb_veronese) &&
+          all(purrr::map_chr(m7_drop, m7_kind) != "diverging"))
+  # the same test on every other diverging palette on offer: reported, none removed
+  m7_other_div <- purrr::keep(CHART_PALETTES, function(e) identical(e$kind, "diverging") && !identical(e$source, "MetBrewer"))
+  m7_other_fail <- purrr::keep(names(m7_other_div), function(k) {
+    v = m7_lch(toupper(palette_colours(k)))$l; n = length(v); ext = c(which.max(v), which.min(v))
+    mid = if (n %% 2L == 1L) (n + 1L) / 2L else c(n / 2L, n / 2L + 1L)
+    !(any(ext %in% mid) && abs(v[1] - v[n]) <= 20)
+  })
+  cat("      diverging palettes of other sources that fail the balanced test (kept, not removed): ",
+      paste(purrr::map_chr(m7_other_fail, function(k) { v = m7_lch(toupper(palette_colours(k)))$l
+        paste0(k, " L ", paste(round(v[unique(round(seq(1, length(v), length.out = min(length(v), 13L))))]), collapse = " ")) }), collapse = "; "), "
+", sep = "")
   m7_qual <- c("Isfahan1", "Cassatt2", "Moreau", "Renoir", "Tsimshian", "Lakota", "Klimt")
   check("7A-6: the seven added MetBrewer qualitative sets are listed with source MetBrewer, max = their number of colours, and a stored result at every n and at five",
         all(purrr::map_lgl(m7_qual, function(p) {
@@ -3178,6 +3200,76 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
           all(purrr::map_lgl(b7_styles, function(s) identical(b7_calc(chart_theme(s), "strip.text.x")$face, if (identical(CHART_STYLES[[s]]$strip, "bold")) "bold" else "plain"))))
 } else cat("skip  7B: panel.csv or colorspace is not available\n")
 
+
+
+
+# ---- Phase 7 C: the manager's changes (a-006): a palette label that names no publication, a colour that cannot be seen is not drawn -----
+
+c0_two <- function(style, q) utils::modifyList(chart_palette_default(), list(style = style, qualitative = q))
+if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE) && paletteer_installed()) {
+  # a. no palette label (or source, or the label the select shows) names a publication; the ggthemes set is "Stata blue-grey"
+  c0_shown <- unlist(purrr::map(c("qualitative", "sequential", "diverging"), function(k) {
+    g = chart_palette_groups(k)
+    c(names(g), names(unlist(unname(g))))
+  }))
+  c0_words <- c(purrr::map_chr(CHART_PALETTES, "label"), purrr::map_chr(CHART_PALETTES, "source"), c0_shown)
+  check("7C-0a: no palette label, source or select label names a publication, and the ggthemes Stata set is offered as 'Stata blue-grey' (source ggthemes, paletteer name unchanged)",
+        !any(grepl(b7_banned, c0_words, ignore.case = TRUE)) && identical(CHART_PALETTES$ggth_stata_economist$label, "Stata blue-grey") &&
+          identical(CHART_PALETTES$ggth_stata_economist$source, "ggthemes") && identical(CHART_PALETTES$ggth_stata_economist$paletteer, "ggthemes::stata_economist") &&
+          any(grepl("Stata blue-grey", c0_shown, fixed = TRUE)))
+
+  # c. a colour under 10 dE (CIE2000) from a style's background is skipped; swap first, then repeats of the swap colour, then the skip
+  c0_stata <- palette_colours("ggth_stata_economist")
+  c0_moth <- palette_colours("pnwc_moth")
+  c0_de <- function(cols, style) chart_colour_distance(cols, CHART_STYLES[[style]]$background)
+  c0_light <- c("clean", "minimal", "newspaper")
+  check("7C-0c: on a white style Stata blue-grey's #FFFFFF and Moth's #F0F0E4 are skipped: their usable counts are 14 of 15 and 4 of 5, the colours drawn are the rest in order, and every usable colour is 10 dE or more from the background",
+        all(purrr::map_lgl(c0_light, function(s)
+          identical(palette_usable_max("ggth_stata_economist", s), 14L) && identical(palette_usable_max("pnwc_moth", s), 4L) &&
+            identical(palette_usable("ggth_stata_economist", s), c0_stata[-1]) && identical(palette_usable("pnwc_moth", s), c0_moth[1:4]) &&
+            all(c0_de(palette_usable("ggth_stata_economist", s), s) >= CHART_VISIBLE_DE) && all(c0_de(palette_usable("pnwc_moth", s), s) >= CHART_VISIBLE_DE) &&
+            identical(chart_palette(2L, "ggth_stata_economist", s), c0_stata[2:3]))) &&
+          identical(palette_groups_max(c0_two("clean", "ggth_stata_economist")), 14L) && identical(palette_groups_max(c0_two("clean", "pnwc_moth")), 8L) &&
+          identical(palette_usable_max("ggth_stata_economist"), 15L) && identical(chart_palette(2L, "ggth_stata_economist"), c0_stata[1:2]) &&
+          isTRUE(tryCatch({ chart_palette(15L, "ggth_stata_economist", "clean"); FALSE }, error = function(e) grepl("at most 14 groups in this style", conditionMessage(e)))))
+  c0_regions5 <- list(family = "line", x = "year", y = "revenue", color = "region", fn = "sum", title = "t",
+                      filter = list(list(column = "region", op = "in", value = list("North", "South", "East", "West", "Central"))))
+  c0_regions6 <- list(family = "line", x = "year", y = "revenue", color = "region", fn = "sum", title = "t",
+                      filter = list(list(column = "region", op = "in", value = list("North", "South", "East", "West", "Central", "Coast"))))
+  c0_cols <- function(sp, style, q) tryCatch({
+    p = spec_plot(sp, pan_g$data, pan_g$cb, c0_two(style, q))
+    list(p = p, cols = b7_hex(unique(ggplot2::ggplot_build(p)$data[[1]]$colour)), notes = attr(p, "notes"))
+  }, error = function(e) list(p = NULL, cols = character(0), notes = conditionMessage(e)))
+  c0_a <- c0_cols(c0_regions5, "clean", "pnwc_moth")
+  c0_b <- c0_cols(c0_regions6, "clean", "ggth_stata_economist")
+  c0_d <- c0_cols(c0_regions5, "dark", "pnwc_moth")
+  c0_code <- tryCatch(spec_code(attr(c0_b$p, "spec"), pan_g$cb, pan_g$path, c0_two("clean", "ggth_stata_economist")), error = function(e) "")
+  c0_values <- regmatches(c0_code, regexpr("scale_colour_manual\\(values = c\\([^)]*\\)", c0_code))   # the page's own background is #FFFFFF too
+  check("7C-0c: a chart needing 5 colours with Moth on Clean (4 usable) is drawn with Okabe-Ito and says Moth has 4 colours that show; 6 groups in Stata blue-grey on Clean are drawn in colours 2 to 7, never #FFFFFF, in the chart and in its code",
+        identical(c0_a$cols, b7_hex(palette_colours("okabe_ito")[1:5])) &&
+          any(grepl("The palette Moth has 4 colours that show against this style's background and this chart needs 5, so it is drawn with Okabe-Ito", c0_a$notes, fixed = TRUE)) &&
+          setequal(c0_b$cols, c0_stata[2:7]) && !"#FFFFFF" %in% c0_b$cols && length(c0_values) == 1L && !grepl("#FFFFFF", c0_values, fixed = TRUE) && grepl(c0_stata[[2]], c0_values, fixed = TRUE))
+  check("7C-0c: the colour-vision result is taken on the colours used: Stata blue-grey drawn without its white gives 5.0 at six colours (the stored result, for the palette with its white, is 9.1), and the lint note follows it",
+        identical(palette_cvd_used("ggth_stata_economist", 6L, "clean"), round(cvd_gap(c0_stata[2:7]), 1)) && identical(palette_cvd_at("ggth_stata_economist", 6L), 9.1) &&
+          palette_cvd_used("ggth_stata_economist", 6L, "clean") < CHART_CVD_MARK && any(grepl("Some of these 6 colours are hard to tell apart", c0_b$notes, fixed = TRUE)) &&
+          identical(palette_cvd_used("ggth_stata_economist", 3L, "clean"), palette_cvd_at("ggth_stata_economist", 3L)) &&
+          identical(palette_cvd_used("ggth_stata_economist", 6L, "dark"), round(cvd_gap(chart_palette(6L, "ggth_stata_economist", "dark")), 1)))
+  # Dark: the swap is kept (Okabe-Ito's black becomes the light colour, nothing is lost: 8 usable), a swapped colour that repeats is skipped,
+  #   and no colour any palette offers on any style is under 10 dE from its background, nor on Dark under 3:1
+  c0_qual_names <- names(chart_palettes("qualitative"))
+  c0_all <- purrr::map(stats::setNames(names(CHART_STYLES), names(CHART_STYLES)), function(s)
+    purrr::map(stats::setNames(c0_qual_names, c0_qual_names), function(k) palette_usable(k, s)))
+  c0_lost <- purrr::map(c0_all, function(per) purrr::keep(purrr::imap_int(per, function(cols, k) length(cols) - CHART_PALETTES[[k]]$max), function(d) d < 0L))
+  cat("      palettes with fewer usable colours than their maximum, by style: ",
+      paste(names(c0_lost), purrr::map_chr(c0_lost, function(l) if (length(l)) paste(paste0(names(l), " ", l), collapse = ", ") else "none"), sep = " = ", collapse = "; "), "\n", sep = "")
+  check("7C-0c: Dark keeps the swap: Okabe-Ito has 8 usable colours with the black replaced by the light colour; a swapped colour that repeats an earlier one is skipped (Moth: 4 of 5), so no group shares a swapped colour; across every palette and style no colour offered is under 10 dE from its background, and none on Dark under 3:1",
+        identical(palette_usable_max("okabe_ito", "dark"), 8L) && CHART_STYLES$dark$swap %in% palette_usable("okabe_ito", "dark") && !"#000000" %in% palette_usable("okabe_ito", "dark") &&
+          identical(palette_usable_max("pnwc_moth", "dark"), 4L) &&
+          all(purrr::map_lgl(c0_all$dark, function(cols) sum(cols == CHART_STYLES$dark$swap) <= 1L)) &&
+          all(purrr::map_lgl(names(c0_all), function(s) all(purrr::map_lgl(c0_all[[s]], function(cols) !length(cols) || all(c0_de(cols, s) >= CHART_VISIBLE_DE))))) &&
+          all(purrr::map_lgl(c0_all$dark, function(cols) all(b7_ratio(cols, CHART_STYLES$dark$background) >= CHART_MARK_CONTRAST))) &&
+          identical(c0_d$cols, b7_hex(palette_colours("okabe_ito")[1:5])) && any(grepl("has 4 colours", c0_d$notes, fixed = TRUE)))
+} else cat("skip  7C-0: panel.csv, colorspace or paletteer is not available\n")
 
 # ---- the count -------------------------------------------------------------------
 

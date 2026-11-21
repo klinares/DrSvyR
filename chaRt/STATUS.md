@@ -1,5 +1,23 @@
 # chaRt: status
 
+## Phase 7, notes carried while it is built (2026-11-20)
+
+Branch `chart`. Not pushed. The full Phase 7 report goes to `manager/done-7.md` at its end; these are the things a
+later reader of this file needs before then.
+
+- **The plotly version shows less than the static chart.** plotly shows semibold as bold (it has no weight between
+  regular and bold for a font family), and it drops Magazine's lifted value-axis labels (the static chart sets them
+  above their grid line with a theme margin that plotly does not carry). Everything else a style sets (colours, grid,
+  fonts, the Newspaper rule, the palette, the Dark swap) is kept; see Part B's report.
+- **Diverging means balanced** (a-006). A diverging palette is offered only if its lightness has one extreme at the
+  middle colour (or one of the two middle colours when the length is even) and its two end colours are within 20
+  lightness units. MetBrewer's diverging sets kept: Benedictus, Cassatt1, Cassatt2, Demuth, Ingres, Isfahan1, Johnson,
+  Juarez, Moreau, OKeeffe1, Troy; dropped as diverging: Hiroshige, Hokusai1, Homer1, VanGogh1, Veronese.
+- **A colour that cannot be seen is not drawn** (a-006). In any style a palette colour under 10 dE (CIE2000) from the
+  style's background is skipped and the palette's usable count for that style drops (`palette_usable()` in
+  `R/theme.R`); on Dark the swap of a too-dark colour for the light one comes first, then a swapped colour that repeats
+  an earlier one is skipped, then the skip.
+
 ## Phase 6b, 2026-11-20: more palettes, a working signal, a clean folder
 
 Branch `chart`. Not pushed. No model call. Kevin approved the proposals at the STOP ("Go, as

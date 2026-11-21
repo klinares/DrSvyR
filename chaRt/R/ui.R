@@ -1256,7 +1256,7 @@ mod_explore_server <- function(id, state, ask = llm_json) {
     #   and it changes no text.
     observeEvent(input$style, {
       pal = isolate(palette())
-      sample_colour = style_marks(chart_palette(1L, pal$qualitative), pal$style %||% CHART_STYLE_DEFAULT)[[1]]
+      sample_colour = chart_palette(1L, pal$qualitative, pal$style %||% CHART_STYLE_DEFAULT)[[1]]
       showModal(modalDialog(
         title = "Style", size = "l", easyClose = TRUE, footer = modalButton("Close"),
         tags$p(class = "small text-muted", "The style and the palettes apply to every chart on the canvas. Changing one draws the charts again; ",
