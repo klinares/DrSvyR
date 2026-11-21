@@ -605,7 +605,7 @@ one_line <- function(x) trimws(gsub("[[:space:]]+", " ", as.character(x)))
 #   has the warning line under it); for a failure the sentences. Whatever the model wrote goes through md_text().
 chat_reply_text <- function(r) {
   if (identical(r$kind, "charts")) {
-    says = purrr::keep(purrr::map_chr(r$charts, function(ch) if (is_text1(ch$spec$say)) ch$spec$say else NA_character_), Negate(is.na))
+    says = purrr::keep(purrr::map_chr(r$charts, function(ch) if (is_text1(ch$say)) ch$say else if (is_text1(ch$spec$say)) ch$spec$say else NA_character_), Negate(is.na))
     not_drawn = purrr::map_chr(r$failed, function(f)
       paste0("Chart ", f$number, if (is_text1(f$spec$title)) paste0(" (", md_text(f$spec$title), ")"), " was not drawn: ", md_text(paste(f$sentences, collapse = " "))))
     return(paste(c(if (length(says)) paste0("- ", md_text(says), collapse = "\n"), if (length(r$charts)) "Added to the canvas.", md_text(r$cannot), not_drawn),

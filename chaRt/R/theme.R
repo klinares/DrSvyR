@@ -46,6 +46,13 @@ CHART_PALETTES <- list(
   metb_archambault = list(label = "Archambault", source = "MetBrewer", kind = "qualitative", max = 7L, paletteer = "MetBrewer::Archambault"),
   metb_veronese = list(label = "Veronese", source = "MetBrewer", kind = "qualitative", max = 7L, paletteer = "MetBrewer::Veronese"),
   metb_johnson = list(label = "Johnson", source = "MetBrewer", kind = "qualitative", max = 5L, paletteer = "MetBrewer::Johnson"),
+  metb_isfahan1 = list(label = "Isfahan1", source = "MetBrewer", kind = "qualitative", max = 8L, paletteer = "MetBrewer::Isfahan1"),
+  metb_cassatt2 = list(label = "Cassatt2", source = "MetBrewer", kind = "qualitative", max = 10L, paletteer = "MetBrewer::Cassatt2"),
+  metb_moreau = list(label = "Moreau", source = "MetBrewer", kind = "qualitative", max = 7L, paletteer = "MetBrewer::Moreau"),
+  metb_renoir = list(label = "Renoir", source = "MetBrewer", kind = "qualitative", max = 12L, paletteer = "MetBrewer::Renoir"),
+  metb_tsimshian = list(label = "Tsimshian", source = "MetBrewer", kind = "qualitative", max = 7L, paletteer = "MetBrewer::Tsimshian"),
+  metb_lakota = list(label = "Lakota", source = "MetBrewer", kind = "qualitative", max = 6L, paletteer = "MetBrewer::Lakota"),
+  metb_klimt = list(label = "Klimt", source = "MetBrewer", kind = "qualitative", max = 6L, paletteer = "MetBrewer::Klimt"),
   natp_kingscanyon = list(label = "Kings Canyon", source = "NatParksPalettes", kind = "qualitative", max = 6L, paletteer = "NatParksPalettes::KingsCanyon"),
   natp_deathvalley = list(label = "Death Valley", source = "NatParksPalettes", kind = "qualitative", max = 7L, paletteer = "NatParksPalettes::DeathValley"),
   natp_torres = list(label = "Torres", source = "NatParksPalettes", kind = "qualitative", max = 10L, paletteer = "NatParksPalettes::Torres"),
@@ -76,6 +83,16 @@ CHART_PALETTES <- list(
   rcar_darkmint = list(label = "DarkMint", source = "CARTOColors", kind = "sequential", paletteer = "rcartocolor::DarkMint"),
   rcar_brwnyl = list(label = "BrwnYl", source = "CARTOColors", kind = "sequential", paletteer = "rcartocolor::BrwnYl"),
   rcar_bluyl = list(label = "BluYl", source = "CARTOColors", kind = "sequential", paletteer = "rcartocolor::BluYl"),
+  # MetBrewer records no kind for its palettes (paletteer's table lists all 56 as qualitative). The kind of the
+  #   sequential and diverging MetBrewer palettes below is OURS, by the lightness rule (see metb_lightness_kind()
+  #   in tests/smoke.R): CIELAB lightness of the colours in MetBrewer's stored order moves one way (at most one
+  #   step of under 3 units back) for a sequential one, or has a single extreme in the middle third with ends
+  #   more than 60 degrees apart in hue for a diverging one; each is offered only if, drawn as a ramp, it reaches
+  #   the colour-vision mark. It is not MetBrewer's classification.
+  metb_hokusai2_seq = list(label = "Hokusai2", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::Hokusai2"),
+  metb_hokusai3_seq = list(label = "Hokusai3", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::Hokusai3"),
+  metb_tam_seq = list(label = "Tam", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::Tam"),
+  metb_vangogh3_seq = list(label = "VanGogh3", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::VanGogh3"),
   rdbu = list(label = "ColorBrewer RdBu", source = "ColorBrewer", kind = "diverging", paletteer = "RColorBrewer::RdBu"),
   puor = list(label = "ColorBrewer PuOr", source = "ColorBrewer", kind = "diverging", paletteer = "RColorBrewer::PuOr"),
   brbg = list(label = "ColorBrewer BrBG", source = "ColorBrewer", kind = "diverging", paletteer = "RColorBrewer::BrBG"),
@@ -92,6 +109,22 @@ CHART_PALETTES <- list(
   rcar_earth = list(label = "Earth", source = "CARTOColors", kind = "diverging", paletteer = "rcartocolor::Earth"),
   rcar_armyrose = list(label = "ArmyRose", source = "CARTOColors", kind = "diverging", paletteer = "rcartocolor::ArmyRose"),
   rcar_geyser = list(label = "Geyser", source = "CARTOColors", kind = "diverging", paletteer = "rcartocolor::Geyser"),
+  metb_benedictus_div = list(label = "Benedictus", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Benedictus"),
+  metb_cassatt1_div = list(label = "Cassatt1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Cassatt1"),
+  metb_cassatt2_div = list(label = "Cassatt2", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Cassatt2"),
+  metb_demuth_div = list(label = "Demuth", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Demuth"),
+  metb_hiroshige_div = list(label = "Hiroshige", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Hiroshige"),
+  metb_hokusai1_div = list(label = "Hokusai1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Hokusai1"),
+  metb_homer1_div = list(label = "Homer1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Homer1"),
+  metb_ingres_div = list(label = "Ingres", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Ingres"),
+  metb_isfahan1_div = list(label = "Isfahan1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Isfahan1"),
+  metb_johnson_div = list(label = "Johnson", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Johnson"),
+  metb_juarez_div = list(label = "Juarez", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Juarez"),
+  metb_moreau_div = list(label = "Moreau", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Moreau"),
+  metb_okeeffe1_div = list(label = "OKeeffe1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::OKeeffe1"),
+  metb_troy_div = list(label = "Troy", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Troy"),
+  metb_vangogh1_div = list(label = "VanGogh1", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::VanGogh1"),
+  metb_veronese_div = list(label = "Veronese", source = "MetBrewer", kind = "diverging", paletteer = "MetBrewer::Veronese"),
   blue_red = list(label = "Blue-red", source = "Built in", kind = "diverging",
                   colours = c("#4A6FE3", "#7086E1", "#8F9DE1", "#ABB4E2", "#C7CBE3", "#E2E2E2", "#E6C4C9", "#E5A5B1",
                               "#E28699", "#DB6581", "#D33F6A")))
@@ -119,7 +152,8 @@ CHART_PALETTE_CVD <- c(okabe_ito = 12.1, tol_bright = 8.7, tol_muted = 17.7, tol
   rcar_bluyl = 11.2, rdbu = 22.9, puor = 24.7, brbg = 13.7, sunset = 18.7, khro_vanimo = 27.9,
   khro_vik = 28.2, khro_bam = 24.1, ggth_red_blue_white = 25.2, ggth_orange_blue_white = 25.1,
   ggth_classic_orange_white_blue = 23.5, nord_silver_mine = 8.5, pnwc_shuksan2 = 15.0,
-  pnwc_anemone = 8.3, rcar_earth = 15.2, rcar_armyrose = 12.5, rcar_geyser = 11.4, blue_red = 13.9)
+  pnwc_anemone = 8.3, rcar_earth = 15.2, rcar_armyrose = 12.5, rcar_geyser = 11.4, blue_red = 13.9,
+  metb_isfahan1 = 13.3, metb_cassatt2 = 12.0, metb_moreau = 10.7, metb_renoir = 10.6, metb_tsimshian = 10.0, metb_lakota = 9.9, metb_klimt = 9.7, metb_benedictus_div = 15.8, metb_cassatt1_div = 15.9, metb_cassatt2_div = 18.4, metb_demuth_div = 21.0, metb_hiroshige_div = 14.4, metb_hokusai1_div = 8.2, metb_hokusai2_seq = 10.5, metb_hokusai3_seq = 9.0, metb_homer1_div = 14.4, metb_ingres_div = 15.5, metb_isfahan1_div = 19.7, metb_johnson_div = 14.6, metb_juarez_div = 9.1, metb_moreau_div = 17.4, metb_okeeffe1_div = 28.1, metb_tam_seq = 10.8, metb_troy_div = 12.2, metb_vangogh1_div = 9.8, metb_vangogh3_seq = 11.9, metb_veronese_div = 12.1)
 
 # The same check for every number of colours a qualitative palette can show, 2 to its `max`: element
 #   n - 1 is the result for the first n colours (read it with palette_cvd_at()). The value at n =
@@ -148,7 +182,14 @@ CHART_PALETTE_CVD_N <- list(
   rcar_safe = c(29.2, 22.6, 17.7, 17.7, 11.6, 11.6, 11.6, 11.6, 11.5, 6.0, 5.3),
   wesa_darjeeling2 = c(44.9, 13.9, 13.9, 13.9),
   wesa_isleofdogs1 = c(30.0, 16.5, 16.5, 12.2, 4.5),
-  wesa_isleofdogs2 = c(16.9, 10.7, 10.7, 8.4))
+  wesa_isleofdogs2 = c(16.9, 10.7, 10.7, 8.4),
+  metb_isfahan1 = c(13.3, 13.3, 13.3, 13.3, 12.6, 12.6, 7.9),
+  metb_cassatt2 = c(12.8, 12.8, 12.2, 12.0, 12.0, 12.0, 12.0, 11.1, 10.6),
+  metb_moreau = c(10.7, 10.7, 10.7, 10.7, 10.7, 9.6),
+  metb_renoir = c(10.6, 10.6, 10.6, 10.6, 10.6, 10.6, 10.6, 5.4, 4.4, 2.9, 1.4),
+  metb_tsimshian = c(12.4, 12.4, 10.3, 10.0, 8.9, 8.9),
+  metb_lakota = c(44.9, 41.3, 13.3, 9.9, 9.9),
+  metb_klimt = c(27.4, 11.5, 9.7, 9.7, 2.1))
 
 # The stored check of the first n colours of a qualitative palette; NA when n is outside 2 to its max
 #   or the palette has no stored result.

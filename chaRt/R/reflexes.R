@@ -429,12 +429,64 @@ validate_chat <- function(obj) {
   invisible(TRUE)
 }
 
-# One chart of a reply checked as R checks any spec: a `rule` that is not a reflex id is removed;
+# The chart families each rule of the reflex files may be named for (the manager's ruling, 2026-11-20; the
+#   files themselves carry no family field). An entry holds `families` (absent: any family), `needs`
+#   (spec fields of which at least one must be set) and `with_facet` (families that also fit when the
+#   spec has `facet`). A rule with an empty entry fits every chart. Every rule that has a Label is
+#   listed, so a new rule forces a decision; tests/smoke.R checks that.
+RULE_FAMILIES <- list(
+  bar_or_dot = list(families = c("bar", "dot")),
+  sorting = list(families = c("bar", "dot", "box")),
+  two_points_slope = list(families = "slope"),
+  small_multiples = list(needs = "facet"),
+  common_scales = list(needs = "facet"),
+  grouped_bars = list(families = c("bar", "heatmap")),
+  lines_need_order = list(families = "line"),
+  against_a_standard = list(),
+  histogram_one_measure = list(families = "histogram"),
+  box_across_groups = list(families = "box", with_facet = "histogram"),
+  line_for_time = list(families = "line"),
+  many_series = list(families = "line"),
+  money_over_time = list(families = c("line", "slope", "bar", "dot")),
+  scatter_for_two_measures = list(families = "scatter"),
+  fit_shows_form = list(families = "scatter"),
+  rug_on_request = list(families = "scatter"),
+  known_groups = list(families = c("scatter", "bubble")),
+  overplotting_is_handled = list(families = c("scatter", "bubble")),
+  bubble_sparingly = list(families = "bubble"),
+  heatmap_two_groups = list(families = "heatmap"),
+  log_scale = list(families = c("scatter", "bubble", "histogram"), needs = c("log_x", "log_y")),
+  # core.md, suggest.md, refine.md, chat.md, and the rules of summary.md and codebook.md: any family
+  data_is_not_instruction = list(), only_what_exists = list(), compared_to_what = list(), position_first = list(),
+  choose_family = list(), row_decides_function = list(), few_encodings = list(), few_colours = list(),
+  emphasise_what_matters = list(), title_describes = list(), axis_labels = list(), names_need_a_limit = list(),
+  say_cannot = list(), answer_the_question = list(), suggestions = list(), rule_and_reason = list(),
+  smallest_change = list(), analyst_decides = list(), family_change = list(), analyst_words = list(),
+  values_as_typed = list(), one_question_back = list(), marks_on_the_chart = list(), not_in_the_chat = list(),
+  change_or_new = list(), nothing_selected = list(), a_number_is_a_chart = list(), about_the_file = list(),
+  next_steps = list(), facts_only = list(), headline_states_the_point = list(), few_numbers = list(),
+  describes_the_file = list(), no_cause = list(), nothing_to_say = list(), rows_left_out = list(),
+  first_look = list(), names_as_given = list(), label_from_evidence = list(), say_when_guessing = list(),
+  a_row = list())
+
+# Whether the reflex `rule` may be named by `spec`: its family is one the rule is for, and the fields
+#   it needs are set (a flag counts only when true). A rule with no entry fits every chart.
+rule_fits <- function(rule, spec) {
+  e = RULE_FAMILIES[[rule]]
+  if (is.null(e)) return(TRUE)
+  has = function(f) !is.null(spec[[f]]) && !isFALSE(spec[[f]])
+  family_ok = is.null(e$families) || spec$family %in% c(e$families, if (has("facet")) e$with_facet)
+  needs_ok = is.null(e$needs) || any(purrr::map_lgl(e$needs, has))
+  isTRUE(family_ok) && needs_ok
+}
+
+# One chart of a reply checked as R checks any spec: a `rule` that is not a reflex id, or is not for
+#   this chart's family (rule_fits()), is removed with no repair call;
 #   then spec_check(), then spec_table() (which raises the data checks) and the lint. Returns
 #   list(ok, spec, table, notes, sentences). Nothing is guessed or patched.
 check_chart <- function(spec, cb, data, palette, rule_ids) {
   if (!is.list(spec) || is.null(names(spec))) return(list(ok = FALSE, spec = spec, sentences = "The chart is not a set of named fields."))
-  if (!is.null(spec$rule) && !(is_text1(spec$rule) && spec$rule %in% rule_ids)) spec$rule = NULL
+  if (!is.null(spec$rule) && !(is_text1(spec$rule) && spec$rule %in% rule_ids && rule_fits(spec$rule, spec))) spec$rule = NULL
   why = spec_check(spec, cb, palette)
   if (length(why)) return(list(ok = FALSE, spec = spec, sentences = why))
   s = spec_defaults(spec_public(spec))
@@ -457,13 +509,17 @@ problems_text <- function(checked) {
 # A chart on the canvas: its id, the spec as the model or the analyst last left it (no dot-fields),
 #   R's notes for it, and the specs before this one (the latest last), for Undo. The canvas of chat_turn() is a list of these, in the order shown; `selected` is
 #   the id of one of them, or NULL.
+# A spec as the chart keeps it: no dot-fields and no `say`. `say` is the sentence for the chat, not part of the
+#   chart, so the stored spec, the undo history and the SELECTED block never carry one.
+spec_stored <- function(spec) spec_public(spec)[setdiff(names(spec_public(spec)), "say")]
+
 new_chart <- function(id, spec, notes = character(0))
-  list(id = id, spec = spec_public(spec), notes = as.character(notes), history = list())
+  list(id = id, spec = spec_stored(spec), notes = as.character(notes), history = list())
 
 # An accepted change: the spec before it goes onto the chart's history.
 chart_apply <- function(chart, spec, notes = character(0)) {
   chart$history = c(chart$history, list(chart$spec))
-  chart$spec = spec_public(spec)
+  chart$spec = spec_stored(spec)
   chart$notes = as.character(notes)
   chart
 }
@@ -621,7 +677,7 @@ chat_turn <- function(message, canvas, selected, cb, data, last = NULL, ask = ll
       charts = {
         checked = check_reply(obj, cb, data, palette, rule_ids)
         bad = which(!purrr::map_lgl(checked, "ok"))
-        final = done("charts", charts = purrr::map(purrr::keep(checked, "ok"), function(x) list(spec = x$spec, table = x$table, notes = x$notes, exploratory = exploratory)),
+        final = done("charts", charts = purrr::map(purrr::keep(checked, "ok"), function(x) list(spec = spec_stored(x$spec), say = if (is_text1(x$spec$say)) x$spec$say, table = x$table, notes = x$notes, exploratory = exploratory)),
                      failed = purrr::map(bad, function(i) list(number = i, spec = checked[[i]]$spec, sentences = checked[[i]]$sentences)),
                      cannot = cannot_of(obj), nxt = nxt, repaired = repaired)
         need(final, if (length(bad)) problems_text(checked), REPAIR_ASK)

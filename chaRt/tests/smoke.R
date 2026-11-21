@@ -2787,6 +2787,102 @@ if (!is.null(pan_g)) {
 }
 
 
+# ---- Phase 7 A follow-up (the manager's ruling a-005) -------------------------------------------------------------------------
+
+# 1. A rule must belong to the chart's family.
+a7_labelled <- names(reflex_labels())
+check("7A-4: every reflex rule that has a Label is in RULE_FAMILIES, and every family name in it is a family",
+      length(a7_labelled) >= 50L && all(a7_labelled %in% names(RULE_FAMILIES)) &&
+        all(unlist(purrr::map(RULE_FAMILIES, function(e) c(e$families, e$with_facet))) %in% SPEC_FAMILIES))
+if (!is.null(ball_g)) {
+  a7_rule <- function(spec) check_chart(spec, ball_g$cb, ball_g$data, chart_palette_default(), chat_rule_ids())$spec$rule
+  a7_hist <- list(family = "histogram", x = "Age", title = "t")
+  a7_box <- list(family = "box", x = "Position", y = "Height", title = "t")
+  check("7A-4: a rule for the chart's family is kept and one for another family is removed with no repair call (histogram: histogram_one_measure kept, bar_or_dot removed; box: box_across_groups kept)",
+        identical(a7_rule(c(a7_hist, list(rule = "histogram_one_measure"))), "histogram_one_measure") && is.null(a7_rule(c(a7_hist, list(rule = "bar_or_dot")))) &&
+          identical(a7_rule(c(a7_box, list(rule = "box_across_groups"))), "box_across_groups") && identical(a7_rule(c(a7_hist, list(rule = "smallest_change"))), "smallest_change") &&
+          is.null(a7_rule(c(a7_hist, list(rule = "no_such_rule")))))
+  check("7A-4: the conditions: box_across_groups fits a histogram only with facet; small_multiples and common_scales need facet; log_scale needs log_x or log_y (a false flag does not count)",
+        is.null(a7_rule(c(a7_hist, list(rule = "box_across_groups")))) &&
+          identical(a7_rule(c(a7_hist, list(facet = "League", rule = "box_across_groups"))), "box_across_groups") &&
+          is.null(a7_rule(c(a7_box, list(rule = "small_multiples")))) && identical(a7_rule(c(a7_box, list(facet = "League", rule = "small_multiples"))), "small_multiples") &&
+          is.null(a7_rule(c(a7_box, list(rule = "common_scales")))) && identical(a7_rule(c(a7_box, list(facet = "League", rule = "common_scales"))), "common_scales") &&
+          is.null(a7_rule(c(a7_hist, list(rule = "log_scale")))) && is.null(a7_rule(c(a7_hist, list(log_x = FALSE, rule = "log_scale")))) &&
+          identical(a7_rule(c(a7_hist, list(log_x = TRUE, rule = "log_scale"))), "log_scale") &&
+          !rule_fits("log_scale", list(family = "bar", log_y = TRUE)) && rule_fits("log_scale", list(family = "scatter", log_y = TRUE)))
+}
+
+# 3. `say` is text for the chat, not part of the chart.
+if (!is.null(ball_g)) {
+  a7_stale <- c(b6_dot, list(say = "The old sentence."))
+  a7_sp <- b6_run(list(list(spec = a7_stale, say = "Now a dot plot.")))
+  a7_ch <- b6_run(list(list(charts = list(c(b6_sc, list(say = "Height against weight."))))), "how do height and weight go together?")
+  a7_chart <- a7_sp$r$chart
+  a7_ch_one <- a7_ch$r$charts[[1]]
+  a7_new <- new_chart("c3", a7_ch_one$spec)
+  a7_seen <- function(text, s) lengths(regmatches(text, gregexpr(s, text, fixed = TRUE)))
+  a7_txt_sp <- chat_reply_text(a7_sp$r)
+  a7_txt_ch <- chat_reply_text(a7_ch$r)
+  check("7A-3b: after a spec reply the stored spec, the undo history and the SELECTED block carry no say, and the chat shows the reply's sentence once",
+        !"say" %in% names(a7_chart$spec) && !any(purrr::map_lgl(a7_chart$history, function(h) "say" %in% names(h))) &&
+          !grepl("\"say\"|old sentence", selected_block(a7_chart), ignore.case = TRUE) && identical(a7_sp$r$text, "Now a dot plot.") &&
+          a7_seen(a7_txt_sp, md_text("Now a dot plot.")) == 1L && !grepl("old sentence", a7_txt_sp, ignore.case = TRUE))
+  check("7A-3b: after a charts reply the chart's spec carries no say (stored and as a new chart), the sentence travels beside it, and the chat shows each sentence once; spec_check() still accepts a say",
+        !"say" %in% names(a7_ch_one$spec) && identical(a7_ch_one$say, "Height against weight.") && !"say" %in% names(a7_new$spec) &&
+          !grepl("\"say\"", selected_block(a7_new)) && a7_seen(a7_txt_ch, md_text("Height against weight.")) == 1L &&
+          !length(spec_check(c(b6_sc, list(say = "A sentence.")), ball_g$cb)))
+}
+
+# 2. MetBrewer: seven more qualitative sets, and sequential and diverging ones chosen by measured lightness.
+if (length(find.package("MetBrewer", quiet = TRUE)) && length(find.package("colorspace", quiet = TRUE))) {
+  m7_lch <- function(cols) as.data.frame(farver::convert_colour(farver::decode_colour(cols), from = "rgb", to = "lch"))
+  m7_back <- function(v, dir) { d = diff(v) * dir; d[d < 0] }
+  m7_few <- function(r) length(r) == 0L || (length(r) == 1L && abs(r) < 3)
+  m7_kind <- function(p) {
+    lab = m7_lch(toupper(substr(MetBrewer::MetPalettes[[p]][[1]], 1, 7)))
+    v = lab$l; n = length(v)
+    if (sign(v[n] - v[1]) != 0 && m7_few(m7_back(v, sign(v[n] - v[1])))) return("sequential")
+    mid = function(k) (k - 1) / (n - 1) >= 1 / 3 && (k - 1) / (n - 1) <= 2 / 3 && k > 1 && k < n
+    one = function(k, dir) m7_few(c(m7_back(v[1:k], dir), m7_back(v[k:n], -dir)))
+    peak = mid(which.max(v)) && one(which.max(v), 1)
+    trough = mid(which.min(v)) && one(which.min(v), -1)
+    gap = abs(lab$h[1] - lab$h[n]) %% 360
+    if ((peak || trough) && min(gap, 360 - gap) > 60) "diverging" else "none"
+  }
+  m7_all <- paletteer::palettes_d_names$palette[paletteer::palettes_d_names$package == "MetBrewer"]
+  m7_cont <- purrr::keep(CHART_PALETTES, function(e) identical(e$source, "MetBrewer") && e$kind != "qualitative")
+  m7_names <- names(m7_cont)
+  m7_have <- purrr::map_chr(m7_cont, function(e) sub("^MetBrewer::", "", e$paletteer))
+  m7_expected <- purrr::keep(m7_all, function(p) m7_kind(p) != "none")
+  m7_score <- function(p) {
+    cols = toupper(substr(as.character(paletteer::paletteer_d(paste0("MetBrewer::", p))), 1, 7))
+    if (length(cols) > 11L) cols = cols[unique(round(seq(1, length(cols), length.out = 11L)))]
+    round(cvd_gap(grDevices::colorRampPalette(cols)(5L)), 1)
+  }
+  m7_scored <- purrr::map_dbl(m7_all, function(p) {
+    kd = m7_kind(p)
+    if (kd == "none") NA_real_ else m7_score(p)
+  })
+  # every candidate by the lightness rule is either offered with its kind or fails the mark; nothing offered fails the rule
+  m7_wanted <- paste0("metb_", tolower(m7_all), ifelse(purrr::map_chr(m7_all, m7_kind) == "sequential", "_seq", "_div"))[!is.na(m7_scored) & m7_scored >= CHART_CVD_MARK]
+  check(paste0("7A-6: the MetBrewer sequential and diverging palettes offered (", length(m7_names), ") are exactly those whose kind, by the lightness rule on CIELAB L of the stored colours, is sequential or diverging and whose ramp reaches the colour-vision mark; each is under source MetBrewer with the kind the rule gives"),
+        setequal(m7_names, m7_wanted) && all(purrr::map2_lgl(m7_cont, m7_have, function(e, p) identical(e$kind, m7_kind(p)) && identical(e$source, "MetBrewer"))) &&
+          all(purrr::map_lgl(m7_names, function(k) isTRUE(CHART_PALETTE_CVD[[k]] >= CHART_CVD_MARK))))
+  m7_qual <- c("Isfahan1", "Cassatt2", "Moreau", "Renoir", "Tsimshian", "Lakota", "Klimt")
+  check("7A-6: the seven added MetBrewer qualitative sets are listed with source MetBrewer, max = their number of colours, and a stored result at every n and at five",
+        all(purrr::map_lgl(m7_qual, function(p) {
+          e = CHART_PALETTES[[paste0("metb_", tolower(p))]]
+          !is.null(e) && identical(e$kind, "qualitative") && identical(e$source, "MetBrewer") && e$max == length(paletteer::paletteer_d(paste0("MetBrewer::", p))) &&
+            length(CHART_PALETTE_CVD_N[[paste0("metb_", tolower(p))]]) == e$max - 1L && CHART_PALETTE_CVD[[paste0("metb_", tolower(p))]] >= CHART_CVD_MARK
+        })))
+  m7_src <- paste(purrr::map_chr(c(r_files, "app.R"), function(f) paste(readLines(f, warn = FALSE, encoding = "UTF-8"), collapse = "\n")), collapse = "\n")
+  m7_theme <- paste(readLines(file.path("R", "theme.R"), encoding = "UTF-8"), collapse = "\n")
+  check("7A-6: MetBrewer's own colorblind flag is used nowhere in the app, and theme.R says the kind of the continuous sets is ours, by the lightness rule, not MetBrewer's",
+        !grepl("colorblind.friendly|colorblind_palettes|MetPalettes|\\$colorblind", m7_src) &&
+          grepl("is OURS, by the lightness rule", m7_theme, fixed = TRUE) && grepl("not MetBrewer's classification", m7_theme, fixed = TRUE))
+} else cat("skip  7A-6: MetBrewer or colorspace is not installed, so the lightness rule is not recomputed\n")
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")
