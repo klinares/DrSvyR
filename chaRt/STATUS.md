@@ -56,9 +56,20 @@ typed in the new box, ready.
 **Item 14 (live, 4 calls, Sonnet).** Calls: chat 1, then summarize 2 (a first reply that failed a check and its
 repair), then summarize 1 more. The turn came back `charts`: a line of revenue by month in six panels by region. The
 facts sent hold, for each panel, first and last, highest and lowest with when, and the value a year before the last
-point (output in tests/live_run_7b.out, git-ignored). **No headline was obtained**: the scratch script printed the wrong
-list and lost the reply to the third call, and the fourth call's reply could not be read. Whether summary.md 0.3 stops
-a first-and-last headline is not known; another run needs more calls than the phase allowed.
+point (output in tests/live_run_7b.out, git-ignored). No headline was obtained in that run: the scratch script printed
+the wrong list and lost the reply to the third call, and the fourth call's reply could not be read.
+
+**Item 14, second run** (Kevin approved 4 more calls; 3 used; tests/live_run_7b2.out). Chat 1: the same chart (line, six
+panels by region). Summary 1: not valid JSON: the model wrote its JSON and then went on ("Wait, I must check that
+headline..."), and the reply parser takes everything from the first `{` to the last `}`, so text after the object breaks
+it. Summary 2 (same chart and facts), checked clean, no repair:
+- HEADLINE: "West revenue ended December 2024 at 69,700, its highest month, while East fell over the final year."
+- SUMMARY: "West ended at 69,700 in 2024-12-01, up 11,100 over the final year from 58,600, and 9.3 times its January 2022
+  start. East was the one panel that fell over that year, by 20,300 to 7,460. The chart draws on 3,000 orders; Central
+  has 35 monthly points and the other regions have 36."
+In this one reply summary.md 0.3 did what it asks: the headline rests on the peak and the change over the last year,
+not on the first and last month, and "9.3 times its start" stands beside the year-earlier change. One reply is not a
+test of the rule. Open: the parser should take the first complete JSON object and ignore what follows it.
 
 **Not confirmed.** The plotly versions of the changed charts (bare axis, merged end labels) were not seen in a browser;
 the box measure is of the string's box, not its ink (tolerance 0.02 inch); the rug's band is not kept on a log axis;
