@@ -3621,8 +3621,8 @@ if (c7_ok) {
   # the YAML
   c7_y_on <- yaml::yaml.load("family: bar\nx: region\n\"y\": revenue\nfn: sum\ntitle: t\nlabels: \"on\"\nannotate: [highest, lowest]\n")
   c7_y_off <- yaml::yaml.load("family: bar\nx: region\n\"y\": revenue\nfn: sum\ntitle: t\nlabels: off\nannotate: highest\n")
-  c7_y_p <- c7_plot(c7_y_on)
-  c7_y_q <- c7_plot(c7_y_off)
+  c7_y_p <- tryCatch(c7_plot(c7_y_on), error = function(e) NULL)
+  c7_y_q <- tryCatch(c7_plot(c7_y_off), error = function(e) NULL)
   check("7C-1: labels and annotate read from YAML: a list of kinds or one kind, labels written as on or off (YAML 1.1 reads a bare on or off as TRUE or FALSE, which mean the same here) are accepted and drawn",
         !length(spec_check(c7_y_on, pan_g$cb)) && !length(spec_check(c7_y_off, pan_g$cb)) && isTRUE(c7_y_off$labels == FALSE) &&
           length(c7_labels(c7_y_p)) == nrow(attr(c7_y_p, "table")) && identical(attr(c7_y_q, "spec")$labels, "off") && !isTRUE(attr(c7_y_q, "spec")$.value_labels) &&
