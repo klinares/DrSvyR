@@ -207,8 +207,8 @@ live_yaml <- function(spec, indent = "      ") paste0(indent, strsplit(yaml::as.
 
 # One turn: select as the turn says, send it through chat_turn(), and keep the canvas, the history and the last exchange as the
 #   app does (newest first; a spec reply replaces the selected chart). Returns the state for the next turn, with this turn's record.
-live_turn <- function(st, i, cb, data, m, asker, say) {
-  turn = LIVE_TURNS[[i]]
+live_turn <- function(st, i, cb, data, m, asker, say, plan = LIVE_TURNS) {
+  turn = plan[[i]]
   if (isTRUE(asker$stopped)) return(c(st[setdiff(names(st), "skipped")], list(skipped = c(st$skipped, i))))
   selected = if (identical(turn$select, "keep")) st$selected else if (identical(turn$select, "none")) NULL else st$first_added[[as.character(turn$select)]]
   note = if (is.numeric(turn$select) && is.null(selected)) paste0("turn ", turn$select, " added no chart, so nothing is selected")
@@ -249,7 +249,8 @@ live_turn <- function(st, i, cb, data, m, asker, say) {
 #   and summary for every chart on the canvas. Calls are counted as they go: the call after max_calls is not made, the run stops
 #   there and prints what was done. Prints each turn, each text with its check, and the totals; adds the run to the saved file as
 #   `phase6`. Sonnet only (the id is checked again here). Returns the run.
-live_chat <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds = LIVE_RDS, max_calls = LIVE_MAX_CALLS, path = LIVE_ORDERS) {
+live_chat <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds = LIVE_RDS, max_calls = LIVE_MAX_CALLS, path = LIVE_ORDERS,
+                      plan = LIVE_TURNS, phase = "phase6") {
   if (grepl("opus", m$id, ignore.case = TRUE)) stop("Live tests call Sonnet models only; '", m$id, "' is an Opus model.", call. = FALSE)
   if (!file.exists(path)) return(say("Result: no call was made; ", path, " is not there."))
   started = Sys.time()
@@ -270,7 +271,7 @@ live_chat <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds 
   say("  labels proposed: ", sum(purrr::map_lgl(cb$columns, function(e) identical(e$label_source, "ai_guess"))), "; row_is_guess: ", lab$row_is_guess %||% "(none)",
       "; row_is set to '", LIVE_ORDERS_ROW, "'")
 
-  st = purrr::reduce(seq_along(LIVE_TURNS), function(st, i) live_turn(st, i, cb, data, m, asker, say),
+  st = purrr::reduce(seq_along(plan), function(st, i) live_turn(st, i, cb, data, m, asker, say, plan),
                      .init = list(canvas = list(), selected = NULL, last = NULL, n = 0L, first_added = list(), turns = list(), skipped = integer(0)))
   canvas = st$canvas
   turns = st$turns
@@ -295,7 +296,7 @@ live_chat <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds 
       if (is.null(s$headline)) say("    NO TEXT: ", s$text) else say("    HEADLINE: ", s$headline, "\n    SUMMARY:  ", s$summary)
       say("    CHECK:    ", if (isTRUE(s$checked)) "every number is in the facts; no forbidden word" else paste(s$problems, collapse = "; "),
           if (isTRUE(s$repaired)) " (after a repair)" else "")
-      list(id = ch$id, headline = s$headline, summary = s$summary, checked = s$checked, problems = s$problems, repaired = s$repaired, text = s$text)
+      list(id = ch$id, headline = s$headline, summary = s$summary, checked = s$checked, problems = s$problems, repaired = s$repaired, text = s$text, facts = s$facts)
     })
   }
 
@@ -305,18 +306,18 @@ live_chat <- function(m, key, say = function(...) cat(..., "\n", sep = ""), rds 
   say("\n---- Totals")
   say("  calls made ", asker$n, " of ", max_calls, " allowed (records: ", paste(names(table(calls$call)), table(calls$call), sep = " ", collapse = ", "), "); repairs ", sum(calls$repair),
       "; failed ", sum(!calls$ok), if (asker$refused) paste0(" (", asker$refused, " of them refused at the limit and not made)"))
-  say("  turns run ", length(turns), " of ", length(LIVE_TURNS), " (", paste(names(kinds), kinds, collapse = ", "), ")")
+  say("  turns run ", length(turns), " of ", length(plan), " (", paste(names(kinds), kinds, collapse = ", "), ")")
   fmt_totals(calls, say)
   say("  seconds in calls ", sprintf("%.0f", secs), "; wall time ", sprintf("%.0f", as.numeric(difftime(Sys.time(), started, units = "secs"))))
   say("  headlines and summaries: ", length(stories), " (checked ", sum(purrr::map_lgl(stories, function(s) isTRUE(s$checked))), ", not checked ",
       length(stories) - sum(purrr::map_lgl(stories, function(s) isTRUE(s$checked))), ")")
   run = if (file.exists(rds)) readRDS(rds) else list()
-  run$phase6 = list(model = m$id, when = format(Sys.time(), "%Y-%m-%d %H:%M"), file = basename(path), missing = LIVE_ORDERS_MISSING, cb = cb,
+  run[[phase]] = list(model = m$id, when = format(Sys.time(), "%Y-%m-%d %H:%M"), file = basename(path), missing = LIVE_ORDERS_MISSING, cb = cb,
                     row_is_guess = lab$row_is_guess, turns = turns, canvas = canvas, stories = stories, calls = calls, log = asker$log,
                     stopped = isTRUE(asker$stopped), skipped = st$skipped, max_calls = max_calls)
   saveRDS(run, rds)
-  say("  saved ", rds, " (phase6: ", length(asker$log), " raw replies)")
-  invisible(run$phase6)
+  say("  saved ", rds, " (", phase, ": ", length(asker$log), " raw replies)")
+  invisible(run[[phase]])
 }
 
 # The Phase 6 section of the page: the turns in a table, then the canvas as it ended, newest first: the three value boxes as
@@ -357,6 +358,49 @@ live_phase6_html <- function(p6) {
   paste0("<h1>Phase 6</h1><p class=\"muted\">", esc(p6$model), ", ", esc(p6$when), "; ", nrow(p6$calls), " calls (limit ", p6$max_calls, ")",
          if (isTRUE(p6$stopped)) "; STOPPED at the call limit", ".</p>", turns, "<h2>The canvas as it ended</h2>", boxes,
          "<div class=\"grid\">", paste(cards, collapse = ""), "</div>")
+}
+
+
+# ---- Phase 7: six turns on orders.csv (value labels, a mark on a point, the style the analyst chooses) ---------------
+
+LIVE_MAX_CALLS_7 <- 12L       # the manager allowed at most 12 for the one run: 1 label, 6 turns, their repairs, 1 summary call
+LIVE_TURNS_7 <- list(
+  list(message = "How has revenue changed by region?", select = "none"),
+  list(message = "mark the highest month", select = 1L),
+  list(message = "which product categories bring in the most revenue?", select = "none"),
+  list(message = "remove the numbers on the bars", select = 3L),
+  list(message = "use the newspaper style", select = 3L),
+  list(message = "do cheaper items sell in larger quantities?", select = "none"))
+
+# The two checks Part D asks for, read from the facts of the finished run: after turn 1 the line chart holds each series' highest and
+#   lowest and, when its x is monthly or quarterly, the line for the same period a year earlier; the scatter's correlation names the scale.
+live_phase7_checks <- function(run, data, say) {
+  facts_of = function(id) purrr::detect(run$stories, function(s) identical(s$id, id))$facts
+  turn1 = run$turns[[1]]$added
+  line = purrr::detect(run$canvas, function(ch) identical(ch$spec$family, "line") && ch$id %in% turn1)
+  scatter = purrr::detect(run$canvas, function(ch) identical(ch$spec$family, "scatter"))
+  lines_of = function(f) strsplit(f %||% "", "\n", fixed = TRUE)[[1]]
+  say("\n---- Checks from the output")
+  if (is.null(line)) say("  1. after turn 1: no line chart was added, so the line facts cannot be checked.")
+  else {
+    f = lines_of(facts_of(line$id))
+    t = tryCatch(spec_table(line$spec, data, run$cb), error = function(e) NULL)
+    period = if (!is.null(t)) fact_period(sort(unique(t[[line$spec$x]])))
+    say("  1. after turn 1, line chart ", line$id, " (x = ", line$spec$x, ", ", if (is.null(period)) "not monthly or quarterly" else paste("period", period), "):")
+    say("     highest and lowest in its facts: ", if (any(grepl("highest .*lowest ", f))) "YES" else "NO")
+    say("     year-earlier line: ", if (is.null(period)) "not expected (x is not monthly or quarterly)"
+        else if (any(grepl("a year before the last point|no point a year before", f))) "YES" else "NO")
+    say("     facts: ", paste(utils::head(grep("highest|a year before|Points per series", f, value = TRUE), 3), collapse = " || "))
+  }
+  if (is.null(scatter)) say("  2. no scatter chart on the canvas, so the correlation cannot be checked.")
+  else {
+    cors = grep("correlation", lines_of(facts_of(scatter$id)), value = TRUE)
+    logged = isTRUE(scatter$spec$log_x) || isTRUE(scatter$spec$log_y)
+    say("  2. scatter ", scatter$id, " (log_x = ", isTRUE(scatter$spec$log_x), ", log_y = ", isTRUE(scatter$spec$log_y), "): ", paste(cors, collapse = " || "))
+    say("     the correlation names the scale: ",
+        if (logged) (if (any(grepl("on the log scale shown", cors, fixed = TRUE))) "YES" else "NO")
+        else if (any(grepl("^Pearson correlation: ", cors))) "YES (linear scale, no log)" else "NO")
+  }
 }
 
 

@@ -48,6 +48,13 @@ later reader of this file needs before then.
   longer list a package stores. ColorBrewer PuOr (ends 23.7 lightness units apart) is no longer offered as diverging; the
   earlier reading of Crameri's 256 stored colours by index is dropped: Vanimo, Vik and Bam pass on the 11 drawn.
   The heatmap cell cap stays at 40.
+- **Part D: the screen.** The Style dialog has the six styles with samples (Part B). The file-name value box is set at
+  1.1rem on one line, cut with an ellipsis, with the full name as its tooltip. Card buttons have dark-mode rules (light
+  text from the theme's own dark colours; the hue only in the border), since the theme's primary is a dark navy. `bsicons`
+  is not installed, so the card buttons are words only. `tests/style_sheet.html` (git-ignored, written by
+  `Rscript --no-init-file tests/gallery.R style_sheet`, no model call) shows every family in every style, every
+  qualitative palette on Clean and Dark, labels and annotations, each family with labels and annotate in Newspaper and
+  Dark, and the MetBrewer palettes on offer. `tests/llm_check.R` step 9 is the six-turn live run (at most 12 calls).
 
 ## Phase 6b, 2026-11-20: more palettes, a working signal, a clean folder
 

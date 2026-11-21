@@ -3773,6 +3773,143 @@ if (c7_ok) {
   }
 }
 
+
+# ---- Phase 7 D: the screen, the style sheet, the live-run script ------------------------------------------------------------------------
+
+if (exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
+  # 1. the screen: the Style dialog has the style choice; the file-name box; card buttons in dark mode; bsicons
+  d7_dlg <- new.env()
+  d7_card <- new.env()
+  assign("showModal", function(ui, session = NULL) assign("modal", ui, envir = d7_dlg), envir = globalenv())
+  tryCatch(shiny::testServer(mod_explore_server, args = list(state = c6_state(), ask = stand_by(c6_reply)$ask), {
+    session$flushReact()
+    session$setInputs(chat_user_input = "How many orders in each region?")
+    session$flushReact()
+    assign("html", gsub("&#39;", "'", paste(as.character(output[["c1_card"]]$html), collapse = ""), fixed = TRUE), envir = d7_card)
+    session$setInputs(style = 1)
+  }), finally = rm("showModal", envir = globalenv()))
+  d7_modal <- paste(as.character(d7_dlg$modal), collapse = "")
+  d7_radios <- regmatches(d7_modal, gregexpr("<input[^>]*type=\"radio\"[^>]*>", d7_modal))[[1]]
+  d7_radios <- purrr::keep(d7_radios, function(x) grepl("style_choice", x, fixed = TRUE))
+  d7_radio_vals <- sub("^.*value=\"([^\"]*)\".*$", "\\1", d7_radios)
+  check("7D-1: the Style dialog has the style choice: a radio group (style_choice) with one option for each of the six styles, each with its drawn sample and its name, beside the three palette selects",
+        length(d7_dlg$modal) > 0L && identical(sort(d7_radio_vals), sort(names(CHART_STYLES))) && length(d7_radio_vals) == 6L &&
+          lengths(regmatches(d7_modal, gregexpr("chart-style-sample", d7_modal, fixed = TRUE))) == 6L &&
+          all(purrr::map_lgl(purrr::map_chr(CHART_STYLES, "label"), function(l) grepl(l, d7_modal, fixed = TRUE))) &&
+          grepl("pal_qualitative", d7_modal, fixed = TRUE) && grepl("pal_sequential", d7_modal, fixed = TRUE) && grepl("pal_diverging", d7_modal, fixed = TRUE))
+  # the file-name value box: small type, one line, cut with an ellipsis, the full name as the tooltip
+  d7_name <- "quarterly_sales_by_region_and_product_2015_to_2024_final_version_3_checked.csv"
+  d7_boxes <- paste(as.character(canvas_boxes(data.frame(a = 1:3, b = 4:6), list(file = d7_name, columns = list()))), collapse = "")
+  d7_css <- regmatches(EXPLORE_CSS, regexpr("[.]chart-boxes [.]bslib-value-box [.]chart-box-file [{][^}]*[}]", EXPLORE_CSS))
+  d7_size <- as.numeric(sub("^.*font-size: ([0-9.]+)rem.*$", "\\1", d7_css))
+  d7_period <- paste(as.character(canvas_boxes(c6_read$read$data, c6_cb_ready)), collapse = "")
+  check("7D-1: the file-name value box does not wrap in large type: the name is in a span set small (1.25rem or less), on one line (nowrap), cut with an ellipsis, and the whole name is its title (tooltip); a box that is not the file name does not use it",
+        grepl("class=\"chart-box-file[^\"]*\"", d7_boxes) && grepl(paste0("title=\"", d7_name, "\""), d7_boxes, fixed = TRUE) && grepl(paste0(">", d7_name, "</span>"), d7_boxes, fixed = TRUE) &&
+          length(d7_css) == 1L && isTRUE(d7_size <= 1.25) && grepl("white-space: nowrap", d7_css, fixed = TRUE) && grepl("overflow: hidden", d7_css, fixed = TRUE) &&
+          grepl("text-overflow: ellipsis", d7_css, fixed = TRUE) && !grepl("chart-box-file", d7_period, fixed = TRUE) && grepl("Rows", d7_period, fixed = TRUE))
+  # card buttons in dark mode: the dark rules give each kind of card button light text (4.5 to 1 or better) against the theme's dark background, which
+  #   the light-mode colours do not (the theme's primary is a dark navy)
+  d7_theme_css <- as.character(sass::sass(bslib::bs_theme(version = 5, preset = "flatly")))
+  d7_blocks <- regmatches(d7_theme_css, gregexpr("[[]data-bs-theme=\"dark\"[]][^{]*[{][^}]*[}]", d7_theme_css))[[1]]
+  d7_dark_block <- d7_blocks[which.max(nchar(d7_blocks))]
+  d7_var <- function(v) sub("^[^:]+:[ ]*", "", regmatches(d7_dark_block, regexpr(paste0("--bs-", v, ":[^;]+"), d7_dark_block)))
+  d7_rule <- function(sel) regmatches(EXPLORE_CSS, regexpr(paste0("(?s)[[]data-bs-theme='dark'[]] [.]chart-card ", sel, "[^{]*[{][^}]*[}]"), EXPLORE_CSS, perl = TRUE))
+  d7_ref <- function(rule, prop) sub("^.*var[(]--bs-([a-z-]+)[)].*$", "\\1", regmatches(rule, regexpr(paste0("--bs-btn-", prop, ": var[(]--bs-[a-z-]+[)]"), rule)))
+  d7_cr <- function(a, b) chart_contrast(a, b)
+  d7_bg <- d7_var("body-bg")
+  d7_secondary <- d7_rule("[.]btn-outline-secondary"); d7_danger <- d7_rule("[.]btn-outline-danger"); d7_primary <- d7_rule("[.]btn-primary")
+  d7_text_secondary <- d7_var(d7_ref(d7_secondary, "color")); d7_text_danger <- d7_var(d7_ref(d7_danger, "color"))
+  d7_selected_text <- d7_var(d7_ref(d7_primary, "color")); d7_selected_fill <- d7_var(d7_ref(d7_primary, "bg"))
+  d7_light_primary <- "#2C3E50"
+  cat("      dark mode card buttons, contrast on the dark card (", d7_bg, "): outline ", sprintf("%.1f", d7_cr(d7_text_secondary, d7_bg)), ", danger ", sprintf("%.1f", d7_cr(d7_text_danger, d7_bg)),
+      ", selected text on fill ", sprintf("%.1f", d7_cr(d7_selected_text, d7_selected_fill)), "; the light-mode primary would be ", sprintf("%.1f", d7_cr(d7_light_primary, d7_bg)), "\n", sep = "")
+  check("7D-1: card buttons read clearly in dark mode: the dark-mode rules (outline, outline primary, danger, selected) set their text and fill from the theme's own dark colours, each 4.5 to 1 or better against the dark background; the light-mode primary colour, which the buttons used, is under 3 to 1 there",
+        length(d7_secondary) == 1L && length(d7_danger) == 1L && length(d7_primary) == 1L && length(d7_blocks) > 0L && grepl("^#", d7_bg) &&
+          d7_cr(d7_text_secondary, d7_bg) >= 4.5 && d7_cr(d7_text_danger, d7_bg) >= 4.5 && d7_cr(d7_selected_text, d7_selected_fill) >= 4.5 && d7_cr(d7_selected_fill, d7_bg) >= 4.5 &&
+          grepl("btn-outline-primary:not[(][.]chart-call[)]", EXPLORE_CSS) && d7_cr(d7_light_primary, d7_bg) < 3)
+  # bsicons: not installed here (nothing is installed for this), so the card buttons are words only
+  d7_words <- c("Select", "Undo", "Interactive", "Code", "Edit text", "Headline", "Remove")
+  d7_bsicons <- length(find.package("bsicons", quiet = TRUE)) > 0L
+  check(paste0("7D-1: the card buttons are words (Select, Undo, Interactive, Code, Edit text, Headline, Remove) and, with bsicons ", if (d7_bsicons) "installed" else "not installed (as here)", ", carry no icon markup; the app does not call bsicons"),
+        !d7_bsicons && all(purrr::map_lgl(d7_words, function(w) grepl(paste0("action-button[^>]*>(<span[^>]*>)?\\s*", w, "\\s*<"), d7_card$html))) && !grepl("class=\"bi bi-", d7_card$html, fixed = TRUE) &&
+          !any(grepl("bsicons", unlist(purrr::map(code_files, readLines, encoding = "UTF-8")), fixed = TRUE)))
+
+  # 2. the style sheet: built by tests/gallery.R, no model call, git-ignored, every family in every style and the rest
+  d7_sheet_file <- tempfile(fileext = ".html")
+  d7_sheet_out <- utils::capture.output(build_style_sheet(d7_sheet_file))
+  d7_sheet <- paste(readLines(d7_sheet_file, encoding = "UTF-8", warn = FALSE), collapse = "\n")
+  d7_n_figs <- lengths(regmatches(d7_sheet, gregexpr("<figure>", d7_sheet, fixed = TRUE)))
+  d7_n_imgs <- lengths(regmatches(d7_sheet, gregexpr("<img ", d7_sheet, fixed = TRUE)))
+  d7_met <- names(purrr::keep(CHART_PALETTES, function(e) identical(e$source, "MetBrewer")))
+  d7_met_of <- function(kind) sum(names(chart_palettes(kind)) %in% d7_met)
+  d7_expect <- 9L * 6L + 2L * length(chart_palettes("qualitative")) + 3L + 9L * 2L + 2L * d7_met_of("qualitative") + d7_met_of("sequential") + d7_met_of("diverging")
+  d7_sheet_src <- paste(readLines(file.path("tests", "gallery.R"), encoding = "UTF-8"), collapse = "\n")
+  d7_build_src <- sub("(?s)^.*(build_style_sheet <- function.*?)\nif \\(sys.nframe.*$", "\\1", d7_sheet_src, perl = TRUE)
+  cat("      style sheet: ", d7_n_imgs, " charts (expected ", d7_expect, "), ", round(file.size(d7_sheet_file) / 1e6, 1), " MB\n", sep = "")
+  check("7D-2: tests/style_sheet.html: every family in every style (54), every qualitative palette on Clean and on Dark, the three labelled charts, one chart of each family with labels and annotate in Newspaper and Dark, and the MetBrewer palettes on offer: the count of drawn charts is the count expected from the app's own palette lists, none failed to draw",
+        d7_n_imgs == d7_expect && d7_n_figs == d7_n_imgs && !grepl("Could not draw this", d7_sheet, fixed = TRUE) &&
+          all(purrr::map_lgl(names(CHART_STYLES), function(s) lengths(regmatches(d7_sheet, gregexpr(paste0(", ", CHART_STYLES[[s]]$label, "\""), d7_sheet, fixed = TRUE))) >= 9L)) &&
+          all(purrr::map_lgl(c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap"), function(f) grepl(paste0("alt=\"", f, ", "), d7_sheet, fixed = TRUE) && grepl(paste0(f, ", labels and annotate, Newspaper|", f, ", no labels or annotate for this family, Newspaper"), d7_sheet) && grepl(paste0(f, ", [a-z ,]*Dark"), d7_sheet))) &&
+          all(purrr::map_lgl(unname(chart_palettes("qualitative")), function(l) grepl(paste0(htmltools::htmlEscape(l), " on Clean"), d7_sheet, fixed = TRUE) && grepl(paste0(htmltools::htmlEscape(l), " on Dark"), d7_sheet, fixed = TRUE))) &&
+          all(purrr::map_lgl(unname(chart_palettes("sequential"))[names(chart_palettes("sequential")) %in% d7_met], function(l) grepl(paste0("alt=\"", l, " (sequential"), d7_sheet, fixed = TRUE))))
+  check("7D-2: the style sheet is written without a model call and is git-ignored: build_style_sheet() holds no call to llm_json, llm_chat, ellmer or the key, and 'tests/style_sheet.html' is in chaRt/.gitignore",
+        nzchar(d7_build_src) && !grepl("llm_|ellmer|ANTHROPIC", d7_build_src) && "tests/style_sheet.html" %in% trimws(readLines(".gitignore")) && grepl("^<!doctype html>", d7_sheet))
+
+  # 4. step 9 of tests/llm_check.R: the six turns, Sonnet only, at most 12 calls, counted
+  source(file.path("tests", "live_gallery.R"))
+  d7_check_src <- paste(readLines(file.path("tests", "llm_check.R"), encoding = "UTF-8"), collapse = "\n")
+  d7_msgs <- purrr::map_chr(LIVE_TURNS_7, "message")
+  check("7D-4: step 9 of tests/llm_check.R: the six turns exactly as the prompt lists them (the selections as it says), the counter set to 12, Sonnet only (the opus guard stands before any step, and the home model's id has sonnet and not opus in it), and step 9 runs live_chat() with that counter and the six turns",
+        identical(d7_msgs, c("How has revenue changed by region?", "mark the highest month", "which product categories bring in the most revenue?", "remove the numbers on the bars",
+                             "use the newspaper style", "do cheaper items sell in larger quantities?")) &&
+          identical(unname(purrr::map(LIVE_TURNS_7, "select")), list("none", 1L, "none", 3L, 3L, "none")) && identical(LIVE_MAX_CALLS_7, 12L) &&
+          grepl("live_chat(home, ANTHROPIC_KEY, say, max_calls = LIVE_MAX_CALLS_7, plan = LIVE_TURNS_7, phase = \"phase7\")", d7_check_src, fixed = TRUE) &&
+          grepl("if (step_on(9))", d7_check_src, fixed = TRUE) && grepl("grepl(\"opus\", CHART_TEST_MODEL", d7_check_src, fixed = TRUE) && grepl("Live tests call Sonnet models only", d7_check_src, fixed = TRUE) &&
+          grepl("sonnet", APP_PROFILES$home$id, ignore.case = TRUE) && !grepl("opus", APP_PROFILES$home$id, ignore.case = TRUE) &&
+          inherits(tryCatch(live_chat(list(id = "claude-opus-4-1"), "k"), error = function(e) e), "error"))
+  # a dry run of the six turns and the summary through a stand-in for llm_json(): the script runs end to end, the calls are counted, and the call after the
+  #   limit is not made; the two checks from the output read what the facts hold
+  d7_orders <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", LIVE_ORDERS_MISSING)
+  d7_line <- list(family = "line", x = "order_month", y = "revenue", color = "region", fn = "sum", title = "Revenue by month and region")
+  d7_replies <- list(
+    "How has revenue changed by region?" = list(charts = list(d7_line)),
+    "mark the highest month" = list(spec = c(d7_line, list(annotate = list("highest"))), say = "Marked the highest month."),
+    "which product categories bring in the most revenue?" = list(charts = list(list(family = "bar", x = "product_category", y = "revenue", fn = "sum", title = "Revenue by category"))),
+    "remove the numbers on the bars" = list(spec = list(family = "bar", x = "product_category", y = "revenue", fn = "sum", title = "Revenue by category", labels = "off"), say = "Removed the numbers."),
+    "use the newspaper style" = list(cannot = "The style is chosen under Style, not in the chat."),
+    "do cheaper items sell in larger quantities?" = list(charts = list(list(family = "scatter", x = "unit_price", y = "units", log_x = TRUE, title = "Units against price"))))
+  d7_reply <- function(user, i) {
+    if (grepl("<CHARTS>", user, fixed = TRUE))
+      return(to_json(list(charts = purrr::map(sent_ids(user), function(id) list(id = id, headline = "A headline written for this chart", summary = "A summary written for this chart.")))))
+    if (grepl("\nANALYST: ", user, fixed = TRUE)) return(to_json(d7_replies[[c6_msg(user)]] %||% list(ask = "Which?")))
+    to_json(list(labels = purrr::map(names(d7_orders$read$data), function(n) list(name = n, label = paste("Label of", n), sure = TRUE)), row_is_guess = "one order"))
+  }
+  d7_dry <- function(max_calls) {
+    si = stand_by(d7_reply)
+    old = llm_json
+    assign("llm_json", function(user, m, system_prompt = NULL, max_tokens, validate = NULL, key = NULL) si$ask(user, m, system_prompt, max_tokens, validate), envir = globalenv())
+    on.exit(assign("llm_json", old, envir = globalenv()))
+    lines = character(0)
+    say = function(...) lines <<- c(lines, paste0(...))
+    run = live_chat(APP_PROFILES$home, "stand-in-key", say, rds = tempfile(fileext = ".rds"), max_calls = max_calls, plan = LIVE_TURNS_7, phase = "phase7")
+    if (!is.null(run) && max_calls >= 8L) live_phase7_checks(run, d7_orders$read$data, say)
+    list(run = run, lines = lines, sent = length(si$sent))
+  }
+  d7_full <- d7_dry(LIVE_MAX_CALLS_7)
+  d7_cut <- d7_dry(3L)
+  d7_kinds <- purrr::map_chr(d7_full$run$turns, "kind")
+  cat("      dry run: kinds ", paste(d7_kinds, collapse = ", "), "; calls ", nrow(d7_full$run$calls), "; sent ", d7_full$sent, "; ", paste(utils::tail(grep("YES|NO|calls made|FAILED|STOPPED", d7_full$lines, value = TRUE), 8), collapse = " | "), "
+", sep = "")
+  check("7D-4: a dry run of the six turns through a stand-in: label call, six turns (charts, spec, charts, spec, cannot, charts), one summary call, 8 calls of the 12 allowed; the style request came back as cannot; the checks from the output find the line's highest and lowest and year-earlier line and the scatter's correlation naming the log scale",
+        identical(d7_kinds, c("charts", "spec", "charts", "spec", "cannot", "charts")) && nrow(d7_full$run$calls) == 8L && d7_full$sent == 8L && !isTRUE(d7_full$run$stopped) &&
+          any(grepl("calls made 8 of 12 allowed", d7_full$lines, fixed = TRUE)) && any(grepl("highest and lowest in its facts: YES", d7_full$lines, fixed = TRUE)) &&
+          any(grepl("year-earlier line: YES", d7_full$lines, fixed = TRUE)) && any(grepl("the correlation names the scale: YES", d7_full$lines, fixed = TRUE)) &&
+          any(grepl("Pearson correlation on the log scale shown", d7_full$lines, fixed = TRUE)))
+  check("7D-4: the call counter holds: with a limit of 3 the run makes 3 calls, the fourth is not made (refused and counted), the run says it stopped and which turns were not run, and no summary call is made",
+        d7_cut$sent == 3L && isTRUE(d7_cut$run$stopped) && nrow(d7_cut$run$calls) >= 3L && sum(d7_cut$run$calls$ok) == 3L && length(d7_cut$run$skipped) > 0L &&
+          any(grepl("STOPPED", d7_cut$lines, fixed = TRUE)) && !any(grepl("Headlines and summaries for", d7_cut$lines, fixed = TRUE)))
+}
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")

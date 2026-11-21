@@ -712,10 +712,12 @@ canvas_boxes <- function(data, cb) {
     paste(both, collapse = " to ")
   }, error = function(e) NULL)
   box = function(title, value) bslib::value_box(title, value, fill = FALSE)
+  # The file name is long and value boxes are large type: it is set small, on one line, cut with an ellipsis, and the full name is its tooltip.
+  file_box = function(name) box("File", tags$span(class = "chart-box-file", title = name, name))
   do.call(bslib::layout_column_wrap,
           c(list(width = 1 / 3, fill = FALSE, class = "chart-boxes"),
             list(box("Rows", format_num(nrow(data))), box("Columns", format_num(ncol(data))),
-                 if (!is.null(period)) box("Period", period) else box("File", cb$file %||% ""))))
+                 if (!is.null(period)) box("Period", period) else file_box(cb$file %||% ""))))
 }
 
 # A click on a card selects it, unless it lands on a button, link, box or the full screen button, which have
@@ -755,7 +757,28 @@ EXPLORE_CSS <- "
 .chart-style-sample { display: block; max-width: 100%; height: auto; border: 1px solid rgba(128, 128, 128, .5); margin-bottom: .2rem; }
 .chart-style-name { font-weight: 600; }
 .chart-card { cursor: pointer; }
-.chart-card.chart-selected { border: 2px solid var(--bs-primary); box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .25); }
+.chart-boxes .bslib-value-box .chart-box-file { display: block; font-size: 1.1rem; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.chart-boxes .bslib-value-box .value-box-area { min-width: 0; }
+/* Card buttons in dark mode: Bootstrap's outline buttons and the theme's primary (a dark navy) keep their light-mode colours on a dark
+   card and read faintly. Text and fills take the theme's body colours for dark mode (light text, 11 to 1 on the card); the hue stays in the
+   border (the theme's text-emphasis colours for primary and danger). */
+[data-bs-theme='dark'] .chart-card .btn-outline-secondary,
+[data-bs-theme='dark'] .chart-card .btn-outline-primary:not(.chart-call) {
+  --bs-btn-color: var(--bs-body-color); --bs-btn-border-color: var(--bs-body-color);
+  --bs-btn-hover-color: var(--bs-body-bg); --bs-btn-hover-bg: var(--bs-body-color); --bs-btn-hover-border-color: var(--bs-body-color);
+  --bs-btn-active-color: var(--bs-body-bg); --bs-btn-active-bg: var(--bs-body-color); --bs-btn-active-border-color: var(--bs-body-color);
+  --bs-btn-disabled-color: var(--bs-secondary-color); --bs-btn-disabled-border-color: var(--bs-secondary-color); --bs-btn-disabled-opacity: .75;
+}
+[data-bs-theme='dark'] .chart-card .btn-outline-primary:not(.chart-call) { --bs-btn-border-color: var(--bs-primary-text-emphasis); }
+[data-bs-theme='dark'] .chart-card .btn-outline-danger {
+  --bs-btn-color: var(--bs-danger-text-emphasis); --bs-btn-border-color: var(--bs-danger-text-emphasis);
+  --bs-btn-hover-color: var(--bs-body-bg); --bs-btn-hover-bg: var(--bs-danger-text-emphasis); --bs-btn-hover-border-color: var(--bs-danger-text-emphasis);
+  --bs-btn-active-color: var(--bs-body-bg); --bs-btn-active-bg: var(--bs-danger-text-emphasis); --bs-btn-active-border-color: var(--bs-danger-text-emphasis);
+}
+[data-bs-theme='dark'] .chart-card .btn-primary {
+  --bs-btn-color: var(--bs-body-bg); --bs-btn-bg: var(--bs-body-color); --bs-btn-border-color: var(--bs-primary-text-emphasis);
+  --bs-btn-hover-color: var(--bs-body-bg); --bs-btn-hover-bg: var(--bs-body-color); --bs-btn-hover-border-color: var(--bs-primary-text-emphasis);
+}
 .chart-call {
   --bs-btn-color: var(--bs-emphasis-color); --bs-btn-border-color: var(--bs-emphasis-color);
   --bs-btn-hover-color: var(--bs-body-bg); --bs-btn-hover-bg: var(--bs-emphasis-color); --bs-btn-hover-border-color: var(--bs-emphasis-color);

@@ -16,6 +16,11 @@
 #      order", then twelve turns through chat_turn() (LIVE_TURNS, selecting as the plan says) and a headline
 #      and summary for every chart on the canvas. Calls are counted and the run stops at 24 (LIVE_MAX_CALLS).
 #      Saved as `phase6` beside the rest and shown on the page under "Phase 6".
+#   9. Phase 7: tests/data/orders.csv again, one label call, then six turns through chat_turn() (LIVE_TURNS_7: a line chart and a mark
+#      on its highest month, value labels on a bar chart and their removal, a style request that must come back as `cannot`, a
+#      scatter) and a headline and summary for the canvas. At most 12 calls (LIVE_MAX_CALLS_7), counted: the call after the twelfth is not
+#      made. It then prints two checks from the facts of the run (the line's highest, lowest and year-earlier line; the scatter's
+#      correlation names the scale). Saved as `phase7` beside the rest.
 #   (Steps 4 to 6, the Phase 3 and 4 runs of the suggest and refine calls, went with those calls; the numbers
 #   of the others are kept.)
 # CHART_LIVE_STEPS chooses which run, for example "1,8"; 1 to 3 by default (steps 7 and 8 cost more, so they
@@ -156,6 +161,21 @@ if (step_on(8)) {
   } else {
     live_chat(home, ANTHROPIC_KEY, say)
     live_page()
+  }
+}
+
+
+# ---- 9. Phase 7: the chat, six turns on orders.csv ----------------------------------------------------
+
+if (step_on(9)) {
+  heading(9, "Phase 7: chat_turn() on tests/data/orders.csv, six turns, then headlines and summaries (at most 12 calls)")
+  if (!exists("live_chat")) source(file.path("tests", "live_gallery.R"))
+  say("Model:  ", home$id, " at ", home$base_url)
+  if (!nzchar(ANTHROPIC_KEY)) {
+    say("Result: no call was made; ANTHROPIC_API_KEY is not set.")
+  } else {
+    run7 = live_chat(home, ANTHROPIC_KEY, say, max_calls = LIVE_MAX_CALLS_7, plan = LIVE_TURNS_7, phase = "phase7")
+    if (!is.null(run7)) live_phase7_checks(run7, reread_data(LIVE_ORDERS, basename(LIVE_ORDERS), LIVE_ORDERS_MISSING)$read$data, say)
   }
 }
 
