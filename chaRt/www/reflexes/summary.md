@@ -1,6 +1,6 @@
 # Summary
 
-Version: 0.2
+Version: 0.3
 
 The headline and the short summary under a chart in the report. This is the only call that says
 what a chart shows, so it is the only one given the chart's numbers, and every number it writes
@@ -46,6 +46,13 @@ You write the headline and the short summary that go with a chart in an analyst'
 - **Never:** Do not list every value; the chart does that.
 - **Label:** Summary gives the comparison
 - **Source:** Tufte 2006, p. 127 ("compared to what?"), as presented in SURV752, Comparison, Comparison, Comparison.
+
+### change_over_time
+- **When:** FACTS describe a series over time.
+- **Say:** A first and a last point are two readings, not a trend. When FACTS give the value a year before the last point, state the change over that year. When they give the highest and lowest points, say when the peak or the low came. Use "end is m times start" only when the series has few points, or beside one of those.
+- **Never:** Do not call a difference between the first and last point a rise, a fall or growth on its own when the series has more than a few points, and do not rank series by it.
+- **Label:** Change over more than two points
+- **Source:** Design rule of this app; Tufte 1983 on graphical integrity (show data variation, and compare like with like), as presented in SURV727.
 
 ### few_numbers
 - **When:** Writing `summary`.

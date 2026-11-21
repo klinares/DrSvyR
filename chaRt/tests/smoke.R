@@ -815,7 +815,7 @@ REFLEX_SHA <- c(
   "time.md" = "c907e5546557b6fedb91623a8c83588ac10af738946d00ea35458e74961988a9",
   "suggest.md" = "510448474300239e9f90e7cc3ed540e57e5e48fbe4e4fa3e6ec3c22d964efb29",
   "refine.md" = "04a081673a2365eb09695bdcab36a052a10e4812cdf9583314bf27969d03add5",
-  "summary.md" = "b32e0563d508d7e14b5055d44f3174fabdf46c8fc65b3fcb630bac55f8add81b",
+  "summary.md" = "976d0b9126c6cf016714251ae20a92dde61a926d826c6bf8f53fbcd6391741be",
   "chat.md" = "e978258b6d2d463003bfd8926ac34a151447157bb4b7ef1f5c9917b40a0295a3")
 
 rfiles <- tryCatch(check_reflex_files(), error = function(e) e)

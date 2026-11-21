@@ -464,7 +464,7 @@ RULE_FAMILIES <- list(
   smallest_change = list(), analyst_decides = list(), family_change = list(), analyst_words = list(),
   values_as_typed = list(), one_question_back = list(), marks_on_the_chart = list(), not_in_the_chat = list(),
   change_or_new = list(), nothing_selected = list(), a_number_is_a_chart = list(), about_the_file = list(),
-  next_steps = list(), facts_only = list(), headline_states_the_point = list(), few_numbers = list(),
+  next_steps = list(), facts_only = list(), headline_states_the_point = list(), change_over_time = list(), few_numbers = list(),
   describes_the_file = list(), no_cause = list(), nothing_to_say = list(), rows_left_out = list(),
   first_look = list(), names_as_given = list(), label_from_evidence = list(), say_when_guessing = list(),
   a_row = list())
