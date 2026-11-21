@@ -3814,7 +3814,8 @@ if (exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
   # the file-name value box: small type, one line, cut with an ellipsis, the full name as the tooltip
   d7_name <- "quarterly_sales_by_region_and_product_2015_to_2024_final_version_3_checked.csv"
   d7_boxes <- paste(as.character(canvas_boxes(data.frame(a = 1:3, b = 4:6), list(file = d7_name, columns = list()))), collapse = "")
-  d7_css <- regmatches(EXPLORE_CSS, regexpr("[.]chart-boxes [.]bslib-value-box [.]chart-box-file [{][^}]*[}]", EXPLORE_CSS))
+  # (Phase 7b: the Period box shares the rule, so the selector may list it after the file name's)
+  d7_css <- regmatches(EXPLORE_CSS, regexpr("[.]chart-boxes [.]bslib-value-box [.]chart-box-file[^{]*[{][^}]*[}]", EXPLORE_CSS))
   d7_size <- as.numeric(sub("^.*font-size: ([0-9.]+)rem.*$", "\\1", d7_css))
   d7_period <- paste(as.character(canvas_boxes(c6_read$read$data, c6_cb_ready)), collapse = "")
   check("7D-1: the file-name value box does not wrap in large type: the name is in a span set small (1.25rem or less), on one line (nowrap), cut with an ellipsis, and the whole name is its title (tooltip); a box that is not the file name does not use it",
@@ -3856,14 +3857,17 @@ if (exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
   d7_n_imgs <- lengths(regmatches(d7_sheet, gregexpr("<img ", d7_sheet, fixed = TRUE)))
   d7_met <- names(purrr::keep(CHART_PALETTES, function(e) identical(e$source, "MetBrewer")))
   d7_met_of <- function(kind) sum(names(chart_palettes(kind)) %in% d7_met)
-  d7_expect <- 9L * 6L + 2L * length(chart_palettes("qualitative")) + 3L + 9L * 2L + 2L * d7_met_of("qualitative") + d7_met_of("sequential") + d7_met_of("diverging")
+  # Phase 7b adds a row of its (look) charts: after, and before when the old code could be exported from git
+  d7_before <- grepl("before (drawn by the code at commit", d7_sheet, fixed = TRUE)
+  d7_expect <- 9L * 6L + 2L * length(chart_palettes("qualitative")) + 3L + 9L * 2L + 2L * d7_met_of("qualitative") + d7_met_of("sequential") + d7_met_of("diverging") +
+    length(PHASE7B_LOOK) * (if (d7_before) 2L else 1L)
   d7_sheet_src <- paste(readLines(file.path("tests", "gallery.R"), encoding = "UTF-8"), collapse = "\n")
   d7_build_src <- sub("(?s)^.*(build_style_sheet <- function.*?)\nif \\(sys.nframe.*$", "\\1", d7_sheet_src, perl = TRUE)
   cat("      style sheet: ", d7_n_imgs, " charts (expected ", d7_expect, "), ", round(file.size(d7_sheet_file) / 1e6, 1), " MB\n", sep = "")
   check("7D-2: tests/style_sheet.html: every family in every style (54), every qualitative palette on Clean and on Dark, the three labelled charts, one chart of each family with labels and annotate in Newspaper and Dark, and the MetBrewer palettes on offer: the count of drawn charts is the count expected from the app's own palette lists, none failed to draw",
         d7_n_imgs == d7_expect && d7_n_figs == d7_n_imgs && !grepl("Could not draw this", d7_sheet, fixed = TRUE) &&
           all(purrr::map_lgl(names(CHART_STYLES), function(s) lengths(regmatches(d7_sheet, gregexpr(paste0(", ", CHART_STYLES[[s]]$label, "\""), d7_sheet, fixed = TRUE))) >= 9L)) &&
-          all(purrr::map_lgl(c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap"), function(f) grepl(paste0("alt=\"", f, ", "), d7_sheet, fixed = TRUE) && grepl(paste0(f, ", labels and annotate, Newspaper|", f, ", no labels or annotate for this family, Newspaper"), d7_sheet) && grepl(paste0(f, ", [a-z ,]*Dark"), d7_sheet))) &&
+          all(purrr::map_lgl(c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap"), function(f) grepl(paste0("alt=\"", f, ", "), d7_sheet, fixed = TRUE) && grepl(paste0(f, ", (labels and annotate|labels|cell values|no labels or annotate for this family), Newspaper"), d7_sheet) && grepl(paste0(f, ", [a-z ,]*Dark"), d7_sheet))) &&
           all(purrr::map_lgl(unname(chart_palettes("qualitative")), function(l) grepl(paste0(htmltools::htmlEscape(l), " on Clean"), d7_sheet, fixed = TRUE) && grepl(paste0(htmltools::htmlEscape(l), " on Dark"), d7_sheet, fixed = TRUE))) &&
           all(purrr::map_lgl(unname(chart_palettes("sequential"))[names(chart_palettes("sequential")) %in% d7_met], function(l) grepl(paste0("alt=\"", l, " (sequential"), d7_sheet, fixed = TRUE))))
   check("7D-2: the style sheet is written without a model call and is git-ignored: build_style_sheet() holds no call to llm_json, llm_chat, ellmer or the key, and 'tests/style_sheet.html' is in chaRt/.gitignore",
@@ -3923,6 +3927,184 @@ if (exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
         d7_cut$sent == 3L && isTRUE(d7_cut$run$stopped) && nrow(d7_cut$run$calls) >= 3L && sum(d7_cut$run$calls$ok) == 3L && length(d7_cut$run$skipped) > 0L &&
           any(grepl("STOPPED", d7_cut$lines, fixed = TRUE)) && !any(grepl("Headlines and summaries for", d7_cut$lines, fixed = TRUE)))
 }
+
+# ---- Phase 7b: faults found by looking at the charts -------------------------------------------
+#
+# A check that a label exists is not a check that it can be read: these work on the drawn chart where they can
+#   (drawn_text_faults() in tests/gallery.R measures every text a panel draws).
+
+if (c7_ok) {
+  # 1, 2, 3. every gold spec, with labels on (where the family takes it) and each kind of annotate it takes, in all six styles:
+  #   no text R writes runs past its panel (or past the device, for a plot that does not clip), no two overlap, none sits on a rug
+  e7_t0 <- Sys.time()
+  e7_variants <- function(spec, cb) {
+    base = utils::modifyList(spec, list(labels = "on"))
+    if (length(spec_check(base, cb))) base = spec
+    ann = purrr::map(annotate_kinds(spec$family), function(k) utils::modifyList(base, list(annotate = list(k))))
+    c(list(base), ann)
+  }
+  e7_runs <- unlist(purrr::map(gold, function(x) purrr::imap(e7_variants(x$entry$spec, x$g$cb), function(sp, i) purrr::map(names(CHART_STYLES), function(st) {
+    p = tryCatch(spec_plot(sp, x$g$data, x$g$cb, b7_pal(st)), error = function(e) e)
+    if (!inherits(p, "ggplot")) return(paste0(x$entry$name, " #", i, " ", st, ": could not draw"))
+    f = drawn_text_faults(p)
+    if (length(f)) paste0(x$entry$name, " #", i, " ", st, ": ", f) else character(0)
+  }))), use.names = FALSE)
+  e7_n <- sum(purrr::map_int(gold, function(x) length(e7_variants(x$entry$spec, x$g$cb)))) * length(CHART_STYLES)
+  cat("      drawn texts: ", e7_n, " charts measured in ", round(as.numeric(difftime(Sys.time(), e7_t0, units = "secs"))), " s", if (length(e7_runs)) paste0("; ", paste(e7_runs, collapse = " | ")), "\n", sep = "")
+  # the measure can fail: a long label centred on the first bar runs past a clipped panel, and two labels on one spot overlap
+  e7_bad <- c7_plot(c7_bar8) + ggplot2::annotate("text", x = 1, y = 7e5, label = "A long label centred on the first bar", size = 5) +
+    ggplot2::annotate("text", x = c(5, 5), y = c(4e5, 4e5), label = c("same place", "same place"))
+  e7_bad_f <- drawn_text_faults(e7_bad)
+  check(paste0("7b-1: on the drawn chart, every text R writes lies wholly inside its panel (inside the device where the plot does not clip), no two overlap and no annotation sits on a rug: every gold spec with labels on and each annotate kind, in all six styles (",
+               e7_n, " charts, measured with grid on a ragg device); the measure flags a label run past the panel and two that overlap"),
+        !length(e7_runs) && e7_n > 300L && any(grepl("runs past the panel", e7_bad_f, fixed = TRUE)) && any(grepl("overlaps", e7_bad_f, fixed = TRUE)))
+  # 1. the side a text runs to, and words on lines of their own over an upright bar
+  e7_g <- function(sp) attr(c7_plot(sp), "spec")$.annotate
+  e7_bar_hi <- e7_g(utils::modifyList(c7_bar8, list(labels = "on", annotate = list("highest"))))[[1]]
+  check("7b-1: an annotation's side comes from the point's place: over an upright bar it is centred, its kind and value on lines of their own; on a point in the right third of a panel it runs left (hjust 1), in the left third right (hjust 0)",
+        identical(e7_bar_hi$hjust, 0.5) && any(c7_labels(c7_plot(utils::modifyList(c7_bar8, list(labels = "on", annotate = list("highest"))))) == paste0("Highest\n", fact_num(max(attr(c7_plot(c7_bar8), "table")$revenue)))) &&
+          identical(e7_g(utils::modifyList(c7_lines3, list(labels = "off", annotate = list("latest"))))[[1]]$hjust, 1) &&
+          identical(e7_g(utils::modifyList(c7_lines3, list(labels = "off", annotate = list("first"))))[[1]]$hjust, 0))
+  # 2. a marked last point joins its line's end label
+  e7_pm <- c7_plot(utils::modifyList(c7_lines3, list(annotate = list("highest", "latest"))))
+  e7_2 <- c(end_label = "Islands  116,000, highest" %in% c7_labels(e7_pm), no_second = !any(grepl("^Highest", c7_labels(e7_pm))), ring = length(c7_rings(e7_pm)) == 1L,
+            merged = isTRUE(attr(e7_pm, "spec")$.annotate[[1]]$merged), readable = !length(drawn_text_faults(e7_pm)))
+  if (!all(e7_2)) cat("      7b-2 not so: ", paste(names(e7_2)[!e7_2], collapse = ", "), "\n", sep = "")
+  check("7b-2: when the marked point is the last point of a line with an end label, the end label carries the words ('Islands  116,000, highest') and no second text is drawn; the ring stays",
+        all(e7_2))
+  # 3. ties are said; annotations keep clear of a rug (the sweep above), and ggrepel is told where the rug's band is
+  e7_ball_sc <- purrr::detect(gold, function(x) grepl("football, height against weight by foot", x$entry$name, fixed = TRUE))
+  e7_tie <- if (!is.null(e7_ball_sc)) spec_plot(utils::modifyList(e7_ball_sc$entry$spec, list(annotate = list("highest", "lowest"))), e7_ball_sc$g$data, e7_ball_sc$g$cb, b7_pal("clean"))
+  e7_tie_t <- if (!is.null(e7_tie)) attr(e7_tie, "table")
+  e7_tie_n <- if (!is.null(e7_tie)) sum(e7_tie_t[[e7_ball_sc$entry$spec$y]] == max(e7_tie_t[[e7_ball_sc$entry$spec$y]]))
+  check("7b-3: when several points tie for the highest or lowest, one is marked and the words say so ('Highest: 100, one of 2 points', the count from the table drawn); with a rug, the labels ggrepel moves are kept above and right of the rug's band",
+        !is.null(e7_tie) && e7_tie_n > 1L && any(c7_labels(e7_tie) == paste0("Highest: ", fact_num(max(e7_tie_t[[e7_ball_sc$entry$spec$y]]), comma = FALSE), ", one of ", e7_tie_n, " points")) &&
+          !is.null(attr(e7_tie, "spec")$.rug_floor) && any(grepl("ylim = c(", spec_code(attr(e7_tie, "spec"), e7_ball_sc$g$cb, e7_ball_sc$g$path), fixed = TRUE)))
+  # 4. a value on every mark: the value axis keeps its title and loses its numbers and ticks
+  e7_all <- c7_plot(c7_bar8)
+  e7_some <- c7_plot(utils::modifyList(c7_grouped, list(labels = "on")))
+  e7_some_flip <- isTRUE(attr(e7_some, "spec")$.flip)
+  e7_blank <- function(th, el) inherits(ggplot2::calc_element(el, th), "ggplot2::element_blank")
+  c7_blank <- e7_blank
+  e7_s_all <- attr(e7_all, "spec")
+  cat("      7b-4: value labels ", isTRUE(e7_s_all$.value_labels), ", rows ", length(e7_s_all$.label_rows), ", annotate ", length(e7_s_all$.annotate), ", bare ", isTRUE(e7_s_all$.value_axis_bare),
+      ", notes: ", paste(attr(e7_all, "notes"), collapse = " | "), "\n", sep = "")
+  e7_4 <- c(bare = isTRUE(attr(e7_all, "spec")$.value_axis_bare), text_blank = c7_blank(e7_all$theme, "axis.text.y"), ticks_blank = c7_blank(e7_all$theme, "axis.ticks.y"),
+            title = identical(e7_all$labels$y, "Total revenue"), code = grepl("axis.text.y = element_blank()", spec_code(attr(e7_all, "spec"), pan_g$cb, pan_g$path), fixed = TRUE),
+            some_missing = length(attr(e7_some, "spec")$.label_rows) > 0L, some_whole = !isTRUE(attr(e7_some, "spec")$.value_axis_bare),
+            some_text = !c7_blank(e7_some$theme, if (e7_some_flip) "axis.text.x" else "axis.text.y"))
+  if (!all(e7_4)) cat("      7b-4 not so: ", paste(names(e7_4)[!e7_4], collapse = ", "), "\n", sep = "")
+  check("7b-4: when every bar carries its value the value axis keeps its title and loses its numbers and ticks (and the written code says so); when any label is missing the axis is whole",
+        all(e7_4))
+  # 5. a line chart in panels: a mark in each panel up to six, each number in the facts; above six, none and a note
+  e7_p4 <- c7_plot(list(family = "line", x = "year", y = "revenue", fn = "sum", color = "region", facet = "region", title = "t",
+                        filter = c7_in("region", "North", "Coast", "Islands", "East"), annotate = list("highest")))
+  e7_p8 <- c7_plot(list(family = "line", x = "year", y = "revenue", fn = "sum", color = "region", facet = "region", title = "t", annotate = list("highest")))
+  e7_f4 <- spec_facts(attr(e7_p4, "spec"), attr(e7_p4, "table"), pan_g$cb)$text
+  e7_a4 <- attr(e7_p4, "spec")$.annotate
+  check("7b-5: a line chart in panels with annotate marks the point in each panel when there are at most 6 (here 4 marks, one per panel, each number in the chart's facts); with 8 panels it marks none and the notes say why",
+        length(e7_a4) == 4L && setequal(purrr::map_chr(e7_a4, "panel"), c("North", "Coast", "Islands", "East")) &&
+          all(purrr::map_lgl(e7_a4, function(g) grepl(fact_num(attr(e7_p4, "table")$revenue[g$row]), e7_f4, fixed = TRUE))) &&
+          !length(attr(e7_p8, "spec")$.annotate) && any(grepl("No point is marked: the chart has 8 panels", attr(e7_p8, "notes"), fixed = TRUE)))
+  # 6. the time axis prints no tick beyond the data
+  e7_lines <- purrr::keep(gold, function(x) identical(x$entry$spec$family, "line"))
+  e7_breaks_ok <- unlist(purrr::map(e7_lines, function(x) purrr::map_lgl(names(CHART_STYLES), function(st) {
+    p = spec_plot(utils::modifyList(x$entry$spec, list(labels = "on")), x$g$data, x$g$cb, b7_pal(st))
+    t = attr(p, "table"); xr = range(as.numeric(t[[x$entry$spec$x]]))
+    br = as.numeric(stats::na.omit(ggplot2::ggplot_build(p)$layout$panel_params[[1]]$x$breaks))
+    length(br) >= 2L && all(br >= xr[1] & br <= xr[2])
+  })))
+  check(paste0("7b-6: a line chart's time axis prints no tick beyond its data's first and last x, with end labels on (", length(e7_breaks_ok), " charts: the gold line specs in six styles); the room for the labels comes from the expansion"),
+        length(e7_breaks_ok) >= 6L && all(e7_breaks_ok))
+  # 7. axis titles from the data dictionary
+  e7_cb <- pan_g$cb
+  e7_cb$columns = purrr::map(e7_cb$columns, function(e) if (identical(e$name, "units")) utils::modifyList(e, list(label = "Units sold")) else e)
+  e7_tp <- spec_plot(list(family = "scatter", x = "price", y = "units", title = "t"), pan_g$data, e7_cb, b7_pal("clean"))
+  e7_tcode <- spec_code(attr(e7_tp, "spec"), e7_cb, pan_g$path)
+  e7_under <- list(columns = list(list(name = "unit_price", label = "unit_price")))
+  check("7b-7: axis titles use the data dictionary's label ('Units sold'), else the column name with underscores as spaces and a capital first letter ('Price', 'Unit price', 'Mean unit price'); spec_code() prints the same titles; the facts keep the label as it is",
+        identical(e7_tp$labels$y, "Units sold") && identical(e7_tp$labels$x, "Price") && grepl("x = \"Price\"", e7_tcode, fixed = TRUE) && grepl("y = \"Units sold\"", e7_tcode, fixed = TRUE) &&
+          identical(col_title(e7_under, "unit_price"), "Unit price") && identical(value_label(list(family = "dot", y = "unit_price", fn = "mean"), e7_under, title = TRUE), "Mean unit price") &&
+          identical(value_label(list(family = "dot", y = "unit_price", fn = "mean"), e7_under), "Mean unit_price") && identical(c7_plot(c7_bar8)$labels$x, "Region"))
+  # 8. a heatmap legend shows four to six round values, in every style
+  # every gold heatmap, the panel's mean price among them (the one whose legend showed two values: 20 and 30)
+  e7_heats <- purrr::keep(gold, function(x) identical(x$entry$spec$family, "heatmap"))
+  e7_heat_gold <- purrr::detect(e7_heats, function(x) grepl("panel, mean price by region and year (heatmap)", x$entry$name, fixed = TRUE))
+  e7_nbreaks <- unlist(purrr::map(e7_heats, function(x) purrr::map_int(names(CHART_STYLES), function(st) {
+    p = spec_plot(x$entry$spec, x$g$data, x$g$cb, b7_pal(st))
+    # what the legend shows (the scale's breaks can lie outside its range: the default gave 10, 20, 30, 40 and the legend showed 20 and 30)
+    length(ggplot2::get_guide_data(p, "fill")$.label)
+  })))
+  check(paste0("7b-8: a heatmap's legend shows four to six round values in every style (", length(e7_heats), " gold heatmaps by six styles: ", paste(e7_nbreaks, collapse = ", "), "), on a colour bar made long enough for them"),
+        !is.null(e7_heat_gold) &&
+        all(e7_nbreaks >= 4L & e7_nbreaks <= 6L) && grepl("legend.key.width = unit(2.4, \"in\")", spec_code(attr(spec_plot(e7_heat_gold$entry$spec, e7_heat_gold$g$data, e7_heat_gold$g$cb), "spec"), e7_heat_gold$g$cb, e7_heat_gold$g$path), fixed = TRUE))
+  # 9. a palette's own colour for a single series
+  e7_single_dark <- palette_single("okabe_ito", "dark")
+  check("7b-9: a palette entry may carry `single`, the colour of a chart with one series: Okabe-Ito's is its blue (#0072B2) on Clean, and on Dark the 3 to 1 rule applies to it as to any colour; a palette without one uses its first colour",
+        identical(CHART_PALETTES$okabe_ito$single, "#0072B2") && identical(b7_hex(ggplot2::ggplot_build(c7_plot(c7_line1))$data[[1]]$colour[[1]]), "#0072B2") &&
+          b7_ratio(e7_single_dark, CHART_STYLES$dark$background) >= 3 && identical(palette_single("tol_bright", "clean"), palette_usable("tol_bright", "clean")[[1]]))
+}
+
+# 10. the Period value box
+e7_per <- period_text(as.Date(c("2023-01-01", "2024-12-01")))
+e7_per_short <- period_text(as.Date(c("2024-03-01", "2024-04-15")))
+e7_boxes <- paste(as.character(canvas_boxes(data.frame(d = as.Date(c("2023-01-01", "2024-12-01")), v = 1:2),
+                                            list(file = "x.csv", columns = list(list(name = "d", role = "time"), list(name = "v", role = "measure"))))), collapse = "")
+check("7b-10: the Period box says 'Jan 2023 to Dec 2024' (month and year past 60 days, the dates under it; years as numbers stay), on one line in smaller type with the full dates as its tooltip; the third box takes a row of its own on a narrow canvas and half the row on a wide one",
+      identical(e7_per$short, "Jan 2023 to Dec 2024") && identical(e7_per$full, "2023-01-01 to 2024-12-01") && identical(e7_per_short$short, e7_per_short$full) &&
+        identical(period_text(c(2015, 2024))$short, "2015 to 2024") &&
+        grepl("class=\"chart-box-period[^\"]*\" title=\"2023-01-01 to 2024-12-01\">Jan 2023 to Dec 2024<", e7_boxes) &&
+        grepl(".chart-box-period { font-size: 1rem; }", EXPLORE_CSS, fixed = TRUE) && grepl("white-space: nowrap", EXPLORE_CSS, fixed = TRUE) &&
+        grepl("breakpoints(sm = c(6, 6, 12), lg = c(3, 3, 6))", paste(readLines(file.path("R", "ui.R"), encoding = "UTF-8"), collapse = "\n"), fixed = TRUE))
+
+# 11. the chat text of a charts reply, from a real saved reply
+e7_rds <- file.path("tests", "live_replies.rds")
+e7_rr <- if (file.exists(e7_rds)) tryCatch(readRDS(e7_rds)$phase7, error = function(e) NULL)
+if (!is.null(e7_rr) && identical(e7_rr$turns[[1]]$kind, "charts")) {
+  e7_orders <- read_data(file.path("tests", "data", "orders.csv"), "orders.csv", e7_rr$missing)$data
+  e7_raw <- e7_rr$turns[[1]]$replies$first
+  e7_r1 <- chat_turn(e7_rr$turns[[1]]$message, list(), NULL, e7_rr$cb, e7_orders, ask = stand_by(function(user, i) e7_raw)$ask)
+  e7_say <- parse_json_block(e7_raw)$charts[[1]]$say
+  e7_txt <- chat_reply_text(e7_r1)
+  check("7b-11: for a charts reply (the Phase 7 live run's first, from tests/live_replies.rds) the chat shows the chart's say once, escaped, then 'Added to the canvas.'; the stored spec has no say; the live run's printout now prints it too",
+        is_text1(e7_say) && lengths(regmatches(e7_txt, gregexpr(md_text(e7_say), e7_txt, fixed = TRUE))) == 1L && grepl("Added to the canvas.", e7_txt, fixed = TRUE) &&
+          is.null(e7_r1$charts[[1]]$spec$say) && identical(live_reply_text(e7_r1), e7_say))
+} else cat("skip  7b-11: tests/live_replies.rds has no Phase 7 run\n")
+
+# 12. a row typed on the Data page after a second file reaches Explore
+e7_file1 <- profile_data(data.frame(region = c("a", "b"), revenue = c(1, 2)))
+e7_file2 <- profile_data(data.frame(area = c("x", "y", "z"), units = c(3, 4, 5)))
+e7_srv <- new.env()
+local({
+  st = shiny::reactiveValues(codebook = NULL, data = NULL)
+  shiny::testServer(mod_codebook_server, args = list(state = st), {
+    ready = function() codebook_ready(st$codebook) && !is.null(st$data)
+    type_row = function(id, text) do.call(session$setInputs, stats::setNames(list(text), id))
+    st$data = data.frame(region = c("a", "b"), revenue = c(1, 2)); st$codebook = new_codebook(e7_file1, "one.csv", 2L, character(0), "UTF-8")
+    session$flushReact()
+    id1 = input_id("row_is", 0L)
+    type_row(id1, "one sale"); session$flushReact()
+    e7_srv$first = ready()
+    st$data = data.frame(area = c("x", "y", "z"), units = c(3, 4, 5)); st$codebook = new_codebook(e7_file2, "two.csv", 3L, character(0), "UTF-8")
+    session$flushReact()
+    id2 = input_id("row_is", 0L)
+    e7_srv$new_box = !identical(id1, id2) && !ready()
+    type_row(id1, "an old box"); session$flushReact()          # the first file's box, if its page were still on screen
+    e7_srv$old_box_ignored = !ready()
+    type_row(id2, "one shipment"); session$flushReact()
+    e7_srv$second = ready() && identical(st$codebook$row_is, "one shipment") && identical(st$codebook$file, "two.csv")
+  })
+})
+check("7b-12: file one, row typed, Explore ready; file two (a new data dictionary): the Data page's boxes are new (a new generation of ids) and Explore is not ready; a value sent from the first file's box is not applied; the row typed in the new box makes Explore ready",
+      isTRUE(e7_srv$first) && isTRUE(e7_srv$new_box) && isTRUE(e7_srv$old_box_ignored) && isTRUE(e7_srv$second))
+
+# 13. the style sheet and the gold bar's title
+e7_bar_gold <- purrr::detect(gold, function(x) grepl("panel, total revenue by region (bar", x$entry$name, fixed = TRUE))
+check("7b-13: the gold bar spec's title names the region its table puts highest (Islands); the style sheet has a Phase 7b row of the (look) charts and a heatmap with its cell values in the labels rows",
+      !is.null(e7_bar_gold) && grepl("^Islands ", e7_bar_gold$entry$spec$title) &&
+        identical(as.character(attr(spec_plot(e7_bar_gold$entry$spec, e7_bar_gold$g$data, e7_bar_gold$g$cb), "table")$region[1]), "Islands") &&
+        exists("d7_sheet") && grepl("<h2>Phase 7b</h2>", d7_sheet, fixed = TRUE) && grepl("heatmap, cell values, Newspaper", d7_sheet, fixed = TRUE) &&
+        length(PHASE7B_LOOK) == 6L && setequal(purrr::map_int(PHASE7B_LOOK, "item"), c(1L, 2L, 3L, 4L, 6L, 8L)))
 
 # ---- the count -------------------------------------------------------------------
 

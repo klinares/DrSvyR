@@ -705,19 +705,32 @@ chart_title <- function(chart, fallback = "this chart") {
 #   the time role (its first and last value), else the file name.
 canvas_boxes <- function(data, cb) {
   time = purrr::detect(cb$columns, function(e) identical(e$role, "time"))
-  period = if (!is.null(time) && time$name %in% names(data)) tryCatch({
-    x = data[[time$name]]
-    rng = range(x, na.rm = TRUE)
-    both = if (inherits(rng, c("Date", "POSIXt"))) date_text(rng) else format(rng, big.mark = "", scientific = FALSE, trim = TRUE)
-    paste(both, collapse = " to ")
-  }, error = function(e) NULL)
+  period = if (!is.null(time) && time$name %in% names(data)) tryCatch(period_text(range(data[[time$name]], na.rm = TRUE)), error = function(e) NULL)
   box = function(title, value) bslib::value_box(title, value, fill = FALSE)
-  # The file name is long and value boxes are large type: it is set small, on one line, cut with an ellipsis, and the full name is its tooltip.
-  file_box = function(name) box("File", tags$span(class = "chart-box-file", title = name, name))
-  do.call(bslib::layout_column_wrap,
-          c(list(width = 1 / 3, fill = FALSE, class = "chart-boxes"),
-            list(box("Rows", format_num(nrow(data))), box("Columns", format_num(ncol(data))),
-                 if (!is.null(period)) box("Period", period) else file_box(cb$file %||% ""))))
+  # The file name and the period are long and value boxes are large type: each is set smaller, on one line (cut with an
+  #   ellipsis if it must be), with the full text as its tooltip.
+  small = function(title, cls, text, full) box(title, tags$span(class = cls, title = full, text))
+  # The third box takes half the row on a wide canvas, and a row of its own on a narrow one (below bslib's lg breakpoint,
+  #   down to 576 pixels, where the sidebar still sits beside the canvas), so the period fits on one line (Phase 7b).
+  bslib::layout_columns(col_widths = bslib::breakpoints(sm = c(6, 6, 12), lg = c(3, 3, 6)), fill = FALSE, class = "chart-boxes",
+                        box("Rows", format_num(nrow(data))), box("Columns", format_num(ncol(data))),
+                        if (!is.null(period)) small("Period", "chart-box-period", period$short, period$full)
+                        else small("File", "chart-box-file", cb$file %||% "", cb$file %||% ""))
+}
+
+# The period a time column covers, for its value box (Phase 7b): `short` is month and year ("Jan 2023 to Dec 2024") when the
+#   dates span more than 60 days, else the dates; `full` is the first and last date, for the tooltip. Years as numbers stay
+#   as they are ("2015 to 2024"). Month names from month.abb, so the box does not depend on the server's locale.
+period_text <- function(rng) {
+  if (inherits(rng, c("Date", "POSIXt"))) {
+    d = as.Date(rng)
+    full = paste(date_text(rng), collapse = " to ")
+    month = function(x) paste(month.abb[as.integer(format(x, "%m"))], format(x, "%Y"))
+    short = if (as.numeric(diff(d)) > 60) paste(month(d), collapse = " to ") else full
+    return(list(short = short, full = full))
+  }
+  both = paste(format(rng, big.mark = "", scientific = FALSE, trim = TRUE), collapse = " to ")
+  list(short = both, full = both)
 }
 
 # A click on a card selects it, unless it lands on a button, link, box or the full screen button, which have
@@ -757,7 +770,8 @@ EXPLORE_CSS <- "
 .chart-style-sample { display: block; max-width: 100%; height: auto; border: 1px solid rgba(128, 128, 128, .5); margin-bottom: .2rem; }
 .chart-style-name { font-weight: 600; }
 .chart-card { cursor: pointer; }
-.chart-boxes .bslib-value-box .chart-box-file { display: block; font-size: 1.1rem; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.chart-boxes .bslib-value-box .chart-box-file, .chart-boxes .bslib-value-box .chart-box-period { display: block; font-size: 1.1rem; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.chart-boxes .bslib-value-box .chart-box-period { font-size: 1rem; }
 .chart-boxes .bslib-value-box .value-box-area { min-width: 0; }
 /* Card buttons in dark mode: Bootstrap's outline buttons and the theme's primary (a dark navy) keep their light-mode colours on a dark
    card and read faintly. Text and fills take the theme's body colours for dark mode (light text, 11 to 1 on the card); the hue stays in the

@@ -75,6 +75,93 @@ gold_run <- function(entry, work_dir) {
 }
 
 
+# ---- the texts on a drawn chart (Phase 7b) -----------------------------------------------------------
+# A check that a label exists is not a check that it can be read. These measure every text a chart's panels draw (value
+#   labels, end labels, annotations, names, cell values), on the chart as drawn: the plot is printed to a ragg device of its
+#   own size, grid::grid.force() turns ggrepel's labels into plain text grobs, and each text grob in a panel's viewport is
+#   measured there: grid::deviceLoc() for its anchor, grid::grobWidth(), grobHeight() and grobDescent() of the string in its
+#   own font and size, and its hjust and vjust. One row per label: label, x0 x1 y0 y1 in inches from the device's lower left;
+#   the panel's box px0 px1 py0 py1; the panel; the device's width and height; and whether the plot clips to its panels.
+drawn_text_boxes <- function(p, dpi = 96) {
+  sz = spec_size(attr(p, "spec"), attr(p, "table"))
+  f = tempfile(fileext = ".png")
+  ragg::agg_png(f, width = round(sz[["width"]] * dpi), height = round(sz[["height"]] * dpi), res = dpi)
+  on.exit({ grDevices::dev.off(); unlink(f) })
+  print(p)
+  grid::grid.force()
+  ls = grid::grid.ls(viewports = TRUE, print = FALSE, fullNames = TRUE)
+  rows = which(ls$type == "grobListing" & grepl("^text\\[", ls$name) & grepl("panel", ls$vpPath))
+  dev = grDevices::dev.size("in")
+  clip = !identical(p$coordinates$clip, "off")
+  boxes = purrr::map(rows, function(i) {
+    name = sub("^text\\[(.*)\\]$", "\\1", ls$name[[i]])
+    vp = do.call(grid::vpPath, as.list(sub("^viewport\\[(.*)\\]$", "\\1", strsplit(sub("^viewport\\[ROOT\\]::", "", ls$vpPath[[i]]), "::")[[1]])))
+    gp = do.call(grid::gPath, as.list(c(sub("^[A-Za-z]+\\[(.*)\\]$", "\\1", strsplit(ls$gPath[[i]], "::")[[1]]), name)))
+    g = grid::grid.get(gp, strict = TRUE)
+    lab = as.character(g$label)
+    n = length(lab)
+    if (!n) return(NULL)
+    grid::downViewport(vp)
+    pb = grid::deviceLoc(grid::unit(c(0, 1), "npc"), grid::unit(c(0, 1), "npc"))
+    one_gp = function(k) do.call(grid::gpar, purrr::map(unclass(g$gp), function(v) if (length(v) > 1L) v[[(k - 1L) %% length(v) + 1L]] else v))
+    # each anchor in the label's own font settings: ggrepel writes a moved label's place as the point plus an offset in
+    #   font-relative units, which mean something else in the viewport's default font
+    xs = rep_len(g$x, n); ys = rep_len(g$y, n)
+    loc = purrr::map(seq_len(n), function(k) {
+      grid::pushViewport(grid::viewport(gp = one_gp(k)))
+      on.exit(grid::popViewport())
+      l = grid::deviceLoc(xs[k], ys[k])
+      c(x = as.numeric(l$x), y = as.numeric(l$y))
+    })
+    loc = list(x = purrr::map_dbl(loc, "x"), y = purrr::map_dbl(loc, "y"))
+    tg = purrr::map(seq_len(n), function(k) grid::textGrob(lab[[k]], gp = one_gp(k)))
+    w = purrr::map_dbl(tg, function(x) grid::convertWidth(grid::grobWidth(x), "in", valueOnly = TRUE))
+    h = purrr::map_dbl(tg, function(x) grid::convertHeight(grid::grobHeight(x), "in", valueOnly = TRUE) +
+                         grid::convertHeight(grid::grobDescent(x), "in", valueOnly = TRUE))
+    grid::upViewport(0)
+    hj = rep_len(as.numeric(g$hjust %||% 0.5), n)
+    vj = rep_len(as.numeric(g$vjust %||% 0.5), n)
+    ax = as.numeric(loc$x); ay = as.numeric(loc$y)
+    data.frame(label = lab, x0 = ax - hj * w, x1 = ax + (1 - hj) * w, y0 = ay - vj * h, y1 = ay + (1 - vj) * h,
+               px0 = as.numeric(pb$x[1]), px1 = as.numeric(pb$x[2]), py0 = as.numeric(pb$y[1]), py1 = as.numeric(pb$y[2]),
+               panel = sub(".*viewport\\[(panel[^]]*)\\].*", "\\1", ls$vpPath[[i]]), dev_w = dev[[1]], dev_h = dev[[2]], clip = clip,
+               stringsAsFactors = FALSE)
+  })
+  out = do.call(rbind, purrr::compact(boxes))
+  if (is.null(out)) data.frame(label = character(0)) else out
+}
+
+# The faults of a drawn chart's texts, as sentences (none: character(0)). A text must lie wholly inside its panel when the plot
+#   clips to its panels (anything past the panel is cut off), and inside the device when it does not (end labels stand in the
+#   margin). No two texts of a panel may overlap. With a rug, an annotation keeps clear of the rug's band (3% of the panel along
+#   its bottom and left edges). `tol` is how far a box may reach, in inches (the measure is of the string's box, not its ink).
+drawn_text_faults <- function(p, tol = 0.02) {
+  b = drawn_text_boxes(p)
+  if (!nrow(b)) return(character(0))
+  out_of = function(i) {
+    lim = if (b$clip[[i]]) c(b$px0[[i]], b$px1[[i]], b$py0[[i]], b$py1[[i]]) else c(0, b$dev_w[[i]], 0, b$dev_h[[i]])
+    b$x0[[i]] < lim[1] - tol || b$x1[[i]] > lim[2] + tol || b$y0[[i]] < lim[3] - tol || b$y1[[i]] > lim[4] + tol
+  }
+  outside = purrr::keep(seq_len(nrow(b)), out_of)
+  pairs = if (nrow(b) > 1L) utils::combn(nrow(b), 2L, simplify = FALSE) else list()
+  meet = purrr::keep(pairs, function(ij) {
+    i = ij[1]; j = ij[2]
+    identical(b$panel[[i]], b$panel[[j]]) &&
+      min(b$x1[[i]], b$x1[[j]]) - max(b$x0[[i]], b$x0[[j]]) > tol && min(b$y1[[i]], b$y1[[j]]) - max(b$y0[[i]], b$y0[[j]]) > tol
+  })
+  s = attr(p, "spec")
+  ann = purrr::map_chr(s$.annotate %||% list(), function(g) annotation_text(g, s, attr(p, "table")))
+  rug = if (isTRUE(s$rug)) purrr::keep(seq_len(nrow(b)), function(i) {
+    is_ann = any(startsWith(ann, sub("\n.*", "", b$label[[i]]))) && nzchar(b$label[[i]])
+    band_y = b$py0[[i]] + 0.03 * (b$py1[[i]] - b$py0[[i]]); band_x = b$px0[[i]] + 0.03 * (b$px1[[i]] - b$px0[[i]])
+    is_ann && (b$y0[[i]] < band_y - tol || b$x0[[i]] < band_x - tol)
+  }) else integer(0)
+  c(purrr::map_chr(outside, function(i) paste0("'", b$label[[i]], "' runs past the ", if (b$clip[[i]]) "panel" else "device")),
+    purrr::map_chr(meet, function(ij) paste0("'", b$label[[ij[1]]], "' overlaps '", b$label[[ij[2]]], "'")),
+    purrr::map_chr(rug, function(i) paste0("'", b$label[[i]], "' sits on the rug")))
+}
+
+
 # ---- the gallery page ---------------------------------------------------------------------------
 
 GALLERY_OUT <- file.path("tests", "gallery.html")
@@ -268,6 +355,68 @@ sheet_cell <- function(caption, spec, g, palette) {
                                 if (length(notes)) paste0("<ul>", paste0("<li>", htmltools::htmlEscape(notes), "</li>", collapse = ""), "</ul>"), "</figure>"))
 }
 
+# A cell of the sheet from a PNG already drawn (the Phase 7b row's before and after).
+sheet_png_cell <- function(caption, file) {
+  if (!file.exists(file)) return(list(ok = FALSE, html = paste0("<figure><figcaption>", htmltools::htmlEscape(caption), "</figcaption><p class=\"bad\">Not drawn.</p></figure>")))
+  list(ok = TRUE, html = paste0("<figure><figcaption>", htmltools::htmlEscape(caption), "</figcaption><img loading=\"lazy\" alt=\"", htmltools::htmlEscape(caption),
+                                "\" width=\"", STYLE_SHEET_PX, "\" src=\"data:image/png;base64,", jsonlite::base64_enc(readBin(file, "raw", file.size(file))), "\"></figure>"))
+}
+
+# The charts of Phase 7b's (look) items, drawn before (the code at PHASE7B_BEFORE, exported from git) and after (the code here).
+#   Each: the item, what it shows, the gold spec (a STYLE_SHEET_GOLD key), what is changed in it, and the style.
+PHASE7B_BEFORE <- "489f3f9"
+PHASE7B_LOOK <- list(
+  list(item = 1L, what = "an annotation at the plot's edge", key = "bar", mods = list(labels = "on", annotate = list("highest")), style = "clean"),
+  list(item = 2L, what = "an annotation on a line's end label", key = "line", mods = list(labels = "on", annotate = list("highest", "latest")), style = "dark"),
+  list(item = 3L, what = "annotations by a rug, with ties", key = "scatter", mods = list(annotate = list("highest", "lowest")), style = "clean"),
+  list(item = 4L, what = "a value on every bar", key = "bar", mods = list(labels = "on"), style = "clean"),
+  list(item = 6L, what = "the time axis of a line chart with end labels", key = "line", mods = list(), style = "dark"),
+  list(item = 8L, what = "a heatmap's legend", key = "heatmap", mods = list(), style = "clean"))
+
+# Draws PHASE7B_LOOK with the code loaded now, one PNG per item (item<N>.png) in `out`. TRUE for each drawn.
+phase7b_draw <- function(out, work = tempfile("phase7b_")) {
+  dir.create(out, showWarnings = FALSE, recursive = TRUE)
+  dir.create(work, showWarnings = FALSE)
+  purrr::map_lgl(PHASE7B_LOOK, function(x) {
+    g = sheet_gold(STYLE_SHEET_GOLD[[x$key]], work)
+    if (is.null(g)) return(FALSE)
+    p = tryCatch(spec_plot(utils::modifyList(g$spec, x$mods), g$g$data, g$g$cb, sheet_palette(x$style)), error = function(e) e)
+    if (!inherits(p, "ggplot")) return(FALSE)
+    spec_png(p, file.path(out, paste0("item", x$item, ".png")))
+    TRUE
+  })
+}
+
+# The same charts drawn by the code at PHASE7B_BEFORE: its R/, app.R, www/ and tests are exported with `git archive` into a
+#   temporary folder, and a fresh R process loads that app and draws them there. FALSE when git or the commit is not to hand.
+phase7b_before <- function(out) {
+  dir.create(out, showWarnings = FALSE, recursive = TRUE)
+  tmp = tempfile("phase7b_before_")
+  dir.create(tmp)
+  tar = file.path(tmp, "old.tar")
+  ok = tryCatch(system2("git", c("archive", "--format=tar", "-o", shQuote(tar), PHASE7B_BEFORE, "--", "R", "app.R", "www", "tests/gallery.R", "tests/gold_specs.yaml"),
+                        stdout = FALSE, stderr = FALSE) == 0L, error = function(e) FALSE)
+  if (!ok || !file.exists(tar)) return(FALSE)
+  utils::untar(tar, exdir = tmp)
+  saveRDS(PHASE7B_LOOK, file.path(tmp, "look.rds"))
+  runner = file.path(tmp, "draw_before.R")
+  writeLines(c(
+    "invisible(shiny::shinyAppDir('.'))",
+    "source(file.path('tests', 'gallery.R'))",
+    "look = readRDS('look.rds')",
+    paste0("out = ", deparse(normalizePath(out, winslash = "/"))),
+    "work = tempfile('before_'); dir.create(work)",
+    "invisible(lapply(look, function(x) {",
+    "  g = sheet_gold(STYLE_SHEET_GOLD[[x$key]], work)",
+    "  p = spec_plot(utils::modifyList(g$spec, x$mods), g$g$data, g$g$cb, sheet_palette(x$style))",
+    "  spec_png(p, file.path(out, paste0('item', x$item, '.png')))",
+    "}))"), runner)
+  old = setwd(tmp)
+  on.exit(setwd(old))
+  status = system2(file.path(R.home("bin"), "Rscript"), c("--no-init-file", shQuote(runner)), stdout = FALSE, stderr = FALSE)
+  identical(status, 0L) && all(file.exists(file.path(out, paste0("item", purrr::map_int(PHASE7B_LOOK, "item"), ".png"))))
+}
+
 sheet_section <- function(heading, intro, cells)
   list(n = sum(purrr::map_lgl(cells, "ok")),
        html = paste0("<section><h2>", htmltools::htmlEscape(heading), "</h2><p class=\"intro\">", htmltools::htmlEscape(intro), "</p><div class=\"grid\">",
@@ -304,10 +453,18 @@ build_style_sheet <- function(out = STYLE_SHEET_OUT) {
     sheet_cell(paste0(fam, " with labels and annotations, Clean"), sp, x$g, sheet_palette("clean"))
   }))
   sec_c <- sheet_section("Labels and annotations", "Values on the marks, and the highest, lowest or latest point marked, all written by R.", c3)
-  # D. one chart of each family with labels and annotate, Newspaper and Dark
+  # D. one chart of each family with labels and annotate, Newspaper and Dark. The heatmap is cut to five years (8 regions by 5:
+  #   40 cells, the most that are labelled) so it shows its cell values; a heatmap takes no annotate (Phase 7b).
+  marks_caption = function(fam) if (identical(fam, "heatmap")) ", cell values, " else if (length(STYLE_SHEET_MARKS[[fam]]$annotate)) ", labels and annotate, "
+                                else if (length(STYLE_SHEET_MARKS[[fam]])) ", labels, " else ", no labels or annotate for this family, "
+  marks_spec = function(x, fam) {
+    sp = with_marks(x$spec, fam)
+    if (identical(fam, "heatmap")) sp$filter = list(list(column = "year", op = "in", value = as.list(2020:2024)))
+    sp
+  }
   d = purrr::compact(purrr::imap(gold, function(x, fam) if (!is.null(x))
-    purrr::map(c("newspaper", "dark"), function(s) sheet_cell(paste0(fam, if (length(STYLE_SHEET_MARKS[[fam]])) ", labels and annotate, " else ", no labels or annotate for this family, ", CHART_STYLES[[s]]$label), with_marks(x$spec, fam), x$g, sheet_palette(s)))))
-  sec_d = sheet_section("Labels and annotate in Newspaper and Dark", "One chart of each family with labels on and annotate where the family takes it (slope, histogram, box and heatmap take labels only).", unlist(d, recursive = FALSE))
+    purrr::map(c("newspaper", "dark"), function(s) sheet_cell(paste0(fam, marks_caption(fam), CHART_STYLES[[s]]$label), marks_spec(x, fam), x$g, sheet_palette(s)))))
+  sec_d = sheet_section("Labels and annotate in Newspaper and Dark", "One chart of each family with labels on and annotate where the family takes it (a slope takes labels only; a heatmap writes its cell values, on five years so it has at most 40 cells; a histogram and a box take neither).", unlist(d, recursive = FALSE))
   # E. the MetBrewer palettes on offer: qualitative as swatches on a bar chart, sequential and diverging on a heatmap
   met_names = names(purrr::keep(CHART_PALETTES, function(e) identical(e$source, "MetBrewer")))
   met = function(kind) { l = as.list(chart_palettes(kind)); l[names(l) %in% met_names] }
@@ -332,7 +489,19 @@ build_style_sheet <- function(out = STYLE_SHEET_OUT) {
     sheet_cell(paste0(label, " (", kind, ", offered under our lightness rule, not MetBrewer's)"), sp, heat$g, pal)
   })))
   sec_e = sheet_section("MetBrewer palettes on offer", "Qualitative sets as bars, one colour each; sequential and diverging sets as a heatmap of the mean price, the diverging ones centred on 25.", c(unname(e_q), unname(e_c)))
-  secs = list(sec_a, sec_b, sec_c, sec_d, sec_e)
+  # F. Phase 7b: the charts of its (look) items, before (the code at PHASE7B_BEFORE, from git) and after
+  after_dir = tempfile("phase7b_after_"); before_dir = tempfile("phase7b_before_png_")
+  phase7b_draw(after_dir)
+  have_before = phase7b_before(before_dir)
+  f = purrr::list_flatten(purrr::map(PHASE7B_LOOK, function(x) {
+    label = paste0("Item ", x$item, ": ", x$what, ", ", CHART_STYLES[[x$style]]$label)
+    c(if (have_before) list(sheet_png_cell(paste0(label, ", before"), file.path(before_dir, paste0("item", x$item, ".png")))),
+      list(sheet_png_cell(paste0(label, if (have_before) ", after" else ""), file.path(after_dir, paste0("item", x$item, ".png")))))
+  }))
+  sec_f = sheet_section("Phase 7b", paste0("The charts of the faults found by looking (items 1, 2, 3, 4, 6 and 8), ",
+                                           if (have_before) paste0("before (drawn by the code at commit ", PHASE7B_BEFORE, ", exported with git archive) and after.")
+                                           else "after only (the code before could not be exported from git here)."), f)
+  secs = list(sec_f, sec_a, sec_b, sec_c, sec_d, sec_e)
   total = sum(purrr::map_int(secs, "n"))
   html = paste0("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
                 "<title>chaRt style sheet</title><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:1300px;background:#fff;color:#1a1a1a}",

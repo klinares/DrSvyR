@@ -290,7 +290,7 @@
     "y": revenue
     fn: sum
     interactive: true
-    title: Coast earned the most over ten years
+    title: Islands earned the most over ten years
 
 - name: panel, revenue in three regions far apart (line, labels kept)
   file: panel.csv

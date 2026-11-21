@@ -199,7 +199,8 @@ LIVE_TURNS <- list(
 # What a reply says, as plain text: a charts reply gives each chart's say and the cannot sentences; the others their text.
 live_reply_text <- function(r) {
   if (!identical(r$kind, "charts")) return(paste(r$text, collapse = " "))
-  says = purrr::keep(purrr::map_chr(r$charts, function(ch) if (is_text1(ch$spec$say)) ch$spec$say else NA_character_), Negate(is.na))
+  # each chart's say travels beside its spec (Phase 7: the stored spec has none), as chat_reply_text() reads it
+  says = purrr::keep(purrr::map_chr(r$charts, function(ch) if (is_text1(ch$say)) ch$say else if (is_text1(ch$spec$say)) ch$spec$say else NA_character_), Negate(is.na))
   paste(c(says, r$cannot), collapse = " | ")
 }
 

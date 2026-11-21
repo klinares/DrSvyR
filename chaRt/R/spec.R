@@ -997,11 +997,12 @@ annotation_groups <- function(s, cb, t, whole = t) {
   fam = s$family
   kinds = as.character(values_of(s$annotate))
   if (!length(kinds) || !length(annotate_kinds(fam))) return(NULL)
-  if (identical(fam, "line") && !is.null(s$facet) && !identical(s$facet, s$color)) {
+  if (identical(fam, "line") && !is.null(s$facet)) {
     panels = unique(as.character(t[[s$facet]]))
     if (length(panels) > SPEC_ANNOTATE_PANELS) return(NULL)
     inner = s
     inner$facet = NULL
+    if (identical(s$color, s$facet)) inner$color = NULL     # one line in each panel
     return(unlist(purrr::map(panels, function(k) {
       at = which(as.character(t[[s$facet]]) == k)
       purrr::map(annotation_groups(inner, cb, t[at, , drop = FALSE], whole = t), function(g) { g$row = at[[g$row]]; g$panel = k; g })
@@ -1197,7 +1198,7 @@ lint_marks <- function(s, cb, table) {
   s$.annotate = annotation_groups(s, cb, t)
   # A line chart in panels: one mark in each panel when there are at most SPEC_ANNOTATE_PANELS, each only if its number is in the
   #   chart's facts (which describe each panel's lines); with more panels, none.
-  if (identical(fam, "line") && !is.null(s$facet) && !identical(s$facet, s$color) && length(values_of(s$annotate))) {
+  if (identical(fam, "line") && !is.null(s$facet) && length(values_of(s$annotate))) {
     np = length(unique(as.character(t[[s$facet]])))
     if (np > SPEC_ANNOTATE_PANELS)
       notes = c(notes, paste0("No point is marked: the chart has ", np, " panels, and a mark is drawn in each panel only when there are at most ",
@@ -1271,8 +1272,11 @@ lint_marks <- function(s, cb, table) {
       parts = strsplit(texts, "\n", fixed = TRUE)
       long = if (isTRUE(s$.flip)) purrr::map_dbl(parts, function(l) max(nchar(l))) * SPEC_LABEL_CHAR_IN * bold + 0.08
              else (lengths(parts) + 1.2) * SPEC_LABEL_HEIGHT_IN
-      need = if (length(texts)) max((abs(at) - 0) / span + long / along) - max(abs(c(lo, hi))) / span else 0
-      s$.value_room = round(max(0.12, need + 0.03), 2)
+      # A text whose mark ends at share a of the value range needs a / (1 + r) + long / P <= 1 of the panel P, with r the room
+      #   (expansion is a share of the data's range): r >= a / (1 - long / P) - 1.
+      a = abs(at - (if (all(at >= 0)) lo else 0)) / span
+      need = if (length(texts)) max(a / pmax(0.2, 1 - long / along) - 1) else 0
+      s$.value_room = round(min(2, max(0.12, need + 0.04)), 2)
     }
     cand = setdiff(seq_len(n), ann_rows)
     if (show && n > 0L) {
@@ -1596,8 +1600,23 @@ side_labels <- function(s, pal, widget) {
   x = sym(s$x)
   hjust = call("if_else", call(">", x, call("/", call("+", call("min", x), call("max", x)), 2)), 1.15, -0.15)
   shown = if (is.null(rows)) quote(highlighted) else call("&", quote(highlighted), call("%in%", quote(row_number()), as.numeric(rows)))
-  label_layer(s, widget, call("filter", call("mutate", sym("chart_table"), label_hjust = hjust), shown),
-              aes_call(label = s$highlight$column, hjust = "label_hjust"), pal$strong, bold = TRUE)
+  named = call("filter", call("mutate", sym("chart_table"), label_hjust = hjust), shown)
+  if (!shared_repel(s, widget))
+    return(label_layer(s, widget, named, aes_call(label = s$highlight$column, hjust = "label_hjust"), pal$strong, bold = TRUE))
+  # Names and annotations in one layer moved by ggrepel (Phase 7b): layers do not push one another apart, so a name and an
+  #   annotation drawn in two could land on each other.
+  words = purrr::map(s$.annotate, function(g)
+    call("mutate", annotation_data(s, g), label_text = annotation_label(s, g), label_hjust = g$hjust))
+  both = as.call(c(list(sym("bind_rows"), call("mutate", named, label_text = call("as.character", sym(s$highlight$column)))), words))
+  clear = if (!is.null(s$.rug_floor)) list(xlim = c(s$.rug_floor[["x"]], NA), ylim = c(s$.rug_floor[["y"]], NA))
+  do.call(label_layer, c(list(s, widget, both, aes_call(label = "label_text", hjust = "label_hjust"), pal$strong, bold = TRUE), clear), quote = TRUE)
+}
+
+# Whether a scatter's or bubble's names and annotations share one ggrepel layer (static chart, ggrepel installed, both drawn).
+shared_repel <- function(s, widget) {
+  rows = s$.label_rows
+  !widget && isTRUE(s$.repel) && s$family %in% c("scatter", "bubble") && isTRUE(s$.names) && length(s$.annotate) > 0L &&
+    !(length(rows) == 0L && !is.null(rows))
 }
 
 # How far a jittered point may move on one axis: SPEC_JITTER of the smallest gap between distinct
@@ -1853,6 +1872,8 @@ annotation_calls <- function(s, cb, pal, widget) {
       list(call("geom_point", data = data, shape = 1, size = 4, stroke = 1, colour = CHART_HIGHLIGHT))
     # merged into its line's end label (lint_marks()): the ring only, in the static chart; the plotly version has no end labels
     if (isTRUE(g$merged) && !widget) return(ring)
+    # drawn with the names, in one layer (side_labels())
+    if (shared_repel(s, widget)) return(ring)
     # a label moved by ggrepel keeps clear of a rug's band (xlim, ylim in the data's units, worked out by the lint)
     clear = if (!widget && isTRUE(s$.repel) && !is.null(s$.rug_floor)) list(xlim = c(s$.rug_floor[["x"]], NA), ylim = c(s$.rug_floor[["y"]], NA))
     c(ring, list(do.call(label_layer, c(list(s, widget, data, aes_call(label = annotation_label(s, g)), pal$strong, bold = TRUE,
