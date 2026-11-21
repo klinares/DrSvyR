@@ -845,10 +845,19 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
 
 # The colours a chart is drawn with, from the palettes chosen for the report (R/theme.R): qual(n)
 #   for groups (at most max; the default palette when the chosen one has fewer than n colours, see
-#   palette_for_n()), seq for a continuous fill, div for a fill centred on a midpoint.
-spec_palette <- function(palette = chart_palette_default())
-  list(qual = function(n) chart_palette(n, palette_for_n(n, palette$qualitative)), max = palette_groups_max(palette),
-       seq = chart_sequential(palette$sequential), div = chart_diverging(palette$diverging))
+#   palette_for_n(); on a dark style a colour too dark to see is swapped for a light one), seq for a
+#   continuous fill, div for a fill centred on a midpoint, and the style's own values: single (a series
+#   with no groups: the chosen palette's first colour), grey (behind a highlight), fit, outline, box_fill,
+#   rug and the values of the font variables its theme uses.
+spec_palette <- function(palette = chart_palette_default()) {
+  style = palette$style %||% CHART_STYLE_DEFAULT
+  st = chart_style(style)
+  qual = function(n) style_marks(chart_palette(n, palette_for_n(n, palette$qualitative)), style)
+  list(qual = qual, max = palette_groups_max(palette),
+       seq = chart_sequential(palette$sequential), div = chart_diverging(palette$diverging),
+       style = style, single = qual(1L)[[1]], grey = st$grey, fit = st$fit, outline = st$outline, box_fill = st$box_fill,
+       rug = st$text_2, fonts = chart_font_values(chart_theme_calls(style)))
+}
 
 # The note for a chart whose groups outnumber the chosen qualitative palette's colours, so it is
 #   drawn with the default palette instead; NULL otherwise.
@@ -881,7 +890,7 @@ value_label <- function(s, cb) {
          median = paste("Median", lab), lab)
 }
 
-highlight_values <- function() c(`FALSE` = CHART_GREY, `TRUE` = CHART_HIGHLIGHT)
+highlight_values <- function(pal) c(`FALSE` = pal$grey, `TRUE` = CHART_HIGHLIGHT)
 
 aes_call <- function(...) {
   a = purrr::compact(list(...))
@@ -954,11 +963,11 @@ bar_calls <- function(s, cb, pal, widget) {
   text = if (widget) tooltip_call(s, cb)
   main = if (flip) aes_call(x = v, y = s$x, fill = col, text = text) else aes_call(x = s$x, y = v, fill = col, text = text)
   geom = if (!is.null(s$highlight)) list(call("geom_col", aes_call(fill = "highlighted")),
-                                          call("scale_fill_manual", values = highlight_values(), guide = "none"))
+                                          call("scale_fill_manual", values = highlight_values(pal), guide = "none"))
     else if (!is.null(col)) list(call("geom_col", position = if (flip) call("position_dodge", width = 0.8, reverse = TRUE) else call("position_dodge", width = 0.8),
                                       width = 0.75),
                                  call("scale_fill_manual", values = pal$qual(colour_count(s, cb, col))))
-    else list(call("geom_col", fill = CHART_SINGLE))
+    else list(call("geom_col", fill = pal$single))
   c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, if (flip) "x" else "y", TRUE),
     if (flip) list(call("scale_y_discrete", limits = sym("rev"))))
 }
@@ -968,10 +977,10 @@ dot_calls <- function(s, cb, pal, widget) {
   text = if (widget) tooltip_call(s, cb)
   main = if (flip) aes_call(x = v, y = s$x, colour = col, text = text) else aes_call(x = s$x, y = v, colour = col, text = text)
   geom = if (!is.null(s$highlight)) list(call("geom_point", aes_call(colour = "highlighted"), size = 3),
-                                          call("scale_colour_manual", values = highlight_values(), guide = "none"))
+                                          call("scale_colour_manual", values = highlight_values(pal), guide = "none"))
     else if (!is.null(col)) list(call("geom_point", size = 3),
                                  call("scale_colour_manual", values = pal$qual(colour_count(s, cb, col))))
-    else list(call("geom_point", size = 3, colour = CHART_SINGLE))
+    else list(call("geom_point", size = 3, colour = pal$single))
   c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, if (flip) "x" else "y", FALSE),
     if (flip) list(call("scale_y_discrete", limits = sym("rev"))))
 }
@@ -1003,7 +1012,7 @@ line_calls <- function(s, cb, pal, widget) {
                               if (!is.null(colour)) list(colour = colour))))
   base = function(...) call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v, ...))
   layers = if (is.null(col) || same) {
-    c(list(base(group = group, text = text), call("geom_line", colour = CHART_SINGLE, linewidth = 0.9)), points(colour = CHART_SINGLE))
+    c(list(base(group = group, text = text), call("geom_line", colour = pal$single, linewidth = 0.9)), points(colour = pal$single))
   } else if (!is.null(s$highlight)) {
     nh = length(values_of(s$highlight$values))
     lit = if (legend && nh <= pal$max)
@@ -1014,10 +1023,10 @@ line_calls <- function(s, cb, pal, widget) {
       c(list(call("geom_line", data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT, linewidth = 1.1)),
         points(colour = CHART_HIGHLIGHT, data = data_where(quote(highlighted))),
         if (labelled) list(end_labels(s, end_rows(s, list(quote(highlighted))), CHART_HIGHLIGHT)))
-    c(list(base(group = col, text = text), call("geom_line", data = data_where(quote(!highlighted)), colour = CHART_GREY, linewidth = 0.7)), lit)
+    c(list(base(group = col, text = text), call("geom_line", data = data_where(quote(!highlighted)), colour = pal$grey, linewidth = 0.7)), lit)
   } else if (many) {
-    c(list(base(group = col, text = text), call("geom_line", colour = CHART_SINGLE, linewidth = 0.7)), points(colour = CHART_SINGLE),
-      if (labelled) list(end_labels(s, end_rows(s), CHART_SINGLE)))
+    c(list(base(group = col, text = text), call("geom_line", colour = pal$single, linewidth = 0.7)), points(colour = pal$single),
+      if (labelled) list(end_labels(s, end_rows(s), pal$single)))
   } else {
     c(list(base(colour = col, group = col, text = text), call("geom_line", linewidth = 0.9)), points(),
       list(as.call(c(list(sym("scale_colour_manual"), values = pal$qual(k)), if (legend) list(breaks = s$.legend_order)))),
@@ -1064,14 +1073,14 @@ scatter_calls <- function(s, cb, pal, widget) {
   }
   geom = if (binned) list(call("geom_bin_2d", bins = SPEC_BIN_2D), call("scale_fill_gradientn", colours = pal$seq))
     else if (!is.null(s$highlight))
-      c(list(point(data = data_where(quote(!highlighted)), colour = CHART_GREY),
+      c(list(point(data = data_where(quote(!highlighted)), colour = pal$grey),
              point(data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT)),
         if (!widget) list(side_labels(s)))
     else if (!is.null(col)) c(list(point()), colours)
-    else list(point(colour = CHART_SINGLE))
-  c(list(call("ggplot", sym("chart_table"), main)), geom, fit_calls(s, cb),
+    else list(point(colour = pal$single))
+  c(list(call("ggplot", sym("chart_table"), main)), geom, fit_calls(s, cb, pal),
     if (bubble) list(call("scale_size_area", max_size = 8)),
-    if (isTRUE(s$rug)) list(call("geom_rug", alpha = 0.2)),
+    if (isTRUE(s$rug)) list(call("geom_rug", colour = pal$rug, alpha = 0.2)),
     if (isTRUE(s$log_x)) list(quote(scale_x_log10())), if (isTRUE(s$log_y)) list(quote(scale_y_log10())))
 }
 
@@ -1085,12 +1094,12 @@ fit_xseq <- function(s, r) {
 # The fitted curve as geom_smooth() layers. With no trimmed group, one layer. With groups, one layer
 #   per trimmed group, on that group's rows only (data = ~ filter(.x, ...)), with its own xseq, and
 #   one layer for the other groups, untrimmed. A group that cannot be fitted is in no layer.
-fit_calls <- function(s, cb) {
+fit_calls <- function(s, cb, pal) {
   if (identical(s$fit, "none")) return(list())
   smooth = function(data = NULL, r = NULL)
     as.call(c(list(sym("geom_smooth")), if (!is.null(data)) list(data = data),
               list(method = if (identical(s$fit, "linear")) "lm" else "loess", formula = quote(y ~ x), se = FALSE),
-              if (!is.null(r)) list(xseq = fit_xseq(s, r)), list(colour = "#4D4D4D", linewidth = 0.8)))
+              if (!is.null(r)) list(xseq = fit_xseq(s, r)), list(colour = pal$fit, linewidth = 0.8)))
   fr = s$.fit_range
   if (is.null(fr)) return(list(smooth()))
   if (is.null(c(fr$groups, fr$skip)[[1]]$keys)) return(if (length(fr$skip)) list() else list(smooth(r = fr$groups[[1]]$range)))
@@ -1105,14 +1114,14 @@ fit_calls <- function(s, cb) {
 
 histogram_calls <- function(s, cb, pal, widget)
   c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x)),
-         call("geom_histogram", bins = as.numeric(s$bins), fill = CHART_SINGLE, colour = "white"),
+         call("geom_histogram", bins = as.numeric(s$bins), fill = pal$single, colour = pal$outline),
          call("scale_y_continuous", expand = call("expansion", mult = c(0, 0.05)))),
     if (isTRUE(s$log_x)) list(quote(scale_x_log10())))
 
 box_calls <- function(s, cb, pal, widget) {
   flip = isTRUE(s$.flip)
   main = if (flip) aes_call(x = s$y, y = s$x) else aes_call(x = s$x, y = s$y)
-  c(list(call("ggplot", sym("chart_table"), main), call("geom_boxplot", fill = "#F2F2F2", colour = CHART_SINGLE, width = 0.6)),
+  c(list(call("ggplot", sym("chart_table"), main), call("geom_boxplot", fill = pal$box_fill, colour = pal$single, width = 0.6)),
     if (flip) list(call("scale_y_discrete", limits = sym("rev"))),
     if (isTRUE(s$log_y)) list(if (flip) quote(scale_x_log10()) else quote(scale_y_log10())))
 }
@@ -1143,7 +1152,7 @@ heatmap_calls <- function(s, cb, pal, widget) {
   rescaler = if (!is.null(s$midpoint))
     list(rescaler = call("function", as.pairlist(alist(x = , ... = )), call("rescale_mid", sym("x"), sym("..."), mid = s$midpoint)))
   c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = s$y, fill = value_name(s), text = text)),
-         call("geom_tile", colour = "white", linewidth = 0.5),
+         call("geom_tile", colour = pal$outline, linewidth = 0.5),
          as.call(c(list(sym("scale_fill_gradientn"), colours = colours), rescaler,
                    if (identical(s$fn, "share")) list(labels = call("label_percent")))),
          call("scale_y_discrete", limits = sym("rev"))),
@@ -1181,11 +1190,18 @@ facet_call <- function(s) {
   as.call(c(list(sym("facet_wrap"), call("vars", sym(s$facet))), if (isTRUE(s$free_y)) list(scales = "free_y")))
 }
 
-theme_call <- function(s) {
-  args = c(if (!identical(grid_of(s), "y")) list(grid = grid_of(s)),
-           if (s$family %in% c("line", "slope") && !is.null(s$.legend_order)) list(legend = "right"))
-  as.call(c(list(sym("chart_theme")), args))
-}
+# Whether the value axis labels can sit above their grid line (a style that asks for it): an upright
+#   chart with its value axis on the left and no panels.
+lift_axis <- function(s) s$family %in% c("bar", "dot", "line", "histogram", "box") && !isTRUE(s$.flip) && is.null(s$facet)
+
+# The style's theme as ggplot2 calls (R/theme.R), written from the spec: the grid its family gets, the legend's
+#   place, and the style's own layers (the rule under the title block; not in the plotly version, which
+#   drops a second axis, so spec_widget() draws the rule itself).
+theme_calls <- function(s, pal, widget = FALSE)
+  c(chart_theme_calls(pal$style, grid = grid_of(s),
+                      legend = if (s$family %in% c("line", "slope") && !is.null(s$.legend_order)) "right" else "top",
+                      lift = lift_axis(s)),
+    if (!widget) chart_style_layers(pal$style))
 
 # The plot's layers, as calls, from the spec as the lint left it and the codebook. widget = TRUE
 #   builds the variant the plotly version is made from: no direct labels (plotly cannot place
@@ -1193,7 +1209,7 @@ theme_call <- function(s) {
 plot_calls <- function(s, cb, pal = spec_palette(), widget = FALSE) {
   build = switch(s$family, bar = bar_calls, dot = dot_calls, line = , slope = line_calls, scatter = , bubble = scatter_calls,
                  histogram = histogram_calls, box = box_calls, heatmap = heatmap_calls)
-  c(build(s, cb, pal, widget), purrr::compact(list(facet_call(s), labs_call(s, cb), theme_call(s))))
+  c(build(s, cb, pal, widget), purrr::compact(list(facet_call(s), labs_call(s, cb))), theme_calls(s, pal, widget))
 }
 
 plus_call <- function(calls) purrr::reduce(calls[-1], function(acc, cl) call("+", acc, cl), .init = calls[[1]])
@@ -1213,7 +1229,7 @@ spec_plot <- function(spec, data, cb, palette = chart_palette_default()) {
   pal = spec_palette(palette)
   table = spec_table(s, data, cb, palette)
   lint = spec_lint(s, cb, table, pal$max)
-  env = spec_env(chart_table = table)
+  env = do.call(spec_env, c(list(chart_table = table), pal$fonts))
   p = eval(plus_call(plot_calls(lint$spec, cb, pal)), env)
   attr(p, "notes") = c(palette_note(lint$spec, cb, palette), lint$notes)
   attr(p, "spec") = lint$spec
@@ -1253,11 +1269,31 @@ code_text <- function(cl, indent = 0L, suffix = "") {
   paste(wrap(cutoff), collapse = paste0("\n", strrep(" ", indent + 4L)))
 }
 
+# The lines that give the typeface variables their value in the written code: the bundled family when
+#   systemfonts knows it (registered or installed), else the default sans or serif. "" when the theme
+#   uses none.
+font_lines <- function(vars) {
+  if (!length(vars)) return("")
+  one = function(v) {
+    f = CHART_FONT_VARS[[v]]
+    name = chart_font_name(f[[1]], f[[2]])
+    paste0(v, " <- if (has_font(\"", name, "\")) \"", name, "\" else \"", CHART_FONTS[[f[[1]]]]$fallback, "\"")
+  }
+  paste0("# The typeface: ", paste(unique(purrr::map_chr(CHART_FONT_VARS[vars], function(f) CHART_FONTS[[f[[1]]]]$family)), collapse = " and "),
+         " when systemfonts knows it (registered or installed), else the default fonts.\n",
+         "has_font <- function(f) requireNamespace(\"systemfonts\", quietly = TRUE) &&\n",
+         "  f %in% c(systemfonts::registry_fonts()$family, systemfonts::system_fonts()$family)\n",
+         paste(purrr::map_chr(vars, one), collapse = "\n"), "\n\n")
+}
+
 # R code that reads the file (by its name, with the codebook's values that mean missing and its
 #   encoding), builds the same table with dplyr and tidyr, and draws the same chart with ggplot2,
-#   ending with chart_theme(). It is written from the spec as spec_plot() left it
-#   (attr(plot, "spec")) and the same palette: every line is one of the calls spec_table() and
-#   spec_plot() evaluate, with the palette's colours written in, so the code runs without paletteer.
+#   ending with the style's theme as plain theme_minimal() and theme() calls (chart_theme_calls()), with the
+#   typeface set to the bundled family when it is registered or installed and to the default sans (or
+#   serif) when it is not. It is written from the spec as spec_plot() left it
+#   (attr(plot, "spec")) and the same palette and style: every line is one of the calls spec_table() and
+#   spec_plot() evaluate, with the palette's colours written in, so the code runs without paletteer or
+#   anything else from this app.
 #   `file` is where the file is now (to read its header); the code names it by cb$file only.
 spec_code <- function(spec, cb, file, palette = chart_palette_default()) {
   pub = spec_defaults(spec_public(spec))
@@ -1275,7 +1311,8 @@ spec_code <- function(spec, cb, file, palette = chart_palette_default()) {
   rename = if (length(renamed)) as.call(c(list(sym("rename")), stats::setNames(purrr::map(h$names[renamed], sym), names_now[renamed])))
   st = table_steps(s, cb)
   steps = c(st$base, st$agg, st$post)
-  plot = plot_calls(s, cb, spec_palette(palette))
+  pal = spec_palette(palette)
+  plot = plot_calls(s, cb, pal)
   plot_text = paste(purrr::imap_chr(plot, function(cl, i) code_text(cl, 2L, if (i < length(plot)) " +" else "")), collapse = " +\n  ")
   step_text = paste(purrr::imap_chr(steps, function(cl, i) code_text(cl, 2L, if (i < length(steps)) " |>" else "")), collapse = " |>\n  ")
   libs = c("readr", "dplyr", "tidyr", "ggplot2", if (grepl("label_|breaks_|pal_gradient_n|rescale", plot_text)) "scales")
@@ -1286,7 +1323,8 @@ spec_code <- function(spec, cb, file, palette = chart_palette_default()) {
          if (!is.null(rename)) paste0(" |>\n  ", code_text(rename, 2L), "  # blank or repeated names in the file, as in the codebook"),
          "\n\n# The table that is drawn.\n",
          "chart_table <- chart_data |>\n  ", step_text, "\n\n",
-         "# The chart. chart_theme() is the house theme, in R/theme.R.\n",
+         font_lines(names(pal$fonts)),
+         "# The chart. The theme is the style chosen in chaRt, written out.\n",
          plot_text, "\n")
 }
 
@@ -1701,6 +1739,27 @@ scale_fonts <- function(x, f, in_font = FALSE) {
   out
 }
 
+# A font family as a CSS font-family list for the page (the bundled families are declared with @font-face,
+#   see CHART_FONT_CSS in R/ui.R): the family, then the generic one it falls back to. The default names
+#   "sans" and "serif" that charts fall back to are not CSS names.
+font_css <- function(family) {
+  bundled = purrr::keep(CHART_FONTS, function(f) startsWith(family, f$family))
+  if (length(bundled)) (if (identical(family, bundled[[1]]$family)) bundled[[1]]$css else paste0("'", family, "', ", bundled[[1]]$css))
+  else switch(family, sans = "sans-serif", serif = "serif", family)
+}
+
+# Every font family in a built plotly figure, as a CSS list.
+font_stacks <- function(x, in_font = FALSE) {
+  if (!is.list(x)) return(x)
+  keys = names(x) %||% rep("", length(x))
+  out = purrr::map2(x, keys, function(el, key) {
+    if (in_font && identical(key, "family") && is.character(el)) return(font_css(el))
+    font_stacks(el, in_font || key %in% c("font", "tickfont", "titlefont"))
+  })
+  names(out) = names(x)
+  out
+}
+
 wrapped <- function(text, width) paste(strwrap(text, width), collapse = "<br>")
 
 # plotly::ggplotly() of a spec_plot()'s widget variant, built (plotly::plotly_build()) so that every
@@ -1717,25 +1776,34 @@ spec_widget <- function(plot, palette = attr(plot, "palette") %||% chart_palette
   said = character(0)
   w = withCallingHandlers(plotly::plotly_build(plotly::ggplotly(wp, tooltip = tip)),
                           warning = function(cond) { said <<- c(said, conditionMessage(cond)); invokeRestart("muffleWarning") })
-  w$x$layout = scale_fonts(w$x$layout, SPEC_PLOTLY_TEXT)
+  w$x$layout = font_stacks(scale_fonts(w$x$layout, SPEC_PLOTLY_TEXT))
+  st = chart_style(palette$style)
+  sub_css = font_css(chart_font_family(st$subtitle_font))
   title_lines = c(if (!is.null(s$title)) paste0("<b>", wrapped(s$title, SPEC_WRAP_TITLE), "</b>"),
-                  if (!is.null(s$subtitle)) paste0("<span style=\"font-size:0.8em;color:#4D4D4D\">", wrapped(s$subtitle, SPEC_WRAP_SUBTITLE), "</span>"))
+                  if (!is.null(s$subtitle)) paste0("<span style=\"font-size:0.8em;font-weight:normal;color:", st$text_2, ";font-family:", sub_css, "\">",
+                                                   wrapped(s$subtitle, SPEC_WRAP_SUBTITLE), "</span>"))
   if (length(title_lines)) {
     n_lines = sum(lengths(regmatches(title_lines, gregexpr("<br>", title_lines)))) + length(title_lines)
     w$x$layout$title = utils::modifyList(w$x$layout$title %||% list(),
                                          list(text = paste(title_lines, collapse = "<br>"), x = 0.01, xanchor = "left",
-                                              xref = "container"))
+                                              xref = "container",
+                                              font = list(family = font_css(chart_font_family(st$title_font)), color = st$text)))
     w$x$layout$margin$t = 30 + 22 * n_lines
   }
   if (!is.null(s$caption)) {
     w$x$layout$annotations = c(w$x$layout$annotations,
                                list(list(text = wrapped(s$caption, SPEC_WRAP_SUBTITLE), x = 0, y = 0, xref = "paper", yref = "paper",
                                          xanchor = "left", yanchor = "top", yshift = -45, showarrow = FALSE,
-                                         font = list(size = 11, color = "#7F7F7F"))))
+                                         font = list(size = 11, color = st$caption, family = font_css(chart_font_family("sans"))))))
     w$x$layout$margin$b = (w$x$layout$margin$b %||% 40) + 30
   }
   w$x$layout$legend = utils::modifyList(w$x$layout$legend %||% list(),
                                         list(x = 1.02, y = 1, xanchor = "left", yanchor = "top", orientation = "v"))
+  # A style's thin rule under the title block: the static chart draws it as a second axis line, which plotly drops
+  #   without a word, so the figure gets it as a line across the top of its plot area.
+  if (!is.na(st$rule))
+    w$x$layout$shapes = c(w$x$layout$shapes, list(list(type = "line", xref = "paper", yref = "paper", x0 = 0, x1 = 1, y0 = 1, y1 = 1,
+                                                       line = list(color = st$rule, width = 1))))
   w = plotly::config(w, displaylogo = FALSE, modeBarButtons = list(list("toImage")))
   attr(w, "warnings") = unique(said)
   w

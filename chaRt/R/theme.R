@@ -1,19 +1,164 @@
 # theme.R for chaRt
-# The look of every chart: the ggplot2 theme, the palettes an analyst may choose from, and the two
-#   colours of a highlight. This is the one file replaced at work with the office theme and
-#   palette, so it is self-contained: it uses ggplot2 and grDevices, and paletteer when it is
-#   installed (the app starts without it), and nothing else from the app. R/spec.R reads
-#   CHART_SINGLE, CHART_HIGHLIGHT, CHART_GREY, chart_palette(), chart_sequential(),
-#   chart_diverging() and chart_palette_default(), and the code a chart comes with ends with
-#   chart_theme(). Function definitions and constants only.
+# The look of every chart: the typeface, the six styles (CHART_STYLES), the ggplot2 theme, the
+#   palettes an analyst may choose from, and the colour of a highlight. This is the one file
+#   replaced at work with the office theme and palette, so it is self-contained: it uses ggplot2,
+#   grDevices and systemfonts (when installed: without it charts draw in the default fonts), and
+#   paletteer when it is installed (the app starts without it), and nothing else from the app.
+#   R/spec.R reads CHART_HIGHLIGHT, chart_style(), chart_theme_calls(), chart_style_layers(),
+#   chart_font_values(), style_marks(), chart_palette(), chart_sequential(), chart_diverging() and
+#   chart_palette_default(); the code a chart comes with carries chart_theme_calls() written out
+#   as plain ggplot2 calls. Function definitions and constants only.
 
 
-# One series with no groups.
-CHART_SINGLE <- "#0072B2"
-
-# A highlight: the named values in CHART_HIGHLIGHT, everything else in CHART_GREY.
+# A highlight: the named values in CHART_HIGHLIGHT, everything else in the style's `grey`.
 CHART_HIGHLIGHT <- "#D55E00"
-CHART_GREY <- "#BDBDBD"
+
+# ---- type ------------------------------------------------------------------------------------------
+
+# The two bundled families (www/fonts/, both under the SIL Open Font License 1.1, each with its
+#   licence file). Each is registered with systemfonts under two names: the family itself (regular, and
+#   bold for face = "bold") and "<family> SemiBold" (semibold as its plain face), since register_font()
+#   takes four faces, not a weight; `fallback` is what a chart draws in when the family is neither
+#   registered nor installed.
+CHART_FONT_DIR <- file.path("www", "fonts")
+CHART_FONTS <- list(
+  sans = list(family = "Inter", fallback = "sans", css = "Inter, sans-serif",
+              regular = "Inter-Regular.ttf", semibold = "Inter-SemiBold.ttf", bold = "Inter-Bold.ttf"),
+  serif = list(family = "Source Serif 4", fallback = "serif", css = "'Source Serif 4', serif",
+               regular = "SourceSerif4-Regular.ttf", semibold = "SourceSerif4-Semibold.ttf", bold = "SourceSerif4-Bold.ttf"))
+
+# The variables the written code and the theme use for a family: sans regular is chart_font, and so on.
+CHART_FONT_VARS <- list(chart_font = c("sans", "regular"), chart_font_semibold = c("sans", "semibold"),
+                        chart_serif = c("serif", "regular"), chart_serif_semibold = c("serif", "semibold"))
+
+# The name a family is registered under, for a weight: "regular" or "semibold".
+chart_font_name <- function(role, weight = "regular") {
+  f = CHART_FONTS[[role]]$family
+  if (identical(weight, "semibold")) paste(f, "SemiBold") else f
+}
+
+# Whether systemfonts is installed (find.package(), as for paletteer), and whether a family name is
+#   registered with it or installed on the machine.
+systemfonts_installed <- function() length(find.package("systemfonts", quiet = TRUE)) > 0L
+chart_font_available <- function(name)
+  systemfonts_installed() &&
+    name %in% c(systemfonts::registry_fonts()$family, systemfonts::system_fonts()$family)
+
+# Registers the bundled families with systemfonts (called once, from app.R, with the folder that holds
+#   the files); a family whose files are not all there, or systemfonts missing, is skipped. Returns
+#   whether each family (sans, serif) was registered, invisibly.
+chart_fonts_register <- function(dir = CHART_FONT_DIR) {
+  ok = purrr::map_lgl(CHART_FONTS, function(f) {
+    files = file.path(dir, unlist(f[c("regular", "semibold", "bold")]))
+    if (!systemfonts_installed() || !all(file.exists(files))) return(FALSE)
+    tryCatch({
+      systemfonts::register_font(f$family, plain = files[[1]], bold = files[[3]])
+      systemfonts::register_font(paste(f$family, "SemiBold"), plain = files[[2]], bold = files[[3]])
+      TRUE
+    }, error = function(e) FALSE)
+  })
+  invisible(ok)
+}
+
+# The family a chart is drawn in for a role and weight: the bundled one when it is registered or
+#   installed, otherwise the default sans (or serif).
+chart_font_family <- function(role, weight = "regular") {
+  name = chart_font_name(role, weight)
+  if (chart_font_available(name)) name else CHART_FONTS[[role]]$fallback
+}
+
+# The bundled families that this machine cannot draw in (neither registered nor installed), as their names.
+chart_fonts_missing <- function()
+  Filter(function(f) !chart_font_available(f), purrr::map_chr(CHART_FONTS, "family"))
+
+# The value of each font variable that a call uses (chart_font, ...): list(chart_font = "Inter", ...).
+chart_font_values <- function(calls) {
+  used = intersect(names(CHART_FONT_VARS), unlist(purrr::map(calls, all.vars)))
+  stats::setNames(purrr::map(used, function(v) chart_font_family(CHART_FONT_VARS[[v]][[1]], CHART_FONT_VARS[[v]][[2]])), used)
+}
+
+
+# ---- styles ----------------------------------------------------------------------------------------
+
+# A style is one named set of values; a dashboard has one (Style dialog), the model never names it.
+#   label, note             what the Style dialog calls it and says of it
+#   background, panel       the plot's and the panel's fill
+#   text, text_2, caption   the title and legend text; axis text, axis titles and subtitle; the caption
+#   grid, grid_axes, grid_width   the grid's colour, which lines ("value": the value axis only, as the chart
+#                           asks; "both"; "none") and its width
+#   axis_line, ticks        the colour of the axis lines and of the ticks (NA: none)
+#   title_font, title_weight, title_size, subtitle_font   serif or sans; regular, semibold or bold; size
+#                           against the base size; the subtitle's family
+#   strip                   the weight of a panel's name
+#   rule                    the colour of a thin rule under the title block (NA: none)
+#   lift                    the value axis labels sit just above their grid line, not beside it (ggplot2 cannot
+#                           put them inside the plot: a negative margin is clamped to zero)
+#   grey                    the colour behind a highlight
+#   fit, outline, box_fill  a fitted curve; the edge of a histogram bar or heatmap cell (the background);
+#                           a box's fill
+#   swap                    a light colour that stands in for a mark colour too dark to see on this
+#                           background (contrast under CHART_MARK_CONTRAST); NA: none
+#   A series with no colour column is drawn in the chosen qualitative palette's first colour in every style.
+#   The Phase 7 checks (tests/smoke.R): text, text_2 and caption against the background 4.5 to 1 or more;
+#   the grid below text; `grey` visible against the background but weaker than any palette colour.
+CHART_MARK_CONTRAST <- 3
+CHART_STYLE_DEFAULT <- "clean"
+CHART_STYLES <- list(
+  clean = list(label = "Clean", note = "White, a light grid along the value axis, a bold title.",
+               background = "#FFFFFF", panel = "#FFFFFF", text = "#1A1A1A", text_2 = "#4D4D4D", caption = "#6B6B6B",
+               grid = "#E5E5E5", grid_axes = "value", grid_width = 0.4, axis_line = NA, ticks = NA,
+               title_font = "sans", title_weight = "bold", title_size = 1.2, subtitle_font = "sans", strip = "bold",
+               rule = NA, lift = FALSE, grey = "#C4C4C4", fit = "#4D4D4D", outline = "#FFFFFF", box_fill = "#F2F2F2", swap = NA),
+  minimal = list(label = "Minimal", note = "No grid and no axis line; ticks only. The least ink that still reads.",
+                 background = "#FFFFFF", panel = "#FFFFFF", text = "#262626", text_2 = "#4D4D4D", caption = "#6B6B6B",
+                 grid = "#E5E5E5", grid_axes = "none", grid_width = 0.4, axis_line = NA, ticks = "#4D4D4D",
+                 title_font = "sans", title_weight = "semibold", title_size = 1.15, subtitle_font = "sans", strip = "semibold",
+                 rule = NA, lift = FALSE, grey = "#C4C4C4", fit = "#4D4D4D", outline = "#FFFFFF", box_fill = "#FFFFFF", swap = NA),
+  magazine = list(label = "Magazine", note = "A pale tint, a white grid, a heavy title.",
+                  background = "#E6EDF2", panel = "#E6EDF2", text = "#14202B", text_2 = "#38464F", caption = "#4F5D66",
+                  grid = "#FFFFFF", grid_axes = "value", grid_width = 0.7, axis_line = NA, ticks = NA,
+                  title_font = "sans", title_weight = "bold", title_size = 1.5, subtitle_font = "sans", strip = "bold",
+                  rule = NA, lift = TRUE, grey = "#B5C0C9", fit = "#2B3A45", outline = "#E6EDF2", box_fill = "#F7FAFC", swap = NA),
+  desk = list(label = "Data desk", note = "Light grey, a darker grid both ways, a large bold title.",
+              background = "#EBEBEB", panel = "#EBEBEB", text = "#111111", text_2 = "#333333", caption = "#4A4A4A",
+              grid = "#C2C2C2", grid_axes = "both", grid_width = 0.4, axis_line = NA, ticks = NA,
+              title_font = "sans", title_weight = "bold", title_size = 1.6, subtitle_font = "sans", strip = "bold",
+              rule = NA, lift = FALSE, grey = "#BDBDBD", fit = "#333333", outline = "#EBEBEB", box_fill = "#F7F7F7", swap = NA),
+  newspaper = list(label = "Newspaper", note = "White, a serif title, a thin black rule under the title block, a hairline grid.",
+                   background = "#FFFFFF", panel = "#FFFFFF", text = "#111111", text_2 = "#404040", caption = "#595959",
+                   grid = "#D9D9D9", grid_axes = "value", grid_width = 0.2, axis_line = NA, ticks = NA,
+                   title_font = "serif", title_weight = "bold", title_size = 1.35, subtitle_font = "serif", strip = "bold",
+                   rule = "#000000", lift = FALSE, grey = "#C4C4C4", fit = "#404040", outline = "#FFFFFF", box_fill = "#F2F2F2", swap = NA),
+  dark = list(label = "Dark", note = "Near-black, light text, a muted grid.",
+              background = "#14171C", panel = "#14171C", text = "#ECEFF2", text_2 = "#B9C0C8", caption = "#9AA3AD",
+              grid = "#303640", grid_axes = "value", grid_width = 0.4, axis_line = NA, ticks = NA,
+              title_font = "sans", title_weight = "bold", title_size = 1.2, subtitle_font = "sans", strip = "bold",
+              rule = NA, lift = FALSE, grey = "#5E6670", fit = "#C8CED6", outline = "#14171C", box_fill = "#232932", swap = "#EDEDED"))
+
+# The style of that name; an error for one that is not there.
+chart_style <- function(name = CHART_STYLE_DEFAULT) {
+  s = CHART_STYLES[[name %||% CHART_STYLE_DEFAULT]]
+  if (is.null(s)) stop("There is no style '", name, "'.", call. = FALSE)
+  s
+}
+
+# WCAG contrast ratio of two colours (vectorised over the first), from relative luminance.
+chart_contrast <- function(a, b) {
+  lum = function(x) {
+    v = grDevices::col2rgb(x) / 255
+    colSums(c(0.2126, 0.7152, 0.0722) * ifelse(v <= 0.04045, v / 12.92, ((v + 0.055) / 1.055)^2.4))
+  }
+  la = lum(a); lb = lum(b)
+  (pmax(la, lb) + 0.05) / (pmin(la, lb) + 0.05)
+}
+
+# Mark colours as a style can show them: a colour whose contrast with the background is under
+#   CHART_MARK_CONTRAST (Okabe-Ito's black on Dark) is swapped for the style's light `swap` colour.
+style_marks <- function(cols, style = CHART_STYLE_DEFAULT) {
+  st = chart_style(style)
+  if (is.na(st$swap)) return(cols)
+  ifelse(chart_contrast(cols, st$background) < CHART_MARK_CONTRAST, st$swap, cols)
+}
 
 # Viridis, written out (viridisLite::viridis(7)) so the default needs no package.
 CHART_SEQUENTIAL <- c("#440154", "#443A83", "#31688E", "#21908C", "#35B779", "#8FD744", "#FDE725")
@@ -223,10 +368,10 @@ palette_colours <- function(name, n = NULL) {
 
 palette_available <- function(name) isTRUE(tryCatch(length(palette_colours(name)) > 0L, error = function(e) FALSE))
 
-# The three palettes a report starts with. At work, this is the function to change.
+# The three palettes and the style a report starts with. At work, this is the function to change.
 chart_palette_default <- function()
   list(qualitative = "okabe_ito", sequential = "viridis",
-       diverging = if (palette_available("rdbu")) "rdbu" else "blue_red")
+       diverging = if (palette_available("rdbu")) "rdbu" else "blue_red", style = CHART_STYLE_DEFAULT)
 
 # The palettes on offer for a kind, as c(name = label), the default first.
 chart_palettes <- function(kind) {
@@ -303,31 +448,82 @@ chart_diverging <- function(name = chart_palette_default()$diverging) palette_co
 chart_fill_scale <- function(...) ggplot2::scale_fill_gradientn(colours = chart_sequential(), ...)
 chart_colour_scale <- function(...) ggplot2::scale_colour_gradientn(colours = chart_sequential(), ...)
 
-# A minimal theme with high data-ink: no panel border, no minor grid, a light major grid only along
-#   the value axis (grid = "y", "x", "xy" or "none"), the title left-aligned and bold, the legend on
-#   top (legend = "right" for a line chart whose legend stands in for its labels), and two legends
-#   stacked rather than side by side. A chart whose lines carry their own labels drops the legend
-#   with guides(), not here.
-chart_theme <- function(base_size = 12, grid = "y", legend = "top") {
-  line = ggplot2::element_line(colour = "#E5E5E5", linewidth = 0.4)
-  none = ggplot2::element_blank()
-  ggplot2::theme_minimal(base_size = base_size) +
-    ggplot2::theme(
-      panel.border = none,
-      panel.grid.minor = none,
-      panel.grid.major.x = if (grid %in% c("x", "xy")) line else none,
-      panel.grid.major.y = if (grid %in% c("y", "xy")) line else none,
-      plot.title = ggplot2::element_text(face = "bold", hjust = 0),
-      plot.title.position = "plot",
-      plot.subtitle = ggplot2::element_text(colour = "#4D4D4D", hjust = 0),
-      plot.caption = ggplot2::element_text(colour = "#7F7F7F", hjust = 0),
-      plot.caption.position = "plot",
-      axis.title = ggplot2::element_text(colour = "#4D4D4D"),
-      axis.text = ggplot2::element_text(colour = "#4D4D4D"),
-      strip.text = ggplot2::element_text(face = "bold", hjust = 0),
-      legend.position = legend,
-      legend.justification = if (identical(legend, "top")) "left" else "top",
-      legend.box = "vertical",
-      legend.box.just = "left",
-      legend.title = ggplot2::element_text(colour = "#4D4D4D"))
+# The theme of a style as ggplot2 calls, in the order to add them: theme_minimal() and one theme(). They are
+#   evaluated to draw a chart (chart_theme()) and printed as they are in the code a chart comes with, with
+#   every value written in, so that code needs nothing from this app. The fonts are the variables
+#   chart_font, chart_font_semibold, chart_serif and chart_serif_semibold (chart_font_values() gives them
+#   a value; the written code sets them to the bundled family when it is registered or installed, else to
+#   the default sans or serif). grid is the grid the chart asks for ("y", "x", "xy" or "none": which
+#   axes a chart of this family gives a grid), and the style's grid_axes decides what is kept; legend is
+#   its place ("right" for a line chart whose legend stands in for its labels); lift sets the value axis
+#   labels above their grid line, where the style asks for it. A chart whose lines carry their
+#   own labels drops the legend with guides(), not here.
+chart_theme_calls <- function(style = CHART_STYLE_DEFAULT, grid = "y", legend = "top", lift = FALSE, base_size = 12) {
+  st = chart_style(style)
+  e = function(fn, ...) as.call(c(list(as.name(fn)), purrr::compact(list(...))))
+  blank = quote(element_blank())
+  line = function(colour, width) e("element_line", colour = colour, linewidth = width)
+  font = function(role, weight) as.name(names(Filter(function(v) identical(v, c(role, if (identical(weight, "semibold")) "semibold" else "regular")),
+                                                      CHART_FONT_VARS))[[1]])
+  text = function(role, weight, ..., colour) {
+    args = list(family = font(role, weight), face = if (identical(weight, "bold")) "bold", colour = colour, ...)
+    do.call(e, c(list("element_text"), args), quote = TRUE)
+  }
+  axes = if (identical(grid, "none") || identical(st$grid_axes, "none")) "none"
+         else if (identical(st$grid_axes, "both")) "xy" else grid
+  grid_el = function(axis) if (axes %in% c(axis, "xy")) line(st$grid, st$grid_width) else blank
+  ticked = !is.na(st$ticks)
+  args = list(
+    text = e("element_text", colour = st$text),
+    plot.background = e("element_rect", fill = st$background, colour = NA),
+    panel.background = e("element_rect", fill = st$panel, colour = NA),
+    panel.border = blank, panel.grid.minor = blank,
+    panel.grid.major.x = grid_el("x"), panel.grid.major.y = grid_el("y"),
+    axis.line = if (is.na(st$axis_line)) blank else line(st$axis_line, 0.4),
+    axis.ticks = if (ticked) line(st$ticks, 0.4) else blank,
+    axis.ticks.length = if (ticked) call("unit", 3, "pt"),
+    plot.title = text(st$title_font, st$title_weight, size = call("rel", st$title_size), hjust = 0, colour = st$text),
+    plot.title.position = "plot",
+    plot.subtitle = text(st$subtitle_font, "regular", hjust = 0, colour = st$text_2),
+    plot.caption = e("element_text", colour = st$caption, hjust = 0),
+    plot.caption.position = "plot",
+    axis.title = e("element_text", colour = st$text_2),
+    axis.text = e("element_text", colour = st$text_2),
+    axis.text.y = if (isTRUE(lift) && isTRUE(st$lift)) e("element_text", colour = st$text_2, hjust = 1, vjust = -0.35, margin = call("margin", r = 4)),
+    strip.text = text("sans", st$strip, hjust = 0, colour = st$text),
+    legend.position = legend,
+    legend.justification = if (identical(legend, "top")) "left" else "top",
+    legend.box = "vertical", legend.box.just = "left",
+    legend.title = e("element_text", colour = st$text_2),
+    legend.text = e("element_text", colour = st$text),
+    plot.margin = call("margin", 8, 12, 8, 8),
+    axis.line.x.top = if (!is.na(st$rule)) line(st$rule, 0.5),
+    axis.text.x.top = if (!is.na(st$rule)) blank,
+    axis.ticks.x.top = if (!is.na(st$rule)) blank,
+    axis.title.x.top = if (!is.na(st$rule)) blank)
+  list(e("theme_minimal", base_size = base_size, base_family = quote(chart_font)),
+       as.call(c(list(as.name("theme")), purrr::compact(args))))
+}
+
+# Layers a style adds besides its theme: the thin rule under the title block is the top axis line, so a
+#   style that has one asks for a second x axis (guides(x.sec = "axis")), which its theme draws as a line
+#   without labels or ticks. The plotly version leaves it out.
+chart_style_layers <- function(style = CHART_STYLE_DEFAULT) {
+  if (is.na(chart_style(style)$rule)) return(list())
+  list(call("guides", x.sec = "axis"))
+}
+
+# The value of a call of chart_theme_calls(), worked out call by call (each function looked up in env and
+#   applied with do.call()): the calls hold only ggplot2 functions, numbers, strings and the font variables.
+theme_value <- function(x, env) {
+  if (is.call(x)) do.call(get(as.character(x[[1]]), envir = env), purrr::map(as.list(x)[-1], theme_value, env = env))
+  else if (is.symbol(x)) get(as.character(x), envir = env)
+  else x
+}
+
+# The ggplot2 theme of a style: the calls of chart_theme_calls(), applied with the fonts it can draw in.
+chart_theme <- function(style = CHART_STYLE_DEFAULT, base_size = 12, grid = "y", legend = "top", lift = FALSE) {
+  cls = chart_theme_calls(style, grid, legend, lift, base_size)
+  env = list2env(chart_font_values(cls), parent = asNamespace("ggplot2"))
+  purrr::reduce(purrr::map(cls, theme_value, env = env), `+`)
 }

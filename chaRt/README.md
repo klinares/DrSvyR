@@ -22,10 +22,11 @@ left and a canvas of charts on the right, every message going through one call, 
 | `R/llm.R` | From QuestionR: the session key, the model call, JSON repair, retry, the connection check and the key box |
 | `R/data.R` | Read a delimited file, profile and type its columns, build, write, read and check `data_dictionary.yaml`, and the column texts a model will be sent |
 | `R/spec.R` | The plot spec: defaults, the check against the codebook, the table that is drawn, the lint, the ggplot, the plotly version, the R code that reproduces a chart, and its size. Every threshold is a constant at the top |
-| `R/theme.R` | `chart_theme()`, the palettes an analyst may choose from (`CHART_PALETTES`), the highlight colours, and `chart_palette_default()`. The one file replaced at work |
+| `R/theme.R` | The typeface (`CHART_FONTS`, registered with systemfonts by `chart_fonts_register()` from `app.R`), the six styles (`CHART_STYLES`), `chart_theme()` and `chart_theme_calls()`, the palettes an analyst may choose from (`CHART_PALETTES`), the highlight colour, and `chart_palette_default()`. The one file replaced at work |
 | `R/reflexes.R` | Reads the reflex files, assembles every prompt, and makes the three calls: `label_columns()`, `chat_turn()` (every chat message) and `summarize_charts()` (headlines and summaries), with the number and word checks |
 | `R/ui.R` | The page (banner and navbar), the shared helpers, the logo, Start here, the connection check, the Data page (file, then data dictionary) and the Explore screen (chat and canvas) |
 | `www/reflexes/` | The rules the model is given, one markdown file per topic, written in the Claude project and not edited here; `README.md` there gives the format |
+| `www/fonts/` | Inter and Source Serif 4 (static TrueType: regular, semibold, bold) with their licence files, both under the SIL Open Font License 1.1. Registered at start-up and declared with `@font-face`; without them charts draw in the default fonts and Start here says so |
 | `tests/` | The smoke test, the live check and its page (`live_gallery.R`), the gold specs (`gold_specs.yaml`) and the gallery (`gallery.R`), at home. Not deployed |
 | `probe/app.R` | A separate one-page app, published once at work to learn what the server can do |
 | `DESIGN.md`, `STATUS.md` | The design, and where the build stands |

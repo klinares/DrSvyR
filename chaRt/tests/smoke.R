@@ -359,47 +359,68 @@ code_ok <- purrr::map_lgl(gold_codes, is.character)
 check("every gold spec: spec_code() returns code", all(code_ok))
 parsed <- purrr::map(gold_codes[code_ok], function(code) tryCatch(parse(text = code, keep.source = TRUE), error = function(e) e))
 check("every gold spec: the code parses", all(purrr::map_lgl(parsed, function(p) !inherits(p, "error"))))
-app_functions <- setdiff(unlist(purrr::map(r_files, function(f)
+app_functions <- unlist(purrr::map(r_files, function(f)
   purrr::map_chr(purrr::keep(top_level(f), function(e) is_assignment(e) && is.call(e[[3]]) && identical(e[[3]][[1]], as.name("function"))),
-                 function(e) as.character(e[[2]])))), "chart_theme")
+                 function(e) as.character(e[[2]]))))
 code_tokens <- purrr::map(parsed, function(p) if (!inherits(p, "error")) utils::getParseData(p))
 check("every gold spec: the code has no for, while or repeat",
       all(purrr::map_lgl(code_tokens, function(pd) !is.null(pd) && !any(pd$token %in% c("FOR", "WHILE", "REPEAT")))))
-check("every gold spec: the code calls no function of this app except chart_theme()",
+check("every gold spec: the code calls no function of this app (the style is a plain theme_minimal() and theme() call; Phase 7 B replaced chart_theme())",
       all(purrr::map_lgl(code_tokens, function(pd) !is.null(pd) &&
                            !length(intersect(pd$text[pd$token == "SYMBOL_FUNCTION_CALL"], app_functions)))))
 
-# Each code run in a fresh R process that has chart_theme() and nothing else from the app.
+# Each code run in a fresh R process that has nothing from the app (Phase 7 B: the style is written into the
+#   code as theme_minimal() and theme(), so chart_theme() is no longer needed). The runner builds the plot, draws it
+#   to a PNG with ragg (a font that is not there falls back to the default sans), and keeps what the code set the
+#   typeface variables to. `register` as the second argument registers the bundled fonts with systemfonts first,
+#   as a reader who has them would.
 code_dir <- file.path(work_dir, "codes")
 dir.create(code_dir)
 # The code names the file only, so each runs from the folder that holds its file.
-purrr::iwalk(which(code_ok), function(k, i) {
-  writeLines(gold_codes[[k]], file.path(code_dir, sprintf("code_%02d.R", i)), useBytes = TRUE)
-  writeLines(normalizePath(dirname(gold[[k]]$g$path), winslash = "/"), file.path(code_dir, sprintf("code_%02d.dir", i)))
-})
+write_codes <- function(dir, codes, paths, prefix = "code") {
+  dir.create(dir, showWarnings = FALSE)
+  purrr::iwalk(codes, function(code, i) {
+    writeLines(code, file.path(dir, sprintf("%s_%02d.R", prefix, i)), useBytes = TRUE)
+    writeLines(normalizePath(dirname(paths[[i]]), winslash = "/"), file.path(dir, sprintf("%s_%02d.dir", prefix, i)))
+  })
+}
+write_codes(code_dir, gold_codes[code_ok], purrr::map_chr(gold[code_ok], function(x) x$g$path))
 runner <- file.path(work_dir, "run_codes.R")
 writeLines(c(
   "args <- commandArgs(TRUE)",
-  "theme <- new.env(); sys.source(args[2], envir = theme); assign('chart_theme', theme$chart_theme, envir = globalenv())",
+  "fonts_dir <- args[3]",
+  "if (identical(args[2], 'register')) {",
+  "  f <- function(x) file.path(fonts_dir, x)",
+  "  systemfonts::register_font('Inter', plain = f('Inter-Regular.ttf'), bold = f('Inter-Bold.ttf'))",
+  "  systemfonts::register_font('Inter SemiBold', plain = f('Inter-SemiBold.ttf'), bold = f('Inter-Bold.ttf'))",
+  "  systemfonts::register_font('Source Serif 4', plain = f('SourceSerif4-Regular.ttf'), bold = f('SourceSerif4-Bold.ttf'))",
+  "  systemfonts::register_font('Source Serif 4 SemiBold', plain = f('SourceSerif4-Semibold.ttf'), bold = f('SourceSerif4-Bold.ttf'))",
+  "}",
   "files <- sort(list.files(args[1], pattern = '^code_.*[.]R$', full.names = TRUE))",
   "out <- lapply(files, function(f) tryCatch({",
   "  env <- new.env(parent = globalenv())",
   "  old <- setwd(readLines(sub('[.]R$', '.dir', f))); on.exit(setwd(old))",
   "  p <- suppressMessages(eval(parse(f, encoding = 'UTF-8'), env))",
   "  b <- ggplot2::ggplot_build(p)",
-  "  list(table = env$chart_table, built = TRUE, layer = b$data[[1]])",
+  "  png <- tempfile(fileext = '.png')",
+  "  ragg::agg_png(png, width = 700, height = 450); print(p); grDevices::dev.off()",
+  "  fonts <- mget(intersect(c('chart_font', 'chart_font_semibold', 'chart_serif', 'chart_serif_semibold'), ls(env)), envir = env)",
+  "  list(table = env$chart_table, built = TRUE, layer = b$data[[1]], drawn = file.exists(png) && file.size(png) > 1000, fonts = fonts)",
   "}, error = function(e) list(error = conditionMessage(e))))",
   "saveRDS(out, file.path(args[1], 'results.rds'))"), runner)
-system2(file.path(R.home("bin"), "Rscript"), c("--no-init-file", shQuote(runner), shQuote(code_dir), shQuote(file.path("R", "theme.R"))),
-        stdout = FALSE, stderr = FALSE)
-code_runs <- if (file.exists(file.path(code_dir, "results.rds"))) readRDS(file.path(code_dir, "results.rds")) else list()
+run_codes <- function(dir, mode = "plain")
+  system2(file.path(R.home("bin"), "Rscript"), c("--no-init-file", shQuote(runner), shQuote(dir), mode, shQuote(file.path("www", "fonts"))),
+          stdout = FALSE, stderr = FALSE)
+read_runs <- function(dir) if (file.exists(file.path(dir, "results.rds"))) readRDS(file.path(dir, "results.rds")) else list()
+run_codes(code_dir)
+code_runs <- read_runs(code_dir)
 plain <- function(t) { t = as.data.frame(t); attributes(t) = attributes(t)[c("names", "class", "row.names")]; t }
 code_match <- purrr::map2_lgl(code_runs, gold_plots[code_ok], function(run, r)
   isTRUE(run$built) && isTRUE(all.equal(plain(run$table), plain(attr(r$plot, "table")))))
 purrr::walk2(code_runs, gold_plots[code_ok], function(run, r) if (!is.null(run$error)) cat("      ", r$name, ": ", run$error, "\n", sep = ""))
-check(paste0("every gold spec: the code runs in a fresh R process with only chart_theme(), draws, and builds a table equal to spec_table() (",
+check(paste0("every gold spec: the code runs in a fresh R process with nothing from the app, draws (ragg), and builds a table equal to spec_table() (",
              sum(code_match), " of ", sum(code_ok), ")"),
-      length(code_runs) == sum(code_ok) && all(code_match))
+      length(code_runs) == sum(code_ok) && all(code_match) && all(purrr::map_lgl(code_runs, function(r) isTRUE(r$drawn))))
 
 
 # ---- Phase 2b: fixes after the gallery review ----------------------------------------------
@@ -434,7 +455,7 @@ if (!is.null(lines8) && !is.null(lines3)) {
   ends8 = attr(lines8$plot, "table") |> dplyr::filter(year == max(year)) |> dplyr::arrange(dplyr::desc(revenue))
   check("2b-2: 8 lines ending close together get no end labels and a legend on the right, in the order of the end values",
         identical(s8$.labels, FALSE) && identical(s8$.legend_order, as.character(ends8$region)) &&
-          !code_has(lines8$code, "geom_text") && code_has(lines8$code, "legend = \"right\""))
+          !code_has(lines8$code, "geom_text") && code_has(lines8$code, "legend.position = \"right\""))
   check("2b-2: 3 lines ending far apart keep their end labels and show no legend",
         isTRUE(s3$.labels) && code_has(lines3$code, "geom_text") && code_has(lines3$code, "guides(colour = \"none\")"))
   check("2b-2: no gold chart uses check_overlap", !any(purrr::map_lgl(gold_codes, function(cd) code_has(cd, "check_overlap"))))
@@ -492,7 +513,7 @@ if (!is.null(hw)) {
         isTRUE(attr(hw$plot, "spec")$.jitter) && nrow(hw_layer) == nrow(hw_table) && any(moved > 0) &&
           all(moved <= SPEC_JITTER * step_x + 1e-9) && all(hw_layer$alpha == SPEC_ALPHA) &&
           jitter_note %in% attr(hw$plot, "notes") && code_has(hw$code, "position_jitter(") &&
-          !code_has(hw$code, "scale_size") && !code_has(hw$code, "size =") &&
+          !code_has(hw$code, "scale_size") && !grepl("aes\\([^)]*size", hw$code) &&
           isTRUE(attr(plain_hw, "spec")$.jitter) && jitter_note %in% attr(plain_hw, "notes"))
   check("2d-1: the jittered chart is the same on a second call, and its code reproduces the table and the same points",
         isTRUE(all.equal(hw_layer[c("x", "y")], hw_again[c("x", "y")])) && isTRUE(hw_run$built) &&
@@ -2881,6 +2902,281 @@ if (length(find.package("MetBrewer", quiet = TRUE)) && length(find.package("colo
         !grepl("colorblind.friendly|colorblind_palettes|MetPalettes|\\$colorblind", m7_src) &&
           grepl("is OURS, by the lightness rule", m7_theme, fixed = TRUE) && grepl("not MetBrewer's classification", m7_theme, fixed = TRUE))
 } else cat("skip  7A-6: MetBrewer or colorspace is not installed, so the lightness rule is not recomputed\n")
+
+
+# ---- Phase 7 B: styles and type ----------------------------------------------------------------------------------------------
+
+b7_styles <- names(CHART_STYLES)
+b7_pal <- function(style, q = "okabe_ito") utils::modifyList(chart_palette_default(), list(style = style, qualitative = q))
+b7_hex <- function(x) toupper(substr(as.character(x), 1, 7))
+b7_ratio <- function(a, b) as.numeric(colorspace::contrast_ratio(a, b))   # WCAG, from colorspace, not from R/theme.R
+# The colour of an element of a theme as ggplot2 resolves it.
+b7_calc <- function(th, el) ggplot2::calc_element(el, th)
+b7_num <- function(x) formatC(x, format = "f", digits = 2)
+if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
+
+  # 1. the typeface
+  b7_dir <- file.path("www", "fonts")
+  b7_wanted <- c(unlist(purrr::map(CHART_FONTS, function(f) unlist(f[c("regular", "semibold", "bold")]))), "Inter-LICENSE.txt", "SourceSerif4-LICENSE.md")
+  b7_tables <- function(path) {
+    hdr = readBin(path, "raw", 12L)
+    n = readBin(hdr[5:6], "integer", n = 1L, size = 2L, signed = FALSE, endian = "big")
+    dir = readBin(path, "raw", 12L + 16L * n)[-(1:12)]
+    list(magic = hdr[1:4], tags = purrr::map_chr(seq_len(n), function(i) rawToChar(dir[((i - 1L) * 16L + 1L):((i - 1L) * 16L + 4L)])))
+  }
+  b7_ttf <- purrr::keep(b7_wanted, function(f) endsWith(f, ".ttf"))
+  b7_lic <- readLines(file.path(b7_dir, "Inter-LICENSE.txt"), warn = FALSE, encoding = "UTF-8")
+  b7_lic2 <- readLines(file.path(b7_dir, "SourceSerif4-LICENSE.md"), warn = FALSE, encoding = "UTF-8")
+  b7_page <- paste(htmltools::renderTags(app_ui("UNCLASSIFIED", "x.png", "", "https://example.org"))$head, collapse = "")
+  b7_urls <- regmatches(b7_page, gregexpr("(?<=url\\('fonts/)[^']+(?=')", b7_page, perl = TRUE))[[1]]
+  b7_git <- if (nzchar(Sys.which("git"))) purrr::map_int(file.path(b7_dir, b7_wanted), function(f) system2("git", c("check-ignore", "-q", f), stdout = FALSE, stderr = FALSE)) else 1L
+  b7_ignore <- if (file.exists(".rscignore")) readLines(".rscignore", warn = FALSE) else character(0)
+  check("7B-1: www/fonts/ holds exactly the three static TrueType files (regular, semibold, bold) of Inter and of Source Serif 4 and the two licence files, none a variable font, and the licences are the SIL Open Font License 1.1",
+        setequal(list.files(b7_dir), b7_wanted) &&
+          all(purrr::map_lgl(b7_ttf, function(f) { t = b7_tables(file.path(b7_dir, f)); identical(as.integer(t$magic), c(0L, 1L, 0L, 0L)) && !"fvar" %in% t$tags && "glyf" %in% t$tags })) &&
+          any(grepl("SIL OPEN FONT LICENSE Version 1.1", b7_lic, fixed = TRUE)) && any(grepl("SIL OPEN FONT LICENSE Version 1.1", b7_lic2, fixed = TRUE)) &&
+          any(grepl("^Copyright .*Inter Project Authors", b7_lic)) && any(grepl("^Copyright .*Adobe", b7_lic2)))
+  check("7B-1: the fonts are registered with systemfonts at start-up (app.R calls chart_fonts_register()): each family and its SemiBold name, with a file that is there",
+        isTRUE(all(c("Inter", "Inter SemiBold", "Source Serif 4", "Source Serif 4 SemiBold") %in% systemfonts::registry_fonts()$family)) &&
+          all(file.exists(systemfonts::registry_fonts()$path[systemfonts::registry_fonts()$family %in% c("Inter", "Inter SemiBold", "Source Serif 4", "Source Serif 4 SemiBold")])) &&
+          identical(unname(chart_fonts_register()), c(TRUE, TRUE)) && length(chart_fonts_missing()) == 0L &&
+          any(grepl("^chart_fonts_register\\(\\)", readLines("app.R", warn = FALSE))))
+  check("7B-1: the page declares each bundled file with @font-face under the names the charts use, every address is a file in www/fonts/, and neither .gitignore nor .rscignore leaves www/fonts out",
+        setequal(unique(b7_urls), b7_ttf) && all(file.exists(file.path(b7_dir, b7_urls))) &&
+          all(purrr::map_lgl(c("'Inter'", "'Inter SemiBold'", "'Source Serif 4'", "'Source Serif 4 SemiBold'"), function(n) grepl(paste0("font-family: ", n), b7_page, fixed = TRUE))) &&
+          all(b7_git == 1L) && !any(grepl("font|^www|ttf|woff", b7_ignore)))
+
+  # the fonts missing: the app starts, charts draw in the default fonts, Start here says so once
+  b7_real_avail <- chart_font_available
+  assign("chart_font_available", function(name) FALSE, envir = globalenv())
+  b7_none <- tryCatch(chart_fonts_register(tempfile("nofonts_")), error = function(e) e)
+  b7_start <- paste(as.character(start_ui()), collapse = "")
+  b7_miss_page <- tryCatch(nchar(paste(as.character(app_ui("UNCLASSIFIED", "x.png", "", "https://example.org")), collapse = "")) > 0L, error = function(e) FALSE)
+  b7_chart_font_family_missing <- list(sans = chart_font_family("sans"), serif = chart_font_family("serif"))
+  b7_np <- tryCatch(spec_plot(list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "t"), pan_g$data, pan_g$cb, b7_pal("newspaper")), error = function(e) e)
+  b7_np_png <- tempfile(fileext = ".png")
+  b7_drawn <- inherits(b7_np, "ggplot") && !inherits(tryCatch(spec_png(b7_np, b7_np_png), error = function(e) e), "error") && file.size(b7_np_png) > 1000
+  b7_code_missing <- if (inherits(b7_np, "ggplot")) spec_code(attr(b7_np, "spec"), pan_g$cb, pan_g$path, b7_pal("newspaper")) else ""
+  b7_wid_missing <- if (inherits(b7_np, "ggplot")) spec_widget(b7_np) else NULL
+  b7_fam_missing <- unique(unlist(rapply(b7_wid_missing$x$layout, function(x) x, how = "unlist")[grepl("family", names(unlist(b7_wid_missing$x$layout)))]))
+  assign("chart_font_available", b7_real_avail, envir = globalenv())
+  b7_start_ok <- paste(as.character(start_ui()), collapse = "")
+  check("7B-1: with the fonts missing the app still builds, charts draw (static, in the default sans and serif), the written code says it falls back, and Start here says so once; with them there it says nothing",
+        inherits(b7_none, "logical") && identical(unname(b7_none), c(FALSE, FALSE)) && b7_miss_page && b7_drawn &&
+          identical(b7_chart_font_family_missing, list(sans = "sans", serif = "serif")))
+  check("7B-1: Start here names the missing typefaces exactly once, and the plotly version then asks for the generic fonts, not for a name the browser lacks",
+        lengths(gregexpr("is not available here|are not available here", b7_start))[[1]] == 1L && grepl("Inter and Source Serif 4", b7_start, fixed = TRUE) &&
+          !grepl("not available here", b7_start_ok, fixed = TRUE) && all(grepl("sans-serif|serif", b7_fam_missing)) && !any(b7_fam_missing %in% c("sans")) &&
+          grepl("else \"sans\"", b7_code_missing, fixed = TRUE) && grepl("else \"serif\"", b7_code_missing, fixed = TRUE))
+
+  # 2. six styles, neutral names
+  b7_banned <- "economist|guardian|financial times|\\bFT\\b|bloomberg|\\bvox\\b|538|fivethirtyeight|new york|\\btimes\\b|washington|\\bpost\\b|journal|reuters|\\bpew\\b|\\bnpr\\b|\\bbbc\\b|atlantic|wsj|nyt|wired|axios|politico|monde|spiegel|observer|telegraph|herald|tribune"
+  b7_fields <- c("label", "note", "background", "panel", "text", "text_2", "caption", "grid", "grid_axes", "grid_width", "axis_line", "ticks",
+                 "title_font", "title_weight", "title_size", "subtitle_font", "strip", "rule", "lift", "grey", "fit", "outline", "box_fill", "swap")
+  b7_sample_text <- paste(purrr::map_chr(b7_styles, function(s) paste(as.character(style_choice_ui(s, "#E69F00")), collapse = "")), collapse = " ")
+  check("7B-2: CHART_STYLES has exactly six styles, Clean first and the default, each with the same named values, and no name, label, note or sample names a publication",
+        identical(b7_styles, c("clean", "minimal", "magazine", "desk", "newspaper", "dark")) && identical(CHART_STYLE_DEFAULT, "clean") &&
+          identical(chart_palette_default()$style, "clean") &&
+          all(purrr::map_lgl(CHART_STYLES, function(s) setequal(names(s), b7_fields))) &&
+          !any(grepl(b7_banned, c(b7_styles, unlist(purrr::map(CHART_STYLES, function(s) c(s$label, s$note))), b7_sample_text), ignore.case = TRUE)) &&
+          identical(unname(purrr::map_chr(CHART_STYLES, "label")), c("Clean", "Minimal", "Magazine", "Data desk", "Newspaper", "Dark")))
+  b7_ggplot2_exports <- getNamespaceExports("ggplot2")
+  check("7B-2: Minimal has no range frame: ggplot2 (installed) has no function for one, so its axes are plain with ticks only (this check fails if a ggplot2 that has one is installed, so the choice is made again)",
+        !any(grepl("range.?frame", b7_ggplot2_exports, ignore.case = TRUE)) && !grepl("rangeframe|range_frame", paste(readLines(file.path("R", "theme.R"), warn = FALSE), collapse = "\n")))
+
+  # 3. what every style must hold
+  b7_text_els <- c("plot.title", "plot.subtitle", "plot.caption", "axis.text.x", "axis.text.y", "axis.title.x", "axis.title.y", "legend.text", "legend.title", "strip.text.x")
+  b7_text_cr <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) {
+    th = chart_theme(s)
+    bg = b7_calc(th, "plot.background")$fill
+    stats::setNames(purrr::map_dbl(b7_text_els, function(el) b7_ratio(b7_calc(th, el)$colour, bg)), b7_text_els)
+  })
+  cat("      text against background (lowest of ", length(b7_text_els), " text elements), contrast ratio: ",
+      paste(b7_styles, purrr::map_chr(b7_text_cr, function(v) b7_num(min(v))), collapse = ", "), "\n", sep = "")
+  check("7B-3: every style: each text of the theme (title, subtitle, caption, axis texts and titles, legend, panel names) against its background is 4.5 to 1 or better",
+        all(purrr::map_lgl(b7_text_cr, function(v) all(v >= 4.5))))
+  b7_grid <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) {
+    th = chart_theme(s, grid = "xy")
+    panel = b7_calc(th, "panel.background")$fill
+    el = purrr::keep(purrr::map(c("panel.grid.major.x", "panel.grid.major.y"), function(e) b7_calc(th, e)), function(x) !inherits(x, "ggplot2::element_blank"))
+    list(n = length(el), cr = purrr::map_dbl(el, function(x) b7_ratio(x$colour, panel)))
+  })
+  cat("      grid against background, contrast ratio (text for comparison): ",
+      paste(b7_styles, purrr::map_chr(b7_styles, function(s) if (b7_grid[[s]]$n) paste0(b7_num(max(b7_grid[[s]]$cr)), " (", b7_num(min(b7_text_cr[[s]])), ")") else "no grid"), collapse = ", "), "\n", sep = "")
+  check("7B-3: every style: the grid, where it has one, has a lower contrast against the background than the lowest text has; Minimal has none, Data desk and the others as written",
+        all(purrr::map_lgl(b7_styles, function(s) all(b7_grid[[s]]$cr < min(b7_text_cr[[s]])))) &&
+          identical(b7_grid$minimal$n, 0L) && identical(b7_grid$desk$n, 2L) && identical(b7_grid$clean$n, 2L) &&
+          identical(unname(purrr::map_int(b7_styles, function(s) { th = chart_theme(s, grid = "y"); sum(!purrr::map_lgl(c("panel.grid.major.x", "panel.grid.major.y"), function(e) inherits(b7_calc(th, e), "ggplot2::element_blank"))) })),
+                    c(1L, 0L, 1L, 2L, 1L, 1L)))
+  # the highlight grey: saliency is the CIE2000 colour difference from the background (farver); visible means 10 or more,
+  #   weaker means below that of the highlight colour and of every chromatic colour (LCh chroma 8 or more) of every
+  #   qualitative palette on offer, as the style shows it (a colour near white or grey is not a mark for a group)
+  b7_de <- function(a, b) as.numeric(farver::compare_colour(farver::decode_colour(a), farver::decode_colour(b), from_space = "rgb", method = "cie2000"))
+  b7_chroma <- function(a) farver::decode_colour(a, to = "lch")[, "c"]
+  b7_all_q <- unlist(purrr::map(names(chart_palettes("qualitative")), function(k) b7_hex(palette_colours(k))))
+  b7_sal <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) {
+    st = CHART_STYLES[[s]]
+    cols = unique(b7_hex(style_marks(b7_all_q, s)))
+    cols = cols[b7_chroma(cols) >= 8]
+    list(grey = b7_de(st$grey, st$background), hl = b7_de(CHART_HIGHLIGHT, st$background), weakest = min(b7_de(cols, st$background)))
+  })
+  cat("      highlight grey, colour difference from the background (visible at 10 or more): ",
+      paste(b7_styles, purrr::map_chr(b7_sal, function(v) sprintf("%.1f (highlight %.1f, weakest palette colour %.1f)", v$grey, v$hl, v$weakest)), collapse = "; "), "\n", sep = "")
+  b7_hl_spec <- list(family = "bar", x = "region", y = "revenue", fn = "sum", highlight = list(column = "region", values = list("North")), title = "t")
+  b7_hl_cols <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) unique(b7_hex(ggplot2::ggplot_build(spec_plot(b7_hl_spec, pan_g$data, pan_g$cb, b7_pal(s)))$data[[1]]$fill)))
+  check("7B-3: every style: its highlight grey is visible (10 or more from the background) and weaker than the highlight colour and than every chromatic colour of every qualitative palette; a highlighted chart draws the grey and the highlight colour",
+        all(purrr::map_lgl(b7_sal, function(v) v$grey >= 10 && v$grey < v$hl && v$grey < v$weakest)) &&
+          all(purrr::map_lgl(b7_styles, function(s) setequal(b7_hl_cols[[s]], c(b7_hex(CHART_STYLES[[s]]$grey), b7_hex(CHART_HIGHLIGHT))))))
+  # Dark: a palette colour too dark to see is swapped for a light one, in the chart and in the written code
+  b7_eight <- list(family = "line", x = "year", y = "revenue", color = "region", fn = "sum", title = "t")
+  b7_line_cols <- function(s) unique(b7_hex(ggplot2::ggplot_build(spec_plot(b7_eight, pan_g$data, pan_g$cb, b7_pal(s)))$data[[1]]$colour))
+  b7_code_of <- function(s) { p = spec_plot(b7_eight, pan_g$data, pan_g$cb, b7_pal(s)); spec_code(attr(p, "spec"), pan_g$cb, pan_g$path, b7_pal(s)) }
+  b7_dark_cols <- b7_line_cols("dark"); b7_clean_cols <- b7_line_cols("clean")
+  b7_dark_code <- b7_code_of("dark"); b7_clean_code <- b7_code_of("clean")
+  check("7B-3: Dark: Okabe-Ito's black (the seventh colour of an eight-region line chart) is swapped for the light colour in the chart and in the written code, every colour drawn is 3 to 1 or better against the background, and the light styles keep the black",
+        "#000000" %in% b7_clean_cols && grepl("#000000", b7_clean_code, fixed = TRUE) &&
+          !"#000000" %in% b7_dark_cols && CHART_STYLES$dark$swap %in% b7_dark_cols && length(b7_dark_cols) == 8L &&
+          !grepl("#000000", b7_dark_code, fixed = TRUE) && grepl(CHART_STYLES$dark$swap, b7_dark_code, fixed = TRUE) &&
+          all(b7_ratio(b7_dark_cols, CHART_STYLES$dark$background) >= 3) && identical(sum(b7_dark_cols != b7_clean_cols), 1L))
+
+  # 4. a single series is drawn in the chosen palette's first colour
+  b7_single_specs <- list(
+    bar = list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "t"),
+    dot = list(family = "dot", x = "region", y = "revenue", fn = "sum", title = "t"),
+    line = list(family = "line", x = "year", y = "revenue", fn = "sum", title = "t"),
+    scatter = list(family = "scatter", x = "price", y = "units", title = "t"),
+    histogram = list(family = "histogram", x = "price", title = "t"),
+    box = list(family = "box", x = "region", y = "revenue", title = "t"))
+  b7_firsts <- purrr::map(c("okabe_ito", "tol_bright", "metb_veronese", "natp_torres"), function(q) {
+    purrr::map_chr(b7_single_specs, function(sp) {
+      b = ggplot2::ggplot_build(spec_plot(sp, pan_g$data, pan_g$cb, b7_pal("clean", q)))$data[[1]]
+      b7_hex(if (sp$family %in% c("bar", "histogram")) b$fill else b$colour)[[1]]
+    })
+  })
+  b7_expected <- purrr::map_chr(c("okabe_ito", "tol_bright", "metb_veronese", "natp_torres"), function(q) b7_hex(palette_colours(q))[[1]])
+  b7_line_code <- spec_code(attr(spec_plot(b7_single_specs$bar, pan_g$data, pan_g$cb, b7_pal("clean", "tol_bright")), "spec"), pan_g$cb, pan_g$path, b7_pal("clean", "tol_bright"))
+  check("7B-4: a chart with one series and no colour column is drawn, in every family, in the chosen qualitative palette's first colour (four palettes), never a fixed blue, and its code writes that colour",
+        all(purrr::map2_lgl(b7_firsts, b7_expected, function(got, want) all(got == want))) && !any(unlist(b7_firsts) == "#0072B2") &&
+          grepl(b7_expected[[2]], b7_line_code, fixed = TRUE) && !grepl("CHART_SINGLE", paste(readLines(file.path("R", "spec.R"), warn = FALSE), collapse = "\n"), fixed = TRUE) &&
+          !exists("CHART_SINGLE") && !exists("CHART_GREY"))
+
+  # 5. one style per dashboard, chosen in the Style dialog; the model never names one
+  b7_src_ui <- paste(readLines(file.path("R", "ui.R"), encoding = "UTF-8"), collapse = "\n")
+  b7_spec_err <- spec_check(list(family = "bar", x = "region", y = "revenue", fn = "sum", style = "dark"), pan_g$cb)
+  check("7B-5: the model has no style field: a spec naming one is refused as an unknown field, `style` is not among the spec's fields, and the spec reference says nothing of styles",
+        !"style" %in% SPEC_FIELDS && length(b7_spec_err) > 0L && any(grepl("style", b7_spec_err, fixed = TRUE)) &&
+          !grepl("\\bstyle\\b", spec_reference(), ignore.case = TRUE) && !grepl("newspaper|magazine|data desk", spec_reference(), ignore.case = TRUE))
+  check("7B-5: the Style dialog lists every style with a drawn sample (an SVG in the style's own background, title typeface and grid) beside the three palette selects, and the choice is the dashboard's, kept in palette()$style",
+        all(purrr::map_lgl(b7_styles, function(s) {
+          h = paste(as.character(style_choice_ui(s, "#E69F00")), collapse = "")
+          grepl("<svg", h, fixed = TRUE) && grepl(CHART_STYLES[[s]]$background, h, fixed = TRUE) && grepl(CHART_STYLES[[s]]$label, h, fixed = TRUE) && grepl("role=\"img\"", h, fixed = TRUE)
+        })) && grepl("radioButtons(ns(\"style_choice\")", b7_src_ui, fixed = TRUE) && grepl("choiceValues = names(CHART_STYLES)", b7_src_ui, fixed = TRUE) &&
+          grepl("selectizeInput(ns(paste0(\"pal_\", kind))", b7_src_ui, fixed = TRUE) && grepl("p$style = v; palette(p)", b7_src_ui, fixed = TRUE) &&
+          grepl("font-family=\"'Source Serif 4', serif\"", style_sample_svg("newspaper", "#E69F00"), fixed = TRUE) &&
+          grepl("stroke=\"#000000\"", style_sample_svg("newspaper", "#E69F00"), fixed = TRUE) && !grepl("stroke=\"#000000\"", style_sample_svg("clean", "#E69F00"), fixed = TRUE))
+  b7_si <- stand_by(c6_reply)
+  b7_state <- c6_state()
+  b7_out <- new.env()
+  shiny::testServer(mod_explore_server, args = list(state = b7_state, ask = b7_si$ask), {
+    session$flushReact()
+    html <- function(name) gsub("&#39;", "'", paste(as.character(output[[name]]$html), collapse = ""), fixed = TRUE)
+    session$setInputs(chat_user_input = "How many orders in each region?")
+    session$setInputs(write_headlines = 1)
+    stories0 <- b7_state$stories; charts0 <- b7_state$charts; canvas0 <- b7_state$canvas; log0 <- length(made$log); sent0 <- length(b7_si$sent); calls0 <- nrow(b7_state$calls)
+    cards0 <- html("c1_card")
+    session$setInputs(style = 1)
+    b7_out$default <- identical(palette()$style, "clean") && identical(b7_state$palette$style, "clean")
+    session$setInputs(style_choice = "dark")
+    b7_out$dark <- identical(palette()$style, "dark") && identical(b7_state$palette$style, "dark") && identical(palette()$qualitative, "okabe_ito")
+    b7_out$quiet <- identical(b7_state$stories, stories0) && identical(b7_state$charts, charts0) && identical(b7_state$canvas, canvas0) &&
+      length(b7_si$sent) == sent0 && nrow(b7_state$calls) == calls0 && length(made$log) == log0 &&
+      !grepl(SUMMARY_STALE, html("c1_card"), fixed = TRUE) && !grepl(SUMMARY_STALE_DATA, html("c1_card"), fixed = TRUE) &&
+      identical(sub("src=\"[^\"]*\"", "", cards0), sub("src=\"[^\"]*\"", "", html("c1_card")))
+    session$setInputs(style_choice = "nonsense")
+    b7_out$unknown <- identical(palette()$style, "dark")
+    session$setInputs(pal_sequential = "ylgnbu")
+    b7_out$palette_too <- identical(palette()$style, "dark") && identical(palette()$sequential, "ylgnbu")
+  })
+  check("7B-5: choosing a style in the dialog sets the dashboard's style (and state's), makes no model call, leaves the charts, their stories and every card's text as they were and marks nothing changed; an unknown value is ignored; a palette change keeps the style",
+        isTRUE(b7_out$default) && isTRUE(b7_out$dark) && isTRUE(b7_out$quiet) && isTRUE(b7_out$unknown) && isTRUE(b7_out$palette_too))
+  b7_drawn_dark <- spec_plot(c6_bar, c6_read$read$data, c6_cb_ready, b7_pal("dark"))
+  b7_drawn_clean <- spec_plot(c6_bar, c6_read$read$data, c6_cb_ready, b7_pal("clean"))
+  check("7B-5: the style reaches the drawing: the same spec drawn under Dark and under Clean differs in the plot background and nowhere in the data, notes or spec",
+        !identical(b7_calc(b7_drawn_dark$theme, "plot.background")$fill, b7_calc(b7_drawn_clean$theme, "plot.background")$fill) &&
+          identical(b7_calc(b7_drawn_dark$theme, "plot.background")$fill, CHART_STYLES$dark$background) &&
+          identical(attr(b7_drawn_dark, "table"), attr(b7_drawn_clean, "table")) && identical(attr(b7_drawn_dark, "notes"), attr(b7_drawn_clean, "notes")) &&
+          identical(attr(b7_drawn_dark, "spec"), attr(b7_drawn_clean, "spec")))
+
+  # 6. the plotly version and the written code follow the style
+  b7_rgba <- function(hex) { v = grDevices::col2rgb(hex)[, 1]; paste0("rgba(", paste(v, collapse = ","), ",1)") }
+  b7_wspec <- list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "A title", subtitle = "A subtitle", caption = "A caption")
+  b7_widgets <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) spec_widget(spec_plot(b7_wspec, pan_g$data, pan_g$cb, b7_pal(s))))
+  b7_has <- function(x, pat) grepl(pat, x, fixed = TRUE)
+  check("7B-6: spec_widget() follows the style: the figure's paper and plot colours are the style's, the title's colour and family, the subtitle's colour and the caption's colour are the style's (Source Serif 4 for Newspaper's title and subtitle), and the bundled families come with their generic fallback",
+        all(purrr::map_lgl(b7_styles, function(s) {
+          st = CHART_STYLES[[s]]; l = b7_widgets[[s]]$x$layout
+          identical(l$paper_bgcolor, b7_rgba(st$background)) && identical(l$plot_bgcolor, b7_rgba(st$panel)) &&
+            identical(l$title$font$color, st$text) && b7_has(l$title$text, paste0("color:", st$text_2)) &&
+            identical(l$annotations[[length(l$annotations)]]$font$color, st$caption) &&
+            grepl(if (identical(st$title_font, "serif")) "Source Serif 4', serif" else "Inter', Inter, sans-serif|Inter, sans-serif", l$title$font$family) &&
+            identical(l$annotations[[length(l$annotations)]]$text, "A caption") && b7_has(l$title$text, "font-family:")
+        })) && b7_has(b7_widgets$newspaper$x$layout$title$text, "Source Serif 4") && !b7_has(b7_widgets$clean$x$layout$title$text, "Source Serif 4"))
+  b7_shapes <- purrr::map(b7_widgets, function(w) w$x$layout$shapes)
+  check("7B-6: spec_widget() keeps Newspaper's rule (plotly drops the second axis the static chart draws it with, so the figure draws a line across the top of its plot area, in the rule's colour) and adds none to the other styles; every style's figure builds with no warning",
+        length(b7_shapes$newspaper) == 1L && identical(b7_shapes$newspaper[[1]]$line$color, CHART_STYLES$newspaper$rule) &&
+          identical(b7_shapes$newspaper[[1]]$y0, 1) && !any(purrr::map_lgl(b7_shapes[setdiff(b7_styles, "newspaper")], length)) &&
+          all(purrr::map_lgl(b7_widgets, function(w) !length(attr(w, "warnings")))))
+  # the written code of every style, run alone in a fresh R process
+  b7_gold_ok <- which(purrr::map_lgl(gold_plots, function(r) inherits(r$plot, "ggplot")))
+  b7_code_dirs <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) {
+    dir = file.path(work_dir, paste0("codes_", s))
+    codes = purrr::map(b7_gold_ok, function(i) tryCatch(spec_code(attr(gold_plots[[i]]$plot, "spec"), gold[[i]]$g$cb, gold[[i]]$g$path, b7_pal(s)), error = function(e) e))
+    ok = purrr::map_lgl(codes, is.character)
+    write_codes(dir, codes[ok], purrr::map_chr(gold[b7_gold_ok][ok], function(x) x$g$path))
+    list(dir = dir, ok = ok, n = sum(ok), idx = b7_gold_ok[ok])
+  })
+  purrr::walk(b7_code_dirs, function(d) run_codes(d$dir))
+  b7_runs <- purrr::map(b7_code_dirs, function(d) read_runs(d$dir))
+  b7_match <- purrr::map_int(stats::setNames(b7_styles, b7_styles), function(s) {
+    d = b7_code_dirs[[s]]; runs = b7_runs[[s]]
+    if (length(runs) != d$n) return(-1L)
+    sum(purrr::map2_lgl(runs, d$idx, function(run, i) isTRUE(run$built) && isTRUE(run$drawn) && isTRUE(all.equal(plain(run$table), plain(attr(gold_plots[[i]]$plot, "table"))))))
+  })
+  purrr::walk(b7_styles, function(s) purrr::walk(b7_runs[[s]], function(r) if (!is.null(r$error)) cat("      ", s, ": ", r$error, "\n", sep = "")))
+  cat("      written code run in a fresh R process, drawn and equal to spec_table(), per style: ", paste(b7_styles, b7_match, sep = " ", collapse = ", "), " of ", length(b7_gold_ok), "\n", sep = "")
+  check("7B-6: for every style, the code spec_code() prints runs alone in a fresh R process with nothing from the app, builds, draws with ragg, and makes a table equal to spec_table() (every gold spec that draws, six styles)",
+        all(b7_match == vapply(b7_code_dirs, function(d) d$n, integer(1))) && all(vapply(b7_code_dirs, function(d) d$n, integer(1)) == length(b7_gold_ok)))
+  b7_codes_text <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) paste(readLines(file.path(b7_code_dirs[[s]]$dir, "code_01.R"), encoding = "UTF-8"), collapse = "\n"))
+  check("7B-6: the printed code carries the style as plain theme_minimal() and theme() calls with the style's own colours written in (no chart_theme(), no app function), and only Newspaper asks for the second axis that draws its rule",
+        all(purrr::map_lgl(b7_styles, function(s) b7_has(b7_codes_text[[s]], "theme_minimal(") && b7_has(b7_codes_text[[s]], "theme(") &&
+                              b7_has(b7_codes_text[[s]], CHART_STYLES[[s]]$background) && b7_has(b7_codes_text[[s]], CHART_STYLES[[s]]$text) &&
+                              !b7_has(b7_codes_text[[s]], "chart_theme") && !b7_has(b7_codes_text[[s]], "style_marks") && !b7_has(b7_codes_text[[s]], "CHART_"))) &&
+          b7_has(b7_codes_text$newspaper, "guides(x.sec = \"axis\")") && !any(purrr::map_lgl(setdiff(b7_styles, "newspaper"), function(s) b7_has(b7_codes_text[[s]], "x.sec"))) &&
+          b7_has(b7_codes_text$newspaper, "chart_serif <- if (has_font(\"Source Serif 4\")) \"Source Serif 4\" else \"serif\"") &&
+          b7_has(b7_codes_text$minimal, "chart_font_semibold <- if (has_font(\"Inter SemiBold\")) \"Inter SemiBold\" else \"sans\""))
+  # the same code with the fonts registered (as a reader who has them would) uses them
+  b7_reg_dir <- file.path(work_dir, "codes_registered")
+  b7_reg_idx <- b7_gold_ok[[1]]
+  b7_reg_codes <- purrr::map(c("newspaper", "minimal", "clean"), function(s) spec_code(attr(gold_plots[[b7_reg_idx]]$plot, "spec"), gold[[b7_reg_idx]]$g$cb, gold[[b7_reg_idx]]$g$path, b7_pal(s)))
+  write_codes(b7_reg_dir, b7_reg_codes, rep(gold[[b7_reg_idx]]$g$path, 3L))
+  run_codes(b7_reg_dir, "register")
+  b7_reg <- read_runs(b7_reg_dir)
+  b7_plain <- read_runs(b7_code_dirs$newspaper$dir)[[1]]$fonts
+  check("7B-6: with the bundled fonts registered the printed code uses them (Newspaper: Source Serif 4 and Inter; Minimal: Inter SemiBold; Clean: Inter), and without them it draws in the default fonts",
+        length(b7_reg) == 3L && all(purrr::map_lgl(b7_reg, function(r) isTRUE(r$drawn))) &&
+          identical(b7_reg[[1]]$fonts$chart_serif, "Source Serif 4") && identical(b7_reg[[1]]$fonts$chart_font, "Inter") &&
+          identical(b7_reg[[2]]$fonts$chart_font_semibold, "Inter SemiBold") && identical(b7_reg[[3]]$fonts$chart_font, "Inter") &&
+          identical(b7_plain$chart_serif, "serif") && identical(b7_plain$chart_font, "sans"))
+  # layers and the page for the other places the style reaches
+  b7_flip <- spec_plot(list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "t", facet = "year"), pan_g$data, pan_g$cb, b7_pal("magazine"))
+  b7_up <- spec_plot(b7_wspec, pan_g$data, pan_g$cb, b7_pal("magazine"))
+  check("7B-3: the style is whole: Newspaper draws its rule as the top axis line, Magazine lifts the value labels above their grid line on an upright chart with no panels and not otherwise, Minimal draws ticks and no axis line, and the facet strips are bold",
+        !inherits(b7_calc(chart_theme("newspaper"), "axis.line.x.top"), "ggplot2::element_blank") && inherits(b7_calc(chart_theme("clean"), "axis.line.x.top"), "ggplot2::element_blank") &&
+          b7_calc(b7_up$theme, "axis.text.y")$vjust < 0 && !is.null(b7_up$theme) &&
+          !(b7_calc(b7_flip$theme, "axis.text.y")$vjust %||% 0) < 0 &&
+          !inherits(b7_calc(chart_theme("minimal"), "axis.ticks.x"), "ggplot2::element_blank") && inherits(b7_calc(chart_theme("minimal"), "axis.line.x"), "ggplot2::element_blank") &&
+          all(purrr::map_lgl(b7_styles, function(s) identical(b7_calc(chart_theme(s), "strip.text.x")$face, if (identical(CHART_STYLES[[s]]$strip, "bold")) "bold" else "plain"))))
+} else cat("skip  7B: panel.csv or colorspace is not available\n")
 
 
 # ---- the count -------------------------------------------------------------------

@@ -18,6 +18,7 @@ LATER_PHASE <- "Built in a later phase."
 #   the first thing in the page, before the bar; only Explore fills the window, the others scroll.
 app_ui <- function(classification, logo, office, source_url)
   tagList(
+    tags$head(tags$style(HTML(font_face_css()))),
     tags$div(class = "chart-classification",
              style = paste("background:#b40404; color:#fff; text-align:center;",
                            "font-weight:700; letter-spacing:0.06em;",
@@ -104,8 +105,19 @@ start_ui <- function()
            "that follow written visualization rules, and lets you change a chart by chat. Charts collect ",
            "on a canvas, each with a headline and a short summary of what it shows. Every chart and ",
            "summary describes the file, not a population. Start on the Data page, then go to Explore."),
+    fonts_note(),
     mod_key_ui("key"),
     mod_connect_ui("connect"))
+
+# Said once on Start here when this machine cannot draw in a bundled typeface (www/fonts/ missing, or systemfonts
+#   not installed): the charts are drawn in the default fonts instead. Nothing when both are there.
+fonts_note <- function() {
+  missing = chart_fonts_missing()
+  if (!length(missing)) return(NULL)
+  many = length(missing) > 1L
+  warn_box(paste0("The typeface", if (many) "s ", if (!many) " ", paste(missing, collapse = " and "), if (many) " are" else " is",
+                  " not available here, so charts are drawn in the default ", paste(names(missing), collapse = " and "), " font", if (many) "s", "."))
+}
 
 # A tab that a later phase builds.
 later_ui <- function() tags$p(class = "text-muted", LATER_PHASE)
@@ -547,6 +559,54 @@ palette_swatch_script <- function(names) {
     "  return '<div><span class=\"chart-swatches\" aria-hidden=\"true\">' + s + '</span>' + escape(item.label) + '</div>';\n",
     "};")))
 }
+# @font-face for the bundled families, served from www/fonts/ (Shiny serves www/ at the site root, so the
+#   address is relative to it), under the names the charts use: plotly and the page then draw in the same
+#   faces as the static charts. "<family> SemiBold" is the semibold file as its regular face.
+font_face_css <- function() {
+  face = function(family, weight, file)
+    paste0("@font-face { font-family: '", family, "'; font-weight: ", weight, "; font-style: normal; font-display: swap; ",
+           "src: url('fonts/", file, "') format('truetype'); }")
+  paste(unlist(purrr::map(CHART_FONTS, function(f)
+    c(face(f$family, 400, f$regular), face(f$family, 700, f$bold),
+      face(paste(f$family, "SemiBold"), 400, f$semibold), face(paste(f$family, "SemiBold"), 700, f$bold)))), collapse = "\n")
+}
+
+# A small drawn sample of a style for the Style dialog: an SVG of the style's own background, title in its
+#   typeface, subtitle, grid (as the style draws it), four bars in `colour` (the chosen palette's first colour as
+#   the style shows it), ticks and rule. It carries no text a reader needs; the choice's label does.
+STYLE_SAMPLE_SIZE <- c(width = 132, height = 84)
+style_sample_svg <- function(style, colour) {
+  st = chart_style(style)
+  w = STYLE_SAMPLE_SIZE[["width"]]; h = STYLE_SAMPLE_SIZE[["height"]]
+  semibold = identical(st$title_weight, "semibold")
+  title_fam = font_css(chart_font_family(st$title_font, if (semibold) "semibold" else "regular"))
+  sub_fam = font_css(chart_font_family(st$subtitle_font))
+  line = function(x1, y1, x2, y2, col, width) sprintf("<line x1=\"%s\" y1=\"%s\" x2=\"%s\" y2=\"%s\" stroke=\"%s\" stroke-width=\"%s\"/>", x1, y1, x2, y2, col, width)
+  gw = max(st$grid_width * 2, 0.6)
+  hgrid = if (!identical(st$grid_axes, "none")) purrr::map_chr(c(40, 52, 64), function(y) line(10, y, 122, y, st$grid, gw))
+  vgrid = if (identical(st$grid_axes, "both")) purrr::map_chr(c(38, 66, 94), function(x) line(x, 36, x, 70, st$grid, gw))
+  heights = c(28, 21, 15, 9)
+  xs = c(16, 44, 72, 100)
+  bars = purrr::map2_chr(xs, heights, function(x, ht) sprintf("<rect x=\"%s\" y=\"%s\" width=\"20\" height=\"%s\" fill=\"%s\"/>", x, 70 - ht, ht, colour))
+  ticks = if (!is.na(st$ticks)) purrr::map_chr(xs + 10, function(x) line(x, 70, x, 73, st$ticks, 0.8))
+  rule = if (!is.na(st$rule)) line(10, 31, 122, 31, st$rule, 1)
+  paste0("<svg class=\"chart-style-sample\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 ", w, " ", h, "\" width=\"", w, "\" height=\"", h,
+         "\" role=\"img\" aria-label=\"Sample of the ", st$label, " style\">",
+         "<rect width=\"", w, "\" height=\"", h, "\" fill=\"", st$background, "\"/>",
+         "<text x=\"10\" y=\"14\" font-size=\"", round(9 * st$title_size, 1), "\" font-weight=\"", if (identical(st$title_weight, "bold")) 700 else 400,
+         "\" font-family=\"", title_fam, "\" fill=\"", st$text, "\">Title</text>",
+         "<text x=\"10\" y=\"25\" font-size=\"6.5\" font-family=\"", sub_fam, "\" fill=\"", st$text_2, "\">A subtitle</text>",
+         paste(c(rule, hgrid, vgrid, bars, ticks), collapse = ""), "</svg>")
+}
+
+# One style in the dialog's list: the sample and its name.
+style_choice_ui <- function(style, colour) {
+  st = chart_style(style)
+  tags$span(class = "chart-style-choice", HTML(style_sample_svg(style, colour)),
+            tags$span(class = "chart-style-name d-block", st$label),
+            tags$span(class = "chart-style-note d-block small text-muted", st$note))
+}
+
 EXPLORE_PLACEHOLDER <- "Ask a question about your data"
 EXPLORE_WIDTH <- "38%"
 
@@ -683,6 +743,12 @@ WORKING_LATER_MS <- 8000L
 EXPLORE_CSS <- "
 .chart-swatches { display: inline-flex; margin-right: .4rem; vertical-align: middle; }
 .chart-swatch { display: inline-block; width: .8rem; height: .8rem; border: 1px solid rgba(0, 0, 0, .15); }
+.chart-style-grid .shiny-options-group { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.chart-style-grid .radio { margin: 0; padding: 0; }
+.chart-style-grid label { display: block; cursor: pointer; }
+.chart-style-choice { display: inline-block; vertical-align: top; }
+.chart-style-sample { display: block; max-width: 100%; height: auto; border: 1px solid rgba(128, 128, 128, .5); margin-bottom: .2rem; }
+.chart-style-name { font-weight: 600; }
 .chart-card { cursor: pointer; }
 .chart-card.chart-selected { border: 2px solid var(--bs-primary); box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .25); }
 .chart-call {
@@ -1163,7 +1229,7 @@ mod_explore_server <- function(id, state, ask = llm_json) {
     # One line under Style when a chosen palette does not pass the colour-vision check.
     output$style_warning = renderUI({
       p = palette()
-      if (all(purrr::map_lgl(unlist(p), palette_passes))) return(NULL)
+      if (all(purrr::map_lgl(unlist(p[names(EXPLORE_PALETTE_KINDS)]), palette_passes))) return(NULL)
       tags$p(class = "small mb-0", style = "color: var(--bs-warning-text-emphasis, #8a5a00);", PALETTE_CVD_WARNING)
     })
 
@@ -1185,18 +1251,35 @@ mod_explore_server <- function(id, state, ask = llm_json) {
                                                      " (and ", format_num(tcache), " read from the cache), out ", format_num(tout), "."))
     })
 
-    # Style: the three palettes, in a dialog; changing one draws the charts again and makes no model call.
+    # Style: the chart style and the three palettes, in a dialog; changing one draws every chart again and makes no
+    #   model call. The style is one for the whole dashboard (palette()$style): the analyst's choice, never the model's,
+    #   and it changes no text.
     observeEvent(input$style, {
       pal = isolate(palette())
+      sample_colour = style_marks(chart_palette(1L, pal$qualitative), pal$style %||% CHART_STYLE_DEFAULT)[[1]]
       showModal(modalDialog(
-        title = "Style", easyClose = TRUE, footer = modalButton("Close"),
-        tags$p(class = "small text-muted", "The palettes colour every chart on the canvas. Changing one draws the charts again; no model call is made."),
-        tags$p(class = "small text-muted", PALETTE_CVD_LEGEND),
-        palette_swatch_script(unlist(purrr::map(names(EXPLORE_PALETTE_KINDS), function(kind) names(chart_palettes(kind))))),
-        purrr::imap(EXPLORE_PALETTE_KINDS, function(label, kind)
-          selectizeInput(ns(paste0("pal_", kind)), label, choices = chart_palette_groups(kind), selected = pal[[kind]],
-                         width = "100%", options = list(render = I(PALETTE_SWATCH_RENDER))))))
+        title = "Style", size = "l", easyClose = TRUE, footer = modalButton("Close"),
+        tags$p(class = "small text-muted", "The style and the palettes apply to every chart on the canvas. Changing one draws the charts again; ",
+               "no model call is made and no text changes."),
+        tags$div(class = "row g-3",
+          tags$div(class = "col-md-7 chart-style-grid",
+                   tags$h6("Chart style"),
+                   radioButtons(ns("style_choice"), NULL, width = "100%",
+                                choiceNames = purrr::map(names(CHART_STYLES), style_choice_ui, colour = sample_colour),
+                                choiceValues = names(CHART_STYLES), selected = pal$style %||% CHART_STYLE_DEFAULT)),
+          tags$div(class = "col-md-5",
+                   tags$h6("Palettes"),
+                   tags$p(class = "small text-muted", PALETTE_CVD_LEGEND),
+                   palette_swatch_script(unlist(purrr::map(names(EXPLORE_PALETTE_KINDS), function(kind) names(chart_palettes(kind))))),
+                   purrr::imap(EXPLORE_PALETTE_KINDS, function(label, kind)
+                     selectizeInput(ns(paste0("pal_", kind)), label, choices = chart_palette_groups(kind), selected = pal[[kind]],
+                                    width = "100%", options = list(render = I(PALETTE_SWATCH_RENDER))))))))
     })
+    observeEvent(input$style_choice, {
+      p = isolate(palette())
+      v = input$style_choice
+      if (v %in% names(CHART_STYLES) && !identical(p$style, v)) { p$style = v; palette(p) }
+    }, ignoreInit = TRUE)
     purrr::walk(names(EXPLORE_PALETTE_KINDS), function(kind)
       observeEvent(input[[paste0("pal_", kind)]], {
         p = isolate(palette())

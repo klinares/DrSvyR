@@ -245,7 +245,7 @@ Kept few on purpose.
 | `R/reflexes.R` | From QuestionR: the parser and the prompt assembly |
 | `R/data.R` | Read the file, profile it, build and read `codebook.yaml` |
 | `R/spec.R` | The spec: validate, lint, plot, table, code |
-| `R/theme.R` | `chart_theme()` and the palettes. Replaced at work |
+| `R/theme.R` | The typeface, the styles, `chart_theme()` and the palettes. Replaced at work |
 | `R/ui.R` | The tabs, the gallery, the chat, the report page |
 | `report.qmd` | The report template |
 | `www/reflexes/` | The reflex files |

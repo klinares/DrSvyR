@@ -102,6 +102,11 @@ list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION, APP_PROFILE = APP_PROFILE
 #   naming the file and the reflex, not in the middle of a call.
 check_reflex_files()
 
+# The two bundled typefaces in www/fonts/ (Inter and Source Serif 4), registered with systemfonts so that charts are
+#   drawn in them whatever the server has installed. Missing files or no systemfonts: the app starts, charts
+#   are drawn in the default fonts, and Start here says so once (chart_fonts_missing()).
+chart_fonts_register()
+
 
 # ---- 4. process settings ----------------------------------------------------
 
