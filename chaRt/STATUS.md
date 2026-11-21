@@ -1,5 +1,69 @@
 # chaRt: status
 
+## Phase 7b: faults found by looking at the charts (2026-11-21)
+
+Branch `chart`, not pushed; done by the lead alone (no mailbox, no workers). Smoke: **395 of 395** (381 before; 14 new
+checks, 8 changed, none removed); one smoke run takes about 6 minutes. Commits: 489f3f9 (summary.md 0.3 and its checksum,
+`change_over_time` in `RULE_FAMILIES` as "any", like the other summary.md rules; `.rscignore` names phase7b_prompt.md),
+9d8ec0e (the drawing), 95fbf56 (the checks, the screen, the style sheet).
+
+**The lesson of Phase 7, and what now checks for it.** `drawn_text_faults()` (tests/gallery.R) measures every text a
+chart's panels draw on the chart as drawn: the plot is printed to a ragg device of its own size, `grid::grid.force()`
+turns ggrepel's labels into text grobs, and each grob's box is measured with grid (`deviceLoc()` for its anchor, taken in
+the label's own font settings, because ggrepel writes a moved label's place as an offset in font units; `grobWidth()`,
+`grobHeight()`, `grobDescent()`, its hjust and vjust). A text must lie inside its panel when the plot clips (a text past
+the panel is cut off, which is what "ghest: 765,000" was), inside the device when it does not (end labels); no two texts
+of a panel may overlap; an annotation keeps clear of a rug's band. Check 7b-1 runs it on every gold spec with
+`labels: on` and each annotate kind it takes, in all six styles: 402 charts, about 130 seconds. It found, beyond the
+items: a sideways bar's or dot's tied annotation running past its panel, and a scatter's highlighted name overlapping
+its annotation (two ggrepel layers do not push one another apart).
+
+**What changed in the drawing.**
+- An annotation's text runs away from the nearer edge (point in the left third: to the right; right third: to the left),
+  sits below a point near the top and above one near the bottom; over an upright bar or dot it is centred, its kind,
+  value and any tie on lines of their own ("Highest" / "765,000"). The value axis gets the room the longest text past a
+  mark needs, worked out from the data's range (ggplot2's expansion is a share of the range, not of the panel; the
+  same mistake made the end-label room too small for long labels, also fixed).
+- A marked point that is the last point of a line with an end label is said in the end label ("Islands  116,000,
+  highest"); no second text; the ring stays. A scatter's or bubble's names and annotations share one ggrepel layer.
+- Ties: "Highest: 100, one of 2 points" (the count is R's, from the table drawn; the facts do not hold it, and check
+  7C-6 sets it aside). A label ggrepel moves is kept above and right of a rug's band (`xlim`, `ylim`; not on a log axis).
+- Every bar or dot carrying its value: the value axis keeps its title and loses its numbers and ticks.
+- A line chart in panels marks the point in each panel up to 6 panels, each only if its number is in the facts; with
+  more, none, and a note. A chart whose colour is its facet counts.
+- A line chart's time-axis breaks are `pretty()` of the data's own range, kept within it (no "2026").
+- Axis and legend titles: the dictionary's label, else the name with underscores as spaces and a capital first letter.
+  The facts keep the label as it is.
+- Heatmap legend: four to six round breaks inside the range (`get_guide_data()` counts what the legend shows) and a
+  colour bar 2.4 inches long. A palette entry may carry `single`; Okabe-Ito's is #0072B2.
+
+**The screen.** The Period box says "Jan 2023 to Dec 2024" in 1rem type, one line, with the full dates as its tooltip;
+on a canvas narrower than bslib's lg breakpoint (down to 576 pixels, where the sidebar still sits beside it) the third
+box takes a row of its own. Seen in the `chart` preview at 576, 991, 992 and 1024 pixels: one line at each.
+
+**Item 11 (the chat text of a charts reply).** The app was right: `chat_reply_text()` reads each chart's say beside its
+spec. Only the live run's printout (`live_reply_text()` in tests/live_gallery.R) read `spec$say`, which Phase 7 stopped
+storing; fixed. Check 7b-11 replays the Phase 7 run's first reply from tests/live_replies.rds through `chat_turn()`.
+
+**Item 12 (the row that did not reach Explore).** No order of events in the app was found that loses it. A Data page
+that is hidden is not redrawn (Shiny suspends hidden outputs): after a file is read while Explore is showing, the
+Data page keeps the first file's boxes, "one sale" still in them, until it is shown; then it is drawn with new boxes
+(a new generation of ids) and a row typed there reaches Explore (reproduced in the preview). The Phase 7 sighting
+fits the browser automation typing into the old, hidden box, which already said "one sale", so nothing was sent.
+Check 7b-12 (`testServer()`): file one, row, ready; file two, new boxes, not ready, the old box's value ignored; row
+typed in the new box, ready.
+
+**Item 14 (live, 4 calls, Sonnet).** Calls: chat 1, then summarize 2 (a first reply that failed a check and its
+repair), then summarize 1 more. The turn came back `charts`: a line of revenue by month in six panels by region. The
+facts sent hold, for each panel, first and last, highest and lowest with when, and the value a year before the last
+point (output in tests/live_run_7b.out, git-ignored). **No headline was obtained**: the scratch script printed the wrong
+list and lost the reply to the third call, and the fourth call's reply could not be read. Whether summary.md 0.3 stops
+a first-and-last headline is not known; another run needs more calls than the phase allowed.
+
+**Not confirmed.** The plotly versions of the changed charts (bare axis, merged end labels) were not seen in a browser;
+the box measure is of the string's box, not its ink (tolerance 0.02 inch); the rug's band is not kept on a log axis;
+the style sheet's before pictures need git on the path (without it the row shows after only).
+
 ## Phase 7, notes carried while it is built (2026-11-20)
 
 Branch `chart`. Not pushed. The full Phase 7 report goes to `manager/done-7.md` at its end; these are the things a
