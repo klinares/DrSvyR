@@ -34,8 +34,20 @@ later reader of this file needs before then.
     the names that would run into another, and says so in the card's notes while it is shown.
 - **A colour that cannot be seen is not drawn** (a-006). In any style a palette colour under 10 dE (CIE2000) from the
   style's background is skipped and the palette's usable count for that style drops (`palette_usable()` in
-  `R/theme.R`); on Dark the swap of a too-dark colour for the light one comes first, then a swapped colour that repeats
-  an earlier one is skipped, then the skip.
+  `R/theme.R`). Rules of a-007 supersede the first Part C version of the Dark swap: on Dark each palette colour under
+  3 to 1 is replaced by its own lightened version (`chart_lighten()`: CIELCh lightness raised, hue and chroma kept as far
+  as the gamut allows, until 3 to 1; farver `decode_colour(to = "lch")` and `encode_colour(from = "lch")`), so no colour is
+  lost and no two groups share one (black becomes a grey of about 3.04 to 1, not #EDEDED); then the skip for a colour
+  under 10 dE from the background; then, on Dark, the skip of a colour under 10 dE from an earlier colour kept. Dark's
+  highlight grey is #565E68 (it was #5E6670: a lightened black sits just over 3 to 1, and the grey must stay weaker than
+  every palette colour).
+- **Value labels under `auto`** (a-007): if any bar or dot label would be left out, none is written, the value axis keeps
+  its grid, and the notes say "Values are not written on the marks because some would overlap." Under `on`, the labels
+  that fit are written and the notes keep the count.
+- **Palettes are judged on the colours as drawn** (a-007): the 11 colours a diverging chart gets (`chart_diverging()`), not the
+  longer list a package stores. ColorBrewer PuOr (ends 23.7 lightness units apart) is no longer offered as diverging; the
+  earlier reading of Crameri's 256 stored colours by index is dropped: Vanimo, Vik and Bam pass on the 11 drawn.
+  The heatmap cell cap stays at 40.
 
 ## Phase 6b, 2026-11-20: more palettes, a working signal, a clean folder
 

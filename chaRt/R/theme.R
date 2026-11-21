@@ -96,8 +96,8 @@ chart_font_values <- function(calls) {
 #   grey                    the colour behind a highlight
 #   fit, outline, box_fill  a fitted curve; the edge of a histogram bar or heatmap cell (the background);
 #                           a box's fill
-#   swap                    a light colour that stands in for a mark colour too dark to see on this
-#                           background (contrast under CHART_MARK_CONTRAST); NA: none
+#   swap                    "lighten" on a dark background: a mark colour under CHART_MARK_CONTRAST on it is
+#                           replaced by its own lightened version (chart_lighten()); NA: none
 #   A series with no colour column is drawn in the chosen qualitative palette's first colour in every style.
 #   The Phase 7 checks (tests/smoke.R): text, text_2 and caption against the background 4.5 to 1 or more;
 #   the grid below text; `grey` visible against the background but weaker than any palette colour.
@@ -133,7 +133,7 @@ CHART_STYLES <- list(
               background = "#14171C", panel = "#14171C", text = "#ECEFF2", text_2 = "#B9C0C8", caption = "#9AA3AD",
               grid = "#303640", grid_axes = "value", grid_width = 0.4, axis_line = NA, ticks = NA,
               title_font = "sans", title_weight = "bold", title_size = 1.2, subtitle_font = "sans", strip = "bold",
-              rule = NA, lift = FALSE, grey = "#5E6670", fit = "#C8CED6", outline = "#14171C", box_fill = "#232932", swap = "#EDEDED"))
+              rule = NA, lift = FALSE, grey = "#565E68", fit = "#C8CED6", outline = "#14171C", box_fill = "#232932", swap = "lighten"))
 
 # The style of that name; an error for one that is not there.
 chart_style <- function(name = CHART_STYLE_DEFAULT) {
@@ -152,20 +152,39 @@ chart_contrast <- function(a, b) {
   (pmax(la, lb) + 0.05) / (pmin(la, lb) + 0.05)
 }
 
-# Mark colours as a style can show them: a colour whose contrast with the background is under
-#   CHART_MARK_CONTRAST (Okabe-Ito's black on Dark) is swapped for the style's light `swap` colour.
+# A colour made light enough: `col` with its CIELCh lightness raised (hue and chroma kept as far as the sRGB
+#   gamut allows, the chroma lowered only when it must be) until its contrast with `background` reaches
+#   `target` (farver: decode_colour(to = "lch"), encode_colour(from = "lch"); encode_colour clamps a colour
+#   outside the gamut, so one is in the gamut when it decodes to the lightness and chroma it was made from).
+#   A colour that already reaches the target is returned as it is.
+chart_lighten <- function(col, background, target = CHART_MARK_CONTRAST) {
+  if (chart_contrast(col, background) >= target) return(col)
+  lch = farver::decode_colour(col, to = "lch")
+  grid = expand.grid(l = seq(lch[1, "l"], 100, by = 0.5), k = seq(1, 0, by = -0.05))
+  m = cbind(l = grid$l, c = lch[1, "c"] * grid$k, h = lch[1, "h"])
+  hex = farver::encode_colour(m, from = "lch")
+  back = farver::decode_colour(hex, to = "lch")
+  ok = abs(back[, "l"] - m[, "l"]) < 1 & abs(back[, "c"] - m[, "c"]) < 1 & chart_contrast(hex, background) >= target
+  if (!any(ok)) return(farver::encode_colour(cbind(l = 100, c = 0, h = 0), from = "lch"))
+  hex[[which(ok)[order(grid$l[ok], -grid$k[ok])][1]]]
+}
+
+# Mark colours as a style can show them: on a style with a `swap`, each colour whose contrast with the
+#   background is under CHART_MARK_CONTRAST (Okabe-Ito's black on Dark) is replaced by its own lightened
+#   version (chart_lighten()), so no colour is lost and no two colours become one.
 style_marks <- function(cols, style = CHART_STYLE_DEFAULT) {
   st = chart_style(style)
   if (is.na(st$swap)) return(cols)
-  ifelse(chart_contrast(cols, st$background) < CHART_MARK_CONTRAST, st$swap, cols)
+  vapply(cols, chart_lighten, character(1), background = st$background, USE.NAMES = FALSE)
 }
 
 # A colour that cannot be seen is not drawn: a palette colour under CHART_VISIBLE_DE (CIE2000 difference,
 #   farver) from a style's background (Stata's #FFFFFF and Moth's #F0F0E4 on white) is skipped, and the
 #   palette's usable count for that style drops by one. The rules combine in this order: the swap first (on
-#   Dark a colour too dark to see becomes the light `swap` colour, so it is kept, not skipped); then a swapped
-#   colour that repeats an earlier one is skipped (two groups would otherwise share one colour); then the skip
-#   for any colour still under CHART_VISIBLE_DE from the background.
+#   Dark a colour under 3 to 1 is replaced by its own lightened version, so it is kept, not skipped); then the
+#   skip for any colour still under CHART_VISIBLE_DE from the background; then, on a style with a swap, the skip
+#   of any colour under CHART_VISIBLE_DE from an earlier colour kept (after the swap two colours may have
+#   become nearly one, and two groups must not share one).
 CHART_VISIBLE_DE <- 10
 
 # CIE2000 colour difference of each colour in `a` from the colour `b`.
@@ -248,12 +267,15 @@ CHART_PALETTES <- list(
   #   lightness units of each other (so that equal distances from a heatmap's midpoint look equal), and the ends
   #   more than 60 degrees apart in hue; each is offered only if, drawn as a ramp, it reaches the colour-vision
   #   mark. It is not MetBrewer's classification.
+  # Every palette, of every source, is judged on the colours as drawn: the CHART_CONTINUOUS_N colours (11 for a
+  #   diverging one) that chart_diverging() hands to the chart, not on the longer list a package stores (Crameri's
+  #   have 256), because those are what the reader sees. ColorBrewer PuOr is not offered as a diverging palette:
+  #   its two ends are 23.7 lightness units apart, over the balanced rule's 20 (a-007).
   metb_hokusai2_seq = list(label = "Hokusai2", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::Hokusai2"),
   metb_hokusai3_seq = list(label = "Hokusai3", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::Hokusai3"),
   metb_tam_seq = list(label = "Tam", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::Tam"),
   metb_vangogh3_seq = list(label = "VanGogh3", source = "MetBrewer", kind = "sequential", paletteer = "MetBrewer::VanGogh3"),
   rdbu = list(label = "ColorBrewer RdBu", source = "ColorBrewer", kind = "diverging", paletteer = "RColorBrewer::RdBu"),
-  puor = list(label = "ColorBrewer PuOr", source = "ColorBrewer", kind = "diverging", paletteer = "RColorBrewer::PuOr"),
   brbg = list(label = "ColorBrewer BrBG", source = "ColorBrewer", kind = "diverging", paletteer = "RColorBrewer::BrBG"),
   sunset = list(label = "Paul Tol sunset", source = "khroma (Paul Tol, Crameri)", kind = "diverging", paletteer = "khroma::sunset"),
   khro_vanimo = list(label = "Crameri Vanimo", source = "khroma (Paul Tol, Crameri)", kind = "diverging", paletteer = "khroma::vanimo"),
@@ -303,7 +325,7 @@ CHART_PALETTE_CVD <- c(okabe_ito = 12.1, tol_bright = 8.7, tol_muted = 17.7, tol
   khro_smoothrainbow = 17.0, khro_oslo = 19.4, khro_grayc = 18.4, ggth_classic_blue = 11.1,
   ggth_gray_warm = 11.0, ggth_classic_gray = 10.5, nord_halifax_harbor = 8.3, pnwc_lake = 13.5,
   pnwc_mushroom = 12.6, pnwc_winter = 11.9, rcar_darkmint = 12.9, rcar_brwnyl = 12.0,
-  rcar_bluyl = 11.2, rdbu = 22.9, puor = 24.7, brbg = 13.7, sunset = 18.7, khro_vanimo = 27.9,
+  rcar_bluyl = 11.2, rdbu = 22.9, brbg = 13.7, sunset = 18.7, khro_vanimo = 27.9,
   khro_vik = 28.2, khro_bam = 24.1, ggth_red_blue_white = 25.2, ggth_orange_blue_white = 25.1,
   ggth_classic_orange_white_blue = 23.5, nord_silver_mine = 8.5, pnwc_shuksan2 = 15.0,
   pnwc_anemone = 8.3, rcar_earth = 15.2, rcar_armyrose = 12.5, rcar_geyser = 11.4, blue_red = 13.9,
@@ -427,13 +449,16 @@ palette_cvd <- function(name, n = CHART_CVD_N) {
 }
 
 # The colours of a qualitative palette that a style shows, in order: the first `max` of them, swapped
-#   (style_marks()), without a swapped colour that repeats an earlier one, and without those too near the
-#   style's background (CHART_VISIBLE_DE).
+#   (style_marks()), without those too near the style's background and, on a style with a swap, without any
+#   that is under CHART_VISIBLE_DE from an earlier one kept.
 palette_usable <- function(name, style = CHART_STYLE_DEFAULT) {
+  st = chart_style(style)
   own = utils::head(palette_colours(name), chart_palette_max(name))
   cols = style_marks(own, style)
-  cols = cols[!(cols != own & duplicated(cols))]
-  cols[chart_colour_distance(cols, chart_style(style)$background) >= CHART_VISIBLE_DE]
+  cols = cols[chart_colour_distance(cols, st$background) >= CHART_VISIBLE_DE]
+  if (is.na(st$swap)) return(cols)
+  purrr::reduce(cols, function(kept, col)
+    if (length(kept) && any(chart_colour_distance(kept, col) < CHART_VISIBLE_DE)) kept else c(kept, col), .init = character(0))
 }
 
 # How many groups a qualitative palette can colour in a style: its number of usable colours. With no

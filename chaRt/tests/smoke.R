@@ -2900,17 +2900,23 @@ if (length(find.package("MetBrewer", quiet = TRUE)) && length(find.package("colo
         setequal(unname(m7_div_have), m7_keep) && !any(m7_drop %in% m7_div_have) && !any(paste0("metb_", tolower(m7_drop), "_div") %in% names(CHART_PALETTES)) &&
           !any(paste0("metb_", tolower(m7_drop), "_div") %in% names(CHART_PALETTE_CVD)) && !is.null(CHART_PALETTES$metb_veronese) &&
           all(purrr::map_chr(m7_drop, m7_kind) != "diverging"))
-  # the same test on every other diverging palette on offer: reported, none removed
+  # a-007: the same test on every other diverging palette on offer, judged on the colours as drawn (the 11-colour ramp that
+  #   chart_diverging() hands to the chart, not the 256 a package stores): every one passes; ColorBrewer PuOr (ends 23.7 apart) is not offered
   m7_other_div <- purrr::keep(CHART_PALETTES, function(e) identical(e$kind, "diverging") && !identical(e$source, "MetBrewer"))
-  m7_other_fail <- purrr::keep(names(m7_other_div), function(k) {
-    v = m7_lch(toupper(palette_colours(k)))$l; n = length(v); ext = c(which.max(v), which.min(v))
+  m7_balanced <- function(cols) {
+    v = m7_lch(toupper(cols))$l; n = length(v); ext = c(which.max(v), which.min(v))
     mid = if (n %% 2L == 1L) (n + 1L) / 2L else c(n / 2L, n / 2L + 1L)
-    !(any(ext %in% mid) && abs(v[1] - v[n]) <= 20)
-  })
-  cat("      diverging palettes of other sources that fail the balanced test (kept, not removed): ",
-      paste(purrr::map_chr(m7_other_fail, function(k) { v = m7_lch(toupper(palette_colours(k)))$l
-        paste0(k, " L ", paste(round(v[unique(round(seq(1, length(v), length.out = min(length(v), 13L))))]), collapse = " ")) }), collapse = "; "), "
+    any(ext %in% mid) && abs(v[1] - v[n]) <= 20
+  }
+  m7_other_fail <- purrr::keep(names(m7_other_div), function(k) !m7_balanced(chart_diverging(k)))
+  m7_puor <- toupper(as.character(paletteer::paletteer_d("RColorBrewer::PuOr")))
+  m7_puor_11 <- grDevices::colorRampPalette(m7_puor)(11L)
+  cat("      diverging palettes of other sources on offer: ", length(m7_other_div), ", failing the balanced test on the 11 colours drawn: ",
+      if (length(m7_other_fail)) paste(m7_other_fail, collapse = ", ") else "none", "; PuOr ends ", round(abs(diff(m7_lch(m7_puor)$l[c(1, 11)])), 1), " L apart
 ", sep = "")
+  check("7A-6: every diverging palette of the other sources on offer passes the balanced test on the 11 colours as drawn (the 256-colour order of a khroma set is not what is judged); ColorBrewer PuOr, whose ends are over 20 L apart, is not offered and has no stored result, and the test fails on it",
+        !length(m7_other_fail) && is.null(CHART_PALETTES$puor) && !"puor" %in% names(CHART_PALETTE_CVD) && !"puor" %in% names(chart_palettes("diverging")) &&
+          !m7_balanced(m7_puor) && length(chart_diverging("khro_vik")) == 11L && !grepl("puor", paste(names(chart_palettes("diverging")), collapse = " ")))
   m7_qual <- c("Isfahan1", "Cassatt2", "Moreau", "Renoir", "Tsimshian", "Lakota", "Klimt")
   check("7A-6: the seven added MetBrewer qualitative sets are listed with source MetBrewer, max = their number of colours, and a stored result at every n and at five",
         all(purrr::map_lgl(m7_qual, function(p) {
@@ -3055,10 +3061,13 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
   b7_code_of <- function(s) { p = spec_plot(b7_eight, pan_g$data, pan_g$cb, b7_pal(s)); spec_code(attr(p, "spec"), pan_g$cb, pan_g$path, b7_pal(s)) }
   b7_dark_cols <- b7_line_cols("dark"); b7_clean_cols <- b7_line_cols("clean")
   b7_dark_code <- b7_code_of("dark"); b7_clean_code <- b7_code_of("clean")
-  check("7B-3: Dark: Okabe-Ito's black (the seventh colour of an eight-region line chart) is swapped for the light colour in the chart and in the written code, every colour drawn is 3 to 1 or better against the background, and the light styles keep the black",
+  # a-007: the black is replaced by its own lightened version (a grey just over 3 to 1), not by one shared light colour
+  b7_black_dark <- b7_hex(style_marks("#000000", "dark"))
+  check("7B-3: Dark: Okabe-Ito's black (the seventh colour of an eight-region line chart) is replaced by its own lightened grey (3 to 1 or a little more) in the chart and in the written code, every colour drawn is 3 to 1 or better against the background, and the light styles keep the black",
         "#000000" %in% b7_clean_cols && grepl("#000000", b7_clean_code, fixed = TRUE) &&
-          !"#000000" %in% b7_dark_cols && CHART_STYLES$dark$swap %in% b7_dark_cols && length(b7_dark_cols) == 8L &&
-          !grepl("#000000", b7_dark_code, fixed = TRUE) && grepl(CHART_STYLES$dark$swap, b7_dark_code, fixed = TRUE) &&
+          !"#000000" %in% b7_dark_cols && b7_black_dark %in% b7_dark_cols && !b7_black_dark %in% c("#EDEDED", "#FFFFFF") &&
+          b7_ratio(b7_black_dark, CHART_STYLES$dark$background) >= 3 && b7_ratio(b7_black_dark, CHART_STYLES$dark$background) < 3.3 && length(b7_dark_cols) == 8L &&
+          !grepl("#000000", b7_dark_code, fixed = TRUE) && grepl(b7_black_dark, b7_dark_code, fixed = TRUE) &&
           all(b7_ratio(b7_dark_cols, CHART_STYLES$dark$background) >= 3) && identical(sum(b7_dark_cols != b7_clean_cols), 1L))
 
   # 4. a single series is drawn in the chosen palette's first colour
@@ -3262,13 +3271,34 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE) && palette
   c0_lost <- purrr::map(c0_all, function(per) purrr::keep(purrr::imap_int(per, function(cols, k) length(cols) - CHART_PALETTES[[k]]$max), function(d) d < 0L))
   cat("      palettes with fewer usable colours than their maximum, by style: ",
       paste(names(c0_lost), purrr::map_chr(c0_lost, function(l) if (length(l)) paste(paste0(names(l), " ", l), collapse = ", ") else "none"), sep = " = ", collapse = "; "), "\n", sep = "")
-  check("7C-0c: Dark keeps the swap: Okabe-Ito has 8 usable colours with the black replaced by the light colour; a swapped colour that repeats an earlier one is skipped (Moth: 4 of 5), so no group shares a swapped colour; across every palette and style no colour offered is under 10 dE from its background, and none on Dark under 3:1",
-        identical(palette_usable_max("okabe_ito", "dark"), 8L) && CHART_STYLES$dark$swap %in% palette_usable("okabe_ito", "dark") && !"#000000" %in% palette_usable("okabe_ito", "dark") &&
-          identical(palette_usable_max("pnwc_moth", "dark"), 4L) &&
-          all(purrr::map_lgl(c0_all$dark, function(cols) sum(cols == CHART_STYLES$dark$swap) <= 1L)) &&
+  # a-007: each colour of a palette under 3 to 1 on Dark is replaced by its own lightened version (same hue and chroma as far as the
+  #   gamut allows, lightness raised to 3 to 1), so no colour is lost and no two groups share one; then a colour under 10 dE from
+  #   another colour kept is skipped
+  c0_dark_names <- names(CHART_PALETTES)[purrr::map_lgl(CHART_PALETTES, function(e) identical(e$kind, "qualitative"))]
+  c0_hue <- function(a) farver::decode_colour(a, to = "lch")[, "h"]
+  c0_lch <- function(a) farver::decode_colour(a, to = "lch")
+  c0_ex <- c("#332288", "#0072B2", "#000000", "#882255")
+  c0_ex_lit <- style_marks(c0_ex, "dark")
+  c0_pairs_ok <- function(cols) length(cols) < 2L || { m = farver::compare_colour(farver::decode_colour(cols), farver::decode_colour(cols), from_space = "rgb", method = "cie2000"); all(m[upper.tri(m)] >= CHART_VISIBLE_DE) }
+  check("7C-0c: Dark swap: a colour under 3 to 1 is replaced by its own lightened version at 3 to 1 or a little more (#332288 keeps its hue within 3 degrees, black becomes a grey, none becomes #EDEDED), a colour already at 3 to 1 is untouched, and the light styles change nothing",
+        identical(c0_ex_lit[[2]], c0_ex[[2]]) && all(b7_ratio(c0_ex_lit, CHART_STYLES$dark$background) >= 3) && all(b7_ratio(c0_ex_lit[-2], CHART_STYLES$dark$background) < 3.3) &&
+          abs(c0_hue(c0_ex_lit[[1]]) - c0_hue(c0_ex[[1]])) < 3 && abs(c0_hue(c0_ex_lit[[4]]) - c0_hue(c0_ex[[4]])) < 3 && c0_lch(c0_ex_lit[[1]])[, "c"] > 0.6 * c0_lch(c0_ex[[1]])[, "c"] &&
+          length(unique(c0_ex_lit)) == 4L && !"#EDEDED" %in% c0_ex_lit && identical(style_marks(c0_ex, "clean"), c0_ex) &&
+          identical(chart_lighten("#FFFFFF", CHART_STYLES$dark$background), "#FFFFFF"))
+  check("7C-0c: Dark keeps what no longer needs a shared colour: Okabe-Ito has 8 usable colours, its black is its own grey; every colour on offer on Dark is 3 to 1 or better, 10 dE or more from the background and 10 dE or more from every other colour of its palette that is kept; a skipped colour is one that was under 10 dE from a colour kept before it; across every style no colour offered is under 10 dE from its background",
+        identical(palette_usable_max("okabe_ito", "dark"), 8L) && b7_hex(style_marks("#000000", "dark")) %in% palette_usable("okabe_ito", "dark") && !"#000000" %in% palette_usable("okabe_ito", "dark") &&
           all(purrr::map_lgl(names(c0_all), function(s) all(purrr::map_lgl(c0_all[[s]], function(cols) !length(cols) || all(c0_de(cols, s) >= CHART_VISIBLE_DE))))) &&
-          all(purrr::map_lgl(c0_all$dark, function(cols) all(b7_ratio(cols, CHART_STYLES$dark$background) >= CHART_MARK_CONTRAST))) &&
-          identical(c0_d$cols, b7_hex(palette_colours("okabe_ito")[1:5])) && any(grepl("has 4 colours", c0_d$notes, fixed = TRUE)))
+          all(purrr::map_lgl(c0_all$dark, function(cols) all(b7_ratio(cols, CHART_STYLES$dark$background) >= CHART_MARK_CONTRAST) && c0_pairs_ok(cols))) &&
+          all(purrr::map_lgl(c0_dark_names, function(k) {
+            lit = style_marks(utils::head(palette_colours(k), chart_palette_max(k)), "dark")
+            lit = lit[c0_de(lit, "dark") >= CHART_VISIBLE_DE]
+            gone = setdiff(lit, c0_all$dark[[k]])
+            all(purrr::map_lgl(gone, function(g) any(chart_colour_distance(c0_all$dark[[k]], g) < CHART_VISIBLE_DE)))
+          })) &&
+          identical(palette_usable_max("pnwc_moth", "dark"), 5L) && identical(palette_usable_max("tol_muted", "dark"), 8L) && identical(palette_usable_max("tol_muted", "clean"), 9L))
+  check("7C-0c: Dark: 5 groups in Moth are drawn in Moth's own lightened colours (not the Okabe-Ito fallback), the chart's colours equal palette_usable(), the written code carries the same colours, and no note about a fallback",
+        identical(c0_d$cols, b7_hex(palette_usable("pnwc_moth", "dark"))) && !any(grepl("has 4 colours|drawn with Okabe-Ito", c0_d$notes)) &&
+          identical(b7_hex(chart_palette(5L, "pnwc_moth", "dark")), b7_hex(palette_usable("pnwc_moth", "dark"))))
 } else cat("skip  7C-0: panel.csv, colorspace or paletteer is not available\n")
 
 
@@ -3383,6 +3413,17 @@ if (c7_ok) {
           any(grepl("value labels were left out because they would run into another label or a mark", attr(c7_pg_off, "notes"), fixed = TRUE)) &&
           identical(c7_labels(c7_pg_off), c7_labels(c7_pg_on)) && !any(grepl("ggrepel", attr(c7_pg_on, "notes"), fixed = TRUE)) &&
           identical(c7_labels(c7_sp8), c7_labels(c7_p8)) && !any(grepl("left out", attr(c7_sp8, "notes"), fixed = TRUE)))
+  # a-007: under auto, if any label would be left out none is written and the value axis keeps its grid; under on, those that fit
+  c7_g12 <- c(c7_grouped[names(c7_grouped) != "filter"], list(labels = "auto", filter = c(c7_in("year", 2015, 2016, 2017), do.call(c7_in, c(list("region"), as.list(utils::head(sort(unique(as.character(pan_g$data$region))), 4L)))))))
+  c7_pa <- c7_plot(c7_g12)
+  c7_po <- c7_plot(utils::modifyList(c7_g12, list(labels = "on")))
+  cat("      auto, 12 grouped marks: ", length(c7_labels(c7_pa)), " labels; on: ", length(c7_labels(c7_po)), " of ", nrow(attr(c7_po, "table")), "\n", sep = "")
+  check("7C-1: labels auto on 12 grouped bars where some label would collide writes none, keeps the value axis grid and says 'Values are not written on the marks because some would overlap.'; on writes those that fit, drops the grid and keeps the note with the count",
+        nrow(attr(c7_pa, "table")) == 12L && !length(c7_labels(c7_pa)) && !isTRUE(attr(c7_pa, "spec")$.value_labels) && !c7_blank(c7_pa$theme, "panel.grid.major.y") &&
+          sum(grepl("Values are not written on the marks because some would overlap.", attr(c7_pa, "notes"), fixed = TRUE)) == 1L && !any(grepl("left out because", attr(c7_pa, "notes"), fixed = TRUE)) &&
+          length(c7_labels(c7_po)) > 0L && length(c7_labels(c7_po)) < 12L && c7_blank(c7_po$theme, "panel.grid.major.y") &&
+          any(grepl("value labels were left out because they would run into another label or a mark", attr(c7_po, "notes"), fixed = TRUE)) &&
+          !any(grepl("Values are not written on the marks", attr(c7_po, "notes"), fixed = TRUE)))
   c7_hl <- list(family = "scatter", x = "price", y = "units", title = "t", highlight = list(column = "year", values = list(2015, 2016)))
   c7_ps_on <- c7_plot(c7_hl)
   c7_ps_off <- c7_without_ggrepel(c7_plot(c7_hl))

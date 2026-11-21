@@ -1149,9 +1149,16 @@ lint_marks <- function(s, cb, table) {
       fit = fit_value_labels(s, t, cand, ann_rows, ann_text, ann_h, ann_v)
       # ggrepel cannot place a label against a bar (it knows the label's anchor, not the bar), so the value labels of a bar or
       #   dot chart are placed by R, at the end of the mark, with or without it; those that would collide are left out.
-      s$.value_labels = TRUE
-      s$.label_rows = restrict(fit, seq_len(n))
-      if (left_out(cand, fit)) notes = c(notes, say_left_out(left_out(cand, fit), "value label", FALSE))
+      #   Under `auto` a chart that would label some marks and not others reads as if the labelled ones matter more, so
+      #   if any label would be left out none is written (and the value axis keeps its grid). Under `on` those that fit are
+      #   written and the count is in the notes.
+      if (identical(mode, "auto") && left_out(cand, fit)) {
+        notes = c(notes, "Values are not written on the marks because some would overlap.")
+      } else {
+        s$.value_labels = TRUE
+        s$.label_rows = restrict(fit, seq_len(n))
+        if (left_out(cand, fit)) notes = c(notes, say_left_out(left_out(cand, fit), "value label", FALSE))
+      }
     }
   }
   if (fam %in% c("scatter", "bubble") && !is.null(s$highlight)) {
