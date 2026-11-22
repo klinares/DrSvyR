@@ -8,7 +8,7 @@
 #   Every check is in exactly one run. The heavy group (HEAVY_CHECKS below): the sweep of about 400 drawn charts measured with grid
 #   (7b-1), the style sheet of about 180 charts (7D-2, and 7b-13 which reads it), and the five-chart dashboard built in six styles,
 #   laid out and printed by Chrome (9A-1, 9A-8 to 9A-11), the value boxes of a six-box page and the table cards of an exported dashboard measured in
-#   Chrome (9D-0b, 9D-18). Both runs make the fixtures the heavy group needs (the gold specs, the
+#   Chrome (9D-0b, 9D-18), and the real videos of Part B (9B-15 to 9B-18: a video drawn, encoded and read back, a dashboard of videos, the video played in Chrome). Both runs make the fixtures the heavy group needs (the gold specs, the
 #   panel file, the sales file) and the heavy run skips what costs time and it does not need. CHART_SMOKE=all runs both groups in one process (about ten
 #   minutes: too long for a foreground limit; for a machine and a time with room).
 # Each run prints one line per check, "ok" or "FAIL", the 15 slowest stretches (seconds since the previous check), then its own
@@ -37,7 +37,11 @@ HEAVY_CHECKS <- c(
   "9A-10: print: every style's page prints on a light ground",                    # and printed to PDF by Chrome
   "9A-11: the five-chart dashboard",                                              # reads those six
   "9D-0b: in Chrome the three number boxes",                                      # the six-box page measured in Chrome
-  "9D-18: in Chrome the table cards")                                            # the table cards of an exported dashboard measured in Chrome
+  "9D-18: in Chrome the table cards",                                            # the table cards of an exported dashboard measured in Chrome
+  "9B-15: a real video of a bar chart",                                           # a video drawn and encoded, and read back
+  "9B-16: the frames read back from the encoded file",                            # reads it
+  "9B-17: a dashboard with two videos and a picture",                             # two videos drawn for the page
+  "9B-18: in Chrome the exported <video> plays")                                  # the page's video played in Chrome
 
 results <- new.env()
 results$all <- logical(0)
@@ -5106,7 +5110,7 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8c_st2, ask 
     grepl(">Rows<", m, fixed = TRUE) && grepl(">Columns<", m, fixed = TRUE) && grepl(">Period<", m, fixed = TRUE)
   titles_at <- purrr::map_int(c("1. Price by region", "2. Orders by region", "3. Price of an order"), function(t) regexpr(t, m, fixed = TRUE)[[1]])
   p8c_d$charts <- all(titles_at > 0L) && !is.unsorted(titles_at) && !grepl("Units against price", m, fixed = TRUE) && lengths(gregexpr("<img src=\"data:image/png;base64,", m, fixed = TRUE)) == 3L &&
-    all(purrr::map_lgl(c("c4", "c1", "c3"), function(i) lengths(gregexpr(paste0("name=\"proxy1-dash_mode_", i, "\""), m, fixed = TRUE)) == 2L)) && !grepl("dash_mode_c2", m, fixed = TRUE) &&
+    all(purrr::map_lgl(c("c4", "c1", "c3"), function(i) lengths(gregexpr(paste0("name=\"proxy1-dash_mode_", i, "\""), m, fixed = TRUE)) == 3L)) && !grepl("dash_mode_c2", m, fixed = TRUE) &&   # picture, interactive or video (Phase 9 Part B: was two)
     grepl("Orders are spread across four regions", m, fixed = TRUE) && grepl("Move up and Move down", m, fixed = TRUE) &&
     lengths(gregexpr("name=\"proxy1-dash_mode_[a-z0-9]+\" value=\"picture\" checked", m)) == 3L
   p8c_d$warn <- grepl("No headline yet: Price of an order. The page shows the chart's title in its place.", gsub("&#39;", "'", m, fixed = TRUE), fixed = TRUE) &&
@@ -5138,7 +5142,7 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8c_st2, ask 
   p8c_d$no_model <- nrow(p8c_st2$calls) == calls_before && length(made$log) == log_before
 })
 , error = function(e) message("note  a Part C screen scenario stopped: ", conditionMessage(e)), finally = rm("showModal", envir = globalenv()))
-check("8C-18: Export dashboard opens a dialog with the title (filled with the file's name), subtitle, author, the date (today), an introduction that says it is not checked by the number check, the three value boxes all chosen, and the chosen charts in the order of the canvas (not the one switched off), each with a small picture and a picture-or-interactive choice that starts on picture",
+check("8C-18: Export dashboard opens a dialog with the title (filled with the file's name), subtitle, author, the date (today), an introduction that says it is not checked by the number check, the three value boxes all chosen, and the chosen charts in the order of the canvas (not the one switched off), each with a small picture and a picture, interactive or video choice (three radios since Phase 9 Part B) that starts on picture",
       isTRUE(p8c_d$fields) && isTRUE(p8c_d$charts))
 check("8C-19: the dialog warns, before anything is built: a chosen chart with no headline, a chart whose text is marked as changed, and (only when one is chosen) a palette that fails the colour-vision mark; no model call and no chat message comes of opening it",
       isTRUE(p8c_d$warn) && isTRUE(p8c_d$palette) && isTRUE(p8c_d$no_model) &&
@@ -6154,6 +6158,419 @@ check("9D-17: the code of the summary tables calls no model (no llm_json, ask, m
         any(grepl("chart_ids", deparse(body(mod_explore_server)), fixed = TRUE)) && any(grepl("purrr::map(chart_ids(), chart_of)", deparse(body(mod_explore_server)), fixed = TRUE)))
 
 }   # end of the fast run part of Phase 9 Part D
+
+# ---- Phase 9 Part B: animation ------------------------------------------------------------------------------------------------------------
+# A chart can be made into a video: R draws the frames itself (the finished chart's built object with each layer's data cut down for the
+#   moment, so no scale can move) and the av package encodes them. No model is called. The checks of the motion, the pinned scales and the
+#   labels read the frames as built data (cheap, fast run); the checks that draw and encode real videos, make a dashboard with videos and
+#   play one in Chrome are in the heavy run (9B-14 to 9B-18). A stand-in for spec_video() stands in for the encoder where the card, the chat and
+#   the dialog are tested, and a stand-in for av_installed() for a server without av. Shared by both runs: the fixtures below.
+
+# >>> 9B fixtures
+p9b_o <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+p9b_cb <- utils::modifyList(p9b_o$codebook, list(row_is = "one order"))
+p9b_data <- p9b_o$read$data
+p9b_path <- file.path("tests", "data", "orders.csv")
+p9b_s <- list(
+  bar = list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "Revenue by region"),
+  dot = list(family = "dot", x = "region", y = "revenue", fn = "mean", title = "Mean revenue by region"),
+  line = list(family = "line", x = "order_month", y = "revenue", fn = "sum", annotate = list("highest"), title = "Revenue by month"),
+  slope = list(family = "slope", x = "year", y = "revenue", fn = "sum", color = "region",
+               filter = list(list(column = "year", op = "in", value = list(2022L, 2024L))), title = "Revenue in 2022 and 2024"),
+  scatter = list(family = "scatter", x = "units", y = "revenue", title = "Revenue against units", fit = "loess",
+                 filter = list(list(column = "units", op = "<=", value = 40L), list(column = "revenue", op = "<=", value = 6000))),
+  bubble = list(family = "bubble", x = "units", y = "revenue", size = "unit_price", title = "Revenue against units, sized by price",
+                filter = list(list(column = "units", op = "<=", value = 12L), list(column = "region", op = "==", value = "West"))),
+  histogram = list(family = "histogram", x = "unit_price", title = "Unit price"),
+  box = list(family = "box", x = "channel", y = "unit_price", title = "Unit price by channel"),
+  heat_cat = list(family = "heatmap", x = "region", y = "channel", fn = "count", title = "Orders by region and channel"),
+  heat_year = list(family = "heatmap", x = "year", y = "region", color = "revenue", fn = "sum", title = "Revenue by year and region"),
+  facet = list(family = "line", x = "year", y = "revenue", fn = "sum", facet = "product_category", title = "Revenue by year in each category"))
+p9b_pal <- function(style = "clean") utils::modifyList(chart_palette_default(), list(style = style))
+p9b_ctx <- function(spec, style = "clean", bare = FALSE) video_context(video_plot(spec, p9b_data, p9b_cb, p9b_pal(style), bare), p9b_cb)
+p9b_progress <- seq(0, 1, length.out = 25L)    # the frames of the cheap checks: 25 steps, so the motion is 20 of them and the labels 4 or 5
+p9b_frames <- function(ctx, progress = p9b_progress) purrr::map(progress, function(p) video_frame(ctx, p))
+p9b_lab <- function(ctx) which(ctx$roles == "label")
+# >>> 9B end of fixtures
+
+if (run_fast) {   # the fast run only: 9B-1 to 9B-13; not indented, to keep the diff small
+# >>> 9B fast
+p9b_fam <- purrr::map(p9b_s, function(sp) p9b_ctx(sp))
+p9b_fr <- purrr::map(p9b_fam, p9b_frames)
+
+# 9B-1: the pieces of the motion, as numbers
+p9b_ph <- video_phases(c(0, 3 / 3.6, 1))
+check("9B-1: progress is eased with a cubic ease in and out (0 at 0, 1 at 1, one half at one half, slow at each end and fast between), the motion is 3 seconds and the labels 0.6 (the labels' phase begins exactly when the motion ends and ends with the video's drawn part), the frames are drawn at 24 a second (87 frames for 3.6 seconds, 44 at 12 a second), the hold is 2 seconds, and the sizes are 1920 by 1080 and 1280 by 720",
+      identical(video_ease(c(0, 1)), c(0, 1)) && abs(video_ease(0.5) - 0.5) < 1e-12 && video_ease(0.1) < 0.02 && video_ease(0.9) > 0.98 && all(diff(video_ease(seq(0, 1, 0.05))) > 0) &&
+        identical(p9b_ph$motion, c(0, 1, 1)) && identical(p9b_ph$labels, c(0, 0, 1)) && SPEC_VIDEO_MOTION_S == 3 && SPEC_VIDEO_LABELS_S == 0.6 && SPEC_VIDEO_HOLD_S == 2 && SPEC_VIDEO_FPS == 24L &&
+        video_frame_count(24L) == 87L && video_frame_count(12L) == 44L && identical(unname(SPEC_VIDEO_PX$download), c(1920, 1080)) && identical(unname(SPEC_VIDEO_PX$card), c(1280, 720)))
+
+# 9B-2: the hold is the last file repeated in the encoder's input, not drawn again
+p9b_files <- sprintf("f%02d.png", 1:87)
+p9b_in <- video_inputs(p9b_files)
+p9b_in2 <- video_inputs(p9b_files[1:44], each = 2L)
+check("9B-2: the 2-second hold is made by repeating the last frame's file in the encoder's input: 87 drawn files give 87 + 48 inputs, the last 49 all the same file, no file named twice before it (and at 12 drawn frames a second each is named twice: 44 files give 88 + 48)",
+      length(p9b_in) == 87L + 48L && all(p9b_in[87:135] == "f87.png") && identical(p9b_in[1:87], p9b_files) && !anyDuplicated(p9b_in[1:87]) &&
+        length(p9b_in2) == 88L + 48L && identical(p9b_in2[1:88], rep(p9b_files[1:44], each = 2L)) && all(p9b_in2[88:136] == "f44.png"))
+
+# 9B-3: the scales never move: every frame of every family has the finished chart's limits, breaks and labels on both axes in every panel, and the same
+#   layout (the sizes of the table the frame draws), while the frames do differ from one another
+p9b_scales_ok <- function(frames) {
+  last <- video_scales(frames[[length(frames)]])
+  all(purrr::map_lgl(frames, function(f) identical(video_scales(f), last)))
+}
+p9b_dims <- function(f) { gt <- suppressMessages(ggplot2::ggplot_gtable(f)); c(as.numeric(gt$widths), as.numeric(gt$heights)) }
+p9b_moves <- function(frames) !identical(frames[[1]]$data, frames[[length(frames)]]$data) && !identical(frames[[8]]$data, frames[[length(frames)]]$data)
+p9b_dev <- tempfile(fileext = ".png")
+chart_device(p9b_dev, 4, 3, 72)
+p9b_layout_ok <- purrr::map_lgl(p9b_fr, function(frames) { ref <- p9b_dims(frames[[length(frames)]]); all(purrr::map_lgl(frames[c(1, 6, 12, 18, 22)], function(f) isTRUE(all.equal(p9b_dims(f), ref)))) })
+grDevices::dev.off()
+unlink(p9b_dev)
+check(paste0("9B-3: scales never move: in each of the ", length(p9b_fr), " charts (every family; a time axis, a sideways chart, a legend, small multiples) the limits, breaks and labels of both axes in every panel of every one of the ",
+             length(p9b_progress), " frames are those of the last frame, the table a frame draws has the last frame's widths and heights, and the frames themselves differ"),
+      all(purrr::map_lgl(p9b_fr, p9b_scales_ok)) && all(p9b_layout_ok) && all(purrr::map_lgl(p9b_fr, p9b_moves)) &&
+        length(unique(purrr::map_chr(p9b_fr, function(fr) paste(unlist(purrr::map(video_scales(fr[[1]]), function(s) c(s$x_range, s$y_range))), collapse = ",")))) > 3L)
+
+# 9B-4: the last frame is the static chart: its built data, layer by layer, is the data of spec_plot() on the same canvas; the first frame is not
+p9b_static <- function(ctx) {
+  cv <- attr(ctx$plot, "canvas")
+  ggplot2::ggplot_build(spec_plot(ctx$spec, p9b_data, p9b_cb, p9b_pal(), web = list(width = cv[["width"]], height = cv[["height"]], bare = FALSE)))$data
+}
+p9b_same <- purrr::imap_lgl(p9b_fam, function(ctx, nm) identical(p9b_fr[[nm]][[length(p9b_progress)]]$data, p9b_static(ctx)))
+p9b_first <- purrr::imap_lgl(p9b_fam, function(ctx, nm) !identical(p9b_fr[[nm]][[1]]$data, p9b_static(ctx)))
+check("9B-4: the last frame is the static chart: in every chart its built data, in every layer, is identical to the built data of spec_plot() drawn on the same canvas (so the video ends on exactly the chart), and the first frame is not",
+      all(p9b_same) && all(p9b_first) && !anyNA(p9b_same) && length(p9b_same) == length(p9b_s))
+
+# 9B-5: labels (values on the marks, end labels, names, annotations, cell values) are absent before their phase, fade in over it and are there at the end
+p9b_label_rows <- function(f, ctx) purrr::map_int(p9b_lab(ctx), function(i) nrow(f$data[[i]]))
+p9b_label_alpha <- function(f, ctx) unlist(purrr::map(p9b_lab(ctx), function(i) f$data[[i]]$alpha))
+p9b_lab_charts <- names(p9b_fam)[purrr::map_lgl(p9b_fam, function(ctx) length(p9b_lab(ctx)) > 0L)]
+p9b_motion_n <- sum(video_phases(p9b_progress)$labels == 0)
+p9b_lab_ok <- purrr::map_lgl(p9b_lab_charts, function(nm) {
+  ctx <- p9b_fam[[nm]]; fr <- p9b_fr[[nm]]; n <- length(fr)
+  before <- all(purrr::map_lgl(fr[seq_len(p9b_motion_n)], function(f) all(p9b_label_rows(f, ctx) == 0L)))
+  mid <- fr[[p9b_motion_n + 2L]]
+  fading <- all(p9b_label_rows(mid, ctx) > 0L) && all(p9b_label_alpha(mid, ctx) > 0 & p9b_label_alpha(mid, ctx) < 1)
+  end <- all(p9b_label_rows(fr[[n]], ctx) > 0L) && !anyNA(p9b_label_rows(fr[[n]], ctx)) && all(is.na(p9b_label_alpha(fr[[n]], ctx)) | p9b_label_alpha(fr[[n]], ctx) == 1)
+  before && fading && end
+})
+check(paste0("9B-5: labels only at the end: in each chart that has labels (", paste(p9b_lab_charts, collapse = ", "), "; value labels, end labels, annotations, cell values) every label layer has no rows in the ", p9b_motion_n,
+             " frames of the motion, has all its rows at a strength between 0 and 1 in the middle of the label phase, and has all its rows at full strength in the last frame"),
+      length(p9b_lab_charts) >= 5L && all(p9b_lab_ok) && all(c("bar", "dot", "line", "heat_cat") %in% p9b_lab_charts))
+
+# 9B-6: the motion of each family, in the numbers of its frames. Bars rise from the axis in the order drawn, each starting after the one before; dots travel from the value axis;
+#   a box opens from its median outward, its median fixed; a histogram's bars rise; and the marks that have not begun are not there
+p9b_mid <- 9L   # the frame at the middle of the motion
+p9b_layer1 <- function(nm, i = p9b_mid, layer = 1L) p9b_fr[[nm]][[i]]$data[[layer]]
+p9b_final1 <- function(nm, layer = 1L) p9b_fr[[nm]][[length(p9b_progress)]]$data[[layer]]
+p9b_bars_mid <- p9b_layer1("bar"); p9b_bars_end <- p9b_final1("bar")
+
+p9b_hist_mid <- p9b_layer1("histogram"); p9b_hist_end <- p9b_final1("histogram")
+p9b_dot_mid <- p9b_layer1("dot"); p9b_dot_end <- p9b_final1("dot")
+p9b_box_mid <- p9b_layer1("box"); p9b_box_end <- p9b_final1("box")
+p9b_box_first <- p9b_fr$box[[3]]$data[[1]]
+p9b_edge <- p9b_fam$dot$built$layout$panel_params[[1]]$y.range[[1]]
+check("9B-6: bars rise from the axis in the order drawn: in the middle of the motion every bar is shorter than its final height or not yet begun, a bar is never taller than the one drawn before it, the bars drawn last have not begun, and a histogram's bars rise the same way; dots travel from the value axis (a dot is between the edge and its value, the last dots drawn have not left); a box opens from its median outward (whiskers and quartiles inside the final ones, the median where it ends up, the boxes drawn last not yet there)",
+      nrow(p9b_bars_mid) >= 1L && all(p9b_bars_mid$ymax <= p9b_bars_end$ymax[match(p9b_bars_mid$x, p9b_bars_end$x)] + 1e-9) && any(p9b_bars_mid$ymax < p9b_bars_end$ymax[match(p9b_bars_mid$x, p9b_bars_end$x)] - 1e-6) &&
+        !is.unsorted(-(p9b_bars_mid$ymax / p9b_bars_end$ymax[match(p9b_bars_mid$x, p9b_bars_end$x)])[order(p9b_bars_mid$x)]) && nrow(p9b_bars_mid) < nrow(p9b_bars_end) &&
+        nrow(p9b_hist_mid) >= 1L && all(p9b_hist_mid$ymax <= p9b_hist_end$ymax[match(p9b_hist_mid$x, p9b_hist_end$x)] + 1e-9) && any(p9b_hist_mid$ymax < p9b_hist_end$ymax[match(p9b_hist_mid$x, p9b_hist_end$x)] - 1e-6) &&
+        nrow(p9b_dot_mid) >= 1L && all(p9b_dot_mid$y >= p9b_edge - 1e-9) && all(p9b_dot_mid$y <= p9b_dot_end$y[match(p9b_dot_mid$x, p9b_dot_end$x)] + 1e-9) && any(p9b_dot_mid$y < p9b_dot_end$y[match(p9b_dot_mid$x, p9b_dot_end$x)] - 1e-6) &&
+        nrow(p9b_dot_mid) < nrow(p9b_dot_end) &&
+        nrow(p9b_box_mid) >= 1L && nrow(p9b_box_mid) < nrow(p9b_box_end) && nrow(p9b_box_first) < nrow(p9b_box_end) &&
+        all(p9b_box_mid$ymin >= p9b_box_end$ymin[match(p9b_box_mid$x, p9b_box_end$x)] - 1e-9) && all(p9b_box_mid$ymax <= p9b_box_end$ymax[match(p9b_box_mid$x, p9b_box_end$x)] + 1e-9) &&
+        all(p9b_box_mid$middle == p9b_box_end$middle[match(p9b_box_mid$x, p9b_box_end$x)]) && any(p9b_box_mid$ymax < p9b_box_end$ymax[match(p9b_box_mid$x, p9b_box_end$x)] - 1e-6))
+
+# 9B-7: lines draw from the first x to the last (all series together), the newest point interpolated; a slope chart's points come when its lines reach them; scatter points come in
+#   order along x and then the fitted curve is drawn
+p9b_line_x <- function(d) tapply(d$x, list(d$PANEL, d$group), max)
+p9b_line_mid <- p9b_layer1("line"); p9b_line_end <- p9b_final1("line")
+p9b_slope_mid <- p9b_layer1("slope", 5L); p9b_slope_end <- p9b_final1("slope")
+p9b_slope_pts <- p9b_layer1("slope", 5L, 2L); p9b_slope_pts_end <- p9b_final1("slope", 2L)
+p9b_sc_n <- function(i, layer) nrow(p9b_fr$scatter[[i]]$data[[layer]])
+p9b_sc_pts <- purrr::map_int(seq_along(p9b_progress), function(i) p9b_sc_n(i, 1L))
+p9b_sc_curve <- purrr::map_int(seq_along(p9b_progress), function(i) p9b_sc_n(i, 2L))
+p9b_pts_mid <- p9b_fr$scatter[[7L]]$data[[1]]
+p9b_pts_end <- p9b_final1("scatter")
+p9b_edge_x <- p9b_fr$line[[p9b_mid]]$data[[1]]$x
+check("9B-7: a line is drawn from its first x to its last, all series together (in the middle every series ends at the same x, short of the last, on an interpolated point that is not a data point; at the end all are whole), a slope chart's points are there only when the lines reach them, scatter points come in order along x (the count grows with progress and the points shown are the leftmost), and the fitted curve is drawn after the points (no curve while the points come, the whole curve at the end)",
+      nrow(p9b_line_mid) >= 1L && max(p9b_line_mid$x) < max(p9b_line_end$x) && !(max(p9b_line_mid$x) %in% p9b_line_end$x) &&
+        nrow(p9b_slope_mid) >= 1L && length(unique(round(as.vector(p9b_line_x(p9b_slope_mid)), 9))) == 1L && length(p9b_line_x(p9b_slope_mid)) >= 3L && max(p9b_slope_mid$x) < max(p9b_slope_end$x) &&
+        nrow(p9b_slope_pts) < nrow(p9b_slope_pts_end) && !is.unsorted(p9b_sc_pts) && p9b_sc_pts[[1]] == 0L && p9b_sc_pts[[length(p9b_sc_pts)]] > 100L && p9b_sc_pts[[10]] > 0L && p9b_sc_pts[[10]] < p9b_sc_pts[[length(p9b_sc_pts)]] &&
+        max(p9b_pts_mid$x) <= max(p9b_pts_end$x) && all(p9b_sc_curve[p9b_sc_pts < p9b_sc_pts[[length(p9b_sc_pts)]] * 0.9] == 0L) && p9b_sc_curve[[length(p9b_sc_curve)]] == 80L && p9b_sc_curve[[length(p9b_sc_curve) - 5L]] > 0L &&
+        p9b_sc_curve[[length(p9b_sc_curve) - 5L]] < 80L && !is.unsorted(p9b_sc_curve))
+
+# 9B-8: a heatmap fills a column at a time when x is ordered (a year) and a row at a time when it is not (a region), cells fading in; small multiples move together; a bubble chart's points grow in
+
+p9b_heat_year_mid <- p9b_layer1("heat_year", 7L); p9b_heat_cat_mid <- p9b_layer1("heat_cat", 7L)
+p9b_heat_cols <- tapply(p9b_heat_year_mid$alpha, p9b_heat_year_mid$x, max)
+p9b_heat_rows <- tapply(p9b_heat_cat_mid$alpha, p9b_heat_cat_mid$y, max)
+p9b_facet_mid <- p9b_layer1("facet")
+p9b_facet_ends <- tapply(p9b_facet_mid$x, p9b_facet_mid$PANEL, max)
+p9b_bub_mid <- p9b_fr$bubble[[10L]]$data[[1]]; p9b_bub_end <- p9b_final1("bubble")
+check("9B-8: a heatmap fills a column of cells at a time when x is ordered (the columns' strengths fall from the first to the last, none past the first column is as strong) and a row at a time when it is not (the rows' strengths fall from the top row down); the cells fade in (a strength between 0 and 1); small multiples move together (in the middle every panel's line ends at the same x); a bubble chart's bubbles grow in (sizes up to the final, more of them as time goes)",
+      p9b_fam$heat_year$by_column && !p9b_fam$heat_cat$by_column && !is.unsorted(rev(p9b_heat_cols)) && p9b_heat_cols[[1]] > p9b_heat_cols[[length(p9b_heat_cols)]] && any(p9b_heat_year_mid$alpha > 0 & p9b_heat_year_mid$alpha < 1) &&
+        !is.unsorted(p9b_heat_rows) && length(unique(p9b_heat_rows)) >= 2L && length(unique(round(p9b_facet_ends, 9))) == 1L && length(p9b_facet_ends) >= 3L && max(p9b_facet_mid$x) < max(p9b_final1("facet")$x) &&
+        nrow(p9b_bub_mid) > 0L && nrow(p9b_bub_mid) < nrow(p9b_bub_end) && all(p9b_bub_mid$size <= max(p9b_bub_end$size) + 1e-9) && any(p9b_bub_mid$size < max(p9b_bub_end$size) - 1e-6))
+
+# The card, the chat and the dialog (testServer, stand-ins for the model and the encoder). The stand-in for spec_video() writes the two files it is asked for, so a file can be found and removed.
+p9b_made <- new.env()
+p9b_made$calls <- list()
+p9b_made$real_spec_video <- spec_video
+p9b_fake_video <- function(spec, data, cb, palette = chart_palette_default(), file, size = SPEC_VIDEO_PX$download, small = NULL, bare = FALSE, drawn_fps = NULL, widths = SPEC_VIDEO_WIDTHS,
+                           on_frame = NULL, poster = NULL, keep = NULL) {
+  p9b_made$calls[[length(p9b_made$calls) + 1L]] <- list(spec = spec, file = file, small = small, size = size, bare = bare, widths = widths)
+  writeBin(charToRaw("fake 1920 video"), file)
+  if (!is.null(small)) writeBin(charToRaw("fake 1280 video"), small)
+  if (!is.null(on_frame)) on_frame(2L, 87L)
+  if (!is.null(poster)) writeBin(charToRaw("fake png"), poster)
+  list(file = file, small = small, drawn = 87L, inputs = 135L, canvas = c(width = 8, height = 4.5), plot = NULL, drawn_fps = 24L, seconds = c(draw = 1, encode = 1))
+}
+p9b_reply <- function(user, i) {
+  if (grepl("<CHARTS>", user, fixed = TRUE)) return(to_json(list(charts = purrr::map(sent_ids(user), function(id) list(id = id, headline = "A headline", summary = "A summary.")))))
+  if (grepl("\nANALYST: ", user, fixed = TRUE)) {
+    msg <- sub("(?s)^.*\nANALYST: (.*)\n\nREPLY FORMAT\n.*$", "\\1", user, perl = TRUE)
+    if (identical(msg, "a scatter")) return(to_json(list(charts = list(list(family = "scatter", x = "units", y = "revenue", title = "Revenue against units")))))
+    if (identical(msg, "make it a dot plot")) return(to_json(list(spec = list(family = "dot", x = "region", fn = "count", title = "Orders by region, as dots"), say = "Now a dot plot.")))
+    return(to_json(list(charts = list(list(family = "bar", x = "region", fn = "count", title = "Orders by region")))))
+  }
+  to_json(list(labels = list(), row_is_guess = "one order"))
+}
+p9b_state <- function() shiny::reactiveValues(key_version = 0L, data = p9b_data, problems = p9b_o$read$problems, profile = p9b_o$profile, codebook = p9b_cb,
+                                              path = p9b_path, calls = NULL, charts = list(), canvas = character(0), stories = list(), tables = list(), palette = chart_palette_default())
+p9b_modal <- new.env()
+p9b_e <- new.env()
+assign("spec_video", p9b_fake_video, envir = globalenv())
+assign("showModal", function(ui, session = NULL) assign("modal", ui, envir = p9b_modal), envir = globalenv())
+p9b_si <- stand_by(p9b_reply)
+p9b_st <- p9b_state()
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p9b_st, ask = p9b_si$ask), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  last_say <- function() made$log[[length(made$log)]]$content
+  session$setInputs(chat_user_input = "How many orders in each region?")
+  card <- html("c1_card")
+  p9b_e$button <- grepl(">Animate<", card, fixed = TRUE) && grepl("data-working=\"Drawing the video\"", regmatches(card, regexpr("<button[^>]*id=\"proxy1-c1_animate\"[^>]*>", card)), fixed = TRUE) &&
+    grepl("chart-call", regmatches(card, regexpr("<button[^>]*id=\"proxy1-c1_animate\"[^>]*>", card)), fixed = TRUE)
+  sent0 <- length(p9b_si$sent)
+  # no chart selected: R says to click one, with no model call and no video
+  none <- purrr::map_chr(c("animate", "Animate this", "play it!", "make it a video", "Make a video of this."), function(msg) {
+    session$setInputs(chat_user_input = msg)
+    last_say()
+  })
+  p9b_e$none <- all(none == md_text(ANIMATE_NONE)) && identical(ANIMATE_NONE, "Click a chart first, then ask me to animate it.") && length(p9b_si$sent) == sent0 && !length(p9b_made$calls) && is.null(made$video[["c1"]]())
+  # a chart selected: each of the phrases is handled by R (no model call)
+  session$setInputs(c1_select = 1)
+  log0 <- length(made$log)
+  session$setInputs(chat_user_input = "animate")
+  v1 <- made$video[["c1"]]()
+  p9b_e$first <- !is.null(v1) && length(p9b_made$calls) == 1L && file.exists(v1$file) && file.exists(v1$small) && identical(p9b_made$calls[[1]]$size, SPEC_VIDEO_PX$download) &&
+    identical(p9b_made$calls[[1]]$spec, chart_of("c1")$spec) && length(p9b_si$sent) == sent0 && isTRUE(made$showv[["c1"]]()) && grepl("Made a video of Orders by region", last_say(), fixed = TRUE) && length(made$log) == log0 + 1L
+  view <- html("c1_view")
+  vtag <- regmatches(view, regexpr("<video[^>]*>", view))
+  p9b_e$view <- length(vtag) == 1L && grepl("autoplay", vtag, fixed = TRUE) && grepl(" muted", vtag, fixed = TRUE) && grepl("playsinline", vtag, fixed = TRUE) && grepl(" controls", vtag, fixed = TRUE) &&
+    !grepl("loop", vtag, fixed = TRUE) && grepl("src=\"data:video/mp4;base64,", vtag, fixed = TRUE) && grepl(jsonlite::base64_enc(charToRaw("fake 1280 video")), vtag, fixed = TRUE) &&
+    grepl(">Replay<", view, fixed = TRUE) && grepl("Download MP4", view, fixed = TRUE) && grepl("proxy1-c1_mp4", view, fixed = TRUE) && grepl("proxy1-c1_picture", view, fixed = TRUE) &&
+    grepl("v.currentTime = 0; v.play();", view, fixed = TRUE) && grepl(">Picture<", view, fixed = TRUE) && !grepl("<img", view, fixed = TRUE)
+  p9b_e$download <- identical(readBin(output$c1_mp4, "raw", 20L), charToRaw("fake 1920 video")) || identical(readBin(output$c1_mp4, "raw", 15L), charToRaw("fake 1920 video"))
+  # the other phrases, with a polite word or a different case
+  phrases <- c("animate this", "Play it.", "make it a video", "MAKE A VIDEO OF THIS!", "please animate it", "Can you animate the chart?")
+  purrr::walk(phrases, function(msg) { session$setInputs(chat_user_input = msg) })
+  p9b_e$phrases <- length(p9b_si$sent) == sent0 && length(p9b_made$calls) == 1L && all(purrr::map_lgl(phrases, animate_request)) && !any(purrr::map_lgl(c("animate the bars slowly", "why animate", "animate the line chart for 2023", "play it again with a title", "video", "", NA), animate_request))
+  # Picture goes back to the picture, and Animate shows the same video again, without drawing it again
+  session$setInputs(c1_picture = 1)
+  p9b_e$picture <- !isTRUE(made$showv[["c1"]]()) && grepl("shiny-image-output|proxy1-c1_static", html("c1_view")) && !grepl("<video", html("c1_view"), fixed = TRUE) && !is.null(made$video[["c1"]]())
+  session$setInputs(c1_animate = 1)
+  p9b_e$again <- isTRUE(made$showv[["c1"]]()) && length(p9b_made$calls) == 1L && grepl("<video", html("c1_view"), fixed = TRUE)
+  # a message that asks for more than the animation goes to the model as any other
+  session$setInputs(chat_user_input = "animate the bars slowly")
+  p9b_e$more <- length(p9b_si$sent) == sent0 + 1L && length(p9b_made$calls) == 1L
+  # the video is dropped when the chart's spec changes (the card shows its picture again, the files are removed), also when the style does
+  files <- c(v1$file, v1$small)
+  session$setInputs(chat_user_input = "make it a dot plot")
+  session$flushReact()
+  p9b_e$dropped <- is.null(made$video[["c1"]]()) && !isTRUE(made$showv[["c1"]]()) && !any(file.exists(files)) && !grepl("<video", html("c1_view"), fixed = TRUE) && identical(chart_of("c1")$spec$family, "dot")
+  session$setInputs(c1_animate = 2)
+  v2 <- made$video[["c1"]]()
+  files2 <- c(v2$file, v2$small)
+  p9b_e$second <- !is.null(v2) && length(p9b_made$calls) == 2L && identical(p9b_made$calls[[2]]$spec$family, "dot") && !identical(v1$key, v2$key)
+  session$setInputs(style_choice = "dark")
+  session$flushReact()
+  p9b_e$style <- is.null(made$video[["c1"]]()) && !any(file.exists(files2))
+  session$setInputs(style_choice = "clean")
+  session$setInputs(c1_undo = 1)
+  session$setInputs(c1_animate = 3)
+  p9b_e$undo_then <- length(p9b_made$calls) == 3L && identical(p9b_made$calls[[3]]$spec$family, "bar")
+  # a table card has no Animate
+  session$setInputs(c1_remove = 1)
+  p9b_e$count <- length(p9b_made$calls)
+}), error = function(e) message("note  a Part B card scenario stopped: ", conditionMessage(e)))
+assign("spec_video", p9b_made$real_spec_video, envir = globalenv())
+check("9B-9: each chart card has an Animate button (a chart-call button whose working words are 'Drawing the video'); with no chart selected the chat's 'animate', 'animate this', 'play it', 'make it a video' and 'make a video of this' (any case, with or without a full stop or an exclamation mark) are answered by R with exactly 'Click a chart first, then ask me to animate it.' (through md_text(), no model call, no video drawn)",
+      isTRUE(p9b_e$button) && isTRUE(p9b_e$none))
+check("9B-10: with a chart selected the same phrases are handled by R with no model call and the video is drawn once (the stand-in for the encoder asked for the chart's own spec, at 1920 by 1080 with a 1280 by 720 copy); the card then shows <video autoplay muted playsinline controls> (no loop) with the 1280 file as a data address, Replay, Download MP4 (the 1920 file) and Picture; Picture goes back to the picture with the video kept, Animate shows it again without drawing it again; a message that asks for more than the animation still goes to the model",
+      isTRUE(p9b_e$first) && isTRUE(p9b_e$view) && isTRUE(p9b_e$download) && isTRUE(p9b_e$phrases) && isTRUE(p9b_e$picture) && isTRUE(p9b_e$again) && isTRUE(p9b_e$more))
+check("9B-11: a chart whose spec changes drops its video (the card shows the picture again, the files are removed, the next Animate draws the new chart), and so does a new style; Undo then Animate draws the old chart again",
+      isTRUE(p9b_e$dropped) && isTRUE(p9b_e$second) && isTRUE(p9b_e$style) && isTRUE(p9b_e$undo_then) && identical(p9b_e$count, 3L))
+
+# 9B-12: a server without av (a stand-in for av_installed()) hides the control, says so on Start here, and a chat 'animate' says so; a server whose only device is svglite is the same
+p9b_real_av <- av_installed
+p9b_real_kind <- chart_device_kind
+p9b_none <- new.env()
+assign("av_installed", function() FALSE, envir = globalenv())
+p9b_none$start <- paste(as.character(start_ui()), collapse = "")
+p9b_none$text <- video_unavailable_text()
+p9b_none$avail <- video_available()
+p9b_none$calls_before <- length(p9b_made$calls)
+p9b_nst <- p9b_state()
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p9b_nst, ask = stand_by(p9b_reply)$ask), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  session$setInputs(chat_user_input = "How many orders in each region?")
+  session$setInputs(c1_select = 1)
+  session$setInputs(chat_user_input = "animate this")
+  p9b_none$card <- grepl(">Animate<", html("c1_card"), fixed = TRUE)
+  p9b_none$say <- made$log[[length(made$log)]]$content
+  p9b_none$calls <- length(p9b_made$calls) - p9b_none$calls_before
+  session$setInputs(export = 1)
+  p9b_none$dialog <- paste(as.character(p9b_modal$modal), collapse = "")
+}), error = function(e) message("note  a Part B no-av scenario stopped: ", conditionMessage(e)))
+assign("av_installed", p9b_real_av, envir = globalenv())
+assign("chart_device_kind", function() "svglite", envir = globalenv())
+p9b_none$svg_avail <- video_available()
+p9b_none$svg_text <- video_unavailable_text()
+assign("chart_device_kind", p9b_real_kind, envir = globalenv())
+p9b_has <- new.env()
+p9b_pst <- p9b_state()
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p9b_pst, ask = stand_by(p9b_reply)$ask), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  session$setInputs(chat_user_input = "How many orders in each region?")
+  session$setInputs(chat_user_input = "a scatter")
+  p9b_has$card <- grepl(">Animate<", html("c1_card"), fixed = TRUE)
+  session$setInputs(export = 1)
+  p9b_has$dialog <- paste(as.character(p9b_modal$modal), collapse = "")
+  # choosing Video says what it costs, and for a chart drawn from rows that it carries no rows
+  session$setInputs(dash_mode_c1 = "video")
+  p9b_has$note_totals <- paste(as.character(output$dash_note_c1$html), collapse = "")
+  session$setInputs(dash_mode_c2 = "video")
+  p9b_has$note_rows <- paste(as.character(output$dash_note_c2$html), collapse = "")
+}), error = function(e) message("note  a Part B dialog scenario stopped: ", conditionMessage(e)), finally = rm("showModal", envir = globalenv()))
+p9b_has$start <- paste(as.character(start_ui()), collapse = "")
+check("9B-12: with av absent (a stand-in for av_installed(): video_available() is FALSE and video_unavailable_text() says the av package is not installed) the card has no Animate button, the export dialog offers no Video, Start here says videos are unavailable on this server, and a chat 'animate this' is answered with that and draws nothing; with av there are the button and the choice and Start here says videos can be made; a server whose only device is svglite (a picture a video cannot be made of) has the same switch",
+      !p9b_none$avail && grepl("av package is not installed", p9b_none$text, fixed = TRUE) && grepl("Videos are unavailable on this server", p9b_none$start, fixed = TRUE) && !isTRUE(p9b_none$card) &&
+        !grepl("value=\"video\"", p9b_none$dialog, fixed = TRUE) && grepl("value=\"picture\"", p9b_none$dialog, fixed = TRUE) && identical(p9b_none$say, md_text(p9b_none$text)) && identical(p9b_none$calls, 0L) &&
+        isTRUE(p9b_has$card) && grepl("value=\"video\"", p9b_has$dialog, fixed = TRUE) && !grepl("Videos are unavailable", p9b_has$start, fixed = TRUE) && grepl("short videos", p9b_has$start, fixed = TRUE) &&
+        !p9b_none$svg_avail && grepl("SVG", p9b_none$svg_text, fixed = TRUE) && isTRUE(video_available()))
+
+# 9B-13: the export dialog's choice is picture, interactive or video; beside Video it says what a video costs, and for a chart drawn from rows (here a bar of rows) that a video carries no rows
+check("9B-13: the dialog's per-chart choice is Picture, Interactive or Video; with Video chosen it says a video takes about half a minute and, for a chart drawn from rows, that a video carries no rows (the sentence of DASH_VIDEO_DISCLOSURE), and says nothing of rows for a chart of totals",
+      grepl("value=\"picture\"", p9b_has$dialog, fixed = TRUE) && grepl("value=\"interactive\"", p9b_has$dialog, fixed = TRUE) && grepl("value=\"video\"", p9b_has$dialog, fixed = TRUE) &&
+        identical(unname(DASH_MODES), c("picture", "interactive", "video")) && grepl(DASH_VIDEO_TIME, p9b_has$note_totals, fixed = TRUE) && !grepl("carries no rows", p9b_has$note_totals, fixed = TRUE) &&
+        grepl("A video carries no rows", p9b_has$note_rows, fixed = TRUE) && grepl(DASH_VIDEO_TIME, p9b_has$note_rows, fixed = TRUE) && grepl("pictures of the chart", DASH_VIDEO_DISCLOSURE, fixed = TRUE) && chart_from_rows(list(family = "bar", x = "region", fn = "none")) &&
+        !chart_from_rows(list(family = "bar", x = "region", fn = "count")))
+
+# 9B-14: the page's markup for a video card (a stand-in video item): a <video> with its poster as a data address, muted, with controls, plays on scroll (data-once) and not by itself, a still
+#   of the finished chart that takes its place for a reader whose system asks for less motion and in print, one script and only when a video is in the page
+p9b_item <- function(mode = "video", id = "c1") list(id = id, title = "Revenue by region", headline = "A headline", summary = "A summary.", mode = mode, chart_subtitle = NULL, notes = character(0), source = "Source: orders.csv",
+                                                      video = list(uri = "data:video/mp4;base64,AAAAIGZ0eXA=", poster = "data:image/png;base64,iVBORw0KGgo="), facts = list(), deps = NULL,
+                                                      pictures = list(desk = list(uri = "data:image/png;base64,iVBORw0KGgo=", pixels = c(1, 1)), phone = list(uri = "data:image/png;base64,iVBORw0KGgo=", pixels = c(1, 1))))
+p9b_set <- list(title = "T", subtitle = "", author = "", date = as.Date("2026-11-22"), intro = "", boxes = character(0), keys = character(0))
+p9b_page <- function(items) dash_page(items, p9b_set, p9b_cb, p9b_data, chart_palette_default(), "test-model", rep(FALSE, length(items)))
+p9b_vh <- p9b_page(list(p9b_item("video")))
+p9b_ph <- p9b_page(list(p9b_item("picture")))
+p9b_vtag <- regmatches(p9b_vh, regexpr("<video[^>]*>", p9b_vh))
+check("9B-14: in the page a video is a <video> with controls, muted, playsinline and preload, data-once (played once, when it scrolls into view), no autoplay and no loop, its MP4 as a data address and the finished chart as its poster (a data address too), and next to it the same picture as a still; the style sheet hides the video and shows the still under prefers-reduced-motion and in print; the one script (IntersectionObserver, no library) is in the page only when a video is, and does nothing under reduced motion; a page of pictures has no script at all; the About card says what a video carries",
+      length(p9b_vtag) == 1L && grepl(" controls", p9b_vtag, fixed = TRUE) && grepl(" muted", p9b_vtag, fixed = TRUE) && grepl("playsinline", p9b_vtag, fixed = TRUE) && grepl("data-once", p9b_vtag, fixed = TRUE) &&
+        !grepl("autoplay|loop", p9b_vtag) && grepl("src=\"data:video/mp4;base64,", p9b_vtag, fixed = TRUE) && grepl("poster=\"data:image/png;base64,", p9b_vtag, fixed = TRUE) &&
+        grepl("<img class=\"still\" src=\"data:image/png;base64,", p9b_vh, fixed = TRUE) && grepl("@media (prefers-reduced-motion:reduce){.video-box video{display:none;}.video-box .still{display:block;}}", p9b_vh, fixed = TRUE) &&
+        regexpr("@media print{", p9b_vh, fixed = TRUE)[[1]] > 0L && regexpr(".video-box video{display:none;}.video-box .still{display:block;max-width:100%;}", p9b_vh, fixed = TRUE)[[1]] > regexpr("@media print{", p9b_vh, fixed = TRUE)[[1]] && lengths(gregexpr("<script>", p9b_vh, fixed = TRUE)) == 1L &&
+        grepl("IntersectionObserver", p9b_vh, fixed = TRUE) && grepl("prefers-reduced-motion: reduce", regmatches(p9b_vh, regexpr("(?s)<script>.*</script>", p9b_vh, perl = TRUE)), fixed = TRUE) && grepl("unobserve", p9b_vh, fixed = TRUE) &&
+        !grepl("<script", p9b_ph, fixed = TRUE) && !grepl("<video", p9b_ph, fixed = TRUE) && grepl("A video holds no row values", p9b_vh, fixed = TRUE) && grepl("0 pictures, 0 interactive and 1 video.", p9b_vh, fixed = TRUE) &&
+        length(p8c_requests(p9b_vh)) == 0L)
+# >>> 9B end of fast
+
+}   # end of the fast run part of Phase 9 Part B
+
+if (run_heavy) {   # the heavy run only: 9B-15 to 9B-18, real videos; not indented, to keep the diff small
+# >>> 9B heavy
+p9b_dir <- file.path(tempdir(), "p9b_video")
+dir.create(p9b_dir, showWarnings = FALSE)
+p9b_mp4 <- file.path(p9b_dir, "bar_1080.mp4")
+p9b_small <- file.path(p9b_dir, "bar_720.mp4")
+p9b_keep <- file.path(p9b_dir, "frames")
+p9b_poster <- file.path(p9b_dir, "poster.png")
+p9b_t <- system.time(p9b_r <- spec_video(p9b_s$bar, p9b_data, p9b_cb, p9b_pal(), p9b_mp4, small = p9b_small, poster = p9b_poster, keep = p9b_keep))
+p9b_info <- function(f) av::av_media_info(f)
+p9b_i1 <- p9b_info(p9b_mp4); p9b_i2 <- p9b_info(p9b_small)
+p9b_ftyp <- function(f) rawToChar(readBin(f, "raw", 12L)[5:8])
+p9b_frames_drawn <- list.files(p9b_keep, pattern = "^frame_[0-9]+[.]png$")
+check("9B-15: a real video of a bar chart: the encoder is given 87 drawn frames and 135 files (the last one repeated 48 times), and the keep folder holds 87 files (the hold is not drawn); the 1920 file is 1920 by 1080 at 24 a second and 5.6 seconds long, the card's copy 1280 by 720, both H.264 in an MP4 (yuv420p, which Chrome plays), both small; drawing and encoding took under 45 seconds",
+      identical(p9b_r$drawn, 87L) && identical(p9b_r$inputs, 135L) && length(p9b_frames_drawn) == 87L && identical(p9b_ftyp(p9b_mp4), "ftyp") && identical(p9b_ftyp(p9b_small), "ftyp") &&
+        p9b_i1$video$width == 1920 && p9b_i1$video$height == 1080 && abs(p9b_i1$video$framerate - 24) < 0.01 && abs(p9b_i1$duration - 135 / 24) < 0.05 && p9b_i2$video$width == 1280 && p9b_i2$video$height == 720 &&
+        abs(p9b_i2$duration - 135 / 24) < 0.05 && grepl("h264", p9b_i1$video$codec, ignore.case = TRUE) && grepl("yuv420p", p9b_i1$video$format, fixed = TRUE) && grepl("yuv420p", p9b_i2$video$format, fixed = TRUE) &&
+        file.size(p9b_mp4) < 5e6 && file.size(p9b_small) < 5e6 && p9b_t[["elapsed"]] < 45)
+
+# the frames read back from the file: the first is not the last, and the last frame of the file (and the file drawn for the hold) is the static chart drawn at that size
+invisible(utils::capture.output(utils::capture.output(p9b_back <- av::av_video_images(p9b_mp4, destdir = file.path(p9b_dir, "back"), format = "png"), type = "message"), type = "output"))   # it prints a line a frame
+p9b_static_png <- file.path(p9b_dir, "static.png")
+p9b_cv <- p9b_r$canvas
+spec_png(p9b_r$plot, p9b_static_png, size = c(width = p9b_cv[["width"]], height = p9b_cv[["height"]]), dpi = 1920 / p9b_cv[["width"]])
+p9b_rd <- function(f) png::readPNG(f)
+p9b_last_drawn <- p9b_rd(file.path(p9b_keep, sprintf("frame_%04d.png", 87L)))
+p9b_first_drawn <- p9b_rd(file.path(p9b_keep, "frame_0001.png"))
+p9b_backs <- purrr::map(p9b_back[c(1L, length(p9b_back))], p9b_rd)
+p9b_close <- function(a, b) identical(dim(a), dim(b)) && mean(abs(a - b)) < 0.01
+check("9B-16: the frames read back from the encoded file: the file holds the 135 frames (the decoder gives 135 or 136), the first is the empty chart (axes, no bars) and is not like the last, the last frame drawn is pixel for pixel the static chart drawn at that size, and the last frame of the file is like it (within the encoder's loss); the poster is that last frame",
+      length(p9b_back) %in% 135:136 && !p9b_close(p9b_backs[[1]], p9b_backs[[2]]) && identical(p9b_last_drawn, p9b_rd(p9b_static_png)) && p9b_close(p9b_backs[[2]], p9b_rd(p9b_static_png)) && identical(p9b_rd(p9b_poster), p9b_last_drawn) &&
+        !identical(p9b_first_drawn, p9b_last_drawn))
+
+# a dashboard with two videos, one picture
+p9b_items <- list(p8c_item(1, p9b_s$bar, mode = "video"), p8c_item(2, p9b_s$scatter, mode = "picture"), p8c_item(3, p9b_s$line, mode = "video"))
+p9b_zt <- system.time(p9b_z <- p9_build(p9b_items))
+p9b_zh <- p9b_z$html
+p9b_zv <- regmatches(p9b_zh, gregexpr("<video[^>]*>", p9b_zh))[[1]]
+p9b_b64 <- function(tag, attr) sub(paste0("^.*", attr, "=\"data:[^;]*;base64,([^\"]*)\".*$"), "\\1", tag)
+p9b_page_mp4 <- purrr::map(p9b_zv, function(t) jsonlite::base64_dec(p9b_b64(t, " src")))
+p9b_zip_mp4 <- file.path(p9b_z$dir, c("charts/01_revenue_by_region.mp4", "charts/03_revenue_by_month.mp4"))
+p9b_poster_png <- file.path(tempdir(), "p9b_poster_page.png")
+writeBin(jsonlite::base64_dec(p9b_b64(p9b_zv[[1]], "poster")), p9b_poster_png)
+check("9B-17: a dashboard with two videos and a picture: each video chart's MP4 is in charts/ (and is the very file in the page, byte for byte), the page has two <video> elements with a poster that is a 1280 by 720 PNG and the reduced-motion rule and one script, the picture chart has no video, nothing is requested from outside, the result says '1 as a picture and 0 interactive and 2 videos', and the page's weight is reported",
+      all(file.exists(p9b_zip_mp4)) && length(p9b_zv) == 2L && length(p9b_page_mp4) == 2L && identical(p9b_page_mp4[[1]], readBin(p9b_zip_mp4[[1]], "raw", file.size(p9b_zip_mp4[[1]]))) &&
+        identical(p9b_page_mp4[[2]], readBin(p9b_zip_mp4[[2]], "raw", file.size(p9b_zip_mp4[[2]]))) && identical(unname(p8c_png_size(p9b_poster_png)), c(1280L, 720L)) &&
+        all(grepl("poster=\"data:image/png;base64,", p9b_zv, fixed = TRUE)) && grepl("prefers-reduced-motion:reduce", p9b_zh, fixed = TRUE) && lengths(gregexpr("<script>", p9b_zh, fixed = TRUE)) == 1L &&
+        identical(p9b_z$modes, c("video", "picture", "video")) && grepl("1 picture, 0 interactive and 2 videos.", p9b_zh, fixed = TRUE) && length(p8c_requests(p9b_zh)) == 0L &&
+        sum(grepl("<picture", p9b_zh, fixed = TRUE)) >= 1L && file.size(file.path(p9b_z$dir, "dashboard.html")) < 8e6)
+cat(sprintf("note  Part B weights: video 1920 %.0f KB, 1280 %.0f KB; dashboard of two videos and a picture: page %.2f MB, zip %.2f MB, built in %.0f s\n",
+            file.size(p9b_mp4) / 1024, file.size(p9b_small) / 1024, file.size(file.path(p9b_z$dir, "dashboard.html")) / 1024^2, p9b_z$bytes / 1024^2, p9b_zt[["elapsed"]]))
+
+# Chrome: the exported video plays (readyState, no error, a size and a duration, the time moves after play()), and with reduced motion the still is shown and the video is not
+p9b_chrome_run <- function(html, js, flags = character(0), budget = 15000) {
+  h <- paste(readLines(html, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  Encoding(h) <- "UTF-8"
+  f <- tempfile(fileext = ".html")
+  writeLines(sub("</body>", paste0("<script>", js, "</script></body>"), h, fixed = TRUE), f, useBytes = TRUE)
+  out <- suppressWarnings(system2(p9_chrome, c("--headless=new", "--disable-gpu", "--no-sandbox", "--autoplay-policy=no-user-gesture-required", paste0("--user-data-dir=", file.path(tempdir(), "p9b_chrome")),
+                                              "--window-size=1400,900", paste0("--virtual-time-budget=", budget), flags, "--dump-dom", paste0("file:///", normalizePath(f, winslash = "/"))), stdout = TRUE, stderr = FALSE))
+  txt <- paste(out, collapse = "\n")
+  m <- regmatches(txt, regexpr("name=\"p9b\" content=\"[^\"]*\"", txt))
+  if (!length(m)) return(NULL)
+  jsonlite::fromJSON(gsub("&quot;", "\"", gsub("&amp;", "&", sub("^name=\"p9b\" content=\"(.*)\"$", "\\1", m), fixed = TRUE), fixed = TRUE))
+}
+p9b_play_js <- paste0("var v=document.querySelector('video');var d={};var done=function(){d.rs=v.readyState;d.err=v.error?v.error.code:0;d.w=v.videoWidth;d.h=v.videoHeight;d.dur=v.duration;d.t=v.currentTime;d.paused=v.paused;",
+                      "d.vdisp=getComputedStyle(v).display;d.still=getComputedStyle(document.querySelector('.still')).display;d.loop=v.loop;d.auto=v.autoplay;",
+                      "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9b\" content=\"'+JSON.stringify(d).replace(/\"/g,'&quot;')+'\">');};",
+                      "v.muted=true;var started=false;v.addEventListener('loadeddata',function(){if(!started){started=true;var p=v.play();if(p&&p.catch)p.catch(function(e){d.perr=String(e)});setTimeout(done,2500);}});",
+                      "if(v.readyState>=2&&!started){started=true;v.play();setTimeout(done,2500);} setTimeout(function(){if(!started){started=true;done();}},6000);")
+if (!p9_has_chrome) cat("note  Chrome was not found: the video is not played by 9B-18\n")
+p9b_played <- if (p9_has_chrome) p9b_chrome_run(file.path(p9b_z$dir, "dashboard.html"), p9b_play_js)
+p9b_reduced <- if (p9_has_chrome) p9b_chrome_run(file.path(p9b_z$dir, "dashboard.html"), p9b_play_js, "--force-prefers-reduced-motion")
+check("9B-18: in Chrome the exported <video> plays: its data is loaded (readyState 2 or more, no error), it is 1280 by 720 and 5.6 seconds long, its time moves once play() is called, it neither loops nor autoplays by itself; and with the system asking for reduced motion the video is not displayed and the still is (not run where Chrome is not installed)",
+      !p9_has_chrome || (!is.null(p9b_played) && p9b_played$rs >= 2L && identical(as.integer(p9b_played$err), 0L) && p9b_played$w == 1280 && p9b_played$h == 720 && abs(p9b_played$dur - 135 / 24) < 0.1 && p9b_played$t > 0 &&
+                           !isTRUE(p9b_played$loop) && !isTRUE(p9b_played$auto) && identical(p9b_played$vdisp, "block") && identical(p9b_played$still, "none") &&
+                           !is.null(p9b_reduced) && identical(p9b_reduced$vdisp, "none") && identical(p9b_reduced$still, "block")))
+# >>> 9B end of heavy
+
+}   # end of the heavy run part of Phase 9 Part B
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
 #
