@@ -1,10 +1,12 @@
 # chaRt: what a local run leaves behind. The shared rules are in the root .gitignore.
 .Rhistory
 tests/*.out
+!tests/live_run_9.out
 tests/gallery.html
 tests/style_sheet.html
 tests/live_gallery.html
 tests/live_replies.rds
+tests/live_replies_9.rds
 manager/*
 !manager/README.md
 # Phase 8 Part C: dashboards exported from stand-in charts, unpacked here for the manager to open.
