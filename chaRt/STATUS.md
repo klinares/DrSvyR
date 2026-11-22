@@ -1,5 +1,56 @@
 # chaRt: status
 
+## Phase 8 Part B: the Methodology page and things to ask (2026-11-21)
+
+Branch `chart`, not pushed; done by a Sonnet worker for the lead. Smoke: **421 of 421** (409 before; 12 new checks, 8B-1 to 8B-11 and 8B-2b; 3 changed, none removed).
+Part C is not started. No model call is made by anything in this part.
+
+**The page** (Methodology, `mod_method_ui()` in R/ui.R; `www/methodology.md` is the manager's and is not edited). In order: the manager's text as HTML, with a
+contents list after its opening paragraph; "Questions for your file"; "The rules the model follows"; "How a reply is checked"; "Styles and fonts". The text is
+rendered by `commonmark::markdown_html(extensions = TRUE)`, which is what `shiny::markdown()` calls (checked: the same HTML for this file); tables are an
+extension, so without `extensions` the table would stay raw text. `commonmark` is now in `APP_PACKAGES` (it is installed with shiny). The `{measure}` braces are
+shown as written. Everything except the questions is the same for every session, so it is built when the app starts.
+
+**Small drawn examples.** A first column of thumbnails in the "Which chart for which question" table, one for each of its nine rows, keyed by the first word of
+the row's "The chart" cell (`method_thumb_key()`). They are drawn by `spec_plot()` and `spec_png()` (so `chart_device()`) from a made-up table
+(`method_thumb_data()`: five regions by ten years, units, price and revenue, with no random numbers) at 72 pixels per inch, 7 by 4.5 inches, shown 9 rem wide,
+as data addresses. `method_thumbs()` draws them once (about 4 seconds, 130 KB of PNG in all) and caches them; app.R calls it when it starts. A note under the table says
+they come from a made-up table and show form, not a finding. A server that cannot draw has none, and the page goes without. The course files are not deployed
+and `tests/` is not, so nothing else was available.
+
+**Things to ask.** `example_questions(cb)` (R/reflexes.R) reads the table's last column: the text in quotes (straight or curly), with `{measure}`, `{measure2}`,
+`{measure3}`, `{group}`, `{group2}` and `{time}`. The table is found by its heading and its columns by their header cells (`methodology_templates()`), so a
+reordered table reads the same; `check_methodology_file()` at start-up stops the app, naming the file, if the heading, the table or a column is gone. Slots are
+filled from the dictionary: measures from the columns with the measure role (first, second, third), groups from those with the group role (at most
+`SPEC_FACET_MAX` values), time from the first with the time role; a column with fewer than two values or mostly missing fills none; the label (`col_title()`) is
+used, one line, cut at 60 characters; the fill is in one pass, so text that goes into a slot is never read as a slot. A template whose slots are not all filled is
+left out; at most eight, in the table's order, each tagged with the table's chart name ("Bar, or dot"). On Explore, when the dictionary is ready and the canvas is
+empty, the ready message is followed by "Try one of these:" and the questions as suggestion cards (`say_ready()`). On Methodology the section lists them with an
+"Ask this" button (a `chart-call` button): the server puts that question in `state$ask_request`, the Explore server passes it to the chat with
+`shinychat::update_chat_user_input(submit = TRUE)`, so it goes as the analyst's message by the path a card takes, and the button also opens the Explore tab.
+
+**Rules, checks, styles.** The rules are built by the existing parser: 56 labelled rules in 9 files (core 12, comparison 8, relationship 7, distribution 2, time 3,
+suggest 2, refine 8, chat 4, summary 10), each with its Label, When, Say and Source, in a collapsed `<details>` for each file; 10 rules have no label (codebook.md's
+four and six in other files) and are counted, not listed. "How a reply is checked" is written from `check_numbers()`, `check_words()`, `names_back()`,
+`check_chart()` and the one repair in `chat_turn()` and `summarize_batch()`; its examples (69,700 passes for 69,712; 70,000 does not) are run by check 8B-8, and
+the forbidden and multiple words are the code's own constants. Styles and fonts: the six style samples of the Style dialog and the two bundled typefaces with the
+SIL Open Font License 1.1, the holder's line read from the licence file, and a link to the file in `www/fonts/`.
+
+**Checks.** 8B-1 templates parsed (also from a reversed table with other text and tables around it and from curly quotes; the errors); 8B-2 and 8B-2b the filling and
+dropping (no time, no group, neither, no measure, nothing, a constant column, a mostly-missing one, a group of 17 values; orders.csv, the messy file); 8B-3 a hostile
+label; 8B-4 the page with no file; 8B-5 the page with a file and the buttons; 8B-6 the Explore cards and the request from Methodology; 8B-7 every labelled rule once;
+8B-8 the checks text; 8B-9 styles and fonts; 8B-10 the thumbnails (drawn once, at start-up, from a table with no random numbers); 8B-11 no model call, start-up.
+Changed: 6-C 5, 6-C 7 and 6-C 25 now ask that the ready message start with `SETUP_READY` (the cards follow it) instead of being equal to it. Mutation runs: every new
+check failed in at least one run (see the report).
+
+**Things to know.**
+- The last template, "Show that in a panel for each {group}.", says "that", which means the chart before it. As a card on an empty canvas it has nothing to point
+  at. It is the ninth, so it is cut when eight others fit, and appears for a file with few columns. Not edited (the file is the manager's).
+- A bare `http://` address in a label shows as a link in a suggestion card: shinychat's browser code links it although `md_text()` backslashes its punctuation (seen in
+  the browser; the page's own list on Methodology escapes it and links nothing). `md_text()` is not changed here.
+- The question text is sent to the model as the analyst's message, with the label in it; the label is already in the DATA block of every call.
+- `later_ui()` and `LATER_PHASE` are no longer used; kept because check 6-C 30 names `later_ui`.
+
 ## Phase 8 Part A: no X11, anywhere (2026-11-21)
 
 Branch `chart`, not pushed; done by a Sonnet worker for the lead. Smoke: **409 of 409** (396 before; 13 new checks, 1 changed,
