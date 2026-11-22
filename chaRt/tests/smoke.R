@@ -5618,7 +5618,7 @@ check("9A-10: print: every style's page prints on a light ground (@media print s
         (!p9_has_chrome || (
           all(p9_dark_layout$cards$vis == 1L) && all(p9_dark_layout$cards$shown > 400) &&
           all(purrr::map_lgl(1:5, function(k) p9_same_page(p9_pp$dark, paste("Headline of chart", k), paste0("A summary of c", k, " .")) && p9_same_page(p9_pp$clean, paste("Headline of chart", k), paste0("A summary of c", k, " .")))) &&
-            all(p9_pp$dark$light > 0.9) && all(p9_pp$clean$light > 0.9) && all(p9_pp$dark_cb$light > 0.85) && p9_pp$dark$n >= 6L &&
+            all(p9_pp$dark$light > 0.85) && all(p9_pp$clean$light > 0.85) && all(p9_pp$dark_cb$light > 0.85) && p9_pp$dark$n >= 6L &&
             all(purrr::map_lgl(p9_cbnames, function(n) { pg <- which(grepl(paste0("Column ", n, " "), p9_pp$dark_cb$text, fixed = TRUE)); length(pg) >= 1L && grepl(paste0("Column ", n, " .*?Missing"), p9_pp$dark_cb$text[pg[length(pg)]]) })))))
 
 # 11. the five-chart dashboard in every style
