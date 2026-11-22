@@ -670,12 +670,16 @@ TELL_WARNING <- "Not every number here is in the description of the file: "
 #   CommonMark gives them all, so no emphasis, link, image, code, list, heading or table can start), and "&", "<" and ">"
 #   become entities (so no tag or entity can start). The reader sees the text as it was.
 #   Nothing may become a link either. GFM turns http://, https://, www. and e-mail addresses into links by itself. The
-#   backslash on ":" and "." stops the first three (checked against commonmark with extensions); an address with "@" is
-#   found in the text after the escapes are undone, and no escape or entity stops that, so the "@" is written as a
-#   <span>@</span>: the text on either side is then not one text, and the reader sees and copies a plain "@".
-md_text <- function(x)
-  gsub("@", "<span>@</span>", htmltools::htmlEscape(gsub("([!\"#$%'()*+,./:;=?\\[\\\\\\]^_`{|}~-])", "\\\\\\1", as.character(x), perl = TRUE)),
-       fixed = TRUE)
+#   backslash on ":" and "." stops the first three in cmark-gfm (R's commonmark with extensions) but NOT in shinychat's
+#   browser code (remark): it undoes the escapes and then links the text that is left, in a chat message and in a suggestion
+#   card alike (seen in the browser, Phase 8 Part C). An address with "@" is found the same way, and no escape or entity
+#   stops that. So the one mark that completes an address is also written as a <span>: the ":" after "http" or "https", the
+#   "." after "www", and the "@". The text on either side of a span is not one text, so no address is found in it, and the
+#   reader sees and copies the plain character; no zero-width or other hidden character is added.
+md_text <- function(x) {
+  escaped = htmltools::htmlEscape(gsub("([!\"#$%'()*+,./:;=?\\[\\\\\\]^_`{|}~-])", "\\\\\\1", as.character(x), perl = TRUE))
+  gsub("@", "<span>@</span>", gsub("(?i)(https?|www)(\\\\[:.])", "\\1<span>\\2</span>", escaped, perl = TRUE), fixed = TRUE)
+}
 
 # A reply's text on one line: the whitespace inside it, a newline above all, becomes one space.
 one_line <- function(x) trimws(gsub("[[:space:]]+", " ", as.character(x)))

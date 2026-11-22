@@ -2369,10 +2369,11 @@ d6_unhtml <- function(x) {
   x = gsub("&gt;", ">", x, fixed = TRUE)
   gsub("&amp;", "&", x, fixed = TRUE)
 }
-d6_seen <- function(x) d6_unhtml(gsub("\\\\([[:punct:]])", "\\1", gsub("<span>@</span>", "@", x, fixed = TRUE)))
+d6_spans <- function(x) gsub("<span>(\\\\?[:.@])</span>", "\\1", x)    # the one-mark spans md_text() writes so that no address is found
+d6_seen <- function(x) d6_unhtml(gsub("\\\\([[:punct:]])", "\\1", d6_spans(x)))
 d6_sugg <- function(content) d6_unhtml(regmatches(content, gregexpr("(?<=data-suggestion=\")[^\"]*(?=\")", content, perl = TRUE))[[1]])
 d6_shown <- function(content) d6_seen(regmatches(content, gregexpr("(?<=\">)[^<]*(?=</span>)", content, perl = TRUE))[[1]])
-d6_bare <- function(content) gsub("</span>", "", gsub("<span class=\"suggestion submit\" data-suggestion=\"[^\"<>]*\">", "", content, perl = TRUE), fixed = TRUE)
+d6_bare <- function(content) gsub("</span>", "", gsub("<span class=\"suggestion submit\" data-suggestion=\"[^\"<>]*\">", "", d6_spans(content), perl = TRUE), fixed = TRUE)
 d6_clean <- function(content) !grepl("<", d6_bare(content), fixed = TRUE)
 d6_n_spans <- function(content) lengths(gregexpr("<span", content, fixed = TRUE)) * grepl("<span", content, fixed = TRUE)
 
@@ -4639,6 +4640,32 @@ check("8B-11: nothing in the page, the questions or the thumbnails calls the mod
         grepl("APP_PACKAGES <- c(\"commonmark\", ", paste(readLines("app.R", warn = FALSE), collapse = "\n"), fixed = TRUE) && grepl("say_ready = function", p8b_say_ready, fixed = TRUE) &&
         inherits(tryCatch(check_methodology_file(p8b_no_table), error = function(e) e), "error") &&
         !any(purrr::map_lgl(p8b_fns, function(f) any(c("for", "while", "repeat") %in% p8b_calls_in(f)))))
+
+# ---- Phase 8 Part C: links in cards, choosing charts, exporting the dashboard -------------------------------------------------
+#
+# Nothing here calls the model. The browser is not tested here: the lead and the worker looked at the cards, the dialog and the exported
+#   pages in the browser pane (see STATUS.md).
+
+# 0. links in cards. shinychat's browser code (remark) undoes a backslash escape and then links the text that is left, so a bare address
+#   in a column label became a link in a suggestion card, and in plain chat text too, although cmark-gfm (R's commonmark) is kept from it
+#   by the backslashes. p8c_found() models the browser: the escapes undone, the text cut at every tag, and an address looked for in each
+#   piece of text. The attribute is the text a click sends and must stay exactly as it was.
+p8c_found <- function(md) {
+  pieces = strsplit(gsub("<[^>]*>", "\001", md), "\001", fixed = TRUE)[[1]]
+  any(purrr::map_lgl(pieces, function(p)
+    grepl("(?i)(\\b(https?://|www\\.)[^[:space:]]+)|([A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+)", d6_unhtml(gsub("\\\\([[:punct:]])", "\\1", p)), perl = TRUE)))
+}
+p8c_forms <- c("see http://x.test/a now", "see https://x.test/b#c now", "go to www.x.test now", "mail a.b@x.test now", "HTTP://EVIL.TEST/X and Www.A.b",
+               "one, http://a.test, https://b.test and c@d.test.")
+p8c_cards <- suggestion_list(p8c_forms)
+p8c_card <- strsplit(p8c_cards, "\n", fixed = TRUE)[[1]]
+p8c_sent <- d6_sugg(p8c_cards)
+check("8C-1: a bare http://, https://, www. or e-mail address in a suggestion card (and in plain chat text) is not found by a reader that undoes the escapes and then looks for addresses (the plain text is found, so the check can fail), the card still shows the text as it was, the attribute a click sends is exactly the text, and the card makes no <a> in commonmark with extensions",
+      all(purrr::map_lgl(p8c_forms, p8c_found)) && !any(purrr::map_lgl(p8c_card, p8c_found)) && !any(purrr::map_lgl(md_text(p8c_forms), p8c_found)) &&
+        identical(d6_seen(sub("</span>$", "", sub("^- <span class=\"suggestion submit\" data-suggestion=\"[^\"]*\">", "", p8c_card))), p8c_forms) && identical(p8c_sent, p8c_forms) && !grepl("<a ", commonmark::markdown_html(p8c_cards, extensions = TRUE), fixed = TRUE) &&
+        !any(grepl("[^ -~]", p8c_card)) && length(p8c_card) == length(p8c_forms) && all(grepl("^- <span class=\"suggestion submit\" data-suggestion=\"", p8c_card)) &&
+        identical(md_text("a@b"), "a<span>@</span>b") && identical(md_text("see www.x"), "see www<span>\\.</span>x"))
+
 
 # ---- the count -------------------------------------------------------------------
 
