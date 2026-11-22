@@ -1,5 +1,74 @@
 # chaRt: status
 
+## Phase 8 Part C: choosing charts and exporting the dashboard (2026-11-21)
+
+Branch `chart`, not pushed; done by a Sonnet worker for the lead. Smoke: **447 of 447** (421 before; 26 new checks, 8C-1 to 8C-25 and 8C-8b; none removed; two test helpers
+widened, see below). No model call is made by anything in this part; no Quarto and no pandoc anywhere in the app (Kevin's ruling: the work server has neither).
+
+**Links in cards (first commit).** shinychat's browser code (remark) undoes a backslash escape and then links the text that is left. So `md_text()`'s backslashes kept a bare
+`http://`, `https://` or `www.` address in a column label from becoming a link in cmark-gfm (R's commonmark) but not in the browser: it became a link in a suggestion card and in
+plain chat text alike (seen in the browser pane). `md_text()` now also writes the ":" after http or https and the "." after www as a one-mark `<span>`, as it already wrote the "@";
+no zero-width or other hidden character is added, and the `data-suggestion` attribute (the text a click sends) is unchanged. After the change the browser showed 0 links for all four
+forms in a card and in plain text. One thing is left that this cannot touch: when a card is clicked its text is shown, by shinychat's own code, as the analyst's message, and that echo
+is linked (the analyst's own typed text is linked the same way); breaking it would change what is sent.
+
+**Choosing.** Each card has an "In dashboard" switch (a `reactiveVal` made with the chart, in `made$dash`, on when the card is made; it survives Undo, reordering and a redraw as the
+Interactive view does) and Move up / Move down buttons (the first cannot go up, the last cannot go down; the canvas order is the dashboard's order). The canvas header says
+"n of m in the dashboard" and has the Export dashboard button. No drag: neither bslib nor any package the app already uses gives it.
+
+**The dialog** (Export dashboard): title (filled with the file's name), subtitle, author, date (today), an introduction (plain text; the dialog says it is not checked by the number
+check), which of the three value boxes to show, and each chosen chart in order with a small picture and "Picture" or "Interactive". Warnings are at the top, before anything is built: a
+chosen chart with no headline, a chart whose text is marked as changed, a chosen palette that fails the colour-vision mark. Beside a chart set to Interactive that is drawn from rows
+the dialog says in one sentence that the values of every plotted row are written into the file and a picture holds none. A chart is drawn from rows when it is a scatter, bubble or
+box, or when its marks are rows (fn none) for a bar, dot, line, slope or heatmap (`chart_from_rows()`); the default for those is a picture, and for the others the card's own view.
+The Build the dashboard button is a `chart-call` button (disabled in the browser from the click, the working line says "Building the dashboard", `with_busy()` clears it); an error is
+shown in the dialog in plain words with the last four lines of the build's own message, the button works again, and nothing is added to the chat. A built zip is offered for download
+from the dialog (`downloadHandler`); building again removes the earlier zip.
+
+**What is written** (`build_dashboard()` in R/ui.R; the whole of it is R: htmltools for the two pages, `zip::zipr()` for the zip): `dashboard_<date>.zip` holding `dashboard.html`,
+`codebook.html`, `data_dictionary.yaml` (what the Data page writes), `charts.R` (the code of each chart, as the Code dialog shows it) and `charts/NN_<title>.png` (300 dpi) with
+`NN_<title>.svg` when svglite is installed (it is: 2.2.2; written through `chart_device(kind = "svglite")`, a new `kind` argument; the SVG names the family and does not carry the font).
+`dashboard.html` is one file: the stylesheet in a `<style>`, the bundled typefaces the style uses as base64 `@font-face`, each chart as a base64 PNG, a CSS grid of cards that wraps from
+columns to one, a print stylesheet (a card is never split; `print-color-adjust: exact` so a style prints as it looks), the title block, the chosen value boxes, a card for each chart
+(headline or title, chart, summary, notes, source line) and an About card (file, rows and columns, date, author, the model that wrote the text, which texts passed the checks, how many
+charts are pictures, a link to the codebook, and the paragraph of `www/methodology.md` that says a chart describes the file, read from the file). Only when a chart is interactive are the
+scripts its widget needs written in: `htmltools::as.tags()` of the plotly widget, `findDependencies()`, `resolveDependencies()`, then each dependency's files read from the installed
+packages (htmlwidgets, plotly's binding, typedarray, jquery, crosstalk, plotly.js) into `<script>` and `<style>` elements, with `</script` written as `<\/script`. An interactive card
+takes the full width of the page. `htmlwidgets::saveWidget(selfcontained = TRUE)` calls pandoc (confirmed in its source) and is not used. A chart whose interactive version cannot be made
+is written as a picture, the dialog's result and the About card say so. `codebook.html` has one section for each column, from the dictionary only (`column_summary()` in R/data.R): a
+number's range and quartiles, a date's range, the level counts of a group of at most 30 levels, and for an id, a text and a longer category only the number of different values.
+Both pages are written with `htmltools` tags (a `<head>` tag is not used: htmltools moves it out when it renders), all in the style chosen; no `src` or `href` is an address, no `url()`
+that is not a data address.
+
+**Measured on this machine** (orders.csv, 3,000 rows; ragg; seconds are a build, not a page): 3 charts as pictures 2.9 s, zip 1.60 MB, dashboard.html 1.53 MB; 3 charts interactive (bar,
+line, scatter of 3,000 rows) 2.5 s, zip 2.54 MB, dashboard.html 5.06 MB; 5 charts as pictures 2.2 s, zip 1.86 MB, dashboard.html 1.73 MB; 5 charts interactive 3.3 s, zip 2.67 MB,
+dashboard.html 5.09 MB. The two Inter faces are about 1.1 MB of every page (also in codebook.html, 1.13 MB), plotly.js 3.58 MB of an interactive one. `zip::zipr()` needs no zip program
+(with `PATH` cut down to R's own folder and `R_ZIPCMD` wrong the build still writes the zip, and `utils::zip()` fails); its default `mode` in zip 3.0.2 is "cherry-pick", which drops the
+folder names, so the call says `mode = "mirror"`.
+
+**Looked at** (the browser pane, stand-in charts from tests/data/orders.csv, headlines are placeholder text; unpacked in tests/dashboard_clean/ and tests/dashboard_dark/, git-ignored):
+Clean and Dark at 1280 and 375 wide, and both codebook pages. No page scrolls sideways at 375 px; the charts scale to the card (they are pictures, so their text gets small on a phone);
+Inter loads (it did not at first: `jsonlite::base64_enc()` breaks its lines and a `url()` may not hold one; fixed and checked); Dark's text is 7.0 to 15.6 to 1 against its
+background; the print rules were looked at by turning `@media print` into `@media all` in the page (the pane has no print preview): one card to a block, a single column. What is not
+good: a line chart's interactive version (`spec_widget()`, not changed here) has tick labels that touch each other and a source line that meets the axis title at card width; the
+interactive card is therefore full width, and below 40 rem it scrolls sideways inside its card; a Dark page prints on a dark ground.
+
+**Checks.** 8C-1 the link fix; 8C-2 the zip of a three-chart canvas (listing, 2100 by 1350 PNG, SVG, dictionary, charts.R); 8C-3 and 8C-4 the page and the About card; 8C-5 style, fonts, grid,
+print and phone rules; 8C-6 no request leaves either page (and the search finds a planted one); 8C-7 both pages parse (balanced tags, xml2); 8C-8 and 8C-8b the codebook; 8C-9
+`SECRET_VALUE_123` in no exported file; 8C-10 a picture export of a scatter holds no planted value and an interactive one does; 8C-11 which charts carry rows; 8C-12 the scripts and the
+weight; 8C-13 the interactive fallback; 8C-14 a failing step; 8C-15 the zip needs no program; 8C-16 helpers; 8C-17 the switch, the count, Undo, the order; 8C-18 to 8C-20 the dialog, its
+warnings and the sentence; 8C-21 the switch and the order reach the export and the unchosen chart is nowhere; 8C-22 title, author, date and boxes reach the page; 8C-23 the result, the
+disabled button and the working words; 8C-24 a failing build; 8C-25 no Quarto, pandoc, model or loop. Mutation runs (in memory; the files were never changed): 42 mutations, each caught
+by at least one check (a model call in the export, a request to the web, the unchosen chart kept, a picture that carries the widget, no span, no mirror, the switch starting off, and so
+on). Two checks first stopped on an error instead of failing and were made to fail cleanly. Changed: the helpers `d6_seen()` and `d6_bare()` also undo the one-mark spans of `md_text()`.
+
+**Things to know.**
+- `zip` is now in `APP_PACKAGES` (installed here: 3.0.2); svglite is used when it is there and is not required.
+- The About card's model is `APP_MODEL$id` of the profile in use; a text the analyst edited is still said to be checked (it is checked again on every edit, but not marked as edited).
+- The intro, title, subtitle and author are the analyst's own words and are not checked; the dialog and the About card say so.
+- The built zip lives in the session's temporary folder until the next build or the end of the session.
+- The date in the zip's name is the date typed in the dialog.
+
 ## Phase 8 Part B: the Methodology page and things to ask (2026-11-21)
 
 Branch `chart`, not pushed; done by a Sonnet worker for the lead. Smoke: **421 of 421** (409 before; 12 new checks, 8B-1 to 8B-11 and 8B-2b; 3 changed, none removed).
