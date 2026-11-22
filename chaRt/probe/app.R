@@ -5,6 +5,8 @@
 #   others, and its answer is "yes", "no" or the error text. The table is repeated as plain text
 #   under "Copy results", to be typed back at home. Needs only shiny, so it starts on a bare server;
 #   that is why it uses base lapply() and vapply() rather than purrr (still no loops).
+# Three tables: the checks, Graphics (Phase 8: can this server draw without X11) and Video (Phase 9: can it make the
+#   MP4 behind Animate: av, libx264, ten frames encoded, 30 frames of 1280 by 720 drawn and encoded, with the seconds).
 
 library(shiny)
 
@@ -325,6 +327,139 @@ graphics_pictures <- function() {
     one("ragg", "ragg"), one("cairo", "png(type = \"cairo\")"), one("svglite", "svglite (an SVG, drawn by the browser)"))
 }
 
+# ---- Video: can this server make the MP4 that chaRt's Animate button makes? -----------------------------------------------------
+#   chaRt draws about 87 frames of a chart as PNG files and encodes them with the av package (libx264, yuv420p, 24 frames a second;
+#   the last frame repeated for a 2 second hold). This section shows whether av is here, whether its ffmpeg has libx264, whether ten
+#   small frames encode to an MP4 (the time, the size, the codec read back from the file), and how long 30 frames of 1280 by 720 take
+#   to draw and then to encode, on this server. The chart is a made-up bar chart whose bars rise, drawn the way chaRt draws a frame
+#   (the scale fixed at its final limits), with ragg when it is installed, else png(type = "cairo"). Written here again, not shared with
+#   the app: this folder is published alone. No model call, no key, no file from the user: every number below is made up here.
+
+PROBE_VIDEO_VALUES <- c(West = 94, East = 53, North = 38, South = 31, Centre = 22)
+
+# A PNG at the given size on the best device this server has (ragg, else cairo), drawn by draw(); the device is closed whatever happens
+#   in draw(), and a device that could not be opened is not closed. Errors reach the caller.
+probe_png <- function(file, width, height, draw) {
+  if (requireNamespace("ragg", quietly = TRUE)) ragg::agg_png(file, width = width, height = height, units = "px", res = 144)
+  else if (isTRUE(unname(capabilities("cairo")))) grDevices::png(file, width = width, height = height, units = "px", res = 144, type = "cairo")
+  else stop("neither ragg nor cairo is available to draw a PNG")
+  on.exit(grDevices::dev.off())
+  draw()
+  invisible(file)
+}
+
+# The bars of one frame at progress 0 to 1: the value is the final value times a cubic ease; the scale is the final one in every frame.
+probe_frame <- function(progress) {
+  eased = if (progress < 0.5) 4 * progress^3 else 1 - (-2 * progress + 2)^3 / 2
+  d = data.frame(region = factor(names(PROBE_VIDEO_VALUES), levels = names(PROBE_VIDEO_VALUES)), value = unname(PROBE_VIDEO_VALUES) * eased)
+  if (requireNamespace("ggplot2", quietly = TRUE))
+    print(ggplot2::ggplot(d, ggplot2::aes(x = region, y = value)) + ggplot2::geom_col(fill = "#0072B2") +
+            ggplot2::scale_y_continuous(limits = c(0, 100)) +
+            ggplot2::labs(title = "chaRt probe: a frame of a video", x = NULL, y = NULL) + ggplot2::theme_minimal(base_size = 18))
+  else graphics::barplot(d$value, names.arg = as.character(d$region), ylim = c(0, 100), main = "chaRt probe: a frame of a video (base graphics)")
+  invisible(NULL)
+}
+
+# The pixel size a PNG file says it has (width, height), read from its header; NULL when the file is not a PNG.
+png_size <- function(file) {
+  b = readBin(file, "raw", 24)
+  if (length(b) < 24 || !identical(b[1:4], as.raw(c(0x89, 0x50, 0x4e, 0x47)))) return(NULL)
+  be = function(x) sum(as.integer(x) * 256^(3:0))
+  c(width = be(b[17:20]), height = be(b[21:24]))
+}
+
+# n frames at the given size into a new folder, timed. list(ok, files, secs, size, text); a failure is text, not an error.
+#   Kept for the session: the encode of the same 30 frames does not draw them again.
+probe_video_state <- new.env()
+probe_frames <- function(n, width, height) {
+  key = paste(n, width, height)
+  if (!is.null(probe_video_state[[key]])) return(probe_video_state[[key]])
+  dir = tempfile("probe_video_")
+  dir.create(dir)
+  files = file.path(dir, sprintf("frame%03d.png", seq_len(n)))
+  started = Sys.time()
+  res = tryCatch({ lapply(seq_len(n), function(i) probe_png(files[i], width, height, function() probe_frame((i - 1) / max(n - 1, 1)))); NULL },
+                 error = function(e) conditionMessage(e), warning = function(w) conditionMessage(w))
+  secs = as.numeric(difftime(Sys.time(), started, units = "secs"))
+  made = file.exists(files) & file.size(files) > 0
+  out = if (!is.null(res) || !all(made))
+    list(ok = FALSE, files = files[made], secs = secs, text = paste0("no, ", sum(made), " of ", n, " frames were written", if (!is.null(res)) paste0(" (", res, ")") else ""))
+  else {
+    size = png_size(files[[1]])
+    list(ok = TRUE, files = files, secs = secs, size = size, mb = sum(file.size(files)) / 1048576,
+         text = paste0("yes, ", n, " frames of ", size[["width"]], " by ", size[["height"]], " in ", sprintf("%.1f", secs), " s (", sprintf("%.2f", secs / n), " s a frame); the PNGs are ",
+                       sprintf("%.1f", sum(file.size(files)) / 1048576), " MB"))
+  }
+  assign(key, out, envir = probe_video_state)
+  out
+}
+
+# Whether the installed av has av_encode_video(input, output, framerate, vfilter, codec); "" when it has, else the sentence.
+av_missing <- function() {
+  if (!requireNamespace("av", quietly = TRUE)) return("no, not run: av is not installed")
+  if (!"av_encode_video" %in% getNamespaceExports("av") || !all(c("input", "output", "framerate", "vfilter", "codec") %in% names(formals(getExportedValue("av", "av_encode_video")))))
+    return("no, not run: this av has no av_encode_video(input, output, framerate, vfilter, codec)")
+  ""
+}
+
+# The encoders this av's ffmpeg lists, as a character vector of names (empty when it cannot say).
+av_encoder_names <- function() {
+  e = tryCatch(getExportedValue("av", "av_encoders")(), error = function(e) NULL)
+  if (is.data.frame(e) && "name" %in% names(e)) as.character(e$name) else character(0)
+}
+
+# Frames to an MP4 the way chaRt does it (libx264, yuv420p, 24 frames a second; the default codec when libx264 is not in the list,
+#   and the answer says so). The codec and frame count are read back from the file. list(ok, secs, kb, text).
+probe_encode <- function(frames, framerate = 24) {
+  gone = av_missing()
+  if (nzchar(gone)) return(list(ok = FALSE, text = gone))
+  x264 = "libx264" %in% av_encoder_names()
+  out = tempfile(fileext = ".mp4")
+  started = Sys.time()
+  getExportedValue("av", "av_encode_video")(frames, out, framerate = framerate, vfilter = "format=yuv420p", codec = if (x264) "libx264", verbose = FALSE)
+  secs = as.numeric(difftime(Sys.time(), started, units = "secs"))
+  if (!file.exists(out) || file.size(out) == 0) return(list(ok = FALSE, text = "no (no file was written)"))
+  info = tryCatch(getExportedValue("av", "av_video_info")(out)$video, error = function(e) NULL)
+  read_back = if (is.data.frame(info) && nrow(info)) paste0("; read back: ", info$codec[[1]], ", ", info$width[[1]], " by ", info$height[[1]]) else ""
+  list(ok = TRUE, secs = secs, kb = file.size(out) / 1024,
+       text = paste0("yes, in ", sprintf("%.2f", secs), " s; ", sprintf("%.1f", file.size(out) / 1024), " KB; ", if (x264) "libx264" else "NOT libx264 (not in av's encoder list; the default codec was used)", read_back))
+}
+
+video_ten_frames <- function() {
+  gone = av_missing()
+  if (nzchar(gone)) return(gone)
+  f = probe_frames(10, 640, 360)
+  if (!isTRUE(f$ok)) return(paste0("no, the frames could not be drawn: ", f$text))
+  probe_encode(f$files)$text
+}
+
+video_thirty_frames_draw <- function() probe_frames(30, 1280, 720)$text
+
+video_thirty_frames_encode <- function() {
+  gone = av_missing()
+  if (nzchar(gone)) return(gone)
+  f = probe_frames(30, 1280, 720)
+  if (!isTRUE(f$ok)) return(paste0("no, the frames could not be drawn: ", f$text))
+  probe_encode(f$files)$text
+}
+
+# The Video table: av, its encoder, then the three timed steps.
+video_rows <- function() {
+  list(list("av installed, with av_encode_video()", function() { gone = av_missing(); if (nzchar(gone)) gone else paste("yes,", as.character(utils::packageVersion("av"))) }),
+       list("libx264 is among the encoders of the ffmpeg inside av", function() {
+         gone = av_missing()
+         if (nzchar(gone)) gone else if ("libx264" %in% av_encoder_names()) "yes" else "no (chaRt then lets ffmpeg choose the codec)" }),
+       list("Ten frames (640 by 360) encode to an MP4 with av", video_ten_frames),
+       list("30 frames of 1280 by 720 draw (the size of a card's video)", video_thirty_frames_draw),
+       list("The same 30 frames encode to an MP4 with av", video_thirty_frames_encode))
+}
+
+video_table <- function() {
+  rows = video_rows()
+  data.frame(Check = vapply(rows, function(r) r[[1]], character(1)),
+             Result = vapply(rows, function(r) as.character(probe(r[[2]]()))[1], character(1)))
+}
+
 # Every check, in the order the table shows them.
 run_checks <- function() {
   rows = c(
@@ -367,6 +502,9 @@ ui <- fluidPage(
   tags$p("Can this server draw a chart without X11? What R and the machine say, then one chart drawn by each device that is available."),
   tableOutput("graphics"),
   uiOutput("graphics_pictures"),
+  tags$h3("Video"),
+  tags$p("Can this server make the MP4 behind chaRt's Animate button? av and its encoder, ten small frames encoded, then 30 frames of 1280 by 720 drawn and encoded, with the seconds. The chart is made up here."),
+  tableOutput("video"),
   tags$h4("Copy results"),
   tags$p("The same table as plain text, to copy or type back at home."),
   uiOutput("copy"))
@@ -377,8 +515,10 @@ server <- function(input, output, session) {
   graphics <- reactive(withProgress(message = "Drawing a chart with each device", value = 0.5, graphics_table()))
   output$graphics <- renderTable(graphics(), striped = TRUE, bordered = TRUE)
   output$graphics_pictures <- renderUI(tryCatch(graphics_pictures(), error = function(e) tags$p(paste("error:", conditionMessage(e)))))
+  video <- reactive(withProgress(message = "Encoding a short video", value = 0.5, video_table()))
+  output$video <- renderTable(video(), striped = TRUE, bordered = TRUE)
   output$copy <- renderUI(
-    textAreaInput("copy_text", NULL, value = as_text(rbind(checks(), graphics())), width = "100%", rows = nrow(checks()) + nrow(graphics()) + 3))
+    textAreaInput("copy_text", NULL, value = as_text(rbind(checks(), graphics(), video())), width = "100%", rows = nrow(checks()) + nrow(graphics()) + nrow(video()) + 3))
 }
 
 shinyApp(ui, server)

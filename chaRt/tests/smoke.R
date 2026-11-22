@@ -41,7 +41,9 @@ HEAVY_CHECKS <- c(
   "9B-15: a real video of a bar chart",                                           # a video drawn and encoded, and read back
   "9B-16: the frames read back from the encoded file",                            # reads it
   "9B-17: a dashboard with two videos and a picture",                             # two videos drawn for the page
-  "9B-18: in Chrome the exported <video> plays")                                  # the page's video played in Chrome
+  "9B-18: in Chrome the exported <video> plays",                                  # the page's video played in Chrome
+  "9C-5: the whole Video table on this machine",                                  # 30 frames of 1280 by 720 drawn and encoded
+  "9C-6: the check of the whole Video table can fail")                            # and three changed probes, each drawing and encoding 30 frames
 
 results <- new.env()
 results$all <- logical(0)
@@ -6571,6 +6573,99 @@ check("9B-18: in Chrome the exported <video> plays: its data is loaded (readySta
 # >>> 9B end of heavy
 
 }   # end of the heavy run part of Phase 9 Part B
+
+# ---- Phase 9 Part C: the probe's Video section, the bundle, the live run's script ------------------------------------------------
+#
+# The probe (probe/app.R) is a separate app, published alone and first. Its Video section says whether the work server can make the MP4 behind Animate. No model
+#   call, no key. The probe is loaded here as 8A-11 loads it (its expressions evaluated in an environment of their own, never started as a server); a check that
+#   needs a changed probe evaluates it again in a new environment and replaces one function there, so the files are never touched.
+
+p9c_exprs <- as.list(parse(file.path("probe", "app.R"), keep.source = FALSE))
+p9c_load <- function() {
+  e = new.env(parent = globalenv())
+  purrr::walk(purrr::discard(p9c_exprs, function(x) is.call(x) && identical(as.character(x[[1]]), "shinyApp")), function(x) eval(x, e))
+  e
+}
+# The first n rows of the Video table, built as video_table() builds it (each row through probe(), so a failure is a sentence).
+p9c_rows <- function(env, idx) {
+  rows = env$video_rows()[idx]
+  data.frame(Check = vapply(rows, function(r) r[[1]], character(1)), Result = vapply(rows, function(r) as.character(env$probe(r[[2]]()))[1], character(1)))
+}
+# What av itself says, not what the probe says: the truth the probe's rows are held against.
+p9c_x264 <- "libx264" %in% av::av_encoders()$name
+# The first three rows are right: av and its version, libx264 yes exactly when av's own list has it, ten frames of 640 by 360 encoded (seconds, KB, the codec read back).
+p9c_ten_ok <- function(tab) {
+  nrow(tab) == 3L && startsWith(tab$Result[1], paste0("yes, ", utils::packageVersion("av"))) && identical(startsWith(tab$Result[2], "yes"), p9c_x264) &&
+    grepl("^yes, in [0-9.]+ s; [0-9.]+ KB; ", tab$Result[3]) &&
+    grepl(if (p9c_x264) "KB; libx264; read back: h264, 640 by 360$" else "KB; NOT libx264 ", tab$Result[3])
+}
+p9c_penv <- p9c_load()
+p9c_ten <- p9c_rows(p9c_penv, 1:3)
+p9c_ui <- paste(as.character(p9c_penv$ui), collapse = "")
+p9c_src <- paste(readLines(file.path("probe", "app.R"), encoding = "UTF-8"), collapse = "\n")
+p9c_video_src <- sub("(?s)^.*?# ---- Video:", "# ---- Video:", sub("# Every check, in the order the table shows them.*$", "", p9c_src), perl = TRUE)
+p9c_graphics_labels <- vapply(p9c_penv$graphics_rows(), function(r) r[[1]], character(1))
+check("9C-1: the probe has a Video table next to the Graphics one of Phase 8, which is whole: five Video rows (av with av_encode_video(), libx264, ten frames encoded, 30 frames drawn at 1280 by 720, the same 30 encoded); the first three answer as av itself does (its version, whether its own list holds libx264) with the seconds, the KB and the codec read back from the MP4 for ten frames of 640 by 360; the page and the copy text show it",
+      identical(vapply(p9c_penv$video_rows(), function(r) r[[1]], character(1))[c(1, 3, 4, 5)],
+                c("av installed, with av_encode_video()", "Ten frames (640 by 360) encode to an MP4 with av", "30 frames of 1280 by 720 draw (the size of a card's video)", "The same 30 frames encode to an MP4 with av")) &&
+        length(p9c_penv$video_rows()) == 5L && p9c_ten_ok(p9c_ten) &&
+        grepl("<h3>Video</h3>", p9c_ui, fixed = TRUE) && grepl("id=\"video\"", p9c_ui, fixed = TRUE) && grepl("<h3>Graphics</h3>", p9c_ui, fixed = TRUE) && grepl("id=\"graphics\"", p9c_ui, fixed = TRUE) &&
+        grepl("id=\"graphics_pictures\"", p9c_ui, fixed = TRUE) && grepl("rbind(checks(), graphics(), video())", p9c_src, fixed = TRUE) &&
+        length(p9c_graphics_labels) == 19L && all(c("capabilities(\"X11\")", "ragg", "svglite", "Cairo", "systemfonts", "av", "A font file registers with systemfonts and is found by name",
+                                                    "A chart draws with ragg", "A chart draws with png(type = \"cairo\")", "A chart draws with svglite") %in% p9c_graphics_labels))
+
+# One failure must not hide the others and must not crash: a frame that cannot be drawn, an encoder that stops, a server with no av
+p9c_bad_frame <- p9c_load(); p9c_bad_frame$probe_frame <- function(progress) stop("no frame today")
+p9c_bad_frame_rows <- p9c_rows(p9c_bad_frame, 1:5)
+p9c_bad_enc <- p9c_load(); p9c_bad_enc$probe_encode <- function(frames, framerate = 24) stop("the encoder stopped")
+p9c_bad_enc_rows <- p9c_rows(p9c_bad_enc, 3L)
+p9c_no_av <- p9c_load(); p9c_no_av$av_missing <- function() "no, not run: av is not installed"
+p9c_no_av_rows <- p9c_rows(p9c_no_av, c(1:3, 5L))
+check("9C-2: a failure is a sentence, never a crash: a frame that cannot be drawn gives 'no, ' with the reason in the draw and encode rows (and the av rows still answer), an encoder that stops gives 'error: ' and the reason, and a server without av says 'not run: av is not installed' in the four rows that need it",
+      nrow(p9c_bad_frame_rows) == 5L && startsWith(p9c_bad_frame_rows$Result[3], "no, the frames could not be drawn") && grepl("no frame today", p9c_bad_frame_rows$Result[3], fixed = TRUE) &&
+        grepl("^no, [0-9]+ of 30 frames were written", p9c_bad_frame_rows$Result[4]) && grepl("no frame today", p9c_bad_frame_rows$Result[4], fixed = TRUE) &&
+        startsWith(p9c_bad_frame_rows$Result[5], "no, the frames could not be drawn") && startsWith(p9c_bad_frame_rows$Result[1], "yes, ") &&
+        identical(p9c_bad_enc_rows$Result, "error: the encoder stopped") &&
+        nrow(p9c_no_av_rows) == 4L && all(grepl("^no, not run: av is not installed$", p9c_no_av_rows$Result)))
+check("9C-3: the probe's Video section makes no model call and reads no key or file of the user's (no ellmer, httr2, API-key name, Sys.getenv, read of a file, address or download in it), takes its device from ragg or png(type = \"cairo\") only, and has no for or while",
+      !grepl("httr2|ellmer|chat_anthropic|ANTHROPIC|api_key|Sys\\.getenv|readRDS|readLines|read_csv|download|https?://|url\\(|source\\(|\\.\\./|X11\\(|type = \"Xlib\"", p9c_video_src) &&
+        grepl("ragg::agg_png", p9c_video_src, fixed = TRUE) && grepl("type = \"cairo\"", p9c_video_src, fixed = TRUE) && nzchar(p9c_video_src) && nchar(p9c_video_src) > 3000 &&
+        !any(utils::getParseData(parse(text = p9c_video_src, keep.source = TRUE))$token %in% c("FOR", "WHILE", "REPEAT")))
+# The check 9C-1 can fail: three changed probes, each must be caught by p9c_ten_ok() (and by what 9C-1 reads)
+p9c_mut_fake <- p9c_load(); p9c_mut_fake$probe_encode <- function(frames, framerate = 24) list(ok = TRUE, text = "yes")
+p9c_mut_size <- p9c_load(); p9c_mut_size$probe_png <- local({ orig = p9c_penv$probe_png; function(file, width, height, draw) orig(file, width %/% 2, height %/% 2, draw) })
+p9c_mut_x264 <- p9c_load(); p9c_mut_x264$av_encoder_names <- function() character(0)
+p9c_mut_ver <- p9c_load(); p9c_mut_ver$video_rows <- local({ orig = p9c_penv$video_rows; function() { r = orig(); r[[1]][[2]] <- function() "yes, 0.0.0"; r } })
+check("9C-4: the check of the Video rows can fail: a probe that says only 'yes' for the encode, one that draws half-size frames, one that does not see libx264 where av has it and one that reports another av version are each refused by it (and the real probe is accepted)",
+      p9c_ten_ok(p9c_ten) && !p9c_ten_ok(p9c_rows(p9c_mut_fake, 1:3)) && !p9c_ten_ok(p9c_rows(p9c_mut_size, 1:3)) &&
+        (!p9c_x264 || !p9c_ten_ok(p9c_rows(p9c_mut_x264, 1:3))) && !p9c_ten_ok(p9c_rows(p9c_mut_ver, 1:3)))
+
+if (run_heavy) {   # the heavy run only: 9C-5 and 9C-6 (30 frames of 1280 by 720 drawn and encoded, three times more under mutation); not indented, to keep the diff small
+
+# A PNG's width and height read from its header here, not by the probe's own png_size().
+p9c_wh <- function(f) { b = readBin(f, "raw", 24); c(sum(as.integer(b[17:20]) * 256^(3:0)), sum(as.integer(b[21:24]) * 256^(3:0))) }
+# The whole Video table is right: the first three rows as above, 30 frames drawn at 1280 by 720 (seconds, a frame's seconds, MB), the same 30 encoded and read back as 1280 by 720
+#   h264; and the 30 PNG files the probe kept are 30 files of that size, the first and the last unlike (the bars rise).
+p9c_thirty_ok <- function(env, tab) {
+  kept = Filter(function(x) length(x$files) == 30L, as.list(env$probe_video_state))
+  files = if (length(kept) == 1L) kept[[1]]$files else character(0)
+  nrow(tab) == 5L && p9c_ten_ok(tab[1:3, ]) &&
+    grepl("^yes, 30 frames of 1280 by 720 in [0-9.]+ s \\([0-9.]+ s a frame\\); the PNGs are [0-9.]+ MB$", tab$Result[4]) &&
+    grepl(if (p9c_x264) "^yes, in [0-9.]+ s; [0-9.]+ KB; libx264; read back: h264, 1280 by 720$" else "^yes, in [0-9.]+ s; [0-9.]+ KB; NOT libx264 ", tab$Result[5]) &&
+    length(files) == 30L && all(file.exists(files)) && identical(p9c_wh(files[[1]]), c(1280, 720)) && identical(p9c_wh(files[[30]]), c(1280, 720)) &&
+    file.size(files[[1]]) != file.size(files[[30]])
+}
+p9c_full <- p9c_penv$video_table()
+check("9C-5: the whole Video table on this machine: 30 frames drawn at 1280 by 720 with the seconds, a frame's seconds and the MB, the same 30 encoded to an MP4 that reads back as h264 at 1280 by 720, the 30 PNG files kept are 1280 by 720 by their headers and the first differs from the last",
+      p9c_thirty_ok(p9c_penv, p9c_full))
+p9c_mut_half <- p9c_load(); p9c_mut_half$probe_png <- local({ orig = p9c_penv$probe_png; function(file, width, height, draw) orig(file, width %/% 2, height %/% 2, draw) })
+p9c_mut_still <- p9c_load(); p9c_mut_still$probe_frame <- local({ orig = p9c_penv$probe_frame; function(progress) orig(1) })
+p9c_mut_29 <- p9c_load(); p9c_mut_29$probe_frames <- local({ orig = p9c_penv$probe_frames; function(n, width, height) orig(if (n == 30) 29 else n, width, height) })
+check("9C-6: the check of the whole Video table can fail: a probe that draws half-size frames, one whose frames do not move and one that draws 29 frames instead of 30 are each refused by it (and the real probe is accepted)",
+      p9c_thirty_ok(p9c_penv, p9c_full) && !p9c_thirty_ok(p9c_mut_half, p9c_mut_half$video_table()) && !p9c_thirty_ok(p9c_mut_still, p9c_mut_still$video_table()) &&
+        !p9c_thirty_ok(p9c_mut_29, p9c_mut_29$video_table()))
+
+}   # end of the heavy run part of Phase 9 Part C
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
 #
