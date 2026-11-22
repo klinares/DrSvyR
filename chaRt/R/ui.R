@@ -107,6 +107,7 @@ start_ui <- function()
            "summary describes the file, not a population. Start on the Data page, then go to Explore."),
     device_note(),
     fonts_note(),
+    video_note(),
     mod_key_ui("key"),
     mod_connect_ui("connect"))
 
@@ -122,6 +123,14 @@ device_note <- function() {
                   if (!chart_device_uses_bundled_fonts(kind))
                     paste0(" This device does not use the bundled typefaces: the charts are drawn in the fonts ",
                            switch(kind, cairo = "this server has.", svglite = "that the browser showing them has."))))
+}
+
+# Said once on Start here: whether this server makes videos (the Animate button). Quiet when it does; when it does not (no av package,
+#   or a device that writes SVG), in a box, with why (video_unavailable_text() in R/spec.R).
+video_note <- function() {
+  why = video_unavailable_text()
+  if (is.null(why)) tags$p(class = "text-muted small", "Charts can be made into short videos with the av package (the Animate button on a chart).")
+  else warn_box(why)
 }
 
 # Said once on Start here when this machine cannot draw in a bundled typeface (www/fonts/ missing, or systemfonts
@@ -563,6 +572,18 @@ summary_request <- function(msg) {
   length(m) == 1L && !is.na(m) && grepl(SUMMARY_REQUEST_PATTERN, m, perl = TRUE)
 }
 
+# A message that only asks for the selected chart to be animated: "animate", "animate this", "play it", "make it a video", "make a video of this",
+#   with at most a polite word or two around it. R answers it with no model call. Plain groups only, so the same pattern runs in the browser's
+#   script (the working line says "Drawing the video" at once).
+ANIMATE_PATTERN <- paste0("^(please )?((can|could) you )?(animate( (this|it|that|the chart|this chart))?|play (it|this|that)|",
+                          "(make|turn) (it|this|that) (into |in)?a video|(make|create) (me )?a video( of (this|it|that|the chart|this chart))?)( please)?$")
+animate_request <- function(msg) {
+  m = tolower(trimws(gsub("[[:space:]]+", " ", as.character(msg))))
+  m = trimws(sub("[.!?]+$", "", m))
+  length(m) == 1L && !is.na(m) && grepl(ANIMATE_PATTERN, m, perl = TRUE)
+}
+ANIMATE_NONE <- "Click a chart first, then ask me to animate it."
+
 SETUP_SUMMARY <- paste("Choose the columns for the summary table in the dialog. R works the numbers out from the file; no model is asked, and",
                            "nothing of the table is sent to one.")
 SUMMARY_PRIVACY <-"Worked out by R from the file and drawn in your browser; no model is asked and nothing here is sent to one."
@@ -889,7 +910,7 @@ period_text <- function(rng) {
 # A click on a card selects it, unless it lands on a button, link, box or the full screen button, which have
 #   their own meaning. The value carries the time, so the same card clicked twice still reaches the server.
 card_click_js <- function(input_id)
-  paste0("if (event.target.closest('button, a, input, select, textarea, label, .js-plotly-plot, .bslib-full-screen-enter')) return; ",
+  paste0("if (event.target.closest('button, a, input, select, textarea, label, video, .js-plotly-plot, .bslib-full-screen-enter')) return; ",
          "Shiny.setInputValue('", input_id, "', {id: this.dataset.chartId, t: Date.now()}, {priority: 'event'});")
 
 # The copy button of the Code dialog.
@@ -910,7 +931,7 @@ copy_js <- function(code_id)
 #   motion. It is not a chat message: nothing is added to the chat's messages. A link to #open-data-page opens
 #   the Data page.
 WORKING_WORDS <- c(chat = "Thinking", suggest = "Thinking", headlines = "Writing headlines", headline = "Writing a headline",
-                   label = "Labelling columns", setup = "Working", dashboard = "Building the dashboard")
+                   label = "Labelling columns", setup = "Working", dashboard = "Building the dashboard", animate = "Drawing the video")
 WORKING_LATER <- ", still working"
 WORKING_LATER_MS <- 8000L
 EXPLORE_CSS <- "
@@ -981,6 +1002,13 @@ EXPLORE_JS <- paste0("
     if (timer) clearTimeout(timer);
     timer = setTimeout(function () { if (lab && !el.hidden) lab.textContent = words + LATER; }, ", WORKING_LATER_MS, ");
   }
+  function progress(words) {
+    var el = line();
+    var lab = el && el.querySelector('.chart-working-words');
+    if (!lab || el.hidden) return;
+    if (timer) { clearTimeout(timer); timer = null; }
+    lab.textContent = words;
+  }
   function done() {
     if (timer) { clearTimeout(timer); timer = null; }
     var el = line();
@@ -990,6 +1018,7 @@ EXPLORE_JS <- paste0("
     text = String(text || '');
     if (text === 'Label the columns') return WORDS.label;
     if (/^Treat '.*' as missing$/.test(text) || /^A row is /.test(text)) return WORDS.setup;
+    if (new RegExp(", jsonlite::toJSON(ANIMATE_PATTERN, auto_unbox = TRUE), ", 'i').test(text.trim().replace(/[.!?]+$/, ''))) return WORDS.animate;
     return WORDS.chat;
   }
   function busy(on) {
@@ -1018,6 +1047,7 @@ EXPLORE_JS <- paste0("
   }
   if (window.Shiny && Shiny.addCustomMessageHandler) {
     Shiny.addCustomMessageHandler('chart-busy', function (m) { busy(m.on); });
+    Shiny.addCustomMessageHandler('chart-progress', function (m) { progress(m.words); });
   }
 })();
 ")
@@ -1083,6 +1113,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     made$sel = new.env()               #   one chart draws only that chart again
     made$interactive = new.env()
     made$dash = new.env()              # per chart: whether it is in the dashboard (a reactiveVal, TRUE when the card is made)
+    made$video = new.env()             # per chart: its video (a reactiveVal: NULL, or list(key, file, small, seconds, frames)); the key is what it was drawn from
+    made$showv = new.env()             #   and whether the card shows it in place of the picture (a reactiveVal)
+    made$video_dir = NULL              # this session's folder of video files, made when the first video is
     made$thumbs = new.env()            # the small pictures of the export dialog, by chart spec, palette and data
     made$tn = 0L                       # summary tables made, for their ids (t1, t2, ...)
     made$table = new.env()             # per table: its definition (title, measures, by, ci), a reactiveVal; a table's switch for the dashboard is in made$dash
@@ -1289,6 +1322,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       g = guess()
       if (!is.null(g) && identical(m, row_text(g))) return(function() use_guess(g))
       if (m %in% made$rows_offered) return(function() say("That row guess is not on offer now. Write what one row is on the Data page."))
+      # A message that only asks for the selected chart to be animated is answered by R: no model call.
+      if (animate_request(m)) return(animate_selected)
       # A message that only asks for summary statistics is answered by R opening the dialog of the summary table: no model call.
       if (summary_request(m)) return(function() if (isTRUE(open_table_dialog())) say(SETUP_SUMMARY))
       NULL
@@ -1629,12 +1664,15 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         output[[paste0("dash_note_", it$id)]] = renderUI({
           if (identical(input[[dash_mode_id(it$id)]], "interactive") && chart_from_rows(it$chart$spec))
             tags$p(class = "small mb-0", style = warn_style, DASH_DISCLOSURE)
+          else if (identical(input[[dash_mode_id(it$id)]], "video"))
+            tagList(tags$p(class = "small mb-0 text-muted", DASH_VIDEO_TIME),
+                    if (chart_from_rows(it$chart$spec)) tags$p(class = "small mb-0", style = warn_style, DASH_VIDEO_DISCLOSURE))
         }))
       dash_result(NULL)
       dash_gen(isolate(dash_gen()) + 1L)
       showModal(modalDialog(
         title = "Export dashboard", size = "l", easyClose = FALSE, footer = modalButton("Close"),
-        tags$p(class = "small text-muted", "One zip: the dashboard as one page, the data dictionary and a codebook page, and each chart as a picture and a script (each summary table as a CSV). ",
+        tags$p(class = "small text-muted", "One zip: the dashboard as one page, the data dictionary and a codebook page, and each chart as a picture and a script (a video as an MP4, each summary table as a CSV). ",
                "On the page each chart is drawn at the size it is shown, and again for a phone. ",
                "Nothing here calls a model."),
         if (length(warns)) tags$div(class = "mb-3", purrr::map(unname(warns), function(w) tags$p(class = "small mb-1", style = warn_style, w))),
@@ -1660,7 +1698,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         },
         tags$h6("Charts, in the order of the canvas"),
         tags$p(class = "small text-muted", "Change the order with Move up and Move down on the cards, and leave a chart out with its \"In dashboard\" switch. ",
-               "A picture is the smallest file. An interactive chart needs the scripts of the chart package, which makes the page several megabytes larger."),
+               "A picture is the smallest file. An interactive chart needs the scripts of the chart package, which makes the page several megabytes larger.",
+               if (video_available()) " A video is drawn again for the page, as it will be shown there, and plays once when it scrolls into view."),
         purrr::imap(items, function(it, i)
           if (!is.null(it$table)) dash_table_row(it, i, isolate(state$codebook))
           else dash_chart_row(it, i, dash_thumb(it$chart), ns(dash_mode_id(it$id)), ns(paste0("dash_note_", it$id)),
@@ -1682,18 +1721,19 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
           tags$div(class = "alert alert-success mt-3", role = "status",
                    tags$p(class = "mb-1", paste0("Built ", res$name, ": ", dash_size_text(res$bytes), " in ", format(round(res$seconds, 1), nsmall = 1), " seconds. ",
                                                  sum(res$modes != "table"), if (sum(res$modes != "table") == 1L) " chart: " else " charts: ", sum(res$modes == "picture"), " as ",
-                                                 if (sum(res$modes == "picture") == 1L) "a picture" else "pictures", " and ", sum(res$modes == "interactive"), " interactive.",
+                                                 if (sum(res$modes == "picture") == 1L) "a picture" else "pictures", " and ", sum(res$modes == "interactive"), " interactive",
+                                                 if (any(res$modes == "video")) paste0(" and ", sum(res$modes == "video"), if (sum(res$modes == "video") == 1L) " video" else " videos") else "", ".",
                                                  if (any(res$modes == "table")) paste0(" ", sum(res$modes == "table"), if (sum(res$modes == "table") == 1L) " summary table" else " summary tables",
                                                                                        " (a table in the page and a CSV in charts/).") else "")),
                    unname(purrr::imap(res$fallbacks[!is.na(res$fallbacks)], function(why, t)
-                     tags$p(class = "small mb-1", style = warn_style, paste0("'", t, "' is a picture: its interactive version could not be made (", why, ").")))),
+                     tags$p(class = "small mb-1", style = warn_style, paste0("'", t, "' is a picture: its ", res$fallback_of[[t]] %||% "interactive version", " could not be made (", why, ").")))),
                    tags$p(class = "small mb-0", "Unzip it and open dashboard.html in any browser; it needs no connection.")),
         tags$div(class = "d-flex flex-wrap align-items-center gap-2 mt-3",
                  actionButton(ns("dash_build"), "Build the dashboard", class = "btn-primary chart-call", `data-working` = WORKING_WORDS[["dashboard"]],
                               onclick = paste0("this.disabled = true; document.getElementById('", ns("dash_build_busy"), "').style.display = 'block';")),
                  if (isTRUE(res$ok)) downloadButton(ns("dash_download"), paste("Download", res$name), class = "btn-outline-secondary")),
         tags$p(id = ns("dash_build_busy"), class = "text-muted small", style = "display:none; margin-top:0.25rem;",
-               paste0(WORKING_WORDS[["dashboard"]], ". With interactive charts this can take a minute; the page stays as it is until it is done.")))
+               paste0(WORKING_WORDS[["dashboard"]], ". With interactive charts or videos this can take a few minutes; the page stays as it is until it is done.")))
     })
     output$dash_download = downloadHandler(
       filename = function() isolate(dash_result())$name %||% "dashboard.zip",
@@ -1762,6 +1802,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                    btn("select", if (sel) "Deselect" else "Select", if (sel) "btn-primary" else "btn-outline-primary"),
                    btn("undo", "Undo", disabled = !length(ch$history)),
                    btn("interactive", if (interactive) "Static" else "Interactive"),
+                   if (video_available()) btn("animate", "Animate", "btn-outline-primary chart-call", `data-working` = WORKING_WORDS[["animate"]]),
                    btn("code", "Code"),
                    btn("edit", "Edit text"),
                    btn("headline", "Headline", "btn-outline-primary chart-call", `data-working` = WORKING_WORDS[["headline"]]),
@@ -1783,6 +1824,70 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                  if (isTRUE(ch$exploratory)) tags$span(class = "badge bg-secondary ms-1", "Exploratory"))))
     }
 
+    # ---- a chart's video -------------------------------------------------------------------------------------------
+
+    # What a video is drawn from: the spec, the palette and style, and the data. A video whose key is not the chart's key now is dropped.
+    video_key = function(chart_id) {
+      ch = made$chart[[chart_id]]()   # not isolated: the observer that drops a video depends on the spec, the palette and the data
+      if (is.null(ch)) NULL else digest::digest(list(spec_hash(ch$spec), palette(), data_key()))
+    }
+    drop_video = function(chart_id) {
+      v = isolate(made$video[[chart_id]]())
+      if (!is.null(v)) unlink(c(v$file, v$small))
+      made$video[[chart_id]](NULL)
+      made$showv[[chart_id]](FALSE)
+    }
+    # The card's view of a video: the 1280 by 720 file as a data address (no resource path, which Connect would need), played at once, muted,
+    #   once, with its controls; then Replay (a line of script, no round trip), Download MP4 (the 1920 by 1080 file) and Picture.
+    video_view = function(chart_id, v) {
+      id = ns(cid(chart_id, "video"))
+      tagList(
+        tags$video(id = id, class = "chart-video", src = dash_data_uri(v$small, "video/mp4"), autoplay = NA, muted = NA, playsinline = NA, controls = NA,
+                   preload = "auto", `aria-label` = paste("Video of", chart_title(chart_of(chart_id), "this chart")), style = "display:block; width:100%; max-width:960px; height:auto;"),
+        tags$div(class = "d-flex flex-wrap gap-1 mt-2",
+                 tags$button(type = "button", class = "btn btn-sm btn-outline-secondary",
+                             onclick = paste0("var v = document.getElementById('", id, "'); v.currentTime = 0; v.play();"), "Replay"),
+                 downloadButton(ns(cid(chart_id, "mp4")), "Download MP4", class = "btn-sm btn-outline-secondary", icon = NULL),
+                 actionButton(ns(cid(chart_id, "picture")), "Picture", class = "btn-sm btn-outline-secondary")))
+    }
+    # Animate: draws the video unless the chart has a current one, and shows it in place of the picture. The frames done are said in the working line
+    #   as they are drawn (a custom message from inside the call). It returns TRUE when the card shows a video.
+    animate_chart = function(chart_id) {
+      ch = chart_of(chart_id)
+      if (is.null(ch) || !video_available()) return(invisible(FALSE))
+      v = isolate(made$video[[chart_id]]())
+      key = video_key(chart_id)
+      if (is.null(v) || !identical(v$key, key)) {
+        drop_video(chart_id)
+        if (is.null(made$video_dir)) {
+          made$video_dir = tempfile("chart_videos_")
+          dir.create(made$video_dir)
+          session$onSessionEnded(function() unlink(made$video_dir, recursive = TRUE))
+        }
+        stem = file.path(made$video_dir, paste0(chart_id, "_", substr(key, 1L, 8L)))
+        words = WORKING_WORDS[["animate"]]
+        res = tryCatch(spec_video(ch$spec, isolate(state$data), isolate(state$codebook), isolate(palette()), file = paste0(stem, "_1080.mp4"), small = paste0(stem, "_720.mp4"),
+                                  on_frame = function(i, n) session$sendCustomMessage("chart-progress", list(words = if (i < n) paste0(words, ", ", i, " of ", n, " frames") else paste0(words, ", encoding it")))),
+                       error = function(e) e)
+        if (inherits(res, "error")) {
+          say(paste0("The video could not be made: ", md_text(conditionMessage(res)), " The chart is unchanged."))
+          return(invisible(FALSE))
+        }
+        made$video[[chart_id]](list(key = key, file = res$file, small = res$small, seconds = res$seconds, frames = res$drawn))
+      }
+      made$interactive[[chart_id]](FALSE)
+      made$showv[[chart_id]](TRUE)
+      invisible(TRUE)
+    }
+    # The chat's "animate": the selected chart, or the sentence that says to click one. No model is asked.
+    animate_selected = function() {
+      why = video_unavailable_text()
+      if (!is.null(why)) return(say(md_text(why)))
+      sel = isolate(selected())
+      if (is.null(sel) || is.null(chart_of(sel))) return(say(md_text(ANIMATE_NONE)))
+      if (isTRUE(animate_chart(sel))) say(paste0("Made a video of ", md_text(chart_title(chart_of(sel), "the chart")), ". It plays once on the card: Replay plays it again, Download MP4 saves it and Picture goes back. No model was asked."))
+    }
+
     # A chart's outputs and observers, made once, when it is added.
     make_chart = function(chart_id) {
       if (chart_id %in% made$ids) return(invisible())
@@ -1792,6 +1897,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       made$sel[[chart_id]] = reactiveVal(FALSE)
       made$interactive[[chart_id]] = reactiveVal(FALSE)
       made$dash[[chart_id]] = reactiveVal(TRUE)
+      made$video[[chart_id]] = reactiveVal(NULL)
+      made$showv[[chart_id]] = reactiveVal(FALSE)
       drawn = reactive(tryCatch(spec_plot(made$chart[[chart_id]]()$spec, state$data, state$codebook, palette()), error = function(e) e))
       # The facts the checks in the Edit text dialog compare against, from the chart as it is now.
       facts = reactive({
@@ -1817,9 +1924,19 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         spec_widget(p)
       })
       output[[cid(chart_id, "view")]] = renderUI({
-        if (isTRUE(made$interactive[[chart_id]]())) plotly::plotlyOutput(ns(cid(chart_id, "widget")), height = "450px")
+        v = made$video[[chart_id]]()
+        if (isTRUE(made$showv[[chart_id]]()) && !is.null(v) && identical(v$key, video_key(chart_id))) video_view(chart_id, v)
+        else if (isTRUE(made$interactive[[chart_id]]())) plotly::plotlyOutput(ns(cid(chart_id, "widget")), height = "450px")
         else imageOutput(ns(cid(chart_id, "static")), height = "auto")
       })
+      # The video is dropped when what it was drawn from changes (the chart's spec, the palette or style, the data): the card shows the picture again.
+      observe({
+        v = made$video[[chart_id]]()
+        if (!is.null(v) && !identical(v$key, video_key(chart_id))) drop_video(chart_id)
+      })
+      output[[cid(chart_id, "mp4")]] = downloadHandler(
+        filename = function() paste0(dash_slug(chart_title(chart_of(chart_id), "chart")), ".mp4"),
+        content = function(file) file.copy(isolate(made$video[[chart_id]]())$file, file, overwrite = TRUE), contentType = "video/mp4")
       output[[cid(chart_id, "notes")]] = renderUI({
         p = drawn()
         if (inherits(p, "error")) return(warn_box(conditionMessage(p)))
@@ -1832,7 +1949,10 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       observeEvent(input[[cid(chart_id, "interactive")]], {
         rv = made$interactive[[chart_id]]
         rv(!isTRUE(isolate(rv())))
+        if (isTRUE(isolate(rv()))) made$showv[[chart_id]](FALSE)
       })
+      observeEvent(input[[cid(chart_id, "animate")]], with_busy(animate_chart(chart_id)))
+      observeEvent(input[[cid(chart_id, "picture")]], made$showv[[chart_id]](FALSE))
       observeEvent(input[[cid(chart_id, "undo")]], {
         ch = chart_of(chart_id)
         if (is.null(ch) || !length(ch$history)) return()
@@ -2067,10 +2187,36 @@ DASH_DPI <- 300L                # pixels per inch of the pictures in the file
 DASH_THUMB_DPI <- 40L           # ... and of the small ones in the dialog
 DASH_ROW_FAMILIES <- c("scatter", "bubble", "box")
 DASH_TOTAL_FAMILIES <- c("bar", "dot", "line", "slope", "heatmap")
-DASH_MODES <- c(Picture = "picture", Interactive = "interactive")
+DASH_MODES <- c(Picture = "picture", Interactive = "interactive", Video = "video")   # the dialog offers Video only when this server makes videos (video_available())
 DASH_BOX_CHOICES <- c(rows = "Rows", columns = "Columns", third = "Period, or the file name")
 DASH_DISCLOSURE <- paste("In the interactive version the values of every plotted row are written into the file, so anyone who opens it can read",
                          "them; a picture holds none.")
+DASH_VIDEO_DISCLOSURE <- paste("A video carries no rows: it is pictures of the chart, so no value of the file can be read from it. The page shows the chart as it is at the end of",
+                                "the video, as a still, to a reader whose system asks for less motion.")
+DASH_VIDEO_TIME <- "A video takes about half a minute to draw and adds a few hundred kilobytes to the page."
+
+# The script of the page, only when a video is in it: each video plays once, when half of it is on the screen. With no script, or no
+#   IntersectionObserver, or for a reader whose system asks for less motion, nothing plays by itself and the poster (the finished chart) shows.
+DASH_VIDEO_JS <- "(function () {
+  var videos = document.querySelectorAll('video[data-once]');
+  if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var seen = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      seen.unobserve(e.target);
+      var p = e.target.play();
+      if (p && p.catch) p.catch(function () {});
+    });
+  }, { threshold: 0.5 });
+  videos.forEach(function (v) { seen.observe(v); });
+})();"
+
+# The video, and the still that stands in for it (for a reader whose system asks for less motion, and in print).
+DASH_VIDEO_CSS <- paste0(
+  ".video-box video,.video-box .still{display:block;width:100%;max-width:1120px;height:auto;aspect-ratio:16/9;}\n",
+  ".video-box .still{display:none;}\n",
+  "@media (prefers-reduced-motion:reduce){.video-box video{display:none;}.video-box .still{display:block;}}\n")
+
 DASH_INTRO_NOTE <- "Plain text, shown as you write it. It is not checked by the number check."
 DASH_DESCRIBES <- "A chart describes the file, not the world."
 DASH_ERROR_TEXT <- paste("The dashboard was not built, and nothing was saved. Your charts, texts and choices are unchanged, so you can press",
@@ -2275,7 +2421,7 @@ dash_css <- function(style, accent) {
     ".card-note{color:var(--caption);font-size:.85rem;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
     ".card picture{display:block;}\n.card img.print-only{display:none;}\n",
     ".card img{display:block;width:100%;max-width:700px;height:auto;}\n",
-    ".widget{width:100%;overflow:hidden;}\n",
+    ".widget{width:100%;overflow:hidden;}\n", DASH_VIDEO_CSS,
     ".summary{margin:.8rem 0 0;}\n",
     ".notes{color:var(--text2);font-size:.85rem;margin:.6rem 0 0;padding-left:1.1rem;}\n",
     ".source{color:var(--caption);font-size:.8rem;margin:.6rem 0 0;overflow-wrap:anywhere;}\n",
@@ -2317,7 +2463,7 @@ dash_css <- function(style, accent) {
     "@page{margin:14mm;}\n",
     "@media print{:root{--bg:#FFFFFF;--text:#111111;--text2:#333333;--caption:#555555;--grid:#BBBBBB;--box:#F2F2F2;--rule:#111111;}",
     "body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FFFFFF;color:#111111;}.page{max-width:none;padding:0;}",
-    ".grid{display:block;}.card,.col-section,.box,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.col-section figure img.screen-only{display:none;}",
+    ".grid{display:block;}.card,.col-section,.box,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.video-box video{display:none;}.video-box .still{display:block;max-width:100%;}.col-section figure img.screen-only{display:none;}",
     ".boxes{display:flex;flex-wrap:wrap;}.box{flex:1 1 10rem;}.masthead{break-after:avoid;}h2{break-after:avoid;}.stat-block .table-scroll{overflow:visible;}.stat-table{font-size:.7rem;}}\n")
 }
 
@@ -2408,10 +2554,13 @@ dash_about <- function(items, settings, cb, data, model) {
                                                    " or edited. The title, subtitle, author and introduction above are the author's own and are not checked.")
                         else "No headline or summary in this dashboard was written by a model. The title, subtitle, author and introduction above are the author's own and are not checked."),
       if (length(charts)) entry("What the checks said", tags$ul(purrr::map(charts, function(it) tags$li(paste0(it$title, ": ", dash_text_status(it), "."))))),
-      if (length(charts)) entry("The charts", paste0(sum(modes == "picture"), if (sum(modes == "picture") == 1L) " picture" else " pictures", " and ", sum(modes == "interactive"),
-                                 " interactive. ", if (any(modes == "interactive"))
+      if (length(charts)) entry("The charts", paste0(sum(modes == "picture"), if (sum(modes == "picture") == 1L) " picture" else " pictures",
+                                 if (any(modes == "video")) paste0(", ", sum(modes == "interactive"), " interactive and ", sum(modes == "video"), if (sum(modes == "video") == 1L) " video. " else " videos. ")
+                                 else paste0(" and ", sum(modes == "interactive"), " interactive. "),
+                                 if (any(modes == "interactive"))
                                    "An interactive chart carries the values of the rows it plots, in this file." else "A picture holds no row values.",
-                                 purrr::map_chr(fell, function(it) paste0(" '", it$title, "' is a picture because its interactive version could not be made: ", it$fallback)) |> paste(collapse = ""))),
+                                 if (any(modes == "video")) " A video holds no row values: it is pictures of the chart.",
+                                 purrr::map_chr(fell, function(it) paste0(" '", it$title, "' is a picture because its ", it$fallback_of %||% "interactive version", " could not be made: ", it$fallback)) |> paste(collapse = ""))),
       if (length(tables)) entry("The summary tables", paste0(length(tables), if (length(tables) == 1L) " table" else " tables", " of statistics, worked out by R from the rows of the file with no model; ",
                                  "each is also a CSV in charts/. A table shows statistics of columns and groups, never a row. The note under each says how its numbers were made. The tables: ",
                                  paste(purrr::map_chr(tables, "title"), collapse = "; "), ".")),
@@ -2438,6 +2587,17 @@ dash_picture_tag <- function(it, full, alt) {
     if (!is.null(paper)) tags$img(class = "print-only", src = paper$uri, alt = alt, width = paper$pixels[[1]], height = paper$pixels[[2]]))
 }
 
+# The video of a card as the page holds it: the MP4 as a data address in a <video> (controls, muted, no autoplay and no loop: the script of the page
+#   plays it once when it scrolls into view), the finished chart as its poster and, as a second element shown instead when the reader's system asks for
+#   less motion and in print, the same picture. The poster is a data address too, so nothing is requested.
+dash_video_tag <- function(it, alt) {
+  v = it$video
+  tags$div(class = "video-box",
+    tags$video(src = v$uri, poster = v$poster, controls = NA, muted = NA, playsinline = NA, preload = "auto", `data-once` = NA, `aria-label` = paste0("Video: ", alt),
+               width = SPEC_VIDEO_PX$card[["width"]], height = SPEC_VIDEO_PX$card[["height"]]),
+    tags$img(class = "still", src = v$poster, alt = alt, width = SPEC_VIDEO_PX$card[["width"]], height = SPEC_VIDEO_PX$card[["height"]]))
+}
+
 # One card of the page: the headline as its heading (the chart's title, if there is no headline), the chart's title as its subtitle (and
 #   the chart's own subtitle under it), the chart (a picture, or the widget), the summary, the notes the chart carries and the source
 #   line, once. The drawing has no title and no source line. `full`: the card has a whole row to itself.
@@ -2449,7 +2609,9 @@ dash_card <- function(it, full = FALSE) {
     tags$h2(if (headed) it$headline else it$title),
     if (headed) tags$p(class = "card-sub", it$title),
     if (is_text1(it$chart_subtitle) && nzchar(it$chart_subtitle)) tags$p(class = "card-note", it$chart_subtitle),
-    if (identical(it$mode, "interactive")) tags$div(class = "widget", HTML(it$widget_html)) else dash_picture_tag(it, full, alt),
+    if (identical(it$mode, "interactive")) tags$div(class = "widget", HTML(it$widget_html))
+    else if (identical(it$mode, "video")) dash_video_tag(it, alt)
+    else dash_picture_tag(it, full, alt),
     if (is_text1(it$summary) && nzchar(trimws(it$summary))) tags$p(class = "summary", it$summary),
     if (length(it$notes)) tags$ul(class = "notes", purrr::map(it$notes, tags$li)),
     if (is_text1(it$source)) tags$p(class = "source", it$source))
@@ -2519,7 +2681,8 @@ dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALS
                                                                                    title = b$full, b$value),
                                                                            if (!is.null(b$chart)) tags$div(class = "box-chart", b$chart)))),
     tags$main(class = "grid", purrr::map2(items, full, dash_card)),
-    tags$footer(class = "foot", dash_about(items, settings, cb, data, model), tags$p(class = "made", "Made with chaRt"))))
+    tags$footer(class = "foot", dash_about(items, settings, cb, data, model), tags$p(class = "made", "Made with chaRt")),
+    if (any(purrr::map_chr(items, "mode") == "video")) tags$script(HTML(DASH_VIDEO_JS))))
   dash_document(head, body)
 }
 
@@ -2691,14 +2854,26 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind) {
   w = if (identical(it$mode, "interactive"))
     tryCatch(dash_widget(widget(spec_plot(chart$spec, data, cb, palette, web = list(width = SPEC_SIZE[["width"]], height = SPEC_SIZE[["height"]], bare = TRUE)))),
              error = function(e) conditionMessage(e))
-  fallback = if (is.character(w)) sub("\n.*$", "", w)
+  v = if (identical(it$mode, "video")) tryCatch(dash_video(chart, stage, file.path("charts", sprintf("%02d_%s.mp4", i, dash_slug(title))), data, cb, palette), error = function(e) conditionMessage(e))
+  fallback = if (is.character(w)) sub("\n.*$", "", w) else if (is.character(v)) sub("\n.*$", "", v)
   st = it$story
   list(id = it$id, title = title, headline = if (!is.null(st)) st$headline, summary = if (!is.null(st)) st$summary, story = st, chart_subtitle = s$subtitle,
-       mode = if (is.list(w)) "interactive" else "picture", fallback = fallback, facts = facts,
+       mode = if (is.list(w)) "interactive" else if (is.list(v)) "video" else "picture", fallback = fallback, fallback_of = if (is.character(v)) "video", facts = facts,
+       video = if (is.list(v)) v,
        widget_html = if (is.list(w)) w$html, deps = if (is.list(w)) w$deps,
        natural_wide = identical(unname(size[["width"]]), SPEC_SIZE[["max_width"]]),
        notes = c(attr(p, "notes"), if (is.list(w)) widget_notes(s)), source = s$caption,
-       files = c(pic_file, vector_file), code = code)
+       files = c(pic_file, vector_file, if (is.list(v)) v$file), code = code)
+}
+
+# The video of a chart for the page: the chart drawn without title, subtitle or source line (the page says them), as a 1280 by 720 MP4 in the staging
+#   folder (charts/ gets the same file), with the finished chart as the poster. Returns list(file, uri, poster, seconds, drawn, canvas): the file as a data
+#   address ready for the page, and the poster as one.
+dash_video <- function(chart, stage, file, data, cb, palette) {
+  poster = tempfile(fileext = ".png")
+  on.exit(unlink(poster))
+  r = spec_video(chart$spec, data, cb, palette, file.path(stage, file), size = SPEC_VIDEO_PX$card, bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS, poster = poster)
+  list(file = file, uri = dash_data_uri(file.path(stage, file), "video/mp4"), poster = dash_data_uri(poster, "image/png"), seconds = r$seconds, drawn = r$drawn, canvas = r$canvas)
 }
 
 # The second part: the drawings the page shows for a chart that goes in as a picture, made once the layout is known (a card that has a row
@@ -2794,7 +2969,8 @@ build_dashboard <- function(items, data, cb, palette, settings, path, zip_file, 
   listing = zip::zip_list(zip_file)
   list(zip = zip_file, bytes = file.size(zip_file), seconds = proc.time()[["elapsed"]] - started,
        files = stats::setNames(listing$uncompressed_size, listing$filename), modes = purrr::map_chr(made, "mode"), full = full,
-       fallbacks = stats::setNames(purrr::map_chr(made, function(m) m$fallback %||% NA_character_), purrr::map_chr(made, "title")), device = kind)
+       fallbacks = stats::setNames(purrr::map_chr(made, function(m) m$fallback %||% NA_character_), purrr::map_chr(made, "title")),
+       fallback_of = stats::setNames(purrr::map_chr(made, function(m) m$fallback_of %||% "interactive version"), purrr::map_chr(made, "title")), device = kind)
 }
 
 # A size in bytes for a sentence: kilobytes below a megabyte, else megabytes to one decimal.
@@ -2814,7 +2990,7 @@ dash_chart_row <- function(it, i, thumb, mode_id, note_id, mode) {
            tags$div(class = "flex-grow-1",
                     tags$div(class = "fw-semibold", paste0(i, ". ", chart_title(it$chart, "Untitled chart"))),
                     if (!is.null(head)) tags$div(class = "small text-muted", head),
-                    radioButtons(mode_id, NULL, choices = DASH_MODES, selected = mode, inline = TRUE),
+                    radioButtons(mode_id, NULL, choices = if (video_available()) DASH_MODES else DASH_MODES[DASH_MODES != "video"], selected = mode, inline = TRUE),
                     uiOutput(note_id)))
 }
 
