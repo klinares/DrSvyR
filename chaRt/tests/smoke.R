@@ -7,7 +7,8 @@
 #     Bash:        CHART_SMOKE=heavy Rscript --no-init-file tests/smoke.R        the heavy run: ONLY the heavy group
 #   Every check is in exactly one run. The heavy group (HEAVY_CHECKS below): the sweep of about 400 drawn charts measured with grid
 #   (7b-1), the style sheet of about 180 charts (7D-2, and 7b-13 which reads it), and the five-chart dashboard built in six styles,
-#   laid out and printed by Chrome (9A-1, 9A-8 to 9A-11). Both runs make the fixtures the heavy group needs (the gold specs, the
+#   laid out and printed by Chrome (9A-1, 9A-8 to 9A-11), the value boxes of a six-box page and the table cards of an exported dashboard measured in
+#   Chrome (9D-0b, 9D-18). Both runs make the fixtures the heavy group needs (the gold specs, the
 #   panel file, the sales file) and the heavy run skips what costs time and it does not need. CHART_SMOKE=all runs both groups in one process (about ten
 #   minutes: too long for a foreground limit; for a machine and a time with room).
 # Each run prints one line per check, "ok" or "FAIL", the 15 slowest stretches (seconds since the previous check), then its own
@@ -35,7 +36,8 @@ HEAVY_CHECKS <- c(
   "9A-9: the codebook is a document",                                             # reads those six
   "9A-10: print: every style's page prints on a light ground",                    # and printed to PDF by Chrome
   "9A-11: the five-chart dashboard",                                              # reads those six
-  "9D-0b: in Chrome the three number boxes")                                      # the six-box page measured in Chrome
+  "9D-0b: in Chrome the three number boxes",                                      # the six-box page measured in Chrome
+  "9D-18: in Chrome the table cards")                                            # the table cards of an exported dashboard measured in Chrome
 
 results <- new.env()
 results$all <- logical(0)
@@ -5560,7 +5562,7 @@ p9_cb_pics <- purrr::map(regmatches(p9_cbh, gregexpr("<figure><img[^>]*>", p9_cb
 })
 p9_mh <- p8c_sq(codebook_page(p8c_mcb, p8c_pal, as.Date("2026-11-21"), p8c_mdata))
 check("9A-9: the codebook is a document: a summary table at the top with one row for each of the 22 columns (name linking to its section, label, type, role, share missing), then a compact section for each column; a measure has a small histogram, a group its levels as bars, a date its rows over time, an id, a text and a category of more than 30 levels none (16 pictures of the 22 columns, each with twice the pixels it is shown at); a column with no label shows a dash and 'no label given' in the table and in its section, never 'Label: from the file'; a label written by the analyst is shown with how it was written; the messy file's secret and free text are in no part of its codebook page, which still draws its numbers",
-      grepl("<table class=\"summary-table\"><thead><tr><th scope=\"col\">Column</th><th scope=\"col\">Label</th><th scope=\"col\">Type</th><th scope=\"col\">Role</th><th scope=\"col\" class=\"n\">Missing</th></tr></thead>", p9_cbh, fixed = TRUE) &&
+      grepl("<table class=\"summary-table\"><thead><tr><th scope=\"col\">Column</th><th scope=\"col\">Label</th><th scope=\"col\">Type</th><th scope=\"col\">Role</th><th scope=\"col\" class=\"n\">Missing</th><th scope=\"col\" class=\"n\">n</th>", p9_cbh, fixed = TRUE) &&
         length(p9_cb_rows) == length(p9_cbnames) && length(p9_cbs) == length(p9_cbnames) &&
         grepl("<td><a href=\"#col-12\">units</a></td>", p9_cbh, fixed = TRUE) && grepl("<td><a href=\"#col-15\">revenue</a></td><td>Revenue \\(USD\\)</td><td>number</td><td>measure</td><td class=\"n\">0%</td>", p9_cbh) &&
         grepl("<td><a href=\"#col-1\">order_id</a></td><td> ?\u2013 ?<span class=\"muted\"> ?no label given</span></td><td>id</td><td>id</td>", p9_cbh) &&
@@ -5638,7 +5640,520 @@ check("9D-0b: in Chrome the three number boxes of a six-box page (3,000, 22, 2,7
             p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "2,740,000"] < 1.9 * 16 && p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "2,740,000"] > 12 &&
             p9d_fit(p9d_dom$stress) && p9d_dom$stress$boxes$fs[p9d_dom$stress$boxes$text == "2,740,000"] < 0.8 * 1.9 * 16 && p9d_dom$stress$boxes$fs[p9d_dom$stress$boxes$text == "2,740,000"] > 10)))
 
+
+# 9D-18: in Chrome, a table card of the dashboard: at 1400 the wide table (a group and three measures: 13 columns) fits its card, at 500 (headless Chrome goes no narrower) it scrolls sideways inside its
+#   card (overflow-x auto, wider inside than the box) and the page does not, in Clean and in Dark; the card has the row to itself
+p9d_hz_js <- paste0("var t=[].map.call(document.querySelectorAll('.table-card'),function(c){var s=c.querySelector('.table-scroll');var b=c.getBoundingClientRect();var p=document.querySelector('.page').getBoundingClientRect();",
+                    "return {w:Math.round(b.width),pw:Math.round(p.width),sw:s.scrollWidth,cw:s.clientWidth,ox:getComputedStyle(s).overflowX,full:c.classList.contains('full')}});",
+                    "var d={cw:document.documentElement.clientWidth,sw:document.documentElement.scrollWidth,tables:t};",
+                    "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9\" content=\"'+JSON.stringify(d).replace(/\"/g,'&quot;')+'\">');")
+p9d_hz_build <- function(style) {
+  out <- file.path(tempfile("p9d_hz_"), "d.zip")
+  dir.create(dirname(out))
+  its <- list(list(id = "t1", table = list(title = "Revenue, satisfaction and shipping by region", measures = c("revenue", "satisfaction", "shipping_days"), by = "region", ci = TRUE), mode = "table", stale = NA_character_),
+              list(id = "t2", table = list(title = "Units", measures = "units", by = NULL, ci = TRUE), mode = "table", stale = NA_character_))
+  res <- build_dashboard(its, p9_data, p9_cb, utils::modifyList(chart_palette_default(), list(style = style)), list(title = "Dash", subtitle = "", author = "", date = as.Date("2026-11-22"), intro = "", boxes = "rows", keys = character(0)),
+                         p9_path, out, model = "test-model")
+  p8c_dir(res$zip)
+}
+p9d_hz <- if (p9_has_chrome) purrr::map(c(clean = "clean", dark = "dark"), function(st) {
+  d <- p9d_hz_build(st)
+  list(dir = d, w1400 = p9_dom(file.path(d, "dashboard.html"), 1400, p9d_hz_js), w500 = p9_dom(file.path(d, "dashboard.html"), 500, p9d_hz_js))
+})
+check("9D-18: in Chrome the table cards of the exported dashboard (Clean and Dark): each has a row to itself; at 1400 pixels the wide table (a group and three measures, 13 columns) fits inside its card and the page does not scroll sideways; at 500 the table scrolls sideways inside its card (overflow-x auto, wider inside than its box: 898 and 706 pixels in a 435 pixel box) and the page does not (nothing wider than the window)",
+      !p9_has_chrome || all(purrr::map_lgl(p9d_hz, function(z) {
+        a <- z$w1400; b <- z$w500
+        nrow(a$tables) == 2L && all(a$tables$full) && all(a$tables$ox == "auto") && a$tables$sw[1] <= a$tables$cw[1] + 1 && a$sw <= a$cw && all(a$tables$w <= a$tables$pw + 1) &&
+          nrow(b$tables) == 2L && all(b$tables$sw > b$tables$cw + 20) && b$tables$sw[1] > b$tables$sw[2] && b$sw <= b$cw && all(b$tables$w <= b$cw)
+      })))
+
 }   # end of the heavy run's 9A-8 to 9A-11
+
+# ---- Phase 9 Part D: summary statistics --------------------------------------------------------------------------------------
+#
+# summary_table() and what is drawn from it (the Data page, a table card on the canvas, the export). The ten-row fixture is worked out by hand
+#   here from the ten numbers (the mean, the SD with n minus 1, the quartiles by R's default type 7, the t interval with the t value of the
+#   table for 9 degrees of freedom, the Wilson interval written out), never by calling the function under test for what it should say.
+#   The orders file gives the kinds of column, the messy file the secret. No model is called by any of it.
+
+if (run_fast) {   # the fast run only; not indented, to keep the diff small
+
+p9d_dir <- file.path(work_dir, "p9d")
+dir.create(p9d_dir, showWarnings = FALSE)
+p9d_x <- c(3.5, 5.5, 7.5, 8.5, 9.5, 10.5, 12.5, 13.5, 14.5, 19.5)
+p9d_df <- data.frame(score = p9d_x, grp = c(rep("a", 7), rep("b", 3)), score2 = c(1.5, 2.5, NA, 4.5, 5.5, 6.5, NA, 8.5, 9.5, 10.5),
+                     rating = c(1L, 2L, 3L, 3L, 4L, 4L, 4L, 5L, 5L, 5L), quantity = c(0L, 5L, 10L, 15L, 15L, 20L, 30L, 0L, 5L, 10L), konst = rep(7.5, 10),
+                     single = c(rep(NA_real_, 9), 2.5), when = format(as.Date("2024-01-01") + 0:9))
+readr::write_csv(p9d_df, file.path(p9d_dir, "fix.csv"))
+p9d_read <- reread_data(file.path(p9d_dir, "fix.csv"), "fix.csv", character())
+p9d_cb <- utils::modifyList(p9d_read$codebook, list(row_is = "one case"))
+p9d_data <- p9d_read$read$data
+p9d_tb <- summary_table(p9d_data, p9d_cb)
+p9d_pick <- function(tb, col, grp = NULL, lvl = NULL) {
+  r <- tb[tb$column == col, ]
+  if (!is.null(grp)) r <- r[r$group %in% grp, ]
+  if (!is.null(lvl)) r <- r[r$level %in% lvl, ]
+  r
+}
+# by hand: mean, SD (n - 1), the type 7 quartiles (position 1 + 9p of the ten ordered values), the t interval (t of 9 degrees of freedom is 2.262157 in the table), and Wilson
+p9d_m <- sum(p9d_x) / 10
+p9d_s <- sqrt(sum((p9d_x - p9d_m)^2) / 9)
+p9d_half <- 2.262157 * p9d_s / sqrt(10)
+p9d_q <- c(p9d_x[3] + 0.25 * (p9d_x[4] - p9d_x[3]), (p9d_x[5] + p9d_x[6]) / 2, p9d_x[7] + 0.75 * (p9d_x[8] - p9d_x[7]))
+p9d_z <- 1.959964
+p9d_wilson <- function(k, n) {
+  p <- k / n
+  c((p + p9d_z^2 / (2 * n) - p9d_z * sqrt(p * (1 - p) / n + p9d_z^2 / (4 * n^2))) / (1 + p9d_z^2 / n),
+    (p + p9d_z^2 / (2 * n) + p9d_z * sqrt(p * (1 - p) / n + p9d_z^2 / (4 * n^2))) / (1 + p9d_z^2 / n))
+}
+p9d_4 <- function(a, b) length(a) == length(b) && !anyNA(a) && !anyNA(b) && isTRUE(all.equal(signif(a, 4), signif(b, 4), tolerance = 1e-12))
+p9d_score <- p9d_pick(p9d_tb, "score")
+p9d_a <- p9d_pick(p9d_tb, "grp", lvl = "a")
+check("9D-1: the ten-row fixture, by hand (the numbers 3.5 to 19.5): n 10, mean 10.5, SD 4.690 (n - 1), minimum 3.5, quartiles 7.75, 10 and 13.25 (type 7), maximum 19.5, the t interval 7.145 to 13.86 (t of 9 degrees of freedom, 2.262157, times SD over the square root of 10) and the Wilson interval of the share 7 of 10, 0.3968 to 0.8922, each equal to four significant digits to the arithmetic written out in the test; the same hand arithmetic gives the values the function has",
+      identical(p9d_m, 10.5) && p9d_4(p9d_s, 4.690) && p9d_4(p9d_half, 3.355) && p9d_4(c(p9d_m - p9d_half, p9d_m + p9d_half), c(7.145, 13.86)) &&
+        identical(p9d_q, c(7.75, 10, 13.25)) && p9d_4(p9d_wilson(7, 10), c(0.3968, 0.8922)) &&
+        nrow(p9d_score) == 1L && p9d_score$n == 10L && p9d_score$missing_n == 0L && p9d_4(p9d_score$mean, p9d_m) && p9d_4(p9d_score$sd, p9d_s) && p9d_score$min == 3.5 && p9d_score$max == 19.5 &&
+        p9d_4(c(p9d_score$q1, p9d_score$median, p9d_score$q3), p9d_q) && p9d_4(c(p9d_score$mean_ci_low, p9d_score$mean_ci_high), c(p9d_m - p9d_half, p9d_m + p9d_half)) &&
+        isTRUE(all.equal(p9d_score$sd, stats::sd(p9d_x))) && !isTRUE(all.equal(p9d_score$sd, sqrt(sum((p9d_x - p9d_m)^2) / 10))) &&
+        nrow(p9d_a) == 1L && p9d_a$count == 7L && p9d_a$n == 10L && p9d_4(p9d_a$share, 0.7) && p9d_4(c(p9d_a$share_ci_low, p9d_a$share_ci_high), p9d_wilson(7, 10)) &&
+        p9d_4(c(p9d_a$share_ci_low, p9d_a$share_ci_high), c(0.3968, 0.8922)) &&
+        identical(names(p9d_tb), c("column", "label", "kind", "group", "level", "rows", "n", "missing_n", "missing_share", "distinct", "mean", "sd", "min", "q1", "median", "q3", "max",
+                                   "mean_ci_low", "mean_ci_high", "levels", "count", "share", "share_ci_low", "share_ci_high", "first", "last", "gap", "scale", "small")))
+
+# each column kind, and each column uses the rows it has
+p9d_s2 <- p9d_pick(p9d_tb, "score2")
+p9d_single <- p9d_pick(p9d_tb, "single")
+p9d_konst <- p9d_pick(p9d_tb, "konst")
+p9d_when <- p9d_pick(p9d_tb, "when")
+p9d_b <- p9d_pick(p9d_tb, "grp", lvl = "b")
+check("9D-2: each kind of column in the fixture: a measure has n, missing (count and share), mean, SD, minimum, three quartiles, maximum and the interval of the mean (and no interval for a median, a quartile, the minimum or the maximum: the table has no such column); a column uses the rows it has (score2 has 8 of 10: n 8, missing 2, share 0.2, its mean over those 8); the interval is none for one value (n 1: no SD either) and for a constant (SD 0); a group-like column has n, missing, the number of levels, and each level with count, share and its Wilson interval on the rows that column has; a date column has n, missing, first, last and the usual gap",
+      identical(p9d_s2$n, 8L) && identical(p9d_s2$missing_n, 2L) && p9d_4(p9d_s2$missing_share, 0.2) && p9d_4(p9d_s2$mean, mean(c(1.5, 2.5, 4.5, 5.5, 6.5, 8.5, 9.5, 10.5))) &&
+        p9d_4(p9d_s2$sd, sqrt(sum((c(1.5, 2.5, 4.5, 5.5, 6.5, 8.5, 9.5, 10.5) - 6.125)^2) / 7)) &&
+        p9d_4(p9d_s2$mean_ci_high, 6.125 + 2.364624 * sqrt(sum((c(1.5, 2.5, 4.5, 5.5, 6.5, 8.5, 9.5, 10.5) - 6.125)^2) / 7) / sqrt(8)) &&
+        identical(p9d_single$n, 1L) && is.na(p9d_single$sd) && is.na(p9d_single$mean_ci_low) && is.na(p9d_single$mean_ci_high) && p9d_single$mean == 2.5 && identical(p9d_single$missing_n, 9L) &&
+        p9d_konst$sd == 0 && is.na(p9d_konst$mean_ci_low) && is.na(p9d_konst$mean_ci_high) && p9d_konst$mean == 7.5 &&
+        identical(p9d_b$count, 3L) && p9d_4(c(p9d_b$share_ci_low, p9d_b$share_ci_high), p9d_wilson(3, 10)) && identical(p9d_a$levels, 2L) && p9d_a$missing_n == 0L && p9d_a$kind == "group" &&
+        identical(p9d_when$kind, "time") && identical(p9d_when$first, "2024-01-01") && identical(p9d_when$last, "2024-01-10") && identical(p9d_when$gap, "1 day") && p9d_when$n == 10L &&
+        identical(p9d_score$kind, "measure") && !any(c("median_ci_low", "q1_ci_low", "min_ci_low", "max_ci_low") %in% names(p9d_tb)) &&
+        !any(is.na(p9d_tb$mean_ci_low[p9d_tb$column == "score"])) && length(unique(p9d_tb$n[p9d_tb$kind == "measure"])) > 2L)
+
+# the orders file: every kind, a group's levels (all, at most 30; else the ten most frequent and "and k others"), an id and a text with n, missing and distinct only
+p9d_otb <- summary_table(p9_data, p9_cb)
+p9d_many <- local({
+  set.seed(9)
+  d <- data.frame(g = sample(paste0("L", sprintf("%02d", 1:40)), 600, replace = TRUE), v = round(stats::rnorm(600), 3))
+  cb <- new_codebook(profile_data(d), "many.csv", 600L)
+  cb$columns[[1]]$type <- "category"
+  cb$columns[[1]]$role <- "group"
+  list(d = d, cb = cb, tb = summary_table(d, cb, "g"))
+})
+
+check("9D-3: the orders file in each kind: measures (units, unit_price, discount_pct, revenue, shipping_days, satisfaction), groups (region with its six levels, each with count, share and interval; the shares add to 1 and the counts to 3,000), dates (order_date, order_month, and the year column that has the time role: first, last, usual gap), and an id (order_id), a text (comment), a 60-level city and the product names with n, missing and the number of different values only, never a value; a group of more than 30 levels shows its ten most frequent and 'and 30 others' (the counts add to the rows)",
+      identical(sort(p9d_otb$column[p9d_otb$kind == "measure"]), sort(c("units", "unit_price", "discount_pct", "revenue", "shipping_days", "satisfaction"))) &&
+        identical(sort(p9d_otb$level[p9d_otb$column == "region"]), sort(c("West", "East", "North", "Québec", "South", "Central"))) &&
+        isTRUE(all.equal(sum(p9d_otb$share[p9d_otb$column == "region"]), 1)) && sum(p9d_otb$count[p9d_otb$column == "region"]) == 3000L &&
+        all(p9d_otb$share_ci_low[p9d_otb$column == "region"] < p9d_otb$share[p9d_otb$column == "region"]) && all(p9d_otb$share_ci_high[p9d_otb$column == "region"] > p9d_otb$share[p9d_otb$column == "region"]) &&
+        identical(p9d_otb$column[p9d_otb$kind == "time"], c("order_date", "order_month", "year")) && identical(p9d_otb$first[p9d_otb$column == "year"], "2022") && identical(p9d_otb$last[p9d_otb$column == "year"], "2024") &&
+        identical(sort(p9d_otb$column[p9d_otb$kind == "count"]), sort(c("order_id", "city", "product", "sales_rep", "customer_age", "comment"))) &&
+        !anyNA(p9d_otb$n[p9d_otb$kind == "count"]) && all(is.na(unlist(p9d_otb[p9d_otb$kind == "count", c("mean", "sd", "min", "max", "level", "count", "share", "first", "last")]))) &&
+        identical(p9d_otb$distinct[p9d_otb$column == "order_id"], 3000L) && identical(p9d_otb$n[p9d_otb$column == "comment"], 191L) && identical(p9d_otb$missing_n[p9d_otb$column == "comment"], 2809L) &&
+        nrow(p9d_many$tb) == 11L && sum(p9d_many$tb$count) == 600L && identical(p9d_many$tb$level[11], "and 30 others") && identical(p9d_many$tb$levels[1], 40L) &&
+        identical(sort(p9d_many$tb$count[1:10], decreasing = TRUE), as.integer(sort(as.vector(table(p9d_many$d$g)), decreasing = TRUE)[1:10])) &&
+        p9d_many$tb$count[11] == 600L - sum(p9d_many$tb$count[1:10]))
+
+# by: the measure rows for each level and "All rows"; each interval on that level's own n; the other kinds once; small groups marked
+p9d_bytb <- summary_table(p9d_data, p9d_cb, c("score", "rating", "grp", "when"), "grp")
+p9d_ga <- c(3.5, 5.5, 7.5, 8.5, 9.5, 10.5, 12.5)      # the rows with grp a
+p9d_gb <- c(13.5, 14.5, 19.5)                         # the rows with grp b
+p9d_half_a <- 2.446912 * sqrt(sum((p9d_ga - sum(p9d_ga) / 7)^2) / 6) / sqrt(7)       # t of 6 degrees of freedom
+p9d_half_b <- 4.302653 * sqrt(sum((p9d_gb - sum(p9d_gb) / 3)^2) / 2) / sqrt(3)       # t of 2 degrees of freedom
+p9d_sa <- p9d_pick(p9d_bytb, "score", "a")
+p9d_sb <- p9d_pick(p9d_bytb, "score", "b")
+p9d_sall <- p9d_pick(p9d_bytb, "score", "All rows")
+p9d_na_by <- local({
+  d <- data.frame(g = c("x", "x", "x", "x", "x", NA, NA, "y", "y", "y"), v = c(1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5))
+  cb <- new_codebook(profile_data(d), "na.csv", 10L)
+  list(tb = summary_table(d, cb, "v", "g"), cb = cb, d = d)
+})
+p9d_g <- summary_table(p9d_na_by$d, p9d_na_by$cb, "g")
+check("9D-4: with a group: each measure has a row for each level of the group and one for 'All rows' (the rows of the file); the interval of a level rests on that level's own n (group a: 7 rows, t of 6 degrees of freedom; group b: 3 rows, t of 2), worked out by hand in the test; the other kinds (the group column itself, a date) are written once, for 'All rows'; a row with no value in the group column is in 'All rows' only, and the table says so; a group column with more than 30 levels, a measure and a name that is not a column are refused in plain words",
+      identical(p9d_bytb$group[p9d_bytb$column == "score"], c("a", "b", "All rows")) && identical(p9d_bytb$group[p9d_bytb$column == "rating"], c("a", "b", "All rows")) &&
+        identical(unique(p9d_bytb$group[p9d_bytb$column %in% c("grp", "when")]), "All rows") &&
+        identical(c(p9d_sa$n, p9d_sb$n, p9d_sall$n), c(7L, 3L, 10L)) && identical(c(p9d_sa$rows, p9d_sb$rows, p9d_sall$rows), c(7L, 3L, 10L)) &&
+        p9d_4(p9d_sa$mean, mean(p9d_ga)) && p9d_4(c(p9d_sa$mean_ci_low, p9d_sa$mean_ci_high), mean(p9d_ga) + c(-1, 1) * p9d_half_a) &&
+        p9d_4(c(p9d_sb$mean_ci_low, p9d_sb$mean_ci_high), mean(p9d_gb) + c(-1, 1) * p9d_half_b) &&
+        p9d_4(c(p9d_sall$mean_ci_low, p9d_sall$mean_ci_high), p9d_m + c(-1, 1) * p9d_half) &&
+        !isTRUE(all.equal(p9d_sa$mean_ci_high - p9d_sa$mean_ci_low, p9d_sb$mean_ci_high - p9d_sb$mean_ci_low)) &&
+        identical(attr(p9d_na_by$tb, "summary")$by_missing, 2L) && identical(p9d_na_by$tb$n, c(5L, 3L, 10L)) && identical(p9d_na_by$tb$group, c("x", "y", "All rows")) &&
+        any(grepl("2 rows have no value for g and are in 'All rows' only", summary_notes(p9d_na_by$tb), fixed = TRUE)) &&
+        inherits(tryCatch(summary_table(p9d_many$d, p9d_many$cb, "v", "g"), error = function(e) e), "error") &&
+        grepl("too many to summarise by", tryCatch(summary_table(p9d_many$d, p9d_many$cb, "v", "g"), error = function(e) conditionMessage(e)), fixed = TRUE) &&
+        grepl("needs a column of categories", tryCatch(summary_table(p9d_data, p9d_cb, "score", "score"), error = function(e) conditionMessage(e)), fixed = TRUE) &&
+        grepl("Not columns of this file: nope", tryCatch(summary_table(p9d_data, p9d_cb, "nope"), error = function(e) conditionMessage(e)), fixed = TRUE) &&
+        # a group column with two rows missing: its levels' shares and Wilson intervals are on the 8 rows it has, not the 10
+        identical(p9d_g$n, c(8L, 8L)) && identical(p9d_g$missing_n, c(2L, 2L)) && identical(p9d_g$count, c(5L, 3L)) && p9d_4(p9d_g$share, c(5 / 8, 3 / 8)) &&
+        p9d_4(c(p9d_g$share_ci_low[1], p9d_g$share_ci_high[1]), p9d_wilson(5, 8)) && p9d_4(c(p9d_g$share_ci_low[2], p9d_g$share_ci_high[2]), p9d_wilson(3, 8)))
+
+# small groups: marked, not hidden; the dialog's warning is checked with the server below
+p9d_small_blocks <- summary_blocks(p9d_bytb, TRUE)
+p9d_small_meas <- p9d_small_blocks[[1]]$table
+check("9D-5: a level with fewer than 5 rows is marked in the table (group b has 3 rows: 'b (under 5 rows)'; group a with 7 rows and 'All rows' are not) and the note under the table says what the mark means; nothing is hidden (group b's statistics are all there, interval and all); without a group no row is marked, and a marked row is marked in the tibble (small) as well",
+      identical(p9d_bytb$small[p9d_bytb$column == "score"], c(FALSE, TRUE, FALSE)) && SUMMARY_SMALL_ROWS == 5L &&
+        identical(p9d_small_meas$Group[p9d_small_meas$Column == "score"], c("a", "b (under 5 rows)", "All rows")) &&
+        any(grepl("Groups marked 'under 5 rows' have fewer than 5 rows: their statistics can describe individuals.", summary_notes(p9d_bytb), fixed = TRUE)) &&
+        !any(grepl("under 5 rows", summary_notes(p9d_tb), fixed = TRUE)) && !any(p9d_tb$small) &&
+        !is.na(p9d_sb$mean) && !is.na(p9d_sb$sd) && !is.na(p9d_sb$mean_ci_low) && p9d_sb$n == 3L)
+
+# the scale note: which columns get it, and what it says
+p9d_ord_cb <- p9d_cb
+p9d_ord_cb$columns <- purrr::map(p9d_cb$columns, function(e) if (identical(e$name, "rating")) edit_entry(e, type = "ordered") else e)
+p9d_ord_tb <- summary_table(p9d_data, p9d_ord_cb, c("rating", "score"))
+p9d_scale_blocks <- summary_blocks(p9d_tb, TRUE)
+p9d_mean_cell <- function(blocks, col) blocks[[1]]$table$Mean[blocks[[1]]$table$Column == col]
+check("9D-6: the scale note: a whole-number column left as a measure with at most ten different values in an unbroken run of whole numbers (rating 1 to 5; the dictionary calls such a column 'may be a coded category') has its mean, SD and interval marked with a dagger and the note 'treats the steps of the scale as equal' under the table; a number (score), a whole-number column with gaps in its values (quantity: 0, 5, 10, 15, 20, 30) and a column typed ordered (shown by its levels, with no mean) have none; a table of no such column has no such line",
+      identical(p9d_pick(p9d_tb, "rating")$scale, TRUE) && identical(p9d_pick(p9d_tb, "quantity")$scale, FALSE) && identical(p9d_pick(p9d_tb, "score")$scale, FALSE) &&
+        identical(p9d_pick(p9d_tb, "konst")$scale, FALSE) &&
+        grepl("†$", p9d_mean_cell(p9d_scale_blocks, "rating")) && !grepl("†", p9d_mean_cell(p9d_scale_blocks, "score")) && !grepl("†", p9d_mean_cell(p9d_scale_blocks, "quantity")) &&
+        all(grepl("†$", unlist(p9d_scale_blocks[[1]]$table[p9d_scale_blocks[[1]]$table$Column == "rating", c("Mean", "SD", "95% CI (SRS) low", "95% CI (SRS) high")]))) &&
+        any(grepl("^† rating \\(mean, SD and interval\\): treats the steps of the scale as equal\\.$", summary_notes(p9d_tb))) &&
+        !any(grepl("treats the steps", summary_notes(summary_table(p9d_data, p9d_cb, c("score", "quantity"))), fixed = TRUE)) &&
+        identical(p9d_ord_tb$kind[p9d_ord_tb$column == "rating"], rep("group", 5L)) && !any(p9d_ord_tb$scale) && all(is.na(p9d_ord_tb$mean[p9d_ord_tb$column == "rating"])) &&
+        identical(p9d_ord_tb$level[p9d_ord_tb$column == "rating"], c("1", "2", "3", "4", "5")) &&
+        identical(summary_scale(list(type = "integer", role = "measure"), c(1, 2, 3, 4, 5, NA)), TRUE) && identical(summary_scale(list(type = "integer", role = "measure"), c(0, 5, 10, 15, 30)), FALSE) &&
+        identical(summary_scale(list(type = "integer", role = "time"), c(1, 2, 3)), FALSE) && identical(summary_scale(list(type = "number", role = "measure"), c(1, 2, 3)), FALSE))
+
+# the notes and headers: the exact lines, the interval switch, the column headers
+p9d_ci_note <- "95% confidence intervals assume a simple random sample of independent rows. No weights or sample design are applied; for clustered or weighted data the true intervals are usually wider. If the file is a complete count and not a sample, an interval has no sampling meaning."
+p9d_plain_note <- "Descriptive statistics of the rows in this file. No weights or sample design are applied."
+p9d_dates_tb <- summary_table(p9d_data, p9d_cb, c("when"))
+p9d_blocks_off <- summary_blocks(p9d_tb, FALSE)
+check("9D-7: the note under every table that shows an interval is, word for word, '95% confidence intervals assume a simple random sample of independent rows. No weights or sample design are applied; for clustered or weighted data the true intervals are usually wider. If the file is a complete count and not a sample, an interval has no sampling meaning.' (the first line of summary_notes()); a table with no interval (the switch off, or only a date column) has the shorter 'Descriptive statistics of the rows in this file. No weights or sample design are applied.'; the headers say '95% CI (SRS)' (a mean's low and high, and a share's low and high); with the switch off the interval columns are gone; the quartile rule (R's default, type 7) is said under a table that shows quartiles",
+      identical(SUMMARY_CI_NOTE, p9d_ci_note) && identical(SUMMARY_PLAIN_NOTE, p9d_plain_note) && identical(summary_notes(p9d_tb, TRUE)[1], p9d_ci_note) && identical(summary_notes(p9d_tb, FALSE)[1], p9d_plain_note) &&
+        identical(summary_notes(p9d_dates_tb, TRUE)[1], p9d_plain_note) && !summary_has_interval(p9d_dates_tb, TRUE) && summary_has_interval(p9d_tb, TRUE) && !summary_has_interval(p9d_tb, FALSE) &&
+        all(c("95% CI (SRS) low", "95% CI (SRS) high") %in% names(summary_blocks(p9d_tb, TRUE)[[1]]$table)) &&
+        all(c("95% CI (SRS) low", "95% CI (SRS) high") %in% names(purrr::detect(summary_blocks(p9d_tb, TRUE), function(b) b$kind == "group")$table)) &&
+        !any(grepl("95% CI", unlist(purrr::map(p9d_blocks_off, function(b) names(b$table))), fixed = TRUE)) &&
+        any(grepl("type 7", summary_notes(p9d_tb, TRUE), fixed = TRUE)) && any(grepl("R's default rule", summary_notes(p9d_tb, FALSE), fixed = TRUE)) &&
+        !any(grepl("type 7", summary_notes(p9d_dates_tb, TRUE), fixed = TRUE)) && identical(SUMMARY_CI_HEADER, "95% CI (SRS)") &&
+        identical(p9d_blocks_off[[1]]$table$Mean[1], summary_blocks(p9d_tb, TRUE)[[1]]$table$Mean[1]) &&
+        identical(fact_num(912.3333, TRUE), "912") && identical(summary_num(912.3333), "912") && identical(summary_cnt(3000), "3,000") && identical(summary_pct(0.1234), "12.3%") && identical(summary_num(NA_real_), "–"))
+
+# the CSV: opens cleanly in Excel (a byte-order mark, the header on the first row), raw numbers, the note on every row, the headers, the switch
+p9d_csv <- tempfile(fileext = ".csv")
+summary_csv(p9d_bytb, TRUE, p9d_csv)
+p9d_csv_raw <- readBin(p9d_csv, "raw", file.size(p9d_csv))
+p9d_csv_in <- readr::read_csv(p9d_csv, show_col_types = FALSE, progress = FALSE)
+p9d_csv_off <- tempfile(fileext = ".csv")
+summary_csv(p9d_bytb, FALSE, p9d_csv_off)
+p9d_csv_off_in <- readr::read_csv(p9d_csv_off, show_col_types = FALSE, progress = FALSE)
+p9d_evil <- local({
+  d <- data.frame(g = c("=SUM(A1:A9)", "=SUM(A1:A9)", "-5", "-5", "+1+1", "@cmd", "ok", "ok", "ok", "ok"), v = c(1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5))
+  cb <- new_codebook(profile_data(d), "evil.csv", 10L)
+  f <- tempfile(fileext = ".csv")
+  summary_csv(summary_table(d, cb, "g"), TRUE, f)
+  list(raw = readLines(f, encoding = "UTF-8"), f = f)
+})
+check("9D-8: the CSV: UTF-8 with a byte-order mark (as readr::write_excel_csv writes it, so Excel reads 'Québec' right) and the header on the first row (not a comment row, which Excel and most readers would take for the header); raw numbers to six significant digits (the mean 10.5 and the SD 4.69042, not '10' and '4.69'); an empty cell for none; the headers '95% CI (SRS) low' and '95% CI (SRS) high' (and 'share 95% CI (SRS) low'); the note, word for word, in the last column of every row, with the quartile rule; 'scale_note' and 'small_group' say which rows carry those marks; with the switch off the interval columns are gone and the note is the short one; a text cell that a spreadsheet would run as a formula (=SUM(A1:A9), @cmd, +1+1) has an apostrophe in front, a number written as text (-5) does not",
+      identical(p9d_csv_raw[1:3], as.raw(c(0xef, 0xbb, 0xbf))) && grepl("^\"?column\"?,", sub("^﻿", "", readLines(p9d_csv, n = 1, encoding = "UTF-8"))) &&
+        identical(names(p9d_csv_in), c("column", "label", "kind", "group", "level", "rows", "n", "missing", "missing_share", "distinct", "mean", "sd", "min", "q1", "median", "q3", "max", "95% CI (SRS) low", "95% CI (SRS) high",
+                                       "levels", "count", "share", "share 95% CI (SRS) low", "share 95% CI (SRS) high", "first", "last", "usual_gap", "scale_note", "small_group", "note")) &&
+        nrow(p9d_csv_in) == nrow(p9d_bytb) && all(p9d_csv_in$note == paste(p9d_ci_note, SUMMARY_QUARTILE_NOTE)) &&
+        identical(p9d_csv_in$mean[p9d_csv_in$column == "score" & p9d_csv_in$group == "All rows"], 10.5) && p9d_csv_in$sd[p9d_csv_in$column == "score" & p9d_csv_in$group == "All rows"] == signif(p9d_s, 6) && is.na(p9d_csv_in$level[1]) && identical(p9d_csv_in$small_group[p9d_csv_in$column == "score"], c(NA, "under 5 rows", NA)) &&
+        identical(p9d_csv_in$scale_note[p9d_csv_in$column == "rating"][1], "mean, SD and interval: treats the steps of the scale as equal") && all(is.na(p9d_csv_in$scale_note[p9d_csv_in$column == "score"])) &&
+        !any(grepl("95% CI", names(p9d_csv_off_in), fixed = TRUE)) && !any(grepl("^share 95", names(p9d_csv_off_in))) && all(grepl("^Descriptive statistics of the rows in this file\\. No weights or sample design are applied\\.", p9d_csv_off_in$note)) &&
+        any(grepl("'=SUM(A1:A9)", p9d_evil$raw, fixed = TRUE)) && any(grepl("'@cmd", p9d_evil$raw, fixed = TRUE)) && any(grepl("'+1+1", p9d_evil$raw, fixed = TRUE)) && any(grepl(",\"-5\",", p9d_evil$raw, fixed = TRUE)) &&
+        !any(grepl("'-5", p9d_evil$raw, fixed = TRUE)) && identical(csv_safe(c("=1", "-5", "abc", NA)), c("'=1", "-5", "abc", NA)))
+
+# the secret: no value of a text, an id or a long category is in any summary (the tibble, its text, the HTML table, the CSV); a column of free text shows n, missing and distinct only;
+#   a hostile label or level is text in the tags
+p9d_mtb <- summary_table(p8c_mdata, p8c_mcb)
+p9d_mcsv <- tempfile(fileext = ".csv")
+summary_csv(p9d_mtb, TRUE, p9d_mcsv)
+p9d_mall <- paste(c(as.character(unlist(p9d_mtb)), unlist(purrr::map(summary_blocks(p9d_mtb, TRUE), function(b) as.character(unlist(b$table)))), as.character(summary_tag(p9d_mtb, TRUE)),
+                    rawToChar(readBin(p9d_mcsv, "raw", file.size(p9d_mcsv)))), collapse = "\n")
+p9d_mrows <- function(col) p9d_mtb[p9d_mtb$column == col, ]
+p9d_hostile <- local({
+  d <- data.frame(m = c(1.5, 2.5, 3.5, 4.5, 5.5, 6.5), g = c("<b>x</b>", "<b>x</b>", "<img src=x onerror=alert(1)>", "ok", "ok", "ok"))
+  cb <- new_codebook(profile_data(d), "h.csv", 6L)
+  cb$columns[[1]]$label <- "<script>alert(1)</script> & more"
+  cb$columns[[2]]$label <- "Group <i>by</i> \"quote\""
+  tb <- summary_table(d, cb, "m", "g")
+  list(tb = tb, html = as.character(summary_tag(tb, TRUE)), choices = names(summary_measure_choices(cb, d)))
+})
+check("9D-9: SECRET_VALUE_123 (planted in the free text, the id and the 45-level category of the messy file) is in no summary: not in the tibble, the formatted tables, the HTML of the table or the CSV, and neither is any other value of those columns ('comment about item', 'R0001', 'city_01'); the free-text column, the id and the long category have n, missing and the number of different values and no other field; a group's levels and a measure's statistics are the summary (the five-level rating is there); a label, a column name or a level with markup or quotes is text in the HTML, never a tag",
+      !grepl(SECRET, p9d_mall, fixed = TRUE) && !grepl("comment about item", p9d_mall, fixed = TRUE) && !grepl("R0001", p9d_mall, fixed = TRUE) && !grepl("city_01", p9d_mall, fixed = TRUE) &&
+        all(purrr::map_lgl(c("comment", "record_id", "city"), function(col) {
+          r <- p9d_mrows(col)
+          nrow(r) == 1L && identical(r$kind, "count") && !is.na(r$n) && !is.na(r$missing_n) && !is.na(r$distinct) &&
+            all(is.na(unlist(r[setdiff(names(r), c("column", "label", "kind", "group", "rows", "n", "missing_n", "missing_share", "distinct", "scale", "small"))])))
+        })) && identical(p9d_mrows("city")$distinct, 45L) && identical(p9d_mrows("comment")$distinct, length(unique(p8c_mdata$comment[!is.na(p8c_mdata$comment)]))) &&
+        identical(p9d_mrows("record_id")$distinct, 120L) && nrow(p9d_mrows("rating")) == 1L && p9d_mrows("rating")$kind == "measure" &&
+        grepl("&lt;script&gt;alert(1)&lt;/script&gt; &amp; more", p9d_hostile$html, fixed = TRUE) && !grepl("<script", p9d_hostile$html, fixed = TRUE) && !grepl("<img", p9d_hostile$html, fixed = TRUE) &&
+        grepl("&lt;b&gt;x&lt;/b&gt;", p9d_hostile$html, fixed = TRUE) && !grepl("<b>x", p9d_hostile$html, fixed = TRUE) && grepl("&lt;img src=x onerror=alert(1)&gt;", p9d_hostile$html, fixed = TRUE) &&
+        identical(p9d_hostile$choices, "<script>alert(1)</script> & more (m)") && !grepl("<i>", p9d_hostile$html, fixed = TRUE))
+
+# the Data page: the section, its controls, the table, the CSV (testServer, no model)
+p9d_state <- function(cb = p9_cb, read = p9_o, path = p9_path)
+  shiny::reactiveValues(key_version = 0L, data = read$read$data, problems = read$read$problems, profile = read$profile, codebook = cb,
+                        path = path, calls = NULL, charts = list(), canvas = character(0), stories = list(), tables = list(),
+                        palette = chart_palette_default())
+p9d_page <- paste(as.character(data_page_ui()), collapse = "")
+p9d_sum <- new.env()
+shiny::testServer(mod_summary_server, args = list(state = shiny::reactiveValues(data = NULL, codebook = NULL)), {
+  session$flushReact()
+  p9d_sum$none_has <- !nzchar(output$has_data)
+  p9d_sum$none_html <- is.null(output$table$html) || !nzchar(paste(as.character(output$table$html), collapse = ""))
+})
+shiny::testServer(mod_summary_server, args = list(state = p9d_state(cb = utils::modifyList(p9_cb, list(row_is = "")))), {
+  session$flushReact()
+  html <- function() paste(as.character(output$table$html), collapse = "")
+  p9d_sum$has <- identical(output$has_data, "yes")                     # a file is read, the dictionary is not ready: the section is there
+  h1 <- html()
+  p9d_sum$first <- grepl("<table class=\"stat-table\"", h1, fixed = TRUE) && grepl("95% CI (SRS) low", h1, fixed = TRUE) &&
+    grepl(htmltools::htmlEscape(p9d_ci_note), h1, fixed = TRUE) && !grepl("<th scope=\"col\">Group</th>", h1, fixed = TRUE) && grepl("Dates and times", h1, fixed = TRUE) && grepl("Groups and categories", h1, fixed = TRUE)
+  session$setInputs(by = "region", ci = TRUE)
+  h2 <- html()
+  p9d_sum$by <- grepl("<th scope=\"col\">Group</th>", h2, fixed = TRUE) && grepl("<td>All rows</td>", h2, fixed = TRUE) && grepl("<td>Québec</td>", h2, fixed = TRUE)
+  session$setInputs(ci = FALSE)
+  h3 <- html()
+  p9d_sum$off <- !grepl("95% CI", h3, fixed = TRUE) && grepl(htmltools::htmlEscape(p9d_plain_note), h3, fixed = TRUE) && !grepl("simple random sample", h3, fixed = TRUE)
+  session$setInputs(by = "", ci = TRUE)
+  csv_on <- output$download
+  p9d_sum$csv <- file.exists(csv_on) && identical(readBin(csv_on, "raw", 3), as.raw(c(0xef, 0xbb, 0xbf))) && nrow(readr::read_csv(csv_on, show_col_types = FALSE, progress = FALSE)) == nrow(p9d_otb)
+  session$setInputs(by = "region", ci = FALSE)
+  p9d_sum$csv_by <- any(grepl("All rows", readLines(output$download, encoding = "UTF-8"), fixed = TRUE)) && !any(grepl("95% CI", readLines(output$download, n = 1, encoding = "UTF-8"), fixed = TRUE))
+})
+p9d_srv <- paste(deparse(body(mod_summary_server)), collapse = "\n")
+check("9D-10: the Data page has a 'Summary statistics' section under the dictionary, with a select 'By group', a switch 'Show 95% CI' and a button 'Download CSV'; it is there once a file is read and does not wait for the dictionary (a file with no row sentence still gives its table); with no file it says to read one; the table for every column in four blocks (numbers, groups and categories, dates and times, other columns), the note under it word for word; 'By group' adds the Group column with 'All rows'; the switch off takes the intervals and the long note away; the CSV is the table (a byte-order mark, one row for each row of the table, the interval columns gone with the switch off); the module is registered in app.R",
+      grepl("Summary statistics", p9d_page, fixed = TRUE) && grepl("By group", p9d_page, fixed = TRUE) && grepl("Show 95% CI", p9d_page, fixed = TRUE) && grepl("Download CSV", p9d_page, fixed = TRUE) &&
+        regexpr("Data dictionary", p9d_page, fixed = TRUE)[[1]] < regexpr("Summary statistics", p9d_page, fixed = TRUE)[[1]] && grepl("Read a data file above first", p9d_page, fixed = TRUE) &&
+        grepl("output.has_data", p9d_page, fixed = TRUE) && isTRUE(p9d_sum$none_has) && isTRUE(p9d_sum$none_html) && isTRUE(p9d_sum$has) && isTRUE(p9d_sum$first) && isTRUE(p9d_sum$by) &&
+        isTRUE(p9d_sum$off) && isTRUE(p9d_sum$csv) && isTRUE(p9d_sum$csv_by) && any(grepl("mod_summary_server(\"summary\", state)", readLines("app.R"), fixed = TRUE)) &&
+        !any(c("llm_json", "ask", "make_call", "chat_turn") %in% all.names(body(mod_summary_server))) && !grepl("for (|while (", p9d_srv, fixed = TRUE))
+
+# the table card on the canvas, the dialog, the chat, the privacy, the export dialog (testServer, a stand-in for the model)
+p9d_reply <- function(user, i) {
+  if (grepl("<CHARTS>", user, fixed = TRUE))
+    return(to_json(list(charts = purrr::map(sent_ids(user), function(id) list(id = id, headline = "A headline", summary = "A summary.")))))
+  if (grepl("\nANALYST: ", user, fixed = TRUE)) return(to_json(list(charts = list(list(family = "bar", x = "region", fn = "count", title = "Orders by region")))))
+  to_json(list(labels = list(), row_is_guess = "one order"))
+}
+p9d_modal <- new.env()
+assign("showModal", function(ui, session = NULL) assign("modal", ui, envir = p9d_modal), envir = globalenv())
+p9d_modal_html <- function() paste(as.character(p9d_modal$modal), collapse = "")
+p9d_si <- stand_by(p9d_reply)
+p9d_st <- p9d_state()
+p9d_e <- new.env()
+p9d_tokens <- NULL
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p9d_st, ask = p9d_si$ask), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  # the button and the dialog
+  p9d_e$button <- grepl("Add a summary table", html("bar"), fixed = TRUE) && grepl("0 charts", html("bar"), fixed = TRUE)
+  session$setInputs(add_table = 1)
+  m <- p9d_modal_html()
+  p9d_e$dialog <- grepl("Add a summary table", m, fixed = TRUE) && grepl("Measures (one or more)", m, fixed = TRUE) && grepl("By group (optional)", m, fixed = TRUE) && grepl(">Title<", m, fixed = TRUE) &&
+    grepl("Show 95% CI", m, fixed = TRUE) && grepl("role=\"switch\"", m, fixed = TRUE) && grepl("value=\"revenue\"", m, fixed = TRUE) && grepl("value=\"satisfaction\"", m, fixed = TRUE) &&
+    !grepl("<option value=\"order_id\"", m, fixed = TRUE) && !grepl("<option value=\"region\">[^<]*</option></select>[^~]*Measures", m) && grepl("value=\"region\"", m, fixed = TRUE) &&
+    grepl("no model is asked", m, fixed = TRUE) && grepl("data-suggestion|Add table", m)
+  # no measure chosen: it says so and adds nothing
+  session$setInputs(table_measures = character(0), table_by = "", table_title = "", table_ci = TRUE, table_add = 1)
+  p9d_e$none <- grepl("Choose at least one measure.", html("table_msg"), fixed = TRUE) && !length(p9d_st$tables) && !length(p9d_st$canvas)
+  # a table: two measures by region, a title typed
+  session$setInputs(table_measures = c("revenue", "satisfaction"), table_by = "region", table_title = "My table", table_ci = TRUE, table_add = 2)
+  card <- html("t1_card")
+  p9d_e$added <- identical(p9d_st$canvas, "t1") && identical(names(p9d_st$tables), "t1") && identical(p9d_st$tables$t1$measures, c("revenue", "satisfaction")) && identical(p9d_st$tables$t1$by, "region") &&
+    identical(p9d_st$tables$t1$title, "My table") && isTRUE(p9d_st$tables$t1$ci) && in_dash("t1") && is.null(chart_of("t1")) && identical(chart_ids(), character(0))
+  p9d_e$card <- grepl("<table class=\"stat-table\"", card, fixed = TRUE) && grepl("My table", card, fixed = TRUE) && grepl("95% CI (SRS) low", card, fixed = TRUE) && grepl("<td class=\"n\">3,000</td>", card, fixed = TRUE) &&
+    grepl("<td>All rows</td>", card, fixed = TRUE) && grepl("<td class=\"n\">", card, fixed = TRUE) && grepl("<th scope=\"col\" class=\"n\">Mean</th>", card, fixed = TRUE) &&
+    grepl(htmltools::htmlEscape(p9d_ci_note), card, fixed = TRUE) && grepl("type 7", card, fixed = TRUE) && grepl("† satisfaction", card, fixed = TRUE) &&
+    grepl("In dashboard", card, fixed = TRUE) && grepl("role=\"switch\"", card, fixed = TRUE) && grepl(">Move up<", card, fixed = TRUE) && grepl(">Move down<", card, fixed = TRUE) &&
+    grepl(">Edit text<", card, fixed = TRUE) && grepl(">Remove<", card, fixed = TRUE) && !grepl(">Interactive<|>Static<|>Code<|>Headline<|>Animate<|>Select<|>Undo<|>Deselect<", card) &&
+    grepl("Inter", card, fixed = TRUE) && grepl(".bslib-grid-item:has(.chart-table-card) { grid-column: 1 / -1; }", SUMMARY_CSS, fixed = TRUE) && grepl("chart-table-card", card, fixed = TRUE) && !grepl("<img", card, fixed = TRUE)
+  p9d_e$bar <- grepl("0 charts, 1 table", html("bar"), fixed = TRUE) && grepl("1 of 1 in the dashboard", html("bar"), fixed = TRUE)
+  # the style's type: a new style draws the card again in its typeface
+  session$setInputs(style_choice = "newspaper")
+  p9d_e$style <- grepl("Source Serif", html("t1_card"), fixed = TRUE) && !grepl("font-family: [^;]*Inter", html("t1_card"))
+  session$setInputs(style_choice = "clean")
+  # a chart too: the order, Move, the counts
+  calls_before <- nrow(p9d_st$calls)
+  session$setInputs(chat_user_input = "q one")
+  p9d_e$order <- identical(p9d_st$canvas, c("c1", "t1")) && grepl("1 chart, 1 table", html("bar"), fixed = TRUE) && grepl("2 of 2 in the dashboard", html("bar"), fixed = TRUE)
+  session$setInputs(t1_up = 1)
+  moved <- identical(p9d_st$canvas, c("t1", "c1"))
+  session$setInputs(t1_up = 2)
+  stays <- identical(p9d_st$canvas, c("t1", "c1")) && grepl("disabled[^>]*t1_up|t1_up[^>]*disabled", html("t1_card"))
+  session$setInputs(t1_down = 1)
+  p9d_e$move <- moved && stays && identical(p9d_st$canvas, c("c1", "t1")) && grepl("disabled[^>]*t1_down|t1_down[^>]*disabled", html("t1_card"))
+  # Edit text: the title only
+  session$setInputs(t1_edit = 1)
+  em <- p9d_modal_html()
+  p9d_e$edit_dialog <- grepl("Edit text: My table", em, fixed = TRUE) && grepl("t1_w_title", em, fixed = TRUE) && !grepl("Headline|Summary|Subtitle|Caption|X-axis", em)
+  session$setInputs(t1_w_title = "A new title", t1_apply = 1)
+  p9d_e$edit <- identical(p9d_st$tables$t1$title, "A new title") && grepl("A new title", html("t1_card"), fixed = TRUE) && !grepl("My table", html("t1_card"), fixed = TRUE)
+  session$setInputs(t1_w_title = "  ", t1_apply = 2)
+  p9d_e$edit_blank <- grepl("^Summary statistics: ", p9d_st$tables$t1$title) && grepl("revenue", p9d_st$tables$t1$title, fixed = TRUE) && grepl(", by region", p9d_st$tables$t1$title, fixed = TRUE)
+  # the switch, and what the export takes
+  session$setInputs(t1_dash = FALSE)
+  off <- !in_dash("t1") && identical(purrr::map_chr(dash_items(), "id"), "c1") && grepl("1 of 2 in the dashboard", html("bar"), fixed = TRUE)
+  session$setInputs(t1_dash = TRUE)
+  p9d_e$dash <- off && in_dash("t1") && identical(purrr::map_chr(dash_items(), "id"), c("c1", "t1")) && identical(dash_items()[[2]]$mode, "table") && is.null(dash_items()[[2]]$chart) &&
+    identical(dash_items()[[2]]$table$measures, c("revenue", "satisfaction"))
+  # the chat: a message that only asks for summary statistics opens the dialog with no model call
+  sent_before <- length(p9d_si$sent)
+  log_before <- length(made$log)
+  calls_mid <- NROW(p9d_st$calls)
+  p9d_modal$modal <- NULL
+  session$setInputs(chat_user_input = "summary statistics")
+  m1 <- p9d_modal_html()
+  asked <- purrr::map_lgl(c("summary table", "Summary table.", "describe the columns", "Describe the columns!", "Give me summary statistics", "show the summary table please", "Please make a summary table"), function(msg) {
+    p9d_modal$modal <- NULL
+    session$setInputs(chat_user_input = msg)
+    grepl("Add a summary table", p9d_modal_html(), fixed = TRUE)
+  })
+  p9d_e$chat <- grepl("Add a summary table", m1, fixed = TRUE) && all(asked) && length(p9d_si$sent) == sent_before && NROW(p9d_st$calls) == calls_mid && calls_mid == 1L &&
+    identical(made$log[[log_before + 1L]]$content, SETUP_SUMMARY) && grepl("no model is asked", SETUP_SUMMARY, fixed = TRUE)
+  # a message that asks for more than the table goes to the model, as any other
+  p9d_modal$modal <- NULL
+  session$setInputs(chat_user_input = "summary statistics of revenue by region")
+  session$setInputs(chat_user_input = "describe the columns that matter")
+  p9d_e$more <- length(p9d_si$sent) == sent_before + 2L && is.null(p9d_modal$modal) && !summary_request("summary statistics of revenue") && !summary_request("how do I make a summary table of this") &&
+    summary_request("Summary statistics") && summary_request("  describe columns.  ") && !summary_request("") && !summary_request(NA)
+  # the privacy: what the model is sent holds nothing of the table
+  tb <- summary_table(p9_data, p9_cb, c("revenue", "satisfaction"), "region")
+  cells <- unlist(purrr::map(summary_blocks(tb, TRUE), function(b) as.character(unlist(b$table[setdiff(names(b$table), c("Column", "Group", "Level"))]))))
+  p9d_tokens <<- unique(cells[nchar(cells) >= 3L])
+  p9d_e$tokens <- length(p9d_tokens) >= 40L
+  p9d_si$sent <- list()
+  session$setInputs(chat_user_input = "q two")
+  p9d_e$sent <- p9d_si$sent[[1]]$user
+  p9d_e$n_charts <- length(chart_ids())
+})
+, error = function(e) message("note  a Part D screen scenario stopped: ", conditionMessage(e)), finally = rm("showModal", envir = globalenv()))
+p9d_user <- p9d_e$sent %||% ""
+p9d_rest <- gsub("(?s)<DATA>.*?</DATA>", "", gsub("(?s)REPLY FORMAT\n.*$", "", p9d_user, perl = TRUE), perl = TRUE)
+p9d_canvas_lines <- regmatches(p9d_user, regexpr("(?s)<CANVAS>.*?</CANVAS>", p9d_user, perl = TRUE))
+p9d_hits <- p9d_tokens[purrr::map_lgl(p9d_tokens, function(t) grepl(t, p9d_rest, fixed = TRUE))]
+check("9D-11: the Explore canvas: a button 'Add a summary table' (the header counts charts and tables) opens a dialog with measures (one or more, only measure columns), a group (optional), a title and the switch 'Show 95% CI'; with no measure chosen it says so and adds nothing; the card is a plain HTML table in the style's type (Inter in Clean, Source Serif in Newspaper), numbers right-aligned, the note under it, with the 'In dashboard' switch, Move up and Move down, Edit text (the title only; blank gives the title R writes) and Remove, and none of Select, Undo, Interactive, Code, Headline or Animate; it sits at the top like a chart, has a row to itself, moves with the charts, and the switch takes it out of the export items",
+      isTRUE(p9d_e$button) && isTRUE(p9d_e$dialog) && isTRUE(p9d_e$none) && isTRUE(p9d_e$added) && isTRUE(p9d_e$card) && isTRUE(p9d_e$bar) && isTRUE(p9d_e$style) && isTRUE(p9d_e$order) &&
+        isTRUE(p9d_e$move) && isTRUE(p9d_e$edit_dialog) && isTRUE(p9d_e$edit) && isTRUE(p9d_e$edit_blank) && isTRUE(p9d_e$dash))
+check("9D-12: in the chat a message that only asks for it ('summary statistics', 'summary table', 'describe the columns', with a please or a full stop) is answered by R opening the dialog, with no model call (nothing is sent, no call is recorded, R says so in one line); a message that asks for more (a column, a question) goes to the model as any other",
+      isTRUE(p9d_e$chat) && isTRUE(p9d_e$more))
+check("9D-13: privacy: the chat message built after a table card is added holds nothing of the table: its CANVAS block lists only the charts (a line for each of the three, no table id, no title), its SELECTED block is none, and none of the 40 or more numbers of the table (means, SDs, intervals, counts, shares, as the card shows them) is in the message outside the DATA block; the numbers are in the card, so the test can fail; the table is in state$tables and in no chart, story or last exchange",
+      isTRUE(p9d_e$tokens) && length(p9d_user) == 1L && nzchar(p9d_user) && length(p9d_hits) == 0L && length(p9d_canvas_lines) == 1L && p9d_e$n_charts == 4L && length(strsplit(p9d_canvas_lines, "\n")[[1]]) == (p9d_e$n_charts - 1L) + 2L &&
+        grepl("^<CANVAS>\nc3 \\| Orders by region", p9d_canvas_lines) && !grepl("t1", p9d_canvas_lines, fixed = TRUE) && grepl("<SELECTED>\nnone\n</SELECTED>", p9d_user, fixed = TRUE) &&
+        !grepl("A new title|My table|Summary statistics", p9d_user) && !grepl("t1 ", p9d_user, fixed = TRUE) && grepl("<DATA>", p9d_user, fixed = TRUE) &&
+        all(purrr::map_lgl(p9d_tokens[1:8], function(t) grepl(t, paste(as.character(summary_tag(summary_table(p9_data, p9_cb, c("revenue", "satisfaction"), "region"), TRUE)), collapse = ""), fixed = TRUE))))
+
+# the export: a table card is a card of dashboard.html (a real table) and a CSV in charts/; the codebook's summary table has the statistics
+p9d_set <- list(title = "Dash", subtitle = "", author = "A. Analyst", date = as.Date("2026-11-22"), intro = "", boxes = c("rows", "columns", "third"), keys = character(0))
+p9d_build <- function(items, data = p9_data, cb = p9_cb, path = p9_path) {
+  out <- file.path(tempfile("p9d_zip_"), "d.zip")
+  dir.create(dirname(out))
+  res <- build_dashboard(items, data, cb, chart_palette_default(), p9d_set, path, out, model = "test-model")
+  d <- p8c_dir(res$zip)
+  c(res, list(dir = d, html = p8c_html(d), codebook = p8c_html(d, "codebook.html")))
+}
+p9d_chart_item <- function(id, spec) list(id = id, chart = new_chart(id, spec), story = NULL, mode = "picture", stale = NA_character_)
+p9d_table_item <- function(id, title, measures, by = NULL, ci = TRUE) list(id = id, table = list(title = title, measures = measures, by = by, ci = ci), mode = "table", stale = NA_character_)
+p9d_items <- list(p9d_chart_item("c1", list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Revenue by region")),
+                  p9d_table_item("t1", "Revenue and satisfaction by region", c("revenue", "satisfaction"), "region"),
+                  p9d_chart_item("c2", list(family = "line", x = "order_month", y = "revenue", fn = "sum", title = "Revenue by month")),
+                  p9d_table_item("t2", "Units without intervals", "units", NULL, FALSE))
+p9d_z <- p9d_build(p9d_items)
+p9d_cards <- regmatches(p8c_sq(p9d_z$html), gregexpr("<article class=\"card[^\"]*\">.*?</article>", p8c_sq(p9d_z$html), perl = TRUE))[[1]]
+p9d_tcards <- purrr::keep(p9d_cards, function(c) grepl("table-card", c, fixed = TRUE))
+p9d_zcsv <- readr::read_csv(file.path(p9d_z$dir, "charts", "02_revenue_and_satisfaction_by_region.csv"), show_col_types = FALSE, progress = FALSE)
+p9d_cbh <- p8c_sq(p9d_z$codebook)
+p9d_cbtop <- sub("(?s)^.*?(<table class=\"summary-table\">.*?</table>).*$", "\\1", p9d_cbh, perl = TRUE)
+p9d_mz <- p9d_build(list(p9d_table_item("t1", "Messy numbers", c("score", "rating", "column_1")), p9d_table_item("t2", "Rating by nothing", "rating")), data = p8c_mdata, cb = p8c_mcb, path = p8c_mfile)
+p9d_only <- p9d_build(list(p9d_table_item("t1", "Only a table", "revenue")))
+check("9D-14: the export: a chosen table is a card of dashboard.html, a real table (not a picture): the title as the heading, the table in a box that scrolls sideways when it is wider than the card (overflow-x: auto, and on a phone no wrapping inside a cell), numbers right-aligned, the note under it word for word (the long one with intervals, the short one for the table with the switch off), the card taking a row to itself, in the order of the canvas (chart, table, chart, table); charts/ holds the table as a CSV (a byte-order mark, header first, the note in a column) beside the pictures; the zip lists the same files as before for the charts; the About card says how many summary tables and that none is written by a model; a dashboard of only a table builds; both pages are balanced and make no request",
+      identical(p9d_z$modes, c("picture", "table", "picture", "table")) && length(p9d_cards) == 4L && length(p9d_tcards) == 2L &&
+        identical(which(purrr::map_lgl(p9d_cards, function(c) grepl("table-card", c, fixed = TRUE))), c(2L, 4L)) &&
+        all(grepl("^<article class=\"card table-card full\"><h2>", p9d_tcards)) && grepl("<h2>Revenue and satisfaction by region</h2>", p9d_tcards[1], fixed = TRUE) &&
+        all(grepl("<div class=\"stat-block\"><div class=\"table-scroll\" role=\"region\" tabindex=\"0\"", p9d_tcards)) && all(grepl("<table class=\"stat-table\">", p9d_tcards)) && !any(grepl("<img|<picture", p9d_tcards)) &&
+        grepl("<th scope=\"col\" class=\"n\">Mean</th>", p9d_tcards[1], fixed = TRUE) && grepl("<td class=\"n\">3,000</td>", p9d_tcards[1], fixed = TRUE) &&
+        grepl(htmltools::htmlEscape(p9d_ci_note), p9d_tcards[1], fixed = TRUE) && !grepl("95% CI", p9d_tcards[2], fixed = TRUE) && grepl(htmltools::htmlEscape(p9d_plain_note), p9d_tcards[2], fixed = TRUE) &&
+        !grepl("simple random sample", p9d_tcards[2], fixed = TRUE) &&
+        grepl(".stat-block .table-scroll{overflow-x:auto;", p9d_z$html, fixed = TRUE) && grepl(".stat-table th,.stat-table td{white-space:nowrap;}", p9d_z$html, fixed = TRUE) &&
+        grepl(".stat-table td.n,.stat-table th.n{text-align:right;white-space:nowrap;}", p9d_z$html, fixed = TRUE) &&
+        all(c("charts/02_revenue_and_satisfaction_by_region.csv", "charts/04_units_without_intervals.csv", "charts/01_revenue_by_region.png", "charts/03_revenue_by_month.png") %in% names(p9d_z$files)) &&
+        identical(readBin(file.path(p9d_z$dir, "charts", "02_revenue_and_satisfaction_by_region.csv"), "raw", 3), as.raw(c(0xef, 0xbb, 0xbf))) && nrow(p9d_zcsv) == nrow(summary_table(p9_data, p9_cb, c("revenue", "satisfaction"), "region")) &&
+        all(p9d_zcsv$note == paste(p9d_ci_note, SUMMARY_QUARTILE_NOTE)) && grepl("^Descriptive statistics of the rows in this file", readr::read_csv(file.path(p9d_z$dir, "charts", "04_units_without_intervals.csv"), show_col_types = FALSE, progress = FALSE)$note[1]) &&
+        grepl("The summary tables", p9d_z$html, fixed = TRUE) && grepl("2 tables of statistics, worked out by R from the rows of the file with no model", p9d_z$html, fixed = TRUE) &&
+        grepl("2 pictures and 0 interactive", p9d_z$html, fixed = TRUE) && grepl("# A summary table, not a chart: Units without intervals.", p8c_bytes(file.path(p9d_z$dir, "charts.R")), fixed = TRUE) &&
+        p8c_balanced(p9d_z$html) && p8c_balanced(p9d_z$codebook) && !length(p8c_requests(p9d_z$html)) && !length(p8c_requests(p9d_z$codebook)) &&
+        identical(p9d_only$modes, "table") && grepl("<h2>Only a table</h2>", p9d_only$html, fixed = TRUE) && !grepl("What the checks said", p9d_only$html, fixed = TRUE) && p8c_balanced(p9d_only$html))
+check("9D-15: codebook.html gets the per-column statistics in its summary table at the top (after Column, Label, Type, Role and Missing: n, Distinct, Mean, SD, Min, Median, Max and the 95% CI (SRS) low and high; a measure has its numbers, a date its first and last day, a group, an id and a text only n and the number of different values), one row for each of the 22 columns, with the interval note word for word and the quartile rule under it, and the dagger and the scale line for a score (satisfaction); no row of the file is in it (the messy file's secret and free text are in no file of its export, tables included)",
+      grepl("<th scope=\"col\">Column</th><th scope=\"col\">Label</th><th scope=\"col\">Type</th><th scope=\"col\">Role</th><th scope=\"col\" class=\"n\">Missing</th><th scope=\"col\" class=\"n\">n</th><th scope=\"col\" class=\"n\">Distinct</th>", p9d_cbtop, fixed = TRUE) &&
+        grepl("<th scope=\"col\" class=\"n\">95% CI (SRS) low</th><th scope=\"col\" class=\"n\">95% CI (SRS) high</th></tr></thead>", p9d_cbtop, fixed = TRUE) &&
+        lengths(gregexpr("<tr><td><a href=\"#col-", p9d_cbtop, fixed = TRUE)) == 22L &&
+        grepl("<td><a href=\"#col-15\">revenue</a></td>[^~]*?<td class=\"n\">912</td><td class=\"n\">1,190</td>", p9d_cbtop) &&
+        grepl("<td><a href=\"#col-2\">order_date</a></td>[^~]*?<td class=\"n\">3,000</td><td class=\"n\">[0-9,]+</td><td class=\"n\"></td><td class=\"n\"></td><td class=\"n\">2022-01-02</td><td class=\"n\"></td><td class=\"n\">2024-12-31</td>", p9d_cbtop) &&
+        grepl("<td><a href=\"#col-1\">order_id</a></td>[^~]*?<td class=\"n\">3,000</td><td class=\"n\">3,000</td><td class=\"n\"></td><td class=\"n\"></td><td class=\"n\"></td>", p9d_cbtop) &&
+        grepl(htmltools::htmlEscape(p9d_ci_note), p9d_cbh, fixed = TRUE) && grepl("Quartiles use R", p9d_cbh, fixed = TRUE) && grepl("3.91†", p9d_cbtop, fixed = TRUE) &&
+        grepl("† satisfaction, discount_pct|† satisfaction \\(mean, SD and interval\\)", p9d_cbh) &&
+        !p8c_has(p9d_mz$dir, SECRET) && !p8c_has(p9d_mz$dir, "comment about item") && !p8c_has(p9d_mz$dir, "R0001") && grepl("<h2>Messy numbers</h2>", p9d_mz$html, fixed = TRUE) &&
+        grepl("<td class=\"n\">", sub("(?s)^.*?(<table class=\"summary-table\">.*?</table>).*$", "\\1", p8c_sq(p9d_mz$codebook), perl = TRUE), fixed = TRUE))
+
+# the export dialog: tables in its list, the small-group warning once, the build with tables (testServer, the real build)
+p9d_x_modal <- new.env()
+assign("showModal", function(ui, session = NULL) assign("modal", ui, envir = p9d_x_modal), envir = globalenv())
+p9d_xs <- p9d_state(cb = p9d_cb, read = p9d_read, path = file.path(p9d_dir, "fix.csv"))
+p9d_xe <- new.env()
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p9d_xs, ask = stand_by(p9d_reply)$ask), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  shown <- function() paste(as.character(p9d_x_modal$modal), collapse = "")
+  session$setInputs(add_table = 1)
+  p9d_xe$measures <- grepl("value=\"score\"", shown(), fixed = TRUE) && grepl("value=\"rating\"", shown(), fixed = TRUE) && !grepl("<option value=\"grp\" selected>", shown(), fixed = TRUE)
+  # a table by grp (group b has 3 rows), another by grp, one with no group
+  session$setInputs(table_measures = "score", table_by = "grp", table_title = "Score by group", table_ci = TRUE, table_add = 1)
+  session$setInputs(table_measures = c("score", "rating"), table_by = "grp", table_title = "Score and rating by group", table_ci = TRUE, table_add = 2)
+  session$setInputs(table_measures = "score", table_by = "", table_title = "Score alone", table_ci = FALSE, table_add = 3)
+  p9d_xe$cards <- identical(p9d_xs$canvas, c("t3", "t2", "t1")) && grepl("b (under 5 rows)", html("t1_card"), fixed = TRUE) && grepl("Groups marked", html("t1_card"), fixed = TRUE) &&
+    !grepl("under 5 rows", html("t3_card"), fixed = TRUE) && !grepl("95% CI", html("t3_card"), fixed = TRUE) && grepl(htmltools::htmlEscape(p9d_plain_note), html("t3_card"), fixed = TRUE)
+  session$setInputs(export = 1)
+  m <- shown()
+  p9d_xe$modal <- grepl("Summary table", m, fixed = TRUE) && grepl("1. Score alone", m, fixed = TRUE) && grepl("2. Score and rating by group", m, fixed = TRUE) && grepl("3. Score by group", m, fixed = TRUE) &&
+    grepl("Columns: score, rating; by grp", m, fixed = TRUE) && !grepl("dash_mode_t", m, fixed = TRUE) && !grepl("<img", m, fixed = TRUE) && grepl("each summary table as a CSV", m, fixed = TRUE) &&
+    grepl("No chart in the dashboard has a line of facts that can be a key number", m, fixed = TRUE) && !grepl("No headline yet", m, fixed = TRUE)
+  p9d_xe$warn <- lengths(gregexpr("fewer than 5 rows", m, fixed = TRUE)) == 1L && grepl("which can describe individuals", m, fixed = TRUE) && grepl("Nothing is hidden", m, fixed = TRUE) &&
+    grepl("Marked in: Score and rating by group; Score by group.", m, fixed = TRUE) && !grepl("Marked in:[^.]*Score alone", m)
+  # the build with tables: a zip with the tables as CSV
+  session$setInputs(dash_title = "T", dash_subtitle = "", dash_author = "", dash_intro = "", dash_boxes = c("rows", "columns", "third"), dash_build = 1)
+  res <- dash_result()
+  p9d_xe$build <- isTRUE(res$ok) && identical(res$modes, c("table", "table", "table")) && any(grepl("^charts/01_score_alone[.]csv$", names(res$files))) && any(grepl("^charts/03_score_by_group[.]csv$", names(res$files))) &&
+    grepl("3 summary tables", paste(as.character(output$dash_action$html), collapse = ""), fixed = TRUE) && grepl("0 charts", paste(as.character(output$dash_action$html), collapse = ""), fixed = TRUE)
+  # a table with no small group: no warning
+  session$setInputs(t1_remove = 1)
+  session$setInputs(t2_remove = 1)
+  session$setInputs(export = 2)
+  p9d_xe$no_warn <- !grepl("fewer than 5 rows", shown(), fixed = TRUE) && identical(p9d_xs$canvas, "t3") && !length(p9d_xs$tables$t1) && !length(p9d_xs$tables$t2)
+  # a table out of the dashboard is not an export item; with every card out the dialog says so
+  session$setInputs(t3_dash = FALSE)
+  session$setInputs(export = 3)
+  p9d_xe$none <- grepl("No chart is in the dashboard", shown(), fixed = TRUE)
+}), error = function(e) message("note  a Part D export scenario stopped: ", conditionMessage(e)), finally = rm("showModal", envir = globalenv()))
+check("9D-16: the export dialog lists each chosen table (its title, the columns and the group it takes, 'goes in the page as a table and in charts/ as a CSV', no picture and no choice of picture or interactive), warns once that a table shows statistics for groups of fewer than 5 rows, which can describe individuals, naming the tables that do (and not a table with no such group, nor when no table has one); nothing is hidden; building with tables writes the zip (the tables as CSV in charts/, the result says '3 summary tables'); removing a table takes it out of the dashboard; with every card switched off the dialog says no chart is in it",
+      isTRUE(p9d_xe$measures) && isTRUE(p9d_xe$cards) && isTRUE(p9d_xe$modal) && isTRUE(p9d_xe$warn) && isTRUE(p9d_xe$build) && isTRUE(p9d_xe$no_warn) && isTRUE(p9d_xe$none) &&
+        identical(dashboard_warnings("a", TRUE, NA_character_, chart_palette_default(), small = c("A", "B"))$small_groups, paste0(SUMMARY_SMALL_WARNING, " Marked in: A; B.")) &&
+        is.null(dashboard_warnings("a", TRUE, NA_character_, chart_palette_default())$small_groups) && grepl("fewer than 5 rows, which can describe individuals", SUMMARY_SMALL_WARNING, fixed = TRUE))
+
+# no model, no loop, no device but chart_device(): the code of the summary tables
+p9d_fns <- c("summary_kind", "summary_scale", "summary_t_ci", "summary_wilson", "summary_rows", "summary_levels", "summary_table", "summary_has_interval", "summary_notes", "summary_num", "summary_cnt",
+             "summary_pct", "summary_txt", "summary_blocks", "csv_safe", "summary_csv", "summary_per_column", "summary_tag", "summary_choice", "summary_measure_choices", "summary_by_choices",
+             "summary_title", "summary_request", "mod_summary_ui", "mod_summary_server", "dash_table", "dash_table_card", "dash_table_row", "dash_value_em")
+p9d_called <- unique(unlist(purrr::map(p9d_fns, function(f) all.names(body(get(f))))))
+p9d_code <- unlist(purrr::map(p9d_fns, function(f) deparse(get(f))))
+check("9D-17: the code of the summary tables calls no model (no llm_json, ask, make_call, chat_turn, summarize_charts, label_columns), has no for, while or repeat, opens no device, uses no prop.test, no Quarto or pandoc, and the Wilson interval and the t interval are written in it (qnorm and qt of 0.975); the summary section of R/ holds only definitions (as every R/ file does: checked above); and the table cards are not in the chat's canvas: run_turn() hands chat_turn() the charts only",
+      !any(c("llm_json", "ask", "make_call", "chat_turn", "summarize_charts", "summarize_inputs", "label_columns", "chat_append_message") %in% p9d_called) && !any(c("for", "while", "repeat") %in% p9d_called) &&
+        !any(c("png", "agg_png", "pdf", "svg", "ggsave", "dev.new", "prop.test", "saveWidget", "system", "system2") %in% p9d_called) && !any(grepl("quarto|pandoc", p9d_code, ignore.case = TRUE)) &&
+        any(grepl("qnorm(0.975)", p9d_code, fixed = TRUE)) && any(grepl("qt(0.975", p9d_code, fixed = TRUE)) && !any(grepl("prop.test", p9d_code, fixed = TRUE)) &&
+        any(grepl("chart_ids", deparse(body(mod_explore_server)), fixed = TRUE)) && any(grepl("purrr::map(chart_ids(), chart_of)", deparse(body(mod_explore_server)), fixed = TRUE)))
+
+}   # end of the fast run part of Phase 9 Part D
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
 #

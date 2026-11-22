@@ -202,7 +202,10 @@ data_page_ui <- function()
           tags$p(class = "text-muted small",
                  "The data dictionary says what one row represents and gives each column a label, a type and a role. ",
                  "Charts are drawn only after it says what one row represents."),
-          mod_codebook_ui("codebook"))
+          mod_codebook_ui("codebook"),
+          tags$hr(),
+          tags$h4("Summary statistics"),
+          mod_summary_ui("summary"))
 
 # The data file: a delimited file, what R found in it, and an optional saved data dictionary.
 mod_data_ui <- function(id) {
@@ -540,6 +543,139 @@ label_tag <- function(e, accept_id) {
   tagList(tags$span(class = "badge bg-warning text-dark", "AI guess"),
           if (!isTRUE(e$sure)) tags$span(class = "text-danger ms-1", "check this"),
           checkboxInput(accept_id, "Accept", value = FALSE))
+}
+
+
+
+# ---- Summary statistics -----------------------------------------------------------------------------------------------------
+#   The numbers are R's (summary_table() in R/data.R) and are drawn in the browser as plain HTML tables in three places: the Data
+#   page, a table card on the canvas, and the exported dashboard and codebook. They are never sent to a model: a table card is not in
+#   the CANVAS, SELECTED or LAST EXCHANGE of a chat message (the cards of the canvas that the chat sees are the charts), and the chat
+#   reads no number of it. No model call is made by anything here.
+
+# A message that only asks for a summary table: "summary statistics", "summary table", "describe the columns", with at most a polite
+#   word or two around them. Anything more (a column, a question) is the analyst's own and goes on to the model.
+SUMMARY_REQUEST_PATTERN <- paste0("^(please )?((can|could) you )?((show|give|make|add|build|create|do) (me )?)?(a |an |the |some )?",
+                                  "((summary|descriptive) (statistics|stats|table|tables)|describe (the )?(columns|variables))( please)?$")
+summary_request <- function(msg) {
+  m = tolower(trimws(gsub("[[:space:]]+", " ", as.character(msg))))
+  m = trimws(sub("[.!?]+$", "", m))
+  length(m) == 1L && !is.na(m) && grepl(SUMMARY_REQUEST_PATTERN, m, perl = TRUE)
+}
+
+SETUP_SUMMARY <- paste("Choose the columns for the summary table in the dialog. R works the numbers out from the file; no model is asked, and",
+                           "nothing of the table is sent to one.")
+SUMMARY_PRIVACY <-"Worked out by R from the file and drawn in your browser; no model is asked and nothing here is sent to one."
+SUMMARY_NO_MEASURE <- "This file has no column of numbers to summarise as a measure."
+SUMMARY_CSS <- "
+.stat-block { margin: 0 0 1rem; }
+.stat-title { font-weight: 600; margin: 0 0 .25rem; }
+.stat-block .table-scroll { overflow-x: auto; max-width: 100%; }
+.stat-table { border-collapse: collapse; font-size: .85rem; width: 100%; }
+.stat-table th { text-align: left; font-weight: 600; white-space: nowrap; border-bottom: 2px solid currentColor; padding: .25rem .7rem .25rem 0; vertical-align: bottom; }
+.stat-table td { padding: .25rem .7rem .25rem 0; border-bottom: 1px solid rgba(128, 128, 128, .35); vertical-align: top; }
+.stat-table td.n, .stat-table th.n { text-align: right; white-space: nowrap; }
+.stat-table td { white-space: nowrap; }
+.stat-notes .stat-note { font-size: .8rem; color: var(--bs-secondary-color, #555); margin: 0 0 .25rem; }
+/* a table card has a row to itself in the canvas grid (bslib wraps each card in a grid item) */
+.bslib-grid-item:has(.chart-table-card) { grid-column: 1 / -1; }
+"
+
+# The summary tables as plain HTML (one for each kind of column, each scrolling sideways inside its own box when it is wider than its
+#   place), then the lines under them (summary_notes()). `tb` is summary_table()'s tibble; `ci` whether the intervals are shown. A
+#   file's own words (a column name, a label, a level) are text in the tags, so none can be markup.
+summary_tag <- function(tb, ci = TRUE) {
+  blocks = summary_blocks(tb, ci)
+  tagList(
+    purrr::map(blocks, function(b) {
+      cols = seq_along(b$table)
+      tags$div(class = "stat-block",
+        if (length(blocks) > 1L) tags$p(class = "stat-title", b$title),
+        tags$div(class = "table-scroll", role = "region", tabindex = "0", `aria-label` = b$title,
+          tags$table(class = "stat-table",
+            tags$thead(tags$tr(purrr::map(cols, function(j) tags$th(scope = "col", class = if (b$right[[j]]) "n", names(b$table)[[j]])))),
+            tags$tbody(purrr::map(seq_len(nrow(b$table)), function(i)
+              tags$tr(purrr::map(cols, function(j) tags$td(class = if (b$right[[j]]) "n", b$table[[j]][[i]]))))))))
+    }),
+    tags$div(class = "stat-notes", purrr::map(summary_notes(tb, ci), function(n) tags$p(class = "stat-note", n))))
+}
+
+# The columns a summary table can be taken as a measure (a number, a whole number that is not a time) and the columns it can be taken by
+#   (a group-like column of at most CODEBOOK_MAX_LEVELS levels), as named choices for a select: the label (the name) is the choice's
+#   name, the column name its value.
+summary_choice <- function(e) if (is_text1(e$label) && nzchar(trimws(e$label)) && !identical(e$label, e$name)) paste0(e$label, " (", e$name, ")") else e$name
+summary_measure_choices <- function(cb, data) {
+  ok = purrr::keep(cb$columns, function(e) e$name %in% names(data) && identical(summary_kind(e, data[[e$name]]), "measure"))
+  stats::setNames(purrr::map_chr(ok, "name"), purrr::map_chr(ok, summary_choice))
+}
+summary_by_choices <- function(cb, data) {
+  ok = purrr::keep(cb$columns, function(e) e$name %in% names(data) && identical(summary_kind(e, data[[e$name]]), "group") &&
+                     length(unique(data[[e$name]][!is.na(data[[e$name]])])) <= CODEBOOK_MAX_LEVELS)
+  c(None = "", stats::setNames(purrr::map_chr(ok, "name"), purrr::map_chr(ok, summary_choice)))
+}
+
+# A table's title when the analyst types none: the measures' labels (the first three), then "by" and the group's label.
+summary_title <- function(measures, by, cb) {
+  lab = function(n) { e = purrr::detect(cb$columns, function(c) identical(c$name, n)); if (is.null(e)) n else if (is_text1(e$label) && nzchar(trimws(e$label))) trimws(e$label) else n }
+  shown = purrr::map_chr(utils::head(measures, 3L), lab)
+  paste0("Summary statistics: ", paste(shown, collapse = ", "), if (length(measures) > 3L) paste0(" and ", length(measures) - 3L, " more"),
+         if (is_text1(by) && nzchar(by)) paste0(", by ", lab(by)))
+}
+
+# The Data page's section: the summary of every column of the file read, shown once a file is read (it does not wait for labels), with a
+#   select for the group, the switch for the intervals and the CSV. The controls are fixed and the select is refilled when the
+#   groups change, so nothing the analyst chose is lost while the dictionary is edited.
+mod_summary_ui <- function(id) {
+  ns = NS(id)
+  tagList(
+    conditionalPanel("!output.has_data", ns = ns, tags$p(class = "text-muted", "Read a data file above first.")),
+    conditionalPanel("output.has_data", ns = ns,
+      tags$style(HTML(SUMMARY_CSS)),
+      tags$p(class = "text-muted small", "Statistics of every column of the file. ", SUMMARY_PRIVACY),
+      tags$div(class = "d-flex flex-wrap align-items-end gap-3 mb-2",
+               tags$div(style = "min-width: 14rem;", selectInput(ns("by"), "By group", choices = c(None = ""), selectize = FALSE, width = "100%")),
+               tags$div(class = "mb-3", bslib::input_switch(ns("ci"), "Show 95% CI", value = TRUE)),
+               tags$div(class = "mb-3", downloadButton(ns("download"), "Download CSV", class = "btn-sm btn-outline-secondary"))),
+      uiOutput(ns("table"))))
+}
+
+mod_summary_server <- function(id, state) {
+  moduleServer(id, function(input, output, session) {
+    # "yes" when a file is read, else empty: the page shows the section on it (conditionalPanel reads it as true or false)
+    output$has_data = renderText(if (!is.null(state$data) && !is.null(state$codebook)) "yes" else "")
+    outputOptions(output, "has_data", suspendWhenHidden = FALSE)
+
+    # The select holds the group-like columns; it is filled again only when that set changes, and keeps its choice while it can.
+    choices = reactive({
+      if (is.null(state$data) || is.null(state$codebook)) return(c(None = ""))
+      summary_by_choices(state$codebook, state$data)
+    })
+    observeEvent(choices(), {
+      keep = isolate(input$by) %||% ""
+      updateSelectInput(session, "by", choices = choices(), selected = if (keep %in% choices()) keep else "")
+    })
+
+    by = reactive({ b = input$by %||% ""; if (nzchar(b) && b %in% choices()) b })
+    table = reactive({
+      if (is.null(state$data) || is.null(state$codebook)) return(NULL)
+      tryCatch(summary_table(state$data, state$codebook, NULL, by()), error = function(e) e)
+    })
+    show_ci = reactive(!identical(input$ci, FALSE))
+
+    output$table = renderUI({
+      tb = table()
+      if (is.null(tb)) return(NULL)
+      if (inherits(tb, "error")) return(warn_box(conditionMessage(tb)))
+      summary_tag(tb, show_ci())
+    })
+    output$download = downloadHandler(
+      filename = function() "summary_statistics.csv",
+      content = function(file) {
+        tb = table()
+        if (is.null(tb) || inherits(tb, "error")) stop("There is no summary to write.", call. = FALSE)
+        summary_csv(tb, show_ci(), file)
+      })
+  })
 }
 
 
@@ -913,6 +1049,7 @@ mod_explore_ui <- function(id) {
     tags$div(class = "chart-canvas",
              uiOutput(ns("gate")), uiOutput(ns("boxes")), uiOutput(ns("bar")), uiOutput(ns("cards")), uiOutput(ns("foot"))),
     tags$style(HTML(EXPLORE_CSS)),
+    tags$style(HTML(SUMMARY_CSS)),
     tags$script(HTML(EXPLORE_JS)))
 }
 
@@ -947,6 +1084,10 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     made$interactive = new.env()
     made$dash = new.env()              # per chart: whether it is in the dashboard (a reactiveVal, TRUE when the card is made)
     made$thumbs = new.env()            # the small pictures of the export dialog, by chart spec, palette and data
+    made$tn = 0L                       # summary tables made, for their ids (t1, t2, ...)
+    made$table = new.env()             # per table: its definition (title, measures, by, ci), a reactiveVal; a table's switch for the dashboard is in made$dash
+    made$tbl = new.env()               #   and the numbers worked out for it (summary_table(), or the error), a reactive, so a new palette does not work them again
+    table_msg = reactiveVal(NULL)      # what the Add a summary table dialog says when it cannot add (no measure chosen)
     dash_result = reactiveVal(NULL)    # what the last build of the dashboard gave, or the error it met
     dash_gen = reactiveVal(0L)         # counts builds and openings, so the dialog's button area is drawn again
     dash_fields = reactiveValues()     # what the analyst typed in the dialog, kept for the next time it opens
@@ -1030,6 +1171,11 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     toggle_selected = function(chart_id) set_selected(if (identical(isolate(selected()), chart_id)) NULL else chart_id)
     # Whether a chart is in the dashboard: the card's "In dashboard" switch, made with the chart, on until it is turned off.
     in_dash = function(chart_id) !is.null(made$dash[[chart_id]]) && isTRUE(made$dash[[chart_id]]())
+    # A summary table is a card on the canvas with an id of its own (t1, t2, ...), in the canvas order; its definition is in state$tables.
+    #   The canvas ids that are charts are what the chat, the headlines and the redraws work on; a table is none of them, so what the
+    #   model is sent never holds a table (nor its id or title).
+    table_of = function(id) (isolate(state$tables) %||% list())[[id]]
+    chart_ids = function() purrr::keep(isolate(state$canvas), function(i) !is.null(chart_of(i)))
     # One place up or down in the canvas, which is the order of the dashboard; the first cannot go up nor the last down.
     move_chart = function(chart_id, by) {
       ids = isolate(state$canvas)
@@ -1066,9 +1212,15 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       state$canvas = setdiff(isolate(state$canvas), chart_id)
     }
 
+    # Removing a summary table takes its card off the canvas and its definition out of the state.
+    remove_table = function(table_id) {
+      ts = isolate(state$tables) %||% list(); ts[[table_id]] = NULL; state$tables = ts
+      state$canvas = setdiff(isolate(state$canvas), table_id)
+    }
+
     reset_canvas = function() {
       set_selected(NULL)
-      state$charts = list(); state$stories = list(); state$canvas = character(0)
+      state$charts = list(); state$stories = list(); state$canvas = character(0); state$tables = list()
       last(NULL)
     }
 
@@ -1109,7 +1261,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     # One chat turn: the canvas (newest first), the selected chart and the last exchange go with the message. The
     #   last exchange is this message and the reply's text, never anything R wrote in the chat during setup.
     run_turn = function(msg) {
-      canvas = unname(purrr::map(isolate(state$canvas), chart_of))
+      canvas = unname(purrr::map(chart_ids(), chart_of))     # the charts only: no summary table goes to the model
       r = chat_turn(msg, canvas, isolate(selected()), isolate(state$codebook), isolate(state$data), last = isolate(last()), ask = ask,
                     palette = isolate(palette()))
       state$calls = dplyr::bind_rows(isolate(state$calls), r$calls)
@@ -1137,6 +1289,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       g = guess()
       if (!is.null(g) && identical(m, row_text(g))) return(function() use_guess(g))
       if (m %in% made$rows_offered) return(function() say("That row guess is not on offer now. Write what one row is on the Data page."))
+      # A message that only asks for summary statistics is answered by R opening the dialog of the summary table: no model call.
+      if (summary_request(m)) return(function() if (isTRUE(open_table_dialog())) say(SETUP_SUMMARY))
       NULL
     }
 
@@ -1160,8 +1314,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     observeEvent(input$write_headlines, with_busy({
       say("Write headlines", role = "user")
       if (send_ok("Writing headlines")) {
-        todo = purrr::keep(isolate(state$canvas), needs_story)
-        if (!length(todo)) say(if (length(isolate(state$canvas))) "Every chart on the canvas already has a headline and summary that match it."
+        todo = purrr::keep(chart_ids(), needs_story)
+        if (!length(todo)) say(if (length(chart_ids())) "Every chart on the canvas already has a headline and summary that match it."
                                else "There are no charts on the canvas yet.")
         else say(story_line(write_stories(todo)))
       }
@@ -1239,12 +1393,12 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       dk = data_key()
       changed = !fresh && !identical(made$data_key, dk)
       made$data_key = dk
-      if (changed) purrr::walk(isolate(state$canvas), function(i) {
+      if (changed) purrr::walk(chart_ids(), function(i) {
         ch = chart_of(i)
         ch$notes = notes_for(ch$spec)
         set_chart(ch)
       })
-      n_texts = if (changed) sum(purrr::map_lgl(isolate(state$canvas), function(i) !is.null(story_of(i)))) else 0L
+      n_texts = if (changed) sum(purrr::map_lgl(chart_ids(), function(i) !is.null(story_of(i)))) else 0L
       # A value on a button must be one line, to sit in the markup of one suggestion.
       words = purrr::discard(missing_candidates(data), function(w) grepl("[\r\n]", w))
       treat(words)
@@ -1255,8 +1409,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                    format_num(ncol(data)), " columns."),
             if (length(problems)) paste0("- ", md_text(problems), collapse = "\n") else "No problems found.",
             if (length(made$notes)) paste0("- ", md_text(made$notes), collapse = "\n"),
-            if (changed && length(isolate(state$canvas)))
-              paste0("The data changed, so the ", length(isolate(state$canvas)), if (length(isolate(state$canvas)) == 1L) " chart on the canvas was" else " charts on the canvas were",
+            if (changed && length(chart_ids()))
+              paste0("The data changed, so the ", length(chart_ids()), if (length(chart_ids()) == 1L) " chart on the canvas was" else " charts on the canvas were",
                      " drawn again from it.", if (n_texts) paste0(" ", n_texts, if (n_texts == 1L) " headline and summary is" else " headlines and summaries are",
                                                                   " marked as changed since written, because their numbers may no longer hold. Press Write headlines to write them again.")),
             if (length(words)) "If one of these stands for missing, press it and the file is read again:"),
@@ -1305,14 +1459,18 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
 
     output$bar = renderUI({
       if (!ready()) return(NULL)
-      n = length(state$canvas)
+      cards = state$canvas
+      n = length(purrr::keep(cards, function(i) !is.null(state$charts[[i]])))     # charts; the rest of the canvas is summary tables
+      n_tables = length(cards) - n
       sel = selected()
       chosen = if (!is.null(sel) && !is.null(made$chart[[sel]])) chart_title(made$chart[[sel]](), sel)
-      n_in = sum(purrr::map_lgl(state$canvas, in_dash))
+      n_in = sum(purrr::map_lgl(cards, in_dash))
       tags$div(class = "d-flex align-items-center flex-wrap gap-2 my-2",
                actionButton(ns("style"), "Style", class = "btn-sm btn-outline-secondary"),
-               tags$span(class = "text-muted small", paste0(format_num(n), if (n == 1L) " chart" else " charts")),
-               tags$span(class = "text-muted small chart-in-dashboard", paste0(format_num(n_in), " of ", format_num(n), " in the dashboard")),
+               tags$span(class = "text-muted small", paste0(format_num(n), if (n == 1L) " chart" else " charts",
+                                                            if (n_tables) paste0(", ", format_num(n_tables), if (n_tables == 1L) " table" else " tables"))),
+               tags$span(class = "text-muted small chart-in-dashboard", paste0(format_num(n_in), " of ", format_num(length(cards)), " in the dashboard")),
+               actionButton(ns("add_table"), "Add a summary table", class = "btn-sm btn-outline-secondary"),
                actionButton(ns("export"), "Export dashboard", class = "btn-sm btn-outline-secondary"),
                if (!is.null(chosen))
                  tagList(tags$span(class = "small", paste0("Selected: ", chosen)),
@@ -1332,7 +1490,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       ids = state$canvas
       if (!length(ids)) return(tags$p(class = "text-muted", "No charts yet. Ask a question, or press Suggest charts."))
       do.call(bslib::layout_column_wrap,
-              c(list(width = 1 / 2, fill = FALSE, heights_equal = "row"), purrr::map(ids, function(i) uiOutput(ns(cid(i, "card"))))))
+              c(list(width = 1 / 2, fill = FALSE, heights_equal = "row"),
+                purrr::map(ids, function(i) uiOutput(ns(cid(i, "card"))))))
     })
 
     output$foot = renderUI({
@@ -1386,7 +1545,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     #   follows the selected chart.
     observeEvent(input$card_click, {
       i = input$card_click$id
-      if (is_text1(i) && i %in% isolate(state$canvas)) toggle_selected(i)
+      if (is_text1(i) && i %in% isolate(state$canvas) && !is.null(chart_of(i))) toggle_selected(i)
     })
     observeEvent(input$deselect, set_selected(NULL))
     placeholder = reactive({
@@ -1399,11 +1558,14 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     # ---- exporting the dashboard ------------------------------------------------------------------------------------
 
     # The chosen charts, in the order of the canvas, as build_dashboard() takes them (the mode is the dialog's to fill in).
+    #   A summary table is an item too (list(id, table, mode = "table"), with no chart or story), at its place in the canvas order.
     dash_items = function() {
-      ids = purrr::keep(isolate(state$canvas), function(i) !is.null(chart_of(i)) && in_dash(i))
-      purrr::map(ids, function(i) list(id = i, chart = chart_of(i), story = story_of(i), mode = "picture",
-                                       stale = story_stale(story_of(i), chart_of(i), isolate(data_key()))))
+      ids = purrr::keep(isolate(state$canvas), function(i) (!is.null(chart_of(i)) || !is.null(table_of(i))) && in_dash(i))
+      purrr::map(ids, function(i) if (!is.null(table_of(i))) list(id = i, table = table_of(i), mode = "table", stale = NA_character_)
+                                  else list(id = i, chart = chart_of(i), story = story_of(i), mode = "picture",
+                                            stale = story_stale(story_of(i), chart_of(i), isolate(data_key()))))
     }
+    item_title = function(it) if (!is.null(it$table)) it$table$title else chart_title(it$chart, "Untitled chart")
 
     # A chart's small picture for the dialog as a data address, drawn once for a given spec, palette and data; NULL for a chart that
     #   cannot be drawn now.
@@ -1455,11 +1617,15 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       if (!length(items))
         return(showModal(modalDialog(title = "Export dashboard", easyClose = TRUE, footer = modalButton("Close"),
                                      warn_box("No chart is in the dashboard. Switch \"In dashboard\" on for at least one card, then press Export dashboard again."))))
-      titles = purrr::map_chr(items, function(it) chart_title(it$chart, "Untitled chart"))
-      has_head = purrr::map_lgl(items, function(it) !is.null(it$story) && is_text1(it$story$headline) && nzchar(trimws(it$story$headline)))
-      warns = dashboard_warnings(titles, has_head, purrr::map_chr(items, "stale"), isolate(palette()))
+      titles = purrr::map_chr(items, item_title)
+      has_head = purrr::map_lgl(items, function(it) !is.null(it$table) || (!is.null(it$story) && is_text1(it$story$headline) && nzchar(trimws(it$story$headline))))
+      # A table with a group that has fewer than SUMMARY_SMALL_ROWS rows is named once in one warning (nothing is hidden).
+      small = purrr::map_chr(purrr::keep(items, function(it) !is.null(it$table) && is_text1(it$table$by) && nzchar(it$table$by)), function(it)
+        if (isTRUE(tryCatch(any(summary_table(isolate(state$data), isolate(state$codebook), it$table$measures, it$table$by)$small), error = function(e) FALSE))) it$table$title else NA_character_)
+      warns = dashboard_warnings(titles, has_head, purrr::map_chr(items, "stale"), isolate(palette()), small = small[!is.na(small)])
       boxes = canvas_box_values(isolate(state$data), isolate(state$codebook))
-      purrr::walk(items, function(it)
+      chart_items = purrr::keep(items, function(it) is.null(it$table))
+      purrr::walk(chart_items, function(it)
         output[[paste0("dash_note_", it$id)]] = renderUI({
           if (identical(input[[dash_mode_id(it$id)]], "interactive") && chart_from_rows(it$chart$spec))
             tags$p(class = "small mb-0", style = warn_style, DASH_DISCLOSURE)
@@ -1468,7 +1634,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       dash_gen(isolate(dash_gen()) + 1L)
       showModal(modalDialog(
         title = "Export dashboard", size = "l", easyClose = FALSE, footer = modalButton("Close"),
-        tags$p(class = "small text-muted", "One zip: the dashboard as one page, the data dictionary and a codebook page, and each chart as a picture and a script. ",
+        tags$p(class = "small text-muted", "One zip: the dashboard as one page, the data dictionary and a codebook page, and each chart as a picture and a script (each summary table as a CSV). ",
                "On the page each chart is drawn at the size it is shown, and again for a phone. ",
                "Nothing here calls a model."),
         if (length(warns)) tags$div(class = "mb-3", purrr::map(unname(warns), function(w) tags$p(class = "small mb-1", style = warn_style, w))),
@@ -1486,7 +1652,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         tags$p(class = "small text-muted", "Each is a line from the facts of one chart, worked out by R from the numbers the chart draws, and is shown as one more box at the top of the page with the chart's name under it. ",
                "You pick it from the list; it is never typed."),
         {
-          choices = dash_key_choices(items)
+          choices = dash_key_choices(chart_items)
           if (length(choices) > 1L)
             tags$div(class = "row g-2", purrr::map(seq_len(DASH_KEYS_MAX), function(k)
               tags$div(class = "col-md-4", selectInput(ns(paste0("dash_key", k)), paste("Key number", k), choices = choices, selected = "", width = "100%"))))
@@ -1496,8 +1662,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         tags$p(class = "small text-muted", "Change the order with Move up and Move down on the cards, and leave a chart out with its \"In dashboard\" switch. ",
                "A picture is the smallest file. An interactive chart needs the scripts of the chart package, which makes the page several megabytes larger."),
         purrr::imap(items, function(it, i)
-          dash_chart_row(it, i, dash_thumb(it$chart), ns(dash_mode_id(it$id)), ns(paste0("dash_note_", it$id)),
-                         dashboard_default_mode(it$chart, isolate(made$interactive[[it$id]]())))),
+          if (!is.null(it$table)) dash_table_row(it, i, isolate(state$codebook))
+          else dash_chart_row(it, i, dash_thumb(it$chart), ns(dash_mode_id(it$id)), ns(paste0("dash_note_", it$id)),
+                              dashboard_default_mode(it$chart, isolate(made$interactive[[it$id]]())))),
         uiOutput(ns("dash_action"))))
     })
     purrr::walk(c("title", "subtitle", "author", "intro"), function(f)
@@ -1514,8 +1681,10 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         if (isTRUE(res$ok))
           tags$div(class = "alert alert-success mt-3", role = "status",
                    tags$p(class = "mb-1", paste0("Built ", res$name, ": ", dash_size_text(res$bytes), " in ", format(round(res$seconds, 1), nsmall = 1), " seconds. ",
-                                                 length(res$modes), if (length(res$modes) == 1L) " chart: " else " charts: ", sum(res$modes == "picture"), " as ",
-                                                 if (sum(res$modes == "picture") == 1L) "a picture" else "pictures", " and ", sum(res$modes == "interactive"), " interactive.")),
+                                                 sum(res$modes != "table"), if (sum(res$modes != "table") == 1L) " chart: " else " charts: ", sum(res$modes == "picture"), " as ",
+                                                 if (sum(res$modes == "picture") == 1L) "a picture" else "pictures", " and ", sum(res$modes == "interactive"), " interactive.",
+                                                 if (any(res$modes == "table")) paste0(" ", sum(res$modes == "table"), if (sum(res$modes == "table") == 1L) " summary table" else " summary tables",
+                                                                                       " (a table in the page and a CSV in charts/).") else "")),
                    unname(purrr::imap(res$fallbacks[!is.na(res$fallbacks)], function(why, t)
                      tags$p(class = "small mb-1", style = warn_style, paste0("'", t, "' is a picture: its interactive version could not be made (", why, ").")))),
                    tags$p(class = "small mb-0", "Unzip it and open dashboard.html in any browser; it needs no connection.")),
@@ -1539,7 +1708,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       tryCatch({
         items = purrr::map(dash_items(), function(it) {
           m = input[[dash_mode_id(it$id)]]
-          it$mode = if (is_text1(m) && m %in% DASH_MODES) m else dashboard_default_mode(it$chart, isolate(made$interactive[[it$id]]()))
+          if (is.null(it$table)) it$mode = if (is_text1(m) && m %in% DASH_MODES) m else dashboard_default_mode(it$chart, isolate(made$interactive[[it$id]]()))
           it
         })
         d = input$dash_date
@@ -1757,6 +1926,126 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       })
       invisible()
     }
+
+    # ---- a summary table's card ---------------------------------------------------------------------------------------
+
+    # The Add a summary table dialog: the measures (one or more), a group to take them by (optional), a title and the switch for the 95%
+    #   intervals. R works the numbers out from the file; no model is asked. A chat message that only asks for summary statistics opens it
+    #   too. Returns TRUE when the dialog opened (it does not before a file is read and the dictionary says what a row is).
+    open_table_dialog = function() {
+      cb = isolate(state$codebook)
+      data = isolate(state$data)
+      if (is.null(data) || is.null(cb)) { say(SETUP_NEED_DATA); return(invisible(FALSE)) }
+      if (!codebook_ready(cb)) { say(SETUP_NEED_ROW); return(invisible(FALSE)) }
+      table_msg(NULL)
+      showModal(modalDialog(
+        title = "Add a summary table", size = "l", easyClose = TRUE,
+        footer = tagList(modalButton("Cancel"), actionButton(ns("table_add"), "Add table", class = "btn-primary")),
+        tags$p(class = "small text-muted", SUMMARY_PRIVACY),
+        selectizeInput(ns("table_measures"), "Measures (one or more)", choices = summary_measure_choices(cb, data), multiple = TRUE, width = "100%",
+                       options = list(placeholder = "Choose columns")),
+        selectInput(ns("table_by"), "By group (optional)", choices = summary_by_choices(cb, data), selectize = FALSE, width = "100%"),
+        textInput(ns("table_title"), "Title", value = "", width = "100%", placeholder = "Left blank, the title names the columns"),
+        bslib::input_switch(ns("table_ci"), "Show 95% CI", value = TRUE),
+        tags$p(class = "small text-muted", "95% intervals assume a simple random sample, and the note under the table says so."),
+        uiOutput(ns("table_msg"))))
+      invisible(TRUE)
+    }
+    output$table_msg = renderUI(if (!is.null(table_msg())) warn_box(table_msg()))
+    observeEvent(input$add_table, open_table_dialog())
+
+    # A table is added on top of the canvas, as a chart is, with its switch for the dashboard on.
+    add_table = function(def) {
+      made$tn = made$tn + 1L
+      def$id = paste0("t", made$tn)
+      ts = isolate(state$tables) %||% list()
+      ts[[def$id]] = def
+      state$tables = ts
+      make_table(def$id)
+      state$canvas = c(def$id, isolate(state$canvas))
+      invisible(def$id)
+    }
+
+    observeEvent(input$table_add, {
+      cb = isolate(state$codebook)
+      data = isolate(state$data)
+      if (is.null(cb) || is.null(data)) return()
+      allowed = unname(summary_measure_choices(cb, data))
+      m = as.character(input$table_measures)
+      m = m[m %in% allowed]
+      if (!length(m)) return(table_msg(if (length(allowed)) "Choose at least one measure." else SUMMARY_NO_MEASURE))
+      by = input$table_by %||% ""
+      by = if (nzchar(by) && by %in% summary_by_choices(cb, data)) by
+      title = trimws(input$table_title %||% "")
+      add_table(list(title = if (nzchar(title)) title else summary_title(m, by, cb), measures = m, by = by, ci = !identical(input$table_ci, FALSE)))
+      removeModal()
+    })
+
+    # The card: the title, Edit text (the title only) and Remove, the dashboard's switch with Move up and Move down, and the table as plain HTML
+    #   in the style's type (its title face for the title, its subtitle face for the table). A table has no picture and no text written by a
+    #   model, so it has no Select, Interactive, Code, Headline or Animate.
+    table_card_ui = function(table_id) {
+      def = made$table[[table_id]]()
+      if (is.null(def)) return(NULL)
+      tb = made$tbl[[table_id]]()
+      st = chart_style(palette()$style %||% CHART_STYLE_DEFAULT)
+      ids = state$canvas
+      at = match(table_id, ids)
+      btn = function(what, text, class = "btn-outline-secondary", ...)
+        actionButton(ns(cid(table_id, what)), text, class = paste("btn-sm", class), ...)
+      bslib::card(
+        full_screen = TRUE, fill = FALSE, class = "chart-card chart-table-card", `data-table-id` = table_id,
+        bslib::card_header(
+          class = "d-flex flex-column align-items-start gap-2",
+          tags$div(class = "fw-semibold", style = paste0("font-family: ", CHART_FONTS[[st$title_font]]$css, ";"), def$title),
+          tags$div(class = "d-flex flex-wrap gap-1", btn("edit", "Edit text"), btn("remove", "Remove", "btn-outline-danger")),
+          tags$div(class = "d-flex flex-wrap align-items-center gap-2 chart-dash-row",
+                   bslib::input_switch(ns(cid(table_id, "dash")), "In dashboard", value = isolate(in_dash(table_id))),
+                   btn("up", "Move up", disabled = isTRUE(at <= 1L)), btn("down", "Move down", disabled = isTRUE(at >= length(ids))))),
+        bslib::card_body(
+          fillable = FALSE, fill = FALSE, style = paste0("font-family: ", CHART_FONTS[[st$subtitle_font]]$css, ";"),
+          if (inherits(tb, "error")) warn_box(conditionMessage(tb)) else summary_tag(tb, def$ci)))
+    }
+
+    # A table's outputs and observers, made once, when it is added.
+    make_table = function(table_id) {
+      if (table_id %in% made$ids) return(invisible())
+      made$ids = c(made$ids, table_id)
+      made$table[[table_id]] = reactiveVal(table_of(table_id))
+      made$dash[[table_id]] = reactiveVal(TRUE)
+      made$tbl[[table_id]] = reactive({
+        def = made$table[[table_id]]()
+        tryCatch(summary_table(state$data, state$codebook, def$measures, def$by), error = function(e) e)
+      })
+      output[[cid(table_id, "card")]] = renderUI(table_card_ui(table_id))
+      observeEvent(input[[cid(table_id, "remove")]], remove_table(table_id))
+      observeEvent(input[[cid(table_id, "dash")]], {
+        rv = made$dash[[table_id]]
+        v = isTRUE(input[[cid(table_id, "dash")]])
+        if (!identical(isolate(rv()), v)) rv(v)
+      }, ignoreInit = TRUE)
+      observeEvent(input[[cid(table_id, "up")]], move_chart(table_id, -1L))
+      observeEvent(input[[cid(table_id, "down")]], move_chart(table_id, 1L))
+      # Edit text: the title only (a table holds no other text), applied with the button; blank is the title R writes from the columns.
+      observeEvent(input[[cid(table_id, "edit")]], {
+        def = table_of(table_id)
+        if (is.null(def)) return()
+        showModal(modalDialog(
+          title = paste0("Edit text: ", def$title), size = "l", easyClose = FALSE,
+          textInput(ns(cid(table_id, "w_title")), "Title", value = def$title, width = "100%"),
+          footer = tagList(modalButton("Close"), actionButton(ns(cid(table_id, "apply")), "Apply wording", class = "btn-primary"))))
+      })
+      observeEvent(input[[cid(table_id, "apply")]], {
+        def = table_of(table_id)
+        if (is.null(def)) return()
+        title = trimws(input[[cid(table_id, "w_title")]] %||% "")
+        def$title = if (nzchar(title)) title else summary_title(def$measures, def$by, isolate(state$codebook))
+        ts = isolate(state$tables); ts[[table_id]] = def; state$tables = ts
+        made$table[[table_id]](def)
+        removeModal()
+      })
+      invisible()
+    }
   })
 }
 
@@ -1892,8 +2181,9 @@ dashboard_default_mode <- function(chart, interactive_now = FALSE)
   if (chart_from_rows(chart$spec) || !isTRUE(interactive_now)) "picture" else "interactive"
 
 # The warnings of the dialog, as sentences named by what they are about (headline, changed, palette). `titles`, `has_headline` and
-#   `stale` (NA, "chart" or "data", as story_stale() says) describe the chosen charts in order; the palette is the three chosen.
-dashboard_warnings <- function(titles, has_headline, stale, palette) {
+#   `stale` (NA, "chart" or "data", as story_stale() says) describe the chosen charts in order; the palette is the three chosen. `small` is
+#   the titles of the summary tables that show a group of fewer than SUMMARY_SMALL_ROWS rows: one warning for all of them (nothing is hidden).
+dashboard_warnings <- function(titles, has_headline, stale, palette, small = character(0)) {
   bad = purrr::keep(names(EXPLORE_PALETTE_KINDS), function(k) !palette_passes(palette[[k]]))
   c(if (any(!has_headline))
       list(headline = paste0("No headline yet: ", paste(titles[!has_headline], collapse = "; "), ". The page shows the chart's title in its place."))
@@ -1905,6 +2195,8 @@ dashboard_warnings <- function(titles, has_headline, stale, palette) {
     if (length(bad))
       list(palette = paste(purrr::map_chr(bad, function(k) paste0("The ", tolower(EXPLORE_PALETTE_KINDS[[k]]), " palette (", CHART_PALETTES[[palette[[k]]]]$label, "): ",
                                                                    PALETTE_CVD_WARNING)), collapse = " "))
+    else NULL,
+    if (length(small)) list(small_groups = paste0(SUMMARY_SMALL_WARNING, " Marked in: ", paste(small, collapse = "; "), "."))
     else NULL)
 }
 
@@ -2010,14 +2302,23 @@ dash_css <- function(style, accent) {
     ".levels{border-collapse:collapse;margin:.25rem 0 0;font-size:.9rem;width:100%;max-width:28rem;}\n",
     ".levels th,.levels td{border-bottom:1px solid var(--grid);padding:.2rem .5rem;text-align:left;overflow-wrap:anywhere;}\n",
     ".levels td.n{text-align:right;white-space:nowrap;}\n",
+    # The summary tables (a card of the page): a real table that scrolls sideways inside its own box when it is wider than its place.
+    ".stat-block{margin:0 0 1rem;}.stat-title{font-weight:700;margin:0 0 .25rem;color:var(--text2);}\n",
+    ".stat-block .table-scroll{overflow-x:auto;margin:0;max-width:100%;}\n",
+    ".stat-table{border-collapse:collapse;font-size:.85rem;width:100%;}\n",
+    ".stat-table th{text-align:left;color:var(--text2);font-weight:700;white-space:nowrap;border-bottom:2px solid var(--text);padding:.3rem .8rem .3rem 0;vertical-align:bottom;}\n",
+    ".stat-table td{padding:.3rem .8rem .3rem 0;border-bottom:1px solid var(--grid);vertical-align:top;}\n",
+    ".stat-table td.n,.stat-table th.n{text-align:right;white-space:nowrap;}\n",
+    ".table-scroll.has-notes{margin-bottom:.4rem;}.page>.stat-notes{margin:0 0 2rem;}\n",
+    ".stat-notes .stat-note{color:var(--caption);font-size:.8rem;margin:.3rem 0 0;max-width:80ch;}\n",
     look, "\n",
     "@media (max-width:", DASH_PHONE_MAX_PX, "px){.page{padding:1rem .75rem 2rem;}.card{padding:.75rem;}.col-section{grid-template-columns:minmax(0,1fr);}.col-section dl{grid-template-columns:1fr;gap:0;}",
-    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.widget{overflow-x:auto;}.widget .html-widget{min-width:36rem;}.boxes{grid-template-columns:repeat(2,minmax(0,1fr));}.boxes .box:last-child:nth-child(odd){grid-column:1/-1;}.box-value{--max:1.5rem;}.box-value.long{--max:1rem;}}\n",
+    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.stat-table th,.stat-table td{white-space:nowrap;}.widget{overflow-x:auto;}.widget .html-widget{min-width:36rem;}.boxes{grid-template-columns:repeat(2,minmax(0,1fr));}.boxes .box:last-child:nth-child(odd){grid-column:1/-1;}.box-value{--max:1.5rem;}.box-value.long{--max:1rem;}}\n",
     "@page{margin:14mm;}\n",
     "@media print{:root{--bg:#FFFFFF;--text:#111111;--text2:#333333;--caption:#555555;--grid:#BBBBBB;--box:#F2F2F2;--rule:#111111;}",
     "body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FFFFFF;color:#111111;}.page{max-width:none;padding:0;}",
     ".grid{display:block;}.card,.col-section,.box,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.col-section figure img.screen-only{display:none;}",
-    ".boxes{display:flex;flex-wrap:wrap;}.box{flex:1 1 10rem;}.masthead{break-after:avoid;}h2{break-after:avoid;}}\n")
+    ".boxes{display:flex;flex-wrap:wrap;}.box{flex:1 1 10rem;}.masthead{break-after:avoid;}h2{break-after:avoid;}.stat-block .table-scroll{overflow:visible;}.stat-table{font-size:.7rem;}}\n")
 }
 
 # One of the three value boxes of the canvas: the title, the value and the text to show in full (what the Period or File box says in
@@ -2092,6 +2393,8 @@ dash_about <- function(items, settings, cb, data, model) {
   texts = purrr::keep(items, function(it) !is.null(it$story) && is_text1(it$story$headline) && nzchar(trimws(it$story$headline)))
   fell = purrr::keep(items, function(it) !is.null(it$fallback))
   modes = purrr::map_chr(items, "mode")
+  charts = purrr::keep(items, function(it) !identical(it$mode, "table"))
+  tables = purrr::keep(items, function(it) identical(it$mode, "table"))
   entry = function(term, ...) list(tags$dt(term), tags$dd(...))
   tags$section(class = "about", `aria-labelledby` = "about-heading",
     tags$h2(id = "about-heading", "About this dashboard"),
@@ -2104,11 +2407,14 @@ dash_about <- function(items, settings, cb, data, model) {
                                                    " from numbers that chaRt worked out from the file, and each was checked against those numbers when it was written",
                                                    " or edited. The title, subtitle, author and introduction above are the author's own and are not checked.")
                         else "No headline or summary in this dashboard was written by a model. The title, subtitle, author and introduction above are the author's own and are not checked."),
-      entry("What the checks said", tags$ul(purrr::map(items, function(it) tags$li(paste0(it$title, ": ", dash_text_status(it), "."))))),
-      entry("The charts", paste0(sum(modes == "picture"), if (sum(modes == "picture") == 1L) " picture" else " pictures", " and ", sum(modes == "interactive"),
+      if (length(charts)) entry("What the checks said", tags$ul(purrr::map(charts, function(it) tags$li(paste0(it$title, ": ", dash_text_status(it), "."))))),
+      if (length(charts)) entry("The charts", paste0(sum(modes == "picture"), if (sum(modes == "picture") == 1L) " picture" else " pictures", " and ", sum(modes == "interactive"),
                                  " interactive. ", if (any(modes == "interactive"))
                                    "An interactive chart carries the values of the rows it plots, in this file." else "A picture holds no row values.",
                                  purrr::map_chr(fell, function(it) paste0(" '", it$title, "' is a picture because its interactive version could not be made: ", it$fallback)) |> paste(collapse = ""))),
+      if (length(tables)) entry("The summary tables", paste0(length(tables), if (length(tables) == 1L) " table" else " tables", " of statistics, worked out by R from the rows of the file with no model; ",
+                                 "each is also a CSV in charts/. A table shows statistics of columns and groups, never a row. The note under each says how its numbers were made. The tables: ",
+                                 paste(purrr::map_chr(tables, "title"), collapse = "; "), ".")),
       entry("The data dictionary", "Column by column: ", tags$a(href = "codebook.html", "codebook.html"), " and data_dictionary.yaml, in the same folder."),
       entry("Read this first", dash_describes())))
 }
@@ -2136,6 +2442,7 @@ dash_picture_tag <- function(it, full, alt) {
 #   the chart's own subtitle under it), the chart (a picture, or the widget), the summary, the notes the chart carries and the source
 #   line, once. The drawing has no title and no source line. `full`: the card has a whole row to itself.
 dash_card <- function(it, full = FALSE) {
+  if (identical(it$mode, "table")) return(dash_table_card(it, full))
   headed = is_text1(it$headline) && nzchar(trimws(it$headline))
   alt = paste0(it$title, if (headed) paste0(". ", it$headline))
   tags$article(class = css_class("card", if (full) "full"),
@@ -2281,6 +2588,21 @@ codebook_page <- function(cb, palette = chart_palette_default(), date = Sys.Date
   style = palette$style %||% CHART_STYLE_DEFAULT
   accent = spec_palette(palette)$single
   cols = cb$columns
+  # The statistics of each column for the table at the top, from the data in hand (summary_table(): measures, levels, dates, and for an id or a
+  #   text only n and the number of different values); none when no data is given. They describe a column; no row of the file is in them.
+  stats = if (!is.null(data)) tryCatch(summary_per_column(summary_table(data, cb)), error = function(err) NULL)
+  stat_head = c("n", "Distinct", "Mean", "SD", "Min", "Median", "Max", paste(SUMMARY_CI_HEADER, c("low", "high")))
+  stat_cells = function(e) {
+    r = stats[match(e$name, stats$column), ]
+    meas = identical(r$kind, "measure")
+    cell = function(applies, text) if (applies) summary_txt(text) else ""
+    tagList(purrr::map(c(
+      summary_cnt(r$n), summary_cnt(r$distinct),
+      cell(meas, summary_num(r$mean, r$scale)), cell(meas, summary_num(r$sd, r$scale)),
+      cell(meas || identical(r$kind, "time"), if (meas) summary_num(r$min) else r$first), cell(meas, summary_num(r$median)),
+      cell(meas || identical(r$kind, "time"), if (meas) summary_num(r$max) else r$last),
+      cell(meas, summary_num(r$mean_ci_low, r$scale)), cell(meas, summary_num(r$mean_ci_high, r$scale))), function(x) tags$td(class = "n", x)))
+  }
   num = function(x, big = TRUE) if (is.numeric(x)) format(x, big.mark = if (big) "," else "", scientific = FALSE, trim = TRUE, drop0trailing = TRUE) else as.character(x)
   row = function(term, value) if (!is.null(value) && length(value) && !all(is.na(value))) list(tags$dt(term), tags$dd(value))
   has_label = function(e) is_text1(e$label) && nzchar(trimws(e$label)) && !identical(e$label, e$name)
@@ -2325,10 +2647,13 @@ codebook_page <- function(cb, palette = chart_palette_default(), date = Sys.Date
                 tags$p(class = "byline", dash_date_text(date), if (is_text1(cb$source) && nzchar(trimws(cb$source))) paste0(" · Source: ", trimws(cb$source))),
                 tags$div(class = "intro", tags$p("This page describes each column from the data dictionary: no row of the file is shown, only a summary of each column."),
                          if (length(codes)) tags$p(paste0("These values were read as missing in every column: ", paste(codes, collapse = ", "), ".")))),
-    tags$div(class = "table-scroll", tags$table(class = "summary-table",
-      tags$thead(tags$tr(purrr::map(c("Column", "Label", "Type", "Role", "Missing"), function(h) tags$th(scope = "col", class = if (identical(h, "Missing")) "n", h)))),
+    tags$div(class = css_class("table-scroll", if (!is.null(stats)) "has-notes"), tags$table(class = "summary-table",
+      tags$thead(tags$tr(purrr::map(c("Column", "Label", "Type", "Role", "Missing", if (!is.null(stats)) stat_head), function(h)
+        tags$th(scope = "col", class = if (!h %in% c("Column", "Label", "Type", "Role")) "n", h)))),
       tags$tbody(purrr::imap(cols, function(e, i)
-        tags$tr(tags$td(tags$a(href = paste0("#col-", i), e$name)), tags$td(label_cell(e)), tags$td(e$type), tags$td(e$role), tags$td(class = "n", dash_pct(e$missing))))))),
+        tags$tr(tags$td(tags$a(href = paste0("#col-", i), e$name)), tags$td(label_cell(e)), tags$td(e$type), tags$td(e$role), tags$td(class = "n", dash_pct(e$missing)),
+                if (!is.null(stats)) stat_cells(e)))))),
+    if (!is.null(stats)) tags$div(class = "stat-notes", purrr::map(summary_notes(stats, TRUE), function(n) tags$p(class = "stat-note", n))),
     tags$main(purrr::imap(cols, function(e, i) section(e, i)))))
   dash_document(head, body)
 }
@@ -2397,7 +2722,43 @@ dash_pictures <- function(m, full, i, chart, data, cb, palette, kind) {
   m
 }
 
-# Builds the dashboard zip. `items` is list(id, chart, story, mode, stale) for each chosen chart in the order shown; `settings` is
+# One summary table of the dashboard, made. `it` is list(id, table, mode = "table") where `table` is list(title, measures, by, ci). The statistics are
+#   worked out here from the data in hand (summary_table()) and written to charts/ as a CSV (summary_csv(): header on the first row, the note in a
+#   column), and the page gets the table itself as HTML (dash_table_card()), not a picture. No model is called and no row of the file is written: a
+#   measure's statistics, a group's levels and counts, nothing of a text or an id but how many values it has.
+dash_table <- function(it, i, stage, data, cb) {
+  t = it$table
+  what = paste0("working out table ", i, " (", t$title, ")")
+  tb = dash_step(what, summary_table(data, cb, t$measures, t$by))
+  file = file.path("charts", sprintf("%02d_%s.csv", i, dash_slug(t$title)))
+  dash_step(what, summary_csv(tb, t$ci, file.path(stage, file)))
+  list(id = it$id, title = t$title, mode = "table", tb = tb, ci = isTRUE(t$ci), small = any(tb$small %in% TRUE), files = file,
+       code = c(paste0("# A summary table, not a chart: ", t$title, "."),
+                paste0("#   Columns: ", paste(t$measures, collapse = ", "), if (is_text1(t$by) && nzchar(t$by)) paste0("; by ", t$by), "."),
+                paste0("#   Worked out by chaRt from the file with no model; the numbers are in ", file, ". ", summary_notes(tb, isTRUE(t$ci))[1])))
+}
+
+# The card of a table in the page: the title as the heading, the table (a real table that scrolls sideways inside its card when it is
+#   wider than the card) and the lines under it. A table has a row to itself.
+dash_table_card <- function(it, full = TRUE)
+  tags$article(class = css_class("card", "table-card", if (full) "full"),
+    tags$h2(it$title),
+    summary_tag(it$tb, it$ci))
+
+# A table in the dialog's list: its title and the columns it takes, and what is written (a table in the page and a CSV in charts/).
+dash_table_row <- function(it, i, cb) {
+  t = it$table
+  tags$div(class = "d-flex gap-3 align-items-start border-bottom py-2",
+           tags$div(class = "small text-muted", style = "width:9rem; flex:none;", "Summary table"),
+           tags$div(class = "flex-grow-1",
+                    tags$div(class = "fw-semibold", paste0(i, ". ", t$title)),
+                    tags$div(class = "small text-muted", paste0("Columns: ", paste(purrr::map_chr(t$measures, function(n) summary_choice(purrr::detect(cb$columns, function(e) identical(e$name, n)) %||% list(name = n))), collapse = ", "),
+                                                               if (is_text1(t$by) && nzchar(t$by)) paste0("; by ", t$by), if (!isTRUE(t$ci)) "; without 95% intervals")),
+                    tags$div(class = "small", "Goes in the page as a table (no model text) and in charts/ as a CSV.")))
+}
+
+# Builds the dashboard zip. `items` is list(id, chart, story, mode, stale) for each chosen chart in the order shown (a summary table is an item
+#   too: list(id, table = list(title, measures, by, ci), mode = "table"), a card of its own with a row to itself and a CSV in charts/); `settings` is
 #   list(title, subtitle, author, date, intro, boxes, keys): `keys` are the key numbers chosen, as "chart id|number of the fact line". The
 #   pages and the charts are staged in a folder of their own and written to `zip_file`; the folder is removed. `widget` makes the
 #   interactive version of a plot (spec_widget; a check can stand in a failing one). The cards are laid out first (dash_layout(): an
@@ -2412,9 +2773,10 @@ build_dashboard <- function(items, data, cb, palette, settings, path, zip_file, 
   on.exit(unlink(stage, recursive = TRUE), add = TRUE)
   kind = chart_device_kind()
   settings$date = if (inherits(settings$date, "Date") && !is.na(settings$date)) settings$date else Sys.Date()
-  made = tryCatch(purrr::imap(unname(items), function(it, i) dash_chart(it, i, stage, data, cb, palette, path, widget, kind)),
+  made = tryCatch(purrr::imap(unname(items), function(it, i)
+                    if (!is.null(it$table)) dash_table(it, i, stage, data, cb) else dash_chart(it, i, stage, data, cb, palette, path, widget, kind)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
-  full = dash_layout(purrr::map_lgl(made, function(m) identical(m$mode, "interactive") || isTRUE(m$natural_wide)))
+  full = dash_layout(purrr::map_lgl(made, function(m) m$mode %in% c("interactive", "table") || isTRUE(m$natural_wide)))
   made = tryCatch(purrr::pmap(list(made, full, seq_along(made), unname(items)), function(m, f, i, it) dash_pictures(m, f, i, it$chart, data, cb, palette, kind)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
   dash_step("writing dashboard.html", writeBin(charToRaw(enc2utf8(dash_page(made, settings, cb, data, palette, model, full))), file.path(stage, "dashboard.html")))

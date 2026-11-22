@@ -133,12 +133,13 @@ options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 #   is saved or forgotten, so anything that depends on a key can re-run; the data as read, the
 #   sentences about it (problems), its profile, the data dictionary the analyst edits (codebook) and the
 #   path of the upload (for the code a chart comes with); the record of every model call (calls); every
-#   chart drawn this session, by id (charts), and the ids of those on the canvas, newest first (canvas);
+#   chart drawn this session, by id (charts), and the ids of those on the canvas, newest first (canvas), where a summary table is a card
+#   too (its id is in canvas and its definition, by id, in tables; the chat sees only the charts);
 #   the headline and summary written for a chart, by id (stories); the three palettes; and ask_request, a question that
 #   Methodology's "Ask this" button hands to Explore.
 new_state <- function() reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL,
                                        path = NULL, calls = NULL, charts = list(), canvas = character(0), stories = list(),
-                                       palette = chart_palette_default(), ask_request = NULL)
+                                       tables = list(), palette = chart_palette_default(), ask_request = NULL)
 
 
 # ---- 6. layout --------------------------------------------------------------
@@ -155,6 +156,7 @@ server <- function(input, output, session) {
   mod_connect_server("connect", state)
   mod_data_server("data", state)
   mod_codebook_server("codebook", state)
+  mod_summary_server("summary", state)
   mod_explore_server("explore", state)
   mod_method_server("method", state)
 }

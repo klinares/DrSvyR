@@ -571,3 +571,279 @@ codebook_detail <- function(cb, columns) {
       count_only)
   })
 }
+
+
+# ---- B5. summary statistics ---------------------------------------------------------------
+#   Descriptive statistics of the file, worked out by R from the data in hand and written to the screen, the CSV and the export. Nothing
+#   here calls a model, and nothing here is sent to one. summary_table() gives the numbers (a tibble of raw numbers: sortable, and the
+#   CSV is made from it); summary_blocks() writes them with the facts' number functions (fact_num(), fact_count(), fact_pct() of
+#   R/spec.R) for the screen and the page; summary_csv() writes the CSV. The intervals assume a simple random sample.
+
+# The line under every table that shows an interval, and the shorter one under a table with none (Kevin's wording, kept as it is).
+SUMMARY_CI_NOTE <- paste("95% confidence intervals assume a simple random sample of independent rows. No weights or sample design are applied;",
+                         "for clustered or weighted data the true intervals are usually wider. If the file is a complete count and not a sample,",
+                         "an interval has no sampling meaning.")
+SUMMARY_PLAIN_NOTE <- "Descriptive statistics of the rows in this file. No weights or sample design are applied."
+SUMMARY_QUARTILE_NOTE <- "Quartiles use R's default rule (type 7: linear interpolation between the ordered values)."
+SUMMARY_SCALE_PHRASE <- "treats the steps of the scale as equal"
+SUMMARY_CI_HEADER <- "95% CI (SRS)"
+SUMMARY_ALL_ROWS <- "All rows"
+SUMMARY_SMALL_ROWS <- 5L                  # a group with fewer rows than this is marked
+SUMMARY_SMALL_MARK <- "under 5 rows"
+SUMMARY_SMALL_WARNING <- paste("A table shows statistics for groups of fewer than 5 rows, which can describe individuals. Nothing is hidden;",
+                               "whether to publish them is your decision.")
+SUMMARY_LEVELS_SHOWN <- 10L               # the most frequent levels shown for a group-like column that has more than CODEBOOK_MAX_LEVELS
+SUMMARY_SCALE_MAX_DISTINCT <- CODED_MAX_DISTINCT   # a whole-number measure with this many different values or fewer is read as a score on a scale
+SUMMARY_SCALE_MARK <- "†"            # the dagger after a mean, SD or interval that treats the steps of a scale as equal
+SUMMARY_KIND_TITLES <- c(measure = "Numbers", group = "Groups and categories", time = "Dates and times", count = "Other columns")
+
+# What a column is summarised as, from its dictionary entry and the data in hand: "measure" (a number, or a whole number that is not a
+#   time), "group" (a category, an ordered category or a flag), "time" (a date or time, or a whole number with the time role, a year) and
+#   "count" (an id, free text, anything else, or a column whose data cannot be what its type says): for these only n, missing and the
+#   number of different values are written, never a value.
+summary_kind <- function(e, x) {
+  kind = switch(e$type %||% "text",
+    number = "measure", integer = if (identical(e$role, "time")) "time" else "measure",
+    date = "time", category = , flag = , ordered = "group", "count")
+  ok = switch(kind, measure = is.numeric(x), time = inherits(x, c("Date", "POSIXt")) || is.numeric(x), group = TRUE, TRUE)
+  if (ok) kind else "count"
+}
+
+# Whether a measure is read as a score on a scale (a rating, a Likert item, a 0 to 10 score): a whole-number column the analyst left as a
+#   measure (type integer, role measure) that has at most SUMMARY_SCALE_MAX_DISTINCT different values and lies within a run of that many
+#   consecutive whole numbers (1 to 5, 0 to 9), the columns the dictionary itself marks "may be a coded category" that are also an unbroken
+#   run of steps. Its mean, SD and interval then carry the note that they treat the steps of the scale as equal. A column of whole numbers
+#   with gaps (0, 5, 10, 15, 30 per cent) is a quantity, not a scale, and has no such note. A column typed ordered is shown by its levels
+#   and shares, with no mean, so it needs no such note.
+summary_scale <- function(e, x) {
+  obs = if (is.numeric(x)) x[is.finite(x)] else numeric(0)
+  identical(e$type, "integer") && identical(e$role, "measure") && length(obs) > 0L &&
+    length(unique(obs)) <= SUMMARY_SCALE_MAX_DISTINCT && max(obs) - min(obs) + 1 <= SUMMARY_SCALE_MAX_DISTINCT
+}
+
+# The 95% interval of a mean, t times the standard error either way (a simple random sample, no finite population correction); NA when
+#   there are fewer than two values or the standard deviation is 0 or not a number.
+summary_t_ci <- function(obs) {
+  n = length(obs)
+  s = if (n >= 2L) stats::sd(obs) else NA_real_
+  if (is.na(s) || s == 0) return(c(NA_real_, NA_real_))
+  half = stats::qt(0.975, n - 1) * s / sqrt(n)
+  mean(obs) + c(-half, half)
+}
+
+# The Wilson score interval of a share, k of n, written out (no continuity correction, so not prop.test): centre
+#   (p + z^2 / 2n) / (1 + z^2 / n), half-width z / (1 + z^2 / n) * sqrt(p (1 - p) / n + z^2 / 4n^2), with z = qnorm(0.975).
+summary_wilson <- function(k, n) {
+  if (!isTRUE(n >= 1L)) return(c(NA_real_, NA_real_))
+  z = stats::qnorm(0.975)
+  p = k / n
+  d = 1 + z^2 / n
+  half = z * sqrt(p * (1 - p) / n + z^2 / (4 * n^2)) / d
+  centre = (p + z^2 / (2 * n)) / d
+  c(max(0, centre - half), min(1, centre + half))
+}
+
+# One row of the table's tibble with every field there is, NA (or FALSE) where the row has none.
+SUMMARY_FIELDS <- list(column = NA_character_, label = NA_character_, kind = NA_character_, group = NA_character_, level = NA_character_,
+                       rows = NA_integer_, n = NA_integer_, missing_n = NA_integer_, missing_share = NA_real_, distinct = NA_integer_,
+                       mean = NA_real_, sd = NA_real_, min = NA_real_, q1 = NA_real_, median = NA_real_, q3 = NA_real_, max = NA_real_,
+                       mean_ci_low = NA_real_, mean_ci_high = NA_real_,
+                       levels = NA_integer_, count = NA_integer_, share = NA_real_, share_ci_low = NA_real_, share_ci_high = NA_real_,
+                       first = NA_character_, last = NA_character_, gap = NA_character_, scale = FALSE, small = FALSE)
+
+# The rows (as lists of fields) that one column's values `x` give, for the kind of column it is. `x` is what the group has of the column.
+summary_rows <- function(e, x, kind, scale) {
+  rows = length(x)
+  base = function(n, ...) c(list(rows = rows, n = n, missing_n = rows - n, missing_share = if (rows) (rows - n) / rows else NA_real_), list(...))
+  switch(kind,
+    measure = {
+      obs = x[is.finite(x)]
+      n = length(obs)
+      q = if (n) stats::quantile(obs, c(0.25, 0.5, 0.75), names = FALSE, type = 7) else rep(NA_real_, 3)
+      ci = summary_t_ci(obs)
+      list(base(n, distinct = length(unique(obs)), mean = if (n) mean(obs) else NA_real_, sd = if (n >= 2L) stats::sd(obs) else NA_real_,
+                min = if (n) min(obs) else NA_real_, q1 = q[[1]], median = q[[2]], q3 = q[[3]], max = if (n) max(obs) else NA_real_,
+                mean_ci_low = ci[[1]], mean_ci_high = ci[[2]], scale = scale))
+    },
+    group = {
+      obs = as.character(x[!is.na(x)])
+      n = length(obs)
+      lv = summary_levels(e, obs)
+      shown = if (length(lv$values) > CODEBOOK_MAX_LEVELS) {
+        top = order(-lv$counts, seq_along(lv$counts))[seq_len(SUMMARY_LEVELS_SHOWN)]
+        rest = setdiff(seq_along(lv$counts), top)
+        list(values = c(lv$values[top], paste0("and ", length(rest), " others")), counts = c(lv$counts[top], sum(lv$counts[rest])))
+      } else lv
+      if (!length(shown$values)) return(list(base(n, distinct = 0L, levels = 0L)))
+      purrr::map2(shown$values, shown$counts, function(v, k) {
+        ci = summary_wilson(k, n)
+        base(n, distinct = length(lv$values), levels = length(lv$values), level = v, count = as.integer(k), share = k / n,
+             share_ci_low = ci[[1]], share_ci_high = ci[[2]])
+      })
+    },
+    time = {
+      obs = x[!is.na(x)]
+      n = length(obs)
+      if (!n) return(list(base(0L, distinct = 0L)))
+      f = if (inherits(obs, c("Date", "POSIXt"))) date_facts(obs) else {
+        u = sort(unique(obs))
+        tab = if (length(u) > 1L) table(diff(u))
+        c(list(min = format(min(obs), scientific = FALSE, trim = TRUE), max = format(max(obs), scientific = FALSE, trim = TRUE)),
+          if (!is.null(tab)) list(gap = names(tab)[which.max(tab)]))
+      }
+      list(base(n, distinct = length(unique(obs)), first = f$min, last = f$max, gap = f$gap %||% NA_character_))
+    },
+    list(base(sum(!is.na(x)), distinct = length(unique(x[!is.na(x)])))))
+}
+
+# A group-like column's levels and their counts, most frequent first, but an ordered column in its own order (levels the data does not
+#   hold are left out; any level the order does not name follows).
+summary_levels <- function(e, obs) {
+  if (!length(obs)) return(list(values = character(0), counts = integer(0)))
+  lc = level_counts(obs)
+  if (!identical(e$type, "ordered") || is.null(e$order)) return(lc)
+  at = match(as.character(unlist(e$order)), lc$values)
+  at = c(at[!is.na(at)], setdiff(seq_along(lc$values), at))
+  list(values = lc$values[at], counts = lc$counts[at])
+}
+
+# The summary table, as a tibble of raw numbers with a row for each column (for a group-like column each level), the kind of column in
+#   `kind`: measure (n, missing, mean, sd, min, q1, median, q3, max, the 95% interval of the mean), group (n, missing, the number of levels, each
+#   level with its count, share and the share's 95% interval; more than CODEBOOK_MAX_LEVELS levels: the SUMMARY_LEVELS_SHOWN most
+#   frequent and "and k others"), time (n, missing, first, last, the usual gap) and count (n, missing and the number of different values only).
+#   Each column uses the rows it has: n differs by column. `measures` names the columns to summarise, in that order (NULL: every column of
+#   the data); `by` names one group-like column of at most CODEBOOK_MAX_LEVELS levels, and then each measure has a row for each of its
+#   levels and one for "All rows" (a row with no value in `by` is in "All rows" only); the other kinds are written once, as "All rows".
+#   A group of fewer than SUMMARY_SMALL_ROWS rows has `small` TRUE. The values of a text, an id or any "count" column are never in it.
+summary_table <- function(data, cb, measures = NULL, by = NULL) {
+  entries = stats::setNames(cb$columns, purrr::map_chr(cb$columns, "name"))
+  entries = entries[names(entries) %in% names(data)]
+  chosen = measures %||% names(entries)
+  unknown = setdiff(chosen, names(entries))
+  if (length(unknown)) stop("Not columns of this file: ", paste(unknown, collapse = ", "), ".", call. = FALSE)
+  if (!is.null(by)) {
+    if (!is_text1(by) || !by %in% names(entries) || !identical(summary_kind(entries[[by]], data[[by]]), "group"))
+      stop("A summary by group needs a column of categories, an ordered category or a flag; ", paste(by, collapse = ", "), " is not one.", call. = FALSE)
+    if (length(unique(data[[by]][!is.na(data[[by]])])) > CODEBOOK_MAX_LEVELS)
+      stop(by, " has more than ", CODEBOOK_MAX_LEVELS, " levels, too many to summarise by.", call. = FALSE)
+  }
+  by_x = if (!is.null(by)) as.character(data[[by]])
+  groups = if (!is.null(by)) summary_levels(entries[[by]], by_x[!is.na(by_x)])$values
+  one = function(name, group, idx) {
+    e = entries[[name]]
+    x = data[[name]][idx]
+    kind = summary_kind(e, x)
+    purrr::map(summary_rows(e, x, kind, kind == "measure" && summary_scale(e, data[[name]])), function(r)
+      utils::modifyList(SUMMARY_FIELDS, c(list(column = name, label = e$label %||% name, kind = kind, group = group,
+                                                small = !is.null(by) && !identical(group, SUMMARY_ALL_ROWS) && length(idx) < SUMMARY_SMALL_ROWS), r)))
+  }
+  everyone = seq_len(nrow(data))
+  rows = unlist(purrr::map(chosen, function(name) {
+    kind = summary_kind(entries[[name]], data[[name]])
+    if (is.null(by)) return(one(name, NA_character_, everyone))
+    if (!identical(kind, "measure")) return(one(name, SUMMARY_ALL_ROWS, everyone))
+    c(unlist(purrr::map(groups, function(g) one(name, g, which(by_x == g))), recursive = FALSE), one(name, SUMMARY_ALL_ROWS, everyone))
+  }), recursive = FALSE)
+  out = dplyr::bind_rows(purrr::map(rows, tibble::as_tibble))
+  attr(out, "summary") = list(by = by, by_label = if (!is.null(by)) entries[[by]]$label %||% by, by_missing = if (!is.null(by)) sum(is.na(by_x)) else 0L,
+                              rows = nrow(data))
+  out
+}
+
+# Whether the table shows an interval (and so carries the long note): the switch is on and the table has a measure or a group-like column.
+summary_has_interval <- function(tb, ci = TRUE) isTRUE(ci) && any(tb$kind %in% c("measure", "group"))
+
+# The lines under the table: first the note (the long one with the intervals, the short one without), then what applies to this table: the
+#   quartile rule, the columns whose mean, SD and interval treat a scale's steps as equal, the groups of fewer than SUMMARY_SMALL_ROWS rows,
+#   and the rows with no value in the `by` column.
+summary_notes <- function(tb, ci = TRUE) {
+  info = attr(tb, "summary") %||% list()
+  scaled = unique(tb$label[tb$scale %in% TRUE])
+  c(if (summary_has_interval(tb, ci)) SUMMARY_CI_NOTE else SUMMARY_PLAIN_NOTE,
+    if (any(tb$kind == "measure")) SUMMARY_QUARTILE_NOTE,
+    if (length(scaled)) paste0(SUMMARY_SCALE_MARK, " ", paste(scaled, collapse = ", "), " (mean, SD and interval): ", SUMMARY_SCALE_PHRASE, "."),
+    if (any(tb$small %in% TRUE)) paste0("Groups marked '", SUMMARY_SMALL_MARK, "' have fewer than ", SUMMARY_SMALL_ROWS, " rows: ", "their statistics can describe individuals."),
+    if (isTRUE(info$by_missing > 0L)) paste0(format_num(info$by_missing), if (info$by_missing == 1L) " row has" else " rows have", " no value for ", info$by_label,
+                                              " and ", if (info$by_missing == 1L) "is" else "are", " in '", SUMMARY_ALL_ROWS, "' only."))
+}
+
+# How a cell is written, by the facts' functions (R/spec.R): a statistic to three significant digits with thousands separators, a count
+#   whole, a share as a percentage to one decimal, text as it is; no value is a dash. `mark` puts the dagger after a statistic that
+#   treats the steps of a scale as equal.
+SUMMARY_DASH <- "–"
+summary_num <- function(v, mark = FALSE) ifelse(is.na(v), SUMMARY_DASH, paste0(fact_num(v, TRUE), ifelse(mark, SUMMARY_SCALE_MARK, "")))
+summary_cnt <- function(v) ifelse(is.na(v), SUMMARY_DASH, fact_count(v))
+summary_pct <- function(v) ifelse(is.na(v), SUMMARY_DASH, fact_pct(100 * v))
+summary_txt <- function(v) ifelse(is.na(v), SUMMARY_DASH, v)
+
+# The table as text, in one block for each kind of column present (SUMMARY_KIND_TITLES): list(kind, title, table, right) where `table` is a
+#   tibble of strings under the headers the reader sees and `right` says which columns are numbers (right-aligned). Numbers are written
+#   by the facts' functions: a measure to three significant digits, a count whole, a share and a share missing as a percentage to one
+#   decimal; a missing cell is a dash. A score on a scale has the dagger after its mean, SD and interval; a small group says so in its group cell.
+#   With `ci` FALSE the interval columns are left out.
+summary_blocks <- function(tb, ci = TRUE) {
+  num = summary_num
+  cnt = summary_cnt
+  pct = summary_pct
+  txt = summary_txt
+  dash = SUMMARY_DASH
+  missing_cell = function(d) ifelse(is.na(d$missing_n), dash, paste0(fact_count(d$missing_n), " (", ifelse(is.na(d$missing_share), dash, fact_pct(100 * d$missing_share)), ")"))
+  who = function(d) ifelse(is.na(d$label) | d$label == d$column, d$column, paste0(d$label, " (", d$column, ")"))
+  grouped = !is.null(attr(tb, "summary")$by)
+  first_row = function(d) !duplicated(d$column)
+  make = function(kind, d) {
+    cols = switch(kind,
+      measure = c(list(Column = who(d)), if (grouped) list(Group = ifelse(d$small, paste0(d$group, " (", SUMMARY_SMALL_MARK, ")"), d$group)),
+                  list(n = cnt(d$n), Missing = missing_cell(d), Mean = num(d$mean, d$scale), SD = num(d$sd, d$scale), Min = num(d$min), Q1 = num(d$q1),
+                       Median = num(d$median), Q3 = num(d$q3), Max = num(d$max)),
+                  if (ci) stats::setNames(list(num(d$mean_ci_low, d$scale), num(d$mean_ci_high, d$scale)), paste(SUMMARY_CI_HEADER, c("low", "high")))),
+      group = {
+        f = first_row(d)
+        c(list(Column = ifelse(f, who(d), ""), n = ifelse(f, cnt(d$n), ""), Missing = ifelse(f, missing_cell(d), ""), Levels = ifelse(f, cnt(d$levels), ""),
+               Level = txt(d$level), Count = cnt(d$count), Share = pct(d$share)),
+          if (ci) stats::setNames(list(pct(d$share_ci_low), pct(d$share_ci_high)), paste(SUMMARY_CI_HEADER, c("low", "high"))))
+      },
+      time = list(Column = who(d), n = cnt(d$n), Missing = missing_cell(d), First = txt(d$first), Last = txt(d$last), `Usual gap` = txt(d$gap)),
+      list(Column = who(d), n = cnt(d$n), Missing = missing_cell(d), Distinct = cnt(d$distinct)))
+    tab = tibble::as_tibble(cols, .name_repair = "minimal")
+    list(kind = kind, title = SUMMARY_KIND_TITLES[[kind]], table = tab,
+         right = !names(tab) %in% c("Column", "Group", "Level", "First", "Last", "Usual gap"))
+  }
+  kinds = intersect(names(SUMMARY_KIND_TITLES), unique(tb$kind))
+  purrr::map(kinds, function(k) make(k, tb[tb$kind == k, ]))
+}
+
+# A text cell of a CSV that a spreadsheet would run as a formula (it starts with =, @, a tab or a return, or with + or - and is not a
+#   number) gets an apostrophe in front, as the usual guard says; nothing else is changed.
+csv_safe <- function(x) {
+  x = as.character(x)
+  risky = !is.na(x) & (grepl("^[=@\t\r]", x) | (grepl("^[-+]", x) & is.na(suppressWarnings(as.numeric(x)))))
+  ifelse(risky, paste0("'", x), x)
+}
+
+# The table as a CSV that opens in Excel: UTF-8 with a byte-order mark (readr::write_excel_csv), the header on the first row (so a program
+#   reads it as a table), raw numbers to six significant digits, an empty cell for none, and the note in a last column on every row (a
+#   comment row above the header would make Excel and most readers take the comment for the header). A column header says "95% CI (SRS)".
+#   `scale_note` and `small_group` say which rows carry those marks. With `ci` FALSE the interval columns are left out and the note is the short one.
+summary_csv <- function(tb, ci = TRUE, file) {
+  keep = function(d, names) d[names]
+  notes = summary_notes(tb, ci)
+  note = paste(c(notes[1], if (any(tb$kind == "measure")) SUMMARY_QUARTILE_NOTE), collapse = " ")
+  r = function(v) signif(v, FACT_DIGITS)
+  out = tibble::tibble(column = csv_safe(tb$column), label = csv_safe(tb$label), kind = tb$kind, group = csv_safe(tb$group), level = csv_safe(tb$level),
+                       rows = tb$rows, n = tb$n, missing = tb$missing_n, missing_share = r(tb$missing_share), distinct = tb$distinct,
+                       mean = r(tb$mean), sd = r(tb$sd), min = r(tb$min), q1 = r(tb$q1), median = r(tb$median), q3 = r(tb$q3), max = r(tb$max),
+                       `95% CI (SRS) low` = r(tb$mean_ci_low), `95% CI (SRS) high` = r(tb$mean_ci_high),
+                       levels = tb$levels, count = tb$count, share = r(tb$share),
+                       `share 95% CI (SRS) low` = r(tb$share_ci_low), `share 95% CI (SRS) high` = r(tb$share_ci_high),
+                       first = tb$first, last = tb$last, usual_gap = tb$gap,
+                       scale_note = ifelse(tb$scale %in% TRUE, paste("mean, SD and interval:", SUMMARY_SCALE_PHRASE), NA_character_),
+                       small_group = ifelse(tb$small %in% TRUE, SUMMARY_SMALL_MARK, NA_character_), note = note)
+  if (!isTRUE(ci)) out = out[!grepl("95% CI", names(out), fixed = TRUE)]
+  readr::write_excel_csv(out, file, na = "")
+  invisible(file)
+}
+
+# One row for each column of a codebook page's summary table: the first row the summary table has for it (a group-like column's first
+#   level carries n, missing and the number of levels too).
+summary_per_column <- function(tb) tb[!duplicated(tb$column), ]
