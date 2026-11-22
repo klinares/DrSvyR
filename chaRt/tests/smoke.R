@@ -8,7 +8,7 @@
 #   Every check is in exactly one run. The heavy group (HEAVY_CHECKS below): the sweep of about 400 drawn charts measured with grid
 #   (7b-1), the style sheet of about 180 charts (7D-2, and 7b-13 which reads it), and the five-chart dashboard built in six styles,
 #   laid out and printed by Chrome (9A-1, 9A-8 to 9A-11), the value boxes of a six-box page and the table cards of an exported dashboard measured in
-#   Chrome (9D-0b, 9D-18), and the real videos of Part B (9B-15 to 9B-18: a video drawn, encoded and read back, a dashboard of videos, the video played in Chrome). Both runs make the fixtures the heavy group needs (the gold specs, the
+#   Chrome (9D-0b, 9D-18), and the real videos of Part B (9B-15 to 9B-18: a video drawn, encoded and read back, a dashboard of videos, the video played in Chrome), and Part C's: the probe's 30 frames drawn and encoded and the bundle's own files loaded as the app (9C-5, 9C-6, 9C-9, 9C-10). Both runs make the fixtures the heavy group needs (the gold specs, the
 #   panel file, the sales file) and the heavy run skips what costs time and it does not need. CHART_SMOKE=all runs both groups in one process (about ten
 #   minutes: too long for a foreground limit; for a machine and a time with room).
 # Each run prints one line per check, "ok" or "FAIL", the 15 slowest stretches (seconds since the previous check), then its own
@@ -43,7 +43,9 @@ HEAVY_CHECKS <- c(
   "9B-17: a dashboard with two videos and a picture",                             # two videos drawn for the page
   "9B-18: in Chrome the exported <video> plays",                                  # the page's video played in Chrome
   "9C-5: the whole Video table on this machine",                                  # 30 frames of 1280 by 720 drawn and encoded
-  "9C-6: the check of the whole Video table can fail")                            # and three changed probes, each drawing and encoding 30 frames
+  "9C-6: the check of the whole Video table can fail",                            # and three changed probes, each drawing and encoding 30 frames
+  "9C-9: the files of the bundle alone",                                          # the bundle copied alone and loaded as the app
+  "9C-10: the checks of the bundle can fail")                                     # three more loads and a package list worked out again
 
 results <- new.env()
 results$all <- logical(0)
@@ -6666,6 +6668,93 @@ check("9C-6: the check of the whole Video table can fail: a probe that draws hal
         !p9c_thirty_ok(p9c_mut_29, p9c_mut_29$video_table()))
 
 }   # end of the heavy run part of Phase 9 Part C
+
+# ---- the bundle: what a Connect bundle of chaRt/ holds, listed without publishing --------------------------------------------------
+#
+# rsconnect 1.11.2 is installed. What it would upload is rsconnect::listDeploymentFiles(appDir) (exported; the function deployApp() calls first; it only reads the folder:
+#   it applies the default ignores and then the lines of .rscignore, each an exact file or folder name, in the folder that holds the .rscignore; no globs). The packages it
+#   would ask Connect to install are rsconnect:::appDependencies(appDir) (not exported: it copies the listed files to a temporary folder, runs renv::dependencies() on the
+#   code there and renv::snapshot(), and returns the packages with their dependencies; no server is contacted). Neither publishes.
+#   A bundle is app.R, R/ and www/ and nothing else.
+p9c_has_rsconnect <- requireNamespace("rsconnect", quietly = TRUE)
+# The same list by hand, from .rscignore alone (the top level only, exact names, as rsconnect reads them; the defaults that matter here added): used by the check when rsconnect
+#   is not installed, and held equal to rsconnect's list when it is.
+p9c_by_hand <- function(dir) {
+  skip = c(".Rhistory", ".gitignore", ".git", "manifest.json", "rsconnect", "renv", "packrat", ".Rproj.user", ".DS_Store",
+           if (file.exists(file.path(dir, ".rscignore"))) c(readLines(file.path(dir, ".rscignore")), ".rscignore"))
+  top = setdiff(list.files(dir, all.files = TRUE, no.. = TRUE), skip)
+  sort(unlist(purrr::map(top, function(n) if (dir.exists(file.path(dir, n))) file.path(n, list.files(file.path(dir, n), recursive = TRUE, all.files = TRUE, no.. = TRUE)) else n)))
+}
+p9c_list <- function(dir) if (p9c_has_rsconnect) sort(rsconnect::listDeploymentFiles(dir)) else p9c_by_hand(dir)
+# A tree is bundled right: app.R is the only file at the top and R/ and www/ the only folders; every file under R/ and www/ is in (fonts, reflex files, methodology.md among them);
+#   nothing of tests/, manager/, probe/, build/, a phase prompt, the notes, a key file or a stray plot is.
+p9c_bundle_ok <- function(dir, files = p9c_list(dir)) {
+  must = c("app.R", file.path("R", list.files(file.path(dir, "R"))), file.path("www", list.files(file.path(dir, "www"), recursive = TRUE)))
+  all(must %in% files) && any(grepl("^www/fonts/.*[.]ttf$", files)) && any(grepl("^www/reflexes/.*[.]md$", files)) && "www/methodology.md" %in% files &&
+    identical(files[!grepl("/", files)], "app.R") && identical(sort(unique(sub("/.*$", "", files[grepl("/", files)]))), c("R", "www")) &&
+    !any(grepl("(^|/)phase[0-9a-z]*_prompt[.]md$|(^|/)\\.Renviron$|(^|/)\\.env$|Rplots[.]pdf$|(^|/)\\.rscignore$", files))
+}
+# A small tree that has what chaRt/ has at the top (stand-in files, the real .rscignore), for the mutations
+p9c_tree <- function(rscignore = readLines(".rscignore")) {
+  d = tempfile("p9c_tree_")
+  dir.create(d)
+  ff = c("app.R", "R/a.R", "www/fonts/Inter-Regular.ttf", "www/reflexes/core.md", "www/methodology.md", "tests/smoke.R", "tests/data/orders.csv", "manager/q-001.md", "probe/app.R", "build/x.txt",
+         "phase9_prompt.md", "phase10_prompt.md", "README.md", "DESIGN.md", "STATUS.md", ".gitignore", ".Rhistory", ".Renviron", "Rplots.pdf")
+  purrr::walk(ff, function(f) { dir.create(dirname(file.path(d, f)), recursive = TRUE, showWarnings = FALSE); writeLines("x", file.path(d, f)) })
+  writeLines(rscignore, file.path(d, ".rscignore"))
+  d
+}
+p9c_files <- p9c_list(".")
+p9c_rsc <- readLines(".rscignore")
+check(paste0("9C-7: a bundle of chaRt/ by .rscignore (rsconnect::listDeploymentFiles, nothing published) is app.R, R/ and www/ only: every file of R/ and www/ is in (the fonts, the reflex files, methodology.md), tests/, manager/, probe/, build/, ",
+             "the phase prompts, README, DESIGN, STATUS, .Renviron and Rplots.pdf are out; the list equals the one made by hand from .rscignore; it is under 5 MB; and the same check refuses a tree whose .rscignore lacks tests, manager, probe, a phase prompt, .Renviron or Rplots.pdf"),
+      p9c_bundle_ok(".") && identical(p9c_files, p9c_by_hand(".")) && sum(file.size(p9c_files)) < 5 * 1048576 && length(p9c_files) > 20L && length(p9c_files) < 100L &&
+        p9c_bundle_ok(p9c_tree()) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "tests"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "manager"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "probe"))) &&
+        !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "phase9_prompt.md"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, ".Renviron"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "Rplots.pdf"))) &&
+        !p9c_bundle_ok(p9c_tree(c(p9c_rsc, "www"))))
+
+# The packages the bundle would ask for: every one of APP_PACKAGES, and the ones the app uses without listing (av, svglite, ragg, systemfonts, paletteer, plotly), with the dependencies.
+p9c_app_packages <- eval(purrr::keep(as.list(parse("app.R", keep.source = FALSE)), function(e) is.call(e) && identical(as.character(e[[1]]), "<-") && identical(as.character(e[[2]]), "APP_PACKAGES"))[[1]][[3]])
+p9c_pkgs_ok <- function(deps) {
+  need = unique(c(p9c_app_packages, "shiny", "bslib", "purrr", "av", "svglite", "ragg", "systemfonts", "paletteer", "plotly", "zip", "commonmark"))
+  is.data.frame(deps) && all(c("Package", "Version", "Source") %in% names(deps)) && all(need %in% deps$Package) && !"ggiraph" %in% deps$Package && !anyDuplicated(deps$Package) && all(nzchar(deps$Version))
+}
+p9c_deps <- if (p9c_has_rsconnect) tryCatch(rsconnect:::appDependencies("."), error = function(e) e)
+check(paste0("9C-8: the packages a bundle would ask Connect for (rsconnect:::appDependencies, from the code in the bundle, no server contacted) are ", if (is.data.frame(p9c_deps)) nrow(p9c_deps) else "?", " with their versions, and hold every package of APP_PACKAGES ",
+             "and av, svglite, ragg, systemfonts, paletteer, plotly, zip and commonmark (ggiraph is not used and not asked for); the check refuses a list without av, one without zip and one that adds ggiraph"),
+      length(p9c_app_packages) >= 15L && p9c_pkgs_ok(p9c_deps) &&
+        !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "av", ]) && !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "zip", ]) && !p9c_pkgs_ok(rbind(p9c_deps, transform(p9c_deps[1, ], Package = "ggiraph"))))
+
+if (run_heavy) {   # the heavy run only: 9C-9 and 9C-10 (the bundle's own files loaded as an app, four times, and its packages worked out twice more); not indented, to keep the diff small
+
+# The listed files copied alone into a new folder (less any named in drop, and with edit() applied to the text of one file when it is given): what Connect would hold.
+p9c_stage <- function(files, drop = character(), edit = NULL) {
+  d = tempfile("p9c_stage_")
+  dir.create(d)
+  purrr::walk(setdiff(files, drop), function(f) {
+    dir.create(dirname(file.path(d, f)), recursive = TRUE, showWarnings = FALSE)
+    file.copy(f, file.path(d, f))
+    if (!is.null(edit) && identical(f, edit$file)) writeLines(gsub(edit$from, edit$to, readLines(file.path(d, f), encoding = "UTF-8"), fixed = TRUE), file.path(d, f), useBytes = TRUE)
+  })
+  d
+}
+# Loaded the way Connect loads it (shinyAppDir, from that folder as the working folder); FALSE for anything that stops it.
+p9c_loads <- function(d) tryCatch({
+  old = setwd(d)
+  on.exit(setwd(old))
+  a = shiny::shinyAppDir(d)
+  inherits(a, "shiny.appobj") && is.function(a$serverFuncSource())
+}, error = function(e) FALSE)
+p9c_bundle_loads <- p9c_loads(p9c_stage(p9c_files))
+check("9C-9: the files of the bundle alone (copied into a new folder, nothing else of chaRt/ beside them) load as the app through shiny::shinyAppDir: app.R finds its R/ files, the reflex files, methodology.md and the fonts, and its start-up checks pass",
+      isTRUE(p9c_bundle_loads) && p9c_bundle_ok(".", p9c_files))
+p9c_no_meth <- p9c_loads(p9c_stage(p9c_files, drop = "www/methodology.md"))
+p9c_no_reflex <- p9c_loads(p9c_stage(p9c_files, drop = grep("^www/reflexes/", p9c_files, value = TRUE)))
+p9c_no_zip_deps <- if (p9c_has_rsconnect) tryCatch(rsconnect:::appDependencies(p9c_stage(p9c_files, edit = list(file = "R/ui.R", from = "zip::", to = "utils::"))), error = function(e) e)
+check("9C-10: the checks of the bundle can fail: a bundle without www/methodology.md and one without the reflex files do not load as the app, and one whose code no longer names zip:: asks Connect for no zip package (and the packages check refuses it)",
+      isTRUE(p9c_bundle_loads) && !p9c_no_meth && !p9c_no_reflex && (!p9c_has_rsconnect || (is.data.frame(p9c_no_zip_deps) && !"zip" %in% p9c_no_zip_deps$Package && !p9c_pkgs_ok(p9c_no_zip_deps))))
+
+}   # end of the heavy run part of the bundle checks
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
 #
