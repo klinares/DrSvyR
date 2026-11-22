@@ -2861,7 +2861,8 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind) {
        mode = if (is.list(w)) "interactive" else if (is.list(v)) "video" else "picture", fallback = fallback, fallback_of = if (is.character(v)) "video", facts = facts,
        video = if (is.list(v)) v,
        widget_html = if (is.list(w)) w$html, deps = if (is.list(w)) w$deps,
-       natural_wide = identical(unname(size[["width"]]), SPEC_SIZE[["max_width"]]),
+       # a video drawn on a canvas wider than 8 inches (rows of panels, many sideways bars) is shown across the page, or its text would be too small to read
+       natural_wide = identical(unname(size[["width"]]), SPEC_SIZE[["max_width"]]) || (is.list(v) && v$canvas[["width"]] > 8),
        notes = c(attr(p, "notes"), if (is.list(w)) widget_notes(s)), source = s$caption,
        files = c(pic_file, vector_file, if (is.list(v)) v$file), code = code)
 }
