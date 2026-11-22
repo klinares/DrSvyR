@@ -1,5 +1,9 @@
 # chaRt: status
 
+## Phase 9 Part A: the exported dashboard and codebook (2026-11-22)
+
+The smoke test is now two runs, because the one run took 9.8 minutes and the foreground limit is 10. From inside chaRt/: `Rscript --no-init-file tests/smoke.R` is the fast run (about 5.3 minutes, 450 checks, the default), and `$env:CHART_SMOKE = "heavy"; Rscript --no-init-file tests/smoke.R; Remove-Item Env:CHART_SMOKE` is the heavy run (about 5 minutes, 9 checks: the 400-chart sweep of drawn texts 7b-1, the style sheet 7D-2 with 7b-13, and 9A-1 and 9A-8 to 9A-11, the dashboard in six styles measured and printed by Chrome). Run them one after the other, never together. Each prints its own count line (`[fast] ...` and `[heavy] ...`) and exits with status 1 on a failure; every check is in exactly one run, 449 plus 9 being the 458 of before, plus the new `split:` check that reads smoke.R and holds that no check sits under the other run's guard and every heavy title prefix starts exactly one check. The header of tests/smoke.R says the same.
+
 ## Phase 8 Part C: choosing charts and exporting the dashboard (2026-11-21)
 
 Branch `chart`, not pushed; done by a Sonnet worker for the lead. Smoke: **447 of 447** (421 before; 26 new checks, 8C-1 to 8C-25 and 8C-8b; none removed; two test helpers

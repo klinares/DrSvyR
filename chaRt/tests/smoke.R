@@ -1,14 +1,58 @@
 # Smoke test for chaRt. No model calls. Not deployed (tests/ is in .rscignore).
-# Run from inside chaRt/, without the user profile so it is closer to Connect:
-#   Rscript --no-init-file tests/smoke.R
-# Prints one line per check, "ok" or "FAIL", then the count; exits with status 1 if any failed.
+# Run from inside chaRt/, without the user profile so it is closer to Connect. The test is split in TWO runs, chosen by the
+#   environment variable CHART_SMOKE, so that each finishes in about five minutes (the whole was ten, the limit of a foreground
+#   run). Run them one after the other, never together (a second R process can leave an Rplots.pdf and fail 8A-1):
+#     Rscript --no-init-file tests/smoke.R                        the fast run (CHART_SMOKE unset or "fast"): every check but the heavy group
+#     PowerShell:  $env:CHART_SMOKE = "heavy"; Rscript --no-init-file tests/smoke.R; Remove-Item Env:CHART_SMOKE
+#     Bash:        CHART_SMOKE=heavy Rscript --no-init-file tests/smoke.R        the heavy run: ONLY the heavy group
+#   Every check is in exactly one run. The heavy group (HEAVY_CHECKS below): the sweep of about 400 drawn charts measured with grid
+#   (7b-1), the style sheet of about 180 charts (7D-2, and 7b-13 which reads it), and the five-chart dashboard built in six styles,
+#   laid out and printed by Chrome (9A-1, 9A-8 to 9A-11). Both runs make the fixtures the heavy group needs (the gold specs, the
+#   panel file, the sales file) and the heavy run skips what costs time and it does not need. CHART_SMOKE=all runs both groups in one process (about ten
+#   minutes: too long for a foreground limit; for a machine and a time with room).
+# Each run prints one line per check, "ok" or "FAIL", the 15 slowest stretches (seconds since the previous check), then its own
+#   count line, "[fast] 450 of 450 checks passed." or "[heavy] 9 of 9 checks passed."; it exits with status 1 if any check failed.
+#   The last check of the fast run, "split: ...", reads this file and holds that the two groups together leave no check out.
 
 stopifnot("Run from inside chaRt/" = file.exists("app.R") && dir.exists("R"))
 
+SMOKE_MODE <- tolower(Sys.getenv("CHART_SMOKE", unset = "fast"))
+if (!nzchar(SMOKE_MODE)) SMOKE_MODE <- "fast"
+stopifnot("CHART_SMOKE must be fast, heavy or all" = SMOKE_MODE %in% c("fast", "heavy", "all"))
+run_fast <- SMOKE_MODE %in% c("fast", "all")
+run_heavy <- SMOKE_MODE %in% c("heavy", "all")
+
+# The titles (their first words) of the checks that belong to the heavy run; every other check is in the fast run.
+#   Each prefix must start exactly one check title in this file, and the code that makes what a heavy check reads sits
+#   in an `if (run_heavy)` block (see the check "split: ..." at the end).
+HEAVY_CHECKS <- c(
+  "7b-1: on the drawn chart, every text R writes lies wholly inside its panel",   # about 400 charts measured with grid (about 130 s)
+  "7D-2: tests/style_sheet.html",                                                 # the style sheet of about 180 charts (about 60 s)
+  "7D-2: the style sheet is written without a model call",                        # reads that sheet
+  "7b-13: the gold bar spec's title",                                             # reads that sheet
+  "9A-1: the page is centred",                                                    # the dashboard page laid out in Chrome at three widths
+  "9A-8: the page is written as the chosen style",                                # the five-chart dashboard built in six styles
+  "9A-9: the codebook is a document",                                             # reads those six
+  "9A-10: print: every style's page prints on a light ground",                    # and printed to PDF by Chrome
+  "9A-11: the five-chart dashboard")                                              # reads those six
+
 results <- new.env()
 results$all <- logical(0)
+results$t <- Sys.time()
+results$title <- character(0)
+results$secs <- numeric(0)
+results$skipped <- character(0)
 check <- function(what, cond) {
-  pass = isTRUE(tryCatch(cond, error = function(e) FALSE))
+  mine = identical(SMOKE_MODE, "all") || any(startsWith(what, HEAVY_CHECKS)) == run_heavy
+  pass = if (mine) isTRUE(tryCatch(cond, error = function(e) FALSE))
+  now = Sys.time()
+  results$secs <- c(results$secs, as.numeric(difftime(now, results$t, units = "secs")))
+  results$title <- c(results$title, substr(what, 1, 70))
+  results$t <- now
+  if (!mine) {
+    results$skipped <- c(results$skipped, what)
+    return(invisible(NA))
+  }
   results$all <- c(results$all, pass)
   cat(if (pass) "ok    " else "FAIL  ", what, "\n", sep = "")
 }
@@ -139,6 +183,7 @@ make_messy <- function(path) {
   path
 }
 
+if (run_fast) {   # the fast run only: the data files, the messy file, Phase 1b; not indented, to keep the diff small
 course_present <- dir.exists(COURSE_DIR) && all(file.exists(file.path(COURSE_DIR, COURSE_FILES)))
 if (!course_present) cat("skip  the three course files: ", COURSE_DIR, " is not there\n", sep = "")
 files <- c(if (course_present) stats::setNames(file.path(COURSE_DIR, COURSE_FILES), COURSE_FILES),
@@ -298,6 +343,7 @@ if (course_present) {
         identical(again$codebook$columns[[13]]$role, "time") && identical(again$codebook$columns[[2]]$type, "integer") &&
           identical(again$codebook$columns[[2]]$role, "measure") && !length(again$notes))
 } else cat("skip  Read again on FH: the course files are not there\n")
+}   # end of the fast run's part with the data files
 
 
 # ---- Phase 2: the gold specs -------------------------------------------------------
@@ -308,6 +354,11 @@ gold <- purrr::compact(purrr::map(gold_entries(), function(en) {
   if (is.null(g)) { cat("skip  gold spec '", en$name, "': its file is not there\n", sep = ""); return(NULL) }
   list(entry = en, g = g)
 }))
+# Looked up by file name, in both runs (the fast checks and the heavy run's sweep use them).
+gold_g <- function(file) purrr::detect(gold, function(x) identical(x$entry$file, file))$g
+ball_g <- gold_g("footballdata-1.csv")
+pan_g <- gold_g("panel.csv")
+if (run_fast) {   # the fast run only: the gold checks to 6-C; not indented, to keep the diff small
 gold_tables <- purrr::map(gold, function(x) tryCatch(spec_table(x$entry$spec, x$g$data, x$g$cb), error = function(e) e))
 check(paste0("every gold spec (", length(gold), ") passes spec_check()"),
       length(gold) > 0L && all(purrr::map_lgl(gold, function(x) !length(spec_check(x$entry$spec, x$g$cb)))))
@@ -690,10 +741,7 @@ lint_of <- function(spec, g) {
   s = spec_defaults(spec)
   spec_lint(s, g$cb, spec_table(s, g$data, g$cb))
 }
-gold_g <- function(file) purrr::detect(gold, function(x) identical(x$entry$file, file))$g
 fh_g <- gold_g("FH_disaggregated.csv")
-ball_g <- gold_g("footballdata-1.csv")
-pan_g <- gold_g("panel.csv")
 made_g <- function(n, seed) {
   set.seed(seed)
   d = tibble::tibble(a = stats::rnorm(n), b = stats::rnorm(n))
@@ -1884,6 +1932,7 @@ check("6-A 2 (small fixture): column a is worded 'All rows in a: mean 15' (its r
 #   the server with a stand-in for the model (stand_by()); no model is called. What testServer cannot do, and so is not tested here:
 #   the browser (what a click on a card or on a button inside it does, the buttons being disabled while a call runs, how the
 #   suggestions and the layout look). Those are covered by reading the code and by the lead's look at the screens.
+}   # end of the fast run's part from the gold checks to 6-C
 
 # A small sales file: 240 orders, a word ("N/A") among the units, a year column (the time role).
 c6_path <- file.path(work_dir, "sales.csv")
@@ -1932,6 +1981,7 @@ c6_reply <- function(user, i) {
 c6_chat_calls <- function(si) purrr::keep(si$sent, function(s) grepl("\nANALYST: ", s$user, fixed = TRUE))
 c6_has <- function(x, pat) any(grepl(pat, x, fixed = TRUE))
 
+if (run_fast) {   # the fast run only: 6-C 1 to 7A; not indented, to keep the diff small
 check("6-C 1: the helpers: a word among the numbers is a candidate for missing (once, not a number); md_text() keeps a '<' or '&' from starting a tag; the messy file gives its words and the -99 planted in its score column (a repeated numeric code, Phase 8)",
       identical(missing_candidates(c6_read$read$data), "N/A") && identical(md_text("a <b> & c"), "a &lt;b&gt; &amp; c") &&
         (inherits(messy, "error") || setequal(missing_candidates(messy$read$data), c("unknown", "about 40", "-99"))) &&
@@ -2934,6 +2984,7 @@ if (length(find.package("MetBrewer", quiet = TRUE)) && length(find.package("colo
         !grepl("colorblind.friendly|colorblind_palettes|MetPalettes|\\$colorblind", m7_src) &&
           grepl("is OURS, by the lightness rule", m7_theme, fixed = TRUE) && grepl("not MetBrewer's classification", m7_theme, fixed = TRUE))
 } else cat("skip  7A-6: MetBrewer or colorspace is not installed, so the lightness rule is not recomputed\n")
+}   # end of the fast run's part from 6-C 1 to 7A
 
 
 # ---- Phase 7 B: styles and type ----------------------------------------------------------------------------------------------
@@ -2945,6 +2996,13 @@ b7_ratio <- function(a, b) as.numeric(colorspace::contrast_ratio(a, b))   # WCAG
 # The colour of an element of a theme as ggplot2 resolves it.
 b7_calc <- function(th, el) ggplot2::calc_element(el, th)
 b7_num <- function(x) formatC(x, format = "f", digits = 2)
+# Made in both runs: the heavy run's sweep (7b-1) draws with them; the fast run's 7C checks use them too.
+c7_ok <- !is.null(pan_g) && !is.null(ball_g) && requireNamespace("colorspace", quietly = TRUE) && requireNamespace("ggrepel", quietly = TRUE)
+c7_pal <- function(style = "clean") utils::modifyList(chart_palette_default(), list(style = style))
+c7_plot <- function(sp, g = pan_g, style = "clean") spec_plot(sp, g$data, g$cb, c7_pal(style))
+c7_bar8 <- list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "t")
+
+if (run_fast) {   # the fast run only: 7B to 7D-1; not indented, to keep the diff small
 if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
 
   # 1. the typeface
@@ -3310,10 +3368,7 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE) && palette
 
 # ---- Phase 7 C: words and numbers on the chart, all written by R ---------------------------------------------------------------
 
-c7_ok <- !is.null(pan_g) && !is.null(ball_g) && requireNamespace("colorspace", quietly = TRUE) && requireNamespace("ggrepel", quietly = TRUE)
 if (c7_ok) {
-  c7_pal <- function(style = "clean") utils::modifyList(chart_palette_default(), list(style = style))
-  c7_plot <- function(sp, g = pan_g, style = "clean") spec_plot(sp, g$data, g$cb, c7_pal(style))
   c7_texts <- function(p) purrr::keep(ggplot2::ggplot_build(p)$data, function(d) "label" %in% names(d))
   c7_labels <- function(p) unlist(purrr::map(c7_texts(p), function(d) as.character(d$label)))
   c7_geoms <- function(p) purrr::map_chr(p$layers, function(l) class(l$geom)[1])
@@ -3327,7 +3382,6 @@ if (c7_ok) {
     force(expr)
   }
   c7_fmt <- function(p) fact_value_fmt(attr(p, "spec"))
-  c7_bar8 <- list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "t")
   c7_bar13 <- list(family = "bar", x = "Nationality", top_n = 13, fn = "count", title = "t")
   c7_bar_panels <- list(family = "bar", x = "region", y = "revenue", fn = "sum", facet = "year", title = "t", filter = c7_in("year", 2021, 2022, 2023, 2024))
   c7_grouped <- list(family = "bar", x = "region", y = "revenue", fn = "sum", color = "year", title = "t", filter = c7_in("year", 2015, 2016, 2017))
@@ -3794,7 +3848,7 @@ if (c7_ok) {
 
 # ---- Phase 7 D: the screen, the style sheet, the live-run script ------------------------------------------------------------------------
 
-if (exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
+if (run_fast && exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
   # 1. the screen: the Style dialog has the style choice; the file-name box; card buttons in dark mode; bsicons
   d7_dlg <- new.env()
   d7_card <- new.env()
@@ -3853,6 +3907,9 @@ if (exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
         !d7_bsicons && all(purrr::map_lgl(d7_words, function(w) grepl(paste0("action-button[^>]*>(<span[^>]*>)?\\s*", w, "\\s*<"), d7_card$html))) && !grepl("class=\"bi bi-", d7_card$html, fixed = TRUE) &&
           !any(grepl("bsicons", unlist(purrr::map(code_files, readLines, encoding = "UTF-8")), fixed = TRUE)))
 
+}
+}   # end of the fast run's part from 7B to 7D-1
+if (run_heavy) {   # the heavy run only: the style sheet needs nothing from the Explore fixtures
   # 2. the style sheet: built by tests/gallery.R, no model call, git-ignored, every family in every style and the rest
   d7_sheet_file <- tempfile(fileext = ".html")
   d7_sheet_out <- utils::capture.output(build_style_sheet(d7_sheet_file))
@@ -3877,6 +3934,46 @@ if (exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
   check("7D-2: the style sheet is written without a model call and is git-ignored: build_style_sheet() holds no call to llm_json, llm_chat, ellmer or the key, and 'tests/style_sheet.html' is in chaRt/.gitignore",
         nzchar(d7_build_src) && !grepl("llm_|ellmer|ANTHROPIC", d7_build_src) && "tests/style_sheet.html" %in% trimws(readLines(".gitignore")) && grepl("^<!doctype html>", d7_sheet))
 
+}
+# ---- the heavy run's other pieces: the sweep of 7b-1 and 7b-13 (which reads the style sheet 7D-2 built) ----------------------------
+if (run_heavy && c7_ok) {   # about two minutes: the heavy run only; not indented, to keep the diff small
+  # 1, 2, 3. every gold spec, with labels on (where the family takes it) and each kind of annotate it takes, in all six styles:
+  #   no text R writes runs past its panel (or past the device, for a plot that does not clip), no two overlap, none sits on a rug
+  e7_t0 <- Sys.time()
+  e7_variants <- function(spec, cb) {
+    base = utils::modifyList(spec, list(labels = "on"))
+    if (length(spec_check(base, cb))) base = spec
+    ann = purrr::map(annotate_kinds(spec$family), function(k) utils::modifyList(base, list(annotate = list(k))))
+    c(list(base), ann)
+  }
+  e7_runs <- unlist(purrr::map(gold, function(x) purrr::imap(e7_variants(x$entry$spec, x$g$cb), function(sp, i) purrr::map(names(CHART_STYLES), function(st) {
+    p = tryCatch(spec_plot(sp, x$g$data, x$g$cb, b7_pal(st)), error = function(e) e)
+    if (!inherits(p, "ggplot")) return(paste0(x$entry$name, " #", i, " ", st, ": could not draw"))
+    f = drawn_text_faults(p)
+    if (length(f)) paste0(x$entry$name, " #", i, " ", st, ": ", f) else character(0)
+  }))), use.names = FALSE)
+  e7_n <- sum(purrr::map_int(gold, function(x) length(e7_variants(x$entry$spec, x$g$cb)))) * length(CHART_STYLES)
+  cat("      drawn texts: ", e7_n, " charts measured in ", round(as.numeric(difftime(Sys.time(), e7_t0, units = "secs"))), " s", if (length(e7_runs)) paste0("; ", paste(e7_runs, collapse = " | ")), "\n", sep = "")
+  # the measure can fail: a long label centred on the first bar runs past a clipped panel, and two labels on one spot overlap
+  e7_bad <- c7_plot(c7_bar8) + ggplot2::annotate("text", x = 1, y = 7e5, label = "A long label centred on the first bar", size = 5) +
+    ggplot2::annotate("text", x = c(5, 5), y = c(4e5, 4e5), label = c("same place", "same place"))
+  e7_bad_f <- drawn_text_faults(e7_bad)
+  check(paste0("7b-1: on the drawn chart, every text R writes lies wholly inside its panel (inside the device where the plot does not clip), no two overlap and no annotation sits on a rug: every gold spec with labels on and each annotate kind, in all six styles (",
+               e7_n, " charts, measured with grid on a ragg device); the measure flags a label run past the panel and two that overlap"),
+        !length(e7_runs) && e7_n > 300L && any(grepl("runs past the panel", e7_bad_f, fixed = TRUE)) && any(grepl("overlaps", e7_bad_f, fixed = TRUE)))
+}
+if (run_heavy) {
+# 13. the style sheet and the gold bar's title
+e7_bar_gold <- purrr::detect(gold, function(x) grepl("panel, total revenue by region (bar", x$entry$name, fixed = TRUE))
+check("7b-13: the gold bar spec's title names the region its table puts highest (Islands); the style sheet has a Phase 7b row of the (look) charts and a heatmap with its cell values in the labels rows",
+      !is.null(e7_bar_gold) && grepl("^Islands ", e7_bar_gold$entry$spec$title) &&
+        identical(as.character(attr(spec_plot(e7_bar_gold$entry$spec, e7_bar_gold$g$data, e7_bar_gold$g$cb), "table")$region[1]), "Islands") &&
+        exists("d7_sheet") && grepl("<h2>Phase 7b</h2>", d7_sheet, fixed = TRUE) && grepl("heatmap, cell values, Newspaper", d7_sheet, fixed = TRUE) &&
+        length(PHASE7B_LOOK) == 6L && setequal(purrr::map_int(PHASE7B_LOOK, "item"), c(1L, 2L, 3L, 4L, 6L, 8L)))
+}
+
+if (run_fast) {   # the fast run only, to 8C-1; not indented, to keep the diff small
+if (run_fast && exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
   # 4. step 9 of tests/llm_check.R: the six turns, Sonnet only, at most 12 calls, counted
   source(file.path("tests", "live_gallery.R"))
   d7_check_src <- paste(readLines(file.path("tests", "llm_check.R"), encoding = "UTF-8"), collapse = "\n")
@@ -3938,30 +4035,6 @@ if (exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
 #   (drawn_text_faults() in tests/gallery.R measures every text a panel draws).
 
 if (c7_ok) {
-  # 1, 2, 3. every gold spec, with labels on (where the family takes it) and each kind of annotate it takes, in all six styles:
-  #   no text R writes runs past its panel (or past the device, for a plot that does not clip), no two overlap, none sits on a rug
-  e7_t0 <- Sys.time()
-  e7_variants <- function(spec, cb) {
-    base = utils::modifyList(spec, list(labels = "on"))
-    if (length(spec_check(base, cb))) base = spec
-    ann = purrr::map(annotate_kinds(spec$family), function(k) utils::modifyList(base, list(annotate = list(k))))
-    c(list(base), ann)
-  }
-  e7_runs <- unlist(purrr::map(gold, function(x) purrr::imap(e7_variants(x$entry$spec, x$g$cb), function(sp, i) purrr::map(names(CHART_STYLES), function(st) {
-    p = tryCatch(spec_plot(sp, x$g$data, x$g$cb, b7_pal(st)), error = function(e) e)
-    if (!inherits(p, "ggplot")) return(paste0(x$entry$name, " #", i, " ", st, ": could not draw"))
-    f = drawn_text_faults(p)
-    if (length(f)) paste0(x$entry$name, " #", i, " ", st, ": ", f) else character(0)
-  }))), use.names = FALSE)
-  e7_n <- sum(purrr::map_int(gold, function(x) length(e7_variants(x$entry$spec, x$g$cb)))) * length(CHART_STYLES)
-  cat("      drawn texts: ", e7_n, " charts measured in ", round(as.numeric(difftime(Sys.time(), e7_t0, units = "secs"))), " s", if (length(e7_runs)) paste0("; ", paste(e7_runs, collapse = " | ")), "\n", sep = "")
-  # the measure can fail: a long label centred on the first bar runs past a clipped panel, and two labels on one spot overlap
-  e7_bad <- c7_plot(c7_bar8) + ggplot2::annotate("text", x = 1, y = 7e5, label = "A long label centred on the first bar", size = 5) +
-    ggplot2::annotate("text", x = c(5, 5), y = c(4e5, 4e5), label = c("same place", "same place"))
-  e7_bad_f <- drawn_text_faults(e7_bad)
-  check(paste0("7b-1: on the drawn chart, every text R writes lies wholly inside its panel (inside the device where the plot does not clip), no two overlap and no annotation sits on a rug: every gold spec with labels on and each annotate kind, in all six styles (",
-               e7_n, " charts, measured with grid on a ragg device); the measure flags a label run past the panel and two that overlap"),
-        !length(e7_runs) && e7_n > 300L && any(grepl("runs past the panel", e7_bad_f, fixed = TRUE)) && any(grepl("overlaps", e7_bad_f, fixed = TRUE)))
   # 1. the side a text runs to, and words on lines of their own over an upright bar
   e7_g <- function(sp) attr(c7_plot(sp), "spec")$.annotate
   e7_bar_hi <- e7_g(utils::modifyList(c7_bar8, list(labels = "on", annotate = list("highest"))))[[1]]
@@ -4102,13 +4175,6 @@ local({
 check("7b-12: file one, row typed, Explore ready; file two (a new data dictionary): the Data page's boxes are new (a new generation of ids) and Explore is not ready; a value sent from the first file's box is not applied; the row typed in the new box makes Explore ready",
       isTRUE(e7_srv$first) && isTRUE(e7_srv$new_box) && isTRUE(e7_srv$old_box_ignored) && isTRUE(e7_srv$second))
 
-# 13. the style sheet and the gold bar's title
-e7_bar_gold <- purrr::detect(gold, function(x) grepl("panel, total revenue by region (bar", x$entry$name, fixed = TRUE))
-check("7b-13: the gold bar spec's title names the region its table puts highest (Islands); the style sheet has a Phase 7b row of the (look) charts and a heatmap with its cell values in the labels rows",
-      !is.null(e7_bar_gold) && grepl("^Islands ", e7_bar_gold$entry$spec$title) &&
-        identical(as.character(attr(spec_plot(e7_bar_gold$entry$spec, e7_bar_gold$g$data, e7_bar_gold$g$cb), "table")$region[1]), "Islands") &&
-        exists("d7_sheet") && grepl("<h2>Phase 7b</h2>", d7_sheet, fixed = TRUE) && grepl("heatmap, cell values, Newspaper", d7_sheet, fixed = TRUE) &&
-        length(PHASE7B_LOOK) == 6L && setequal(purrr::map_int(PHASE7B_LOOK, "item"), c(1L, 2L, 3L, 4L, 6L, 8L)))
 
 # 14. a reply with text after its JSON (Phase 7b's live run: the model wrote its object, then "Wait, I must check that
 #   headline..." and a second object): the first complete object is read
@@ -4668,6 +4734,7 @@ check("8C-1: a bare http://, https://, www. or e-mail address in a suggestion ca
         identical(d6_seen(sub("</span>$", "", sub("^- <span class=\"suggestion submit\" data-suggestion=\"[^\"]*\">", "", p8c_card))), p8c_forms) && identical(p8c_sent, p8c_forms) && !grepl("<a ", commonmark::markdown_html(p8c_cards, extensions = TRUE), fixed = TRUE) &&
         !any(grepl("[^ -~]", p8c_card)) && length(p8c_card) == length(p8c_forms) && all(grepl("^- <span class=\"suggestion submit\" data-suggestion=\"", p8c_card)) &&
         identical(md_text("a@b"), "a<span>@</span>b") && identical(md_text("see www.x"), "see www<span>\\.</span>x"))
+}   # end of the fast run's part from 7D-4 to 8C-1
 
 
 # ---- choosing the charts, and what the export writes ------------------------------------------------------------------------
@@ -4704,6 +4771,12 @@ p8c_bytes <- function(f) { x <- readBin(f, "raw", file.size(f)); rawToChar(x[x !
 p8c_has <- function(d, pat) any(purrr::map_lgl(file.path(d, p8c_paths(d)), function(f) grepl(pat, p8c_bytes(f), fixed = TRUE, useBytes = TRUE)))
 p8c_html <- function(d, f = "dashboard.html") { x <- readBin(file.path(d, f), "raw", file.size(file.path(d, f))); r <- rawToChar(x); Encoding(r) <- "UTF-8"; r }
 p8c_svg <- svglite_installed()
+# The messy file's codebook, read in both runs: the fast checks below and the heavy run's 9A-9 both use it.
+p8c_mfile <- make_messy(file.path(work_dir, "messy_c.csv"))
+p8c_mread <- reread_data(p8c_mfile, "messy.csv", character())
+p8c_mcb <- utils::modifyList(p8c_mread$codebook, list(row_is = "one visit"))
+p8c_sq <- function(h) gsub(">[[:space:]]+<", "><", h)
+p8c_mdata <- p8c_mread$read$data
 
 # The page with every script and every style element emptied, so an address that a script or a style holds as text is not an
 #   attribute: what is left is the markup, where a src or an href is a request.
@@ -4732,6 +4805,7 @@ p8c_balanced <- function(h) {
 }
 p8c_png_size <- function(f) { b <- readBin(f, "raw", 24L); c(width = readBin(b[17:20], "integer", size = 4L, endian = "big"), height = readBin(b[21:24], "integer", size = 4L, endian = "big")) }
 
+if (run_fast) {   # the fast run only (sections 1 to 16 build and read dozens of exports); not indented, to keep the diff small
 # 1. the zip of a three-chart canvas, pictures only
 p8c_z3 <- p8c_build(list(p8c_item(1, p8c_s$bar), p8c_item(2, p8c_s$scatter), p8c_item(3, p8c_s$hist, headline = NULL)))
 p8c_d3 <- p8c_dir(p8c_z3$zip)
@@ -4823,11 +4897,7 @@ check("8C-7: dashboard.html and codebook.html parse as HTML: every tag with an e
                                                        identical(p8c_xml(p8c_cb_html, "//section[contains(@class,'col-section')]"), p8c_ncol) && identical(p8c_xml(p8c_cb_html, "//h1"), 1L))))
 
 # 5. the codebook page
-p8c_mfile <- make_messy(file.path(work_dir, "messy_c.csv"))
-p8c_mread <- reread_data(p8c_mfile, "messy.csv", character())
-p8c_mcb <- utils::modifyList(p8c_mread$codebook, list(row_is = "one visit"))
 p8c_mnames <- purrr::map_chr(p8c_mcb$columns, "name")
-p8c_sq <- function(h) gsub(">[[:space:]]+<", "><", h)
 p8c_cp <- p8c_sq(codebook_page(p8c_mcb))
 p8c_sections <- regmatches(p8c_cp, gregexpr("(?s)<section class=\"col-section\".*?</section>", p8c_cp, perl = TRUE))[[1]]
 p8c_sec <- function(name) p8c_sections[purrr::map_lgl(p8c_sections, function(s) grepl(paste0("Column ", name, "</p>"), s, fixed = TRUE))]
@@ -4857,7 +4927,6 @@ check("8C-8b: in the codebook of the sales file a group has a table of its level
 p8c_ms <- list(hist = list(family = "histogram", x = "score", title = "Scores"),
                scatter = list(family = "scatter", x = "score", y = "score_1", title = "Score against score 1"),
                bar = list(family = "bar", x = "rating", fn = "count", title = "Ratings"))
-p8c_mdata <- p8c_mread$read$data
 p8c_zm <- p8c_build(list(p8c_item(1, p8c_ms$bar), p8c_item(2, p8c_ms$hist), p8c_item(3, p8c_ms$scatter, mode = "interactive")), data = p8c_mdata, cb = p8c_mcb, path = p8c_mfile)
 p8c_dm <- p8c_dir(p8c_zm$zip)
 p8c_planted <- tempfile("p8c_planted_")
@@ -5195,6 +5264,7 @@ check("8C-25: no Quarto, no pandoc and no model in the export: no string of R/ o
         !any(c("llm_json", "ask", "make_call", "chat_turn", "summarize_charts", "summarize_inputs", "label_columns", "chat_append_message") %in% p8c_called) &&
         !any(c("for", "while", "repeat") %in% p8c_called) && "zipr" %in% p8c_called &&
         identical(get("dash_widget")(spec_widget(spec_plot(p8c_s$bar, p8c_data, p8c_cb)))$deps[[1]]$name, "htmlwidgets"))
+}   # end of the fast run's 8C part (sections 1 to 16)
 
 
 # ---- Phase 9 Part A: the exported dashboard and codebook ------------------------------------------------------------------
@@ -5259,21 +5329,14 @@ p9_measure_js <- paste0("var r=function(e){var b=e.getBoundingClientRect();retur
 p9_z <- p9_build()
 p9_h <- p9_z$html
 p9_dirs <- p9_z$dir
+# What the heavy run's checks need from the fast part below, made in both runs.
+p9_close <- function(a, b) length(a) == length(b) && all(abs(a - b) <= 1L)
+p9_std <- purrr::map(p9_s, function(sp) spec_plot(sp, p9_data, p9_cb))
+p9_stems <- paste0("charts/", sprintf("%02d_%s", 1:5, c("revenue_by_region", "revenue_by_month", "revenue_against_units", "revenue_by_year_in_each_category", "unit_price_by_channel")))
+p9_chart_files <- as.vector(outer(p9_stems, c(".png", if (p8c_svg) ".svg"), paste0))
 
-# 1. the page: about 1240 pixels wide, centred; two cards to a row from 900 pixels, one below (the CSS, and in Chrome the page as laid out)
-p9_layout <- if (p9_has_chrome) list(w1400 = p9_dom(file.path(p9_dirs, "dashboard.html"), 1400, p9_measure_js), w800 = p9_dom(file.path(p9_dirs, "dashboard.html"), 800, p9_measure_js),
-                                     w500 = p9_dom(file.path(p9_dirs, "dashboard.html"), 500, p9_measure_js))
-p9_rows <- function(m) unname(as.integer(table(m$cards$top)))   # the cards in each row, from the top down
-check("9A-1: the page is centred and about 1240 pixels wide (a column of at most 1240 pixels with auto margins), two cards to a row from 900 pixels and one below, a card with a row to itself spans both columns; measured in Chrome: at 1400 the page is 1240 wide and centred, one picture is shown in each card (a print-only picture is not), the cards stand two to a row (the rows hold 2, 2 and 1 cards, the last across the whole page), at 800 and at 500 one to a row, and no page scrolls sideways",
-      DASH_PAGE_PX == 1240L && DASH_TWO_PX == 900L && grepl(".page{max-width:1240px;margin:0 auto;", p9_h, fixed = TRUE) &&
-        grepl(".grid{display:grid;grid-template-columns:minmax(0,1fr);", p9_h, fixed = TRUE) &&
-        grepl("@media (min-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}", p9_h, fixed = TRUE) &&
-        (!p9_has_chrome || (
-          p9_layout$w1400$page$width == 1240L && abs(p9_layout$w1400$page$left - (p9_layout$w1400$cw - 1240) / 2) <= 1 && p9_layout$w1400$sw <= p9_layout$w1400$cw &&
-            identical(p9_rows(p9_layout$w1400), c(2L, 2L, 1L)) && all(p9_layout$w1400$cards$width[1:4] > 500) && p9_layout$w1400$cards$width[5] > 1100 &&
-            isTRUE(p9_layout$w1400$cards$full[5]) && !any(p9_layout$w1400$cards$full[1:4]) &&
-            all(p9_layout$w1400$cards$vis == 1L) && all(p9_layout$w800$cards$vis == 1L) && all(p9_layout$w500$cards$vis == 1L) &&
-            all(p9_rows(p9_layout$w800) == 1L) && p9_layout$w800$sw <= p9_layout$w800$cw && all(p9_rows(p9_layout$w500) == 1L) && p9_layout$w500$sw <= p9_layout$w500$cw)))
+
+if (run_fast) {   # the fast run only: 9A-2 to 9A-7; not indented, to keep the diff small
 
 # 2. no hole in the grid: an interactive (wide) card takes a row and the card before it, alone in its row, takes a row too
 p9_all_seqs <- unlist(purrr::map(1:7, function(n) {
@@ -5295,7 +5358,6 @@ p9_pics <- p9_pictures(p9_h)
 p9_phone <- purrr::keep(p9_pics, function(p) identical(p$tag, "source") && identical(p$media, "(max-width:599px)"))
 p9_half <- purrr::keep(p9_pics, function(p) identical(p$tag, "source") && identical(p$media, "(max-width:899px)"))
 p9_imgs <- purrr::keep(p9_pics, function(p) identical(p$tag, "img") && is.null(p$class))
-p9_close <- function(a, b) length(a) == length(b) && all(abs(a - b) <= 1L)
 p9_battery <- list(
   bar = list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "a"),
   bar_flip = list(family = "bar", x = "product_category", y = "revenue", fn = "sum", sort = "value_desc", title = "a", labels = "on"),
@@ -5341,11 +5403,8 @@ check(paste0("9A-3: each chart is drawn at the size it is shown: a picture whose
 cat(if (length(p9_fault_list)) paste0("note  label box faults: ", paste(p9_fault_list, collapse = "; "), "\n"))
 
 # 4. no title, subtitle or source line inside the page's pictures; the pictures in charts/ keep them; the page says each once
-p9_std <- purrr::map(p9_s, function(sp) spec_plot(sp, p9_data, p9_cb))
 p9_bare <- purrr::map(p9_s, function(sp) spec_plot(sp, p9_data, p9_cb, web = dash_web("desk")))
 p9_bare_ph <- purrr::map(p9_s, function(sp) spec_plot(sp, p9_data, p9_cb, web = dash_web("phone")))
-p9_stems <- paste0("charts/", sprintf("%02d_%s", 1:5, c("revenue_by_region", "revenue_by_month", "revenue_against_units", "revenue_by_year_in_each_category", "unit_price_by_channel")))
-p9_chart_files <- as.vector(outer(p9_stems, c(".png", if (p8c_svg) ".svg"), paste0))
 p9_card_html <- regmatches(p9_h, gregexpr("(?s)<article class=\"card[^\"]*\">.*?</article>", p9_h, perl = TRUE))[[1]]
 check("9A-4: the pictures drawn for the page have no title, subtitle or source line (their plots carry none, at the desk, wide and phone sizes) while the same charts as drawn for charts/ carry the title and the source line; the page says the source line once for each card (under the card, not in the picture) and the chart's title once (as the card's subtitle); the 300 dpi PNG and the SVG are still in charts/",
       all(purrr::map_lgl(p9_bare, function(p) is.null(ggplot2::get_labs(p)$title) && is.null(ggplot2::get_labs(p)$caption) && is.null(ggplot2::get_labs(p)$subtitle))) &&
@@ -5429,6 +5488,23 @@ check("9A-7: a value box has the style's accent as a rule (border-top in var(--a
         length(dash_boxes(utils::modifyList(p9_set, list(keys = p9_keys)), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1), list(id = "c2", title = "B", facts = p9_f2)))) == 3L + 3L &&
         length(dash_boxes(utils::modifyList(p9_set, list(keys = c("c9|1", "c1|999", "junk"))), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1)))) == 3L &&
         length(p9_boxes_html(p9_h)) >= 3L && !grepl("box key", p9_h, fixed = TRUE) && !is.na(p9_at(p9_f1, "Highest", "West")))
+
+}   # end of the fast run's 9A-2 to 9A-7
+if (run_heavy) {   # the heavy run only: 9A-1 (the page in Chrome) and 9A-8 to 9A-11 (the page in the six styles, the codebook page, the print); not indented, to keep the diff small
+# 1. the page: about 1240 pixels wide, centred; two cards to a row from 900 pixels, one below (the CSS, and in Chrome the page as laid out)
+p9_layout <- if (p9_has_chrome) list(w1400 = p9_dom(file.path(p9_dirs, "dashboard.html"), 1400, p9_measure_js), w800 = p9_dom(file.path(p9_dirs, "dashboard.html"), 800, p9_measure_js),
+                                     w500 = p9_dom(file.path(p9_dirs, "dashboard.html"), 500, p9_measure_js))
+p9_rows <- function(m) unname(as.integer(table(m$cards$top)))   # the cards in each row, from the top down
+check("9A-1: the page is centred and about 1240 pixels wide (a column of at most 1240 pixels with auto margins), two cards to a row from 900 pixels and one below, a card with a row to itself spans both columns; measured in Chrome: at 1400 the page is 1240 wide and centred, one picture is shown in each card (a print-only picture is not), the cards stand two to a row (the rows hold 2, 2 and 1 cards, the last across the whole page), at 800 and at 500 one to a row, and no page scrolls sideways",
+      DASH_PAGE_PX == 1240L && DASH_TWO_PX == 900L && grepl(".page{max-width:1240px;margin:0 auto;", p9_h, fixed = TRUE) &&
+        grepl(".grid{display:grid;grid-template-columns:minmax(0,1fr);", p9_h, fixed = TRUE) &&
+        grepl("@media (min-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}", p9_h, fixed = TRUE) &&
+        (!p9_has_chrome || (
+          p9_layout$w1400$page$width == 1240L && abs(p9_layout$w1400$page$left - (p9_layout$w1400$cw - 1240) / 2) <= 1 && p9_layout$w1400$sw <= p9_layout$w1400$cw &&
+            identical(p9_rows(p9_layout$w1400), c(2L, 2L, 1L)) && all(p9_layout$w1400$cards$width[1:4] > 500) && p9_layout$w1400$cards$width[5] > 1100 &&
+            isTRUE(p9_layout$w1400$cards$full[5]) && !any(p9_layout$w1400$cards$full[1:4]) &&
+            all(p9_layout$w1400$cards$vis == 1L) && all(p9_layout$w800$cards$vis == 1L) && all(p9_layout$w500$cards$vis == 1L) &&
+            all(p9_rows(p9_layout$w800) == 1L) && p9_layout$w800$sw <= p9_layout$w800$cw && all(p9_rows(p9_layout$w500) == 1L) && p9_layout$w500$sw <= p9_layout$w500$cw)))
 
 # the same five charts in every one of the six styles
 p9_styles <- names(CHART_STYLES)
@@ -5523,8 +5599,47 @@ check("9A-11: the five-chart dashboard (sorted bars, a time axis in order, a sca
                             identical(z$modes, rep("picture", 5L)) && grepl(paste0("--bg:", CHART_STYLES[[z$style]]$background), z$html, fixed = TRUE) && lengths(gregexpr("<picture", z$html, fixed = TRUE)) >= 5L &&
                             length(p9_pictures(z$html)) >= 10L && !length(p8c_requests(z$html)) && !length(p8c_requests(z$codebook)) && p8c_balanced(z$html) && p8c_balanced(z$codebook))) &&
         all(purrr::map_dbl(p9_six, "elapsed") < 120) && min(attr(p9_std$scatter, "table")$units) >= 1)
+}   # end of the heavy run's 9A-8 to 9A-11
+
+# ---- the split: the two runs together hold every check ---------------------------------------------------------------------
+#
+# This file is read as code (not run): every check( call is found with the guard it sits under, `if (run_fast ...)` or `if (run_heavy)`.
+#   A check inside a guard that its title does not belong to would be skipped in BOTH runs (its call is never reached in the run it belongs to),
+#   and a heavy prefix that starts no title (a typo, or a title reworded) would leave that check in the fast run. Neither is possible unseen.
+#   What this does not show: that a check whose title is built by paste0() from a variable is in the right run (its first words are not known
+#   until it runs: such a title counts as a fast check), that a check inside a loop ran as many times as before (the count lines show that),
+#   or that the objects a check reads were made in its run (if not, the check fails there, loudly). CHART_SMOKE=all runs both groups in one process.
+split_visit <- function(e, where = "any") {
+  if (!is.call(e)) return(list())
+  head <- if (is.symbol(e[[1]])) as.character(e[[1]]) else ""
+  if (identical(head, "check")) {
+    t <- e[[2]]
+    if (is.call(t) && length(t) > 1L) t <- t[[2]]
+    return(list(list(title = if (is.character(t)) t else NA_character_, where = where)))
+  }
+  if (identical(head, "if")) {
+    nm <- all.names(e[[2]])
+    inner <- if ("run_heavy" %in% nm) "heavy" else if ("run_fast" %in% nm) "fast" else where
+    parts <- purrr::map(seq_along(e)[-1], function(i) tryCatch(split_visit(e[[i]], if (i == 3L) inner else where), error = function(err) list()))
+    return(unlist(parts, recursive = FALSE))
+  }
+  unlist(purrr::map(seq_along(e), function(i) tryCatch(split_visit(e[[i]], where), error = function(err) list())), recursive = FALSE)
+}
+split_found <- unlist(purrr::map(as.list(parse(file.path("tests", "smoke.R"), keep.source = FALSE)), split_visit), recursive = FALSE)
+split_titles <- purrr::map_chr(split_found, "title")
+split_where <- purrr::map_chr(split_found, "where")
+split_is_heavy <- purrr::map_lgl(split_titles, function(t) !is.na(t) && any(startsWith(t, HEAVY_CHECKS)))
+check(paste0("split: the fast and the heavy run together hold every check: each of the ", length(HEAVY_CHECKS), " heavy prefixes starts exactly one title in this file, no heavy check sits in an `if (run_fast)` block ",
+             "and no other check in an `if (run_heavy)` block (", length(split_found), " check calls read from the source, ", sum(split_is_heavy), " of them heavy)"),
+      length(split_found) > 400L && !anyDuplicated(HEAVY_CHECKS) &&
+        all(purrr::map_int(HEAVY_CHECKS, function(p) sum(!is.na(split_titles) & startsWith(split_titles, p))) == 1L) &&
+        !any(split_is_heavy & split_where == "fast") && !any(!split_is_heavy & split_where == "heavy"))
 
 # ---- the count -------------------------------------------------------------------
 
-cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")
+top <- order(results$secs, decreasing = TRUE)[1:15]
+cat("\nslowest stretches (seconds since the previous check, then the check):\n")
+cat(sprintf("%7.1f  #%d %s\n", results$secs[top], top, results$title[top]), sep = "")
+cat(sprintf("total %.1f s\n", sum(results$secs)))
+cat("\n[", SMOKE_MODE, "] ", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")
 if (!all(results$all)) quit(status = 1)
