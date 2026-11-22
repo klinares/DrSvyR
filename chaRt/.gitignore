@@ -10,3 +10,6 @@ manager/*
 # Phase 8 Part C: dashboards exported from stand-in charts, unpacked here for the manager to open.
 tests/dashboard_*/
 tests/mockup_reference.png
+# Phase 9 Part B: the videos made from stand-in charts, one per family in Clean and in Dark, and the page that shows them all.
+tests/videos/
+tests/videos.html

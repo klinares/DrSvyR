@@ -2724,3 +2724,313 @@ fig_across <- function(s, panels) {
   across = ceiling(sqrt(panels))
   if (is.null(s$.fig_width)) across else min(across, max(1L, floor((s$.fig_width - 0.3) / SPEC_PANEL_MIN_IN)))
 }
+
+
+# ---- the video (Phase 9 Part B) ---------------------------------------------------------------------------------------------
+# A chart that moves: its marks come in over about 3 seconds, its numbers and names fade in over 0.6, and the finished chart is
+#   held for 2. The frames are drawn by our own renderer on the device chart_device() opens and encoded to MP4 by the av package
+#   (no gganimate). How a frame is made: the finished chart is built once (ggplot2::ggplot_build() of spec_plot()'s plot), so its
+#   scales, breaks, axes, legends and panels are the finished chart's and cannot move; a frame is that built object with the
+#   data of each layer cut down for the moment (a line drawn up to some x, a bar at some share of its height, the points so far),
+#   which is how gganimate draws its frames too. At progress 1 every layer's data is the built data untouched, so the last frame
+#   is the static chart. Nothing here calls a model.
+
+# Whether the av package is installed (a function, so that a test can stand in for a server that has not got it).
+av_installed <- function() length(find.package("av", quiet = TRUE)) > 0L
+
+# Whether the av package's encoder can write H.264 (libx264), which every browser plays; without it av would choose a codec some browsers cannot play.
+av_has_h264 <- function() isTRUE(tryCatch("libx264" %in% av::av_encoders()$name, error = function(e) FALSE))
+
+# Whether this server can make a video: av with an H.264 encoder, and a device that writes pictures a video can be made of (not svglite's SVG).
+video_available <- function() av_installed() && av_has_h264() && chart_device_kind() %in% c("ragg", "cairo")
+
+# Why it cannot, in words for Start here; NULL when it can.
+video_unavailable_text <- function() {
+  if (!av_installed()) return("Videos are unavailable on this server: the av package is not installed, so the Animate button is not shown.")
+  if (!av_has_h264()) return("Videos are unavailable on this server: the av package here has no H.264 encoder (libx264), so the Animate button is not shown.")
+  if (!chart_device_kind() %in% c("ragg", "cairo"))
+    return("Videos are unavailable on this server: charts are drawn here as SVG pictures, which a video cannot be made of, so the Animate button is not shown.")
+  NULL
+}
+
+SPEC_VIDEO_FPS <- 24L                   # frames a second in the file
+SPEC_VIDEO_MOTION_S <- 3                # seconds the marks take to come in
+SPEC_VIDEO_LABELS_S <- 0.6              # seconds the labels, annotations and names take to fade in
+SPEC_VIDEO_HOLD_S <- 2                  # seconds the finished chart is held (its file repeated in the encoder's input, not drawn again)
+SPEC_VIDEO_PX <- list(card = c(width = 1280, height = 720), download = c(width = 1920, height = 1080))
+SPEC_VIDEO_WIDTHS <- c(8, 10, 12)       # the widths in inches of the 16 to 9 canvas a chart is drawn on (8 by 4.5, the usual), narrowest first; dots per inch are pixels over this
+SPEC_VIDEO_DASH_WIDTHS <- c(6.4, SPEC_VIDEO_WIDTHS)  # the same for the dashboard's video, which is shown at the width of a card (540 pixels shared, so 6.4 inches gives text of 12 pixels)
+SPEC_VIDEO_STAGGER <- 0.5               # each bar, dot, box or column starts this much later than the one before, the last by this share of the motion
+SPEC_VIDEO_POINTS_SHARE <- 0.7          # a scatter or bubble with a fitted curve: the points take this share of the motion, then the curve is drawn
+SPEC_VIDEO_RAMP <- 0.04                 # points growing in at once, as a share of all the points (at least 2)
+SPEC_VIDEO_SLOW_S <- 45                 # a video that takes longer than this to draw is drawn at half the frame rate, each frame shown twice
+
+# Progress 0 to 1 over the motion and the labels together, as the share of each that has been done.
+video_phases <- function(progress) {
+  total = SPEC_VIDEO_MOTION_S + SPEC_VIDEO_LABELS_S
+  list(motion = video_clamp(progress * total / SPEC_VIDEO_MOTION_S),
+       labels = video_clamp((progress * total - SPEC_VIDEO_MOTION_S) / SPEC_VIDEO_LABELS_S))
+}
+
+video_clamp <- function(x) pmin(1, pmax(0, x))
+
+# A cubic ease in and out: slow, fast, slow; 0 at 0 and 1 at 1.
+video_ease <- function(t) {
+  t = video_clamp(t)
+  ifelse(t < 0.5, 4 * t^3, 1 - (-2 * t + 2)^3 / 2)
+}
+
+# The frames drawn for a video, with progress at 0, 1 / (n - 1), ... 1; `fps` is the frames drawn each second.
+video_frame_count <- function(fps = SPEC_VIDEO_FPS) as.integer(round((SPEC_VIDEO_MOTION_S + SPEC_VIDEO_LABELS_S) * fps)) + 1L
+
+# How far each of a set of marks has got when the motion is at `m`: the marks of a panel start in the order of `key` (the first at once,
+#   the last SPEC_VIDEO_STAGGER of the motion later), each eased. Every mark is at 1 when the motion is.
+video_staggered <- function(key, panel, m) {
+  rk = stats::ave(as.numeric(key), panel, FUN = function(v) rank(v, ties.method = "first"))
+  n = stats::ave(as.numeric(key), panel, FUN = length)
+  delay = SPEC_VIDEO_STAGGER * (rk - 1) / pmax(1, n - 1)
+  video_ease((m - delay) / (1 - SPEC_VIDEO_STAGGER))
+}
+
+# What a layer is for the motion, from its geom and its built data: "bars", "dots", "points", "line", "linepoints" (the points of a slope
+#   chart), "curve", "box", "tiles", "rug", "label" (text, and the ring round a marked point: they fade in at the end) or "keep".
+video_role <- function(layer, d, s) {
+  geom = class(layer$geom)[[1]]
+  if (geom %in% c("GeomText", "GeomLabel", "GeomTextRepel", "GeomLabelRepel")) return("label")
+  if (identical(geom, "GeomPoint") && nrow(d) && all(d$shape %in% 1)) return("label")
+  switch(geom, GeomCol = , GeomBar = , GeomRect = "bars", GeomLine = "line", GeomSmooth = "curve", GeomBoxplot = "box", GeomTile = "tiles",
+         GeomRug = "rug", GeomPoint = if (identical(s$family, "dot")) "dots" else if (identical(s$family, "slope")) "linepoints" else "points",
+         "keep")
+}
+
+# Bars (and a histogram's bars) rise from the axis: the value end of each is its built value times its share of the way, the bars that
+#   have not started are not drawn. Upright bars start left to right, sideways ones from the top.
+video_bars <- function(d, m) {
+  if (!nrow(d)) return(d)
+  flipped = isTRUE(d$flipped_aes[[1]])
+  cols = intersect(if (flipped) c("xmin", "xmax", "x") else c("ymin", "ymax", "y"), names(d))
+  key = if (flipped) -(d$ymin + d$ymax) / 2 else (d$xmin + d$xmax) / 2
+  k = video_staggered(key, d$PANEL, m)
+  d[cols] = lapply(d[cols], function(v) v * k)
+  d[k > 0, , drop = FALSE]
+}
+
+# Dots travel from the value axis (the panel's edge) to their value, fading in as they leave it.
+video_dots <- function(d, m, panel_params, flipped) {
+  if (!nrow(d)) return(d)
+  vcol = if (flipped) "x" else "y"
+  edge = purrr::map_dbl(as.integer(d$PANEL), function(i) panel_params[[i]][[paste0(vcol, ".range")]][[1]])
+  k = video_staggered(if (flipped) -d$y else d$x, d$PANEL, m)
+  d[[vcol]] = edge + (d[[vcol]] - edge) * k
+  d$alpha = pmin(ifelse(is.na(d$alpha), 1, d$alpha), video_clamp(4 * k))
+  d[k > 0, , drop = FALSE]
+}
+
+# A line is drawn up to `at` on x, its newest point interpolated between the data points on either side of it; a line that has not
+#   begun is not drawn. Rows are taken line by line (panel and group) in the order of x.
+video_cut <- function(d, at) {
+  if (!nrow(d)) return(d)
+  parts = split(seq_len(nrow(d)), interaction(d$PANEL, d$group, drop = TRUE))
+  out = purrr::map(parts, function(ix) {
+    r = d[ix, , drop = FALSE]
+    r = r[order(r$x), , drop = FALSE]
+    keep = r$x <= at
+    if (!any(keep)) return(r[0, , drop = FALSE])
+    last = max(which(keep))
+    if (last == nrow(r) || r$x[[last]] == at) return(r[keep, , drop = FALSE])
+    f = (at - r$x[[last]]) / (r$x[[last + 1L]] - r$x[[last]])
+    new = r[last, , drop = FALSE]
+    new$x = at
+    cols = intersect(c("y", "ymin", "ymax"), names(r))
+    new[cols] = lapply(r[cols], function(v) v[[last]] + f * (v[[last + 1L]] - v[[last]]))
+    rbind(r[keep, , drop = FALSE], new)
+  })
+  do.call(rbind, unname(out))
+}
+
+# Points come in along x: the first `share` of all the points of the chart in the order of x, each growing from nothing over a short
+#   run of points. `allx` is the x of every point of every points layer.
+video_points <- function(d, share, allx) {
+  if (!nrow(d)) return(d)
+  n = length(allx)
+  ramp = max(2, SPEC_VIDEO_RAMP * n)
+  s = video_clamp((share * (n + ramp) - findInterval(d$x, sort(allx)) + 1) / ramp)
+  d = d[s > 0, , drop = FALSE]
+  g = video_ease(s[s > 0])
+  d$size = d$size * g
+  d$stroke = d$stroke * g
+  d
+}
+
+# A rug has the marks of the points that have come in.
+video_rug <- function(d, share, allx) {
+  if (!nrow(d)) return(d)
+  n = length(allx)
+  d[findInterval(d$x, sort(allx)) <= share * (n + max(2, SPEC_VIDEO_RAMP * n)), , drop = FALSE]
+}
+
+# A box opens from its median outward: whiskers, quartiles and notches are the median plus their built distance times the share, a
+#   box that has not started is not drawn, and the outlying points come once it is open.
+video_boxes <- function(d, m) {
+  if (!nrow(d)) return(d)
+  flipped = isTRUE(d$flipped_aes[[1]])
+  nm = function(x) if (flipped) c(ymin = "xmin", lower = "xlower", middle = "xmiddle", upper = "xupper", ymax = "xmax",
+                                  notchupper = "xnotchupper", notchlower = "xnotchlower")[[x]] else x
+  k = video_staggered(if (flipped) -d$y else d$x, d$PANEL, m)
+  mid = d[[nm("middle")]]
+  cols = intersect(purrr::map_chr(c("ymin", "lower", "upper", "ymax", "notchupper", "notchlower"), nm), names(d))
+  d[cols] = lapply(d[cols], function(v) mid + (v - mid) * k)
+  d$outliers = purrr::map2(d$outliers, k, function(o, kk) if (kk >= 1) o else numeric(0))
+  d[k > 0, , drop = FALSE]
+}
+
+# Cells fill in, a column of them at a time (a row when x is not ordered), each fading in as its turn comes.
+video_tiles <- function(d, m, by_column) {
+  if (!nrow(d)) return(d)
+  key = if (by_column) d$x else -d$y
+  k = video_staggered(match(key, sort(unique(key))), d$PANEL, m)
+  d$alpha = ifelse(is.na(d$alpha), 1, d$alpha) * k
+  d[k > 0, , drop = FALSE]
+}
+
+# The labels fade in: none before their phase, then each at `a` of its colour's strength.
+video_labels <- function(d, raw, a) {
+  if (raw >= 1) return(d)
+  if (raw <= 0 || !nrow(d)) return(d[0, , drop = FALSE])
+  d$alpha = ifelse(is.na(d$alpha), a, d$alpha * a)
+  d
+}
+
+# Everything a video of one chart needs, worked out once: the finished chart's plot and built object, what each layer is for the
+#   motion, and how x is ordered. `p` is spec_plot()'s plot, `cb` the codebook.
+video_context <- function(p, cb) {
+  b = ggplot2::ggplot_build(p)
+  s = attr(p, "spec")
+  roles = purrr::map_chr(seq_along(p$layers), function(i) video_role(p$layers[[i]], b$data[[i]], s))
+  xs = function(role) unlist(purrr::map(b$data[roles == role], function(d) d$x), use.names = FALSE)
+  e = if (!is.null(s$x)) cb_entry(cb, s$x)
+  list(plot = p, built = b, spec = s, roles = roles, line_x = if (length(c(xs("line"), xs("linepoints")))) range(c(xs("line"), xs("linepoints")), na.rm = TRUE),
+       point_x = xs("points"), has_curve = any(roles == "curve"),
+       by_column = !is.null(e) && (is_time(e) || e$type %in% c("number", "integer", "ordered")))
+}
+
+# The built data of layer i for a progress.
+video_layer <- function(ctx, i, ph) {
+  d = ctx$built$data[[i]]
+  role = ctx$roles[[i]]
+  m = ph$motion
+  if (identical(role, "label")) return(video_labels(d, ph$labels, video_ease(ph$labels)))
+  if (m >= 1) return(d)
+  points_share = if (ctx$has_curve) video_ease(m / SPEC_VIDEO_POINTS_SHARE) else video_ease(m)
+  switch(role,
+         bars = video_bars(d, m),
+         dots = video_dots(d, m, ctx$built$layout$panel_params, isTRUE(ctx$spec$.flip)),
+         line = , linepoints = {
+           at = ctx$line_x[[1]] + video_ease(m) * diff(ctx$line_x)
+           if (identical(role, "line")) video_cut(d, at) else d[d$x <= at, , drop = FALSE]
+         },
+         curve = if (nrow(d) && m > SPEC_VIDEO_POINTS_SHARE) video_cut(d, min(d$x) + video_ease((m - SPEC_VIDEO_POINTS_SHARE) / (1 - SPEC_VIDEO_POINTS_SHARE)) * diff(range(d$x))) else d[0, , drop = FALSE],
+         points = video_points(d, points_share, ctx$point_x),
+         rug = video_rug(d, points_share, ctx$point_x),
+         box = video_boxes(d, m),
+         tiles = video_tiles(d, m, ctx$by_column),
+         d)
+}
+
+# One frame: the finished chart's built object with the layers' data for this progress (0 to 1).
+video_frame <- function(ctx, progress) {
+  ph = video_phases(progress)
+  b = ctx$built
+  b$data = purrr::map(seq_along(ctx$roles), function(i) video_layer(ctx, i, ph))
+  b
+}
+
+# The chart as a video draws it: spec_plot() on a 16 to 9 canvas, the narrowest of SPEC_VIDEO_WIDTHS inches wide whose height holds the
+#   chart (sideways bars and rows of panels need more than the usual 4.5; past the widest, the chart is drawn as it fits). The wider the
+#   canvas, the smaller its text on the screen, which is why the widths are few and the first is the usual one. `bare`: no title, subtitle
+#   or source line (the dashboard's page says them). Returns the plot, with the canvas in inches as attribute "canvas".
+video_plot <- function(spec, data, cb, palette = chart_palette_default(), bare = FALSE, widths = SPEC_VIDEO_WIDTHS) {
+  at = function(w) {
+    h = w * 9 / 16
+    p = spec_plot(spec, data, cb, palette, web = list(width = w, height = h, bare = bare))
+    attr(p, "canvas") = c(width = w, height = h)
+    p
+  }
+  fits = function(p) spec_size(attr(p, "spec"), attr(p, "table"))[["height"]] <= attr(p, "canvas")[["height"]] + 1e-9
+  purrr::reduce(widths, function(p, w) if (!is.null(p) && fits(p)) p else at(w), .init = NULL)
+}
+
+# The frames of a chart's video, for progress 0 to 1 in `n` steps: the built chart for each (a ggplot_built object, which
+#   ggplot2::ggplot_gtable() draws). The chart's style is the palette's (palette$style); `style` names another. The plot as the static
+#   chart is attribute "plot", the progress of each "progress".
+spec_frames <- function(spec, data, cb, palette = chart_palette_default(), style = palette$style, n = video_frame_count(), bare = FALSE, widths = SPEC_VIDEO_WIDTHS) {
+  palette$style = style
+  ctx = video_context(video_plot(spec, data, cb, palette, bare, widths), cb)
+  progress = seq(0, 1, length.out = n)
+  structure(purrr::map(progress, function(p) video_frame(ctx, p)), plot = ctx$plot, progress = progress)
+}
+
+# The pinned things of a frame, to be compared with another's: each panel's range and breaks on both axes, as numbers.
+video_scales <- function(frame) {
+  purrr::map(frame$layout$panel_params, function(pp)
+    list(x_range = unname(pp$x.range), y_range = unname(pp$y.range), x_breaks = unname(pp$x$get_breaks()), y_breaks = unname(pp$y$get_breaks()),
+         x_labels = pp$x$get_labels(), y_labels = pp$y$get_labels()))
+}
+
+# One frame as a picture file, `width_in` by `height_in` inches at `dpi`, on the device chart_device() opens.
+video_draw <- function(frame, file, width_in, height_in, dpi, kind = chart_device_kind()) {
+  chart_device(file, width_in, height_in, dpi, kind)
+  on.exit(grDevices::dev.off())
+  # after the device is open: building the table measures text, which opens a device when none is. A line not yet begun is a group of one
+  #   point, which ggplot2 mentions each time (as a message, in ggplot2 4; as a warning before); that is the motion, not a fault.
+  once = function(cnd) grepl("only one observation", conditionMessage(cnd), fixed = TRUE)
+  withCallingHandlers({
+    gt = ggplot2::ggplot_gtable(frame)
+    grid::grid.newpage()
+    grid::grid.draw(gt)
+  }, warning = function(w) if (once(w)) invokeRestart("muffleWarning"), message = function(m) if (once(m)) invokeRestart("muffleMessage"))
+  invisible(file)
+}
+
+# The encoder's input for a video: each drawn file shown `each` times, then the last file again for the hold (not drawn again).
+video_inputs <- function(files, each = 1L, fps = SPEC_VIDEO_FPS) {
+  c(rep(files, each = each), rep(files[[length(files)]], round(SPEC_VIDEO_HOLD_S * fps)))
+}
+
+# A video of a chart, written to `file` (MP4, H.264, yuv420p, which a browser plays): `size` pixels wide and high (the download's
+#   1920 by 1080 unless said; SPEC_VIDEO_PX), and `small`, when given, a second file of the same frames scaled to the card's 1280 by
+#   720 by the encoder, so the frames are drawn once. `drawn_fps` is the frames drawn a second (24; 12 draws half as many and shows each
+#   twice; NULL: 24, unless one frame of the label phase, the dearest, shows the drawing would take more than SPEC_VIDEO_SLOW_S, and then
+#   12). `widths` are the canvases to try (video_plot()). `on_frame(i, n)` is called after each frame is drawn, `poster` names a file
+#   that gets the last frame (the finished chart) as a picture, and `keep` names a folder to leave the frame files in. Returns
+#   list(file, small, drawn, inputs, canvas, plot, drawn_fps, seconds = c(draw, encode)). Needs av (video_available()).
+spec_video <- function(spec, data, cb, palette = chart_palette_default(), file, size = SPEC_VIDEO_PX$download, small = NULL, bare = FALSE,
+                       drawn_fps = NULL, widths = SPEC_VIDEO_WIDTHS, on_frame = NULL, poster = NULL, keep = NULL) {
+  if (!video_available()) stop(video_unavailable_text(), call. = FALSE)
+  started = proc.time()[["elapsed"]]
+  ctx = video_context(video_plot(spec, data, cb, palette, bare, widths), cb)
+  canvas = attr(ctx$plot, "canvas")
+  dpi = size[["width"]] / canvas[["width"]]
+  dir = keep %||% tempfile("chart_video_")
+  dir.create(dir, showWarnings = FALSE, recursive = TRUE)
+  if (is.null(keep)) on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+  draw = function(p, f) video_draw(video_frame(ctx, p), f, canvas[["width"]], canvas[["height"]], dpi)
+  if (is.null(drawn_fps)) {
+    t = system.time(draw(0.97, file.path(dir, "probe.png")))[["elapsed"]]
+    drawn_fps = if (t * video_frame_count(SPEC_VIDEO_FPS) > SPEC_VIDEO_SLOW_S) SPEC_VIDEO_FPS %/% 2L else SPEC_VIDEO_FPS
+  }
+  n = video_frame_count(drawn_fps)
+  files = file.path(dir, sprintf("frame_%04d.png", seq_len(n)))
+  purrr::iwalk(seq(0, 1, length.out = n), function(p, i) {
+    draw(p, files[[i]])
+    if (is.function(on_frame)) on_frame(i, n)
+  })
+  if (!is.null(poster)) file.copy(files[[n]], poster, overwrite = TRUE)
+  drawn_at = proc.time()[["elapsed"]]
+  inputs = video_inputs(files, each = as.integer(round(SPEC_VIDEO_FPS / drawn_fps)))
+  encode = function(out, filter) av::av_encode_video(inputs, out, framerate = SPEC_VIDEO_FPS, vfilter = filter, codec = "libx264", verbose = FALSE)
+  encode(file, "format=yuv420p")
+  if (!is.null(small)) encode(small, paste0("scale=", SPEC_VIDEO_PX$card[["width"]], ":", SPEC_VIDEO_PX$card[["height"]], ":flags=lanczos,format=yuv420p"))
+  list(file = file, small = small, drawn = n, inputs = length(inputs), canvas = canvas, plot = ctx$plot, drawn_fps = drawn_fps,
+       seconds = c(draw = drawn_at - started, encode = proc.time()[["elapsed"]] - drawn_at))
+}
