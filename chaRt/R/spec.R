@@ -2554,13 +2554,11 @@ spec_widget <- function(plot, palette = attr(plot, "palette") %||% chart_palette
   w
 }
 
-# The static chart as a PNG at SPEC_DPI pixels per inch and its size in inches: ragg when it is
-#   installed, the cairo png device otherwise. Returns the size in inches, invisibly.
+# The static chart at SPEC_DPI pixels per inch and its size in inches, drawn on the device chart_device() opens
+#   (ragg, else cairo, else svglite: a PNG, or an SVG on a server that has only svglite; the file's ending and media
+#   type are chart_device_ext() and chart_device_type()). Returns the size in inches, invisibly.
 spec_png <- function(plot, file, size = spec_size(attr(plot, "spec"), attr(plot, "table")), dpi = SPEC_DPI) {
-  w = round(size[["width"]] * dpi)
-  h = round(size[["height"]] * dpi)
-  if (nzchar(find.package("ragg", quiet = TRUE))) ragg::agg_png(file, width = w, height = h, units = "px", res = dpi)
-  else grDevices::png(file, width = w, height = h, units = "px", res = dpi, type = "cairo")
+  chart_device(file, size[["width"]], size[["height"]], dpi)
   on.exit(grDevices::dev.off())
   print(plot)
   invisible(size)

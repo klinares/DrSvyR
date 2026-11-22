@@ -110,8 +110,10 @@ chart_fonts_register()
 
 # ---- 4. process settings ----------------------------------------------------
 
-# Cairo for every PNG: a Linux server with no display has no X11.
-options(bitmapType = "cairo")
+# Cairo for every PNG a stray call opens (a Linux server with no display has no X11), and ragg for shiny's own plots, when
+#   R and shiny have them: chart_device_options() in R/theme.R. Charts themselves are drawn by chart_device(), the one
+#   way a device is opened (R/theme.R); Start here says which device is in use.
+chart_device_options()
 
 # The largest upload, in bytes.
 options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)

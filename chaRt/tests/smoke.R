@@ -4120,6 +4120,123 @@ check("7b-14: a reply with text after its JSON object, braces and quotes inside 
         identical(json_first_object("no object here"), character(0)) && identical(json_first_object("{\"a\": 1"), character(0)) &&
         !inherits(e7_cut, "error") && identical(e7_cut$charts[[1]]$headline, "Cut off"))
 
+# ---- Phase 8 Part A: no X11, anywhere ------------------------------------------------------------------------------
+#
+# A Linux server with no X11 cannot open base R's default devices. chart_device() (R/theme.R) is the one place the app opens
+#   a device: ragg, else png(type = "cairo"), else svglite, else a sentence. The four switches (ragg_installed(),
+#   cairo_available(), svglite_installed(), shiny_has_useragg()) are replaced here, one at a time, to stand in for a server
+#   that lacks them; each is put back at once. A real server with no X11 was not available on this machine (see STATUS.md).
+
+p8_switches <- c("ragg_installed", "cairo_available", "svglite_installed", "shiny_has_useragg")
+p8_real <- stats::setNames(purrr::map(p8_switches, get, envir = globalenv()), p8_switches)
+# Runs `code` on a server where each switch says what `on` says (a named logical: ragg, cairo, svglite), then restores the switches.
+p8_with <- function(on, code) {
+  on.exit(purrr::iwalk(p8_real, function(f, nm) assign(nm, f, envir = globalenv())))
+  assign("ragg_installed", function() isTRUE(on[["ragg"]]), envir = globalenv())
+  assign("cairo_available", function() isTRUE(on[["cairo"]]), envir = globalenv())
+  assign("svglite_installed", function() isTRUE(on[["svglite"]]), envir = globalenv())
+  force(code)
+}
+p8_paths <- list(ragg = c(ragg = TRUE, cairo = TRUE, svglite = TRUE), cairo = c(ragg = FALSE, cairo = TRUE, svglite = TRUE),
+                 svglite = c(ragg = FALSE, cairo = FALSE, svglite = TRUE), none = c(ragg = FALSE, cairo = FALSE, svglite = FALSE))
+
+# 1. the one way in: what each device writes, and that nothing is left open
+p8_bar <- spec_plot(list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Total revenue by region", subtitle = "Orders", caption = "Source: orders"),
+                    pan_g$data, pan_g$cb, chart_palette_default())
+p8_draw <- function(kind) {
+  f = tempfile(fileext = if (identical(kind, "none")) ".png" else chart_device_ext(kind))
+  p8_with(p8_paths[[kind]], {
+    said = tryCatch({ spec_png(p8_bar, f); NULL }, error = function(e) conditionMessage(e))
+    list(kind = chart_device_kind(), said = said, file = f, size = if (file.exists(f)) file.size(f), open = grDevices::dev.list(),
+         head = if (file.exists(f)) readBin(f, "raw", 8L))
+  })
+}
+p8_out <- stats::setNames(purrr::map(names(p8_paths), p8_draw), names(p8_paths))
+p8_png_sig <- as.raw(c(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+check("8A-1: chart_device() opens ragg when it is installed, else png(type = \"cairo\") when R has cairo, else svglite, else says the server cannot draw; each path writes a picture (PNGs with the PNG signature, svglite an SVG), none leaves a device open and none lets a stray call open the default one (no Rplots.pdf)",
+      identical(purrr::map_chr(p8_out, "kind"), c(ragg = "ragg", cairo = "cairo", svglite = "svglite", none = "none")) &&
+        identical(p8_out$ragg$head, p8_png_sig) && identical(p8_out$cairo$head, p8_png_sig) && p8_out$ragg$size > 5000 && p8_out$cairo$size > 5000 &&
+        grepl("<svg", paste(readLines(p8_out$svglite$file, n = 3L, warn = FALSE), collapse = " "), fixed = TRUE) && p8_out$svglite$size > 1000 &&
+        is.null(p8_out$ragg$said) && is.null(p8_out$cairo$said) && is.null(p8_out$svglite$said) &&
+        identical(p8_out$none$said, CHART_DEVICE_NONE) && grepl("cannot draw", CHART_DEVICE_NONE, fixed = TRUE) && !file.exists(p8_out$none$file) &&
+        purrr::every(p8_out, function(x) is.null(x$open)) && is.null(grDevices::dev.list()) && !file.exists("Rplots.pdf") &&
+        identical(chart_device_ext("svglite"), ".svg") && identical(chart_device_type("svglite"), "image/svg+xml") &&
+        identical(chart_device_ext("cairo"), ".png") && identical(chart_device_type("ragg"), "image/png"))
+
+# 2. nothing else opens a device or measures text with none open: every call that does is in chart_device() (theme.R), and the
+#   gallery's measurement runs inside the device chart_device() opens
+p8_banned <- c("agg_png", "agg_jpeg", "agg_tiff", "agg_capture", "png", "jpeg", "bmp", "tiff", "pdf", "svg", "svglite", "cairo_pdf", "cairo_ps", "postscript",
+               "xfig", "pictex", "x11", "X11", "dev.new", "ggsave", "Cairo", "strwidth", "strheight", "convertUnit", "convertWidth", "convertHeight",
+               "grobWidth", "grobHeight", "stringWidth", "stringHeight", "deviceLoc", "string_widths_dev", "shape_string")
+p8_hits <- function(f) {
+  unlist(purrr::map(top_level(f), function(e) {
+    hit = intersect(all.names(e), p8_banned)
+    if (length(hit)) paste0(basename(f), ": ", if (is_assignment(e) && is.symbol(e[[2]])) as.character(e[[2]]) else "(top level)", " calls ", paste(hit, collapse = ", "))
+  }))
+}
+p8_found <- unlist(purrr::map(c("app.R", r_files), p8_hits))
+p8_gal <- unlist(purrr::map("tests/gallery.R", p8_hits))
+p8_expect <- "theme.R: chart_device calls agg_png, png, svglite"
+check(paste0("8A-2: no function in app.R or R/ opens a graphics device or measures text outside chart_device() in R/theme.R (png, jpeg, agg_png, svglite, pdf, ggsave, strwidth, grid unit conversions and the like)",
+             if (!identical(p8_found, p8_expect)) paste0(" (found: ", paste(p8_found, collapse = "; "), ")")),
+      identical(p8_found, p8_expect) &&
+        any(grepl("chart_device\\(", deparse(body(spec_png)))) && any(grepl("chart_device\\(", deparse(body(drawn_text_boxes)))) &&
+        !any(grepl("agg_png", deparse(body(drawn_text_boxes)), fixed = TRUE)) && !any(grepl("agg_png|png\\(", deparse(body(spec_png)))) &&
+        !any(grepl("agg_png", p8_gal, fixed = TRUE)))
+
+# 3. start-up options, so that a stray call cannot reach X11
+p8_opts0 <- options(bitmapType = "Xlib", shiny.useragg = NULL)
+p8_set <- chart_device_options()
+p8_after <- list(bitmapType = getOption("bitmapType"), useragg = getOption("shiny.useragg"))
+options(bitmapType = "Xlib", shiny.useragg = NULL)
+p8_nocairo <- p8_with(c(ragg = TRUE, cairo = FALSE, svglite = TRUE), { chart_device_options(); getOption("bitmapType") })
+p8_nouseragg <- local({
+  on.exit(assign("shiny_has_useragg", p8_real$shiny_has_useragg, envir = globalenv()))
+  assign("shiny_has_useragg", function() FALSE, envir = globalenv())
+  options(shiny.useragg = NULL)
+  chart_device_options()
+  getOption("shiny.useragg")
+})
+options(p8_opts0)
+check("8A-3: chart_device_options() sets bitmapType to \"cairo\" when R has cairo (and leaves it alone when it does not) and shiny.useragg to TRUE when the installed shiny has it (shiny 1.7.2 or later; and not when it does not); app.R calls it at start-up and the app, as loaded, has bitmapType \"cairo\"",
+      identical(p8_after$bitmapType, "cairo") && isTRUE(p8_after$useragg) && setequal(names(p8_set), c("bitmapType", "shiny.useragg")) &&
+        identical(p8_nocairo, "Xlib") && is.null(p8_nouseragg) &&
+        any(grepl("^chart_device_options\\(\\)", readLines("app.R", warn = FALSE))) && !any(grepl("^options\\(bitmapType", readLines("app.R", warn = FALSE))) &&
+        identical(getOption("bitmapType"), "cairo") && isTRUE(shiny_has_useragg()))
+
+# 4. Start here says once which device is in use
+p8_note <- function(kind) paste(as.character(p8_with(p8_paths[[kind]], start_ui())), collapse = "")
+p8_says <- purrr::map_chr(names(p8_paths), p8_note)
+names(p8_says) <- names(p8_paths)
+p8_count <- function(x, pat) lengths(gregexpr(pat, x, fixed = TRUE)) * grepl(pat, x, fixed = TRUE)
+check("8A-4: Start here says once which device draws the charts: ragg (quietly), R's cairo graphics or svglite (in a box, each adding that the bundled typefaces are not used), or that the server cannot draw",
+      p8_count(p8_says[["ragg"]], "Charts are drawn with ragg.") == 1L && !grepl("warning", p8_says[["ragg"]], fixed = TRUE) &&
+        p8_count(p8_says[["cairo"]], "Charts are drawn with R's cairo graphics, because the ragg package is not installed here.") == 1L &&
+        p8_count(p8_says[["cairo"]], "does not use the bundled typefaces") == 1L && !grepl("Charts are drawn with ragg", p8_says[["cairo"]], fixed = TRUE) &&
+        p8_count(p8_says[["svglite"]], "Charts are drawn with the svglite package, as SVG pictures") == 1L && p8_count(p8_says[["svglite"]], "does not use the bundled typefaces") == 1L &&
+        p8_count(p8_says[["none"]], "This server cannot draw charts") == 1L && !grepl("Charts are drawn with", p8_says[["none"]], fixed = TRUE) &&
+        chart_device_uses_bundled_fonts("ragg") && !chart_device_uses_bundled_fonts("svglite") && !chart_device_uses_bundled_fonts("cairo"))
+
+# 5. the paths really draw one chart: the same size in pixels, the picture differs; the bundled fonts are found by ragg through systemfonts
+p8_dim <- function(f) { b = readBin(f, "raw", 24L); c(sum(as.integer(b[17:20]) * 256^(3:0)), sum(as.integer(b[21:24]) * 256^(3:0))) }
+p8_match <- systemfonts::match_fonts("Inter")$path
+check("8A-5: one chart drawn by ragg and by cairo has the same size in pixels (the size in inches times SPEC_DPI), the two files differ, and ragg finds the bundled Inter through systemfonts (a registered file in www/fonts, or an installed copy) while the cairo device cannot be told of it",
+      identical(p8_dim(p8_out$ragg$file), p8_dim(p8_out$cairo$file)) &&
+        identical(p8_dim(p8_out$ragg$file), unname(as.numeric(round(spec_size(attr(p8_bar, "spec"), attr(p8_bar, "table")) * SPEC_DPI)))) &&
+        !identical(unname(tools::md5sum(p8_out$ragg$file)), unname(tools::md5sum(p8_out$cairo$file))) &&
+        chart_font_available("Inter") && length(p8_match) == 1L && file.exists(p8_match))
+
+# 6. the text measurement of the gallery runs inside the device chart_device() opens and closes it
+check("8A-6: tests/gallery.R's drawn_text_boxes() measures a chart's texts inside a device chart_device() opens (ragg and cairo give boxes for the same labels) and closes it",
+      local({
+        sp = list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "t", labels = "on")
+        pl = spec_plot(sp, pan_g$data, pan_g$cb, chart_palette_default())
+        a = drawn_text_boxes(pl)
+        b = p8_with(p8_paths$cairo, drawn_text_boxes(pl))
+        nrow(a) > 0L && nrow(b) == nrow(a) && setequal(a$label, b$label) && is.null(grDevices::dev.list())
+      }))
+
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")

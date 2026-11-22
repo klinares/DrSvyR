@@ -105,9 +105,24 @@ start_ui <- function()
            "that follow written visualization rules, and lets you change a chart by chat. Charts collect ",
            "on a canvas, each with a headline and a short summary of what it shows. Every chart and ",
            "summary describes the file, not a population. Start on the Data page, then go to Explore."),
+    device_note(),
     fonts_note(),
     mod_key_ui("key"),
     mod_connect_ui("connect"))
+
+# Said once on Start here: which device draws the charts (chart_device() in R/theme.R). ragg is the usual answer and
+#   is said quietly; cairo or svglite, which a server without ragg falls back to, is said in a box, with what they
+#   cannot do (use the bundled typefaces); a server that can draw with none says so.
+device_note <- function() {
+  kind = chart_device_kind()
+  if (identical(kind, "none")) return(warn_box(CHART_DEVICE_NONE))
+  if (identical(kind, "ragg")) return(tags$p(class = "text-muted small", "Charts are drawn with ragg."))
+  warn_box(paste0("Charts are drawn with ", switch(kind, cairo = "R's cairo graphics, because the ragg package is not installed here",
+                                                     svglite = "the svglite package, as SVG pictures, because neither ragg nor R's cairo graphics is here"), ".",
+                  if (!chart_device_uses_bundled_fonts(kind))
+                    paste0(" This device does not use the bundled typefaces: the charts are drawn in the fonts ",
+                           switch(kind, cairo = "this server has.", svglite = "that the browser showing them has."))))
+}
 
 # Said once on Start here when this machine cannot draw in a bundled typeface (www/fonts/ missing, or systemfonts
 #   not installed): the charts are drawn in the default fonts instead. Nothing when both are there.
@@ -1408,9 +1423,10 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       output[[cid(chart_id, "static")]] = renderImage({
         p = drawn()
         if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
-        f = tempfile(fileext = ".png")
+        kind = chart_device_kind()
+        f = tempfile(fileext = chart_device_ext(kind))
         size = spec_png(p, f)
-        list(src = f, contentType = "image/png", alt = attr(p, "spec")$title %||% "chart",
+        list(src = f, contentType = chart_device_type(kind), alt = attr(p, "spec")$title %||% "chart",
              width = round(size[["width"]] * CSS_PPI), height = round(size[["height"]] * CSS_PPI),
              style = "max-width:100%; height:auto;")
       }, deleteFile = TRUE)

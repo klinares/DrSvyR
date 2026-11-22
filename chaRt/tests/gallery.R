@@ -77,7 +77,7 @@ gold_run <- function(entry, work_dir) {
 
 # ---- the texts on a drawn chart (Phase 7b) -----------------------------------------------------------
 # A check that a label exists is not a check that it can be read. These measure every text a chart's panels draw (value
-#   labels, end labels, annotations, names, cell values), on the chart as drawn: the plot is printed to a ragg device of its
+#   labels, end labels, annotations, names, cell values), on the chart as drawn: the plot is printed to the device chart_device() opens (ragg here), of its
 #   own size, grid::grid.force() turns ggrepel's labels into plain text grobs, and each text grob in a panel's viewport is
 #   measured there: grid::deviceLoc() for its anchor, grid::grobWidth(), grobHeight() and grobDescent() of the string in its
 #   own font and size, and its hjust and vjust. One row per label: label, x0 x1 y0 y1 in inches from the device's lower left;
@@ -85,7 +85,7 @@ gold_run <- function(entry, work_dir) {
 drawn_text_boxes <- function(p, dpi = 96) {
   sz = spec_size(attr(p, "spec"), attr(p, "table"))
   f = tempfile(fileext = ".png")
-  ragg::agg_png(f, width = round(sz[["width"]] * dpi), height = round(sz[["height"]] * dpi), res = dpi)
+  chart_device(f, sz[["width"]], sz[["height"]], dpi)
   on.exit({ grDevices::dev.off(); unlink(f) })
   print(p)
   grid::grid.force()

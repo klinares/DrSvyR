@@ -2,8 +2,9 @@
 # The look of every chart: the typeface, the six styles (CHART_STYLES), the ggplot2 theme, the
 #   palettes an analyst may choose from, and the colour of a highlight. This is the one file
 #   replaced at work with the office theme and palette, so it is self-contained: it uses ggplot2,
-#   grDevices and systemfonts (when installed: without it charts draw in the default fonts), and
-#   paletteer when it is installed (the app starts without it), and nothing else from the app.
+#   grDevices, ragg and svglite (when installed: chart_device()), systemfonts (when installed: without it charts
+#   draw in the default fonts) and paletteer when it is installed (the app starts without it), and nothing else
+#   from the app.
 #   R/spec.R reads CHART_HIGHLIGHT, chart_style(), chart_theme_calls(), chart_style_layers(),
 #   chart_font_values(), style_marks(), chart_palette(), chart_sequential(), chart_diverging() and
 #   chart_palette_default(); the code a chart comes with carries chart_theme_calls() written out
@@ -75,6 +76,69 @@ chart_fonts_missing <- function()
 chart_font_values <- function(calls) {
   used = intersect(names(CHART_FONT_VARS), unlist(purrr::map(calls, all.vars)))
   stats::setNames(purrr::map(used, function(v) chart_font_family(CHART_FONT_VARS[[v]][[1]], CHART_FONT_VARS[[v]][[2]])), used)
+}
+
+
+# ---- the one way to draw -----------------------------------------------------------------------------
+
+# A Linux server with no X11 cannot open base R's default devices (png() with type "Xlib", the device a stray
+#   print() or text measurement opens when none is open). So the app opens a device in one place, chart_device(),
+#   and every drawing and every text measurement runs inside it. The order: ragg (needs neither X11 nor cairo,
+#   and draws in the bundled typefaces through systemfonts); else base R's png(type = "cairo") when R has cairo
+#   (it draws, but in the typefaces the operating system has, not the bundled ones); else svglite (an SVG
+#   file); else nothing, and CHART_DEVICE_NONE says so. The four switches below are functions so that a test
+#   can stand in for a server without ragg, or without cairo.
+ragg_installed <- function() length(find.package("ragg", quiet = TRUE)) > 0L
+svglite_installed <- function() length(find.package("svglite", quiet = TRUE)) > 0L
+cairo_available <- function() isTRUE(unname(capabilities("cairo")))
+# shiny has drawn its own plots with ragg, when installed, since 1.7.2 (NEWS: renderPlot() and plotPNG(), option shiny.useragg).
+shiny_has_useragg <- function() isTRUE(tryCatch(utils::packageVersion("shiny") >= "1.7.2", error = function(e) FALSE))
+
+# What a server that can draw none of the three is told.
+CHART_DEVICE_NONE <- paste("This server cannot draw charts: it has none of the ragg package, R's cairo graphics and the svglite package.",
+                           "Ask whoever runs the server to install ragg.")
+
+# The device chart_device() will open: "ragg", "cairo", "svglite" or "none".
+chart_device_kind <- function() {
+  if (ragg_installed()) "ragg"
+  else if (cairo_available()) "cairo"
+  else if (svglite_installed()) "svglite"
+  else "none"
+}
+
+# The file ending and media type of what the device writes: a PNG, except from svglite.
+chart_device_ext <- function(kind = chart_device_kind()) if (identical(kind, "svglite")) ".svg" else ".png"
+chart_device_type <- function(kind = chart_device_kind()) if (identical(kind, "svglite")) "image/svg+xml" else "image/png"
+
+# Opens the device that writes `file`, `width` by `height` inches at `dpi` pixels per inch (svglite draws vectors,
+#   so it takes no dpi), and returns its kind, invisibly. The caller closes it (dev.off()). With none of the
+#   three it stops with CHART_DEVICE_NONE, as a sentence and not a failure inside a graphics package.
+chart_device <- function(file, width, height, dpi) {
+  kind = chart_device_kind()
+  w = round(width * dpi)
+  h = round(height * dpi)
+  switch(kind,
+         ragg = ragg::agg_png(file, width = w, height = h, units = "px", res = dpi),
+         cairo = grDevices::png(file, width = w, height = h, units = "px", res = dpi, type = "cairo"),
+         svglite = svglite::svglite(file, width = width, height = height),
+         stop(CHART_DEVICE_NONE, call. = FALSE))
+  invisible(kind)
+}
+
+# Whether the typefaces registered with systemfonts reach the picture: ragg reads them from systemfonts. Base R's cairo device
+#   asks the operating system, which does not know the bundled files. svglite measures the text with them but writes only the
+#   family name into the SVG, and a browser showing that picture has no such font.
+chart_device_uses_bundled_fonts <- function(kind = chart_device_kind()) identical(kind, "ragg")
+
+# The options a stray graphics call needs so that it cannot reach X11: bitmapType "cairo" when R has cairo (the
+#   type png() and jpeg() use when none is given, as plotly's own conversion does), and shiny.useragg TRUE when the
+#   installed shiny has it. Called once from app.R; returns what it set, invisibly.
+chart_device_options <- function() {
+  set = list()
+  if (cairo_available()) set$bitmapType = "cairo"
+  if (shiny_has_useragg()) set$shiny.useragg = TRUE
+  if (length(set)) options(set)
+  invisible(set)
 }
 
 
