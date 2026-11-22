@@ -1,8 +1,10 @@
 # chaRt: status
 
-## Current state (2026-11-22, end of Phase 9 Part C)
+## Current state (2026-11-22, end of Phase 9)
 
 Branch `chart`, not pushed. Everything below was built and tested at home on R 4.6.1. No test makes a model call unless it says so. The phase-by-phase record is under History.
+
+**Phase 9 in brief** (report: `manager/done-9.md`). Parts A to D done: the exported dashboard and codebook look like published pages (centred, no hole in the grid, readable chart text, a page in the chosen style), charts animate to MP4, summary statistics (Data page, canvas, export), and a closing pass (probe Video table, deploy check without deploying, README, this file). Smoke: fast 488 of 488 (6.1 minutes), heavy 19 of 19 (7.0 minutes). **Not done: the live run** (`tests/live_run_9.R`), because no key was available; so no dashboard with real model headlines has been seen.
 
 **What works**
 - **Data page.** Reads a delimited file (csv, tsv, txt, tab; up to 50 MB; encoding guessed or chosen), types and roles every column, applies the missing codes the analyst lists, and writes `data_dictionary.yaml` (also read back). "Summary statistics" under the dictionary (`summary_table()` in R/data.R): one row per column, an optional "By group", 95% intervals that assume a simple random sample (t for a mean, Wilson for a share), a CSV; no key and no model.
@@ -21,6 +23,7 @@ Branch `chart`, not pushed. Everything below was built and tested at home on R 4
 
 **Known limits**
 - Statistics use a simple random sample, three significant digits on screen (six in the CSV), and no weights or design. A mean of a scale treats its steps as equal, and says so.
+- On a dashboard page a video shows its first frame (empty axes), not its poster, until it scrolls into view (`preload="auto"`); a `preload` change was tried once and not confirmed.
 - A video has no phone drawing (its text is small below 600 px), takes a row of the page when drawn on a wide canvas, and its chart carries no rows. An interactive chart carries every plotted row.
 - The Dark style's bubble size legend has black keys on a dark ground. A line chart's plotly version has tick labels that touch at card width.
 - On a phone the Data page's file table scrolls sideways by about 27 px. shinychat links the echo of a clicked card's text; the model's own text and the file's text are escaped (`md_text()`).
