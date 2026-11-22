@@ -1,5 +1,56 @@
 # chaRt: status
 
+## Phase 8 Part A: no X11, anywhere (2026-11-21)
+
+Branch `chart`, not pushed; done by a Sonnet worker for the lead. Smoke: **409 of 409** (396 before; 13 new checks, 1 changed,
+none removed). Part B and Part C are not started.
+
+**The one way in.** `chart_device(file, width, height, dpi)` (R/theme.R) opens the only device the app opens: ragg when it is
+installed, else `png(type = "cairo")` when `capabilities("cairo")`, else svglite (an SVG), else it stops with
+`CHART_DEVICE_NONE`, a plain sentence. `spec_png()` and tests/gallery.R's `drawn_text_boxes()` (the text measurement) run
+inside it and close it. Four switches (`ragg_installed()`, `cairo_available()`, `svglite_installed()`,
+`shiny_has_useragg()`) let a check stand in for a server without ragg or without cairo. `chart_device_options()` (called from
+app.R) sets `bitmapType` to "cairo" when R has cairo, and `shiny.useragg` to TRUE when shiny is 1.7.2 or later (NEWS: that is
+where `renderPlot()` began to use ragg, with that option). Start here says which device is in use, once (`device_note()`).
+A check (8A-2) reads every function in app.R and R/ and fails if any other calls a device opener, `ggsave`, `strwidth` or a
+grid unit conversion; the audit found none outside the gallery, which now goes through `chart_device()`.
+
+**What the audit left that is not ours.** `plotly::ggplotly()` (spec_widget) opens its own `grDevices::png(tempfile())` to
+convert sizes, with the default type, which is `options(bitmapType)`, hence the start-up option; where `capabilities("png")` and
+`("jpeg")` are both FALSE and the Cairo package is absent, ggplotly stops with its own message and the interactive version
+cannot be made (the static chart still draws). In a non-interactive R (Rscript, a Shiny server) a stray `print(plot)` with no
+device open starts the `pdf` device, not X11: it writes `Rplots.pdf` and measures text with the pdf device's fonts. Check 8A-1
+looks for that file.
+
+**The paths compared** (one bar chart of orders.csv, 7 by 4.5 inches at SPEC_DPI 192): ragg 1344 x 864 px, about 45 KB, drawn in
+Inter; cairo 1344 x 864 px, about 17 KB, drawn in the operating system's default sans (Arial on this Windows machine): the
+bundled files are registered with systemfonts, which ragg and svglite read, and base R's cairo device asks the operating system,
+which does not know them. Same layout, same size; the type differs. svglite writes the family name into the SVG and measures with
+systemfonts, but a browser showing the SVG as a picture has no such font, so it is not counted as using the bundled ones. On a
+Linux machine that already has Inter installed (the WSL test below) cairo drew Inter too, because the system had it, and
+`register_font()` said the family already exists (so `chart_fonts_register()` returns FALSE for it there, with the family still
+available).
+
+**No X11, proved as far as it can be here.** Windows has none to remove. A WSL Ubuntu (R 4.4.2, DISPLAY unset, `X11` FALSE,
+cairo TRUE) was at hand: `chart_device()` drew by ragg, cairo and svglite and said "cannot draw" with none; `png(type =
+"Xlib")` failed there with "unable to open connection to X11 display"; `plotly::ggplotly()` worked with `bitmapType` cairo; the
+probe's Graphics section ran and drew all three. That is not Connect: the whole app (ellmer, shinychat, S7, ggplot2 4) was not
+run there, and the server's packages, fonts and `capabilities()` may differ. The probe will show them.
+
+**The probe** (probe/app.R) has a Graphics section: `capabilities()` for X11, cairo, png and jpeg, DISPLAY, `bitmapType` at start
+and now, whether `png(type = "Xlib")` opens, ragg, svglite, Cairo, systemfonts and av with versions, R and the system (the
+`Sys.info()` fields without host and user names), whether a font file registers with systemfonts and is found by name (the bundled
+Inter if www/fonts is copied beside the probe, else the first monospace TrueType file the server has), and one chart drawn by each
+available device and shown. No model call, no key, self-contained.
+
+**Numeric codes for missing (item 6).** `numeric_code_words()` and `missing_candidates()` (R/data.R): a value of a numeric column
+that is repeated (at least 5 rows or 1% of the rows, and never one row), is in a usual form (negative while the rest of the
+column is not, or all nines of two digits or more, with or without a minus), and lies more than 3 interquartile ranges beyond
+the nearer quartile of the rest of the column, is offered in the chat as "Treat '-99' as missing", the same button and the same
+`TREAT_PATTERN` click as a word, at most 3 a column. It is an offer; nothing is applied until the click. The value is offered as
+the text `format()` gives, so a file that writes it as "-99.0" is read again with no change and the chat says so.
+The messy test file's planted -99 (score column, 3 rows of 120) is now offered; check 6-C 1 expects it.
+
 ## Phase 7b: faults found by looking at the charts (2026-11-21)
 
 Branch `chart`, not pushed; done by the lead alone (no mailbox, no workers). Smoke: **395 of 395** (381 before; 14 new

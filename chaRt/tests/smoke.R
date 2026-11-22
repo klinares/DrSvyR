@@ -1929,9 +1929,9 @@ c6_reply <- function(user, i) {
 c6_chat_calls <- function(si) purrr::keep(si$sent, function(s) grepl("\nANALYST: ", s$user, fixed = TRUE))
 c6_has <- function(x, pat) any(grepl(pat, x, fixed = TRUE))
 
-check("6-C 1: the helpers: a word among the numbers is a candidate for missing (once, not a number); md_text() keeps a '<' or '&' from starting a tag; the messy file gives its words",
+check("6-C 1: the helpers: a word among the numbers is a candidate for missing (once, not a number); md_text() keeps a '<' or '&' from starting a tag; the messy file gives its words and the -99 planted in its score column (a repeated numeric code, Phase 8)",
       identical(missing_candidates(c6_read$read$data), "N/A") && identical(md_text("a <b> & c"), "a &lt;b&gt; &amp; c") &&
-        (inherits(messy, "error") || setequal(missing_candidates(messy$read$data), c("unknown", "about 40"))) &&
+        (inherits(messy, "error") || setequal(missing_candidates(messy$read$data), c("unknown", "about 40", "-99"))) &&
         identical(treat_text("-99"), "Treat '-99' as missing") && identical(row_text("one order"), "A row is one order"))
 
 
@@ -4236,6 +4236,60 @@ check("8A-6: tests/gallery.R's drawn_text_boxes() measures a chart's texts insid
         nrow(a) > 0L && nrow(b) == nrow(a) && setequal(a$label, b$label) && is.null(grDevices::dev.list())
       }))
 
+# 7. numeric codes for missing: a repeated value, outside the rest of the column, in one of the usual forms, is offered
+set.seed(81)
+p8_n <- 240L
+p8_path <- file.path(work_dir, "codes.csv")
+p8_inc <- round(stats::rnorm(p8_n, 50, 10)); p8_inc[c(3, 30, 60, 90, 120, 150, 180, 200, 230)] <- -99       # -99 nine times, rest not negative
+p8_scr <- sample(100:900, p8_n, replace = TRUE); p8_scr[17] <- 999                                          # 999 once, a real maximum
+p8_stk <- sample(0:1000, p8_n, replace = TRUE); p8_stk[c(5, 55, 105, 155, 205, 235)] <- 999                  # 999 six times, among values up to 1000
+p8_big <- round(stats::rnorm(p8_n, 200, 20)); p8_big[c(8, 88, 98, 108, 118, 128)] <- 9999                    # 9999 six times, far above
+p8_two <- round(stats::rnorm(p8_n, 50, 10)); p8_two[c(2, 12)] <- -88                                        # -88 twice: not repeated enough
+readr::write_csv(data.frame(region = sample(c("East", "West", "North"), p8_n, replace = TRUE), income = p8_inc, score = p8_scr, stock = p8_stk,
+                            big = p8_big, two = p8_two, year = sample(2019:2024, p8_n, replace = TRUE)), p8_path)
+p8_read <- reread_data(p8_path, "codes.csv", character())
+p8_d <- p8_read$read$data
+check("8A-7: numeric_code_words() offers -99 for a non-negative column that holds it nine times and 9999 for a column that holds it six times far above the rest; it does not offer a 999 that is the real maximum once, a 999 repeated amid values up to 1000, or a code in two rows; a text column and one with nothing odd give none",
+      identical(numeric_code_words(p8_d$income), "-99") && identical(numeric_code_words(p8_d$big), "9999") && length(numeric_code_words(p8_d$score)) == 0L &&
+        length(numeric_code_words(p8_d$stock)) == 0L && length(numeric_code_words(p8_d$two)) == 0L && length(numeric_code_words(p8_d$region)) == 0L &&
+        length(numeric_code_words(p8_d$year)) == 0L && setequal(missing_candidates(p8_d), c("-99", "9999")) && is.numeric(p8_d$income) &&
+        sum(p8_d$income == -99) == 9L && max(p8_d$score) == 999)
+set.seed(82)
+check("8A-8: the form and the fence: a negative code needs the rest of the column to be non-negative (other negatives: only all nines qualifies); a value inside 3 interquartile ranges of its quartile is not a code; the rows needed are 5 or 1% of the rows, never one",
+      identical(numeric_code_words(c(p8_d$income[p8_d$income != -99], rep(-99, 9))), "-99") &&
+        identical(numeric_code_words(c(round(stats::rnorm(300, 0, 10)), rep(-99, 9))), "-99") &&
+        length(numeric_code_words(c(round(stats::rnorm(300, 0, 10)), rep(-77, 9)))) == 0L &&
+        length(numeric_code_words(c(rpois(300, 3), rep(-1, 20)))) == 0L &&
+        identical(numeric_code_words(c(rep(10, 500), rep(11, 495), rep(-5, 5))), "-5") && length(numeric_code_words(c(rep(10, 500), rep(11, 496), rep(-5, 4)))) == 0L &&
+        identical(numeric_code_words(c(rep(10, 45), rep(11, 50), rep(-5, 2))), "-5") && length(numeric_code_words(c(rep(10, 45), rep(11, 51), rep(-5, 1)))) == 0L &&
+        identical(numeric_code_words(c(rep(10, 90), rep(11, 90), rep(999, 2))), "999") && length(numeric_code_words(c(1:50, 999))) == 0L &&
+        NUMERIC_CODE_ROWS == 5L && NUMERIC_CODE_SHARE == 0.01 && NUMERIC_CODE_IQR == 3 && length(numeric_code_words(numeric(0))) == 0L)
+
+p8_si <- stand_by(c6_reply)
+p8_state <- shiny::reactiveValues(key_version = 0L, data = p8_d, problems = p8_read$read$problems, profile = p8_read$profile, codebook = p8_read$codebook,
+                                  path = p8_path, calls = NULL, charts = list(), canvas = character(0), stories = list(), palette = chart_palette_default())
+p8_out7 <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = p8_state, ask = p8_si$ask), {
+  session$flushReact()
+  m1 <- made$log[[1]]$content
+  p8_out7$offer <- identical(d6_sugg(m1), treat_text(c("-99", "9999"))) && identical(d6_shown(m1), treat_text(c("-99", "9999"))) &&
+    grepl("If one of these stands for missing, press it and the file is read again:", m1, fixed = TRUE) && setequal(treat(), c("-99", "9999")) &&
+    sum(p8_state$data$income == -99) == 9L && sum(is.na(p8_state$data$income)) == 0L && identical(p8_state$data, p8_d) &&
+    length(p8_si$sent) == 0L && is.null(p8_state$calls) && identical(missing_codes(p8_state$codebook), character(0))
+  session$setInputs(chat_user_input = treat_text("-99"))
+  p8_out7$click <- identical(missing_codes(p8_state$codebook), "-99") && sum(is.na(p8_state$data$income)) == 9L && !any(p8_state$data$income == -99, na.rm = TRUE) &&
+    identical(p8_state$data$score, p8_d$score) && identical(p8_state$data$big, p8_d$big) && is.numeric(p8_state$data$income) &&
+    identical(treat(), "9999") && length(p8_si$sent) == 0L && is.null(p8_state$calls) &&
+    grepl(paste0("again with '", md_text("-99"), "' as missing"), made$log[[length(made$log) - 1L]]$content, fixed = TRUE) &&
+    !grepl("-99", paste(d6_sugg(made$log[[length(made$log) - 1L]]$content), collapse = " "), fixed = TRUE)
+  session$setInputs(chat_user_input = treat_text("-99"))
+  p8_out7$again <- identical(missing_codes(p8_state$codebook), "-99") && length(p8_si$sent) == 0L &&
+    grepl(paste0("No button offers '", md_text("-99"), "' now"), made$log[[length(made$log)]]$content, fixed = TRUE)
+})
+check("8A-9: the chat offers \"Treat '-99' as missing\" and \"Treat '9999' as missing\" as buttons, the same ones as for a word, and nothing is applied until the click (the data, the data dictionary and the model are untouched)",
+      isTRUE(p8_out7$offer))
+check("8A-10: a click on \"Treat '-99' as missing\" (the same TREAT_PATTERN text) reads the file again with -99 as missing: nine cells of income are missing, no other column changes, the offer for -99 is gone and the one for 9999 stays, and no model call is made; pressing it again is refused as a button no longer on offer",
+      isTRUE(p8_out7$click) && isTRUE(p8_out7$again))
 
 # 8. the probe's Graphics section (probe/ is a separate app: it is loaded as Connect loads it, then its functions are run in an
 #   environment of their own, since testServer() would also run every old check, ffmpeg's included)

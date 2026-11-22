@@ -82,10 +82,43 @@ mostly_numbers_words <- function(x) {
   obs[!num]
 }
 
+# A numeric code for missing, such as -99 or 999 written in a column of numbers, is read as a number and so is not a
+#   word among the numbers. It is offered, never applied, when all of this holds for a value of a numeric column:
+#   - it is repeated: at least NUMERIC_CODE_ROWS rows, or NUMERIC_CODE_SHARE of the rows, and never a single row;
+#   - it is one of the usual forms: negative while the rest of the column is not, or all nines (99, 999, 9999, ...),
+#     with or without a minus sign;
+#   - it lies outside the rest of the column (the column without that value) by more than NUMERIC_CODE_IQR times the
+#     interquartile range, beyond the quartile on its side. A real maximum of 999 that occurs once, or amid values of
+#     that size, fails one of these.
+#   Returns the values as the text of the button ("-99"), at most three, the most repeated first.
+NUMERIC_CODE_ROWS <- 5L
+NUMERIC_CODE_SHARE <- 0.01
+NUMERIC_CODE_IQR <- 3
+numeric_code_words <- function(x) {
+  if (!is.numeric(x)) return(character(0))
+  obs = sort(x[is.finite(x)])
+  runs = rle(obs)
+  repeated = runs$lengths >= 2L & (runs$lengths >= NUMERIC_CODE_ROWS | runs$lengths >= NUMERIC_CODE_SHARE * length(obs))
+  as_code = function(v) format(v, scientific = FALSE, trim = TRUE)
+  usual = function(v, rest)
+    (v < 0 && min(rest) >= 0) || (v == round(v) && grepl("^9{2,}$", as_code(abs(v))))
+  outside = function(v, rest) {
+    q = stats::quantile(rest, c(0.25, 0.75), names = FALSE)
+    v > q[[2]] + NUMERIC_CODE_IQR * (q[[2]] - q[[1]]) || v < q[[1]] - NUMERIC_CODE_IQR * (q[[2]] - q[[1]])
+  }
+  keep = purrr::map_lgl(which(repeated), function(i) {
+    rest = obs[obs != runs$values[[i]]]
+    length(rest) >= 4L && usual(runs$values[[i]], rest) && outside(runs$values[[i]], rest)
+  })
+  idx = which(repeated)[keep]
+  utils::head(as_code(runs$values[idx[order(-runs$lengths[idx], runs$values[idx])]]), 3L)
+}
+
 # The words that may stand for missing in a file, as the note below names them: the first three of
-#   each column that is mostly numbers, each word once, in column order.
+#   each column that is mostly numbers, then the numeric codes of each numeric column (numeric_code_words()), each word
+#   once, in column order.
 missing_candidates <- function(data)
-  unique(unlist(purrr::map(as.list(data), function(x) utils::head(mostly_numbers_words(x), 3L)), use.names = FALSE)) %||% character(0)
+  unique(unlist(purrr::map(as.list(data), function(x) c(utils::head(mostly_numbers_words(x), 3L), numeric_code_words(x))), use.names = FALSE)) %||% character(0)
 
 # A column of text whose values are mostly numbers: a missing-value code such as ".." or -99 written
 #   as a word keeps it from being read as numbers. Said, not fixed: the code is the analyst's call.
