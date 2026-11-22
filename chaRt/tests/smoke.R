@@ -1073,7 +1073,9 @@ if (!inherits(wide, "error")) {
 # No model reply is evaluated. Read from the parse data, so a comment does not count: nothing in
 #   app.R or R/ turns text into code (parse, str2lang, str2expression, eval_tidy), and eval() is
 #   called only in R/spec.R, on a call R itself builds from a checked spec (run_steps() on the
-#   pipeline of dplyr steps, spec_plot() on plus_call() of the ggplot2 layers).
+#   pipeline of dplyr steps, spec_plot() on plus_call() of the ggplot2 layers), and on TIME_LABELS, the
+#   constant call that writes a date axis (Phase 9), which time_labels() turns into the function the
+#   dashboard's small pictures use.
 calls_named <- function(names) unlist(purrr::map(code_files, function(f) {
   pd = utils::getParseData(parse(f, keep.source = TRUE))
   hits = pd[pd$token == "SYMBOL_FUNCTION_CALL" & pd$text %in% names, ]
@@ -1087,8 +1089,9 @@ eval_lines <- unlist(purrr::map(code_files, function(f) {
   if (length(at)) paste0(f, ": ", trimws(txt[at]))
 }))
 eval_allowed <- c("R/spec.R: eval(pipeline, spec_env(chart_data = data, ...))",
-                  "R/spec.R: p = eval(plus_call(plot_calls(lint$spec, cb, pal)), env)",
-                  "R/spec.R: attr(p, \"widget_plot\") = eval(plus_call(plot_calls(lint$spec, cb, pal, widget = TRUE)), env)")
+                  "R/spec.R: p = eval(plus_call(plot_calls(ls, cb, pal)), env)",
+                  "R/spec.R: attr(p, \"widget_plot\") = eval(plus_call(plot_calls(ls, cb, pal, widget = TRUE)), env)",
+                  "R/spec.R: time_labels <- function() eval(TIME_LABELS, baseenv())")
 check(paste0("no file in app.R or R/ turns text into code, and eval() is used only on the calls spec.R builds",
              if (length(text_to_code) || !setequal(eval_lines, eval_allowed))
                paste0(" (", paste(c(text_to_code, setdiff(eval_lines, eval_allowed)), collapse = "; "), ")")),
@@ -4716,7 +4719,7 @@ p8c_requests <- function(h) {
 p8c_balanced <- function(h) {
   m <- gsub("(?s)<!--.*?-->", "", gsub("(?s)<(script|style)([^>]*)>.*?</\\1>", "<\\1\\2></\\1>", h, perl = TRUE), perl = TRUE)
   tags <- regmatches(m, gregexpr("</?[A-Za-z][A-Za-z0-9]*[^>]*>", m, perl = TRUE))[[1]]
-  void <- c("meta", "img", "br", "hr", "input", "link")
+  void <- c("meta", "img", "br", "hr", "input", "link", "source")
   name <- tolower(sub("^</?([A-Za-z][A-Za-z0-9]*).*$", "\\1", tags))
   close <- startsWith(tags, "</")
   open_self <- grepl("/>$", tags)
@@ -4791,16 +4794,16 @@ check("8C-4: the About card has the file name, its rows and columns, what one ro
 p8c_zd <- p8c_build(list(p8c_item(1, p8c_s$bar)), settings = p8c_set)
 p8c_dk <- { f <- tempfile(fileext = ".zip"); res <- build_dashboard(list(p8c_item(1, p8c_s$bar)), p8c_data, p8c_cb, utils::modifyList(p8c_pal, list(style = "dark")), p8c_set, c6_path, f, model = "m"); p8c_html(p8c_dir(f)) }
 p8c_np <- { f <- tempfile(fileext = ".zip"); res <- build_dashboard(list(p8c_item(1, p8c_s$bar)), p8c_data, p8c_cb, utils::modifyList(p8c_pal, list(style = "newspaper")), p8c_set, c6_path, f, model = "m"); p8c_html(p8c_dir(f)) }
-check("8C-5: the page is written in the chosen style: its colours as custom properties (Clean white and #1A1A1A; Dark #14171C and #ECEFF2), its typefaces (Inter; Source Serif 4 for Newspaper's title) as base64 @font-face rules inside the page, a CSS grid of cards that wraps from columns to one (and a viewport meta), a print rule that keeps each card whole, and no typeface file beside it",
+check("8C-5: the page is written in the chosen style: its colours as custom properties (Clean white and #1A1A1A; Dark #14171C and #ECEFF2), its typefaces (Inter; Source Serif 4 for Newspaper's title) as base64 @font-face rules inside the page, a CSS grid of cards of two columns from 900 pixels and one below (and a viewport meta), a print rule that keeps each card whole, and no typeface file beside it",
       grepl("--bg:#FFFFFF;--text:#1A1A1A", p8c_h3, fixed = TRUE) && grepl("--bg:#14171C;--text:#ECEFF2", p8c_dk, fixed = TRUE) && !grepl("--bg:#14171C", p8c_h3, fixed = TRUE) &&
         grepl("@font-face{font-family:'Inter';font-weight:400;font-style:normal;src:url('data:font/ttf;base64,", p8c_h3, fixed = TRUE) &&
         grepl("font-family:'Inter';font-weight:700", p8c_h3, fixed = TRUE) && !grepl("Source Serif 4", p8c_h3, fixed = TRUE) &&
         grepl("@font-face{font-family:'Source Serif 4';font-weight:700", p8c_np, fixed = TRUE) && grepl("'Source Serif 4', serif", p8c_np, fixed = TRUE) &&
-        grepl("grid-template-columns:repeat(auto-fit,minmax(min(100%,30rem),1fr))", p8c_h3, fixed = TRUE) && grepl("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>", p8c_h3, fixed = TRUE) &&
-        grepl("@media (max-width:40rem)", p8c_h3, fixed = TRUE) && grepl("@media print{", p8c_h3, fixed = TRUE) && grepl("break-inside:avoid", p8c_h3, fixed = TRUE) &&
+        grepl("@media (min-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}", p8c_h3, fixed = TRUE) && grepl("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>", p8c_h3, fixed = TRUE) &&
+        grepl("@media (max-width:599px)", p8c_h3, fixed = TRUE) && grepl("@media print{", p8c_h3, fixed = TRUE) && grepl("break-inside:avoid", p8c_h3, fixed = TRUE) &&
         !grepl("url\\((?!['\"]data:)", p8c_h3, perl = TRUE) && !grepl("\\.ttf", p8c_h3) &&
-        !grepl("data:[a-z/]+;base64,[A-Za-z0-9+/=]*[[:space:]]", p8c_h3, perl = TRUE) && grepl("data:font/ttf;base64,[A-Za-z0-9+/=]{1000}", p8c_h3, perl = TRUE) &&
-        grepl("data:image/png;base64,[A-Za-z0-9+/=]{1000}", p8c_h3, perl = TRUE) && grepl("data:[a-z/]+;base64,[A-Za-z0-9+/=]*[[:space:]]", "src=\"data:image/png;base64,AAAA\nBBBB\"", perl = TRUE))
+        !grepl("data:[a-z/]+;base64,[A-Za-z0-9+/=]*[\r\n]", p8c_h3, perl = TRUE) && grepl("data:font/ttf;base64,[A-Za-z0-9+/=]{1000}", p8c_h3, perl = TRUE) &&
+        grepl("data:image/png;base64,[A-Za-z0-9+/=]{1000}", p8c_h3, perl = TRUE) && grepl("data:[a-z/]+;base64,[A-Za-z0-9+/=]*[\r\n]", "src=\"data:image/png;base64,AAAA\nBBBB\"", perl = TRUE))
 
 # 3. nothing is requested when the page is opened offline; the check can fail
 p8c_cb_html <- p8c_html(p8c_d3, "codebook.html")
@@ -4813,10 +4816,10 @@ check("8C-6: no request leaves either page: no src, href, poster or action that 
 # 4. both pages parse as HTML
 p8c_ncol <- length(p8c_cb$columns)
 p8c_xml <- function(h, xp) if (requireNamespace("xml2", quietly = TRUE)) length(xml2::xml_find_all(xml2::read_html(h), xp))
-check("8C-7: dashboard.html and codebook.html parse as HTML: every tag with an end tag is closed in order (the checker rejects an unclosed tag and accepts a closed one), and where xml2 is installed they parse to one h1, a card for each chart and the About card (4), and a section for each column of the file",
+check("8C-7: dashboard.html and codebook.html parse as HTML: every tag with an end tag is closed in order (the checker rejects an unclosed tag and accepts a closed one), and where xml2 is installed they parse to one h1, a card for each chart (3) and the foot with the About text, and a section for each column of the file",
       p8c_balanced(p8c_h3) && p8c_balanced(p8c_cb_html) && p8c_balanced(p8c_dk) && !p8c_balanced("<div><p></div>") && p8c_balanced("<div><p></p><br><img src=x></div>") && !p8c_balanced("<div></span></div>") &&
         startsWith(p8c_h3, "<!DOCTYPE html>") && startsWith(p8c_cb_html, "<!DOCTYPE html>") &&
-        (!requireNamespace("xml2", quietly = TRUE) || (identical(p8c_xml(p8c_h3, "//h1"), 1L) && identical(p8c_xml(p8c_h3, "//article[contains(@class,'card')]"), 4L) &&
+        (!requireNamespace("xml2", quietly = TRUE) || (identical(p8c_xml(p8c_h3, "//h1"), 1L) && identical(p8c_xml(p8c_h3, "//article[contains(@class,'card')]"), 3L) && identical(p8c_xml(p8c_h3, "//footer[contains(@class,'foot')]//h2"), 1L) &&
                                                        identical(p8c_xml(p8c_cb_html, "//section[contains(@class,'col-section')]"), p8c_ncol) && identical(p8c_xml(p8c_cb_html, "//h1"), 1L))))
 
 # 5. the codebook page
@@ -5096,8 +5099,13 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8c_st3, ask 
   calls_before <- nrow(p8c_st3$calls)
   sent_before <- length(p8c_si3$sent)
   session$setInputs(export = 1)
+  # the dialog's key numbers: three selects whose options are lines of the facts, each "chart id|number of the line" (Phase 9)
+  p8c_b$modal <- p8c_modal_html()
+  p8c_b$key_vals <- sub("^value=\"(.*)\"$", "\\1", regmatches(p8c_b$modal, gregexpr("value=\"c[0-9]+\\|[0-9]+\"", p8c_b$modal))[[1]])
+  p8c_b$key_pick <- c(p8c_b$key_vals[1], p8c_b$key_vals[length(p8c_b$key_vals)])
   session$setInputs(dash_title = "Sales review", dash_subtitle = "The fourth quarter", dash_author = "Kim Analyst", dash_date = as.Date("2026-11-21"),
-                    dash_intro = "Why this dashboard exists.", dash_boxes = c("rows", "third"), dash_mode_c4 = "picture", dash_mode_c1 = "picture", dash_mode_c3 = "picture")
+                    dash_intro = "Why this dashboard exists.", dash_boxes = c("rows", "third"), dash_mode_c4 = "picture", dash_mode_c1 = "picture", dash_mode_c3 = "picture",
+                    dash_key1 = p8c_b$key_pick[1], dash_key2 = p8c_b$key_pick[2], dash_key3 = "")
   session$setInputs(dash_build = 1)
   res <- dash_result()
   p8c_b$res <- res
@@ -5178,7 +5186,7 @@ check("8C-24: when a build step fails (a stand-in builder is forced to stop) the
 p8c_fns <- c("chart_from_rows", "dashboard_default_mode", "dashboard_warnings", "dash_slug", "dash_date_text", "dash_b64", "dash_data_uri", "dash_read_text", "dash_font_css", "dash_css",
              "canvas_box_values", "dash_dependency_dir", "dash_dependency_files", "dash_inline_dependencies", "dash_widget", "dash_paragraphs", "dash_describes", "dash_text_status",
              "dash_about", "dash_card", "dash_page", "codebook_page", "dash_document", "dash_root_error", "dash_step", "dash_chart", "build_dashboard", "dash_size_text", "dash_last_lines",
-             "dash_chart_row", "column_summary")
+             "dash_chart_row", "column_summary", "dash_layout", "dash_holes", "dash_web", "dash_picture_tag", "dash_fact_choices", "dash_boxes", "dash_pictures", "dash_pct", "codebook_figure")
 p8c_called <- unique(unlist(purrr::map(p8c_fns, function(f) all.names(body(get(f))))))
 p8c_strings <- unlist(purrr::map(c(r_files, "app.R"), function(f) { pd <- utils::getParseData(parse(f, keep.source = TRUE)); pd$text[pd$token == "STR_CONST"] }))
 p8c_fncalls <- unlist(purrr::map(c(r_files, "app.R"), function(f) { pd <- utils::getParseData(parse(f, keep.source = TRUE)); pd$text[pd$token == "SYMBOL_FUNCTION_CALL"] }))
@@ -5187,6 +5195,334 @@ check("8C-25: no Quarto, no pandoc and no model in the export: no string of R/ o
         !any(c("llm_json", "ask", "make_call", "chat_turn", "summarize_charts", "summarize_inputs", "label_columns", "chat_append_message") %in% p8c_called) &&
         !any(c("for", "while", "repeat") %in% p8c_called) && "zipr" %in% p8c_called &&
         identical(get("dash_widget")(spec_widget(spec_plot(p8c_s$bar, p8c_data, p8c_cb)))$deps[[1]]$name, "htmlwidgets"))
+
+
+# ---- Phase 9 Part A: the exported dashboard and codebook ------------------------------------------------------------------
+#
+# The orders file (3,000 rows) gives five stand-in charts: sorted bars, a line on a time axis, a scatter that is cut so that no column of
+#   points stands at zero, small multiples, and a box chart. They are exported in the six styles, and the pages are measured in Chrome
+#   (headless; where it is installed) at 1400, 800 and 500 pixels. The drawn texts of each picture are measured by drawn_text_faults().
+
+p9_o <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+p9_cb <- utils::modifyList(p9_o$codebook, list(row_is = "one order"))
+p9_data <- p9_o$read$data
+p9_path <- file.path("tests", "data", "orders.csv")
+p9_s <- list(
+  bar = list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "Revenue by region"),
+  line = list(family = "line", x = "order_month", y = "revenue", fn = "sum", title = "Revenue by month"),
+  scatter = list(family = "scatter", x = "units", y = "revenue", title = "Revenue against units", fit = "loess",
+                 filter = list(list(column = "units", op = "<=", value = 40L), list(column = "revenue", op = "<=", value = 6000))),
+  facet = list(family = "line", x = "year", y = "revenue", fn = "sum", facet = "product_category", title = "Revenue by year in each category"),
+  box = list(family = "box", x = "channel", y = "unit_price", title = "Unit price by channel"))
+p9_pal <- function(style = "clean") utils::modifyList(chart_palette_default(), list(style = style))
+p9_set <- utils::modifyList(p8c_set, list(keys = character(0)))
+p9_items <- function(specs = p9_s, ...) purrr::imap(unname(specs), function(sp, i) p8c_item(i, sp, ...))
+p9_build <- function(items = p9_items(), style = "clean", settings = p9_set, data = p9_data, cb = p9_cb, ...) {
+  out <- file.path(tempfile("p9_zip_"), "dashboard_x.zip")
+  dir.create(dirname(out))
+  t <- system.time(res <- build_dashboard(items, data, cb, p9_pal(style), settings, p9_path, out, model = "test-model", ...))
+  d <- p8c_dir(res$zip)
+  c(res, list(dir = d, html = p8c_html(d), codebook = p8c_html(d, "codebook.html"), elapsed = t[["elapsed"]], style = style))
+}
+p9_uri_file <- function(uri) { f <- tempfile(fileext = ".png"); writeBin(jsonlite::base64_dec(sub("^data:[^,]*,", "", uri)), f); f }
+p9_uri_size <- function(uri) unname(p8c_png_size(p9_uri_file(uri)))
+# the pictures of a page: for each <img> and <source> its tag attributes and the size of the PNG in its data address
+p9_pictures <- function(h) {
+  tags <- regmatches(h, gregexpr("<(img|source)[^>]*>", h))[[1]]
+  purrr::map(tags, function(t) {
+    attr <- function(a) { m <- regmatches(t, regexpr(paste0("[[:space:]]", a, "=\"[^\"]*\""), t)); if (length(m)) sub(paste0("^[[:space:]]", a, "=\"(.*)\"$"), "\\1", m) }
+    uri <- sub("[[:space:]]+2x$", "", attr("srcset") %||% attr("src"))
+    list(tag = sub("^<([a-z]+).*$", "\\1", t), media = attr("media"), class = attr("class"), w = as.integer(attr("width")), h = as.integer(attr("height")), px = if (startsWith(uri, "data:image/png")) p9_uri_size(uri))
+  })
+}
+p9_chrome <- "C:/Program Files/Google/Chrome/Application/chrome.exe"
+p9_has_chrome <- file.exists(p9_chrome) && requireNamespace("pdftools", quietly = TRUE)
+if (!p9_has_chrome) cat("note  Chrome (or pdftools) was not found: the page layout and the print are not measured by the 9A checks\n")
+p9_dom <- function(html, width, js) {
+  h <- paste(readLines(html, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  Encoding(h) <- "UTF-8"
+  f <- tempfile(fileext = ".html")
+  writeLines(sub("</body>", paste0("<script>", js, "</script></body>"), h, fixed = TRUE), f, useBytes = TRUE)
+  out <- suppressWarnings(system2(p9_chrome, c("--headless=new", "--disable-gpu", "--no-sandbox", paste0("--user-data-dir=", file.path(tempdir(), "p9_chrome")), paste0("--window-size=", width, ",900"),
+                                              "--virtual-time-budget=4000", "--dump-dom", paste0("file:///", normalizePath(f, winslash = "/"))), stdout = TRUE, stderr = FALSE))
+  m <- regmatches(paste(out, collapse = "\n"), regexpr("name=\"p9\" content=\"[^\"]*\"", paste(out, collapse = "\n")))
+  if (!length(m)) return(NULL)
+  jsonlite::fromJSON(gsub("&quot;", "\"", gsub("&amp;", "&", sub("^name=\"p9\" content=\"(.*)\"$", "\\1", m), fixed = TRUE), fixed = TRUE))
+}
+p9_measure_js <- paste0("var r=function(e){var b=e.getBoundingClientRect();return {left:Math.round(b.left),top:Math.round(b.top+scrollY),width:Math.round(b.width)}};",
+                        "var d={cw:document.documentElement.clientWidth,sw:document.documentElement.scrollWidth,page:r(document.querySelector('.page')),",
+                        "cards:[].map.call(document.querySelectorAll('.card'),function(c){var i=c.querySelector('img');var o=r(c);o.full=c.classList.contains('full');",
+                        "o.nat=i?i.naturalWidth:0;o.shown=i?Math.round(i.getBoundingClientRect().width):0;",
+                        "o.vis=[].filter.call(c.querySelectorAll('img'),function(m){return getComputedStyle(m).display!=='none'}).length;return o})};",
+                        "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9\" content=\"'+JSON.stringify(d).replace(/\"/g,'&quot;')+'\">');")
+
+p9_z <- p9_build()
+p9_h <- p9_z$html
+p9_dirs <- p9_z$dir
+
+# 1. the page: about 1240 pixels wide, centred; two cards to a row from 900 pixels, one below (the CSS, and in Chrome the page as laid out)
+p9_layout <- if (p9_has_chrome) list(w1400 = p9_dom(file.path(p9_dirs, "dashboard.html"), 1400, p9_measure_js), w800 = p9_dom(file.path(p9_dirs, "dashboard.html"), 800, p9_measure_js),
+                                     w500 = p9_dom(file.path(p9_dirs, "dashboard.html"), 500, p9_measure_js))
+p9_rows <- function(m) unname(as.integer(table(m$cards$top)))   # the cards in each row, from the top down
+check("9A-1: the page is centred and about 1240 pixels wide (a column of at most 1240 pixels with auto margins), two cards to a row from 900 pixels and one below, a card with a row to itself spans both columns; measured in Chrome: at 1400 the page is 1240 wide and centred, one picture is shown in each card (a print-only picture is not), the cards stand two to a row (the rows hold 2, 2 and 1 cards, the last across the whole page), at 800 and at 500 one to a row, and no page scrolls sideways",
+      DASH_PAGE_PX == 1240L && DASH_TWO_PX == 900L && grepl(".page{max-width:1240px;margin:0 auto;", p9_h, fixed = TRUE) &&
+        grepl(".grid{display:grid;grid-template-columns:minmax(0,1fr);", p9_h, fixed = TRUE) &&
+        grepl("@media (min-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}", p9_h, fixed = TRUE) &&
+        (!p9_has_chrome || (
+          p9_layout$w1400$page$width == 1240L && abs(p9_layout$w1400$page$left - (p9_layout$w1400$cw - 1240) / 2) <= 1 && p9_layout$w1400$sw <= p9_layout$w1400$cw &&
+            identical(p9_rows(p9_layout$w1400), c(2L, 2L, 1L)) && all(p9_layout$w1400$cards$width[1:4] > 500) && p9_layout$w1400$cards$width[5] > 1100 &&
+            isTRUE(p9_layout$w1400$cards$full[5]) && !any(p9_layout$w1400$cards$full[1:4]) &&
+            all(p9_layout$w1400$cards$vis == 1L) && all(p9_layout$w800$cards$vis == 1L) && all(p9_layout$w500$cards$vis == 1L) &&
+            all(p9_rows(p9_layout$w800) == 1L) && p9_layout$w800$sw <= p9_layout$w800$cw && all(p9_rows(p9_layout$w500) == 1L) && p9_layout$w500$sw <= p9_layout$w500$cw)))
+
+# 2. no hole in the grid: an interactive (wide) card takes a row and the card before it, alone in its row, takes a row too
+p9_all_seqs <- unlist(purrr::map(1:7, function(n) {
+  grid <- as.matrix(expand.grid(rep(list(c(FALSE, TRUE)), n)))
+  purrr::map(seq_len(nrow(grid)), function(i) unname(grid[i, ]))
+}), recursive = FALSE)
+p9_lay <- purrr::map(p9_all_seqs, dash_layout)
+check(paste0("9A-2: no row of the grid has a hole: for every sequence of 1 to 7 cards that are wide or not (", length(p9_all_seqs), " of them) dash_layout() leaves no row with one card that is not full, every wide card has its row, and a card that is not wide has its row only when it would have sat alone (before a wide card or last); worked cases; and without the rule the grid has holes (the check can fail)"),
+      all(purrr::map_int(p9_lay, dash_holes) == 0L) && all(purrr::map2_lgl(p9_all_seqs, p9_lay, function(w, f) all(f[w]))) &&
+        all(purrr::map2_lgl(p9_all_seqs, p9_lay, function(w, f) all(purrr::map_lgl(which(f & !w), function(i) i == length(w) || isTRUE(w[[i + 1L]]))))) &&
+        identical(dash_layout(c(FALSE, FALSE, FALSE, TRUE)), c(FALSE, FALSE, TRUE, TRUE)) && identical(dash_layout(c(FALSE, TRUE, FALSE)), c(TRUE, TRUE, TRUE)) &&
+        identical(dash_layout(c(TRUE, FALSE, FALSE)), c(TRUE, FALSE, FALSE)) && identical(dash_layout(c(FALSE, FALSE, FALSE)), c(FALSE, FALSE, TRUE)) &&
+        identical(dash_layout(FALSE), TRUE) && identical(dash_layout(logical(0)), logical(0)) && identical(dash_layout(c(FALSE, FALSE)), c(FALSE, FALSE)) &&
+        dash_holes(c(FALSE, TRUE, FALSE)) == 2L && dash_holes(c(FALSE, FALSE, FALSE)) == 1L && dash_holes(c(FALSE, FALSE, TRUE, FALSE, TRUE)) == 1L &&
+        identical(p9_z$full, dash_layout(c(FALSE, FALSE, FALSE, FALSE, FALSE))) && lengths(gregexpr("class=\"card full\"", p9_h, fixed = TRUE)) == 1L)
+
+# 3. each chart is drawn at the size it is shown, and again for a phone; both at twice the pixels; the label box check on both
+p9_pics <- p9_pictures(p9_h)
+p9_phone <- purrr::keep(p9_pics, function(p) identical(p$tag, "source") && identical(p$media, "(max-width:599px)"))
+p9_half <- purrr::keep(p9_pics, function(p) identical(p$tag, "source") && identical(p$media, "(max-width:899px)"))
+p9_imgs <- purrr::keep(p9_pics, function(p) identical(p$tag, "img") && is.null(p$class))
+p9_close <- function(a, b) length(a) == length(b) && all(abs(a - b) <= 1L)
+p9_battery <- list(
+  bar = list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "a"),
+  bar_flip = list(family = "bar", x = "product_category", y = "revenue", fn = "sum", sort = "value_desc", title = "a", labels = "on"),
+  bar_ann = list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "a", annotate = list("highest")),
+  bar_many = list(family = "bar", x = "product", y = "revenue", fn = "sum", top_n = 10, sort = "value_desc", title = "a", labels = "on"),
+  dot_flip = list(family = "dot", x = "product_category", y = "revenue", fn = "mean", sort = "value_desc", title = "a", labels = "on", annotate = list("lowest")),
+  line = p9_s$line,
+  line_ann = list(family = "line", x = "order_month", y = "revenue", fn = "sum", title = "a", annotate = list("highest", "latest")),
+  line_col = list(family = "line", x = "year", y = "revenue", fn = "sum", color = "region", title = "a", labels = "on"),
+  line_col_ann = list(family = "line", x = "year", y = "revenue", fn = "sum", color = "region", title = "a", annotate = list("highest")),
+  line_facet = p9_s$facet,
+  line_facet_col = list(family = "line", x = "year", y = "satisfaction", fn = "mean", color = "priority", facet = "channel", title = "a", labels = "on"),
+  scatter = list(family = "scatter", x = "shipping_days", y = "satisfaction", title = "a"),
+  scatter_fit = p9_s$scatter,
+  scatter_ann = list(family = "scatter", x = "units", y = "unit_price", title = "a", annotate = list("highest", "lowest")),
+  hist = list(family = "histogram", x = "revenue", title = "a"),
+  box = p9_s$box,
+  heat = list(family = "heatmap", x = "year", y = "region", color = "revenue", fn = "sum", title = "a", labels = "on"))
+p9_web_plot <- function(spec, style, size) spec_plot(spec, p9_data, p9_cb, p9_pal(style), web = dash_web(size))
+p9_faults_of <- function(specs, styles, sizes) unlist(purrr::map(styles, function(st) purrr::map(sizes, function(sz) purrr::imap(specs, function(sp, n) {
+  f <- tryCatch(drawn_text_faults(p9_web_plot(sp, st, sz)), error = function(e) paste("could not be drawn:", conditionMessage(e)))
+  if (length(f)) paste0(n, "/", st, "/", sz, ": ", f)
+}))))
+p9_fault_list <- c(p9_faults_of(p9_battery, "clean", c("desk", "phone")),
+                   p9_faults_of(p9_s, c("minimal", "magazine", "desk", "newspaper", "dark"), c("desk", "phone")),
+                   p9_faults_of(p9_s, "clean", "wide"))
+p9_size_in <- function(p) spec_size(attr(p, "spec"), attr(p, "table"))
+p9_axis_px <- ggplot2::calc_element("axis.text.x", chart_theme("clean"))$size * DASH_CSS_DPI / 72
+check(paste0("9A-3: each chart is drawn at the size it is shown: a picture whose axis text comes out near 12 CSS pixels (",
+             round(p9_axis_px, 1), ") at the card's width (540 pixels for a card that shares its row, 1120 for one that has its row), and a narrower drawing of 340 pixels for a screen of at most 599 pixels, chosen by a <picture> element's <source media>; every picture has twice the pixels it is shown at (the width and height of its tag are half those of its PNG); the full-row card also has the half-width drawing for a screen under 900; names and values at the ends of lines give way to a legend on a phone (and in small multiples, where a panel is short) when they would take too much of the axis or touch, a facet's panels are kept apart, and a heatmap's colour bar has three labels at most on the page and four or more as the app draws it; the label box check (drawn_text_faults) finds no text past its panel or over another in ",
+             length(p9_battery), " charts in Clean and the five stand-in charts in the other styles, at both sizes (and the wide size)"),
+      DASH_SCALE == 2L && DASH_CSS_DPI * DASH_SCALE == SPEC_DPI && abs(p9_axis_px - 12) < 1.5 && length(p9_imgs) == 5L && length(p9_phone) == 5L && length(p9_half) == 1L &&
+        lengths(gregexpr("<picture", p9_h, fixed = TRUE)) == 5L && all(purrr::map_lgl(p9_imgs, function(p) p9_close(p$px, 2L * c(p$w, p$h)))) &&
+        identical(purrr::map_int(p9_imgs, "w"), c(540L, 540L, 540L, 540L, 1120L)) && all(purrr::map_int(p9_phone, function(p) p$px[[1]]) == 680L) && identical(p9_half[[1]]$px[[1]], 1080L) &&
+        all(purrr::map_lgl(p9_phone, function(p) p$px[[2]] >= 540L)) &&
+        all(purrr::map_lgl(p9_battery, function(sp) abs(p9_size_in(p9_web_plot(sp, "clean", "desk"))[["width"]] * 96 - 540) < 1e-6 && abs(p9_size_in(p9_web_plot(sp, "clean", "phone"))[["width"]] * 96 - 340) < 1e-6)) &&
+        !length(p9_fault_list) && length(drawn_text_faults(p9_web_plot(p9_battery$line_col, "clean", "desk"))) == 0L &&
+        isTRUE(attr(p9_web_plot(p9_battery$line_col, "clean", "desk"), "spec")$.labels) && isFALSE(attr(p9_web_plot(p9_battery$line_col, "clean", "phone"), "spec")$.labels) &&
+        isFALSE(attr(p9_web_plot(p9_battery$line_facet_col, "clean", "desk"), "spec")$.labels) &&
+        { u <- p9_web_plot(p9_s$facet, "clean", "desk")$theme$panel.spacing.x; identical(as.numeric(u), 0.3) && identical(grid::unitType(u), "inches") } && is.null(spec_plot(p9_s$facet, p9_data, p9_cb)$theme$panel.spacing.x) &&
+        sum(!is.na(ggplot2::ggplot_build(p9_web_plot(p9_battery$heat, "clean", "desk"))$plot$scales$get_scales("fill")$get_breaks())) <= 3L &&
+        sum(!is.na(ggplot2::ggplot_build(spec_plot(p9_battery$heat, p9_data, p9_cb))$plot$scales$get_scales("fill")$get_breaks())) >= 4L)
+cat(if (length(p9_fault_list)) paste0("note  label box faults: ", paste(p9_fault_list, collapse = "; "), "\n"))
+
+# 4. no title, subtitle or source line inside the page's pictures; the pictures in charts/ keep them; the page says each once
+p9_std <- purrr::map(p9_s, function(sp) spec_plot(sp, p9_data, p9_cb))
+p9_bare <- purrr::map(p9_s, function(sp) spec_plot(sp, p9_data, p9_cb, web = dash_web("desk")))
+p9_bare_ph <- purrr::map(p9_s, function(sp) spec_plot(sp, p9_data, p9_cb, web = dash_web("phone")))
+p9_stems <- paste0("charts/", sprintf("%02d_%s", 1:5, c("revenue_by_region", "revenue_by_month", "revenue_against_units", "revenue_by_year_in_each_category", "unit_price_by_channel")))
+p9_chart_files <- as.vector(outer(p9_stems, c(".png", if (p8c_svg) ".svg"), paste0))
+p9_card_html <- regmatches(p9_h, gregexpr("(?s)<article class=\"card[^\"]*\">.*?</article>", p9_h, perl = TRUE))[[1]]
+check("9A-4: the pictures drawn for the page have no title, subtitle or source line (their plots carry none, at the desk, wide and phone sizes) while the same charts as drawn for charts/ carry the title and the source line; the page says the source line once for each card (under the card, not in the picture) and the chart's title once (as the card's subtitle); the 300 dpi PNG and the SVG are still in charts/",
+      all(purrr::map_lgl(p9_bare, function(p) is.null(ggplot2::get_labs(p)$title) && is.null(ggplot2::get_labs(p)$caption) && is.null(ggplot2::get_labs(p)$subtitle))) &&
+        all(purrr::map_lgl(p9_bare_ph, function(p) is.null(ggplot2::get_labs(p)$title) && is.null(ggplot2::get_labs(p)$caption))) &&
+        is.null(ggplot2::get_labs(p9_web_plot(p9_s$bar, "clean", "wide"))$title) &&
+        all(purrr::map_lgl(p9_std, function(p) is_text1(ggplot2::get_labs(p)$title) && is_text1(ggplot2::get_labs(p)$caption))) &&
+        is.null(attr(p9_bare$bar, "spec")$caption) && is_text1(attr(p9_std$bar, "spec")$caption) &&
+        length(p9_card_html) == 5L && all(lengths(gregexpr("class=\"source\"", p9_card_html, fixed = TRUE)) == 1L) && lengths(gregexpr("Source: orders.csv", p9_h, fixed = TRUE)) == 5L &&
+        identical(unlist(regmatches(p9_h, gregexpr("(?<=<p class=\"card-sub\">)[^<]*", p9_h, perl = TRUE))), unname(purrr::map_chr(p9_s, "title"))) &&
+        setequal(names(p9_z$files), c("dashboard.html", "codebook.html", "data_dictionary.yaml", "charts.R", p9_chart_files)) &&
+        identical(unname(p8c_png_size(file.path(p9_dirs, "charts/01_revenue_by_region.png"))), c(2100L, 1350L)))
+
+# 5. the card's heading is the headline; the chart's title is its subtitle; a chart with no headline has its title as the heading and no subtitle; a chart's own subtitle follows
+p9_h2 <- unlist(regmatches(p9_h, gregexpr("(?<=<h2>)[^<]*", p9_h, perl = TRUE)))
+p9_zn <- p9_build(list(p8c_item(1, p9_s$bar, headline = NULL), p8c_item(2, list(family = "bar", x = "region", y = "revenue", fn = "sum", top_n = 3, title = "Top regions"), headline = "The top three")))
+p9_hn <- p9_zn$html
+check("9A-5: in a card the headline is the heading and the chart's title is the subtitle (Headline of chart 1 over Revenue by region, and so on); a chart with no headline has its title as the heading and no subtitle (nothing is said twice); a chart's own subtitle (here 'Top 3 of 6') is shown under the title in the card's HTML, and is in no picture",
+      identical(p9_h2[1:5], paste("Headline of chart", 1:5)) &&
+        grepl("<h2>Headline of chart 1</h2><p class=\"card-sub\">Revenue by region</p>", p8c_sq(p9_h), fixed = TRUE) &&
+        grepl("<h2>Revenue by region</h2><picture>", p8c_sq(p9_hn), fixed = TRUE) && lengths(gregexpr("class=\"card-sub\"", p9_hn, fixed = TRUE)) == 1L &&
+        grepl("<h2>The top three</h2><p class=\"card-sub\">Top regions</p><p class=\"card-note\">Top 3 of 6</p><picture>", p8c_sq(p9_hn), fixed = TRUE) &&
+        is.null(ggplot2::get_labs(spec_plot(list(family = "bar", x = "region", y = "revenue", fn = "sum", top_n = 3, title = "Top regions"), p9_data, p9_cb, web = dash_web("desk")))$subtitle) &&
+        identical(ggplot2::get_labs(spec_plot(list(family = "bar", x = "region", y = "revenue", fn = "sum", top_n = 3, title = "Top regions"), p9_data, p9_cb))$subtitle, "Top 3 of 6"))
+
+# 6. a time axis is written by its span: years, "Jan 2022" or "3 Jan", in the app (spec_plot) and in the export (the web drawings); never "2022-01-01"
+p9_xlabs <- function(p) ggplot2::ggplot_build(p)$layout$panel_params[[1]]$x$get_labels()
+p9_ts <- function(dates) {
+  d <- tibble::tibble(day = dates, value = seq_along(dates) * 10 + (seq_along(dates) %% 7))
+  cb <- new_codebook(profile_data(d), "series.csv", nrow(d))
+  cb$row_is <- "one day"
+  list(data = d, cb = cb)
+}
+p9_spans <- list(years = p9_ts(seq(as.Date("2012-01-15"), by = "30 days", length.out = 125)), months = p9_ts(seq(as.Date("2022-01-03"), by = "10 days", length.out = 43)),
+                 days = p9_ts(seq(as.Date("2022-01-03"), by = "1 day", length.out = 40)))
+p9_line <- list(family = "line", x = "day", y = "value", fn = "sum", title = "t")
+p9_big <- local({ d <- tibble::tibble(day = seq(as.Date("2015-01-15"), by = "30 days", length.out = 60), value = seq_len(60) * 1e7 + (seq_len(60) %% 7) * 1e6)
+                  cb <- new_codebook(profile_data(d), "series.csv", nrow(d)); cb$row_is <- "one day"; list(data = d, cb = cb) })
+p9_big_labels <- function(size) isTRUE(attr(spec_plot(p9_line, p9_big$data, p9_big$cb, web = dash_web(size)), "spec")$.labels)
+p9_lab_of <- function(span, web = NULL) p9_xlabs(spec_plot(p9_line, p9_spans[[span]]$data, p9_spans[[span]]$cb, web = web))
+p9_hm <- spec_plot(list(family = "heatmap", x = "order_month", y = "region", color = "revenue", fn = "sum", title = "t", filter = list(list(column = "order_month", op = "<=", value = "2022-12-01"))), p9_data, p9_cb)
+p9_sl <- spec_plot(list(family = "slope", x = "order_month", y = "revenue", color = "region", fn = "sum", title = "t", filter = list(list(column = "order_month", op = "in", value = c("2022-01-01", "2024-12-01")))), p9_data, p9_cb)
+p9_tl <- time_labels()
+check("9A-6: a time axis is written by its span, in the app and in the export: ten years give years ('2014', '2016'), fourteen months or three years give 'Jan 2022', 'Jul 2022', forty days give '3 Jan', '10 Jan' (month names from month.abb, not the locale); none is an ISO date like 2022-01-01; the same at the web sizes; a heatmap's date axis and a slope's two dates are written 'Jan 2022' and 'Dec 2024'; the value written at the end of a line is kept at the desk size and, when it is as long as '12,300,000,000', left to the axis on a phone; a break outside the limits (NA) stays NA; the code a chart comes with holds the same function",
+      all(grepl("^20[0-9]{2}$", p9_lab_of("years")[!is.na(p9_lab_of("years"))])) && all(grepl("^(Jan|Apr|Jul|Oct) 20[0-9]{2}$", p9_lab_of("months")[!is.na(p9_lab_of("months"))])) &&
+        all(grepl("^[0-9]{1,2} (Jan|Feb)$", p9_lab_of("days")[!is.na(p9_lab_of("days"))])) &&
+        !any(grepl("[0-9]{4}-[0-9]{2}-[0-9]{2}", unlist(purrr::map(names(p9_spans), p9_lab_of)))) &&
+        all(grepl("^20[0-9]{2}$", p9_lab_of("years", dash_web("desk"))[!is.na(p9_lab_of("years", dash_web("desk")))])) &&
+        all(grepl("^[0-9]{1,2} (Jan|Feb)$", p9_lab_of("days", dash_web("phone"))[!is.na(p9_lab_of("days", dash_web("phone")))])) &&
+        all(grepl("^(Jan|Jul) 20[0-9]{2}$", p9_xlabs(spec_plot(p9_s$line, p9_data, p9_cb))[!is.na(p9_xlabs(spec_plot(p9_s$line, p9_data, p9_cb)))])) &&
+        all(grepl("^(Jan|Apr|Jul|Oct) 20[0-9]{2}$", p9_xlabs(p9_hm)[!is.na(p9_xlabs(p9_hm))])) && identical(p9_xlabs(p9_sl), c("Jan 2022", "Dec 2024")) && p9_big_labels("desk") && !p9_big_labels("phone") &&
+        identical(p9_tl(as.Date(c("2022-01-01", NA, "2023-01-01"))), c("2022", NA, "2023")) && identical(p9_tl(as.Date(c("2022-03-01", "2022-04-01"))), c("Mar 2022", "Apr 2022")) &&
+        identical(p9_tl(as.Date(c("2022-03-03", "2022-03-10"))), c("3 Mar", "10 Mar")) && identical(p9_tl(as.POSIXct(c("2022-03-03 14:00:00", "2022-03-03 16:00:00"), tz = "UTC")), c("14:00", "16:00")) &&
+        grepl("month.abb", spec_code(attr(spec_plot(p9_s$line, p9_data, p9_cb), "spec"), p9_cb, p9_path), fixed = TRUE) &&
+        inherits(tryCatch(parse(text = spec_code(attr(spec_plot(p9_s$line, p9_data, p9_cb), "spec"), p9_cb, p9_path)), error = function(e) e), "expression"))
+
+# 7. value boxes: the style's accent as a rule on each; up to three key numbers, each a line of a chart's facts picked from a list, with the chart's name under it
+p9_facts <- function(spec) {
+  p <- spec_plot(spec, p9_data, p9_cb)
+  f <- spec_facts(attr(p, "spec"), attr(p, "table"), p9_cb, data = p9_data)
+  dash_fact_choices(f$text, f$names)
+}
+p9_f1 <- p9_facts(p9_s$bar)
+p9_f2 <- p9_facts(p9_s$line)
+p9_at <- function(f, label, pat) which(purrr::map_lgl(f, function(x) x$label == label && grepl(pat, x$value)))[1]
+p9_keys <- c(paste0("c1|", p9_at(p9_f1, "Highest", "West")), paste0("c2|", p9_at(p9_f2, "The line", "^last")), paste0("c1|", p9_at(p9_f1, "Total", ".")), "c2|1", "c9|1", "c1|999")
+p9_zk <- p9_build(settings = utils::modifyList(p9_set, list(keys = p9_keys)))
+p9_boxes_html <- function(h) regmatches(h, gregexpr("<div class=\"box\">", h, fixed = TRUE))[[1]]
+p9_keybox <- regmatches(p8c_sq(p9_zk$html), gregexpr("<div class=\"box key\">.*?</div></div>", p8c_sq(p9_zk$html), perl = TRUE))[[1]]
+p9_dash_text <- "Plotted: Total revenue by region\nRows used: 3,000\nValues:\n- West: 940,000\nHighest: West (940,000)\nThe line: first 39,000 (2022-01-01), last 142,000 (2024-12-01), end is 3.6 times start\nShare of the total: West 34.3%; East 19.5%\nTop: [[N1]] 5\nExploratory: no"
+p9_chunks <- dash_fact_choices(p9_dash_text, c("[[N1]]" = "Ann"))
+check("9A-7: a value box has the style's accent as a rule (border-top in var(--accent), which is the palette's colour for the style: in Clean and in Dark); the analyst adds up to three key numbers, each a line of the facts of a chart picked from a list (the bookkeeping lines are not in it: what is plotted, the rows used; a line with several figures is one choice for each, and a name that the facts hold as a token is written back as the name); the page shows them as further boxes with the chart's name under them, the fourth key and keys that are not on the list are ignored; the dialog offers three selects of such lines",
+      grepl(".box{background:var(--box);border:1px solid var(--grid);border-top:4px solid var(--accent);", p9_h, fixed = TRUE) &&
+        grepl(paste0("--accent:", spec_palette(p9_pal("clean"))$single, ";"), p9_h, fixed = TRUE) &&
+        identical(purrr::map_chr(p9_chunks, function(x) paste0(x$label, "|", x$value)),
+                  c("West|940,000", "Highest|West (940,000)", "The line|first 39,000 (2022-01-01)", "The line|last 142,000 (2024-12-01)", "The line|end is 3.6 times start",
+                    "Share of the total|West 34.3%", "Share of the total|East 19.5%", "Top|Ann 5")) &&
+        !any(grepl("^(Plotted|Rows used|Exploratory)$", purrr::map_chr(p9_chunks, "label"))) && DASH_KEYS_MAX == 3L &&
+        length(p9_keybox) == 3L && all(grepl("<div class=\"box-chart\">", p9_keybox, fixed = TRUE)) &&
+        grepl("Highest</div>.*West \\(940,000\\).*Revenue by region", p9_keybox[1]) && grepl("The line</div>.*last 142,000 \\(2024-12-01\\).*Revenue by month", p9_keybox[2]) &&
+        grepl("Total</div>.*2,740,000.*Revenue by region", p9_keybox[3]) &&
+        length(dash_boxes(utils::modifyList(p9_set, list(keys = p9_keys)), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1), list(id = "c2", title = "B", facts = p9_f2)))) == 3L + 3L &&
+        length(dash_boxes(utils::modifyList(p9_set, list(keys = c("c9|1", "c1|999", "junk"))), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1)))) == 3L &&
+        length(p9_boxes_html(p9_h)) >= 3L && !grepl("box key", p9_h, fixed = TRUE) && !is.na(p9_at(p9_f1, "Highest", "West")))
+
+# the same five charts in every one of the six styles
+p9_styles <- names(CHART_STYLES)
+p9_six <- stats::setNames(purrr::map(p9_styles, function(st) if (identical(st, "clean")) p9_z else p9_build(style = st)), p9_styles)
+cat("note  the five-chart dashboard in each style (seconds to build, zip, dashboard.html, codebook.html in KB): ",
+    paste(purrr::map_chr(p9_six, function(z) sprintf("%s %.1f s %.0f %.0f %.0f", z$style, z$elapsed, z$bytes / 1024, file.size(file.path(z$dir, "dashboard.html")) / 1024,
+                                                    file.size(file.path(z$dir, "codebook.html")) / 1024)), collapse = "; "), "\n", sep = "")
+
+# 8. the page looks like the chosen style: its typeface for the headings, its background, its rules; a masthead and a foot
+p9_hd <- p9_six$dark$html
+p9_np <- p9_six$newspaper$html
+p9_order <- function(h, xs) { at <- purrr::map_int(xs, function(x) regexpr(x, h, fixed = TRUE)[[1]]); all(at > 0L) && !is.unsorted(at) }
+check("9A-8: the page is written as the chosen style: in each of the six styles its own background (the custom property --bg), text colour and its rules (DASH_LOOK has an entry for each style and no two are alike), the title face for its headings (Source Serif 4 in Newspaper, Inter in the others; the face is in the page as a base64 @font-face); a masthead block that holds the title, the subtitle, the author and then the date, and the introduction at a reading measure of 70 characters; then the boxes, the cards, and a foot that holds the About text and 'Made with chaRt'",
+      all(purrr::map_lgl(p9_styles, function(st) grepl(paste0("--bg:", CHART_STYLES[[st]]$background, ";--text:", CHART_STYLES[[st]]$text), p9_six[[st]]$html, fixed = TRUE) &&
+                            grepl(DASH_LOOK[[st]], p9_six[[st]]$html, fixed = TRUE) && grepl("body{margin:0;background:var(--bg);", p9_six[[st]]$html, fixed = TRUE))) &&
+        setequal(names(DASH_LOOK), p9_styles) && length(unique(unlist(DASH_LOOK))) == 6L &&
+        grepl("--title-font:'Source Serif 4', serif;", p9_np, fixed = TRUE) && grepl("--title-font:Inter, sans-serif;", p9_h, fixed = TRUE) && grepl("--title-font:Inter, sans-serif;", p9_hd, fixed = TRUE) &&
+        grepl("h1{font-family:var(--title-font);", p9_h, fixed = TRUE) && grepl("@font-face{font-family:'Source Serif 4';font-weight:700", p9_np, fixed = TRUE) &&
+        grepl(".intro{max-width:70ch;", p9_h, fixed = TRUE) &&
+        grepl("<header class=\"masthead\"><h1>", p8c_sq(p9_h), fixed = TRUE) &&
+        p9_order(p8c_sq(p9_h), c("<header class=\"masthead\">", "<h1>Sales dashboard</h1>", "class=\"subtitle\">Orders in the file", "<span class=\"author\">A. Analyst</span>", "<time>21 November 2026</time>",
+                                 "<div class=\"intro\">", "<section class=\"boxes\"", "<main class=\"grid\">", "<footer class=\"foot\">", "About this dashboard", "Made with chaRt")) &&
+        grepl("<footer class=\"foot\">.*class=\"about\".*The file.*Read this first.*<p class=\"made\">Made with chaRt</p></footer>", p8c_sq(p9_h)) && !grepl("<article class=\"card about", p9_h, fixed = TRUE) &&
+        grepl("text-align:center;border-top:4px solid var(--rule)", p9_np, fixed = TRUE) && !grepl("text-align:center;border-top:4px", p9_h, fixed = TRUE))
+
+# 9. the codebook is a document: a table of every column, a compact section for each with a small drawn summary, "no label given" for a column without a label
+p9_cbl <- p9_cb
+p9_cbl$columns <- purrr::map(p9_cbl$columns, function(e) if (e$name %in% c("revenue", "region")) utils::modifyList(e, list(label = c(revenue = "Revenue (USD)", region = "Sales region")[[e$name]], label_source = "user")) else e)
+p9_cbh <- gsub("> <", "><", gsub("[[:space:]]+", " ", codebook_page(p9_cbl, p9_pal("clean"), as.Date("2026-11-21"), p9_data)))
+p9_cbs <- regmatches(p9_cbh, gregexpr("(?s)<section class=\"col-section\".*?</section>", p9_cbh, perl = TRUE))[[1]]
+p9_cbsec <- function(name) p9_cbs[purrr::map_lgl(p9_cbs, function(s) grepl(paste0("Column ", name, "</p>"), s, fixed = TRUE))]
+p9_figs <- function(sec) regmatches(sec, regexpr("<figure>.*</figure>", sec))
+p9_cbnames <- purrr::map_chr(p9_cbl$columns, "name")
+p9_cb_rows <- regmatches(p9_cbh, gregexpr("<tr><td><a href=\"#col-[0-9]+\">[^<]*</a></td>.*?</tr>", p9_cbh))[[1]]
+p9_cb_pics <- purrr::map(regmatches(p9_cbh, gregexpr("<figure><img[^>]*>", p9_cbh))[[1]], function(t) {
+  uri <- sub("^.*src=\"([^\"]*)\".*$", "\\1", t)
+  list(px = p9_uri_size(uri), w = as.integer(sub("^.*width=\"([0-9]+)\".*$", "\\1", t)), h = as.integer(sub("^.*height=\"([0-9]+)\".*$", "\\1", t)))
+})
+p9_mh <- p8c_sq(codebook_page(p8c_mcb, p8c_pal, as.Date("2026-11-21"), p8c_mdata))
+check("9A-9: the codebook is a document: a summary table at the top with one row for each of the 22 columns (name linking to its section, label, type, role, share missing), then a compact section for each column; a measure has a small histogram, a group its levels as bars, a date its rows over time, an id, a text and a category of more than 30 levels none (16 pictures of the 22 columns, each with twice the pixels it is shown at); a column with no label shows a dash and 'no label given' in the table and in its section, never 'Label: from the file'; a label written by the analyst is shown with how it was written; the messy file's secret and free text are in no part of its codebook page, which still draws its numbers",
+      grepl("<table class=\"summary-table\"><thead><tr><th scope=\"col\">Column</th><th scope=\"col\">Label</th><th scope=\"col\">Type</th><th scope=\"col\">Role</th><th scope=\"col\" class=\"n\">Missing</th></tr></thead>", p9_cbh, fixed = TRUE) &&
+        length(p9_cb_rows) == length(p9_cbnames) && length(p9_cbs) == length(p9_cbnames) &&
+        grepl("<td><a href=\"#col-12\">units</a></td>", p9_cbh, fixed = TRUE) && grepl("<td><a href=\"#col-15\">revenue</a></td><td>Revenue \\(USD\\)</td><td>number</td><td>measure</td><td class=\"n\">0%</td>", p9_cbh) &&
+        grepl("<td><a href=\"#col-1\">order_id</a></td><td> ?\u2013 ?<span class=\"muted\"> ?no label given</span></td><td>id</td><td>id</td>", p9_cbh) &&
+        grepl("<td><a href=\"#col-16\">shipping_days</a></td>.*<td class=\"n\">39%</td>", p9_cbh) &&
+        grepl("<dt>Label</dt><dd> ?\u2013 ?<span class=\"muted\"> ?no label given</span></dd>", p9_cbsec("order_id")) && !grepl("from the file", p9_cbh, fixed = TRUE) &&
+        grepl("<dt>Label</dt><dd> ?Revenue \\(USD\\) ?<span class=\"muted\"> ?\\(written by the analyst\\)</span></dd>", p9_cbsec("revenue")) &&
+        length(regmatches(p9_cbh, gregexpr("<figure>", p9_cbh))[[1]]) == 16L &&
+        grepl("alt=\"How the values are spread: Revenue \\(USD\\)\"", p9_figs(p9_cbsec("revenue"))) && grepl("alt=\"Rows at each level: Sales region\"", p9_figs(p9_cbsec("region"))) &&
+        grepl("alt=\"Rows over time: order_month\"", p9_figs(p9_cbsec("order_month"))) && grepl("alt=\"Rows at each level: quarter\"", p9_figs(p9_cbsec("quarter"))) &&
+        !length(p9_figs(p9_cbsec("order_id"))) && !length(p9_figs(p9_cbsec("city"))) && !length(p9_figs(p9_cbsec("comment"))) && !length(p9_figs(p9_cbsec("product"))) &&
+        all(purrr::map_lgl(p9_cb_pics, function(p) p9_close(p$px, 2L * c(p$w, p$h)))) &&
+        identical(dash_pct(0), "0%") && identical(dash_pct(0.004), "under 1%") && identical(dash_pct(0.394), "39%") &&
+        length(regmatches(p9_mh, gregexpr("<figure>", p9_mh))[[1]]) >= 4L && !grepl(SECRET, p9_mh, fixed = TRUE) && !grepl("comment about item", p9_mh, fixed = TRUE) && !grepl("R0001", p9_mh, fixed = TRUE) &&
+        !grepl(SECRET, p9_six$clean$codebook, fixed = TRUE) && grepl("<figure>", p8c_sq(p9_six$clean$codebook), fixed = TRUE))
+
+# 10. print: a light ground whatever the style, no card split across pages; where Chrome is installed the page is printed to a PDF and read back
+p9_lum <- function(uri) { a <- png::readPNG(p9_uri_file(uri)); mean(a[1, 1, 1:3]) }
+p9_uris <- function(h, class) { t <- regmatches(h, gregexpr(paste0("<img[^>]*class=\"", class, "\"[^>]*>"), h))[[1]]; sub("^.*src=\"([^\"]*)\".*$", "\\1", t) }
+p9_screen_dk <- sub("^.*src=\"([^\"]*)\".*$", "\\1", regmatches(p8c_sq(p9_hd), gregexpr("<picture class=\"screen-only\">.*?<img src=\"[^\"]*\"", p8c_sq(p9_hd), perl = TRUE))[[1]])
+p9_print <- function(html, name) {
+  pdf <- file.path(tempdir(), paste0(name, ".pdf"))
+  suppressWarnings(system2(p9_chrome, c("--headless=new", "--disable-gpu", "--no-sandbox", paste0("--user-data-dir=", file.path(tempdir(), "p9_chrome")), "--no-pdf-header-footer",
+                                        paste0("--print-to-pdf=", pdf), "--virtual-time-budget=4000", paste0("file:///", normalizePath(html, winslash = "/"))), stdout = FALSE, stderr = FALSE))
+  txt <- gsub("[[:space:]]+", " ", pdftools::pdf_text(pdf))
+  light <- purrr::map_dbl(seq_along(txt), function(i) mean(pdftools::pdf_render_page(pdf, i, dpi = 20, numeric = TRUE)[, , 1:3]))
+  list(text = txt, light = light, n = length(txt))
+}
+p9_pp <- if (p9_has_chrome) list(dark = p9_print(file.path(p9_six$dark$dir, "dashboard.html"), "p9_dark"), clean = p9_print(file.path(p9_six$clean$dir, "dashboard.html"), "p9_clean"),
+                                 dark_cb = p9_print(file.path(p9_six$dark$dir, "codebook.html"), "p9_dark_cb"))
+p9_dark_layout <- if (p9_has_chrome) p9_dom(file.path(p9_six$dark$dir, "dashboard.html"), 1400, p9_measure_js)
+p9_same_page <- function(pp, a, b) { pa <- which(grepl(a, pp$text, fixed = TRUE)); pb <- which(grepl(b, pp$text, fixed = TRUE)); length(pa) == 1L && identical(pa, pb) }
+check("9A-10: print: every style's page prints on a light ground (@media print sets the custom properties to white and near-black, print-color-adjust exact, a card, a codebook section, a box and the foot are never split, the grid is one column); a dark page also holds, for each picture, a light drawing in the Clean style that is shown only for print (the screen picture is dark in its corner, the print one light, and in Chrome only the screen picture is shown on screen) and the codebook's pictures the same; a card that has its row has the half-width drawing for print; printed to a PDF by Chrome the dark and the clean dashboard have every card whole on one page (headline, summary and source line together) and every page light, and the dark codebook has no section split and light pages",
+      all(purrr::map_lgl(p9_styles, function(st) grepl("@media print{:root{--bg:#FFFFFF;--text:#111111;--text2:#333333;--caption:#555555;--grid:#BBBBBB;--box:#F2F2F2;--rule:#111111;}", p9_six[[st]]$html, fixed = TRUE) &&
+                            grepl("print-color-adjust:exact;background:#FFFFFF", p9_six[[st]]$html, fixed = TRUE) && grepl(".grid{display:block;}.card,.col-section,.box,.foot{break-inside:avoid;page-break-inside:avoid;}", p9_six[[st]]$html, fixed = TRUE) &&
+                            grepl("@page{margin:14mm;}", p9_six[[st]]$html, fixed = TRUE))) &&
+        length(p9_screen_dk) == 5L && length(p9_uris(p9_hd, "print-only")) == 5L && all(purrr::map_dbl(p9_screen_dk, p9_lum) < 0.2) && all(purrr::map_dbl(p9_uris(p9_hd, "print-only"), p9_lum) > 0.9) &&
+        lengths(gregexpr("class=\"print-only\"", p9_h, fixed = TRUE)) == 1L &&
+        grepl("<picture class=\"screen-only\">", p9_h, fixed = TRUE) && lengths(gregexpr("<picture class=\"screen-only\">", p9_h, fixed = TRUE)) == 1L &&
+        grepl(".card picture.screen-only{display:none;}.card img.print-only", p9_h, fixed = TRUE) &&
+        lengths(gregexpr("<img class=\"print-only\"", p9_six$dark$codebook, fixed = TRUE)) > 5L && !grepl("<img class=\"print-only\"", p9_six$clean$codebook, fixed = TRUE) &&
+        (!p9_has_chrome || (
+          all(p9_dark_layout$cards$vis == 1L) && all(p9_dark_layout$cards$shown > 400) &&
+          all(purrr::map_lgl(1:5, function(k) p9_same_page(p9_pp$dark, paste("Headline of chart", k), paste0("A summary of c", k, " .")) && p9_same_page(p9_pp$clean, paste("Headline of chart", k), paste0("A summary of c", k, " .")))) &&
+            all(p9_pp$dark$light > 0.9) && all(p9_pp$clean$light > 0.9) && all(p9_pp$dark_cb$light > 0.85) && p9_pp$dark$n >= 6L &&
+            all(purrr::map_lgl(p9_cbnames, function(n) { pg <- which(grepl(paste0("Column ", n, " "), p9_pp$dark_cb$text, fixed = TRUE)); length(pg) >= 1L && grepl(paste0("Column ", n, " .*?Missing"), p9_pp$dark_cb$text[pg[length(pg)]]) })))))
+
+# 11. the five-chart dashboard in every style
+check("9A-11: the five-chart dashboard (sorted bars, a time axis in order, a scatter with no column of points at zero, small multiples, a box chart) builds in each of the six styles: each zip holds the pages, charts.R and the ten files of charts/ (PNG and SVG), the page has the style's colours, five cards each with a <picture> and a phone source, no request leaves it, both pages parse, no model is called, and the scatter's x starts above zero",
+      length(p9_six) == 6L && identical(names(p9_six), c("clean", "minimal", "magazine", "desk", "newspaper", "dark")) &&
+        all(purrr::map_lgl(p9_six, function(z) setequal(names(z$files), c("dashboard.html", "codebook.html", "data_dictionary.yaml", "charts.R", p9_chart_files)) &&
+                            identical(z$modes, rep("picture", 5L)) && grepl(paste0("--bg:", CHART_STYLES[[z$style]]$background), z$html, fixed = TRUE) && lengths(gregexpr("<picture", z$html, fixed = TRUE)) >= 5L &&
+                            length(p9_pictures(z$html)) >= 10L && !length(p8c_requests(z$html)) && !length(p8c_requests(z$codebook)) && p8c_balanced(z$html) && p8c_balanced(z$codebook))) &&
+        all(purrr::map_dbl(p9_six, "elapsed") < 120) && min(attr(p9_std$scatter, "table")$units) >= 1)
 
 # ---- the count -------------------------------------------------------------------
 

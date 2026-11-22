@@ -1420,6 +1420,30 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       if (is.na(made$thumbs[[key]])) NULL else made$thumbs[[key]]
     }
 
+    # The lines of a chart's facts that can be a key number (dash_fact_choices()), worked out by R from the plotted table; kept for a
+    #   given spec and data. An empty list for a chart that cannot be drawn now.
+    dash_fact_list = function(chart) {
+      key = digest::digest(list("facts", spec_hash(chart$spec), isolate(palette()), isolate(data_key())))
+      if (is.null(made$thumbs[[key]]))
+        made$thumbs[[key]] = tryCatch({
+          p = spec_plot(chart$spec, isolate(state$data), isolate(state$codebook), isolate(palette()))
+          f = spec_facts(attr(p, "spec"), attr(p, "table"), isolate(state$codebook), data = isolate(state$data))
+          dash_fact_choices(f$text, f$names)
+        }, error = function(e) list())
+      made$thumbs[[key]]
+    }
+
+    # The choices of the three key-number selects: "None", then each chosen chart's lines as a group named by the chart, each value
+    #   "chart id|number of the line" (never typed text).
+    dash_key_choices = function(items) {
+      groups = purrr::compact(purrr::map(items, function(it) {
+        f = dash_fact_list(it$chart)
+        if (length(f)) stats::setNames(list(stats::setNames(paste0(it$id, "|", seq_along(f)), purrr::map_chr(f, function(x) substr(paste0(x$label, ": ", x$value), 1L, 90L)))),
+                                       chart_title(it$chart, "Untitled chart"))
+      }))
+      c(list("None" = ""), unlist(unname(groups), recursive = FALSE))
+    }
+
     dash_mode_id = function(chart_id) paste0("dash_mode_", chart_id)
     dash_title_default = function() paste("Dashboard:", isolate(state$codebook)$file %||% "the data file")
 
@@ -1445,6 +1469,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       showModal(modalDialog(
         title = "Export dashboard", size = "l", easyClose = FALSE, footer = modalButton("Close"),
         tags$p(class = "small text-muted", "One zip: the dashboard as one page, the data dictionary and a codebook page, and each chart as a picture and a script. ",
+               "On the page each chart is drawn at the size it is shown, and again for a phone. ",
                "Nothing here calls a model."),
         if (length(warns)) tags$div(class = "mb-3", purrr::map(unname(warns), function(w) tags$p(class = "small mb-1", style = warn_style, w))),
         tags$div(class = "row g-2",
@@ -1457,6 +1482,16 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         tags$p(class = "small text-muted", DASH_INTRO_NOTE),
         checkboxGroupInput(ns("dash_boxes"), "Value boxes to show", inline = TRUE, selected = names(DASH_BOX_CHOICES),
                            choiceNames = unname(c(DASH_BOX_CHOICES[1:2], boxes$third$title)), choiceValues = names(DASH_BOX_CHOICES)),
+        tags$h6("Key numbers (up to three)"),
+        tags$p(class = "small text-muted", "Each is a line from the facts of one chart, worked out by R from the numbers the chart draws, and is shown as one more box at the top of the page with the chart's name under it. ",
+               "You pick it from the list; it is never typed."),
+        {
+          choices = dash_key_choices(items)
+          if (length(choices) > 1L)
+            tags$div(class = "row g-2", purrr::map(seq_len(DASH_KEYS_MAX), function(k)
+              tags$div(class = "col-md-4", selectInput(ns(paste0("dash_key", k)), paste("Key number", k), choices = choices, selected = "", width = "100%"))))
+          else tags$p(class = "small text-muted", "No chart in the dashboard has a line of facts that can be a key number.")
+        },
         tags$h6("Charts, in the order of the canvas"),
         tags$p(class = "small text-muted", "Change the order with Move up and Move down on the cards, and leave a chart out with its \"In dashboard\" switch. ",
                "A picture is the smallest file. An interactive chart needs the scripts of the chart package, which makes the page several megabytes larger."),
@@ -1510,7 +1545,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         d = input$dash_date
         settings = list(title = input$dash_title %||% "", subtitle = input$dash_subtitle %||% "", author = input$dash_author %||% "",
                         date = if (inherits(d, "Date") && !is.na(d)) d else Sys.Date(), intro = input$dash_intro %||% "",
-                        boxes = intersect(input$dash_boxes, names(DASH_BOX_CHOICES)))
+                        boxes = intersect(input$dash_boxes, names(DASH_BOX_CHOICES)),
+                        keys = unique(purrr::keep(unlist(purrr::map(seq_len(DASH_KEYS_MAX), function(k) input[[paste0("dash_key", k)]])),
+                                                  function(v) is_text1(v) && nzchar(v))))
         old = isolate(dash_result())$zip
         if (is_text1(old)) unlink(dirname(old), recursive = TRUE)
         dir.create(dir)
@@ -1750,6 +1787,96 @@ DASH_DESCRIBES <- "A chart describes the file, not the world."
 DASH_ERROR_TEXT <- paste("The dashboard was not built, and nothing was saved. Your charts, texts and choices are unchanged, so you can press",
                          "the button again. If it fails again, the last lines of the message below say which step failed.")
 
+# The page and its pictures (Phase 9). The cards stand in a column at most DASH_PAGE_PX wide, centred, two to a row from DASH_TWO_PX
+#   and one below. A chart is drawn for the width it is shown at, so its text comes out near 12 CSS pixels: DASH_DESK_PX for a card
+#   that shares its row, DASH_WIDE_PX for one that has the row to itself, and a narrower drawing of DASH_PHONE_PX for a screen of
+#   at most DASH_PHONE_MAX_PX pixels. A drawing is made at 96 CSS pixels to the inch and DASH_SCALE pixels for each one it is shown
+#   at, so it is sharp on a screen of twice the density. DASH_ASPECT is its height over its width.
+DASH_PAGE_PX <- 1240L
+DASH_TWO_PX <- 900L
+DASH_PHONE_MAX_PX <- 599L
+DASH_DESK_PX <- 540L
+DASH_WIDE_PX <- 1120L
+DASH_PHONE_PX <- 340L
+DASH_ASPECT <- c(desk = 0.64, wide = 0.42, phone = 0.8)
+DASH_SCALE <- 2L
+DASH_CSS_DPI <- 96L
+DASH_KEYS_MAX <- 3L             # key numbers the analyst may add, each a line of a chart's facts
+DASH_PICTURE_SIZES <- c("desk", "wide", "phone")
+DASH_PX <- c(desk = DASH_DESK_PX, wide = DASH_WIDE_PX, phone = DASH_PHONE_PX)
+
+# The lines of a chart's facts that say what the chart is about and carry no number a reader would want in a box.
+DASH_FACT_SKIP <- c("Plotted", "Filter", "Shown", "Highlighted", "Fitted curve", "Rows used", "Rows after the filter", "Groups shown",
+                    "Rows left out for missing values", "Exploratory", "Values", "Groups at the highest value", "Points", "Points per series")
+
+# How each style's page differs beyond its colours and typefaces (the look of its masthead, its cards and its boxes), as CSS over the
+#   custom properties --bg, --text, --text2, --caption, --grid, --box, --accent and --rule. A style with no entry is drawn as Clean.
+DASH_LOOK <- list(
+  clean = paste0(".masthead{border-bottom:3px solid var(--accent);}",
+                 ".card{background:var(--bg);border:1px solid var(--grid);border-radius:.5rem;padding:1rem;}"),
+  minimal = paste0(".masthead{border-bottom:1px solid var(--text2);}",
+                   ".card{background:transparent;border:0;border-top:1px solid var(--text2);border-radius:0;padding:.75rem 0 0;}",
+                   ".box{background:transparent;border:0;border-top:3px solid var(--accent);border-radius:0;padding:.6rem 0 .5rem;}"),
+  magazine = paste0(".masthead{border-top:10px solid var(--accent);padding-top:1.25rem;}",
+                    ".card{background:var(--bg);border:3px solid var(--grid);border-radius:.25rem;padding:1rem;}",
+                    ".box{border:3px solid var(--grid);border-top:6px solid var(--accent);border-radius:.25rem;}"),
+  desk = paste0(".masthead{border-bottom:5px solid var(--text);}",
+                ".card{background:var(--bg);border:2px solid var(--grid);border-radius:0;padding:1rem;}",
+                ".box{border:2px solid var(--grid);border-top:5px solid var(--accent);border-radius:0;}",
+                ".box-title,.card-sub{text-transform:uppercase;letter-spacing:.04em;font-size:.78rem;}"),
+  newspaper = paste0(".masthead{text-align:center;border-top:4px solid var(--rule);border-bottom:1px solid var(--rule);padding:1.1rem 0 1.2rem;}",
+                     ".masthead .intro{margin-left:auto;margin-right:auto;text-align:left;}",
+                     ".card{background:transparent;border:0;border-top:1px solid var(--rule);border-radius:0;padding:.75rem 0 0;}",
+                     ".box{background:transparent;border:0;border-top:2px solid var(--rule);border-radius:0;padding:.6rem 0 .5rem;}",
+                     ".box-value{font-family:var(--title-font);}"),
+  dark = paste0(".masthead{border-bottom:3px solid var(--accent);}",
+                ".card{background:var(--bg);border:1px solid var(--grid);border-radius:.8rem;padding:1.1rem;}",
+                ".box{border-radius:.8rem;}"))
+
+# The class attribute from names, leaving out the ones that are NULL ("card" or "card full", never "card ").
+css_class <- function(...) paste(c(...), collapse = " ")
+
+# What spec_plot() is told of a drawing for the page, by its size (desk, wide or phone): the inches it is shown at (CSS pixels over 96),
+#   no title, subtitle or source line, and fewer breaks on the x axis of the phone drawing.
+dash_web <- function(size) {
+  width = DASH_PX[[size]] / DASH_CSS_DPI
+  list(width = width, height = round(width * DASH_ASPECT[[size]], 2), bare = TRUE, few_breaks = identical(size, "phone"))
+}
+
+# Which cards of the page take a whole row, given the cards that must (an interactive chart, a chart drawn wide): `wide`, one
+#   flag for each card in order. The page is two columns wide, so a card that is not wide shares its row with the next; a wide
+#   card takes the row, and the card before it, left alone in its row, takes a whole row too (as does a last card with no
+#   partner), so that no row of the page has a hole. Returns a flag for each card: TRUE for a card that has its row.
+dash_layout <- function(wide) {
+  n = length(wide)
+  out = purrr::reduce(seq_len(n), function(st, i) {
+    if (isTRUE(wide[[i]])) {
+      if (st$open) st$full[[st$last]] = TRUE
+      st$full[[i]] = TRUE
+      st$open = FALSE
+    } else if (st$open) {
+      st$open = FALSE
+    } else {
+      st$open = TRUE
+      st$last = i
+    }
+    st
+  }, .init = list(full = rep(FALSE, n), open = FALSE, last = 0L))
+  if (out$open) out$full[[out$last]] = TRUE
+  out$full
+}
+
+# The rows of a page that have a hole, given which cards have a row to themselves: lay the cards out two to a row, in order, as the
+#   page's grid does, and count the rows that hold one card that is not full. (The page's own layout leaves none.)
+dash_holes <- function(full) {
+  out = purrr::reduce(full, function(st, f) {
+    if (isTRUE(f)) { if (st$open) st$holes = st$holes + 1L; st$open = FALSE }
+    else st$open = !st$open
+    st
+  }, .init = list(open = FALSE, holes = 0L))
+  out$holes + as.integer(out$open)
+}
+
 # Whether a chart's interactive version carries the values of the rows it plots: a scatter, bubble or box chart does, and so does any
 #   other chart whose marks are rows (fn none: one row for each bar, dot, line point or cell). A bar, line or heatmap of totals
 #   (count, share, sum, mean, median) carries only its totals, and a histogram only its bins.
@@ -1817,55 +1944,76 @@ dash_font_css <- function(style) {
   })), collapse = "\n")
 }
 
-# The page's stylesheet in the chosen style's colours and typefaces: a CSS grid of cards that wraps from two columns to one,
-#   a print stylesheet that keeps each card whole on a page, and the colours as custom properties.
+# The page's stylesheet in the chosen style's colours, typefaces and look (DASH_LOOK): a column centred at most DASH_PAGE_PX wide, a grid
+#   of two cards to a row from DASH_TWO_PX and one below, a phone rule, and a print stylesheet that keeps each card whole on a page and
+#   prints on a light ground whatever the style. The colours are custom properties.
 dash_css <- function(style, accent) {
   st = chart_style(style)
   title_css = function(role) CHART_FONTS[[role]]$css
   title_family = if (identical(st$title_weight, "semibold")) paste0("'", CHART_FONTS[[st$title_font]]$family, " SemiBold', ", title_css(st$title_font)) else title_css(st$title_font)
   title_weight = if (identical(st$title_weight, "bold")) 700 else 400
+  h1_rem = round(0.9 + 1.4 * st$title_size, 2)
+  look = DASH_LOOK[[style]] %||% DASH_LOOK[["clean"]]
   paste0(
     ":root{--bg:", st$background, ";--text:", st$text, ";--text2:", st$text_2, ";--caption:", st$caption, ";--grid:", st$grid, ";--box:", st$box_fill,
-    ";--accent:", accent, ";}\n",
+    ";--accent:", accent, ";--rule:", if (is.na(st$rule)) st$text else st$rule, ";--title-font:", title_family, ";}\n",
     "*{box-sizing:border-box;}\n",
     "html{-webkit-text-size-adjust:100%;}\n",
     "body{margin:0;background:var(--bg);color:var(--text);font-family:", title_css("sans"), ";line-height:1.5;}\n",
-    ".page{max-width:72rem;margin:0 auto;padding:1.5rem 1rem 3rem;}\n",
-    ".title-block{border-bottom:3px solid var(--accent);padding-bottom:1rem;margin-bottom:1.25rem;}\n",
-    "h1{font-family:", title_family, ";font-weight:", title_weight, ";font-size:clamp(1.6rem,4vw,2.4rem);line-height:1.2;margin:0 0 .35rem;overflow-wrap:anywhere;}\n",
-    ".subtitle{font-family:", title_css(st$subtitle_font), ";color:var(--text2);font-size:1.2rem;margin:0;overflow-wrap:anywhere;}\n",
-    ".byline{color:var(--caption);font-size:.9rem;margin:.6rem 0 0;}\n",
-    ".intro{max-width:60rem;margin-top:.9rem;}\n.intro p{margin:.4rem 0;}\n",
-    ".boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr));gap:.75rem;margin:1rem 0 1.5rem;}\n",
-    ".box{background:var(--box);border:1px solid var(--grid);border-radius:.5rem;padding:.75rem 1rem;min-width:0;}\n",
+    ".page{max-width:", DASH_PAGE_PX, "px;margin:0 auto;padding:1.5rem 1.5rem 3rem;}\n",
+    ".masthead{padding:0 0 1.25rem;margin-bottom:1.5rem;}\n",
+    "h1{font-family:var(--title-font);font-weight:", title_weight, ";font-size:clamp(1.8rem,4.5vw,", h1_rem, "rem);line-height:1.15;margin:0 0 .4rem;overflow-wrap:anywhere;}\n",
+    ".subtitle{font-family:", title_css(st$subtitle_font), ";color:var(--text2);font-size:1.25rem;margin:0;overflow-wrap:anywhere;}\n",
+    ".byline{color:var(--caption);font-size:.9rem;margin:.7rem 0 0;}\n",
+    ".intro{max-width:70ch;margin-top:1rem;font-size:1.05rem;}\n.intro p{margin:.5rem 0;}\n",
+    ".boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));gap:.75rem;margin:0 0 1.5rem;}\n",
+    ".box{background:var(--box);border:1px solid var(--grid);border-top:4px solid var(--accent);border-radius:.5rem;padding:.7rem 1rem .8rem;min-width:0;}\n",
     ".box-title{color:var(--text2);font-size:.85rem;}\n",
-    ".box-value{font-size:1.7rem;font-weight:700;line-height:1.25;overflow-wrap:anywhere;}\n.box-value.long{font-size:1.1rem;}\n",
-    ".grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,30rem),1fr));gap:1rem;align-items:start;}\n",
-    ".card{background:var(--bg);border:1px solid var(--grid);border-radius:.5rem;padding:1rem;min-width:0;}\n",
-    ".card.wide{grid-column:1/-1;}\n",
-    ".card h2{font-family:", title_family, ";font-weight:", title_weight, ";font-size:1.2rem;line-height:1.3;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
-    ".card img{display:block;width:100%;height:auto;}\n",
+    ".box-value{font-size:1.9rem;font-weight:700;line-height:1.25;overflow-wrap:break-word;}\n.box-value.long{font-size:1.1rem;}\n",
+    ".box-chart{color:var(--caption);font-size:.8rem;margin-top:.2rem;overflow-wrap:anywhere;}\n",
+    ".grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;align-items:start;}\n",
+    "@media (min-width:", DASH_TWO_PX, "px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}.card.full img{max-width:none;}}\n",
+    ".card{min-width:0;}\n",
+    ".card h2{font-family:var(--title-font);font-weight:", title_weight, ";font-size:1.3rem;line-height:1.3;margin:0 0 .5rem;overflow-wrap:anywhere;}\n",
+    ".card-sub{color:var(--text2);font-size:.95rem;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
+    ".card-note{color:var(--caption);font-size:.85rem;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
+    ".card picture{display:block;}\n.card img.print-only{display:none;}\n",
+    ".card img{display:block;width:100%;max-width:700px;height:auto;}\n",
     ".widget{width:100%;overflow:hidden;}\n",
     ".summary{margin:.8rem 0 0;}\n",
     ".notes{color:var(--text2);font-size:.85rem;margin:.6rem 0 0;padding-left:1.1rem;}\n",
     ".source{color:var(--caption);font-size:.8rem;margin:.6rem 0 0;overflow-wrap:anywhere;}\n",
-    ".about{margin-top:1rem;}\n.about dl{margin:0;}\n.about dt{font-weight:700;margin-top:.7rem;}\n.about dd{margin:.1rem 0 0;color:var(--text2);overflow-wrap:anywhere;}\n",
+    ".foot{margin-top:2.5rem;padding-top:1.25rem;border-top:1px solid var(--rule);}\n",
+    ".foot h2{font-family:var(--title-font);font-weight:", title_weight, ";font-size:1.1rem;margin:0 0 .5rem;}\n",
+    ".about dl{margin:0;}\n.about dt{font-weight:700;margin-top:.7rem;}\n.about dd{margin:.1rem 0 0;color:var(--text2);overflow-wrap:anywhere;max-width:70ch;}\n",
     ".about ul{margin:.2rem 0 0;padding-left:1.1rem;}\n",
+    ".made{color:var(--caption);font-size:.85rem;margin:1.5rem 0 0;}\n",
     "a{color:var(--text);text-decoration-thickness:1px;}\n",
-    ".toc{columns:14rem;column-gap:1.5rem;margin:0 0 1rem;padding-left:1.1rem;}\n",
-    ".col-section{background:var(--bg);border:1px solid var(--grid);border-radius:.5rem;padding:1rem;margin:0 0 1rem;break-inside:avoid;}\n",
-    ".col-section h2{font-family:", title_family, ";font-weight:", title_weight, ";font-size:1.15rem;margin:0 0 .15rem;overflow-wrap:anywhere;}\n",
+    ".muted{color:var(--caption);}\n",
+    ".table-scroll{overflow-x:auto;margin:0 0 2rem;}\n",
+    ".summary-table{width:100%;border-collapse:collapse;font-size:.9rem;}\n",
+    ".summary-table th{text-align:left;color:var(--text2);font-weight:700;border-bottom:2px solid var(--text);}\n",
+    ".summary-table th,.summary-table td{padding:.35rem .8rem .35rem 0;border-bottom:1px solid var(--grid);vertical-align:top;}\n",
+    ".summary-table td.n,.summary-table th.n{text-align:right;white-space:nowrap;}\n",
+    ".col-section{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,21rem);gap:.1rem 1.75rem;padding:1.1rem 0;border-top:1px solid var(--grid);break-inside:avoid;}\n",
+    ".col-section>h2,.col-section>.name{grid-column:1/-1;}\n",
+    ".col-section h2{font-family:var(--title-font);font-weight:", title_weight, ";font-size:1.15rem;margin:0;overflow-wrap:anywhere;}\n",
     ".col-section .name{color:var(--caption);font-size:.85rem;margin:0 0 .5rem;overflow-wrap:anywhere;}\n",
-    ".col-section dl{display:grid;grid-template-columns:minmax(7rem,max-content) 1fr;gap:.25rem .9rem;margin:0;}\n",
+    ".col-section dl{display:grid;grid-template-columns:minmax(7rem,max-content) 1fr;gap:.25rem .9rem;margin:0;font-size:.95rem;}\n",
     ".col-section dt{color:var(--text2);}\n.col-section dd{margin:0;overflow-wrap:anywhere;}\n",
+    ".col-section figure{margin:0;align-self:start;}\n.col-section figure img{display:block;width:100%;height:auto;}\n.col-section figure img.print-only{display:none;}\n",
+    ".col-section figcaption{color:var(--caption);font-size:.8rem;margin-top:.15rem;}\n",
     ".levels{border-collapse:collapse;margin:.25rem 0 0;font-size:.9rem;width:100%;max-width:28rem;}\n",
     ".levels th,.levels td{border-bottom:1px solid var(--grid);padding:.2rem .5rem;text-align:left;overflow-wrap:anywhere;}\n",
     ".levels td.n{text-align:right;white-space:nowrap;}\n",
-    "@media (max-width:40rem){.page{padding:1rem .75rem 2rem;}.card,.col-section{padding:.75rem;}.col-section dl{grid-template-columns:1fr;gap:0;}.col-section dd{margin-bottom:.4rem;}",
-    ".widget{overflow-x:auto;}.widget .html-widget{min-width:36rem;}}\n",
-    "@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.page{max-width:none;padding:0;}",
-    ".grid{display:block;}.card,.col-section,.box{break-inside:avoid;page-break-inside:avoid;margin:0 0 .8rem;}.boxes{display:flex;flex-wrap:wrap;}.box{flex:1 1 10rem;}",
-    ".title-block{break-after:avoid;}}\n")
+    look, "\n",
+    "@media (max-width:", DASH_PHONE_MAX_PX, "px){.page{padding:1rem .75rem 2rem;}.card{padding:.75rem;}.col-section{grid-template-columns:minmax(0,1fr);}.col-section dl{grid-template-columns:1fr;gap:0;}",
+    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.widget{overflow-x:auto;}.widget .html-widget{min-width:36rem;}.boxes{grid-template-columns:repeat(2,minmax(0,1fr));}.boxes .box:last-child:nth-child(odd){grid-column:1/-1;}.box-value{font-size:1.5rem;}.box-value.long{font-size:1rem;}}\n",
+    "@page{margin:14mm;}\n",
+    "@media print{:root{--bg:#FFFFFF;--text:#111111;--text2:#333333;--caption:#555555;--grid:#BBBBBB;--box:#F2F2F2;--rule:#111111;}",
+    "body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FFFFFF;color:#111111;}.page{max-width:none;padding:0;}",
+    ".grid{display:block;}.card,.col-section,.box,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.col-section figure img.screen-only{display:none;}",
+    ".boxes{display:flex;flex-wrap:wrap;}.box{flex:1 1 10rem;}.masthead{break-after:avoid;}h2{break-after:avoid;}}\n")
 }
 
 # One of the three value boxes of the canvas: the title, the value and the text to show in full (what the Period or File box says in
@@ -1935,13 +2083,13 @@ dash_text_status <- function(it) {
   else "passed the number check and the word check"
 }
 
-# The About card: the file, when, the model that wrote the text, which texts passed the checks, what is interactive, the note.
+# The About block of the foot: the file, when, the model that wrote the text, which texts passed the checks, what is interactive, the note.
 dash_about <- function(items, settings, cb, data, model) {
   texts = purrr::keep(items, function(it) !is.null(it$story) && is_text1(it$story$headline) && nzchar(trimws(it$story$headline)))
   fell = purrr::keep(items, function(it) !is.null(it$fallback))
   modes = purrr::map_chr(items, "mode")
   entry = function(term, ...) list(tags$dt(term), tags$dd(...))
-  tags$article(class = "card about", `aria-labelledby` = "about-heading",
+  tags$section(class = "about", `aria-labelledby` = "about-heading",
     tags$h2(id = "about-heading", "About this dashboard"),
     tags$dl(
       entry("The file", paste0(cb$file %||% "the data file", ": ", format_num(nrow(data)), " rows and ", format_num(ncol(data)), " columns.",
@@ -1961,63 +2109,183 @@ dash_about <- function(items, settings, cb, data, model) {
       entry("Read this first", dash_describes())))
 }
 
-# One card of the page: the headline (or the chart's title), the chart (a picture, or the widget), the summary, the notes the chart
-#   carries and the source line. A chart drawn wide (four or more panels across) and an interactive
-#   chart (its axis labels need room) take the page's full width.
-dash_card <- function(it) {
-  alt = paste0(it$title, if (is_text1(it$headline) && nzchar(it$headline)) paste0(". ", it$headline))
-  tags$article(class = paste("card", if (it$wide) "wide"),
-    tags$h2(if (is_text1(it$headline) && nzchar(trimws(it$headline))) it$headline else it$title),
-    if (identical(it$mode, "interactive")) tags$div(class = "widget", HTML(it$widget_html))
-    else tags$img(src = it$uri, alt = alt, width = it$pixels[[1]], height = it$pixels[[2]]),
+# The picture of a card as the page holds it: a <picture> whose img is the drawing for a card of the card's size (the one with the
+#   row to itself when the card has it), and whose sources, in the order a browser tries them, are the narrow drawing for a screen of at
+#   most DASH_PHONE_MAX_PX pixels and, for a card that has a row to itself, the half-width drawing for a screen too narrow for two
+#   columns. Each has twice the pixels it is shown at ("2x"). For print a second img, shown only when the page is printed (a browser does
+#   not choose a <picture> source again for print): the drawing for a half-width card, in the Clean style when the page is dark (a dark
+#   page prints on a light ground), for a dark style or a card that has its row.
+dash_picture_tag <- function(it, full, alt) {
+  p = it$pictures
+  main = if (full && !is.null(p$wide)) p$wide else p$desk
+  src = function(pic, media) htmltools::tag("source", list(media = media, srcset = paste0(pic$uri, " 2x")))
+  paper = p$print %||% if (full && !is.null(p$wide)) p$desk
+  tagList(
+    tags$picture(class = if (!is.null(paper)) "screen-only",
+      src(p$phone, paste0("(max-width:", DASH_PHONE_MAX_PX, "px)")),
+      if (full && !is.null(p$wide)) src(p$desk, paste0("(max-width:", DASH_TWO_PX - 1L, "px)")),
+      tags$img(src = main$uri, alt = alt, width = main$pixels[[1]], height = main$pixels[[2]])),
+    if (!is.null(paper)) tags$img(class = "print-only", src = paper$uri, alt = alt, width = paper$pixels[[1]], height = paper$pixels[[2]]))
+}
+
+# One card of the page: the headline as its heading (the chart's title, if there is no headline), the chart's title as its subtitle (and
+#   the chart's own subtitle under it), the chart (a picture, or the widget), the summary, the notes the chart carries and the source
+#   line, once. The drawing has no title and no source line. `full`: the card has a whole row to itself.
+dash_card <- function(it, full = FALSE) {
+  headed = is_text1(it$headline) && nzchar(trimws(it$headline))
+  alt = paste0(it$title, if (headed) paste0(". ", it$headline))
+  tags$article(class = css_class("card", if (full) "full"),
+    tags$h2(if (headed) it$headline else it$title),
+    if (headed) tags$p(class = "card-sub", it$title),
+    if (is_text1(it$chart_subtitle) && nzchar(it$chart_subtitle)) tags$p(class = "card-note", it$chart_subtitle),
+    if (identical(it$mode, "interactive")) tags$div(class = "widget", HTML(it$widget_html)) else dash_picture_tag(it, full, alt),
     if (is_text1(it$summary) && nzchar(trimws(it$summary))) tags$p(class = "summary", it$summary),
     if (length(it$notes)) tags$ul(class = "notes", purrr::map(it$notes, tags$li)),
     if (is_text1(it$source)) tags$p(class = "source", it$source))
 }
 
-# The page, as one string: the title block, the chosen value boxes, a card for each chart in order, the About card; the style sheet,
-#   typefaces, pictures and (when a chart is interactive) scripts all inside it.
-dash_page <- function(items, settings, cb, data, palette, model) {
+# A line of a chart's facts that can be a key number, as list(label, value): the facts' own words, with a figure in them, from the facts
+#   text (spec_facts()$text) and `tokens`, the map (token = name) of the ones that stand for names in it. A line that holds several figures
+#   ("The line: first 39,000 (2022-01-01), last 142,000 (2024-12-01), ...") is one choice for each (commas inside brackets do not
+#   split). The bookkeeping lines (what is plotted, the filter, the rows used) are not offered.
+dash_fact_choices <- function(text, tokens = character(0)) {
+  lines = trimws(strsplit(text %||% "", "\n", fixed = TRUE)[[1]])
+  lines = sub("^- ", "", lines[nzchar(lines)])
+  lines = lines[grepl("^[^:]+: .*[0-9]", lines) & !grepl("^Panel ", lines) & !sub(":.*$", "", lines) %in% DASH_FACT_SKIP]
+  named = function(x) purrr::reduce(names(tokens), function(acc, tok) gsub(tok, tokens[[tok]], acc, fixed = TRUE), .init = x)
+  unlist(purrr::map(lines, function(l) {
+    label = sub(":.*$", "", l)
+    pieces = trimws(strsplit(sub("^[^:]+: ", "", l), "(?<![0-9]), (?![^(]*\\))|; ", perl = TRUE)[[1]])
+    pieces = pieces[grepl("[0-9]", pieces)]
+    purrr::map(pieces, function(v) list(label = named(label), value = named(v)))
+  }), recursive = FALSE)
+}
+
+# The boxes of the page's top, as list(title, value, long, chart): the file's (rows, columns, the period or the file name, as chosen)
+#   and then the key numbers the analyst picked, each with the name of its chart under it.
+dash_boxes <- function(settings, cb, data, items) {
+  file = canvas_box_values(data, cb)[intersect(c("rows", "columns", "third"), settings$boxes)]
+  files = purrr::map(unname(file), function(b) list(title = b$title, value = b$value, full = b$full, long = nzchar(b$cls), chart = NULL))
+  keys = purrr::compact(purrr::map(unique(settings$keys %||% character(0)), function(k) {
+    at = regexec("^(.*)\\|([0-9]+)$", k)[[1]]
+    if (at[[1]] < 0L) return(NULL)
+    id = regmatches(k, list(at))[[1]][2]
+    n = as.integer(regmatches(k, list(at))[[1]][3])
+    it = purrr::detect(items, function(m) identical(m$id, id))
+    f = if (!is.null(it) && n >= 1L && n <= length(it$facts)) it$facts[[n]]
+    if (!is.null(f)) list(title = f$label, value = f$value, full = f$value, long = nchar(f$value) > 9L, chart = it$title)
+  }))
+  c(files, utils::head(keys, DASH_KEYS_MAX))
+}
+
+# The page, as one string: the masthead (title, subtitle, author, date, the introduction at a reading measure), the boxes, a card for each chart
+#   in order (those with a row to themselves, from `full`), and the foot (the About text and "Made with chaRt"); the style sheet, typefaces,
+#   pictures and (when a chart is interactive) scripts all inside it.
+dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALSE, length(items))) {
   style = palette$style %||% CHART_STYLE_DEFAULT
   accent = spec_palette(palette)$single
-  boxes = canvas_box_values(data, cb)[intersect(c("rows", "columns", "third"), settings$boxes)]
+  boxes = dash_boxes(settings, cb, data, items)
   deps = htmltools::resolveDependencies(unlist(purrr::map(items, function(it) it$deps), recursive = FALSE) %||% list())
   title = if (nzchar(trimws(settings$title %||% ""))) trimws(settings$title) else paste("Dashboard:", cb$file %||% "the data file")
+  author = trimws(settings$author %||% "")
   head = tagList(tags$meta(charset = "utf-8"), tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"), tags$title(title),
                    tags$style(HTML(paste(dash_font_css(style), dash_css(style, accent), sep = "\n"))), dash_inline_dependencies(deps))
   body = tags$body(tags$div(class = "page",
-    tags$header(class = "title-block", tags$h1(title),
+    tags$header(class = "masthead", tags$h1(title),
                 if (nzchar(trimws(settings$subtitle %||% ""))) tags$p(class = "subtitle", trimws(settings$subtitle)),
-                tags$p(class = "byline", dash_date_text(settings$date), if (nzchar(trimws(settings$author %||% ""))) paste0(" \u00b7 ", trimws(settings$author))),
+                tags$p(class = "byline", if (nzchar(author)) tags$span(class = "author", author), if (nzchar(author)) " · ", tags$time(dash_date_text(settings$date))),
                 tags$div(class = "intro", dash_paragraphs(settings$intro))),
     if (length(boxes)) tags$section(class = "boxes", `aria-label` = "The file in numbers",
-                                    purrr::map(boxes, function(b) tags$div(class = "box", tags$div(class = "box-title", b$title),
-                                                                           tags$div(class = paste("box-value", if (nzchar(b$cls)) "long"), title = b$full, b$value)))),
-    tags$main(class = "grid", purrr::map(items, dash_card)),
-    dash_about(items, settings, cb, data, model)))
+                                    purrr::map(boxes, function(b) tags$div(class = css_class("box", if (!is.null(b$chart)) "key"), tags$div(class = "box-title", b$title),
+                                                                           tags$div(class = css_class("box-value", if (isTRUE(b$long)) "long"), title = b$full, b$value),
+                                                                           if (!is.null(b$chart)) tags$div(class = "box-chart", b$chart)))),
+    tags$main(class = "grid", purrr::map2(items, full, dash_card)),
+    tags$footer(class = "foot", dash_about(items, settings, cb, data, model), tags$p(class = "made", "Made with chaRt"))))
   dash_document(head, body)
 }
 
-# The codebook page: one section for each column, from the data dictionary only (column_summary()), so no row value is in it
-#   beyond those summaries: label, type, role, missing, and a range and quartiles, or the level counts of a group of at most
-#   CODEBOOK_MAX_LEVELS levels, or the number of distinct values alone.
-codebook_page <- function(cb, palette = chart_palette_default(), date = Sys.Date()) {
+# The percentage of the rows missing, for a table cell or a sentence: whole numbers, and "under 1%" where it is more than none.
+dash_pct <- function(x) if (isTRUE(x > 0) && x < 0.005) "under 1%" else sprintf("%.0f%%", 100 * (x %||% 0))
+
+# The codebook's small picture of a column (inline, as a data address), drawn on the device chart_device() opens in the page's style and
+#   palette: a histogram for a measure, bars for the levels of a group (at most CODEBOOK_FIG_LEVELS, the most frequent when there are more),
+#   a line of counts over time for a date; nothing for an id, a text, a category with too many levels, a column with no value or a
+#   drawing that fails. `s` is column_summary(e). The picture holds no row value: a histogram's bars, the dictionary's own level counts,
+#   counts of rows for each month or year.
+CODEBOOK_FIG_LEVELS <- 12L
+CODEBOOK_FIG <- c(width = 3.6, height = 1.4)
+codebook_figure <- function(e, s, data, palette) {
+  if (is.null(data) || !e$name %in% names(data) || identical(s$kind, "distinct")) return(NULL)
+  style = palette$style %||% CHART_STYLE_DEFAULT
+  col = spec_palette(palette)$single
+  x = data[[e$name]]
+  small = ggplot2::theme(axis.title = ggplot2::element_blank(), axis.text.y = ggplot2::element_blank(), axis.ticks = ggplot2::element_blank(),
+                         panel.grid.major.x = ggplot2::element_blank(), plot.margin = ggplot2::margin(4, 8, 2, 4))
+  size = CODEBOOK_FIG
+  p = tryCatch(switch(s$kind,
+    range = {
+      v = suppressWarnings(as.numeric(x[!is.na(x)]))
+      if (length(v) < 2L || length(unique(v)) < 2L) return(NULL)
+      ggplot2::ggplot(data.frame(v = v), ggplot2::aes(v)) + ggplot2::geom_histogram(bins = min(20L, length(unique(v))), fill = col) +
+        ggplot2::scale_x_continuous(labels = scales::label_number(big.mark = if (identical(e$role, "time")) "" else ","), n.breaks = 5) +
+        chart_theme(style, base_size = 10, grid = "y", legend = "none") + small
+    },
+    dates = {
+      d = as.Date(x[!is.na(x)])
+      if (length(d) < 2L) return(NULL)
+      span = as.numeric(diff(range(d)))
+      period = as.Date(format(d, if (span > 3 * 365) "%Y-01-01" else if (span > 60) "%Y-%m-01" else "%Y-%m-%d"))
+      counts = dplyr::count(data.frame(period = period), period)
+      if (nrow(counts) < 2L) return(NULL)
+      ggplot2::ggplot(counts, ggplot2::aes(period, n)) + ggplot2::geom_line(colour = col, linewidth = 0.9) +
+        ggplot2::scale_x_date(labels = time_labels()) + chart_theme(style, base_size = 10, grid = "y", legend = "none") + small
+    },
+    levels = {
+      k = order(-s$counts, seq_along(s$counts))[seq_len(min(length(s$counts), CODEBOOK_FIG_LEVELS))]
+      shown = data.frame(level = substr(s$values[k], 1L, 26L), n = s$counts[k])
+      size = c(width = CODEBOOK_FIG[["width"]], height = max(0.7, 0.2 * nrow(shown) + 0.3))
+      ggplot2::ggplot(shown, ggplot2::aes(n, factor(level, levels = rev(level)))) + ggplot2::geom_col(fill = col, width = 0.7) +
+        ggplot2::scale_x_continuous(labels = scales::label_comma(), n.breaks = 4, expand = ggplot2::expansion(mult = c(0, 0.05))) +
+        chart_theme(style, base_size = 10, grid = "x", legend = "none") + small + ggplot2::theme(axis.text.y = ggplot2::element_text(), panel.grid.major.x = ggplot2::element_line())
+    },
+    NULL), error = function(err) NULL)
+  if (is.null(p)) return(NULL)
+  f = tempfile(fileext = chart_device_ext())
+  on.exit(unlink(f))
+  ok = tryCatch({ spec_png(p, f, size = size, dpi = DASH_CSS_DPI * DASH_SCALE); TRUE }, error = function(err) FALSE)
+  if (!ok) return(NULL)
+  list(uri = dash_data_uri(f, chart_device_type()), size = size, kind = s$kind,
+       note = if (identical(s$kind, "levels") && length(s$counts) > CODEBOOK_FIG_LEVELS)
+         paste0("The ", CODEBOOK_FIG_LEVELS, " most frequent of ", length(s$counts), " levels") else
+       switch(s$kind, range = "How the values are spread", dates = "Rows over time", levels = "Rows at each level"))
+}
+
+# The codebook page, a document: a table of every column at the top (name, label, type, role, share missing), then a compact section for
+#   each column from the data dictionary (column_summary()): label, type, role, missing, a range and quartiles, or the level counts of a
+#   group of at most CODEBOOK_MAX_LEVELS levels, or the number of distinct values alone, and where `data` is given a small drawn summary
+#   (codebook_figure()). A column with no label shows a dash and says so. No row value is in it: the summaries and the drawings
+#   describe a column, they do not show a row.
+codebook_page <- function(cb, palette = chart_palette_default(), date = Sys.Date(), data = NULL) {
   style = palette$style %||% CHART_STYLE_DEFAULT
   accent = spec_palette(palette)$single
   cols = cb$columns
   num = function(x, big = TRUE) if (is.numeric(x)) format(x, big.mark = if (big) "," else "", scientific = FALSE, trim = TRUE, drop0trailing = TRUE) else as.character(x)
   row = function(term, value) if (!is.null(value) && length(value) && !all(is.na(value))) list(tags$dt(term), tags$dd(value))
+  has_label = function(e) is_text1(e$label) && nzchar(trimws(e$label)) && !identical(e$label, e$name)
+  label_cell = function(e) if (has_label(e)) e$label else tagList("–", tags$span(class = "muted", " no label given"))
+  provenance = function(e) switch(e$label_source %||% "file", user = "written by the analyst", ai_guess = if (isFALSE(e$sure)) "proposed by a model, marked 'check this'" else "proposed by a model", NULL)
   section = function(e, i) {
     s = column_summary(e)
+    fig = codebook_figure(e, s, data, palette)
+    paper = if (!is.null(fig) && identical(style, "dark")) codebook_figure(e, s, data, utils::modifyList(palette, list(style = "clean")))
     tags$section(class = "col-section", id = paste0("col-", i),
-      tags$h2(if (is_text1(e$label) && nzchar(e$label)) e$label else e$name),
+      tags$h2(if (has_label(e)) e$label else e$name),
       tags$p(class = "name", paste0("Column ", e$name)),
       tags$dl(
+        row("Label", if (has_label(e)) tagList(e$label, if (!is.null(provenance(e))) tags$span(class = "muted", paste0(" (", provenance(e), ")"))) else label_cell(e)),
         row("Type", paste0(e$type, if (!identical(e$type, e$detected %||% e$type)) paste0(" (found as ", e$detected, ")"))),
         row("Role", e$role),
-        row("Label", switch(e$label_source %||% "file", user = "written by the analyst", ai_guess = if (isFALSE(e$sure)) "proposed by a model, marked 'check this'" else "proposed by a model",
-                            "from the file")),
-        row("Missing", sprintf("%.0f%% of the rows", 100 * (e$missing %||% 0))),
+        row("Missing", paste(dash_pct(e$missing), "of the rows")),
         switch(s$kind,
           range = list(row("Range", paste(num(s$min, !identical(e$role, "time")), "to", num(s$max, !identical(e$role, "time")))),
                        row("Quartiles", paste(purrr::map_chr(s$quartiles, num, big = !identical(e$role, "time")), collapse = ", ")), row("Note", s$note)),
@@ -2027,21 +2295,28 @@ codebook_page <- function(cb, palette = chart_palette_default(), date = Sys.Date
                            tags$tbody(purrr::map2(s$values, s$counts, function(v, n)
                              tags$tr(tags$td(v), tags$td(class = "n", format_num(n)), tags$td(class = "n", sprintf("%.0f%%", 100 * n / sum(s$counts))))))))),
                         NULL),
-          distinct = row("Different values", num(s$distinct)))))
+          distinct = row("Different values", num(s$distinct)))),
+      if (!is.null(fig)) {
+        alt = paste0(fig$note, ": ", if (has_label(e)) e$label else e$name)
+        img = function(f, class = NULL) tags$img(class = class, src = f$uri, alt = alt, width = round(f$size[[1]] * DASH_CSS_DPI), height = round(f$size[[2]] * DASH_CSS_DPI))
+        tags$figure(img(fig, if (!is.null(paper)) "screen-only"), if (!is.null(paper)) img(paper, "print-only"), tags$figcaption(fig$note))
+      })
   }
   codes = missing_codes(cb)
   title = paste("Codebook:", cb$file %||% "the data file")
   head = tagList(tags$meta(charset = "utf-8"), tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"), tags$title(title),
                    tags$style(HTML(paste(dash_font_css(style), dash_css(style, accent), sep = "\n"))))
   body = tags$body(tags$div(class = "page",
-    tags$header(class = "title-block", tags$h1(title),
+    tags$header(class = "masthead", tags$h1(title),
                 tags$p(class = "subtitle", paste0(format_num(cb$rows %||% 0L), " rows and ", format_num(length(cols)), " columns",
                                                   if (codebook_ready(cb)) paste0("; one row is ", trimws(cb$row_is)), ".")),
-                tags$p(class = "byline", dash_date_text(date), if (is_text1(cb$source) && nzchar(trimws(cb$source))) paste0(" \u00b7 Source: ", trimws(cb$source))),
+                tags$p(class = "byline", dash_date_text(date), if (is_text1(cb$source) && nzchar(trimws(cb$source))) paste0(" · Source: ", trimws(cb$source))),
                 tags$div(class = "intro", tags$p("This page describes each column from the data dictionary: no row of the file is shown, only a summary of each column."),
                          if (length(codes)) tags$p(paste0("These values were read as missing in every column: ", paste(codes, collapse = ", "), ".")))),
-    tags$nav(`aria-label` = "Columns", tags$ol(class = "toc", purrr::imap(cols, function(e, i)
-      tags$li(tags$a(href = paste0("#col-", i), if (is_text1(e$label) && nzchar(e$label)) e$label else e$name))))),
+    tags$div(class = "table-scroll", tags$table(class = "summary-table",
+      tags$thead(tags$tr(purrr::map(c("Column", "Label", "Type", "Role", "Missing"), function(h) tags$th(scope = "col", class = if (identical(h, "Missing")) "n", h)))),
+      tags$tbody(purrr::imap(cols, function(e, i)
+        tags$tr(tags$td(tags$a(href = paste0("#col-", i), e$name)), tags$td(label_cell(e)), tags$td(e$type), tags$td(e$role), tags$td(class = "n", dash_pct(e$missing))))))),
     tags$main(purrr::imap(cols, function(e, i) section(e, i)))))
   dash_document(head, body)
 }
@@ -2059,9 +2334,10 @@ dash_root_error <- function(e) if (!is.null(e$parent)) dash_root_error(e$parent)
 dash_step <- function(what, code)
   tryCatch(code, error = function(e) stop("While ", what, ": ", conditionMessage(e), call. = FALSE))
 
-# One chart of the dashboard, made: drawn (the plot as the card draws it), its picture at DASH_DPI and its SVG (when svglite is
-#   installed) written into the staging folder, its code, and, for an interactive one, its widget. A widget that cannot be made
-#   leaves a picture and says why in `fallback`. `it` is list(id, chart, story, mode, stale).
+# One chart of the dashboard, made, in two parts. This part draws the plot as the card draws it, writes its picture at DASH_DPI and its SVG
+#   (when svglite is installed) into the staging folder for charts/ (title and source line in them, for print), writes its code, works out
+#   the lines of its facts a key number may be, and for an interactive one makes its widget (drawn without title and source line, which
+#   the card says). A widget that cannot be made leaves a picture and says why in `fallback`. `it` is list(id, chart, story, mode, stale).
 dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind) {
   chart = it$chart
   title = chart_title(chart, "Untitled chart")
@@ -2074,23 +2350,48 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind) {
   vector_file = if (!identical(kind, "svglite") && svglite_installed()) paste0(stem, ".svg")
   if (!is.null(vector_file)) dash_step(what, spec_png(p, file.path(stage, vector_file), size = size, kind = "svglite"))
   code = tryCatch(spec_code(s, cb, path, palette), error = function(e) paste0("# The code of this chart could not be written: ", conditionMessage(e)))
-  w = if (identical(it$mode, "interactive")) tryCatch(dash_widget(widget(p)), error = function(e) conditionMessage(e))
+  facts = tryCatch({ f = spec_facts(s, attr(p, "table"), cb, data = data); dash_fact_choices(f$text, f$names) }, error = function(e) list())
+  w = if (identical(it$mode, "interactive"))
+    tryCatch(dash_widget(widget(spec_plot(chart$spec, data, cb, palette, web = list(width = SPEC_SIZE[["width"]], height = SPEC_SIZE[["height"]], bare = TRUE)))),
+             error = function(e) conditionMessage(e))
   fallback = if (is.character(w)) sub("\n.*$", "", w)
   st = it$story
-  list(id = it$id, title = title, headline = if (!is.null(st)) st$headline, summary = if (!is.null(st)) st$summary, story = st,
-       mode = if (is.list(w)) "interactive" else "picture", fallback = fallback,
-       uri = dash_data_uri(file.path(stage, pic_file), chart_device_type(kind)), pixels = round(size * DASH_DPI),
+  list(id = it$id, title = title, headline = if (!is.null(st)) st$headline, summary = if (!is.null(st)) st$summary, story = st, chart_subtitle = s$subtitle,
+       mode = if (is.list(w)) "interactive" else "picture", fallback = fallback, facts = facts,
        widget_html = if (is.list(w)) w$html, deps = if (is.list(w)) w$deps,
-       wide = is.list(w) || identical(unname(size[["width"]]), SPEC_SIZE[["max_width"]]),
+       natural_wide = identical(unname(size[["width"]]), SPEC_SIZE[["max_width"]]),
        notes = c(attr(p, "notes"), if (is.list(w)) widget_notes(s)), source = s$caption,
        files = c(pic_file, vector_file), code = code)
 }
 
+# The second part: the drawings the page shows for a chart that goes in as a picture, made once the layout is known (a card that has a row
+#   to itself is shown wider). Each is the chart without title, subtitle or source line, drawn by spec_plot() for the size it is shown at
+#   (the lint reckons with that size) and written at DASH_SCALE pixels for each one shown: desk, for a card that shares its row; wide, for
+#   one that has its row; phone, narrower and with fewer breaks on its x axis, for a screen of at most DASH_PHONE_MAX_PX pixels; and, in a
+#   dark style only, a light drawing in the Clean style for print. They are held in memory (data addresses) and are not written to charts/.
+dash_pictures <- function(m, full, i, chart, data, cb, palette, kind) {
+  if (!identical(m$mode, "picture")) return(m)
+  what = paste0("drawing chart ", i, " (", m$title, ")")
+  draw = function(size, pal = palette) {
+    p = dash_step(what, spec_plot(chart$spec, data, cb, pal, web = dash_web(size)))
+    f = tempfile(fileext = chart_device_ext(kind))
+    on.exit(unlink(f))
+    sz = dash_step(what, spec_png(p, f, dpi = DASH_CSS_DPI * DASH_SCALE, kind = kind))
+    list(uri = dash_data_uri(f, chart_device_type(kind)), pixels = round(sz * DASH_CSS_DPI))
+  }
+  light = if (identical(palette$style, "dark")) utils::modifyList(palette, list(style = "clean"))
+  m$pictures = list(desk = draw("desk"), phone = draw("phone"), wide = if (full) draw("wide"),
+                    print = if (!is.null(light)) draw("desk", light))
+  m
+}
+
 # Builds the dashboard zip. `items` is list(id, chart, story, mode, stale) for each chosen chart in the order shown; `settings` is
-#   list(title, subtitle, author, date, intro, boxes). The pages and the charts are staged in a folder of their own and written
-#   to `zip_file`; the folder is removed. `widget` makes the interactive version of a plot (spec_widget; a check can stand in a
-#   failing one). Returns what was written: the zip, its size, the seconds, the files in it, how each chart went in and why a chart
-#   is a picture when its interactive version was asked for. An error says which step failed.
+#   list(title, subtitle, author, date, intro, boxes, keys): `keys` are the key numbers chosen, as "chart id|number of the fact line". The
+#   pages and the charts are staged in a folder of their own and written to `zip_file`; the folder is removed. `widget` makes the
+#   interactive version of a plot (spec_widget; a check can stand in a failing one). The cards are laid out first (dash_layout(): an
+#   interactive or wide chart has its row, and a card left alone beside it has its row too), then each chart is drawn for the size it
+#   is shown at. Returns what was written: the zip, its size, the seconds, the files in it, how each chart went in, why a chart is a
+#   picture when its interactive version was asked for, and which cards have a row to themselves. An error says which step failed.
 build_dashboard <- function(items, data, cb, palette, settings, path, zip_file, model = APP_MODEL$id, widget = spec_widget) {
   started = proc.time()[["elapsed"]]
   if (!length(items)) stop("No chart is in the dashboard.", call. = FALSE)
@@ -2101,8 +2402,11 @@ build_dashboard <- function(items, data, cb, palette, settings, path, zip_file, 
   settings$date = if (inherits(settings$date, "Date") && !is.na(settings$date)) settings$date else Sys.Date()
   made = tryCatch(purrr::imap(unname(items), function(it, i) dash_chart(it, i, stage, data, cb, palette, path, widget, kind)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
-  dash_step("writing dashboard.html", writeBin(charToRaw(enc2utf8(dash_page(made, settings, cb, data, palette, model))), file.path(stage, "dashboard.html")))
-  dash_step("writing codebook.html", writeBin(charToRaw(enc2utf8(codebook_page(cb, palette, settings$date))), file.path(stage, "codebook.html")))
+  full = dash_layout(purrr::map_lgl(made, function(m) identical(m$mode, "interactive") || isTRUE(m$natural_wide)))
+  made = tryCatch(purrr::pmap(list(made, full, seq_along(made), unname(items)), function(m, f, i, it) dash_pictures(m, f, i, it$chart, data, cb, palette, kind)),
+                  error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
+  dash_step("writing dashboard.html", writeBin(charToRaw(enc2utf8(dash_page(made, settings, cb, data, palette, model, full))), file.path(stage, "dashboard.html")))
+  dash_step("writing codebook.html", writeBin(charToRaw(enc2utf8(codebook_page(cb, palette, settings$date, data))), file.path(stage, "codebook.html")))
   dash_step("writing data_dictionary.yaml", write_codebook(cb, file.path(stage, "data_dictionary.yaml")))
   dash_step("writing charts.R", writeBin(charToRaw(enc2utf8(paste(c("# The code of each chart in the dashboard, in the order shown. Run a chart's part on its own;",
                                                                    "# each reads the data file named in it, which is not in this zip.",
@@ -2115,7 +2419,7 @@ build_dashboard <- function(items, data, cb, palette, settings, path, zip_file, 
   })
   listing = zip::zip_list(zip_file)
   list(zip = zip_file, bytes = file.size(zip_file), seconds = proc.time()[["elapsed"]] - started,
-       files = stats::setNames(listing$uncompressed_size, listing$filename), modes = purrr::map_chr(made, "mode"),
+       files = stats::setNames(listing$uncompressed_size, listing$filename), modes = purrr::map_chr(made, "mode"), full = full,
        fallbacks = stats::setNames(purrr::map_chr(made, function(m) m$fallback %||% NA_character_), purrr::map_chr(made, "title")), device = kind)
 }
 

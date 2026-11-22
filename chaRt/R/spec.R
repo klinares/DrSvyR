@@ -30,6 +30,10 @@ SPEC_ALPHA <- 0.3            # transparency of crowded points
 SPEC_BIN_2D <- 40L           # bins on each axis of a binned scatter
 SPEC_SIZE <- c(width = 7, height = 4.5, max_height = 14, max_width = 10)
 SPEC_DPI <- 192L             # pixels per inch of every static image; it is shown at its size in inches
+SPEC_PANEL_MIN_IN <- 1.55    # a drawing made for a screen (spec_plot's `web`) gives a panel of small multiples at least this much width
+SPEC_BARE_INCHES <- 0.8      # what a drawing with no title, subtitle or source line needs less height than one with them
+SPEC_NARROW_IN <- 4.5        # a drawing made for a screen narrower than this puts an annotation's words on lines of their own
+SPEC_FEW_BREAKS <- 3L        # the breaks a narrow drawing asks of a continuous x axis
 SPEC_FIT_TRIM_N <- 100L      # a fitted curve on this many rows or more is drawn only ...
 SPEC_FIT_TRIM <- c(0.01, 0.99) # ... between these percentiles of x (it is fitted on every row)
 SPEC_FIT_POINTS <- 80L       # points the trimmed curve is drawn at
@@ -72,7 +76,8 @@ SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 # Fields the lint adds; never accepted from outside.
 SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".cell_labels", ".top_n",
                       ".fit_range", ".n_colours", ".annotate", ".value_labels", ".names", ".label_rows", ".widget_rows", ".repel",
-                      ".end_value", ".source", ".widget_left_out", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor")
+                      ".end_value", ".source", ".widget_left_out", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor",
+                      ".fig_width", ".fig_height", ".bare", ".few_breaks", ".facet_cols")
 
 # What the plotly tooltip shows: the plotted values.
 SPEC_TOOLTIP <- c("x", "y", "colour", "fill", "size")
@@ -781,7 +786,10 @@ label_plan <- function(s, table) {
   panel = if (!is.null(s$facet) && !identical(s$facet, s$color)) s$facet
   ends = if (identical(s$family, "slope")) rows[as.character(rows[[s$x]]) == levels(table[[s$x]])[2], , drop = FALSE]
          else dplyr::filter(rows, .data[[s$x]] == max(.data[[s$x]]), .by = dplyr::all_of(c(s$color, panel)))
-  gap = SPEC_LABEL_GAP * diff(range(table[[v]]))
+  # a label is as tall in a shorter panel but takes a larger share of it: on a drawing made for a screen the gap grows with it
+  #   (SPEC_LABEL_GAP is for the panel of the usual 7 by 4.5, 2.6 inches high)
+  grow = if (is.null(s$.fig_width)) 1 else max(1, 2.6 / panel_inches(s, table)[["h"]])
+  gap = SPEC_LABEL_GAP * grow * diff(range(table[[v]]))
   groups = if (is.null(panel)) list(ends[[v]]) else split(ends[[v]], ends[[panel]])
   close = any(purrr::map_lgl(groups, function(vals) length(vals) > 1L && any(diff(sort(vals)) < gap)))
   list(fits = !close, order = unique(as.character(ends[[s$color]][order(-ends[[v]])])), ends = ends)
@@ -817,6 +825,9 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
   if (fam %in% c("bar", "dot", "box")) {
     labels = as.character(unique(table[[s$x]]))
     if (length(labels) > SPEC_FLIP_BARS || any(nchar(labels) > SPEC_FLIP_CHARS)) s$.flip = TRUE
+    # On a drawing made for a screen the names have to stand side by side in the panel's width (about 0.085 inch a character, and a
+    #   little between names), or the chart is drawn sideways, where each name has a line to itself.
+    if (!is.null(s$.fig_width) && sum(nchar(labels)) * 0.085 + 0.12 * length(labels) > fig_panel_w(s)) s$.flip = TRUE
   }
   coloured = !is.null(s$color) && !identical(fam, "heatmap") && !identical(s$color, s$facet) && is.null(s$highlight)
   # A slope names its lines at their ends, so it is noted only past the palette's own limit.
@@ -835,6 +846,7 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
     n_lab = if (!is.null(s$highlight)) length(unique(as.character(table[[s$color]][table$highlighted]))) else nd(s$color)
     wanted = !identical(mode, "off") && (identical(mode, "on") || !identical(fam, "line") || n_lab <= SPEC_LABEL_SERIES)
     s$.labels = wanted && lab$fits
+    if (isTRUE(s$.labels) && narrow_end_labels(s, lab$ends, v)) s$.labels = FALSE
     if (!s$.labels) {
       many = is.null(s$highlight) && nd(s$color) > max_colours
       if (many) notes = c(notes, if (identical(mode, "off")) paste0("Labels are off and the ", nd(s$color), " lines are too many to colour; highlight a few.")
@@ -848,7 +860,7 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
     } else {
       text = paste0(as.character(lab$ends[[s$color]]), "  ", fact_value_fmt(s)(lab$ends[[v]]))
       s$.end_value = all(nchar(text) <= SPEC_LABEL_CHARS)
-      s$.end_room = end_room(if (isTRUE(s$.end_value)) text else as.character(lab$ends[[s$color]]))
+      s$.end_room = end_room(if (isTRUE(s$.end_value)) text else as.character(lab$ends[[s$color]]), fig_panel_w(s))
     }
   }
   # A line chart's first and last x, so its time axis prints no tick past the data (time_scale()). Dates as text.
@@ -860,7 +872,12 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
   if (identical(fam, "line") && is.null(s$color) && is.null(s$facet)) {
     s$.labels = !identical(mode, "off")
     s$.end_value = TRUE
-    s$.end_room = end_room(fact_value_fmt(s)(table[[v]][which.max(as.numeric(table[[s$x]]))]))
+    s$.end_room = end_room(fact_value_fmt(s)(table[[v]][which.max(as.numeric(table[[s$x]]))]), fig_panel_w(s))
+    if (isTRUE(s$.labels) && !is.null(s$.fig_width) && s$.end_room > SPEC_END_ROOM_NARROW && s$.fig_width < SPEC_NARROW_IN) {
+      s$.labels = FALSE
+      s$.end_value = NULL
+      s$.end_room = NULL
+    }
   }
   # Small multiples share their scales unless free_y asks otherwise: facet_wrap()'s scales are
   #   fixed by default, so there is nothing to change.
@@ -1098,10 +1115,10 @@ label_keep <- function(boxes, marks, panel) {
 panel_inches <- function(s, t) {
   size = spec_size(s, t)
   panels = if (!is.null(s$facet)) length(unique(t[[s$facet]])) else 1L
-  across = ceiling(sqrt(panels))
+  across = fig_across(s, panels)
   rows = ceiling(panels / across)
   left = if (isTRUE(s$.flip) && !is.null(s$x)) 0.5 + 0.075 * max(nchar(as.character(t[[s$x]]))) else 0.9
-  c(w = max(0.5, (size[["width"]] - left - 0.2) / across), h = max(0.5, (size[["height"]] - 1.9) / rows))
+  c(w = max(0.5, (size[["width"]] - left - 0.2) / across), h = max(0.5, (size[["height"]] - (if (isTRUE(s$.bare)) 1.9 - SPEC_BARE_INCHES else 1.9)) / rows))
 }
 
 # Which panel each row of the table is in.
@@ -1166,14 +1183,15 @@ annotation_text <- function(g, s, t) {
   fmt = fact_value_fmt(s)
   words = paste(g$kinds, collapse = " and ")
   tie = annotation_tie(g)
-  if (annotation_lines(s)) return(paste0(toupper(substring(words, 1, 1)), substring(words, 2), "\n", fmt(t[[v]][g$row]), if (nzchar(tie)) paste0("\n", sub("^, ", "", tie))))
+  if (annotation_lines(s)) return(paste0(toupper(substring(words, 1, 1)), substring(words, 2), "\n", fmt(t[[v]][g$row]), if (nzchar(tie)) paste0("\n", sub("^, ", "", tie)),
+                                         if (identical(fam, "line")) paste0("\n(", fact_time(t[[s$x]][g$row]), ")")))
   paste0(toupper(substring(words, 1, 1)), substring(words, 2), ": ", fmt(t[[v]][g$row]),
          if (identical(fam, "line")) paste0(" (", fact_time(t[[s$x]][g$row]), ")"), tie)
 }
 
 # Whether an annotation's words go on lines of their own (the kind, the value, a tie): over an upright bar or dot, where one
 #   line would be wider than the mark and run over its neighbours.
-annotation_lines <- function(s) s$family %in% c("bar", "dot") && !isTRUE(s$.flip)
+annotation_lines <- function(s) (s$family %in% c("bar", "dot") && !isTRUE(s$.flip)) || (!is.null(s$.fig_width) && s$.fig_width < SPEC_NARROW_IN)
 
 # The words a marked point adds to its line's end label: the kinds other than latest (the end is the latest), and a tie.
 end_words <- function(g) {
@@ -1235,7 +1253,7 @@ lint_marks <- function(s, cb, table) {
         paste0(if (named) paste0(as.character(t[[s$color]][r]), "  "), if (isTRUE(s$.end_value) || !is.null(g)) fact_value_fmt(s)(t[[value_name(s)]][r]),
                if (!is.null(g)) end_words(g))
       })
-      s$.end_room = end_room(txt)
+      s$.end_room = end_room(txt, fig_panel_w(s))
     }
   }
   # A rug draws ticks along the bottom and left edges, 3% of the panel deep; a label moved by ggrepel is kept above and right
@@ -1462,25 +1480,76 @@ value_scale <- function(s, axis, zero) {
   purrr::compact(list(scale, limits))
 }
 
+# How a time axis writes its dates (Phase 9): by the span the breaks cover, not as "2022-01-01". The breaks come from pretty(), which
+#   steps by years, months, weeks or days as the span needs, so the labels follow what the breaks are: all on 1 January, the years
+#   ("2022"); all on the 1st of a month, "Jan 2022"; otherwise the day and the month, "3 Jan"; and clock times ("14:00") when the
+#   breaks are not at midnight. The month names are month.abb, so a server's locale does not change them. The scale hands the
+#   function its breaks with NA for one outside the limits.
+TIME_LABELS <- quote(function(x) {
+  month <- month.abb[as.integer(format(x, "%m"))]
+  out <- if (any(format(x, "%H%M%S") != "000000", na.rm = TRUE)) format(x, "%H:%M")
+    else if (all(format(x, "%m%d") == "0101", na.rm = TRUE)) format(x, "%Y")
+    else if (all(format(x, "%d") == "01", na.rm = TRUE)) paste(month, format(x, "%Y"))
+    else paste(as.integer(format(x, "%d")), month)
+  out[is.na(x)] <- NA
+  out
+})
+
+# TIME_LABELS as the function it describes (the one place the app evaluates it, apart from the plot's own calls).
+time_labels <- function() eval(TIME_LABELS, baseenv())
+
+# The same for a discrete axis whose levels are dates (a slope chart's two dates): the level text is read back as a date.
+TIME_LABELS_DISCRETE <- quote(function(x) {
+  d <- as.Date(x)
+  month <- month.abb[as.integer(format(d, "%m"))]
+  out <- if (all(format(d, "%m%d") == "0101", na.rm = TRUE)) format(d, "%Y")
+    else if (all(format(d, "%d") == "01", na.rm = TRUE)) paste(month, format(d, "%Y"))
+    else paste(as.integer(format(d, "%d")), month)
+  out[is.na(d)] <- x[is.na(d)]
+  out
+})
+
+# Whether a column's values are dates held as a Date (not a datetime, not text), and whether it is drawn as a continuous axis.
+date_column <- function(cb, col) !is.null(col) && identical(cb_entry(cb, col)$type, "date") && identical(storage_of(cb_entry(cb, col)), "date")
+
+# The scale of a date x that is drawn on a continuous axis (a heatmap's): its labels by span.
+date_x_scale <- function(s, cb) {
+  e = cb_entry(cb, s$x)
+  if (is.null(e) || !identical(e$type, "date")) return(NULL)
+  if (identical(storage_of(e), "datetime")) call("scale_x_datetime", labels = TIME_LABELS)
+  else call("scale_x_date", labels = TIME_LABELS)
+}
+
 # A time axis: whole years as whole numbers, room on the right for line labels when asked.
 #   The breaks stay within the data's first and last x (Phase 7b): the room for end labels comes from the expansion, and a
 #   tick past the data (a year with no value) is not printed.
 time_scale <- function(s, cb, room) {
   e = cb_entry(cb, s$x)
   expand = if (room) call("expansion", mult = c(0.02, s$.end_room %||% 0.18))
+           else if (!is.null(s$.fig_width) && !is.null(s$facet)) call("expansion", mult = 0.12)
   r = s$.x_range
-  # pretty() of the data's own range (not of the widened limits), kept within it
-  within = function(b, lo, hi) call("{", call("<-", sym("b"), b), call("[", sym("b"), call("&", call(">=", sym("b"), lo), call("<=", sym("b"), hi))))
+  pretty_of = function(x) call("pretty", x)
+  # pretty() of the data's own range (not of the widened limits), kept within it; on a drawing made for a screen every k-th break only, so
+  #   that no more than the width has an inch for are left (a label such as "Jan 2022" is about 0.75 inch wide; in small multiples the
+  #   width of one panel): the breaks stay the round ones pretty() chose
+  within = function(b, lo, hi) {
+    inside = call("<-", sym("b"), call("[", sym("b"), call("&", call(">=", sym("b"), lo), call("<=", sym("b"), hi))))
+    thin = if (!is.null(s$.fig_width)) {
+      m = max(2L, floor(fig_panel_w(s) / (s$.facet_cols %||% 1L)))
+      list(call("<-", sym("k"), call("max", 1, call("ceiling", call("/", call("length", sym("b")), m)))),
+           call("[", sym("b"), call("==", call("%%", call("-", call("seq_along", sym("b")), 1), sym("k")), 0)))
+    } else list(sym("b"))
+    as.call(c(list(sym("{"), call("<-", sym("b"), b), inside), thin))
+  }
   if (identical(e$type, "date")) {
-    if (identical(storage_of(e), "datetime")) return(if (!is.null(expand)) call("scale_x_datetime", expand = expand))
+    if (identical(storage_of(e), "datetime")) return(as.call(c(list(sym("scale_x_datetime")), list(labels = TIME_LABELS), if (!is.null(expand)) list(expand = expand))))
     breaks = if (!is.null(r)) {
       lo = call("as.Date", r[[1]]); hi = call("as.Date", r[[2]])
-      call("function", as.pairlist(alist(x = )), within(call("pretty", call("c", lo, hi)), lo, hi))
+      call("function", as.pairlist(alist(x = )), within(pretty_of(call("c", lo, hi)), lo, hi))
     }
-    if (is.null(expand) && is.null(breaks)) return(NULL)
-    return(as.call(c(list(sym("scale_x_date")), if (!is.null(breaks)) list(breaks = breaks), if (!is.null(expand)) list(expand = expand))))
+    return(as.call(c(list(sym("scale_x_date")), if (!is.null(breaks)) list(breaks = breaks), list(labels = TIME_LABELS), if (!is.null(expand)) list(expand = expand))))
   }
-  breaks = if (!is.null(r)) call("function", as.pairlist(alist(x = )), within(call("unique", call("floor", call("pretty", call("c", r[[1]], r[[2]])))), r[[1]], r[[2]]))
+  breaks = if (!is.null(r)) call("function", as.pairlist(alist(x = )), within(call("unique", call("floor", pretty_of(call("c", r[[1]], r[[2]])))), r[[1]], r[[2]]))
            else quote(function(x) unique(floor(pretty(x))))
   as.call(c(list(sym("scale_x_continuous"), breaks = breaks), if (!is.null(expand)) list(expand = expand)))
 }
@@ -1517,10 +1586,23 @@ dot_calls <- function(s, cb, pal, widget) {
 #   ggplot2's expansion is a share of the data's range, not of the panel: room r on the right of a panel P inches wide
 #   gives r * P / (1.02 + r) inches, so the label's width w (with the 0.15 of it the label stands off its point) needs
 #   r = 1.02 * w / (P - w) (Phase 7b; the earlier share of the panel left long labels running past it).
-end_room <- function(text) {
-  w = 1.15 * max(nchar(text)) * SPEC_LABEL_CHAR_END_IN + 0.05
-  round(min(1.5, max(0.18, 1.02 * w / max(0.5, 5.8 - w))), 2)
+# On a drawing narrower than SPEC_NARROW_IN the names and values at the ends of the lines may take at most this share of the axis;
+#   past it they give way to a legend (the lines' names) and the value is on the line's last point only when it is asked for.
+SPEC_END_ROOM_NARROW <- 0.45
+narrow_end_labels <- function(s, ends, v) {
+  if (is.null(s$.fig_width) || s$.fig_width >= SPEC_NARROW_IN) return(FALSE)
+  text = paste0(as.character(ends[[s$color]]), "  ", fact_value_fmt(s)(ends[[v]]))
+  end_room(text, fig_panel_w(s)) > SPEC_END_ROOM_NARROW
 }
+
+end_room <- function(text, panel = 5.8) {
+  w = 1.15 * max(nchar(text)) * SPEC_LABEL_CHAR_END_IN + 0.05
+  round(min(1.5, max(0.18, 1.02 * w / max(0.5, panel - w))), 2)
+}
+
+# The width in inches of a panel's plotting area that end_room() reckons with: the figure less what the axis and the margins take
+#   (5.8 of the usual 7).
+fig_panel_w <- function(s) (s$.fig_width %||% SPEC_SIZE[["width"]]) - 1.2
 
 # A line or slope label at one end: the rows where x is at its last value (per line and panel).
 end_rows <- function(s, extra = NULL) {
@@ -1586,7 +1668,8 @@ line_calls <- function(s, cb, pal, widget) {
       if (labelled) list(end_labels(s, end_rows(s)), call("guides", colour = "none")))
   }
   room = labelled
-  xscale = if (slope) call("scale_x_discrete", expand = call("expansion", add = if (room) c(0.3, 0.8) else c(0.3, 0.3)))
+  xscale = if (slope) as.call(c(list(sym("scale_x_discrete")), if (date_column(cb, s$x)) list(labels = TIME_LABELS_DISCRETE),
+                                list(expand = call("expansion", add = if (room) c(0.3, 0.8) else c(0.3, 0.3)))))
            else time_scale(s, cb, room)
   yscale = as.call(c(list(sym(if (isTRUE(s$log_y)) "scale_y_log10" else "scale_y_continuous")), list(labels = call("label_comma")),
                      if (length(s$.annotate)) list(expand = call("expansion", mult = 0.12))))
@@ -1721,13 +1804,14 @@ heatmap_calls <- function(s, cb, pal, widget) {
   colours = if (!is.null(s$midpoint)) pal$div else pal$seq
   rescaler = if (!is.null(s$midpoint))
     list(rescaler = call("function", as.pairlist(alist(x = , ... = )), call("rescale_mid", sym("x"), sym("..."), mid = s$midpoint)))
-  c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = s$y, fill = value_name(s), text = text)),
+  c(purrr::compact(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = s$y, fill = value_name(s), text = text)),
          call("geom_tile", colour = pal$outline, linewidth = 0.5),
-         as.call(c(list(sym("scale_fill_gradientn"), colours = colours), rescaler, list(breaks = HEAT_BREAKS),
-                   if (identical(s$fn, "share")) list(labels = call("label_percent")))),
+         as.call(c(list(sym("scale_fill_gradientn"), colours = colours), rescaler, list(breaks = if (!is.null(s$.fig_width)) HEAT_BREAKS_FEW else HEAT_BREAKS),
+                   if (identical(s$fn, "share")) list(labels = call("label_percent")) else if (!is.null(s$.fig_width)) list(labels = call("label_comma")))),
          call("scale_y_discrete", limits = sym("rev")),
+         if (!is_group_like(cb_entry(cb, s$x))) date_x_scale(s, cb),
          # a colour bar long enough for its labels (the guide's own theme, so the style's theme does not undo it)
-         quote(guides(fill = guide_colourbar(theme = theme(legend.key.width = unit(2.4, "in")))))),
+         call("guides", fill = call("guide_colourbar", theme = call("theme", legend.key.width = call("unit", if (!is.null(s$.fig_width)) min(2.4, fig_panel_w(s) - 0.4) else 2.4, "in")))))),
     if (isTRUE(s$.cell_labels)) cell_labels(s, colours))
 }
 
@@ -1738,6 +1822,14 @@ HEAT_BREAKS <- quote(function(x) {
   b = inside(pretty(x, n = 6))
   if (length(b) < 4) b = inside(pretty(x, n = 10))
   utils::head(b, 6)
+})
+
+# The same for a narrow drawing (about three round values, each inside the scale's range), on a shorter colour bar.
+HEAT_BREAKS_FEW <- quote(function(x) {
+  inside = function(b) b[b >= x[1] & b <= x[2]]
+  b = inside(pretty(x, n = 2))
+  if (length(b) < 2) b = inside(pretty(x, n = 4))
+  utils::head(b, 3)
 })
 
 # Which axis carries the light grid: the value axis.
@@ -1765,13 +1857,21 @@ labs_call <- function(s, cb) {
   axes = if (flip && s$family %in% c("bar", "dot")) list(x = yl, y = s$x_label)
          else if (flip) list(x = yl, y = xl) else list(x = xl, y = yl)
   if (is.null(axes$y)) axes = c(axes["x"], list(y = NULL))
+  # on a drawing made for a screen an axis title that is wider than its axis is broken into lines (the x title over the panel's
+  #   width, the y title over its height)
+  if (!is.null(s$.fig_width)) {
+    wrap = function(text, inches) if (is_text1(text)) paste(strwrap(text, max(10L, floor(inches / 0.09))), collapse = "\n") else text
+    if (is_text1(axes$x)) axes$x = wrap(axes$x, fig_panel_w(s))
+    if (is_text1(axes$y)) axes$y = wrap(axes$y, max(1.5, (s$.fig_height %||% SPEC_SIZE[["height"]]) - 1.2))
+  }
   caption = if (isTRUE(s$.source)) paste(strwrap(s$caption, SPEC_CAPTION_WIDTH), collapse = "\n") else s$caption
   as.call(c(list(sym("labs")), purrr::compact(list(title = s$title, subtitle = s$subtitle, caption = caption)), axes, legend))
 }
 
 facet_call <- function(s) {
   if (is.null(s$facet)) return(NULL)
-  as.call(c(list(sym("facet_wrap"), call("vars", sym(s$facet))), if (isTRUE(s$free_y)) list(scales = "free_y")))
+  as.call(c(list(sym("facet_wrap"), call("vars", sym(s$facet))), if (isTRUE(s$free_y)) list(scales = "free_y"),
+            if (!is.null(s$.facet_cols)) list(ncol = s$.facet_cols)))
 }
 
 # Whether the value axis labels can sit above their grid line (a style that asks for it): an upright
@@ -1856,7 +1956,8 @@ annotation_label <- function(s, g) {
   tie = annotation_tie(g)
   if (annotation_lines(s))
     return(as.call(c(list(sym("paste0"), paste0(toupper(substring(words, 1, 1)), substring(words, 2), "\n"), value_text_call(s, v)),
-                     if (nzchar(tie)) list(paste0("\n", sub("^, ", "", tie))))))
+                     if (nzchar(tie)) list(paste0("\n", sub("^, ", "", tie))),
+                     if (identical(s$family, "line")) list("\n(", x_text_call(s, g$x_text), ")"))))
   as.call(c(list(sym("paste0"), paste0(toupper(substring(words, 1, 1)), substring(words, 2), ": "), value_text_call(s, v)),
             if (identical(s$family, "line")) list(" (", x_text_call(s, g$x_text), ")"), if (nzchar(tie)) list(tie)))
 }
@@ -1890,7 +1991,23 @@ mark_calls <- function(s, cb, pal, widget) c(value_label_calls(s, cb, pal, widge
 plot_calls <- function(s, cb, pal = spec_palette(), widget = FALSE) {
   build = switch(s$family, bar = bar_calls, dot = dot_calls, line = , slope = line_calls, scatter = , bubble = scatter_calls,
                  histogram = histogram_calls, box = box_calls, heatmap = heatmap_calls)
-  c(build(s, cb, pal, widget), mark_calls(s, cb, pal, widget), purrr::compact(list(facet_call(s), labs_call(s, cb))), theme_calls(s, pal, widget))
+  few_breaks_calls(c(build(s, cb, pal, widget), mark_calls(s, cb, pal, widget), purrr::compact(list(facet_call(s), labs_call(s, cb))), theme_calls(s, pal, widget)), s)
+}
+
+# A narrow drawing (.few_breaks) asks a continuous x axis for fewer breaks: n.breaks on its scale, or a scale made for it when the
+#   chart has none. The axes of a line chart (time_scale()) and the discrete ones take care of themselves.
+few_breaks_calls <- function(calls, s) {
+  if (!is.null(s$.fig_width) && !is.null(s$facet))
+    calls = c(calls, list(call("theme", panel.spacing.x = call("unit", 0.3, "in"))))
+  continuous = (s$family %in% c("bar", "dot", "box") && isTRUE(s$.flip)) || s$family %in% c("scatter", "bubble", "histogram")
+  if (!isTRUE(s$.few_breaks) || !continuous) return(calls)
+  is_x = function(cl) is.call(cl) && is.symbol(cl[[1]]) && as.character(cl[[1]]) %in% c("scale_x_continuous", "scale_x_log10")
+  at = which(purrr::map_lgl(calls, is_x))
+  if (!length(at)) return(append(calls, list(call("scale_x_continuous", n.breaks = SPEC_FEW_BREAKS)), after = 1L))
+  cl = calls[[at[1]]]
+  cl$n.breaks = SPEC_FEW_BREAKS
+  calls[[at[1]]] = cl
+  calls
 }
 
 plus_call <- function(calls) purrr::reduce(calls[-1], function(acc, cl) call("+", acc, cl), .init = calls[[1]])
@@ -1903,20 +2020,39 @@ widget_has_text <- function(s) s$family %in% c("bar", "dot", "line", "slope", "s
 #   is enough. `palette` names the three palettes of the report (chart_palette_default()); the
 #   spec never chooses colours. Attributes: notes (the lint's sentences), spec (the spec as drawn),
 #   table, widget_plot (the variant spec_widget() converts) and palette.
-spec_plot <- function(spec, data, cb, palette = chart_palette_default()) {
+spec_plot <- function(spec, data, cb, palette = chart_palette_default(), web = NULL) {
   s = spec_defaults(spec_public(spec))
   why = spec_check(s, cb, palette)
   if (length(why)) spec_fail(paste(why, collapse = " "))
   pal = spec_palette(palette)
   table = spec_table(s, data, cb, palette)
+  # A drawing made for a screen (the exported dashboard): `web` is list(width, height, bare, few_breaks), the size in inches it is
+  #   shown at, whether it carries no title, subtitle or source line (the page says them), and whether its x axis asks for fewer breaks.
+  #   The lint reckons with that size, so a label that does not fit it is left out or moved, as at the usual 7 by 4.5.
+  if (!is.null(web)) {
+    s$.fig_width = web$width
+    s$.fig_height = web$height %||% round(web$width * 0.64, 2)
+    s$.bare = isTRUE(web$bare)
+    s$.few_breaks = isTRUE(web$few_breaks)
+  }
   lint = spec_lint(s, cb, table, pal$max)
+  ls = lint$spec
+  if (!is.null(web)) {
+    if (!is.null(ls$facet)) ls$.facet_cols = fig_across(ls, length(unique(table[[ls$facet]])))
+    if (isTRUE(ls$.bare)) {
+      ls$title = NULL
+      ls$subtitle = NULL
+      ls$caption = NULL
+      ls$.source = NULL
+    }
+  }
   env = do.call(spec_env, c(list(chart_table = table), pal$fonts))
-  p = eval(plus_call(plot_calls(lint$spec, cb, pal)), env)
-  attr(p, "notes") = c(palette_note(lint$spec, cb, palette), lint$notes)
-  attr(p, "spec") = lint$spec
+  p = eval(plus_call(plot_calls(ls, cb, pal)), env)
+  attr(p, "notes") = c(palette_note(ls, cb, palette), lint$notes)
+  attr(p, "spec") = ls
   attr(p, "table") = table
-  attr(p, "widget_plot") = eval(plus_call(plot_calls(lint$spec, cb, pal, widget = TRUE)), env)
-  attr(p, "widget_text") = widget_has_text(lint$spec)
+  attr(p, "widget_plot") = eval(plus_call(plot_calls(ls, cb, pal, widget = TRUE)), env)
+  attr(p, "widget_text") = widget_has_text(ls)
   attr(p, "palette") = palette
   p
 }
@@ -2567,15 +2703,24 @@ spec_png <- function(plot, file, size = spec_size(attr(plot, "spec"), attr(plot,
 # Width and height in inches for the static figure: 7 by 4.5, taller for sideways bars with many
 #   rows and for rows of panels, wider for four or more panels across.
 spec_size <- function(spec, table) {
-  w = SPEC_SIZE[["width"]]
-  h = SPEC_SIZE[["height"]]
+  web = !is.null(spec$.fig_width)
+  w = spec$.fig_width %||% SPEC_SIZE[["width"]]
+  h = spec$.fig_height %||% SPEC_SIZE[["height"]]
+  save = if (isTRUE(spec$.bare)) SPEC_BARE_INCHES else 0
   if (isTRUE(spec$.flip) && !is.null(spec$x))
-    h = max(h, 1.5 + SPEC_ROW_INCHES * length(unique(table[[spec$x]])))
+    h = max(h, 1.5 - save + SPEC_ROW_INCHES * length(unique(table[[spec$x]])))
   if (!is.null(spec$facet)) {
     panels = length(unique(table[[spec$facet]]))
-    across = ceiling(sqrt(panels))
-    h = max(h, 1.3 + SPEC_PANEL_INCHES * ceiling(panels / across))
-    if (across >= 4) w = SPEC_SIZE[["max_width"]]
+    across = fig_across(spec, panels)
+    h = max(h, 1.3 - save + SPEC_PANEL_INCHES * ceiling(panels / across))
+    if (!web && across >= 4) w = SPEC_SIZE[["max_width"]]
   }
   c(width = w, height = min(h, SPEC_SIZE[["max_height"]]))
+}
+
+# How many panels of small multiples stand side by side: the squarest grid, and for a drawing made for a screen (a width given) no
+#   more than leave each panel SPEC_PANEL_MIN_IN of width.
+fig_across <- function(s, panels) {
+  across = ceiling(sqrt(panels))
+  if (is.null(s$.fig_width)) across else min(across, max(1L, floor((s$.fig_width - 0.3) / SPEC_PANEL_MIN_IN)))
 }
