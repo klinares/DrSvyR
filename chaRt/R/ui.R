@@ -1969,7 +1969,11 @@ dash_css <- function(style, accent) {
     ".boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));gap:.75rem;margin:0 0 1.5rem;}\n",
     ".box{background:var(--box);border:1px solid var(--grid);border-top:4px solid var(--accent);border-radius:.5rem;padding:.7rem 1rem .8rem;min-width:0;}\n",
     ".box-title{color:var(--text2);font-size:.85rem;}\n",
-    ".box-value{font-size:1.9rem;font-weight:700;line-height:1.25;overflow-wrap:break-word;}\n.box-value.long{font-size:1.1rem;}\n",
+    ".box-value{--max:1.9rem;font-size:var(--max);font-weight:700;line-height:1.25;overflow-wrap:break-word;}\n.box-value.long{--max:1.1rem;}\n",
+    # A number is never broken inside itself: it stays on one line (.num) and, where the browser has container query units, its size is the
+    #   smaller of the style's size and what lets its width in ems (--w, estimated by dash_value_em()) fit the width of its own box.
+    ".box-value.num{white-space:nowrap;}\n",
+    "@supports (width:1cqi){.box{container-type:inline-size;}.box-value.num{font-size:min(var(--max),calc(100cqi / var(--w)));}}\n",
     ".box-chart{color:var(--caption);font-size:.8rem;margin-top:.2rem;overflow-wrap:anywhere;}\n",
     ".grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;align-items:start;}\n",
     "@media (min-width:", DASH_TWO_PX, "px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}.card.full img{max-width:none;}}\n",
@@ -2008,7 +2012,7 @@ dash_css <- function(style, accent) {
     ".levels td.n{text-align:right;white-space:nowrap;}\n",
     look, "\n",
     "@media (max-width:", DASH_PHONE_MAX_PX, "px){.page{padding:1rem .75rem 2rem;}.card{padding:.75rem;}.col-section{grid-template-columns:minmax(0,1fr);}.col-section dl{grid-template-columns:1fr;gap:0;}",
-    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.widget{overflow-x:auto;}.widget .html-widget{min-width:36rem;}.boxes{grid-template-columns:repeat(2,minmax(0,1fr));}.boxes .box:last-child:nth-child(odd){grid-column:1/-1;}.box-value{font-size:1.5rem;}.box-value.long{font-size:1rem;}}\n",
+    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.widget{overflow-x:auto;}.widget .html-widget{min-width:36rem;}.boxes{grid-template-columns:repeat(2,minmax(0,1fr));}.boxes .box:last-child:nth-child(odd){grid-column:1/-1;}.box-value{--max:1.5rem;}.box-value.long{--max:1rem;}}\n",
     "@page{margin:14mm;}\n",
     "@media print{:root{--bg:#FFFFFF;--text:#111111;--text2:#333333;--caption:#555555;--grid:#BBBBBB;--box:#F2F2F2;--rule:#111111;}",
     "body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FFFFFF;color:#111111;}.page{max-width:none;padding:0;}",
@@ -2178,6 +2182,13 @@ dash_boxes <- function(settings, cb, data, items) {
   c(files, utils::head(keys, DASH_KEYS_MAX))
 }
 
+# The width of a value box's text in ems of its font, estimated (a digit 0.64, a comma, point or space 0.3, anything else 0.72, and 8% over), so that
+#   the page can scale a number to the box it sits in; never under 1, so that the size is never a division by zero.
+dash_value_em <- function(value) {
+  ch = strsplit(as.character(value), "")[[1]]
+  round(max(1, 1.08 * sum(dplyr::case_when(grepl("[0-9]", ch) ~ 0.64, ch %in% c(",", ".", " ") ~ 0.3, TRUE ~ 0.72))), 2)
+}
+
 # The page, as one string: the masthead (title, subtitle, author, date, the introduction at a reading measure), the boxes, a card for each chart
 #   in order (those with a row to themselves, from `full`), and the foot (the About text and "Made with chaRt"); the style sheet, typefaces,
 #   pictures and (when a chart is interactive) scripts all inside it.
@@ -2197,7 +2208,8 @@ dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALS
                 tags$div(class = "intro", dash_paragraphs(settings$intro))),
     if (length(boxes)) tags$section(class = "boxes", `aria-label` = "The file in numbers",
                                     purrr::map(boxes, function(b) tags$div(class = css_class("box", if (!is.null(b$chart)) "key"), tags$div(class = "box-title", b$title),
-                                                                           tags$div(class = css_class("box-value", if (isTRUE(b$long)) "long"), title = b$full, b$value),
+                                                                           tags$div(class = css_class("box-value", if (isTRUE(b$long)) "long", if (!grepl("[[:space:]]", b$value)) "num"), style = paste0("--w:", dash_value_em(b$value), ";"),
+                                                                                   title = b$full, b$value),
                                                                            if (!is.null(b$chart)) tags$div(class = "box-chart", b$chart)))),
     tags$main(class = "grid", purrr::map2(items, full, dash_card)),
     tags$footer(class = "foot", dash_about(items, settings, cb, data, model), tags$p(class = "made", "Made with chaRt"))))

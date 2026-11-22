@@ -34,7 +34,8 @@ HEAVY_CHECKS <- c(
   "9A-8: the page is written as the chosen style",                                # the five-chart dashboard built in six styles
   "9A-9: the codebook is a document",                                             # reads those six
   "9A-10: print: every style's page prints on a light ground",                    # and printed to PDF by Chrome
-  "9A-11: the five-chart dashboard")                                              # reads those six
+  "9A-11: the five-chart dashboard",                                              # reads those six
+  "9D-0b: in Chrome the three number boxes")                                      # the six-box page measured in Chrome
 
 results <- new.env()
 results$all <- logical(0)
@@ -5489,6 +5490,20 @@ check("9A-7: a value box has the style's accent as a rule (border-top in var(--a
         length(dash_boxes(utils::modifyList(p9_set, list(keys = c("c9|1", "c1|999", "junk"))), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1)))) == 3L &&
         length(p9_boxes_html(p9_h)) >= 3L && !grepl("box key", p9_h, fixed = TRUE) && !is.na(p9_at(p9_f1, "Highest", "West")))
 
+
+# 9D-0: a value box's number is never broken inside itself (the page's CSS); the heavy run's 9D-0b looks at it in Chrome
+p9d_boxes <- regmatches(p8c_sq(p9_zk$html), gregexpr("<div class=\"box( key)?\">.*?</div></div>", p8c_sq(p9_zk$html), perl = TRUE))[[1]]
+check("9D-0: a value box's number is never broken inside itself: a box value with no space in it (3,000, 22, 2,740,000) has the class num, which the stylesheet sets to white-space:nowrap, and a width in ems (--w, from dash_value_em(): wider for more digits) that, where the browser has container query units, scales its font size down to the width of its own box (never above the style's size, --max: 1.9rem, 1.5rem on a phone, a long text 1.1rem and 1rem); a text value (the period, a fact with words) is not nowrap and wraps between words; and the grid is unchanged",
+      grepl(".box-value.num{white-space:nowrap;}", p9_zk$html, fixed = TRUE) &&
+        grepl("@supports (width:1cqi){.box{container-type:inline-size;}.box-value.num{font-size:min(var(--max),calc(100cqi / var(--w)));}}", p9_zk$html, fixed = TRUE) &&
+        grepl(".box-value{--max:1.9rem;font-size:var(--max);", p9_zk$html, fixed = TRUE) && grepl(".box-value{--max:1.5rem;}.box-value.long{--max:1rem;}", p9_zk$html, fixed = TRUE) &&
+        grepl(".boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));", p9_zk$html, fixed = TRUE) &&
+        length(p9d_boxes) == 6L && grepl("class=\"box-value num\" style=\"--w:[0-9.]+;\"[^>]*>3,000<", p9d_boxes[1]) && grepl("class=\"box-value num\" style=\"--w:[0-9.]+;\"[^>]*>22<", p9d_boxes[2]) &&
+        grepl("class=\"box-value long\"", p9d_boxes[3]) && !grepl("box-value[^\"]* num", p9d_boxes[3]) && !grepl("box-value[^\"]* num", p9d_boxes[4]) && !grepl("box-value[^\"]* num", p9d_boxes[5]) &&
+        grepl("class=\"box-value num\" style=\"--w:[0-9.]+;\"[^>]*>2,740,000<", p9d_boxes[6]) &&
+        dash_value_em("2,740,000") > dash_value_em("3,000") && dash_value_em("3,000") > dash_value_em("22") && dash_value_em("") == 1 &&
+        isTRUE(all.equal(dash_value_em("2,740,000"), round(1.08 * (7 * 0.64 + 2 * 0.3), 2))))
+
 }   # end of the fast run's 9A-2 to 9A-7
 if (run_heavy) {   # the heavy run only: 9A-1 (the page in Chrome) and 9A-8 to 9A-11 (the page in the six styles, the codebook page, the print); not indented, to keep the diff small
 # 1. the page: about 1240 pixels wide, centred; two cards to a row from 900 pixels, one below (the CSS, and in Chrome the page as laid out)
@@ -5599,6 +5614,30 @@ check("9A-11: the five-chart dashboard (sorted bars, a time axis in order, a sca
                             identical(z$modes, rep("picture", 5L)) && grepl(paste0("--bg:", CHART_STYLES[[z$style]]$background), z$html, fixed = TRUE) && lengths(gregexpr("<picture", z$html, fixed = TRUE)) >= 5L &&
                             length(p9_pictures(z$html)) >= 10L && !length(p8c_requests(z$html)) && !length(p8c_requests(z$codebook)) && p8c_balanced(z$html) && p8c_balanced(z$codebook))) &&
         all(purrr::map_dbl(p9_six, "elapsed") < 120) && min(attr(p9_std$scatter, "table")$units) >= 1)
+
+# 9D-0b: in Chrome, a value box's number stays on one line and inside its box, six boxes in a row at 1400 and two to a row at 500 (headless Chrome goes no narrower)
+p9d_keys <- c("c1|10", "c2|2", "c1|7")
+p9d_z <- p9_build(settings = utils::modifyList(p9_set, list(keys = p9d_keys)))
+p9d_js <- paste0("var v=[].map.call(document.querySelectorAll('.box-value'),function(e){var cs=getComputedStyle(e);var b=e.closest('.box').getBoundingClientRect();",
+                 "return {num:e.classList.contains('num'),text:e.textContent,sw:e.scrollWidth,cw:e.clientWidth,h:e.getBoundingClientRect().height,lh:parseFloat(cs.lineHeight),fs:parseFloat(cs.fontSize),",
+                 "top:Math.round(b.top+scrollY),right:Math.round(b.right)}});",
+                 "var d={cw:document.documentElement.clientWidth,sw:document.documentElement.scrollWidth,boxes:v};",
+                 "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9\" content=\"'+JSON.stringify(d).replace(/\"/g,'&quot;')+'\">');")
+# a stress page: the same page with its six boxes forced narrower than the grid makes them (6 columns at 1000 pixels leave 110 pixels for a number, as a narrower font or a
+#   scrollbar would at 1400), where a number that may wrap breaks in two ("2,740,00" and "0"; seen so in Chrome with the nowrap and the scaling rules removed)
+p9d_stress <- file.path(tempdir(), "p9d_stress.html")
+writeLines(sub("</style>", ".boxes{grid-template-columns:repeat(6,minmax(0,1fr));}</style>", p8c_html(p9d_z$dir), fixed = TRUE), p9d_stress, useBytes = TRUE)
+p9d_dom <- if (p9_has_chrome) list(w1400 = p9_dom(file.path(p9d_z$dir, "dashboard.html"), 1400, p9d_js), w500 = p9_dom(file.path(p9d_z$dir, "dashboard.html"), 500, p9d_js),
+                                   stress = p9_dom(p9d_stress, 1000, p9d_js))
+p9d_fit <- function(m) { b <- m$boxes[m$boxes$num, ]; nrow(b) == 3L && all(b$sw <= b$cw + 1) && all(b$h <= b$lh * 1.05) && all(b$right <= m$cw) && m$sw <= m$cw }
+check("9D-0b: in Chrome the three number boxes of a six-box page (3,000, 22, 2,740,000) each stay on one line and inside their box, with the six boxes in one row at 1400 pixels (all within the window, the page not scrolling sideways) and two to a row at 500, and the largest number is scaled down to fit and the shortest is not (3,000 keeps the style's 1.9rem at 1400); on a stress page with the six boxes forced to 110 pixels each number still stays on one line and inside its box, scaled down",
+      length(p9d_keys) == 3L && lengths(gregexpr("class=\"box-value", p9d_z$html, fixed = TRUE)) == 6L &&
+        (!p9_has_chrome || (
+          p9d_fit(p9d_dom$w1400) && p9d_fit(p9d_dom$w500) && length(unique(p9d_dom$w1400$boxes$top)) == 1L && length(unique(p9d_dom$w500$boxes$top)) == 3L &&
+            abs(p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "3,000"] - 1.9 * 16) < 0.5 &&
+            p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "2,740,000"] < 1.9 * 16 && p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "2,740,000"] > 12 &&
+            p9d_fit(p9d_dom$stress) && p9d_dom$stress$boxes$fs[p9d_dom$stress$boxes$text == "2,740,000"] < 0.8 * 1.9 * 16 && p9d_dom$stress$boxes$fs[p9d_dom$stress$boxes$text == "2,740,000"] > 10)))
+
 }   # end of the heavy run's 9A-8 to 9A-11
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
