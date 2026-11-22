@@ -1672,7 +1672,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       dash_gen(isolate(dash_gen()) + 1L)
       showModal(modalDialog(
         title = "Export dashboard", size = "l", easyClose = FALSE, footer = modalButton("Close"),
-        tags$p(class = "small text-muted", "One zip: the dashboard as one page, the data dictionary and a codebook page, and each chart as a picture and a script (a video as an MP4, each summary table as a CSV). ",
+        tags$p(class = "small text-muted", "One zip, named after the marking: the dashboard as one page, the data dictionary and a codebook page, and each chart as a picture and a script (a video as an MP4, each summary table as a CSV). ",
                "On the page each chart is drawn at the size it is shown, and again for a phone. ",
                "Nothing here calls a model."),
         if (length(warns)) tags$div(class = "mb-3", purrr::map(unname(warns), function(w) tags$p(class = "small mb-1", style = warn_style, w))),
@@ -1681,6 +1681,10 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                  tags$div(class = "col-md-6", textInput(ns("dash_subtitle"), "Subtitle", value = isolate(dash_fields$subtitle) %||% "", width = "100%")),
                  tags$div(class = "col-md-6", textInput(ns("dash_author"), "Author", value = isolate(dash_fields$author) %||% "", width = "100%")),
                  tags$div(class = "col-md-6", dateInput(ns("dash_date"), "Date", value = Sys.Date(), width = "100%"))),
+        tags$div(class = "mt-2",
+                 marking_input(ns("dash_marking"), isolate(dash_fields$marking) %||% APP_CLASSIFICATION),
+                 uiOutput(ns("dash_marking_note")),
+                 tags$p(class = "small text-muted", DASH_MARKING_NOTE)),
         textAreaInput(ns("dash_intro"), "Introduction", value = isolate(dash_fields$intro) %||% "", width = "100%", rows = 3,
                       placeholder = "A few sentences for the reader, at the top of the page"),
         tags$p(class = "small text-muted", DASH_INTRO_NOTE),
@@ -1706,7 +1710,12 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                               dashboard_default_mode(it$chart, isolate(made$interactive[[it$id]]())))),
         uiOutput(ns("dash_action"))))
     })
-    purrr::walk(c("title", "subtitle", "author", "intro"), function(f)
+    # The marking field says at once, under itself, why a blank or a too long marking will be refused when the dashboard is built.
+    output$dash_marking_note = renderUI({
+      m = marking_clean(if (is.null(input$dash_marking)) APP_CLASSIFICATION else input$dash_marking)
+      if (!m$ok) tags$p(class = "small mb-1", style = warn_style, m$why)
+    })
+    purrr::walk(c("title", "subtitle", "author", "intro", "marking"), function(f)
       observeEvent(input[[paste0("dash_", f)]], dash_fields[[f]] <- input[[paste0("dash_", f)]], ignoreInit = TRUE))
 
     # The button, and what the last build gave: the file to download, or the error in plain words with the last lines of its own
@@ -1715,7 +1724,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       dash_gen()
       res = isolate(dash_result())
       tagList(
-        if (!is.null(res) && !isTRUE(res$ok))
+        if (isTRUE(res$refused))
+          tags$div(class = "alert alert-danger mt-3", role = "alert", tags$p(class = "mb-0", res$lines))
+        else if (!is.null(res) && !isTRUE(res$ok))
           tags$div(class = "alert alert-danger mt-3", role = "alert", tags$p(class = "mb-2", DASH_ERROR_TEXT), tags$pre(class = "small mb-0", res$lines)),
         if (isTRUE(res$ok))
           tags$div(class = "alert alert-success mt-3", role = "status",
@@ -1752,7 +1763,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
           it
         })
         d = input$dash_date
-        settings = list(title = input$dash_title %||% "", subtitle = input$dash_subtitle %||% "", author = input$dash_author %||% "",
+        mk = marking_clean(if (is.null(input$dash_marking)) APP_CLASSIFICATION else input$dash_marking)   # no field (a test with no dialog): the default; a blank is refused
+        if (!mk$ok) return(list(ok = FALSE, refused = TRUE, lines = mk$why))
+        settings = list(marking = mk$text, title = input$dash_title %||% "", subtitle = input$dash_subtitle %||% "", author = input$dash_author %||% "",
                         date = if (inherits(d, "Date") && !is.na(d)) d else Sys.Date(), intro = input$dash_intro %||% "",
                         boxes = intersect(input$dash_boxes, names(DASH_BOX_CHOICES)),
                         keys = unique(purrr::keep(unlist(purrr::map(seq_len(DASH_KEYS_MAX), function(k) input[[paste0("dash_key", k)]])),
@@ -1760,7 +1773,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         old = isolate(dash_result())$zip
         if (is_text1(old)) unlink(dirname(old), recursive = TRUE)
         dir.create(dir)
-        name = paste0("dashboard_", format(settings$date, "%Y-%m-%d"), ".zip")
+        name = paste0(marking_slug(mk$text), "_dashboard_", format(settings$date, "%Y-%m-%d"), ".zip")
         c(list(ok = TRUE, name = name),
           build(items, isolate(state$data), isolate(state$codebook), isolate(palette()), settings, isolate(state$path), file.path(dir, name)))
       }, error = function(e) {
@@ -1827,9 +1840,15 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     # ---- a chart's video -------------------------------------------------------------------------------------------
 
     # What a video is drawn from: the spec, the palette and style, and the data. A video whose key is not the chart's key now is dropped.
+    # The marking a card's video is drawn with (its Download MP4 is a file that leaves the app): the one written in the export dialog this session,
+    #   or APP_CLASSIFICATION when none is there or it is refused. A video is dropped when this changes, so a file never carries an old marking.
+    card_marking = function() {
+      m = marking_clean(if (is.null(dash_fields$marking)) APP_CLASSIFICATION else dash_fields$marking)
+      if (m$ok) m$text else marking_of()
+    }
     video_key = function(chart_id) {
       ch = made$chart[[chart_id]]()   # not isolated: the observer that drops a video depends on the spec, the palette and the data
-      if (is.null(ch)) NULL else digest::digest(list(spec_hash(ch$spec), palette(), data_key()))
+      if (is.null(ch)) NULL else digest::digest(list(spec_hash(ch$spec), palette(), data_key(), card_marking()))
     }
     drop_video = function(chart_id) {
       v = isolate(made$video[[chart_id]]())
@@ -1866,7 +1885,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         }
         stem = file.path(made$video_dir, paste0(chart_id, "_", substr(key, 1L, 8L)))
         words = WORKING_WORDS[["animate"]]
-        res = tryCatch(spec_video(ch$spec, isolate(state$data), isolate(state$codebook), isolate(palette()), file = paste0(stem, "_1080.mp4"), small = paste0(stem, "_720.mp4"),
+        res = tryCatch(spec_video(ch$spec, isolate(state$data), isolate(state$codebook), isolate(palette()), file = paste0(stem, "_1080.mp4"), small = paste0(stem, "_720.mp4"), marking = card_marking(),
                                   on_frame = function(i, n) session$sendCustomMessage("chart-progress", list(words = if (i < n) paste0(words, ", ", i, " of ", n, " frames") else paste0(words, ", encoding it")))),
                        error = function(e) e)
         if (inherits(res, "error")) {
@@ -2217,6 +2236,9 @@ DASH_VIDEO_CSS <- paste0(
   ".video-box .still{display:none;}\n",
   "@media (prefers-reduced-motion:reduce){.video-box video{display:none;}.video-box .still{display:block;}}\n")
 
+DASH_MARKING_NOTE <- paste("The marking is written into every file of the zip: a band at the top and bottom of each page, picture and video, a first line of the script, the data dictionary",
+                          "and each table's CSV (a reader must skip that line), and the start of the zip's name. It is your statement: chaRt does not judge or change it, and it is never sent to a model.",
+                          "It cannot be blank, and it is at most", MARKING_MAX, "characters.")
 DASH_INTRO_NOTE <- "Plain text, shown as you write it. It is not checked by the number check."
 DASH_DESCRIBES <- "A chart describes the file, not the world."
 DASH_ERROR_TEXT <- paste("The dashboard was not built, and nothing was saved. Your charts, texts and choices are unchanged, so you can press",
@@ -2233,6 +2255,7 @@ DASH_PHONE_MAX_PX <- 599L
 DASH_DESK_PX <- 540L
 DASH_WIDE_PX <- 1120L
 DASH_PHONE_PX <- 340L
+DASH_PRINT_ROOM_MM <- c(one = 17, two = 22)   # the room a printed page keeps at its top and at its bottom for the classification band: a marking of one line, and a long one (over 55 characters) that may wrap to two
 DASH_ASPECT <- c(desk = 0.64, wide = 0.42, phone = 0.8)
 DASH_SCALE <- 2L
 DASH_CSS_DPI <- 96L
@@ -2346,6 +2369,58 @@ dashboard_warnings <- function(titles, has_headline, stale, palette, small = cha
     else NULL)
 }
 
+# ---- the classification marking (Phase 10 Part A) ---------------------------------------------------------------------------
+# What the analyst writes in the export dialog, as svysegment's report has it: the marking is the analyst's statement, and the app does
+#   not judge it or change its words. It is written into every file of the export (the band at the top and bottom of each page, picture and
+#   video; the first line of charts.R, data_dictionary.yaml and each CSV; the name of the zip) and is never sent to a model. The default is
+#   APP_CLASSIFICATION, the marking shown above every screen (app.R). marking_clean() is the one gate: it takes what was typed and returns
+#   list(ok, text, why). Runs of white space and control characters (a newline, a tab) become one space and the ends are trimmed, so the
+#   marking is always one line (it cannot end a comment line of a script or a yaml file); a blank one is refused, and one of more than
+#   MARKING_MAX characters is refused with its length (the app does not cut it: a marking cut short is not what the analyst said).
+MARKING_BLANK <- "Every export is marked, even if the marking is UNCLASSIFIED: write the marking in the box, then build the dashboard."
+marking_long <- function(n) paste0("The marking is ", n, " characters; the most is ", MARKING_MAX, ". Shorten it: the app does not cut a marking for you.")
+
+marking_clean <- function(x) {
+  one = if (is_text1(x) && validUTF8(x)) trimws(gsub("[[:space:][:cntrl:]]+", " ", enc2utf8(x))) else ""
+  n = nchar(one)
+  list(ok = n > 0L && n <= MARKING_MAX, text = one, why = if (!n) MARKING_BLANK else if (n > MARKING_MAX) marking_long(n))
+}
+
+# The marking to write: what `x` says, or APP_CLASSIFICATION when nothing was given (NULL); a refused marking stops with its sentence.
+marking_of <- function(x = NULL) {
+  m = marking_clean(if (is.null(x)) APP_CLASSIFICATION else x)
+  if (!m$ok) stop(m$why, call. = FALSE)
+  m$text
+}
+
+# The marking as the start of a file name: lower case, every run of characters that are not letters or digits one underscore, none at either
+#   end, ASCII only (accents are transliterated or dropped), so no path character can be in it; "marked" when nothing is left.
+marking_slug <- function(x) {
+  s = gsub("^_+|_+$", "", gsub("[^a-z0-9]+", "_", tolower(iconv(as.character(x), to = "ASCII//TRANSLIT", sub = ""))))
+  if (length(s) != 1L || is.na(s) || !nzchar(s)) "marked" else s
+}
+
+# The first line of a script, a yaml file or a CSV: the marking as a comment.
+marking_comment <- function(x) paste0("# ", marking_of(x))
+
+# Puts a comment line first in `file` (after a byte-order mark when it has one, so that the file still starts as UTF-8 with a mark).
+marking_prepend <- function(file, line) {
+  raw = readBin(file, "raw", file.size(file))
+  bom = length(raw) >= 3L && identical(raw[1:3], as.raw(c(0xef, 0xbb, 0xbf)))
+  keep = if (bom) 3L else 0L
+  writeBin(c(raw[seq_len(keep)], charToRaw(enc2utf8(paste0(line, "\n"))), raw[seq_len(length(raw) - keep) + keep]), file)
+  invisible(file)
+}
+
+# The marking's text box in the export dialog: a text input with the browser's own limit of MARKING_MAX characters (marking_clean() refuses more).
+marking_input <- function(id, value)
+  htmltools::tagQuery(textInput(id, "Classification marking", value = value, width = "100%"))$find("input")$addAttrs(maxlength = MARKING_MAX, autocomplete = "off")$allTags()
+
+# The band of a page: the marking in white bold type, letter-spaced, on #b40404 (the colour, weight and spacing of svysegment's report), full width,
+#   outside the page's width-limited column. `where` is "top" or "bottom"; the text is escaped, quotes included.
+dash_band <- function(marking, where) {
+  tags$div(class = paste("mark", where), role = "note", `aria-label` = "Classification marking", htmltools::HTML(htmltools::htmlEscape(marking, attribute = TRUE)))
+}
 # A chart's title as a file name: lower-case ASCII words joined by underscores, at most 40 characters.
 dash_slug <- function(x) {
   s = gsub("^_+|_+$", "", gsub("[^a-z0-9]+", "_", tolower(iconv(as.character(x), to = "ASCII//TRANSLIT", sub = ""))))
@@ -2398,6 +2473,8 @@ dash_css <- function(style, accent) {
     "*{box-sizing:border-box;}\n",
     "html{-webkit-text-size-adjust:100%;}\n",
     "body{margin:0;background:var(--bg);color:var(--text);font-family:", title_css("sans"), ";line-height:1.5;}\n",
+    # The classification band (dash_band()): the same red whatever the style, outside the page's column; a long marking wraps inside it.
+    ".mark{background:", MARKING_COLOUR, ";color:#fff;text-align:center;font-weight:700;letter-spacing:.06em;font-size:13px;line-height:1.4;padding:5px 12px;overflow-wrap:anywhere;}\n",
     ".page{max-width:", DASH_PAGE_PX, "px;margin:0 auto;padding:1.5rem 1.5rem 3rem;}\n",
     ".masthead{padding:0 0 1.25rem;margin-bottom:1.5rem;}\n",
     "h1{font-family:var(--title-font);font-weight:", title_weight, ";font-size:clamp(1.8rem,4.5vw,", h1_rem, "rem);line-height:1.15;margin:0 0 .4rem;overflow-wrap:anywhere;}\n",
@@ -2460,9 +2537,16 @@ dash_css <- function(style, accent) {
     look, "\n",
     "@media (max-width:", DASH_PHONE_MAX_PX, "px){.page{padding:1rem .75rem 2rem;}.card{padding:.75rem;}.col-section{grid-template-columns:minmax(0,1fr);}.col-section dl{grid-template-columns:1fr;gap:0;}",
     ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.stat-table th,.stat-table td{white-space:nowrap;}.widget{overflow-x:auto;}.widget .html-widget{min-width:36rem;}.boxes{grid-template-columns:repeat(2,minmax(0,1fr));}.boxes .box:last-child:nth-child(odd){grid-column:1/-1;}.box-value{--max:1.5rem;}.box-value.long{--max:1rem;}}\n",
-    "@page{margin:14mm;}\n",
+    # Print. The classification band is fixed: Chrome repeats a fixed box at the top and at the bottom of the content area of every printed page, and a
+    #   fixed box covers what is under it. Negative offsets do not move it into the margin (looked at in a PDF: the band is clipped or misplaced), and a
+    #   repeating table header and footer did not repeat for a column that is one row. So the sheet has no margin at the top and bottom, the bands stand
+    #   6 mm inside its edges (a printer cannot print to the edge), and the page's column has top and bottom padding that is repeated on every fragment of
+    #   it (box-decoration-break: clone), as deep as the band needs (DASH_PRINT_ROOM_MM): content never runs under a band.
+    "@page{margin:0;}\n",
     "@media print{:root{--bg:#FFFFFF;--text:#111111;--text2:#333333;--caption:#555555;--grid:#BBBBBB;--box:#F2F2F2;--rule:#111111;}",
-    "body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FFFFFF;color:#111111;}.page{max-width:none;padding:0;}",
+    ".mark{position:fixed;left:8mm;right:8mm;}.mark.top{top:6mm;}.mark.bottom{bottom:6mm;}",
+    "body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FFFFFF;color:#111111;}.page{max-width:none;padding:", DASH_PRINT_ROOM_MM[["one"]], "mm 14mm;box-decoration-break:clone;-webkit-box-decoration-break:clone;}",
+    "body.long .page{padding-top:", DASH_PRINT_ROOM_MM[["two"]], "mm;padding-bottom:", DASH_PRINT_ROOM_MM[["two"]], "mm;}",
     ".grid{display:block;}.card,.col-section,.box,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.video-box video{display:none;}.video-box .still{display:block;max-width:100%;}.col-section figure img.screen-only{display:none;}",
     ".boxes{display:flex;flex-wrap:wrap;}.box{flex:1 1 10rem;}.masthead{break-after:avoid;}h2{break-after:avoid;}.stat-block .table-scroll{overflow:visible;}.stat-table{font-size:.7rem;}}\n")
 }
@@ -2662,6 +2746,7 @@ dash_value_em <- function(value) {
 #   in order (those with a row to themselves, from `full`), and the foot (the About text and "Made with chaRt"); the style sheet, typefaces,
 #   pictures and (when a chart is interactive) scripts all inside it.
 dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALSE, length(items))) {
+  mark = marking_of(settings$marking)
   style = palette$style %||% CHART_STYLE_DEFAULT
   accent = spec_palette(palette)$single
   boxes = dash_boxes(settings, cb, data, items)
@@ -2670,7 +2755,7 @@ dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALS
   author = trimws(settings$author %||% "")
   head = tagList(tags$meta(charset = "utf-8"), tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"), tags$title(title),
                    tags$style(HTML(paste(dash_font_css(style), dash_css(style, accent), sep = "\n"))), dash_inline_dependencies(deps))
-  body = tags$body(tags$div(class = "page",
+  body = tags$body(class = if (nchar(mark) > 55L) "long", dash_band(mark, "top"), tags$div(class = "page",
     tags$header(class = "masthead", tags$h1(title),
                 if (nzchar(trimws(settings$subtitle %||% ""))) tags$p(class = "subtitle", trimws(settings$subtitle)),
                 tags$p(class = "byline", if (nzchar(author)) tags$span(class = "author", author), if (nzchar(author)) " · ", tags$time(dash_date_text(settings$date))),
@@ -2682,7 +2767,7 @@ dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALS
                                                                            if (!is.null(b$chart)) tags$div(class = "box-chart", b$chart)))),
     tags$main(class = "grid", purrr::map2(items, full, dash_card)),
     tags$footer(class = "foot", dash_about(items, settings, cb, data, model), tags$p(class = "made", "Made with chaRt")),
-    if (any(purrr::map_chr(items, "mode") == "video")) tags$script(HTML(DASH_VIDEO_JS))))
+    if (any(purrr::map_chr(items, "mode") == "video")) tags$script(HTML(DASH_VIDEO_JS))), dash_band(mark, "bottom"))
   dash_document(head, body)
 }
 
@@ -2747,7 +2832,8 @@ codebook_figure <- function(e, s, data, palette) {
 #   group of at most CODEBOOK_MAX_LEVELS levels, or the number of distinct values alone, and where `data` is given a small drawn summary
 #   (codebook_figure()). A column with no label shows a dash and says so. No row value is in it: the summaries and the drawings
 #   describe a column, they do not show a row.
-codebook_page <- function(cb, palette = chart_palette_default(), date = Sys.Date(), data = NULL) {
+codebook_page <- function(cb, palette = chart_palette_default(), date = Sys.Date(), data = NULL, marking = NULL) {
+  mark = marking_of(marking)
   style = palette$style %||% CHART_STYLE_DEFAULT
   accent = spec_palette(palette)$single
   cols = cb$columns
@@ -2803,7 +2889,7 @@ codebook_page <- function(cb, palette = chart_palette_default(), date = Sys.Date
   title = paste("Codebook:", cb$file %||% "the data file")
   head = tagList(tags$meta(charset = "utf-8"), tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"), tags$title(title),
                    tags$style(HTML(paste(dash_font_css(style), dash_css(style, accent), sep = "\n"))))
-  body = tags$body(tags$div(class = "page",
+  body = tags$body(class = if (nchar(mark) > 55L) "long", dash_band(mark, "top"), tags$div(class = "page",
     tags$header(class = "masthead", tags$h1(title),
                 tags$p(class = "subtitle", paste0(format_num(cb$rows %||% 0L), " rows and ", format_num(length(cols)), " columns",
                                                   if (codebook_ready(cb)) paste0("; one row is ", trimws(cb$row_is)), ".")),
@@ -2817,7 +2903,7 @@ codebook_page <- function(cb, palette = chart_palette_default(), date = Sys.Date
         tags$tr(tags$td(tags$a(href = paste0("#col-", i), e$name)), tags$td(label_cell(e)), tags$td(e$type), tags$td(e$role), tags$td(class = "n", dash_pct(e$missing)),
                 if (!is.null(stats)) stat_cells(e)))))),
     if (!is.null(stats)) tags$div(class = "stat-notes", purrr::map(summary_notes(stats, TRUE), function(n) tags$p(class = "stat-note", n))),
-    tags$main(purrr::imap(cols, function(e, i) section(e, i)))))
+    tags$main(purrr::imap(cols, function(e, i) section(e, i)))), dash_band(mark, "bottom"))
   dash_document(head, body)
 }
 
@@ -2838,7 +2924,7 @@ dash_step <- function(what, code)
 #   (when svglite is installed) into the staging folder for charts/ (title and source line in them, for print), writes its code, works out
 #   the lines of its facts a key number may be, and for an interactive one makes its widget (drawn without title and source line, which
 #   the card says). A widget that cannot be made leaves a picture and says why in `fallback`. `it` is list(id, chart, story, mode, stale).
-dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind) {
+dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, marking) {
   chart = it$chart
   title = chart_title(chart, "Untitled chart")
   what = paste0("drawing chart ", i, " (", title, ")")
@@ -2846,15 +2932,15 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind) {
   s = attr(p, "spec")
   stem = file.path("charts", sprintf("%02d_%s", i, dash_slug(title)))
   pic_file = paste0(stem, chart_device_ext(kind))
-  size = dash_step(what, spec_png(p, file.path(stage, pic_file), dpi = DASH_DPI, kind = kind))
+  size = dash_step(what, spec_png(p, file.path(stage, pic_file), dpi = DASH_DPI, kind = kind, marking = marking))
   vector_file = if (!identical(kind, "svglite") && svglite_installed()) paste0(stem, ".svg")
-  if (!is.null(vector_file)) dash_step(what, spec_png(p, file.path(stage, vector_file), size = size, kind = "svglite"))
+  if (!is.null(vector_file)) dash_step(what, spec_png(p, file.path(stage, vector_file), size = size, kind = "svglite", marking = marking))
   code = tryCatch(spec_code(s, cb, path, palette), error = function(e) paste0("# The code of this chart could not be written: ", conditionMessage(e)))
   facts = tryCatch({ f = spec_facts(s, attr(p, "table"), cb, data = data); dash_fact_choices(f$text, f$names) }, error = function(e) list())
   w = if (identical(it$mode, "interactive"))
     tryCatch(dash_widget(widget(spec_plot(chart$spec, data, cb, palette, web = list(width = SPEC_SIZE[["width"]], height = SPEC_SIZE[["height"]], bare = TRUE)))),
              error = function(e) conditionMessage(e))
-  v = if (identical(it$mode, "video")) tryCatch(dash_video(chart, stage, file.path("charts", sprintf("%02d_%s.mp4", i, dash_slug(title))), data, cb, palette), error = function(e) conditionMessage(e))
+  v = if (identical(it$mode, "video")) tryCatch(dash_video(chart, stage, file.path("charts", sprintf("%02d_%s.mp4", i, dash_slug(title))), data, cb, palette, marking), error = function(e) conditionMessage(e))
   fallback = if (is.character(w)) sub("\n.*$", "", w) else if (is.character(v)) sub("\n.*$", "", v)
   st = it$story
   list(id = it$id, title = title, headline = if (!is.null(st)) st$headline, summary = if (!is.null(st)) st$summary, story = st, chart_subtitle = s$subtitle,
@@ -2870,10 +2956,10 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind) {
 # The video of a chart for the page: the chart drawn without title, subtitle or source line (the page says them), as a 1280 by 720 MP4 in the staging
 #   folder (charts/ gets the same file), with the finished chart as the poster. Returns list(file, uri, poster, seconds, drawn, canvas): the file as a data
 #   address ready for the page, and the poster as one.
-dash_video <- function(chart, stage, file, data, cb, palette) {
+dash_video <- function(chart, stage, file, data, cb, palette, marking) {
   poster = tempfile(fileext = ".png")
   on.exit(unlink(poster))
-  r = spec_video(chart$spec, data, cb, palette, file.path(stage, file), size = SPEC_VIDEO_PX$card, bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS, poster = poster)
+  r = spec_video(chart$spec, data, cb, palette, file.path(stage, file), size = SPEC_VIDEO_PX$card, bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS, poster = poster, marking = marking)
   list(file = file, uri = dash_data_uri(file.path(stage, file), "video/mp4"), poster = dash_data_uri(poster, "image/png"), seconds = r$seconds, drawn = r$drawn, canvas = r$canvas)
 }
 
@@ -2902,12 +2988,12 @@ dash_pictures <- function(m, full, i, chart, data, cb, palette, kind) {
 #   worked out here from the data in hand (summary_table()) and written to charts/ as a CSV (summary_csv(): header on the first row, the note in a
 #   column), and the page gets the table itself as HTML (dash_table_card()), not a picture. No model is called and no row of the file is written: a
 #   measure's statistics, a group's levels and counts, nothing of a text or an id but how many values it has.
-dash_table <- function(it, i, stage, data, cb) {
+dash_table <- function(it, i, stage, data, cb, marking) {
   t = it$table
   what = paste0("working out table ", i, " (", t$title, ")")
   tb = dash_step(what, summary_table(data, cb, t$measures, t$by))
   file = file.path("charts", sprintf("%02d_%s.csv", i, dash_slug(t$title)))
-  dash_step(what, summary_csv(tb, t$ci, file.path(stage, file)))
+  dash_step(what, summary_csv(tb, t$ci, file.path(stage, file), marking = marking))
   list(id = it$id, title = t$title, mode = "table", tb = tb, ci = isTRUE(t$ci), small = any(tb$small %in% TRUE), files = file,
        code = c(paste0("# A summary table, not a chart: ", t$title, "."),
                 paste0("#   Columns: ", paste(t$measures, collapse = ", "), if (is_text1(t$by) && nzchar(t$by)) paste0("; by ", t$by), "."),
@@ -2944,21 +3030,23 @@ dash_table_row <- function(it, i, cb) {
 build_dashboard <- function(items, data, cb, palette, settings, path, zip_file, model = APP_MODEL$id, widget = spec_widget) {
   started = proc.time()[["elapsed"]]
   if (!length(items)) stop("No chart is in the dashboard.", call. = FALSE)
+  mark = marking_of(settings$marking)
+  settings$marking = mark
   stage = tempfile("dashboard_")
   dir.create(file.path(stage, "charts"), recursive = TRUE)
   on.exit(unlink(stage, recursive = TRUE), add = TRUE)
   kind = chart_device_kind()
   settings$date = if (inherits(settings$date, "Date") && !is.na(settings$date)) settings$date else Sys.Date()
   made = tryCatch(purrr::imap(unname(items), function(it, i)
-                    if (!is.null(it$table)) dash_table(it, i, stage, data, cb) else dash_chart(it, i, stage, data, cb, palette, path, widget, kind)),
+                    if (!is.null(it$table)) dash_table(it, i, stage, data, cb, mark) else dash_chart(it, i, stage, data, cb, palette, path, widget, kind, mark)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
   full = dash_layout(purrr::map_lgl(made, function(m) m$mode %in% c("interactive", "table") || isTRUE(m$natural_wide)))
   made = tryCatch(purrr::pmap(list(made, full, seq_along(made), unname(items)), function(m, f, i, it) dash_pictures(m, f, i, it$chart, data, cb, palette, kind)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
   dash_step("writing dashboard.html", writeBin(charToRaw(enc2utf8(dash_page(made, settings, cb, data, palette, model, full))), file.path(stage, "dashboard.html")))
-  dash_step("writing codebook.html", writeBin(charToRaw(enc2utf8(codebook_page(cb, palette, settings$date, data))), file.path(stage, "codebook.html")))
-  dash_step("writing data_dictionary.yaml", write_codebook(cb, file.path(stage, "data_dictionary.yaml")))
-  dash_step("writing charts.R", writeBin(charToRaw(enc2utf8(paste(c("# The code of each chart in the dashboard, in the order shown. Run a chart's part on its own;",
+  dash_step("writing codebook.html", writeBin(charToRaw(enc2utf8(codebook_page(cb, palette, settings$date, data, mark))), file.path(stage, "codebook.html")))
+  dash_step("writing data_dictionary.yaml", { write_codebook(cb, file.path(stage, "data_dictionary.yaml")); marking_prepend(file.path(stage, "data_dictionary.yaml"), marking_comment(mark)) })
+  dash_step("writing charts.R", writeBin(charToRaw(enc2utf8(paste(c(marking_comment(mark), "# The code of each chart in the dashboard, in the order shown. Run a chart's part on its own;",
                                                                    "# each reads the data file named in it, which is not in this zip.",
                                                                    unlist(purrr::imap(made, function(m, i) c("", paste0("# ---- Chart ", i, ": ", m$title, " ", strrep("-", 20)), m$code)))),
                                                                  collapse = "\n"))), file.path(stage, "charts.R")))

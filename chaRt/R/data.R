@@ -825,7 +825,9 @@ csv_safe <- function(x) {
 #   reads it as a table), raw numbers to six significant digits, an empty cell for none, and the note in a last column on every row (a
 #   comment row above the header would make Excel and most readers take the comment for the header). A column header says "95% CI (SRS)".
 #   `scale_note` and `small_group` say which rows carry those marks. With `ci` FALSE the interval columns are left out and the note is the short one.
-summary_csv <- function(tb, ci = TRUE, file) {
+#   `marking` (the export's classification marking, Phase 10) is written as a comment line, "# <marking>", before the header, after the byte-order mark: a reader
+#   must skip that one line (readr::read_csv(skip = 1)); Excel shows it in the first cell. Without it (the Data page's download) the header is the first row.
+summary_csv <- function(tb, ci = TRUE, file, marking = NULL) {
   keep = function(d, names) d[names]
   notes = summary_notes(tb, ci)
   note = paste(c(notes[1], if (any(tb$kind == "measure")) SUMMARY_QUARTILE_NOTE), collapse = " ")
@@ -841,6 +843,7 @@ summary_csv <- function(tb, ci = TRUE, file) {
                        small_group = ifelse(tb$small %in% TRUE, SUMMARY_SMALL_MARK, NA_character_), note = note)
   if (!isTRUE(ci)) out = out[!grepl("95% CI", names(out), fixed = TRUE)]
   readr::write_excel_csv(out, file, na = "")
+  if (!is.null(marking)) marking_prepend(file, marking_comment(marking))
   invisible(file)
 }
 

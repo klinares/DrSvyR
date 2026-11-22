@@ -45,7 +45,9 @@ HEAVY_CHECKS <- c(
   "9C-5: the whole Video table on this machine",                                  # 30 frames of 1280 by 720 drawn and encoded
   "9C-6: the check of the whole Video table can fail",                            # and three changed probes, each drawing and encoding 30 frames
   "9C-9: the files of the bundle alone",                                          # the bundle copied alone and loaded as the app
-  "9C-10: the checks of the bundle can fail")                                     # three more loads and a package list worked out again
+  "9C-10: the checks of the bundle can fail",                                       # three more loads and a package list worked out again
+  "10A-13: every frame of the MP4",                                               # a dashboard with a video, the MP4 decoded and read back
+  "10A-14: printed by Chrome")                                                     # the dashboard and the codebook printed to PDF in the Dark style with a long marking
 
 results <- new.env()
 results$all <- logical(0)
@@ -4257,13 +4259,15 @@ p8_hits <- function(f) {
 }
 p8_found <- unlist(purrr::map(c("app.R", r_files), p8_hits))
 p8_gal <- unlist(purrr::map("tests/gallery.R", p8_hits))
-p8_expect <- "theme.R: chart_device calls agg_png, png, svglite"
+p8_expect <- c("spec.R: marking_band calls convertWidth, stringWidth", "theme.R: chart_device calls agg_png, png, svglite")   # Phase 10 Part A: marking_band() measures its letters, and is reached only from marking_draw(), which spec_png() and video_draw() call after chart_device() has opened the device
 check(paste0("8A-2: no function in app.R or R/ opens a graphics device or measures text outside chart_device() in R/theme.R (png, jpeg, agg_png, svglite, pdf, ggsave, strwidth, grid unit conversions and the like)",
              if (!identical(p8_found, p8_expect)) paste0(" (found: ", paste(p8_found, collapse = "; "), ")")),
       identical(p8_found, p8_expect) &&
         any(grepl("chart_device\\(", deparse(body(spec_png)))) && any(grepl("chart_device\\(", deparse(body(drawn_text_boxes)))) &&
         !any(grepl("agg_png", deparse(body(drawn_text_boxes)), fixed = TRUE)) && !any(grepl("agg_png|png\\(", deparse(body(spec_png)))) &&
-        !any(grepl("agg_png", p8_gal, fixed = TRUE)))
+        !any(grepl("agg_png", p8_gal, fixed = TRUE)) &&
+        any(grepl("marking_draw(", deparse(body(spec_png)), fixed = TRUE)) && any(grepl("marking_draw(", deparse(body(video_draw)), fixed = TRUE)) &&
+        sum(purrr::map_lgl(purrr::keep(ls(globalenv()), function(n) is.function(get(n, globalenv()))), function(n) any(grepl("marking_band(", deparse(body(get(n, globalenv()))), fixed = TRUE)))) == 1L)
 
 # 3. start-up options, so that a stray call cannot reach X11
 p8_opts0 <- options(bitmapType = "Xlib", shiny.useragg = NULL)
@@ -4827,9 +4831,9 @@ p8c_code <- readLines(file.path(p8c_d3, "charts.R"), warn = FALSE)
 check(paste0("8C-2: the zip of a three-chart canvas holds dashboard.html, codebook.html, data_dictionary.yaml, charts.R and charts/ with each chart as a PNG at 300 dpi (2100 by 1350 pixels for 7 by 4.5 inches) and, with svglite installed (",
              p8c_svg, "), as an SVG; the dictionary is what write_codebook() writes; charts.R holds the code of each chart in order and parses; the files are numbered in the order of the canvas"),
       setequal(p8c_paths(p8c_d3), p8c_expect3) && setequal(names(p8c_z3$files), p8c_expect3) && setequal(zip::zip_list(p8c_z3$zip)$filename, p8c_expect3) &&
-        all(p8c_z3$files > 0L) && identical(unname(p8c_png_size(file.path(p8c_d3, "charts/01_orders_by_region.png"))), c(2100L, 1350L)) &&
+        all(p8c_z3$files > 0L) && identical(unname(p8c_png_size(file.path(p8c_d3, "charts/01_orders_by_region.png"))), c(2100L, 1350L + 120L)) &&
         (!p8c_svg || grepl("^<\\?xml|^<svg", readLines(file.path(p8c_d3, "charts/02_units_against_price.svg"), n = 2L, warn = FALSE)[1])) &&
-        identical(readLines(file.path(p8c_d3, "data_dictionary.yaml"), warn = FALSE), { f <- tempfile(); write_codebook(p8c_cb, f); readLines(f, warn = FALSE) }) &&
+        identical(readLines(file.path(p8c_d3, "data_dictionary.yaml"), warn = FALSE)[-1], { f <- tempfile(); write_codebook(p8c_cb, f); readLines(f, warn = FALSE) }) &&
         all(grepl("^# ---- Chart [123]: ", grep("^# ---- Chart", p8c_code, value = TRUE))) && length(grep("^# ---- Chart", p8c_code)) == 3L &&
         identical(grep("Orders by region|Units against price|Price of an order", grep("^# ---- Chart", p8c_code, value = TRUE), value = TRUE),
                   grep("^# ---- Chart", p8c_code, value = TRUE)) && inherits(tryCatch(parse(file.path(p8c_d3, "charts.R")), error = function(e) e), "expression") &&
@@ -5205,7 +5209,7 @@ p8c_bd <- p8c_b$dir
 p8c_bh <- if (!is.null(p8c_bd)) p8c_html(p8c_bd)
 p8c_pos <- function(h, x) regexpr(x, h, fixed = TRUE)[[1]]
 check("8C-21: the switch and the order reach the export: with one chart switched off and another moved up, the zip holds exactly the three chosen charts numbered in the canvas's order (charts/01_price_by_region, 02_orders_by_region, 03_price_of_an_order), the page shows their headlines (the stale one as it is now, the chart's title where there is none) in that order, and the unchosen scatter ('Units against price') is in no file of the zip, nor its file name",
-      isTRUE(p8c_r$ok) && identical(p8c_r$name, "dashboard_2026-11-21.zip") && identical(basename(p8c_r$zip), "dashboard_2026-11-21.zip") && dir.exists(p8c_bd) &&
+      isTRUE(p8c_r$ok) && identical(p8c_r$name, "unclassified_dashboard_2026-11-21.zip") && identical(basename(p8c_r$zip), "unclassified_dashboard_2026-11-21.zip") && dir.exists(p8c_bd) &&
         setequal(names(p8c_r$files), c("dashboard.html", "codebook.html", "data_dictionary.yaml", "charts.R",
                                        paste0("charts/", c("01_price_by_region", "02_orders_by_region", "03_price_of_an_order"), ".png"),
                                        if (p8c_svg) paste0("charts/", c("01_price_by_region", "02_orders_by_region", "03_price_of_an_order"), ".svg"))) &&
@@ -5218,14 +5222,14 @@ check("8C-22: what the dialog asked for reaches the page: the title, subtitle, a
         grepl("<p>Why this dashboard exists.</p>", p8c_bh, fixed = TRUE) && grepl("box-title\">Rows<", p8c_bh, fixed = TRUE) && grepl("box-title\">Period<", p8c_bh, fixed = TRUE) &&
         !grepl("box-title\">Columns<", p8c_bh, fixed = TRUE) && grepl(paste0("written by the model ", APP_MODEL$id), p8c_bh, fixed = TRUE) && isTRUE(p8c_b$log))
 check("8C-23: after a build the dialog says what was built (the name, the size, the seconds, how many charts as pictures and how many interactive), offers the zip for download, and draws the build button again enabled with its busy line hidden; the button was disabled while it ran (a chart-call button that says 'Building the dashboard', and disables itself when clicked) and busy was set and cleared; a second build with another date makes dashboard_2026-12-01.zip and removes the first zip",
-      grepl("Built dashboard_2026-11-21.zip: ", p8c_b$action, fixed = TRUE) && grepl("3 charts: 3 as pictures and 0 interactive.", p8c_b$action, fixed = TRUE) && grepl(" seconds. ", p8c_b$action, fixed = TRUE) &&
-        grepl("Download dashboard_2026-11-21.zip", p8c_b$action, fixed = TRUE) && grepl("id=\"proxy1-dash_download\"", p8c_b$action, fixed = TRUE) &&
+      grepl("Built unclassified_dashboard_2026-11-21.zip: ", p8c_b$action, fixed = TRUE) && grepl("3 charts: 3 as pictures and 0 interactive.", p8c_b$action, fixed = TRUE) && grepl(" seconds. ", p8c_b$action, fixed = TRUE) &&
+        grepl("Download unclassified_dashboard_2026-11-21.zip", p8c_b$action, fixed = TRUE) && grepl("id=\"proxy1-dash_download\"", p8c_b$action, fixed = TRUE) &&
         grepl("<button[^>]*id=\"proxy1-dash_build\"[^>]*>", p8c_b$action) && !grepl("<button[^>]*[[:space:]]disabled[[:space:]=>]", p8c_b$action) &&
         grepl("chart-call", regmatches(p8c_b$action, regexpr("<button[^>]*id=\"proxy1-dash_build\"[^>]*>", p8c_b$action)), fixed = TRUE) &&
         grepl("data-working=\"Building the dashboard\"", p8c_b$action, fixed = TRUE) && grepl("this.disabled = true;", p8c_b$action, fixed = TRUE) &&
         grepl("id=\"proxy1-dash_build_busy\"[^>]*style=\"display:none;", p8c_b$action) && isTRUE(p8c_b$busy) && identical(WORKING_WORDS[["dashboard"]], "Building the dashboard") &&
         grepl("\"dashboard\":\"Building the dashboard\"", EXPLORE_JS, fixed = TRUE) &&
-        isTRUE(p8c_b$res2$ok) && identical(p8c_b$res2$name, "dashboard_2026-12-01.zip") && isTRUE(p8c_b$old_gone))
+        isTRUE(p8c_b$res2$ok) && identical(p8c_b$res2$name, "unclassified_dashboard_2026-12-01.zip") && isTRUE(p8c_b$old_gone))
 
 # 15. a build that fails: plain words, the last lines of its own message, the button works again, nothing is left, nothing goes to the chat
 p8c_fail_build <- function(...) stop("While drawing chart 2 (Units against price): forced failure\nan inner line\nthe last line", call. = FALSE)
@@ -5426,7 +5430,7 @@ check("9A-4: the pictures drawn for the page have no title, subtitle or source l
         length(p9_card_html) == 5L && all(lengths(gregexpr("class=\"source\"", p9_card_html, fixed = TRUE)) == 1L) && lengths(gregexpr("Source: orders.csv", p9_h, fixed = TRUE)) == 5L &&
         identical(unlist(regmatches(p9_h, gregexpr("(?<=<p class=\"card-sub\">)[^<]*", p9_h, perl = TRUE))), unname(purrr::map_chr(p9_s, "title"))) &&
         setequal(names(p9_z$files), c("dashboard.html", "codebook.html", "data_dictionary.yaml", "charts.R", p9_chart_files)) &&
-        identical(unname(p8c_png_size(file.path(p9_dirs, "charts/01_revenue_by_region.png"))), c(2100L, 1350L)))
+        identical(unname(p8c_png_size(file.path(p9_dirs, "charts/01_revenue_by_region.png"))), c(2100L, 1350L + 120L)))
 
 # 5. the card's heading is the headline; the chart's title is its subtitle; a chart with no headline has its title as the heading and no subtitle; a chart's own subtitle follows
 p9_h2 <- unlist(regmatches(p9_h, gregexpr("(?<=<h2>)[^<]*", p9_h, perl = TRUE)))
@@ -5605,7 +5609,7 @@ p9_same_page <- function(pp, a, b) { pa <- which(grepl(a, pp$text, fixed = TRUE)
 check("9A-10: print: every style's page prints on a light ground (@media print sets the custom properties to white and near-black, print-color-adjust exact, a card, a codebook section, a box and the foot are never split, the grid is one column); a dark page also holds, for each picture, a light drawing in the Clean style that is shown only for print (the screen picture is dark in its corner, the print one light, and in Chrome only the screen picture is shown on screen) and the codebook's pictures the same; a card that has its row has the half-width drawing for print; printed to a PDF by Chrome the dark and the clean dashboard have every card whole on one page (headline, summary and source line together) and every page light, and the dark codebook has no section split and light pages",
       all(purrr::map_lgl(p9_styles, function(st) grepl("@media print{:root{--bg:#FFFFFF;--text:#111111;--text2:#333333;--caption:#555555;--grid:#BBBBBB;--box:#F2F2F2;--rule:#111111;}", p9_six[[st]]$html, fixed = TRUE) &&
                             grepl("print-color-adjust:exact;background:#FFFFFF", p9_six[[st]]$html, fixed = TRUE) && grepl(".grid{display:block;}.card,.col-section,.box,.foot{break-inside:avoid;page-break-inside:avoid;}", p9_six[[st]]$html, fixed = TRUE) &&
-                            grepl("@page{margin:14mm;}", p9_six[[st]]$html, fixed = TRUE))) &&
+                            grepl("@page{margin:0;}", p9_six[[st]]$html, fixed = TRUE))) &&   # Phase 10 Part A: the sheet has no margin; the page's column has the padding, repeated on every page, that leaves room for the band
         length(p9_screen_dk) == 5L && length(p9_uris(p9_hd, "print-only")) == 5L && all(purrr::map_dbl(p9_screen_dk, p9_lum) < 0.2) && all(purrr::map_dbl(p9_uris(p9_hd, "print-only"), p9_lum) > 0.9) &&
         lengths(gregexpr("class=\"print-only\"", p9_h, fixed = TRUE)) == 1L &&
         grepl("<picture class=\"screen-only\">", p9_h, fixed = TRUE) && lengths(gregexpr("<picture class=\"screen-only\">", p9_h, fixed = TRUE)) == 1L &&
@@ -6071,7 +6075,7 @@ p9d_items <- list(p9d_chart_item("c1", list(family = "bar", x = "region", y = "r
 p9d_z <- p9d_build(p9d_items)
 p9d_cards <- regmatches(p8c_sq(p9d_z$html), gregexpr("<article class=\"card[^\"]*\">.*?</article>", p8c_sq(p9d_z$html), perl = TRUE))[[1]]
 p9d_tcards <- purrr::keep(p9d_cards, function(c) grepl("table-card", c, fixed = TRUE))
-p9d_zcsv <- readr::read_csv(file.path(p9d_z$dir, "charts", "02_revenue_and_satisfaction_by_region.csv"), show_col_types = FALSE, progress = FALSE)
+p9d_zcsv <- readr::read_csv(file.path(p9d_z$dir, "charts", "02_revenue_and_satisfaction_by_region.csv"), skip = 1, show_col_types = FALSE, progress = FALSE)
 p9d_cbh <- p8c_sq(p9d_z$codebook)
 p9d_cbtop <- sub("(?s)^.*?(<table class=\"summary-table\">.*?</table>).*$", "\\1", p9d_cbh, perl = TRUE)
 p9d_mz <- p9d_build(list(p9d_table_item("t1", "Messy numbers", c("score", "rating", "column_1")), p9d_table_item("t2", "Rating by nothing", "rating")), data = p8c_mdata, cb = p8c_mcb, path = p8c_mfile)
@@ -6088,7 +6092,7 @@ check("9D-14: the export: a chosen table is a card of dashboard.html, a real tab
         grepl(".stat-table td.n,.stat-table th.n{text-align:right;white-space:nowrap;}", p9d_z$html, fixed = TRUE) &&
         all(c("charts/02_revenue_and_satisfaction_by_region.csv", "charts/04_units_without_intervals.csv", "charts/01_revenue_by_region.png", "charts/03_revenue_by_month.png") %in% names(p9d_z$files)) &&
         identical(readBin(file.path(p9d_z$dir, "charts", "02_revenue_and_satisfaction_by_region.csv"), "raw", 3), as.raw(c(0xef, 0xbb, 0xbf))) && nrow(p9d_zcsv) == nrow(summary_table(p9_data, p9_cb, c("revenue", "satisfaction"), "region")) &&
-        all(p9d_zcsv$note == paste(p9d_ci_note, SUMMARY_QUARTILE_NOTE)) && grepl("^Descriptive statistics of the rows in this file", readr::read_csv(file.path(p9d_z$dir, "charts", "04_units_without_intervals.csv"), show_col_types = FALSE, progress = FALSE)$note[1]) &&
+        all(p9d_zcsv$note == paste(p9d_ci_note, SUMMARY_QUARTILE_NOTE)) && grepl("^Descriptive statistics of the rows in this file", readr::read_csv(file.path(p9d_z$dir, "charts", "04_units_without_intervals.csv"), skip = 1, show_col_types = FALSE, progress = FALSE)$note[1]) &&
         grepl("The summary tables", p9d_z$html, fixed = TRUE) && grepl("2 tables of statistics, worked out by R from the rows of the file with no model", p9d_z$html, fixed = TRUE) &&
         grepl("2 pictures and 0 interactive", p9d_z$html, fixed = TRUE) && grepl("# A summary table, not a chart: Units without intervals.", p8c_bytes(file.path(p9d_z$dir, "charts.R")), fixed = TRUE) &&
         p8c_balanced(p9d_z$html) && p8c_balanced(p9d_z$codebook) && !length(p8c_requests(p9d_z$html)) && !length(p8c_requests(p9d_z$codebook)) &&
@@ -6321,7 +6325,7 @@ p9b_made <- new.env()
 p9b_made$calls <- list()
 p9b_made$real_spec_video <- spec_video
 p9b_fake_video <- function(spec, data, cb, palette = chart_palette_default(), file, size = SPEC_VIDEO_PX$download, small = NULL, bare = FALSE, drawn_fps = NULL, widths = SPEC_VIDEO_WIDTHS,
-                           on_frame = NULL, poster = NULL, keep = NULL) {
+                           on_frame = NULL, poster = NULL, keep = NULL, marking = NULL) {
   p9b_made$calls[[length(p9b_made$calls) + 1L]] <- list(spec = spec, file = file, small = small, size = size, bare = bare, widths = widths)
   writeBin(charToRaw("fake 1920 video"), file)
   if (!is.null(small)) writeBin(charToRaw("fake 1280 video"), small)
@@ -6755,6 +6759,355 @@ check("9C-10: the checks of the bundle can fail: a bundle without www/methodolog
       isTRUE(p9c_bundle_loads) && !p9c_no_meth && !p9c_no_reflex && (!p9c_has_rsconnect || (is.data.frame(p9c_no_zip_deps) && !"zip" %in% p9c_no_zip_deps$Package && !p9c_pkgs_ok(p9c_no_zip_deps))))
 
 }   # end of the heavy run part of the bundle checks
+
+# ---- Phase 10 Part A: the classification marking on everything that leaves the app ---------------------------------------------
+#
+# The export dialog asks for a marking (default APP_CLASSIFICATION, at most 80 characters, never blank). It is written into dashboard.html and codebook.html
+#   (a band at the top and at the bottom, outside the page's column, and on every printed page), into each PNG and SVG of charts/ (a band at the top and
+#   at the bottom, drawn by R), into each MP4 (on every frame), as the first line of charts.R, data_dictionary.yaml and each CSV, and into the name of the zip. It is the
+#   analyst's statement, and no model is ever sent it. This part makes its own small fixtures, so that a changed copy of one function can be tried against
+#   it alone (the part between the two marker lines is what the mutation runs use). No model call.
+# >>> 10A begin
+p10_o <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+p10_cb <- utils::modifyList(p10_o$codebook, list(row_is = "one order"))
+p10_data <- p10_o$read$data
+p10_path <- file.path("tests", "data", "orders.csv")
+p10_specs <- list(
+  bar = list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "Revenue by region"),
+  line = list(family = "line", x = "order_month", y = "revenue", fn = "sum", title = "Revenue by month"),
+  scatter = list(family = "scatter", x = "units", y = "revenue", title = "Revenue against units",
+                 filter = list(list(column = "units", op = "<=", value = 40L), list(column = "revenue", op = "<=", value = 6000))))
+p10_item <- function(i, spec, mode = "picture") {
+  ch <- new_chart(paste0("c", i), spec)
+  list(id = ch$id, chart = ch, story = list(headline = paste("Headline of chart", i), summary = "A summary.", hash = spec_hash(ch$spec), data = "d", facts = "", spec = ch$spec,
+                                            problems = character(0)), mode = mode, stale = NA_character_)
+}
+p10_table <- list(id = "t1", table = list(title = "Revenue by region", measures = "revenue", by = "region", ci = TRUE), mode = "table", stale = NA_character_)
+p10_set <- list(title = "Dash", subtitle = "", author = "A. Analyst", date = as.Date("2026-11-22"), intro = "", boxes = c("rows", "columns", "third"), keys = character(0))
+p10_unzip <- function(zip) { d <- tempfile("p10_unz_"); dir.create(d); zip::unzip(zip, exdir = d); d }
+p10_build <- function(items, marking = NULL, style = "clean", settings = p10_set) {
+  if (!is.null(marking)) settings$marking <- marking
+  out <- file.path(tempfile("p10_zip_"), "d.zip")
+  dir.create(dirname(out))
+  res <- build_dashboard(items, p10_data, p10_cb, utils::modifyList(chart_palette_default(), list(style = style)), settings, p10_path, out, model = "test-model")
+  c(res, list(dir = p10_unzip(res$zip)))
+}
+p10_lines <- function(d, f) readLines(file.path(d, f), warn = FALSE, encoding = "UTF-8")
+p10_text <- function(d, f) { r <- rawToChar(readBin(file.path(d, f), "raw", file.size(file.path(d, f)))); Encoding(r) <- "UTF-8"; r }
+p10_px <- function(img, r, c) round(255 * img[r, c, 1:3])
+p10_red <- c(180, 4, 4)
+p10_is_red <- function(px, tol = 2) all(abs(px - p10_red) <= tol)
+# a PNG whose top and bottom six rows are red at three places across, whose rows just under and over the bands are not, with white type in the band
+p10_banded <- function(f, h_expect = NULL) {
+  img <- png::readPNG(f)
+  h <- dim(img)[1]
+  w <- dim(img)[2]
+  band <- as.integer(round(MARKING_BAND_IN * 300))
+  rows <- c(1L, 3L, band %/% 2L, band - 1L)
+  cols <- c(3L, as.integer(round(w * 0.02)), w - 3L)
+  red <- all(purrr::map_lgl(rows, function(r) all(purrr::map_lgl(cols, function(cc) p10_is_red(p10_px(img, r, cc) ) && p10_is_red(p10_px(img, h - r + 1L, cc))))))
+  off <- !p10_is_red(p10_px(img, band + 8L, 3L)) && !p10_is_red(p10_px(img, h - band - 7L, 3L))
+  white <- img[seq_len(band), , 1] > 0.95 & img[seq_len(band), , 2] > 0.95 & img[seq_len(band), , 3] > 0.95
+  type <- sum(white) > 100L && abs(mean(which(colSums(white) > 0L)) - w / 2) < w * 0.05
+  red && off && type && (is.null(h_expect) || identical(c(w, h), as.integer(h_expect)))
+}
+p10_mark <- "UNCLASSIFIED//FOR TEST"
+
+if (run_fast) {   # the fast run only: its builds and its screen scenario
+p10_items3 <- c(purrr::imap(unname(p10_specs), function(sp, i) p10_item(i, sp)), list(p10_table))
+p10_a <- p10_build(p10_items3, p10_mark)
+p10_def <- p10_build(list(p10_item(1, p10_specs$bar)), NULL, "dark")                 # no marking in the settings: the default
+p10_hostile <- "<b onclick=\"x()\">&amp; 'q' \"r\"</b>\nnext # line"
+p10_hostile_clean <- "<b onclick=\"x()\">&amp; 'q' \"r\"</b> next # line"
+p10_h <- p10_build(list(p10_item(1, p10_specs$bar), p10_table), p10_hostile)
+p10_band_re <- "<div class=\"mark (top|bottom)\"[^>]*>[^<]*</div>"
+p10_bands <- function(h) regmatches(h, gregexpr(p10_band_re, h))[[1]]
+p10_cells <- function(t) c(list(names(t)), unname(lapply(t, as.vector)))
+p10_band_text <- function(b) sub("^<div[^>]*>(.*)</div>$", "\\1", b)
+
+check("10A-1: the default: APP_CLASSIFICATION is UNCLASSIFIED in app.R and in the global environment; a build whose settings name no marking writes it: dashboard.html and codebook.html (a Dark page too) have a band at the top, before the page's column, and one at the bottom, after it, with the text, and the band's style is white bold letter-spaced type on #b40404 (the colours of svysegment's report) whatever the page's style; a print rule keeps a light ground",
+      identical(APP_CLASSIFICATION, "UNCLASSIFIED") && any(grepl("^APP_CLASSIFICATION <- \"UNCLASSIFIED\"", readLines("app.R"))) && identical(marking_of(), "UNCLASSIFIED") &&
+        all(purrr::map_lgl(c("dashboard.html", "codebook.html"), function(f) {
+          h <- p10_text(p10_def$dir, f)
+          b <- p10_bands(h)
+          length(b) == 2L && grepl("mark top", b[1], fixed = TRUE) && grepl("mark bottom", b[2], fixed = TRUE) && all(p10_band_text(b) == "UNCLASSIFIED") &&
+            regexpr("class=\"mark top\"", h, fixed = TRUE)[[1]] < regexpr("class=\"page\"", h, fixed = TRUE)[[1]] &&
+            regexpr("class=\"mark bottom\"", h, fixed = TRUE)[[1]] > regexpr("class=\"page\"", h, fixed = TRUE)[[1]] &&
+            regexpr("class=\"mark bottom\"", h, fixed = TRUE)[[1]] > regexpr("</main>", h, fixed = TRUE)[[1]] &&
+            grepl(".mark{background:#b40404;color:#fff;text-align:center;font-weight:700;letter-spacing:.06em;", h, fixed = TRUE) &&
+            grepl("--bg:#14171C", h, fixed = TRUE) && grepl("@media print{:root{--bg:#FFFFFF", h, fixed = TRUE) && grepl("print-color-adjust:exact;background:#FFFFFF", h, fixed = TRUE)
+        })) && identical(MARKING_COLOUR, "#b40404"))
+
+check("10A-2: a custom marking (UNCLASSIFIED//FOR TEST) reaches every file of the zip: both pages (two bands each), the first line of charts.R and data_dictionary.yaml (a comment), the first line of the table's CSV after its byte-order mark, and each SVG (the text twice and two bands of #B40404); every file in the zip is one of those kinds or a PNG, so none is left unchecked",
+      {
+        z <- names(p10_a$files)
+        text_ok <- all(purrr::map_lgl(c("dashboard.html", "codebook.html"), function(f) { b <- p10_bands(p10_text(p10_a$dir, f)); length(b) == 2L && all(p10_band_text(b) == p10_mark) })) &&
+          identical(p10_lines(p10_a$dir, "charts.R")[1], paste0("# ", p10_mark)) && identical(p10_lines(p10_a$dir, "data_dictionary.yaml")[1], paste0("# ", p10_mark))
+        csv <- "charts/04_revenue_by_region.csv"
+        raw <- readBin(file.path(p10_a$dir, csv), "raw", file.size(file.path(p10_a$dir, csv)))
+        csv_ok <- identical(raw[1:3], as.raw(c(0xef, 0xbb, 0xbf))) && identical(rawToChar(raw[4:(3 + nchar(p10_mark) + 3L)]), paste0("# ", p10_mark, "\n")) &&
+          grepl("^\"?column\"?,", p10_lines(p10_a$dir, csv)[2])
+        svg_ok <- svglite_installed() && all(purrr::map_lgl(grep("[.]svg$", z, value = TRUE), function(f) {
+          s <- p10_lines(p10_a$dir, f)
+          sum(grepl(paste0(">", p10_mark, "</text>"), s, fixed = TRUE)) == 2L && sum(grepl("<rect[^>]*fill: #B40404", s)) == 2L }))
+        kinds <- sub("^.*[.]", "", z)
+        text_ok && csv_ok && svg_ok && length(grep("[.]svg$", z)) == 3L && length(grep("[.]png$", z)) == 3L && sum(z == csv) == 1L && all(kinds %in% c("html", "R", "yaml", "csv", "svg", "png", "mp4")) &&
+          setequal(z, c("dashboard.html", "codebook.html", "data_dictionary.yaml", "charts.R", paste0("charts/", c("01_revenue_by_region", "02_revenue_by_month", "03_revenue_against_units"), c(".png", ".png", ".png")),
+                        paste0("charts/", c("01_revenue_by_region", "02_revenue_by_month", "03_revenue_against_units"), ".svg"), csv))
+      })
+
+check("10A-3: each PNG of charts/ has a band at the top and one at the bottom: 0.2 inch (60 pixels at 300 dpi) of #b40404 across the full width, white type centred in it, the chart below and above unchanged (the file is the chart's 1350 pixels plus the two bands, 2100 by 1470), and nothing red in the rows under and over the bands; the Dark page's PNG too",
+      all(purrr::map_lgl(grep("[.]png$", names(p10_a$files), value = TRUE), function(f) p10_banded(file.path(p10_a$dir, f), c(2100L, 1470L)))) &&
+        p10_banded(file.path(p10_def$dir, "charts/01_revenue_by_region.png"), c(2100L, 1470L)) &&
+        { plain <- tempfile(fileext = ".png"); p <- spec_plot(p10_specs$bar, p10_data, p10_cb, chart_palette_default()); spec_png(p, plain, dpi = 300); !p10_banded(plain) && identical(dim(png::readPNG(plain))[1:2], c(1350L, 2100L)) })
+
+check("10A-4: the marked files still read: the dictionary reads back as the same codebook as an unmarked one, the CSV read with skip = 1 is the same table as an unmarked CSV (the note column too), charts.R parses, and the Data page's CSV (no marking given) still has its header on the first line",
+      {
+        plain <- tempfile(fileext = ".yaml"); write_codebook(p10_cb, plain)
+        tb <- summary_table(p10_data, p10_cb, "revenue", "region")
+        csv_plain <- tempfile(fileext = ".csv"); summary_csv(tb, TRUE, csv_plain)
+        csv_marked <- file.path(p10_a$dir, "charts/04_revenue_by_region.csv")
+        identical(read_codebook(file.path(p10_a$dir, "data_dictionary.yaml")), read_codebook(plain)) &&
+          identical(p10_cells(readr::read_csv(csv_marked, skip = 1, show_col_types = FALSE, progress = FALSE)), p10_cells(readr::read_csv(csv_plain, show_col_types = FALSE, progress = FALSE))) &&
+          "note" %in% names(readr::read_csv(csv_marked, skip = 1, show_col_types = FALSE, progress = FALSE)) && inherits(tryCatch(parse(file.path(p10_a$dir, "charts.R")), error = function(e) e), "expression") &&
+          grepl("^\"?column\"?,", sub("^\ufeff", "", readLines(csv_plain, n = 1, encoding = "UTF-8"))) && !startsWith(readLines(csv_plain, n = 1, encoding = "UTF-8"), "#")
+      })
+
+check("10A-5: a hostile marking (a tag with an attribute and quotes, an ampersand and a newline) arrives as text everywhere: the pages hold it escaped (parsed, each band's text is exactly the marking with its newline made a space, and the page has no <b> element and no raw '<b onclick'), the first line of charts.R, the yaml and the CSV is that one line (the newline cannot start a second line: the second line is still the file's own), the SVG parses as XML with the text intact, and the PNG still has its bands",
+      {
+        mk <- marking_clean(p10_hostile)
+        pages <- purrr::map(c("dashboard.html", "codebook.html"), function(f) p10_text(p10_h$dir, f))
+        page_ok <- all(purrr::map_lgl(pages, function(h) {
+          doc <- xml2::read_html(h)
+          marks <- xml2::xml_text(xml2::xml_find_all(doc, "//div[starts-with(@class,'mark ')]"))
+          identical(marks, rep(p10_hostile_clean, 2L)) && !length(xml2::xml_find_all(doc, "//b")) && !grepl("<b onclick", h, fixed = TRUE) && length(p10_bands(h)) == 2L &&
+            grepl("&lt;b onclick=&quot;x()&quot;&gt;&amp;amp; &#39;q&#39; &quot;r&quot;&lt;/b&gt; next # line", h, fixed = TRUE)
+        }))
+        csv <- p10_lines(p10_h$dir, "charts/02_revenue_by_region.csv")
+        svg <- xml2::read_xml(file.path(p10_h$dir, "charts/01_revenue_by_region.svg"))
+        svg_text <- xml2::xml_text(xml2::xml_find_all(svg, "//*[local-name()='text']"))
+        isTRUE(mk$ok) && identical(mk$text, p10_hostile_clean) && page_ok &&
+          identical(p10_lines(p10_h$dir, "charts.R")[1:2], c(paste0("# ", p10_hostile_clean), "# The code of each chart in the dashboard, in the order shown. Run a chart's part on its own;")) &&
+          identical(p10_lines(p10_h$dir, "data_dictionary.yaml")[1:2], c(paste0("# ", p10_hostile_clean), "chart_codebook: 1")) &&
+          identical(sub("^\ufeff", "", csv[1]), paste0("# ", p10_hostile_clean)) && grepl("^\"?column\"?,", csv[2]) && sum(svg_text == p10_hostile_clean) == 2L &&
+          identical(read_codebook(file.path(p10_h$dir, "data_dictionary.yaml")), read_codebook({ f <- tempfile(fileext = ".yaml"); write_codebook(p10_cb, f); f })) &&
+          p10_banded(file.path(p10_h$dir, "charts/01_revenue_by_region.png"))
+      })
+
+check("10A-6: a blank marking is refused with a sentence (every export is marked, even if the marking is UNCLASSIFIED): an empty text, spaces, a newline and a tab, NA and a number are all refused, a build with one stops with that sentence, writes no zip and leaves no staging folder; 80 characters are allowed and 81 refused with the count in the sentence (the app does not cut a marking); no marking given at all (NULL) is the default, not a blank",
+      {
+        blanks <- list("", "   ", "\n\t \r\n", NA_character_, 5, character(0), NULL)
+        refused <- purrr::map(blanks[-length(blanks)], marking_clean)
+        out <- file.path(tempfile("p10_blank_"), "d.zip"); dir.create(dirname(out))
+        staging_before <- length(list.files(tempdir(), pattern = "^dashboard_"))
+        err <- tryCatch(build_dashboard(list(p10_item(1, p10_specs$bar)), p10_data, p10_cb, chart_palette_default(), utils::modifyList(p10_set, list(marking = "  \n ")), p10_path, out), error = function(e) e)
+        m80 <- strrep("A", 80L); m81 <- strrep("A", 81L)
+        all(purrr::map_lgl(refused, function(r) !r$ok && identical(r$why, MARKING_BLANK))) && grepl("Every export is marked, even if the marking is UNCLASSIFIED", MARKING_BLANK, fixed = TRUE) &&
+          inherits(err, "error") && identical(conditionMessage(err), MARKING_BLANK) && !file.exists(out) && length(list.files(tempdir(), pattern = "^dashboard_")) == staging_before &&
+          marking_clean(m80)$ok && identical(marking_clean(m80)$text, m80) && !marking_clean(m81)$ok && grepl("81 characters", marking_clean(m81)$why, fixed = TRUE) && grepl("most is 80", marking_clean(m81)$why, fixed = TRUE) &&
+          identical(MARKING_MAX, 80L) && identical(marking_of(NULL), APP_CLASSIFICATION) &&
+          identical(marking_clean("  a \n b\t c  ")$text, "a b c") && inherits(tryCatch(marking_of(""), error = function(e) e), "error")
+      })
+
+check("10A-7: marking_slug() makes the start of the zip's name: lower case, every run of other characters one underscore, none at either end, ASCII only, never empty ('marked' when nothing is left), no path character; 'UNCLASSIFIED//FOR TEST' is 'unclassified_for_test'",
+      {
+        cases <- c("UNCLASSIFIED//FOR TEST" = "unclassified_for_test", "  --SECRET//NOFORN-- " = "secret_noforn", "////" = "marked", "../../etc/passwd" = "etc_passwd", "CUI" = "cui", "a  b\t\tc" = "a_b_c",
+                   "UNCLASSIFIED" = "unclassified", "C:\\Users\\x" = "c_users_x", "a.b" = "a_b")
+        got <- purrr::map_chr(names(cases), marking_slug)
+        accents <- marking_slug("Caf\u00e9 Interne")   # transliterated where the platform can, dropped where it cannot: a word that starts with caf either way
+        nasty <- c(names(cases), "Caf\u00e9 Interne", "\u0426\u0415\u041b\u042c", "", " ", ".", "..", "/", "\\", "a/b\\c:d*e?f\"g<h>i|j", strrep("x y ", 20L), "__a__", "_", "\u00e9")
+        all_ok <- purrr::map_lgl(nasty, function(s) { g <- marking_slug(s); grepl("^[a-z0-9]+(_[a-z0-9]+)*$", g) && nzchar(g) })
+        identical(unname(got), unname(cases)) && startsWith(accents, "caf") && all(all_ok) && identical(marking_slug(NA_character_), "marked")
+      })
+
+# the Explore screen: the dialog's field, the name of the zip, a blank refused, a card's video, and what the model is sent (testServer, stand-ins for the model and the encoder)
+# what the stand-in says: a chart for a message, a headline for each chart it is asked about, and an empty set of labels for the set-up call
+p10_json <- function(x) as.character(jsonlite::toJSON(x, auto_unbox = TRUE))
+p10_ids <- function(user) sub("^CHART ", "", regmatches(user, gregexpr("(?m)^CHART \\S+", user, perl = TRUE))[[1]])
+p10_reply <- function(user, i) {
+  if (grepl("<CHARTS>", user, fixed = TRUE)) return(p10_json(list(charts = purrr::map(p10_ids(user), function(id) list(id = id, headline = "A headline", summary = "A summary.")))))
+  if (grepl("\nANALYST: ", user, fixed = TRUE)) return(p10_json(list(charts = list(list(family = "bar", x = "region", fn = "count", title = "Orders by region")))))
+  p10_json(list(labels = list(), row_is_guess = "one order"))
+}
+p10_si <- local({
+  env <- new.env()
+  env$sent <- list()
+  env$ask <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL) {
+    i <- length(env$sent) + 1L
+    env$sent[[i]] <- list(user = user, system = system_prompt)
+    raw <- p10_reply(user, i)
+    obj <- parse_json_block(raw)
+    if (!is.null(validate)) validate(obj)
+    list(obj = obj, raw = raw, finish = "success", tokens = c(100, 20, 50), seconds = 0.1)
+  }
+  env
+})
+p10_state <- shiny::reactiveValues(key_version = 0L, data = p10_data, problems = p10_o$read$problems, profile = p10_o$profile, codebook = p10_cb, path = p10_path, calls = NULL,
+                                   charts = list(), canvas = character(0), stories = list(), tables = list(), palette = chart_palette_default())
+p10_calls <- new.env()
+p10_calls$list <- list()
+p10_fake_video <- function(spec, data, cb, palette = chart_palette_default(), file, size = SPEC_VIDEO_PX$download, small = NULL, bare = FALSE, drawn_fps = NULL, widths = SPEC_VIDEO_WIDTHS,
+                           on_frame = NULL, poster = NULL, keep = NULL, marking = NULL) {
+  p10_calls$list[[length(p10_calls$list) + 1L]] <- list(marking = marking, file = file)
+  writeBin(charToRaw("fake 1920 video"), file)
+  if (!is.null(small)) writeBin(charToRaw("fake 1280 video"), small)
+  list(file = file, small = small, drawn = 87L, inputs = 135L, canvas = c(width = 8, height = 4.5), plot = NULL, drawn_fps = 24L, seconds = c(draw = 1, encode = 1))
+}
+p10_modal <- new.env()
+p10_e <- new.env()
+p10_real_video <- spec_video
+p10_token <- "ZQX-HOLD"
+p10_screen_mark <- paste0(p10_token, "//FOR TEST")
+assign("spec_video", p10_fake_video, envir = globalenv())
+assign("showModal", function(ui, session = NULL) assign("modal", ui, envir = p10_modal), envir = globalenv())
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p10_state, ask = p10_si$ask), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  modal_html <- function() paste(as.character(p10_modal$modal), collapse = "")
+  session$setInputs(chat_user_input = "q one")
+  # a card's video before any marking is typed: drawn with APP_CLASSIFICATION (the stand-in for the encoder records what it was asked for)
+  session$setInputs(c1_animate = 1)
+  p10_e$video0 <- p10_calls$list
+  session$setInputs(export = 1)
+  p10_e$dialog <- modal_html()
+  # the marking is set, then the model is sent a message
+  session$setInputs(dash_marking = p10_screen_mark, dash_title = "Sales review", dash_subtitle = "", dash_author = "", dash_date = as.Date("2026-11-21"), dash_intro = "", dash_boxes = "rows",
+                    dash_mode_c1 = "picture")
+  session$flushReact()
+  p10_e$dropped0 <- is.null(made$video[["c1"]]())
+  session$setInputs(chat_user_input = "q two")
+  p10_e$sent_before <- p10_si$sent
+  session$setInputs(dash_build = 1)
+  p10_e$res <- dash_result()
+  p10_e$action <- html("dash_action")
+  session$setInputs(chat_user_input = "q three")
+  p10_e$sent_after <- p10_si$sent
+  p10_e$log <- purrr::map_chr(made$log, function(m) paste(as.character(m$content), collapse = ""))
+  # and again with the marking typed
+  session$setInputs(c1_animate = 2)
+  p10_e$video1 <- p10_calls$list
+  # a changed marking drops the video: a file never carries an old marking
+  session$setInputs(dash_marking = "CHANGED//MARKING")
+  session$flushReact()
+  p10_e$dropped <- is.null(made$video[["c1"]]())
+  session$setInputs(c1_animate = 3)
+  p10_e$video2 <- p10_calls$list
+  # a blank marking is refused, with the zip left alone
+  zip_before <- dash_result()$zip
+  session$setInputs(dash_marking = "   ")
+  session$setInputs(dash_build = 2)
+  p10_e$blank <- dash_result()
+  p10_e$blank_html <- html("dash_action")
+  p10_e$note_blank <- html("dash_marking_note")
+  p10_e$zip_kept <- file.exists(zip_before)
+  session$setInputs(dash_marking = strrep("B", 81L))
+  p10_e$note_long <- html("dash_marking_note")
+  session$setInputs(dash_build = 3)
+  p10_e$long <- dash_result()
+  # the dialog opens again with what was typed
+  session$setInputs(dash_marking = "KEPT//THIS ONE")
+  session$setInputs(export = 2)
+  p10_e$reopened <- modal_html()
+})
+, error = function(e) message("note  a Part A screen scenario stopped: ", conditionMessage(e)), finally = { rm("showModal", envir = globalenv()); assign("spec_video", p10_real_video, envir = globalenv()) })
+p10_field <- function(h) regmatches(h, regexpr("<input[^>]*id=\"proxy1-dash_marking\"[^>]*>", h))
+check("10A-8: the export dialog has the field 'Classification marking', filled with APP_CLASSIFICATION, a text input that stops at 80 characters (maxlength), with a sentence under it that says where the marking goes and that it is never sent to a model; the field says at once why a blank or an 81-character marking will be refused; the dialog opens again with what was typed",
+      grepl(">Classification marking<", p10_e$dialog, fixed = TRUE) && length(p10_field(p10_e$dialog)) == 1L && grepl("value=\"UNCLASSIFIED\"", p10_field(p10_e$dialog), fixed = TRUE) &&
+        grepl("type=\"text\"", p10_field(p10_e$dialog), fixed = TRUE) && grepl("maxlength=\"80\"", p10_field(p10_e$dialog), fixed = TRUE) && grepl(htmltools::htmlEscape(DASH_MARKING_NOTE), p10_e$dialog, fixed = TRUE) &&
+        grepl("never sent to a model", DASH_MARKING_NOTE, fixed = TRUE) && grepl(MARKING_BLANK, htmltools::htmlEscape(p10_e$note_blank), fixed = TRUE) &&
+        grepl("81 characters", p10_e$note_long, fixed = TRUE) && length(p10_field(p10_e$reopened)) == 1L && grepl("value=\"KEPT//THIS ONE\"", p10_field(p10_e$reopened), fixed = TRUE))
+check("10A-9: the zip is named after the marking: with the marking 'ZQX-HOLD//FOR TEST' typed in the dialog a build makes zqx_hold_for_test_dashboard_2026-11-21.zip (the result and the download button say it), the page and the pictures carry the marking, and a blank marking in the dialog builds nothing: the result is refused, the sentence is the one under the field, no download is offered for it, the zip of the earlier build is untouched; so is an 81-character one",
+      isTRUE(p10_e$res$ok) && identical(p10_e$res$name, "zqx_hold_for_test_dashboard_2026-11-21.zip") && identical(basename(p10_e$res$zip), "zqx_hold_for_test_dashboard_2026-11-21.zip") &&
+        grepl("Built zqx_hold_for_test_dashboard_2026-11-21.zip: ", p10_e$action, fixed = TRUE) && grepl("Download zqx_hold_for_test_dashboard_2026-11-21.zip", p10_e$action, fixed = TRUE) &&
+        { d <- p10_unzip(p10_e$res$zip); length(p10_bands(p10_text(d, "dashboard.html"))) == 2L && grepl(p10_screen_mark, p10_text(d, "dashboard.html"), fixed = TRUE) && identical(p10_lines(d, "charts.R")[1], paste0("# ", p10_screen_mark)) &&
+            p10_banded(file.path(d, "charts/01_orders_by_region.png")) } &&
+        isFALSE(p10_e$blank$ok) && isTRUE(p10_e$blank$refused) && identical(p10_e$blank$lines, MARKING_BLANK) && grepl(htmltools::htmlEscape(MARKING_BLANK), p10_e$blank_html, fixed = TRUE) &&
+        !grepl("dash_download", p10_e$blank_html, fixed = TRUE) && !grepl("alert-success", p10_e$blank_html, fixed = TRUE) && isTRUE(p10_e$zip_kept) &&
+        isFALSE(p10_e$long$ok) && isTRUE(p10_e$long$refused) && grepl("81 characters", p10_e$long$lines, fixed = TRUE))
+check("10A-10: the marking is never sent to the model: after 'ZQX-HOLD//FOR TEST' is typed in the dialog, a chat message, and another after the export is built, hold no part of it (the user text and the system prompt of every call are searched for the token, the whole marking, and its lower-case slug), while they do hold the messages ('q two', 'q three') and the canvas; no line of the chat holds it either; and R/reflexes.R and R/llm.R, which write what the model is sent, never name a marking or a classification",
+      length(p10_e$sent_before) == 2L && length(p10_e$sent_after) == 3L && grepl("ANALYST: q two", p10_e$sent_before[[2]]$user, fixed = TRUE) && grepl("ANALYST: q three", p10_e$sent_after[[3]]$user, fixed = TRUE) &&
+        grepl("<CANVAS>", p10_e$sent_after[[3]]$user, fixed = TRUE) &&
+        !any(purrr::map_lgl(p10_e$sent_after, function(s) any(grepl(paste(c(p10_token, "zqx_hold", "FOR TEST"), collapse = "|"), c(s$user, s$system %||% ""), ignore.case = TRUE)))) &&
+        !any(grepl(p10_token, p10_e$log, fixed = TRUE)) &&
+        !any(grepl("marking|classification", c(readLines("R/reflexes.R", warn = FALSE), readLines("R/llm.R", warn = FALSE)), ignore.case = TRUE)))
+check("10A-11: a card's video is drawn with the marking in force (it leaves the app when Download MP4 is pressed): with none typed, APP_CLASSIFICATION; the video is dropped when a marking is typed (a file never carries an old marking), Animate then draws it with 'ZQX-HOLD//FOR TEST', and a changed marking drops it again and the next Animate has the new one",
+      length(p10_e$video0) == 1L && identical(p10_e$video0[[1]]$marking, APP_CLASSIFICATION) && isTRUE(p10_e$dropped0) && length(p10_e$video1) == 2L && identical(p10_e$video1[[2]]$marking, p10_screen_mark) &&
+        isTRUE(p10_e$dropped) && length(p10_e$video2) == 3L && identical(p10_e$video2[[3]]$marking, "CHANGED//MARKING"))
+
+# the last frame of a video is the static chart with its band: the frame keeps its 16 to 9 shape, the chart is drawn in the rows between the bands, and the last frame is spec_png() of the same plot, pixel for pixel
+p10_frames <- spec_frames(p10_specs$bar, p10_data, p10_cb, chart_palette_default(), n = 3L, bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS, marking = p10_mark)
+p10_plot <- attr(p10_frames, "plot")
+p10_canvas <- attr(p10_plot, "canvas")
+p10_chart <- attr(p10_plot, "chart")
+p10_f1 <- tempfile(fileext = ".png")
+p10_f2 <- tempfile(fileext = ".png")
+p10_f0 <- tempfile(fileext = ".png")
+video_draw(p10_frames[[3]], p10_f1, p10_canvas[["width"]], p10_canvas[["height"]], 100, marking = p10_mark)
+spec_png(p10_plot, p10_f2, size = p10_chart, dpi = 100, marking = p10_mark)
+video_draw(p10_frames[[1]], p10_f0, p10_canvas[["width"]], p10_canvas[["height"]], 100, marking = p10_mark)
+p10_plain_frames <- spec_frames(p10_specs$bar, p10_data, p10_cb, chart_palette_default(), n = 2L, bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS)
+check("10A-12: a video frame keeps its 16 to 9 shape with the marking (6.4 by 3.6 inches: 640 by 360 pixels at 100 dpi), has the band at the top and at the bottom on the first frame (nothing drawn yet) and on the last, the chart is drawn in the rows between them (its canvas is 0.4 inch shorter), and the last frame is the static chart with its band (spec_png() of the same plot with the same marking) pixel for pixel; without a marking the canvas and the chart are the same",
+      identical(unname(p10_canvas), c(6.4, 3.6)) && isTRUE(all.equal(unname(p10_chart), c(6.4, 3.6 - 2 * MARKING_BAND_IN))) && identical(dim(png::readPNG(p10_f1))[1:2], c(360L, 640L)) &&
+        identical(png::readPNG(p10_f1), png::readPNG(p10_f2)) && all(purrr::map_lgl(c(p10_f0, p10_f1), function(f) { im <- png::readPNG(f); band <- as.integer(round(MARKING_BAND_IN * 100))
+          all(purrr::map_lgl(c(1L, band %/% 2L, band), function(r) p10_is_red(p10_px(im, r, 5L)) && p10_is_red(p10_px(im, 360L - r + 1L, 5L)))) && !p10_is_red(p10_px(im, band + 6L, 5L)) })) &&
+        identical(attr(p10_plain_frames, "plot") |> attr("canvas"), attr(p10_plain_frames, "plot") |> attr("chart")) && "marking" %in% names(formals(spec_frames)))
+}   # end of the fast run part of Phase 10 Part A
+# <<< 10A end
+
+if (run_heavy) {   # the heavy run only: a video encoded and read back, and the pages printed by Chrome
+
+# a dashboard with one video: each frame of the MP4 has the band
+p10_v <- p10_build(list(p10_item(1, p10_specs$bar, "video")), p10_mark)
+p10_mp4 <- file.path(p10_v$dir, "charts/01_revenue_by_region.mp4")
+p10_vdir <- tempfile("p10_vf_")
+dir.create(p10_vdir)
+p10_vframes <- tryCatch(suppressMessages(av::av_video_images(p10_mp4, destdir = p10_vdir, format = "png", fps = 3)), error = function(e) character(0))
+p10_vband <- function(f) {
+  im <- png::readPNG(f)
+  h <- dim(im)[1]
+  band <- as.integer(round(MARKING_BAND_IN * 200))                     # the card video is 1280 pixels for 6.4 inches: 200 dpi
+  rows <- c(4L, band %/% 2L, band - 4L)
+  all(purrr::map_lgl(rows, function(r) p10_is_red(p10_px(im, r, 6L), 14) && p10_is_red(p10_px(im, h - r + 1L, 6L), 14))) && !p10_is_red(p10_px(im, band + 10L, 6L), 30) &&
+    sum(im[seq_len(band), , 1] > 0.9 & im[seq_len(band), , 2] > 0.9 & im[seq_len(band), , 3] > 0.9) > 80L
+}
+check("10A-13: every frame of the MP4 in charts/ read back has the band: the video is 1280 by 720, and on each frame decoded (at 3 a second: the first, the middle and the last among them) the top and bottom rows are #b40404 within the encoder's tolerance, white type stands in the band, and the rows under and over the bands are not red; the video in charts/ is the file the page plays",
+      length(p10_vframes) >= 12L && identical(dim(png::readPNG(p10_vframes[1]))[1:2], c(720L, 1280L)) && all(purrr::map_lgl(p10_vframes, p10_vband)) &&
+        av::av_media_info(p10_mp4)$video$width == 1280 && grepl(substr(dash_b64(p10_mp4), 1L, 200L), p10_text(p10_v$dir, "dashboard.html"), fixed = TRUE))
+
+# the pages printed by Chrome: a band at the top and at the bottom of every page, nothing under a band, a light ground (the Dark style, and a marking long enough to wrap)
+p10_long <- paste0("SECRET//ORCON/NOFORN//FOR OFFICIAL USE ONLY - HANDLE VIA SPECIAL CHANNELS ONLY X")
+p10_pr <- p10_build(c(purrr::imap(unname(p10_specs), function(sp, i) p10_item(i, sp)), list(p10_table)), p10_long, "dark")
+p10_print <- function(f, dpi = 50) {
+  pdf <- tempfile(fileext = ".pdf")
+  system2(p9_chrome, c("--headless=new", "--disable-gpu", "--no-sandbox", paste0("--user-data-dir=", file.path(tempdir(), "p10_chrome")), "--no-pdf-header-footer", "--virtual-time-budget=3000",
+                       paste0("--print-to-pdf=", pdf), paste0("file:///", normalizePath(file.path(p10_pr$dir, f), winslash = "/"))), stdout = FALSE, stderr = FALSE)
+  if (!file.exists(pdf)) return(NULL)
+  n <- pdftools::pdf_info(pdf)$pages
+  files <- suppressWarnings(pdftools::pdf_convert(pdf, format = "png", pages = seq_len(min(n, 8L)), dpi = dpi, filenames = file.path(tempdir(), sprintf("p10_page_%s_%%d.png", sub("[.].*$", "", f))), verbose = FALSE))
+  list(pages = n, files = files)
+}
+p10_page_ok <- function(f) {
+  im <- png::readPNG(f)
+  h <- dim(im)[1]
+  w <- dim(im)[2]
+  red <- function(r) { px <- round(255 * im[r, 18L, 1:3]); p10_is_red(px, 6) }   # a column inside the band, left of its type
+  rr <- which(purrr::map_lgl(seq_len(h), red))
+  top <- rr[rr < h / 2]
+  bot <- rr[rr > h / 2]
+  # the rows between a band and the first thing under it (or over it) are the paper's white, for a gap of at least 2 mm (50 dpi: 4 rows)
+  gap <- 4L
+  white <- function(rows) all(im[rows, , ] > 0.97)
+  length(top) > 3L && length(bot) > 3L && all(diff(top) == 1L) && all(diff(bot) == 1L) && max(top) - min(top) < 40L &&
+    white(seq(max(top) + 1L, max(top) + gap)) && white(seq(min(bot) - gap, min(bot) - 1L)) && all(im[1:3, 1:3, ] > 0.97) && all(im[h - 2L:0L, w - 2L:0L, ] > 0.97)
+}
+p10_pd <- if (p9_has_chrome) p10_print("dashboard.html")
+p10_pc <- if (p9_has_chrome) p10_print("codebook.html")
+check("10A-14: printed by Chrome (the Dark style, a marking of 80 characters that wraps to two lines): dashboard.html and codebook.html have more than one page, and on each page rasterised (the first eight) a red band stands at the top and another at the bottom, the rows between a band and the content are the paper's white (no content runs under a band), the corners are white (a light ground), and the page has the same marking on every page; the page's own screen band is not in the flow of the print",
+      !p9_has_chrome || (!is.null(p10_pd) && !is.null(p10_pc) && p10_pd$pages > 1L && p10_pc$pages > 1L && all(purrr::map_lgl(c(p10_pd$files, p10_pc$files), p10_page_ok)) &&
+                           grepl("@page{margin:0;}", p10_text(p10_pr$dir, "dashboard.html"), fixed = TRUE) && grepl("box-decoration-break:clone", p10_text(p10_pr$dir, "dashboard.html"), fixed = TRUE) &&
+                           grepl("body.long .page{padding-top:22mm", p10_text(p10_pr$dir, "dashboard.html"), fixed = TRUE)))
+
+}   # end of the heavy run part of Phase 10 Part A
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
 #

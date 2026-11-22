@@ -2693,11 +2693,64 @@ spec_widget <- function(plot, palette = attr(plot, "palette") %||% chart_palette
 # The static chart at SPEC_DPI pixels per inch and its size in inches, drawn on the device chart_device() opens
 #   (ragg, else cairo, else svglite: a PNG, or an SVG on a server that has only svglite; the file's ending and media
 #   type are chart_device_ext() and chart_device_type()). Returns the size in inches, invisibly.
-spec_png <- function(plot, file, size = spec_size(attr(plot, "spec"), attr(plot, "table")), dpi = SPEC_DPI, kind = chart_device_kind()) {
-  chart_device(file, size[["width"]], size[["height"]], dpi, kind)
+spec_png <- function(plot, file, size = spec_size(attr(plot, "spec"), attr(plot, "table")), dpi = SPEC_DPI, kind = chart_device_kind(), marking = NULL) {
+  band = if (is.null(marking)) 0 else MARKING_BAND_IN
+  chart_device(file, size[["width"]], size[["height"]] + 2 * band, dpi, kind)
   on.exit(grDevices::dev.off())
-  print(plot)
+  if (is.null(marking)) print(plot) else marking_draw(marking, size[["width"]], function() print(plot, newpage = FALSE), kind)
   invisible(size)
+}
+
+# ---- the classification marking on a picture or a video (Phase 10 Part A) -----------------------------------------------------
+# A file that can be separated from the page carries the marking in its pixels: a band across the top and another across the bottom, white bold
+#   type on #b40404 as on the pages (the sans typeface the charts use, bold). The bands are drawn by R on the same device as the chart, with grid:
+#   `marking` is the text (marking_clean() has made it one line), the chart itself is drawn unchanged in the rows between the bands, and the
+#   file is MARKING_BAND_IN inches taller at the top and again at the bottom than the chart (spec_png() adds them; a video keeps its 16 to 9 frame
+#   and draws the chart in what is left). Letters of a bitmap are placed one by one with MARKING_SPACING of an em between them (grid has no
+#   letter spacing); svglite writes the whole text as one element, so that the text of an SVG can be found and read, without the spacing. The
+#   text is the size MARKING_TEXT_PT points, or smaller when the marking would not fit in the band's width, so a long one is never cut off.
+MARKING_MAX <- 80L              # the most characters of a marking (marking_clean() in R/ui.R refuses more)
+MARKING_COLOUR <- "#b40404"
+MARKING_BAND_IN <- 0.2
+MARKING_TEXT_PT <- 9
+MARKING_SPACING <- 0.06
+MARKING_MARGIN <- 0.04
+
+# One band as a grob for a band `width_in` inches wide (the device must be open: the type is measured).
+marking_band <- function(text, width_in, kind = chart_device_kind()) {
+  gp = function(size) grid::gpar(fontfamily = chart_font_family("sans"), fontface = "bold", fontsize = size, col = "white")
+  spaced = !identical(kind, "svglite")
+  parts = if (spaced) strsplit(text, "")[[1]] else text
+  base = MARKING_TEXT_PT
+  grid::pushViewport(grid::viewport(gp = gp(base)))
+  w = grid::convertWidth(grid::stringWidth(parts), "points", valueOnly = TRUE)
+  grid::popViewport()
+  gap = if (spaced) MARKING_SPACING * base else 0
+  total = sum(w) + gap * (length(parts) - 1L)
+  k = min(1, width_in * 72 * (1 - 2 * MARKING_MARGIN) / total)
+  x = (width_in * 72 - total * k) / 2 + (cumsum(w) - w + gap * (seq_along(w) - 1L)) * k
+  grid::gTree(children = grid::gList(
+    grid::rectGrob(gp = grid::gpar(fill = MARKING_COLOUR, col = NA)),
+    # the baseline sits so that the capitals (about 0.72 of the size) are centred in the band, whatever letters the text has
+    grid::textGrob(parts, x = grid::unit(x, "points"), y = grid::unit(0.5, "npc") - grid::unit(0.36 * base * k, "points"), hjust = 0, vjust = 0, gp = gp(base * k))))
+}
+
+# Draws `draw()` (which draws the chart in the current viewport) between a band at the top and one at the bottom of the open device, which is
+#   `width_in` inches wide. Starts a new page.
+marking_draw <- function(marking, width_in, draw, kind = chart_device_kind()) {
+  band = grid::unit(MARKING_BAND_IN, "inches")
+  grid::grid.newpage()
+  grid::pushViewport(grid::viewport(layout = grid::grid.layout(3, 1, heights = grid::unit.c(band, grid::unit(1, "null"), band))))
+  grob = marking_band(marking, width_in, kind)
+  purrr::walk(c(1L, 3L), function(row) {
+    grid::pushViewport(grid::viewport(layout.pos.row = row))
+    grid::grid.draw(grob)
+    grid::popViewport()
+  })
+  grid::pushViewport(grid::viewport(layout.pos.row = 2))
+  draw()
+  grid::popViewport(2)
+  invisible(NULL)
 }
 
 # Width and height in inches for the static figure: 7 by 4.5, taller for sideways bars with many
@@ -2949,23 +3002,24 @@ video_frame <- function(ctx, progress) {
 #   chart (sideways bars and rows of panels need more than the usual 4.5; past the widest, the chart is drawn as it fits). The wider the
 #   canvas, the smaller its text on the screen, which is why the widths are few and the first is the usual one. `bare`: no title, subtitle
 #   or source line (the dashboard's page says them). Returns the plot, with the canvas in inches as attribute "canvas".
-video_plot <- function(spec, data, cb, palette = chart_palette_default(), bare = FALSE, widths = SPEC_VIDEO_WIDTHS) {
+video_plot <- function(spec, data, cb, palette = chart_palette_default(), bare = FALSE, widths = SPEC_VIDEO_WIDTHS, band = 0) {
   at = function(w) {
     h = w * 9 / 16
-    p = spec_plot(spec, data, cb, palette, web = list(width = w, height = h, bare = bare))
+    p = spec_plot(spec, data, cb, palette, web = list(width = w, height = h - 2 * band, bare = bare))
     attr(p, "canvas") = c(width = w, height = h)
+    attr(p, "chart") = c(width = w, height = h - 2 * band)
     p
   }
-  fits = function(p) spec_size(attr(p, "spec"), attr(p, "table"))[["height"]] <= attr(p, "canvas")[["height"]] + 1e-9
+  fits = function(p) spec_size(attr(p, "spec"), attr(p, "table"))[["height"]] <= attr(p, "chart")[["height"]] + 1e-9
   purrr::reduce(widths, function(p, w) if (!is.null(p) && fits(p)) p else at(w), .init = NULL)
 }
 
 # The frames of a chart's video, for progress 0 to 1 in `n` steps: the built chart for each (a ggplot_built object, which
 #   ggplot2::ggplot_gtable() draws). The chart's style is the palette's (palette$style); `style` names another. The plot as the static
 #   chart is attribute "plot", the progress of each "progress".
-spec_frames <- function(spec, data, cb, palette = chart_palette_default(), style = palette$style, n = video_frame_count(), bare = FALSE, widths = SPEC_VIDEO_WIDTHS) {
+spec_frames <- function(spec, data, cb, palette = chart_palette_default(), style = palette$style, n = video_frame_count(), bare = FALSE, widths = SPEC_VIDEO_WIDTHS, marking = NULL) {
   palette$style = style
-  ctx = video_context(video_plot(spec, data, cb, palette, bare, widths), cb)
+  ctx = video_context(video_plot(spec, data, cb, palette, bare, widths, band = if (is.null(marking)) 0 else MARKING_BAND_IN), cb)
   progress = seq(0, 1, length.out = n)
   structure(purrr::map(progress, function(p) video_frame(ctx, p)), plot = ctx$plot, progress = progress)
 }
@@ -2978,7 +3032,7 @@ video_scales <- function(frame) {
 }
 
 # One frame as a picture file, `width_in` by `height_in` inches at `dpi`, on the device chart_device() opens.
-video_draw <- function(frame, file, width_in, height_in, dpi, kind = chart_device_kind()) {
+video_draw <- function(frame, file, width_in, height_in, dpi, kind = chart_device_kind(), marking = NULL) {
   chart_device(file, width_in, height_in, dpi, kind)
   on.exit(grDevices::dev.off())
   # after the device is open: building the table measures text, which opens a device when none is. A line not yet begun is a group of one
@@ -2986,8 +3040,10 @@ video_draw <- function(frame, file, width_in, height_in, dpi, kind = chart_devic
   once = function(cnd) grepl("only one observation", conditionMessage(cnd), fixed = TRUE)
   withCallingHandlers({
     gt = ggplot2::ggplot_gtable(frame)
-    grid::grid.newpage()
-    grid::grid.draw(gt)
+    if (is.null(marking)) {
+      grid::grid.newpage()
+      grid::grid.draw(gt)
+    } else marking_draw(marking, width_in, function() grid::grid.draw(gt), kind)
   }, warning = function(w) if (once(w)) invokeRestart("muffleWarning"), message = function(m) if (once(m)) invokeRestart("muffleMessage"))
   invisible(file)
 }
@@ -3003,18 +3059,20 @@ video_inputs <- function(files, each = 1L, fps = SPEC_VIDEO_FPS) {
 #   twice; NULL: 24, unless one frame of the label phase, the dearest, shows the drawing would take more than SPEC_VIDEO_SLOW_S, and then
 #   12). `widths` are the canvases to try (video_plot()). `on_frame(i, n)` is called after each frame is drawn, `poster` names a file
 #   that gets the last frame (the finished chart) as a picture, and `keep` names a folder to leave the frame files in. Returns
-#   list(file, small, drawn, inputs, canvas, plot, drawn_fps, seconds = c(draw, encode)). Needs av (video_available()).
+#   list(file, small, drawn, inputs, canvas, plot, drawn_fps, seconds = c(draw, encode)). Needs av (video_available()). `marking`, when given, draws the band of marking_draw() on every frame: the
+#   frame keeps its 16 to 9 shape and the chart is drawn in the rows between the bands (video_plot() `band`), so the last frame is spec_png() of the same
+#   plot with the same marking, pixel for pixel.
 spec_video <- function(spec, data, cb, palette = chart_palette_default(), file, size = SPEC_VIDEO_PX$download, small = NULL, bare = FALSE,
-                       drawn_fps = NULL, widths = SPEC_VIDEO_WIDTHS, on_frame = NULL, poster = NULL, keep = NULL) {
+                       drawn_fps = NULL, widths = SPEC_VIDEO_WIDTHS, on_frame = NULL, poster = NULL, keep = NULL, marking = NULL) {
   if (!video_available()) stop(video_unavailable_text(), call. = FALSE)
   started = proc.time()[["elapsed"]]
-  ctx = video_context(video_plot(spec, data, cb, palette, bare, widths), cb)
+  ctx = video_context(video_plot(spec, data, cb, palette, bare, widths, band = if (is.null(marking)) 0 else MARKING_BAND_IN), cb)
   canvas = attr(ctx$plot, "canvas")
   dpi = size[["width"]] / canvas[["width"]]
   dir = keep %||% tempfile("chart_video_")
   dir.create(dir, showWarnings = FALSE, recursive = TRUE)
   if (is.null(keep)) on.exit(unlink(dir, recursive = TRUE), add = TRUE)
-  draw = function(p, f) video_draw(video_frame(ctx, p), f, canvas[["width"]], canvas[["height"]], dpi)
+  draw = function(p, f) video_draw(video_frame(ctx, p), f, canvas[["width"]], canvas[["height"]], dpi, marking = marking)
   if (is.null(drawn_fps)) {
     t = system.time(draw(0.97, file.path(dir, "probe.png")))[["elapsed"]]
     drawn_fps = if (t * video_frame_count(SPEC_VIDEO_FPS) > SPEC_VIDEO_SLOW_S) SPEC_VIDEO_FPS %/% 2L else SPEC_VIDEO_FPS

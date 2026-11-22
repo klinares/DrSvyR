@@ -26,11 +26,18 @@ survey microdata.
    short video ("Animate"). "Write headlines" gives each chart a headline and a summary. The "In
    dashboard" switch and Move up and Move down on each card choose what goes in the dashboard and in
    what order. "Add a summary table" puts a table of descriptive statistics on the canvas.
-5. **Export.** "Export dashboard" asks for a title, subtitle, author, date and introduction, up to
-   three key numbers, and for each chart a picture, an interactive chart or a video. "Build the
-   dashboard" makes `dashboard_<date>.zip` with `dashboard.html` and `codebook.html` (each one
+5. **Export.** "Export dashboard" asks for a title, subtitle, author, date and introduction, a
+   classification marking (it starts as the marking shown above every screen, `APP_CLASSIFICATION` in
+   `app.R`; it cannot be blank and is at most 80 characters), up to three key numbers, and for each
+   chart a picture, an interactive chart or a video. "Build the dashboard" makes
+   `<marking>_dashboard_<date>.zip` (the marking in lower case with other characters as underscores,
+   so `unclassified_dashboard_2026-11-22.zip`) with `dashboard.html` and `codebook.html` (each one
    file), `data_dictionary.yaml`, `charts.R` and a `charts/` folder (PNG at 300 dpi, SVG when
-   svglite is installed, MP4 for a video, CSV for a table).
+   svglite is installed, MP4 for a video, CSV for a table). Everything in it carries the marking: a
+   red band at the top and the bottom of each page (and of every printed page), of each PNG and SVG
+   and of every frame of each MP4, and a first line `# <marking>` in `charts.R`, the dictionary and
+   each CSV (a program that reads a CSV must skip that one line: `readr::read_csv(file, skip = 1)`).
+   The marking is yours to state: the app does not judge or change it, and it is never sent to the model.
 
 The Methodology page says how a chart is chosen and drawn and where each rule comes from.
 
