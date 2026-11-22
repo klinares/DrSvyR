@@ -858,3 +858,110 @@ summarize_inputs <- function(inputs, ask = llm_json, m = APP_MODEL) {
          repaired = FALSE))
   list(charts = purrr::set_names(out, purrr::map_chr(inputs, "id")), calls = dplyr::bind_rows(purrr::map(done, function(d) dplyr::bind_rows(d$records))))
 }
+
+
+# ---- things to ask: the question templates of www/methodology.md, filled from the data dictionary ----------------
+#   No model call. The templates are the last column of the table under "## Which chart for which question": the text
+#   in quotes, with {measure}, {measure2}, {measure3}, {group}, {group2} and {time} where a column goes. The table is
+#   found by its heading and its columns by their header cells, so a reordered table still reads. The file is the
+#   manager's and is never edited by code.
+
+METHODOLOGY_FILE <- file.path("www", "methodology.md")
+METHODOLOGY_TABLE_HEADING <- "Which chart for which question"
+METHODOLOGY_COLUMNS <- c(question = "The question", chart = "The chart", use = "Use it when", ask = "Ask something like")
+
+# The slots a template may hold, and the columns each is filled from: measure, measure2 and measure3 are the first,
+#   second and third column with the measure role; group and group2 the first and second with the group role; time
+#   the first with the time role (the one canvas_boxes() takes its period from).
+EXAMPLE_SLOTS <- c("measure", "measure2", "measure3", "group", "group2", "time")
+EXAMPLE_QUESTIONS_MAX <- 8L
+
+# A column fills a slot only when it has at least two different values and is not mostly missing; a group column
+#   also has at most as many values as a chart may have panels (SPEC_FACET_MAX).
+EXAMPLE_MISSING_MAX <- 0.5
+# A label longer than this is cut, so one odd label cannot make a question the size of a paragraph.
+EXAMPLE_LABEL_CHARS <- 60L
+
+# The cells of one line of the file's table (a backslash before a bar keeps it as a bar in the text).
+methodology_cells <- function(line) {
+  inner = sub("\\s*\\|\\s*$", "", sub("^\\s*\\|", "", gsub("\\|", "\001", line, fixed = TRUE)))
+  trimws(gsub("\001", "|", strsplit(inner, "|", fixed = TRUE)[[1]], fixed = TRUE))
+}
+
+# The question templates, one per row of the table, in the table's order: question and chart (as written in the
+#   file), use (when to use it), template (the text in quotes, braces as written; the whole cell when it has no
+#   quotes), slots (the braces' names, in order). Stops, naming the file, when the heading, the table or one of its
+#   columns is not there.
+methodology_templates <- function(path = METHODOLOGY_FILE) {
+  if (!file.exists(path)) stop("The methodology file is missing: ", path, call. = FALSE)
+  lines = readLines(path, encoding = "UTF-8", warn = FALSE)
+  at = grep(paste0("^##\\s+", METHODOLOGY_TABLE_HEADING, "\\s*$"), lines)
+  if (length(at) != 1L)
+    stop(basename(path), " needs exactly one heading '## ", METHODOLOGY_TABLE_HEADING, "', and has ", length(at), ".", call. = FALSE)
+  rest = lines[-seq_len(at)]
+  nxt = grep("^#{1,2}\\s", rest)
+  if (length(nxt)) rest = rest[seq_len(nxt[1] - 1L)]
+  rows = purrr::map(rest[grepl("^\\s*\\|", rest)], methodology_cells)
+  if (length(rows) < 3L || !all(grepl("^:?-{3,}:?$", rows[[2]])))
+    stop(basename(path), " has no table under '## ", METHODOLOGY_TABLE_HEADING, "' (a header row, a divider row and one row a question).", call. = FALSE)
+  header = rows[[1]]
+  col_at = purrr::map_int(METHODOLOGY_COLUMNS, function(h) match(h, header, nomatch = 0L))
+  if (any(col_at == 0L))
+    stop(basename(path), ": the table under '## ", METHODOLOGY_TABLE_HEADING, "' has no column '", METHODOLOGY_COLUMNS[col_at == 0L][1], "'.", call. = FALSE)
+  body = purrr::keep(rows[-(1:2)], function(r) length(r) == length(header))
+  cell = function(r, key) r[[col_at[[key]]]]
+  quoted = function(x) {
+    m = regmatches(x, regexec(paste0("[\"", intToUtf8(0x201c), "](.*)[\"", intToUtf8(0x201d), "]"), x))[[1]]
+    if (length(m)) m[[2]] else x
+  }
+  tibble::tibble(question = purrr::map_chr(body, cell, "question"), chart = purrr::map_chr(body, cell, "chart"),
+                 use = purrr::map_chr(body, cell, "use"), template = purrr::map_chr(body, function(r) quoted(cell(r, "ask"))),
+                 slots = purrr::map(body, function(r) {
+                   t = quoted(cell(r, "ask"))
+                   gsub("[{}]", "", regmatches(t, gregexpr("\\{[A-Za-z0-9_]+\\}", t))[[1]])
+                 }))
+}
+
+# Read once when the app starts, so a methodology file that has lost its table stops it there, naming the file; at
+#   least one template must be there.
+check_methodology_file <- function(path = METHODOLOGY_FILE) {
+  t = methodology_templates(path)
+  if (!nrow(t)) stop(basename(path), " has a table with no rows under '## ", METHODOLOGY_TABLE_HEADING, "'.", call. = FALSE)
+  invisible(t)
+}
+
+# A column's name as a question says it: its label, else its name as words (col_title()); on one line, and cut when long.
+example_label <- function(cb, e) {
+  l = one_line(col_title(cb, e$name, capital = FALSE))
+  if (!nzchar(l)) l = one_line(e$name)
+  if (nchar(l) > EXAMPLE_LABEL_CHARS) paste0(substr(l, 1L, EXAMPLE_LABEL_CHARS - 3L), "...") else l
+}
+
+# The slots a codebook can fill, as c(slot = label); a slot the file has no column for is not in it.
+example_slots <- function(cb) {
+  usable = purrr::keep(cb$columns, function(e) is_text1(e$name) && (e$missing %||% 0) < EXAMPLE_MISSING_MAX && (e$distinct %||% 0L) >= 2L)
+  with_role = function(role) purrr::keep(usable, function(e) identical(e$role, role))
+  measures = with_role("measure")
+  groups = purrr::keep(with_role("group"), function(e) e$distinct <= SPEC_FACET_MAX)
+  time = with_role("time")
+  pick = function(x, i, slot) if (length(x) >= i) stats::setNames(example_label(cb, x[[i]]), slot)
+  c(pick(measures, 1L, "measure"), pick(measures, 2L, "measure2"), pick(measures, 3L, "measure3"),
+    pick(groups, 1L, "group"), pick(groups, 2L, "group2"), pick(time, 1L, "time"))
+}
+
+# A template with its slots filled, in one pass: text that goes into a slot is never read as a slot itself.
+fill_template <- function(template, values) {
+  found = gregexpr("\\{[A-Za-z0-9_]+\\}", template)
+  regmatches(template, found) = list(unname(values[gsub("[{}]", "", regmatches(template, found)[[1]])]))
+  template
+}
+
+# Questions the analyst can try, from the data dictionary and the templates of www/methodology.md: each template whose
+#   slots the file can fill, filled with the columns' labels, in the table's order, at most `max`. Returns a tibble:
+#   question (one line), family (the chart as the table names it, "Bar, or dot"), template. No model call, no data.
+example_questions <- function(cb, templates = methodology_templates(), max = EXAMPLE_QUESTIONS_MAX) {
+  values = example_slots(cb)
+  can = purrr::map_lgl(templates$slots, function(s) length(s) > 0L && all(s %in% names(values)))
+  t = utils::head(templates[can, ], max)
+  tibble::tibble(question = purrr::map_chr(t$template, fill_template, values), family = t$chart, template = t$template)
+}
