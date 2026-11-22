@@ -38,7 +38,7 @@ app_ui <- function(classification, logo, office, source_url)
       bslib::nav_panel(CHART_TABS[1], tags$div(class = "container py-3", start_ui())),
       bslib::nav_panel(CHART_TABS[2], tags$div(class = "container py-3", data_page_ui())),
       bslib::nav_panel(CHART_TABS[3], mod_explore_ui("explore")),
-      bslib::nav_panel(CHART_TABS[4], tags$div(class = "container py-3", later_ui())),
+      bslib::nav_panel(CHART_TABS[4], tags$div(class = "container py-3 chart-method", mod_method_ui("method"))),
       bslib::nav_spacer(),
       bslib::nav_item(tags$a("Source code", href = source_url, target = "_blank", rel = "noopener",
                              class = "btn btn-outline-secondary btn-sm")),
@@ -642,6 +642,7 @@ SETUP_WELCOME <- paste("Start on the Data page: choose a data file there. Setup 
                        "with no model call except \"Label the columns\". After that, ask a question about your data.")
 SETUP_LABEL <- "Label the columns"
 SETUP_READY <- "Ask a question about your data, or press Suggest charts."
+SETUP_TRY <- "Try one of these:"
 DATA_PAGE_LINK <- "[Open the Data page](#open-data-page)"
 SETUP_NEED_DATA <- paste("Read a data file on the Data page first.", DATA_PAGE_LINK)
 SETUP_NEED_ROW <- paste("The data dictionary does not say what one row represents yet, and charts are drawn only after it does.",
@@ -977,6 +978,13 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       invisible()
     }
 
+    # The dictionary is ready: the line that says so and, while the canvas is empty, questions to try, as suggestion cards (the
+    #   templates of www/methodology.md filled from the dictionary: example_questions(), no model call). A card sends its question.
+    say_ready = function() {
+      tries = if (!length(isolate(state$canvas))) example_questions(isolate(state$codebook))$question else character(0)
+      say(c(SETUP_READY, if (length(tries)) SETUP_TRY), tries)
+    }
+
     # ---- the charts and their texts -------------------------------------------------------------
 
     chart_of = function(chart_id) isolate(state$charts)[[chart_id]]
@@ -1238,7 +1246,7 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       made$notes = character(0)
       made$label_offer = FALSE
       if (codebook_ready(cb)) {
-        if (!identical(made$ready_for, key)) { made$ready_for = key; say(SETUP_READY) }
+        if (!identical(made$ready_for, key)) { made$ready_for = key; say_ready() }
       } else {
         made$label_offer = TRUE
         say(c("Next, the data dictionary: each column needs a label, and it needs to say what one row represents.",
@@ -1251,8 +1259,16 @@ mod_explore_server <- function(id, state, ask = llm_json) {
     observeEvent(ready(), {
       if (isTRUE(ready()) && !is.null(made$key) && !identical(made$ready_for, made$key)) {
         made$ready_for = made$key
-        say(SETUP_READY)
+        say_ready()
       }
+    }, ignoreInit = TRUE)
+
+    # A question that Methodology's "Ask this" button put in state$ask_request: sent as if the analyst had pressed a suggestion
+    #   card, so it shows as the analyst's message and goes the same way (setup_action(), then chat_turn()).
+    observeEvent(state$ask_request, {
+      req = state$ask_request
+      if (is.list(req) && is_text1(req$text) && nzchar(trimws(req$text)))
+        shinychat::update_chat_user_input("chat", value = req$text, submit = TRUE, focus = FALSE)
     }, ignoreInit = TRUE)
 
     # ---- the canvas ---------------------------------------------------------------------------------
@@ -1537,5 +1553,317 @@ mod_explore_server <- function(id, state, ask = llm_json) {
       })
       invisible()
     }
+  })
+}
+
+
+# ---- Methodology -----------------------------------------------------------------------------------------------------
+#   The page, in this order: www/methodology.md as HTML (the manager's text, never edited here; a small drawn example
+#   beside each row of its "Which chart for which question" table); "Questions for your file", the page's templates filled
+#   from the data dictionary (example_questions(), no model call); "The rules the model follows", built from the reflex files
+#   by their own parser; "How a reply is checked"; the styles and fonts with their licences. A contents list at the top. No
+#   part of it calls a model. Everything but the questions is the same for every session, so it is built once, when the app
+#   starts (the pictures from a table made here, not from any file of the analyst's).
+
+# A thumbnail is the chart as the app draws it, 7 by 4.5 inches, at 72 pixels per inch, shown about 9 rem wide.
+METHOD_THUMB_SIZE <- c(width = 7, height = 4.5)
+METHOD_THUMB_DPI <- 72L
+
+# One thumbnail for each family of the table: the key is the first word of the table's "The chart" cell, lower case
+#   ("Bar, or dot" is bar, "Small multiples" is small). The specs are written as the gold specs are, against the table
+#   method_thumb_data() makes.
+METHOD_THUMB_SPECS <- list(
+  bar = list(family = "bar", x = "region", y = "revenue", fn = "sum"),
+  line = list(family = "line", x = "year", y = "revenue", color = "region", fn = "sum"),
+  slope = list(family = "slope", x = "year", y = "revenue", color = "region", fn = "sum",
+               filter = list(list(column = "year", op = "in", value = c(2015L, 2024L)))),
+  scatter = list(family = "scatter", x = "units", y = "price", fit = "loess"),
+  bubble = list(family = "bubble", x = "units", y = "price", size = "revenue",
+                filter = list(list(column = "year", op = "==", value = 2024L))),
+  histogram = list(family = "histogram", x = "revenue"),
+  box = list(family = "box", x = "region", y = "price"),
+  heatmap = list(family = "heatmap", x = "year", y = "region", color = "price", fn = "mean", labels = "off"),
+  small = list(family = "line", x = "year", y = "revenue", facet = "region", fn = "sum"))
+METHOD_THUMB_ALT <- c(
+  bar = "A small bar chart: one bar for each of five groups.", line = "A small line chart: one line for each of five groups over ten years.",
+  slope = "A small slope chart: five groups at two points in time, joined by lines.",
+  scatter = "A small scatter chart: one point for each row, with a fitted curve.",
+  bubble = "A small bubble chart: five points, the size of each showing a third measure.",
+  histogram = "A small histogram: how one measure is spread out.", box = "A small box chart: the spread of one measure for each of five groups.",
+  heatmap = "A small heatmap: one measure in the cells of two groupings.", small = "Small multiples: the same line chart repeated in a panel for each of five groups.")
+METHOD_THUMB_NOTE <- paste("The small pictures are drawn by chaRt from a made-up table of five regions over ten years. They show the form of each",
+                           "chart, not a finding.")
+
+# The thumbnails are made once per process: the first call draws them, and app.R makes that call when it starts.
+METHOD_CACHE <- new.env()
+
+# A tiny table, the same every time and made with no random numbers: five regions by ten years, with units, price and revenue.
+method_thumb_data <- function() {
+  regions = c("North", "South", "East", "West", "Central")
+  grid = expand.grid(year = 2015:2024, region = regions, stringsAsFactors = FALSE)
+  r = match(grid$region, regions)
+  wobble = function(k) sin(k * 12.9898 + r * 78.233 + grid$year * 37.719)
+  units = round(100 * c(1.0, 0.8, 1.3, 0.6, 1.0)[r] * (1 + c(0.06, 0.0, 0.03, 0.09, -0.02)[r])^(grid$year - 2015L) * (1 + 0.08 * wobble(1)))
+  price = round(10 + 0.07 * units + 3 * wobble(2), 2)
+  tibble::tibble(region = grid$region, year = grid$year, units = units, price = price, revenue = round(units * price, 2))
+}
+
+# One thumbnail as a data address, drawn on the device chart_device() opens, as every chart is.
+method_thumb_draw <- function(spec, data, cb) {
+  p = spec_plot(spec, data, cb)
+  f = tempfile(fileext = chart_device_ext())
+  on.exit(unlink(f))
+  spec_png(p, f, size = METHOD_THUMB_SIZE, dpi = METHOD_THUMB_DPI)
+  paste0("data:", chart_device_type(), ";base64,", jsonlite::base64_enc(readBin(f, "raw", file.size(f))))
+}
+
+# The thumbnails by key; NULL for one that could not be drawn (a server that cannot draw has none, and the page goes without).
+method_thumbs <- function() {
+  if (is.null(METHOD_CACHE$thumbs)) {
+    data = method_thumb_data()
+    cb = new_codebook(profile_data(data), "made-up table", nrow(data))
+    cb$row_is = "one region in one year"
+    METHOD_CACHE$thumbs = purrr::map(METHOD_THUMB_SPECS, function(s) tryCatch(method_thumb_draw(s, data, cb), error = function(e) NULL))
+  }
+  METHOD_CACHE$thumbs
+}
+
+method_thumb_key <- function(chart) tolower(sub("[ ,].*$", "", trimws(chart)))
+
+# The page's own headings get an id so the contents list can link to them: "method-" and the heading as lower case words.
+method_slug <- function(x)
+  paste0("method-", gsub("^-+|-+$", "", gsub("[^a-z0-9]+", "-", tolower(gsub("<[^>]+>|&[a-z#0-9]+;", "", x)))))
+
+method_add_ids <- function(html) {
+  found = gregexpr("<h2>(.*?)</h2>", html, perl = TRUE)
+  hits = regmatches(html, found)[[1]]
+  if (!length(hits)) return(html)
+  text = sub("^<h2>(.*)</h2>$", "\\1", hits)
+  regmatches(html, found) = list(paste0("<h2 id=\"", method_slug(text), "\">", text, "</h2>"))
+  html
+}
+
+# The id and text (as HTML) of each "##" heading of the rendered page.
+method_headings <- function(html) {
+  hits = regmatches(html, gregexpr("<h2 id=\"[^\"]+\">.*?</h2>", html, perl = TRUE))[[1]]
+  list(id = sub("^<h2 id=\"([^\"]+)\">.*$", "\\1", hits), text = sub("^<h2 id=\"[^\"]+\">(.*)</h2>$", "\\1", hits))
+}
+
+# The table under "Which chart for which question", in a scrolling box, with a first column of thumbnails: one cell for
+#   each row, from the table's own order (the templates are read from the same rows). The html is left as it was if the
+#   table is not there or has a different number of rows.
+method_add_thumbs <- function(html, templates, thumbs) {
+  pat = paste0("(?s)<h2[^>]*>", METHODOLOGY_TABLE_HEADING, "</h2>\\s*<table>(.*?)</table>")
+  at = regexpr(pat, html, perl = TRUE)
+  if (at < 0L) return(html)
+  table_html = regmatches(html, regexec(pat, html, perl = TRUE))[[1]][2]
+  start = regexpr("<tbody>", table_html, fixed = TRUE)
+  head_html = substr(table_html, 1L, start - 1L)
+  body_html = substr(table_html, start, nchar(table_html))
+  rows = gregexpr("<tr>", body_html, fixed = TRUE)
+  keys = method_thumb_key(templates$chart)
+  if (start < 0L || length(rows[[1]]) != length(keys)) return(html)
+  alt = function(key) if (key %in% names(METHOD_THUMB_ALT)) METHOD_THUMB_ALT[[key]] else ""
+  cell = function(key) paste0("<tr><td class=\"chart-method-thumb\">",
+                              if (!is.null(thumbs[[key]]))
+                                paste0("<img src=\"", thumbs[[key]], "\" alt=\"", htmltools::htmlEscape(alt(key), attribute = TRUE), "\" loading=\"lazy\">"),
+                              "</td>")
+  regmatches(body_html, rows) = list(purrr::map_chr(keys, cell))
+  head_html = sub("<tr>", "<tr><th scope=\"col\">Example</th>", head_html, fixed = TRUE)
+  heading = sub("(?s)<table>.*$", "", regmatches(html, at)[[1]], perl = TRUE)
+  new = paste0(heading, "<div class=\"table-responsive\"><table class=\"table table-sm align-middle chart-method-table\">", head_html, body_html,
+               "</table></div><p class=\"small text-muted\">", htmltools::htmlEscape(METHOD_THUMB_NOTE), "</p>")
+  paste0(substr(html, 1L, at - 1L), new, substr(html, at + attr(at, "match.length"), nchar(html)))
+}
+
+# The sections the page adds after the manager's text, as id and title, in order.
+METHOD_SECTIONS <- c("method-questions" = "Questions for your file", "method-rules" = "The rules the model follows",
+                     "method-checks" = "How a reply is checked", "method-styles" = "Styles and fonts")
+
+method_contents <- function(ids, titles)
+  tags$nav(class = "chart-method-contents card card-body mb-4", `aria-label` = "Contents",
+           tags$p(class = "fw-semibold mb-1", "On this page"),
+           tags$ul(class = "list-unstyled mb-0 chart-method-toc",
+                   purrr::map2(ids, titles, function(id, title) tags$li(tags$a(href = paste0("#", id), HTML(title))))))
+
+# The manager's page as HTML, by commonmark with extensions (what shiny::markdown() calls: tables are an extension), with the
+#   thumbnails in the table and an id on each heading; and the contents list after the opening paragraph, where the
+#   first "##" heading starts. The braces of the question templates are shown as they are.
+method_text_ui <- function(path = METHODOLOGY_FILE) {
+  md = paste(readLines(path, encoding = "UTF-8", warn = FALSE), collapse = "\n")
+  html = method_add_ids(commonmark::markdown_html(md, extensions = TRUE))
+  html = method_add_thumbs(html, methodology_templates(path), method_thumbs())
+  heads = method_headings(html)
+  first = regexpr("<h2", html, fixed = TRUE)
+  contents = method_contents(c(heads$id, names(METHOD_SECTIONS)), c(heads$text, unname(METHOD_SECTIONS)))
+  if (first < 0L) return(tagList(HTML(html), contents))
+  tagList(HTML(substr(html, 1L, first - 1L)), contents, HTML(substr(html, first, nchar(html))))
+}
+
+# "The rules the model follows": every reflex with a Label, from the parsed reflex files, grouped by file, a collapsed
+#   section for each: the label, when it applies, what it says, and its source. A rule with no Label (the analyst never
+#   reads it, and the column-labelling file has none) is counted, not listed.
+method_rules_ui <- function(dir = REFLEXES_DIR) {
+  files = purrr::map(REFLEX_FILES, read_reflex_file, dir)
+  shown = purrr::map(files, function(s) purrr::keep(unname(s$reflexes), function(r) !is.na(r$label)))
+  hidden = sum(lengths(purrr::map(files, function(s) s$reflexes))) - sum(lengths(shown))
+  rule_ui = function(r)
+    tags$div(class = "chart-rule mb-3",
+             tags$div(class = "fw-semibold", r$label),
+             tags$div(class = "small", tags$span(class = "text-muted", "When: "), r$when),
+             tags$div(class = "small", tags$span(class = "text-muted", "Say: "), r$say),
+             tags$div(class = "small text-muted", "Source: ", if (!is.na(r$source)) r$source))
+  tags$section(
+    id = "method-rules",
+    tags$h2("The rules the model follows"),
+    tags$p("The model is given these written rules with every request. Each says when it applies and what to say, and each carries its ",
+           "source. ", paste0(sum(lengths(shown)), " rules are listed here, in ", sum(lengths(shown) > 0L), " files",
+                              if (hidden > 0L) paste0("; ", hidden, " more have no label and are not listed"), ".")),
+    purrr::map2(files, shown, function(s, rules) if (length(rules))
+      tags$details(class = "chart-rule-file mb-2",
+                   tags$summary(class = "fw-semibold", paste0(s$title, " (", s$file, ", version ", s$version, "): ", length(rules), if (length(rules) == 1L) " rule" else " rules")),
+                   tags$div(class = "mt-2 ms-3", purrr::map(rules, rule_ui)))))
+}
+
+# "How a reply is checked", in plain words, from what R does with a reply (check_numbers(), check_words(), names_back(),
+#   check_chart(), summarize_batch() and chat_turn()). The words and numbers it quotes are the code's own constants.
+method_checks_ui <- function() {
+  words = function(x) paste0("'", x, "'", collapse = ", ")
+  tags$section(
+    id = "method-checks",
+    tags$h2("How a reply is checked"),
+    tags$p("The model's reply is only text. R reads it as data and never runs it, and R checks it before anything is shown as ",
+           "fact. The checks look at numbers, words and names; they cannot tell whether a sentence is a fair reading of the chart."),
+    tags$h3(class = "h5", "The number check"),
+    tags$p(paste0("Every number in a headline, a summary or a description of the file is looked for among the numbers R computed for that ",
+           "chart (its facts). A number passes when it is one of them, however it is written: '1,200', '1200' and '1.2 thousand' are one number, ",
+           "and a percent sign is ignored. It also passes when it is one of them rounded to fewer digits that still keep at least two ",
+           "significant digits: 69,700 passes for 69,712, and 70,000 does not. A number in the chart's own filter or top-n passes, and so ",
+           "does a year that appears in the facts. The words from '", names(NUMBER_WORDS)[1L], "' to '", names(NUMBER_WORDS)[length(NUMBER_WORDS)],
+           "' are checked as numbers; 'one' is not, because it is nearly always a pronoun. A date such as 2024-12-01 counts as its year.")),
+    tags$h3(class = "h5", "The word check"),
+    tags$p(paste0("Words that claim a cause, or reach beyond the rows of the file, are not allowed: ", words(SUMMARY_FORBIDDEN), ". Words that state ",
+           "a multiple, ", words(names(MULTIPLE_WORDS)), ", pass only when the chart's facts state a multiple that supports them: at least 2 for ",
+           "'doubled' and 'twice', 3 for 'tripled', 4 for 'quadrupled', at most 0.5 for 'halved'.")),
+    tags$h3(class = "h5", "The names check"),
+    tags$p("The model writes a name from your file as a token, such as [[N1]], and R puts the name back. A token that is not a name in ",
+           "that chart is flagged."),
+    tags$h3(class = "h5", "The chart check"),
+    tags$p("A chart the model asks for is checked before it is drawn. Its rule must be one of the written rules and must fit the chart's ",
+           "family (otherwise the rule is dropped, with no repair). Its columns must exist, not be ignored and be of a kind that part of the ",
+           "chart takes; its function, filter, top-n, sort, fit and every other field must be ones that family takes; and R must be able to ",
+           "build the chart's table from the rows. R then looks for faults a reader would notice, such as too many colours, and adds a note ",
+           "to the chart for each."),
+    tags$h3(class = "h5", "The repair"),
+    tags$p("A reply that fails a check gets one repair call: the model is shown its own reply, the problems found and the request to send the ",
+           "reply again corrected. The new reply is checked in the same way. There is no second repair. Text that still fails is kept and marked ",
+           "on its card, with each problem in plain words; a chart that still fails is not drawn, and the chat says why."),
+    tags$h3(class = "h5", "Your own edits"),
+    tags$p("A headline or summary you edit is checked by the same number and word checks as you leave the box, with no model call. A text is ",
+           "marked as changed when the chart, or the data, is no longer what it was written for."),
+    tags$h3(class = "h5", "Text from the model or the file"),
+    tags$p("A name, label or model sentence is escaped before the chat shows it, so it is read as text and never starts a link, a picture or ",
+           "formatting."))
+}
+
+# The styles, each with its small sample (the one the Style dialog shows), and the two bundled typefaces with their licences.
+FONT_LICENCE <- "SIL Open Font License, Version 1.1"
+FONT_LICENCE_FILES <- c(sans = "Inter-LICENSE.txt", serif = "SourceSerif4-LICENSE.md")
+
+# The first line of a font's licence file, which names its copyright holder.
+font_copyright <- function(file) {
+  path = file.path(CHART_FONT_DIR, file)
+  if (!file.exists(path)) return("(the licence file is not in this copy of the app)")
+  trimws(readLines(path, n = 1L, encoding = "UTF-8", warn = FALSE))
+}
+
+method_styles_ui <- function() {
+  colour = chart_palette(1L, chart_palette_default()$qualitative, CHART_STYLE_DEFAULT)[[1]]
+  serif_in = purrr::map_chr(purrr::keep(CHART_STYLES, function(s) "serif" %in% c(s$title_font, s$subtitle_font)), "label")
+  font_ui = function(role) {
+    f = CHART_FONTS[[role]]
+    file = FONT_LICENCE_FILES[[role]]
+    tags$li(class = "mb-2",
+            tags$span(class = "fw-semibold", style = paste0("font-family: ", f$css, ";"), paste0(f$family, ":")),
+            paste0(if (identical(role, "serif")) paste0("the title and subtitle of the ", paste(serif_in, collapse = " and "), " style, in regular, semibold and bold. ")
+                   else "all other chart text, in regular, semibold and bold. ",
+                   "Licence: ", FONT_LICENCE, ". ", font_copyright(file), " "),
+            tags$a(href = file.path("fonts", file), target = "_blank", rel = "noopener", "Licence text"))
+  }
+  tags$section(
+    id = "method-styles",
+    tags$h2("Styles and fonts"),
+    tags$p("A dashboard has one style, chosen with the Style button on Explore; the model never chooses it. Each style is a set of colours, ",
+           "a grid and a title in one of two typefaces."),
+    tags$div(class = "row g-3 mb-3",
+             purrr::map(names(CHART_STYLES), function(nm) {
+               st = CHART_STYLES[[nm]]
+               tags$div(class = "col-6 col-md-4 col-lg-2",
+                        HTML(style_sample_svg(nm, colour)), tags$div(class = "fw-semibold", st$label), tags$div(class = "small text-muted", st$note))
+             })),
+    tags$h3(class = "h5", "The typefaces"),
+    tags$p("Two typefaces are bundled with the app, so a chart looks the same on any server (when it is drawn by ragg; see Start here)."),
+    tags$ul(class = "list-unstyled", purrr::map(names(CHART_FONTS), font_ui)))
+}
+
+METHOD_CSS <- "
+.chart-method { max-width: 62rem; }
+.chart-method h2 { margin-top: 2rem; }
+.chart-method-toc li { margin: .15rem 0; }
+.chart-method-table td, .chart-method-table th { vertical-align: top; }
+.chart-method-thumb { width: 9.5rem; min-width: 9.5rem; }
+.chart-method-thumb img { display: block; width: 9rem; height: auto; border: 1px solid rgba(128, 128, 128, .5); }
+.chart-method .chart-style-sample { width: 100%; max-width: 12rem; }
+.chart-rule-file > summary { cursor: pointer; }
+.chart-question { display: flex; gap: .75rem; align-items: baseline; padding: .35rem 0; border-bottom: 1px solid rgba(128, 128, 128, .25); }
+.chart-question .btn { flex: none; }
+"
+
+# The Methodology page: its parts, and a place for the questions, which depend on the file.
+mod_method_ui <- function(id) {
+  ns = NS(id)
+  tagList(
+    method_text_ui(),
+    tags$section(id = "method-questions", tags$h2("Questions for your file"), uiOutput(ns("questions"))),
+    method_rules_ui(),
+    method_checks_ui(),
+    method_styles_ui(),
+    tags$style(HTML(METHOD_CSS)))
+}
+
+# "Questions for your file": what is there to say before a file is read, when none of the templates fits it, and the
+#   questions, each with a button. The text of a question comes from the analyst's own labels; it is put in the page as
+#   text by htmltools, which escapes it, and the button sends the question the server holds, not a text from the browser.
+method_questions_ui <- function(ns, cb, questions, ready) {
+  if (is.null(cb))
+    return(tags$p(class = "text-muted", "Read a data file on the Data page, and questions made from its columns appear here. ",
+                  tags$a(href = "#open-data-page", "Open the Data page")))
+  if (!nrow(questions))
+    return(tags$p(class = "text-muted", "None of the question templates above fits the columns of this file: they need columns with the ",
+                  "measure, group or time role, and a column with fewer than two different values or mostly missing is not used."))
+  tagList(
+    tags$p("Made from the labels of your columns by filling in the templates above, with no model call. A button sends the question to Explore.",
+           if (!ready) " Explore will first ask what one row of the file is, because the data dictionary does not say yet."),
+    purrr::map(seq_len(nrow(questions)), function(i)
+      tags$div(class = "chart-question",
+               actionButton(ns(paste0("ask_", i)), "Ask this", class = "btn-sm btn-outline-primary chart-call",
+                            `data-working` = WORKING_WORDS[["chat"]],
+                            onclick = "var t = document.querySelector('.navbar [data-value=\"Explore\"]'); if (t) t.click();"),
+               tags$span(questions$question[[i]]),
+               tags$span(class = "badge text-bg-secondary flex-none", questions$family[[i]]))))
+}
+
+# The questions follow the data dictionary. A button puts its question in state$ask_request, which the Explore server sends
+#   as the analyst's message (a question, not a model call made here).
+mod_method_server <- function(id, state) {
+  moduleServer(id, function(input, output, session) {
+    ns = session$ns
+    questions = reactive(if (!is.null(state$codebook)) example_questions(state$codebook))
+    output$questions = renderUI(method_questions_ui(ns, state$codebook, questions(), codebook_ready(state$codebook)))
+    purrr::walk(seq_len(EXAMPLE_QUESTIONS_MAX), function(i)
+      observeEvent(input[[paste0("ask_", i)]], {
+        q = questions()
+        if (!is.null(q) && i <= nrow(q)) state$ask_request = list(text = q$question[[i]], t = as.numeric(Sys.time()))
+      }))
   })
 }

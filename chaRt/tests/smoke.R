@@ -1964,7 +1964,7 @@ shiny::testServer(mod_explore_server, args = list(state = a_state, ask = a_si$as
     identical(a_state$codebook$row_is, "") && !isTRUE(ready())
   session$setInputs(chat_user_input = "A row is one order")
   a_out$row <- length(a_si$sent) == 1L && identical(a_state$codebook$row_is, "one order") && isTRUE(ready()) &&
-    identical(made$log[[length(made$log)]]$content, SETUP_READY) && nrow(a_state$calls) == 1L
+    startsWith(made$log[[length(made$log)]]$content, SETUP_READY) && nrow(a_state$calls) == 1L
   # now questions: the last exchange is the analyst's message and the model's reply, never a setup line
   session$setInputs(chat_user_input = "How many orders in each region?")
   session$setInputs(chat_user_input = "Orders by channel too")
@@ -2009,7 +2009,7 @@ shiny::testServer(mod_explore_server, args = list(state = b_state, ask = b_ask),
 
   # the ready message and the canvas before anything is drawn
   b_out$ready <- length(made$log) == 2L && grepl(paste0("Read ", md_text("sales.csv"), ": 240 rows, 5 columns."), made$log[[1]]$content, fixed = TRUE) &&
-    identical(made$log[[2]]$content, SETUP_READY) && sent_n() == 0L && grepl("No charts yet", html("cards"), fixed = TRUE)
+    startsWith(made$log[[2]]$content, SETUP_READY) && sent_n() == 0L && grepl("No charts yet", html("cards"), fixed = TRUE)
   boxes <- html("boxes")
   b_out$boxes <- length(gregexpr("bslib-value-box", boxes, fixed = TRUE)[[1]]) >= 3L && cell(boxes, "Rows") && cell(boxes, "240") && cell(boxes, "Columns") && cell(boxes, "5") && cell(boxes, "Period") &&
     grepl("2019 to 2024", boxes, fixed = TRUE) && !grepl("sales.csv", boxes, fixed = TRUE)
@@ -2184,7 +2184,7 @@ shiny::testServer(mod_explore_server, args = list(state = b_state, ask = b_ask),
   session$flushReact()
   b_out$fresh <- length(b_state$canvas) == 0L && length(b_state$charts) == 0L && length(b_state$stories) == 0L && is.null(selected()) && is.null(last()) &&
     grepl("A different file was read", made$log[[1]]$content, fixed = TRUE) && grepl(paste0("Read ", md_text("other.csv"), ": 240 rows"), made$log[[2]]$content, fixed = TRUE) &&
-    identical(made$log[[3]]$content, SETUP_READY) && length(made$log) == 3L
+    startsWith(made$log[[3]]$content, SETUP_READY) && length(made$log) == 3L
 })
 check("6-C 7: the Explore server starts ready: the read line, then the 'ask a question' line; the canvas says there are no charts; three plain value boxes (rows, columns, the period of the time column)",
       isTRUE(b_out$ready) && isTRUE(b_out$boxes))
@@ -4321,6 +4321,324 @@ check("8A-12: the probe draws one chart with each available device and shows it 
 check("8A-13: the probe makes no model call and reads no key (no ellmer, httr2, API-key name or Sys.getenv of a key in it), stays one folder (no source() of the app's R/, no ../ path) and has no for or while",
       !grepl("httr2::|ellmer::|chat_anthropic|chat_openai|ANTHROPIC|api_key|Sys\\.getenv\\(\"[A-Za-z_]*KEY", p8_psrc) && !grepl("source\\(|\\.\\./|R/theme|R/spec", p8_psrc) &&
         !length(p8_ploops) && grepl("PROBE_GRAPHICS_PACKAGES <- c(\"ragg\", \"svglite\", \"Cairo\", \"systemfonts\", \"av\")", p8_psrc, fixed = TRUE))
+
+
+# ---- Phase 8 Part B: the Methodology page and things to ask ----------------------------------------------------------------
+#
+# The page (mod_method_ui()) is www/methodology.md as HTML with a small drawn example beside each row of its question table, then
+#   "Questions for your file", the rules of the reflex files, how a reply is checked, and the styles and fonts. The questions are the
+#   table's templates filled from the data dictionary (example_questions()); Explore shows them as suggestion cards, Methodology as
+#   buttons. Nothing here calls the model. The browser (what a button or a card looks like and does) is not tested here; the lead looked
+#   at the screens.
+
+p8b_t <- methodology_templates()
+p8b_expect_charts <- c("Bar, or dot", "Line", "Slope", "Scatter", "Bubble", "Histogram", "Box", "Heatmap", "Small multiples")
+
+# 1. the templates, read from the table as the file has it
+p8b_lines <- readLines(METHODOLOGY_FILE, encoding = "UTF-8", warn = FALSE)
+p8b_tbl_at <- grep("^\\|", p8b_lines)
+p8b_swapped <- p8b_lines
+p8b_swapped[p8b_tbl_at] <- purrr::map_chr(p8b_lines[p8b_tbl_at], function(l) paste0("| ", paste(rev(methodology_cells(l)), collapse = " | "), " |"))
+p8b_swapped_file <- file.path(work_dir, "methodology_swapped.md")
+writeLines(c("# Another page", "", "Text before.", p8b_swapped, "", "## After", "", "| a | b |", "|---|---|", "| 1 | 2 |"), p8b_swapped_file)
+p8b_no_heading <- file.path(work_dir, "methodology_no_heading.md")
+writeLines(sub("^## Which chart for which question", "## Which chart", p8b_lines), p8b_no_heading)
+p8b_no_table <- file.path(work_dir, "methodology_no_table.md")
+writeLines(p8b_lines[!grepl("^\\|", p8b_lines)], p8b_no_table)
+p8b_no_col <- file.path(work_dir, "methodology_no_col.md")
+writeLines(sub("Ask something like", "Ask", p8b_lines, fixed = TRUE), p8b_no_col)
+p8b_curly <- file.path(work_dir, "methodology_curly.md")
+writeLines(gsub("\"([^\"]*)\"", paste0(intToUtf8(0x201c), "\\1", intToUtf8(0x201d)), p8b_lines), p8b_curly, useBytes = TRUE)
+p8b_err <- function(f) tryCatch({ methodology_templates(f); "" }, error = function(e) conditionMessage(e))
+check("8B-1: the question templates are read from the table under '## Which chart for which question' by its header cells: nine rows in the table's order, the text in quotes with its braces as written, the slots of each; a table with its columns reversed (and other tables and text around it) reads the same; a missing heading, table or column stops with a sentence naming the file",
+      identical(p8b_t$chart, p8b_expect_charts) && identical(p8b_t$template[1], "Which {group} has the highest {measure}?") &&
+        identical(p8b_t$template[5], "Show {measure} against {measure2}, sized by {measure3}.") && identical(p8b_t$slots[[5]], c("measure", "measure2", "measure3")) &&
+        identical(p8b_t$slots[[1]], c("group", "measure")) && identical(p8b_t$slots[[9]], "group") && all(unlist(p8b_t$slots) %in% EXAMPLE_SLOTS) &&
+        all(grepl("\\{", p8b_t$template)) && !any(grepl("\"", p8b_t$template, fixed = TRUE)) && nzchar(p8b_t$use[1]) &&
+        identical(methodology_templates(p8b_swapped_file)[c("chart", "template", "slots")], p8b_t[c("chart", "template", "slots")]) &&
+        identical(methodology_templates(p8b_curly)[c("chart", "template", "slots")], p8b_t[c("chart", "template", "slots")]) &&
+        grepl("methodology_no_heading.md needs exactly one heading '## Which chart for which question', and has 0", p8b_err(p8b_no_heading), fixed = TRUE) &&
+        grepl("methodology_no_table.md has no table under", p8b_err(p8b_no_table), fixed = TRUE) &&
+        grepl("has no column 'Ask something like'", p8b_err(p8b_no_col), fixed = TRUE) &&
+        inherits(tryCatch(check_methodology_file(file.path(work_dir, "absent.md")), error = function(e) e), "error") && nrow(check_methodology_file()) == 9L)
+
+# 2. the questions: filled from the dictionary, dropped when a column is missing, at most eight, tagged with the family
+p8b_edit <- function(cb, ...) {
+  by_name = list(...)
+  cb$columns = purrr::map(cb$columns, function(e) if (!is.null(by_name[[e$name]])) utils::modifyList(e, by_name[[e$name]]) else e)
+  cb
+}
+# The sales file's dictionary as it is when "N/A" has been treated as missing: region, channel, units, price, year: two measures, two
+#   groups and a time column. (As the file reads at first, units holds words and is text, so only price is a measure: c6_cb_ready.)
+p8b_cb <- p8b_edit(c6_cb_ready, units = list(type = "integer", role = "measure", distinct = 20L, missing = 0))
+p8b_role <- function(cb, cols, role) {
+  cb$columns = purrr::map(cb$columns, function(e) if (e$name %in% cols) utils::modifyList(e, list(role = role)) else e)
+  cb
+}
+p8b_label <- function(cb, col, label) {
+  cb$columns = purrr::map(cb$columns, function(e) if (identical(e$name, col)) utils::modifyList(e, list(label = label)) else e)
+  cb
+}
+p8b_q <- example_questions(p8b_cb)
+p8b_q_notime <- example_questions(p8b_role(p8b_cb, "year", "ignore"))
+p8b_q_nogroup <- example_questions(p8b_role(p8b_cb, c("region", "channel"), "ignore"))
+p8b_q_neither <- example_questions(p8b_role(p8b_role(p8b_cb, c("region", "channel"), "ignore"), "year", "ignore"))
+p8b_q_nomeasure <- example_questions(p8b_role(p8b_cb, c("units", "price"), "ignore"))
+p8b_q_nothing <- example_questions(p8b_role(p8b_role(p8b_role(p8b_cb, c("region", "channel"), "ignore"), "year", "ignore"), c("units", "price"), "ignore"))
+p8b_orders <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", character())
+p8b_q_orders <- example_questions(p8b_orders$codebook)
+# A constant column and a group of 17 values fill no slot: price is then the one measure and channel the one group.
+p8b_thin <- p8b_edit(p8b_cb, units = list(distinct = 1L), region = list(distinct = 17L))
+# ... and a measure that is mostly missing fills none either.
+p8b_thin2 <- p8b_edit(p8b_thin, price = list(missing = 0.6))
+p8b_calls <- .llm_state$calls
+check("8B-2: example_questions() fills each template from the dictionary (labels, in one pass) in the table's order: with two measures, two groups and a time column the bubble is the one left out; no time column drops the line and the slope; no group drops the bar, slope, box, heatmap (and 'small multiples' with them); one with neither keeps the scatter and the histogram; no measure keeps the one that needs only a group; nothing usable gives none; never a brace left; at most eight, each tagged with its family",
+      identical(p8b_q$question, c("Which region has the highest units?", "How has units changed over year?", "Compare units in the first and last year for each region.",
+                                  "Is units related to price?", "How is units distributed?", "How does units vary across region?",
+                                  "Show units by region and channel.", "Show that in a panel for each region.")) &&
+        identical(p8b_q$family, c("Bar, or dot", "Line", "Slope", "Scatter", "Histogram", "Box", "Heatmap", "Small multiples")) &&
+        identical(p8b_q_notime$family, c("Bar, or dot", "Scatter", "Histogram", "Box", "Heatmap", "Small multiples")) && !any(grepl("year", p8b_q_notime$question)) &&
+        identical(p8b_q_nogroup$family, c("Line", "Scatter", "Histogram")) && !any(grepl("region|channel", p8b_q_nogroup$question)) &&
+        identical(p8b_q_neither$family, c("Scatter", "Histogram")) && identical(p8b_q_nomeasure$family, "Small multiples") && nrow(p8b_q_nothing) == 0L &&
+        !any(grepl("[{}]", c(p8b_q$question, p8b_q_notime$question, p8b_q_nogroup$question, p8b_q_neither$question, p8b_q_orders$question))) &&
+        nrow(p8b_q_orders) == 8L && identical(p8b_q_orders$family, p8b_expect_charts[1:8]) && identical(example_questions(p8b_orders$codebook, max = 3L)$family, p8b_expect_charts[1:3]) &&
+        identical(example_questions(p8b_cb, templates = p8b_t[5, ])$question, character(0)) &&
+        identical(example_questions(p8b_label(p8b_cb, "region", "Sales area"))$question[1], "Which Sales area has the highest units?") &&
+        identical(p8b_q_orders$question[4], "Is units related to unit price?") && identical(p8b_q_orders$question[5], "Show units against unit price, sized by discount pct.") &&
+        identical(example_questions(c6_cb_ready)$family, c("Bar, or dot", "Line", "Slope", "Histogram", "Box", "Heatmap", "Small multiples")) &&
+        !any(grepl("units", example_questions(c6_cb_ready)$question)) && grepl("price", example_questions(c6_cb_ready)$question[1], fixed = TRUE) &&
+        identical(example_questions(p8b_thin)$family, c("Bar, or dot", "Line", "Slope", "Histogram", "Box", "Small multiples")) &&
+        identical(example_questions(p8b_thin)$question[1], "Which channel has the highest price?") && identical(example_questions(p8b_thin2)$family, "Small multiples") &&
+        identical(.llm_state$calls, p8b_calls))
+cat("  Questions for tests/data/orders.csv:\n", paste0("    [", p8b_q_orders$family, "] ", p8b_q_orders$question, "\n", collapse = ""), sep = "")
+if (!inherits(messy, "error")) {
+  p8b_q_messy <- example_questions(messy$codebook)
+  cat("  Questions for the messy file:\n", paste0("    [", p8b_q_messy$family, "] ", p8b_q_messy$question, "\n", collapse = ""), sep = "")
+  check("8B-2b: the messy file (a renamed blank header, text columns, an id, an all-missing flag, a free-text column) gives the questions its measures and time column allow: a line, a scatter, a bubble and a histogram, none from the all-missing column or the text columns",
+        identical(p8b_q_messy$family, c("Line", "Scatter", "Bubble", "Histogram")) && identical(p8b_q_messy$question[1], "How has column 1 changed over visit date?") &&
+          !any(grepl("empty|comment|city|record id", p8b_q_messy$question)) && !any(grepl("SECRET", p8b_q_messy$question, fixed = TRUE)))
+}
+
+# 3. a hostile label: it is text everywhere it goes, and is never read as a slot or markup
+p8b_hostile <- "<img src=x onerror=1> [x](a) **b** {measure} @a.com\nz"
+p8b_hostile2 <- "[x](javascript:alert(1)) http://x.test"
+p8b_long <- paste(rep("long", 30), collapse = " ")
+p8b_hcb <- p8b_label(p8b_label(p8b_label(p8b_cb, "region", p8b_hostile), "channel", p8b_hostile2), "units", p8b_long)
+p8b_hq <- example_questions(p8b_hcb)
+p8b_cut <- paste0(substr(one_line(p8b_long), 1, EXAMPLE_LABEL_CHARS - 3L), "...")
+p8b_cards <- suggestion_list(p8b_hq$question)
+# What is left of a message once its suggestion spans, and the <span>@</span> that md_text() writes for an at sign, are taken out: no tag.
+p8b_clean <- function(x) !grepl("<", d6_bare(gsub("<span>@</span>", "", x, fixed = TRUE)), fixed = TRUE)
+p8b_hpage <- as.character(method_questions_ui(function(x) x, p8b_hcb, p8b_hq, TRUE))
+p8b_hstate <- c6_state(cb = p8b_hcb)
+p8b_hout <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = p8b_hstate, ask = stand_by(c6_reply)$ask), {
+  session$flushReact()
+  p8b_hout$said <- made$log[[length(made$log)]]$content
+})
+check("8B-3: a label holding markup, a link, a brace slot, an address and a newline stays text: the question is one line with the label as written (its {measure} not filled again), a long label is cut to 60 characters; the cards (md_text and an escaped attribute) hold no raw tag and send the question as it is; the Methodology page escapes it; the Explore message built from it is clean",
+      identical(p8b_hq$question[1], paste0("Which ", one_line(p8b_hostile), " has the highest ", p8b_cut, "?")) && !any(grepl("\n", p8b_hq$question, fixed = TRUE)) &&
+        identical(p8b_hq$question[p8b_hq$family == "Heatmap"], paste0("Show ", p8b_cut, " by ", one_line(p8b_hostile), " and ", p8b_hostile2, ".")) &&
+        grepl("{measure}", p8b_hq$question[1], fixed = TRUE) && nchar(p8b_cut) == EXAMPLE_LABEL_CHARS && identical(example_label(p8b_hcb, p8b_hcb$columns[[3]]), p8b_cut) &&
+        lengths(gregexpr("class=\"suggestion submit\"", p8b_cards, fixed = TRUE)) == nrow(p8b_hq) && p8b_clean(p8b_cards) && identical(d6_sugg(p8b_cards), p8b_hq$question) &&
+        all(purrr::map_lgl(p8b_hq$question, function(q) grepl(paste0(">", md_text(q), "</span>"), p8b_cards, fixed = TRUE))) &&
+        !grepl("<img", p8b_hpage, fixed = TRUE) && grepl("&lt;img src=x onerror=1&gt;", p8b_hpage, fixed = TRUE) && !grepl("<a ", p8b_hpage, fixed = TRUE) &&
+        p8b_clean(p8b_hout$said) && identical(d6_sugg(p8b_hout$said), p8b_hq$question) && startsWith(p8b_hout$said, SETUP_READY))
+
+# 4. the page, with no file
+p8b_page <- paste(as.character(mod_method_ui("method")), collapse = "")
+p8b_ids <- c("method-the-principles", "method-which-chart-for-which-question", "method-what-chart-will-not-do-and-why", "method-what-to-check-yourself",
+             "method-sources", "method-questions", "method-rules", "method-checks", "method-styles")
+p8b_at <- purrr::map_int(p8b_ids, function(i) as.integer(regexpr(paste0("id=\"", i, "\""), p8b_page, fixed = TRUE)))
+p8b_toc <- regmatches(p8b_page, regexpr("(?s)<nav class=\"chart-method-contents.*?</nav>", p8b_page, perl = TRUE))
+p8b_table <- regmatches(p8b_page, regexpr("(?s)<table class=\"table.*?</table>", p8b_page, perl = TRUE))
+p8b_rows <- if (length(p8b_table)) regmatches(p8b_table, gregexpr("(?s)<tr><td class=\"chart-method-thumb\">.*?</tr>", p8b_table, perl = TRUE))[[1]] else character(0)
+p8b_none <- new.env()
+p8b_nostate <- shiny::reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL, path = NULL, calls = NULL,
+                                     charts = list(), canvas = character(0), stories = list(), palette = chart_palette_default(), ask_request = NULL)
+shiny::testServer(mod_method_server, args = list(state = p8b_nostate), {
+  session$flushReact()
+  p8b_none$html <- as.character(output$questions$html)
+})
+check("8B-4: the page with no file: the manager's text as HTML (commonmark with extensions renders its table: a table element, a header, nine body rows, the {measure} braces as written, no raw pipes), then Questions for your file, the rules, how a reply is checked, the styles and fonts, in that order; a contents list after the opening paragraph links to every heading; the questions section says to read a file and holds no button",
+      all(p8b_at > 0L) && !is.unsorted(p8b_at, strictly = TRUE) && grepl("<h1>How chaRt chooses and draws a chart</h1>", p8b_page, fixed = TRUE) &&
+        length(p8b_toc) == 1L && all(purrr::map_lgl(p8b_ids, function(i) grepl(paste0("href=\"#", i, "\""), p8b_toc, fixed = TRUE))) && length(gregexpr("<li>", p8b_toc, fixed = TRUE)[[1]]) == 9L &&
+        regexpr("chaRt does not let a model draw", p8b_page, fixed = TRUE) < regexpr("chart-method-contents", p8b_page, fixed = TRUE) &&
+        regexpr("chart-method-contents", p8b_page, fixed = TRUE) < p8b_at[1] &&
+        length(p8b_table) == 1L && grepl("<thead>", p8b_table, fixed = TRUE) && grepl("<th scope=\"col\">Example</th>", p8b_table, fixed = TRUE) && length(p8b_rows) == 9L &&
+        grepl("Which {group} has the highest {measure}?", p8b_table, fixed = TRUE) && grepl("{measure3}", p8b_table, fixed = TRUE) && !grepl("|---", p8b_page, fixed = TRUE) &&
+        grepl("<div class=\"table-responsive\"><table", p8b_page, fixed = TRUE) && grepl(METHOD_THUMB_NOTE, p8b_page, fixed = TRUE) &&
+        grepl("Read a data file on the Data page", p8b_none$html, fixed = TRUE) && !grepl("ask_1", p8b_none$html, fixed = TRUE) && !grepl("later phase", p8b_page, fixed = TRUE) &&
+        grepl("<div class=\"container py-3 chart-method\">", paste(as.character(app_ui("B", "office_logo.png", "", "https://example.org/")), collapse = ""), fixed = TRUE))
+
+# 5. the page, with a file: a button for each question, and what a click does
+p8b_state <- c6_state(cb = p8b_cb)
+p8b_with <- new.env()
+shiny::testServer(mod_method_server, args = list(state = p8b_state), {
+  session$flushReact()
+  p8b_with$html <- as.character(output$questions$html)
+  calls_before <- .llm_state$calls
+  session$setInputs(ask_3 = 1)
+  p8b_with$first <- p8b_state$ask_request
+  session$setInputs(ask_3 = 2)
+  p8b_with$second <- p8b_state$ask_request
+  p8b_with$none <- is.null(p8b_state$calls) && identical(.llm_state$calls, calls_before)
+})
+p8b_nr_state <- c6_state(cb = c6_cb)
+p8b_short_state <- c6_state(cb = p8b_role(p8b_role(p8b_cb, c("region", "channel"), "ignore"), "year", "ignore"))
+shiny::testServer(mod_method_server, args = list(state = p8b_nr_state), {
+  session$flushReact()
+  p8b_with$not_ready <- as.character(output$questions$html)
+})
+p8b_warned <- character(0)
+withCallingHandlers(shiny::testServer(mod_method_server, args = list(state = p8b_short_state), {
+  session$flushReact()
+  session$setInputs(ask_5 = 1)
+  p8b_with$beyond <- is.null(p8b_short_state$ask_request)
+}), warning = function(w) { p8b_warned <<- c(p8b_warned, conditionMessage(w)); invokeRestart("muffleWarning") })
+p8b_with$beyond <- isTRUE(p8b_with$beyond) && !length(p8b_warned)
+check("8B-5: with a file the section lists the questions, each with its family and an Ask this button (a call button that also opens Explore); a click puts that question, as the server holds it, in state$ask_request (a second click is a new request); a button past the last question does nothing; nothing is sent to the model; before the dictionary says what a row is, the section says Explore will ask first",
+      length(gregexpr("id=\"proxy[0-9]+-ask_[0-9]\"", p8b_with$html)[[1]]) == 8L && all(purrr::map_lgl(p8b_q$question, function(q) grepl(htmltools::htmlEscape(q), p8b_with$html, fixed = TRUE))) &&
+        all(purrr::map_lgl(unique(p8b_q$family), function(f) grepl(paste0(">", f, "<"), p8b_with$html, fixed = TRUE))) && grepl("chart-call", p8b_with$html, fixed = TRUE) &&
+        grepl("data-value=&quot;Explore&quot;", p8b_with$html, fixed = TRUE) && grepl("Ask this", p8b_with$html, fixed = TRUE) && !grepl("Explore will first ask", p8b_with$html, fixed = TRUE) &&
+        grepl("Explore will first ask what one row of the file is", p8b_with$not_ready, fixed = TRUE) &&
+        identical(p8b_with$first$text, p8b_q$question[3]) && identical(p8b_with$second$text, p8b_q$question[3]) && !identical(p8b_with$first, p8b_with$second) &&
+        isTRUE(p8b_with$none) && isTRUE(p8b_with$beyond))
+
+# 6. Explore: the questions as suggestion cards, only while the canvas is empty; a card sends its question; a request from Methodology is sent as a message
+p8b_ex <- new.env()
+p8b_si <- stand_by(c6_reply)
+p8b_st <- c6_state(cb = p8b_cb)
+shiny::testServer(mod_explore_server, args = list(state = p8b_st, ask = p8b_si$ask), {
+  session$flushReact()
+  m <- made$log[[length(made$log)]]$content
+  p8b_ex$ready <- length(made$log) == 2L && startsWith(m, SETUP_READY) && grepl(SETUP_TRY, m, fixed = TRUE) && identical(d6_sugg(m), p8b_q$question) &&
+    identical(d6_shown(m), p8b_q$question) && d6_clean(m) && length(p8b_si$sent) == 0L && is.null(p8b_st$calls)
+  session$setInputs(chat_user_input = d6_sugg(m)[2])
+  p8b_ex$click <- length(p8b_si$sent) == 1L && identical(c6_msg(p8b_si$sent[[1]]$user), p8b_q$question[2]) && !grepl(SETUP_TRY, p8b_si$sent[[1]]$user, fixed = TRUE)
+})
+p8b_busy <- c6_state(cb = p8b_cb)
+p8b_busy$canvas <- "c9"
+shiny::testServer(mod_explore_server, args = list(state = p8b_busy, ask = stand_by(c6_reply)$ask), {
+  session$flushReact()
+  p8b_ex$canvas <- identical(made$log[[2]]$content, SETUP_READY)
+})
+p8b_nr <- c6_state(cb = c6_cb)
+shiny::testServer(mod_explore_server, args = list(state = p8b_nr, ask = stand_by(c6_reply)$ask), {
+  session$flushReact()
+  before <- purrr::map_lgl(made$log, function(x) grepl(SETUP_TRY, x$content, fixed = TRUE))
+  p8b_nr$codebook <- p8b_cb
+  session$flushReact()
+  m <- made$log[[length(made$log)]]$content
+  p8b_ex$late <- !any(before) && startsWith(m, SETUP_READY) && identical(d6_sugg(m), p8b_q$question)
+})
+p8b_sent <- list()
+p8b_ns <- asNamespace("shinychat")
+p8b_orig <- get("update_chat_user_input", p8b_ns)
+unlockBinding("update_chat_user_input", p8b_ns)
+assign("update_chat_user_input", function(id, ..., value = NULL, placeholder = NULL, submit = FALSE, focus = FALSE, session = shiny::getDefaultReactiveDomain())
+  if (!is.null(value)) p8b_sent[[length(p8b_sent) + 1L]] <<- list(id = id, value = value, submit = submit), p8b_ns)
+p8b_rq <- c6_state()
+p8b_rsi <- stand_by(c6_reply)
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8b_rq, ask = p8b_rsi$ask), {
+  session$flushReact()
+  p8b_rq$ask_request <- list(text = "How many orders in each region?", n = 1L)
+  session$flushReact()
+  p8b_rq$ask_request <- list(text = "  ", n = 2L)
+  session$flushReact()
+  p8b_rq$ask_request <- "not a list"
+  session$flushReact()
+  p8b_ex$sent_n <- length(p8b_rsi$sent)
+}), finally = { assign("update_chat_user_input", p8b_orig, p8b_ns); lockBinding("update_chat_user_input", p8b_ns) })
+check("8B-6: Explore, when the dictionary is ready and the canvas is empty, says so and then 'Try one of these:' with the questions as suggestion cards (a click is the question, sent as the analyst's message, making no call of its own); a canvas with a chart gets no cards; a dictionary that becomes ready later gets them then; a request from Methodology is passed to the chat as a submitted message (one, with its text), a blank or malformed request is ignored, and neither makes a model call",
+      isTRUE(p8b_ex$ready) && isTRUE(p8b_ex$click) && isTRUE(p8b_ex$canvas) && isTRUE(p8b_ex$late) &&
+        identical(p8b_sent, list(list(id = "chat", value = "How many orders in each region?", submit = TRUE))) && identical(p8b_ex$sent_n, 0L) &&
+        identical(get("update_chat_user_input", p8b_ns), p8b_orig))
+
+# 7. the rules: every reflex rule with a Label, once, with its When, Say and Source, a collapsed section for each file
+p8b_rules_html <- paste(as.character(method_rules_ui()), collapse = "")
+p8b_rfiles <- purrr::map(REFLEX_FILES, read_reflex_file)
+p8b_rlabelled <- unlist(purrr::map(p8b_rfiles, function(s) purrr::keep(unname(s$reflexes), function(r) !is.na(r$label))), recursive = FALSE)
+p8b_shown <- unlist(regmatches(p8b_rules_html, gregexpr("(?<=<div class=\"fw-semibold\">)[^<]*(?=</div>)", p8b_rules_html, perl = TRUE)))
+p8b_esc <- function(x) htmltools::htmlEscape(x)
+p8b_blocks <- strsplit(p8b_rules_html, "<div class=\"chart-rule mb-3\">", fixed = TRUE)[[1]][-1]
+check("8B-7: 'The rules the model follows' holds every reflex rule that has a Label exactly once (56 across 9 files), each with its label, its When and Say lines and its Source as the parser read them, in one collapsed section for each file with its title, file name and version; the file with no labelled rule (codebook.md) has no section; the count of rules without a label is said",
+      length(p8b_rlabelled) == 56L && identical(sort(p8b_shown), sort(purrr::map_chr(p8b_rlabelled, "label"))) && !anyDuplicated(purrr::map_chr(p8b_rlabelled, function(r) paste(r$id, r$label))) &&
+        length(gregexpr("<div class=\"chart-rule mb-3\">", p8b_rules_html, fixed = TRUE)[[1]]) == 56L &&
+        length(p8b_blocks) == 56L &&
+        all(purrr::map2_lgl(p8b_rlabelled, p8b_blocks, function(r, b) grepl(paste0(">", p8b_esc(r$label), "<"), b, fixed = TRUE) && grepl("When: ", b, fixed = TRUE) &&
+                              grepl(p8b_esc(r$when), b, fixed = TRUE) && grepl("Say: ", b, fixed = TRUE) && grepl(p8b_esc(r$say), b, fixed = TRUE) &&
+                              grepl("Source: ", b, fixed = TRUE) && grepl(p8b_esc(r$source), b, fixed = TRUE))) &&
+        length(gregexpr("<details class=\"chart-rule-file mb-2\">", p8b_rules_html, fixed = TRUE)[[1]]) == 9L && !grepl("<details[^>]* open", p8b_rules_html) &&
+        all(purrr::map_lgl(p8b_rfiles[purrr::map_lgl(p8b_rfiles, function(s) any(!is.na(purrr::map_chr(s$reflexes, "label"))))],
+                           function(s) grepl(paste0(s$title, " (", s$file, ", version ", s$version, ")"), p8b_rules_html, fixed = TRUE))) &&
+        !grepl("codebook.md", p8b_rules_html, fixed = TRUE) && grepl("56 rules are listed here, in 9 files; 10 more have no label and are not listed.", p8b_rules_html, fixed = TRUE))
+
+# 8. how a reply is checked: the page says what the code does, and what it says holds
+p8b_checks_html <- paste(as.character(method_checks_ui()), collapse = "")
+p8b_facts <- "Revenue: 69712 in 2024. Highest as a multiple of the lowest: 2.5"
+check("8B-8: 'How a reply is checked' names the number check, the word check, the names check, the chart check, the repair (one call, no second) and the edits you make; it quotes the code's own forbidden words, multiple words and number words, and what it says holds when run: 69,700 passes for 69,712 and 70,000 does not, '1.2 thousand' is 1,200, 'one' is not checked, a multiple word passes only with a supporting multiple",
+      all(purrr::map_lgl(c("The number check", "The word check", "The names check", "The chart check", "The repair", "Your own edits", "one repair call", "There is no second repair"),
+                         function(x) grepl(x, p8b_checks_html, fixed = TRUE))) &&
+        all(purrr::map_lgl(c(SUMMARY_FORBIDDEN, names(MULTIPLE_WORDS)), function(w) grepl(paste0("'", w, "'"), p8b_checks_html, fixed = TRUE))) &&
+        grepl("from 'two' to 'twelve'", p8b_checks_html, fixed = TRUE) && grepl("69,700 passes for 69,712, and 70,000 does not", p8b_checks_html, fixed = TRUE) &&
+        length(check_numbers("It was 69,700.", p8b_facts)) == 0L && identical(check_numbers("It was 70,000.", p8b_facts), "70,000") &&
+        length(check_numbers("1.2 thousand", "Total: 1200")) == 0L && length(check_numbers("one of 3 groups", "Groups: 3")) == 0L && identical(check_numbers("two groups", "Groups: 3"), "two") &&
+        length(check_numbers("In 2024-12-01 it was 69712.", p8b_facts)) == 0L && length(check_numbers("Top 5", "Revenue: 3", list(top_n = 5))) == 0L &&
+        setequal(check_words(paste(SUMMARY_FORBIDDEN, collapse = " ")), SUMMARY_FORBIDDEN) && length(check_words("It doubled.", p8b_facts)) == 0L && identical(check_words("It doubled.", "x: 1.5"), "doubled") &&
+        length(gregexpr("repair = TRUE", paste(deparse(chat_turn), collapse = " "), fixed = TRUE)[[1]]) == 1L &&
+        length(gregexpr("repair = TRUE", paste(deparse(summarize_batch), collapse = " "), fixed = TRUE)[[1]]) == 1L)
+
+# 9. the styles and fonts, with their licences
+p8b_styles_html <- paste(as.character(method_styles_ui()), collapse = "")
+check("8B-9: 'Styles and fonts' shows a sample and the note of each of the six styles and both bundled typefaces with the SIL Open Font License, the holder's line read from the licence file and a link to that file, which is in www/fonts (and which styles use the serif)",
+      length(gregexpr("<svg class=\"chart-style-sample\"", p8b_styles_html, fixed = TRUE)[[1]]) == length(CHART_STYLES) && length(CHART_STYLES) == 6L &&
+        all(purrr::map_lgl(CHART_STYLES, function(s) grepl(s$label, p8b_styles_html, fixed = TRUE) && grepl(htmltools::htmlEscape(s$note), p8b_styles_html, fixed = TRUE))) &&
+        all(purrr::map_lgl(purrr::map_chr(CHART_FONTS, "family"), function(f) grepl(paste0(f, ":"), p8b_styles_html, fixed = TRUE))) &&
+        length(gregexpr(FONT_LICENCE, p8b_styles_html, fixed = TRUE)[[1]]) == 2L && FONT_LICENCE == "SIL Open Font License, Version 1.1" &&
+        all(file.exists(file.path(CHART_FONT_DIR, FONT_LICENCE_FILES))) && all(purrr::map_lgl(FONT_LICENCE_FILES, function(f) grepl(paste0("href=\"fonts/", f, "\""), p8b_styles_html, fixed = TRUE))) &&
+        grepl(htmltools::htmlEscape(font_copyright("Inter-LICENSE.txt")), p8b_styles_html, fixed = TRUE) && grepl("Adobe", p8b_styles_html, fixed = TRUE) &&
+        grepl("the title and subtitle of the Newspaper style", p8b_styles_html, fixed = TRUE) &&
+        all(purrr::map_lgl(FONT_LICENCE_FILES, function(f) any(grepl("SIL OPEN FONT LICENSE", readLines(file.path(CHART_FONT_DIR, f), warn = FALSE), ignore.case = TRUE)))))
+
+# 10. the thumbnails: one for each row of the table, real pictures, drawn once at start-up from a made-up table, never per session
+p8b_th <- method_thumbs()
+p8b_keys <- method_thumb_key(p8b_t$chart)
+p8b_png <- function(u) !is.null(u) && identical(readBin(jsonlite::base64_dec(sub("^data:[^,]*,", "", u)), "raw", 8L), as.raw(c(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)))
+p8b_draws <- 0L
+p8b_spec_png <- get("spec_png", envir = globalenv())
+assign("spec_png", function(...) { p8b_draws <<- p8b_draws + 1L; p8b_spec_png(...) }, envir = globalenv())
+p8b_again <- tryCatch({
+  invisible(paste(as.character(mod_method_ui("method")), collapse = ""))
+  invisible(app_ui("B", "office_logo.png", "", "https://example.org/"))
+  shiny::testServer(mod_method_server, args = list(state = p8b_state), session$flushReact())
+  method_thumbs()
+}, finally = assign("spec_png", p8b_spec_png, envir = globalenv()))
+p8b_d1 <- method_thumb_data()
+set.seed(99); p8b_s1 <- .Random.seed; p8b_d2 <- method_thumb_data()
+p8b_app_src <- parse("app.R", keep.source = FALSE)
+p8b_top_calls <- purrr::map_chr(as.list(p8b_app_src), function(e) if (is.call(e)) paste(deparse(e[[1]]), collapse = "") else "")
+check("8B-10: each row of the table has a thumbnail (nine real PNGs, one for each family key, in a data address, from a made-up table of five regions over ten years that uses no random numbers); they were drawn once when the app started (app.R calls method_thumbs(); building the page, the whole page and a session again draws none, and the object is the same); every thumbnail is drawn through spec_png() (and so chart_device())",
+      identical(sort(names(p8b_th)), sort(names(METHOD_THUMB_SPECS))) && all(p8b_keys %in% names(p8b_th)) && length(p8b_keys) == 9L && all(purrr::map_lgl(p8b_th, p8b_png)) &&
+        all(purrr::map_int(p8b_th, nchar) > 3000L) && all(startsWith(unlist(p8b_th), "data:image/png;base64,")) && identical(names(METHOD_THUMB_ALT), names(METHOD_THUMB_SPECS)) &&
+        identical(p8b_d1, p8b_d2) && identical(.Random.seed, p8b_s1) && nrow(p8b_d1) == 50L && length(unique(p8b_d1$region)) == 5L &&
+        "method_thumbs" %in% p8b_top_calls && identical(p8b_draws, 0L) && identical(p8b_again, p8b_th) && is.environment(METHOD_CACHE) && !is.null(METHOD_CACHE$thumbs) &&
+        grepl("spec_png(p, f, size = METHOD_THUMB_SIZE, dpi = METHOD_THUMB_DPI)", paste(deparse(method_thumb_draw), collapse = " "), fixed = TRUE))
+
+# 11. no model call, and the start-up
+p8b_fns <- c("mod_method_ui", "mod_method_server", "method_text_ui", "method_rules_ui", "method_checks_ui", "method_styles_ui", "method_questions_ui", "method_thumbs", "method_thumb_draw",
+             "method_add_thumbs", "example_questions", "example_slots", "example_label", "fill_template", "methodology_templates", "methodology_cells", "check_methodology_file")
+p8b_calls_in <- function(f) unique(all.names(body(get(f, envir = globalenv()))))
+p8b_ask_calls <- c("llm_json", "chat_turn", "summarize_charts", "label_columns", "make_call", "llm_ping", "ask", "chat_anthropic", "chat_openai_compatible", "httr2", "ellmer")
+p8b_say_ready <- paste(deparse(mod_explore_server), collapse = " ")
+check("8B-11: nothing in the page, the questions or the thumbnails calls the model (none of the functions of this part names llm_json, chat_turn, summarize_charts, label_columns, make_call, llm_ping, ellmer or httr2); app.R checks www/methodology.md at start-up (check_methodology_file()), draws the thumbnails (method_thumbs()), starts mod_method_server(), and new_state() holds ask_request; commonmark is a listed package; no function of this part has a for or while",
+      !any(purrr::map_lgl(p8b_fns, function(f) any(p8b_ask_calls %in% p8b_calls_in(f)))) && all(purrr::map_lgl(p8b_fns, exists)) &&
+        all(c("check_methodology_file", "method_thumbs") %in% p8b_top_calls) &&
+        grepl("mod_method_server(\"method\", state)", paste(readLines("app.R", warn = FALSE), collapse = "\n"), fixed = TRUE) &&
+        grepl("palette = chart_palette_default(), ask_request = NULL)", paste(readLines("app.R", warn = FALSE), collapse = "\n"), fixed = TRUE) &&
+        grepl("APP_PACKAGES <- c(\"commonmark\", ", paste(readLines("app.R", warn = FALSE), collapse = "\n"), fixed = TRUE) && grepl("say_ready = function", p8b_say_ready, fixed = TRUE) &&
+        inherits(tryCatch(check_methodology_file(p8b_no_table), error = function(e) e), "error") &&
+        !any(purrr::map_lgl(p8b_fns, function(f) any(c("for", "while", "repeat") %in% p8b_calls_in(f)))))
 
 # ---- the count -------------------------------------------------------------------
 

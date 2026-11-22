@@ -54,8 +54,8 @@ library(bslib)
 library(purrr)
 
 # Called as pkg::fn() in R/ and never attached; listed so a missing one stops the app here, by name.
-APP_PACKAGES <- c("digest", "dplyr", "ellmer", "ggplot2", "htmltools", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales", "shinychat",
-                  "tibble", "tidyr", "yaml")
+APP_PACKAGES <- c("commonmark", "digest", "dplyr", "ellmer", "ggplot2", "htmltools", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales",
+                  "shinychat", "tibble", "tidyr", "yaml")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
@@ -102,6 +102,10 @@ list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION, APP_PROFILE = APP_PROFILE
 #   naming the file and the reflex, not in the middle of a call.
 check_reflex_files()
 
+# www/methodology.md read for its table of question templates (Methodology page, and the questions on Explore), so a file that
+#   has lost the table stops the app here, naming the file.
+check_methodology_file()
+
 # The two bundled typefaces in www/fonts/ (Inter and Source Serif 4), registered with systemfonts so that charts are
 #   drawn in them whatever the server has installed. Missing files or no systemfonts: the app starts, charts
 #   are drawn in the default fonts, and Start here says so once (chart_fonts_missing()).
@@ -115,6 +119,10 @@ chart_fonts_register()
 #   way a device is opened (R/theme.R); Start here says which device is in use.
 chart_device_options()
 
+# The small pictures on the Methodology page, drawn now and once (R/ui.R): not per session, and not from any file of the
+#   analyst's. A server that cannot draw gets a page without them.
+method_thumbs()
+
 # The largest upload, in bytes.
 options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 
@@ -126,10 +134,11 @@ options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 #   sentences about it (problems), its profile, the data dictionary the analyst edits (codebook) and the
 #   path of the upload (for the code a chart comes with); the record of every model call (calls); every
 #   chart drawn this session, by id (charts), and the ids of those on the canvas, newest first (canvas);
-#   the headline and summary written for a chart, by id (stories); and the three palettes.
+#   the headline and summary written for a chart, by id (stories); the three palettes; and ask_request, a question that
+#   Methodology's "Ask this" button hands to Explore.
 new_state <- function() reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL,
                                        path = NULL, calls = NULL, charts = list(), canvas = character(0), stories = list(),
-                                       palette = chart_palette_default())
+                                       palette = chart_palette_default(), ask_request = NULL)
 
 
 # ---- 6. layout --------------------------------------------------------------
@@ -147,6 +156,7 @@ server <- function(input, output, session) {
   mod_data_server("data", state)
   mod_codebook_server("codebook", state)
   mod_explore_server("explore", state)
+  mod_method_server("method", state)
 }
 
 
