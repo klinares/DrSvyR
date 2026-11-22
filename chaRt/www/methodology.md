@@ -1,6 +1,6 @@
 # How chaRt chooses and draws a chart
 
-Version: 0.1
+Version: 0.3
 
 chaRt does not let a model draw. The model reads a description of your columns (never the rows),
 picks a chart form by the written rules below, and hands R a short specification. R checks it,
@@ -54,7 +54,7 @@ how the rows were collected.
 | How is one measure spread out? | Histogram | One measure; you want its shape, centre and tails. | "How is {measure} distributed?" |
 | How does a spread differ across groups? | Box | One measure, several groups; medians and ranges side by side. | "How does {measure} vary across {group}?" |
 | How do two groupings combine? | Heatmap | Two category columns and one number per cell. | "Show {measure} by {group} and {group2}." |
-| One pattern, many groups | Small multiples | Any of the above, when there are too many groups for colour. | "Show that in a panel for each {group}." |
+| One pattern, many groups | Small multiples | Any of the above, when there are too many groups for colour. | "Show {measure} in a panel for each {group}." |
 
 You can also change a chart you have selected: "only 2024", "highlight West", "sort by value",
 "use a log scale", "mark the highest point", "remove the numbers on the bars".
@@ -77,6 +77,10 @@ You can also change a chart you have selected: "only 2024", "highlight West", "s
 - **Two end points are not a trend.** Look at the whole line before trusting "rose" or "fell".
 - **Weights and design.** chaRt does not apply survey weights or account for a sample design.
   Charts of survey data made here describe the respondents in the file.
+- **Confidence intervals.** The summary tables give 95% intervals that assume a simple random
+  sample of independent rows: a t interval for a mean and a Wilson interval for a share. With
+  clustering, stratification or weights the true intervals are usually wider, and for a complete
+  count an interval has no sampling meaning. Charts show no intervals.
 
 ## Sources
 

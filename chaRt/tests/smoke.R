@@ -4354,7 +4354,7 @@ p8b_err <- function(f) tryCatch({ methodology_templates(f); "" }, error = functi
 check("8B-1: the question templates are read from the table under '## Which chart for which question' by its header cells: nine rows in the table's order, the text in quotes with its braces as written, the slots of each; a table with its columns reversed (and other tables and text around it) reads the same; a missing heading, table or column stops with a sentence naming the file",
       identical(p8b_t$chart, p8b_expect_charts) && identical(p8b_t$template[1], "Which {group} has the highest {measure}?") &&
         identical(p8b_t$template[5], "Show {measure} against {measure2}, sized by {measure3}.") && identical(p8b_t$slots[[5]], c("measure", "measure2", "measure3")) &&
-        identical(p8b_t$slots[[1]], c("group", "measure")) && identical(p8b_t$slots[[9]], "group") && all(unlist(p8b_t$slots) %in% EXAMPLE_SLOTS) &&
+        identical(p8b_t$slots[[1]], c("group", "measure")) && identical(p8b_t$slots[[9]], c("measure", "group")) && all(unlist(p8b_t$slots) %in% EXAMPLE_SLOTS) &&
         all(grepl("\\{", p8b_t$template)) && !any(grepl("\"", p8b_t$template, fixed = TRUE)) && nzchar(p8b_t$use[1]) &&
         identical(methodology_templates(p8b_swapped_file)[c("chart", "template", "slots")], p8b_t[c("chart", "template", "slots")]) &&
         identical(methodology_templates(p8b_curly)[c("chart", "template", "slots")], p8b_t[c("chart", "template", "slots")]) &&
@@ -4393,14 +4393,14 @@ p8b_thin <- p8b_edit(p8b_cb, units = list(distinct = 1L), region = list(distinct
 # ... and a measure that is mostly missing fills none either.
 p8b_thin2 <- p8b_edit(p8b_thin, price = list(missing = 0.6))
 p8b_calls <- .llm_state$calls
-check("8B-2: example_questions() fills each template from the dictionary (labels, in one pass) in the table's order: with two measures, two groups and a time column the bubble is the one left out; no time column drops the line and the slope; no group drops the bar, slope, box, heatmap (and 'small multiples' with them); one with neither keeps the scatter and the histogram; no measure keeps the one that needs only a group; nothing usable gives none; never a brace left; at most eight, each tagged with its family",
+check("8B-2: example_questions() fills each template from the dictionary (labels, in one pass) in the table's order: with two measures, two groups and a time column the bubble is the one left out; no time column drops the line and the slope; no group drops the bar, slope, box, heatmap (and 'small multiples' with them); one with neither keeps the scatter and the histogram; no measure gives none (the ninth, small multiples, now needs a measure too: Phase 9 wording); nothing usable gives none; never a brace left; at most eight, each tagged with its family",
       identical(p8b_q$question, c("Which region has the highest units?", "How has units changed over year?", "Compare units in the first and last year for each region.",
                                   "Is units related to price?", "How is units distributed?", "How does units vary across region?",
-                                  "Show units by region and channel.", "Show that in a panel for each region.")) &&
+                                  "Show units by region and channel.", "Show units in a panel for each region.")) &&
         identical(p8b_q$family, c("Bar, or dot", "Line", "Slope", "Scatter", "Histogram", "Box", "Heatmap", "Small multiples")) &&
         identical(p8b_q_notime$family, c("Bar, or dot", "Scatter", "Histogram", "Box", "Heatmap", "Small multiples")) && !any(grepl("year", p8b_q_notime$question)) &&
         identical(p8b_q_nogroup$family, c("Line", "Scatter", "Histogram")) && !any(grepl("region|channel", p8b_q_nogroup$question)) &&
-        identical(p8b_q_neither$family, c("Scatter", "Histogram")) && identical(p8b_q_nomeasure$family, "Small multiples") && nrow(p8b_q_nothing) == 0L &&
+        identical(p8b_q_neither$family, c("Scatter", "Histogram")) && nrow(p8b_q_nomeasure) == 0L && nrow(p8b_q_nothing) == 0L &&
         !any(grepl("[{}]", c(p8b_q$question, p8b_q_notime$question, p8b_q_nogroup$question, p8b_q_neither$question, p8b_q_orders$question))) &&
         nrow(p8b_q_orders) == 8L && identical(p8b_q_orders$family, p8b_expect_charts[1:8]) && identical(example_questions(p8b_orders$codebook, max = 3L)$family, p8b_expect_charts[1:3]) &&
         identical(example_questions(p8b_cb, templates = p8b_t[5, ])$question, character(0)) &&
@@ -4409,7 +4409,7 @@ check("8B-2: example_questions() fills each template from the dictionary (labels
         identical(example_questions(c6_cb_ready)$family, c("Bar, or dot", "Line", "Slope", "Histogram", "Box", "Heatmap", "Small multiples")) &&
         !any(grepl("units", example_questions(c6_cb_ready)$question)) && grepl("price", example_questions(c6_cb_ready)$question[1], fixed = TRUE) &&
         identical(example_questions(p8b_thin)$family, c("Bar, or dot", "Line", "Slope", "Histogram", "Box", "Small multiples")) &&
-        identical(example_questions(p8b_thin)$question[1], "Which channel has the highest price?") && identical(example_questions(p8b_thin2)$family, "Small multiples") &&
+        identical(example_questions(p8b_thin)$question[1], "Which channel has the highest price?") && nrow(example_questions(p8b_thin2)) == 0L &&
         identical(.llm_state$calls, p8b_calls))
 cat("  Questions for tests/data/orders.csv:\n", paste0("    [", p8b_q_orders$family, "] ", p8b_q_orders$question, "\n", collapse = ""), sep = "")
 if (!inherits(messy, "error")) {
