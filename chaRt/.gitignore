@@ -9,3 +9,4 @@ manager/*
 !manager/README.md
 # Phase 8 Part C: dashboards exported from stand-in charts, unpacked here for the manager to open.
 tests/dashboard_*/
+tests/mockup_reference.png
