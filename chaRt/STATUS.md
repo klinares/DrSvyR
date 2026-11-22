@@ -1,5 +1,41 @@
 # chaRt: status
 
+## Current state (2026-11-22, end of Phase 9 Part C)
+
+Branch `chart`, not pushed. Everything below was built and tested at home on R 4.6.1. No test makes a model call unless it says so. The phase-by-phase record is under History.
+
+**What works**
+- **Data page.** Reads a delimited file (csv, tsv, txt, tab; up to 50 MB; encoding guessed or chosen), types and roles every column, applies the missing codes the analyst lists, and writes `data_dictionary.yaml` (also read back). "Summary statistics" under the dictionary (`summary_table()` in R/data.R): one row per column, an optional "By group", 95% intervals that assume a simple random sample (t for a mean, Wilson for a share), a CSV; no key and no model.
+- **Explore.** A chat and a canvas. Every message goes through one call, `chat_turn()`; the model answers with a small JSON spec that R checks and draws, never code. "Label the columns" is one call; "Suggest charts" and "Write headlines" are buttons. Some messages are answered by R alone (animate, summary table, "Treat -99 as missing"). Cards: Select, Undo, Interactive, Code, Edit text, Headline, Animate, "In dashboard", Move, Remove. A table card shows summary statistics.
+- **The renderer** (R/spec.R, R/theme.R). Ten chart families, a lint, six styles (Clean, Minimal, Magazine, Data desk, Newspaper, Dark), palettes (paletteer optional), every text measured to fit its panel, one device chosen in one place (`chart_device()`: ragg, else cairo, else svglite; no X11, no Quarto, no pandoc).
+- **Headlines and summaries.** Written from facts R computes; every number and word is checked, a failed text is sent back once, and a text is marked when its chart or data changed.
+- **Video.** `spec_video()` draws frames with our renderer and encodes an MP4 with `av` (3 s of motion, 0.6 s of labels, 2 s hold, scales pinned; the last frame equals the static chart). Hidden where `av` is missing.
+- **Export.** `build_dashboard()` writes `dashboard_<date>.zip`: `dashboard.html` and `codebook.html` (single files, in the chosen style, centred, print-safe, a phone layout), `data_dictionary.yaml`, `charts.R`, `charts/` (PNG 300 dpi, SVG, MP4, table CSV). Each chart is a picture, an interactive chart (plotly, with its rows) or a video; up to three key numbers; table cards are real tables.
+- **Methodology page** (from `www/methodology.md`, which is not edited here) and the **probe** (`probe/app.R`): the checks table, Graphics (devices, a font, three drawn charts) and Video (av, libx264, ten frames encoded, 30 frames of 1280 by 720 drawn and encoded, with seconds).
+- **The bundle** (`.rscignore`, checked by 9C-7 to 9C-10): `app.R`, `R/`, `www/` only: 28 files, 2.6 MB: the six typefaces 2.0 MB, `R/` 0.6 MB, the reflex files and methodology.md under 0.1 MB. rsconnect would ask Connect for 95 packages (av, zip, commonmark, svglite, ragg, plotly, paletteer among them; ggiraph is not used). Loads alone as an app (9C-9).
+
+**What is not verified**
+- The probe has not been run on the work server, nor has the app been published anywhere. Open: whether Connect's `av` has libx264, whether ragg, svglite and systemfonts are installed there, the time a five-video dashboard takes (68 s here), and the memory of a session.
+- The `work` profile has placeholders for its base URL and model id (`app.R`); the app has only ever called `claude-sonnet-5-5` on Anthropic's API. The last live runs were Phase 7b; the live run of Part C (`tests/live_run_9.R`: label, three questions, headlines, a Magazine dashboard of a picture, an interactive chart and a video) has NOT been made, because no key was available to the worker; its export step was run with stand-in charts and headlines (`CHART_LIVE_DRY=1`, no call) and the page looked at in Chrome at 1280 and 500 px.
+- Not seen: the working line during a long call with a screen reader, Excel opening the summary CSV (UTF-8 with a byte-order mark, a `note` column), a printer.
+
+**Known limits**
+- Statistics use a simple random sample, three significant digits on screen (six in the CSV), and no weights or design. A mean of a scale treats its steps as equal, and says so.
+- A video has no phone drawing (its text is small below 600 px), takes a row of the page when drawn on a wide canvas, and its chart carries no rows. An interactive chart carries every plotted row.
+- The Dark style's bubble size legend has black keys on a dark ground. A line chart's plotly version has tick labels that touch at card width.
+- On a phone the Data page's file table scrolls sideways by about 27 px. shinychat links the echo of a clicked card's text; the model's own text and the file's text are escaped (`md_text()`).
+- The key is pasted on Start here and lives in the session only (the app never reads the environment); one model per profile; nothing is kept between sessions.
+
+**Run and test** (from inside `chaRt/`, PowerShell; never two R processes at once, a second can leave an Rplots.pdf and fail 8A-1)
+- App: `shiny::runApp("chaRt")` from the repository root.
+- Fast smoke: `Rscript --no-init-file tests/smoke.R`: 488 checks, 6.1 minutes.
+- Heavy smoke: `$env:CHART_SMOKE = "heavy"; Rscript --no-init-file tests/smoke.R; Remove-Item Env:CHART_SMOKE`: 19 checks, 7.0 minutes. Every check is in exactly one run (the `split:` check holds it); `CHART_SMOKE=all` runs both in about 12 minutes, too long for a foreground limit.
+- Live (a key in `ANTHROPIC_API_KEY`, costs a little): `tests/llm_check.R` (steps by `CHART_LIVE_STEPS`) and `tests/live_run_9.R` (at most 10 calls, writes `tests/live_run_9.out` and `tests/dashboard_live/`).
+
+**Map.** `app.R` settings, profiles, packages check, page, server. `R/data.R` file, dictionary, summary statistics. `R/spec.R` spec, checks, ggplot, plotly, code, video. `R/theme.R` fonts, styles, palettes, device. `R/llm.R` key, model call, repair. `R/reflexes.R` prompts, the three calls and their checks. `R/ui.R` pages, canvas, dashboard and codebook writers. `www/reflexes/` the model's rules (not edited here), `www/fonts/`, `www/methodology.md`. `probe/app.R`. `tests/` smoke, live scripts, gold specs, `data/orders.csv`. `DESIGN.md` the design; `manager/` the mailbox of earlier phases (git-ignored but its README).
+
+## History
+
 ## Phase 9 Part B: animation (2026-11-22)
 
 Branch `chart`, not pushed; done by a Sonnet worker for the lead. No model call is made by anything in this part. Smoke: fast run 482 of 482 (6.0 minutes; 468 before, 14 new: 9B-1 to 9B-14; one changed), heavy run 15 of 15 (6.5 minutes; 11 before, 4 new: 9B-15 to 9B-18).
