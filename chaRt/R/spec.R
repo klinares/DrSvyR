@@ -2557,8 +2557,8 @@ spec_widget <- function(plot, palette = attr(plot, "palette") %||% chart_palette
 # The static chart at SPEC_DPI pixels per inch and its size in inches, drawn on the device chart_device() opens
 #   (ragg, else cairo, else svglite: a PNG, or an SVG on a server that has only svglite; the file's ending and media
 #   type are chart_device_ext() and chart_device_type()). Returns the size in inches, invisibly.
-spec_png <- function(plot, file, size = spec_size(attr(plot, "spec"), attr(plot, "table")), dpi = SPEC_DPI) {
-  chart_device(file, size[["width"]], size[["height"]], dpi)
+spec_png <- function(plot, file, size = spec_size(attr(plot, "spec"), attr(plot, "table")), dpi = SPEC_DPI, kind = chart_device_kind()) {
+  chart_device(file, size[["width"]], size[["height"]], dpi, kind)
   on.exit(grDevices::dev.off())
   print(plot)
   invisible(size)

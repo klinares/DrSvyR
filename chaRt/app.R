@@ -55,7 +55,7 @@ library(purrr)
 
 # Called as pkg::fn() in R/ and never attached; listed so a missing one stops the app here, by name.
 APP_PACKAGES <- c("commonmark", "digest", "dplyr", "ellmer", "ggplot2", "htmltools", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales",
-                  "shinychat", "tibble", "tidyr", "yaml")
+                  "shinychat", "tibble", "tidyr", "yaml", "zip")
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)

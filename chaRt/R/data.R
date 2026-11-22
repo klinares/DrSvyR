@@ -512,6 +512,27 @@ facts_text <- function(e) {
 
 format_num <- function(x) format(x, big.mark = ",", scientific = FALSE, trim = TRUE, drop0trailing = TRUE)
 
+# What the codebook page (and nothing else of the dashboard export) says about a column's values, from its dictionary entry
+#   only, never from the data: a number's range and quartiles ("range"), a date's first and last day and usual gap ("dates"),
+#   the level counts of a group of at most CODEBOOK_MAX_LEVELS levels ("levels"), and for an id, a text, a longer category or an
+#   entry that has no summary the count of distinct values alone ("distinct"). No other value of a row is in the result.
+column_summary <- function(e) {
+  distinct = as.integer(e$distinct %||% NA_integer_)
+  only = list(kind = "distinct", distinct = distinct)
+  values = as.character(unlist(e$values))
+  switch(e$type %||% "text",
+    number = , integer = if (!is.null(e$min) && !is.null(e$max) && length(e$quartiles) == 3L)
+      list(kind = "range", min = e$min, max = e$max, quartiles = as.numeric(unlist(e$quartiles)), note = e$note) else only,
+    date = if (!is.null(e$min) && !is.null(e$max)) list(kind = "dates", min = e$min, max = e$max, gap = e$gap) else only,
+    category = , ordered = , flag = if (length(values) && length(values) <= CODEBOOK_MAX_LEVELS && length(e$counts) == length(values)) {
+      counts = as.integer(unlist(e$counts))
+      order = as.character(unlist(e$order))
+      at = if (identical(e$type, "ordered") && length(order) == length(values) && setequal(order, values)) match(order, values) else seq_along(values)
+      list(kind = "levels", values = values[at], counts = counts[at])
+    } else only,
+    only)
+}
+
 
 # ---- B4. what a model will be sent -------------------------------------------------------
 

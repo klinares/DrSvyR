@@ -112,9 +112,9 @@ chart_device_type <- function(kind = chart_device_kind()) if (identical(kind, "s
 
 # Opens the device that writes `file`, `width` by `height` inches at `dpi` pixels per inch (svglite draws vectors,
 #   so it takes no dpi), and returns its kind, invisibly. The caller closes it (dev.off()). With none of the
-#   three it stops with CHART_DEVICE_NONE, as a sentence and not a failure inside a graphics package.
-chart_device <- function(file, width, height, dpi) {
-  kind = chart_device_kind()
+#   three it stops with CHART_DEVICE_NONE, as a sentence and not a failure inside a graphics package. `kind` is the device
+#   chart_device_kind() names unless a caller asks for one (the dashboard export asks for svglite to write each chart's SVG).
+chart_device <- function(file, width, height, dpi, kind = chart_device_kind()) {
   w = round(width * dpi)
   h = round(height * dpi)
   switch(kind,

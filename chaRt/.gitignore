@@ -7,3 +7,5 @@ tests/live_gallery.html
 tests/live_replies.rds
 manager/*
 !manager/README.md
+# Phase 8 Part C: dashboards exported from stand-in charts, unpacked here for the manager to open.
+tests/dashboard_*/

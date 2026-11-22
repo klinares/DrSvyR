@@ -4667,6 +4667,527 @@ check("8C-1: a bare http://, https://, www. or e-mail address in a suggestion ca
         identical(md_text("a@b"), "a<span>@</span>b") && identical(md_text("see www.x"), "see www<span>\\.</span>x"))
 
 
+# ---- choosing the charts, and what the export writes ------------------------------------------------------------------------
+#
+# The sales file of the Explore checks (240 orders; region, channel, units, price, year) gives the charts; the messy file gives the
+#   secret. A zip is unpacked and every file of it searched as bytes, so a value hidden in a picture or a script would be found.
+
+p8c_read <- reread_data(c6_path, "sales.csv", "N/A")
+p8c_cb <- utils::modifyList(p8c_read$codebook, list(row_is = "one order"))
+p8c_data <- p8c_read$read$data
+p8c_pal <- chart_palette_default()
+p8c_set <- list(title = "Sales dashboard", subtitle = "Orders in the file", author = "A. Analyst", date = as.Date("2026-11-21"),
+                intro = "First paragraph of the introduction.\n\nSecond paragraph.", boxes = c("rows", "columns", "third"))
+p8c_s <- list(
+  bar = c6_bar, scatter = list(family = "scatter", x = "units", y = "price", title = "Units against price"), hist = c6_hist,
+  box = list(family = "box", x = "region", y = "price", title = "Price by region"),
+  line = list(family = "line", x = "year", y = "price", fn = "mean", title = "Average price by year"))
+p8c_story <- function(ch, headline, problems = character(0))
+  if (!is.null(headline)) list(headline = headline, summary = paste("A summary of", ch$id, "."), hash = spec_hash(ch$spec), data = "d", facts = "", spec = ch$spec,
+                               problems = problems)
+p8c_item <- function(i, spec, mode = "picture", headline = paste("Headline of chart", i), problems = character(0), stale = NA_character_) {
+  ch <- new_chart(paste0("c", i), spec)
+  list(id = ch$id, chart = ch, story = p8c_story(ch, headline, problems), mode = mode, stale = stale)
+}
+p8c_build <- function(items, data = p8c_data, cb = p8c_cb, settings = p8c_set, path = c6_path, ...) {
+  out <- file.path(tempfile("p8c_zip_"), "dashboard_x.zip")
+  dir.create(dirname(out))
+  t <- system.time(res <- build_dashboard(items, data, cb, p8c_pal, settings, path, out, model = "test-model", ...))
+  c(res, list(elapsed = t[["elapsed"]]))
+}
+p8c_dir <- function(zip) { d <- tempfile("p8c_unz_"); dir.create(d); zip::unzip(zip, exdir = d); d }
+p8c_paths <- function(d) list.files(d, recursive = TRUE, all.files = TRUE)
+p8c_bytes <- function(f) { x <- readBin(f, "raw", file.size(f)); rawToChar(x[x != as.raw(0)]) }
+p8c_has <- function(d, pat) any(purrr::map_lgl(file.path(d, p8c_paths(d)), function(f) grepl(pat, p8c_bytes(f), fixed = TRUE, useBytes = TRUE)))
+p8c_html <- function(d, f = "dashboard.html") { x <- readBin(file.path(d, f), "raw", file.size(file.path(d, f))); r <- rawToChar(x); Encoding(r) <- "UTF-8"; r }
+p8c_svg <- svglite_installed()
+
+# The page with every script and every style element emptied, so an address that a script or a style holds as text is not an
+#   attribute: what is left is the markup, where a src or an href is a request.
+p8c_markup <- function(h) gsub("(?s)<(script|style)([^>]*)>.*?</\\1>", "<\\1\\2></\\1>", h, perl = TRUE)
+p8c_requests <- function(h) {
+  m <- p8c_markup(h)
+  c(regmatches(m, gregexpr("(?i)\\s(src|href|poster|data|action)\\s*=\\s*[\"']?\\s*(https?:)?//[^\"' >]*", m, perl = TRUE))[[1]],
+    regmatches(h, gregexpr("(?i)url\\(\\s*[\"']?\\s*(https?:)?//[^)\"']*", h, perl = TRUE))[[1]],
+    regmatches(h, gregexpr("(?i)@import[^;]*;", h, perl = TRUE))[[1]])
+}
+# A balanced-tag check for a page: every element that has an end tag is closed in order, after the void elements and the text of a
+#   script or style are set aside. Returns TRUE when the page is balanced.
+p8c_balanced <- function(h) {
+  m <- gsub("(?s)<!--.*?-->", "", gsub("(?s)<(script|style)([^>]*)>.*?</\\1>", "<\\1\\2></\\1>", h, perl = TRUE), perl = TRUE)
+  tags <- regmatches(m, gregexpr("</?[A-Za-z][A-Za-z0-9]*[^>]*>", m, perl = TRUE))[[1]]
+  void <- c("meta", "img", "br", "hr", "input", "link")
+  name <- tolower(sub("^</?([A-Za-z][A-Za-z0-9]*).*$", "\\1", tags))
+  close <- startsWith(tags, "</")
+  open_self <- grepl("/>$", tags)
+  stack <- purrr::reduce2(name, close, function(st, nm, cl) {
+    if (is.null(st)) return(NULL)
+    if (cl) { if (length(st) && identical(st[length(st)], nm)) st[-length(st)] else NULL }
+    else if (nm %in% void) st else c(st, nm)
+  }, .init = character(0))
+  !is.null(stack) && !length(stack)
+}
+p8c_png_size <- function(f) { b <- readBin(f, "raw", 24L); c(width = readBin(b[17:20], "integer", size = 4L, endian = "big"), height = readBin(b[21:24], "integer", size = 4L, endian = "big")) }
+
+# 1. the zip of a three-chart canvas, pictures only
+p8c_z3 <- p8c_build(list(p8c_item(1, p8c_s$bar), p8c_item(2, p8c_s$scatter), p8c_item(3, p8c_s$hist, headline = NULL)))
+p8c_d3 <- p8c_dir(p8c_z3$zip)
+p8c_expect3 <- c("dashboard.html", "codebook.html", "data_dictionary.yaml", "charts.R",
+                 paste0("charts/", c("01_orders_by_region", "02_units_against_price", "03_price_of_an_order"), ".png"),
+                 if (p8c_svg) paste0("charts/", c("01_orders_by_region", "02_units_against_price", "03_price_of_an_order"), ".svg"))
+p8c_code <- readLines(file.path(p8c_d3, "charts.R"), warn = FALSE)
+check(paste0("8C-2: the zip of a three-chart canvas holds dashboard.html, codebook.html, data_dictionary.yaml, charts.R and charts/ with each chart as a PNG at 300 dpi (2100 by 1350 pixels for 7 by 4.5 inches) and, with svglite installed (",
+             p8c_svg, "), as an SVG; the dictionary is what write_codebook() writes; charts.R holds the code of each chart in order and parses; the files are numbered in the order of the canvas"),
+      setequal(p8c_paths(p8c_d3), p8c_expect3) && setequal(names(p8c_z3$files), p8c_expect3) && setequal(zip::zip_list(p8c_z3$zip)$filename, p8c_expect3) &&
+        all(p8c_z3$files > 0L) && identical(unname(p8c_png_size(file.path(p8c_d3, "charts/01_orders_by_region.png"))), c(2100L, 1350L)) &&
+        (!p8c_svg || grepl("^<\\?xml|^<svg", readLines(file.path(p8c_d3, "charts/02_units_against_price.svg"), n = 2L, warn = FALSE)[1])) &&
+        identical(readLines(file.path(p8c_d3, "data_dictionary.yaml"), warn = FALSE), { f <- tempfile(); write_codebook(p8c_cb, f); readLines(f, warn = FALSE) }) &&
+        all(grepl("^# ---- Chart [123]: ", grep("^# ---- Chart", p8c_code, value = TRUE))) && length(grep("^# ---- Chart", p8c_code)) == 3L &&
+        identical(grep("Orders by region|Units against price|Price of an order", grep("^# ---- Chart", p8c_code, value = TRUE), value = TRUE),
+                  grep("^# ---- Chart", p8c_code, value = TRUE)) && inherits(tryCatch(parse(file.path(p8c_d3, "charts.R")), error = function(e) e), "expression") &&
+        identical(p8c_z3$modes, rep("picture", 3L)))
+
+# 2. the page: title, subtitle, author, date, introduction, the chosen value boxes, a card for each chart (headline or title, chart,
+#   summary, notes, source line), the About card, the style's colours and typefaces, the print and phone rules
+p8c_h3 <- p8c_html(p8c_d3)
+p8c_hostile <- utils::modifyList(p8c_set, list(title = "<script>window.x=1</script> & \"q\"", author = "<b>Me</b>", intro = "A <i>plain</i> text & more.", boxes = "rows"))
+p8c_zh <- p8c_build(list(p8c_item(1, p8c_s$bar)), settings = p8c_hostile)
+p8c_hh <- p8c_html(p8c_dir(p8c_zh$zip))
+p8c_about_at <- regexpr("About this dashboard", p8c_h3, fixed = TRUE)
+p8c_about <- substr(p8c_h3, p8c_about_at, nchar(p8c_h3))
+p8c_h2s <- regmatches(p8c_h3, gregexpr("<h2[^>]*>[^<]*</h2>", p8c_h3))[[1]]
+p8c_methodology_para <- dash_describes()
+p8c_para_expected <- local({
+  ml <- readLines(METHODOLOGY_FILE, encoding = "UTF-8", warn = FALSE)
+  at <- grep("A chart describes the file", ml, fixed = TRUE)[1]
+  end <- at + which(!nzchar(trimws(ml[at:length(ml)])))[1] - 2L
+  gsub("[[:space:]]+", " ", trimws(gsub("*", "", paste(ml[at:end], collapse = " "), fixed = TRUE)))
+})
+check("8C-3: dashboard.html has the title, subtitle, author, the date as written out (21 November 2026) and the introduction as paragraphs of plain text (a tag or an ampersand in them is shown as text, never run), the three value boxes (rows, columns, the period) or only those chosen, and one card for each chart in order: the headline (the chart's title for a chart with none), the chart as a base64 PNG with alt text, the summary and the source line; then the About card",
+      grepl("<h1>Sales dashboard</h1>", p8c_h3, fixed = TRUE) && grepl("Orders in the file", p8c_h3, fixed = TRUE) && grepl("21 November 2026", p8c_h3, fixed = TRUE) &&
+        grepl("A. Analyst", p8c_h3, fixed = TRUE) && grepl("<p>First paragraph of the introduction.</p>", p8c_h3, fixed = TRUE) && grepl("<p>Second paragraph.</p>", p8c_h3, fixed = TRUE) &&
+        grepl("<title>Sales dashboard</title>", p8c_h3, fixed = TRUE) &&
+        grepl("&lt;script&gt;window.x=1&lt;/script&gt; &amp; \"q\"", p8c_hh, fixed = TRUE) && !grepl("<script>window.x=1", p8c_hh, fixed = TRUE) &&
+        grepl("&lt;b&gt;Me&lt;/b&gt;", p8c_hh, fixed = TRUE) && grepl("A &lt;i&gt;plain&lt;/i&gt; text &amp; more.", p8c_hh, fixed = TRUE) &&
+        grepl("<div class=\"box-title\">Rows</div>", p8c_hh, fixed = TRUE) && !grepl("box-title\">Columns<", p8c_hh, fixed = TRUE) && !grepl("box-title\">Period<", p8c_hh, fixed = TRUE) &&
+        grepl("box-title\">Rows<", p8c_h3, fixed = TRUE) && grepl("box-title\">Columns<", p8c_h3, fixed = TRUE) && grepl("box-title\">Period<", p8c_h3, fixed = TRUE) &&
+        grepl(">240<", p8c_h3, fixed = TRUE) && grepl("2019 to 2024", p8c_h3, fixed = TRUE) &&
+        identical(p8c_h2s, c("<h2>Headline of chart 1</h2>", "<h2>Headline of chart 2</h2>", "<h2>Price of an order</h2>", "<h2 id=\"about-heading\">About this dashboard</h2>")) &&
+        lengths(gregexpr("<img src=\"data:image/png;base64,", p8c_h3, fixed = TRUE)) == 3L && grepl("alt=\"Orders by region. Headline of chart 1\"", p8c_h3, fixed = TRUE) &&
+        grepl("alt=\"Price of an order\"", p8c_h3, fixed = TRUE) && lengths(gregexpr("class=\"source\">Source: sales.csv", p8c_h3, fixed = TRUE)) == 3L &&
+        lengths(gregexpr("class=\"summary\"", p8c_h3, fixed = TRUE)) == 2L && regexpr("Headline of chart 1", p8c_h3, fixed = TRUE) < regexpr("Headline of chart 2", p8c_h3, fixed = TRUE) &&
+        regexpr("Headline of chart 2", p8c_h3, fixed = TRUE) < regexpr("Price of an order</h2>", p8c_h3, fixed = TRUE))
+check("8C-4: the About card has the file name, its rows and columns, what one row is, the date and author, the model that wrote the text (and that the author's own title and introduction are not checked), which texts passed the checks and which chart has none, how many charts are pictures, a link to the codebook, and the paragraph of www/methodology.md that says a chart describes the file",
+      grepl("sales.csv: 240 rows and 5 columns.", p8c_about, fixed = TRUE) && grepl("One row is one order.", p8c_about, fixed = TRUE) &&
+        grepl("21 November 2026, by A. Analyst.", p8c_about, fixed = TRUE) && grepl("written by the model test-model", p8c_about, fixed = TRUE) &&
+        grepl("are the author's own and are not checked", p8c_about, fixed = TRUE) &&
+        grepl("Orders by region: passed the number check and the word check.", p8c_about, fixed = TRUE) &&
+        grepl("Price of an order: has no headline or summary.", p8c_about, fixed = TRUE) && grepl("3 pictures and 0 interactive. A picture holds no row values.", p8c_about, fixed = TRUE) &&
+        grepl("<a href=\"codebook.html\">codebook.html</a>", p8c_about, fixed = TRUE) && grepl(DASH_DESCRIBES, p8c_about, fixed = TRUE) &&
+        grepl("They do not claim a cause, and they do not generalise to a population", p8c_about, fixed = TRUE) && startsWith(p8c_methodology_para, DASH_DESCRIBES) &&
+        identical(p8c_methodology_para, p8c_para_expected) && grepl(htmltools::htmlEscape(p8c_methodology_para), p8c_about, fixed = TRUE))
+
+# the style: its colours and typefaces, written into the page; a phone and a print rule; the typefaces inside the page
+p8c_zd <- p8c_build(list(p8c_item(1, p8c_s$bar)), settings = p8c_set)
+p8c_dk <- { f <- tempfile(fileext = ".zip"); res <- build_dashboard(list(p8c_item(1, p8c_s$bar)), p8c_data, p8c_cb, utils::modifyList(p8c_pal, list(style = "dark")), p8c_set, c6_path, f, model = "m"); p8c_html(p8c_dir(f)) }
+p8c_np <- { f <- tempfile(fileext = ".zip"); res <- build_dashboard(list(p8c_item(1, p8c_s$bar)), p8c_data, p8c_cb, utils::modifyList(p8c_pal, list(style = "newspaper")), p8c_set, c6_path, f, model = "m"); p8c_html(p8c_dir(f)) }
+check("8C-5: the page is written in the chosen style: its colours as custom properties (Clean white and #1A1A1A; Dark #14171C and #ECEFF2), its typefaces (Inter; Source Serif 4 for Newspaper's title) as base64 @font-face rules inside the page, a CSS grid of cards that wraps from columns to one (and a viewport meta), a print rule that keeps each card whole, and no typeface file beside it",
+      grepl("--bg:#FFFFFF;--text:#1A1A1A", p8c_h3, fixed = TRUE) && grepl("--bg:#14171C;--text:#ECEFF2", p8c_dk, fixed = TRUE) && !grepl("--bg:#14171C", p8c_h3, fixed = TRUE) &&
+        grepl("@font-face{font-family:'Inter';font-weight:400;font-style:normal;src:url('data:font/ttf;base64,", p8c_h3, fixed = TRUE) &&
+        grepl("font-family:'Inter';font-weight:700", p8c_h3, fixed = TRUE) && !grepl("Source Serif 4", p8c_h3, fixed = TRUE) &&
+        grepl("@font-face{font-family:'Source Serif 4';font-weight:700", p8c_np, fixed = TRUE) && grepl("'Source Serif 4', serif", p8c_np, fixed = TRUE) &&
+        grepl("grid-template-columns:repeat(auto-fit,minmax(min(100%,30rem),1fr))", p8c_h3, fixed = TRUE) && grepl("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>", p8c_h3, fixed = TRUE) &&
+        grepl("@media (max-width:40rem)", p8c_h3, fixed = TRUE) && grepl("@media print{", p8c_h3, fixed = TRUE) && grepl("break-inside:avoid", p8c_h3, fixed = TRUE) &&
+        !grepl("url\\((?!['\"]data:)", p8c_h3, perl = TRUE) && !grepl("\\.ttf", p8c_h3) &&
+        !grepl("data:[a-z/]+;base64,[A-Za-z0-9+/=]*[[:space:]]", p8c_h3, perl = TRUE) && grepl("data:font/ttf;base64,[A-Za-z0-9+/=]{1000}", p8c_h3, perl = TRUE) &&
+        grepl("data:image/png;base64,[A-Za-z0-9+/=]{1000}", p8c_h3, perl = TRUE) && grepl("data:[a-z/]+;base64,[A-Za-z0-9+/=]*[[:space:]]", "src=\"data:image/png;base64,AAAA\nBBBB\"", perl = TRUE))
+
+# 3. nothing is requested when the page is opened offline; the check can fail
+p8c_cb_html <- p8c_html(p8c_d3, "codebook.html")
+check("8C-6: no request leaves either page: no src, href, poster or action that is an http://, https:// or // address, no url() that is not a data address, no @import (scripts and styles set aside, so a script's own text is not an attribute); the search does find a planted address of each kind",
+      !length(p8c_requests(p8c_h3)) && !length(p8c_requests(p8c_cb_html)) &&
+        length(p8c_requests("<img src=\"https://x.test/a.png\">")) == 1L && length(p8c_requests("<a href='http://x.test'>")) == 1L &&
+        length(p8c_requests("<link href=//cdn.test/a.css>")) == 1L && length(p8c_requests("<style>a{background:url('https://x.test/a.png')}</style>")) == 1L &&
+        length(p8c_requests("<style>@import url(x.css);</style>")) == 1L && !length(p8c_requests("<script>var u = 'href=\"http://x.test\"';</script><p>href=http</p>")))
+
+# 4. both pages parse as HTML
+p8c_ncol <- length(p8c_cb$columns)
+p8c_xml <- function(h, xp) if (requireNamespace("xml2", quietly = TRUE)) length(xml2::xml_find_all(xml2::read_html(h), xp))
+check("8C-7: dashboard.html and codebook.html parse as HTML: every tag with an end tag is closed in order (the checker rejects an unclosed tag and accepts a closed one), and where xml2 is installed they parse to one h1, a card for each chart and the About card (4), and a section for each column of the file",
+      p8c_balanced(p8c_h3) && p8c_balanced(p8c_cb_html) && p8c_balanced(p8c_dk) && !p8c_balanced("<div><p></div>") && p8c_balanced("<div><p></p><br><img src=x></div>") && !p8c_balanced("<div></span></div>") &&
+        startsWith(p8c_h3, "<!DOCTYPE html>") && startsWith(p8c_cb_html, "<!DOCTYPE html>") &&
+        (!requireNamespace("xml2", quietly = TRUE) || (identical(p8c_xml(p8c_h3, "//h1"), 1L) && identical(p8c_xml(p8c_h3, "//article[contains(@class,'card')]"), 4L) &&
+                                                       identical(p8c_xml(p8c_cb_html, "//section[contains(@class,'col-section')]"), p8c_ncol) && identical(p8c_xml(p8c_cb_html, "//h1"), 1L))))
+
+# 5. the codebook page
+p8c_mfile <- make_messy(file.path(work_dir, "messy_c.csv"))
+p8c_mread <- reread_data(p8c_mfile, "messy.csv", character())
+p8c_mcb <- utils::modifyList(p8c_mread$codebook, list(row_is = "one visit"))
+p8c_mnames <- purrr::map_chr(p8c_mcb$columns, "name")
+p8c_sq <- function(h) gsub(">[[:space:]]+<", "><", h)
+p8c_cp <- p8c_sq(codebook_page(p8c_mcb))
+p8c_sections <- regmatches(p8c_cp, gregexpr("(?s)<section class=\"col-section\".*?</section>", p8c_cp, perl = TRUE))[[1]]
+p8c_sec <- function(name) p8c_sections[purrr::map_lgl(p8c_sections, function(s) grepl(paste0("Column ", name, "</p>"), s, fixed = TRUE))]
+check(paste0("8C-8: the codebook page has one section for each column of the messy file (", length(p8c_mnames), "), each with its label, type, role and share missing; a number has its range and quartiles, a group of at most ",
+             CODEBOOK_MAX_LEVELS, " levels its level counts, and an id, a free text and a category of 45 levels only the number of different values; ", SECRET, " and the free text are in no section and in no file of the zip"),
+      length(p8c_sections) == length(p8c_mnames) && all(purrr::map_lgl(p8c_mnames, function(n) length(p8c_sec(n)) == 1L)) &&
+        grepl("Range</dt><dd>-99 to", p8c_sec("score"), fixed = TRUE) && grepl("Quartiles</dt>", p8c_sec("score"), fixed = TRUE) && !grepl("Different values", p8c_sec("score"), fixed = TRUE) &&
+        grepl("Range</dt><dd>2024-03-01 to 2024-06-28", p8c_sec("visit_date"), fixed = TRUE) &&
+        grepl("Range</dt><dd>1 to 5<", p8c_sec("rating"), fixed = TRUE) && grepl("may be a coded category", p8c_sec("rating"), fixed = TRUE) &&
+        grepl("Different values</dt><dd>120<", p8c_sec("record_id"), fixed = TRUE) && !grepl("Range|class=\"levels\"", p8c_sec("record_id")) &&
+        grepl("Different values</dt><dd>45<", p8c_sec("city"), fixed = TRUE) && !grepl("class=\"levels\"|city_01", p8c_sec("city")) &&
+        grepl("Different values</dt>", p8c_sec("comment"), fixed = TRUE) && !grepl("comment about item", p8c_cp, fixed = TRUE) && !grepl(SECRET, p8c_cp, fixed = TRUE) &&
+        grepl("Missing</dt><dd>100% of the rows", p8c_sec("empty"), fixed = TRUE) && grepl("one visit", p8c_cp, fixed = TRUE) &&
+        identical(column_summary(list(type = "category", distinct = 40L, values = as.list(letters), counts = as.list(seq_along(letters))))$kind, "levels") &&
+        identical(column_summary(list(type = "category", distinct = 40L, values = as.list(paste0("v", 1:31)), counts = as.list(1:31)))$kind, "distinct") &&
+        identical(column_summary(list(type = "text", distinct = 80L, values = as.list("secret")))$kind, "distinct"))
+p8c_scp <- p8c_sq(codebook_page(p8c_cb))
+p8c_counts <- table(p8c_data$region)
+check("8C-8b: in the codebook of the sales file a group has a table of its levels with each count and share (the counts are the file's), a year column's range has no thousands separator, a measure its quartiles, and the page says which values were read as missing",
+      grepl("class=\"levels\"", p8c_scp, fixed = TRUE) &&
+        all(purrr::map_lgl(names(p8c_counts), function(v) grepl(paste0("<td>", v, "</td><td class=\"n\">", p8c_counts[[v]], "</td>"), p8c_scp, fixed = TRUE))) &&
+        grepl("Range</dt><dd>2019 to 2024<", p8c_scp, fixed = TRUE) && grepl("Quartiles</dt>", p8c_scp, fixed = TRUE) &&
+        grepl("These values were read as missing in every column: N/A.", p8c_scp, fixed = TRUE) &&
+        !grepl("were read as missing", p8c_sq(codebook_page({ k <- p8c_cb; k$missing_codes <- list(); k })), fixed = TRUE))
+
+# 6. the secret of the messy file is in no exported file (a picture, a script, the codebook, the dictionary, the code, the page)
+p8c_ms <- list(hist = list(family = "histogram", x = "score", title = "Scores"),
+               scatter = list(family = "scatter", x = "score", y = "score_1", title = "Score against score 1"),
+               bar = list(family = "bar", x = "rating", fn = "count", title = "Ratings"))
+p8c_mdata <- p8c_mread$read$data
+p8c_zm <- p8c_build(list(p8c_item(1, p8c_ms$bar), p8c_item(2, p8c_ms$hist), p8c_item(3, p8c_ms$scatter, mode = "interactive")), data = p8c_mdata, cb = p8c_mcb, path = p8c_mfile)
+p8c_dm <- p8c_dir(p8c_zm$zip)
+p8c_planted <- tempfile("p8c_planted_")
+dir.create(p8c_planted)
+writeLines(paste("a free text with", SECRET), file.path(p8c_planted, "page.html"))
+check(paste0("8C-9: ", SECRET, " (planted in the free text, the id and the 45-level category of the messy file) is in no file of a zip that holds three charts, one of them interactive, nor are the free text or the ids (every file unpacked and searched as bytes; the search does find a planted file); every column of the file has its section in the codebook"),
+      length(p8c_paths(p8c_dm)) >= 10L && !p8c_has(p8c_dm, SECRET) && !p8c_has(p8c_dm, "comment about item") && !p8c_has(p8c_dm, "R0001") && !p8c_has(p8c_dm, "city_01") &&
+        p8c_has(p8c_planted, SECRET) && identical(p8c_zm$modes, c("picture", "picture", "interactive")) &&
+        length(gregexpr("<section class=\"col-section\"", p8c_html(p8c_dm, "codebook.html"), fixed = TRUE)[[1]]) == length(p8c_mnames) &&
+        sum(grepl(SECRET, readLines(file.path(p8c_dm, "data_dictionary.yaml"), warn = FALSE), fixed = TRUE)) == 0L)
+
+# 7. disclosure: an interactive scatter or box carries every plotted row's value, a picture none, a chart of totals not the row
+p8c_plant <- p8c_data
+p8c_plant$price[5] <- 987654.321
+p8c_pv <- function(spec, mode) { z <- p8c_build(list(p8c_item(1, spec, mode = mode)), data = p8c_plant); d <- p8c_dir(z$zip); list(dir = d, zip = z, html = p8c_html(d)) }
+p8c_pic <- p8c_pv(p8c_s$scatter, "picture")
+p8c_int <- p8c_pv(p8c_s$scatter, "interactive")
+p8c_box <- p8c_pv(p8c_s$box, "interactive")
+p8c_tot <- p8c_pv(p8c_s$line, "interactive")
+check("8C-10: the picture export of a scatter holds no row value (a price planted in one row, 987654.321, is in no file of the unpacked zip, nor in a rounded form); the interactive export of the same scatter holds it, and so does an interactive box chart, while an interactive line chart of means holds only totals (not the planted value); so the disclosure sentence is true",
+      !p8c_has(p8c_pic$dir, "987654.321") && !p8c_has(p8c_pic$dir, "987654.32") && !p8c_has(p8c_pic$dir, "987654") && identical(p8c_pic$zip$modes, "picture") &&
+        grepl("987654.321", p8c_int$html, fixed = TRUE) && identical(p8c_int$zip$modes, "interactive") && grepl("987654.321", p8c_box$html, fixed = TRUE) &&
+        identical(p8c_tot$zip$modes, "interactive") && !p8c_has(p8c_tot$dir, "987654.321") && grepl("\"type\":\"scatter\"", p8c_int$html, fixed = TRUE) &&
+        p8c_has(p8c_int$dir, "987654") && !p8c_has(p8c_planted, "987654"))
+p8c_fam <- function(...) chart_from_rows(list(...))
+p8c_hm <- list(family = "heatmap", x = "year", y = "region", color = "price", fn = "mean")
+check("8C-11: which interactive charts carry rows: a scatter, bubble or box always; a bar, dot, line, slope or heatmap only when its marks are rows (fn none), not when it is counts, shares, sums, means or medians; a histogram never; the default way a chart goes in is a picture for those that carry rows (even when the card shows the interactive view) and for the others the card's view",
+      p8c_fam(family = "scatter", x = "units", y = "price") && p8c_fam(family = "bubble", x = "units", y = "price", size = "units") && p8c_fam(family = "box", x = "region", y = "price") &&
+        !p8c_fam(family = "bar", x = "region", fn = "count") && !p8c_fam(family = "bar", x = "region", y = "price", fn = "sum") && p8c_fam(family = "bar", x = "region", y = "price", fn = "none") &&
+        p8c_fam(family = "dot", x = "region", y = "price", fn = "none") && !p8c_fam(family = "line", x = "year", y = "price", fn = "mean") && p8c_fam(family = "line", x = "year", y = "price", fn = "none") &&
+        !p8c_fam(family = "slope", x = "year", y = "price", color = "region", fn = "sum") && !p8c_fam(family = "histogram", x = "price") && !p8c_fam(family = "heatmap", x = "year", y = "region") &&
+        !chart_from_rows(p8c_hm) && chart_from_rows(utils::modifyList(p8c_hm, list(fn = "none"))) &&
+        identical(dashboard_default_mode(list(spec = p8c_s$scatter), TRUE), "picture") && identical(dashboard_default_mode(list(spec = p8c_s$box), TRUE), "picture") &&
+        identical(dashboard_default_mode(list(spec = p8c_s$bar), TRUE), "interactive") && identical(dashboard_default_mode(list(spec = p8c_s$bar), FALSE), "picture") &&
+        identical(dashboard_default_mode(list(spec = p8c_s$line), TRUE), "interactive"))
+
+# 8. the interactive file: the widget scripts are written into it from the installed packages, nothing is requested, and a picture-only file holds none
+p8c_plotly_js <- system.file("htmlwidgets/lib/plotlyjs/plotly-latest.min.js", package = "plotly")
+p8c_n_script <- function(h) lengths(gregexpr("<script>", h, fixed = TRUE)) * grepl("<script>", h, fixed = TRUE)
+check("8C-12: only when a chart is interactive does the page hold the scripts its widget needs (htmlwidgets, plotly's binding, typedarray, jquery, crosstalk and plotly.js: six <script> elements with their text inside, read from the installed packages, no src), the file is larger by about the weight of plotly.js, no request leaves it (the search finds none, scripts set aside), and a picture-only page has no <script> at all",
+      file.exists(p8c_plotly_js) && p8c_n_script(p8c_int$html) >= 6L && !grepl("<script src", p8c_int$html, fixed = TRUE) && !grepl("<script[^>]* src=", p8c_int$html) &&
+        nchar(p8c_int$html, "bytes") > nchar(p8c_pic$html, "bytes") + file.size(p8c_plotly_js) && !length(p8c_requests(p8c_int$html)) && p8c_balanced(p8c_int$html) &&
+        grepl("class=\"plotly html-widget\"", p8c_int$html, fixed = TRUE) && grepl("data-for=\"htmlwidget-", p8c_int$html, fixed = TRUE) &&
+        !grepl("<script", p8c_pic$html, fixed = TRUE) && !grepl("class=\"plotly html-widget\"", p8c_pic$html, fixed = TRUE) &&
+        p8c_n_script(p8c_html(p8c_dm)) >= 6L)
+
+# 9. a chart whose interactive version cannot be made goes in as a picture and the dialog's result and the About card say so
+p8c_failw <- function(p) stop("plotly could not convert this plot\nsecond line of the message")
+p8c_nobuild <- function(e) list(modes = character(0), fallbacks = character(0), zip = NA_character_, error = conditionMessage(e))
+p8c_zf <- tryCatch(p8c_build(list(p8c_item(1, p8c_s$scatter, mode = "interactive"), p8c_item(2, p8c_s$bar, mode = "interactive")),
+                             widget = function(p) if (identical(attr(p, "spec")$family, "scatter")) p8c_failw(p) else spec_widget(p)), error = p8c_nobuild)
+p8c_hf <- if (!is.na(p8c_zf$zip)) p8c_html(p8c_dir(p8c_zf$zip)) else ""
+p8c_zf1 <- tryCatch(p8c_build(list(p8c_item(1, p8c_s$scatter, mode = "interactive")), widget = p8c_failw), error = p8c_nobuild)
+p8c_hf1 <- if (!is.na(p8c_zf1$zip)) p8c_html(p8c_dir(p8c_zf1$zip)) else ""
+check("8C-13: when spec_widget() fails for a chart (stand-in: plotly stops), that chart is written as a picture (the build does not fail), the build says why with the first line of the message, the other interactive chart is still interactive, the page says in its About card that it is a picture because its interactive version could not be made, and with no widget left it holds no script",
+      identical(p8c_zf$modes, c("picture", "interactive")) && identical(unname(p8c_zf$fallbacks), c("plotly could not convert this plot", NA)) && identical(names(p8c_zf$fallbacks), c("Units against price", "Orders by region")) &&
+        grepl("'Units against price' is a picture because its interactive version could not be made: plotly could not convert this plot", p8c_hf, fixed = TRUE) &&
+        grepl("1 picture and 1 interactive.", p8c_hf, fixed = TRUE) && lengths(gregexpr("<img src=\"data:image/png", p8c_hf, fixed = TRUE)) == 1L && p8c_n_script(p8c_hf) >= 6L &&
+        identical(p8c_zf1$modes, "picture") && !grepl("<script", p8c_hf1, fixed = TRUE) && grepl("1 picture and 0 interactive.", p8c_hf1, fixed = TRUE))
+
+# 10. a failing step: the build stops, says which step, and leaves nothing
+p8c_nocol <- p8c_data
+p8c_nocol$price <- NULL
+p8c_out_f <- file.path(tempfile("p8c_fail_"), "dashboard_x.zip")
+dir.create(dirname(p8c_out_f))
+p8c_err <- tryCatch(build_dashboard(list(p8c_item(1, p8c_s$bar), p8c_item(2, p8c_s$scatter)), p8c_nocol, p8c_cb, p8c_pal, p8c_set, c6_path, p8c_out_f), error = function(e) e)
+p8c_stage_left <- length(list.files(tempdir(), pattern = "^dashboard_[0-9a-f]+$"))
+p8c_err0 <- tryCatch(build_dashboard(list(), p8c_data, p8c_cb, p8c_pal, p8c_set, c6_path, p8c_out_f), error = function(e) e)
+check("8C-14: a build that fails says which step failed and why in the build's own words (here chart 2, whose column is missing), writes no zip, and removes its staging folder; an empty dashboard is refused in a sentence; the dialog's last-lines helper keeps four lines of at most 300 characters",
+      inherits(p8c_err, "error") && grepl("^While drawing chart 2 \\(Units against price\\): ", conditionMessage(p8c_err)) && !file.exists(p8c_out_f) && p8c_stage_left == 0L &&
+        identical(conditionMessage(p8c_err0), "No chart is in the dashboard.") &&
+        identical(dash_last_lines("a\nb\nc\nd\ne\nf"), "c\nd\ne\nf") && identical(nchar(dash_last_lines(strrep("x", 500))), 300L) && identical(dash_last_lines("one"), "one"))
+
+# 11. the zip is written by the zip package, with no zip program: with no zip on the path (and R_ZIPCMD wrong) the build still works, utils::zip() does not
+p8c_old_env <- Sys.getenv(c("PATH", "R_ZIPCMD"), unset = NA)
+p8c_nozip <- tryCatch({
+  Sys.setenv(PATH = R.home("bin"), R_ZIPCMD = "no_such_zip_program")
+  tmp <- tempfile(fileext = ".txt"); writeLines("x", tmp)
+  list(which = unname(Sys.which("zip")),
+       built = tryCatch(p8c_build(list(p8c_item(1, p8c_s$bar)))$bytes, error = function(e) conditionMessage(e)),
+       base = tryCatch(suppressWarnings(utils::zip(tempfile(fileext = ".zip"), files = tmp, flags = "-q")), error = function(e) "error"))
+}, finally = { Sys.setenv(PATH = p8c_old_env[["PATH"]]); if (is.na(p8c_old_env[["R_ZIPCMD"]])) Sys.unsetenv("R_ZIPCMD") else Sys.setenv(R_ZIPCMD = p8c_old_env[["R_ZIPCMD"]]) })
+check("8C-15: the zip is written by zip::zipr() (compiled into the zip package: no zip program on Windows or on a Linux server): with no zip on the path the build still writes a zip, where base R's utils::zip() fails; the code calls zip::zipr() with the paths mirrored, not utils::zip()",
+      identical(p8c_nozip$which, "") && is.numeric(p8c_nozip$built) && p8c_nozip$built > 100000 && !identical(p8c_nozip$base, 0L) &&
+        any(grepl("zip::zipr", deparse(body(build_dashboard)), fixed = TRUE)) && any(grepl("mode = \"mirror\"", deparse(body(build_dashboard)), fixed = TRUE)) &&
+        !any(grepl("utils::zip", deparse(body(build_dashboard)), fixed = TRUE)) && identical(Sys.getenv("PATH"), p8c_old_env[["PATH"]]))
+
+# small helpers
+check("8C-16: dash_slug() makes a file name from a title (lower-case words joined by underscores, at most 40 characters, 'chart' when nothing is left), dash_date_text() writes a date out in words, dash_size_text() a size in KB or MB",
+      identical(dash_slug("Orders by region, 2024!"), "orders_by_region_2024") && identical(dash_slug(""), "chart") && identical(dash_slug("!!!"), "chart") && nchar(dash_slug(strrep("word ", 30))) <= 40L &&
+        identical(dash_date_text(as.Date("2026-01-05")), "5 January 2026") && identical(dash_size_text(2048), "2 KB") && identical(dash_size_text(2.5 * 1024^2), "2.5 MB"))
+
+# 12. the Explore screen: the switch, the header, the order, the dialog, the build (testServer, with a stand-in for the model)
+p8c_replies <- list("q one" = list(charts = list(c6_bar, p8c_s$scatter, c6_hist)), "q two" = list(charts = list(p8c_s$box)))
+p8c_reply <- function(user, i) {
+  if (grepl("\nANALYST: ", user, fixed = TRUE) && !grepl("<CHARTS>", user, fixed = TRUE)) return(to_json(p8c_replies[[c6_msg(user)]] %||% list(ask = "Which?")))
+  c6_reply(user, i)
+}
+p8c_state <- function() c6_state(cb = p8c_cb, read = p8c_read)
+p8c_out <- new.env()
+p8c_si <- stand_by(p8c_reply)
+p8c_st <- p8c_state()
+p8c_modal <- new.env()
+p8c_show <- function(ui, session = NULL) assign("modal", ui, envir = p8c_modal)
+p8c_modal_html <- function() paste(as.character(p8c_modal$modal), collapse = "")
+assign("showModal", p8c_show, envir = globalenv())
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8c_st, ask = p8c_si$ask), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  squash <- function(h) gsub(">[[:space:]]+<", "><", h)
+  session$setInputs(chat_user_input = "q one")
+  session$setInputs(chat_user_input = "q two")
+  calls_before <- nrow(p8c_st$calls)
+  sent_before <- length(p8c_si$sent)
+  # the switch is on when the card is made, and the header says so
+  p8c_out$made <- identical(p8c_st$canvas, c("c4", "c1", "c2", "c3")) && all(purrr::map_lgl(p8c_st$canvas, in_dash)) && grepl("4 of 4 in the dashboard", html("bar"), fixed = TRUE) &&
+    grepl("4 charts", html("bar"), fixed = TRUE) && grepl("Export dashboard", html("bar"), fixed = TRUE) &&
+    grepl("c1_dash\"[^>]*checked", html("c1_card")) && grepl("In dashboard", html("c1_card"), fixed = TRUE) && grepl("role=\"switch\"", html("c1_card"), fixed = TRUE) &&
+    grepl(">Move up<", squash(html("c1_card")), fixed = TRUE) && grepl(">Move down<", squash(html("c1_card")), fixed = TRUE)
+  # turning one off: the count follows, the chart is left out of the items; the switch is kept through Undo
+  session$setInputs(c2_dash = FALSE)
+  p8c_out$off <- !in_dash("c2") && grepl("3 of 4 in the dashboard", html("bar"), fixed = TRUE) && identical(purrr::map_chr(dash_items(), "id"), c("c4", "c1", "c3"))
+  ch2 <- chart_of("c2")
+  set_chart(chart_apply(ch2, utils::modifyList(ch2$spec, list(title = "Changed title")), character(0)))
+  changed <- identical(chart_of("c2")$spec$title, "Changed title")
+  session$setInputs(c2_undo = 1)
+  p8c_out$undo <- changed && identical(chart_of("c2")$spec$title, "Units against price") && !in_dash("c2") && !grepl("c2_dash\"[^>]*checked", html("c2_card")) &&
+    identical(purrr::map_chr(dash_items(), "id"), c("c4", "c1", "c3"))
+  # the order: a card moves one place, the first cannot go up nor the last down, the switches stay as they were
+  session$setInputs(c3_up = 1)
+  moved <- identical(p8c_st$canvas, c("c4", "c1", "c3", "c2"))
+  session$setInputs(c4_up = 1)
+  first_stays <- identical(p8c_st$canvas, c("c4", "c1", "c3", "c2"))
+  session$setInputs(c2_down = 1)
+  last_stays <- identical(p8c_st$canvas, c("c4", "c1", "c3", "c2"))
+  session$setInputs(c1_down = 1)
+  down <- identical(p8c_st$canvas, c("c4", "c3", "c1", "c2"))
+  session$setInputs(c1_up = 1)
+  back <- identical(p8c_st$canvas, c("c4", "c1", "c3", "c2"))
+  p8c_out$order <- moved && first_stays && last_stays && down && back && identical(purrr::map_chr(dash_items(), "id"), c("c4", "c1", "c3")) && !in_dash("c2") && all(purrr::map_lgl(c("c4", "c1", "c3"), in_dash)) &&
+    grepl("disabled[^>]*c4_up|c4_up[^>]*disabled", html("c4_card")) && !grepl("disabled[^>]*c1_up|c1_up[^>]*disabled", html("c1_card")) && grepl("disabled[^>]*c2_down|c2_down[^>]*disabled", html("c2_card")) &&
+    !grepl("disabled[^>]*c3_down|c3_down[^>]*disabled", html("c3_card")) && grepl("3 of 4 in the dashboard", html("bar"), fixed = TRUE)
+  p8c_out$no_model <- nrow(p8c_st$calls) == calls_before && length(p8c_si$sent) == sent_before
+})
+, error = function(e) message("note  a Part C screen scenario stopped: ", conditionMessage(e)), finally = rm("showModal", envir = globalenv()))
+check("8C-17: each card has an 'In dashboard' switch, on when the card is made, and the canvas header says 'n of m in the dashboard' (4 of 4, then 3 of 4 when one is switched off); the switch is kept with the chart through Undo; Move up and Move down move a card one place in the canvas (the first cannot go up, nor the last down, and those buttons are disabled), keep every switch as it was, and the items for the export are the chosen charts in that order; no model call is made",
+      isTRUE(p8c_out$made) && isTRUE(p8c_out$off) && isTRUE(p8c_out$undo) && isTRUE(p8c_out$order) && isTRUE(p8c_out$no_model))
+
+# 13. the dialog: its fields, its warnings, the choice of picture or interactive and the sentence beside an interactive chart that carries rows
+p8c_st2 <- p8c_state()
+p8c_si2 <- stand_by(p8c_reply)
+p8c_d <- new.env()
+assign("showModal", p8c_show, envir = globalenv())
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8c_st2, ask = p8c_si2$ask), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  session$setInputs(chat_user_input = "q one")
+  session$setInputs(chat_user_input = "q two")
+  session$setInputs(c2_dash = FALSE)
+  session$setInputs(c3_up = 1)
+  # c1 has a headline that is current, c4 one written for an earlier chart (marked as changed), c3 has none, c2 is out
+  s1 <- utils::modifyList(p8c_story(chart_of("c1"), "Orders are spread across four regions"), list(data = isolate(data_key())))
+  s4 <- utils::modifyList(p8c_story(chart_of("c4"), "A headline written earlier"), list(hash = "an old hash", data = isolate(data_key())))
+  p8c_st2$stories <- list(c1 = s1, c4 = s4)
+  calls_before <- nrow(p8c_st2$calls)
+  log_before <- length(made$log)
+  session$setInputs(export = 1)
+  m <- p8c_modal_html()
+  p8c_d$m1 <- m
+  p8c_d$fields <- grepl("Export dashboard", m, fixed = TRUE) && grepl("dash_title", m, fixed = TRUE) && grepl("value=\"Dashboard: sales.csv\"", m, fixed = TRUE) && grepl("dash_subtitle", m, fixed = TRUE) &&
+    grepl("dash_author", m, fixed = TRUE) && grepl("dash_date", m, fixed = TRUE) && grepl(format(Sys.Date()), m, fixed = TRUE) && grepl("<textarea[^>]*dash_intro", m) &&
+    grepl(htmltools::htmlEscape(DASH_INTRO_NOTE), m, fixed = TRUE) && grepl("not checked by the number check", m, fixed = TRUE) &&
+    lengths(gregexpr("type=\"checkbox\" name=\"proxy1-dash_boxes\"", m, fixed = TRUE)) == 3L && lengths(gregexpr("name=\"proxy1-dash_boxes\"[^>]*checked", m)) == 3L &&
+    grepl(">Rows<", m, fixed = TRUE) && grepl(">Columns<", m, fixed = TRUE) && grepl(">Period<", m, fixed = TRUE)
+  titles_at <- purrr::map_int(c("1. Price by region", "2. Orders by region", "3. Price of an order"), function(t) regexpr(t, m, fixed = TRUE)[[1]])
+  p8c_d$charts <- all(titles_at > 0L) && !is.unsorted(titles_at) && !grepl("Units against price", m, fixed = TRUE) && lengths(gregexpr("<img src=\"data:image/png;base64,", m, fixed = TRUE)) == 3L &&
+    all(purrr::map_lgl(c("c4", "c1", "c3"), function(i) lengths(gregexpr(paste0("name=\"proxy1-dash_mode_", i, "\""), m, fixed = TRUE)) == 2L)) && !grepl("dash_mode_c2", m, fixed = TRUE) &&
+    grepl("Orders are spread across four regions", m, fixed = TRUE) && grepl("Move up and Move down", m, fixed = TRUE) &&
+    lengths(gregexpr("name=\"proxy1-dash_mode_[a-z0-9]+\" value=\"picture\" checked", m)) == 3L
+  p8c_d$warn <- grepl("No headline yet: Price of an order. The page shows the chart's title in its place.", gsub("&#39;", "'", m, fixed = TRUE), fixed = TRUE) &&
+    grepl("Marked as changed since it was written: Price by region.", m, fixed = TRUE) && !grepl(PALETTE_CVD_WARNING, m, fixed = TRUE) && !grepl("No headline yet: [^.]*Orders by region", m)
+  # a chosen palette that fails the colour-vision mark is warned of, in the dialog
+  session$setInputs(pal_sequential = "ylgnbu")
+  session$setInputs(export = 2)
+  m2 <- p8c_modal_html()
+  p8c_d$palette <- !palette_passes("ylgnbu") && grepl(PALETTE_CVD_WARNING, m2, fixed = TRUE) && grepl("sequential fill palette", m2, fixed = TRUE)
+  session$setInputs(pal_sequential = "viridis")
+  # the choice per chart: the default is a picture for a chart drawn from rows (the box) even when its card is interactive, and the card's view for a bar
+  made$interactive[["c1"]](TRUE)
+  made$interactive[["c4"]](TRUE)
+  session$setInputs(export = 3)
+  m3 <- p8c_modal_html()
+  p8c_d$defaults <- grepl("name=\"proxy1-dash_mode_c1\" value=\"interactive\" checked", m3) && grepl("name=\"proxy1-dash_mode_c4\" value=\"picture\" checked", m3) &&
+    grepl("name=\"proxy1-dash_mode_c3\" value=\"picture\" checked", m3)
+  made$interactive[["c1"]](FALSE)
+  made$interactive[["c4"]](FALSE)
+  # the sentence about rows: beside an interactive box chart, not beside a picture and not beside an interactive bar of counts
+  note <- function(i) tryCatch(paste(as.character(output[[paste0("dash_note_", i)]]$html), collapse = ""), error = function(e) "")
+  session$setInputs(dash_mode_c4 = "interactive", dash_mode_c1 = "interactive", dash_mode_c3 = "picture")
+  box_on <- note("c4"); bar_on <- note("c1"); hist_pic <- note("c3")
+  session$setInputs(dash_mode_c4 = "picture")
+  box_off <- note("c4")
+  p8c_d$disclosure <- grepl(htmltools::htmlEscape(DASH_DISCLOSURE), box_on, fixed = TRUE) && !grepl("written into the file", bar_on, fixed = TRUE) &&
+    !grepl("written into the file", hist_pic, fixed = TRUE) && !grepl("written into the file", box_off, fixed = TRUE) &&
+    grepl("anyone who opens it can read them; a picture holds none.", DASH_DISCLOSURE, fixed = TRUE) && !grepl("[.!?][[:space:]]", DASH_DISCLOSURE) && endsWith(DASH_DISCLOSURE, ".")
+  p8c_d$no_model <- nrow(p8c_st2$calls) == calls_before && length(made$log) == log_before
+})
+, error = function(e) message("note  a Part C screen scenario stopped: ", conditionMessage(e)), finally = rm("showModal", envir = globalenv()))
+check("8C-18: Export dashboard opens a dialog with the title (filled with the file's name), subtitle, author, the date (today), an introduction that says it is not checked by the number check, the three value boxes all chosen, and the chosen charts in the order of the canvas (not the one switched off), each with a small picture and a picture-or-interactive choice that starts on picture",
+      isTRUE(p8c_d$fields) && isTRUE(p8c_d$charts))
+check("8C-19: the dialog warns, before anything is built: a chosen chart with no headline, a chart whose text is marked as changed, and (only when one is chosen) a palette that fails the colour-vision mark; no model call and no chat message comes of opening it",
+      isTRUE(p8c_d$warn) && isTRUE(p8c_d$palette) && isTRUE(p8c_d$no_model) &&
+        identical(dashboard_warnings(c("A", "B", "C"), c(TRUE, FALSE, TRUE), c(NA, NA, "data"), p8c_pal), list(
+          headline = "No headline yet: B. The page shows the chart's title in its place.",
+          changed = dashboard_warnings(c("A", "B", "C"), c(TRUE, TRUE, TRUE), c(NA, NA, "data"), p8c_pal)$changed)) &&
+        length(dashboard_warnings("A", TRUE, NA_character_, p8c_pal)) == 0L &&
+        names(dashboard_warnings("A", TRUE, NA_character_, utils::modifyList(p8c_pal, list(diverging = "ylgnbu")))) == "palette")
+check("8C-20: beside a chart set to interactive that is drawn from rows (here a box chart) the dialog says in one sentence that the values of every plotted row go into the file and a picture holds none; beside a picture, an interactive bar of counts and a chart of other kinds it says nothing; the default is a picture for charts drawn from rows even when the card shows the interactive view, and the card's view for the others",
+      isTRUE(p8c_d$disclosure) && isTRUE(p8c_d$defaults))
+
+# 14. a build from the screen: the switch and the order reach the export, an unchosen chart is nowhere in the zip, the page holds what the dialog asked for,
+#   and the button is back after it (a second build with another date replaces the first)
+p8c_st3 <- p8c_state()
+p8c_si3 <- stand_by(p8c_reply)
+p8c_b <- new.env()
+assign("showModal", p8c_show, envir = globalenv())
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8c_st3, ask = p8c_si3$ask), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  session$setInputs(chat_user_input = "q one")
+  session$setInputs(chat_user_input = "q two")
+  session$setInputs(c2_dash = FALSE)
+  session$setInputs(c3_up = 1)
+  s1 <- utils::modifyList(p8c_story(chart_of("c1"), "Orders are spread across four regions"), list(data = isolate(data_key())))
+  s4 <- utils::modifyList(p8c_story(chart_of("c4"), "A headline written earlier"), list(hash = "an old hash", data = isolate(data_key())))
+  p8c_st3$stories <- list(c1 = s1, c4 = s4)
+  log_before <- length(made$log)
+  busy_before <- length(made$busy_log)
+  calls_before <- nrow(p8c_st3$calls)
+  sent_before <- length(p8c_si3$sent)
+  session$setInputs(export = 1)
+  session$setInputs(dash_title = "Sales review", dash_subtitle = "The fourth quarter", dash_author = "Kim Analyst", dash_date = as.Date("2026-11-21"),
+                    dash_intro = "Why this dashboard exists.", dash_boxes = c("rows", "third"), dash_mode_c4 = "picture", dash_mode_c1 = "picture", dash_mode_c3 = "picture")
+  session$setInputs(dash_build = 1)
+  res <- dash_result()
+  p8c_b$res <- res
+  p8c_b$busy <- identical(made$busy_log[-seq_len(busy_before)], c(TRUE, FALSE)) && !busy()
+  p8c_b$action <- gsub("&#39;", "'", html("dash_action"), fixed = TRUE)
+  p8c_b$dir <- if (isTRUE(res$ok)) p8c_dir(res$zip)
+  p8c_b$log <- length(made$log) == log_before && nrow(p8c_st3$calls) == calls_before && length(p8c_si3$sent) == sent_before
+  p8c_b$first_zip <- res$zip
+  session$setInputs(dash_date = as.Date("2026-12-01"))
+  session$setInputs(dash_build = 2)
+  p8c_b$res2 <- dash_result()
+  p8c_b$old_gone <- !file.exists(p8c_b$first_zip) && file.exists(p8c_b$res2$zip)
+})
+, error = function(e) message("note  a Part C screen scenario stopped: ", conditionMessage(e)), finally = rm("showModal", envir = globalenv()))
+p8c_r <- p8c_b$res
+p8c_bd <- p8c_b$dir
+p8c_bh <- if (!is.null(p8c_bd)) p8c_html(p8c_bd)
+p8c_pos <- function(h, x) regexpr(x, h, fixed = TRUE)[[1]]
+check("8C-21: the switch and the order reach the export: with one chart switched off and another moved up, the zip holds exactly the three chosen charts numbered in the canvas's order (charts/01_price_by_region, 02_orders_by_region, 03_price_of_an_order), the page shows their headlines (the stale one as it is now, the chart's title where there is none) in that order, and the unchosen scatter ('Units against price') is in no file of the zip, nor its file name",
+      isTRUE(p8c_r$ok) && identical(p8c_r$name, "dashboard_2026-11-21.zip") && identical(basename(p8c_r$zip), "dashboard_2026-11-21.zip") && dir.exists(p8c_bd) &&
+        setequal(names(p8c_r$files), c("dashboard.html", "codebook.html", "data_dictionary.yaml", "charts.R",
+                                       paste0("charts/", c("01_price_by_region", "02_orders_by_region", "03_price_of_an_order"), ".png"),
+                                       if (p8c_svg) paste0("charts/", c("01_price_by_region", "02_orders_by_region", "03_price_of_an_order"), ".svg"))) &&
+        identical(p8c_r$modes, rep("picture", 3L)) &&
+        p8c_pos(p8c_bh, "A headline written earlier") > 0L && p8c_pos(p8c_bh, "A headline written earlier") < p8c_pos(p8c_bh, "Orders are spread across four regions") &&
+        p8c_pos(p8c_bh, "Orders are spread across four regions") < p8c_pos(p8c_bh, "<h2>Price of an order</h2>") &&
+        !p8c_has(p8c_bd, "Units against price") && !p8c_has(p8c_bd, "units_against_price") && p8c_has(p8c_bd, "Price by region"))
+check("8C-22: what the dialog asked for reaches the page: the title, subtitle, author, the date, the introduction, only the value boxes chosen (Rows and the period, not Columns), and the About card names the model of the profile; the build adds nothing to the chat and makes no model call",
+      grepl("<h1>Sales review</h1>", p8c_bh, fixed = TRUE) && grepl("The fourth quarter", p8c_bh, fixed = TRUE) && grepl("Kim Analyst", p8c_bh, fixed = TRUE) && grepl("21 November 2026", p8c_bh, fixed = TRUE) &&
+        grepl("<p>Why this dashboard exists.</p>", p8c_bh, fixed = TRUE) && grepl("box-title\">Rows<", p8c_bh, fixed = TRUE) && grepl("box-title\">Period<", p8c_bh, fixed = TRUE) &&
+        !grepl("box-title\">Columns<", p8c_bh, fixed = TRUE) && grepl(paste0("written by the model ", APP_MODEL$id), p8c_bh, fixed = TRUE) && isTRUE(p8c_b$log))
+check("8C-23: after a build the dialog says what was built (the name, the size, the seconds, how many charts as pictures and how many interactive), offers the zip for download, and draws the build button again enabled with its busy line hidden; the button was disabled while it ran (a chart-call button that says 'Building the dashboard', and disables itself when clicked) and busy was set and cleared; a second build with another date makes dashboard_2026-12-01.zip and removes the first zip",
+      grepl("Built dashboard_2026-11-21.zip: ", p8c_b$action, fixed = TRUE) && grepl("3 charts: 3 as pictures and 0 interactive.", p8c_b$action, fixed = TRUE) && grepl(" seconds. ", p8c_b$action, fixed = TRUE) &&
+        grepl("Download dashboard_2026-11-21.zip", p8c_b$action, fixed = TRUE) && grepl("id=\"proxy1-dash_download\"", p8c_b$action, fixed = TRUE) &&
+        grepl("<button[^>]*id=\"proxy1-dash_build\"[^>]*>", p8c_b$action) && !grepl("<button[^>]*[[:space:]]disabled[[:space:]=>]", p8c_b$action) &&
+        grepl("chart-call", regmatches(p8c_b$action, regexpr("<button[^>]*id=\"proxy1-dash_build\"[^>]*>", p8c_b$action)), fixed = TRUE) &&
+        grepl("data-working=\"Building the dashboard\"", p8c_b$action, fixed = TRUE) && grepl("this.disabled = true;", p8c_b$action, fixed = TRUE) &&
+        grepl("id=\"proxy1-dash_build_busy\"[^>]*style=\"display:none;", p8c_b$action) && isTRUE(p8c_b$busy) && identical(WORKING_WORDS[["dashboard"]], "Building the dashboard") &&
+        grepl("\"dashboard\":\"Building the dashboard\"", EXPLORE_JS, fixed = TRUE) &&
+        isTRUE(p8c_b$res2$ok) && identical(p8c_b$res2$name, "dashboard_2026-12-01.zip") && isTRUE(p8c_b$old_gone))
+
+# 15. a build that fails: plain words, the last lines of its own message, the button works again, nothing is left, nothing goes to the chat
+p8c_fail_build <- function(...) stop("While drawing chart 2 (Units against price): forced failure\nan inner line\nthe last line", call. = FALSE)
+p8c_st4 <- p8c_state()
+p8c_si4 <- stand_by(p8c_reply)
+p8c_f <- new.env()
+assign("showModal", p8c_show, envir = globalenv())
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8c_st4, ask = p8c_si4$ask, build = p8c_fail_build), {
+  session$flushReact()
+  html <- function(name) gsub("&#39;", "'", paste(as.character(output[[name]]$html), collapse = ""), fixed = TRUE)
+  session$setInputs(chat_user_input = "q one")
+  log_before <- length(made$log)
+  busy_before <- length(made$busy_log)
+  session$setInputs(export = 1)
+  p8c_f$before <- html("dash_action")
+  session$setInputs(dash_build = 1)
+  res <- dash_result()
+  a <- html("dash_action")
+  p8c_f$res <- res
+  p8c_f$html <- a
+  p8c_f$busy <- identical(made$busy_log[-seq_len(busy_before)], c(TRUE, FALSE)) && !busy()
+  p8c_f$log <- length(made$log) == log_before
+  # all switches off: the dialog does not open a build
+  purrr::walk(c("c1", "c2", "c3"), function(i) do.call(session$setInputs, stats::setNames(list(FALSE), paste0(i, "_dash"))))
+  session$setInputs(export = 2)
+  p8c_f$none <- p8c_modal_html()
+})
+, error = function(e) message("note  a Part C screen scenario stopped: ", conditionMessage(e)), finally = rm("showModal", envir = globalenv()))
+check("8C-24: when a build step fails (a stand-in builder is forced to stop) the dialog shows the plain sentence (nothing was saved, nothing changed, press the button again), the last lines of the build's own message, no download; the build button is drawn again enabled with its busy line hidden, busy was set and cleared, and nothing was added to the chat; with every chart switched off the dialog says no chart is in the dashboard and has no build button",
+      isFALSE(p8c_f$res$ok) && grepl("forced failure", p8c_f$res$lines, fixed = TRUE) && grepl("the last line", p8c_f$res$lines, fixed = TRUE) &&
+        grepl(htmltools::htmlEscape(DASH_ERROR_TEXT), p8c_f$html, fixed = TRUE) && grepl("<pre[^>]*>While drawing chart 2 \\(Units against price\\): forced failure", p8c_f$html) &&
+        grepl("the last line</pre>", p8c_f$html, fixed = TRUE) && !grepl("dash_download", p8c_f$html, fixed = TRUE) && grepl("alert-danger", p8c_f$html, fixed = TRUE) &&
+        grepl("<button[^>]*id=\"proxy1-dash_build\"[^>]*>", p8c_f$html) && !grepl("<button[^>]*[[:space:]]disabled[[:space:]=>]", p8c_f$html) &&
+        grepl("id=\"proxy1-dash_build_busy\"[^>]*style=\"display:none;", p8c_f$html) && isTRUE(p8c_f$busy) && isTRUE(p8c_f$log) && !grepl("alert-danger", p8c_f$before, fixed = TRUE) &&
+        grepl("No chart is in the dashboard", p8c_f$none, fixed = TRUE) && !grepl("dash_build", p8c_f$none, fixed = TRUE))
+
+# 16. nothing in the export calls Quarto, pandoc or a model; no loops; the build and the pages use only the installed packages
+p8c_fns <- c("chart_from_rows", "dashboard_default_mode", "dashboard_warnings", "dash_slug", "dash_date_text", "dash_b64", "dash_data_uri", "dash_read_text", "dash_font_css", "dash_css",
+             "canvas_box_values", "dash_dependency_dir", "dash_dependency_files", "dash_inline_dependencies", "dash_widget", "dash_paragraphs", "dash_describes", "dash_text_status",
+             "dash_about", "dash_card", "dash_page", "codebook_page", "dash_document", "dash_root_error", "dash_step", "dash_chart", "build_dashboard", "dash_size_text", "dash_last_lines",
+             "dash_chart_row", "column_summary")
+p8c_called <- unique(unlist(purrr::map(p8c_fns, function(f) all.names(body(get(f))))))
+p8c_strings <- unlist(purrr::map(c(r_files, "app.R"), function(f) { pd <- utils::getParseData(parse(f, keep.source = TRUE)); pd$text[pd$token == "STR_CONST"] }))
+p8c_fncalls <- unlist(purrr::map(c(r_files, "app.R"), function(f) { pd <- utils::getParseData(parse(f, keep.source = TRUE)); pd$text[pd$token == "SYMBOL_FUNCTION_CALL"] }))
+check("8C-25: no Quarto, no pandoc and no model in the export: no string of R/ or app.R names quarto or pandoc, no call of saveWidget, render, system, system2 or shell is made in R/ or app.R, no function of the export calls the model (llm_json, ask, make_call, chat_turn, summarize_charts) or reads the session, none has a for, while or repeat, and zip, svglite and htmlwidgets' dependency files are all that is written with",
+      !any(grepl("quarto|pandoc", p8c_strings, ignore.case = TRUE)) && !any(c("saveWidget", "render", "system", "system2", "shell", "shell.exec") %in% p8c_fncalls) &&
+        !any(c("llm_json", "ask", "make_call", "chat_turn", "summarize_charts", "summarize_inputs", "label_columns", "chat_append_message") %in% p8c_called) &&
+        !any(c("for", "while", "repeat") %in% p8c_called) && "zipr" %in% p8c_called &&
+        identical(get("dash_widget")(spec_widget(spec_plot(p8c_s$bar, p8c_data, p8c_cb)))$deps[[1]]$name, "htmlwidgets"))
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")
