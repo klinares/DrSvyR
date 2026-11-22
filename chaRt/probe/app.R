@@ -50,7 +50,10 @@ PROBE_QMD_DASHBOARD_EMBED <- c("---",
 # What the R chunk needs; the check does not run without them.
 PROBE_QMD_R_NEEDS <- c("knitr", "rmarkdown", "ggplot2", "plotly")
 
-options(bitmapType = "cairo")
+# What R chose for bitmapType before anything here set it (a Linux server with no X11 should say "cairo"), then the same
+#   switch chaRt makes at start-up: cairo for every png() that names no type, when R has cairo.
+PROBE_BITMAP_TYPE_AT_START <- getOption("bitmapType")
+if (isTRUE(unname(capabilities("cairo")))) options(bitmapType = "cairo")
 
 
 # ---- the checks ----------------------------------------------------------------------------
@@ -182,6 +185,146 @@ tempdir_writable <- function() {
   if (identical(back, "chaRt probe")) paste("yes,", tempdir()) else "no (what was read back differs)"
 }
 
+# ---- Graphics: can this server draw a chart without X11? -----------------------------------------------------------------
+#   chaRt draws every chart on one device chosen in one place: ragg when it is installed, else base R's png(type = "cairo")
+#   when R has cairo, else svglite, else it says the server cannot draw. This section shows which of those this server has,
+#   draws one chart with each, and shows the pictures. Written here again, not shared with the app: this folder is published
+#   alone. Needs only shiny; the chart needs ggplot2 and falls back to base graphics without it.
+
+PROBE_GRAPHICS_PACKAGES <- c("ragg", "svglite", "Cairo", "systemfonts", "av")
+PROBE_FONT_NAME <- "chaRt probe font"
+
+# The most useful parts of Sys.info(): the operating system and the machine. The host name and the user names it also holds
+#   are left out, since this table is copied by hand into other places.
+sys_info_text <- function() {
+  i = Sys.info()
+  paste0(i[["sysname"]], " ", i[["release"]], " (", i[["machine"]], "); ", i[["version"]])
+}
+
+capability <- function(what) function() as.character(unname(capabilities(what)))
+
+# Whether png(type = "Xlib") opens: what a stray call that names no type gets on a server where R chose Xlib, and
+#   what fails on Linux with no X11. A device that opened is closed at once.
+xlib_png <- function() {
+  f = tempfile(fileext = ".png")
+  opened = tryCatch({ grDevices::png(f, width = 200, height = 200, type = "Xlib"); TRUE },
+                    warning = function(w) paste("no:", conditionMessage(w)), error = function(e) paste("no:", conditionMessage(e)))
+  if (isTRUE(opened)) { grDevices::dev.off(); return("yes (X11 is available)") }
+  if (!is.null(grDevices::dev.list())) grDevices::dev.off()
+  opened
+}
+
+# A font to draw the chart in. The bundled Inter when chaRt's www/fonts is copied beside this app (www/fonts/Inter-Regular.ttf
+#   and Inter-Bold.ttf); otherwise the first monospace TrueType file the machine has (a face that is easy to tell from the default
+#   sans), else any TrueType file. Registered once with systemfonts under PROBE_FONT_NAME. Returns the family to draw in and what
+#   happened, in words; "sans" and the reason when it could not be done.
+probe_font_state <- new.env()
+probe_font <- function() {
+  if (!is.null(probe_font_state$done)) return(probe_font_state$done)
+  out = function(family, how, found = FALSE) { probe_font_state$done = list(family = family, how = how, found = found); probe_font_state$done }
+  if (!requireNamespace("systemfonts", quietly = TRUE)) return(out("sans", "no, systemfonts is not installed"))
+  bundled = file.path("www", "fonts", c("Inter-Regular.ttf", "Inter-Bold.ttf"))
+  sys = tryCatch(systemfonts::system_fonts(), error = function(e) NULL)
+  flag = function(name) if (!is.null(sys) && name %in% names(sys)) sys[[name]] %in% TRUE else rep(FALSE, length(sys$path))
+  ttf = if (is.null(sys) || !all(c("path", "index") %in% names(sys))) NULL else sys[grepl("[.]ttf$", sys$path, ignore.case = TRUE) & sys$index == 0 & !flag("variable"), , drop = FALSE]
+  mono = if (is.null(ttf) || !"monospace" %in% names(ttf)) NULL else ttf[ttf$monospace %in% TRUE, , drop = FALSE]
+  pick = if (all(file.exists(bundled))) list(plain = bundled[[1]], bold = bundled[[2]], what = "the bundled Inter (www/fonts is beside this app)")
+    else if (!is.null(mono) && nrow(mono)) list(plain = mono$path[[1]], bold = mono$path[[1]], what = paste0(mono$family[[1]], " (a monospace file this server has; the bundled files are not in this app)"))
+    else if (!is.null(ttf) && nrow(ttf)) list(plain = ttf$path[[1]], bold = ttf$path[[1]], what = paste0(ttf$family[[1]], " (a file this server has; the bundled files are not in this app)"))
+    else NULL
+  if (is.null(pick)) return(out("sans", "no, found no TrueType file to register"))
+  if (!PROBE_FONT_NAME %in% systemfonts::registry_fonts()$family)
+    tryCatch(systemfonts::register_font(PROBE_FONT_NAME, plain = pick$plain, bold = pick$bold),
+             error = function(e) pick$error <<- conditionMessage(e))
+  if (!is.null(pick$error)) return(out("sans", paste("no, register_font() said:", pick$error)))
+  matched = tryCatch(systemfonts::match_fonts(PROBE_FONT_NAME)$path, error = function(e) "")
+  found = identical(normalizePath(matched, mustWork = FALSE), normalizePath(pick$plain, mustWork = FALSE))
+  out(PROBE_FONT_NAME, paste0(if (found) "yes" else "registered, but match_fonts() found another file", ": ", pick$what), found)
+}
+
+probe_chart <- function(family) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) return(NULL)
+  d = data.frame(region = c("West", "East", "North", "South"), revenue = c(94, 53, 38, 31))
+  ggplot2::ggplot(d, ggplot2::aes(x = region, y = revenue)) + ggplot2::geom_col(fill = "#0072B2") +
+    ggplot2::labs(title = "Revenue by region", subtitle = paste0("Asked for the font family: ", family), x = NULL, y = NULL) +
+    ggplot2::theme_minimal(base_family = family, base_size = 14)
+}
+
+# One chart drawn with one device, 7 by 4.5 inches at 192 pixels per inch (the app's size), and what came of it:
+#   list(ok, text, file, type). The device is closed, and a device that failed to open is not closed.
+probe_draw <- function(kind) {
+  f = tempfile(fileext = if (identical(kind, "svglite")) ".svg" else ".png")
+  have = switch(kind, ragg = requireNamespace("ragg", quietly = TRUE), svglite = requireNamespace("svglite", quietly = TRUE),
+                cairo = isTRUE(unname(capabilities("cairo"))))
+  if (!isTRUE(have)) return(list(ok = FALSE, text = switch(kind, cairo = "no (capabilities('cairo') is FALSE)", "no (not installed)")))
+  started = Sys.time()
+  font = probe_font()
+  p = probe_chart(font$family)
+  res = tryCatch({
+    switch(kind,
+           ragg = ragg::agg_png(f, width = 1344, height = 864, units = "px", res = 192),
+           cairo = grDevices::png(f, width = 1344, height = 864, units = "px", res = 192, type = "cairo"),
+           svglite = svglite::svglite(f, width = 7, height = 4.5))
+    drawn = tryCatch({
+      if (is.null(p)) graphics::barplot(c(94, 53, 38, 31), names.arg = c("West", "East", "North", "South"), main = "Revenue by region (base graphics)")
+      else print(p)
+      TRUE
+    }, error = function(e) paste("error while drawing:", conditionMessage(e)))
+    grDevices::dev.off()
+    drawn
+  }, error = function(e) paste("error opening the device:", conditionMessage(e)), warning = function(w) paste("warning:", conditionMessage(w)))
+  if (!is.null(grDevices::dev.list())) grDevices::dev.off()
+  secs = as.numeric(difftime(Sys.time(), started, units = "secs"))
+  if (!isTRUE(res) || !file.exists(f) || file.size(f) == 0) return(list(ok = FALSE, text = paste0("no, ", if (is.character(res)) res else "no file was written")))
+  list(ok = TRUE, file = f, type = if (identical(kind, "svglite")) "image/svg+xml" else "image/png",
+       text = paste0("yes, ", round(file.size(f) / 1024, 1), " KB in ", sprintf("%.1f", secs), " s",
+                     if (is.null(p)) "; ggplot2 is not installed, so a base graphics chart" else ""))
+}
+
+# The Graphics table: what R and the machine say, then the three drawing paths.
+graphics_rows <- function() {
+  c(list(list("R version", function() R.version.string),
+         list("Operating system (Sys.info(), without host and user names)", sys_info_text),
+         list("capabilities(\"X11\")", capability("X11")),
+         list("capabilities(\"cairo\")", capability("cairo")),
+         list("capabilities(\"png\")", capability("png")),
+         list("capabilities(\"jpeg\")", capability("jpeg")),
+         list("A display is set (the DISPLAY variable)", function() if (nzchar(Sys.getenv("DISPLAY"))) "yes" else "no"),
+         list("options(bitmapType) when this app started", function() if (is.null(PROBE_BITMAP_TYPE_AT_START)) "not set" else PROBE_BITMAP_TYPE_AT_START),
+         list("options(bitmapType) now (set to cairo here when R has cairo, as chaRt does)", function() if (is.null(getOption("bitmapType"))) "not set" else as.character(getOption("bitmapType"))),
+         list("png(type = \"Xlib\") opens (a stray call's device where there is no X11)", xlib_png)),
+    lapply(PROBE_GRAPHICS_PACKAGES, function(p) list(p, function() pkg_version(p))),
+    list(list("A font file registers with systemfonts and is found by name", function() probe_font()$how),
+         list("A chart draws with ragg", function() probe_draw("ragg")$text),
+         list("A chart draws with png(type = \"cairo\")", function() probe_draw("cairo")$text),
+         list("A chart draws with svglite", function() probe_draw("svglite")$text)))
+}
+
+graphics_table <- function() {
+  rows = graphics_rows()
+  data.frame(Check = vapply(rows, function(r) r[[1]], character(1)),
+             Result = vapply(rows, function(r) as.character(probe(r[[2]]()))[1], character(1)))
+}
+
+# The three pictures, to be looked at: the same chart, each drawn by its own device, in the font that was registered. ragg and
+#   svglite read systemfonts, so they should show it; the cairo device asks the operating system, so it should show its default
+#   face. An SVG shown as an image is drawn by the browser, which has none of this server's fonts.
+graphics_pictures <- function() {
+  font = probe_font()
+  one = function(kind, label) {
+    d = probe_draw(kind)
+    tags$div(style = "margin-bottom:1.5em;",
+             tags$h5(label),
+             tags$p(d$text),
+             if (isTRUE(d$ok))
+               tags$img(src = paste0("data:", d$type, ";base64,", gsub("\\s", "", jsonlite::base64_enc(readBin(d$file, "raw", file.size(d$file))))),
+                        alt = label, style = "max-width:100%; border:1px solid #ccc;"))
+  }
+  tags$div(
+    tags$p(paste0("The same chart, drawn by each device that is available. The font asked for: ", font$family, ". Registered: ", font$how, ".")),
+    one("ragg", "ragg"), one("cairo", "png(type = \"cairo\")"), one("svglite", "svglite (an SVG, drawn by the browser)"))
+}
+
 # Every check, in the order the table shows them.
 run_checks <- function() {
   rows = c(
@@ -220,6 +363,10 @@ ui <- fluidPage(
   tags$h2("chaRt probe"),
   tags$p("What this server can do for chaRt. Nothing is sent anywhere; no key is needed."),
   tableOutput("checks"),
+  tags$h3("Graphics"),
+  tags$p("Can this server draw a chart without X11? What R and the machine say, then one chart drawn by each device that is available."),
+  tableOutput("graphics"),
+  uiOutput("graphics_pictures"),
   tags$h4("Copy results"),
   tags$p("The same table as plain text, to copy or type back at home."),
   uiOutput("copy"))
@@ -227,8 +374,11 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   checks <- reactive(withProgress(message = "Running the checks", value = 0.5, run_checks()))
   output$checks <- renderTable(checks(), striped = TRUE, bordered = TRUE)
+  graphics <- reactive(withProgress(message = "Drawing a chart with each device", value = 0.5, graphics_table()))
+  output$graphics <- renderTable(graphics(), striped = TRUE, bordered = TRUE)
+  output$graphics_pictures <- renderUI(tryCatch(graphics_pictures(), error = function(e) tags$p(paste("error:", conditionMessage(e)))))
   output$copy <- renderUI(
-    textAreaInput("copy_text", NULL, value = as_text(checks()), width = "100%", rows = nrow(checks()) + 3))
+    textAreaInput("copy_text", NULL, value = as_text(rbind(checks(), graphics())), width = "100%", rows = nrow(checks()) + nrow(graphics()) + 3))
 }
 
 shinyApp(ui, server)

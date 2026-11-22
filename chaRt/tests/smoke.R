@@ -4237,6 +4237,37 @@ check("8A-6: tests/gallery.R's drawn_text_boxes() measures a chart's texts insid
       }))
 
 
+# 8. the probe's Graphics section (probe/ is a separate app: it is loaded as Connect loads it, then its functions are run in an
+#   environment of their own, since testServer() would also run every old check, ffmpeg's included)
+p8_probe <- tryCatch(shiny::shinyAppDir("probe"), error = function(e) e)
+p8_penv <- new.env(parent = globalenv())
+p8_pexprs <- as.list(parse(file.path("probe", "app.R"), keep.source = FALSE))
+purrr::walk(purrr::discard(p8_pexprs, function(e) is.call(e) && identical(as.character(e[[1]]), "shinyApp")), function(e) eval(e, p8_penv))
+p8_ptab <- tryCatch(p8_penv$graphics_table(), error = function(e) e)
+p8_ppic <- tryCatch(paste(as.character(p8_penv$graphics_pictures()), collapse = ""), error = function(e) conditionMessage(e))
+p8_pui <- paste(as.character(p8_penv$ui), collapse = "")
+p8_psrc <- paste(readLines(file.path("probe", "app.R"), encoding = "UTF-8"), collapse = "\n")
+p8_ploops <- {
+  pd = utils::getParseData(parse(file.path("probe", "app.R"), keep.source = TRUE))
+  pd$text[pd$token %in% c("FOR", "WHILE", "REPEAT")]
+}
+check("8A-11: the probe loads as an app (shinyAppDir) and its page has a Graphics section; its table holds capabilities() for X11, cairo, png and jpeg, ragg, svglite, Cairo, systemfonts and av with their versions, R's version and the system, and a row for a chart drawn by each of ragg, cairo and svglite, every row with an answer",
+      inherits(p8_probe, "shiny.appobj") && is.data.frame(p8_ptab) && all(nzchar(p8_ptab$Result)) &&
+        all(c("capabilities(\"X11\")", "capabilities(\"cairo\")", "capabilities(\"png\")", "capabilities(\"jpeg\")", "ragg", "svglite", "Cairo", "systemfonts", "av", "R version",
+              "A chart draws with ragg", "A chart draws with png(type = \"cairo\")", "A chart draws with svglite") %in% p8_ptab$Check) &&
+        any(grepl("^Operating system", p8_ptab$Check)) && identical(p8_ptab$Result[p8_ptab$Check == "R version"], R.version.string) &&
+        identical(p8_ptab$Result[p8_ptab$Check == "capabilities(\"cairo\")"], as.character(unname(capabilities("cairo")))) &&
+        grepl("^yes, ", p8_ptab$Result[p8_ptab$Check == "ragg"]) && grepl(as.character(utils::packageVersion("ragg")), p8_ptab$Result[p8_ptab$Check == "ragg"], fixed = TRUE) &&
+        grepl("<h3>Graphics</h3>", p8_pui, fixed = TRUE) && grepl("id=\"graphics\"", p8_pui, fixed = TRUE) && grepl("id=\"graphics_pictures\"", p8_pui, fixed = TRUE))
+check("8A-12: the probe draws one chart with each available device and shows it (two PNGs and an SVG, as data in the page), says whether a font file registered with systemfonts and was found by name, and tells the reader which font was asked for",
+      is.data.frame(p8_ptab) && all(grepl("^yes, ", p8_ptab$Result[grepl("^A chart draws with", p8_ptab$Check)])) &&
+        lengths(gregexpr("<img src=\"data:image/png;base64,", p8_ppic, fixed = TRUE)) == 2L && lengths(gregexpr("<img src=\"data:image/svg+xml;base64,", p8_ppic, fixed = TRUE)) == 1L &&
+        grepl("The font asked for: chaRt probe font.", p8_ppic, fixed = TRUE) && grepl("^yes: ", p8_ptab$Result[p8_ptab$Check == "A font file registers with systemfonts and is found by name"]) &&
+        grepl("png\\(type = &quot;cairo&quot;\\)|png\\(type = \"cairo\"\\)", p8_ppic))
+check("8A-13: the probe makes no model call and reads no key (no ellmer, httr2, API-key name or Sys.getenv of a key in it), stays one folder (no source() of the app's R/, no ../ path) and has no for or while",
+      !grepl("httr2::|ellmer::|chat_anthropic|chat_openai|ANTHROPIC|api_key|Sys\\.getenv\\(\"[A-Za-z_]*KEY", p8_psrc) && !grepl("source\\(|\\.\\./|R/theme|R/spec", p8_psrc) &&
+        !length(p8_ploops) && grepl("PROBE_GRAPHICS_PACKAGES <- c(\"ragg\", \"svglite\", \"Cairo\", \"systemfonts\", \"av\")", p8_psrc, fixed = TRUE))
+
 # ---- the count -------------------------------------------------------------------
 
 cat("\n", sum(results$all), " of ", length(results$all), " checks passed.\n", sep = "")
