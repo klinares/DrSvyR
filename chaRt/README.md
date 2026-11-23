@@ -22,7 +22,7 @@ survey microdata.
    region?") or press "Suggest charts". A chart is drawn for each answer and added to the canvas.
 4. **Choose.** Click a chart to select it and change it in words ("sort by value", "make it a
    line"). "Style" sets one of six styles (Clean, Minimal, Magazine, Data desk, Newspaper, Dark) and
-   the palettes for every chart. A card can be shown as an interactive chart ("Interactive") or a
+   the palettes for every chart. A card can be shown as an interactive chart ("Interactive": the same chart as an SVG, with a tooltip and hover on each mark and no zoom) or a
    short video ("Animate"). "Write headlines" gives each chart a headline and a summary. The "In
    dashboard" switch and Move up and Move down on each card choose what goes in the dashboard and in
    what order. "Add a summary table" puts a table of descriptive statistics on the canvas.
@@ -68,7 +68,8 @@ The Methodology page says how a chart is chosen and drawn and where each rule co
 - R computes every number. A headline, a summary or a chat answer that states a number is checked
   against what R computed; a failed text is sent back once and then shown flagged.
 - A picture and a video in the exported dashboard hold no rows. An interactive chart holds the
-  values of every row it plots, and the export dialog says so beside the choice.
+  values of every row it plots (in its tooltips, to three significant digits, and in the drawing),
+  and the export dialog says so beside the choice.
 
 **The key.** The app reads the key only from the box on Start here. It is held in memory for the
 session, never saved, never written to a log or to the exports, and never read from the
@@ -81,8 +82,8 @@ Install the packages once. These are required (the app stops at start-up and nam
 missing):
 
 ```r
-install.packages(c("shiny", "bslib", "purrr", "commonmark", "digest", "dplyr", "ellmer", "ggplot2",
-                   "htmltools", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales",
+install.packages(c("shiny", "bslib", "purrr", "commonmark", "digest", "dplyr", "ellmer", "ggiraph",
+                   "ggplot2", "htmltools", "httr2", "jsonlite", "readr", "rlang", "S7", "scales",
                    "shinychat", "tibble", "tidyr", "yaml", "zip"))
 ```
 
@@ -151,7 +152,7 @@ long they take). `tests/llm_check.R` and `tests/live_run_9.R` make live model ca
 |---|---|
 | `app.R` | Settings, profiles, the packages check, the page and the server |
 | `R/data.R` | Reading a file, the data dictionary, summary statistics |
-| `R/spec.R` | The chart spec, its checks, the ggplot, the plotly version, the R code of a chart, the video engine |
+| `R/spec.R` | The chart spec, its checks, the ggplot, the interactive version (ggiraph), the R code of a chart, the video engine |
 | `R/theme.R` | The typefaces, the six styles, the palettes, the one chart device |
 | `R/llm.R` | The session key, the model call, JSON repair, the connection check |
 | `R/reflexes.R` | The prompts and the three model calls (labels, chat, headlines) with their number and word checks |

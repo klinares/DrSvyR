@@ -20,7 +20,7 @@ no design-based inference. Every figure and summary describes the file, not a po
 | Model calls | ellmer. Home: `claude-sonnet-5-5`. Work: Opus 5 through the office endpoint (OpenAI style) |
 | Key | Pasted on Start here, held for the session only, exactly as QuestionR does. Never saved, never read from the environment |
 | What the model writes | A plot spec (a small structured object), never R code. One R renderer draws every spec |
-| Interactives | plotly, through `plotly::ggplotly()` on the rendered ggplot |
+| Interactives | ggiraph (Phase 10 Part B; plotly before): the same ggplot drawn as SVG with tooltips and hover, through `spec_widget()` |
 | Maps | Not in v1. Revisit once the tool is stable |
 | Survey design | None |
 | Parallelism | None. No call fan-out is needed |
@@ -343,7 +343,7 @@ Where this section and an earlier one disagree, this section holds.
    are still never listed to a model in the DATA block. Before a chart's table goes to a model for
    a headline or summary (Phase 5), R replaces those values with placeholders and puts them back
    in the reply.
-3. **The static chart is the published form.** The plotly version is a second view for reading
+3. **The static chart is the published form.** The interactive version (ggiraph; plotly before Phase 10) is a second view for reading
    values by hovering. Known differences are listed in `STATUS.md`.
 4. **Direct labels only when they fit.** End labels on lines and slopes are drawn when no two
    would touch; otherwise a legend ordered by end value. No ggrepel.
