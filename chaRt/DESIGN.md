@@ -99,7 +99,7 @@ The model's reply for a chart. Fields follow the layered grammar of graphics (da
 geoms, scales, coordinates, facets, theme) as SURV727 teaches it, restricted to what v1 draws.
 
 ```yaml
-family: bar            # bar | dot | line | slope | scatter | bubble | histogram | box | heatmap
+family: bar            # bar | dot | line | slope | scatter | bubble | histogram | box | heatmap | dumbbell
 x: region
 y: revenue
 color: null
@@ -114,6 +114,10 @@ transform:
   sort: value_desc     # none | value_desc | value_asc | level_order | alphabetical
 scales: {log_x: false, log_y: false}
 fit: none              # scatter only: none | loess | linear
+density: auto          # scatter only: auto | on | off. Crowded points (over 2,000) become counts of rows in cells
+shape: box             # box only: box | violin (a violin for groups of 30 rows or more, with its box inside)
+index: none            # line only: none | first (each line divided by its first value, times 100)
+smooth: none           # line only: none, or 2 to 24 periods of moving average, over the raw line in grey
 highlight: []          # levels drawn in colour; the rest in grey
 title: Revenue is concentrated in two regions
 subtitle: Total revenue by sales region, 2025

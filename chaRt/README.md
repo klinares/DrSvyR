@@ -22,7 +22,12 @@ survey microdata.
    region?") or press "Suggest charts". A chart is drawn for each answer and added to the canvas.
 4. **Choose.** Click a chart to select it and change it in words ("sort by value", "make it a
    line"). "Style" sets one of six styles (Clean, Minimal, Magazine, Data desk, Newspaper, Dark) and
-   the palettes for every chart. A card can be shown as an interactive chart ("Interactive": the same chart as an SVG, with a tooltip and hover on each mark and no zoom) or a
+   the palettes for every chart. Beyond bars, lines, scatters, histograms, boxes and heatmaps there are a
+   dumbbell (each group's two values, for exactly two periods or conditions, on one scale), a density view
+   (a scatter of more than 2,000 points becomes counts of rows in cells, by itself), a violin with its box
+   (when you ask for the shape), lines indexed to 100 at their first period (to compare growth), a moving
+   average over the raw line (when you ask for a trend), and call-outs: a marked point is a small box with a
+   thin leader. A card can be shown as an interactive chart ("Interactive": the same chart as an SVG, with a tooltip and hover on each mark and no zoom) or a
    short video ("Animate"). "Write headlines" gives each chart a headline and a summary. The "In
    dashboard" switch and Move up and Move down on each card choose what goes in the dashboard and in
    what order. "Add a summary table" puts a table of descriptive statistics on the canvas.
