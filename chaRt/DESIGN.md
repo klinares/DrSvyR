@@ -21,7 +21,10 @@ no design-based inference. Every figure and summary describes the file, not a po
 | Key | Pasted on Start here, held for the session only, exactly as QuestionR does. Never saved, never read from the environment |
 | What the model writes | A plot spec (a small structured object), never R code. One R renderer draws every spec |
 | Interactives | ggiraph (Phase 10 Part B; plotly before): the same ggplot drawn as SVG with tooltips and hover, through `spec_widget()` |
+| Styles | Seven (`CHART_STYLES` in `R/theme.R`), each a set of values: ground, grid, title face, an `accent` and a `slate`. A highlight is accent against slate, in every style, and R never highlights on its own. Briefing (Phase 10 Part D) sets its titles in Barlow Condensed in upper case (by R on the drawn title, by CSS on a page heading; a number or unit keeps its case) and draws a series with no group in its one deep blue |
+| The page and the canvas | The export and the canvas share their rules (Phase 10 Part D): a strip of key numbers (plain statements, no boxes, a number never wrapped), cards of a row as high as each other with the chart centred in a slot that grows, a chart of more than four panels on a row of its own, a summary at a reading size, notes smaller and the source line smallest |
 | Maps | Not in v1. Revisit once the tool is stable |
+
 | Survey design | None |
 | Parallelism | None. No call fan-out is needed |
 | Report | HTML. Quarto if the work Connect server can render it from a running app (Phase 0 probe); otherwise built with htmltools |

@@ -21,8 +21,8 @@ survey microdata.
    for every column, marked "AI guess"). Then type a question ("How has revenue changed by
    region?") or press "Suggest charts". A chart is drawn for each answer and added to the canvas.
 4. **Choose.** Click a chart to select it and change it in words ("sort by value", "make it a
-   line"). "Style" sets one of six styles (Clean, Minimal, Magazine, Data desk, Newspaper, Dark) and
-   the palettes for every chart. Beyond bars, lines, scatters, histograms, boxes and heatmaps there are a
+   line"). "Style" sets one of seven styles (Clean, Minimal, Magazine, Data desk, Newspaper, Dark, Briefing: an off-white ground, a hairline grid across the chart, condensed upper-case titles, one deep blue and slate greys) and
+   the palettes for every chart. In every style a highlight is the style's accent against its slate grey, and R never colours the largest bar by itself. Beyond bars, lines, scatters, histograms, boxes and heatmaps there are a
    dumbbell (each group's two values, for exactly two periods or conditions, on one scale), a density view
    (a scatter of more than 2,000 points becomes counts of rows in cells, by itself), a violin with its box
    (when you ask for the shape), lines indexed to 100 at their first period (to compare growth), a moving
@@ -33,7 +33,8 @@ survey microdata.
    what order. "Add a summary table" puts a table of descriptive statistics on the canvas.
 5. **Export.** "Export dashboard" asks for a title, subtitle, author, date and introduction, a
    classification marking (it starts as the marking shown above every screen, `APP_CLASSIFICATION` in
-   `app.R`; it cannot be blank and is at most 80 characters), up to three key numbers, and for each
+   `app.R`; it cannot be blank and is at most 80 characters), up to three key numbers (a strip of at most six at the top of the page, with the file's
+   rows, columns and period as plain statements), and for each
    chart a picture, an interactive chart or a video. "Build the dashboard" makes
    `<marking>_dashboard_<date>.zip` (the marking in lower case with other characters as underscores,
    so `unclassified_dashboard_2026-11-22.zip`) with `dashboard.html` and `codebook.html` (each one
@@ -158,12 +159,13 @@ long they take). `tests/llm_check.R` and `tests/live_run_9.R` make live model ca
 | `app.R` | Settings, profiles, the packages check, the page and the server |
 | `R/data.R` | Reading a file, the data dictionary, summary statistics |
 | `R/spec.R` | The chart spec, its checks, the ggplot, the interactive version (ggiraph), the R code of a chart, the video engine |
-| `R/theme.R` | The typefaces, the six styles, the palettes, the one chart device |
+| `R/theme.R` | The typefaces, the seven styles, the palettes, the one chart device |
 | `R/llm.R` | The session key, the model call, JSON repair, the connection check |
 | `R/reflexes.R` | The prompts and the three model calls (labels, chat, headlines) with their number and word checks |
 | `R/ui.R` | Every page, the canvas, the dashboard and codebook writers |
 | `www/reflexes/` | The rules the model is given, one markdown file per topic, written outside this repository |
-| `www/fonts/` | Inter and Source Serif 4, under the SIL Open Font License |
+| `www/fonts/` | Inter, Source Serif 4 and Barlow Condensed (SemiBold and Bold: the Briefing style's titles), under the SIL Open Font License |
+
 | `www/methodology.md` | The text of the Methodology page |
 | `probe/app.R` | The probe |
 | `tests/` | The smoke test, the live scripts, the gold specs, the sample file `tests/data/orders.csv`. Not deployed |

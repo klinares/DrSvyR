@@ -36,7 +36,7 @@ HEAVY_CHECKS <- c(
   "9A-9: the codebook is a document",                                             # reads those six
   "9A-10: print: every style's page prints on a light ground",                    # and printed to PDF by Chrome
   "9A-11: the five-chart dashboard",                                              # reads those six
-  "9D-0b: in Chrome the three number boxes",                                      # the six-box page measured in Chrome
+  "9D-0b: in Chrome the three key numbers",                                     # the six-box page measured in Chrome
   "9D-18: in Chrome the table cards",                                            # the table cards of an exported dashboard measured in Chrome
   "9B-15: a real video of a bar chart",                                           # a video drawn and encoded, and read back
   "9B-16: the frames read back from the encoded file",                            # reads it
@@ -48,7 +48,9 @@ HEAVY_CHECKS <- c(
   "9C-10: the checks of the bundle can fail",                                       # three more loads and a package list worked out again
   "10A-13: every frame of the MP4",                                               # a dashboard with a video, the MP4 decoded and read back
   "10A-14: printed by Chrome",                                                     # the dashboard and the codebook printed to PDF in the Dark style with a long marking
-  "10B-9: in Chrome the export with ten interactive charts")                       # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
+  "10B-9: in Chrome the export with ten interactive charts",                    # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
+  "10D-10: the five-chart dashboard in Briefing",                                  # reads the seven pages built by 9A-8
+  "10D-11: in Chrome at 1400 and 500 pixels")                                       # the cards of a row measured in Chrome in Clean and Briefing                       # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
 
 results <- new.env()
 results$all <- logical(0)
@@ -534,6 +536,7 @@ writeLines(c(
   "  systemfonts::register_font('Inter SemiBold', plain = f('Inter-SemiBold.ttf'), bold = f('Inter-Bold.ttf'))",
   "  systemfonts::register_font('Source Serif 4', plain = f('SourceSerif4-Regular.ttf'), bold = f('SourceSerif4-Bold.ttf'))",
   "  systemfonts::register_font('Source Serif 4 SemiBold', plain = f('SourceSerif4-Semibold.ttf'), bold = f('SourceSerif4-Bold.ttf'))",
+  "  systemfonts::register_font('Barlow Condensed', plain = f('BarlowCondensed-SemiBold.ttf'), bold = f('BarlowCondensed-Bold.ttf'))",
   "}",
   "files <- sort(list.files(args[1], pattern = '^code_.*[.]R$', full.names = TRUE))",
   "out <- lapply(files, function(f) tryCatch({",
@@ -2155,8 +2158,9 @@ shiny::testServer(mod_explore_server, args = list(state = b_state, ask = b_ask),
   b_out$ready <- length(made$log) == 2L && grepl(paste0("Read ", md_text("sales.csv"), ": 240 rows, 5 columns."), made$log[[1]]$content, fixed = TRUE) &&
     startsWith(made$log[[2]]$content, SETUP_READY) && sent_n() == 0L && grepl("No charts yet", html("cards"), fixed = TRUE)
   boxes <- html("boxes")
-  b_out$boxes <- length(gregexpr("bslib-value-box", boxes, fixed = TRUE)[[1]]) >= 3L && cell(boxes, "Rows") && cell(boxes, "240") && cell(boxes, "Columns") && cell(boxes, "5") && cell(boxes, "Period") &&
-    grepl("2019 to 2024", boxes, fixed = TRUE) && !grepl("sales.csv", boxes, fixed = TRUE)
+  # Phase 10 Part D: a strip of key numbers, plain statements, no value boxes
+  b_out$boxes <- length(gregexpr("<div class=\"key\">", boxes, fixed = TRUE)[[1]]) == 3L && grepl("class=\"keys chart-keys\"", boxes, fixed = TRUE) && !grepl("bslib-value-box", boxes, fixed = TRUE) &&
+    cell(boxes, "240 rows") && cell(boxes, "5 columns") && grepl("2019 to 2024", boxes, fixed = TRUE) && !grepl("sales.csv", boxes, fixed = TRUE) && !grepl(">Rows<|>Columns<|>Period<", boxes)
 
   # a question adds cards, newest first
   session$setInputs(chat_user_input = "How many orders in each region?")
@@ -2330,7 +2334,7 @@ shiny::testServer(mod_explore_server, args = list(state = b_state, ask = b_ask),
     grepl("A different file was read", made$log[[1]]$content, fixed = TRUE) && grepl(paste0("Read ", md_text("other.csv"), ": 240 rows"), made$log[[2]]$content, fixed = TRUE) &&
     startsWith(made$log[[3]]$content, SETUP_READY) && length(made$log) == 3L
 })
-check("6-C 7: the Explore server starts ready: the read line, then the 'ask a question' line; the canvas says there are no charts; three plain value boxes (rows, columns, the period of the time column)",
+check("6-C 7: the Explore server starts ready: the read line, then the 'ask a question' line; the canvas says there are no charts; a strip of three key numbers as plain statements (240 rows, 5 columns, the period of the time column)",
       isTRUE(b_out$ready) && isTRUE(b_out$boxes))
 check("6-C 8: a question adds cards, newest first (ids c3, c1, c2 after two questions), with the reply's say and 'Added to the canvas.' in the chat",
       isTRUE(b_out$cards))
@@ -3098,7 +3102,7 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
 
   # 1. the typeface
   b7_dir <- file.path("www", "fonts")
-  b7_wanted <- c(unlist(purrr::map(CHART_FONTS, function(f) unlist(f[c("regular", "semibold", "bold")]))), "Inter-LICENSE.txt", "SourceSerif4-LICENSE.md")
+  b7_wanted <- unique(c(unlist(purrr::map(CHART_FONTS, function(f) unlist(f[c("regular", "semibold", "bold")]))), "Inter-LICENSE.txt", "SourceSerif4-LICENSE.md", "BarlowCondensed-LICENSE.txt"))
   b7_tables <- function(path) {
     hdr = readBin(path, "raw", 12L)
     n = readBin(hdr[5:6], "integer", n = 1L, size = 2L, signed = FALSE, endian = "big")
@@ -3112,19 +3116,22 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
   b7_urls <- regmatches(b7_page, gregexpr("(?<=url\\('fonts/)[^']+(?=')", b7_page, perl = TRUE))[[1]]
   b7_git <- if (nzchar(Sys.which("git"))) purrr::map_int(file.path(b7_dir, b7_wanted), function(f) system2("git", c("check-ignore", "-q", f), stdout = FALSE, stderr = FALSE)) else 1L
   b7_ignore <- if (file.exists(".rscignore")) readLines(".rscignore", warn = FALSE) else character(0)
-  check("7B-1: www/fonts/ holds exactly the three static TrueType files (regular, semibold, bold) of Inter and of Source Serif 4 and the two licence files, none a variable font, and the licences are the SIL Open Font License 1.1",
+  b7_lic3 <- readLines(file.path(b7_dir, "BarlowCondensed-LICENSE.txt"), warn = FALSE, encoding = "UTF-8")
+  check("7B-1: www/fonts/ holds exactly the static TrueType files of Inter and of Source Serif 4 (regular, semibold, bold) and of Barlow Condensed (SemiBold and Bold: it has no regular), and the three licence files, none a variable font, and the licences are the SIL Open Font License 1.1 (Barlow Condensed: Copyright 2017 The Barlow Project Authors)",
         setequal(list.files(b7_dir), b7_wanted) &&
           all(purrr::map_lgl(b7_ttf, function(f) { t = b7_tables(file.path(b7_dir, f)); identical(as.integer(t$magic), c(0L, 1L, 0L, 0L)) && !"fvar" %in% t$tags && "glyf" %in% t$tags })) &&
           any(grepl("SIL OPEN FONT LICENSE Version 1.1", b7_lic, fixed = TRUE)) && any(grepl("SIL OPEN FONT LICENSE Version 1.1", b7_lic2, fixed = TRUE)) &&
-          any(grepl("^Copyright .*Inter Project Authors", b7_lic)) && any(grepl("^Copyright .*Adobe", b7_lic2)))
+          any(grepl("^Copyright .*Inter Project Authors", b7_lic)) && any(grepl("^Copyright .*Adobe", b7_lic2)) &&
+          any(grepl("SIL OPEN FONT LICENSE Version 1.1", b7_lic3, fixed = TRUE)) && any(grepl("^Copyright 2017 The Barlow Project Authors", b7_lic3)) &&
+          length(b7_ttf) == 8L && identical(CHART_FONTS$display$family, "Barlow Condensed") && !file.exists(file.path(b7_dir, "BarlowCondensed-Regular.ttf")))
   check("7B-1: the fonts are registered with systemfonts at start-up (app.R calls chart_fonts_register()): each family and its SemiBold name, with a file that is there",
-        isTRUE(all(c("Inter", "Inter SemiBold", "Source Serif 4", "Source Serif 4 SemiBold") %in% systemfonts::registry_fonts()$family)) &&
-          all(file.exists(systemfonts::registry_fonts()$path[systemfonts::registry_fonts()$family %in% c("Inter", "Inter SemiBold", "Source Serif 4", "Source Serif 4 SemiBold")])) &&
-          identical(unname(chart_fonts_register()), c(TRUE, TRUE)) && length(chart_fonts_missing()) == 0L &&
+        isTRUE(all(c("Inter", "Inter SemiBold", "Source Serif 4", "Source Serif 4 SemiBold", "Barlow Condensed", "Barlow Condensed SemiBold") %in% systemfonts::registry_fonts()$family)) &&
+          all(file.exists(systemfonts::registry_fonts()$path[systemfonts::registry_fonts()$family %in% c("Inter", "Inter SemiBold", "Source Serif 4", "Source Serif 4 SemiBold", "Barlow Condensed", "Barlow Condensed SemiBold")])) &&
+          identical(unname(chart_fonts_register()), c(TRUE, TRUE, TRUE)) && length(chart_fonts_missing()) == 0L &&
           any(grepl("^chart_fonts_register\\(\\)", readLines("app.R", warn = FALSE))))
   check("7B-1: the page declares each bundled file with @font-face under the names the charts use, every address is a file in www/fonts/, and neither .gitignore nor .rscignore leaves www/fonts out",
         setequal(unique(b7_urls), b7_ttf) && all(file.exists(file.path(b7_dir, b7_urls))) &&
-          all(purrr::map_lgl(c("'Inter'", "'Inter SemiBold'", "'Source Serif 4'", "'Source Serif 4 SemiBold'"), function(n) grepl(paste0("font-family: ", n), b7_page, fixed = TRUE))) &&
+          all(purrr::map_lgl(c("'Inter'", "'Inter SemiBold'", "'Source Serif 4'", "'Source Serif 4 SemiBold'", "'Barlow Condensed'", "'Barlow Condensed SemiBold'"), function(n) grepl(paste0("font-family: ", n), b7_page, fixed = TRUE))) &&
           all(b7_git == 1L) && !any(grepl("font|^www|ttf|woff", b7_ignore)))
 
   # the fonts missing: the app starts, charts draw in the default fonts, Start here says so once
@@ -3143,24 +3150,26 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
   assign("chart_font_available", b7_real_avail, envir = globalenv())
   b7_start_ok <- paste(as.character(start_ui()), collapse = "")
   check("7B-1: with the fonts missing the app still builds, charts draw (static, in the default sans and serif), the written code says it falls back, and Start here says so once; with them there it says nothing",
-        inherits(b7_none, "logical") && identical(unname(b7_none), c(FALSE, FALSE)) && b7_miss_page && b7_drawn &&
+        inherits(b7_none, "logical") && identical(unname(b7_none), c(FALSE, FALSE, FALSE)) && b7_miss_page && b7_drawn &&
           identical(b7_chart_font_family_missing, list(sans = "sans", serif = "serif")))
   check("7B-1: Start here names the missing typefaces exactly once, and the interactive version's SVG then asks for the generic fonts, not for a name the browser lacks",
-        lengths(gregexpr("is not available here|are not available here", b7_start))[[1]] == 1L && grepl("Inter and Source Serif 4", b7_start, fixed = TRUE) &&
+        lengths(gregexpr("is not available here|are not available here", b7_start))[[1]] == 1L && grepl("Inter, Source Serif 4 and Barlow Condensed", b7_start, fixed = TRUE) &&
+
           !grepl("not available here", b7_start_ok, fixed = TRUE) && length(b7_fam_missing) >= 1L && all(b7_fam_missing %in% c("sans-serif", "serif")) &&
           grepl("else \"sans\"", b7_code_missing, fixed = TRUE) && grepl("else \"serif\"", b7_code_missing, fixed = TRUE))
 
   # 2. six styles, neutral names
   b7_banned <- "economist|guardian|financial times|\\bFT\\b|bloomberg|\\bvox\\b|538|fivethirtyeight|new york|\\btimes\\b|washington|\\bpost\\b|journal|reuters|\\bpew\\b|\\bnpr\\b|\\bbbc\\b|atlantic|wsj|nyt|wired|axios|politico|monde|spiegel|observer|telegraph|herald|tribune"
   b7_fields <- c("label", "note", "background", "panel", "text", "text_2", "caption", "grid", "grid_axes", "grid_width", "axis_line", "ticks",
-                 "title_font", "title_weight", "title_size", "subtitle_font", "strip", "rule", "lift", "grey", "fit", "outline", "box_fill", "swap")
+                 "title_font", "title_weight", "title_size", "subtitle_font", "strip", "rule", "lift", "grey", "fit", "outline", "box_fill", "swap",
+                 "accent", "slate", "single", "title_case", "axis_size", "subtitle_size")
   b7_sample_text <- paste(purrr::map_chr(b7_styles, function(s) paste(as.character(style_choice_ui(s, "#E69F00")), collapse = "")), collapse = " ")
-  check("7B-2: CHART_STYLES has exactly six styles, Clean first and the default, each with the same named values, and no name, label, note or sample names a publication",
-        identical(b7_styles, c("clean", "minimal", "magazine", "desk", "newspaper", "dark")) && identical(CHART_STYLE_DEFAULT, "clean") &&
+  check("7B-2: CHART_STYLES has exactly seven styles (Briefing the seventh), Clean first and the default, each with the same named values, and no name, label, note or sample names a publication",
+        identical(b7_styles, c("clean", "minimal", "magazine", "desk", "newspaper", "dark", "briefing")) && identical(CHART_STYLE_DEFAULT, "clean") &&
           identical(chart_palette_default()$style, "clean") &&
           all(purrr::map_lgl(CHART_STYLES, function(s) setequal(names(s), b7_fields))) &&
           !any(grepl(b7_banned, c(b7_styles, unlist(purrr::map(CHART_STYLES, function(s) c(s$label, s$note))), b7_sample_text), ignore.case = TRUE)) &&
-          identical(unname(purrr::map_chr(CHART_STYLES, "label")), c("Clean", "Minimal", "Magazine", "Data desk", "Newspaper", "Dark")))
+          identical(unname(purrr::map_chr(CHART_STYLES, "label")), c("Clean", "Minimal", "Magazine", "Data desk", "Newspaper", "Dark", "Briefing")))
   b7_ggplot2_exports <- getNamespaceExports("ggplot2")
   check("7B-2: Minimal has no range frame: ggplot2 (installed) has no function for one, so its axes are plain with ticks only (this check fails if a ggplot2 that has one is installed, so the choice is made again)",
         !any(grepl("range.?frame", b7_ggplot2_exports, ignore.case = TRUE)) && !grepl("rangeframe|range_frame", paste(readLines(file.path("R", "theme.R"), warn = FALSE), collapse = "\n")))
@@ -3188,26 +3197,26 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
         all(purrr::map_lgl(b7_styles, function(s) all(b7_grid[[s]]$cr < min(b7_text_cr[[s]])))) &&
           identical(b7_grid$minimal$n, 0L) && identical(b7_grid$desk$n, 2L) && identical(b7_grid$clean$n, 2L) &&
           identical(unname(purrr::map_int(b7_styles, function(s) { th = chart_theme(s, grid = "y"); sum(!purrr::map_lgl(c("panel.grid.major.x", "panel.grid.major.y"), function(e) inherits(b7_calc(th, e), "ggplot2::element_blank"))) })),
-                    c(1L, 0L, 1L, 2L, 1L, 1L)))
+                    c(1L, 0L, 1L, 2L, 1L, 1L, 1L)))
   # the highlight grey: saliency is the CIE2000 colour difference from the background (farver); visible means 10 or more,
   #   weaker means below that of the highlight colour and of every chromatic colour (LCh chroma 8 or more) of every
   #   qualitative palette on offer, as the style shows it (a colour near white or grey is not a mark for a group)
   b7_de <- function(a, b) as.numeric(farver::compare_colour(farver::decode_colour(a), farver::decode_colour(b), from_space = "rgb", method = "cie2000"))
   b7_chroma <- function(a) farver::decode_colour(a, to = "lch")[, "c"]
   b7_all_q <- unlist(purrr::map(names(chart_palettes("qualitative")), function(k) b7_hex(palette_colours(k))))
+  # Phase 10 Part D: a highlight is the style's accent against its slate: each at 3 to 1 or better from the background and the two at 3 to 1 or better from each
+  #   other (WCAG contrast ratio from colorspace, not from R/theme.R)
   b7_sal <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) {
     st = CHART_STYLES[[s]]
-    cols = unique(b7_hex(style_marks(b7_all_q, s)))
-    cols = cols[b7_chroma(cols) >= 8]
-    list(grey = b7_de(st$grey, st$background), hl = b7_de(CHART_HIGHLIGHT, st$background), weakest = min(b7_de(cols, st$background)))
+    list(pair = b7_ratio(st$accent, st$slate), acc_bg = b7_ratio(st$accent, st$background), slate_bg = b7_ratio(st$slate, st$background))
   })
-  cat("      highlight grey, colour difference from the background (visible at 10 or more): ",
-      paste(b7_styles, purrr::map_chr(b7_sal, function(v) sprintf("%.1f (highlight %.1f, weakest palette colour %.1f)", v$grey, v$hl, v$weakest)), collapse = "; "), "\n", sep = "")
+  cat("      highlight accent against slate, accent and slate against the background (contrast ratio, 3 or more): ",
+      paste(b7_styles, purrr::map_chr(b7_sal, function(v) sprintf("%.2f (%.2f, %.2f)", v$pair, v$acc_bg, v$slate_bg)), collapse = "; "), "\n", sep = "")
   b7_hl_spec <- list(family = "bar", x = "region", y = "revenue", fn = "sum", highlight = list(column = "region", values = list("North")), title = "t")
   b7_hl_cols <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) unique(b7_hex(ggplot2::ggplot_build(spec_plot(b7_hl_spec, pan_g$data, pan_g$cb, b7_pal(s)))$data[[1]]$fill)))
-  check("7B-3: every style: its highlight grey is visible (10 or more from the background) and weaker than the highlight colour and than every chromatic colour of every qualitative palette; a highlighted chart draws the grey and the highlight colour",
-        all(purrr::map_lgl(b7_sal, function(v) v$grey >= 10 && v$grey < v$hl && v$grey < v$weakest)) &&
-          all(purrr::map_lgl(b7_styles, function(s) setequal(b7_hl_cols[[s]], c(b7_hex(CHART_STYLES[[s]]$grey), b7_hex(CHART_HIGHLIGHT))))))
+  check("7B-3: every style: the highlight's accent against its slate is 3 to 1 or better, each of them is 3 to 1 or better against the style's background, and a highlighted chart draws exactly the slate and the accent (not the pale grey, not the orange)",
+        all(purrr::map_lgl(b7_sal, function(v) v$pair >= 3 && v$acc_bg >= 3 && v$slate_bg >= 3)) &&
+          all(purrr::map_lgl(b7_styles, function(s) setequal(b7_hl_cols[[s]], b7_hex(c(CHART_STYLES[[s]]$slate, CHART_STYLES[[s]]$accent))))))
   # Dark: a palette colour too dark to see is swapped for a light one, in the chart and in the written code
   b7_eight <- list(family = "line", x = "year", y = "revenue", color = "region", fn = "sum", title = "t")
   b7_line_cols <- function(s) unique(b7_hex(ggplot2::ggplot_build(spec_plot(b7_eight, pan_g$data, pan_g$cb, b7_pal(s)))$data[[1]]$colour))
@@ -3277,11 +3286,17 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
     b7_out$quiet <- identical(b7_state$stories, stories0) && identical(b7_state$charts, charts0) && identical(b7_state$canvas, canvas0) &&
       length(b7_si$sent) == sent0 && nrow(b7_state$calls) == calls0 && length(made$log) == log0 &&
       !grepl(SUMMARY_STALE, html("c1_card"), fixed = TRUE) && !grepl(SUMMARY_STALE_DATA, html("c1_card"), fixed = TRUE) &&
-      identical(sub("src=\"[^\"]*\"", "", cards0), sub("src=\"[^\"]*\"", "", html("c1_card")))
+      identical(gsub("bslib-card-[0-9]+", "bslib-card", sub("src=\"[^\"]*\"", "", cards0)), gsub("bslib-card-[0-9]+", "bslib-card", sub("src=\"[^\"]*\"", "", html("c1_card"))))
     session$setInputs(style_choice = "nonsense")
     b7_out$unknown <- identical(palette()$style, "dark")
     session$setInputs(pal_sequential = "ylgnbu")
     b7_out$palette_too <- identical(palette()$style, "dark") && identical(palette()$sequential, "ylgnbu")
+    # Phase 10 Part D: a card's heading follows the style
+    session$setInputs(style_choice = "briefing")
+    b7_out$brief <- grepl("chart-upper", html("c1_card"), fixed = TRUE) && grepl("font-family: 'Barlow Condensed'", html("c1_card"), fixed = TRUE) &&
+      grepl("chart-slot", html("c1_card"), fixed = TRUE) && grepl("chart-summary", html("c1_card"), fixed = TRUE) && grepl("chart-card-sub", html("c1_card"), fixed = TRUE)
+    session$setInputs(style_choice = "clean")
+    b7_out$clean_card <- !grepl("chart-upper", html("c1_card"), fixed = TRUE) && grepl("font-family: Inter", html("c1_card"), fixed = TRUE)
   })
   check("7B-5: choosing a style in the dialog sets the dashboard's style (and state's), makes no model call, leaves the charts, their stories and every card's text as they were and marks nothing changed; an unknown value is ignored; a palette change keeps the style",
         isTRUE(b7_out$default) && isTRUE(b7_out$dark) && isTRUE(b7_out$quiet) && isTRUE(b7_out$unknown) && isTRUE(b7_out$palette_too))
@@ -3297,13 +3312,13 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
   b7_has <- function(x, pat) grepl(pat, x, fixed = TRUE)
   b7_wspec <- list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "A title", subtitle = "A subtitle", caption = "A caption", labels = "off")
   b7_widgets <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) spec_widget(spec_plot(b7_wspec, pan_g$data, pan_g$cb, b7_pal(s))))
-  b7_face <- function(font, weight) paste0(if (identical(font, "serif")) "Source Serif 4" else "Inter", if (identical(weight, "semibold")) " SemiBold")
+  b7_face <- function(font, weight) paste0(switch(font, serif = "Source Serif 4", display = "Barlow Condensed", "Inter"), if (identical(weight, "semibold")) " SemiBold")
   check("7B-6: spec_widget() follows the style: in the SVG the title's colour and typeface (Source Serif 4 for Newspaper's title and subtitle, a semibold face where the style asks for one), the subtitle's colour and typeface and the caption's colour are the style's, and the ground is the style's background",
         all(purrr::map_lgl(b7_styles, function(s) {
           st = CHART_STYLES[[s]]; w = b7_widgets[[s]]
-          identical(svg_text_attr(w, "A title", "fill"), st$text) && identical(svg_text_attr(w, "A subtitle", "fill"), st$text_2) &&
+          identical(svg_text_attr(w, chart_title_case("A title", s), "fill"), st$text) && identical(svg_text_attr(w, "A subtitle", "fill"), st$text_2) &&
             identical(svg_text_attr(w, "A caption", "fill"), st$caption) &&
-            identical(svg_text_attr(w, "A title", "font-family"), b7_face(st$title_font, st$title_weight)) &&
+            identical(svg_text_attr(w, chart_title_case("A title", s), "font-family"), b7_face(st$title_font, st$title_weight)) &&
             identical(svg_text_attr(w, "A subtitle", "font-family"), b7_face(st$subtitle_font, "regular")) &&
             grepl(paste0("fill='", st$background, "' fill-opacity='1' stroke='none'"), w$x$html, fixed = TRUE)
         })) && identical(svg_text_attr(b7_widgets$newspaper, "A title", "font-family"), "Source Serif 4") &&
@@ -3812,7 +3827,7 @@ if (c7_ok) {
       all(c7_texts(lines)[[1]]$family == chart_font_family("sans"))
   })
   check("7C-1: in each of the six styles the value labels take the style's secondary text colour, an annotation its text colour in bold, every label the chart's font, and a heatmap's cell values are black on a light cell and white on a dark one",
-        all(c7_style_ok) && length(c7_style_ok) == 6L)
+        all(c7_style_ok) && length(c7_style_ok) == 7L)
 
   # the YAML
   c7_y_on <- yaml::yaml.load("family: bar\nx: region\n\"y\": revenue\nfn: sum\ntitle: t\nlabels: \"on\"\nannotate: [highest, lowest]\n")
@@ -3858,6 +3873,7 @@ if (c7_ok) {
     "systemfonts::register_font('Inter SemiBold', plain = f('Inter-SemiBold.ttf'), bold = f('Inter-Bold.ttf'))",
     "systemfonts::register_font('Source Serif 4', plain = f('SourceSerif4-Regular.ttf'), bold = f('SourceSerif4-Bold.ttf'))",
     "systemfonts::register_font('Source Serif 4 SemiBold', plain = f('SourceSerif4-Semibold.ttf'), bold = f('SourceSerif4-Bold.ttf'))",
+    "systemfonts::register_font('Barlow Condensed', plain = f('BarlowCondensed-SemiBold.ttf'), bold = f('BarlowCondensed-Bold.ttf'))",
     "files <- sort(list.files(args[1], pattern = '^code_.*[.]R$', full.names = TRUE))",
     "out <- lapply(files, function(f) tryCatch({",
     "  env <- new.env(parent = globalenv())",
@@ -3948,21 +3964,22 @@ if (run_fast && exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
   d7_radios <- purrr::keep(d7_radios, function(x) grepl("style_choice", x, fixed = TRUE))
   d7_radio_vals <- sub("^.*value=\"([^\"]*)\".*$", "\\1", d7_radios)
   check("7D-1: the Style dialog has the style choice: a radio group (style_choice) with one option for each of the six styles, each with its drawn sample and its name, beside the three palette selects",
-        length(d7_dlg$modal) > 0L && identical(sort(d7_radio_vals), sort(names(CHART_STYLES))) && length(d7_radio_vals) == 6L &&
-          lengths(regmatches(d7_modal, gregexpr("chart-style-sample", d7_modal, fixed = TRUE))) == 6L &&
+        length(d7_dlg$modal) > 0L && identical(sort(d7_radio_vals), sort(names(CHART_STYLES))) && length(d7_radio_vals) == 7L &&
+          lengths(regmatches(d7_modal, gregexpr("chart-style-sample", d7_modal, fixed = TRUE))) == 7L &&
           all(purrr::map_lgl(purrr::map_chr(CHART_STYLES, "label"), function(l) grepl(l, d7_modal, fixed = TRUE))) &&
           grepl("pal_qualitative", d7_modal, fixed = TRUE) && grepl("pal_sequential", d7_modal, fixed = TRUE) && grepl("pal_diverging", d7_modal, fixed = TRUE))
   # the file-name value box: small type, one line, cut with an ellipsis, the full name as the tooltip
   d7_name <- "quarterly_sales_by_region_and_product_2015_to_2024_final_version_3_checked.csv"
   d7_boxes <- paste(as.character(canvas_boxes(data.frame(a = 1:3, b = 4:6), list(file = d7_name, columns = list()))), collapse = "")
   # (Phase 7b: the Period box shares the rule, so the selector may list it after the file name's)
-  d7_css <- regmatches(EXPLORE_CSS, regexpr("[.]chart-boxes [.]bslib-value-box [.]chart-box-file[^{]*[{][^}]*[}]", EXPLORE_CSS))
-  d7_size <- as.numeric(sub("^.*font-size: ([0-9.]+)rem.*$", "\\1", d7_css))
+  d7_css <- regmatches(EXPLORE_CSS, regexpr("[.]chart-keys [.]key-value[.]chart-box-file[^{]*[{][^}]*[}]", EXPLORE_CSS))
+  d7_long <- regmatches(EXPLORE_CSS, regexpr("[.]chart-keys [.]key-value[.]long [{][^}]*[}]", EXPLORE_CSS))
+  d7_size <- as.numeric(sub("^.*--max: ([0-9.]+)rem.*$", "\\1", d7_long))
   d7_period <- paste(as.character(canvas_boxes(c6_read$read$data, c6_cb_ready)), collapse = "")
-  check("7D-1: the file-name value box does not wrap in large type: the name is in a span set small (1.25rem or less), on one line (nowrap), cut with an ellipsis, and the whole name is its title (tooltip); a box that is not the file name does not use it",
-        grepl("class=\"chart-box-file[^\"]*\"", d7_boxes) && grepl(paste0("title=\"", d7_name, "\""), d7_boxes, fixed = TRUE) && grepl(paste0(">", d7_name, "</span>"), d7_boxes, fixed = TRUE) &&
-          length(d7_css) == 1L && isTRUE(d7_size <= 1.25) && grepl("white-space: nowrap", d7_css, fixed = TRUE) && grepl("overflow: hidden", d7_css, fixed = TRUE) &&
-          grepl("text-overflow: ellipsis", d7_css, fixed = TRUE) && !grepl("chart-box-file", d7_period, fixed = TRUE) && grepl("Rows", d7_period, fixed = TRUE))
+  check("7D-1: the file-name value box does not wrap in large type: the name is in a span set small (1.35rem or less), on one line (nowrap), cut with an ellipsis, and the whole name is its title (tooltip); a box that is not the file name does not use it",
+        grepl("class=\"key-value long chart-box-file\"", d7_boxes, fixed = TRUE) && grepl(paste0("title=\"", d7_name, "\""), d7_boxes, fixed = TRUE) && grepl(paste0(">", d7_name, "</div>"), d7_boxes, fixed = TRUE) &&
+          length(d7_css) == 1L && isTRUE(d7_size <= 1.35) && grepl("white-space: nowrap", d7_css, fixed = TRUE) && grepl("overflow: hidden", d7_css, fixed = TRUE) &&
+          grepl("text-overflow: ellipsis", d7_css, fixed = TRUE) && !grepl("chart-box-file", d7_period, fixed = TRUE) && grepl(" rows<", d7_period, fixed = TRUE))
   # card buttons in dark mode: the dark rules give each kind of card button light text (4.5 to 1 or better) against the theme's dark background, which
   #   the light-mode colours do not (the theme's primary is a dark navy)
   d7_theme_css <- as.character(sass::sass(bslib::bs_theme(version = 5, preset = "flatly")))
@@ -4003,12 +4020,12 @@ if (run_heavy) {   # the heavy run only: the style sheet needs nothing from the 
   d7_met_of <- function(kind) sum(names(chart_palettes(kind)) %in% d7_met)
   # Phase 7b adds a row of its (look) charts: after, and before when the old code could be exported from git
   d7_before <- grepl("before (drawn by the code at commit", d7_sheet, fixed = TRUE)
-  d7_expect <- 9L * 6L + 2L * length(chart_palettes("qualitative")) + 3L + 9L * 2L + 2L * d7_met_of("qualitative") + d7_met_of("sequential") + d7_met_of("diverging") +
+  d7_expect <- 9L * length(CHART_STYLES) + 2L * length(chart_palettes("qualitative")) + 3L + 9L * 2L + 2L * d7_met_of("qualitative") + d7_met_of("sequential") + d7_met_of("diverging") +
     length(PHASE7B_LOOK) * (if (d7_before) 2L else 1L)
   d7_sheet_src <- paste(readLines(file.path("tests", "gallery.R"), encoding = "UTF-8"), collapse = "\n")
   d7_build_src <- sub("(?s)^.*(build_style_sheet <- function.*?)\nif \\(sys.nframe.*$", "\\1", d7_sheet_src, perl = TRUE)
   cat("      style sheet: ", d7_n_imgs, " charts (expected ", d7_expect, "), ", round(file.size(d7_sheet_file) / 1e6, 1), " MB\n", sep = "")
-  check("7D-2: tests/style_sheet.html: every family in every style (54), every qualitative palette on Clean and on Dark, the three labelled charts, one chart of each family with labels and annotate in Newspaper and Dark, and the MetBrewer palettes on offer: the count of drawn charts is the count expected from the app's own palette lists, none failed to draw",
+  check("7D-2: tests/style_sheet.html: every family in every style (63), every qualitative palette on Clean and on Dark, the three labelled charts, one chart of each family with labels and annotate in Newspaper and Dark, and the MetBrewer palettes on offer: the count of drawn charts is the count expected from the app's own palette lists, none failed to draw",
         d7_n_imgs == d7_expect && d7_n_figs == d7_n_imgs && !grepl("Could not draw this", d7_sheet, fixed = TRUE) &&
           all(purrr::map_lgl(names(CHART_STYLES), function(s) lengths(regmatches(d7_sheet, gregexpr(paste0(", ", CHART_STYLES[[s]]$label, "\""), d7_sheet, fixed = TRUE))) >= 9L)) &&
           all(purrr::map_lgl(c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap"), function(f) grepl(paste0("alt=\"", f, ", "), d7_sheet, fixed = TRUE) && grepl(paste0(f, ", (labels and annotate|labels|cell values|no labels or annotate for this family), Newspaper"), d7_sheet) && grepl(paste0(f, ", [a-z ,]*Dark"), d7_sheet))) &&
@@ -4213,9 +4230,10 @@ e7_boxes <- paste(as.character(canvas_boxes(data.frame(d = as.Date(c("2023-01-01
 check("7b-10: the Period box says 'Jan 2023 to Dec 2024' (month and year past 60 days, the dates under it; years as numbers stay), on one line in smaller type with the full dates as its tooltip; the third box takes a row of its own on a narrow canvas and half the row on a wide one",
       identical(e7_per$short, "Jan 2023 to Dec 2024") && identical(e7_per$full, "2023-01-01 to 2024-12-01") && identical(e7_per_short$short, e7_per_short$full) &&
         identical(period_text(c(2015, 2024))$short, "2015 to 2024") &&
-        grepl("class=\"chart-box-period[^\"]*\" title=\"2023-01-01 to 2024-12-01\">Jan 2023 to Dec 2024<", e7_boxes) &&
-        grepl(".chart-box-period { font-size: 1rem; }", EXPLORE_CSS, fixed = TRUE) && grepl("white-space: nowrap", EXPLORE_CSS, fixed = TRUE) &&
-        grepl("breakpoints(sm = c(6, 6, 12), lg = c(3, 3, 6))", paste(readLines(file.path("R", "ui.R"), encoding = "UTF-8"), collapse = "\n"), fixed = TRUE))
+        grepl("class=\"key-value long chart-box-period\"[^>]* title=\"2023-01-01 to 2024-12-01\">Jan 2023 to Dec 2024<", e7_boxes) &&
+        grepl(".chart-keys .key-value.chart-box-period { --max: 1.3rem; }", EXPLORE_CSS, fixed = TRUE) && grepl("white-space: nowrap", EXPLORE_CSS, fixed = TRUE) &&
+        grepl("minmax(min(100%, 10.5rem), 1fr)", EXPLORE_CSS, fixed = TRUE))
+
 
 # 11. the chat text of a charts reply, from a real saved reply
 e7_rds <- file.path("tests", "live_replies.rds")
@@ -4748,13 +4766,13 @@ check("8B-8: 'How a reply is checked' names the number check, the word check, th
 
 # 9. the styles and fonts, with their licences
 p8b_styles_html <- paste(as.character(method_styles_ui()), collapse = "")
-check("8B-9: 'Styles and fonts' shows a sample and the note of each of the six styles and both bundled typefaces with the SIL Open Font License, the holder's line read from the licence file and a link to that file, which is in www/fonts (and which styles use the serif)",
-      length(gregexpr("<svg class=\"chart-style-sample\"", p8b_styles_html, fixed = TRUE)[[1]]) == length(CHART_STYLES) && length(CHART_STYLES) == 6L &&
+check("8B-9: 'Styles and fonts' shows a sample and the note of each of the seven styles and the three bundled typefaces with the SIL Open Font License, the holder's line read from the licence file and a link to that file, which is in www/fonts (and which styles use the serif)",
+      length(gregexpr("<svg class=\"chart-style-sample\"", p8b_styles_html, fixed = TRUE)[[1]]) == length(CHART_STYLES) && length(CHART_STYLES) == 7L &&
         all(purrr::map_lgl(CHART_STYLES, function(s) grepl(s$label, p8b_styles_html, fixed = TRUE) && grepl(htmltools::htmlEscape(s$note), p8b_styles_html, fixed = TRUE))) &&
         all(purrr::map_lgl(purrr::map_chr(CHART_FONTS, "family"), function(f) grepl(paste0(f, ":"), p8b_styles_html, fixed = TRUE))) &&
-        length(gregexpr(FONT_LICENCE, p8b_styles_html, fixed = TRUE)[[1]]) == 2L && FONT_LICENCE == "SIL Open Font License, Version 1.1" &&
+        length(gregexpr(FONT_LICENCE, p8b_styles_html, fixed = TRUE)[[1]]) == 3L && FONT_LICENCE == "SIL Open Font License, Version 1.1" &&
         all(file.exists(file.path(CHART_FONT_DIR, FONT_LICENCE_FILES))) && all(purrr::map_lgl(FONT_LICENCE_FILES, function(f) grepl(paste0("href=\"fonts/", f, "\""), p8b_styles_html, fixed = TRUE))) &&
-        grepl(htmltools::htmlEscape(font_copyright("Inter-LICENSE.txt")), p8b_styles_html, fixed = TRUE) && grepl("Adobe", p8b_styles_html, fixed = TRUE) &&
+        grepl(htmltools::htmlEscape(font_copyright("Inter-LICENSE.txt")), p8b_styles_html, fixed = TRUE) && grepl("Adobe", p8b_styles_html, fixed = TRUE) && grepl("Barlow Project Authors", p8b_styles_html, fixed = TRUE) && grepl("the title of the Briefing style", p8b_styles_html, fixed = TRUE) &&
         grepl("the title and subtitle of the Newspaper style", p8b_styles_html, fixed = TRUE) &&
         all(purrr::map_lgl(FONT_LICENCE_FILES, function(f) any(grepl("SIL OPEN FONT LICENSE", readLines(file.path(CHART_FONT_DIR, f), warn = FALSE), ignore.case = TRUE)))))
 
@@ -4933,9 +4951,8 @@ check("8C-3: dashboard.html has the title, subtitle, author, the date as written
         grepl("<title>Sales dashboard</title>", p8c_h3, fixed = TRUE) &&
         grepl("&lt;script&gt;window.x=1&lt;/script&gt; &amp; \"q\"", p8c_hh, fixed = TRUE) && !grepl("<script>window.x=1", p8c_hh, fixed = TRUE) &&
         grepl("&lt;b&gt;Me&lt;/b&gt;", p8c_hh, fixed = TRUE) && grepl("A &lt;i&gt;plain&lt;/i&gt; text &amp; more.", p8c_hh, fixed = TRUE) &&
-        grepl("<div class=\"box-title\">Rows</div>", p8c_hh, fixed = TRUE) && !grepl("box-title\">Columns<", p8c_hh, fixed = TRUE) && !grepl("box-title\">Period<", p8c_hh, fixed = TRUE) &&
-        grepl("box-title\">Rows<", p8c_h3, fixed = TRUE) && grepl("box-title\">Columns<", p8c_h3, fixed = TRUE) && grepl("box-title\">Period<", p8c_h3, fixed = TRUE) &&
-        grepl(">240<", p8c_h3, fixed = TRUE) && grepl("2019 to 2024", p8c_h3, fixed = TRUE) &&
+        grepl(">240 rows<", p8c_hh, fixed = TRUE) && !grepl(" columns<", p8c_hh, fixed = TRUE) && !grepl("class=\"key-value long chart-box-period\"", p8c_hh, fixed = TRUE) &&
+        grepl(">240 rows<", p8c_h3, fixed = TRUE) && grepl(">5 columns<", p8c_h3, fixed = TRUE) && grepl("2019 to 2024", p8c_h3, fixed = TRUE) &&
         identical(p8c_h2s, c("<h2>Headline of chart 1</h2>", "<h2>Headline of chart 2</h2>", "<h2>Price of an order</h2>", "<h2 id=\"about-heading\">About this dashboard</h2>")) &&
         lengths(gregexpr("<img src=\"data:image/png;base64,", p8c_h3, fixed = TRUE)) == 3L && grepl("alt=\"Orders by region. Headline of chart 1\"", p8c_h3, fixed = TRUE) &&
         grepl("alt=\"Price of an order\"", p8c_h3, fixed = TRUE) && lengths(gregexpr("class=\"source\">Source: sales.csv", p8c_h3, fixed = TRUE)) == 3L &&
@@ -5292,8 +5309,9 @@ check("8C-21: the switch and the order reach the export: with one chart switched
         !p8c_has(p8c_bd, "Units against price") && !p8c_has(p8c_bd, "units_against_price") && p8c_has(p8c_bd, "Price by region"))
 check("8C-22: what the dialog asked for reaches the page: the title, subtitle, author, the date, the introduction, only the value boxes chosen (Rows and the period, not Columns), and the About card names the model of the profile; the build adds nothing to the chat and makes no model call",
       grepl("<h1>Sales review</h1>", p8c_bh, fixed = TRUE) && grepl("The fourth quarter", p8c_bh, fixed = TRUE) && grepl("Kim Analyst", p8c_bh, fixed = TRUE) && grepl("21 November 2026", p8c_bh, fixed = TRUE) &&
-        grepl("<p>Why this dashboard exists.</p>", p8c_bh, fixed = TRUE) && grepl("box-title\">Rows<", p8c_bh, fixed = TRUE) && grepl("box-title\">Period<", p8c_bh, fixed = TRUE) &&
-        !grepl("box-title\">Columns<", p8c_bh, fixed = TRUE) && grepl(paste0("written by the model ", APP_MODEL$id), p8c_bh, fixed = TRUE) && isTRUE(p8c_b$log))
+        grepl("<p>Why this dashboard exists.</p>", p8c_bh, fixed = TRUE) && grepl(">240 rows<", p8c_bh, fixed = TRUE) && grepl("2019 to 2024", p8c_bh, fixed = TRUE) &&
+        !grepl(" columns<", p8c_bh, fixed = TRUE) &&
+ grepl(paste0("written by the model ", APP_MODEL$id), p8c_bh, fixed = TRUE) && isTRUE(p8c_b$log))
 check("8C-23: after a build the dialog says what was built (the name, the size, the seconds, how many charts as pictures and how many interactive), offers the zip for download, and draws the build button again enabled with its busy line hidden; the button was disabled while it ran (a chart-call button that says 'Building the dashboard', and disables itself when clicked) and busy was set and cleared; a second build with another date makes dashboard_2026-12-01.zip and removes the first zip",
       grepl("Built unclassified_dashboard_2026-11-21.zip: ", p8c_b$action, fixed = TRUE) && grepl("3 charts: 3 as pictures and 0 interactive.", p8c_b$action, fixed = TRUE) && grepl(" seconds. ", p8c_b$action, fixed = TRUE) &&
         grepl("Download unclassified_dashboard_2026-11-21.zip", p8c_b$action, fixed = TRUE) && grepl("id=\"proxy1-dash_download\"", p8c_b$action, fixed = TRUE) &&
@@ -5343,7 +5361,7 @@ check("8C-24: when a build step fails (a stand-in builder is forced to stop) the
 p8c_fns <- c("chart_from_rows", "dashboard_default_mode", "dashboard_warnings", "dash_slug", "dash_date_text", "dash_b64", "dash_data_uri", "dash_read_text", "dash_font_css", "dash_css",
              "canvas_box_values", "dash_dependency_dir", "dash_dependency_files", "dash_inline_dependencies", "dash_widget", "dash_paragraphs", "dash_describes", "dash_text_status",
              "dash_about", "dash_card", "dash_page", "codebook_page", "dash_document", "dash_root_error", "dash_step", "dash_chart", "build_dashboard", "dash_size_text", "dash_last_lines",
-             "dash_chart_row", "column_summary", "dash_layout", "dash_holes", "dash_web", "dash_picture_tag", "dash_fact_choices", "dash_boxes", "dash_pictures", "dash_pct", "codebook_figure")
+             "dash_chart_row", "column_summary", "dash_layout", "dash_holes", "dash_web", "dash_picture_tag", "dash_fact_choices", "dash_keys", "dash_keys_tag", "dash_heading_text", "dash_card_wide", "dash_pictures", "dash_pct", "codebook_figure")
 p8c_called <- unique(unlist(purrr::map(p8c_fns, function(f) all.names(body(get(f))))))
 p8c_strings <- unlist(purrr::map(c(r_files, "app.R"), function(f) { pd <- utils::getParseData(parse(f, keep.source = TRUE)); pd$text[pd$token == "STR_CONST"] }))
 p8c_fncalls <- unlist(purrr::map(c(r_files, "app.R"), function(f) { pd <- utils::getParseData(parse(f, keep.source = TRUE)); pd$text[pd$token == "SYMBOL_FUNCTION_CALL"] }))
@@ -5439,7 +5457,7 @@ check(paste0("9A-2: no row of the grid has a hole: for every sequence of 1 to 7 
         identical(dash_layout(c(TRUE, FALSE, FALSE)), c(TRUE, FALSE, FALSE)) && identical(dash_layout(c(FALSE, FALSE, FALSE)), c(FALSE, FALSE, TRUE)) &&
         identical(dash_layout(FALSE), TRUE) && identical(dash_layout(logical(0)), logical(0)) && identical(dash_layout(c(FALSE, FALSE)), c(FALSE, FALSE)) &&
         dash_holes(c(FALSE, TRUE, FALSE)) == 2L && dash_holes(c(FALSE, FALSE, FALSE)) == 1L && dash_holes(c(FALSE, FALSE, TRUE, FALSE, TRUE)) == 1L &&
-        identical(p9_z$full, dash_layout(c(FALSE, FALSE, FALSE, FALSE, FALSE))) && lengths(gregexpr("class=\"card full\"", p9_h, fixed = TRUE)) == 1L)
+        identical(p9_z$full, c(FALSE, FALSE, TRUE, TRUE, TRUE)) && lengths(gregexpr("class=\"card full\"", p9_h, fixed = TRUE)) == 3L)
 
 # 3. each chart is drawn at the size it is shown, and again for a phone; both at twice the pixels; the label box check on both
 p9_pics <- p9_pictures(p9_h)
@@ -5470,16 +5488,16 @@ p9_faults_of <- function(specs, styles, sizes) unlist(purrr::map(styles, functio
   if (length(f)) paste0(n, "/", st, "/", sz, ": ", f)
 }))))
 p9_fault_list <- c(p9_faults_of(p9_battery, "clean", c("desk", "phone")),
-                   p9_faults_of(p9_s, c("minimal", "magazine", "desk", "newspaper", "dark"), c("desk", "phone")),
+                   p9_faults_of(p9_s, c("minimal", "magazine", "desk", "newspaper", "dark", "briefing"), c("desk", "phone")),
                    p9_faults_of(p9_s, "clean", "wide"))
 p9_size_in <- function(p) spec_size(attr(p, "spec"), attr(p, "table"))
 p9_axis_px <- ggplot2::calc_element("axis.text.x", chart_theme("clean"))$size * DASH_CSS_DPI / 72
 check(paste0("9A-3: each chart is drawn at the size it is shown: a picture whose axis text comes out near 12 CSS pixels (",
              round(p9_axis_px, 1), ") at the card's width (540 pixels for a card that shares its row, 1120 for one that has its row), and a narrower drawing of 340 pixels for a screen of at most 599 pixels, chosen by a <picture> element's <source media>; every picture has twice the pixels it is shown at (the width and height of its tag are half those of its PNG); the full-row card also has the half-width drawing for a screen under 900; names and values at the ends of lines give way to a legend on a phone (and in small multiples, where a panel is short) when they would take too much of the axis or touch, a facet's panels are kept apart, and a heatmap's colour bar has three labels at most on the page and four or more as the app draws it; the label box check (drawn_text_faults) finds no text past its panel or over another in ",
              length(p9_battery), " charts in Clean and the five stand-in charts in the other styles, at both sizes (and the wide size)"),
-      DASH_SCALE == 2L && DASH_CSS_DPI * DASH_SCALE == SPEC_DPI && abs(p9_axis_px - 12) < 1.5 && length(p9_imgs) == 5L && length(p9_phone) == 5L && length(p9_half) == 1L &&
+      DASH_SCALE == 2L && DASH_CSS_DPI * DASH_SCALE == SPEC_DPI && abs(p9_axis_px - 12) < 1.5 && length(p9_imgs) == 5L && length(p9_phone) == 5L && length(p9_half) == 3L &&
         lengths(gregexpr("<picture", p9_h, fixed = TRUE)) == 5L && all(purrr::map_lgl(p9_imgs, function(p) p9_close(p$px, 2L * c(p$w, p$h)))) &&
-        identical(purrr::map_int(p9_imgs, "w"), c(540L, 540L, 540L, 540L, 1120L)) && all(purrr::map_int(p9_phone, function(p) p$px[[1]]) == 680L) && identical(p9_half[[1]]$px[[1]], 1080L) &&
+        identical(purrr::map_int(p9_imgs, "w"), c(540L, 540L, 1120L, 1120L, 1120L)) && all(purrr::map_int(p9_phone, function(p) p$px[[1]]) == 680L) && identical(p9_half[[1]]$px[[1]], 1080L) &&
         all(purrr::map_lgl(p9_phone, function(p) p$px[[2]] >= 540L)) &&
         all(purrr::map_lgl(p9_battery, function(sp) abs(p9_size_in(p9_web_plot(sp, "clean", "desk"))[["width"]] * 96 - 540) < 1e-6 && abs(p9_size_in(p9_web_plot(sp, "clean", "phone"))[["width"]] * 96 - 340) < 1e-6)) &&
         !length(p9_fault_list) && length(drawn_text_faults(p9_web_plot(p9_battery$line_col, "clean", "desk"))) == 0L &&
@@ -5512,8 +5530,8 @@ p9_hn <- p9_zn$html
 check("9A-5: in a card the headline is the heading and the chart's title is the subtitle (Headline of chart 1 over Revenue by region, and so on); a chart with no headline has its title as the heading and no subtitle (nothing is said twice); a chart's own subtitle (here 'Top 3 of 6') is shown under the title in the card's HTML, and is in no picture",
       identical(p9_h2[1:5], paste("Headline of chart", 1:5)) &&
         grepl("<h2>Headline of chart 1</h2><p class=\"card-sub\">Revenue by region</p>", p8c_sq(p9_h), fixed = TRUE) &&
-        grepl("<h2>Revenue by region</h2><picture>", p8c_sq(p9_hn), fixed = TRUE) && lengths(gregexpr("class=\"card-sub\"", p9_hn, fixed = TRUE)) == 1L &&
-        grepl("<h2>The top three</h2><p class=\"card-sub\">Top regions</p><p class=\"card-note\">Top 3 of 6</p><picture>", p8c_sq(p9_hn), fixed = TRUE) &&
+        grepl("<h2>Revenue by region</h2><div class=\"slot\"><picture>", p8c_sq(p9_hn), fixed = TRUE) && lengths(gregexpr("class=\"card-sub\"", p9_hn, fixed = TRUE)) == 1L &&
+        grepl("<h2>The top three</h2><p class=\"card-sub\">Top regions</p><p class=\"card-note\">Top 3 of 6</p><div class=\"slot\"><picture>", p8c_sq(p9_hn), fixed = TRUE) &&
         is.null(ggplot2::get_labs(spec_plot(list(family = "bar", x = "region", y = "revenue", fn = "sum", top_n = 3, title = "Top regions"), p9_data, p9_cb, web = dash_web("desk")))$subtitle) &&
         identical(ggplot2::get_labs(spec_plot(list(family = "bar", x = "region", y = "revenue", fn = "sum", top_n = 3, title = "Top regions"), p9_data, p9_cb))$subtitle, "Top 3 of 6"))
 
@@ -5559,37 +5577,42 @@ p9_f2 <- p9_facts(p9_s$line)
 p9_at <- function(f, label, pat) which(purrr::map_lgl(f, function(x) x$label == label && grepl(pat, x$value)))[1]
 p9_keys <- c(paste0("c1|", p9_at(p9_f1, "Highest", "West")), paste0("c2|", p9_at(p9_f2, "The line", "^last")), paste0("c1|", p9_at(p9_f1, "Total", ".")), "c2|1", "c9|1", "c1|999")
 p9_zk <- p9_build(settings = utils::modifyList(p9_set, list(keys = p9_keys)))
-p9_boxes_html <- function(h) regmatches(h, gregexpr("<div class=\"box\">", h, fixed = TRUE))[[1]]
-p9_keybox <- regmatches(p8c_sq(p9_zk$html), gregexpr("<div class=\"box key\">.*?</div></div>", p8c_sq(p9_zk$html), perl = TRUE))[[1]]
+p9_keys_html <- function(h) regmatches(h, gregexpr("<div class=\"key\">", h, fixed = TRUE))[[1]]
+p9_keybox <- regmatches(p8c_sq(p9_zk$html), gregexpr("<div class=\"key\">(?:(?!<div class=\"key\">).)*?</div></div>", p8c_sq(p9_zk$html), perl = TRUE))[[1]]
 p9_dash_text <- "Plotted: Total revenue by region\nRows used: 3,000\nValues:\n- West: 940,000\nHighest: West (940,000)\nThe line: first 39,000 (2022-01-01), last 142,000 (2024-12-01), end is 3.6 times start\nShare of the total: West 34.3%; East 19.5%\nTop: [[N1]] 5\nExploratory: no"
 p9_chunks <- dash_fact_choices(p9_dash_text, c("[[N1]]" = "Ann"))
-check("9A-7: a value box has the style's accent as a rule (border-top in var(--accent), which is the palette's colour for the style: in Clean and in Dark); the analyst adds up to three key numbers, each a line of the facts of a chart picked from a list (the bookkeeping lines are not in it: what is plotted, the rows used; a line with several figures is one choice for each, and a name that the facts hold as a token is written back as the name); the page shows them as further boxes with the chart's name under them, the fourth key and keys that are not on the list are ignored; the dialog offers three selects of such lines",
-      grepl(".box{background:var(--box);border:1px solid var(--grid);border-top:4px solid var(--accent);", p9_h, fixed = TRUE) &&
+check("9A-7: the page's key numbers are a strip, not boxes (Phase 10 Part D: a thin rule above and below and between the items, nothing with a border of its own); the analyst adds up to three key numbers, each a line of the facts of a chart picked from a list (the bookkeeping lines are not in it: what is plotted, the rows used; a line with several figures is one choice for each, and a name that the facts hold as a token is written back as the name); the page shows each as its value over '<what it is>, <chart name>', at most six in the strip, the fourth key and keys that are not on the list are ignored; the dialog offers three selects of such lines",
+      grepl(".keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10.5rem),1fr));overflow:hidden;", p9_h, fixed = TRUE) &&
+        grepl(".key{min-width:0;margin-left:-1px;padding:.85rem 1.1rem .9rem;border-left:1px solid var(--grid);}", p9_h, fixed = TRUE) &&
+        !grepl(".box{", p9_h, fixed = TRUE) && !grepl("class=\"box", p9_h, fixed = TRUE) &&
         grepl(paste0("--accent:", spec_palette(p9_pal("clean"))$single, ";"), p9_h, fixed = TRUE) &&
         identical(purrr::map_chr(p9_chunks, function(x) paste0(x$label, "|", x$value)),
                   c("West|940,000", "Highest|West (940,000)", "The line|first 39,000 (2022-01-01)", "The line|last 142,000 (2024-12-01)", "The line|end is 3.6 times start",
                     "Share of the total|West 34.3%", "Share of the total|East 19.5%", "Top|Ann 5")) &&
-        !any(grepl("^(Plotted|Rows used|Exploratory)$", purrr::map_chr(p9_chunks, "label"))) && DASH_KEYS_MAX == 3L &&
-        length(p9_keybox) == 3L && all(grepl("<div class=\"box-chart\">", p9_keybox, fixed = TRUE)) &&
-        grepl("Highest</div>.*West \\(940,000\\).*Revenue by region", p9_keybox[1]) && grepl("The line</div>.*last 142,000 \\(2024-12-01\\).*Revenue by month", p9_keybox[2]) &&
-        grepl("Total</div>.*2,740,000.*Revenue by region", p9_keybox[3]) &&
-        length(dash_boxes(utils::modifyList(p9_set, list(keys = p9_keys)), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1), list(id = "c2", title = "B", facts = p9_f2)))) == 3L + 3L &&
-        length(dash_boxes(utils::modifyList(p9_set, list(keys = c("c9|1", "c1|999", "junk"))), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1)))) == 3L &&
-        length(p9_boxes_html(p9_h)) >= 3L && !grepl("box key", p9_h, fixed = TRUE) && !is.na(p9_at(p9_f1, "Highest", "West")))
+        !any(grepl("^(Plotted|Rows used|Exploratory)$", purrr::map_chr(p9_chunks, "label"))) && DASH_KEYS_MAX == 3L && DASH_KEYS_STRIP_MAX == 6L &&
+        length(p9_keybox) == 6L && sum(grepl("<div class=\"key-what\">", p9_keybox, fixed = TRUE)) == 3L &&
+        grepl("West \\(940,000\\).*Highest, Revenue by region", p9_keybox[4]) && grepl("last 142,000 \\(2024-12-01\\).*The line, Revenue by month", p9_keybox[5]) &&
+        grepl("2,740,000.*Total, Revenue by region", p9_keybox[6]) &&
+        length(dash_keys(utils::modifyList(p9_set, list(keys = p9_keys)), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1), list(id = "c2", title = "B", facts = p9_f2)))) == 3L + 3L &&
+        length(dash_keys(utils::modifyList(p9_set, list(keys = c("c9|1", "c1|999", "junk"))), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1)))) == 3L &&
+        length(dash_keys(utils::modifyList(p9_set, list(keys = rep(p9_keys[1:3], 3), boxes = c("rows", "columns", "third"))), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1), list(id = "c2", title = "B", facts = p9_f2)))) <= 6L &&
+        length(p9_keys_html(p9_h)) >= 3L && !grepl("box key", p9_h, fixed = TRUE) && !is.na(p9_at(p9_f1, "Highest", "West")))
 
 
-# 9D-0: a value box's number is never broken inside itself (the page's CSS); the heavy run's 9D-0b looks at it in Chrome
-p9d_boxes <- regmatches(p8c_sq(p9_zk$html), gregexpr("<div class=\"box( key)?\">.*?</div></div>", p8c_sq(p9_zk$html), perl = TRUE))[[1]]
-check("9D-0: a value box's number is never broken inside itself: a box value with no space in it (3,000, 22, 2,740,000) has the class num, which the stylesheet sets to white-space:nowrap, and a width in ems (--w, from dash_value_em(): wider for more digits) that, where the browser has container query units, scales its font size down to the width of its own box (never above the style's size, --max: 1.9rem, 1.5rem on a phone, a long text 1.1rem and 1rem); a text value (the period, a fact with words) is not nowrap and wraps between words; and the grid is unchanged",
-      grepl(".box-value.num{white-space:nowrap;}", p9_zk$html, fixed = TRUE) &&
-        grepl("@supports (width:1cqi){.box{container-type:inline-size;}.box-value.num{font-size:min(var(--max),calc(100cqi / var(--w)));}}", p9_zk$html, fixed = TRUE) &&
-        grepl(".box-value{--max:1.9rem;font-size:var(--max);", p9_zk$html, fixed = TRUE) && grepl(".box-value{--max:1.5rem;}.box-value.long{--max:1rem;}", p9_zk$html, fixed = TRUE) &&
-        grepl(".boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));", p9_zk$html, fixed = TRUE) &&
-        length(p9d_boxes) == 6L && grepl("class=\"box-value num\" style=\"--w:[0-9.]+;\"[^>]*>3,000<", p9d_boxes[1]) && grepl("class=\"box-value num\" style=\"--w:[0-9.]+;\"[^>]*>22<", p9d_boxes[2]) &&
-        grepl("class=\"box-value long\"", p9d_boxes[3]) && !grepl("box-value[^\"]* num", p9d_boxes[3]) && !grepl("box-value[^\"]* num", p9d_boxes[4]) && !grepl("box-value[^\"]* num", p9d_boxes[5]) &&
-        grepl("class=\"box-value num\" style=\"--w:[0-9.]+;\"[^>]*>2,740,000<", p9d_boxes[6]) &&
+# 9D-0: a key number is never broken inside itself (the page's CSS); the heavy run's 9D-0b looks at it in Chrome
+p9d_boxes <- regmatches(p8c_sq(p9_zk$html), gregexpr("<div class=\"key\">(?:(?!<div class=\"key\">).)*?</div></div>", p8c_sq(p9_zk$html), perl = TRUE))[[1]]
+check("9D-0: a key number is never broken inside itself: a value of 14 characters or fewer (3,000 rows, 22 columns, 2,740,000) has the class num, which the stylesheet sets to white-space:nowrap, and a width in ems (--w, from dash_value_em(): wider for more digits) that, where the browser has container query units, scales its font size down to the width of its own cell (never above the style's size, --max: 2.1rem, 1.7rem on a phone, a long text 1.15rem and 1rem); a long value (the period, a fact with words) is not nowrap and wraps between words; the three statements are '3,000 rows', '22 columns' and 'Jan 2022 to Dec 2024' (a single row is '1 row')",
+      grepl(".key-value.num{white-space:nowrap;}", p9_zk$html, fixed = TRUE) &&
+        grepl("@supports (width:1cqi){.key{container-type:inline-size;}.key-value.num{font-size:min(var(--max),calc(100cqi / var(--w)));}}", p9_zk$html, fixed = TRUE) &&
+        grepl(".key-value{--max:2.1rem;font-family:var(--title-font);font-size:var(--max);", p9_zk$html, fixed = TRUE) && grepl(".key-value{--max:1.7rem;}.key-value.long{--max:1rem;}", p9_zk$html, fixed = TRUE) &&
+        length(p9d_boxes) == 6L && grepl("class=\"key-value num\" style=\"--w:[0-9.]+;\"[^>]*>3,000 rows<", p9d_boxes[1]) && grepl("class=\"key-value num\" style=\"--w:[0-9.]+;\"[^>]*>22 columns<", p9d_boxes[2]) &&
+        grepl("class=\"key-value long[^\"]*\"[^>]*>Jan 2022 to Dec 2024<", p9d_boxes[3]) && !grepl("key-value[^\"]* num", p9d_boxes[3]) &&
+        grepl("class=\"key-value num\" style=\"--w:[0-9.]+;\"[^>]*>2,740,000<", p9d_boxes[6]) &&
         dash_value_em("2,740,000") > dash_value_em("3,000") && dash_value_em("3,000") > dash_value_em("22") && dash_value_em("") == 1 &&
-        isTRUE(all.equal(dash_value_em("2,740,000"), round(1.08 * (7 * 0.64 + 2 * 0.3), 2))))
+        dash_value_em("2,740,000", narrow = TRUE) < dash_value_em("2,740,000") &&
+        isTRUE(all.equal(dash_value_em("2,740,000"), round(1.08 * (7 * 0.64 + 2 * 0.3), 2))) &&
+        identical(canvas_box_values(data.frame(a = 1L), list(file = "f.csv", columns = list()))$rows$value, "1 row") &&
+        identical(canvas_box_values(data.frame(a = 1L), list(file = "f.csv", columns = list()))$columns$value, "1 column"))
 
 }   # end of the fast run's 9A-2 to 9A-7
 if (run_heavy) {   # the heavy run only: 9A-1 (the page in Chrome) and 9A-8 to 9A-11 (the page in the six styles, the codebook page, the print); not indented, to keep the diff small
@@ -5603,14 +5626,22 @@ check("9A-1: the page is centred and about 1240 pixels wide (a column of at most
         grepl("@media (min-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}", p9_h, fixed = TRUE) &&
         (!p9_has_chrome || (
           p9_layout$w1400$page$width == 1240L && abs(p9_layout$w1400$page$left - (p9_layout$w1400$cw - 1240) / 2) <= 1 && p9_layout$w1400$sw <= p9_layout$w1400$cw &&
-            identical(p9_rows(p9_layout$w1400), c(2L, 2L, 1L)) && all(p9_layout$w1400$cards$width[1:4] > 500) && p9_layout$w1400$cards$width[5] > 1100 &&
-            isTRUE(p9_layout$w1400$cards$full[5]) && !any(p9_layout$w1400$cards$full[1:4]) &&
+            # Phase 10 Part D: the small multiples (nine panels, more than four) take a row, and the scatter left alone before them takes one too
+            identical(p9_rows(p9_layout$w1400), c(2L, 1L, 1L, 1L)) && all(p9_layout$w1400$cards$width[1:2] > 500) && all(p9_layout$w1400$cards$width[3:5] > 1100) &&
+            all(p9_layout$w1400$cards$full[3:5]) && !any(p9_layout$w1400$cards$full[1:2]) &&
+
             all(p9_layout$w1400$cards$vis == 1L) && all(p9_layout$w800$cards$vis == 1L) && all(p9_layout$w500$cards$vis == 1L) &&
             all(p9_rows(p9_layout$w800) == 1L) && p9_layout$w800$sw <= p9_layout$w800$cw && all(p9_rows(p9_layout$w500) == 1L) && p9_layout$w500$sw <= p9_layout$w500$cw)))
 
 # the same five charts in every one of the six styles
 p9_styles <- names(CHART_STYLES)
+# Phase 10 Part D (run time): the six other styles are built with the charts/ pictures at 100 dpi, not 300 (DASH_DPI, put back at once): their pages hold the
+#   same pictures either way (those are drawn at 192 dpi by dash_pictures()), and the Clean build (p9_z) keeps the 300 dpi that 9A-11 and the checks of the files read.
+p9_dpi <- DASH_DPI
+assign("DASH_DPI", 100L, envir = globalenv())
 p9_six <- stats::setNames(purrr::map(p9_styles, function(st) if (identical(st, "clean")) p9_z else p9_build(style = st)), p9_styles)
+assign("DASH_DPI", p9_dpi, envir = globalenv())
+
 cat("note  the five-chart dashboard in each style (seconds to build, zip, dashboard.html, codebook.html in KB): ",
     paste(purrr::map_chr(p9_six, function(z) sprintf("%s %.1f s %.0f %.0f %.0f", z$style, z$elapsed, z$bytes / 1024, file.size(file.path(z$dir, "dashboard.html")) / 1024,
                                                     file.size(file.path(z$dir, "codebook.html")) / 1024)), collapse = "; "), "\n", sep = "")
@@ -5619,16 +5650,16 @@ cat("note  the five-chart dashboard in each style (seconds to build, zip, dashbo
 p9_hd <- p9_six$dark$html
 p9_np <- p9_six$newspaper$html
 p9_order <- function(h, xs) { at <- purrr::map_int(xs, function(x) regexpr(x, h, fixed = TRUE)[[1]]); all(at > 0L) && !is.unsorted(at) }
-check("9A-8: the page is written as the chosen style: in each of the six styles its own background (the custom property --bg), text colour and its rules (DASH_LOOK has an entry for each style and no two are alike), the title face for its headings (Source Serif 4 in Newspaper, Inter in the others; the face is in the page as a base64 @font-face); a masthead block that holds the title, the subtitle, the author and then the date, and the introduction at a reading measure of 70 characters; then the boxes, the cards, and a foot that holds the About text and 'Made with chaRt'",
+check("9A-8: the page is written as the chosen style: in each of the seven styles its own background (the custom property --bg), text colour and its rules (DASH_LOOK has an entry for each style and no two are alike), the title face for its headings (Source Serif 4 in Newspaper, Inter in the others; the face is in the page as a base64 @font-face); a masthead block that holds the title, the subtitle, the author and then the date, and the introduction at a reading measure of 70 characters; then the strip of key numbers, the cards, and a foot that holds the About text and 'Made with chaRt'",
       all(purrr::map_lgl(p9_styles, function(st) grepl(paste0("--bg:", CHART_STYLES[[st]]$background, ";--text:", CHART_STYLES[[st]]$text), p9_six[[st]]$html, fixed = TRUE) &&
                             grepl(DASH_LOOK[[st]], p9_six[[st]]$html, fixed = TRUE) && grepl("body{margin:0;background:var(--bg);", p9_six[[st]]$html, fixed = TRUE))) &&
-        setequal(names(DASH_LOOK), p9_styles) && length(unique(unlist(DASH_LOOK))) == 6L &&
+        setequal(names(DASH_LOOK), p9_styles) && length(unique(unlist(DASH_LOOK))) == 7L &&
         grepl("--title-font:'Source Serif 4', serif;", p9_np, fixed = TRUE) && grepl("--title-font:Inter, sans-serif;", p9_h, fixed = TRUE) && grepl("--title-font:Inter, sans-serif;", p9_hd, fixed = TRUE) &&
         grepl("h1{font-family:var(--title-font);", p9_h, fixed = TRUE) && grepl("@font-face{font-family:'Source Serif 4';font-weight:700", p9_np, fixed = TRUE) &&
         grepl(".intro{max-width:70ch;", p9_h, fixed = TRUE) &&
         grepl("<header class=\"masthead\"><h1>", p8c_sq(p9_h), fixed = TRUE) &&
         p9_order(p8c_sq(p9_h), c("<header class=\"masthead\">", "<h1>Sales dashboard</h1>", "class=\"subtitle\">Orders in the file", "<span class=\"author\">A. Analyst</span>", "<time>21 November 2026</time>",
-                                 "<div class=\"intro\">", "<section class=\"boxes\"", "<main class=\"grid\">", "<footer class=\"foot\">", "About this dashboard", "Made with chaRt")) &&
+                                 "<div class=\"intro\">", "<div class=\"keys\"", "<main class=\"grid\">", "<footer class=\"foot\">", "About this dashboard", "Made with chaRt")) &&
         grepl("<footer class=\"foot\">.*class=\"about\".*The file.*Read this first.*<p class=\"made\">Made with chaRt</p></footer>", p8c_sq(p9_h)) && !grepl("<article class=\"card about", p9_h, fixed = TRUE) &&
         grepl("text-align:center;border-top:4px solid var(--rule)", p9_np, fixed = TRUE) && !grepl("text-align:center;border-top:4px", p9_h, fixed = TRUE))
 
@@ -5681,11 +5712,11 @@ p9_dark_layout <- if (p9_has_chrome) p9_dom(file.path(p9_six$dark$dir, "dashboar
 p9_same_page <- function(pp, a, b) { pa <- which(grepl(a, pp$text, fixed = TRUE)); pb <- which(grepl(b, pp$text, fixed = TRUE)); length(pa) == 1L && identical(pa, pb) }
 check("9A-10: print: every style's page prints on a light ground (@media print sets the custom properties to white and near-black, print-color-adjust exact, a card, a codebook section, a box and the foot are never split, the grid is one column); a dark page also holds, for each picture, a light drawing in the Clean style that is shown only for print (the screen picture is dark in its corner, the print one light, and in Chrome only the screen picture is shown on screen) and the codebook's pictures the same; a card that has its row has the half-width drawing for print; printed to a PDF by Chrome the dark and the clean dashboard have every card whole on one page (headline, summary and source line together) and every page light, and the dark codebook has no section split and light pages",
       all(purrr::map_lgl(p9_styles, function(st) grepl("@media print{:root{--bg:#FFFFFF;--text:#111111;--text2:#333333;--caption:#555555;--grid:#BBBBBB;--box:#F2F2F2;--rule:#111111;}", p9_six[[st]]$html, fixed = TRUE) &&
-                            grepl("print-color-adjust:exact;background:#FFFFFF", p9_six[[st]]$html, fixed = TRUE) && grepl(".grid{display:block;}.card,.col-section,.box,.foot{break-inside:avoid;page-break-inside:avoid;}", p9_six[[st]]$html, fixed = TRUE) &&
+                            grepl("print-color-adjust:exact;background:#FFFFFF", p9_six[[st]]$html, fixed = TRUE) && grepl(".grid{display:block;}.card,.col-section,.key,.foot{break-inside:avoid;page-break-inside:avoid;}", p9_six[[st]]$html, fixed = TRUE) &&
                             grepl("@page{margin:0;}", p9_six[[st]]$html, fixed = TRUE))) &&   # Phase 10 Part A: the sheet has no margin; the page's column has the padding, repeated on every page, that leaves room for the band
         length(p9_screen_dk) == 5L && length(p9_uris(p9_hd, "print-only")) == 5L && all(purrr::map_dbl(p9_screen_dk, p9_lum) < 0.2) && all(purrr::map_dbl(p9_uris(p9_hd, "print-only"), p9_lum) > 0.9) &&
-        lengths(gregexpr("class=\"print-only\"", p9_h, fixed = TRUE)) == 1L &&
-        grepl("<picture class=\"screen-only\">", p9_h, fixed = TRUE) && lengths(gregexpr("<picture class=\"screen-only\">", p9_h, fixed = TRUE)) == 1L &&
+        lengths(gregexpr("class=\"print-only\"", p9_h, fixed = TRUE)) == 3L &&
+        grepl("<picture class=\"screen-only\">", p9_h, fixed = TRUE) && lengths(gregexpr("<picture class=\"screen-only\">", p9_h, fixed = TRUE)) == 3L &&
         grepl(".card picture.screen-only{display:none;}.card img.print-only", p9_h, fixed = TRUE) &&
         lengths(gregexpr("<img class=\"print-only\"", p9_six$dark$codebook, fixed = TRUE)) > 5L && !grepl("<img class=\"print-only\"", p9_six$clean$codebook, fixed = TRUE) &&
         (!p9_has_chrome || (
@@ -5695,8 +5726,8 @@ check("9A-10: print: every style's page prints on a light ground (@media print s
             all(purrr::map_lgl(p9_cbnames, function(n) { pg <- which(grepl(paste0("Column ", n, " "), p9_pp$dark_cb$text, fixed = TRUE)); length(pg) >= 1L && grepl(paste0("Column ", n, " .*?Missing"), p9_pp$dark_cb$text[pg[length(pg)]]) })))))
 
 # 11. the five-chart dashboard in every style
-check("9A-11: the five-chart dashboard (sorted bars, a time axis in order, a scatter with no column of points at zero, small multiples, a box chart) builds in each of the six styles: each zip holds the pages, charts.R and the ten files of charts/ (PNG and SVG), the page has the style's colours, five cards each with a <picture> and a phone source, no request leaves it, both pages parse, no model is called, and the scatter's x starts above zero",
-      length(p9_six) == 6L && identical(names(p9_six), c("clean", "minimal", "magazine", "desk", "newspaper", "dark")) &&
+check("9A-11: the five-chart dashboard (sorted bars, a time axis in order, a scatter with no column of points at zero, small multiples, a box chart) builds in each of the seven styles: each zip holds the pages, charts.R and the ten files of charts/ (PNG and SVG), the page has the style's colours, five cards each with a <picture> and a phone source, no request leaves it, both pages parse, no model is called, and the scatter's x starts above zero",
+      length(p9_six) == 7L && identical(names(p9_six), c("clean", "minimal", "magazine", "desk", "newspaper", "dark", "briefing")) &&
         all(purrr::map_lgl(p9_six, function(z) setequal(names(z$files), c("dashboard.html", "codebook.html", "data_dictionary.yaml", "charts.R", p9_chart_files)) &&
                             identical(z$modes, rep("picture", 5L)) && grepl(paste0("--bg:", CHART_STYLES[[z$style]]$background), z$html, fixed = TRUE) && lengths(gregexpr("<picture", z$html, fixed = TRUE)) >= 5L &&
                             length(p9_pictures(z$html)) >= 10L && !length(p8c_requests(z$html)) && !length(p8c_requests(z$codebook)) && p8c_balanced(z$html) && p8c_balanced(z$codebook))) &&
@@ -5705,7 +5736,7 @@ check("9A-11: the five-chart dashboard (sorted bars, a time axis in order, a sca
 # 9D-0b: in Chrome, a value box's number stays on one line and inside its box, six boxes in a row at 1400 and two to a row at 500 (headless Chrome goes no narrower)
 p9d_keys <- c("c1|10", "c2|2", "c1|7")
 p9d_z <- p9_build(settings = utils::modifyList(p9_set, list(keys = p9d_keys)))
-p9d_js <- paste0("var v=[].map.call(document.querySelectorAll('.box-value'),function(e){var cs=getComputedStyle(e);var b=e.closest('.box').getBoundingClientRect();",
+p9d_js <- paste0("var v=[].map.call(document.querySelectorAll('.key-value'),function(e){var cs=getComputedStyle(e);var b=e.closest('.key').getBoundingClientRect();",
                  "return {num:e.classList.contains('num'),text:e.textContent,sw:e.scrollWidth,cw:e.clientWidth,h:e.getBoundingClientRect().height,lh:parseFloat(cs.lineHeight),fs:parseFloat(cs.fontSize),",
                  "top:Math.round(b.top+scrollY),right:Math.round(b.right)}});",
                  "var d={cw:document.documentElement.clientWidth,sw:document.documentElement.scrollWidth,boxes:v};",
@@ -5713,17 +5744,18 @@ p9d_js <- paste0("var v=[].map.call(document.querySelectorAll('.box-value'),func
 # a stress page: the same page with its six boxes forced narrower than the grid makes them (6 columns at 1000 pixels leave 110 pixels for a number, as a narrower font or a
 #   scrollbar would at 1400), where a number that may wrap breaks in two ("2,740,00" and "0"; seen so in Chrome with the nowrap and the scaling rules removed)
 p9d_stress <- file.path(tempdir(), "p9d_stress.html")
-writeLines(sub("</style>", ".boxes{grid-template-columns:repeat(6,minmax(0,1fr));}</style>", p8c_html(p9d_z$dir), fixed = TRUE), p9d_stress, useBytes = TRUE)
+writeLines(sub("</style>", ".keys{grid-template-columns:repeat(6,minmax(0,1fr));}</style>", p8c_html(p9d_z$dir), fixed = TRUE), p9d_stress, useBytes = TRUE)
 p9d_dom <- if (p9_has_chrome) list(w1400 = p9_dom(file.path(p9d_z$dir, "dashboard.html"), 1400, p9d_js), w500 = p9_dom(file.path(p9d_z$dir, "dashboard.html"), 500, p9d_js),
                                    stress = p9_dom(p9d_stress, 1000, p9d_js))
-p9d_fit <- function(m) { b <- m$boxes[m$boxes$num, ]; nrow(b) == 3L && all(b$sw <= b$cw + 1) && all(b$h <= b$lh * 1.05) && all(b$right <= m$cw) && m$sw <= m$cw }
-check("9D-0b: in Chrome the three number boxes of a six-box page (3,000, 22, 2,740,000) each stay on one line and inside their box, with the six boxes in one row at 1400 pixels (all within the window, the page not scrolling sideways) and two to a row at 500, and the largest number is scaled down to fit and the shortest is not (3,000 keeps the style's 1.9rem at 1400); on a stress page with the six boxes forced to 110 pixels each number still stays on one line and inside its box, scaled down",
-      length(p9d_keys) == 3L && lengths(gregexpr("class=\"box-value", p9d_z$html, fixed = TRUE)) == 6L &&
+p9d_fit <- function(m) { b <- m$boxes[m$boxes$num & m$boxes$text %in% c("3,000 rows", "22 columns", "2,740,000"), ]; nrow(b) == 3L && all(b$sw <= b$cw + 1) && all(b$h <= b$lh * 1.05) && all(b$right <= m$cw) && m$sw <= m$cw }
+check("9D-0b: in Chrome the three key numbers of a six-item strip (3,000 rows, 22 columns, 2,740,000) each stay on one line and inside their cell, with the six items in one row at 1400 pixels (all within the window, the page not scrolling sideways) and two to a row at 500, no number larger than the style's 2.1rem and none smaller than 12 pixels; on a stress page with the six cells forced narrow each number still stays on one line and inside its cell, scaled down",
+      length(p9d_keys) == 3L && lengths(gregexpr("class=\"key-value", p9d_z$html, fixed = TRUE)) == 6L &&
+
         (!p9_has_chrome || (
           p9d_fit(p9d_dom$w1400) && p9d_fit(p9d_dom$w500) && length(unique(p9d_dom$w1400$boxes$top)) == 1L && length(unique(p9d_dom$w500$boxes$top)) == 3L &&
-            abs(p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "3,000"] - 1.9 * 16) < 0.5 &&
+            all(p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "3,000 rows"] <= 2.1 * 16 + 0.5) && p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "3,000 rows"] > 12 &&
             p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "2,740,000"] < 1.9 * 16 && p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "2,740,000"] > 12 &&
-            p9d_fit(p9d_dom$stress) && p9d_dom$stress$boxes$fs[p9d_dom$stress$boxes$text == "2,740,000"] < 0.8 * 1.9 * 16 && p9d_dom$stress$boxes$fs[p9d_dom$stress$boxes$text == "2,740,000"] > 10)))
+            p9d_fit(p9d_dom$stress) && p9d_dom$stress$boxes$fs[p9d_dom$stress$boxes$text == "2,740,000"] < 0.8 * 2.1 * 16 && p9d_dom$stress$boxes$fs[p9d_dom$stress$boxes$text == "2,740,000"] > 10)))
 
 
 # 9D-18: in Chrome, a table card of the dashboard: at 1400 the wide table (a group and three measures: 13 columns) fits its card, at 500 (headless Chrome goes no narrower) it scrolls sideways inside its
@@ -6561,7 +6593,8 @@ p9b_vh <- p9b_page(list(p9b_item("video")))
 p9b_ph <- p9b_page(list(p9b_item("picture")))
 p9b_vtag <- regmatches(p9b_vh, regexpr("<video[^>]*>", p9b_vh))
 check("9B-14: in the page a video is a <video> with controls, muted, playsinline and preload, data-once (played once, when it scrolls into view), no autoplay and no loop, its MP4 as a data address and the finished chart as its poster (a data address too), and next to it the same picture as a still; the style sheet hides the video and shows the still under prefers-reduced-motion and in print; the one script (IntersectionObserver, no library) is in the page only when a video is, and does nothing under reduced motion; a page of pictures has no script at all; the About card says what a video carries",
-      length(p9b_vtag) == 1L && grepl(" controls", p9b_vtag, fixed = TRUE) && grepl(" muted", p9b_vtag, fixed = TRUE) && grepl("playsinline", p9b_vtag, fixed = TRUE) && grepl("data-once", p9b_vtag, fixed = TRUE) &&
+      length(p9b_vtag) == 1L && grepl(" controls", p9b_vtag, fixed = TRUE) && grepl(" muted", p9b_vtag, fixed = TRUE) && grepl("playsinline", p9b_vtag, fixed = TRUE) && grepl("data-once", p9b_vtag, fixed = TRUE) && grepl("preload=\"none\"", p9b_vtag, fixed = TRUE) &&
+
         !grepl("autoplay|loop", p9b_vtag) && grepl("src=\"data:video/mp4;base64,", p9b_vtag, fixed = TRUE) && grepl("poster=\"data:image/png;base64,", p9b_vtag, fixed = TRUE) &&
         grepl("<img class=\"still\" src=\"data:image/png;base64,", p9b_vh, fixed = TRUE) && grepl("@media (prefers-reduced-motion:reduce){.video-box video{display:none;}.video-box .still{display:block;}}", p9b_vh, fixed = TRUE) &&
         regexpr("@media print{", p9b_vh, fixed = TRUE)[[1]] > 0L && regexpr(".video-box video{display:none;}.video-box .still{display:block;max-width:100%;}", p9b_vh, fixed = TRUE)[[1]] > regexpr("@media print{", p9b_vh, fixed = TRUE)[[1]] && lengths(gregexpr("<script>", p9b_vh, fixed = TRUE)) == 1L &&
@@ -6641,7 +6674,9 @@ p9b_play_js <- paste0("var v=document.querySelector('video');var d={};var done=f
                       "d.vdisp=getComputedStyle(v).display;d.still=getComputedStyle(document.querySelector('.still')).display;d.loop=v.loop;d.auto=v.autoplay;",
                       "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9b\" content=\"'+JSON.stringify(d).replace(/\"/g,'&quot;')+'\">');};",
                       "v.muted=true;var started=false;v.addEventListener('loadeddata',function(){if(!started){started=true;var p=v.play();if(p&&p.catch)p.catch(function(e){d.perr=String(e)});setTimeout(done,2500);}});",
-                      "if(v.readyState>=2&&!started){started=true;v.play();setTimeout(done,2500);} setTimeout(function(){if(!started){started=true;done();}},6000);")
+                      # Phase 10 Part D: the page's video has preload="none" (its poster shows, no frame is decoded), so nothing is loaded until play(): play it at once, as the page's own script does
+                      #   when the card scrolls into view, and read it 2.5 seconds later
+                      "if(!started){started=true;var q=v.play();if(q&&q.catch)q.catch(function(e){d.perr=String(e)});setTimeout(done,2500);} setTimeout(function(){if(!started){started=true;done();}},6000);")
 if (!p9_has_chrome) cat("note  Chrome was not found: the video is not played by 9B-18\n")
 p9b_played <- if (p9_has_chrome) p9b_chrome_run(file.path(p9b_z$dir, "dashboard.html"), p9b_play_js)
 p9b_reduced <- if (p9_has_chrome) p9b_chrome_run(file.path(p9b_z$dir, "dashboard.html"), p9b_play_js, "--force-prefers-reduced-motion")
@@ -7271,9 +7306,9 @@ b10_style_fonts <- purrr::map(stats::setNames(names(CHART_STYLES), names(CHART_S
                                   utils::modifyList(chart_palette_default(), list(style = s))))))
 b10_dsvg <- function() ggiraph::dsvg(tempfile(fileext = ".svg"), width = 7, height = 4, fonts = list(sans = "Inter"))
 b10_ragg <- function() chart_device(tempfile(fileext = ".png"), 7, 4, 72, "ragg")
-check("10B-5: the typefaces: in each of the six styles every text of the widget's SVG is in a bundled family (Inter, Inter SemiBold, Source Serif 4) or the default sans-serif or serif, and the page of that style declares a @font-face for each bundled one it names (dash_font_css()), so the browser draws the SVG's text in the faces of the picture (Newspaper's title in Source Serif 4, Minimal's in Inter SemiBold); the bundled files are the ones systemfonts has for those names, and the SVG device measures a string within 3 per cent of ragg and not as the default sans (more than 2 per cent from it)",
+check("10B-5: the typefaces: in each of the seven styles every text of the widget's SVG is in a bundled family (Inter, Inter SemiBold, Source Serif 4) or the default sans-serif or serif, and the page of that style declares a @font-face for each bundled one it names (dash_font_css()), so the browser draws the SVG's text in the faces of the picture (Newspaper's title in Source Serif 4, Minimal's in Inter SemiBold); the bundled files are the ones systemfonts has for those names, and the SVG device measures a string within 3 per cent of ragg and not as the default sans (more than 2 per cent from it)",
       all(purrr::map2_lgl(b10_style_fonts, names(b10_style_fonts), function(f, s) all(f %in% c(b10_declared(s), "sans-serif", "serif")) && "Inter" %in% f)) &&
-        "Source Serif 4" %in% b10_style_fonts$newspaper && "Inter SemiBold" %in% b10_style_fonts$minimal && !"Source Serif 4" %in% b10_style_fonts$clean &&
+        "Source Serif 4" %in% b10_style_fonts$newspaper && "Barlow Condensed" %in% b10_style_fonts$briefing && !"Barlow Condensed" %in% b10_style_fonts$clean && "Inter SemiBold" %in% b10_style_fonts$minimal && !"Source Serif 4" %in% b10_style_fonts$clean &&
         grepl("Inter-Regular.ttf$", systemfonts::match_fonts("Inter")$path) && grepl("Inter-SemiBold.ttf$", systemfonts::match_fonts("Inter SemiBold")$path) &&
         abs(b10_tw(b10_dsvg, "Inter") / b10_tw(b10_ragg, "Inter") - 1) < 0.03 && abs(b10_tw(b10_dsvg, "Inter SemiBold") / b10_tw(b10_ragg, "Inter SemiBold") - 1) < 0.03 &&
         (!chart_font_available("Arial") || abs(b10_tw(b10_dsvg, "Arial") / b10_tw(b10_dsvg, "Inter") - 1) > 0.02) &&
@@ -7581,8 +7616,8 @@ c10_oxs <- c(c10_ob$data[[2]]$x, c10_ob$data[[3]]$x)
 check("10C-7b: the dumbbell as drawn: a line, the first dots in the style's slate (5, 10, 40, 20 at D, A, C, B), the second dots in the accent (50, 30, 30, 25), the names T1 and T2 once, above the first row (T1, the lower value, to the left of its dot, T2 to the right of its dot, each in its dot's colour), every tick of the value axis inside the data's range (5 to 50; and on the revenue of six regions, none past 458,000 where an edge tick would have put its label past the picture), and the axis titles of a sideways chart (the measure; none for the groups)",
       identical(c10_dp$geoms, c("GeomLine", "GeomPoint", "GeomPoint", "GeomText")) &&
         identical(c10_db$data[[2]]$colour, rep(c10_dpal$slate, 4)) && identical(c10_db$data[[2]]$x, c(5, 10, 40, 20)) &&
-        identical(c10_db$data[[3]]$colour, rep(c10_dpal$single, 4)) && identical(c10_db$data[[3]]$x, c(50, 30, 30, 25)) &&
-        identical(as.character(c10_dtext$label), c("T1", "T2")) && identical(c10_dtext$hjust, c(1.15, -0.15)) && identical(c10_dtext$colour, c(c10_dpal$slate, c10_dpal$single)) &&
+        identical(c10_db$data[[3]]$colour, rep(c10_dpal$accent, 4)) && identical(c10_db$data[[3]]$x, c(50, 30, 30, 25)) &&
+        identical(as.character(c10_dtext$label), c("T1", "T2")) && identical(c10_dtext$hjust, c(1.15, -0.15)) && identical(c10_dtext$colour, c(c10_dpal$slate, c10_dpal$accent)) &&
         length(unique(c10_dtext$y)) == 1L && c10_dtext$y[[1]] == max(c10_db$data[[2]]$y) && all(c10_dbk[!is.na(c10_dbk)] >= 5 & c10_dbk[!is.na(c10_dbk)] <= 50) && !all(is.na(c10_dbk)) &&
         all(c10_obk[!is.na(c10_obk)] >= min(c10_oxs) & c10_obk[!is.na(c10_obk)] <= max(c10_oxs)) && !all(is.na(c10_obk)) &&
         identical(ggplot2::get_labs(c10_dp$plot)$x, "Amount") && is.null(ggplot2::get_labs(c10_dp$plot)$y))
@@ -7734,6 +7769,209 @@ check("10C-14: ten gold specs of the new forms are in the gold file, on orders.c
 
 } # the fast run only
 # <<< 10C end
+
+
+# ---- Phase 10 Part D: a seventh style (Briefing), colour with a purpose, a tighter page ------------------------------------------------------------------
+#
+# Their fixtures are their own (between >>> 10D begin and <<< 10D end), so a changed copy of one function can be run against them alone. The pages of the
+#   five-chart dashboard in all seven styles are built by the heavy run (p9_six, 9A-8 to 9A-11), where the Briefing page and the page in Chrome are checked.
+# >>> 10D begin
+
+if (run_fast) {   # the fast run only
+
+d10_ratio <- function(a, b) as.numeric(colorspace::contrast_ratio(a, b))   # WCAG, from colorspace, not from R/theme.R
+d10_o <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+d10_cb <- utils::modifyList(d10_o$codebook, list(row_is = "one order"))
+d10_data <- d10_o$read$data
+d10_pal <- function(style = "clean") utils::modifyList(chart_palette_default(), list(style = style))
+d10_plot <- function(spec, style = "briefing") spec_plot(spec, d10_data, d10_cb, d10_pal(style))
+d10_bar <- list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "West drives 34% of revenue in 2024, in kg")
+d10_br <- CHART_STYLES$briefing
+
+# 10D-1: the Briefing style as the prompt describes it: an off-white ground, a hairline grid across the chart only, a condensed bold face in upper case for titles,
+#   small grey subtitles and axis text, one deep blue and slate greys; its text and its grey text against the ground are 4.5 to 1 or better (computed here), its grid is
+#   weaker than its text; the font is Barlow Condensed (SemiBold and Bold files, SIL Open Font License, "Copyright 2017 The Barlow Project Authors")
+d10_theme <- chart_theme("briefing", grid = "xy")
+d10_lic <- readLines(file.path("www", "fonts", "BarlowCondensed-LICENSE.txt"), warn = FALSE)
+check("10D-1: the Briefing style: ground #F7F6F2, the grid is a hairline (0.25) across the chart only (a chart that asks for both grids gets the horizontal one), titles in Barlow Condensed bold at 1.55 times the size and in upper case, the subtitle small (0.85) and grey, axis text and titles smaller (0.9), one deep blue accent (#173A75, the colour of a series with no group) and slate greys; text, grey text and caption against the ground are 4.5 to 1 or better, the grid is weaker than them; the font is the SemiBold and Bold files of Barlow Condensed under the SIL Open Font License",
+      identical(d10_br$background, "#F7F6F2") && identical(d10_br$panel, "#F7F6F2") && identical(d10_br$grid_axes, "horizontal") && d10_br$grid_width == 0.25 &&
+        identical(d10_br$title_font, "display") && identical(d10_br$title_weight, "bold") && d10_br$title_size == 1.55 && identical(d10_br$title_case, "upper") &&
+        d10_br$subtitle_size == 0.85 && d10_br$axis_size == 0.9 && identical(d10_br$subtitle_font, "sans") && identical(d10_br$accent, "#173A75") && identical(d10_br$single, "#173A75") &&
+        identical(palette_single("okabe_ito", "briefing"), "#173A75") && !identical(palette_single("okabe_ito", "clean"), "#173A75") && !identical(palette_single("tol_bright", "briefing"), "#173A75") &&
+        d10_ratio(d10_br$text, d10_br$background) >= 4.5 && d10_ratio(d10_br$text_2, d10_br$background) >= 4.5 && d10_ratio(d10_br$caption, d10_br$background) >= 4.5 &&
+        d10_ratio(d10_br$grid, d10_br$background) < d10_ratio(d10_br$caption, d10_br$background) && d10_ratio(d10_br$grid, d10_br$background) < 1.5 &&
+        inherits(ggplot2::calc_element("panel.grid.major.x", d10_theme), "ggplot2::element_blank") && !inherits(ggplot2::calc_element("panel.grid.major.y", d10_theme), "ggplot2::element_blank") &&
+        identical(ggplot2::calc_element("plot.title", d10_theme)$family, chart_font_family("display")) && identical(ggplot2::calc_element("plot.title", d10_theme)$face, "bold") &&
+        isTRUE(ggplot2::calc_element("axis.text.x", d10_theme)$size < ggplot2::calc_element("axis.text.x", chart_theme("clean"))$size) &&
+        isTRUE(ggplot2::calc_element("plot.subtitle", d10_theme)$size < ggplot2::calc_element("plot.subtitle", chart_theme("clean"))$size) &&
+        identical(CHART_FONTS$display$family, "Barlow Condensed") && identical(CHART_FONTS$display$regular, "BarlowCondensed-SemiBold.ttf") && identical(CHART_FONTS$display$bold, "BarlowCondensed-Bold.ttf") &&
+        identical(FONT_LICENCE_FILES[["display"]], "BarlowCondensed-LICENSE.txt") && any(grepl("^Copyright 2017 The Barlow Project Authors", d10_lic)) &&
+        any(grepl("SIL OPEN FONT LICENSE Version 1.1", d10_lic, fixed = TRUE)) && grepl("Barlow", font_copyright("BarlowCondensed-LICENSE.txt"), fixed = TRUE))
+
+# 10D-2: the upper-case rule: every word but a number, a unit, or a word with a capital inside it; the stored text is not changed
+d10_cases <- list(
+  c("West region drives 34% of total revenue in 2024", "WEST REGION DRIVES 34% OF TOTAL REVENUE IN 2024"),
+  c("Mean weight in kg by region", "MEAN WEIGHT IN kg BY REGION"),
+  c("Energy per household in kWh, 2022 to 2024", "ENERGY PER HOUSEHOLD IN kWh, 2022 TO 2024"),
+  c("Speed in km/h on a (very) long road", "SPEED IN km/h ON A (VERY) LONG ROAD"),
+  c("Q3 sales: the iPhone and USB share", "Q3 SALES: THE iPhone AND USB SHARE"),
+  c("Price per m2 and per l, in ml", "PRICE PER m2 AND PER l, IN ml"),
+  c("year-over-year growth", "YEAR-OVER-YEAR GROWTH"))
+d10_got <- purrr::map_chr(d10_cases, function(x) chart_title_case(x[[1]], "briefing"))
+d10_stored <- attr(d10_plot(d10_bar), "spec")$title
+check("10D-2: the upper-case rule of the Briefing style: every word is upper-cased except one with a digit (2024, 34%, Q3, m2), a unit (kg, km/h, ml, l, kWh: as written) and one with a capital inside it (kWh, iPhone); other styles, NULL and a blank leave the text as it is; the spec's own title is not changed by drawing it",
+      identical(unname(d10_got), purrr::map_chr(d10_cases, 2)) && identical(chart_title_case("West drives", "clean"), "West drives") && identical(chart_title_case("West drives", "dark"), "West drives") &&
+        is.null(chart_title_case(NULL, "briefing")) && identical(chart_title_case("", "briefing"), "") && identical(chart_title_case(NA_character_, "briefing"), NA_character_) &&
+        identical(d10_stored, d10_bar$title) && identical(d10_stored, "West drives 34% of revenue in 2024, in kg") &&
+        identical(chart_case_tokens("a kg 2")$keep, c(FALSE, TRUE, TRUE, TRUE, TRUE)))
+
+# 10D-3: drawn: the title of the picture, of the interactive chart's SVG and of the written code is the upper-cased text in Briefing and as written in Clean
+d10_pb <- d10_plot(d10_bar, "briefing")
+d10_pc <- d10_plot(d10_bar, "clean")
+d10_wb <- spec_widget(d10_pb)
+d10_code_b <- spec_code(attr(d10_pb, "spec"), d10_cb, file.path("tests", "data", "orders.csv"), d10_pal("briefing"))
+check("10D-3: a title is drawn in upper case in Briefing (the picture's title, the interactive chart's SVG text, the printed code's labs()) and as written in every other style; the numbers and the unit keep their case ('2024', 'kg'); the SVG's title is in Barlow Condensed",
+      identical(d10_pb$labels$title, "WEST DRIVES 34% OF REVENUE IN 2024, IN kg") && identical(d10_pc$labels$title, d10_bar$title) &&
+        identical(attr(d10_pc, "spec")$title, d10_bar$title) &&
+        grepl("WEST DRIVES 34% OF REVENUE IN 2024, IN kg", paste(as.character(d10_wb$x$html), collapse = ""), fixed = TRUE) &&
+        identical(svg_text_attr(d10_wb, "WEST DRIVES 34% OF REVENUE IN 2024, IN kg", "font-family"), "Barlow Condensed") &&
+        grepl("title = \"WEST DRIVES 34% OF REVENUE IN 2024, IN kg\"", d10_code_b, fixed = TRUE) && grepl("chart_display <- if (has_font(\"Barlow Condensed\")) \"Barlow Condensed\" else \"sans\"", d10_code_b, fixed = TRUE) &&
+        !grepl("West drives", d10_code_b, fixed = TRUE))
+
+# 10D-4: colour with a purpose: a bar or dot chart sorted by value with no colour column and no highlight draws every mark in the one colour, in every style (R does not
+#   colour the largest); a highlight draws exactly the style's accent for the marks named and its slate for the rest
+d10_fills <- function(spec, style) {
+  p <- d10_plot(spec, style)
+  b <- ggplot2::ggplot_build(p)
+  col <- if (identical(spec$family, "bar")) "fill" else "colour"
+  marks <- purrr::keep(seq_along(p$layers), function(i) inherits(p$layers[[i]]$geom, c("GeomBar", "GeomPoint")))
+  unique(toupper(substr(unlist(purrr::map(marks, function(i) b$data[[i]][[col]])), 1, 7)))
+}
+d10_dot <- list(family = "dot", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "t")
+d10_hl <- function(spec) c(spec, list(highlight = list(column = "region", values = list("West"))))
+d10_styles <- names(CHART_STYLES)
+d10_plain_ok <- purrr::map_lgl(d10_styles, function(s) length(d10_fills(d10_bar, s)) == 1L && length(d10_fills(d10_dot, s)) == 1L &&
+                                 identical(d10_fills(d10_bar, s), toupper(spec_palette(d10_pal(s))$single)))
+d10_hl_ok <- purrr::map_lgl(d10_styles, function(s) setequal(d10_fills(d10_hl(d10_bar), s), toupper(c(CHART_STYLES[[s]]$accent, CHART_STYLES[[s]]$slate))) &&
+                              setequal(d10_fills(d10_hl(d10_dot), s), toupper(c(CHART_STYLES[[s]]$accent, CHART_STYLES[[s]]$slate))))
+d10_hl_b <- ggplot2::ggplot_build(d10_plot(d10_hl(d10_bar), "briefing"))$data[[1]]
+d10_hl_rows <- toupper(d10_hl_b$fill[order(d10_hl_b$x)])
+check("10D-4: colour with a purpose, in all seven styles: a bar or dot chart sorted by value with no colour column and no highlight is in the one colour, nothing is coloured because it is the largest; a highlight is the style's accent on the marks named and its slate on the rest (the bar of West the accent, the five others slate)",
+      all(d10_plain_ok) && all(d10_hl_ok) && length(d10_styles) == 7L &&
+        identical(sum(d10_hl_rows == toupper(d10_br$accent)), 1L) && identical(sum(d10_hl_rows == toupper(d10_br$slate)), 5L) && identical(d10_hl_rows[1], toupper(d10_br$accent)) &&
+        !identical(CHART_STYLES$clean$accent, "#D55E00") && !any(purrr::map_lgl(CHART_STYLES, function(s) identical(toupper(s$slate), toupper(s$grey)))))
+
+# 10D-5: the page: a heading in a style that sets its headings in upper case keeps a number or a unit as written (a span the stylesheet leaves alone), in the card, the
+#   masthead and a table card; the other styles have plain text; the stylesheet of Briefing sets the condensed face, the upper case, the hairline card and no shadow
+d10_h2 <- gsub("[[:space:]]+", " ", as.character(htmltools::tags$div(dash_heading_text("Revenue rose 34% in 2024, in kg per m", "briefing"))))
+d10_card <- gsub("[[:space:]]+", " ", as.character(dash_card(list(mode = "picture", title = "Revenue by region, in kg", headline = "West drives 34% of revenue", chart_subtitle = NULL, summary = "S.", notes = character(0), source = "Source.",
+                                        pictures = list(desk = list(uri = "data:image/png;base64,AA", pixels = c(10, 10)), phone = list(uri = "data:image/png;base64,AA", pixels = c(10, 10)))), FALSE, "briefing")))
+d10_css_b <- dash_css("briefing", "#173A75")
+check("10D-5: in Briefing a heading's number or unit is wrapped in span.keep (text-transform:none) and the words are not, in a card's heading and in the masthead; the other styles write plain text; the style sheet has the condensed face, text-transform:uppercase on h1 and card headings, a hairline card with no shadow and the numbers of the key strip in the condensed face; the face is declared in bold only",
+      grepl("Revenue rose <span class=\"keep\">34%</span> in <span class=\"keep\">2024,</span>", d10_h2) && grepl("in <span class=\"keep\">kg</span> per <span class=\"keep\">m</span>", d10_h2) &&
+        !grepl("<span class=\"keep\">Revenue", d10_h2, fixed = TRUE) && identical(dash_heading_text("Revenue in kg", "clean"), "Revenue in kg") &&
+        grepl("<h2> ?West drives <span class=\"keep\">34%</span> of revenue ?</h2>", d10_card) && grepl("<div class=\"slot\">", d10_card, fixed = TRUE) &&
+        grepl("h1,.card h2,.stat-title{text-transform:uppercase;", d10_css_b, fixed = TRUE) && grepl(".keep{text-transform:none;}", d10_css_b, fixed = TRUE) &&
+        grepl("--title-font:'Barlow Condensed', 'Arial Narrow', sans-serif;", d10_css_b, fixed = TRUE) && grepl("box-shadow:none;", d10_css_b, fixed = TRUE) &&
+        grepl(".card{background:var(--bg);border:1px solid #AEB3BA;border-radius:2px;", d10_css_b, fixed = TRUE) && grepl(".key-value.num{--max:2.6rem;}", d10_css_b, fixed = TRUE) &&
+        !grepl("text-transform:uppercase;letter-spacing:.005em;}.subtitle", dash_css("clean", "#0072B2"), fixed = TRUE) && !grepl("h1,.card h2,.stat-title{text-transform", dash_css("clean", "#0072B2"), fixed = TRUE) &&
+        grepl("@font-face{font-family:'Barlow Condensed';font-weight:700;", dash_font_css("briefing"), fixed = TRUE) && !grepl("font-family:'Barlow Condensed';font-weight:400", dash_font_css("briefing"), fixed = TRUE) &&
+        !grepl("Barlow", dash_font_css("clean"), fixed = TRUE) && lengths(gregexpr("@font-face", dash_font_css("briefing"), fixed = TRUE)) == 3L)
+
+# 10D-6: the key strip: the file's three are plain statements, the strip holds at most six, a value of 14 characters or fewer is a number (nowrap, scaled to its cell) and a
+#   longer one is not; a chosen fact is its value over '<what it is>, <chart name>'
+d10_set <- list(boxes = c("rows", "columns", "third"), keys = c("c1|1", "c1|2", "c1|3", "c1|1"))
+d10_facts <- list(list(label = "Highest", value = "West (940,000)"), list(label = "Total", value = "2,740,000"), list(label = "The line", value = "last 142,000 (2024-12-01)"))
+d10_keys <- dash_keys(d10_set, d10_cb, d10_data, list(list(id = "c1", title = "Revenue by region", facts = d10_facts)))
+d10_strip <- as.character(dash_keys_tag(d10_keys))
+check("10D-6: the key numbers are a strip of at most six plain items: '3,000 rows', '22 columns' and 'Jan 2022 to Dec 2024' (the file's three), then each chosen fact as its value over '<what it is>, <chart name>'; a value of 14 characters or fewer is a number (class num, nowrap, scaled to its cell), a longer one (the period) is not; none is a box (no .box rule or class)",
+      identical(purrr::map_chr(d10_keys, "value"), c("3,000 rows", "22 columns", "Jan 2022 to Dec 2024", "West (940,000)", "2,740,000", "last 142,000 (2024-12-01)")) &&
+        identical(unlist(purrr::map(d10_keys, "what")), c("Highest, Revenue by region", "Total, Revenue by region", "The line, Revenue by region")) &&
+        length(d10_keys) == DASH_KEYS_STRIP_MAX && TRUE &&
+        lengths(gregexpr("<div class=\"key\">", d10_strip, fixed = TRUE)) == 6L && lengths(gregexpr("class=\"key-value num\"", d10_strip, fixed = TRUE)) == 4L &&
+        lengths(gregexpr("class=\"key-value long", d10_strip, fixed = TRUE)) == 2L && lengths(gregexpr("<div class=\"key-what\">", d10_strip, fixed = TRUE)) == 3L &&
+        !grepl("class=\"box", d10_strip, fixed = TRUE) && identical(DASH_KEY_SHORT, 14L) &&
+        is.null(dash_keys_tag(list())) && length(dash_keys(list(boxes = character(0), keys = character(0)), d10_cb, d10_data, list())) == 0L)
+
+# 10D-7: cards of a row share a height and a card stretches to fill it; a chart with more than four panels takes a whole row; the summary is set at a reading size
+#   (1.05rem, at most 62 characters a line), the notes smaller and grey, the source line the smallest
+d10_css <- dash_css("clean", "#0072B2")
+d10_rem <- function(sel) as.numeric(sub("^.*font-size:([0-9.]+)rem.*$", "\\1", regmatches(d10_css, regexpr(paste0("[.]", sel, "[{][^}]*[}]"), d10_css))))
+check("10D-7: the grid stretches its cards (align-items:stretch; a card is a flex column and its chart's slot grows, so no blank block stands under a short card); a chart of more than four panels (DASH_FULL_PANELS) takes a row by dash_card_wide() and so does an interactive chart, a table and a chart drawn wide, but not four panels; the summary is 1.05rem with a line of at most 62 characters, the notes (grey, text2) smaller, the source line (caption grey) the smallest",
+      grepl(".grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;align-items:stretch;}", d10_css, fixed = TRUE) &&
+        grepl(".card{min-width:0;display:flex;flex-direction:column;}", d10_css, fixed = TRUE) && grepl(".card .slot{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;", d10_css, fixed = TRUE) &&
+        !grepl("align-items:start", d10_css, fixed = TRUE) &&
+        DASH_FULL_PANELS == 4L && !dash_card_wide(list(mode = "picture", panels = 4L)) && dash_card_wide(list(mode = "picture", panels = 5L)) && dash_card_wide(list(mode = "picture", panels = 9L)) &&
+        !dash_card_wide(list(mode = "picture")) && dash_card_wide(list(mode = "interactive", panels = 1L)) && dash_card_wide(list(mode = "table")) && dash_card_wide(list(mode = "picture", natural_wide = TRUE)) &&
+        identical(dash_layout(purrr::map_lgl(list(list(mode = "picture", panels = 1L), list(mode = "picture", panels = 1L), list(mode = "picture", panels = 6L)), dash_card_wide)), c(FALSE, FALSE, TRUE)) &&
+        isTRUE(d10_rem("summary") == 1.05) && grepl("[.]summary[{][^}]*max-width:62ch;", d10_css) && isTRUE(d10_rem("notes") < d10_rem("summary")) && isTRUE(d10_rem("source") < d10_rem("notes")) &&
+        grepl("[.]notes[{]color:var[(]--text2[)];", d10_css) && grepl("[.]source[{]color:var[(]--caption[)];", d10_css) && isTRUE(d10_rem("source") >= 0.7))
+
+# 10D-8: the heatmap's x labels do not touch: a group on x whose levels need more than the panel's width (about 0.62 inch each) is dodged into two or three rows, at the
+#   usual size, on a half-width card and on a phone drawing, in the picture and in the interactive version (the same layers); a wide card needs none
+d10_heat <- list(family = "heatmap", x = "quarter", y = "region", color = "revenue", fn = "sum", title = "t")
+d10_dodge <- function(web, style = "clean") {
+  p <- spec_plot(d10_heat, d10_data, d10_cb, d10_pal(style), web = web)
+  code <- spec_code(attr(p, "spec"), d10_cb, file.path("tests", "data", "orders.csv"), d10_pal(style))
+  m <- regmatches(code, regexpr("n[.]dodge = [0-9]", code))
+  if (length(m)) as.integer(sub("n[.]dodge = ", "", m)) else 1L
+}
+d10_dd <- list(usual = d10_dodge(NULL), desk = d10_dodge(dash_web("desk")), phone = d10_dodge(dash_web("phone")), wide = d10_dodge(dash_web("wide")))
+d10_wid <- spec_widget(spec_plot(d10_heat, d10_data, d10_cb, d10_pal("clean"), web = dash_web("phone")))
+check("10D-8: the heatmap's 12 quarters on x ('2022 Q1' and on) are dodged into rows so that no two labels touch: 2 rows at the usual 7 inches and on a half-width card, 3 on a phone drawing, none on a wide card; the interactive version is built from the same layers and draws every label",
+      identical(d10_dd, list(usual = 2L, desk = 2L, phone = 3L, wide = 1L)) && HEAT_LABEL_IN == 0.62 &&
+        inherits(d10_wid, "girafe") && length(attr(d10_wid, "warnings")) == 0L &&
+        all(purrr::map_lgl(c("2022 Q1", "2022 Q4", "2024 Q4"), function(l) grepl(l, d10_wid$x$html, fixed = TRUE))))
+
+# 10D-9: the canvas follows the page: a card's heading is in the style's title face, in upper case where the style asks (a span keeps a number or unit as written), with the
+#   chart's title as a small grey subtitle under it, its chart in a slot that takes the row's height, its summary at a reading size; the strip of key numbers replaces the three value boxes
+d10_ecss <- EXPLORE_CSS
+check("10D-9: the canvas: the stylesheet has the heading's upper case for a style that asks for it (.chart-upper, with .keep left as written), the card body as a column whose slot grows, the summary at 1.05rem and 62 characters, the notes smaller, and the strip of key numbers (.chart-keys: a number large over its words, a rule between, none boxed); the value boxes are gone; the Briefing card (below, from the harness) carries the heading class and face",
+      grepl(".chart-upper { text-transform: uppercase;", d10_ecss, fixed = TRUE) && grepl(".chart-upper .keep { text-transform: none; }", d10_ecss, fixed = TRUE) &&
+        grepl(".chart-card .card-body { display: flex; flex-direction: column; }", d10_ecss, fixed = TRUE) &&
+        grepl(".chart-canvas .bslib-grid-item .chart-card { flex: 1 1 auto; }", d10_ecss, fixed = TRUE) &&
+
+ grepl(".chart-card .chart-slot { flex: 1 1 auto;", d10_ecss, fixed = TRUE) &&
+        grepl(".chart-summary { font-size: 1.05rem; line-height: 1.55; max-width: 62ch; }", d10_ecss, fixed = TRUE) && grepl(".chart-notes { font-size: .82rem;", d10_ecss, fixed = TRUE) &&
+        grepl(".chart-keys { display: grid;", d10_ecss, fixed = TRUE) && !grepl("bslib-value-box", d10_ecss, fixed = TRUE) && !grepl("chart-boxes", d10_ecss, fixed = TRUE) &&
+        !grepl("value_box", paste(deparse(canvas_boxes), collapse = ""), fixed = TRUE) &&
+        isTRUE(b7_out$brief) && isTRUE(b7_out$clean_card))
+
+} # the fast run only
+
+if (run_heavy) {   # the heavy run only: the Briefing page built with the others (p9_six), and the page laid out by Chrome
+
+d10_bh <- p9_six$briefing$html
+d10_bc <- p9_six$briefing$codebook
+check("10D-10: the five-chart dashboard in Briefing: the ground and text colours, the condensed face for its headings in bold only (no regular face is embedded: 2 faces of the family, bold and the sans' two), the upper-case rule for headings, h1 and table titles, the hairline card, a strip of key numbers (rows, columns, the period as statements, no boxes), the small multiples (nine panels) and the scatter before them each on a row of their own, a slot in every card; the codebook page in the same face; the page does not request anything",
+      grepl("--bg:#F7F6F2;--text:#1C2431;", d10_bh, fixed = TRUE) && grepl("--accent:#173A75;", d10_bh, fixed = TRUE) && grepl("--title-font:'Barlow Condensed', 'Arial Narrow', sans-serif;", d10_bh, fixed = TRUE) &&
+        lengths(gregexpr("@font-face{font-family:'Barlow Condensed'", d10_bh, fixed = TRUE)) == 1L && grepl("@font-face{font-family:'Barlow Condensed';font-weight:700;", d10_bh, fixed = TRUE) &&
+        grepl("h1,.card h2,.stat-title{text-transform:uppercase;", d10_bh, fixed = TRUE) && grepl(".card{background:var(--bg);border:1px solid #AEB3BA;border-radius:2px;", d10_bh, fixed = TRUE) &&
+        grepl(">3,000 rows<", d10_bh, fixed = TRUE) && grepl(">22 columns<", d10_bh, fixed = TRUE) && grepl(">Jan 2022 to Dec 2024<", d10_bh, fixed = TRUE) && !grepl("class=\"box", d10_bh, fixed = TRUE) &&
+        identical(unname(p9_six$briefing$full), c(FALSE, FALSE, TRUE, TRUE, TRUE)) && identical(unname(p9_six$clean$full), c(FALSE, FALSE, TRUE, TRUE, TRUE)) &&
+        lengths(gregexpr("<div class=\"slot\">", d10_bh, fixed = TRUE)) == 5L && grepl("Barlow Condensed", d10_bc, fixed = TRUE) && !length(p8c_requests(d10_bh)) && p8c_balanced(d10_bh) &&
+        file.size(file.path(p9_six$briefing$dir, "dashboard.html")) < 4 * 1048576)
+
+# the page in Chrome at 1400: the cards of a row are as high as each other, nothing blank stands under a short card (the last thing in a card, its source line, ends where the card's
+#   padding does), and the chart is centred in its slot
+d10_js <- paste0("var cs=[].map.call(document.querySelectorAll('.card'),function(c){var r=c.getBoundingClientRect();var last=c.lastElementChild.getBoundingClientRect();var s=c.querySelector('.slot');var sr=s.getBoundingClientRect();",
+                 "var pic=s.querySelector('img');var pr=pic.getBoundingClientRect();return {top:Math.round(r.top+scrollY),h:r.height,gap:r.bottom-last.bottom,slotH:sr.height,picH:pr.height,off:pr.top-sr.top,pad:parseFloat(getComputedStyle(c).paddingBottom),dis:getComputedStyle(c).display};});",
+                 "var d={cards:cs,sw:document.documentElement.scrollWidth,cw:document.documentElement.clientWidth};",
+                 "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9\" content=\"'+JSON.stringify(d).replace(/\"/g,'&quot;')+'\">');")
+d10_dom <- if (p9_has_chrome) list(clean = p9_dom(file.path(p9_dirs, "dashboard.html"), 1400, d10_js), briefing = p9_dom(file.path(p9_six$briefing$dir, "dashboard.html"), 1400, d10_js),
+                                   phone = p9_dom(file.path(p9_six$briefing$dir, "dashboard.html"), 500, d10_js))
+d10_rows_ok <- function(m) {
+  cc <- m$cards
+  same <- purrr::map_lgl(split(cc$h, cc$top), function(h) max(h) - min(h) <= 1)
+  all(same) && all(cc$gap <= cc$pad + 6) && all(abs(cc$off - (cc$slotH - cc$picH) / 2) <= 2) && all(cc$dis == "flex") && m$sw <= m$cw
+}
+check("10D-11: in Chrome at 1400 and 500 pixels, in Clean and in Briefing, the cards of a row are as high as each other (to a pixel), a card is a flex column, nothing blank stands under a short card (its last element ends within its padding), the chart is centred in its slot, and the page does not scroll sideways; the first row's two cards have summaries of different length",
+      !p9_has_chrome || (d10_rows_ok(d10_dom$clean) && d10_rows_ok(d10_dom$briefing) && d10_rows_ok(d10_dom$phone) &&
+                           length(d10_dom$briefing$cards$h) == 5L && length(unique(d10_dom$briefing$cards$top)) == 4L && length(unique(d10_dom$phone$cards$top)) == 5L))
+
+}   # the heavy run only
+# <<< 10D end
+
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
