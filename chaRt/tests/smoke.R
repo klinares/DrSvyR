@@ -5748,14 +5748,14 @@ p9d_stress <- file.path(tempdir(), "p9d_stress.html")
 writeLines(sub("</style>", ".keys{grid-template-columns:repeat(6,minmax(0,1fr));}</style>", p8c_html(p9d_z$dir), fixed = TRUE), p9d_stress, useBytes = TRUE)
 p9d_dom <- if (p9_has_chrome) list(w1400 = p9_dom(file.path(p9d_z$dir, "dashboard.html"), 1400, p9d_js), w500 = p9_dom(file.path(p9d_z$dir, "dashboard.html"), 500, p9d_js),
                                    stress = p9_dom(p9d_stress, 1000, p9d_js))
-p9d_fit <- function(m) { b <- m$boxes[m$boxes$num & m$boxes$text %in% c("3,000 rows", "22 columns", "2,740,000"), ]; nrow(b) == 3L && all(b$sw <= b$cw + 1) && all(b$h <= b$lh * 1.05) && all(b$right <= m$cw) && m$sw <= m$cw }
-check("9D-0b: in Chrome the three key numbers of a six-item strip (3,000 rows, 22 columns, 2,740,000) each stay on one line and inside their cell, with the six items in one row at 1400 pixels (all within the window, the page not scrolling sideways) and two to a row at 500, no number larger than the style's 2.1rem and none smaller than 12 pixels; on a stress page with the six cells forced narrow each number still stays on one line and inside its cell, scaled down",
+p9d_fit <- function(m) { b <- m$boxes[m$boxes$num & m$boxes$text %in% c("3,000", "22", "2,740,000"), ]; nrow(b) == 3L && all(b$sw <= b$cw + 1) && all(b$h <= b$lh * 1.05) && all(b$right <= m$cw) && m$sw <= m$cw }
+check("9D-0b: in Chrome the three key numbers of a six-item strip (3,000 rows, 22 columns, 2,740,000) each stay on one line and inside their cell and have one type size (Phase 10b: the values of a strip share the size the longest needs), with the six items in one row at 1400 pixels (all within the window, the page not scrolling sideways) and two to a row at 500, no number larger than the style's 2.1rem and none smaller than 12 pixels; on a stress page with the six cells forced narrow each number still stays on one line and inside its cell, scaled down",
       length(p9d_keys) == 3L && lengths(gregexpr("class=\"key-value", p9d_z$html, fixed = TRUE)) == 6L &&
 
         (!p9_has_chrome || (
           p9d_fit(p9d_dom$w1400) && p9d_fit(p9d_dom$w500) && length(unique(p9d_dom$w1400$boxes$top)) == 1L && length(unique(p9d_dom$w500$boxes$top)) == 3L &&
-            all(p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "3,000 rows"] <= 2.1 * 16 + 0.5) && p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "3,000 rows"] > 12 &&
-            p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "2,740,000"] < 1.9 * 16 && p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "2,740,000"] > 12 &&
+            all(p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "3,000"] <= 2.1 * 16 + 0.5) && p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "3,000"] > 12 &&
+            abs(p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "2,740,000"] - p9d_dom$w1400$boxes$fs[p9d_dom$w1400$boxes$text == "3,000"]) < 0.3 && abs(max(p9d_dom$w1400$boxes$fs) - min(p9d_dom$w1400$boxes$fs)) < 0.3 &&
             p9d_fit(p9d_dom$stress) && p9d_dom$stress$boxes$fs[p9d_dom$stress$boxes$text == "2,740,000"] < 0.8 * 2.1 * 16 && p9d_dom$stress$boxes$fs[p9d_dom$stress$boxes$text == "2,740,000"] > 10)))
 
 
@@ -6652,12 +6652,15 @@ writeBin(jsonlite::base64_dec(p9b_b64(p9b_zv[[1]], "poster")), p9b_poster_png)
 check("9B-17: a dashboard with two videos and a picture: each video chart's MP4 is in charts/ (and is the very file in the page, byte for byte), the page has two <video> elements with a poster that is a PNG of the video's own size (Phase 10b: drawn for the card, 1088 by 612 for a card that shares its row, 1280 by 720 for one that has its row: the first video is the first, the second the full-width last card), a Replay button under each, and the reduced-motion rule and one script, the picture chart has no video, nothing is requested from outside, the result says '1 as a picture and 0 interactive and 2 videos', and the page's weight is reported",
       all(file.exists(p9b_zip_mp4)) && length(p9b_zv) == 2L && length(p9b_page_mp4) == 2L && identical(p9b_page_mp4[[1]], readBin(p9b_zip_mp4[[1]], "raw", file.size(p9b_zip_mp4[[1]]))) &&
         identical(p9b_page_mp4[[2]], readBin(p9b_zip_mp4[[2]], "raw", file.size(p9b_zip_mp4[[2]]))) && identical(unname(p8c_png_size(p9b_poster_png)), c(1088L, 612L)) &&
-        identical(c(av::av_media_info(p9b_zip_mp4[[1]])$video$width, av::av_media_info(p9b_zip_mp4[[1]])$video$height), c(1088L, 612L)) &&
-        identical(c(av::av_media_info(p9b_zip_mp4[[2]])$video$width, av::av_media_info(p9b_zip_mp4[[2]])$video$height), c(1280L, 720L)) &&
+        all(c(av::av_media_info(p9b_zip_mp4[[1]])$video$width, av::av_media_info(p9b_zip_mp4[[1]])$video$height) == c(1088, 612)) &&
+        all(c(av::av_media_info(p9b_zip_mp4[[2]])$video$width, av::av_media_info(p9b_zip_mp4[[2]])$video$height) == c(1280, 720)) &&
         lengths(gregexpr("<button type=\"button\" class=\"replay\" hidden", p9b_zh, fixed = TRUE)) == 2L && lengths(gregexpr("aria-label=\"Replay the video: ", p9b_zh, fixed = TRUE)) == 2L &&
         all(grepl("poster=\"data:image/png;base64,", p9b_zv, fixed = TRUE)) && grepl("prefers-reduced-motion:reduce", p9b_zh, fixed = TRUE) && lengths(gregexpr("<script>", p9b_zh, fixed = TRUE)) == 1L &&
         identical(p9b_z$modes, c("video", "picture", "video")) && grepl("1 picture, 0 interactive and 2 videos.", p9b_zh, fixed = TRUE) && length(p8c_requests(p9b_zh)) == 0L &&
         sum(grepl("<picture", p9b_zh, fixed = TRUE)) >= 1L && file.size(file.path(p9b_z$dir, "dashboard.html")) < 8e6)
+cat("note  Part B dashboard: rows to themselves ", paste(p9b_z$full, collapse = ", "), "; poster ", paste(unname(p8c_png_size(p9b_poster_png)), collapse = " by "), "; videos ",
+    paste(purrr::map_chr(p9b_zip_mp4, function(f) { i <- av::av_media_info(f)$video; paste(i$width, "by", i$height) }), collapse = " and "), "; replay buttons ",
+    lengths(gregexpr("<button type=\"button\" class=\"replay\" hidden", p9b_zh, fixed = TRUE)), "\n", sep = "")
 cat(sprintf("note  Part B weights: video 1920 %.0f KB, 1280 %.0f KB; dashboard of two videos and a picture: page %.2f MB, zip %.2f MB, built in %.0f s\n",
             file.size(p9b_mp4) / 1024, file.size(p9b_small) / 1024, file.size(file.path(p9b_z$dir, "dashboard.html")) / 1024^2, p9b_z$bytes / 1024^2, p9b_zt[["elapsed"]]))
 
@@ -7901,11 +7904,11 @@ check("10D-6 (Phase 10b): the key numbers are a strip of at most six items, each
 # 10D-7: cards of a row share a height and a card stretches to fill it; a chart with more than four panels takes a whole row; the summary is set at a reading size
 #   (1.05rem, at most 62 characters a line), the notes smaller and grey, the source line the smallest
 d10_css <- dash_css("clean", "#0072B2")
-d10_rem <- function(sel) as.numeric(sub("^.*font-size:([0-9.]+)rem.*$", "\\1", regmatches(d10_css, regexpr(paste0("[.]", sel, "[{][^}]*[}]"), d10_css))))
+d10_rem <- function(sel) as.numeric(sub("^.*font-size:([0-9.]+)rem.*$", "\\1", regmatches(d10_css, regexpr(paste0("(?<![>A-Za-z-])[.]", sel, "[{][^}]*[}]"), d10_css, perl = TRUE))))
 check("10D-7: the grid stretches its cards (align-items:stretch; a card is a flex column and its chart's slot grows, so no blank block stands under a short card); a chart of more than four panels (DASH_FULL_PANELS) takes a row by dash_card_wide() and so does an interactive chart, a table and a chart drawn wide, but not four panels; the summary is 1.05rem with a line of at most 62 characters, the notes (grey, text2) smaller, the source line (caption grey) the smallest",
       grepl(".grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;align-items:stretch;}", d10_css, fixed = TRUE) &&
         grepl(".card{min-width:0;display:flex;flex-direction:column;}", d10_css, fixed = TRUE) && grepl(".card .slot{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;", d10_css, fixed = TRUE) &&
-        !grepl("align-items:start", d10_css, fixed = TRUE) &&
+        !grepl("gap:1.25rem;align-items:start", d10_css, fixed = TRUE) &&
         DASH_FULL_PANELS == 4L && !dash_card_wide(list(mode = "picture", panels = 4L)) && dash_card_wide(list(mode = "picture", panels = 5L)) && dash_card_wide(list(mode = "picture", panels = 9L)) &&
         !dash_card_wide(list(mode = "picture")) && !dash_card_wide(list(mode = "interactive", panels = 1L)) && dash_card_wide(list(mode = "interactive", panels = 5L)) && dash_card_wide(list(mode = "table")) && dash_card_wide(list(mode = "picture", natural_wide = TRUE)) &&
         identical(dash_layout(purrr::map_lgl(list(list(mode = "picture", panels = 1L), list(mode = "picture", panels = 1L), list(mode = "picture", panels = 6L)), dash_card_wide)), c(FALSE, FALSE, TRUE)) &&
@@ -7952,7 +7955,7 @@ check("10D-10: the five-chart dashboard in Briefing: the ground and text colours
       grepl("--bg:#F7F6F2;--text:#1C2431;", d10_bh, fixed = TRUE) && grepl("--accent:#173A75;", d10_bh, fixed = TRUE) && grepl("--title-font:'Barlow Condensed', 'Arial Narrow', sans-serif;", d10_bh, fixed = TRUE) &&
         lengths(gregexpr("@font-face{font-family:'Barlow Condensed'", d10_bh, fixed = TRUE)) == 1L && grepl("@font-face{font-family:'Barlow Condensed';font-weight:700;", d10_bh, fixed = TRUE) &&
         grepl("h1,.card h2,.stat-title{text-transform:uppercase;", d10_bh, fixed = TRUE) && grepl(".card{background:var(--bg);border:1px solid #AEB3BA;border-radius:2px;", d10_bh, fixed = TRUE) &&
-        grepl(">3,000 rows<", d10_bh, fixed = TRUE) && grepl(">22 columns<", d10_bh, fixed = TRUE) && grepl(">Jan 2022 to Dec 2024<", d10_bh, fixed = TRUE) && !grepl("class=\"box", d10_bh, fixed = TRUE) &&
+        grepl(">3,000<", d10_bh, fixed = TRUE) && grepl(">22<", d10_bh, fixed = TRUE) && grepl(">Jan 2022 to Dec 2024<", d10_bh, fixed = TRUE) && !grepl("class=\"box", d10_bh, fixed = TRUE) &&
         identical(unname(p9_six$briefing$full), c(FALSE, FALSE, TRUE, TRUE, TRUE)) && identical(unname(p9_six$clean$full), c(FALSE, FALSE, TRUE, TRUE, TRUE)) &&
         lengths(gregexpr("<div class=\"slot\">", d10_bh, fixed = TRUE)) == 5L && grepl("Barlow Condensed", d10_bc, fixed = TRUE) && !length(p8c_requests(d10_bh)) && p8c_balanced(d10_bh) &&
         file.size(file.path(p9_six$briefing$dir, "dashboard.html")) < 4 * 1048576)
@@ -7960,18 +7963,20 @@ check("10D-10: the five-chart dashboard in Briefing: the ground and text colours
 # the page in Chrome at 1400: the cards of a row are as high as each other, nothing blank stands under a short card (the last thing in a card, its source line, ends where the card's
 #   padding does), and the chart is centred in its slot
 d10_js <- paste0("var cs=[].map.call(document.querySelectorAll('.card'),function(c){var r=c.getBoundingClientRect();var last=c.lastElementChild.getBoundingClientRect();var s=c.querySelector('.slot');var sr=s.getBoundingClientRect();",
-                 "var pic=s.querySelector('img');var pr=pic.getBoundingClientRect();return {top:Math.round(r.top+scrollY),h:r.height,gap:r.bottom-last.bottom,slotH:sr.height,picH:pr.height,off:pr.top-sr.top,pad:parseFloat(getComputedStyle(c).paddingBottom),dis:getComputedStyle(c).display};});",
+                 "var pic=s.querySelector('img');var pr=pic.getBoundingClientRect();return {top:Math.round(r.top+scrollY),h:r.height,gap:r.bottom-last.bottom,slotH:sr.height,picH:pr.height,off:pr.top-sr.top,pad:parseFloat(getComputedStyle(c).paddingBottom),dis:getComputedStyle(c).display,sgap:r.bottom-sr.bottom,full:c.classList.contains('full')};});",
                  "var d={cards:cs,sw:document.documentElement.scrollWidth,cw:document.documentElement.clientWidth};",
                  "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9\" content=\"'+JSON.stringify(d).replace(/\"/g,'&quot;')+'\">');")
 d10_dom <- if (p9_has_chrome) list(clean = p9_dom(file.path(p9_dirs, "dashboard.html"), 1400, d10_js), briefing = p9_dom(file.path(p9_six$briefing$dir, "dashboard.html"), 1400, d10_js),
                                    phone = p9_dom(file.path(p9_six$briefing$dir, "dashboard.html"), 500, d10_js))
-d10_rows_ok <- function(m) {
+d10_rows_ok <- function(m, wide = FALSE) {
   cc <- m$cards
   same <- purrr::map_lgl(split(cc$h, cc$top), function(h) max(h) - min(h) <= 1)
-  all(same) && all(cc$gap <= cc$pad + 6) && all(abs(cc$off - (cc$slotH - cc$picH) / 2) <= 2) && all(cc$dis == "flex") && m$sw <= m$cw
+  # Phase 10b: a card that has its row, on a screen of 900 pixels or more, is a grid (the chart beside its text): its chart's slot ends where the card's padding does
+  shape <- if (wide) ifelse(cc$full, cc$dis == "grid" & cc$sgap <= cc$pad + 6, cc$dis == "flex" & cc$gap <= cc$pad + 6) else cc$dis == "flex" & cc$gap <= cc$pad + 6
+  all(same) && all(shape) && all(abs(cc$off - (cc$slotH - cc$picH) / 2) <= 2) && m$sw <= m$cw
 }
-check("10D-11: in Chrome at 1400 and 500 pixels, in Clean and in Briefing, the cards of a row are as high as each other (to a pixel), a card is a flex column, nothing blank stands under a short card (its last element ends within its padding), the chart is centred in its slot, and the page does not scroll sideways; the first row's two cards have summaries of different length",
-      !p9_has_chrome || (d10_rows_ok(d10_dom$clean) && d10_rows_ok(d10_dom$briefing) && d10_rows_ok(d10_dom$phone) &&
+check("10D-11: in Chrome at 1400 and 500 pixels, in Clean and in Briefing, the cards of a row are as high as each other (to a pixel), a card is a flex column (a card with a row to itself, on the wide screen, a grid: the chart beside its text), nothing blank stands under a short card (its last element, or the chart's slot in a grid, ends within its padding), the chart is centred in its slot, and the page does not scroll sideways; the first row's two cards have summaries of different length",
+      !p9_has_chrome || (d10_rows_ok(d10_dom$clean, TRUE) && d10_rows_ok(d10_dom$briefing, TRUE) && d10_rows_ok(d10_dom$phone) &&
                            length(d10_dom$briefing$cards$h) == 5L && length(unique(d10_dom$briefing$cards$top)) == 4L && length(unique(d10_dom$phone$cards$top)) == 5L))
 
 }   # the heavy run only
@@ -8024,7 +8029,7 @@ check("10b-4: a violin is filled with the series colour at 20 per cent (one colo
       local({
         p = b10b_plot(b10b_vio, "briefing"); pal = spec_palette(d10_pal("briefing")); v = p$layers[[1]]; b = p$layers[[2]]
         inherits(v$geom, "GeomViolin") && inherits(b$geom, "GeomBoxplot") && identical(v$aes_params$fill, pal$single) && isTRUE(v$aes_params$alpha == 0.2) && identical(SPEC_VIOLIN_ALPHA, 0.2) &&
-          identical(v$aes_params$colour, pal$single) && identical(b$aes_params$fill, pal$single) && is.null(b$aes_params$alpha) && !isTRUE(is.na(b$geom_params$outlier.shape)) &&
+          identical(v$aes_params$colour, pal$single) && identical(b$aes_params$fill, pal$single) && is.null(b$aes_params$alpha) && !isTRUE(is.na(b$geom_params$outlier_gp$shape)) &&
           any(lengths(ggplot2::ggplot_build(p)$data[[2]]$outliers) > 0L) && !length(widget_match(p, spec_widget(p))) &&
           any(grepl("alpha = 0.2", spec_code(attr(p, "spec"), d10_cb, file.path("tests", "data", "orders.csv"), d10_pal("briefing")), fixed = TRUE))
       }))
