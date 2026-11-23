@@ -3431,7 +3431,7 @@ method_checks_ui <- function() {
            "and a percent sign is ignored. It also passes when it is one of them rounded to fewer digits that still keep at least two ",
            "significant digits: 69,700 passes for 69,712, and 70,000 does not. A number in the chart's own filter or top-n passes, and so ",
            "does a year that appears in the facts. The words from '", names(NUMBER_WORDS)[1L], "' to '", names(NUMBER_WORDS)[length(NUMBER_WORDS)],
-           "' are checked as numbers; 'one' is not, because it is nearly always a pronoun. A date such as 2024-12-01 counts as its year.")),
+           "' are checked as numbers; 'one' is not, because it is nearly always a pronoun. A date such as 2024-12-01 or 3 Jan 2024 counts as its year, and 'Dec 2023' is its year alone.")),
     tags$h3(class = "h5", "The word check"),
     tags$p(paste0("Words that claim a cause, or reach beyond the rows of the file, are not allowed: ", words(SUMMARY_FORBIDDEN), ". Words that state ",
            "a multiple, ", words(names(MULTIPLE_WORDS)), ", pass only when the chart's facts state a multiple that supports them: at least 2 for ",
