@@ -24,8 +24,8 @@ survey microdata.
    line"). "Style" sets one of seven styles (Clean, Minimal, Magazine, Data desk, Newspaper, Dark, Briefing: an off-white ground, a hairline grid across the chart, condensed upper-case titles, one deep blue and slate greys) and
    the palettes for every chart. In every style a highlight is the style's accent against its slate grey, and R never colours the largest bar by itself. Beyond bars, lines, scatters, histograms, boxes and heatmaps there are a
    dumbbell (each group's two values, for exactly two periods or conditions, on one scale), a density view
-   (a scatter of more than 2,000 points becomes counts of rows in cells, by itself), a violin with its box
-   (when you ask for the shape), lines indexed to 100 at their first period (to compare growth), a moving
+   (a scatter of more than 2,000 points becomes counts of rows in cells, in the style's own colours, by itself), a violin with its box
+   (when you ask for the shape: filled lightly in the series colour, with the outlying rows as dots), lines indexed to 100 at their first period (to compare growth: all in one panel, the lines you highlight in the accent and the others in grey, named at their ends), a moving
    average over the raw line (when you ask for a trend), and call-outs: a marked point is a small box with a
    thin leader. A card can be shown as an interactive chart ("Interactive": the same chart as an SVG, with a tooltip and hover on each mark and no zoom) or a
    short video ("Animate"). "Write headlines" gives each chart a headline and a summary. The "In
@@ -33,9 +33,9 @@ survey microdata.
    what order. "Add a summary table" puts a table of descriptive statistics on the canvas.
 5. **Export.** "Export dashboard" asks for a title, subtitle, author, date and introduction, a
    classification marking (it starts as the marking shown above every screen, `APP_CLASSIFICATION` in
-   `app.R`; it cannot be blank and is at most 80 characters), up to three key numbers (a strip of at most six at the top of the page, with the file's
-   rows, columns and period as plain statements), and for each
-   chart a picture, an interactive chart or a video. "Build the dashboard" makes
+   `app.R`; it cannot be blank and is at most 80 characters), up to three key numbers (a strip of at most six at the top of the page: each a small-capital label over its value, with the file's
+   rows, columns and period), and for each
+   chart a picture, an interactive chart or a video, each drawn for the size of its card (a card with a row to itself, on a wide screen, has the chart on the left and the text on the right; a video stands on its finished chart before it plays and after, with a Replay button). "Build the dashboard" makes
    `<marking>_dashboard_<date>.zip` (the marking in lower case with other characters as underscores,
    so `unclassified_dashboard_2026-11-22.zip`) with `dashboard.html` and `codebook.html` (each one
    file), `data_dictionary.yaml`, `charts.R` and a `charts/` folder (PNG at 300 dpi, SVG when

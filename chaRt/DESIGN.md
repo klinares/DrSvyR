@@ -22,7 +22,7 @@ no design-based inference. Every figure and summary describes the file, not a po
 | What the model writes | A plot spec (a small structured object), never R code. One R renderer draws every spec |
 | Interactives | ggiraph (Phase 10 Part B; plotly before): the same ggplot drawn as SVG with tooltips and hover, through `spec_widget()` |
 | Styles | Seven (`CHART_STYLES` in `R/theme.R`), each a set of values: ground, grid, title face, an `accent` and a `slate`. A highlight is accent against slate, in every style, and R never highlights on its own. Briefing (Phase 10 Part D) sets its titles in Barlow Condensed in upper case (by R on the drawn title, by CSS on a page heading; a number or unit keeps its case) and draws a series with no group in its one deep blue |
-| The page and the canvas | The export and the canvas share their rules (Phase 10 Part D): a strip of key numbers (plain statements, no boxes, a number never wrapped), cards of a row as high as each other with the chart centred in a slot that grows, a chart of more than four panels on a row of its own, a summary at a reading size, notes smaller and the source line smallest |
+| The page and the canvas | The export and the canvas share their rules (Phase 10 Part D): a strip of key numbers (Phase 10b: a small-capital label over each value, one type size and one baseline for all, no boxes, a number never wrapped), cards of a row as high as each other with the chart centred in a slot that grows, a chart of more than four panels on a row of its own (an interactive chart takes half a row like a picture), a card with a row to itself on a screen of 900 pixels or more as the chart (62 per cent) beside its text (38), a summary at a reading size, notes smaller and the source line smallest; a heading shows no trailing full stop; a video is drawn for the width of its card, stands on its finished chart and has a Replay button |
 | Maps | Not in v1. Revisit once the tool is stable |
 
 | Survey design | None |
@@ -117,9 +117,9 @@ transform:
   sort: value_desc     # none | value_desc | value_asc | level_order | alphabetical
 scales: {log_x: false, log_y: false}
 fit: none              # scatter only: none | loess | linear
-density: auto          # scatter only: auto | on | off. Crowded points (over 2,000) become counts of rows in cells
+density: auto          # scatter only: auto | on | off. Crowded points (over 2,000) become counts of rows in cells (30 across on the scale drawn, or at the values of an axis with at most 40; the style's own ramp)
 shape: box             # box only: box | violin (a violin for groups of 30 rows or more, with its box inside)
-index: none            # line only: none | first (each line divided by its first value, times 100)
+index: none            # line only: none | first (each line divided by its first value, times 100; one panel, so no facet)
 smooth: none           # line only: none, or 2 to 24 periods of moving average, over the raw line in grey
 highlight: []          # levels drawn in colour; the rest in grey
 title: Revenue is concentrated in two regions
