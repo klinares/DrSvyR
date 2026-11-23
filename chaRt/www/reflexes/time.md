@@ -1,6 +1,6 @@
 # Time
 
-Version: 0.2
+Version: 0.3
 
 A measure over time: line, slope.
 
@@ -27,7 +27,7 @@ A measure over time: line, slope.
 
 ### index_to_compare_growth
 - **When:** The question is which series grew faster, and the series differ a lot in size.
-- **Say:** Set `index` to `first`, so every line starts at 100 and its height is growth since the first period.
+- **Say:** Set `index` to `first`, so every line starts at 100 and its height is growth since the first period. Keep all the series in one panel, with no `facet`, and use `highlight` for the few the question is about.
 - **Never:** Do not index when the question is about amounts, and do not describe an indexed value as an amount.
 - **Label:** Indexed to compare growth
 - **Source:** Design rule of this app; Tufte 1983 on comparing like with like.

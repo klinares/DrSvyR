@@ -242,6 +242,20 @@ chart_case_tokens <- function(text) {
              stringsAsFactors = FALSE, row.names = NULL)
 }
 
+# A text as a heading shows it (Phase 10b): one trailing full stop is dropped, since a stop reads oddly after a heading, in capitals above all. The
+#   stored text is never changed; this is only what is shown (a page's card heading, the canvas heading, the title drawn on a chart). Only a
+#   single stop goes: not the last two of an ellipsis ("..."), not an abbreviation (a letter and a stop twice over, "e.g." and "U.S.", or one of
+#   CHART_STOP_KEEP: "etc.", "vs."), and a number with a decimal point has no stop at its end to lose. A text that is not one string is returned as it is.
+CHART_STOP_KEEP <- c("etc", "vs", "inc", "ltd", "approx", "cf", "al")
+chart_heading_text <- function(text) {
+  if (!is.character(text) || length(text) != 1L || is.na(text)) return(text)
+  t = trimws(text, which = "right")
+  if (!grepl("[.]$", t) || grepl("[.][.]$|[.][[:space:]]*[.]$", t) || grepl("(^|[^[:alpha:]])[[:alpha:]][.][[:alpha:]][.]$", t)) return(text)
+  last = tolower(sub("^.*[[:space:](]", "", t))
+  if (sub("[.]$", "", last) %in% CHART_STOP_KEEP) return(text)
+  trimws(sub("[.]$", "", t), which = "right")
+}
+
 # A title as a style draws it: upper case where its title_case says "upper" (words that keep their case keep it, see
 #   chart_case_tokens()), as written otherwise; a text that is not one string (NULL, NA) is returned as it is.
 chart_title_case <- function(text, style = CHART_STYLE_DEFAULT) {
@@ -618,6 +632,19 @@ chart_palette_max <- function(name = chart_palette_default()$qualitative) CHART_
 # The colours of a continuous scale, sequential or diverging.
 chart_sequential <- function(name = chart_palette_default()$sequential) palette_colours(name, CHART_CONTINUOUS_N[["sequential"]])
 chart_diverging <- function(name = chart_palette_default()$diverging) palette_colours(name, CHART_CONTINUOUS_N[["diverging"]])
+
+# The style's own sequential ramp (Phase 10b), for the fill that counts rows in cells: from a light tint of the style's accent (the accent mixed
+#   with the style's panel colour, CHART_RAMP_TINT of it, so the first step shows against the ground in a light style and a dark one) to the
+#   accent, CHART_CONTINUOUS_N steps in Lab space. The sequential palette the analyst chose replaces it (spec_palette()).
+CHART_RAMP_TINT <- 0.22
+chart_style_ramp <- function(style = CHART_STYLE_DEFAULT) {
+  st = chart_style(style)
+  mix = (1 - CHART_RAMP_TINT) * grDevices::col2rgb(st$panel) + CHART_RAMP_TINT * grDevices::col2rgb(st$accent)
+  tint = grDevices::rgb(mix[1], mix[2], mix[3], maxColorValue = 255)
+  ramp = toupper(grDevices::colorRampPalette(c(tint, st$accent), space = "Lab")(CHART_CONTINUOUS_N[["sequential"]]))
+  ramp[c(1L, length(ramp))] = toupper(c(grDevices::rgb(mix[1], mix[2], mix[3], maxColorValue = 255), st$accent))     # the ends exactly: the tint and the accent
+  ramp
+}
 
 chart_fill_scale <- function(...) ggplot2::scale_fill_gradientn(colours = chart_sequential(), ...)
 chart_colour_scale <- function(...) ggplot2::scale_colour_gradientn(colours = chart_sequential(), ...)

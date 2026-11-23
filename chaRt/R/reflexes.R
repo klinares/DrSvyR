@@ -276,14 +276,20 @@ NUMBER_SCALES <- c(thousand = 1e3, million = 1e6, billion = 1e9)
 SUMMARY_FORBIDDEN <- c("cause", "causes", "caused", "leads to", "drives", "due to", "because of", "effect", "impact",
                        "significant", "significantly", "representative")
 
+# A date written in words, as the facts write one: "3 Jan 2024" (the day, a month name in full or as three letters, the year). Its day is
+#   not a number a text could get wrong: it counts as its year, like an ISO date, and "Dec 2023" is its year alone.
+DATE_WORDS <- paste0("(?i)(?<![0-9A-Za-z])[0-3]?[0-9]\\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|",
+                     "sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\.?\\s+([12][0-9]{3})(?![0-9])")
+
 # The numbers in a text: list(text, value, unit, sig) for each, where unit is the place of its last
 #   written digit (a whole number ending in zeros counts as rounded to them) and sig its significant
-#   digits. Tokens ([[N1]]) and ordinals (1st, 10th) are not numbers; an ISO date counts as its year;
+#   digits. Tokens ([[N1]]) and ordinals (1st, 10th) are not numbers; an ISO date or a date in words ("3 Jan 2024") counts as its year;
 #   "12%", "12 percent" and "12 per cent" are 12; "1.2 thousand" is 1200; two to twelve as words are
 #   numbers. A minus sign is kept in `text` only: values are compared without their sign.
 text_numbers <- function(text) {
   t = gsub("\\[\\[N[0-9]+\\]\\]", " ", paste(text, collapse = " "))
   t = gsub("(?<![0-9])([12][0-9]{3})-[01][0-9](-[0-3][0-9])?(?![0-9])", "\\1", t, perl = TRUE)
+  t = gsub(DATE_WORDS, "\\1", t, perl = TRUE)
   t = gsub("(?i)(?<![A-Za-z0-9_.])[0-9][0-9,]*(st|nd|rd|th)\\b", " ", t, perl = TRUE)
   words = paste0("(?i)\\b(", paste(names(NUMBER_WORDS), collapse = "|"), ")\\b")
   word_hits = regmatches(t, gregexpr(words, t, perl = TRUE))[[1]]

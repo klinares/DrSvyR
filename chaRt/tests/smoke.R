@@ -6,7 +6,7 @@
 #     PowerShell:  $env:CHART_SMOKE = "heavy"; Rscript --no-init-file tests/smoke.R; Remove-Item Env:CHART_SMOKE
 #     Bash:        CHART_SMOKE=heavy Rscript --no-init-file tests/smoke.R        the heavy run: ONLY the heavy group
 #   Every check is in exactly one run. The heavy group (HEAVY_CHECKS below): the sweep of about 400 drawn charts measured with grid
-#   (7b-1), the style sheet of about 180 charts (7D-2, and 7b-13 which reads it), and the five-chart dashboard built in six styles,
+#   (7b-1), and the five-chart dashboard built in six styles,
 #   laid out and printed by Chrome (9A-1, 9A-8 to 9A-11), the value boxes of a six-box page and the table cards of an exported dashboard measured in
 #   Chrome (9D-0b, 9D-18), and the real videos of Part B (9B-15 to 9B-18: a video drawn, encoded and read back, a dashboard of videos, the video played in Chrome), and Part C's: the probe's 30 frames drawn and encoded and the bundle's own files loaded as the app (9C-5, 9C-6, 9C-9, 9C-10). Both runs make the fixtures the heavy group needs (the gold specs, the
 #   panel file, the sales file) and the heavy run skips what costs time and it does not need. CHART_SMOKE=all runs both groups in one process (about ten
@@ -28,9 +28,6 @@ run_heavy <- SMOKE_MODE %in% c("heavy", "all")
 #   in an `if (run_heavy)` block (see the check "split: ..." at the end).
 HEAVY_CHECKS <- c(
   "7b-1: on the drawn chart, every text R writes lies wholly inside its panel",   # about 400 charts measured with grid (about 130 s)
-  "7D-2: tests/style_sheet.html",                                                 # the style sheet of about 180 charts (about 60 s)
-  "7D-2: the style sheet is written without a model call",                        # reads that sheet
-  "7b-13: the gold bar spec's title",                                             # reads that sheet
   "9A-1: the page is centred",                                                    # the dashboard page laid out in Chrome at three widths
   "9A-8: the page is written as the chosen style",                                # the five-chart dashboard built in six styles
   "9A-9: the codebook is a document",                                             # reads those six
@@ -50,7 +47,9 @@ HEAVY_CHECKS <- c(
   "10A-14: printed by Chrome",                                                     # the dashboard and the codebook printed to PDF in the Dark style with a long marking
   "10B-9: in Chrome the export with ten interactive charts",                    # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
   "10D-10: the five-chart dashboard in Briefing",                                  # reads the seven pages built by 9A-8
-  "10D-11: in Chrome at 1400 and 500 pixels")                                       # the cards of a row measured in Chrome in Clean and Briefing                       # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
+  "10D-11: in Chrome at 1400 and 500 pixels",
+  "10b-11: in Chrome, in Briefing, at 1400 and 1000 pixels",                       # the page laid out at four widths
+  "10b-12: in Chrome the Replay button")                                             # the video page, Replay clicked                                       # the cards of a row measured in Chrome in Clean and Briefing                       # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
 
 results <- new.env()
 results$all <- logical(0)
@@ -954,7 +953,7 @@ REFLEX_SHA <- c(
   "comparison.md" = "c236bee0a7f8a5617de8b0064c72beb47de597ac8b513f1728f0b2b50f1e08b0",
   "relationship.md" = "eea692ec090fde8615a33b83cd7941d5ceb5022c70b16279adf3f3eeb5a23201",
   "distribution.md" = "4bdb04443367d28cc8e278d2b55c7ce634deb47f11e60ebfc76f2377f7388262",
-  "time.md" = "f4468f233e7abad9299e2ac58f3ee5c457664373af85e77c59c812d212bd8f43",
+  "time.md" = "191943b1415ffb62aa51efd1f275e0d82294619a9bc96ba304d20383df3fc89c",
   "suggest.md" = "510448474300239e9f90e7cc3ed540e57e5e48fbe4e4fa3e6ec3c22d964efb29",
   "refine.md" = "04a081673a2365eb09695bdcab36a052a10e4812cdf9583314bf27969d03add5",
   "summary.md" = "976d0b9126c6cf016714251ae20a92dde61a926d826c6bf8f53fbcd6391741be",
@@ -2160,7 +2159,9 @@ shiny::testServer(mod_explore_server, args = list(state = b_state, ask = b_ask),
   boxes <- html("boxes")
   # Phase 10 Part D: a strip of key numbers, plain statements, no value boxes
   b_out$boxes <- length(gregexpr("<div class=\"key\">", boxes, fixed = TRUE)[[1]]) == 3L && grepl("class=\"keys chart-keys\"", boxes, fixed = TRUE) && !grepl("bslib-value-box", boxes, fixed = TRUE) &&
-    cell(boxes, "240 rows") && cell(boxes, "5 columns") && grepl("2019 to 2024", boxes, fixed = TRUE) && !grepl("sales.csv", boxes, fixed = TRUE) && !grepl(">Rows<|>Columns<|>Period<", boxes)
+    # Phase 10b: each item is a small-capital label over its value ("Rows" over "240")
+    cell(boxes, "Rows") && cell(boxes, "240") && cell(boxes, "Columns") && cell(boxes, "5") && cell(boxes, "Period") && grepl("2019 to 2024", boxes, fixed = TRUE) && !grepl("sales.csv", boxes, fixed = TRUE) &&
+    !grepl("240 rows|5 columns", boxes) && lengths(gregexpr("class=\"key-label\"", boxes, fixed = TRUE)) == 3L
 
   # a question adds cards, newest first
   session$setInputs(chat_user_input = "How many orders in each region?")
@@ -2663,7 +2664,7 @@ shiny::testServer(mod_explore_server, args = list(state = d3_state, ask = d3_si$
   said <- made$log[[length(made$log)]]$content
   d3_out$changed <- identical(d3_state$canvas, ids) && length(d3_state$charts) == 2L && identical(d3_state$stories, stories0) &&
     all(purrr::map_lgl(ids, needs_story)) && all(purrr::map_lgl(ids, function(i) grepl(SUMMARY_STALE_DATA, html(paste0(i, "_card")), fixed = TRUE))) &&
-    !grepl(SUMMARY_STALE, html("c1_card"), fixed = TRUE) && grepl("A headline.", html("c1_card"), fixed = TRUE) && grepl("It has 999 orders.", html("c1_card"), fixed = TRUE) &&
+    !grepl(SUMMARY_STALE, html("c1_card"), fixed = TRUE) && grepl("A headline", html("c1_card"), fixed = TRUE) && !grepl("A headline.", html("c1_card"), fixed = TRUE) && grepl("It has 999 orders.", html("c1_card"), fixed = TRUE) &&
     grepl("The data changed, so the 2 charts on the canvas were drawn again from it. 2 headlines and summaries are marked as changed since written", said, fixed = TRUE) &&
     !identical(png_digest("c1"), before) && length(notes0) == 0L && any(grepl("left out", d3_state$charts$c1$notes)) && any(grepl("left out", html("c1_notes")))
   # Write headlines writes them again, from the new data, and clears the marks
@@ -2897,11 +2898,11 @@ a7_ydf <- data.frame(year = 2015:2024, v = c(3, 4, 5, 4, 6, 7, 8, 7, 9, 10))
 a7_yf <- a6_facts(list(family = "line", x = "year", y = "v", fn = "none", title = "t"), a6_g(a7_ydf))
 check("7A-1: a line's facts give 'Points per series: n' (a range when series differ), each series' highest and lowest with when, and a series of fewer than three points no highest or lowest",
       "Points per series: 2 to 24" %in% a6_line(a7_lf, "Points per series") && "Points per series: 6" %in% a6_line(a7_qf, "Points per series") &&
-        grepl("highest 31 (2024-12-01), lowest 9 (2023-03-01)", a7_alpha, fixed = TRUE) && grepl("highest 99 (2023-01-01), lowest 88 (2023-12-01)", a7_beta, fixed = TRUE) &&
+        grepl("highest 31 (Dec 2024), lowest 9 (Mar 2023)", a7_alpha, fixed = TRUE) && grepl("highest 99 (Jan 2023), lowest 88 (Dec 2023)", a7_beta, fixed = TRUE) &&
         grepl("only 2 points, so no highest or lowest is given", a7_gamma, fixed = TRUE) && !grepl("highest|lowest ", sub("so no highest or lowest is given", "", a7_gamma, fixed = TRUE)))
 check("7A-1: a monthly or quarterly series over more than one year gives the last value against the same period a year earlier; a series of one year, or a yearly one, gives none",
-      grepl("a year before the last point (2023-12-01) it was 19, change over the year 12 (63.2%)", a7_alpha, fixed = TRUE) &&
-        grepl("a year before the last point (2023-06-01) it was 2, change over the year 5 (250.0%)", a6_line(a7_qf, "The line:"), fixed = TRUE) &&
+      grepl("a year before the last point (Dec 2023) it was 19, change over the year 12 (63.2%)", a7_alpha, fixed = TRUE) &&
+        grepl("a year before the last point (Jun 2023) it was 2, change over the year 5 (250.0%)", a6_line(a7_qf, "The line:"), fixed = TRUE) &&
         !grepl("a year before", a7_beta, fixed = TRUE) && !grepl("a year before", a7_gamma, fixed = TRUE) && !any(grepl("a year before", strsplit(a7_yf, "\n")[[1]])) &&
         identical(fact_period(a7_mo), "month") && identical(fact_period(a7_qdf$q), "quarter") && is.null(fact_period(a7_ydf$year)))
 
@@ -3973,13 +3974,11 @@ if (run_fast && exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
   d7_boxes <- paste(as.character(canvas_boxes(data.frame(a = 1:3, b = 4:6), list(file = d7_name, columns = list()))), collapse = "")
   # (Phase 7b: the Period box shares the rule, so the selector may list it after the file name's)
   d7_css <- regmatches(EXPLORE_CSS, regexpr("[.]chart-keys [.]key-value[.]chart-box-file[^{]*[{][^}]*[}]", EXPLORE_CSS))
-  d7_long <- regmatches(EXPLORE_CSS, regexpr("[.]chart-keys [.]key-value[.]long [{][^}]*[}]", EXPLORE_CSS))
-  d7_size <- as.numeric(sub("^.*--max: ([0-9.]+)rem.*$", "\\1", d7_long))
   d7_period <- paste(as.character(canvas_boxes(c6_read$read$data, c6_cb_ready)), collapse = "")
   check("7D-1: the file-name value box does not wrap in large type: the name is in a span set small (1.35rem or less), on one line (nowrap), cut with an ellipsis, and the whole name is its title (tooltip); a box that is not the file name does not use it",
         grepl("class=\"key-value long chart-box-file\"", d7_boxes, fixed = TRUE) && grepl(paste0("title=\"", d7_name, "\""), d7_boxes, fixed = TRUE) && grepl(paste0(">", d7_name, "</div>"), d7_boxes, fixed = TRUE) &&
-          length(d7_css) == 1L && isTRUE(d7_size <= 1.35) && grepl("white-space: nowrap", d7_css, fixed = TRUE) && grepl("overflow: hidden", d7_css, fixed = TRUE) &&
-          grepl("text-overflow: ellipsis", d7_css, fixed = TRUE) && !grepl("chart-box-file", d7_period, fixed = TRUE) && grepl(" rows<", d7_period, fixed = TRUE))
+          length(d7_css) == 1L && grepl("white-space: nowrap", d7_css, fixed = TRUE) && grepl("overflow: hidden", d7_css, fixed = TRUE) &&
+          grepl("text-overflow: ellipsis", d7_css, fixed = TRUE) && !grepl("chart-box-file", d7_period, fixed = TRUE) && grepl(">Rows<", d7_period, fixed = TRUE) && grepl(">File<", d7_boxes, fixed = TRUE))
   # card buttons in dark mode: the dark rules give each kind of card button light text (4.5 to 1 or better) against the theme's dark background, which
   #   the light-mode colours do not (the theme's primary is a dark navy)
   d7_theme_css <- as.character(sass::sass(bslib::bs_theme(version = 5, preset = "flatly")))
@@ -4009,7 +4008,7 @@ if (run_fast && exists("c6_state") && exists("stand_by") && !is.null(c6_read)) {
 
 }
 }   # end of the fast run's part from 7B to 7D-1
-if (run_heavy) {   # the heavy run only: the style sheet needs nothing from the Explore fixtures
+if (run_fast) {   # the fast run (moved from the heavy run in Phase 10b: the heavy run was near its limit): the style sheet needs nothing from the Explore fixtures
   # 2. the style sheet: built by tests/gallery.R, no model call, git-ignored, every family in every style and the rest
   d7_sheet_file <- tempfile(fileext = ".html")
   d7_sheet_out <- utils::capture.output(build_style_sheet(d7_sheet_file))
@@ -4035,7 +4034,7 @@ if (run_heavy) {   # the heavy run only: the style sheet needs nothing from the 
         nzchar(d7_build_src) && !grepl("llm_|ellmer|ANTHROPIC", d7_build_src) && "tests/style_sheet.html" %in% trimws(readLines(".gitignore")) && grepl("^<!doctype html>", d7_sheet))
 
 }
-# ---- the heavy run's other pieces: the sweep of 7b-1 and 7b-13 (which reads the style sheet 7D-2 built) ----------------------------
+# ---- the heavy run's other piece: the sweep of 7b-1 (7D-2, the style sheet, and 7b-13 which reads it, moved to the fast run in Phase 10b) ----------------------------
 if (run_heavy && c7_ok) {   # about two minutes: the heavy run only; not indented, to keep the diff small
   # 1, 2, 3. every gold spec, with labels on (where the family takes it) and each kind of annotate it takes, in all six styles:
   #   no text R writes runs past its panel (or past the device, for a plot that does not clip), no two overlap, none sits on a rug
@@ -4062,7 +4061,7 @@ if (run_heavy && c7_ok) {   # about two minutes: the heavy run only; not indente
                e7_n, " charts, measured with grid on a ragg device); the measure flags a label run past the panel and two that overlap"),
         !length(e7_runs) && e7_n > 300L && any(grepl("runs past the panel", e7_bad_f, fixed = TRUE)) && any(grepl("overlaps", e7_bad_f, fixed = TRUE)))
 }
-if (run_heavy) {
+if (run_fast) {
 # 13. the style sheet and the gold bar's title
 e7_bar_gold <- purrr::detect(gold, function(x) grepl("panel, total revenue by region (bar", x$entry$name, fixed = TRUE))
 check("7b-13: the gold bar spec's title names the region its table puts highest (Islands); the style sheet has a Phase 7b row of the (look) charts and a heatmap with its cell values in the labels rows",
@@ -4231,7 +4230,7 @@ check("7b-10: the Period box says 'Jan 2023 to Dec 2024' (month and year past 60
       identical(e7_per$short, "Jan 2023 to Dec 2024") && identical(e7_per$full, "2023-01-01 to 2024-12-01") && identical(e7_per_short$short, e7_per_short$full) &&
         identical(period_text(c(2015, 2024))$short, "2015 to 2024") &&
         grepl("class=\"key-value long chart-box-period\"[^>]* title=\"2023-01-01 to 2024-12-01\">Jan 2023 to Dec 2024<", e7_boxes) &&
-        grepl(".chart-keys .key-value.chart-box-period { --max: 1.3rem; }", EXPLORE_CSS, fixed = TRUE) && grepl("white-space: nowrap", EXPLORE_CSS, fixed = TRUE) &&
+        grepl(">Period</div>", e7_boxes, fixed = TRUE) && grepl("white-space: nowrap", EXPLORE_CSS, fixed = TRUE) &&
         grepl("minmax(min(100%, 10.5rem), 1fr)", EXPLORE_CSS, fixed = TRUE))
 
 
@@ -4951,8 +4950,8 @@ check("8C-3: dashboard.html has the title, subtitle, author, the date as written
         grepl("<title>Sales dashboard</title>", p8c_h3, fixed = TRUE) &&
         grepl("&lt;script&gt;window.x=1&lt;/script&gt; &amp; \"q\"", p8c_hh, fixed = TRUE) && !grepl("<script>window.x=1", p8c_hh, fixed = TRUE) &&
         grepl("&lt;b&gt;Me&lt;/b&gt;", p8c_hh, fixed = TRUE) && grepl("A &lt;i&gt;plain&lt;/i&gt; text &amp; more.", p8c_hh, fixed = TRUE) &&
-        grepl(">240 rows<", p8c_hh, fixed = TRUE) && !grepl(" columns<", p8c_hh, fixed = TRUE) && !grepl("class=\"key-value long chart-box-period\"", p8c_hh, fixed = TRUE) &&
-        grepl(">240 rows<", p8c_h3, fixed = TRUE) && grepl(">5 columns<", p8c_h3, fixed = TRUE) && grepl("2019 to 2024", p8c_h3, fixed = TRUE) &&
+        grepl(">240<", p8c_hh, fixed = TRUE) && grepl(">Rows<", p8c_hh, fixed = TRUE) && !grepl(">Columns<", p8c_hh, fixed = TRUE) && !grepl("class=\"key-value long chart-box-period\"", p8c_hh, fixed = TRUE) &&
+        grepl(">240<", p8c_h3, fixed = TRUE) && grepl(">5<", p8c_h3, fixed = TRUE) && grepl(">Columns<", p8c_h3, fixed = TRUE) && grepl("2019 to 2024", p8c_h3, fixed = TRUE) &&
         identical(p8c_h2s, c("<h2>Headline of chart 1</h2>", "<h2>Headline of chart 2</h2>", "<h2>Price of an order</h2>", "<h2 id=\"about-heading\">About this dashboard</h2>")) &&
         lengths(gregexpr("<img src=\"data:image/png;base64,", p8c_h3, fixed = TRUE)) == 3L && grepl("alt=\"Orders by region. Headline of chart 1\"", p8c_h3, fixed = TRUE) &&
         grepl("alt=\"Price of an order\"", p8c_h3, fixed = TRUE) && lengths(gregexpr("class=\"source\">Source: sales.csv", p8c_h3, fixed = TRUE)) == 3L &&
@@ -5309,8 +5308,8 @@ check("8C-21: the switch and the order reach the export: with one chart switched
         !p8c_has(p8c_bd, "Units against price") && !p8c_has(p8c_bd, "units_against_price") && p8c_has(p8c_bd, "Price by region"))
 check("8C-22: what the dialog asked for reaches the page: the title, subtitle, author, the date, the introduction, only the value boxes chosen (Rows and the period, not Columns), and the About card names the model of the profile; the build adds nothing to the chat and makes no model call",
       grepl("<h1>Sales review</h1>", p8c_bh, fixed = TRUE) && grepl("The fourth quarter", p8c_bh, fixed = TRUE) && grepl("Kim Analyst", p8c_bh, fixed = TRUE) && grepl("21 November 2026", p8c_bh, fixed = TRUE) &&
-        grepl("<p>Why this dashboard exists.</p>", p8c_bh, fixed = TRUE) && grepl(">240 rows<", p8c_bh, fixed = TRUE) && grepl("2019 to 2024", p8c_bh, fixed = TRUE) &&
-        !grepl(" columns<", p8c_bh, fixed = TRUE) &&
+        grepl("<p>Why this dashboard exists.</p>", p8c_bh, fixed = TRUE) && grepl(">240<", p8c_bh, fixed = TRUE) && grepl(">Rows<", p8c_bh, fixed = TRUE) && grepl("2019 to 2024", p8c_bh, fixed = TRUE) &&
+        !grepl(">Columns<", p8c_bh, fixed = TRUE) &&
  grepl(paste0("written by the model ", APP_MODEL$id), p8c_bh, fixed = TRUE) && isTRUE(p8c_b$log))
 check("8C-23: after a build the dialog says what was built (the name, the size, the seconds, how many charts as pictures and how many interactive), offers the zip for download, and draws the build button again enabled with its busy line hidden; the button was disabled while it ran (a chart-call button that says 'Building the dashboard', and disables itself when clicked) and busy was set and cleared; a second build with another date makes dashboard_2026-12-01.zip and removes the first zip",
       grepl("Built unclassified_dashboard_2026-11-21.zip: ", p8c_b$action, fixed = TRUE) && grepl("3 charts: 3 as pictures and 0 interactive.", p8c_b$action, fixed = TRUE) && grepl(" seconds. ", p8c_b$action, fixed = TRUE) &&
@@ -5493,11 +5492,11 @@ p9_fault_list <- c(p9_faults_of(p9_battery, "clean", c("desk", "phone")),
 p9_size_in <- function(p) spec_size(attr(p, "spec"), attr(p, "table"))
 p9_axis_px <- ggplot2::calc_element("axis.text.x", chart_theme("clean"))$size * DASH_CSS_DPI / 72
 check(paste0("9A-3: each chart is drawn at the size it is shown: a picture whose axis text comes out near 12 CSS pixels (",
-             round(p9_axis_px, 1), ") at the card's width (540 pixels for a card that shares its row, 1120 for one that has its row), and a narrower drawing of 340 pixels for a screen of at most 599 pixels, chosen by a <picture> element's <source media>; every picture has twice the pixels it is shown at (the width and height of its tag are half those of its PNG); the full-row card also has the half-width drawing for a screen under 900; names and values at the ends of lines give way to a legend on a phone (and in small multiples, where a panel is short) when they would take too much of the axis or touch, a facet's panels are kept apart, and a heatmap's colour bar has three labels at most on the page and four or more as the app draws it; the label box check (drawn_text_faults) finds no text past its panel or over another in ",
+             round(p9_axis_px, 1), ") at the card's width (540 pixels for a card that shares its row, 640 for one that has its row, a column of 62 per cent beside the text), and a narrower drawing of 340 pixels for a screen of at most 599 pixels, chosen by a <picture> element's <source media>; every picture has twice the pixels it is shown at (the width and height of its tag are half those of its PNG); the full-row card also has the half-width drawing for a screen under 900; names and values at the ends of lines give way to a legend on a phone (and in small multiples, where a panel is short) when they would take too much of the axis or touch, a facet's panels are kept apart, and a heatmap's colour bar has three labels at most on the page and four or more as the app draws it; the label box check (drawn_text_faults) finds no text past its panel or over another in ",
              length(p9_battery), " charts in Clean and the five stand-in charts in the other styles, at both sizes (and the wide size)"),
       DASH_SCALE == 2L && DASH_CSS_DPI * DASH_SCALE == SPEC_DPI && abs(p9_axis_px - 12) < 1.5 && length(p9_imgs) == 5L && length(p9_phone) == 5L && length(p9_half) == 3L &&
         lengths(gregexpr("<picture", p9_h, fixed = TRUE)) == 5L && all(purrr::map_lgl(p9_imgs, function(p) p9_close(p$px, 2L * c(p$w, p$h)))) &&
-        identical(purrr::map_int(p9_imgs, "w"), c(540L, 540L, 1120L, 1120L, 1120L)) && all(purrr::map_int(p9_phone, function(p) p$px[[1]]) == 680L) && identical(p9_half[[1]]$px[[1]], 1080L) &&
+        identical(purrr::map_int(p9_imgs, "w"), c(540L, 540L, 640L, 640L, 640L)) && all(purrr::map_int(p9_phone, function(p) p$px[[1]]) == 680L) && identical(p9_half[[1]]$px[[1]], 1080L) &&
         all(purrr::map_lgl(p9_phone, function(p) p$px[[2]] >= 540L)) &&
         all(purrr::map_lgl(p9_battery, function(sp) abs(p9_size_in(p9_web_plot(sp, "clean", "desk"))[["width"]] * 96 - 540) < 1e-6 && abs(p9_size_in(p9_web_plot(sp, "clean", "phone"))[["width"]] * 96 - 340) < 1e-6)) &&
         !length(p9_fault_list) && length(drawn_text_faults(p9_web_plot(p9_battery$line_col, "clean", "desk"))) == 0L &&
@@ -5591,8 +5590,9 @@ check("9A-7: the page's key numbers are a strip, not boxes (Phase 10 Part D: a t
                     "Share of the total|West 34.3%", "Share of the total|East 19.5%", "Top|Ann 5")) &&
         !any(grepl("^(Plotted|Rows used|Exploratory)$", purrr::map_chr(p9_chunks, "label"))) && DASH_KEYS_MAX == 3L && DASH_KEYS_STRIP_MAX == 6L &&
         length(p9_keybox) == 6L && sum(grepl("<div class=\"key-what\">", p9_keybox, fixed = TRUE)) == 3L &&
-        grepl("West \\(940,000\\).*Highest, Revenue by region", p9_keybox[4]) && grepl("last 142,000 \\(2024-12-01\\).*The line, Revenue by month", p9_keybox[5]) &&
-        grepl("2,740,000.*Total, Revenue by region", p9_keybox[6]) &&
+        # Phase 10b: what it is is the label over the value, the chart's name under it; a date is named as the axis names it
+        grepl(">Highest<.*West \\(940,000\\).*key-what\">Revenue by region<", p9_keybox[4]) && grepl(">The line<.*last 142,000 \\(Dec 2024\\).*key-what\">Revenue by month<", p9_keybox[5]) &&
+        grepl(">Total<.*2,740,000.*key-what\">Revenue by region<", p9_keybox[6]) && sum(grepl("class=\"key-label\"", p9_keybox, fixed = TRUE)) == 6L &&
         length(dash_keys(utils::modifyList(p9_set, list(keys = p9_keys)), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1), list(id = "c2", title = "B", facts = p9_f2)))) == 3L + 3L &&
         length(dash_keys(utils::modifyList(p9_set, list(keys = c("c9|1", "c1|999", "junk"))), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1)))) == 3L &&
         length(dash_keys(utils::modifyList(p9_set, list(keys = rep(p9_keys[1:3], 3), boxes = c("rows", "columns", "third"))), p9_cb, p9_data, list(list(id = "c1", title = "A", facts = p9_f1), list(id = "c2", title = "B", facts = p9_f2)))) <= 6L &&
@@ -5603,16 +5603,17 @@ check("9A-7: the page's key numbers are a strip, not boxes (Phase 10 Part D: a t
 p9d_boxes <- regmatches(p8c_sq(p9_zk$html), gregexpr("<div class=\"key\">(?:(?!<div class=\"key\">).)*?</div></div>", p8c_sq(p9_zk$html), perl = TRUE))[[1]]
 check("9D-0: a key number is never broken inside itself: a value of 14 characters or fewer (3,000 rows, 22 columns, 2,740,000) has the class num, which the stylesheet sets to white-space:nowrap, and a width in ems (--w, from dash_value_em(): wider for more digits) that, where the browser has container query units, scales its font size down to the width of its own cell (never above the style's size, --max: 2.1rem, 1.7rem on a phone, a long text 1.15rem and 1rem); a long value (the period, a fact with words) is not nowrap and wraps between words; the three statements are '3,000 rows', '22 columns' and 'Jan 2022 to Dec 2024' (a single row is '1 row')",
       grepl(".key-value.num{white-space:nowrap;}", p9_zk$html, fixed = TRUE) &&
-        grepl("@supports (width:1cqi){.key{container-type:inline-size;}.key-value.num{font-size:min(var(--max),calc(100cqi / var(--w)));}}", p9_zk$html, fixed = TRUE) &&
-        grepl(".key-value{--max:2.1rem;font-family:var(--title-font);font-size:var(--max);", p9_zk$html, fixed = TRUE) && grepl(".key-value{--max:1.7rem;}.key-value.long{--max:1rem;}", p9_zk$html, fixed = TRUE) &&
-        length(p9d_boxes) == 6L && grepl("class=\"key-value num\" style=\"--w:[0-9.]+;\"[^>]*>3,000 rows<", p9d_boxes[1]) && grepl("class=\"key-value num\" style=\"--w:[0-9.]+;\"[^>]*>22 columns<", p9d_boxes[2]) &&
+        grepl("@supports (width:1cqi){.key{container-type:inline-size;}.key-value{font-size:min(var(--max),calc(100cqi / var(--w)));}}", p9_zk$html, fixed = TRUE) &&
+        grepl(".key-value{--max:2.1rem;font-family:var(--title-font);font-size:var(--max);", p9_zk$html, fixed = TRUE) && grepl(".key-value{--max:1.7rem;}", p9_zk$html, fixed = TRUE) && !grepl(".key-value.long{--max", p9_zk$html, fixed = TRUE) &&
+        length(p9d_boxes) == 6L && grepl("class=\"key-label\"[^>]*>Rows<.*class=\"key-value num\"[^>]*>3,000<", p9d_boxes[1]) && grepl("class=\"key-label\"[^>]*>Columns<.*class=\"key-value num\"[^>]*>22<", p9d_boxes[2]) &&
+        grepl("class=\"keys\"[^>]* style=\"--w:[0-9.]+;\"", p9_zk$html) && !grepl("class=\"key-value[^\"]*\" style=", p9_zk$html) &&
         grepl("class=\"key-value long[^\"]*\"[^>]*>Jan 2022 to Dec 2024<", p9d_boxes[3]) && !grepl("key-value[^\"]* num", p9d_boxes[3]) &&
-        grepl("class=\"key-value num\" style=\"--w:[0-9.]+;\"[^>]*>2,740,000<", p9d_boxes[6]) &&
+        grepl("class=\"key-value num\"[^>]*>2,740,000<", p9d_boxes[6]) &&
         dash_value_em("2,740,000") > dash_value_em("3,000") && dash_value_em("3,000") > dash_value_em("22") && dash_value_em("") == 1 &&
         dash_value_em("2,740,000", narrow = TRUE) < dash_value_em("2,740,000") &&
         isTRUE(all.equal(dash_value_em("2,740,000"), round(1.08 * (7 * 0.64 + 2 * 0.3), 2))) &&
-        identical(canvas_box_values(data.frame(a = 1L), list(file = "f.csv", columns = list()))$rows$value, "1 row") &&
-        identical(canvas_box_values(data.frame(a = 1L), list(file = "f.csv", columns = list()))$columns$value, "1 column"))
+        identical(canvas_box_values(data.frame(a = 1L), list(file = "f.csv", columns = list()))$rows$value, "1") && identical(canvas_box_values(data.frame(a = 1L), list(file = "f.csv", columns = list()))$rows$label, "Row") &&
+        identical(canvas_box_values(data.frame(a = 1L), list(file = "f.csv", columns = list()))$columns$label, "Column"))
 
 }   # end of the fast run's 9A-2 to 9A-7
 if (run_heavy) {   # the heavy run only: 9A-1 (the page in Chrome) and 9A-8 to 9A-11 (the page in the six styles, the codebook page, the print); not indented, to keep the diff small
@@ -6596,8 +6597,8 @@ check("9B-14: in the page a video is a <video> with controls, muted, playsinline
       length(p9b_vtag) == 1L && grepl(" controls", p9b_vtag, fixed = TRUE) && grepl(" muted", p9b_vtag, fixed = TRUE) && grepl("playsinline", p9b_vtag, fixed = TRUE) && grepl("data-once", p9b_vtag, fixed = TRUE) && grepl("preload=\"none\"", p9b_vtag, fixed = TRUE) &&
 
         !grepl("autoplay|loop", p9b_vtag) && grepl("src=\"data:video/mp4;base64,", p9b_vtag, fixed = TRUE) && grepl("poster=\"data:image/png;base64,", p9b_vtag, fixed = TRUE) &&
-        grepl("<img class=\"still\" src=\"data:image/png;base64,", p9b_vh, fixed = TRUE) && grepl("@media (prefers-reduced-motion:reduce){.video-box video{display:none;}.video-box .still{display:block;}}", p9b_vh, fixed = TRUE) &&
-        regexpr("@media print{", p9b_vh, fixed = TRUE)[[1]] > 0L && regexpr(".video-box video{display:none;}.video-box .still{display:block;max-width:100%;}", p9b_vh, fixed = TRUE)[[1]] > regexpr("@media print{", p9b_vh, fixed = TRUE)[[1]] && lengths(gregexpr("<script>", p9b_vh, fixed = TRUE)) == 1L &&
+        grepl("<img class=\"still\" src=\"data:image/png;base64,", p9b_vh, fixed = TRUE) && grepl("@media (prefers-reduced-motion:reduce){.video-box video,.video-box .replay{display:none;}.video-box .still{display:block;}}", p9b_vh, fixed = TRUE) &&
+        regexpr("@media print{", p9b_vh, fixed = TRUE)[[1]] > 0L && regexpr(".video-box video,.video-box .replay{display:none;}.video-box .still{display:block;max-width:100%;}", p9b_vh, fixed = TRUE)[[1]] > regexpr("@media print{", p9b_vh, fixed = TRUE)[[1]] && lengths(gregexpr("<script>", p9b_vh, fixed = TRUE)) == 1L &&
         grepl("IntersectionObserver", p9b_vh, fixed = TRUE) && grepl("prefers-reduced-motion: reduce", regmatches(p9b_vh, regexpr("(?s)<script>.*</script>", p9b_vh, perl = TRUE)), fixed = TRUE) && grepl("unobserve", p9b_vh, fixed = TRUE) &&
         !grepl("<script", p9b_ph, fixed = TRUE) && !grepl("<video", p9b_ph, fixed = TRUE) && grepl("A video holds no row values", p9b_vh, fixed = TRUE) && grepl("0 pictures, 0 interactive and 1 video.", p9b_vh, fixed = TRUE) &&
         length(p8c_requests(p9b_vh)) == 0L)
@@ -6648,9 +6649,12 @@ p9b_page_mp4 <- purrr::map(p9b_zv, function(t) jsonlite::base64_dec(p9b_b64(t, "
 p9b_zip_mp4 <- file.path(p9b_z$dir, c("charts/01_revenue_by_region.mp4", "charts/03_revenue_by_month.mp4"))
 p9b_poster_png <- file.path(tempdir(), "p9b_poster_page.png")
 writeBin(jsonlite::base64_dec(p9b_b64(p9b_zv[[1]], "poster")), p9b_poster_png)
-check("9B-17: a dashboard with two videos and a picture: each video chart's MP4 is in charts/ (and is the very file in the page, byte for byte), the page has two <video> elements with a poster that is a 1280 by 720 PNG and the reduced-motion rule and one script, the picture chart has no video, nothing is requested from outside, the result says '1 as a picture and 0 interactive and 2 videos', and the page's weight is reported",
+check("9B-17: a dashboard with two videos and a picture: each video chart's MP4 is in charts/ (and is the very file in the page, byte for byte), the page has two <video> elements with a poster that is a PNG of the video's own size (Phase 10b: drawn for the card, 1088 by 612 for a card that shares its row, 1280 by 720 for one that has its row: the first video is the first, the second the full-width last card), a Replay button under each, and the reduced-motion rule and one script, the picture chart has no video, nothing is requested from outside, the result says '1 as a picture and 0 interactive and 2 videos', and the page's weight is reported",
       all(file.exists(p9b_zip_mp4)) && length(p9b_zv) == 2L && length(p9b_page_mp4) == 2L && identical(p9b_page_mp4[[1]], readBin(p9b_zip_mp4[[1]], "raw", file.size(p9b_zip_mp4[[1]]))) &&
-        identical(p9b_page_mp4[[2]], readBin(p9b_zip_mp4[[2]], "raw", file.size(p9b_zip_mp4[[2]]))) && identical(unname(p8c_png_size(p9b_poster_png)), c(1280L, 720L)) &&
+        identical(p9b_page_mp4[[2]], readBin(p9b_zip_mp4[[2]], "raw", file.size(p9b_zip_mp4[[2]]))) && identical(unname(p8c_png_size(p9b_poster_png)), c(1088L, 612L)) &&
+        identical(c(av::av_media_info(p9b_zip_mp4[[1]])$video$width, av::av_media_info(p9b_zip_mp4[[1]])$video$height), c(1088L, 612L)) &&
+        identical(c(av::av_media_info(p9b_zip_mp4[[2]])$video$width, av::av_media_info(p9b_zip_mp4[[2]])$video$height), c(1280L, 720L)) &&
+        lengths(gregexpr("<button type=\"button\" class=\"replay\" hidden", p9b_zh, fixed = TRUE)) == 2L && lengths(gregexpr("aria-label=\"Replay the video: ", p9b_zh, fixed = TRUE)) == 2L &&
         all(grepl("poster=\"data:image/png;base64,", p9b_zv, fixed = TRUE)) && grepl("prefers-reduced-motion:reduce", p9b_zh, fixed = TRUE) && lengths(gregexpr("<script>", p9b_zh, fixed = TRUE)) == 1L &&
         identical(p9b_z$modes, c("video", "picture", "video")) && grepl("1 picture, 0 interactive and 2 videos.", p9b_zh, fixed = TRUE) && length(p8c_requests(p9b_zh)) == 0L &&
         sum(grepl("<picture", p9b_zh, fixed = TRUE)) >= 1L && file.size(file.path(p9b_z$dir, "dashboard.html")) < 8e6)
@@ -6680,8 +6684,8 @@ p9b_play_js <- paste0("var v=document.querySelector('video');var d={};var done=f
 if (!p9_has_chrome) cat("note  Chrome was not found: the video is not played by 9B-18\n")
 p9b_played <- if (p9_has_chrome) p9b_chrome_run(file.path(p9b_z$dir, "dashboard.html"), p9b_play_js)
 p9b_reduced <- if (p9_has_chrome) p9b_chrome_run(file.path(p9b_z$dir, "dashboard.html"), p9b_play_js, "--force-prefers-reduced-motion")
-check("9B-18: in Chrome the exported <video> plays: its data is loaded (readyState 2 or more, no error), it is 1280 by 720 and 5.6 seconds long, its time moves once play() is called, it neither loops nor autoplays by itself; and with the system asking for reduced motion the video is not displayed and the still is (not run where Chrome is not installed)",
-      !p9_has_chrome || (!is.null(p9b_played) && p9b_played$rs >= 2L && identical(as.integer(p9b_played$err), 0L) && p9b_played$w == 1280 && p9b_played$h == 720 && abs(p9b_played$dur - 135 / 24) < 0.1 && p9b_played$t > 0 &&
+check("9B-18: in Chrome the exported <video> plays: its data is loaded (readyState 2 or more, no error), it is 1088 by 612 (the card's size) and 5.6 seconds long, its time moves once play() is called, it neither loops nor autoplays by itself; and with the system asking for reduced motion the video is not displayed and the still is (not run where Chrome is not installed)",
+      !p9_has_chrome || (!is.null(p9b_played) && p9b_played$rs >= 2L && identical(as.integer(p9b_played$err), 0L) && p9b_played$w == 1088 && p9b_played$h == 612 && abs(p9b_played$dur - 135 / 24) < 0.1 && p9b_played$t > 0 &&
                            !isTRUE(p9b_played$loop) && !isTRUE(p9b_played$auto) && identical(p9b_played$vdisp, "block") && identical(p9b_played$still, "none") &&
                            !is.null(p9b_reduced) && identical(p9b_reduced$vdisp, "none") && identical(p9b_reduced$still, "block")))
 # >>> 9B end of heavy
@@ -7144,7 +7148,7 @@ check("10A-11: a card's video is drawn with the marking in force (it leaves the 
         isTRUE(p10_e$dropped) && length(p10_e$video2) == 3L && identical(p10_e$video2[[3]]$marking, "CHANGED//MARKING"))
 
 # the last frame of a video is the static chart with its band: the frame keeps its 16 to 9 shape, the chart is drawn in the rows between the bands, and the last frame is spec_png() of the same plot, pixel for pixel
-p10_frames <- spec_frames(p10_specs$bar, p10_data, p10_cb, chart_palette_default(), n = 3L, bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS, marking = p10_mark)
+p10_frames <- spec_frames(p10_specs$bar, p10_data, p10_cb, chart_palette_default(), n = 3L, bare = TRUE, widths = 6.4, marking = p10_mark)
 p10_plot <- attr(p10_frames, "plot")
 p10_canvas <- attr(p10_plot, "canvas")
 p10_chart <- attr(p10_plot, "chart")
@@ -7154,7 +7158,7 @@ p10_f0 <- tempfile(fileext = ".png")
 video_draw(p10_frames[[3]], p10_f1, p10_canvas[["width"]], p10_canvas[["height"]], 100, marking = p10_mark)
 spec_png(p10_plot, p10_f2, size = p10_chart, dpi = 100, marking = p10_mark)
 video_draw(p10_frames[[1]], p10_f0, p10_canvas[["width"]], p10_canvas[["height"]], 100, marking = p10_mark)
-p10_plain_frames <- spec_frames(p10_specs$bar, p10_data, p10_cb, chart_palette_default(), n = 2L, bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS)
+p10_plain_frames <- spec_frames(p10_specs$bar, p10_data, p10_cb, chart_palette_default(), n = 2L, bare = TRUE, widths = 6.4)
 check("10A-12: a video frame keeps its 16 to 9 shape with the marking (6.4 by 3.6 inches: 640 by 360 pixels at 100 dpi), has the band at the top and at the bottom on the first frame (nothing drawn yet) and on the last, the chart is drawn in the rows between them (its canvas is 0.4 inch shorter), and the last frame is the static chart with its band (spec_png() of the same plot with the same marking) pixel for pixel; without a marking the canvas and the chart are the same",
       identical(unname(p10_canvas), c(6.4, 3.6)) && isTRUE(all.equal(unname(p10_chart), c(6.4, 3.6 - 2 * MARKING_BAND_IN))) && identical(dim(png::readPNG(p10_f1))[1:2], c(360L, 640L)) &&
         identical(png::readPNG(p10_f1), png::readPNG(p10_f2)) && all(purrr::map_lgl(c(p10_f0, p10_f1), function(f) { im <- png::readPNG(f); band <- as.integer(round(MARKING_BAND_IN * 100))
@@ -7264,7 +7268,7 @@ check("10B-1: a histogram bin's tooltip is written from the bins ggplot2 compute
       nrow(b10_hist) == nrow(b10_hist_static) && all(b10_hist$count == b10_hist_static$count) && sum(b10_hist$count) == 6 &&
         identical(b10_hist$tooltip, paste0("sales: ", fact_num(b10_hist$xmin, FALSE), " to ", fact_num(b10_hist$xmax, FALSE), "
 Count: ", fact_count(b10_hist$count))) &&
-        identical(widget_cell_tip(c(1, 2500)), c("Rows in this cell: 1", "Rows in this cell: 2,500")))
+        identical(widget_cell_tip("Rows", c(1, 2500)), c("Rows in this cell: 1", "Rows in this cell: 2,500")) && identical(widget_cell_tip("Orders", 3), "Orders in this cell: 3"))
 check("10B-2: a point drawn from a row carries the columns the chart plots and no other: the scatter's tooltip is its x, its y and its colour, and the column that is not plotted (a free text with a marker in it) is in no tooltip, no table of the widget and nowhere in the page text of the widget; a heatmap, bar and line carry only their own columns",
       all(grepl("^units: [0-9]+\nsales: [0-9.]+\nregion: (East|West)$", b10_tips(b10_s$scatter))) && !any(grepl("NOTPLOTTED", unlist(purrr::map(b10_t, function(t) c(t$.tip, names(t)))))) &&
         !any(purrr::map_lgl(b10_w, function(w) grepl("NOTPLOTTED", w$x$html, fixed = TRUE))) && !any(grepl("secret", names(attr(b10_plot(b10_s$scatter), "table")), fixed = TRUE)) &&
@@ -7355,7 +7359,7 @@ b10_bw <- spec_widget(b10_bp)
 b10_bt <- ggplot2::ggplot_build(attr(b10_bp, "widget_plot")())$data[[1]]
 check("10B-8: a scatter of 25,000 points is drawn as binned counts in the picture and in the interactive version (GeomInteractiveTile on the 2d bin statistic), a cell's tooltip says how many rows it counts and its count is the picture's, and the widget stays small (1,600 cells at most, under 0.5 MB of SVG)",
       isTRUE(attr(b10_bp, "spec")$.binned) && any(purrr::map_lgl(attr(b10_bp, "widget_plot")()$layers, function(l) identical(class(l$geom)[1], "GeomInteractiveTile") && grepl("Bin2d", class(l$stat)[1]))) &&
-        all(grepl("^Rows in this cell: [0-9,]+$", b10_bt$tooltip)) && identical(sum(b10_bt$count), 25000) && identical(b10_bt$count, ggplot2::ggplot_build(b10_bp)$data[[1]]$count) &&
+        all(grepl("^Points in this cell: [0-9,]+$", b10_bt$tooltip)) && identical(sum(b10_bt$count), 25000) && identical(b10_bt$count, ggplot2::ggplot_build(b10_bp)$data[[1]]$count) &&
         nrow(b10_bt) <= 1600L && nchar(b10_bw$x$html) < 0.5 * 1048576 && !length(widget_match(b10_bp, b10_bw)))
 
 }   # end of the fast run's Phase 10 Part B
@@ -7526,18 +7530,18 @@ check("10C-3: the table by hand: the index is S1 100 150 180 120 200 160 and S2 
 c10_fd <- c10_facts(c10_dbs, c10_d)
 c10_fi <- c10_facts(c10_idx)
 c10_fs <- c10_facts(c10_sm)
-check("10C-4: the facts by hand: the dumbbell gives each group's two values and the difference (D: T1 5, T2 50, difference 45 (900.0%); C: difference -10 (-25.0%)), the largest difference D (45), the smallest C (-10), 3 groups higher and 1 lower; the index gives each line's index at the end and at its peak (S1 160 at the end, 200 at its peak in 2023-05-01; S2 300 for both) and the highest at the end S2 (300), the lowest S1 (160), both above 100; the moving average line says S1 80 and S2 45.3 at the end and the raw values are the facts' own (S1 first 50, last 80)",
+check("10C-4: the facts by hand: the dumbbell gives each group's two values and the difference (D: T1 5, T2 50, difference 45 (900.0%); C: difference -10 (-25.0%)), the largest difference D (45), the smallest C (-10), 3 groups higher and 1 lower; the index gives each line's index at the end and at its peak (S1 160 at the end, 200 at its peak in May 2023; S2 300 for both) and the highest at the end S2 (300), the lowest S1 (160), both above 100; the moving average line says S1 80 and S2 45.3 at the end and the raw values are the facts' own (S1 first 50, last 80)",
       grepl("D: T1 5, T2 50, difference 45 (900.0%)", c10_fd, fixed = TRUE) && grepl("C: T1 40, T2 30, difference -10 (-25.0%)", c10_fd, fixed = TRUE) &&
         grepl("Largest difference (second less first): D (45)", c10_fd, fixed = TRUE) && grepl("Smallest difference (second less first): C (-10)", c10_fd, fixed = TRUE) &&
         grepl("Groups where the second value is higher: 3; lower: 1", c10_fd, fixed = TRUE) && grepl("Groups shown: 4", c10_fd, fixed = TRUE) &&
         grepl("Plotted: amount by grp, at the two values of cond", c10_fd, fixed = TRUE) &&
-        grepl("S1: index 100 at the start (2023-01-01), 160 at the end (2023-06-01), 200 at its peak (2023-05-01)", c10_fi, fixed = TRUE) &&
-        grepl("S2: index 100 at the start (2023-01-01), 300 at the end (2023-06-01), 300 at its peak (2023-06-01)", c10_fi, fixed = TRUE) &&
+        grepl("S1: index 100 at the start (Jan 2023), 160 at the end (Jun 2023), 200 at its peak (May 2023)", c10_fi, fixed = TRUE) &&
+        grepl("S2: index 100 at the start (Jan 2023), 300 at the end (Jun 2023), 300 at its peak (Jun 2023)", c10_fi, fixed = TRUE) &&
         grepl("Highest index at the end: S2 (300)", c10_fi, fixed = TRUE) && grepl("Lowest index at the end: S1 (160)", c10_fi, fixed = TRUE) &&
-        grepl("Lines above 100 at the end: 2 of 2", c10_fi, fixed = TRUE) && grepl("Indexed: every line is divided by its own value at the first month (2023-01-01) and multiplied by 100", c10_fi, fixed = TRUE) &&
+        grepl("Lines above 100 at the end: 2 of 2", c10_fi, fixed = TRUE) && grepl("Indexed: every line is divided by its own value at the first month (Jan 2023) and multiplied by 100", c10_fi, fixed = TRUE) &&
         grepl("Plotted: Index (first month = 100) by month, one line for each series", c10_fi, fixed = TRUE) && !grepl("Rose most", c10_fi, fixed = TRUE) &&
-        grepl("Moving average over 3 periods, at the end of S1 (2023-06-01): 80", c10_fs, fixed = TRUE) && grepl("Moving average over 3 periods, at the end of S2 (2023-06-01): 45.3", c10_fs, fixed = TRUE) &&
-        grepl("S1: first 50 (2023-01-01), last 80 (2023-06-01), change 30", c10_fs, fixed = TRUE) && grepl("Moving average: 3 periods", c10_fs, fixed = TRUE))
+        grepl("Moving average over 3 periods, at the end of S1 (Jun 2023): 80", c10_fs, fixed = TRUE) && grepl("Moving average over 3 periods, at the end of S2 (Jun 2023): 45.3", c10_fs, fixed = TRUE) &&
+        grepl("S1: first 50 (Jan 2023), last 80 (Jun 2023), change 30", c10_fs, fixed = TRUE) && grepl("Moving average: 3 periods", c10_fs, fixed = TRUE))
 
 # 10C-5: density. A scatter counts rows in cells when `density` is on, or auto and more than 2,000 points are drawn (and no highlight); cells replace see-through
 #   points and moved points; the legend says Rows; the fitted curve stays on top; the facts do not change
@@ -7594,7 +7598,7 @@ c10_bs <- ggplot2::ggplot_build(c10_ps$plot)$data
 check("10C-7: the index and the moving average as drawn: the y title is 'Index (first month = 100)' (the analyst's own y_label wins), a dashed rule at 100 is the last layer (a GeomHline), the note names the first month and says the picture depends on it, and the end labels carry the index (S1 160, S2 300); a moving average draws the raw line in the style's grey first and the average after it in the series colours, with the subtitle '3-period moving average; raw values in grey' unless the analyst wrote one, a note, and its end labels sit at the average (S2 45.3)",
       identical(ggplot2::get_labs(c10_pi$plot)$y, "Index (first month = 100)") && identical(ggplot2::get_labs(c10_pi2$plot)$y, "Growth since January") && identical(c10_pi$geoms[length(c10_pi$geoms)], "GeomHline") &&
         identical(ggplot2::ggplot_build(c10_pi$plot)$data[[length(c10_pi$geoms)]]$yintercept, 100) && identical(ggplot2::ggplot_build(c10_pi$plot)$data[[length(c10_pi$geoms)]]$linetype, "dashed") &&
-        any(grepl("first month (2023-01-01)", c10_pi$notes, fixed = TRUE)) && any(grepl("the picture depends on the starting period", c10_pi$notes, fixed = TRUE)) &&
+        any(grepl("first month (Jan 2023)", c10_pi$notes, fixed = TRUE)) && any(grepl("the picture depends on the starting period", c10_pi$notes, fixed = TRUE)) &&
         identical(c10_pi$spec$.index_unit, "month") && all(c("S1  160", "S2  300") %in% ggplot2::ggplot_build(c10_pi$plot)$data[[which(c10_pi$geoms == "GeomText")[1]]]$label) &&
         identical(c10_ps$geoms[1:2], c("GeomLine", "GeomLine")) && identical(c10_bs[[1]]$colour[1], CHART_STYLES$clean$grey) && !identical(c10_bs[[2]]$colour[1], CHART_STYLES$clean$grey) &&
         identical(ggplot2::get_labs(c10_ps$plot)$subtitle, "3-period moving average; raw values in grey") && identical(ggplot2::get_labs(c10_ps2$plot)$subtitle, "Mine") &&
@@ -7727,8 +7731,8 @@ check("10C-11: the interactive views: a dumbbell dot's tooltip is 'grp: D / amou
       identical(c10_dt$.tip[c10_dt$grp == "D" & c10_dt$cond == "T2"], "grp: D\namount: 50\ncond: T2") &&
         identical(unique(c10_dt$.series[c10_dt$grp == "D"]), "grp: D\nT1: 5\nT2: 50\nDifference (second less first): 45") &&
         identical(c10_dt$.hover[c10_dt$grp == "D"], rep("g1", 2)) && identical(unique(c10_dt$.hover), c("g1", "g2", "g3", "g4")) &&
-        identical(c10_sw$.tip[c10_sw$series == "S1" & c10_sw$month == as.Date("2023-03-01")], "month: 2023-03-01\namount: 90\nMoving average over 3 periods: 71.7\nseries: S1") &&
-        identical(c10_sw$.tip[c10_sw$series == "S1" & c10_sw$month == as.Date("2023-01-01")], "month: 2023-01-01\namount: 50\nMoving average over 3 periods: not yet\nseries: S1") &&
+        identical(c10_sw$.tip[c10_sw$series == "S1" & c10_sw$month == as.Date("2023-03-01")], "month: Mar 2023\namount: 90\nMoving average over 3 periods: 71.7\nseries: S1") &&
+        identical(c10_sw$.tip[c10_sw$series == "S1" & c10_sw$month == as.Date("2023-01-01")], "month: Jan 2023\namount: 50\nMoving average over 3 periods: not yet\nseries: S1") &&
         any(grepl("GeomInteractiveViolin", purrr::map_chr(attr(c10_pv$plot, "widget_plot")()$layers, function(l) class(l$geom)[1]))) &&
         all(purrr::map_lgl(c10_widgets, function(w) inherits(w, "girafe") && !length(attr(w, "warnings")))) && all(purrr::map_lgl(c10_match, function(m) !length(m))) &&
         grepl("Difference (second less first): 45", c10_dw$x$html, fixed = TRUE))
@@ -7736,7 +7740,7 @@ check("10C-11: the interactive views: a dumbbell dot's tooltip is 'grp: D / amou
 # 10C-12: the rules of the reflex files: the five new rules are in RULE_FAMILIES with their families and conditions (the dumbbell for a dumbbell, density for a scatter, the violin
 #   for a box that has a shape, the index and the smooth for a line that has them), each has a Label of at most 6 words, and the four files have the versions the work gave them
 c10_rules <- c("two_values_dumbbell", "density_is_automatic", "violin_on_request", "index_to_compare_growth", "smooth_on_request")
-check("10C-12: the reflex rules: two_values_dumbbell, density_is_automatic, violin_on_request, index_to_compare_growth and smooth_on_request are each in a reflex file with a Label of at most 6 words and in RULE_FAMILIES (the dumbbell rule fits a dumbbell and no other family; density a scatter; the violin a box with shape; the index and the smooth a line with index or smooth and no other); comparison.md is Version 0.3, relationship.md, distribution.md and time.md 0.2",
+check("10C-12: the reflex rules: two_values_dumbbell, density_is_automatic, violin_on_request, index_to_compare_growth and smooth_on_request are each in a reflex file with a Label of at most 6 words and in RULE_FAMILIES (the dumbbell rule fits a dumbbell and no other family; density a scatter; the violin a box with shape; the index and the smooth a line with index or smooth and no other); comparison.md is Version 0.3, relationship.md, distribution.md and time.md 0.2 (time.md 0.3 from Phase 10b)",
       all(c10_rules %in% names(reflex_labels())) && all(lengths(strsplit(reflex_labels()[c10_rules], "\\s+")) <= 6L) && all(c10_rules %in% names(RULE_FAMILIES)) &&
         rule_fits("two_values_dumbbell", list(family = "dumbbell")) && !rule_fits("two_values_dumbbell", list(family = "bar")) &&
         rule_fits("density_is_automatic", list(family = "scatter")) && !rule_fits("density_is_automatic", list(family = "bubble")) &&
@@ -7745,7 +7749,7 @@ check("10C-12: the reflex rules: two_values_dumbbell, density_is_automatic, viol
         rule_fits("smooth_on_request", list(family = "line", smooth = 12L)) && !rule_fits("smooth_on_request", list(family = "line")) &&
         all(c("two_values_dumbbell") %in% names(rfiles[["comparison.md"]]$reflexes)) && "density_is_automatic" %in% names(rfiles[["relationship.md"]]$reflexes) &&
         "violin_on_request" %in% names(rfiles[["distribution.md"]]$reflexes) && all(c("index_to_compare_growth", "smooth_on_request") %in% names(rfiles[["time.md"]]$reflexes)) &&
-        identical(unname(purrr::map_chr(rfiles[c("comparison.md", "relationship.md", "distribution.md", "time.md")], "version")), c("0.3", "0.2", "0.2", "0.2")))
+        identical(unname(purrr::map_chr(rfiles[c("comparison.md", "relationship.md", "distribution.md", "time.md")], "version")), c("0.3", "0.2", "0.2", "0.3")))
 
 # 10C-13: the reference, the dashboard and the methodology page: the model's reference names the four new fields and the dumbbell, in plain text under 5,000 characters; a dumbbell is
 #   drawn from rows when it has fn none and from totals otherwise; the methodology table has the five new rows, each with a thumbnail (the violin's from 40 prices in each region)
@@ -7873,7 +7877,7 @@ check("10D-5: in Briefing a heading's number or unit is wrapped in span.keep (te
         grepl("<h2> ?West drives <span class=\"keep\">34%</span> of revenue ?</h2>", d10_card) && grepl("<div class=\"slot\">", d10_card, fixed = TRUE) &&
         grepl("h1,.card h2,.stat-title{text-transform:uppercase;", d10_css_b, fixed = TRUE) && grepl(".keep{text-transform:none;}", d10_css_b, fixed = TRUE) &&
         grepl("--title-font:'Barlow Condensed', 'Arial Narrow', sans-serif;", d10_css_b, fixed = TRUE) && grepl("box-shadow:none;", d10_css_b, fixed = TRUE) &&
-        grepl(".card{background:var(--bg);border:1px solid #AEB3BA;border-radius:2px;", d10_css_b, fixed = TRUE) && grepl(".key-value.num{--max:2.6rem;}", d10_css_b, fixed = TRUE) &&
+        grepl(".card{background:var(--bg);border:1px solid #AEB3BA;border-radius:2px;", d10_css_b, fixed = TRUE) && grepl(".key-value{--max:2.6rem;}", d10_css_b, fixed = TRUE) &&
         !grepl("text-transform:uppercase;letter-spacing:.005em;}.subtitle", dash_css("clean", "#0072B2"), fixed = TRUE) && !grepl("h1,.card h2,.stat-title{text-transform", dash_css("clean", "#0072B2"), fixed = TRUE) &&
         grepl("@font-face{font-family:'Barlow Condensed';font-weight:700;", dash_font_css("briefing"), fixed = TRUE) && !grepl("font-family:'Barlow Condensed';font-weight:400", dash_font_css("briefing"), fixed = TRUE) &&
         !grepl("Barlow", dash_font_css("clean"), fixed = TRUE) && lengths(gregexpr("@font-face", dash_font_css("briefing"), fixed = TRUE)) == 3L)
@@ -7884,9 +7888,10 @@ d10_set <- list(boxes = c("rows", "columns", "third"), keys = c("c1|1", "c1|2", 
 d10_facts <- list(list(label = "Highest", value = "West (940,000)"), list(label = "Total", value = "2,740,000"), list(label = "The line", value = "last 142,000 (2024-12-01)"))
 d10_keys <- dash_keys(d10_set, d10_cb, d10_data, list(list(id = "c1", title = "Revenue by region", facts = d10_facts)))
 d10_strip <- as.character(dash_keys_tag(d10_keys))
-check("10D-6: the key numbers are a strip of at most six plain items: '3,000 rows', '22 columns' and 'Jan 2022 to Dec 2024' (the file's three), then each chosen fact as its value over '<what it is>, <chart name>'; a value of 14 characters or fewer is a number (class num, nowrap, scaled to its cell), a longer one (the period) is not; none is a box (no .box rule or class)",
-      identical(purrr::map_chr(d10_keys, "value"), c("3,000 rows", "22 columns", "Jan 2022 to Dec 2024", "West (940,000)", "2,740,000", "last 142,000 (2024-12-01)")) &&
-        identical(unlist(purrr::map(d10_keys, "what")), c("Highest, Revenue by region", "Total, Revenue by region", "The line, Revenue by region")) &&
+check("10D-6 (Phase 10b): the key numbers are a strip of at most six items, each a small-capital label over its value: Rows over '3,000', Columns over '22' and Period over 'Jan 2022 to Dec 2024' (the file's three), then each chosen fact with what it is as its label and the chart's name under its value; a value of 14 characters or fewer is a number (class num, nowrap, scaled to its cell), a longer one (the period) is not; none is a box (no .box rule or class)",
+      identical(purrr::map_chr(d10_keys, "value"), c("3,000", "22", "Jan 2022 to Dec 2024", "West (940,000)", "2,740,000", "last 142,000 (2024-12-01)")) &&
+        identical(purrr::map_chr(d10_keys, "label"), c("Rows", "Columns", "Period", "Highest", "Total", "The line")) &&
+        identical(unlist(purrr::map(d10_keys, "what")), rep("Revenue by region", 3)) && lengths(gregexpr("class=\"key-label\"", d10_strip, fixed = TRUE)) == 6L &&
         length(d10_keys) == DASH_KEYS_STRIP_MAX && TRUE &&
         lengths(gregexpr("<div class=\"key\">", d10_strip, fixed = TRUE)) == 6L && lengths(gregexpr("class=\"key-value num\"", d10_strip, fixed = TRUE)) == 4L &&
         lengths(gregexpr("class=\"key-value long", d10_strip, fixed = TRUE)) == 2L && lengths(gregexpr("<div class=\"key-what\">", d10_strip, fixed = TRUE)) == 3L &&
@@ -7902,7 +7907,7 @@ check("10D-7: the grid stretches its cards (align-items:stretch; a card is a fle
         grepl(".card{min-width:0;display:flex;flex-direction:column;}", d10_css, fixed = TRUE) && grepl(".card .slot{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;", d10_css, fixed = TRUE) &&
         !grepl("align-items:start", d10_css, fixed = TRUE) &&
         DASH_FULL_PANELS == 4L && !dash_card_wide(list(mode = "picture", panels = 4L)) && dash_card_wide(list(mode = "picture", panels = 5L)) && dash_card_wide(list(mode = "picture", panels = 9L)) &&
-        !dash_card_wide(list(mode = "picture")) && dash_card_wide(list(mode = "interactive", panels = 1L)) && dash_card_wide(list(mode = "table")) && dash_card_wide(list(mode = "picture", natural_wide = TRUE)) &&
+        !dash_card_wide(list(mode = "picture")) && !dash_card_wide(list(mode = "interactive", panels = 1L)) && dash_card_wide(list(mode = "interactive", panels = 5L)) && dash_card_wide(list(mode = "table")) && dash_card_wide(list(mode = "picture", natural_wide = TRUE)) &&
         identical(dash_layout(purrr::map_lgl(list(list(mode = "picture", panels = 1L), list(mode = "picture", panels = 1L), list(mode = "picture", panels = 6L)), dash_card_wide)), c(FALSE, FALSE, TRUE)) &&
         isTRUE(d10_rem("summary") == 1.05) && grepl("[.]summary[{][^}]*max-width:62ch;", d10_css) && isTRUE(d10_rem("notes") < d10_rem("summary")) && isTRUE(d10_rem("source") < d10_rem("notes")) &&
         grepl("[.]notes[{]color:var[(]--text2[)];", d10_css) && grepl("[.]source[{]color:var[(]--caption[)];", d10_css) && isTRUE(d10_rem("source") >= 0.7))
@@ -7918,8 +7923,8 @@ d10_dodge <- function(web, style = "clean") {
 }
 d10_dd <- list(usual = d10_dodge(NULL), desk = d10_dodge(dash_web("desk")), phone = d10_dodge(dash_web("phone")), wide = d10_dodge(dash_web("wide")))
 d10_wid <- spec_widget(spec_plot(d10_heat, d10_data, d10_cb, d10_pal("clean"), web = dash_web("phone")))
-check("10D-8: the heatmap's 12 quarters on x ('2022 Q1' and on) are dodged into rows so that no two labels touch: 2 rows at the usual 7 inches and on a half-width card, 3 on a phone drawing, none on a wide card; the interactive version is built from the same layers and draws every label",
-      identical(d10_dd, list(usual = 2L, desk = 2L, phone = 3L, wide = 1L)) && HEAT_LABEL_IN == 0.62 &&
+check("10D-8: the heatmap's 12 quarters on x ('2022 Q1' and on) are dodged into rows so that no two labels touch: 2 rows at the usual 7 inches and on a half-width card, 3 on a phone drawing, and 2 on the wide card too (Phase 10b: it is 640 pixels, the column beside the text, no longer 1120); the interactive version is built from the same layers and draws every label",
+      identical(d10_dd, list(usual = 2L, desk = 2L, phone = 3L, wide = 2L)) && HEAT_LABEL_IN == 0.62 &&
         inherits(d10_wid, "girafe") && length(attr(d10_wid, "warnings")) == 0L &&
         all(purrr::map_lgl(c("2022 Q1", "2022 Q4", "2024 Q4"), function(l) grepl(l, d10_wid$x$html, fixed = TRUE))))
 
@@ -7972,6 +7977,189 @@ check("10D-11: in Chrome at 1400 and 500 pixels, in Clean and in Briefing, the c
 }   # the heavy run only
 # <<< 10D end
 
+
+
+# ---- Phase 10b: the closing fix list (the density view, violins, indexed lines, dates in the facts, the key strip, headings, the video card, the full-width card) --------
+# >>> 10b begin
+if (run_fast) {   # the fast run only; not indented, to keep the diff small
+b10b_spec <- list(family = "scatter", x = "unit_price", y = "units", fn = "none", fit = "loess", log_x = TRUE, log_y = TRUE, title = "Units ordered against unit price.")
+b10b_plot <- function(spec, style = "clean", cb = d10_cb, web = NULL) spec_plot(spec, d10_data, cb, d10_pal(style), web = web)
+b10b_p <- b10b_plot(b10b_spec)
+b10b_d <- ggplot2::ggplot_build(b10b_p)
+b10b_cells <- b10b_d$data[[1]]
+b10b_edges <- attr(b10b_p, "spec")$.bin_breaks
+b10b_smooth <- b10b_d$data[purrr::map_lgl(b10b_p$layers, function(l) inherits(l$geom, "GeomSmooth"))]
+b10b_tipv <- as.numeric(purrr::map_dbl(b10b_smooth, function(d) mean(10^d$x > 17 & 10^d$x < 47)))
+check("10b-1: the density view counts rows on the scale that is drawn: an axis of at most 40 different values is binned at those values (units, 38 values on a log axis: 39 edges halfway between the values, each value in a cell of its own, no gap between cells), any other in 30 cells of one width in log units (unit_price: 31 edges, equal ratios), empty cells are not drawn, and the picture and its interactive twin have the same cells",
+      identical(bin_edges(c(1, 2, 3, 10), FALSE), c(0.5, 1.5, 2.5, 6.5, 13.5)) && length(bin_edges(c(1, 10, 100), TRUE)) == 4L &&
+        isTRUE(all.equal(diff(log10(bin_edges(c(1, 10, 100), TRUE))), rep(1, 3), tolerance = 1e-3)) &&
+        length(bin_edges(1:100, FALSE)) == SPEC_BIN_2D + 1L && isTRUE(all.equal(diff(diff(bin_edges(1:100, FALSE))), rep(0, SPEC_BIN_2D - 1L), tolerance = 1e-3)) &&
+        length(bin_edges(1:100, TRUE)) == SPEC_BIN_2D + 1L && stats::sd(diff(log10(bin_edges(1:100, TRUE)))) < 1e-3 && SPEC_BIN_2D == 30L && SPEC_BIN_DISTINCT == 40L &&
+        length(unique(d10_data$units)) == 38L && length(b10b_edges$y) == 39L && length(unique(findInterval(d10_data$units, b10b_edges$y))) == 38L &&
+        length(b10b_edges$x) == SPEC_BIN_2D + 1L && stats::sd(diff(log10(b10b_edges$x))) < 1e-3 && min(d10_data$unit_price, na.rm = TRUE) > b10b_edges$x[1] &&
+        all(b10b_cells$count > 0) && sum(b10b_cells$count) == sum(!is.na(d10_data$units) & !is.na(d10_data$unit_price)) &&
+        isTRUE(all.equal(sort(unique(b10b_cells$ymin)), sort(unique(log10(b10b_edges$y[-length(b10b_edges$y)]))), tolerance = 1e-6)) &&
+        length(unique(round(b10b_cells$xmax - b10b_cells$xmin, 6))) == 1L &&
+        !length(widget_match(b10b_p, spec_widget(b10b_p))) && all(grepl("^Orders in this cell: ", ggplot2::ggplot_build(attr(b10b_p, "widget_plot")())$data[[1]]$tooltip)) &&
+        isTRUE(attr(b10b_plot(c(b10b_spec, list(facet = "channel", free_y = TRUE))), "spec")$.binned) && isTRUE(mark_count(attr(b10b_p, "spec"), attr(b10b_p, "table")) == 30L * 38L))
+check("10b-2: the cells take the style's own ramp, from a light tint of its accent to the accent (the least count is the first colour, the largest the accent: Clean, Briefing and Dark; in Dark the tint is dark against a dark ground), the analyst's sequential palette only when she chose one; the legend is titled with the plural of the dictionary's word for a row ('one order' is Orders, 'one country' Countries, 'one point of one dataset' Rows)",
+      all(purrr::map_lgl(c("clean", "briefing", "dark", "minimal", "magazine", "desk", "newspaper"), function(st) {
+        r = chart_style_ramp(st); d = ggplot2::ggplot_build(b10b_plot(b10b_spec, st))$data[[1]]
+        length(r) == 7L && identical(r[7], toupper(chart_style(st)$accent)) && identical(toupper(d$fill[which.max(d$count)]), r[7]) && identical(toupper(d$fill[which.min(d$count)]), r[1]) &&
+          chart_contrast(r[1], chart_style(st)$panel) >= 1.15 && chart_contrast(r[7], chart_style(st)$panel) >= 3 })) &&
+        !any(chart_style_ramp("briefing") %in% CHART_SEQUENTIAL) && identical(spec_palette(d10_pal("briefing"))$ramp, chart_style_ramp("briefing")) &&
+        identical(spec_palette(utils::modifyList(d10_pal("briefing"), list(sequential = "blues")))$ramp, chart_sequential("blues")) &&
+        identical(toupper(ggplot2::ggplot_build(b10b_plot(b10b_spec, "briefing", web = NULL))$data[[1]]$fill[1]) %in% chart_style_ramp("briefing"), TRUE) &&
+        identical(ggplot2::get_labs(b10b_p)$fill, "Orders") && identical(row_word(list(row_is = "one country")), "Countries") && identical(row_word(list(row_is = "A company.")), "Companies") &&
+        identical(row_word(list(row_is = "one point of one dataset")), "Rows") && identical(row_word(list(row_is = "")), "Rows") && identical(row_word(list()), "Rows") &&
+        identical(ggplot2::get_labs(b10b_plot(b10b_spec, cb = utils::modifyList(d10_cb, list(row_is = "one point of one dataset"))))$fill, "Rows"))
+check("10b-3: the fitted curve is drawn only where there are rows of x: the 3,000 orders have no price between about 17 and 47, so the curve is two pieces (two GeomSmooth layers) and has no point in that gap; a curve over x with no empty stretch stays one piece (fit_runs() cuts at two empty cells in a row, and leaves out a stretch of one value)",
+      length(b10b_smooth) == 2L && all(b10b_tipv == 0) && all(purrr::map_lgl(b10b_smooth, function(d) nrow(d) == SPEC_FIT_POINTS)) &&
+        isTRUE(all.equal(fit_runs(c(1:10, 60:90), c(1, 90), seq(0.5, 90.5, length.out = 31), FALSE), list(c(1, 10), c(60, 90)))) &&
+        is.null(fit_runs(1:90, c(1, 90), seq(0.5, 90.5, length.out = 31), FALSE)) && SPEC_FIT_GAP_BINS == 2L &&
+        isTRUE(all.equal(fit_runs(c(1:10, 40, 60:90), c(1, 90), seq(0.5, 90.5, length.out = 31), FALSE), list(c(1, 10), c(60, 90)))) &&
+        sum(purrr::map_lgl(b10b_plot(utils::modifyList(b10b_spec, list(density = "off")))$layers, function(l) inherits(l$geom, "GeomSmooth"))) == 1L)
+b10b_vio <- list(family = "box", x = "channel", y = "unit_price", fn = "none", shape = "violin", title = "Prices")
+check("10b-4: a violin is filled with the series colour at 20 per cent (one colour for every group), its outline in the colour; the box inside stays solid in that colour; the rows beyond the whiskers are small dots as in a plain box (the inner box no longer hides its outliers); the interactive twin matches",
+      local({
+        p = b10b_plot(b10b_vio, "briefing"); pal = spec_palette(d10_pal("briefing")); v = p$layers[[1]]; b = p$layers[[2]]
+        inherits(v$geom, "GeomViolin") && inherits(b$geom, "GeomBoxplot") && identical(v$aes_params$fill, pal$single) && isTRUE(v$aes_params$alpha == 0.2) && identical(SPEC_VIOLIN_ALPHA, 0.2) &&
+          identical(v$aes_params$colour, pal$single) && identical(b$aes_params$fill, pal$single) && is.null(b$aes_params$alpha) && !isTRUE(is.na(b$geom_params$outlier.shape)) &&
+          any(lengths(ggplot2::ggplot_build(p)$data[[2]]$outliers) > 0L) && !length(widget_match(p, spec_widget(p))) &&
+          any(grepl("alpha = 0.2", spec_code(attr(p, "spec"), d10_cb, file.path("tests", "data", "orders.csv"), d10_pal("briefing")), fixed = TRUE))
+      }))
+b10b_idx <- list(family = "line", x = "order_month", y = "revenue", color = "product_category", fn = "sum", index = "first", title = "Revenue indexed")
+b10b_ip <- b10b_plot(b10b_idx, "briefing"); b10b_is <- attr(b10b_ip, "spec")
+b10b_ih <- b10b_plot(c(b10b_idx, list(highlight = list(column = "product_category", values = list("Software", "Cables")))), "briefing")
+b10b_lines <- function(p) ggplot2::ggplot_build(p)$data[purrr::map_lgl(p$layers, function(l) inherits(l$geom, "GeomLine") && !inherits(l$geom, "GeomInteractiveLine"))]
+b10b_txt <- function(p) { i <- which(purrr::map_lgl(p$layers, function(l) inherits(l$geom, "GeomText")))[1]; ggplot2::ggplot_build(p)$data[[i]]$label }
+check("10b-5: indexed lines are one panel whatever the number of series (nine categories: no facet), each line not highlighted in the style's slate (every line when none is), the highlighted in its accent, no legend, and each name written at its line's end only where it does not touch another (the ends are taken in the order of how far they are from 100; the names left out are in a note); index with facet is refused in a sentence the model can act on",
+      inherits(b10b_ip$facet, "FacetNull") && length(unique(attr(b10b_ip, "table")$product_category)) == 9L &&
+        all(purrr::map_lgl(b10b_lines(b10b_ip), function(d) all(toupper(d$colour) == toupper(CHART_STYLES$briefing$slate)))) &&
+        identical(toupper(b10b_lines(b10b_ih)[[2]]$colour[1]), toupper(CHART_STYLES$briefing$accent)) && identical(toupper(b10b_lines(b10b_ih)[[1]]$colour[1]), toupper(CHART_STYLES$briefing$slate)) &&
+        length(b10b_txt(b10b_ip)) >= 2L && length(b10b_txt(b10b_ip)) < 9L && length(b10b_is$.label_series) == length(b10b_txt(b10b_ip)) && is.null(b10b_is$.legend_order) &&
+        any(grepl("line names are left out at the line ends because the ends lie too close together", attr(b10b_ip, "notes"), fixed = TRUE)) &&
+        !any(grepl("facet", attr(b10b_ip, "notes"), fixed = TRUE)) && !any(grepl("colours are hard", attr(b10b_ip, "notes"), fixed = TRUE)) &&
+        identical(sort(sub("  .*$", "", b10b_txt(b10b_ih))), c("Cables", "Software")) && identical(ggplot2::get_labs(b10b_ih)$colour, NULL) &&
+        identical(index_label_keep(c(100, 101, 300, 302, 500), 10), c(2L, 4L, 5L)) && identical(index_label_keep(c(100, 200), 10), 1:2) &&
+        identical(spec_check(c(b10b_idx, list(facet = "channel")), d10_cb), "index puts every series in one panel; remove `facet`, and use `highlight` for the few series the question is about.") &&
+        !length(spec_check(c(b10b_idx[names(b10b_idx) != "index"], list(facet = "channel", index = "none")), d10_cb)) &&
+        inherits(b10b_plot(b10b_idx, web = dash_web("phone"))$facet, "FacetNull") && !length(widget_match(b10b_ip, spec_widget(b10b_ip))) &&
+        grepl("all the lines in one panel (no facet)", spec_reference(), fixed = TRUE))
+b10b_time <- as.Date(c("2023-12-01", "2024-01-01", "2024-02-01"))
+b10b_facts <- function(spec) { p = b10b_plot(spec); spec_facts(attr(p, "spec"), attr(p, "table"), d10_cb)$text }
+b10b_trend <- list(family = "line", x = "order_month", y = "revenue", fn = "sum", title = "Revenue", annotate = list("highest", "lowest"))
+b10b_f <- b10b_facts(b10b_trend)
+b10b_iso <- "[0-9]{4}-[0-9]{2}-[0-9]{2}"
+check("10b-6: a period is named as the axis names it, where the facts are formatted: 'Dec 2023' for monthly dates, the year for yearly ones, '3 Jan 2024' for daily; judged on the whole series (one date of a monthly series is still 'Jan 2024'); facts, tooltips, annotations, notes and the code's own labels carry no ISO date; the number check finds the new forms (a headline with 'Dec 2023' or '3 Jan 2024' passes, a number that is not in the facts is still found, the day of a date is not a number to get wrong)",
+      identical(fact_date(b10b_time), c("Dec 2023", "Jan 2024", "Feb 2024")) && identical(fact_date(as.Date(c("2023-01-01", "2024-01-01"))), c("2023", "2024")) &&
+        identical(fact_date(as.Date(c("2024-01-03", "2024-01-04"))), c("3 Jan 2024", "4 Jan 2024")) && identical(fact_time(b10b_time[2], b10b_time), "Jan 2024") &&
+        identical(fact_time(as.POSIXct("2024-01-03 14:30:00", tz = "UTC")), "3 Jan 2024 14:30") && identical(fact_time(2024), "2024") && identical(fact_time(c("a", "b")), c("a", "b")) &&
+        grepl("(Jan 2022)", b10b_f, fixed = TRUE) && grepl("(Dec 2024)", b10b_f, fixed = TRUE) && grepl("a year before the last point (Dec 2023) it was", b10b_f, fixed = TRUE) && !grepl(b10b_iso, b10b_f) &&
+        grepl("(2 Jan 2022)", b10b_facts(list(family = "line", x = "order_date", y = "revenue", fn = "sum", title = "d")), fixed = TRUE) &&
+        !grepl(b10b_iso, b10b_facts(b10b_idx)) && !any(grepl(b10b_iso, attr(b10b_ip, "notes"))) && any(grepl("first month (Jan 2022)", attr(b10b_ip, "notes"), fixed = TRUE)) &&
+        !any(grepl(b10b_iso, widget_tips(attr(b10b_plot(b10b_trend), "spec"), d10_cb, attr(b10b_plot(b10b_trend), "table")))) &&
+        any(grepl("Lowest: 33,800 \\(Jan 2023\\)", ggplot2::ggplot_build(b10b_plot(b10b_trend))$data[[which(purrr::map_lgl(b10b_plot(b10b_trend)$layers, function(l) inherits(l$geom, "GeomLabel")))[1]]]$label)) &&
+        !grepl("as.character(order_month)", paste(spec_code(attr(b10b_plot(b10b_trend), "spec"), d10_cb, file.path("tests", "data", "orders.csv")), collapse = "\n"), fixed = TRUE) &&
+        grepl("chart_date <- function", paste(spec_code(attr(b10b_plot(b10b_trend), "spec"), d10_cb, file.path("tests", "data", "orders.csv")), collapse = "\n"), fixed = TRUE) &&
+        !length(check_numbers("Revenue went from 39,000 in Jan 2022 to 142,000 in Dec 2024, and a year before that, in Dec 2023, it was 132,000.", b10b_f)) &&
+        !length(check_numbers("The first day, 2 Jan 2022, had 199 in revenue.", "The line: first 199 (2 Jan 2022), last 545 (31 Dec 2024)")) &&
+        identical(check_numbers("It had 5 orders on 3 Jan 2024.", "The line: first 199 (3 Jan 2024)"), "5") && identical(check_numbers("It was 12 on 3 Jan 2024.", "first 199 (3 Jan 2024)"), "12") &&
+        identical(sapply(text_numbers("3 Jan 2024 and Dec 2023 and 31 December 2024"), function(n) n$text), c("2024", "2023", "2024")) &&
+        identical(sapply(text_numbers("on 2024-12-01"), function(n) n$text), "2024"))
+b10b_hs <- c("Revenue rose." = "Revenue rose", "Revenue rose..." = "Revenue rose...", "Prices vary, e.g." = "Prices vary, e.g.", "Growth reached 1.5." = "Growth reached 1.5", "Growth 1.5" = "Growth 1.5",
+             "Costs fell, etc." = "Costs fell, etc.", "Made in the U.S." = "Made in the U.S.", "Done. " = "Done", "Plain" = "Plain", "Two. Sentences." = "Two. Sentences")
+b10b_card <- as.character(dash_card(list(mode = "picture", title = "Chart title", headline = "Revenue rose 34% in 2024.", summary = "A summary.", notes = NULL, source = "Source: x.", chart_subtitle = NULL,
+                                         pictures = list(desk = list(uri = "data:image/png;base64,AA==", pixels = c(540, 345)), phone = list(uri = "data:image/png;base64,AA==", pixels = c(340, 272)))), full = FALSE, style = "briefing"))
+b10b_sp <- b10b_spec; b10b_sp$title <- "Units ordered against unit price."
+check("10b-7: a heading drops one trailing full stop where it is shown as a heading (the page's card heading, the masthead, a table card, the canvas heading, the title drawn on the chart in every style), and the stored text is unchanged; not an ellipsis, not 'e.g.' or 'etc.' or 'U.S.', a decimal number has none to lose, only one stop goes",
+      all(purrr::map_lgl(seq_along(b10b_hs), function(i) identical(chart_heading_text(names(b10b_hs)[i]), unname(b10b_hs[i])))) && is.null(chart_heading_text(NULL)) && identical(chart_heading_text(NA_character_), NA_character_) &&
+        grepl("<h2> ?Revenue rose <span class=\"keep\">34%</span> in <span class=\"keep\">2024</span> ?</h2>", gsub("\\s+", " ", b10b_card)) && identical(dash_heading_text("Revenue rose.", "clean"), "Revenue rose") &&
+        identical(ggplot2::get_labs(b10b_plot(b10b_sp, "clean"))$title, "Units ordered against unit price") && identical(ggplot2::get_labs(b10b_plot(b10b_sp, "briefing"))$title, "UNITS ORDERED AGAINST UNIT PRICE") &&
+        identical(attr(b10b_plot(b10b_sp), "spec")$title, "Units ordered against unit price.") && identical(b10b_sp$title, "Units ordered against unit price.") &&
+        any(grepl("title = \"Units ordered against unit price\"", spec_code(attr(b10b_plot(b10b_sp), "spec"), d10_cb, file.path("tests", "data", "orders.csv")), fixed = TRUE)) &&
+        grepl("<p class=\"card-sub\">Chart title</p>", b10b_card, fixed = TRUE) && grepl("alt=\"Chart title. Revenue rose 34% in 2024.\"", b10b_card, fixed = TRUE))
+b10b_keys <- list(list(label = "Rows", value = "3,000", full = "3,000", what = NULL, cls = ""), list(label = "Period", value = "Jan 2022 to Dec 2024", full = "x", what = NULL, cls = "chart-box-period"),
+                  list(label = "Highest", value = "West (940,000)", full = "x", what = "Revenue by region", cls = ""))
+b10b_strip <- as.character(dash_keys_tag(b10b_keys)); b10b_css <- dash_css("clean", "#0072B2")
+check("10b-8: the key strip has a small-capital label above each value (the label is one line, in small capitals), a chosen fact's chart name under its value; every value of the strip has one type size: the strip carries one width in ems (--w, the widest need among its values, a long value counting about half its width as it may break over two lines) and every value is sized from it, so the numbers share a size and a baseline; the canvas strip is the same markup",
+      lengths(gregexpr("<div class=\"key-label\"", b10b_strip, fixed = TRUE)) == 3L && grepl("<div class=\"key-label\" title=\"Rows\">Rows</div>\\s*<div class=\"key-value num\" title=\"3,000\">3,000</div>", b10b_strip) &&
+        grepl("<div class=\"key-value long chart-box-period\" title=\"x\">Jan 2022 to Dec 2024</div>", b10b_strip, fixed = TRUE) && grepl("<div class=\"key-what\">Revenue by region</div>", b10b_strip, fixed = TRUE) &&
+        grepl("<div class=\"keys\" role=\"group\" aria-label=\"Key numbers\" style=\"--w:[0-9.]+;\">", b10b_strip) && !grepl("class=\"key-value[^\"]*\"[^>]* style=", b10b_strip) &&
+        identical(as.numeric(sub("^.*--w:([0-9.]+);.*$", "\\1", b10b_strip)), max(purrr::map_dbl(b10b_keys, function(k) dash_key_need(k$value)))) &&
+        dash_key_need("Jan 2022 to Dec 2024") < dash_value_em("Jan 2022 to Dec 2024") && dash_key_need("3,000") == dash_value_em("3,000") && dash_key_need("") == 1 &&
+        grepl(".key-label{color:var(--text2);font-variant-caps:all-small-caps;", b10b_css, fixed = TRUE) && grepl("white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}", b10b_css, fixed = TRUE) &&
+        grepl(".key-value{--max:2.1rem;", b10b_css, fixed = TRUE) && grepl("@supports (width:1cqi){.key{container-type:inline-size;}.key-value{font-size:min(var(--max),calc(100cqi / var(--w)));}}", b10b_css, fixed = TRUE) &&
+        grepl(".keys{align-items:start;}", b10b_css, fixed = TRUE) && !grepl("last-child:nth-child(odd){grid-column", b10b_css, fixed = TRUE) &&
+        grepl("class=\"keys chart-keys\"", paste(as.character(canvas_boxes(data.frame(a = 1:2), list(file = "f.csv", columns = list()))), collapse = ""), fixed = TRUE) &&
+        grepl(".chart-keys .key-label", EXPLORE_CSS, fixed = TRUE) && grepl("calc(100cqi / var(--w))", EXPLORE_CSS, fixed = TRUE) && !grepl("key-value.long { --max", EXPLORE_CSS, fixed = TRUE))
+b10b_seen <- new.env()
+b10b_fake_widget <- function(p) { b10b_seen$width <- c(b10b_seen$width, attr(p, "spec")$.fig_width); spec_widget(p) }
+b10b_items <- list(p8c_item(1, p9_s$bar, mode = "interactive"), p8c_item(2, p9_s$box, mode = "picture"), p8c_item(3, p9_s$line, mode = "interactive"))
+b10b_z <- p9_build(b10b_items, widget = b10b_fake_widget)
+b10b_cards <- regmatches(p8c_sq(b10b_z$html), gregexpr("<article class=\"card[^\"]*\">.*?</article>", p8c_sq(b10b_z$html), perl = TRUE))[[1]]
+check("10b-9: an interactive chart is sized to its card like a picture and asks for no row of its own: it is drawn for the half-width card (540 pixels) unless its card has a row (the last card alone: 640), so three cards (interactive, picture, interactive) are two to a row and one full; a card that has a row is a column of 62 per cent and one of 38 on a screen of 900 pixels or more (the headline across the top, the chart title, summary, notes and source in the right column, each in its own row) and stacked under that and in print; the card's parts keep their order",
+      identical(unname(b10b_seen$width), c(540 / 96, 640 / 96)) && identical(b10b_z$full, c(FALSE, FALSE, TRUE)) && identical(b10b_z$modes, c("interactive", "picture", "interactive")) &&
+        !dash_card_wide(list(mode = "interactive", panels = 1L)) && dash_card_wide(list(mode = "interactive", panels = 5L)) && DASH_WIDE_PX == 640L && DASH_DESK_PX == 540L &&
+        length(b10b_cards) == 3L && grepl("class=\"card full\"", b10b_cards[3], fixed = TRUE) && grepl("class=\"widget\"", b10b_cards[1], fixed = TRUE) &&
+        grepl("@media screen and (min-width:900px){.card.full:not(.table-card){display:grid;grid-template-columns:minmax(0,62fr) minmax(0,38fr);grid-template-rows:repeat(6,auto) 1fr;", b10b_z$html, fixed = TRUE) &&
+        grepl(".card.full:not(.table-card)>.slot{grid-column:1;grid-row:2/8;}", b10b_z$html, fixed = TRUE) && grepl(".card.full:not(.table-card)>.summary{grid-column:2;grid-row:4;", b10b_z$html, fixed = TRUE) &&
+        grepl(".card.full:not(.table-card)>.source{grid-column:2;grid-row:6;}}", b10b_z$html, fixed = TRUE) && grepl(".card.full:not(.table-card)>h2{grid-column:1/-1;grid-row:1;}", b10b_z$html, fixed = TRUE) &&
+        all(purrr::map_lgl(b10b_cards, function(h) { at <- purrr::map_int(c("<h2>", "class=\"card-sub\"", "class=\"slot\"", "class=\"summary\"", "class=\"source\""), function(k) as.integer(regexpr(k, h, fixed = TRUE))); all(at > 0L) && !is.unsorted(at) })) &&
+        !grepl("max-width:1120px", b10b_z$html, fixed = TRUE))
+b10b_vh <- dash_video_tag(list(video = list(uri = "data:video/mp4;base64,AA==", poster = "data:image/png;base64,AA==", size = "desk")), "Alt text")
+b10b_vhw <- dash_video_tag(list(video = list(uri = "data:video/mp4;base64,AA==", poster = "data:image/png;base64,AA==", size = "wide")), "Alt text")
+b10b_vs <- gsub("\\s+", " ", as.character(b10b_vh))
+check("10b-10: the video card shows the finished chart before play (its poster, a PNG of the last frame at the video's own pixels) and under reduced motion (the still), rests on its last frame when it ends (the browser keeps it; the box never wider than the video was drawn for: 544 CSS pixels for a card that shares its row, 640 for one that has its row, twice those in pixels), and has a Replay button under it that the page's script shows, a real button (reachable by keyboard, labelled 'Replay the video: <what it shows>'); the script starts the video again from the start; nothing plays before the script runs",
+      grepl("<div class=\"video-box\" style=\"max-width:544px;\">", b10b_vs, fixed = TRUE) && grepl("max-width:640px;", as.character(b10b_vhw), fixed = TRUE) && grepl("preload=\"none\"", b10b_vs, fixed = TRUE) &&
+        grepl("poster=\"data:image/png;base64,AA==\"", b10b_vs, fixed = TRUE) && grepl("<img class=\"still\" src=\"data:image/png;base64,AA==\"", b10b_vs, fixed = TRUE) && grepl("width=\"544\" height=\"306\"", b10b_vs, fixed = TRUE) &&
+        !grepl("autoplay|loop", b10b_vs) && grepl("<button type=\"button\" class=\"replay\" hidden aria-label=\"Replay the video: Alt text\">Replay</button>", b10b_vs, fixed = TRUE) &&
+        identical(SPEC_VIDEO_DASH_PX$desk, c(width = 1088, height = 612)) && identical(SPEC_VIDEO_DASH_PX$wide, c(width = 1280, height = 720)) &&
+        identical(unname(SPEC_VIDEO_DASH_PX$desk[["width"]] / SPEC_VIDEO_DASH_WIDTHS[["desk"]]), 192) && identical(unname(SPEC_VIDEO_DASH_PX$wide[["width"]] / SPEC_VIDEO_DASH_WIDTHS[["wide"]]), 192) &&
+        grepl("button.replay", DASH_VIDEO_JS, fixed = TRUE) && grepl("b.hidden = false;", DASH_VIDEO_JS, fixed = TRUE) && grepl("v.currentTime = 0;", DASH_VIDEO_JS, fixed = TRUE) && grepl(".play()", DASH_VIDEO_JS, fixed = TRUE) &&
+        regexpr("b.hidden = false;", DASH_VIDEO_JS, fixed = TRUE)[[1]] < regexpr("IntersectionObserver", DASH_VIDEO_JS, fixed = TRUE)[[1]] &&
+        grepl(".video-box .replay[hidden]{display:none;}", DASH_VIDEO_CSS, fixed = TRUE) && grepl(":focus-visible{outline:3px solid", DASH_VIDEO_CSS, fixed = TRUE) &&
+        grepl("@media (prefers-reduced-motion:reduce){.video-box video,.video-box .replay{display:none;}.video-box .still{display:block;}}", DASH_VIDEO_CSS, fixed = TRUE) &&
+        grepl("video-box video,.video-box .replay{display:none;}", regmatches(b10b_z$html, regexpr("@media print\\{.*", b10b_z$html)), fixed = TRUE) &&
+        !grepl("preload=\"auto\"", b10b_vs, fixed = TRUE))
+}   # the fast run only
+if (run_heavy) {   # the heavy run only: the page laid out by Chrome (the card beside its text, the key strip, the Replay button); not indented, to keep the diff small
+b10b_js <- paste0("var r=function(e){var b=e.getBoundingClientRect();return {l:b.left,t:b.top+scrollY,r:b.right,b:b.bottom+scrollY}};",
+                  "var d={cw:document.documentElement.clientWidth,sw:document.documentElement.scrollWidth,",
+                  "full:[].map.call(document.querySelectorAll('.card.full:not(.table-card)'),function(c){return {card:r(c),slot:r(c.querySelector('.slot')),parts:[].map.call(c.children,function(e){return {cls:e.className||e.tagName,r:r(e)}})}}),",
+                  "keys:[].map.call(document.querySelectorAll('.key-value'),function(e){var l=e.previousElementSibling;return {fs:parseFloat(getComputedStyle(e).fontSize),top:e.getBoundingClientRect().top+scrollY,ltop:l.getBoundingClientRect().top+scrollY}})};",
+                  "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9\" content=\"'+JSON.stringify(d).replace(/\"/g,'&quot;')+'\">');")
+b10b_dom <- if (p9_has_chrome) purrr::map(c(`1400` = 1400, `1000` = 1000, `899` = 899, `500` = 500), function(w) p9_dom(file.path(p9_six$briefing$dir, "dashboard.html"), w, b10b_js))
+b10b_hit <- function(a, b) a$l < b$r - 1 && b$l < a$r - 1 && a$t < b$b - 1 && b$t < a$b - 1
+b10b_card_ok <- function(m, i, wide) {
+  parts <- m$full$parts[[i]]; slot <- m$full$slot[i, ]; card <- m$full$card[i, ]
+  rect <- function(k) list(l = parts$r$l[k], t = parts$r$t[k], r = parts$r$r[k], b = parts$r$b[k])
+  at <- seq_len(nrow(parts)); head <- which(parts$cls == "H2"); side <- setdiff(at, c(head, which(parts$cls == "slot")))
+  clear <- all(purrr::map_lgl(utils::combn(at, 2, simplify = FALSE), function(ab) !b10b_hit(rect(ab[[1]]), rect(ab[[2]]))))
+  geom <- if (wide) {
+    share <- (slot$r - slot$l) / (card$r - card$l)
+    all(parts$r$l[side] > slot$r - 1) && share > 0.5 && share < 0.66 && all(abs(parts$r$t[side[1]] - slot$t) < 40) && all(abs(parts$r$l[side] - parts$r$l[side[1]]) < 1)
+  } else all(abs(parts$r$l[side] - slot$l) < 1) && all(parts$r$t[side[parts$r$t[side] > slot$t]] >= slot$b - 1)
+  clear && isTRUE(geom)
+}
+b10b_page_ok <- function(m, wide) {
+  k <- m$keys
+  m$sw <= m$cw + 1 && nrow(m$full) >= 1L && all(purrr::map_lgl(seq_len(nrow(m$full)), function(i) b10b_card_ok(m, i, wide))) &&
+    max(k$fs) - min(k$fs) < 0.3 && all(purrr::map_lgl(split(k$top, round(k$ltop)), function(t) max(t) - min(t) < 1.01))
+}
+check("10b-11: in Chrome, in Briefing, at 1400 and 1000 pixels a card that has its row is the chart in 62 per cent on the left and its text (chart title, summary, notes, source) in a column on the right, starting level with the chart, at 899 and 500 pixels the parts stand one under another; at every width no two parts of a card overlap, the page does not scroll sideways, and the values of the key strip share one type size and one baseline",
+      !p9_has_chrome || (!any(purrr::map_lgl(b10b_dom, is.null)) && b10b_page_ok(b10b_dom[["1400"]], TRUE) && b10b_page_ok(b10b_dom[["1000"]], TRUE) && b10b_page_ok(b10b_dom[["899"]], FALSE) && b10b_page_ok(b10b_dom[["500"]], FALSE)))
+b10b_replay_js <- paste0("var v=document.querySelector('video');var b=document.querySelector('.replay');var d={};v.muted=true;",
+                         "d.hidden=b.hidden;d.disp=getComputedStyle(b).display;b.focus();d.focus=document.activeElement===b;d.tab=b.tabIndex;d.tag=b.tagName;d.label=b.getAttribute('aria-label');d.poster=v.poster.slice(0,22);d.rs0=v.readyState;",
+                         "b.click();setTimeout(function(){d.paused=v.paused;d.t=v.currentTime;d.rs=v.readyState;d.ended=v.ended;",
+                         "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9b\" content=\"'+JSON.stringify(d).replace(/\"/g,'&quot;')+'\">');},2000);")
+b10b_replayed <- if (p9_has_chrome) p9b_chrome_run(file.path(p9b_z$dir, "dashboard.html"), b10b_replay_js)
+check("10b-12: in Chrome the Replay button under a video is shown by the page's script, is a button that takes the keyboard's focus and is labelled, the video stands on its poster (the finished chart) before it is played, and clicking Replay starts the video from its beginning (it is playing a moment later, its time under the 2 seconds since the click)",
+      !p9_has_chrome || (!is.null(b10b_replayed) && identical(b10b_replayed$hidden, FALSE) && identical(b10b_replayed$disp, "inline-block") && isTRUE(b10b_replayed$focus) && identical(b10b_replayed$tag, "BUTTON") && b10b_replayed$tab == 0L &&
+                           grepl("^Replay the video: ", b10b_replayed$label) && grepl("^data:image/png;base64,", b10b_replayed$poster) && b10b_replayed$rs0 == 0L && identical(b10b_replayed$paused, FALSE) &&
+                           b10b_replayed$t > 0 && b10b_replayed$t < 2.5 && !isTRUE(b10b_replayed$ended)))
+}   # the heavy run only
+# <<< 10b end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------

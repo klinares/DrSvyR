@@ -879,11 +879,11 @@ chart_title <- function(chart, fallback = "this chart") {
 }
 
 # The key numbers of the canvas, in the strip that stands where three value boxes did (Phase 10 Part D): plain statements from the data, no
-#   model call: "3,000 rows", "22 columns" and the period of the first column with the time role ("Jan 2022 to Dec 2024"), else the file name.
+#   model call: "Rows" over "3,000", "Columns" over "22" and "Period" over the period of the first column with the time role ("Jan 2022 to Dec 2024"), else the file name.
 #   The same strip, in the page's own stylesheet, heads the exported dashboard (dash_keys_tag()).
 canvas_boxes <- function(data, cb) {
   v = canvas_box_values(data, cb)
-  keys = purrr::map(unname(v), function(b) list(value = b$value, full = b$full, what = NULL, cls = b$cls))
+  keys = purrr::map(unname(v), function(b) list(label = b$label, value = b$value, full = b$full, what = NULL, cls = b$cls))
   dash_keys_tag(keys, class = "chart-keys")
 }
 
@@ -957,12 +957,14 @@ EXPLORE_CSS <- "
 .chart-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr)); overflow: hidden; margin-bottom: 1rem;
               border-top: 1px solid var(--bs-border-color); border-bottom: 1px solid var(--bs-border-color); }
 .chart-keys .key { min-width: 0; margin-left: -1px; padding: .7rem 1rem .75rem; border-left: 1px solid var(--bs-border-color); }
-.chart-keys .key-value { --max: 1.9rem; font-size: var(--max); font-weight: 700; line-height: 1.1; overflow-wrap: break-word; }
-.chart-keys .key-value.long { --max: 1.3rem; line-height: 1.25; }
+.chart-keys { align-items: start; }
+.chart-keys .key-label { color: var(--bs-secondary-color); font-variant-caps: all-small-caps; letter-spacing: .06em; font-size: .95rem; line-height: 1.3; margin-bottom: .1rem;
+                         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chart-keys .key-value { --max: 1.9rem; font-size: var(--max); font-weight: 700; line-height: 1.1; overflow-wrap: break-word; text-wrap: balance; }
 .chart-keys .key-value.num { white-space: nowrap; }
-@supports (width: 1cqi) { .chart-keys .key { container-type: inline-size; } .chart-keys .key-value.num { font-size: min(var(--max), calc(100cqi / var(--w))); } }
+.chart-keys .key-what { color: var(--bs-secondary-color); font-size: .85rem; line-height: 1.3; margin-top: .3rem; overflow-wrap: anywhere; }
+@supports (width: 1cqi) { .chart-keys .key { container-type: inline-size; } .chart-keys .key-value { font-size: min(var(--max), calc(100cqi / var(--w))); } }
 .chart-keys .key-value.chart-box-file { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.chart-keys .key-value.chart-box-period { --max: 1.3rem; }
 
 /* Card buttons in dark mode: Bootstrap's outline buttons and the theme's primary (a dark navy) keep their light-mode colours on a dark
    card and read faintly. Text and fills take the theme's body colours for dark mode (light text, 11 to 1 on the card); the hue stays in the
@@ -2239,9 +2241,18 @@ DASH_VIDEO_DISCLOSURE <- paste("A video carries no rows: it is pictures of the c
                                 "the video, as a still, to a reader whose system asks for less motion.")
 DASH_VIDEO_TIME <- "A video takes about half a minute to draw and adds a few hundred kilobytes to the page."
 
-# The script of the page, only when a video is in it: each video plays once, when half of it is on the screen. With no script, or no
-#   IntersectionObserver, or for a reader whose system asks for less motion, nothing plays by itself and the poster (the finished chart) shows.
+# The script of the page, only when a video is in it. Each video plays once, when half of it is on the screen; with no IntersectionObserver, or
+#   for a reader whose system asks for less motion, nothing plays by itself. A video stands on its poster before it plays (the finished chart, a
+#   PNG of its last frame), and rests on its last frame when it ends (the browser keeps it there); the "Replay" button under it, hidden until
+#   this script runs (without a script the player's own controls play it), starts it again from the beginning.
 DASH_VIDEO_JS <- "(function () {
+  var replay = function (v) { v.currentTime = 0; var p = v.play(); if (p && p.catch) p.catch(function () {}); };
+  document.querySelectorAll('.video-box').forEach(function (box) {
+    var v = box.querySelector('video'), b = box.querySelector('button.replay');
+    if (!v || !b) return;
+    b.hidden = false;
+    b.addEventListener('click', function () { replay(v); });
+  });
   var videos = document.querySelectorAll('video[data-once]');
   if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   var seen = new IntersectionObserver(function (entries) {
@@ -2255,11 +2266,17 @@ DASH_VIDEO_JS <- "(function () {
   videos.forEach(function (v) { seen.observe(v); });
 })();"
 
-# The video, and the still that stands in for it (for a reader whose system asks for less motion, and in print).
+# The video, and the still that stands in for it (for a reader whose system asks for less motion, and in print), and the Replay button under it.
+#   The box is as wide as the video was drawn for (set on the box), never wider.
 DASH_VIDEO_CSS <- paste0(
-  ".video-box video,.video-box .still{display:block;width:100%;max-width:1120px;height:auto;aspect-ratio:16/9;}\n",
+  ".video-box{width:100%;}\n",
+  ".video-box video,.video-box .still{display:block;width:100%;height:auto;aspect-ratio:16/9;}\n",
   ".video-box .still{display:none;}\n",
-  "@media (prefers-reduced-motion:reduce){.video-box video{display:none;}.video-box .still{display:block;}}\n")
+  ".video-box .replay{display:inline-block;margin:.45rem 0 0;font:inherit;font-size:.85rem;line-height:1.2;color:var(--text);background:transparent;border:1px solid var(--text2);border-radius:.25rem;padding:.25rem .8rem;cursor:pointer;}\n",
+  ".video-box .replay[hidden]{display:none;}\n",
+  ".video-box .replay:hover{background:var(--box);}\n",
+  ".video-box .replay:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}\n",
+  "@media (prefers-reduced-motion:reduce){.video-box video,.video-box .replay{display:none;}.video-box .still{display:block;}}\n")
 
 DASH_MARKING_NOTE <- paste("The marking is written into every file of the zip: a band at the top and bottom of each page, picture and video, a first line of the script, the data dictionary",
                           "and each table's CSV (a reader must skip that line), and the start of the zip's name. It is your statement: chaRt does not judge or change it, and it is never sent to a model.",
@@ -2278,10 +2295,10 @@ DASH_PAGE_PX <- 1240L
 DASH_TWO_PX <- 900L
 DASH_PHONE_MAX_PX <- 599L
 DASH_DESK_PX <- 540L
-DASH_WIDE_PX <- 1120L
+DASH_WIDE_PX <- 640L
 DASH_PHONE_PX <- 340L
 DASH_PRINT_ROOM_MM <- c(one = 17, two = 22)   # the room a printed page keeps at its top and at its bottom for the classification band: a marking of one line, and a long one (over 55 characters) that may wrap to two
-DASH_ASPECT <- c(desk = 0.64, wide = 0.42, phone = 0.8)
+DASH_ASPECT <- c(desk = 0.64, wide = 0.66, phone = 0.8)
 DASH_SCALE <- 2L
 DASH_CSS_DPI <- 96L
 DASH_KEYS_MAX <- 3L             # key numbers the analyst may add, each a line of a chart's facts
@@ -2309,7 +2326,7 @@ DASH_LOOK <- list(
   desk = paste0(".masthead{border-bottom:5px solid var(--text);}",
                 ".card{background:var(--bg);border:2px solid var(--grid);border-radius:0;padding:1rem;}",
                 ".keys{border-top:5px solid var(--text);border-bottom:2px solid var(--grid);}",
-                ".key-what,.card-sub{text-transform:uppercase;letter-spacing:.04em;font-size:.78rem;}"),
+                ".key-label,.card-sub{text-transform:uppercase;letter-spacing:.04em;font-size:.78rem;}"),
   newspaper = paste0(".masthead{text-align:center;border-top:4px solid var(--rule);border-bottom:1px solid var(--rule);padding:1.1rem 0 1.2rem;}",
                      ".masthead .intro{margin-left:auto;margin-right:auto;text-align:left;}",
                      ".card{background:transparent;border:0;border-top:1px solid var(--rule);border-radius:0;padding:.75rem 0 0;}",
@@ -2325,7 +2342,7 @@ DASH_LOOK <- list(
                     ".card h2{font-size:1.5rem;line-height:1.08;margin-bottom:.35rem;}",
                     ".card-sub{font-size:.88rem;margin-bottom:.5rem;}",
                     ".keys{border-top:1px solid var(--text);border-bottom:1px solid var(--text);}",
-                    ".key-value.num{--max:2.6rem;}"))
+                    ".key-value{--max:2.6rem;}"))
 
 
 # The class attribute from names, leaving out the ones that are NULL ("card" or "card full", never "card ").
@@ -2524,15 +2541,26 @@ dash_css <- function(style, accent) {
     #   first of each row is clipped.
     ".keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10.5rem),1fr));overflow:hidden;margin:0 0 1.5rem;border-top:1px solid var(--rule);border-bottom:1px solid var(--grid);}\n",
     ".key{min-width:0;margin-left:-1px;padding:.85rem 1.1rem .9rem;border-left:1px solid var(--grid);}\n",
-    ".key-value{--max:2.1rem;font-family:var(--title-font);font-size:var(--max);font-weight:700;line-height:1.1;overflow-wrap:break-word;}\n.key-value.long{--max:1.5rem;line-height:1.2;}\n",
+    ".keys{align-items:start;}\n",
+    ".key-label{color:var(--text2);font-variant-caps:all-small-caps;letter-spacing:.06em;font-size:.95rem;line-height:1.3;margin:0 0 .1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}\n",
+    ".key-value{--max:2.1rem;font-family:var(--title-font);font-size:var(--max);font-weight:700;line-height:1.1;overflow-wrap:break-word;text-wrap:balance;}\n",
     ".key-value.num{white-space:nowrap;}\n",
-    "@supports (width:1cqi){.key{container-type:inline-size;}.key-value.num{font-size:min(var(--max),calc(100cqi / var(--w)));}}\n",
-    ".key-what{color:var(--text2);font-variant-caps:all-small-caps;letter-spacing:.04em;font-size:.95rem;line-height:1.3;margin-top:.3rem;overflow-wrap:anywhere;}\n",
+    "@supports (width:1cqi){.key{container-type:inline-size;}.key-value{font-size:min(var(--max),calc(100cqi / var(--w)));}}\n",
+    ".key-what{color:var(--caption);font-size:.85rem;line-height:1.3;margin-top:.3rem;overflow-wrap:anywhere;}\n",
     ".grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;align-items:stretch;}\n",
     "@media (min-width:", DASH_TWO_PX, "px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}.card.full img{max-width:none;}}\n",
     # A card is a column that fills the height of its row (the grid stretches it); its chart's slot takes what is left, so the chart stands in the
     #   middle of the card and no blank block is under a short one.
     ".card{min-width:0;display:flex;flex-direction:column;}\n.card .slot{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;min-width:0;}\n",
+    # A card that has a row to itself, on a screen wide enough for two columns (Phase 10b): the headline across the top, the chart on the left (62%),
+    #   and the chart's title, subtitle, summary, notes and source line in a column on the right (38%). Each sits in its own row of the right column
+    #   (a row is as high as its text; the last row takes what is left, with the chart spanning them all), so the text is not spread down the card.
+    #   Under DASH_TWO_PX, and in print, the parts stand one under another as in a card that shares its row.
+    "@media screen and (min-width:", DASH_TWO_PX, "px){.card.full:not(.table-card){display:grid;grid-template-columns:minmax(0,62fr) minmax(0,38fr);grid-template-rows:repeat(6,auto) 1fr;column-gap:1.5rem;align-content:start;}",
+    ".card.full:not(.table-card)>h2{grid-column:1/-1;grid-row:1;}.card.full:not(.table-card)>.slot{grid-column:1;grid-row:2/8;}",
+    ".card.full:not(.table-card)>.card-sub{grid-column:2;grid-row:2;}.card.full:not(.table-card)>.card-note{grid-column:2;grid-row:3;}",
+    ".card.full:not(.table-card)>.summary{grid-column:2;grid-row:4;margin-top:.2rem;}.card.full:not(.table-card)>.notes{grid-column:2;grid-row:5;}",
+    ".card.full:not(.table-card)>.source{grid-column:2;grid-row:6;}}\n",
     ".card h2{font-family:var(--title-font);font-weight:", title_weight, ";font-size:1.3rem;line-height:1.3;margin:0 0 .5rem;overflow-wrap:anywhere;}\n",
     ".card-sub{color:var(--text2);font-size:.95rem;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
     ".card-note{color:var(--caption);font-size:.85rem;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
@@ -2578,7 +2606,7 @@ dash_css <- function(style, accent) {
     ".stat-notes .stat-note{color:var(--caption);font-size:.8rem;margin:.3rem 0 0;max-width:80ch;}\n",
     look, "\n",
     "@media (max-width:", DASH_PHONE_MAX_PX, "px){.page{padding:1rem .75rem 2rem;}.card{padding:.75rem;}.col-section{grid-template-columns:minmax(0,1fr);}.col-section dl{grid-template-columns:1fr;gap:0;}",
-    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.stat-table th,.stat-table td{white-space:nowrap;}.keys{grid-template-columns:repeat(2,minmax(0,1fr));}.keys .key:last-child:nth-child(odd){grid-column:1/-1;}.key{padding:.7rem .8rem .75rem;}.key-value{--max:1.7rem;}.key-value.long{--max:1rem;}}\n",
+    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.stat-table th,.stat-table td{white-space:nowrap;}.keys{grid-template-columns:repeat(2,minmax(0,1fr));}.key{padding:.7rem .8rem .75rem;}.key-value{--max:1.7rem;}}\n",
     # Print. The classification band is fixed: Chrome repeats a fixed box at the top and at the bottom of the content area of every printed page, and a
     #   fixed box covers what is under it. Negative offsets do not move it into the margin (looked at in a PDF: the band is clipped or misplaced), and a
     #   repeating table header and footer did not repeat for a column that is one row. So the sheet has no margin at the top and bottom, the bands stand
@@ -2589,22 +2617,22 @@ dash_css <- function(style, accent) {
     ".mark{position:fixed;left:8mm;right:8mm;}.mark.top{top:6mm;}.mark.bottom{bottom:6mm;}",
     "body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FFFFFF;color:#111111;}.page{max-width:none;padding:", DASH_PRINT_ROOM_MM[["one"]], "mm 14mm;box-decoration-break:clone;-webkit-box-decoration-break:clone;}",
     "body.long .page{padding-top:", DASH_PRINT_ROOM_MM[["two"]], "mm;padding-bottom:", DASH_PRINT_ROOM_MM[["two"]], "mm;}",
-    ".grid{display:block;}.card,.col-section,.key,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.video-box video{display:none;}.video-box .still{display:block;max-width:100%;}.col-section figure img.screen-only{display:none;}",
+    ".grid{display:block;}.card,.col-section,.key,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.video-box video,.video-box .replay{display:none;}.video-box .still{display:block;max-width:100%;}.col-section figure img.screen-only{display:none;}",
     ".keys{display:flex;flex-wrap:wrap;overflow:visible;}.key{flex:1 1 10rem;}.masthead{break-after:avoid;}h2{break-after:avoid;}.stat-block .table-scroll{overflow:visible;}.stat-table{font-size:.7rem;}}\n")
 }
 
-# The three key numbers about the file, as plain statements, by key (rows, columns, third): `title` names the choice in the export dialog,
-#   `value` is the statement ("3,000 rows", "1 row", "22 columns", "Jan 2022 to Dec 2024" or the file's name), `full` the text to show in
-#   full (the tooltip: the first and last date, or the whole name), `cls` the class of a long value.
+# The three key numbers about the file, by key (rows, columns, third): `title` names the choice in the export dialog, `label` is the small
+#   label over the value ("Rows", "Columns", "Period" or "File"), `value` the value ("3,000", "22", "Jan 2022 to Dec 2024" or the file's name),
+#   `full` the text to show in full (the tooltip: the first and last date, or the whole name), `cls` the class of a long value.
 canvas_box_values <- function(data, cb) {
   time = purrr::detect(cb$columns, function(e) identical(e$role, "time"))
   period = if (!is.null(time) && time$name %in% names(data)) tryCatch(period_text(range(data[[time$name]], na.rm = TRUE)), error = function(e) NULL)
   n_rows = nrow(data)
   n_cols = ncol(data)
-  list(rows = list(title = "Rows", value = paste(format_num(n_rows), if (n_rows == 1L) "row" else "rows"), full = format_num(n_rows), cls = ""),
-       columns = list(title = "Columns", value = paste(format_num(n_cols), if (n_cols == 1L) "column" else "columns"), full = format_num(n_cols), cls = ""),
-       third = if (!is.null(period)) list(title = "Period", value = period$short, full = period$full, cls = "chart-box-period")
-               else list(title = "File", value = cb$file %||% "", full = cb$file %||% "", cls = "chart-box-file"))
+  list(rows = list(title = "Rows", label = if (n_rows == 1L) "Row" else "Rows", value = format_num(n_rows), full = format_num(n_rows), cls = ""),
+       columns = list(title = "Columns", label = if (n_cols == 1L) "Column" else "Columns", value = format_num(n_cols), full = format_num(n_cols), cls = ""),
+       third = if (!is.null(period)) list(title = "Period", label = "Period", value = period$short, full = period$full, cls = "chart-box-period")
+               else list(title = "File", label = "File", value = cb$file %||% "", full = cb$file %||% "", cls = "chart-box-file"))
 }
 
 # The scripts and style sheets of a widget's dependencies, read from the installed packages' files, as <style> and <script>
@@ -2718,14 +2746,19 @@ dash_picture_tag <- function(it, full, alt) {
 }
 
 # The video of a card as the page holds it: the MP4 as a data address in a <video> (controls, muted, no autoplay and no loop: the script of the page
-#   plays it once when it scrolls into view), the finished chart as its poster and, as a second element shown instead when the reader's system asks for
-#   less motion and in print, the same picture. The poster is a data address too, so nothing is requested.
+#   plays it once when it scrolls into view), the finished chart as its poster (a PNG of the last frame; with preload none no frame is decoded
+#   before play, so nothing but the poster can show) and, as a second element shown instead when the reader's system asks for less motion and in
+#   print, the same picture; under them a "Replay" button, hidden until the page's script runs. The box is as wide as the video was drawn for
+#   (css pixels = the file's pixels over DASH_SCALE), so its text is the size it was drawn at. The poster is a data address too.
 dash_video_tag <- function(it, alt) {
   v = it$video
-  tags$div(class = "video-box",
+  px = SPEC_VIDEO_DASH_PX[[v$size %||% "desk"]]
+  css = round(px / DASH_SCALE)
+  tags$div(class = "video-box", style = paste0("max-width:", css[["width"]], "px;"),
     tags$video(src = v$uri, poster = v$poster, controls = NA, muted = NA, playsinline = NA, preload = "none", `data-once` = NA, `aria-label` = paste0("Video: ", alt),
-               width = SPEC_VIDEO_PX$card[["width"]], height = SPEC_VIDEO_PX$card[["height"]]),
-    tags$img(class = "still", src = v$poster, alt = alt, width = SPEC_VIDEO_PX$card[["width"]], height = SPEC_VIDEO_PX$card[["height"]]))
+               width = css[["width"]], height = css[["height"]]),
+    tags$img(class = "still", src = v$poster, alt = alt, width = css[["width"]], height = css[["height"]]),
+    tags$button(type = "button", class = "replay", hidden = NA, `aria-label` = paste0("Replay the video: ", alt), "Replay"))
 }
 
 # One card of the page: the headline as its heading (the chart's title, if there is no headline), the chart's title as its subtitle (and
@@ -2766,12 +2799,12 @@ dash_fact_choices <- function(text, tokens = character(0)) {
   }), recursive = FALSE)
 }
 
-# The key numbers of the page's top, as list(value, full, what, cls): the file's (rows, columns, the period or the file name, as chosen, each a
-#   plain statement: "3,000 rows", "22 columns", "Jan 2022 to Dec 2024") and then the key numbers the analyst picked, each its value over
-#   "<what it is>, <chart name>". At most DASH_KEYS_STRIP_MAX (six).
+# The key numbers of the page's top, as list(label, value, full, what, cls): the file's (rows, columns, the period or the file name, as chosen:
+#   "Rows" over "3,000", "Columns" over "22", "Period" over "Jan 2022 to Dec 2024") and then the key numbers the analyst picked, each with what
+#   it is as its label and the chart's name under its value. At most DASH_KEYS_STRIP_MAX (six).
 dash_keys <- function(settings, cb, data, items) {
   file = canvas_box_values(data, cb)[intersect(c("rows", "columns", "third"), settings$boxes)]
-  files = purrr::map(unname(file), function(b) list(value = b$value, full = b$full, what = NULL, cls = b$cls))
+  files = purrr::map(unname(file), function(b) list(label = b$label, value = b$value, full = b$full, what = NULL, cls = b$cls))
   keys = purrr::compact(purrr::map(unique(settings$keys %||% character(0)), function(k) {
     at = regexec("^(.*)\\|([0-9]+)$", k)[[1]]
     if (at[[1]] < 0L) return(NULL)
@@ -2779,7 +2812,7 @@ dash_keys <- function(settings, cb, data, items) {
     n = as.integer(regmatches(k, list(at))[[1]][3])
     it = purrr::detect(items, function(m) identical(m$id, id))
     f = if (!is.null(it) && n >= 1L && n <= length(it$facts)) it$facts[[n]]
-    if (!is.null(f)) list(value = f$value, full = f$value, what = paste0(f$label, ", ", it$title), cls = "")
+    if (!is.null(f)) list(label = f$label, value = f$value, full = f$value, what = it$title, cls = "")
   }))
   utils::head(c(files, utils::head(keys, DASH_KEYS_MAX)), DASH_KEYS_STRIP_MAX)
 }
@@ -2792,26 +2825,36 @@ dash_value_em <- function(value, narrow = FALSE) {
   round(max(1, (if (narrow) 0.7 else 1) * 1.08 * sum(dplyr::case_when(grepl("[0-9]", ch) ~ 0.64, ch %in% c(",", ".", " ") ~ 0.3, TRUE ~ 0.72))), 2)
 }
 
-# The strip of key numbers: a number large, a thin rule between the items, no boxes. `keys` is a list of list(value, full, what, cls). A value of
-#   DASH_KEY_SHORT characters or fewer is a number to the page's eye: it never wraps and its type shrinks to the width of its cell (the
-#   stylesheet, with --w its estimated width in ems); a longer one (a period, a file's name) is set smaller and may wrap at its spaces. `what`
-#   is the small line under it. `narrow`: the condensed face.
+# The width a key value needs in ems of its font (dash_value_em()), which sets the size of every value of the strip: a value of DASH_KEY_SHORT
+#   characters or fewer is a number and never wraps; a longer one (a period, a file's name) may break at its spaces over two lines, so it needs
+#   a little over half its width.
+dash_key_need <- function(value, narrow = FALSE) {
+  em = dash_value_em(value, narrow)
+  if (nchar(value) <= DASH_KEY_SHORT) em else max(1, round(0.6 * em, 2))
+}
+
+# The strip of key numbers (Phase 10b): each item is a small-capital label over its value, then, for a chosen fact, the chart's name; a thin rule
+#   between the items, no boxes. `keys` is a list of list(label, value, full, what, cls). Every value of the strip has one type size, the largest
+#   that the longest value needs in the width of its cell (`--w` on the strip is that value's width in ems; the stylesheet divides the cell's
+#   width by it), so the numbers sit on one baseline (the labels are one line each). `narrow`: the condensed face.
 dash_keys_tag <- function(keys, class = NULL, narrow = FALSE) {
   if (!length(keys)) return(NULL)
-  tags$div(class = css_class("keys", class), role = "group", `aria-label` = "Key numbers",
+  need = max(purrr::map_dbl(keys, function(k) dash_key_need(k$value, narrow)))
+  tags$div(class = css_class("keys", class), role = "group", `aria-label` = "Key numbers", style = paste0("--w:", need, ";"),
            purrr::map(keys, function(k) {
              short = nchar(k$value) <= DASH_KEY_SHORT
              tags$div(class = "key",
-                      tags$div(class = css_class("key-value", if (short) "num" else "long", if (nzchar(k$cls %||% "")) k$cls), style = paste0("--w:", dash_value_em(k$value, narrow), ";"),
-                               title = k$full, k$value),
+                      tags$div(class = "key-label", title = k$label, k$label),
+                      tags$div(class = css_class("key-value", if (short) "num" else "long", if (nzchar(k$cls %||% "")) k$cls), title = k$full, k$value),
                       if (!is.null(k$what)) tags$div(class = "key-what", k$what))
            }))
 }
 
-# A heading as the page writes it. A style that sets its headings in upper case (its `title_case`) does it with CSS (text-transform), which
+# A heading as the page writes it, without one trailing full stop (chart_heading_text(): the stored text keeps it). A style that sets its headings in upper case (its `title_case`) does it with CSS (text-transform), which
 #   would also turn "kg" into "KG" and "kWh" into "KWH": a word that keeps its case (chart_case_tokens(): a number, a unit) is wrapped in a
 #   span the stylesheet leaves alone. A style that does not has the plain text.
 dash_heading_text <- function(text, style) {
+  text = chart_heading_text(text)     # one trailing full stop is not shown in a heading (Phase 10b)
   if (!identical(chart_style(style)$title_case, "upper") || !is_text1(text)) return(text)
   tk = chart_case_tokens(text)
   # words that keep their case go in spans; the text between them (words and spaces) stays one string
@@ -2997,9 +3040,9 @@ dash_step <- function(what, code)
   tryCatch(code, error = function(e) stop("While ", what, ": ", conditionMessage(e), call. = FALSE))
 
 # One chart of the dashboard, made, in two parts. This part draws the plot as the card draws it, writes its picture at DASH_DPI and its SVG
-#   (when svglite is installed) into the staging folder for charts/ (title and source line in them, for print), writes its code, works out
-#   the lines of its facts a key number may be, and for an interactive one makes its widget (drawn without title and source line, which
-#   the card says). A widget that cannot be made leaves a picture and says why in `fallback`. `it` is list(id, chart, story, mode, stale).
+#   (when svglite is installed) into the staging folder for charts/ (title and source line in them, for print), writes its code and works
+#   out the lines of its facts a key number may be. What the page shows for an interactive chart or a video is made in the second part,
+#   once the layout says how wide the card is (dash_pictures()). `it` is list(id, chart, story, mode, stale).
 dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, marking) {
   chart = it$chart
   title = chart_title(chart, "Untitled chart")
@@ -3013,46 +3056,62 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, mark
   if (!is.null(vector_file)) dash_step(what, spec_png(p, file.path(stage, vector_file), size = size, kind = "svglite", marking = marking))
   code = tryCatch(spec_code(s, cb, path, palette), error = function(e) paste0("# The code of this chart could not be written: ", conditionMessage(e)))
   facts = tryCatch({ f = spec_facts(s, attr(p, "table"), cb, data = data); dash_fact_choices(f$text, f$names) }, error = function(e) list())
-  w = if (identical(it$mode, "interactive"))
-    tryCatch(dash_widget(widget(spec_plot(chart$spec, data, cb, palette, web = list(width = SPEC_SIZE[["width"]], height = SPEC_SIZE[["height"]], bare = TRUE)))),
-             error = function(e) conditionMessage(e))
-  v = if (identical(it$mode, "video")) tryCatch(dash_video(chart, stage, file.path("charts", sprintf("%02d_%s.mp4", i, dash_slug(title))), data, cb, palette, marking), error = function(e) conditionMessage(e))
-  fallback = if (is.character(w)) sub("\n.*$", "", w) else if (is.character(v)) sub("\n.*$", "", v)
   st = it$story
   panels = if (!is.null(s$facet) && s$facet %in% names(attr(p, "table"))) length(unique(attr(p, "table")[[s$facet]])) else 1L
   list(id = it$id, title = title, headline = if (!is.null(st)) st$headline, summary = if (!is.null(st)) st$summary, story = st, chart_subtitle = s$subtitle,
-       mode = if (is.list(w)) "interactive" else if (is.list(v)) "video" else "picture", fallback = fallback, fallback_of = if (is.character(v)) "video", facts = facts,
-       video = if (is.list(v)) v,
-       widget_html = if (is.list(w)) w$html, deps = if (is.list(w)) w$deps,
-       # a video drawn on a canvas wider than 8 inches (rows of panels, many sideways bars) is shown across the page, or its text would be too small to read
-       natural_wide = identical(unname(size[["width"]]), SPEC_SIZE[["max_width"]]) || (is.list(v) && v$canvas[["width"]] > 8),
+       mode = it$mode, fallback = NULL, fallback_of = NULL, facts = facts,
+       # a chart drawn on a canvas wider than 8 inches (many sideways bars) is shown across the page, or its text would be too small to read
+       natural_wide = identical(unname(size[["width"]]), SPEC_SIZE[["max_width"]]),
        panels = panels,
        notes = attr(p, "notes"), source = s$caption,
-       files = c(pic_file, vector_file, if (is.list(v)) v$file), code = code)
+       files = c(pic_file, vector_file), code = code)
 }
 
-# The video of a chart for the page: the chart drawn without title, subtitle or source line (the page says them), as a 1280 by 720 MP4 in the staging
-#   folder (charts/ gets the same file), with the finished chart as the poster. Returns list(file, uri, poster, seconds, drawn, canvas): the file as a data
-#   address ready for the page, and the poster as one.
-dash_video <- function(chart, stage, file, data, cb, palette, marking) {
+# The video of a chart for the page: the chart drawn without title, subtitle or source line (the page says them), for the width it is shown at
+#   (`size`: desk, a card that shares its row, or wide, a card with a row to itself; SPEC_VIDEO_DASH_PX), as an MP4 in the staging folder
+#   (charts/ gets the same file), with the finished chart as the poster, a PNG of its last frame at the video's own pixels. Returns list(file,
+#   uri, poster, seconds, drawn, canvas, size): the file as a data address ready for the page, and the poster as one.
+dash_video <- function(chart, stage, file, data, cb, palette, marking, size = "desk") {
   poster = tempfile(fileext = ".png")
   on.exit(unlink(poster))
-  r = spec_video(chart$spec, data, cb, palette, file.path(stage, file), size = SPEC_VIDEO_PX$card, bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS, poster = poster, marking = marking)
-  list(file = file, uri = dash_data_uri(file.path(stage, file), "video/mp4"), poster = dash_data_uri(poster, "image/png"), seconds = r$seconds, drawn = r$drawn, canvas = r$canvas)
+  r = spec_video(chart$spec, data, cb, palette, file.path(stage, file), size = SPEC_VIDEO_DASH_PX[[size]], bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS[[size]],
+                 poster = poster, marking = marking)
+  list(file = file, uri = dash_data_uri(file.path(stage, file), "video/mp4"), poster = dash_data_uri(poster, "image/png"), seconds = r$seconds, drawn = r$drawn,
+       canvas = r$canvas, size = size)
 }
 
-# Whether a card asks for a whole row by what it is (Phase 10 Part D): an interactive chart, a table, a chart drawn wide (rows of panels, many sideways
-#   bars), or small multiples of more than DASH_FULL_PANELS panels, which are cramped in half a row. `m` is a made card: list(mode, natural_wide, panels).
-dash_card_wide <- function(m) m$mode %in% c("interactive", "table") || isTRUE(m$natural_wide) || (m$panels %||% 1L) > DASH_FULL_PANELS
+# Whether a card asks for a whole row by what it is (Phase 10b): a table, a chart drawn wide (many sideways bars), or small multiples of more
+#   than DASH_FULL_PANELS panels, which are cramped in half a row. An interactive chart no longer does: it is sized to its card as a picture is.
+#   `m` is a made card: list(mode, natural_wide, panels).
+dash_card_wide <- function(m) identical(m$mode, "table") || isTRUE(m$natural_wide) || (m$panels %||% 1L) > DASH_FULL_PANELS
 
-# The second part: the drawings the page shows for a chart that goes in as a picture, made once the layout is known (a card that has a row
-#   to itself is shown wider). Each is the chart without title, subtitle or source line, drawn by spec_plot() for the size it is shown at
-#   (the lint reckons with that size) and written at DASH_SCALE pixels for each one shown: desk, for a card that shares its row; wide, for
-#   one that has its row; phone, narrower and with fewer breaks on its x axis, for a screen of at most DASH_PHONE_MAX_PX pixels; and, in a
-#   dark style only, a light drawing in the Clean style for print. They are held in memory (data addresses) and are not written to charts/.
-dash_pictures <- function(m, full, i, chart, data, cb, palette, kind) {
-  if (!identical(m$mode, "picture")) return(m)
+# The second part: what the page shows for a chart, made once the layout is known (a card that has a row to itself is shown wider). A picture
+#   is the chart without title, subtitle or source line, drawn by spec_plot() for the size it is shown at (the lint reckons with that size) and
+#   written at DASH_SCALE pixels for each one shown: desk, for a card that shares its row; wide, for one that has its row; phone, narrower and
+#   with fewer breaks on its x axis, for a screen of at most DASH_PHONE_MAX_PX pixels; and, in a dark style only, a light drawing in the Clean
+#   style for print. They are held in memory (data addresses) and are not written to charts/. An interactive chart is the widget drawn for the
+#   card's size, and a video is drawn for it too; one that cannot be made is a picture, and says why in `fallback`.
+dash_pictures <- function(m, full, i, chart, data, cb, palette, kind, widget = spec_widget, stage = NULL, marking = NULL) {
+  if (identical(m$mode, "table")) return(m)
+  card = if (full) "wide" else "desk"
   what = paste0("drawing chart ", i, " (", m$title, ")")
+  if (identical(m$mode, "interactive")) {
+    w = tryCatch(dash_widget(widget(spec_plot(chart$spec, data, cb, palette, web = dash_web(card)))), error = function(e) conditionMessage(e))
+    if (is.list(w)) return(utils::modifyList(m, list(widget_html = w$html, deps = w$deps)))
+    m$fallback = sub("\n.*$", "", w)
+    m$mode = "picture"
+  } else if (identical(m$mode, "video")) {
+    v = tryCatch(dash_video(chart, stage, file.path("charts", sprintf("%02d_%s.mp4", i, dash_slug(m$title))), data, cb, palette, marking, card),
+                 error = function(e) conditionMessage(e))
+    if (is.list(v)) {
+      m$video = v
+      m$files = c(m$files, v$file)
+      return(m)
+    }
+    m$fallback = sub("\n.*$", "", v)
+    m$fallback_of = "video"
+    m$mode = "picture"
+  }
   draw = function(size, pal = palette) {
     p = dash_step(what, spec_plot(chart$spec, data, cb, pal, web = dash_web(size)))
     f = tempfile(fileext = chart_device_ext(kind))
@@ -3123,7 +3182,7 @@ build_dashboard <- function(items, data, cb, palette, settings, path, zip_file, 
                     if (!is.null(it$table)) dash_table(it, i, stage, data, cb, mark) else dash_chart(it, i, stage, data, cb, palette, path, widget, kind, mark)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
   full = dash_layout(purrr::map_lgl(made, dash_card_wide))
-  made = tryCatch(purrr::pmap(list(made, full, seq_along(made), unname(items)), function(m, f, i, it) dash_pictures(m, f, i, it$chart, data, cb, palette, kind)),
+  made = tryCatch(purrr::pmap(list(made, full, seq_along(made), unname(items)), function(m, f, i, it) dash_pictures(m, f, i, it$chart, data, cb, palette, kind, widget, stage, mark)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
   dash_step("writing dashboard.html", writeBin(charToRaw(enc2utf8(dash_page(made, settings, cb, data, palette, model, full))), file.path(stage, "dashboard.html")))
   dash_step("writing codebook.html", writeBin(charToRaw(enc2utf8(codebook_page(cb, palette, settings$date, data, mark))), file.path(stage, "codebook.html")))
