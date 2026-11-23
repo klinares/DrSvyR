@@ -13,7 +13,7 @@ library(shiny)
 APP_CLASSIFICATION <- "UNCLASSIFIED"
 
 # The packages chaRt will need, reported with their versions.
-PROBE_PACKAGES <- c("plotly", "shinychat", "yaml", "quarto", "ragg", "htmltools", "knitr", "rmarkdown",
+PROBE_PACKAGES <- c("ggiraph", "shinychat", "yaml", "quarto", "ragg", "htmltools", "knitr", "rmarkdown",
                     "ggplot2", "readr", "dplyr", "tidyr", "tibble", "paletteer", "av", "gganimate", "gifski")
 
 # The three-line document rendered from inside the running app (plus the YAML fences).
@@ -24,7 +24,7 @@ PROBE_QMD <- c("---",
                "Quarto rendered this page from inside a running Shiny app.")
 
 # The render that matters for the report: one R chunk drawing a small ggplot and printing
-#   plotly::ggplotly() of it, so knitr, ggplot2, plotly and the embedded JavaScript all run.
+#   ggiraph::girafe() of it, so knitr, ggplot2, ggiraph and the embedded JavaScript all run.
 PROBE_QMD_R <- c("---",
                  "title: chaRt probe with R",
                  "format: {html: {embed-resources: true}}",
@@ -32,7 +32,7 @@ PROBE_QMD_R <- c("---",
                  "```{r}",
                  "#| echo: false",
                  "p = ggplot2::ggplot(data.frame(x = 1:5, y = c(2, 4, 3, 5, 6)), ggplot2::aes(x, y)) + ggplot2::geom_line()",
-                 "plotly::ggplotly(p)",
+                 "ggiraph::girafe(ggobj = p)",
                  "```")
 
 # A Quarto dashboard, the smallest one.
@@ -50,7 +50,7 @@ PROBE_QMD_DASHBOARD_EMBED <- c("---",
                                "Quarto rendered this dashboard from inside a running Shiny app.")
 
 # What the R chunk needs; the check does not run without them.
-PROBE_QMD_R_NEEDS <- c("knitr", "rmarkdown", "ggplot2", "plotly")
+PROBE_QMD_R_NEEDS <- c("knitr", "rmarkdown", "ggplot2", "ggiraph")
 
 # What R chose for bitmapType before anything here set it (a Linux server with no X11 should say "cairo"), then the same
 #   switch chaRt makes at start-up: cairo for every png() that names no type, when R has cairo.
@@ -470,7 +470,7 @@ run_checks <- function() {
     list(list("Quarto found", quarto_found),
          list("Quarto version", quarto_version),
          list("A .qmd renders to self-contained HTML from the app", quarto_render),
-         list("A .qmd with an R chunk (ggplot, then ggplotly) renders to self-contained HTML", quarto_render_r),
+         list("A .qmd with an R chunk (ggplot, then girafe) renders to self-contained HTML", quarto_render_r),
          list("A format: dashboard document renders from the app", quarto_render_dashboard),
          list("The same dashboard with embed-resources: true renders from the app", quarto_render_dashboard_embed),
          list("An ffmpeg program is on the PATH", ffmpeg_found),

@@ -54,8 +54,12 @@ library(bslib)
 library(purrr)
 
 # Called as pkg::fn() in R/ and never attached; listed so a missing one stops the app here, by name.
-APP_PACKAGES <- c("commonmark", "digest", "dplyr", "ellmer", "ggplot2", "htmltools", "httr2", "jsonlite", "plotly", "readr", "rlang", "S7", "scales",
+APP_PACKAGES <- c("commonmark", "digest", "dplyr", "ellmer", "ggiraph", "ggplot2", "htmltools", "httr2", "jsonlite", "readr", "rlang", "S7", "scales",
                   "shinychat", "tibble", "tidyr", "yaml", "zip")
+
+# tidyr is used only by name (R/spec.R takes the exports of SPEC_PACKAGES), so a deployment, which finds the packages to install by reading the
+#   calls in the code, would not ask for it: plotly used to bring it in as a dependency. This call is what it reads (Phase 10 Part B, found by 9C-8).
+requireNamespace("tidyr", quietly = TRUE)
 
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
@@ -78,6 +82,27 @@ local({
     stop("The installed ellmer (", as.character(packageVersion("ellmer")), ") has no ",
          paste(gone, collapse = "; "), ". chaRt needs ellmer 0.4.2 or a later version that has them: ",
          "install it with install.packages(\"ellmer\") and start the app again.", call. = FALSE)
+})
+
+# The ggiraph functions and arguments R/spec.R calls for the interactive version of a chart (and the twins of the layers it swaps in),
+#   checked the same way. Built and tested with ggiraph 0.9.7 (the arguments are those of its help pages).
+local({
+  calls = list(girafe = c("ggobj", "width_svg", "height_svg", "options", "font_set"), girafe_css = c("css", "text", "point", "line"),
+               opts_sizing = c("rescale", "width"), opts_toolbar = c("saveaspng", "hidden"), opts_zoom = c("min", "max"),
+               opts_selection = "type", opts_hover = "css", opts_hover_inv = "css",
+               opts_tooltip = c("css", "opacity", "offx", "offy", "use_fill", "use_stroke"),
+               geom_col_interactive = character(0), geom_point_interactive = character(0), geom_line_interactive = character(0),
+               geom_histogram_interactive = character(0), geom_boxplot_interactive = character(0), geom_tile_interactive = character(0),
+               geom_bin_2d_interactive = character(0), girafeOutput = c("outputId", "width"), renderGirafe = "expr")
+  gone = unlist(imap(calls, function(args, fn) {
+    if (!fn %in% getNamespaceExports("ggiraph")) return(fn)
+    absent = setdiff(args, names(formals(getExportedValue("ggiraph", fn))))
+    if (length(absent)) paste0(fn, "(", paste(absent, collapse = ", "), ")")
+  }))
+  if (length(gone))
+    stop("The installed ggiraph (", as.character(packageVersion("ggiraph")), ") has no ", paste(gone, collapse = "; "),
+         ". chaRt needs ggiraph 0.9.7 or a later version that has them: install it with install.packages(\"ggiraph\") and start the app again.",
+         call. = FALSE)
 })
 
 # The verbs R/ relies on, checked to be the ones meant: a masked verb fails here.

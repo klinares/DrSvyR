@@ -1,6 +1,6 @@
 # spec.R for chaRt
 # The plot spec (DESIGN.md section 6, as revised by the Phase 2 prompt): defaults, the check
-#   against the codebook, the table that is drawn, the lint, the ggplot, the plotly version, the R
+#   against the codebook, the table that is drawn, the lint, the ggplot, the interactive version (ggiraph), the R
 #   code that reproduces the chart, and the figure size. Nothing here calls a model.
 #
 # One source for three outputs. The table's steps (filter, drop_na, summarise, ...) and the plot's
@@ -24,7 +24,7 @@ SPEC_COLOURS <- 7L           # more colours than this: the lint speaks
 SPEC_LINES <- 5L             # more lines than this with no highlight or facet: the lint speaks
 SPEC_ALPHA_N <- 2000L        # points above this many are drawn transparent
 SPEC_BIN_N <- 20000L         # points above this many are drawn as binned counts
-SPEC_WIDGET_N <- 5000L       # marks above this many: no plotly version
+SPEC_WIDGET_N <- 5000L       # marks above this many: no interactive version (each mark is an element of the page with its tooltip)
 SPEC_BINS <- c(5L, 60L)      # a histogram's bins, given or chosen
 SPEC_ALPHA <- 0.3            # transparency of crowded points
 SPEC_BIN_2D <- 40L           # bins on each axis of a binned scatter
@@ -75,12 +75,9 @@ SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 
 # Fields the lint adds; never accepted from outside.
 SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".cell_labels", ".top_n",
-                      ".fit_range", ".n_colours", ".annotate", ".value_labels", ".names", ".label_rows", ".widget_rows", ".repel",
-                      ".end_value", ".source", ".widget_left_out", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor",
+                      ".fit_range", ".n_colours", ".annotate", ".value_labels", ".names", ".label_rows", ".repel",
+                      ".end_value", ".source", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor",
                       ".fig_width", ".fig_height", ".bare", ".few_breaks", ".facet_cols")
-
-# What the plotly tooltip shows: the plotted values.
-SPEC_TOOLTIP <- c("x", "y", "colour", "fill", "size")
 
 
 # ---- small helpers ----------------------------------------------------------------------------
@@ -1204,8 +1201,7 @@ annotation_tie <- function(g) if ((g$tied %||% 1L) > 1L) paste0(", one of ", g$t
 
 # What a chart writes on its marks, decided from the table (Part C): the annotations, the value labels of a bar or
 #   dot, the names on a scatter's or bubble's highlighted points, and the cell values of a heatmap; the lint fields
-#   .annotate, .value_labels, .label_rows (the rows labelled in the static chart), .widget_rows (the ones the
-#   interactive version labels: no ggrepel there), .repel and .n_rows. Returns list(spec, notes).
+#   .annotate, .value_labels, .label_rows (the rows labelled), .repel and .n_rows. Returns list(spec, notes).
 lint_marks <- function(s, cb, table) {
   fam = s$family
   mode = s$labels %||% "auto"
@@ -1325,8 +1321,6 @@ lint_marks <- function(s, cb, table) {
     if (show && length(named)) {
       fit = fit_point_labels(s, t, named, ann_rows, ann_text, ann_h, ann_v)
       s$.names = TRUE
-      if (s$.repel && left_out(named, fit)) s$.widget_left_out = left_out(named, fit)
-      s$.widget_rows = restrict(fit, named)
       s$.label_rows = restrict(if (s$.repel) named else fit, named)
       if (!s$.repel && left_out(named, fit)) notes = c(notes, say_left_out(left_out(named, fit), "name", TRUE))
     }
@@ -1437,30 +1431,6 @@ legend_rows <- function(aesthetic, n, solid = FALSE) {
   as.call(c(list(sym("guides")), stats::setNames(list(as.call(c(list(sym("guide_legend")), args))), aesthetic)))
 }
 
-# The tooltip of the plotly version: each plotted value named with its codebook label.
-tooltip_call <- function(s, cb) {
-  value = value_name(s)
-  part = function(label, col, number) {
-    shown = if (identical(col, "share")) call("paste0", call("round", call("*", 100, sym(col)), 1), "%")
-            else if (number) call("format", call("round", sym(col), 2), big.mark = ",", trim = TRUE)
-            else sym(col)
-    list(paste0(label, ": "), shown)
-  }
-  is_num = function(col) !is.null(cb_entry(cb, col)) && identical(storage_of(cb_entry(cb, col)), "number") &&
-    !needs_factor_here(s, col)
-  cols = if (s$family %in% c("scatter", "bubble")) list(list(cb_label(cb, s$x), s$x, is_num(s$x)), list(cb_label(cb, s$y), s$y, is_num(s$y)))
-         else if (identical(s$family, "heatmap")) list(list(cb_label(cb, s$x), s$x, FALSE), list(cb_label(cb, s$y), s$y, FALSE),
-                                                       list(value_label(s, cb), value, TRUE))
-         else list(list(cb_label(cb, s$x), s$x, is_num(s$x) && !s$family %in% c("bar", "dot", "slope")), list(value_label(s, cb), value, TRUE))
-  extra = purrr::compact(list(
-    if (!is.null(s$color) && !identical(s$family, "heatmap")) list(cb_label(cb, s$color), s$color, FALSE),
-    if (!is.null(s$size)) list(cb_label(cb, s$size), s$size, is_num(s$size)),
-    if (!is.null(s$facet)) list(cb_label(cb, s$facet), s$facet, FALSE),
-    if (!is.null(s$highlight) && !s$highlight$column %in% c(s$x, s$color)) list(cb_label(cb, s$highlight$column), s$highlight$column, FALSE)))
-  pieces = purrr::imap(c(cols, extra), function(p, i) c(if (i > 1) list("<br>"), part(p[[1]], p[[2]], p[[3]])))
-  as.call(c(list(sym("paste0")), unlist(pieces, recursive = FALSE)))
-}
-
 # Whether a column is drawn as a factor (so shown as its level, not as a number).
 needs_factor_here <- function(s, col) col %in% c(s$color, if (s$family %in% c("bar", "dot", "box", "slope")) s$x,
                                                   if (identical(s$family, "heatmap")) c(s$x, s$y))
@@ -1554,10 +1524,9 @@ time_scale <- function(s, cb, room) {
   as.call(c(list(sym("scale_x_continuous"), breaks = breaks), if (!is.null(expand)) list(expand = expand)))
 }
 
-bar_calls <- function(s, cb, pal, widget) {
+bar_calls <- function(s, cb, pal) {
   v = value_name(s); flip = isTRUE(s$.flip); col = s$color
-  text = if (widget) tooltip_call(s, cb)
-  main = if (flip) aes_call(x = v, y = s$x, fill = col, text = text) else aes_call(x = s$x, y = v, fill = col, text = text)
+  main = if (flip) aes_call(x = v, y = s$x, fill = col) else aes_call(x = s$x, y = v, fill = col)
   geom = if (!is.null(s$highlight)) list(call("geom_col", aes_call(fill = "highlighted")),
                                           call("scale_fill_manual", values = highlight_values(pal), guide = "none"))
     else if (!is.null(col)) list(call("geom_col", position = if (flip) call("position_dodge", width = 0.8, reverse = TRUE) else call("position_dodge", width = 0.8),
@@ -1568,10 +1537,9 @@ bar_calls <- function(s, cb, pal, widget) {
     if (flip) list(call("scale_y_discrete", limits = sym("rev"))))
 }
 
-dot_calls <- function(s, cb, pal, widget) {
+dot_calls <- function(s, cb, pal) {
   v = value_name(s); flip = isTRUE(s$.flip); col = s$color
-  text = if (widget) tooltip_call(s, cb)
-  main = if (flip) aes_call(x = v, y = s$x, colour = col, text = text) else aes_call(x = s$x, y = v, colour = col, text = text)
+  main = if (flip) aes_call(x = v, y = s$x, colour = col) else aes_call(x = s$x, y = v, colour = col)
   geom = if (!is.null(s$highlight)) list(call("geom_point", aes_call(colour = "highlighted"), size = 3),
                                           call("scale_colour_manual", values = highlight_values(pal), guide = "none"))
     else if (!is.null(col)) list(call("geom_point", size = 3),
@@ -1632,21 +1600,20 @@ end_labels <- function(s, rows, colour = NULL) {
             if (!is.null(colour)) list(colour = colour)))
 }
 
-line_calls <- function(s, cb, pal, widget) {
+line_calls <- function(s, cb, pal) {
   v = value_name(s); col = s$color; slope = identical(s$family, "slope")
   same = !is.null(col) && identical(col, s$facet)
-  labelled = isTRUE(s$.labels) && !widget
+  labelled = isTRUE(s$.labels)
   legend = !is.null(s$.legend_order)
   k = if (!is.null(col) && !same) colour_count(s, cb, col) else 0
   many = k > pal$max
-  text = if (widget) tooltip_call(s, cb)
-  group = col %||% if (widget) 1
+  group = col
   points = function(colour = NULL, data = NULL)
     if (slope) list(as.call(c(list(sym("geom_point")), if (!is.null(data)) list(data = data), list(size = 2.5),
                               if (!is.null(colour)) list(colour = colour))))
   base = function(...) call("ggplot", sym("chart_table"), aes_call(x = s$x, y = v, ...))
   layers = if (is.null(col) || same) {
-    c(list(base(group = group, text = text), call("geom_line", colour = pal$single, linewidth = 0.9)), points(colour = pal$single),
+    c(list(base(group = group), call("geom_line", colour = pal$single, linewidth = 0.9)), points(colour = pal$single),
       if (labelled && is.null(col)) list(end_labels(s, end_rows(s), pal$single)))
   } else if (!is.null(s$highlight)) {
     nh = length(values_of(s$highlight$values))
@@ -1658,12 +1625,12 @@ line_calls <- function(s, cb, pal, widget) {
       c(list(call("geom_line", data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT, linewidth = 1.1)),
         points(colour = CHART_HIGHLIGHT, data = data_where(quote(highlighted))),
         if (labelled) list(end_labels(s, end_rows(s, list(quote(highlighted))), CHART_HIGHLIGHT)))
-    c(list(base(group = col, text = text), call("geom_line", data = data_where(quote(!highlighted)), colour = pal$grey, linewidth = 0.7)), lit)
+    c(list(base(group = col), call("geom_line", data = data_where(quote(!highlighted)), colour = pal$grey, linewidth = 0.7)), lit)
   } else if (many) {
-    c(list(base(group = col, text = text), call("geom_line", colour = pal$single, linewidth = 0.7)), points(colour = pal$single),
+    c(list(base(group = col), call("geom_line", colour = pal$single, linewidth = 0.7)), points(colour = pal$single),
       if (labelled) list(end_labels(s, end_rows(s), pal$single)))
   } else {
-    c(list(base(colour = col, group = col, text = text), call("geom_line", linewidth = 0.9)), points(),
+    c(list(base(colour = col, group = col), call("geom_line", linewidth = 0.9)), points(),
       list(as.call(c(list(sym("scale_colour_manual"), values = pal$qual(k)), if (legend) list(breaks = s$.legend_order)))),
       if (labelled) list(end_labels(s, end_rows(s)), call("guides", colour = "none")))
   }
@@ -1677,28 +1644,28 @@ line_calls <- function(s, cb, pal, widget) {
 }
 
 # A highlighted point's label sits to the left of it in the right half of the x range, to the right otherwise.
-side_labels <- function(s, pal, widget) {
-  rows = if (widget) s$.widget_rows else s$.label_rows
+side_labels <- function(s, pal) {
+  rows = s$.label_rows
   if (!isTRUE(s$.names) || (length(rows) == 0L && !is.null(rows))) return(NULL)
   x = sym(s$x)
   hjust = call("if_else", call(">", x, call("/", call("+", call("min", x), call("max", x)), 2)), 1.15, -0.15)
   shown = if (is.null(rows)) quote(highlighted) else call("&", quote(highlighted), call("%in%", quote(row_number()), as.numeric(rows)))
   named = call("filter", call("mutate", sym("chart_table"), label_hjust = hjust), shown)
-  if (!shared_repel(s, widget))
-    return(label_layer(s, widget, named, aes_call(label = s$highlight$column, hjust = "label_hjust"), pal$strong, bold = TRUE))
+  if (!shared_repel(s))
+    return(label_layer(s, named, aes_call(label = s$highlight$column, hjust = "label_hjust"), pal$strong, bold = TRUE))
   # Names and annotations in one layer moved by ggrepel (Phase 7b): layers do not push one another apart, so a name and an
   #   annotation drawn in two could land on each other.
   words = purrr::map(s$.annotate, function(g)
     call("mutate", annotation_data(s, g), label_text = annotation_label(s, g), label_hjust = g$hjust))
   both = as.call(c(list(sym("bind_rows"), call("mutate", named, label_text = call("as.character", sym(s$highlight$column)))), words))
   clear = if (!is.null(s$.rug_floor)) list(xlim = c(s$.rug_floor[["x"]], NA), ylim = c(s$.rug_floor[["y"]], NA))
-  do.call(label_layer, c(list(s, widget, both, aes_call(label = "label_text", hjust = "label_hjust"), pal$strong, bold = TRUE), clear), quote = TRUE)
+  do.call(label_layer, c(list(s, both, aes_call(label = "label_text", hjust = "label_hjust"), pal$strong, bold = TRUE), clear), quote = TRUE)
 }
 
-# Whether a scatter's or bubble's names and annotations share one ggrepel layer (static chart, ggrepel installed, both drawn).
-shared_repel <- function(s, widget) {
+# Whether a scatter's or bubble's names and annotations share one ggrepel layer (ggrepel installed, both drawn).
+shared_repel <- function(s) {
   rows = s$.label_rows
-  !widget && isTRUE(s$.repel) && s$family %in% c("scatter", "bubble") && isTRUE(s$.names) && length(s$.annotate) > 0L &&
+  isTRUE(s$.repel) && s$family %in% c("scatter", "bubble") && isTRUE(s$.names) && length(s$.annotate) > 0L &&
     !(length(rows) == 0L && !is.null(rows))
 }
 
@@ -1714,13 +1681,12 @@ jitter_call <- function(s)
   call("position_jitter", width = jitter_amount(s$x, isTRUE(s$log_x)), height = jitter_amount(s$y, isTRUE(s$log_y)),
        seed = SPEC_JITTER_SEED)
 
-scatter_calls <- function(s, cb, pal, widget) {
+scatter_calls <- function(s, cb, pal) {
   col = s$color; bubble = identical(s$family, "bubble")
   binned = isTRUE(s$.binned)
   alpha = c(if (!is.null(s$.alpha)) list(alpha = s$.alpha) else if (bubble) list(alpha = 0.5),
             if (isTRUE(s$.jitter)) list(position = jitter_call(s)))
-  text = if (widget && !binned) tooltip_call(s, cb)
-  main = aes_call(x = s$x, y = s$y, colour = if (!binned) col, size = if (bubble) s$size, text = text)
+  main = aes_call(x = s$x, y = s$y, colour = if (!binned) col, size = if (bubble) s$size)
   point = function(...) as.call(c(list(sym("geom_point")), list(...), alpha))
   colours = if (!is.null(col) && !binned) {
     n = colour_count(s, cb, col)
@@ -1730,7 +1696,7 @@ scatter_calls <- function(s, cb, pal, widget) {
     else if (!is.null(s$highlight))
       c(list(point(data = data_where(quote(!highlighted)), colour = pal$grey),
              point(data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT)),
-        purrr::compact(list(side_labels(s, pal, widget))))
+        purrr::compact(list(side_labels(s, pal))))
     else if (!is.null(col)) c(list(point()), colours)
     else list(point(colour = pal$single))
   c(list(call("ggplot", sym("chart_table"), main)), geom, fit_calls(s, cb, pal),
@@ -1769,13 +1735,13 @@ fit_calls <- function(s, cb, pal) {
     if (isTRUE(fr$rest)) list(smooth(rows(call("!", call("(", purrr::reduce(others, function(a, b) call("|", a, b))))))))
 }
 
-histogram_calls <- function(s, cb, pal, widget)
+histogram_calls <- function(s, cb, pal)
   c(list(call("ggplot", sym("chart_table"), aes_call(x = s$x)),
          call("geom_histogram", bins = as.numeric(s$bins), fill = pal$single, colour = pal$outline),
          call("scale_y_continuous", expand = call("expansion", mult = c(0, 0.05)))),
     if (isTRUE(s$log_x)) list(quote(scale_x_log10())))
 
-box_calls <- function(s, cb, pal, widget) {
+box_calls <- function(s, cb, pal) {
   flip = isTRUE(s$.flip)
   main = if (flip) aes_call(x = s$y, y = s$x) else aes_call(x = s$x, y = s$y)
   c(list(call("ggplot", sym("chart_table"), main), call("geom_boxplot", fill = pal$box_fill, colour = pal$single, width = 0.6)),
@@ -1799,12 +1765,11 @@ cell_labels <- function(s, colours) {
 insert_data <- function(cl) as.call(c(list(cl[[1]], sym("chart_table")), as.list(cl)[-1]))
 
 # A heatmap's fill: the sequential palette, or the diverging one centred on the midpoint.
-heatmap_calls <- function(s, cb, pal, widget) {
-  text = if (widget) tooltip_call(s, cb)
+heatmap_calls <- function(s, cb, pal) {
   colours = if (!is.null(s$midpoint)) pal$div else pal$seq
   rescaler = if (!is.null(s$midpoint))
     list(rescaler = call("function", as.pairlist(alist(x = , ... = )), call("rescale_mid", sym("x"), sym("..."), mid = s$midpoint)))
-  c(purrr::compact(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = s$y, fill = value_name(s), text = text)),
+  c(purrr::compact(list(call("ggplot", sym("chart_table"), aes_call(x = s$x, y = s$y, fill = value_name(s))),
          call("geom_tile", colour = pal$outline, linewidth = 0.5),
          as.call(c(list(sym("scale_fill_gradientn"), colours = colours), rescaler, list(breaks = if (!is.null(s$.fig_width)) HEAT_BREAKS_FEW else HEAT_BREAKS),
                    if (identical(s$fn, "share")) list(labels = call("label_percent")) else if (!is.null(s$.fig_width)) list(labels = call("label_comma")))),
@@ -1880,14 +1845,13 @@ lift_axis <- function(s) s$family %in% c("bar", "dot", "line", "histogram", "box
   !isTRUE(s$.value_labels)
 
 # The style's theme as ggplot2 calls (R/theme.R), written from the spec: the grid its family gets, the legend's
-#   place, and the style's own layers (the rule under the title block; not in the plotly version, which
-#   drops a second axis, so spec_widget() draws the rule itself).
-theme_calls <- function(s, pal, widget = FALSE)
+#   place, and the style's own layers (the rule under the title block).
+theme_calls <- function(s, pal)
   c(chart_theme_calls(pal$style, grid = grid_of(s),
                       legend = if (s$family %in% c("line", "slope") && !is.null(s$.legend_order)) "right" else "top",
                       lift = lift_axis(s)),
     bare_axis_call(s),
-    if (!widget) chart_style_layers(pal$style))
+    chart_style_layers(pal$style))
 
 # A bar or dot chart whose every mark carries its value: the value axis's numbers and ticks go (its title stays).
 bare_axis_call <- function(s) {
@@ -1897,13 +1861,12 @@ bare_axis_call <- function(s) {
 }
 
 # One text layer of the labels R writes: geom_text(), or ggrepel::geom_text_repel() in the static chart when ggrepel was
-#   installed at the lint (.repel) and `repel` is wanted (not for the labels of a bar or dot, which R places itself); the
-#   plotly version has no repel. In the chart's font and the style's text colour.
+#   installed at the lint (.repel) and `repel` is wanted (not for the labels of a bar or dot, which R places itself). In the chart's font and the style's text colour.
 #   `mapping` is the aes() of the layer; `...` are its constant arguments (hjust, vjust, position).
-label_layer <- function(s, widget, data, mapping, colour, bold = FALSE, repel = TRUE, ...) {
+label_layer <- function(s, data, mapping, colour, bold = FALSE, repel = TRUE, ...) {
   fixed = c(list(data = data, mapping), list(family = sym("chart_font"), size = SPEC_LABEL_MM, colour = colour),
             if (bold) list(fontface = "bold"), list(...))
-  if (widget || !repel || !isTRUE(s$.repel)) return(as.call(c(list(sym("geom_text")), fixed)))
+  if (!repel || !isTRUE(s$.repel)) return(as.call(c(list(sym("geom_text")), fixed)))
   as.call(c(list(quote(ggrepel::geom_text_repel)), fixed,
             list(direction = "both", seed = SPEC_JITTER_SEED, max.overlaps = Inf, box.padding = 0.2, min.segment.length = 0.3,
                  segment.colour = colour, segment.size = 0.3)))
@@ -1917,7 +1880,7 @@ label_data <- function(rows) {
 
 # The value labels of a bar or dot chart: the plotted value at the end of each mark, outside it (a negative value below
 #   or to the left), in the style's text colour. A grouped bar's label sits over its own bar (the same dodge).
-value_label_calls <- function(s, cb, pal, widget) {
+value_label_calls <- function(s, cb, pal) {
   rows = s$.label_rows
   if (!isTRUE(s$.value_labels) || (length(rows) == 0L && !is.null(rows))) return(list())
   v = value_name(s); flip = isTRUE(s$.flip); bar = identical(s$family, "bar")
@@ -1930,7 +1893,7 @@ value_label_calls <- function(s, cb, pal, widget) {
   position = if (bar && !is.null(s$color))
     list(position = if (flip) call("position_dodge", width = 0.8, reverse = TRUE) else call("position_dodge", width = 0.8))
   fixed = if (by_sign) list() else if (flip) list(hjust = side[1]) else list(vjust = side[1])
-  list(do.call(label_layer, c(list(s, widget, label_data(rows), mapping, pal$label, repel = FALSE), fixed, position), quote = TRUE))
+  list(do.call(label_layer, c(list(s, label_data(rows), mapping, pal$label, repel = FALSE), fixed, position), quote = TRUE))
 }
 
 # The row an annotation marks, as a call: the first row of the series (a line with colours) at its highest or lowest value,
@@ -1964,34 +1927,34 @@ annotation_label <- function(s, g) {
 
 # What an annotate marks: a ring round a point (line, dot, scatter, bubble; a bar has no point, so only its words),
 #   and its words in bold in the style's text colour, placed by the lint.
-annotation_calls <- function(s, cb, pal, widget) {
+annotation_calls <- function(s, cb, pal) {
   groups = s$.annotate
   if (!length(groups)) return(list())
   unlist(purrr::map(groups, function(g) {
     data = annotation_data(s, g)
     ring = if (!identical(s$family, "bar"))
       list(call("geom_point", data = data, shape = 1, size = 4, stroke = 1, colour = CHART_HIGHLIGHT))
-    # merged into its line's end label (lint_marks()): the ring only, in the static chart; the plotly version has no end labels
-    if (isTRUE(g$merged) && !widget) return(ring)
+    # merged into its line's end label (lint_marks()): the ring only
+    if (isTRUE(g$merged)) return(ring)
     # drawn with the names, in one layer (side_labels())
-    if (shared_repel(s, widget)) return(ring)
+    if (shared_repel(s)) return(ring)
     # a label moved by ggrepel keeps clear of a rug's band (xlim, ylim in the data's units, worked out by the lint)
-    clear = if (!widget && isTRUE(s$.repel) && !is.null(s$.rug_floor)) list(xlim = c(s$.rug_floor[["x"]], NA), ylim = c(s$.rug_floor[["y"]], NA))
-    c(ring, list(do.call(label_layer, c(list(s, widget, data, aes_call(label = annotation_label(s, g)), pal$strong, bold = TRUE,
+    clear = if (isTRUE(s$.repel) && !is.null(s$.rug_floor)) list(xlim = c(s$.rug_floor[["x"]], NA), ylim = c(s$.rug_floor[["y"]], NA))
+    c(ring, list(do.call(label_layer, c(list(s, data, aes_call(label = annotation_label(s, g)), pal$strong, bold = TRUE,
                                              repel = !s$family %in% c("bar", "dot"), hjust = g$hjust, vjust = g$vjust), clear), quote = TRUE)))
   }), recursive = FALSE)
 }
 
 # Everything R writes or marks on the chart besides the family's own layers: value labels, annotations.
-mark_calls <- function(s, cb, pal, widget) c(value_label_calls(s, cb, pal, widget), annotation_calls(s, cb, pal, widget))
+mark_calls <- function(s, cb, pal) c(value_label_calls(s, cb, pal), annotation_calls(s, cb, pal))
 
-# The plot's layers, as calls, from the spec as the lint left it and the codebook. widget = TRUE
-#   builds the variant the plotly version is made from: no direct labels (plotly cannot place
-#   them), the legend kept, and a tooltip naming each value.
-plot_calls <- function(s, cb, pal = spec_palette(), widget = FALSE) {
+# The plot's layers, as calls, from the spec as the lint left it and the codebook. interactive = TRUE
+#   swaps the data layers for their ggiraph twins (widget_calls()); every other layer is the same.
+plot_calls <- function(s, cb, pal = spec_palette(), interactive = FALSE) {
   build = switch(s$family, bar = bar_calls, dot = dot_calls, line = , slope = line_calls, scatter = , bubble = scatter_calls,
                  histogram = histogram_calls, box = box_calls, heatmap = heatmap_calls)
-  few_breaks_calls(c(build(s, cb, pal, widget), mark_calls(s, cb, pal, widget), purrr::compact(list(facet_call(s), labs_call(s, cb))), theme_calls(s, pal, widget)), s)
+  calls = few_breaks_calls(c(build(s, cb, pal), mark_calls(s, cb, pal), purrr::compact(list(facet_call(s), labs_call(s, cb))), theme_calls(s, pal)), s)
+  if (interactive) widget_calls(calls, s, cb) else calls
 }
 
 # A narrow drawing (.few_breaks) asks a continuous x axis for fewer breaks: n.breaks on its scale, or a scale made for it when the
@@ -2012,14 +1975,10 @@ few_breaks_calls <- function(calls, s) {
 
 plus_call <- function(calls) purrr::reduce(calls[-1], function(acc, cl) call("+", acc, cl), .init = calls[[1]])
 
-# Whether the widget variant carries its own tooltip text.
-widget_has_text <- function(s) s$family %in% c("bar", "dot", "line", "slope", "scatter", "bubble", "heatmap") &&
-  !isTRUE(s$.binned)
-
 # The ggplot for a spec. Runs the defaults, the check, the table and the lint itself, so one call
 #   is enough. `palette` names the three palettes of the report (chart_palette_default()); the
 #   spec never chooses colours. Attributes: notes (the lint's sentences), spec (the spec as drawn),
-#   table, widget_plot (the variant spec_widget() converts) and palette.
+#   table, widget_plot (a function that makes the interactive variant spec_widget() draws) and palette.
 spec_plot <- function(spec, data, cb, palette = chart_palette_default(), web = NULL) {
   s = spec_defaults(spec_public(spec))
   why = spec_check(s, cb, palette)
@@ -2051,8 +2010,10 @@ spec_plot <- function(spec, data, cb, palette = chart_palette_default(), web = N
   attr(p, "notes") = c(palette_note(ls, cb, palette), lint$notes)
   attr(p, "spec") = ls
   attr(p, "table") = table
-  attr(p, "widget_plot") = eval(plus_call(plot_calls(ls, cb, pal, widget = TRUE)), env)
-  attr(p, "widget_text") = widget_has_text(ls)
+  attr(p, "widget_plot") = function() {
+    wenv = do.call(spec_env, c(list(chart_table = widget_table(ls, cb, table), chart_bin_tip = widget_bin_tip, chart_cell_tip = widget_cell_tip), pal$fonts))
+    eval(plus_call(plot_calls(ls, cb, pal, interactive = TRUE)), wenv)
+  }
   attr(p, "palette") = palette
   p
 }
@@ -2564,130 +2525,218 @@ spec_facts <- function(spec, table, cb, exploratory = FALSE, data = NULL) {
 }
 
 
-# ---- the plotly version and the figure size -------------------------------------------------------
+# ---- the interactive version (ggiraph, Phase 10 Part B) and the figure size ----------------------------------------------
 
-# Text in the plotly version matches the static chart at the same size: ggplotly() turns the
-#   theme's points into pixels at a smaller ratio than a 96 dpi image does.
-SPEC_PLOTLY_TEXT <- 96 / 72 / 1.215
-SPEC_WRAP_TITLE <- 50L      # plotly's default font is wider than the static chart's
-SPEC_WRAP_SUBTITLE <- 70L
+# The interactive version of a chart is the chart: the same layers as spec_plot() draws, evaluated again with the layers that
+#   draw the data (bars, points, lines, tiles, bins, boxes) swapped for their ggiraph twins (geom_col_interactive() and so on) and
+#   a tooltip and a hover group given to each mark. Everything else (value labels, end labels, annotations, rings, fitted curves,
+#   the rug, scales, title, subtitle, source line, the style's own layers, the typeface and its weights) is the same ggplot2
+#   layer, so it is in the picture. ggiraph::girafe() draws the plot on its own SVG device (the typefaces are the ones
+#   chart_fonts_register() put in systemfonts, so text is measured as the static chart measures it) and the page shows that SVG.
+#   The tooltip of a mark is written by R from the plotted table (widget_table()), never from a column the chart does not plot.
+#   The data layers that have a twin:
+WIDGET_GEOMS <- c(geom_col = "geom_col_interactive", geom_point = "geom_point_interactive", geom_line = "geom_line_interactive",
+                  geom_histogram = "geom_histogram_interactive", geom_boxplot = "geom_boxplot_interactive",
+                  geom_tile = "geom_tile_interactive", geom_bin_2d = "geom_bin_2d_interactive")
+WIDGET_TIP <- ".tip"        # the columns widget_table() adds to the plotted table: the tooltip text and the hover group
+WIDGET_HOVER <- ".hover"
+WIDGET_SERIES <- ".series"  # ... and, for a line, the tooltip of the line itself: its series (a pointer on the line between two points)
+WIDGET_HIT_SIZE <- 4.5      # the size of the invisible points that carry a line chart's tooltips (about the gap between the points of a monthly series, so a pointer near a point finds it)
 
-# Every font size in a built plotly figure, times f.
-scale_fonts <- function(x, f, in_font = FALSE) {
-  if (!is.list(x)) return(x)
-  keys = names(x) %||% rep("", length(x))
-  out = purrr::map2(x, keys, function(el, key) {
-    if (in_font && identical(key, "size") && is.numeric(el)) return(el * f)
-    scale_fonts(el, f, in_font || key %in% c("font", "tickfont", "titlefont"))
-  })
-  names(out) = names(x)
-  out
+# Text for a tooltip: HTML-escaped (the tooltip is shown as HTML, so a value with a tag in it must come out as text) and on one line.
+widget_esc <- function(x) {
+  x = as.character(x)
+  x[is.na(x)] = "missing"
+  htmltools::htmlEscape(gsub("[\r\n]+", " ", x), attribute = TRUE)
+}
+widget_line <- function(label, text) paste0(widget_esc(label), ": ", widget_esc(text))
+
+# A column's values as a tooltip shows them: a category, a date or a flag as written, a time given as a whole number (a year) in
+#   full, any other number to three significant digits as the facts write it.
+widget_shown <- function(cb, table, col) {
+  x = table[[col]]
+  e = cb_entry(cb, col)
+  if (!is.numeric(x) || is.factor(x)) as.character(x)
+  else if (!is.null(e) && is_time(e)) fact_time(x)
+  else fact_num(x, FALSE)
 }
 
-# A font family as a CSS font-family list for the page (the bundled families are declared with @font-face,
-#   see CHART_FONT_CSS in R/ui.R): the family, then the generic one it falls back to. The default names
-#   "sans" and "serif" that charts fall back to are not CSS names.
+# The tooltip of each row of the plotted table: the x (or the group) and the value as the facts write it (fact_value_fmt(), the
+#   same rounding as the numbers on the chart), then the colour, size, panel and highlight columns when the chart plots them. A
+#   scatter or bubble point is a row: its x and y and the columns it is drawn by, no other. A box chart's tooltip is its group's:
+#   the number of rows, the median, the quartiles and the extremes the box and its points reach. A histogram bin and a cell of a
+#   binned scatter are written from the statistic ggplot2 computes (widget_calls()).
+widget_tips <- function(s, cb, table) {
+  fam = s$family
+  v = value_name(s)
+  n = nrow(table)
+  if (identical(fam, "box")) return(widget_box_tips(s, cb, table))
+  if (identical(fam, "histogram") || isTRUE(s$.binned)) return(rep(NA_character_, n))
+  fmt = fact_value_fmt(s)
+  part = function(col) widget_line(cb_label(cb, col), widget_shown(cb, table, col))
+  value = widget_line(value_label(s, cb), fmt(table[[v]]))
+  main = switch(fam,
+    scatter = , bubble = list(part(s$x), part(s$y)),
+    heatmap = list(part(s$x), part(s$y), value),
+    line = , slope = list(widget_line(cb_label(cb, s$x), fact_time(table[[s$x]])), value),
+    list(part(s$x), value))
+  shown = c(s$x, if (fam %in% c("scatter", "bubble")) s$y)
+  extra = setdiff(unique(c(if (!identical(fam, "heatmap")) s$color, if (identical(fam, "bubble")) s$size, s$facet,
+                           if (!is.null(s$highlight)) s$highlight$column)), shown)
+  do.call(paste, c(main, purrr::map(extra, part), sep = "\n"))
+}
+
+widget_box_tips <- function(s, cb, table) {
+  by = c(s$x, s$facet)
+  keys = widget_keys(table, by)
+  y = table[[s$y]]
+  fmt = fact_value_fmt(s)
+  text = purrr::map_chr(split(seq_along(keys), keys), function(i) {
+    vals = y[i][!is.na(y[i])]
+    q = stats::quantile(vals, c(0.25, 0.5, 0.75), names = FALSE)
+    one = purrr::map_chr(by, function(col) widget_line(cb_label(cb, col), as.character(table[[col]][i[1]])))
+    paste(c(one, widget_line("Rows", fact_count(length(vals))), widget_line(paste("Median", cb_label(cb, s$y)), fmt(q[2])),
+            widget_line("Middle half", paste(fmt(q[1]), "to", fmt(q[3]))),
+            widget_line("Lowest to highest", paste(fmt(min(vals)), "to", fmt(max(vals))))), collapse = "\n")
+  })
+  unname(text[keys])
+}
+
+# One key for each combination of the columns `by` (the group of a row).
+widget_keys <- function(table, by) do.call(paste, c(purrr::map(by, function(col) as.character(table[[col]])), sep = "\r"))
+
+# The hover group of each row: a line, slope, grouped bar or dot, or coloured scatter point belongs to its colour's series, so the
+#   other series dim when one is pointed at; a line chart with no colour is one series; a box chart's group is its box; any other
+#   mark is its own. The group is a number we make (s1, m4), never a value of the file, so it can hold no markup.
+widget_hover <- function(s, table) {
+  n = nrow(table)
+  series = function(col) { x = as.character(table[[col]]); paste0("s", match(x, unique(x))) }
+  coloured = !is.null(s$color) && !isTRUE(s$.binned)
+  keys = widget_keys(table, c(s$x, s$facet))
+  switch(s$family,
+    line = , slope = if (coloured) series(s$color) else rep("s1", n),
+    bar = , dot = , scatter = , bubble = if (coloured) series(s$color) else paste0("m", seq_len(n)),
+    box = paste0("g", match(keys, unique(keys))),
+    paste0("m", seq_len(n)))
+}
+
+# The tooltip of a line or a slope itself (not of one of its points): the name of its colour's value, or, with no colour, what the line shows.
+widget_series <- function(s, cb, table) {
+  if (!s$family %in% c("line", "slope")) return(rep(NA_character_, nrow(table)))
+  if (!is.null(s$color) && !identical(s$color, s$facet)) widget_line(cb_label(cb, s$color), table[[s$color]])
+  else rep(widget_esc(value_label(s, cb)), nrow(table))
+}
+
+# The plotted table with the tooltip, the hover group and (for a line) the series of each row added.
+widget_table <- function(s, cb, table) {
+  table = as.data.frame(table)
+  table[[WIDGET_TIP]] = widget_tips(s, cb, table)
+  table[[WIDGET_HOVER]] = widget_hover(s, table)
+  table[[WIDGET_SERIES]] = widget_series(s, cb, table)
+  table
+}
+
+# What the statistics of ggplot2 give a tooltip, written with the facts' own formats (these two are in the environment the interactive
+#   plot is evaluated in, as chart_bin_tip() and chart_cell_tip()).
+widget_bin_tip <- function(label, lo, hi, count)
+  paste0(widget_line(label, paste(fact_num(lo, FALSE), "to", fact_num(hi, FALSE))), "\n", widget_line("Count", fact_count(count)))
+widget_cell_tip <- function(count) widget_line("Rows in this cell", fact_count(count))
+
+# `cl` (a call to a layer) with `extra` (an aes() call) added to its mapping.
+widget_with_aes <- function(cl, extra) {
+  is_aes = purrr::map_lgl(as.list(cl), function(a) is.call(a) && identical(a[[1]], sym("aes")))
+  if (any(is_aes)) {
+    i = which(is_aes)[1]
+    cl[[i]] = as.call(c(as.list(cl[[i]]), as.list(extra)[-1]))
+    cl
+  } else as.call(c(as.list(cl)[1], list(mapping = extra), as.list(cl)[-1]))
+}
+
+# The layers of a plot (plot_calls()) with each data layer swapped for its interactive twin. A mark carries the tooltip and the
+#   hover group of its row; a histogram bin and a cell of a binned scatter, which ggplot2 computes, carry them written from the
+#   statistic. A line is one element, so it carries the hover group and the name of its series, and each of its points
+#   carries the tooltip of the row in an invisible point of WIDGET_HIT_SIZE (a slope chart's points are drawn, so they carry it). A ring round a marked point (it has
+#   a shape) stays a plain layer, as do labels, fitted curves, rugs and every scale and theme.
+widget_calls <- function(calls, s, cb) {
+  twin = function(cl, f) { cl[[1]] = call("::", sym("ggiraph"), sym(WIDGET_GEOMS[[f]])); cl }
+  mark = aes_call(tooltip = sym(WIDGET_TIP), data_id = sym(WIDGET_HOVER))
+  stat_tip = if (identical(s$family, "histogram"))
+      call("after_stat", call("chart_bin_tip", cb_label(cb, s$x), if (isTRUE(s$log_x)) quote(10^xmin) else quote(xmin),
+                              if (isTRUE(s$log_x)) quote(10^xmax) else quote(xmax), quote(count)))
+    else call("after_stat", call("chart_cell_tip", quote(count)))
+  # The tooltip and the hover group are discrete, and ggplot2 numbers a mark's group from every discrete aesthetic it has, so a bar of grouped
+  #   bars would get a group of its own and be dodged in another order than the picture's. The group is given as the picture's own: the
+  #   interaction of the bar's group and its colour (what ggplot2 makes of them: the first varies slowest), its colour only on the bars of a highlight.
+  is_group = identical(s$family, "bar") && !is.null(s$color) && is.null(s$highlight)
+  group = if (is_group) call("as.integer", call("interaction", sym(s$x), sym(s$color), lex.order = TRUE, drop = TRUE))
+  stat_mark = aes_call(tooltip = stat_tip, data_id = call("after_stat", call("paste0", "b", quote(seq_along(count)))))
+  unlist(purrr::map(calls, function(cl) {
+    f = if (is.call(cl) && is.symbol(cl[[1]])) as.character(cl[[1]]) else ""
+    if (!f %in% names(WIDGET_GEOMS) || (f == "geom_point" && "shape" %in% names(cl))) return(list(cl))
+    if (f %in% c("geom_histogram", "geom_bin_2d")) return(list(twin(widget_with_aes(cl, stat_mark), f)))
+    if (!identical(f, "geom_line")) return(list(twin(widget_with_aes(cl, if (identical(f, "geom_col") && is_group) c(as.list(mark), list(group = group)) |> as.call() else mark), f)))
+    line = twin(widget_with_aes(cl, aes_call(tooltip = sym(WIDGET_SERIES), data_id = sym(WIDGET_HOVER))), f)
+    if (identical(s$family, "slope")) return(list(line))
+    hit = widget_with_aes(cl, mark)
+    hit$linewidth = NULL
+    hit$size = WIDGET_HIT_SIZE
+    hit$alpha = 0
+    list(line, twin(hit, "geom_point"))
+  }), recursive = FALSE)
+}
+
+# The typefaces the SVG is drawn and measured in, as girafe() takes them (a gdtools font_set: the sans and serif of the chart, and
+#   the sans for mono and symbol). gdtools::font_set() would write each font file into the user's data folder and add it to the
+#   widget as a style sheet; the page already carries the bundled faces with @font-face (font_face_css(); the exported page inlines
+#   them), under the names the SVG's text uses, so the set names the families and carries no file.
+widget_font_set <- function() {
+  fam = list(sans = chart_font_family("sans"), serif = chart_font_family("serif"))
+  fam = c(fam, list(mono = fam$sans, symbol = fam$sans))
+  structure(c(fam, list(dependencies = list(), dsvg_fonts = fam, sources = list())), class = "font_set")
+}
+
+# The options of the girafe widget: the SVG scales with its container (so a narrow card scales the whole chart down and nothing is
+#   cut), no toolbar (every group of buttons hidden, so no download button and no zoom), no selection by click, and the pointer
+#   shows a tooltip in the style's colours and dims every mark that is not in the hovered mark's group.
+widget_options <- function(st) {
+  edge = paste0("stroke:", st$text, ";stroke-width:1.5px;")
+  list(ggiraph::opts_sizing(rescale = TRUE, width = 1),
+       ggiraph::opts_toolbar(saveaspng = FALSE, hidden = c("selection", "zoom", "misc")),
+       ggiraph::opts_zoom(min = 1, max = 1),
+       ggiraph::opts_selection(type = "none"),
+       ggiraph::opts_hover(css = ggiraph::girafe_css(css = "opacity:1;", area = edge, point = edge, line = "stroke-width:3.5px;", text = "stroke:none;")),
+       ggiraph::opts_hover_inv(css = "opacity:0.25;"),
+       ggiraph::opts_tooltip(css = paste0("background:", st$background, ";color:", st$text, ";border:1px solid ", st$text_2, ";border-radius:3px;padding:6px 9px;",
+                                          "font-family:", font_css(chart_font_family("sans")), ";font-size:13px;line-height:1.4;text-align:left;box-shadow:0 2px 8px rgba(0,0,0,.25);"),
+                             opacity = 1, offx = 12, offy = 12, use_fill = FALSE, use_stroke = FALSE))
+}
+
+# The girafe widget of a spec_plot(): its interactive variant (attr(plot, "widget_plot"), a function, so the work is done only for a
+#   chart that is made interactive) drawn at the chart's own size in inches (spec_size(): 7 by 4.5 by default, the size of the
+#   drawing for a screen when it was asked for one) and given the options above. The plot's own palette and style are in it; a
+#   different one needs a new spec_plot(). Warnings of the drawing are kept as attr(, "warnings").
+spec_widget <- function(plot, palette = attr(plot, "palette") %||% chart_palette_default()) {
+  s = attr(plot, "spec") %||% list()
+  wp = attr(plot, "widget_plot")
+  size = spec_size(s, attr(plot, "table"))
+  said = character(0)
+  w = withCallingHandlers(
+    ggiraph::girafe(ggobj = if (is.function(wp)) wp() else plot, width_svg = size[["width"]], height_svg = size[["height"]],
+                    font_set = widget_font_set(), options = widget_options(chart_style(palette$style))),
+    warning = function(cond) { said <<- c(said, conditionMessage(cond)); invokeRestart("muffleWarning") })
+  # Where Inter is not there the chart draws in the default "sans", which is not a CSS name (a browser would draw it in its serif font).
+  w$x$html = gsub("font-family='sans'", "font-family='sans-serif'", w$x$html, fixed = TRUE)
+  attr(w, "warnings") = unique(said)
+  w
+}
+
+# A font family as a CSS font-family list for the page (the bundled families are declared with @font-face, see CHART_FONT_CSS in
+#   R/ui.R): the family, then the generic one it falls back to. The default names "sans" and "serif" that charts fall back to are
+#   not CSS names.
 font_css <- function(family) {
   bundled = purrr::keep(CHART_FONTS, function(f) startsWith(family, f$family))
   if (length(bundled)) (if (identical(family, bundled[[1]]$family)) bundled[[1]]$css else paste0("'", family, "', ", bundled[[1]]$css))
   else switch(family, sans = "sans-serif", serif = "serif", family)
-}
-
-# Every font family in a built plotly figure, as a CSS list.
-font_stacks <- function(x, in_font = FALSE) {
-  if (!is.list(x)) return(x)
-  keys = names(x) %||% rep("", length(x))
-  out = purrr::map2(x, keys, function(el, key) {
-    if (in_font && identical(key, "family") && is.character(el)) return(font_css(el))
-    # a blank axis text (a value axis with every value written on its marks) comes back from ggplotly() with no family: the chart's sans
-    if (in_font && identical(key, "family") && length(el) == 1L && is.na(el)) return(font_css(chart_font_family("sans")))
-    font_stacks(el, in_font || key %in% c("font", "tickfont", "titlefont"))
-  })
-  names(out) = names(x)
-  out
-}
-
-wrapped <- function(text, width) paste(strwrap(text, width), collapse = "<br>")
-
-# Where plotly puts the text of a label relative to its point: above it, to the right of a sideways bar or dot, on the point
-#   for a heatmap cell. plotly takes no justification from the chart's hjust and vjust.
-widget_text_position <- function(s) {
-  if (identical(s$family, "heatmap")) "middle center"
-  else if (s$family %in% c("bar", "dot") && isTRUE(s$.flip)) "middle right"
-  else "top center"
-}
-
-# What the interactive version does not carry over from the static chart of a spec as the lint left it (labels and
-#   annotations; nothing is dropped without a sentence): the line-end labels (it has a legend instead), the positions
-#   (each label sits against its mark in one way), and the labels that would run into one another, which the static
-#   chart moves apart with ggrepel and plotly cannot.
-widget_notes <- function(s) {
-  fam = s$family
-  c(if (isTRUE(s$.labels) && fam %in% c("line", "slope"))
-      "The names and values at the line ends are not drawn in the interactive version: it has a legend, and a value shows when you point at a line.",
-    if (isTRUE(s$.value_labels) || isTRUE(s$.names) || length(s$.annotate))
-      paste0("In the interactive version a label is not bold and sits ", if (s$family %in% c("bar", "dot") && isTRUE(s$.flip)) "to the right of its mark" else "above its mark",
-             ", wherever the static chart puts it; ggrepel does not move it.")
-    else NULL,
-    if (length(s$.widget_left_out))
-      paste0(s$.widget_left_out, if (s$.widget_left_out == 1L) " label that the static chart moves apart is" else " labels that the static chart moves apart are",
-             " left out of the interactive version because they would run into another label or a mark."))
-}
-
-# plotly::ggplotly() of a spec_plot()'s widget variant, built (plotly::plotly_build()) so that every
-#   warning comes now. The title and subtitle are both shown and wrapped, the caption below the
-#   chart, the text scaled to match the static chart, the legend on the right where it does not
-#   cover the title, the tooltip naming each value with its codebook label, and the mode bar cut
-#   to the download button. Warnings are kept as attr(, "warnings").
-#   The palette is the one the plot was drawn with (attr(plot, "palette")); a different one needs a
-#   new spec_plot(), since the widget is converted from the plot.
-spec_widget <- function(plot, palette = attr(plot, "palette") %||% chart_palette_default()) {
-  s = attr(plot, "spec") %||% list()
-  wp = attr(plot, "widget_plot") %||% plot
-  tip = if (isTRUE(attr(plot, "widget_text"))) "text" else SPEC_TOOLTIP
-  said = character(0)
-  w = withCallingHandlers(plotly::plotly_build(plotly::ggplotly(wp, tooltip = tip)),
-                          warning = function(cond) { said <<- c(said, conditionMessage(cond)); invokeRestart("muffleWarning") })
-  w$x$layout = font_stacks(scale_fonts(w$x$layout, SPEC_PLOTLY_TEXT))
-  # A label is a text trace; plotly puts its text on the point unless told where.
-  w$x$data = purrr::map(w$x$data, function(tr) {
-    if (identical(tr$mode, "text")) {
-      tr$textposition = widget_text_position(s)
-      tr$textfont$family = font_css(chart_font_family("sans"))
-    }
-    tr
-  })
-  st = chart_style(palette$style)
-  sub_css = font_css(chart_font_family(st$subtitle_font))
-  title_lines = c(if (!is.null(s$title)) paste0("<b>", wrapped(s$title, SPEC_WRAP_TITLE), "</b>"),
-                  if (!is.null(s$subtitle)) paste0("<span style=\"font-size:0.8em;font-weight:normal;color:", st$text_2, ";font-family:", sub_css, "\">",
-                                                   wrapped(s$subtitle, SPEC_WRAP_SUBTITLE), "</span>"))
-  if (length(title_lines)) {
-    n_lines = sum(lengths(regmatches(title_lines, gregexpr("<br>", title_lines)))) + length(title_lines)
-    w$x$layout$title = utils::modifyList(w$x$layout$title %||% list(),
-                                         list(text = paste(title_lines, collapse = "<br>"), x = 0.01, xanchor = "left",
-                                              xref = "container",
-                                              font = list(family = font_css(chart_font_family(st$title_font)), color = st$text)))
-    w$x$layout$margin$t = 30 + 22 * n_lines
-  }
-  if (!is.null(s$caption)) {
-    w$x$layout$annotations = c(w$x$layout$annotations,
-                               list(list(text = wrapped(s$caption, SPEC_WRAP_SUBTITLE), x = 0, y = 0, xref = "paper", yref = "paper",
-                                         xanchor = "left", yanchor = "top", yshift = -45, showarrow = FALSE,
-                                         font = list(size = 11, color = st$caption, family = font_css(chart_font_family("sans"))))))
-    w$x$layout$margin$b = (w$x$layout$margin$b %||% 40) + 30
-  }
-  w$x$layout$legend = utils::modifyList(w$x$layout$legend %||% list(),
-                                        list(x = 1.02, y = 1, xanchor = "left", yanchor = "top", orientation = "v"))
-  # A style's thin rule under the title block: the static chart draws it as a second axis line, which plotly drops
-  #   without a word, so the figure gets it as a line across the top of its plot area.
-  if (!is.na(st$rule))
-    w$x$layout$shapes = c(w$x$layout$shapes, list(list(type = "line", xref = "paper", yref = "paper", x0 = 0, x1 = 1, y0 = 1, y1 = 1,
-                                                       line = list(color = st$rule, width = 1))))
-  w = plotly::config(w, displaylogo = FALSE, modeBarButtons = list(list("toImage")))
-  attr(w, "warnings") = unique(said)
-  attr(w, "notes") = widget_notes(s)
-  w
 }
 
 # The static chart at SPEC_DPI pixels per inch and its size in inches, drawn on the device chart_device() opens

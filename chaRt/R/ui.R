@@ -737,8 +737,8 @@ palette_swatch_script <- function(names) {
     "};")))
 }
 # @font-face for the bundled families, served from www/fonts/ (Shiny serves www/ at the site root, so the
-#   address is relative to it), under the names the charts use: plotly and the page then draw in the same
-#   faces as the static charts. "<family> SemiBold" is the semibold file as its regular face.
+#   address is relative to it), under the names the charts use: the SVG of an interactive chart and the page then draw in
+#   the same faces as the static charts. "<family> SemiBold" is the semibold file as its regular face.
 font_face_css <- function() {
   face = function(family, weight, file)
     paste0("@font-face { font-family: '", family, "'; font-weight: ", weight, "; font-style: normal; font-display: swap; ",
@@ -910,7 +910,7 @@ period_text <- function(rng) {
 # A click on a card selects it, unless it lands on a button, link, box or the full screen button, which have
 #   their own meaning. The value carries the time, so the same card clicked twice still reaches the server.
 card_click_js <- function(input_id)
-  paste0("if (event.target.closest('button, a, input, select, textarea, label, video, .js-plotly-plot, .bslib-full-screen-enter')) return; ",
+  paste0("if (event.target.closest('button, a, input, select, textarea, label, video, .girafe, .bslib-full-screen-enter')) return; ",
          "Shiny.setInputValue('", input_id, "', {id: this.dataset.chartId, t: Date.now()}, {priority: 'event'});")
 
 # The copy button of the Code dialog.
@@ -1702,7 +1702,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         },
         tags$h6("Charts, in the order of the canvas"),
         tags$p(class = "small text-muted", "Change the order with Move up and Move down on the cards, and leave a chart out with its \"In dashboard\" switch. ",
-               "A picture is the smallest file. An interactive chart needs the scripts of the chart package, which makes the page several megabytes larger.",
+               "A picture is the smallest file. An interactive chart is written into the page as its drawing (an SVG with a tooltip on each mark) and the scripts of the chart package (about 0.2 MB, once); a chart of thousands of marks makes the page larger.",
                if (video_available()) " A video is drawn again for the page, as it will be shown there, and plays once when it scrolls into view."),
         purrr::imap(items, function(it, i)
           if (!is.null(it$table)) dash_table_row(it, i, isolate(state$codebook))
@@ -1937,7 +1937,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
              width = round(size[["width"]] * CSS_PPI), height = round(size[["height"]] * CSS_PPI),
              style = "max-width:100%; height:auto;")
       }, deleteFile = TRUE)
-      output[[cid(chart_id, "widget")]] = plotly::renderPlotly({
+      output[[cid(chart_id, "widget")]] = ggiraph::renderGirafe({
         p = drawn()
         if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
         spec_widget(p)
@@ -1945,7 +1945,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       output[[cid(chart_id, "view")]] = renderUI({
         v = made$video[[chart_id]]()
         if (isTRUE(made$showv[[chart_id]]()) && !is.null(v) && identical(v$key, video_key(chart_id))) video_view(chart_id, v)
-        else if (isTRUE(made$interactive[[chart_id]]())) plotly::plotlyOutput(ns(cid(chart_id, "widget")), height = "450px")
+        else if (isTRUE(made$interactive[[chart_id]]())) ggiraph::girafeOutput(ns(cid(chart_id, "widget")), width = "100%")
         else imageOutput(ns(cid(chart_id, "static")), height = "auto")
       })
       # The video is dropped when what it was drawn from changes (the chart's spec, the palette or style, the data): the card shows the picture again.
@@ -1959,7 +1959,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       output[[cid(chart_id, "notes")]] = renderUI({
         p = drawn()
         if (inherits(p, "error")) return(warn_box(conditionMessage(p)))
-        shown = c(attr(p, "notes"), if (isTRUE(made$interactive[[chart_id]]())) widget_notes(attr(p, "spec")))
+        shown = attr(p, "notes")
         if (length(shown)) tags$ul(class = "small text-muted", purrr::map(shown, tags$li))
       })
 
@@ -2498,7 +2498,7 @@ dash_css <- function(style, accent) {
     ".card-note{color:var(--caption);font-size:.85rem;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
     ".card picture{display:block;}\n.card img.print-only{display:none;}\n",
     ".card img{display:block;width:100%;max-width:700px;height:auto;}\n",
-    ".widget{width:100%;overflow:hidden;}\n", DASH_VIDEO_CSS,
+    ".widget{width:100%;max-width:700px;overflow:hidden;}\n", DASH_VIDEO_CSS,
     ".summary{margin:.8rem 0 0;}\n",
     ".notes{color:var(--text2);font-size:.85rem;margin:.6rem 0 0;padding-left:1.1rem;}\n",
     ".source{color:var(--caption);font-size:.8rem;margin:.6rem 0 0;overflow-wrap:anywhere;}\n",
@@ -2536,7 +2536,7 @@ dash_css <- function(style, accent) {
     ".stat-notes .stat-note{color:var(--caption);font-size:.8rem;margin:.3rem 0 0;max-width:80ch;}\n",
     look, "\n",
     "@media (max-width:", DASH_PHONE_MAX_PX, "px){.page{padding:1rem .75rem 2rem;}.card{padding:.75rem;}.col-section{grid-template-columns:minmax(0,1fr);}.col-section dl{grid-template-columns:1fr;gap:0;}",
-    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.stat-table th,.stat-table td{white-space:nowrap;}.widget{overflow-x:auto;}.widget .html-widget{min-width:36rem;}.boxes{grid-template-columns:repeat(2,minmax(0,1fr));}.boxes .box:last-child:nth-child(odd){grid-column:1/-1;}.box-value{--max:1.5rem;}.box-value.long{--max:1rem;}}\n",
+    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.stat-table th,.stat-table td{white-space:nowrap;}.boxes{grid-template-columns:repeat(2,minmax(0,1fr));}.boxes .box:last-child:nth-child(odd){grid-column:1/-1;}.box-value{--max:1.5rem;}.box-value.long{--max:1rem;}}\n",
     # Print. The classification band is fixed: Chrome repeats a fixed box at the top and at the bottom of the content area of every printed page, and a
     #   fixed box covers what is under it. Negative offsets do not move it into the margin (looked at in a PDF: the band is clipped or misplaced), and a
     #   repeating table header and footer did not repeat for a column that is one row. So the sheet has no margin at the top and bottom, the bands stand
@@ -2585,9 +2585,10 @@ dash_inline_dependencies <- function(deps) {
 }
 
 # The widget of an interactive chart as the page holds it: the element and its data as JSON, and the dependencies it needs.
-dash_widget <- function(w, height = 450) {
-  w$height = height
-  w$width = NULL
+dash_widget <- function(w) {
+  # the box is as wide as the card and as tall as the SVG makes it (the SVG scales with the box; htmlwidgets' own default is 960 by 500 pixels)
+  w$width = "100%"
+  w$height = "auto"
   tg = htmltools::as.tags(w)
   list(html = htmltools::renderTags(tg)$html, deps = htmltools::findDependencies(tg))
 }
@@ -2949,7 +2950,7 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, mark
        widget_html = if (is.list(w)) w$html, deps = if (is.list(w)) w$deps,
        # a video drawn on a canvas wider than 8 inches (rows of panels, many sideways bars) is shown across the page, or its text would be too small to read
        natural_wide = identical(unname(size[["width"]]), SPEC_SIZE[["max_width"]]) || (is.list(v) && v$canvas[["width"]] > 8),
-       notes = c(attr(p, "notes"), if (is.list(w)) widget_notes(s)), source = s$caption,
+       notes = attr(p, "notes"), source = s$caption,
        files = c(pic_file, vector_file, if (is.list(v)) v$file), code = code)
 }
 

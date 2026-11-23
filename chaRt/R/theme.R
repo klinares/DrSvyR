@@ -131,7 +131,7 @@ chart_device <- function(file, width, height, dpi, kind = chart_device_kind()) {
 chart_device_uses_bundled_fonts <- function(kind = chart_device_kind()) identical(kind, "ragg")
 
 # The options a stray graphics call needs so that it cannot reach X11: bitmapType "cairo" when R has cairo (the
-#   type png() and jpeg() use when none is given, as plotly's own conversion does), and shiny.useragg TRUE when the
+#   type png() and jpeg() use when none is given, as the charts' own drawing does), and shiny.useragg TRUE when the
 #   installed shiny has it. Called once from app.R; returns what it set, invisibly.
 chart_device_options <- function() {
   set = list()
@@ -634,7 +634,7 @@ chart_theme_calls <- function(style = CHART_STYLE_DEFAULT, grid = "y", legend = 
 
 # Layers a style adds besides its theme: the thin rule under the title block is the top axis line, so a
 #   style that has one asks for a second x axis (guides(x.sec = "axis")), which its theme draws as a line
-#   without labels or ticks. The plotly version leaves it out.
+#   without labels or ticks.
 chart_style_layers <- function(style = CHART_STYLE_DEFAULT) {
   if (is.na(chart_style(style)$rule)) return(list())
   list(call("guides", x.sec = "axis"))
