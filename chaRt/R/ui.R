@@ -139,8 +139,8 @@ fonts_note <- function() {
   missing = chart_fonts_missing()
   if (!length(missing)) return(NULL)
   many = length(missing) > 1L
-  warn_box(paste0("The typeface", if (many) "s ", if (!many) " ", paste(missing, collapse = " and "), if (many) " are" else " is",
-                  " not available here, so charts are drawn in the default ", paste(names(missing), collapse = " and "), " font", if (many) "s", "."))
+  warn_box(paste0("The typeface", if (many) "s ", if (!many) " ", if (many) paste0(paste(utils::head(missing, -1L), collapse = ", "), " and ", utils::tail(missing, 1L)) else missing, if (many) " are" else " is",
+                  " not available here, so charts are drawn in the default ", paste(unique(purrr::map_chr(CHART_FONTS[names(missing)], "fallback")), collapse = " and "), " font", if (many) "s", "."))
 }
 
 # A tab that a later phase builds.
@@ -771,7 +771,7 @@ style_sample_svg <- function(style, colour) {
          "\" role=\"img\" aria-label=\"Sample of the ", st$label, " style\">",
          "<rect width=\"", w, "\" height=\"", h, "\" fill=\"", st$background, "\"/>",
          "<text x=\"10\" y=\"14\" font-size=\"", round(9 * st$title_size, 1), "\" font-weight=\"", if (identical(st$title_weight, "bold")) 700 else 400,
-         "\" font-family=\"", title_fam, "\" fill=\"", st$text, "\">Title</text>",
+         "\" font-family=\"", title_fam, "\" fill=\"", st$text, "\">", chart_title_case("Title", style), "</text>",
          "<text x=\"10\" y=\"25\" font-size=\"6.5\" font-family=\"", sub_fam, "\" fill=\"", st$text_2, "\">A subtitle</text>",
          paste(c(rule, hgrid, vgrid, bars, ticks), collapse = ""), "</svg>")
 }
@@ -878,18 +878,13 @@ chart_title <- function(chart, fallback = "this chart") {
   if (is_text1(t) && nzchar(trimws(t))) trimws(t) else fallback
 }
 
-# Three plain value boxes from the data, no model call: rows, columns, and the period of the first column with
-#   the time role (its first and last value), else the file name.
+# The key numbers of the canvas, in the strip that stands where three value boxes did (Phase 10 Part D): plain statements from the data, no
+#   model call: "3,000 rows", "22 columns" and the period of the first column with the time role ("Jan 2022 to Dec 2024"), else the file name.
+#   The same strip, in the page's own stylesheet, heads the exported dashboard (dash_keys_tag()).
 canvas_boxes <- function(data, cb) {
   v = canvas_box_values(data, cb)
-  box = function(title, value) bslib::value_box(title, value, fill = FALSE)
-  # The file name and the period are long and value boxes are large type: each is set smaller, on one line (cut with an
-  #   ellipsis if it must be), with the full text as its tooltip.
-  small = function(b) box(b$title, tags$span(class = b$cls, title = b$full, b$value))
-  # The third box takes half the row on a wide canvas, and a row of its own on a narrow one (below bslib's lg breakpoint,
-  #   down to 576 pixels, where the sidebar still sits beside the canvas), so the period fits on one line (Phase 7b).
-  bslib::layout_columns(col_widths = bslib::breakpoints(sm = c(6, 6, 12), lg = c(3, 3, 6)), fill = FALSE, class = "chart-boxes",
-                        box(v$rows$title, v$rows$value), box(v$columns$title, v$columns$value), small(v$third))
+  keys = purrr::map(unname(v), function(b) list(value = b$value, full = b$full, what = NULL, cls = b$cls))
+  dash_keys_tag(keys, class = "chart-keys")
 }
 
 # The period a time column covers, for its value box (Phase 7b): `short` is month and year ("Jan 2023 to Dec 2024") when the
@@ -944,9 +939,31 @@ EXPLORE_CSS <- "
 .chart-style-sample { display: block; max-width: 100%; height: auto; border: 1px solid rgba(128, 128, 128, .5); margin-bottom: .2rem; }
 .chart-style-name { font-weight: 600; }
 .chart-card { cursor: pointer; }
-.chart-boxes .bslib-value-box .chart-box-file, .chart-boxes .bslib-value-box .chart-box-period { display: block; font-size: 1.1rem; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.chart-boxes .bslib-value-box .chart-box-period { font-size: 1rem; }
-.chart-boxes .bslib-value-box .value-box-area { min-width: 0; }
+/* the cards of a row are as high as each other: the grid cell (a flex box) is as high as the row, and the card grows to fill it */
+.chart-canvas .bslib-grid-item .chart-card { flex: 1 1 auto; }
+
+.chart-card .card-body { display: flex; flex-direction: column; }
+
+.chart-card .chart-slot { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+.chart-upper { text-transform: uppercase; letter-spacing: .005em; }
+.chart-upper .keep { text-transform: none; }
+.chart-heading { font-size: 1.1rem; line-height: 1.2; }
+.chart-card-sub { margin-top: .15rem; }
+.chart-summary { font-size: 1.05rem; line-height: 1.55; max-width: 62ch; }
+.chart-notes { font-size: .82rem; max-width: 75ch; }
+/* The key numbers at the top of the canvas: a strip, a number large over its words, a thin rule between the items, no boxes (the same markup as the
+   exported page's strip). A number never wraps or is cut: its type shrinks to its cell (container query units, --w its width in ems) and a cell has a
+   least width, so the strip goes to a second row before the type gets small. */
+.chart-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr)); overflow: hidden; margin-bottom: 1rem;
+              border-top: 1px solid var(--bs-border-color); border-bottom: 1px solid var(--bs-border-color); }
+.chart-keys .key { min-width: 0; margin-left: -1px; padding: .7rem 1rem .75rem; border-left: 1px solid var(--bs-border-color); }
+.chart-keys .key-value { --max: 1.9rem; font-size: var(--max); font-weight: 700; line-height: 1.1; overflow-wrap: break-word; }
+.chart-keys .key-value.long { --max: 1.3rem; line-height: 1.25; }
+.chart-keys .key-value.num { white-space: nowrap; }
+@supports (width: 1cqi) { .chart-keys .key { container-type: inline-size; } .chart-keys .key-value.num { font-size: min(var(--max), calc(100cqi / var(--w))); } }
+.chart-keys .key-value.chart-box-file { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.chart-keys .key-value.chart-box-period { --max: 1.3rem; }
+
 /* Card buttons in dark mode: Bootstrap's outline buttons and the theme's primary (a dark navy) keep their light-mode colours on a dark
    card and read faintly. Text and fills take the theme's body colours for dark mode (light text, 11 to 1 on the card); the hue stays in the
    border (the theme's text-emphasis colours for primary and danger). */
@@ -1803,9 +1820,14 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       label = if (is_text1(rule) && !is.na(rule_labels[rule])) rule_labels[[rule]]
       btn = function(what, text, class = "btn-outline-secondary", ...)
         actionButton(ns(cid(chart_id, what)), text, class = paste("btn-sm", class), ...)
+      # The heading follows the style as the exported page's does (Phase 10 Part D): its title face, upper case where the style asks for it (CSS; a
+      #   number or a unit keeps its case), over the chart's title as a small grey subtitle.
+      sty = chart_style(palette()$style %||% CHART_STYLE_DEFAULT)
+      heading = function(text) tags$div(class = css_class("fw-semibold chart-heading", if (identical(sty$title_case, "upper")) "chart-upper"),
+                                        style = paste0("font-family: ", CHART_FONTS[[sty$title_font]]$css, ";"), dash_heading_text(text, palette()$style %||% CHART_STYLE_DEFAULT))
       head = if (!is.null(st) && is_text1(st$headline) && nzchar(st$headline))
-        tags$div(tags$div(class = "fw-semibold", st$headline), tags$div(class = "small text-muted", title))
-      else tags$div(class = "fw-semibold", title)
+        tags$div(heading(st$headline), tags$div(class = "small text-muted chart-card-sub", title))
+      else heading(title)
       bslib::card(
         full_screen = TRUE, fill = FALSE, class = paste("chart-card", if (sel) "chart-selected"),
         `data-chart-id` = chart_id, onclick = card_click_js(ns("card_click")),
@@ -1826,9 +1848,10 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                    btn("up", "Move up", disabled = isTRUE(at <= 1L)), btn("down", "Move down", disabled = isTRUE(at >= length(ids))))),
         bslib::card_body(
           fillable = FALSE, fill = FALSE,
-          uiOutput(ns(cid(chart_id, "view"))),
+          # the chart's slot takes what the row's height leaves, so a short card has no blank block under it
+          tags$div(class = "chart-slot", uiOutput(ns(cid(chart_id, "view")))),
           uiOutput(ns(cid(chart_id, "notes"))),
-          if (!is.null(st)) tags$p(class = "mb-1", st$summary),
+          if (!is.null(st)) tags$p(class = "mb-1 chart-summary", st$summary),
           if (!is.na(stale)) tags$p(class = "small mb-1", style = warn_style, if (identical(stale, "chart")) SUMMARY_STALE else SUMMARY_STALE_DATA),
           if (!is.null(st) && length(st$problems)) check_line(st$problems, ok = NULL),
           if (!is.null(note)) tags$p(class = "small mb-1", style = warn_style, note),
@@ -1960,7 +1983,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         p = drawn()
         if (inherits(p, "error")) return(warn_box(conditionMessage(p)))
         shown = attr(p, "notes")
-        if (length(shown)) tags$ul(class = "small text-muted", purrr::map(shown, tags$li))
+        if (length(shown)) tags$ul(class = "small text-muted chart-notes", purrr::map(shown, tags$li))
       })
 
       # The buttons of the header.
@@ -2136,7 +2159,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         full_screen = TRUE, fill = FALSE, class = "chart-card chart-table-card", `data-table-id` = table_id,
         bslib::card_header(
           class = "d-flex flex-column align-items-start gap-2",
-          tags$div(class = "fw-semibold", style = paste0("font-family: ", CHART_FONTS[[st$title_font]]$css, ";"), def$title),
+          tags$div(class = css_class("fw-semibold chart-heading", if (identical(st$title_case, "upper")) "chart-upper"), style = paste0("font-family: ", CHART_FONTS[[st$title_font]]$css, ";"),
+                   dash_heading_text(def$title, palette()$style %||% CHART_STYLE_DEFAULT)),
+
           tags$div(class = "d-flex flex-wrap gap-1", btn("edit", "Edit text"), btn("remove", "Remove", "btn-outline-danger")),
           tags$div(class = "d-flex flex-wrap align-items-center gap-2 chart-dash-row",
                    bslib::input_switch(ns(cid(table_id, "dash")), "In dashboard", value = isolate(in_dash(table_id))),
@@ -2260,6 +2285,9 @@ DASH_ASPECT <- c(desk = 0.64, wide = 0.42, phone = 0.8)
 DASH_SCALE <- 2L
 DASH_CSS_DPI <- 96L
 DASH_KEYS_MAX <- 3L             # key numbers the analyst may add, each a line of a chart's facts
+DASH_KEYS_STRIP_MAX <- 6L       # the strip at the top of the page holds at most these: the file's three and the analyst's three
+DASH_KEY_SHORT <- 14L           # a key value of this many characters or fewer is a number: it does not wrap and its type shrinks to its cell
+DASH_FULL_PANELS <- 4L          # a chart with more panels than this (small multiples) takes a whole row of the page
 DASH_PICTURE_SIZES <- c("desk", "wide", "phone")
 DASH_PX <- c(desk = DASH_DESK_PX, wide = DASH_WIDE_PX, phone = DASH_PHONE_PX)
 
@@ -2267,29 +2295,38 @@ DASH_PX <- c(desk = DASH_DESK_PX, wide = DASH_WIDE_PX, phone = DASH_PHONE_PX)
 DASH_FACT_SKIP <- c("Plotted", "Filter", "Shown", "Highlighted", "Fitted curve", "Rows used", "Rows after the filter", "Groups shown",
                     "Rows left out for missing values", "Exploratory", "Values", "Groups at the highest value", "Points", "Points per series")
 
-# How each style's page differs beyond its colours and typefaces (the look of its masthead, its cards and its boxes), as CSS over the
+# How each style's page differs beyond its colours and typefaces (the look of its masthead, its cards and its strip of key numbers), as CSS over the
 #   custom properties --bg, --text, --text2, --caption, --grid, --box, --accent and --rule. A style with no entry is drawn as Clean.
 DASH_LOOK <- list(
   clean = paste0(".masthead{border-bottom:3px solid var(--accent);}",
                  ".card{background:var(--bg);border:1px solid var(--grid);border-radius:.5rem;padding:1rem;}"),
   minimal = paste0(".masthead{border-bottom:1px solid var(--text2);}",
                    ".card{background:transparent;border:0;border-top:1px solid var(--text2);border-radius:0;padding:.75rem 0 0;}",
-                   ".box{background:transparent;border:0;border-top:3px solid var(--accent);border-radius:0;padding:.6rem 0 .5rem;}"),
+                   ".keys{border-top:3px solid var(--accent);border-bottom:0;}"),
   magazine = paste0(".masthead{border-top:10px solid var(--accent);padding-top:1.25rem;}",
                     ".card{background:var(--bg);border:3px solid var(--grid);border-radius:.25rem;padding:1rem;}",
-                    ".box{border:3px solid var(--grid);border-top:6px solid var(--accent);border-radius:.25rem;}"),
+                    ".keys{border-top:6px solid var(--accent);border-bottom:3px solid var(--grid);}"),
   desk = paste0(".masthead{border-bottom:5px solid var(--text);}",
                 ".card{background:var(--bg);border:2px solid var(--grid);border-radius:0;padding:1rem;}",
-                ".box{border:2px solid var(--grid);border-top:5px solid var(--accent);border-radius:0;}",
-                ".box-title,.card-sub{text-transform:uppercase;letter-spacing:.04em;font-size:.78rem;}"),
+                ".keys{border-top:5px solid var(--text);border-bottom:2px solid var(--grid);}",
+                ".key-what,.card-sub{text-transform:uppercase;letter-spacing:.04em;font-size:.78rem;}"),
   newspaper = paste0(".masthead{text-align:center;border-top:4px solid var(--rule);border-bottom:1px solid var(--rule);padding:1.1rem 0 1.2rem;}",
                      ".masthead .intro{margin-left:auto;margin-right:auto;text-align:left;}",
                      ".card{background:transparent;border:0;border-top:1px solid var(--rule);border-radius:0;padding:.75rem 0 0;}",
-                     ".box{background:transparent;border:0;border-top:2px solid var(--rule);border-radius:0;padding:.6rem 0 .5rem;}",
-                     ".box-value{font-family:var(--title-font);}"),
+                     ".keys{border-top:2px solid var(--rule);}"),
   dark = paste0(".masthead{border-bottom:3px solid var(--accent);}",
-                ".card{background:var(--bg);border:1px solid var(--grid);border-radius:.8rem;padding:1.1rem;}",
-                ".box{border-radius:.8rem;}"))
+                ".card{background:var(--bg);border:1px solid var(--grid);border-radius:.8rem;padding:1.1rem;}"),
+  # Briefing: a hairline round each card and no shadow, headings in condensed upper case over small grey subtitles (the span `keep` holds a number
+  #   or a unit as written), the strip of key numbers between two hairlines with its numbers in the condensed face.
+  briefing = paste0(".masthead{border-bottom:1px solid var(--text);padding-bottom:1rem;}",
+                    "h1,.card h2,.stat-title{text-transform:uppercase;letter-spacing:.005em;}",
+                    ".subtitle{font-size:1.05rem;}",
+                    ".card{background:var(--bg);border:1px solid #AEB3BA;border-radius:2px;padding:1rem 1.15rem;box-shadow:none;}",
+                    ".card h2{font-size:1.5rem;line-height:1.08;margin-bottom:.35rem;}",
+                    ".card-sub{font-size:.88rem;margin-bottom:.5rem;}",
+                    ".keys{border-top:1px solid var(--text);border-bottom:1px solid var(--text);}",
+                    ".key-value.num{--max:2.6rem;}"))
+
 
 # The class attribute from names, leaving out the ones that are NULL ("card" or "card full", never "card ").
 css_class <- function(...) paste(c(...), collapse = " ")
@@ -2452,7 +2489,7 @@ dash_font_css <- function(style) {
   }
   paste(unlist(purrr::map(roles, function(r) {
     f = CHART_FONTS[[r]]
-    c(face(f$family, 400, f$regular), face(f$family, 700, f$bold),
+    c(if (!identical(f$weights, 700)) face(f$family, 400, f$regular), face(f$family, 700, f$bold),
       if (identical(st$title_weight, "semibold") && identical(r, st$title_font)) face(paste(f$family, "SemiBold"), 400, f$semibold))
   })), collapse = "\n")
 }
@@ -2481,27 +2518,32 @@ dash_css <- function(style, accent) {
     ".subtitle{font-family:", title_css(st$subtitle_font), ";color:var(--text2);font-size:1.25rem;margin:0;overflow-wrap:anywhere;}\n",
     ".byline{color:var(--caption);font-size:.9rem;margin:.7rem 0 0;}\n",
     ".intro{max-width:70ch;margin-top:1rem;font-size:1.05rem;}\n.intro p{margin:.5rem 0;}\n",
-    ".boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));gap:.75rem;margin:0 0 1.5rem;}\n",
-    ".box{background:var(--box);border:1px solid var(--grid);border-top:4px solid var(--accent);border-radius:.5rem;padding:.7rem 1rem .8rem;min-width:0;}\n",
-    ".box-title{color:var(--text2);font-size:.85rem;}\n",
-    ".box-value{--max:1.9rem;font-size:var(--max);font-weight:700;line-height:1.25;overflow-wrap:break-word;}\n.box-value.long{--max:1.1rem;}\n",
-    # A number is never broken inside itself: it stays on one line (.num) and, where the browser has container query units, its size is the
-    #   smaller of the style's size and what lets its width in ems (--w, estimated by dash_value_em()) fit the width of its own box.
-    ".box-value.num{white-space:nowrap;}\n",
-    "@supports (width:1cqi){.box{container-type:inline-size;}.box-value.num{font-size:min(var(--max),calc(100cqi / var(--w)));}}\n",
-    ".box-chart{color:var(--caption);font-size:.8rem;margin-top:.2rem;overflow-wrap:anywhere;}\n",
-    ".grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;align-items:start;}\n",
+    # The key numbers: a strip, a number large over its words, a thin rule between the items and no boxes. A number never wraps or is cut: its type
+    #   shrinks to the width of its own cell (a container query unit, with --w its width in ems, estimated by dash_value_em()), and a cell has a least
+    #   width, so a strip of six becomes two rows before the type gets small. The left rule of each item is pulled over the one before it, and the
+    #   first of each row is clipped.
+    ".keys{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,10.5rem),1fr));overflow:hidden;margin:0 0 1.5rem;border-top:1px solid var(--rule);border-bottom:1px solid var(--grid);}\n",
+    ".key{min-width:0;margin-left:-1px;padding:.85rem 1.1rem .9rem;border-left:1px solid var(--grid);}\n",
+    ".key-value{--max:2.1rem;font-family:var(--title-font);font-size:var(--max);font-weight:700;line-height:1.1;overflow-wrap:break-word;}\n.key-value.long{--max:1.5rem;line-height:1.2;}\n",
+    ".key-value.num{white-space:nowrap;}\n",
+    "@supports (width:1cqi){.key{container-type:inline-size;}.key-value.num{font-size:min(var(--max),calc(100cqi / var(--w)));}}\n",
+    ".key-what{color:var(--text2);font-variant-caps:all-small-caps;letter-spacing:.04em;font-size:.95rem;line-height:1.3;margin-top:.3rem;overflow-wrap:anywhere;}\n",
+    ".grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;align-items:stretch;}\n",
     "@media (min-width:", DASH_TWO_PX, "px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}.card.full img{max-width:none;}}\n",
-    ".card{min-width:0;}\n",
+    # A card is a column that fills the height of its row (the grid stretches it); its chart's slot takes what is left, so the chart stands in the
+    #   middle of the card and no blank block is under a short one.
+    ".card{min-width:0;display:flex;flex-direction:column;}\n.card .slot{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;min-width:0;}\n",
     ".card h2{font-family:var(--title-font);font-weight:", title_weight, ";font-size:1.3rem;line-height:1.3;margin:0 0 .5rem;overflow-wrap:anywhere;}\n",
     ".card-sub{color:var(--text2);font-size:.95rem;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
     ".card-note{color:var(--caption);font-size:.85rem;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
     ".card picture{display:block;}\n.card img.print-only{display:none;}\n",
     ".card img{display:block;width:100%;max-width:700px;height:auto;}\n",
     ".widget{width:100%;max-width:700px;overflow:hidden;}\n", DASH_VIDEO_CSS,
-    ".summary{margin:.8rem 0 0;}\n",
-    ".notes{color:var(--text2);font-size:.85rem;margin:.6rem 0 0;padding-left:1.1rem;}\n",
-    ".source{color:var(--caption);font-size:.8rem;margin:.6rem 0 0;overflow-wrap:anywhere;}\n",
+    # Under a chart, three sizes: the summary at a reading size and a measure of at most 62 characters, the notes smaller and grey, the source line smallest.
+    ".summary{font-size:1.05rem;line-height:1.55;max-width:62ch;margin:.9rem 0 0;}\n",
+    ".notes{color:var(--text2);font-size:.82rem;line-height:1.45;max-width:75ch;margin:.7rem 0 0;padding-left:1.1rem;}\n",
+    ".source{color:var(--caption);font-size:.72rem;margin:.6rem 0 0;overflow-wrap:anywhere;}\n",
+    ".keep{text-transform:none;}\n",
     ".foot{margin-top:2.5rem;padding-top:1.25rem;border-top:1px solid var(--rule);}\n",
     ".foot h2{font-family:var(--title-font);font-weight:", title_weight, ";font-size:1.1rem;margin:0 0 .5rem;}\n",
     ".about dl{margin:0;}\n.about dt{font-weight:700;margin-top:.7rem;}\n.about dd{margin:.1rem 0 0;color:var(--text2);overflow-wrap:anywhere;max-width:70ch;}\n",
@@ -2536,7 +2578,7 @@ dash_css <- function(style, accent) {
     ".stat-notes .stat-note{color:var(--caption);font-size:.8rem;margin:.3rem 0 0;max-width:80ch;}\n",
     look, "\n",
     "@media (max-width:", DASH_PHONE_MAX_PX, "px){.page{padding:1rem .75rem 2rem;}.card{padding:.75rem;}.col-section{grid-template-columns:minmax(0,1fr);}.col-section dl{grid-template-columns:1fr;gap:0;}",
-    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.stat-table th,.stat-table td{white-space:nowrap;}.boxes{grid-template-columns:repeat(2,minmax(0,1fr));}.boxes .box:last-child:nth-child(odd){grid-column:1/-1;}.box-value{--max:1.5rem;}.box-value.long{--max:1rem;}}\n",
+    ".col-section dd{margin-bottom:.4rem;}.summary-table{font-size:.8rem;}.summary-table th,.summary-table td{white-space:nowrap;}.stat-table th,.stat-table td{white-space:nowrap;}.keys{grid-template-columns:repeat(2,minmax(0,1fr));}.keys .key:last-child:nth-child(odd){grid-column:1/-1;}.key{padding:.7rem .8rem .75rem;}.key-value{--max:1.7rem;}.key-value.long{--max:1rem;}}\n",
     # Print. The classification band is fixed: Chrome repeats a fixed box at the top and at the bottom of the content area of every printed page, and a
     #   fixed box covers what is under it. Negative offsets do not move it into the margin (looked at in a PDF: the band is clipped or misplaced), and a
     #   repeating table header and footer did not repeat for a column that is one row. So the sheet has no margin at the top and bottom, the bands stand
@@ -2547,17 +2589,20 @@ dash_css <- function(style, accent) {
     ".mark{position:fixed;left:8mm;right:8mm;}.mark.top{top:6mm;}.mark.bottom{bottom:6mm;}",
     "body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FFFFFF;color:#111111;}.page{max-width:none;padding:", DASH_PRINT_ROOM_MM[["one"]], "mm 14mm;box-decoration-break:clone;-webkit-box-decoration-break:clone;}",
     "body.long .page{padding-top:", DASH_PRINT_ROOM_MM[["two"]], "mm;padding-bottom:", DASH_PRINT_ROOM_MM[["two"]], "mm;}",
-    ".grid{display:block;}.card,.col-section,.box,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.video-box video{display:none;}.video-box .still{display:block;max-width:100%;}.col-section figure img.screen-only{display:none;}",
-    ".boxes{display:flex;flex-wrap:wrap;}.box{flex:1 1 10rem;}.masthead{break-after:avoid;}h2{break-after:avoid;}.stat-block .table-scroll{overflow:visible;}.stat-table{font-size:.7rem;}}\n")
+    ".grid{display:block;}.card,.col-section,.key,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.video-box video{display:none;}.video-box .still{display:block;max-width:100%;}.col-section figure img.screen-only{display:none;}",
+    ".keys{display:flex;flex-wrap:wrap;overflow:visible;}.key{flex:1 1 10rem;}.masthead{break-after:avoid;}h2{break-after:avoid;}.stat-block .table-scroll{overflow:visible;}.stat-table{font-size:.7rem;}}\n")
 }
 
-# One of the three value boxes of the canvas: the title, the value and the text to show in full (what the Period or File box says in
-#   the app), by key: rows, columns, third.
+# The three key numbers about the file, as plain statements, by key (rows, columns, third): `title` names the choice in the export dialog,
+#   `value` is the statement ("3,000 rows", "1 row", "22 columns", "Jan 2022 to Dec 2024" or the file's name), `full` the text to show in
+#   full (the tooltip: the first and last date, or the whole name), `cls` the class of a long value.
 canvas_box_values <- function(data, cb) {
   time = purrr::detect(cb$columns, function(e) identical(e$role, "time"))
   period = if (!is.null(time) && time$name %in% names(data)) tryCatch(period_text(range(data[[time$name]], na.rm = TRUE)), error = function(e) NULL)
-  list(rows = list(title = "Rows", value = format_num(nrow(data)), full = format_num(nrow(data)), cls = ""),
-       columns = list(title = "Columns", value = format_num(ncol(data)), full = format_num(ncol(data)), cls = ""),
+  n_rows = nrow(data)
+  n_cols = ncol(data)
+  list(rows = list(title = "Rows", value = paste(format_num(n_rows), if (n_rows == 1L) "row" else "rows"), full = format_num(n_rows), cls = ""),
+       columns = list(title = "Columns", value = paste(format_num(n_cols), if (n_cols == 1L) "column" else "columns"), full = format_num(n_cols), cls = ""),
        third = if (!is.null(period)) list(title = "Period", value = period$short, full = period$full, cls = "chart-box-period")
                else list(title = "File", value = cb$file %||% "", full = cb$file %||% "", cls = "chart-box-file"))
 }
@@ -2678,7 +2723,7 @@ dash_picture_tag <- function(it, full, alt) {
 dash_video_tag <- function(it, alt) {
   v = it$video
   tags$div(class = "video-box",
-    tags$video(src = v$uri, poster = v$poster, controls = NA, muted = NA, playsinline = NA, preload = "auto", `data-once` = NA, `aria-label` = paste0("Video: ", alt),
+    tags$video(src = v$uri, poster = v$poster, controls = NA, muted = NA, playsinline = NA, preload = "none", `data-once` = NA, `aria-label` = paste0("Video: ", alt),
                width = SPEC_VIDEO_PX$card[["width"]], height = SPEC_VIDEO_PX$card[["height"]]),
     tags$img(class = "still", src = v$poster, alt = alt, width = SPEC_VIDEO_PX$card[["width"]], height = SPEC_VIDEO_PX$card[["height"]]))
 }
@@ -2686,17 +2731,19 @@ dash_video_tag <- function(it, alt) {
 # One card of the page: the headline as its heading (the chart's title, if there is no headline), the chart's title as its subtitle (and
 #   the chart's own subtitle under it), the chart (a picture, or the widget), the summary, the notes the chart carries and the source
 #   line, once. The drawing has no title and no source line. `full`: the card has a whole row to itself.
-dash_card <- function(it, full = FALSE) {
-  if (identical(it$mode, "table")) return(dash_table_card(it, full))
+dash_card <- function(it, full = FALSE, style = NULL) {
+  if (identical(it$mode, "table")) return(dash_table_card(it, full, style))
   headed = is_text1(it$headline) && nzchar(trimws(it$headline))
   alt = paste0(it$title, if (headed) paste0(". ", it$headline))
   tags$article(class = css_class("card", if (full) "full"),
-    tags$h2(if (headed) it$headline else it$title),
+    tags$h2(dash_heading_text(if (headed) it$headline else it$title, style %||% CHART_STYLE_DEFAULT)),
     if (headed) tags$p(class = "card-sub", it$title),
     if (is_text1(it$chart_subtitle) && nzchar(it$chart_subtitle)) tags$p(class = "card-note", it$chart_subtitle),
-    if (identical(it$mode, "interactive")) tags$div(class = "widget", HTML(it$widget_html))
-    else if (identical(it$mode, "video")) dash_video_tag(it, alt)
-    else dash_picture_tag(it, full, alt),
+    # the chart's slot grows to the height of the row, so a short card has no blank block under it (the chart stands in the middle of it)
+    tags$div(class = "slot",
+      if (identical(it$mode, "interactive")) tags$div(class = "widget", HTML(it$widget_html))
+      else if (identical(it$mode, "video")) dash_video_tag(it, alt)
+      else dash_picture_tag(it, full, alt)),
     if (is_text1(it$summary) && nzchar(trimws(it$summary))) tags$p(class = "summary", it$summary),
     if (length(it$notes)) tags$ul(class = "notes", purrr::map(it$notes, tags$li)),
     if (is_text1(it$source)) tags$p(class = "source", it$source))
@@ -2719,11 +2766,12 @@ dash_fact_choices <- function(text, tokens = character(0)) {
   }), recursive = FALSE)
 }
 
-# The boxes of the page's top, as list(title, value, long, chart): the file's (rows, columns, the period or the file name, as chosen)
-#   and then the key numbers the analyst picked, each with the name of its chart under it.
-dash_boxes <- function(settings, cb, data, items) {
+# The key numbers of the page's top, as list(value, full, what, cls): the file's (rows, columns, the period or the file name, as chosen, each a
+#   plain statement: "3,000 rows", "22 columns", "Jan 2022 to Dec 2024") and then the key numbers the analyst picked, each its value over
+#   "<what it is>, <chart name>". At most DASH_KEYS_STRIP_MAX (six).
+dash_keys <- function(settings, cb, data, items) {
   file = canvas_box_values(data, cb)[intersect(c("rows", "columns", "third"), settings$boxes)]
-  files = purrr::map(unname(file), function(b) list(title = b$title, value = b$value, full = b$full, long = nzchar(b$cls), chart = NULL))
+  files = purrr::map(unname(file), function(b) list(value = b$value, full = b$full, what = NULL, cls = b$cls))
   keys = purrr::compact(purrr::map(unique(settings$keys %||% character(0)), function(k) {
     at = regexec("^(.*)\\|([0-9]+)$", k)[[1]]
     if (at[[1]] < 0L) return(NULL)
@@ -2731,16 +2779,47 @@ dash_boxes <- function(settings, cb, data, items) {
     n = as.integer(regmatches(k, list(at))[[1]][3])
     it = purrr::detect(items, function(m) identical(m$id, id))
     f = if (!is.null(it) && n >= 1L && n <= length(it$facts)) it$facts[[n]]
-    if (!is.null(f)) list(title = f$label, value = f$value, full = f$value, long = nchar(f$value) > 9L, chart = it$title)
+    if (!is.null(f)) list(value = f$value, full = f$value, what = paste0(f$label, ", ", it$title), cls = "")
   }))
-  c(files, utils::head(keys, DASH_KEYS_MAX))
+  utils::head(c(files, utils::head(keys, DASH_KEYS_MAX)), DASH_KEYS_STRIP_MAX)
 }
 
-# The width of a value box's text in ems of its font, estimated (a digit 0.64, a comma, point or space 0.3, anything else 0.72, and 8% over), so that
-#   the page can scale a number to the box it sits in; never under 1, so that the size is never a division by zero.
-dash_value_em <- function(value) {
+# The width of a key number's text in ems of its font, estimated (a digit 0.64, a comma, point or space 0.3, anything else 0.72, and 8% over; a
+#   condensed face, `narrow`, 0.7 of that), so that the page can scale a number to the cell it sits in; never under 1, so that the size is never
+#   a division by zero.
+dash_value_em <- function(value, narrow = FALSE) {
   ch = strsplit(as.character(value), "")[[1]]
-  round(max(1, 1.08 * sum(dplyr::case_when(grepl("[0-9]", ch) ~ 0.64, ch %in% c(",", ".", " ") ~ 0.3, TRUE ~ 0.72))), 2)
+  round(max(1, (if (narrow) 0.7 else 1) * 1.08 * sum(dplyr::case_when(grepl("[0-9]", ch) ~ 0.64, ch %in% c(",", ".", " ") ~ 0.3, TRUE ~ 0.72))), 2)
+}
+
+# The strip of key numbers: a number large, a thin rule between the items, no boxes. `keys` is a list of list(value, full, what, cls). A value of
+#   DASH_KEY_SHORT characters or fewer is a number to the page's eye: it never wraps and its type shrinks to the width of its cell (the
+#   stylesheet, with --w its estimated width in ems); a longer one (a period, a file's name) is set smaller and may wrap at its spaces. `what`
+#   is the small line under it. `narrow`: the condensed face.
+dash_keys_tag <- function(keys, class = NULL, narrow = FALSE) {
+  if (!length(keys)) return(NULL)
+  tags$div(class = css_class("keys", class), role = "group", `aria-label` = "Key numbers",
+           purrr::map(keys, function(k) {
+             short = nchar(k$value) <= DASH_KEY_SHORT
+             tags$div(class = "key",
+                      tags$div(class = css_class("key-value", if (short) "num" else "long", if (nzchar(k$cls %||% "")) k$cls), style = paste0("--w:", dash_value_em(k$value, narrow), ";"),
+                               title = k$full, k$value),
+                      if (!is.null(k$what)) tags$div(class = "key-what", k$what))
+           }))
+}
+
+# A heading as the page writes it. A style that sets its headings in upper case (its `title_case`) does it with CSS (text-transform), which
+#   would also turn "kg" into "KG" and "kWh" into "KWH": a word that keeps its case (chart_case_tokens(): a number, a unit) is wrapped in a
+#   span the stylesheet leaves alone. A style that does not has the plain text.
+dash_heading_text <- function(text, style) {
+  if (!identical(chart_style(style)$title_case, "upper") || !is_text1(text)) return(text)
+  tk = chart_case_tokens(text)
+  # words that keep their case go in spans; the text between them (words and spaces) stays one string
+  span = tk$keep & grepl("\\S", tk$text)
+  runs = rle(span)
+  ends = cumsum(runs$lengths)
+  purrr::pmap(list(runs$values, ends - runs$lengths + 1L, ends), function(is_span, from, to)
+    if (is_span) tags$span(class = "keep", paste(tk$text[from:to], collapse = "")) else paste(tk$text[from:to], collapse = ""))
 }
 
 # The page, as one string: the masthead (title, subtitle, author, date, the introduction at a reading measure), the boxes, a card for each chart
@@ -2750,23 +2829,19 @@ dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALS
   mark = marking_of(settings$marking)
   style = palette$style %||% CHART_STYLE_DEFAULT
   accent = spec_palette(palette)$single
-  boxes = dash_boxes(settings, cb, data, items)
+  keys = dash_keys(settings, cb, data, items)
   deps = htmltools::resolveDependencies(unlist(purrr::map(items, function(it) it$deps), recursive = FALSE) %||% list())
   title = if (nzchar(trimws(settings$title %||% ""))) trimws(settings$title) else paste("Dashboard:", cb$file %||% "the data file")
   author = trimws(settings$author %||% "")
   head = tagList(tags$meta(charset = "utf-8"), tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"), tags$title(title),
                    tags$style(HTML(paste(dash_font_css(style), dash_css(style, accent), sep = "\n"))), dash_inline_dependencies(deps))
   body = tags$body(class = if (nchar(mark) > 55L) "long", dash_band(mark, "top"), tags$div(class = "page",
-    tags$header(class = "masthead", tags$h1(title),
+    tags$header(class = "masthead", tags$h1(dash_heading_text(title, style)),
                 if (nzchar(trimws(settings$subtitle %||% ""))) tags$p(class = "subtitle", trimws(settings$subtitle)),
                 tags$p(class = "byline", if (nzchar(author)) tags$span(class = "author", author), if (nzchar(author)) " · ", tags$time(dash_date_text(settings$date))),
                 tags$div(class = "intro", dash_paragraphs(settings$intro))),
-    if (length(boxes)) tags$section(class = "boxes", `aria-label` = "The file in numbers",
-                                    purrr::map(boxes, function(b) tags$div(class = css_class("box", if (!is.null(b$chart)) "key"), tags$div(class = "box-title", b$title),
-                                                                           tags$div(class = css_class("box-value", if (isTRUE(b$long)) "long", if (!grepl("[[:space:]]", b$value)) "num"), style = paste0("--w:", dash_value_em(b$value), ";"),
-                                                                                   title = b$full, b$value),
-                                                                           if (!is.null(b$chart)) tags$div(class = "box-chart", b$chart)))),
-    tags$main(class = "grid", purrr::map2(items, full, dash_card)),
+    dash_keys_tag(keys, narrow = identical(chart_style(style)$title_font, "display")),
+    tags$main(class = "grid", purrr::map2(items, full, dash_card, style = style)),
     tags$footer(class = "foot", dash_about(items, settings, cb, data, model), tags$p(class = "made", "Made with chaRt")),
     if (any(purrr::map_chr(items, "mode") == "video")) tags$script(HTML(DASH_VIDEO_JS))), dash_band(mark, "bottom"))
   dash_document(head, body)
@@ -2944,12 +3019,14 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, mark
   v = if (identical(it$mode, "video")) tryCatch(dash_video(chart, stage, file.path("charts", sprintf("%02d_%s.mp4", i, dash_slug(title))), data, cb, palette, marking), error = function(e) conditionMessage(e))
   fallback = if (is.character(w)) sub("\n.*$", "", w) else if (is.character(v)) sub("\n.*$", "", v)
   st = it$story
+  panels = if (!is.null(s$facet) && s$facet %in% names(attr(p, "table"))) length(unique(attr(p, "table")[[s$facet]])) else 1L
   list(id = it$id, title = title, headline = if (!is.null(st)) st$headline, summary = if (!is.null(st)) st$summary, story = st, chart_subtitle = s$subtitle,
        mode = if (is.list(w)) "interactive" else if (is.list(v)) "video" else "picture", fallback = fallback, fallback_of = if (is.character(v)) "video", facts = facts,
        video = if (is.list(v)) v,
        widget_html = if (is.list(w)) w$html, deps = if (is.list(w)) w$deps,
        # a video drawn on a canvas wider than 8 inches (rows of panels, many sideways bars) is shown across the page, or its text would be too small to read
        natural_wide = identical(unname(size[["width"]]), SPEC_SIZE[["max_width"]]) || (is.list(v) && v$canvas[["width"]] > 8),
+       panels = panels,
        notes = attr(p, "notes"), source = s$caption,
        files = c(pic_file, vector_file, if (is.list(v)) v$file), code = code)
 }
@@ -2963,6 +3040,10 @@ dash_video <- function(chart, stage, file, data, cb, palette, marking) {
   r = spec_video(chart$spec, data, cb, palette, file.path(stage, file), size = SPEC_VIDEO_PX$card, bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS, poster = poster, marking = marking)
   list(file = file, uri = dash_data_uri(file.path(stage, file), "video/mp4"), poster = dash_data_uri(poster, "image/png"), seconds = r$seconds, drawn = r$drawn, canvas = r$canvas)
 }
+
+# Whether a card asks for a whole row by what it is (Phase 10 Part D): an interactive chart, a table, a chart drawn wide (rows of panels, many sideways
+#   bars), or small multiples of more than DASH_FULL_PANELS panels, which are cramped in half a row. `m` is a made card: list(mode, natural_wide, panels).
+dash_card_wide <- function(m) m$mode %in% c("interactive", "table") || isTRUE(m$natural_wide) || (m$panels %||% 1L) > DASH_FULL_PANELS
 
 # The second part: the drawings the page shows for a chart that goes in as a picture, made once the layout is known (a card that has a row
 #   to itself is shown wider). Each is the chart without title, subtitle or source line, drawn by spec_plot() for the size it is shown at
@@ -3003,9 +3084,9 @@ dash_table <- function(it, i, stage, data, cb, marking) {
 
 # The card of a table in the page: the title as the heading, the table (a real table that scrolls sideways inside its card when it is
 #   wider than the card) and the lines under it. A table has a row to itself.
-dash_table_card <- function(it, full = TRUE)
+dash_table_card <- function(it, full = TRUE, style = NULL)
   tags$article(class = css_class("card", "table-card", if (full) "full"),
-    tags$h2(it$title),
+    tags$h2(dash_heading_text(it$title, style %||% CHART_STYLE_DEFAULT)),
     summary_tag(it$tb, it$ci))
 
 # A table in the dialog's list: its title and the columns it takes, and what is written (a table in the page and a CSV in charts/).
@@ -3041,7 +3122,7 @@ build_dashboard <- function(items, data, cb, palette, settings, path, zip_file, 
   made = tryCatch(purrr::imap(unname(items), function(it, i)
                     if (!is.null(it$table)) dash_table(it, i, stage, data, cb, mark) else dash_chart(it, i, stage, data, cb, palette, path, widget, kind, mark)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
-  full = dash_layout(purrr::map_lgl(made, function(m) m$mode %in% c("interactive", "table") || isTRUE(m$natural_wide)))
+  full = dash_layout(purrr::map_lgl(made, dash_card_wide))
   made = tryCatch(purrr::pmap(list(made, full, seq_along(made), unname(items)), function(m, f, i, it) dash_pictures(m, f, i, it$chart, data, cb, palette, kind)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
   dash_step("writing dashboard.html", writeBin(charToRaw(enc2utf8(dash_page(made, settings, cb, data, palette, model, full))), file.path(stage, "dashboard.html")))
@@ -3319,7 +3400,7 @@ method_checks_ui <- function() {
 
 # The styles, each with its small sample (the one the Style dialog shows), and the two bundled typefaces with their licences.
 FONT_LICENCE <- "SIL Open Font License, Version 1.1"
-FONT_LICENCE_FILES <- c(sans = "Inter-LICENSE.txt", serif = "SourceSerif4-LICENSE.md")
+FONT_LICENCE_FILES <- c(sans = "Inter-LICENSE.txt", serif = "SourceSerif4-LICENSE.md", display = "BarlowCondensed-LICENSE.txt")
 
 # The first line of a font's licence file, which names its copyright holder.
 font_copyright <- function(file) {
@@ -3331,13 +3412,16 @@ font_copyright <- function(file) {
 method_styles_ui <- function() {
   colour = chart_palette(1L, chart_palette_default()$qualitative, CHART_STYLE_DEFAULT)[[1]]
   serif_in = purrr::map_chr(purrr::keep(CHART_STYLES, function(s) "serif" %in% c(s$title_font, s$subtitle_font)), "label")
+  display_in = purrr::map_chr(purrr::keep(CHART_STYLES, function(s) "display" %in% c(s$title_font, s$subtitle_font)), "label")
   font_ui = function(role) {
     f = CHART_FONTS[[role]]
     file = FONT_LICENCE_FILES[[role]]
     tags$li(class = "mb-2",
             tags$span(class = "fw-semibold", style = paste0("font-family: ", f$css, ";"), paste0(f$family, ":")),
-            paste0(if (identical(role, "serif")) paste0("the title and subtitle of the ", paste(serif_in, collapse = " and "), " style, in regular, semibold and bold. ")
-                   else "all other chart text, in regular, semibold and bold. ",
+            paste0(switch(role,
+                          serif = paste0("the title and subtitle of the ", paste(serif_in, collapse = " and "), " style, in regular, semibold and bold. "),
+                          display = paste0("the title of the ", paste(display_in, collapse = " and "), " style, in upper case, in bold. "),
+                          "all other chart text, in regular, semibold and bold. "),
                    "Licence: ", FONT_LICENCE, ". ", font_copyright(file), " "),
             tags$a(href = file.path("fonts", file), target = "_blank", rel = "noopener", "Licence text"))
   }
@@ -3345,7 +3429,7 @@ method_styles_ui <- function() {
     id = "method-styles",
     tags$h2("Styles and fonts"),
     tags$p("A dashboard has one style, chosen with the Style button on Explore; the model never chooses it. Each style is a set of colours, ",
-           "a grid and a title in one of two typefaces."),
+           "a grid and a title in one of three typefaces."),
     tags$div(class = "row g-3 mb-3",
              purrr::map(names(CHART_STYLES), function(nm) {
                st = CHART_STYLES[[nm]]
@@ -3353,7 +3437,7 @@ method_styles_ui <- function() {
                         HTML(style_sample_svg(nm, colour)), tags$div(class = "fw-semibold", st$label), tags$div(class = "small text-muted", st$note))
              })),
     tags$h3(class = "h5", "The typefaces"),
-    tags$p("Two typefaces are bundled with the app, so a chart looks the same on any server (when it is drawn by ragg; see Start here)."),
+    tags$p("Three typefaces are bundled with the app, so a chart looks the same on any server (when it is drawn by ragg; see Start here)."),
     tags$ul(class = "list-unstyled", purrr::map(names(CHART_FONTS), font_ui)))
 }
 
