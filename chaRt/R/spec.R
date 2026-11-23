@@ -1573,7 +1573,7 @@ spec_palette <- function(palette = chart_palette_default()) {
   list(qual = qual, max = palette_groups_max(palette),
        seq = chart_sequential(palette$sequential), div = chart_diverging(palette$diverging),
        style = style, single = palette_single(palette_for_n(1L, palette$qualitative, style), style), grey = st$grey, fit = st$fit, outline = st$outline, box_fill = st$box_fill,
-       panel = st$panel, slate = st$text_2,
+       panel = st$panel, slate = st$slate, accent = st$accent,
        rug = st$text_2, label = st$text_2, strong = st$text, fonts = chart_font_values(chart_theme_calls(style)))
 }
 
@@ -1625,7 +1625,7 @@ value_label <- function(s, cb, title = FALSE) {
          median = paste("Median", lab), if (title) col_title(cb, col) else lab)
 }
 
-highlight_values <- function(pal) c(`FALSE` = pal$grey, `TRUE` = CHART_HIGHLIGHT)
+highlight_values <- function(pal) c(`FALSE` = pal$slate, `TRUE` = pal$accent)
 
 aes_call <- function(...) {
   a = purrr::compact(list(...))
@@ -1840,10 +1840,10 @@ line_calls <- function(s, cb, pal) {
         if (slope) list(call("geom_point", data = data_where(quote(highlighted)), aes_call(colour = col), size = 2.5)),
         list(call("scale_colour_manual", values = pal$qual(nh), breaks = s$.legend_order)))
     else
-      c(list(call("geom_line", data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT, linewidth = 1.1)),
-        points(colour = CHART_HIGHLIGHT, data = data_where(quote(highlighted))),
-        if (labelled) list(end_labels(s, end_rows(s, list(quote(highlighted))), CHART_HIGHLIGHT)))
-    c(list(base(group = col), call("geom_line", data = data_where(quote(!highlighted)), colour = pal$grey, linewidth = 0.7)), lit)
+      c(list(call("geom_line", data = data_where(quote(highlighted)), colour = pal$accent, linewidth = 1.1)),
+        points(colour = pal$accent, data = data_where(quote(highlighted))),
+        if (labelled) list(end_labels(s, end_rows(s, list(quote(highlighted))), pal$accent)))
+    c(list(base(group = col), call("geom_line", data = data_where(quote(!highlighted)), colour = pal$slate, linewidth = 0.7)), lit)
   } else if (many) {
     c(list(base(group = col), call("geom_line", colour = pal$single, linewidth = 0.7)), points(colour = pal$single),
       if (labelled) list(end_labels(s, end_rows(s), pal$single)))
@@ -1925,8 +1925,8 @@ scatter_calls <- function(s, cb, pal) {
                           # a colour bar long enough for its labels, as a heatmap's
                           call("guides", fill = call("guide_colourbar", theme = call("theme", legend.key.width = call("unit", if (!is.null(s$.fig_width)) min(2.4, fig_panel_w(s) - 0.4) else 2.4, "in")))))
     else if (!is.null(s$highlight))
-      c(list(point(data = data_where(quote(!highlighted)), colour = pal$grey),
-             point(data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT)),
+      c(list(point(data = data_where(quote(!highlighted)), colour = pal$slate),
+             point(data = data_where(quote(highlighted)), colour = pal$accent)),
         side_labels(s, pal))
     else if (!is.null(col)) c(list(point()), colours)
     else list(point(colour = pal$single))
@@ -2000,12 +2000,12 @@ dumbbell_calls <- function(s, cb, pal) {
   top = call("filter", sym("chart_table"), call("==", y, call("[", call("levels", y), 1L)))
   names_at = call("mutate", top,
                   label_hjust = call("if_else", call("==", call("rank", sym(v), ties.method = "first"), 1L), 1.15, -0.15),
-                  text_colour = call("if_else", call("==", code, call("min", code)), pal$slate, pal$single))
+                  text_colour = call("if_else", call("==", code, call("min", code)), pal$slate, pal$accent))
   room = s$.name_room %||% 0.12
   list(call("ggplot", sym("chart_table"), aes_call(x = v, y = s$y)),
        call("geom_line", aes_call(group = s$y), orientation = "y", colour = pal$grey, linewidth = 1.6),
        call("geom_point", data = at("min"), colour = pal$slate, size = 3.5),
-       call("geom_point", data = at("max"), colour = pal$single, size = 3.5),
+       call("geom_point", data = at("max"), colour = pal$accent, size = 3.5),
        call("geom_text", data = names_at, aes_call(label = s$color, hjust = "label_hjust", colour = "text_colour"), vjust = -1.2,
             size = SPEC_LABEL_MM, family = sym("chart_font"), fontface = "bold"),
        quote(scale_colour_identity()),
@@ -2033,7 +2033,17 @@ cell_labels <- function(s, colours) {
 insert_data <- function(cl) as.call(c(list(cl[[1]], sym("chart_table")), as.list(cl)[-1]))
 
 # A heatmap's fill: the sequential palette, or the diverging one centred on the midpoint.
+# The x labels of a heatmap whose x is a group ("2022 Q1", "2022 Q2", ...): a label is about HEAT_LABEL_IN inches wide with room round it, so when the
+#   levels need more than the panel's width the labels stand in two rows or three (guide_axis(n.dodge)) and no two touch (Phase 10 Part D: they touched at
+#   narrow widths, in the picture and in the interactive view).
+HEAT_LABEL_IN <- 0.62
+heat_x_dodge <- function(s, cb) {
+  rows = min(3L, ceiling(cb_entry(cb, s$x)$distinct * HEAT_LABEL_IN / fig_panel_w(s)))
+  if (rows > 1L) call("scale_x_discrete", guide = call("guide_axis", n.dodge = rows))
+}
+
 heatmap_calls <- function(s, cb, pal) {
+
   colours = if (!is.null(s$midpoint)) pal$div else pal$seq
   rescaler = if (!is.null(s$midpoint))
     list(rescaler = call("function", as.pairlist(alist(x = , ... = )), call("rescale_mid", sym("x"), sym("..."), mid = s$midpoint)))
@@ -2042,7 +2052,7 @@ heatmap_calls <- function(s, cb, pal) {
          as.call(c(list(sym("scale_fill_gradientn"), colours = colours), rescaler, list(breaks = if (!is.null(s$.fig_width)) HEAT_BREAKS_FEW else HEAT_BREAKS),
                    if (identical(s$fn, "share")) list(labels = call("label_percent")) else if (!is.null(s$.fig_width)) list(labels = call("label_comma")))),
          call("scale_y_discrete", limits = sym("rev")),
-         if (!is_group_like(cb_entry(cb, s$x))) date_x_scale(s, cb),
+         if (!is_group_like(cb_entry(cb, s$x))) date_x_scale(s, cb) else heat_x_dodge(s, cb),
          # a colour bar long enough for its labels (the guide's own theme, so the style's theme does not undo it)
          call("guides", fill = call("guide_colourbar", theme = call("theme", legend.key.width = call("unit", if (!is.null(s$.fig_width)) min(2.4, fig_panel_w(s) - 0.4) else 2.4, "in")))))),
     if (isTRUE(s$.cell_labels)) cell_labels(s, colours))
@@ -2074,7 +2084,7 @@ grid_of <- function(s) switch(s$family,
   heatmap = "none",
   "y")
 
-labs_call <- function(s, cb) {
+labs_call <- function(s, cb, style = CHART_STYLE_DEFAULT) {
   flip = isTRUE(s$.flip)
   # Titles from the data dictionary's labels (col_title()), unless the model or analyst gave one.
   xl = s$x_label %||% if (!is.null(s$x)) col_title(cb, s$x)
@@ -2100,7 +2110,8 @@ labs_call <- function(s, cb) {
     if (is_text1(axes$y)) axes$y = wrap(axes$y, max(1.5, (s$.fig_height %||% SPEC_SIZE[["height"]]) - 1.2))
   }
   caption = if (isTRUE(s$.source)) paste(strwrap(s$caption, SPEC_CAPTION_WIDTH), collapse = "\n") else s$caption
-  as.call(c(list(sym("labs")), purrr::compact(list(title = s$title, subtitle = s$subtitle, caption = caption)), axes, legend))
+  # the title as the style draws it (upper case in Briefing; a number or a unit keeps its case); the spec keeps its own text
+  as.call(c(list(sym("labs")), purrr::compact(list(title = chart_title_case(s$title, style), subtitle = s$subtitle, caption = caption)), axes, legend))
 }
 
 facet_call <- function(s) {
@@ -2245,7 +2256,7 @@ annotation_calls <- function(s, cb, pal) {
   unlist(purrr::map(groups, function(g) {
     data = annotation_data(s, g)
     ring = if (!identical(s$family, "bar"))
-      list(call("geom_point", data = data, shape = 1, size = 4, stroke = 1, colour = CHART_HIGHLIGHT))
+      list(call("geom_point", data = data, shape = 1, size = 4, stroke = 1, colour = pal$strong))
     # merged into its line's end label (lint_marks()): the ring only
     if (isTRUE(g$merged)) return(ring)
     # drawn with the names, in one layer (side_labels())
@@ -2265,7 +2276,7 @@ mark_calls <- function(s, cb, pal) c(value_label_calls(s, cb, pal), annotation_c
 plot_calls <- function(s, cb, pal = spec_palette(), interactive = FALSE) {
   build = switch(s$family, bar = bar_calls, dot = dot_calls, line = , slope = line_calls, scatter = , bubble = scatter_calls,
                  histogram = histogram_calls, box = box_calls, heatmap = heatmap_calls, dumbbell = dumbbell_calls)
-  calls = few_breaks_calls(c(build(s, cb, pal), mark_calls(s, cb, pal), purrr::compact(list(facet_call(s), labs_call(s, cb))), theme_calls(s, pal)), s)
+  calls = few_breaks_calls(c(build(s, cb, pal), mark_calls(s, cb, pal), purrr::compact(list(facet_call(s), labs_call(s, cb, pal$style))), theme_calls(s, pal)), s)
   if (interactive) widget_calls(calls, s, cb) else calls
 }
 
