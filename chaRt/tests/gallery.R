@@ -43,6 +43,7 @@ gold_path <- function(entry, work_dir) {
     if (!file.exists(p)) makers[[entry$file]](p)
     return(p)
   }
+  if (identical(entry$file, "orders.csv")) return(file.path("tests", "data", "orders.csv"))    # the 3,000 synthetic orders
   p = file.path(GOLD_COURSE_DIR, entry$file)
   if (file.exists(p)) p else NULL
 }
@@ -92,6 +93,8 @@ drawn_text_boxes <- function(p, dpi = 96) {
   ls = grid::grid.ls(viewports = TRUE, print = FALSE, fullNames = TRUE)
   rows = which(ls$type == "grobListing" & grepl("^text\\[", ls$name) & grepl("panel", ls$vpPath))
   dev = grDevices::dev.size("in")
+  sp = attr(p, "spec")
+  call_outs = purrr::map_chr(sp$.annotate %||% list(), function(g) annotation_text(g, sp, attr(p, "table")))
   clip = !identical(p$coordinates$clip, "off")
   boxes = purrr::map(rows, function(i) {
     name = sub("^text\\[(.*)\\]$", "\\1", ls$name[[i]])
@@ -101,8 +104,13 @@ drawn_text_boxes <- function(p, dpi = 96) {
     lab = as.character(g$label)
     n = length(lab)
     if (!n) return(NULL)
-    grid::downViewport(vp)
+    # the panel's box, from the panel's own viewport (a call-out's text sits in the box's viewport, inside the panel's)
+    parts = sub("^viewport\\[(.*)\\]$", "\\1", strsplit(sub("^viewport\\[ROOT\\]::", "", ls$vpPath[[i]]), "::")[[1]])
+    panel_at = which(startsWith(parts, "panel"))[1]
+    grid::downViewport(do.call(grid::vpPath, as.list(parts[seq_len(panel_at)])))
     pb = grid::deviceLoc(grid::unit(c(0, 1), "npc"), grid::unit(c(0, 1), "npc"))
+    grid::upViewport(0)
+    grid::downViewport(vp)
     one_gp = function(k) do.call(grid::gpar, purrr::map(unclass(g$gp), function(v) if (length(v) > 1L) v[[(k - 1L) %% length(v) + 1L]] else v))
     # each anchor in the label's own font settings: ggrepel writes a moved label's place as the point plus an offset in
     #   font-relative units, which mean something else in the viewport's default font
@@ -122,7 +130,10 @@ drawn_text_boxes <- function(p, dpi = 96) {
     hj = rep_len(as.numeric(g$hjust %||% 0.5), n)
     vj = rep_len(as.numeric(g$vjust %||% 0.5), n)
     ax = as.numeric(loc$x); ay = as.numeric(loc$y)
-    data.frame(label = lab, x0 = ax - hj * w, x1 = ax + (1 - hj) * w, y0 = ay - vj * h, y1 = ay + (1 - vj) * h,
+    # a call-out's box (geom_label, or ggrepel's) reaches past its text by its padding (0.3 of a line, SPEC_LABEL_MM type) and its border: the box is what must be inside the panel
+    #   (the names of a highlight in the same ggrepel layer have no box, so only the call-outs' own words are padded)
+    pad = if (grepl("label", ls$gPath[[i]], ignore.case = TRUE)) ifelse(lab %in% call_outs, 0.3 * 1.2 * SPEC_LABEL_MM * 2.845 / 72 + 0.01, 0) else 0
+    data.frame(label = lab, x0 = ax - hj * w - pad, x1 = ax + (1 - hj) * w + pad, y0 = ay - vj * h - pad, y1 = ay + (1 - vj) * h + pad,
                px0 = as.numeric(pb$x[1]), px1 = as.numeric(pb$x[2]), py0 = as.numeric(pb$y[1]), py1 = as.numeric(pb$y[2]),
                panel = sub(".*viewport\\[(panel[^]]*)\\].*", "\\1", ls$vpPath[[i]]), dev_w = dev[[1]], dev_h = dev[[2]], clip = clip,
                stringsAsFactors = FALSE)

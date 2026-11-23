@@ -440,7 +440,7 @@ widget_match <- function(p, w = spec_widget(p), wp = attr(p, "widget_plot")()) {
     # `group` is left out for marks (the hover group is a discrete aesthetic, so ggplot2 numbers the groups of a bar or point by it too) and kept for the
     #   layers a group draws as one thing (a line, a box, a curve): the same rows in the same groups
     cols = setdiff(names(ds), c("tooltip", "data_id", "group"))
-    if (inherits(p$layers[[i]]$geom, c("GeomPath", "GeomBoxplot", "GeomSmooth")) && !identical(match(ds$group, unique(ds$group)), match(dw$group, unique(dw$group)))) return(paste0("layer ", i, " is grouped differently"))
+    if (inherits(p$layers[[i]]$geom, c("GeomPath", "GeomBoxplot", "GeomSmooth", "GeomViolin")) && !identical(match(ds$group, unique(ds$group)), match(dw$group, unique(dw$group)))) return(paste0("layer ", i, " is grouped differently"))
     wg = wp$layers[[mine[i]]]
     # the twin is a subclass of the picture's geom, or (a binned scatter's cells) a twin of its own made from the same statistic
     if (!inherits(wg$geom, class(p$layers[[i]]$geom)[1]) && !(grepl("^GeomInteractive", class(wg$geom)[1]) && identical(class(wg$stat)[1], class(p$layers[[i]]$stat)[1])))
@@ -873,12 +873,13 @@ if (!is.null(pan_g)) {
 big <- made_g(3000L, 1)
 huge <- made_g(25000L, 2)
 widget_n <- made_g(6000L, 3)
-l_big <- lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t"), big)
+l_big <- lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t", density = "off"), big)
 l_huge <- lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t"), huge)
-check("lint: over 2,000 points are drawn transparent, with a note; over 20,000 they are binned, with a note",
+l_cells <- lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t"), big)
+check("lint: over 2,000 points drawn as points (density off) are drawn transparent, with a note; under density auto, over 2,000 are counted in cells, with a note (Phase 10 Part C moved the switch from 20,000 to 2,000)",
       identical(l_big$spec$.alpha, SPEC_ALPHA) && is.null(l_big$spec$.binned) && any(grepl("see-through", l_big$notes)) &&
-        isTRUE(l_huge$spec$.binned) && any(grepl("grid", l_huge$notes)))
-l_w <- lint_of(list(family = "scatter", x = "a", "y" = "b", interactive = TRUE, title = "t"), widget_n)
+        isTRUE(l_huge$spec$.binned) && any(grepl("grid", l_huge$notes)) && isTRUE(l_cells$spec$.binned) && is.null(l_cells$spec$.alpha) && any(grepl("each cell counts rows", l_cells$notes)))
+l_w <- lint_of(list(family = "scatter", x = "a", "y" = "b", interactive = TRUE, title = "t", density = "off"), widget_n)
 check("lint: interactive with more than 5,000 marks is turned off, with a note",
       identical(l_w$spec$interactive, FALSE) && any(grepl("interactive", l_w$notes)))
 
@@ -947,10 +948,10 @@ if (!inherits(messy, "error")) {
 REFLEX_SHA <- c(
   "codebook.md" = "c7f66548e3d4cb3448f8dc4a1942a2649d0b733d612b1ec78c39d92562ee9709",
   "core.md" = "6b62ea4b3cc6dfc60f6ac66e2cab06a72bb4c4dc83f85dbb1af375e467f5d23b",
-  "comparison.md" = "2acdf70491399e79bbee31dcd7026870d515004d72ce0dd9226b9a69b82d68cd",
-  "relationship.md" = "63fa0ce4d7efc55a8548e5831713ac3764cc3661ae9516fa50031be6a39a34f2",
-  "distribution.md" = "fedaa1f13d77fb92ce9e8b177fbf88b9e2caec07cadda6b6c2901da51c62a6d5",
-  "time.md" = "c907e5546557b6fedb91623a8c83588ac10af738946d00ea35458e74961988a9",
+  "comparison.md" = "c236bee0a7f8a5617de8b0064c72beb47de597ac8b513f1728f0b2b50f1e08b0",
+  "relationship.md" = "eea692ec090fde8615a33b83cd7941d5ceb5022c70b16279adf3f3eeb5a23201",
+  "distribution.md" = "4bdb04443367d28cc8e278d2b55c7ce634deb47f11e60ebfc76f2377f7388262",
+  "time.md" = "f4468f233e7abad9299e2ac58f3ee5c457664373af85e77c59c812d212bd8f43",
   "suggest.md" = "510448474300239e9f90e7cc3ed540e57e5e48fbe4e4fa3e6ec3c22d964efb29",
   "refine.md" = "04a081673a2365eb09695bdcab36a052a10e4812cdf9583314bf27969d03add5",
   "summary.md" = "976d0b9126c6cf016714251ae20a92dde61a926d826c6bf8f53fbcd6391741be",
@@ -3658,8 +3659,9 @@ if (c7_ok) {
   c7_tsa <- attr(c7_psa, "table")
   check("7C-2: on a scatter annotate marks the highest and lowest y with a ring and the y value (no x: the facts do not hold it), moved by ggrepel when it is installed",
         setequal(c7_labels(c7_psa), c(paste0("Highest: ", fact_num(max(c7_tsa$units), FALSE)), paste0("Lowest: ", fact_num(min(c7_tsa$units), FALSE)))) &&
-          length(c7_rings(c7_psa)) == 2L && sort(vapply(c7_rings(c7_psa), function(d) d$y, 1)) [1] == min(c7_tsa$units) && c7_rep_layers(c7_psa) == 2L &&
-          sum(c7_geoms(c7_without_ggrepel(c7_plot(utils::modifyList(c7_scatter, list(annotate = list("highest", "lowest")))))) == "GeomText") == 2L)
+          length(c7_rings(c7_psa)) == 2L && sort(vapply(c7_rings(c7_psa), function(d) d$y, 1)) [1] == min(c7_tsa$units) && c7_rep_layers(c7_psa) == 0L &&
+          sum(c7_geoms(c7_psa) == "GeomLabel") == 2L && sum(c7_geoms(c7_psa) == "GeomSegment") == 2L &&
+          sum(c7_geoms(c7_without_ggrepel(c7_plot(utils::modifyList(c7_scatter, list(annotate = list("highest", "lowest")))))) == "GeomLabel") == 2L)
 
   # 3. highlighted points carry their names
   c7_hl9 <- list(family = "scatter", x = "price", y = "units", title = "t", highlight = list(column = "year", values = as.list(2015:2023)))
@@ -3920,7 +3922,7 @@ if (c7_ok) {
     c7_want <- spec_code(attr(spec_plot(c7_now$spec, c7_now$data, c7_now$cb, c7_now$palette), "spec"), c7_now$cb, c6_path, c7_now$palette)
     c7_naive <- spec_code(c7_now$spec, c7_now$cb, c6_path, c7_now$palette)
     check("7C-3b: the Code dialog of a card shows the code of the chart as drawn: its text is spec_code() of the linted spec (end labels, legend, annotation, source line), and not what the stored spec alone would print",
-          length(c7_text) == 1L && identical(c7_text, c7_want) && !identical(c7_text, c7_naive) && grepl("geom_text", c7_text, fixed = TRUE) && grepl("slice_max(", c7_text, fixed = TRUE) &&
+          length(c7_text) == 1L && identical(c7_text, c7_want) && !identical(c7_text, c7_naive) && grepl("geom_label", c7_text, fixed = TRUE) && grepl("slice_max(", c7_text, fixed = TRUE) &&
             grepl("caption = \"Source: sales.csv.", c7_text, fixed = TRUE) && !grepl("Source:", c7_naive, fixed = TRUE) &&
             grepl("attr(p, \"spec\")", paste(readLines(file.path("R", "ui.R"), encoding = "UTF-8"), collapse = "\n"), fixed = TRUE))
   }
@@ -4025,7 +4027,7 @@ if (run_heavy && c7_ok) {   # about two minutes: the heavy run only; not indente
     base = utils::modifyList(spec, list(labels = "on"))
     if (length(spec_check(base, cb))) base = spec
     ann = purrr::map(annotate_kinds(spec$family), function(k) utils::modifyList(base, list(annotate = list(k))))
-    c(list(base), ann)
+    c(list(base), purrr::keep(ann, function(sp) !length(spec_check(sp, cb))))     # a moving average takes no annotate (Phase 10 Part C)
   }
   e7_runs <- unlist(purrr::map(gold, function(x) purrr::imap(e7_variants(x$entry$spec, x$g$cb), function(sp, i) purrr::map(names(CHART_STYLES), function(st) {
     p = tryCatch(spec_plot(sp, x$g$data, x$g$cb, b7_pal(st)), error = function(e) e)
@@ -4137,7 +4139,7 @@ if (c7_ok) {
   e7_tie_n <- if (!is.null(e7_tie)) sum(e7_tie_t[[e7_ball_sc$entry$spec$y]] == max(e7_tie_t[[e7_ball_sc$entry$spec$y]]))
   check("7b-3: when several points tie for the highest or lowest, one is marked and the words say so ('Highest: 100, one of 2 points', the count from the table drawn); with a rug, the labels ggrepel moves are kept above and right of the rug's band",
         !is.null(e7_tie) && e7_tie_n > 1L && any(c7_labels(e7_tie) == paste0("Highest: ", fact_num(max(e7_tie_t[[e7_ball_sc$entry$spec$y]]), comma = FALSE), ", one of ", e7_tie_n, " points")) &&
-          !is.null(attr(e7_tie, "spec")$.rug_floor) && any(grepl("ylim = c(", spec_code(attr(e7_tie, "spec"), e7_ball_sc$g$cb, e7_ball_sc$g$path), fixed = TRUE)))
+          !is.null(attr(e7_tie, "spec")$.rug_floor) && any(grepl("geom_segment(", spec_code(attr(e7_tie, "spec"), e7_ball_sc$g$cb, e7_ball_sc$g$path), fixed = TRUE)) && !length(drawn_text_faults(e7_tie)))
   # 4. a value on every mark: the value axis keeps its title and loses its numbers and ticks
   e7_all <- c7_plot(c7_bar8)
   e7_some <- c7_plot(utils::modifyList(c7_grouped, list(labels = "on")))
@@ -4485,7 +4487,8 @@ check("8A-13: the probe makes no model call and reads no key (no ellmer, httr2, 
 #   at the screens.
 
 p8b_t <- methodology_templates()
-p8b_expect_charts <- c("Bar, or dot", "Line", "Slope", "Scatter", "Bubble", "Histogram", "Box", "Heatmap", "Small multiples")
+p8b_expect_charts <- c("Bar, or dot", "Line", "Slope", "Scatter", "Bubble", "Histogram", "Box", "Heatmap", "Small multiples",
+                       "Dumbbell", "Violin", "Indexed line", "Smoothed line", "Density")      # the last five are Phase 10 Part C's
 
 # 1. the templates, read from the table as the file has it
 p8b_lines <- readLines(METHODOLOGY_FILE, encoding = "UTF-8", warn = FALSE)
@@ -4503,7 +4506,7 @@ writeLines(sub("Ask something like", "Ask", p8b_lines, fixed = TRUE), p8b_no_col
 p8b_curly <- file.path(work_dir, "methodology_curly.md")
 writeLines(gsub("\"([^\"]*)\"", paste0(intToUtf8(0x201c), "\\1", intToUtf8(0x201d)), p8b_lines), p8b_curly, useBytes = TRUE)
 p8b_err <- function(f) tryCatch({ methodology_templates(f); "" }, error = function(e) conditionMessage(e))
-check("8B-1: the question templates are read from the table under '## Which chart for which question' by its header cells: nine rows in the table's order, the text in quotes with its braces as written, the slots of each; a table with its columns reversed (and other tables and text around it) reads the same; a missing heading, table or column stops with a sentence naming the file",
+check("8B-1: the question templates are read from the table under '## Which chart for which question' by its header cells: fourteen rows (nine, and Phase 10 Part C's dumbbell, violin, indexed line, smoothed line and density) in the table's order, the text in quotes with its braces as written, the slots of each; a table with its columns reversed (and other tables and text around it) reads the same; a missing heading, table or column stops with a sentence naming the file",
       identical(p8b_t$chart, p8b_expect_charts) && identical(p8b_t$template[1], "Which {group} has the highest {measure}?") &&
         identical(p8b_t$template[5], "Show {measure} against {measure2}, sized by {measure3}.") && identical(p8b_t$slots[[5]], c("measure", "measure2", "measure3")) &&
         identical(p8b_t$slots[[1]], c("group", "measure")) && identical(p8b_t$slots[[9]], c("measure", "group")) && all(unlist(p8b_t$slots) %in% EXAMPLE_SLOTS) &&
@@ -4513,7 +4516,8 @@ check("8B-1: the question templates are read from the table under '## Which char
         grepl("methodology_no_heading.md needs exactly one heading '## Which chart for which question', and has 0", p8b_err(p8b_no_heading), fixed = TRUE) &&
         grepl("methodology_no_table.md has no table under", p8b_err(p8b_no_table), fixed = TRUE) &&
         grepl("has no column 'Ask something like'", p8b_err(p8b_no_col), fixed = TRUE) &&
-        inherits(tryCatch(check_methodology_file(file.path(work_dir, "absent.md")), error = function(e) e), "error") && nrow(check_methodology_file()) == 9L)
+        inherits(tryCatch(check_methodology_file(file.path(work_dir, "absent.md")), error = function(e) e), "error") && nrow(check_methodology_file()) == 14L &&
+        identical(p8b_t$slots[[10]], c("measure", "group", "group2")) && identical(p8b_t$slots[[13]], c("measure", "time")))
 
 # 2. the questions: filled from the dictionary, dropped when a column is missing, at most eight, tagged with the family
 p8b_edit <- function(cb, ...) {
@@ -4550,17 +4554,17 @@ check("8B-2: example_questions() fills each template from the dictionary (labels
                                   "Is units related to price?", "How is units distributed?", "How does units vary across region?",
                                   "Show units by region and channel.", "Show units in a panel for each region.")) &&
         identical(p8b_q$family, c("Bar, or dot", "Line", "Slope", "Scatter", "Histogram", "Box", "Heatmap", "Small multiples")) &&
-        identical(p8b_q_notime$family, c("Bar, or dot", "Scatter", "Histogram", "Box", "Heatmap", "Small multiples")) && !any(grepl("year", p8b_q_notime$question)) &&
-        identical(p8b_q_nogroup$family, c("Line", "Scatter", "Histogram")) && !any(grepl("region|channel", p8b_q_nogroup$question)) &&
-        identical(p8b_q_neither$family, c("Scatter", "Histogram")) && nrow(p8b_q_nomeasure) == 0L && nrow(p8b_q_nothing) == 0L &&
+        identical(p8b_q_notime$family, c("Bar, or dot", "Scatter", "Histogram", "Box", "Heatmap", "Small multiples", "Dumbbell", "Violin")) && !any(grepl("year", p8b_q_notime$question)) &&
+        identical(p8b_q_nogroup$family, c("Line", "Scatter", "Histogram", "Smoothed line", "Density")) && !any(grepl("region|channel", p8b_q_nogroup$question)) &&
+        identical(p8b_q_neither$family, c("Scatter", "Histogram", "Density")) && nrow(p8b_q_nomeasure) == 0L && nrow(p8b_q_nothing) == 0L &&
         !any(grepl("[{}]", c(p8b_q$question, p8b_q_notime$question, p8b_q_nogroup$question, p8b_q_neither$question, p8b_q_orders$question))) &&
         nrow(p8b_q_orders) == 8L && identical(p8b_q_orders$family, p8b_expect_charts[1:8]) && identical(example_questions(p8b_orders$codebook, max = 3L)$family, p8b_expect_charts[1:3]) &&
         identical(example_questions(p8b_cb, templates = p8b_t[5, ])$question, character(0)) &&
         identical(example_questions(p8b_label(p8b_cb, "region", "Sales area"))$question[1], "Which Sales area has the highest units?") &&
         identical(p8b_q_orders$question[4], "Is units related to unit price?") && identical(p8b_q_orders$question[5], "Show units against unit price, sized by discount pct.") &&
-        identical(example_questions(c6_cb_ready)$family, c("Bar, or dot", "Line", "Slope", "Histogram", "Box", "Heatmap", "Small multiples")) &&
+        identical(example_questions(c6_cb_ready)$family, c("Bar, or dot", "Line", "Slope", "Histogram", "Box", "Heatmap", "Small multiples", "Dumbbell")) &&
         !any(grepl("units", example_questions(c6_cb_ready)$question)) && grepl("price", example_questions(c6_cb_ready)$question[1], fixed = TRUE) &&
-        identical(example_questions(p8b_thin)$family, c("Bar, or dot", "Line", "Slope", "Histogram", "Box", "Small multiples")) &&
+        identical(example_questions(p8b_thin)$family, c("Bar, or dot", "Line", "Slope", "Histogram", "Box", "Small multiples", "Violin", "Indexed line")) &&
         identical(example_questions(p8b_thin)$question[1], "Which channel has the highest price?") && nrow(example_questions(p8b_thin2)) == 0L &&
         identical(.llm_state$calls, p8b_calls))
 cat("  Questions for tests/data/orders.csv:\n", paste0("    [", p8b_q_orders$family, "] ", p8b_q_orders$question, "\n", collapse = ""), sep = "")
@@ -4568,7 +4572,7 @@ if (!inherits(messy, "error")) {
   p8b_q_messy <- example_questions(messy$codebook)
   cat("  Questions for the messy file:\n", paste0("    [", p8b_q_messy$family, "] ", p8b_q_messy$question, "\n", collapse = ""), sep = "")
   check("8B-2b: the messy file (a renamed blank header, text columns, an id, an all-missing flag, a free-text column) gives the questions its measures and time column allow: a line, a scatter, a bubble and a histogram, none from the all-missing column or the text columns",
-        identical(p8b_q_messy$family, c("Line", "Scatter", "Bubble", "Histogram")) && identical(p8b_q_messy$question[1], "How has column 1 changed over visit date?") &&
+        identical(p8b_q_messy$family, c("Line", "Scatter", "Bubble", "Histogram", "Smoothed line", "Density")) && identical(p8b_q_messy$question[1], "How has column 1 changed over visit date?") &&
           !any(grepl("empty|comment|city|record id", p8b_q_messy$question)) && !any(grepl("SECRET", p8b_q_messy$question, fixed = TRUE)))
 }
 
@@ -4613,12 +4617,12 @@ shiny::testServer(mod_method_server, args = list(state = p8b_nostate), {
   session$flushReact()
   p8b_none$html <- as.character(output$questions$html)
 })
-check("8B-4: the page with no file: the manager's text as HTML (commonmark with extensions renders its table: a table element, a header, nine body rows, the {measure} braces as written, no raw pipes), then Questions for your file, the rules, how a reply is checked, the styles and fonts, in that order; a contents list after the opening paragraph links to every heading; the questions section says to read a file and holds no button",
+check("8B-4: the page with no file: the manager's text as HTML (commonmark with extensions renders its table: a table element, a header, fourteen body rows, the {measure} braces as written, no raw pipes), then Questions for your file, the rules, how a reply is checked, the styles and fonts, in that order; a contents list after the opening paragraph links to every heading; the questions section says to read a file and holds no button",
       all(p8b_at > 0L) && !is.unsorted(p8b_at, strictly = TRUE) && grepl("<h1>How chaRt chooses and draws a chart</h1>", p8b_page, fixed = TRUE) &&
         length(p8b_toc) == 1L && all(purrr::map_lgl(p8b_ids, function(i) grepl(paste0("href=\"#", i, "\""), p8b_toc, fixed = TRUE))) && length(gregexpr("<li>", p8b_toc, fixed = TRUE)[[1]]) == 9L &&
         regexpr("chaRt does not let a model draw", p8b_page, fixed = TRUE) < regexpr("chart-method-contents", p8b_page, fixed = TRUE) &&
         regexpr("chart-method-contents", p8b_page, fixed = TRUE) < p8b_at[1] &&
-        length(p8b_table) == 1L && grepl("<thead>", p8b_table, fixed = TRUE) && grepl("<th scope=\"col\">Example</th>", p8b_table, fixed = TRUE) && length(p8b_rows) == 9L &&
+        length(p8b_table) == 1L && grepl("<thead>", p8b_table, fixed = TRUE) && grepl("<th scope=\"col\">Example</th>", p8b_table, fixed = TRUE) && length(p8b_rows) == 14L &&
         grepl("Which {group} has the highest {measure}?", p8b_table, fixed = TRUE) && grepl("{measure3}", p8b_table, fixed = TRUE) && !grepl("|---", p8b_page, fixed = TRUE) &&
         grepl("<div class=\"table-responsive\"><table", p8b_page, fixed = TRUE) && grepl(METHOD_THUMB_NOTE, p8b_page, fixed = TRUE) &&
         grepl("Read a data file on the Data page", p8b_none$html, fixed = TRUE) && !grepl("ask_1", p8b_none$html, fixed = TRUE) && !grepl("later phase", p8b_page, fixed = TRUE) &&
@@ -4715,17 +4719,17 @@ p8b_rlabelled <- unlist(purrr::map(p8b_rfiles, function(s) purrr::keep(unname(s$
 p8b_shown <- unlist(regmatches(p8b_rules_html, gregexpr("(?<=<div class=\"fw-semibold\">)[^<]*(?=</div>)", p8b_rules_html, perl = TRUE)))
 p8b_esc <- function(x) htmltools::htmlEscape(x)
 p8b_blocks <- strsplit(p8b_rules_html, "<div class=\"chart-rule mb-3\">", fixed = TRUE)[[1]][-1]
-check("8B-7: 'The rules the model follows' holds every reflex rule that has a Label exactly once (56 across 9 files), each with its label, its When and Say lines and its Source as the parser read them, in one collapsed section for each file with its title, file name and version; the file with no labelled rule (codebook.md) has no section; the count of rules without a label is said",
-      length(p8b_rlabelled) == 56L && identical(sort(p8b_shown), sort(purrr::map_chr(p8b_rlabelled, "label"))) && !anyDuplicated(purrr::map_chr(p8b_rlabelled, function(r) paste(r$id, r$label))) &&
-        length(gregexpr("<div class=\"chart-rule mb-3\">", p8b_rules_html, fixed = TRUE)[[1]]) == 56L &&
-        length(p8b_blocks) == 56L &&
+check("8B-7: 'The rules the model follows' holds every reflex rule that has a Label exactly once (61 across 9 files), each with its label, its When and Say lines and its Source as the parser read them, in one collapsed section for each file with its title, file name and version; the file with no labelled rule (codebook.md) has no section; the count of rules without a label is said",
+      length(p8b_rlabelled) == 61L && identical(sort(p8b_shown), sort(purrr::map_chr(p8b_rlabelled, "label"))) && !anyDuplicated(purrr::map_chr(p8b_rlabelled, function(r) paste(r$id, r$label))) &&
+        length(gregexpr("<div class=\"chart-rule mb-3\">", p8b_rules_html, fixed = TRUE)[[1]]) == 61L &&
+        length(p8b_blocks) == 61L &&
         all(purrr::map2_lgl(p8b_rlabelled, p8b_blocks, function(r, b) grepl(paste0(">", p8b_esc(r$label), "<"), b, fixed = TRUE) && grepl("When: ", b, fixed = TRUE) &&
                               grepl(p8b_esc(r$when), b, fixed = TRUE) && grepl("Say: ", b, fixed = TRUE) && grepl(p8b_esc(r$say), b, fixed = TRUE) &&
                               grepl("Source: ", b, fixed = TRUE) && grepl(p8b_esc(r$source), b, fixed = TRUE))) &&
         length(gregexpr("<details class=\"chart-rule-file mb-2\">", p8b_rules_html, fixed = TRUE)[[1]]) == 9L && !grepl("<details[^>]* open", p8b_rules_html) &&
         all(purrr::map_lgl(p8b_rfiles[purrr::map_lgl(p8b_rfiles, function(s) any(!is.na(purrr::map_chr(s$reflexes, "label"))))],
                            function(s) grepl(paste0(s$title, " (", s$file, ", version ", s$version, ")"), p8b_rules_html, fixed = TRUE))) &&
-        !grepl("codebook.md", p8b_rules_html, fixed = TRUE) && grepl("56 rules are listed here, in 9 files; 10 more have no label and are not listed.", p8b_rules_html, fixed = TRUE))
+        !grepl("codebook.md", p8b_rules_html, fixed = TRUE) && grepl("61 rules are listed here, in 9 files; 10 more have no label and are not listed.", p8b_rules_html, fixed = TRUE))
 
 # 8. how a reply is checked: the page says what the code does, and what it says holds
 p8b_checks_html <- paste(as.character(method_checks_ui()), collapse = "")
@@ -4771,8 +4775,8 @@ p8b_d1 <- method_thumb_data()
 set.seed(99); p8b_s1 <- .Random.seed; p8b_d2 <- method_thumb_data()
 p8b_app_src <- parse("app.R", keep.source = FALSE)
 p8b_top_calls <- purrr::map_chr(as.list(p8b_app_src), function(e) if (is.call(e)) paste(deparse(e[[1]]), collapse = "") else "")
-check("8B-10: each row of the table has a thumbnail (nine real PNGs, one for each family key, in a data address, from a made-up table of five regions over ten years that uses no random numbers); they were drawn once when the app started (app.R calls method_thumbs(); building the page, the whole page and a session again draws none, and the object is the same); every thumbnail is drawn through spec_png() (and so chart_device())",
-      identical(sort(names(p8b_th)), sort(names(METHOD_THUMB_SPECS))) && all(p8b_keys %in% names(p8b_th)) && length(p8b_keys) == 9L && all(purrr::map_lgl(p8b_th, p8b_png)) &&
+check("8B-10: each row of the table has a thumbnail (fourteen real PNGs, one for each family key, in a data address, from a made-up table of five regions over ten years that uses no random numbers); they were drawn once when the app started (app.R calls method_thumbs(); building the page, the whole page and a session again draws none, and the object is the same); every thumbnail is drawn through spec_png() (and so chart_device())",
+      identical(sort(names(p8b_th)), sort(names(METHOD_THUMB_SPECS))) && all(p8b_keys %in% names(p8b_th)) && length(p8b_keys) == 14L && all(purrr::map_lgl(p8b_th, p8b_png)) &&
         all(purrr::map_int(p8b_th, nchar) > 3000L) && all(startsWith(unlist(p8b_th), "data:image/png;base64,")) && identical(names(METHOD_THUMB_ALT), names(METHOD_THUMB_SPECS)) &&
         identical(p8b_d1, p8b_d2) && identical(.Random.seed, p8b_s1) && nrow(p8b_d1) == 50L && length(unique(p8b_d1$region)) == 5L &&
         "method_thumbs" %in% p8b_top_calls && identical(p8b_draws, 0L) && identical(p8b_again, p8b_th) && is.environment(METHOD_CACHE) && !is.null(METHOD_CACHE$thumbs) &&
@@ -6254,7 +6258,7 @@ p9b_s <- list(
   line = list(family = "line", x = "order_month", y = "revenue", fn = "sum", annotate = list("highest"), title = "Revenue by month"),
   slope = list(family = "slope", x = "year", y = "revenue", fn = "sum", color = "region",
                filter = list(list(column = "year", op = "in", value = list(2022L, 2024L))), title = "Revenue in 2022 and 2024"),
-  scatter = list(family = "scatter", x = "units", y = "revenue", title = "Revenue against units", fit = "loess",
+  scatter = list(family = "scatter", x = "units", y = "revenue", title = "Revenue against units", fit = "loess", density = "off",
                  filter = list(list(column = "units", op = "<=", value = 40L), list(column = "revenue", op = "<=", value = 6000))),
   bubble = list(family = "bubble", x = "units", y = "revenue", size = "unit_price", title = "Revenue against units, sized by price",
                 filter = list(list(column = "units", op = "<=", value = 12L), list(column = "region", op = "==", value = "West"))),
@@ -7306,7 +7310,7 @@ check("10B-8: the layers of the interactive plot are the picture's layers with t
       "GeomInteractiveCol" %in% b10_g$bar && "GeomInteractivePoint" %in% b10_g$scatter && "GeomInteractiveTile" %in% b10_g$heat && "GeomInteractiveBoxplot" %in% b10_g$box && "GeomInteractiveBar" %in% b10_g$hist &&
         sum(b10_g$line == "GeomInteractiveLine") == 1L && sum(b10_g$line == "GeomInteractivePoint") == 1L && sum(b10_sg == "GeomInteractiveLine") == 1L && sum(b10_sg == "GeomInteractivePoint") == 1L &&
         !any(purrr::map_lgl(attr(b10_sl, "widget_plot")()$layers, function(l) isTRUE(l$aes_params$alpha == 0))) && sum(purrr::map_lgl(attr(b10_plot(b10_s$line), "widget_plot")()$layers, function(l) isTRUE(l$aes_params$alpha == 0))) == 1L &&
-        sum(b10_an == "GeomInteractivePoint") == 1L && all(c("GeomPoint", "GeomRug") %in% b10_an) && any(c("GeomText", "GeomTextRepel") %in% b10_an) && !any(grepl("Interactive", b10_an[b10_an != "GeomInteractivePoint"])))
+        sum(b10_an == "GeomInteractivePoint") == 1L && all(c("GeomPoint", "GeomRug") %in% b10_an) && all(c("GeomLabel", "GeomSegment") %in% b10_an) && !any(grepl("Interactive", b10_an[b10_an != "GeomInteractivePoint"])))
 b10_big <- file.path(work_dir, "b10_big.csv")
 local({ set.seed(10); n = 25000L; readr::write_csv(data.frame(a = round(stats::rnorm(n), 3), b = round(stats::rnorm(n), 3), g = sample(c("u", "v"), n, replace = TRUE)), b10_big) })
 b10_brd <- reread_data(b10_big, "b10_big.csv", character(0))
@@ -7367,6 +7371,369 @@ Total revenue: ", d$tip, fixed = TRUE) && grepl("region: &lt;img src=x onerror=a
 
 }   # end of the heavy run's Phase 10 Part B
 # <<< 10B end
+
+
+# ---- Phase 10 Part C: chart forms (dumbbell, density, violin, indexed lines, smooth, call-outs) -----------------------------------------------
+#
+# Their fixtures are their own (between >>> 10C begin and <<< 10C end), so a changed copy of one function can be run against them alone. The gold
+#   specs of the forms (tests/gold_specs.yaml, drawn from tests/data/orders.csv) go through every gold check above (the widget and its match with the
+#   picture, the code in a fresh process, the heavy sweep of drawn texts); here are the rules, the hand-worked numbers, the layers, the motion.
+# >>> 10C begin
+
+if (run_fast) {   # the fast run only
+
+c10_pal <- function(style = "clean") utils::modifyList(chart_palette_default(), list(style = style))
+# two lines of six months: S1 50 75 90 60 100 80, S2 20 24 30 36 40 60 (their index: 100 150 180 120 200 160 and 100 120 150 180 200 300)
+c10_line_df <- data.frame(month = rep(seq(as.Date("2023-01-01"), by = "month", length.out = 6), 2), series = rep(c("S1", "S2"), each = 6),
+                          amount = c(50, 75, 90, 60, 100, 80, 20, 24, 30, 36, 40, 60), stringsAsFactors = FALSE)
+# four groups at two conditions: the second less the first is D 45, A 20, B 5, C -10; sorted by the second value D 50, A 30, C 30, B 25
+c10_db_df <- data.frame(grp = rep(c("A", "B", "C", "D"), each = 2), cond = rep(c("T1", "T2"), 4), amount = c(10, 30, 20, 25, 40, 30, 5, 50), stringsAsFactors = FALSE)
+c10_load <- function(df, name) {
+  f = file.path(work_dir, paste0(name, ".csv"))
+  readr::write_csv(df, f)
+  rd = reread_data(f, paste0(name, ".csv"), character(0))
+  list(data = rd$read$data, cb = utils::modifyList(rd$codebook, list(row_is = "one row")))
+}
+c10_l <- c10_load(c10_line_df, "c10_line")
+c10_d <- c10_load(c10_db_df, "c10_db")
+c10_o <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+c10_ocb <- utils::modifyList(c10_o$codebook, list(row_is = "one order"))
+c10_odata <- c10_o$read$data
+c10_plot <- function(spec, g = c10_l, style = "clean") spec_plot(spec, g$data, g$cb, c10_pal(style))
+c10_tab <- function(spec, g = c10_l) as.data.frame(spec_table(spec, g$data, g$cb))
+c10_facts <- function(spec, g = c10_l) { p = c10_plot(spec, g); spec_facts(attr(p, "spec"), attr(p, "table"), g$cb)$text }
+c10_idx <- list(family = "line", x = "month", y = "amount", color = "series", fn = "none", index = "first", title = "t")
+c10_sm <- list(family = "line", x = "month", y = "amount", color = "series", fn = "none", smooth = 3L, title = "t")
+c10_dbs <- list(family = "dumbbell", y = "grp", x = "amount", color = "cond", fn = "none", title = "t")
+c10_refusal <- function(spec, cb = c10_ocb) paste(spec_check(spec, cb), collapse = " ")
+c10_error <- function(spec, g) tryCatch({ spec_table(spec, g$data, g$cb); "" }, error = function(e) conditionMessage(e))
+c10_oscat <- list(family = "scatter", x = "units", y = "unit_price", title = "t")
+
+# 10C-1: the fields are checked: each takes its words, is for its family, and a refusal is a sentence that names the field
+c10_ok <- list(
+  list(family = "dumbbell", y = "region", x = "revenue", color = "year", fn = "sum", filter = list(list(column = "year", op = "in", value = list(2022L, 2024L)))),
+  list(family = "dumbbell", y = "region", x = "revenue", color = "returned", fn = "mean"),
+  c(c10_oscat, list(density = "auto")), c(c10_oscat, list(density = "on")), c(c10_oscat, list(density = "off")),
+  list(family = "box", x = "channel", y = "unit_price", shape = "violin"), list(family = "box", x = "channel", y = "unit_price", shape = "box"),
+  list(family = "line", x = "order_month", y = "revenue", fn = "sum", index = "first"), list(family = "line", x = "order_month", y = "revenue", fn = "sum", index = "none"),
+  list(family = "line", x = "order_month", y = "revenue", fn = "sum", smooth = 2L), list(family = "line", x = "order_month", y = "revenue", fn = "sum", smooth = 24L),
+  list(family = "line", x = "order_month", y = "revenue", fn = "sum", smooth = "none"))
+c10_line <- list(family = "line", x = "order_month", y = "revenue", fn = "sum")
+c10_bad <- list(
+  list(c(list(family = "dumbbell", y = "region", x = "revenue", color = "channel", fn = "sum")), "color: 'channel' has 3 values; a dumbbell compares exactly two"),
+  list(list(family = "dumbbell", y = "region", x = "revenue", fn = "sum"), "color: a dumbbell chart needs a color"),
+  list(list(family = "dumbbell", y = "region", x = "revenue", color = "returned"), "fn: a dumbbell chart needs a function"),
+  list(list(family = "dumbbell", y = "region", x = "revenue", color = "returned", fn = "sum", facet = "channel"), "facet: a dumbbell chart cannot be split"),
+  list(list(family = "dumbbell", y = "region", x = "revenue", color = "returned", fn = "sum", highlight = list(column = "region", values = list("West"))), "highlight: a dumbbell chart does not take a highlight"),
+  list(c(c10_oscat, list(density = "dense")), "density must be one of auto, off, on"),
+  list(list(family = "bar", x = "region", density = "on"), "density: only a scatter chart counts rows in cells"),
+  list(c(c10_oscat, list(density = "on", highlight = list(column = "order_id", values = list(10L)))), "density: counting rows in cells leaves no single point to highlight"),
+  list(list(family = "box", x = "channel", y = "unit_price", shape = "blob"), "shape must be one of box, violin"),
+  list(c(c10_oscat, list(shape = "violin")), "shape: only a box chart has a shape"),
+  list(c(c10_line, list(index = "last")), "index must be one of none, first"),
+  list(list(family = "bar", x = "region", index = "first"), "index: only a line chart can be indexed"),
+  list(c(c10_line, list(smooth = 1L)), "smooth must be none, or a whole number of periods from 2 to 24"),
+  list(c(c10_line, list(smooth = 25L)), "smooth must be none, or a whole number of periods from 2 to 24"),
+  list(c(c10_line, list(smooth = 2.5)), "smooth must be none, or a whole number of periods from 2 to 24"),
+  list(c(c10_line, list(smooth = "week")), "smooth must be none, or a whole number of periods from 2 to 24"),
+  list(list(family = "bar", x = "region", smooth = 6L), "smooth: only a line chart takes a moving average"),
+  list(c(c10_line, list(smooth = 6L, color = "region", highlight = list(column = "region", values = list("West")))), "smooth: a chart with a moving average takes no highlight and no annotate"),
+  list(c(c10_line, list(smooth = 6L, annotate = list("highest"))), "smooth: a chart with a moving average takes no highlight and no annotate"))
+check(paste0("10C-1: the new forms are checked by spec_check(): the ", length(c10_ok), " valid specs (a dumbbell, density auto, on and off, a violin and a box, index first and none, smooth 2, 24 and none) pass; the ",
+             length(c10_bad), " bad ones (a dumbbell on a three-valued colour, with no colour or function, in panels, with a highlight; density, shape, index or smooth with a word it does not know, on another family, or smooth ",
+             "with a highlight or annotate; smooth 1, 25, 2.5) are each refused with a sentence that names the field"),
+      all(purrr::map_lgl(c10_ok, function(sp) !length(spec_check(sp, c10_ocb)))) &&
+        all(purrr::map_lgl(c10_bad, function(b) grepl(b[[2]], c10_refusal(b[[1]]), fixed = TRUE))))
+
+# 10C-2: the rules that need the data: a dumbbell's colour has two values after the filter and each group has both; an index needs every line to start at
+#   the chart's first month with a value above zero; a moving average needs the points. A value of an id or text column is never put in the sentence.
+c10_bad_df <- rbind(c10_line_df, data.frame(month = as.Date("2023-01-01") + c(0, 31, 59, 90, 120, 151), series = "S3", amount = c(0, 5, 6, 7, 8, 9)),
+                    data.frame(month = as.Date("2023-01-01") + c(31, 59, 90, 120, 151), series = "S4", amount = c(5, 6, 7, 8, 9)),
+                    data.frame(month = as.Date("2023-01-01") + c(0, 31, 59, 90, 120, 151), series = "S5", amount = c(-4, 5, 6, 7, 8, 9)))
+c10_b <- c10_load(c10_bad_df, "c10_bad")
+c10_one <- c10_load(rbind(c10_db_df[-8, ], data.frame(grp = "E", cond = "T3", amount = 7)), "c10_one")
+c10_who_df <- data.frame(who = rep(paste0("SECRETNAME", 1:40), each = 2), cond = rep(c("T1", "T2"), 40), amount = 1:80)   # 40 values: a text column, not a group
+c10_who_df$amount[2] <- 1000                  # the group SECRETNAME1 has the largest second value, and loses its first
+c10_who_df <- c10_who_df[-1, ]
+c10_who <- c10_load(c10_who_df, "c10_who")
+c10_e <- list(
+  three = c10_error(list(family = "dumbbell", y = "grp", x = "amount", color = "cond", fn = "none", filter = list(list(column = "cond", op = "in", value = list("T1", "T2", "T3")))), c10_one),
+  half = c10_error(c10_dbs, c10_load(c10_db_df[-8, ], "c10_half")),
+  nameless = c10_error(list(family = "dumbbell", y = "who", x = "amount", color = "cond", fn = "none", top_n = 8L), c10_who),
+  zero = c10_error(list(family = "line", x = "month", y = "amount", color = "series", fn = "none", index = "first", filter = list(list(column = "series", op = "in", value = list("S1", "S3")))), c10_b),
+  late = c10_error(list(family = "line", x = "month", y = "amount", color = "series", fn = "none", index = "first", filter = list(list(column = "series", op = "in", value = list("S1", "S4")))), c10_b),
+  neg = c10_error(list(family = "line", x = "month", y = "amount", color = "series", fn = "none", index = "first", filter = list(list(column = "series", op = "in", value = list("S1", "S5")))), c10_b),
+  short = c10_error(utils::modifyList(c10_sm, list(smooth = 7L)), c10_l))
+check("10C-2: the data rules: a dumbbell whose colour has three values after the filter, and one whose group has only one of the two, are refused ('after the filter', 'only one of the two values'); an index is refused for a line whose first value is zero, below zero, or that does not start at the first month, naming the line; a moving average of 7 periods on six points is refused; no value of a text column (SECRETNAME) is in a sentence, only its count",
+      grepl("a dumbbell needs exactly two values of 'cond' after the filter; it has 3", c10_e$three, fixed = TRUE) &&
+        grepl("'D' has only one of the two values of 'cond'", c10_e$half, fixed = TRUE) &&
+        grepl("1 value of 'who' has only one of the two values of 'cond'", c10_e$nameless, fixed = TRUE) && !grepl("SECRETNAME", c10_e$nameless, fixed = TRUE) &&
+        grepl("index: 'S3' has no value above zero at the chart's first", c10_e$zero, fixed = TRUE) && grepl("index: 'S4' has no value above zero", c10_e$late, fixed = TRUE) &&
+        grepl("index: 'S5' has no value above zero", c10_e$neg, fixed = TRUE) && !grepl("S1", c10_e$zero, fixed = TRUE) &&
+        grepl("smooth: a moving average of 7 periods needs 7 points in a line, but 'S1', 'S2' have fewer", c10_e$short, fixed = TRUE))
+
+# 10C-3: the table, by hand. An index is each line over its own first value times 100; a moving average is the mean of the point and the two before it (nothing
+#   for the first two); a dumbbell is sorted by its second value, ties by name, its colour in its two levels
+c10_ti <- c10_tab(c10_idx)
+c10_ts <- c10_tab(c10_sm)
+c10_td <- spec_table(c10_dbs, c10_d$data, c10_d$cb)
+c10_tis <- c10_tab(c(c10_idx, list(smooth = 3L)))
+check("10C-3: the table by hand: the index is S1 100 150 180 120 200 160 and S2 100 120 150 180 200 300; the 3-period moving average is S1 NA NA 71.67 75 83.33 80 and S2 NA NA 24.67 30 35.33 45.33 beside the raw values; indexed and smoothed it is the average of the index; the dumbbell's rows are D D A A C C B B with the colour in T1 T2 and D on top",
+      isTRUE(all.equal(c10_ti$amount[c10_ti$series == "S1"], c(100, 150, 180, 120, 200, 160))) && isTRUE(all.equal(c10_ti$amount[c10_ti$series == "S2"], c(100, 120, 150, 180, 200, 300))) &&
+        isTRUE(all.equal(c10_ts$moving_average[c10_ts$series == "S1"], c(NA, NA, 215 / 3, 75, 250 / 3, 80))) &&
+        isTRUE(all.equal(c10_ts$moving_average[c10_ts$series == "S2"], c(NA, NA, 74 / 3, 30, 106 / 3, 136 / 3))) &&
+        isTRUE(all.equal(c10_ts$amount[c10_ts$series == "S2"], c(20, 24, 30, 36, 40, 60))) && !"moving_average" %in% names(c10_ti) &&
+        isTRUE(all.equal(c10_tis$moving_average[c10_tis$series == "S1"], c(NA, NA, mean(c(100, 150, 180)), mean(c(150, 180, 120)), mean(c(180, 120, 200)), mean(c(120, 200, 160))))) &&
+        identical(as.character(c10_td$grp), c("D", "D", "A", "A", "C", "C", "B", "B")) && identical(levels(c10_td$grp), c("D", "A", "C", "B")) && identical(levels(c10_td$cond), c("T1", "T2")) &&
+        identical(c10_td$amount, c(5, 50, 10, 30, 40, 30, 20, 25)))
+
+# 10C-4: the facts, by hand, on the small fixtures
+c10_fd <- c10_facts(c10_dbs, c10_d)
+c10_fi <- c10_facts(c10_idx)
+c10_fs <- c10_facts(c10_sm)
+check("10C-4: the facts by hand: the dumbbell gives each group's two values and the difference (D: T1 5, T2 50, difference 45 (900.0%); C: difference -10 (-25.0%)), the largest difference D (45), the smallest C (-10), 3 groups higher and 1 lower; the index gives each line's index at the end and at its peak (S1 160 at the end, 200 at its peak in 2023-05-01; S2 300 for both) and the highest at the end S2 (300), the lowest S1 (160), both above 100; the moving average line says S1 80 and S2 45.3 at the end and the raw values are the facts' own (S1 first 50, last 80)",
+      grepl("D: T1 5, T2 50, difference 45 (900.0%)", c10_fd, fixed = TRUE) && grepl("C: T1 40, T2 30, difference -10 (-25.0%)", c10_fd, fixed = TRUE) &&
+        grepl("Largest difference (second less first): D (45)", c10_fd, fixed = TRUE) && grepl("Smallest difference (second less first): C (-10)", c10_fd, fixed = TRUE) &&
+        grepl("Groups where the second value is higher: 3; lower: 1", c10_fd, fixed = TRUE) && grepl("Groups shown: 4", c10_fd, fixed = TRUE) &&
+        grepl("Plotted: amount by grp, at the two values of cond", c10_fd, fixed = TRUE) &&
+        grepl("S1: index 100 at the start (2023-01-01), 160 at the end (2023-06-01), 200 at its peak (2023-05-01)", c10_fi, fixed = TRUE) &&
+        grepl("S2: index 100 at the start (2023-01-01), 300 at the end (2023-06-01), 300 at its peak (2023-06-01)", c10_fi, fixed = TRUE) &&
+        grepl("Highest index at the end: S2 (300)", c10_fi, fixed = TRUE) && grepl("Lowest index at the end: S1 (160)", c10_fi, fixed = TRUE) &&
+        grepl("Lines above 100 at the end: 2 of 2", c10_fi, fixed = TRUE) && grepl("Indexed: every line is divided by its own value at the first month (2023-01-01) and multiplied by 100", c10_fi, fixed = TRUE) &&
+        grepl("Plotted: Index (first month = 100) by month, one line for each series", c10_fi, fixed = TRUE) && !grepl("Rose most", c10_fi, fixed = TRUE) &&
+        grepl("Moving average over 3 periods, at the end of S1 (2023-06-01): 80", c10_fs, fixed = TRUE) && grepl("Moving average over 3 periods, at the end of S2 (2023-06-01): 45.3", c10_fs, fixed = TRUE) &&
+        grepl("S1: first 50 (2023-01-01), last 80 (2023-06-01), change 30", c10_fs, fixed = TRUE) && grepl("Moving average: 3 periods", c10_fs, fixed = TRUE))
+
+# 10C-5: density. A scatter counts rows in cells when `density` is on, or auto and more than 2,000 points are drawn (and no highlight); cells replace see-through
+#   points and moved points; the legend says Rows; the fitted curve stays on top; the facts do not change
+c10_n <- function(n) {
+  d = tibble::tibble(a = seq_len(n) + 0.5 * (seq_len(n) %% 7), b = (seq_len(n) * 7919) %% 1000, who = paste0("r", seq_len(n)))
+  list(data = d, cb = utils::modifyList(new_codebook(profile_data(d), "n.csv", n), list(row_is = "one row")))
+}
+c10_g2000 <- c10_n(2000L); c10_g2001 <- c10_n(2001L); c10_g50 <- c10_n(50L)
+c10_sc <- list(family = "scatter", x = "a", y = "b", title = "t")
+c10_pl <- function(spec, g) { p = c10_plot(spec, g); list(plot = p, spec = attr(p, "spec"), notes = attr(p, "notes"), geoms = unname(purrr::map_chr(p$layers, function(l) class(l$geom)[1]))) }
+c10_p2000 <- c10_pl(c10_sc, c10_g2000); c10_p2001 <- c10_pl(c(c10_sc, list(fit = "loess")), c10_g2001); c10_poff <- c10_pl(c(c10_sc, list(density = "off")), c10_g2001)
+c10_pon <- c10_pl(c(c10_sc, list(density = "on")), c10_g50); c10_phl <- c10_pl(c(c10_sc, list(highlight = list(column = "who", values = list("r5")))), c10_g2001)
+c10_pcol <- c10_pl(list(family = "scatter", x = "units", y = "unit_price", color = "channel", title = "t"), list(data = c10_odata, cb = c10_ocb))
+check("10C-5: density: 2,000 points stay points; 2,001 under auto are counts in cells (a GeomBin2d of cells, then the fitted curve, no point, no see-through, no moving of points), with the legend 'Rows' and a note that each cell counts rows; density off keeps the points, see-through; on counts even 50 points; a highlight keeps the points; a colour is not drawn in cells and the note says so",
+      is.null(c10_p2000$spec$.binned) && identical(c10_p2000$geoms, "GeomPoint") && isTRUE(c10_p2001$spec$.binned) && identical(c10_p2001$geoms, c("GeomBin2d", "GeomSmooth")) &&
+        is.null(c10_p2001$spec$.alpha) && is.null(c10_p2001$spec$.jitter) && identical(ggplot2::get_labs(c10_p2001$plot)$fill, "Rows") &&
+        any(grepl("2,001 points would hide one another, so the chart counts rows in cells of a grid: each cell counts rows", c10_p2001$notes, fixed = TRUE)) &&
+        is.null(c10_poff$spec$.binned) && identical(c10_poff$spec$.alpha, SPEC_ALPHA) && identical(c10_poff$geoms, "GeomPoint") && any(grepl("see-through", c10_poff$notes)) &&
+        isTRUE(c10_pon$spec$.binned) && identical(c10_pon$geoms, "GeomBin2d") && any(grepl("^The chart counts rows in cells of a grid: each cell counts rows", c10_pon$notes)) &&
+        is.null(c10_phl$spec$.binned) && "GeomPoint" %in% c10_phl$geoms && !"GeomBin2d" %in% c10_phl$geoms &&
+        isTRUE(c10_pcol$spec$.binned) && identical(c10_pcol$geoms, "GeomBin2d") && any(grepl("The colour of 'channel' is not drawn in cells", c10_pcol$notes, fixed = TRUE)) &&
+        identical(c10_facts(c(c10_sc, list(density = "on")), c10_g50), c10_facts(c(c10_sc, list(density = "off")), c10_g50)))
+
+# 10C-6: the violin. A group of 30 rows or more is a violin (trimmed to its data, every violin as wide as the widest) with a slim box inside; a group of fewer
+#   rows is a plain box, with a note; with no such group every group is a plain box; the facts do not change
+c10_vs <- list(family = "box", x = "channel", y = "unit_price", shape = "violin", title = "t")
+c10_pv <- c10_pl(c10_vs, list(data = c10_odata, cb = c10_ocb))
+c10_pm <- c10_pl(list(family = "box", x = "product_category", y = "unit_price", shape = "violin", title = "t", filter = list(list(column = "channel", op = "==", value = "Partner"))), list(data = c10_odata, cb = c10_ocb))
+c10_pa <- c10_pl(list(family = "box", x = "series", y = "amount", shape = "violin", title = "t"), c10_l)
+c10_pb <- c10_pl(list(family = "box", x = "channel", y = "unit_price", title = "t"), list(data = c10_odata, cb = c10_ocb))
+c10_vb <- ggplot2::ggplot_build(c10_pv$plot)$data[[1]]
+c10_partner <- c10_odata[c10_odata$channel == "Partner", ]
+c10_pcount <- table(c10_partner$product_category)
+c10_mb <- ggplot2::ggplot_build(c10_pm$plot)$data
+check("10C-6: the violin: three groups of over 1,000 rows are a GeomViolin (trim on, scaled to equal width: the widest point of every violin is 1, its ends are the group's lowest and highest price) and a slim box (0.12 wide, no outlying points); in the partner channel the categories under 30 rows are plain boxes (the plain boxes hold exactly their rows), with a note naming them; with no group of 30 rows every group is a plain box and the note says so; without shape there is one box layer; the facts are the same as for a box",
+      identical(c10_pv$geoms, c("GeomViolin", "GeomBoxplot")) && isTRUE(c10_pv$spec$.violin) && !isTRUE(c10_pv$spec$.plain_box) && !length(c10_pv$notes[grepl("plain box", c10_pv$notes)]) &&
+        isTRUE(c10_pv$plot$layers[[1]]$stat_params$trim) && identical(c10_pv$plot$layers[[1]]$stat_params$scale, "width") && identical(c10_pv$plot$layers[[2]]$geom_params$width, NULL) &&
+        isTRUE(all.equal(as.numeric(tapply(c10_vb$violinwidth, c10_vb$group, max)), rep(1, 3))) &&
+        isTRUE(all.equal(sort(unname(tapply(c10_vb$y, c10_vb$group, min))), sort(unname(tapply(c10_odata$unit_price, c10_odata$channel, min))))) &&
+        isTRUE(all.equal(sort(unname(tapply(c10_vb$y, c10_vb$group, max))), sort(unname(tapply(c10_odata$unit_price, c10_odata$channel, max))))) &&
+        identical(c10_pm$geoms, c("GeomViolin", "GeomBoxplot", "GeomBoxplot")) && isTRUE(c10_pm$spec$.plain_box) && isTRUE(c10_pm$spec$.violin) &&
+        sum(c10_pcount < 30) > 0L && sum(c10_pcount >= 30) > 0L && nrow(c10_mb[[3]]) == sum(c10_pcount < 30) && length(unique(c10_mb[[1]]$group)) == sum(c10_pcount >= 30) &&
+        any(grepl(paste0(sum(c10_pcount < 30), " groups? (has|have) fewer than 30 rows"), c10_pm$notes)) && any(grepl("a density from so few rows shows a shape that is not there", c10_pm$notes, fixed = TRUE)) &&
+        identical(c10_pa$geoms, "GeomBoxplot") && any(grepl("No group has 30 rows, so every group is drawn as a plain box", c10_pa$notes, fixed = TRUE)) &&
+        identical(c10_pb$geoms, "GeomBoxplot") && identical(c10_facts(c10_vs, list(data = c10_odata, cb = c10_ocb)), c10_facts(c10_vs[names(c10_vs) != "shape"], list(data = c10_odata, cb = c10_ocb))))
+
+# 10C-7: the index and the moving average as drawn: an indexed chart's title is 'Index (first month = 100)', with a dashed rule at 100 and its note; a moving average is
+#   the raw line in the grey behind the average in the series colour, the subtitle says so when the analyst has not written one and not when she has
+c10_pi <- c10_pl(c10_idx, c10_l); c10_ps <- c10_pl(c10_sm, c10_l)
+c10_pi2 <- c10_pl(c(c10_idx, list(y_label = "Growth since January", subtitle = "Mine")), c10_l)
+c10_ps2 <- c10_pl(c(c10_sm, list(subtitle = "Mine")), c10_l)
+c10_ps1 <- c10_pl(list(family = "line", x = "month", y = "amount", fn = "sum", smooth = 3L, title = "t"), c10_l)
+c10_bs <- ggplot2::ggplot_build(c10_ps$plot)$data
+check("10C-7: the index and the moving average as drawn: the y title is 'Index (first month = 100)' (the analyst's own y_label wins), a dashed rule at 100 is the last layer (a GeomHline), the note names the first month and says the picture depends on it, and the end labels carry the index (S1 160, S2 300); a moving average draws the raw line in the style's grey first and the average after it in the series colours, with the subtitle '3-period moving average; raw values in grey' unless the analyst wrote one, a note, and its end labels sit at the average (S2 45.3)",
+      identical(ggplot2::get_labs(c10_pi$plot)$y, "Index (first month = 100)") && identical(ggplot2::get_labs(c10_pi2$plot)$y, "Growth since January") && identical(c10_pi$geoms[length(c10_pi$geoms)], "GeomHline") &&
+        identical(ggplot2::ggplot_build(c10_pi$plot)$data[[length(c10_pi$geoms)]]$yintercept, 100) && identical(ggplot2::ggplot_build(c10_pi$plot)$data[[length(c10_pi$geoms)]]$linetype, "dashed") &&
+        any(grepl("first month (2023-01-01)", c10_pi$notes, fixed = TRUE)) && any(grepl("the picture depends on the starting period", c10_pi$notes, fixed = TRUE)) &&
+        identical(c10_pi$spec$.index_unit, "month") && all(c("S1  160", "S2  300") %in% ggplot2::ggplot_build(c10_pi$plot)$data[[which(c10_pi$geoms == "GeomText")[1]]]$label) &&
+        identical(c10_ps$geoms[1:2], c("GeomLine", "GeomLine")) && identical(c10_bs[[1]]$colour[1], CHART_STYLES$clean$grey) && !identical(c10_bs[[2]]$colour[1], CHART_STYLES$clean$grey) &&
+        identical(ggplot2::get_labs(c10_ps$plot)$subtitle, "3-period moving average; raw values in grey") && identical(ggplot2::get_labs(c10_ps2$plot)$subtitle, "Mine") &&
+        any(grepl("moving average over 3 periods", c10_ps$notes, fixed = TRUE)) &&
+        "S2  45.3" %in% ggplot2::ggplot_build(c10_ps$plot)$data[[which(c10_ps$geoms == "GeomText")[1]]]$label &&
+        "125" %in% ggplot2::ggplot_build(c10_ps1$plot)$data[[which(c10_ps1$geoms == "GeomText")[1]]]$label)
+
+# 10C-7b: the dumbbell as drawn: a line and two dot layers (the first values in the style's slate, the second in the accent) and the two names above the first row (the lower value's
+#   name to the left of its dot, the higher value's to the right of its dot, each in its dot's colour); the value axis has its ticks inside the data's range (a tick at the edge of
+#   the room made for the names would put its label past the picture), and its axis titles
+c10_dp <- c10_pl(c10_dbs, c10_d)
+c10_db <- ggplot2::ggplot_build(c10_dp$plot)
+c10_dpal <- spec_palette(c10_pal())
+c10_dtext <- c10_db$data[[which(c10_dp$geoms == "GeomText")]]
+c10_dbk <- c10_db$layout$panel_params[[1]]$x$get_breaks()
+c10_ob <- ggplot2::ggplot_build(c10_plot(list(family = "dumbbell", y = "region", x = "revenue", color = "year", fn = "sum", title = "t", filter = list(list(column = "year", op = "in", value = list(2022L, 2024L)))), list(data = c10_odata, cb = c10_ocb)))
+c10_obk <- c10_ob$layout$panel_params[[1]]$x$get_breaks()
+c10_oxs <- c(c10_ob$data[[2]]$x, c10_ob$data[[3]]$x)
+check("10C-7b: the dumbbell as drawn: a line, the first dots in the style's slate (5, 10, 40, 20 at D, A, C, B), the second dots in the accent (50, 30, 30, 25), the names T1 and T2 once, above the first row (T1, the lower value, to the left of its dot, T2 to the right of its dot, each in its dot's colour), every tick of the value axis inside the data's range (5 to 50; and on the revenue of six regions, none past 458,000 where an edge tick would have put its label past the picture), and the axis titles of a sideways chart (the measure; none for the groups)",
+      identical(c10_dp$geoms, c("GeomLine", "GeomPoint", "GeomPoint", "GeomText")) &&
+        identical(c10_db$data[[2]]$colour, rep(c10_dpal$slate, 4)) && identical(c10_db$data[[2]]$x, c(5, 10, 40, 20)) &&
+        identical(c10_db$data[[3]]$colour, rep(c10_dpal$single, 4)) && identical(c10_db$data[[3]]$x, c(50, 30, 30, 25)) &&
+        identical(as.character(c10_dtext$label), c("T1", "T2")) && identical(c10_dtext$hjust, c(1.15, -0.15)) && identical(c10_dtext$colour, c(c10_dpal$slate, c10_dpal$single)) &&
+        length(unique(c10_dtext$y)) == 1L && c10_dtext$y[[1]] == max(c10_db$data[[2]]$y) && all(c10_dbk[!is.na(c10_dbk)] >= 5 & c10_dbk[!is.na(c10_dbk)] <= 50) && !all(is.na(c10_dbk)) &&
+        all(c10_obk[!is.na(c10_obk)] >= min(c10_oxs) & c10_obk[!is.na(c10_obk)] <= max(c10_oxs)) && !all(is.na(c10_obk)) &&
+        identical(ggplot2::get_labs(c10_dp$plot)$x, "Amount") && is.null(ggplot2::get_labs(c10_dp$plot)$y))
+
+# 10C-8: the call-out. An annotate is a box (the style's text colour on its panel colour, a thin border) with a thin leader to the point: on a line, scatter or bubble three
+#   layers (the leader, the ring, the box) with the box where the leader ends, shifted by a share of the axis range (on a log axis, of the log range); a bar's or dot's box
+#   stands against its mark; with the names of a highlight and ggrepel one layer holds both (a name has no fill and no border); ggrepel absent changes nothing
+c10_og <- list(data = c10_odata, cb = c10_ocb)
+c10_cl <- list(family = "line", x = "order_month", y = "revenue", fn = "sum", annotate = list("lowest"), title = "t")
+c10_cs <- list(family = "scatter", x = "units", y = "unit_price", log_x = TRUE, log_y = TRUE, density = "off", annotate = list("highest"), title = "t")
+c10_cb <- list(family = "bar", x = "region", y = "revenue", fn = "sum", annotate = list("highest"), title = "t")
+c10_ch <- list(family = "scatter", x = "units", y = "unit_price", log_x = TRUE, log_y = TRUE, density = "off", annotate = list("highest"), title = "t",
+               highlight = list(column = "order_id", values = list(10L, 20L)))
+c10_built <- function(spec, g = c10_og, style = "clean") { p = c10_plot(spec, g, style); list(plot = p, data = ggplot2::ggplot_build(p)$data, geoms = unname(purrr::map_chr(p$layers, function(l) class(l$geom)[1]))) }
+c10_bl <- c10_built(c10_cl); c10_bsc <- c10_built(c10_cs); c10_bb <- c10_built(c10_cb); c10_bh <- c10_built(c10_ch)
+c10_bd <- c10_built(c10_cl, style = "dark")
+c10_at <- function(b, geom) which(b$geoms == geom)
+c10_box <- c10_bl$data[[c10_at(c10_bl, "GeomLabel")]]; c10_lead <- c10_bl$data[[c10_at(c10_bl, "GeomSegment")]]; c10_ring <- c10_bl$data[[which(c10_bl$geoms == "GeomPoint")[1]]]
+c10_msc <- c10_bsc$data[[c10_at(c10_bsc, "GeomLabel")]]; c10_ssc <- c10_bsc$data[[c10_at(c10_bsc, "GeomSegment")]]; c10_rsc <- c10_bsc$data[[which(c10_bsc$geoms == "GeomPoint")[2]]]
+c10_xr <- as.numeric(diff(range(c10_tab(c10_cl, c10_og)$order_month)))
+c10_hj <- attr(c10_bl$plot, "spec")$.annotate[[1]]$hjust       # 0.5: the lowest month is in the middle third, its box is centred over it
+c10_hjs <- attr(c10_bsc$plot, "spec")$.annotate[[1]]$hjust     # 0: the highest price is at the left
+c10_rep <- c10_bh$data[[c10_at(c10_bh, "GeomLabelRepel")]]
+c10_stand <- function(expr) {
+  old = ggrepel_installed
+  assign("ggrepel_installed", function() FALSE, envir = globalenv())
+  on.exit(assign("ggrepel_installed", old, envir = globalenv()))
+  expr
+}
+c10_noreg <- c10_stand(c10_built(c10_cs))
+check("10C-8: the call-out: on a line the leader, the ring and the box are three layers, the box is in the style's text colour on its panel colour with a 0.25 border (Clean and Dark), the leader starts at the ring's point and ends at the box's anchor (the lowest month's box above its point, the dearest order's below it, where there is room), shifted along x by 5 per cent of the months' range and along y by 8 per cent of the revenue's; on a scatter with both axes logged the shift is in log units (the box sits 10^(8 per cent of the log range) from the point); a bar's box has no leader; names and call-out are one GeomLabelRepel layer when the chart names points (the names no fill and no border, the call-out the panel colour and 0.25); without ggrepel the line and scatter are drawn as they were, with no repel layer",
+      identical(sort(c10_bl$geoms[c10_bl$geoms != "GeomLine" & c10_bl$geoms != "GeomText"]), sort(c("GeomSegment", "GeomPoint", "GeomLabel"))) &&
+        identical(c10_box$fill, CHART_STYLES$clean$panel) && identical(c10_box$colour, CHART_STYLES$clean$text) && identical(c10_box$linewidth, 0.25) &&
+        identical(c10_bd$data[[c10_at(c10_bd, "GeomLabel")]]$fill, CHART_STYLES$dark$panel) && identical(c10_bd$data[[c10_at(c10_bd, "GeomLabel")]]$colour, CHART_STYLES$dark$text) &&
+        isTRUE(all.equal(c10_lead$x, c10_ring$x)) && isTRUE(all.equal(c10_lead$y, c10_ring$y)) && isTRUE(all.equal(c10_lead$xend, c10_box$x)) && isTRUE(all.equal(c10_lead$yend, c10_box$y)) &&
+        isTRUE(all.equal(c10_box$x - c10_ring$x, c(`0` = 0.05, `0.5` = 0, `1` = -0.05)[[as.character(c10_hj)]] * c10_xr)) && c10_hjs == 0 && isTRUE(all.equal(abs(c10_box$y - c10_ring$y), 0.08 * diff(range(c10_tab(c10_cl, c10_og)$revenue)))) && c10_box$y > c10_ring$y && c10_msc$y < c10_rsc$y &&
+        isTRUE(all.equal(abs(c10_msc$y - c10_rsc$y), 0.08 * diff(range(log10(c10_odata$unit_price))))) &&
+        isTRUE(all.equal(c10_msc$x - c10_rsc$x, 0.05 * diff(range(log10(c10_odata$units))))) &&
+        isTRUE(all.equal(c10_ssc$xend, c10_msc$x)) && "GeomLabel" %in% c10_bb$geoms && !"GeomSegment" %in% c10_bb$geoms &&
+        identical(c10_bb$data[[c10_at(c10_bb, "GeomLabel")]]$fill, CHART_STYLES$clean$panel) &&
+        sum(c10_bh$geoms == "GeomLabelRepel") == 1L && !"GeomLabel" %in% c10_bh$geoms && !"GeomText" %in% c10_bh$geoms && nrow(c10_rep) == 3L &&
+        identical(sum(is.na(c10_rep$fill)), 2L) && identical(c10_rep$fill[!is.na(c10_rep$fill)], CHART_STYLES$clean$panel) && identical(c10_rep$linewidth[!is.na(c10_rep$fill)], 0.25) && all(c10_rep$linewidth[is.na(c10_rep$fill)] == 0) &&
+        identical(c10_noreg$geoms, c10_bsc$geoms) && !any(grepl("Repel", c10_noreg$geoms)))
+
+# 10C-9: the label boxes are clear: the texts of the call-outs lie wholly inside their panel and overlap no other text (drawn_text_faults(), measured with grid on the device),
+#   on a line (highest and lowest), a scatter, a bar and names with a call-out, in Clean and Dark
+c10_faults <- unlist(purrr::map(c(list(c10_cl, c(c10_cl, list(annotate = list("lowest", "highest"))), c10_cs, c10_cb, c10_ch)), function(sp) purrr::map(c("clean", "dark"), function(st) {
+  f = drawn_text_faults(c10_plot(sp, c10_og, st))
+  if (length(f)) paste0(sp$family, " ", st, ": ", f) else character(0)
+})), use.names = FALSE)
+c10_fbad <- drawn_text_faults(c10_plot(c10_cb, c10_og) + ggplot2::annotate("text", x = 1, y = 7e5, label = "A long label centred on the first bar", size = 5))
+check(paste0("10C-9: the label boxes are clear: on the drawn charts (a line with its highest, and with its lowest and latest; a scatter; a bar; names of a highlight with a call-out; Clean and Dark) no text lies outside its panel and no two overlap",
+             if (length(c10_faults)) paste0(" (", paste(c10_faults, collapse = "; "), ")"), "; the measure flags a text that runs past the panel"),
+      !length(c10_faults) && any(grepl("runs past the panel", c10_fbad, fixed = TRUE)))
+
+# 10C-10: the motion. In each new form the scales never move, the first frame is not the chart and the last frame is the static chart (its built data, layer by layer, is
+#   spec_plot()'s on the same canvas). A dumbbell comes in two moves: its first dots appear (the second dots and the lines not yet), then each line and second dot travel out
+#   from the first dot (a line's far end is where its second dot is); a violin grows from its middle; a moving average and its raw line are drawn together
+c10_vspecs <- list(
+  dumbbell = list(family = "dumbbell", y = "region", x = "revenue", color = "year", fn = "sum", title = "t", filter = list(list(column = "year", op = "in", value = list(2022L, 2024L)))),
+  violin = c10_vs, indexed = list(family = "line", x = "order_month", y = "revenue", color = "region", fn = "sum", index = "first", title = "t", labels = "on"),
+  smooth = list(family = "line", x = "order_month", y = "revenue", fn = "sum", smooth = 6L, title = "t"), density = list(family = "scatter", x = "units", y = "unit_price", log_x = TRUE, title = "t"),
+  callout = c10_cl)
+c10_progress <- seq(0, 1, length.out = 25L)
+c10_ctx <- function(spec) video_context(video_plot(spec, c10_odata, c10_ocb, c10_pal()), c10_ocb)
+c10_vctx <- purrr::map(c10_vspecs, c10_ctx)
+c10_vfr <- purrr::map(c10_vctx, function(ctx) purrr::map(c10_progress, function(p) video_frame(ctx, p)))
+c10_vstatic <- function(ctx) { cv = attr(ctx$plot, "canvas"); ggplot2::ggplot_build(spec_plot(ctx$spec, c10_odata, c10_ocb, c10_pal(), web = list(width = cv[["width"]], height = cv[["height"]], bare = FALSE)))$data }
+c10_vsame <- purrr::imap_lgl(c10_vctx, function(ctx, nm) identical(c10_vfr[[nm]][[length(c10_progress)]]$data, c10_vstatic(ctx)))
+c10_vfirst <- purrr::imap_lgl(c10_vctx, function(ctx, nm) !identical(c10_vfr[[nm]][[1]]$data, c10_vstatic(ctx)))
+c10_vscales <- purrr::map_lgl(c10_vfr, function(fr) all(purrr::map_lgl(fr, function(f) identical(video_scales(f), video_scales(fr[[length(fr)]])))))
+c10_dctx <- c10_vctx$dumbbell
+c10_dro <- c10_dctx$roles
+c10_dfr <- function(p) video_frame(c10_dctx, p)
+c10_d1 <- c10_dfr(0.05); c10_d2 <- c10_dfr(0.6); c10_d3 <- c10_dfr(0.9)
+c10_dfin <- c10_dfr(1)
+c10_ix <- function(f, role) f$data[[which(c10_dro == role)]]
+c10_mid_first <- c10_ix(c10_d2, "dumbbell_first"); c10_mid_second <- c10_ix(c10_d2, "dumbbell_second"); c10_mid_line <- c10_ix(c10_d2, "dumbbell_line")
+c10_fin_first <- c10_ix(c10_dfin, "dumbbell_first"); c10_fin_second <- c10_ix(c10_dfin, "dumbbell_second")
+c10_vv <- c10_vfr$violin
+c10_vl <- which(c10_vctx$violin$roles == "violin")
+c10_vr <- c10_vv[[6]]$data[[c10_vl]]; c10_vf <- c10_vv[[25]]$data[[c10_vl]]
+c10_vok <- purrr::map_lgl(unique(c10_vr$group), function(g) { a = c10_vr$violinwidth[c10_vr$group == g]; b = c10_vf$violinwidth[c10_vf$group == g]; isTRUE(all.equal(a, max(a) * b)) })
+c10_sm_ctx <- c10_vctx$smooth
+c10_sm_mid <- video_frame(c10_sm_ctx, 0.4)
+c10_sm_lines <- which(c10_sm_ctx$roles == "line")
+check("10C-10: the motion of the new forms: in the dumbbell, the violin, the indexed lines, the moving average, the density and the call-out the scales never move, the first frame is not the chart and the last frame is the static chart; a dumbbell at 5 per cent has some first dots and no second dot and no line, at 60 per cent every second dot is between its first dot and its place or at it, and a line ends exactly where its second dot is, and at the end the first dots are whole; a violin is narrower early in the motion than at the end, and all of its outline is as narrow (one clock for every row of a violin); the raw line and the moving average are cut at the same x",
+      all(c10_vsame) && all(c10_vfirst) && all(c10_vscales) && length(c10_vsame) == 6L &&
+        identical(sort(c10_dro[c10_dro != "label"]), sort(c("dumbbell_line", "dumbbell_first", "dumbbell_second"))) &&
+        nrow(c10_ix(c10_d1, "dumbbell_first")) > 0L && nrow(c10_ix(c10_d1, "dumbbell_first")) < nrow(c10_fin_first) && nrow(c10_ix(c10_d1, "dumbbell_second")) == 0L && nrow(c10_ix(c10_d1, "dumbbell_line")) == 0L &&
+        identical(nrow(c10_ix(c10_d3, "dumbbell_first")), nrow(c10_fin_first)) && all(c10_ix(c10_d3, "dumbbell_first")$alpha == 1 | is.na(c10_ix(c10_d3, "dumbbell_first")$alpha)) &&
+        nrow(c10_mid_second) > 0L && all(abs(c10_mid_second$x - c10_fin_first$x[match(c10_mid_second$y, c10_fin_first$y)]) <= abs(c10_fin_second$x[match(c10_mid_second$y, c10_fin_second$y)] - c10_fin_first$x[match(c10_mid_second$y, c10_fin_first$y)]) + 1e-9) &&
+        any(abs(c10_mid_second$x - c10_fin_second$x[match(c10_mid_second$y, c10_fin_second$y)]) > 1e-6) &&
+        all(purrr::map_lgl(unique(c10_mid_second$y), function(y) isTRUE(all.equal(max(c10_mid_line$x[c10_mid_line$y == y]) , c10_mid_second$x[c10_mid_second$y == y])) || isTRUE(all.equal(min(c10_mid_line$x[c10_mid_line$y == y]), c10_mid_second$x[c10_mid_second$y == y])))) &&
+        max(c10_vv[[6]]$data[[c10_vl]]$violinwidth) < 1 && length(c10_vok) >= 1L && all(c10_vok) && isTRUE(all.equal(max(c10_vv[[25]]$data[[c10_vl]]$violinwidth), 1)) &&
+        isTRUE(all.equal(max(c10_sm_mid$data[[c10_sm_lines[1]]]$x), max(c10_sm_mid$data[[c10_sm_lines[2]]]$x))) && max(c10_sm_mid$data[[c10_sm_lines[1]]]$x) < max(c10_vfr$smooth[[25]]$data[[c10_sm_lines[1]]]$x))
+
+# 10C-11: the interactive view of each new form: the tooltips are written by R (a dumbbell's dot gives its group, value and colour, its line both values and the
+#   difference; a moving average's point gives the average beside the value), a violin has its interactive twin, no widget warns, and every one matches its picture
+c10_dw <- spec_widget(c10_plot(c10_dbs, c10_d))
+c10_dt <- widget_table(attr(c10_plot(c10_dbs, c10_d), "spec"), c10_d$cb, spec_table(c10_dbs, c10_d$data, c10_d$cb))
+c10_sw <- widget_table(attr(c10_plot(c10_sm, c10_l), "spec"), c10_l$cb, spec_table(c10_sm, c10_l$data, c10_l$cb))
+c10_forms <- list(dumbbell = c10_plot(c10_dbs, c10_d), indexed = c10_plot(c10_idx, c10_l), smooth = c10_plot(c10_sm, c10_l), violin = c10_pv$plot, density = c10_p2001$plot, callout = c10_bl$plot, shared = c10_bh$plot)
+c10_widgets <- purrr::map(c10_forms, spec_widget)
+c10_match <- purrr::map(c10_forms, function(p) tryCatch(widget_match(p), error = function(e) paste("error:", conditionMessage(e))))
+check("10C-11: the interactive views: a dumbbell dot's tooltip is 'grp: D / amount: 50 / cond: T2', its line's 'grp: D / T1: 5 / T2: 50 / Difference (second less first): 45' and the hover group of a group is shared by its two dots and its line; a moving average's point reads 'Moving average over 3 periods: 71.7' (and 'not yet' for the first two); a violin has its interactive twin; none of the seven widgets (dumbbell, indexed, smooth, violin, density, call-out, call-out with names) warns, and each matches its picture layer for layer (scales, labels, texts)",
+      identical(c10_dt$.tip[c10_dt$grp == "D" & c10_dt$cond == "T2"], "grp: D\namount: 50\ncond: T2") &&
+        identical(unique(c10_dt$.series[c10_dt$grp == "D"]), "grp: D\nT1: 5\nT2: 50\nDifference (second less first): 45") &&
+        identical(c10_dt$.hover[c10_dt$grp == "D"], rep("g1", 2)) && identical(unique(c10_dt$.hover), c("g1", "g2", "g3", "g4")) &&
+        identical(c10_sw$.tip[c10_sw$series == "S1" & c10_sw$month == as.Date("2023-03-01")], "month: 2023-03-01\namount: 90\nMoving average over 3 periods: 71.7\nseries: S1") &&
+        identical(c10_sw$.tip[c10_sw$series == "S1" & c10_sw$month == as.Date("2023-01-01")], "month: 2023-01-01\namount: 50\nMoving average over 3 periods: not yet\nseries: S1") &&
+        any(grepl("GeomInteractiveViolin", purrr::map_chr(attr(c10_pv$plot, "widget_plot")()$layers, function(l) class(l$geom)[1]))) &&
+        all(purrr::map_lgl(c10_widgets, function(w) inherits(w, "girafe") && !length(attr(w, "warnings")))) && all(purrr::map_lgl(c10_match, function(m) !length(m))) &&
+        grepl("Difference (second less first): 45", c10_dw$x$html, fixed = TRUE))
+
+# 10C-12: the rules of the reflex files: the five new rules are in RULE_FAMILIES with their families and conditions (the dumbbell for a dumbbell, density for a scatter, the violin
+#   for a box that has a shape, the index and the smooth for a line that has them), each has a Label of at most 6 words, and the four files have the versions the work gave them
+c10_rules <- c("two_values_dumbbell", "density_is_automatic", "violin_on_request", "index_to_compare_growth", "smooth_on_request")
+check("10C-12: the reflex rules: two_values_dumbbell, density_is_automatic, violin_on_request, index_to_compare_growth and smooth_on_request are each in a reflex file with a Label of at most 6 words and in RULE_FAMILIES (the dumbbell rule fits a dumbbell and no other family; density a scatter; the violin a box with shape; the index and the smooth a line with index or smooth and no other); comparison.md is Version 0.3, relationship.md, distribution.md and time.md 0.2",
+      all(c10_rules %in% names(reflex_labels())) && all(lengths(strsplit(reflex_labels()[c10_rules], "\\s+")) <= 6L) && all(c10_rules %in% names(RULE_FAMILIES)) &&
+        rule_fits("two_values_dumbbell", list(family = "dumbbell")) && !rule_fits("two_values_dumbbell", list(family = "bar")) &&
+        rule_fits("density_is_automatic", list(family = "scatter")) && !rule_fits("density_is_automatic", list(family = "bubble")) &&
+        rule_fits("violin_on_request", list(family = "box", shape = "violin")) && !rule_fits("violin_on_request", list(family = "box")) &&
+        rule_fits("index_to_compare_growth", list(family = "line", index = "first")) && !rule_fits("index_to_compare_growth", list(family = "line")) && !rule_fits("index_to_compare_growth", list(family = "bar", index = "first")) &&
+        rule_fits("smooth_on_request", list(family = "line", smooth = 12L)) && !rule_fits("smooth_on_request", list(family = "line")) &&
+        all(c("two_values_dumbbell") %in% names(rfiles[["comparison.md"]]$reflexes)) && "density_is_automatic" %in% names(rfiles[["relationship.md"]]$reflexes) &&
+        "violin_on_request" %in% names(rfiles[["distribution.md"]]$reflexes) && all(c("index_to_compare_growth", "smooth_on_request") %in% names(rfiles[["time.md"]]$reflexes)) &&
+        identical(unname(purrr::map_chr(rfiles[c("comparison.md", "relationship.md", "distribution.md", "time.md")], "version")), c("0.3", "0.2", "0.2", "0.2")))
+
+# 10C-13: the reference, the dashboard and the methodology page: the model's reference names the four new fields and the dumbbell, in plain text under 5,000 characters; a dumbbell is
+#   drawn from rows when it has fn none and from totals otherwise; the methodology table has the five new rows, each with a thumbnail (the violin's from 40 prices in each region)
+c10_ref <- spec_reference()
+c10_th <- method_thumbs()
+check("10C-13: the reference lists density, shape, index and smooth with their words and families and the dumbbell family, plain and under 5,000 characters; a dumbbell of totals carries totals and one with fn none carries rows (chart_from_rows()); the methodology table has 14 rows and the thumbnails of the dumbbell, violin, indexed, smoothed and density rows are real pictures (the violin one drawn with no note of plain boxes)",
+      all(purrr::map_lgl(c("- density: one of auto, off, on", "- shape: one of box, violin", "- index: one of none, first", "- smooth: none, or a whole number from 2 to 24", "- dumbbell: y group or name (required)"), function(t) grepl(t, c10_ref, fixed = TRUE))) &&
+        nchar(c10_ref) < 5000L && grepl("density", c10_ref, fixed = TRUE) && !chart_from_rows(c10_dbs[names(c10_dbs) != "fn"] |> c(list(fn = "sum"))) && chart_from_rows(c10_dbs) &&
+        nrow(check_methodology_file()) == 14L && all(c("dumbbell", "violin", "indexed", "smoothed", "density") %in% names(c10_th)) &&
+        all(purrr::map_lgl(c10_th[c("dumbbell", "violin", "indexed", "smoothed", "density")], function(t) is.character(t) && startsWith(t, "data:image/png;base64,") && nchar(t) > 3000L)) &&
+        nrow(method_thumb_rows()) == 200L && all(table(method_thumb_rows()$region) >= SPEC_VIOLIN_MIN))
+
+# 10C-14: the gold specs of the forms: ten are in tests/gold_specs.yaml (from tests/data/orders.csv) and each draws, passes spec_check(), has a table, an interactive version that matches, and code
+#   that runs in a fresh process (the generic gold checks above hold those for every entry; this holds that the ten are there and are the forms)
+c10_gold <- purrr::keep(gold, function(x) identical(x$entry$file, "orders.csv"))
+c10_gold_fam <- purrr::map_chr(c10_gold, function(x) paste0(x$entry$spec$family, if (!is.null(x$entry$spec$shape)) "/violin", if (!is.null(x$entry$spec$index)) "/index", if (!is.null(x$entry$spec$smooth)) "/smooth",
+                                                         if (identical(x$entry$spec$density, "off")) "/off", if (length(x$entry$spec$annotate)) "/annotate"))
+check("10C-14: ten gold specs of the new forms are in the gold file, on orders.csv: two dumbbells (one with top_n), the scatter in cells and as points, two violins (one with small groups), indexed lines, a moving average, and a call-out on a line and on a scatter",
+      length(c10_gold) == 10L && sum(c10_gold_fam == "dumbbell") == 2L && sum(grepl("violin", c10_gold_fam)) == 2L && sum(grepl("index", c10_gold_fam)) == 1L && sum(grepl("smooth", c10_gold_fam)) == 1L &&
+        sum(grepl("annotate", c10_gold_fam)) == 2L && sum(c10_gold_fam %in% c("scatter", "scatter/off")) == 2L)
+
+} # the fast run only
+# <<< 10C end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------

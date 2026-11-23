@@ -316,3 +316,139 @@
     "y": score
     fn: none
     title: Accented names read correctly from a Latin-1 file
+
+# Phase 10 Part C: the chart forms, on tests/data/orders.csv (3,000 synthetic orders; -99 means missing).
+
+- name: orders, revenue by region in 2022 and 2024 (dumbbell)
+  file: orders.csv
+  missing: ["-99"]
+  row_is: one order
+  spec:
+    family: dumbbell
+    "y": region
+    x: revenue
+    color: year
+    fn: sum
+    filter:
+      - {column: year, op: "in", value: [2022, 2024]}
+    title: West grew most, and Central least, between 2022 and 2024
+    x_label: Revenue
+
+- name: orders, mean unit price of the top 6 products in 2022 and 2024 (dumbbell, top_n)
+  file: orders.csv
+  missing: ["-99"]
+  row_is: one order
+  spec:
+    family: dumbbell
+    "y": product
+    x: unit_price
+    color: year
+    fn: mean
+    top_n: 6
+    filter:
+      - {column: year, op: "in", value: [2022, 2024]}
+    title: Mean unit price of six products, 2022 and 2024
+
+- name: orders, unit price against units, 3,000 points (density auto, with a fitted curve)
+  file: orders.csv
+  missing: ["-99"]
+  row_is: one order
+  spec:
+    family: scatter
+    x: units
+    "y": unit_price
+    log_x: true
+    log_y: true
+    fit: loess
+    title: Cheap orders are large, dear ones are small
+    subtitle: Each cell counts orders
+
+- name: orders, unit price against units with density off (points)
+  file: orders.csv
+  missing: ["-99"]
+  row_is: one order
+  spec:
+    family: scatter
+    x: units
+    "y": unit_price
+    log_x: true
+    log_y: true
+    density: "off"
+    title: The same orders as points
+
+- name: orders, unit price by channel (violin with its box)
+  file: orders.csv
+  missing: ["-99"]
+  row_is: one order
+  spec:
+    family: box
+    x: channel
+    "y": unit_price
+    shape: violin
+    title: Unit prices have two humps in every channel
+
+- name: orders, unit price by product category in the partner channel (violin, small groups as plain boxes)
+  file: orders.csv
+  missing: ["-99"]
+  row_is: one order
+  spec:
+    family: box
+    x: product_category
+    "y": unit_price
+    shape: violin
+    log_y: true
+    filter:
+      - {column: channel, op: "==", value: Partner}
+    title: Partner orders by category
+
+- name: orders, revenue by region indexed to January 2022 (indexed lines, names at the ends)
+  file: orders.csv
+  missing: ["-99"]
+  row_is: one order
+  spec:
+    family: line
+    x: order_month
+    "y": revenue
+    color: region
+    fn: sum
+    index: first
+    title: Which regions grew faster than where they started
+    labels: "on"
+
+- name: orders, monthly revenue with a 6-month moving average (smooth)
+  file: orders.csv
+  missing: ["-99"]
+  row_is: one order
+  spec:
+    family: line
+    x: order_month
+    "y": revenue
+    fn: sum
+    smooth: 6
+    title: Monthly revenue and its 6-month average
+
+- name: orders, call-outs on a line (highest and lowest month)
+  file: orders.csv
+  missing: ["-99"]
+  row_is: one order
+  spec:
+    family: line
+    x: order_month
+    "y": revenue
+    fn: sum
+    annotate: [highest, lowest]
+    title: Revenue by month, best and worst marked
+
+- name: orders, call-out on a scatter (highest price)
+  file: orders.csv
+  missing: ["-99"]
+  row_is: one order
+  spec:
+    family: scatter
+    x: units
+    "y": unit_price
+    log_x: true
+    log_y: true
+    density: "off"
+    annotate: [highest]
+    title: Price against units, the dearest order marked
