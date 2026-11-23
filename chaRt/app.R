@@ -61,6 +61,11 @@ APP_PACKAGES <- c("commonmark", "digest", "dplyr", "ellmer", "ggiraph", "ggplot2
 #   calls in the code, would not ask for it: plotly used to bring it in as a dependency. This call is what it reads (Phase 10 Part B, found by 9C-8).
 requireNamespace("tidyr", quietly = TRUE)
 
+# hexbin is optional: R/spec.R draws a crowded scatter as hexagons (ggplot2's geom_hex()) when density_hex_ok() finds the package, and as rectangles when it
+#   does not, so it is not in APP_PACKAGES and its absence stops nothing. R/ finds it with find.package() (R/ may not call requireNamespace()), which a
+#   deployment does not read; this call is what it reads, so Connect installs hexbin when it is installed here (Phase 10b hexagons, found by 9C-8).
+requireNamespace("hexbin", quietly = TRUE)
+
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
   if (length(missing)) stop("Not installed, so the app cannot start: ", paste(missing, collapse = ", "), call. = FALSE)
@@ -93,7 +98,7 @@ local({
                opts_tooltip = c("css", "opacity", "offx", "offy", "use_fill", "use_stroke"),
                geom_col_interactive = character(0), geom_point_interactive = character(0), geom_line_interactive = character(0),
                geom_histogram_interactive = character(0), geom_boxplot_interactive = character(0), geom_tile_interactive = character(0),
-               geom_bin_2d_interactive = character(0), girafeOutput = c("outputId", "width"), renderGirafe = "expr")
+               geom_bin_2d_interactive = character(0), geom_hex_interactive = character(0), girafeOutput = c("outputId", "width"), renderGirafe = "expr")
   gone = unlist(imap(calls, function(args, fn) {
     if (!fn %in% getNamespaceExports("ggiraph")) return(fn)
     absent = setdiff(args, names(formals(getExportedValue("ggiraph", fn))))

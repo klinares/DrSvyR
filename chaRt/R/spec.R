@@ -84,7 +84,7 @@ SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 # Fields the lint adds; never accepted from outside.
 SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".cell_labels", ".top_n",
                       ".violin", ".plain_box", ".index_unit", ".index_start", ".name_room",
-                      ".fit_range", ".bin_breaks", ".label_series", ".n_colours", ".annotate", ".value_labels", ".names", ".label_rows", ".repel",
+                      ".fit_range", ".bin_breaks", ".hex", ".label_series", ".n_colours", ".annotate", ".value_labels", ".names", ".label_rows", ".repel",
                       ".end_value", ".source", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor",
                       ".fig_width", ".fig_height", ".bare", ".few_breaks", ".facet_cols")
 
@@ -1144,16 +1144,19 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
     jitter = identical(fam, "scatter") && is.null(s$highlight) && n <= SPEC_BIN_N && n > 0L && mean(shared) > SPEC_OVERLAP_SHARE
     # Density (Phase 10 Part C): a scatter's points become counts of rows in cells of a grid when `density` is on, or when it is auto and
     #   the points would pile up (more than SPEC_ALPHA_N, and no highlight, which names single points); a bubble chart's only past SPEC_BIN_N.
-    #   Cells replace the see-through points and the moving of points. ggplot2's geom_bin_2d() draws rectangles (hexagons would need the hexbin package, which is not here).
+    #   Cells replace the see-through points and the moving of points. They are hexagons (geom_hex(), which needs the hexbin package) when hexbin is
+    #   installed and neither axis has few values (hex_fits()), else rectangles (geom_bin_2d()).
     binned = switch(if (identical(fam, "scatter")) density_mode(s) else "bubble",
                     on = TRUE, off = FALSE, auto = n > SPEC_ALPHA_N && is.null(s$highlight), bubble = n > SPEC_BIN_N)
     if (binned) {
       s$.binned = TRUE
       s$.bin_breaks = bin_breaks(s, table)
-      notes = c(notes, paste0(if (n > SPEC_ALPHA_N) paste0(format_num(n), " points would hide one another, so the chart counts rows in cells of a grid"),
-                              if (n <= SPEC_ALPHA_N) "The chart counts rows in cells of a grid",
-                              ": each cell counts rows, and the stronger its colour, the more of them.",
-                              if (!is.null(s$color)) paste0(" The colour of '", s$color, "' is not drawn in cells; panels (facet) keep its groups apart.")))
+      if (hex_fits(s, table)) s$.hex = TRUE
+      hex = isTRUE(s$.hex)
+      notes = c(notes, paste0(if (n > SPEC_ALPHA_N) paste0(format_num(n), " points would hide one another, so the chart counts rows in ", if (hex) "hexagons" else "cells of a grid"),
+                              if (n <= SPEC_ALPHA_N) paste0("The chart counts rows in ", if (hex) "hexagons" else "cells of a grid"),
+                              ": each ", if (hex) "hexagon" else "cell", " counts rows, and the stronger its colour, the more of them.",
+                              if (!is.null(s$color)) paste0(" The colour of '", s$color, "' is not drawn in ", if (hex) "hexagons" else "cells", "; panels (facet) keep its groups apart.")))
     } else if (jitter) {
       s$.jitter = TRUE
       s$.alpha = SPEC_ALPHA
@@ -2010,10 +2013,26 @@ bin_breaks <- function(s, table) {
   if (is.null(b$x) || is.null(b$y)) NULL else b
 }
 
-# The layer that counts rows in cells: rectangles on the edges worked out above (empty cells are not drawn: drop = TRUE).
+# Whether hexbin can draw hexagons here: the package is installed (find.package(), as for paletteer: R/ makes no requireNamespace() call, and
+#   app.R names hexbin in one, so a deployment asks for it). Read each time a chart is drawn, so the app works where it is missing (rectangles);
+#   one function, so a test can stand in for its absence.
+density_hex_ok <- function() length(find.package("hexbin", quiet = TRUE)) > 0L
+
+# How many different values an axis of a binned scatter has on the scale that is drawn.
+bin_distinct <- function(v, log) length(unique(v[is.finite(v) & (!log | v > 0)]))
+
+# Hexagons (Phase 10b hexagons) when hexbin is installed and each axis has more than SPEC_BIN_DISTINCT different values. An axis of at most that many is
+#   binned at its values, and a hexagon cannot sit on a value: its rows of hexagons would be the strips that binning at the values removed. Then rectangles.
+hex_fits <- function(s, table)
+  !is.null(s$.bin_breaks) && density_hex_ok() &&
+    min(bin_distinct(table[[s$x]], isTRUE(s$log_x)), bin_distinct(table[[s$y]], isTRUE(s$log_y))) > SPEC_BIN_DISTINCT
+
+# The layer that counts rows in cells: hexagons, SPEC_BIN_2D across, on the scale that is drawn (geom_hex(bins = ): the stat works on the transformed
+#   axes, so a log axis has hexagons of one width in log units), or rectangles on the edges worked out above. Empty cells are not drawn.
 bin_call <- function(s) {
   b = s$.bin_breaks
-  if (is.null(b) || isTRUE(s$free_y)) call("geom_bin_2d", bins = SPEC_BIN_2D)
+  if (isTRUE(s$.hex)) call("geom_hex", bins = SPEC_BIN_2D)
+  else if (is.null(b) || isTRUE(s$free_y)) call("geom_bin_2d", bins = SPEC_BIN_2D)
   else call("geom_bin_2d", breaks = call("list", x = b$x, y = b$y))
 }
 
@@ -2457,7 +2476,7 @@ spec_plot <- function(spec, data, cb, palette = chart_palette_default(), web = N
   attr(p, "spec") = ls
   attr(p, "table") = table
   attr(p, "widget_plot") = function() {
-    wenv = do.call(spec_env, c(list(chart_table = widget_table(ls, cb, table), chart_bin_tip = widget_bin_tip, chart_cell_tip = widget_cell_tip), pal$fonts))
+    wenv = do.call(spec_env, c(list(chart_table = widget_table(ls, cb, table), chart_bin_tip = widget_bin_tip, chart_cell_tip = widget_cell_tip, chart_hex_tip = widget_hex_tip), pal$fonts))
     eval(plus_call(plot_calls(ls, cb, pal, interactive = TRUE)), wenv)
   }
   attr(p, "palette") = palette
@@ -2562,6 +2581,7 @@ spec_code <- function(spec, cb, file, palette = chart_palette_default()) {
          "\n\n# The table that is drawn.\n",
          "chart_table <- chart_data |>\n  ", step_text, "\n\n",
          font_lines(names(pal$fonts)), helpers,
+         if (isTRUE(s$.hex)) "# The hexagons are drawn by geom_hex(), which needs the hexbin package: install.packages(\"hexbin\") once if it is not installed.\n",
          "# The chart. The theme is the style chosen in chaRt, written out.\n",
          plot_text, "\n")
 }
@@ -3037,7 +3057,7 @@ spec_facts <- function(spec, table, cb, exploratory = FALSE, data = NULL) {
 #   The data layers that have a twin:
 WIDGET_GEOMS <- c(geom_col = "geom_col_interactive", geom_point = "geom_point_interactive", geom_line = "geom_line_interactive",
                   geom_histogram = "geom_histogram_interactive", geom_boxplot = "geom_boxplot_interactive",
-                  geom_tile = "geom_tile_interactive", geom_bin_2d = "geom_bin_2d_interactive", geom_violin = "geom_violin_interactive")
+                  geom_tile = "geom_tile_interactive", geom_bin_2d = "geom_bin_2d_interactive", geom_hex = "geom_hex_interactive", geom_violin = "geom_violin_interactive")
 WIDGET_TIP <- ".tip"        # the columns widget_table() adds to the plotted table: the tooltip text and the hover group
 WIDGET_HOVER <- ".hover"
 WIDGET_SERIES <- ".series"  # ... and, for a line, the tooltip of the line itself: its series (a pointer on the line between two points)
@@ -3156,10 +3176,11 @@ widget_table <- function(s, cb, table) {
 }
 
 # What the statistics of ggplot2 give a tooltip, written with the facts' own formats (these two are in the environment the interactive
-#   plot is evaluated in, as chart_bin_tip() and chart_cell_tip()).
+#   plot is evaluated in, as chart_bin_tip(), chart_cell_tip() and chart_hex_tip()).
 widget_bin_tip <- function(label, lo, hi, count)
   paste0(widget_line(label, paste(fact_num(lo, FALSE), "to", fact_num(hi, FALSE))), "\n", widget_line("Count", fact_count(count)))
 widget_cell_tip <- function(label, count) widget_line(paste(label, "in this cell"), fact_count(count))
+widget_hex_tip <- function(label, count) widget_line(paste(label, "in this hexagon"), fact_count(count))
 
 # `cl` (a call to a layer) with `extra` (an aes() call) added to its mapping.
 widget_with_aes <- function(cl, extra) {
@@ -3182,7 +3203,7 @@ widget_calls <- function(calls, s, cb) {
   stat_tip = if (identical(s$family, "histogram"))
       call("after_stat", call("chart_bin_tip", cb_label(cb, s$x), if (isTRUE(s$log_x)) quote(10^xmin) else quote(xmin),
                               if (isTRUE(s$log_x)) quote(10^xmax) else quote(xmax), quote(count)))
-    else call("after_stat", call("chart_cell_tip", row_word(cb), quote(count)))
+    else call("after_stat", call(if (isTRUE(s$.hex)) "chart_hex_tip" else "chart_cell_tip", row_word(cb), quote(count)))
   # The tooltip and the hover group are discrete, and ggplot2 numbers a mark's group from every discrete aesthetic it has, so a bar of grouped
   #   bars would get a group of its own and be dodged in another order than the picture's. The group is given as the picture's own: the
   #   interaction of the bar's group and its colour (what ggplot2 makes of them: the first varies slowest), its colour only on the bars of a highlight.
@@ -3194,7 +3215,7 @@ widget_calls <- function(calls, s, cb) {
   unlist(purrr::map(calls, function(cl) {
     f = if (is.call(cl) && is.symbol(cl[[1]])) as.character(cl[[1]]) else ""
     if (!f %in% names(WIDGET_GEOMS) || (f == "geom_point" && "shape" %in% names(cl))) return(list(cl))
-    if (f %in% c("geom_histogram", "geom_bin_2d")) return(list(twin(widget_with_aes(cl, stat_mark), f)))
+    if (f %in% c("geom_histogram", "geom_bin_2d", "geom_hex")) return(list(twin(widget_with_aes(cl, stat_mark), f)))
     if (identical(f, "geom_violin")) return(list(twin(widget_with_aes(cl, violin), f)))
     if (!identical(f, "geom_line")) return(list(twin(widget_with_aes(cl, if (identical(f, "geom_col") && is_group) c(as.list(mark), list(group = group)) |> as.call() else mark), f)))
     line = twin(widget_with_aes(cl, aes_call(tooltip = sym(WIDGET_SERIES), data_id = sym(WIDGET_HOVER))), f)
@@ -3428,7 +3449,7 @@ video_role <- function(layer, d, s) {
   geom = class(layer$geom)[[1]]
   if (geom %in% c("GeomText", "GeomLabel", "GeomTextRepel", "GeomLabelRepel", "GeomSegment")) return("label")
   if (identical(geom, "GeomPoint") && nrow(d) && all(d$shape %in% 1)) return("label")
-  switch(geom, GeomCol = , GeomBar = , GeomRect = "bars", GeomLine = "line", GeomSmooth = "curve", GeomBoxplot = "box", GeomViolin = "violin", GeomTile = , GeomBin2d = "tiles",
+  switch(geom, GeomCol = , GeomBar = , GeomRect = "bars", GeomLine = "line", GeomSmooth = "curve", GeomBoxplot = "box", GeomViolin = "violin", GeomTile = , GeomBin2d = , GeomHex = "tiles",
          GeomRug = "rug", GeomPoint = if (identical(s$family, "dot")) "dots" else if (identical(s$family, "slope")) "linepoints" else "points",
          "keep")
 }

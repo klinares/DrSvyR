@@ -83,6 +83,18 @@ app <- tryCatch(shiny::shinyAppDir("."), error = function(e) e)
 check("the app loads through shiny::shinyAppDir(\".\")",
       inherits(app, "shiny.appobj") && is.function(app$serverFuncSource()))
 
+# Phase 10b hexagons: a crowded scatter is hexagons where hexbin is installed and rectangles where it is not (R/spec.R, density_hex_ok(), read each time a
+#   chart is drawn). A check stands in for the absence of hexbin by replacing that one function in the global environment for the length of an expression
+#   (with_hex(FALSE, ...)), and puts the real one back; with_hex(TRUE, ...) is for the work that does not draw (a lint). `hex_here` is whether hexbin is
+#   really installed: the checks of hexagons that draw run only where it is, and say so.
+hex_real <- density_hex_ok
+hex_here <- isTRUE(hex_real())
+with_hex <- function(on, expr) {
+  assign("density_hex_ok", function() on, envir = globalenv())
+  on.exit(assign("density_hex_ok", hex_real, envir = globalenv()))
+  force(expr)
+}
+
 
 # ---- what R/ may hold ------------------------------------------------------------
 
@@ -876,11 +888,15 @@ big <- made_g(3000L, 1)
 huge <- made_g(25000L, 2)
 widget_n <- made_g(6000L, 3)
 l_big <- lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t", density = "off"), big)
-l_huge <- lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t"), huge)
-l_cells <- lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t"), big)
-check("lint: over 2,000 points drawn as points (density off) are drawn transparent, with a note; under density auto, over 2,000 are counted in cells, with a note (Phase 10 Part C moved the switch from 20,000 to 2,000)",
+l_huge <- with_hex(FALSE, lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t"), huge))
+l_cells <- with_hex(FALSE, lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t"), big))
+l_hexes <- with_hex(TRUE, lint_of(list(family = "scatter", x = "a", "y" = "b", title = "t"), big))
+check("lint: over 2,000 points drawn as points (density off) are drawn transparent, with a note; under density auto, over 2,000 are counted in cells (rectangles with no hexbin, hexagons with it, each with its own note) (Phase 10 Part C moved the switch from 20,000 to 2,000; Phase 10b hexagons: both ways)",
       identical(l_big$spec$.alpha, SPEC_ALPHA) && is.null(l_big$spec$.binned) && any(grepl("see-through", l_big$notes)) &&
-        isTRUE(l_huge$spec$.binned) && any(grepl("grid", l_huge$notes)) && isTRUE(l_cells$spec$.binned) && is.null(l_cells$spec$.alpha) && any(grepl("each cell counts rows", l_cells$notes)))
+        isTRUE(l_huge$spec$.binned) && any(grepl("grid", l_huge$notes)) && isTRUE(l_cells$spec$.binned) && is.null(l_cells$spec$.alpha) && any(grepl("each cell counts rows", l_cells$notes)) &&
+        is.null(l_cells$spec$.hex) && is.null(l_huge$spec$.hex) && !any(grepl("hexagon", c(l_cells$notes, l_huge$notes))) &&
+        isTRUE(l_hexes$spec$.binned) && isTRUE(l_hexes$spec$.hex) && is.null(l_hexes$spec$.alpha) && any(grepl("in hexagons: each hexagon counts rows, and the stronger its colour", l_hexes$notes, fixed = TRUE)) &&
+        !any(grepl("cell", l_hexes$notes)))
 l_w <- lint_of(list(family = "scatter", x = "a", "y" = "b", interactive = TRUE, title = "t", density = "off"), widget_n)
 check("lint: interactive with more than 5,000 marks is turned off, with a note",
       identical(l_w$spec$interactive, FALSE) && any(grepl("interactive", l_w$notes)))
@@ -6835,15 +6851,15 @@ check(paste0("9C-7: a bundle of chaRt/ by .rscignore (rsconnect::listDeploymentF
 # The packages the bundle would ask for: every one of APP_PACKAGES, and the ones the app uses without listing (av, svglite, ragg, systemfonts, paletteer), with the dependencies.
 p9c_app_packages <- eval(purrr::keep(as.list(parse("app.R", keep.source = FALSE)), function(e) is.call(e) && identical(as.character(e[[1]]), "<-") && identical(as.character(e[[2]]), "APP_PACKAGES"))[[1]][[3]])
 p9c_pkgs_ok <- function(deps) {
-  need = unique(c(p9c_app_packages, "shiny", "bslib", "purrr", "av", "svglite", "ragg", "systemfonts", "paletteer", "zip", "commonmark"))
+  need = unique(c(p9c_app_packages, "shiny", "bslib", "purrr", "av", "svglite", "ragg", "systemfonts", "paletteer", "zip", "commonmark", if (hex_here) "hexbin"))
   is.data.frame(deps) && all(c("Package", "Version", "Source") %in% names(deps)) && all(need %in% deps$Package) && "ggiraph" %in% need && !"plotly" %in% deps$Package && !anyDuplicated(deps$Package) && all(nzchar(deps$Version))
 }
 p9c_deps <- if (p9c_has_rsconnect) tryCatch(rsconnect:::appDependencies("."), error = function(e) e)
 check(paste0("9C-8: the packages a bundle would ask Connect for (rsconnect:::appDependencies, from the code in the bundle, no server contacted) are ", if (is.data.frame(p9c_deps)) nrow(p9c_deps) else "?", " with their versions, and hold every package of APP_PACKAGES ",
-             "and av, svglite, ragg, systemfonts, paletteer, zip and commonmark, ggiraph (the interactive charts) among them and plotly not (nothing uses it); the check refuses a list without av, one without zip, one without ggiraph and one that adds plotly"),
+             "and av, svglite, ragg, systemfonts, paletteer, zip and commonmark, ggiraph (the interactive charts) among them, and hexbin (the density view's hexagons: app.R names it in a requireNamespace() call, not in APP_PACKAGES) where it is installed, and plotly not (nothing uses it); the check refuses a list without av, one without zip, one without ggiraph, one without hexbin and one that adds plotly"),
       length(p9c_app_packages) >= 15L && p9c_pkgs_ok(p9c_deps) &&
         !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "av", ]) && !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "zip", ]) && !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "ggiraph", ]) &&
-        !p9c_pkgs_ok(rbind(p9c_deps, transform(p9c_deps[1, ], Package = "plotly"))))
+        (!hex_here || !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "hexbin", ])) && !p9c_pkgs_ok(rbind(p9c_deps, transform(p9c_deps[1, ], Package = "plotly"))))
 
 if (run_heavy) {   # the heavy run only: 9C-9 and 9C-10 (the bundle's own files loaded as an app, four times, and its packages worked out twice more); not indented, to keep the diff small
 
@@ -7357,13 +7373,18 @@ b10_big <- file.path(work_dir, "b10_big.csv")
 local({ set.seed(10); n = 25000L; readr::write_csv(data.frame(a = round(stats::rnorm(n), 3), b = round(stats::rnorm(n), 3), g = sample(c("u", "v"), n, replace = TRUE)), b10_big) })
 b10_brd <- reread_data(b10_big, "b10_big.csv", character(0))
 b10_bcb <- utils::modifyList(b10_brd$codebook, list(row_is = "one point"))
-b10_bp <- spec_plot(list(family = "scatter", x = "a", y = "b", title = "t"), b10_brd$read$data, b10_bcb)
-b10_bw <- spec_widget(b10_bp)
-b10_bt <- ggplot2::ggplot_build(attr(b10_bp, "widget_plot")())$data[[1]]
-check("10B-8: a scatter of 25,000 points is drawn as binned counts in the picture and in the interactive version (GeomInteractiveTile on the 2d bin statistic), a cell's tooltip says how many rows it counts and its count is the picture's, and the widget stays small (1,600 cells at most, under 0.5 MB of SVG)",
-      isTRUE(attr(b10_bp, "spec")$.binned) && any(purrr::map_lgl(attr(b10_bp, "widget_plot")()$layers, function(l) identical(class(l$geom)[1], "GeomInteractiveTile") && grepl("Bin2d", class(l$stat)[1]))) &&
-        all(grepl("^Points in this cell: [0-9,]+$", b10_bt$tooltip)) && identical(sum(b10_bt$count), 25000) && identical(b10_bt$count, ggplot2::ggplot_build(b10_bp)$data[[1]]$count) &&
-        nrow(b10_bt) <= 1600L && nchar(b10_bw$x$html) < 0.5 * 1048576 && !length(widget_match(b10_bp, b10_bw)))
+# both ways (Phase 10b hexagons): rectangles with the hexbin branch off (a GeomInteractiveTile on the 2d bin statistic), hexagons with it on (a GeomInteractiveHex on the hex statistic)
+b10_bcase <- function(hex) {
+  bp = with_hex(hex, spec_plot(list(family = "scatter", x = "a", y = "b", title = "t"), b10_brd$read$data, b10_bcb))
+  bw = spec_widget(bp)
+  bt = ggplot2::ggplot_build(attr(bp, "widget_plot")())$data[[1]]
+  isTRUE(attr(bp, "spec")$.binned) && identical(isTRUE(attr(bp, "spec")$.hex), hex) &&
+    any(purrr::map_lgl(attr(bp, "widget_plot")()$layers, function(l) identical(class(l$geom)[1], if (hex) "GeomInteractiveHex" else "GeomInteractiveTile") && grepl(if (hex) "Binhex" else "Bin2d", class(l$stat)[1]))) &&
+    all(grepl(paste0("^Points in this ", if (hex) "hexagon" else "cell", ": [0-9,]+$"), bt$tooltip)) && sum(bt$count) == 25000 && identical(bt$count, ggplot2::ggplot_build(bp)$data[[1]]$count) &&
+    nrow(bt) <= 1600L && nchar(bw$x$html) < 0.5 * 1048576 && !length(widget_match(bp, bw))
+}
+check("10B-8: a scatter of 25,000 points is drawn as binned counts in the picture and in the interactive version, with the hexbin branch off (GeomInteractiveTile on the 2d bin statistic, 'in this cell') and, where hexbin is installed, on (GeomInteractiveHex on the hex statistic, 'in this hexagon'): a tooltip says how many rows it counts and its count is the picture's, and the widget stays small (1,600 cells at most, under 0.5 MB of SVG)",
+      all(purrr::map_lgl(c(FALSE, if (hex_here) TRUE), b10_bcase)))
 
 }   # end of the fast run's Phase 10 Part B
 
@@ -7555,18 +7576,27 @@ c10_n <- function(n) {
 c10_g2000 <- c10_n(2000L); c10_g2001 <- c10_n(2001L); c10_g50 <- c10_n(50L)
 c10_sc <- list(family = "scatter", x = "a", y = "b", title = "t")
 c10_pl <- function(spec, g) { p = c10_plot(spec, g); list(plot = p, spec = attr(p, "spec"), notes = attr(p, "notes"), geoms = unname(purrr::map_chr(p$layers, function(l) class(l$geom)[1]))) }
-c10_p2000 <- c10_pl(c10_sc, c10_g2000); c10_p2001 <- c10_pl(c(c10_sc, list(fit = "loess")), c10_g2001); c10_poff <- c10_pl(c(c10_sc, list(density = "off")), c10_g2001)
-c10_pon <- c10_pl(c(c10_sc, list(density = "on")), c10_g50); c10_phl <- c10_pl(c(c10_sc, list(highlight = list(column = "who", values = list("r5")))), c10_g2001)
-c10_pcol <- c10_pl(list(family = "scatter", x = "units", y = "unit_price", color = "channel", title = "t"), list(data = c10_odata, cb = c10_ocb))
-check("10C-5: density: 2,000 points stay points; 2,001 under auto are counts in cells (a GeomBin2d of cells, then the fitted curve, no point, no see-through, no moving of points), with the legend 'Rows' and a note that each cell counts rows; density off keeps the points, see-through; on counts even 50 points; a highlight keeps the points; a colour is not drawn in cells and the note says so",
-      is.null(c10_p2000$spec$.binned) && identical(c10_p2000$geoms, "GeomPoint") && isTRUE(c10_p2001$spec$.binned) && identical(c10_p2001$geoms, c("GeomBin2d", "GeomSmooth")) &&
-        is.null(c10_p2001$spec$.alpha) && is.null(c10_p2001$spec$.jitter) && identical(ggplot2::get_labs(c10_p2001$plot)$fill, "Rows") &&
-        any(grepl("2,001 points would hide one another, so the chart counts rows in cells of a grid: each cell counts rows", c10_p2001$notes, fixed = TRUE)) &&
-        is.null(c10_poff$spec$.binned) && identical(c10_poff$spec$.alpha, SPEC_ALPHA) && identical(c10_poff$geoms, "GeomPoint") && any(grepl("see-through", c10_poff$notes)) &&
-        isTRUE(c10_pon$spec$.binned) && identical(c10_pon$geoms, "GeomBin2d") && any(grepl("^The chart counts rows in cells of a grid: each cell counts rows", c10_pon$notes)) &&
-        is.null(c10_phl$spec$.binned) && "GeomPoint" %in% c10_phl$geoms && !"GeomBin2d" %in% c10_phl$geoms &&
-        isTRUE(c10_pcol$spec$.binned) && identical(c10_pcol$geoms, "GeomBin2d") && any(grepl("The colour of 'channel' is not drawn in cells", c10_pcol$notes, fixed = TRUE)) &&
-        identical(c10_facts(c(c10_sc, list(density = "on")), c10_g50), c10_facts(c(c10_sc, list(density = "off")), c10_g50)))
+# both ways (Phase 10b hexagons): the whole check once with the hexbin branch off (rectangles: GeomBin2d, 'cells of a grid', 'each cell') and, where hexbin is installed, once on (GeomHex, 'hexagons', 'each hexagon')
+c10_case <- function(hex) with_hex(hex, {
+  mark = if (hex) "GeomHex" else "GeomBin2d"
+  p2000 = c10_pl(c10_sc, c10_g2000); p2001 = c10_pl(c(c10_sc, list(fit = "loess")), c10_g2001); poff = c10_pl(c(c10_sc, list(density = "off")), c10_g2001)
+  pon = c10_pl(c(c10_sc, list(density = "on")), c10_g50); phl = c10_pl(c(c10_sc, list(highlight = list(column = "who", values = list("r5")))), c10_g2001)
+  pcol = c10_pl(list(family = "scatter", x = if (hex) "revenue" else "units", y = "unit_price", color = "channel", title = "t"), list(data = c10_odata, cb = c10_ocb))
+  grid = if (hex) "in hexagons" else "in cells of a grid"
+  each = if (hex) "each hexagon counts rows" else "each cell counts rows"
+  is.null(p2000$spec$.binned) && identical(p2000$geoms, "GeomPoint") && isTRUE(p2001$spec$.binned) && identical(p2001$geoms, c(mark, "GeomSmooth")) && identical(isTRUE(p2001$spec$.hex), hex) &&
+    is.null(p2001$spec$.alpha) && is.null(p2001$spec$.jitter) && identical(ggplot2::get_labs(p2001$plot)$fill, "Rows") &&
+    any(grepl(paste0("2,001 points would hide one another, so the chart counts rows ", grid, ": ", each), p2001$notes, fixed = TRUE)) &&
+    is.null(poff$spec$.binned) && identical(poff$spec$.alpha, SPEC_ALPHA) && identical(poff$geoms, "GeomPoint") && any(grepl("see-through", poff$notes)) &&
+    isTRUE(pon$spec$.binned) && identical(pon$geoms, mark) && any(grepl(paste0("^The chart counts rows ", grid, ": ", each), pon$notes)) &&
+    is.null(phl$spec$.binned) && "GeomPoint" %in% phl$geoms && !mark %in% phl$geoms &&
+    isTRUE(pcol$spec$.binned) && identical(pcol$geoms, mark) && any(grepl(paste0("The colour of 'channel' is not drawn in ", if (hex) "hexagons" else "cells"), pcol$notes, fixed = TRUE)) &&
+    identical(c10_facts(c(c10_sc, list(density = "on")), c10_g50), c10_facts(c(c10_sc, list(density = "off")), c10_g50))
+})
+check("10C-5: density: 2,000 points stay points; 2,001 under auto are counts in cells (rectangles, a GeomBin2d, with the hexbin branch off; hexagons, a GeomHex, where hexbin is installed; then the fitted curve, no point, no see-through, no moving of points), with the legend 'Rows' and a note that each cell (hexagon) counts rows; density off keeps the points, see-through; on counts even 50 points; a highlight keeps the points; a colour is not drawn in cells and the note says so; the facts do not change",
+      all(purrr::map_lgl(c(FALSE, if (hex_here) TRUE), c10_case)))
+# the density chart the gold checks of 10C-14 draw: as the app draws it here (hexagons where hexbin is installed)
+c10_p2001 <- c10_pl(c(c10_sc, list(fit = "loess")), c10_g2001)
 
 # 10C-6: the violin. A group of 30 rows or more is a violin (trimmed to its data, every violin as wide as the widest) with a slim box inside; a group of fewer
 #   rows is a plain box, with a note; with no such group every group is a plain box; the facts do not change
@@ -8165,6 +8195,116 @@ check("10b-12: in Chrome the Replay button under a video is shown by the page's 
                            b10b_replayed$t > 0 && b10b_replayed$t < 2.5 && !isTRUE(b10b_replayed$ended)))
 }   # the heavy run only
 # <<< 10b end
+
+
+# ---- Phase 10b hexagons: the density view as hexagons where hexbin is installed, as rectangles where it is not ----------------------------------
+# >>> 10h begin
+# The decision (R/spec.R, hex_fits() and density_hex_ok(), read each time a chart is drawn): a crowded scatter is hexagons (geom_hex(), 30 across on the scale that is
+#   drawn) when hexbin is installed and each axis has more than 40 different values; an axis of at most 40 is binned at its values, and hexagons cannot sit on values
+#   (they would give back the strips that item 2 of Phase 10b removed), so that chart stays rectangles even with hexbin; with no hexbin every chart is rectangles as it was.
+#   Absence is stood in for by with_hex(FALSE, ...) (top of this file), which replaces density_hex_ok(); where hexbin is really missing the checks that draw hexagons are skipped.
+if (run_fast) {   # the fast run only; not indented, to keep the diff small
+b10h_spec <- list(family = "scatter", x = "unit_price", y = "revenue", fn = "none", fit = "loess", log_x = TRUE, log_y = TRUE, title = "Revenue against unit price.")
+b10h_plot <- function(spec, hex, style = "clean", web = NULL) with_hex(hex, spec_plot(spec, d10_data, d10_cb, d10_pal(style), web = web))
+b10h_r <- b10h_plot(b10h_spec, FALSE)
+b10h_rd <- ggplot2::ggplot_build(b10h_r)$data[[1]]
+b10h_h <- if (hex_here) b10h_plot(b10h_spec, TRUE)
+b10h_hs <- if (hex_here) attr(b10h_h, "spec")
+b10h_hd <- if (hex_here) ggplot2::ggplot_build(b10h_h)$data[[1]]
+b10h_geoms <- function(p) unname(purrr::map_chr(p$layers, function(l) class(l$geom)[1]))
+b10h_n <- sum(!is.na(d10_data$unit_price) & !is.na(d10_data$revenue))
+b10h_axes <- function(nx, ny, hex, n = 600L) {
+  d = tibble::tibble(a = rep_len(seq_len(nx) * 1.5, n), b = rep_len(seq_len(ny) * 2.5, n))
+  with_hex(hex, lint_of(list(family = "scatter", x = "a", y = "b", title = "t", density = "on"), list(data = d, cb = new_codebook(profile_data(d), "axes.csv", n))))$spec
+}
+b10h_live <- if (hex_here) b10h_plot(b10b_spec, TRUE)
+b10h_live_off <- b10h_plot(b10b_spec, FALSE)
+check("10b-13: hexagons when hexbin is installed and each axis has more than 40 different values, else rectangles: two axes of 41 or of 500 values are hexagons (.hex), an axis of exactly 40 values on either side is not (rectangles at its values), and with the hexbin branch off (density_hex_ok() replaced) none is; the live orders chart (unit_price with many values, units with 38) stays rectangles even with hexbin, built data identical to the one with the branch off; the chart of two measures is a GeomHex then the fitted curve (hexagons, no rectangles) where hexbin is installed and a GeomBin2d where it is not; density_hex_ok() is the installed state of hexbin and the switch is put back",
+      isTRUE(b10h_axes(41, 41, TRUE)$.hex) && isTRUE(b10h_axes(500, 500, TRUE)$.hex) && is.null(b10h_axes(40, 41, TRUE)$.hex) && is.null(b10h_axes(41, 40, TRUE)$.hex) &&
+        is.null(b10h_axes(40, 40, TRUE)$.hex) && is.null(b10h_axes(500, 500, FALSE)$.hex) && isTRUE(b10h_axes(500, 500, FALSE)$.binned) && isTRUE(b10h_axes(40, 40, TRUE)$.binned) &&
+        SPEC_BIN_DISTINCT == 40L && identical(density_hex_ok, hex_real) && identical(hex_real(), requireNamespace("hexbin", quietly = TRUE)) &&
+        identical(b10h_geoms(b10h_r), c("GeomBin2d", "GeomSmooth", "GeomSmooth")) && is.null(attr(b10h_r, "spec")$.hex) && isTRUE(attr(b10h_r, "spec")$.binned) &&
+        length(attr(b10h_r, "spec")$.bin_breaks$x) == SPEC_BIN_2D + 1L && sum(b10h_rd$count) == b10h_n &&
+        (!hex_here || (isTRUE(b10h_hs$.hex) && isTRUE(b10h_hs$.binned) && identical(b10h_geoms(b10h_h), c("GeomHex", "GeomSmooth", "GeomSmooth")) && !"GeomBin2d" %in% b10h_geoms(b10h_h) &&
+                         is.null(attr(b10h_live, "spec")$.hex) && identical(b10h_geoms(b10h_live)[1], "GeomBin2d") &&
+                         identical(ggplot2::ggplot_build(b10h_live)$data[[1]], ggplot2::ggplot_build(b10h_live_off)$data[[1]]) && length(attr(b10h_live, "spec")$.bin_breaks$y) == 39L)))
+b10h_ramp <- function(st) {
+  r = chart_style_ramp(st); d = ggplot2::ggplot_build(b10h_plot(b10h_spec, TRUE, st))$data[[1]]
+  identical(toupper(d$fill[which.max(d$count)]), r[7]) && identical(toupper(d$fill[which.min(d$count)]), r[1])
+}
+check("10b-14: the hexagons keep what Phase 10b item 2 set up: counted on the scale that is drawn (30 across: the width of a hexagon is a thirtieth of the range of log10 of the price, and every hexagon is as wide as the next), none empty (every count above 0, the counts add up to the 3,000 orders), the fill the style's own ramp from the least count (light tint) to the most (the accent) in Clean, Briefing and Dark, the legend 'Orders' ('Rows' when the dictionary has no word for a row), the fitted curve in two pieces with no point where there are no orders (none between about 17 and 47), and a note that says hexagons",
+      !hex_here || (nrow(b10h_hd) > 100L && all(b10h_hd$count > 0) && sum(b10h_hd$count) == b10h_n && length(unique(round(b10h_hd$width, 8))) == 1L &&
+                      isTRUE(all.equal(b10h_hd$width[1], diff(log10(range(d10_data$unit_price, na.rm = TRUE))) / SPEC_BIN_2D, tolerance = 1e-6)) &&
+                      isTRUE(all.equal(b10h_hd$height[1], diff(log10(range(d10_data$revenue, na.rm = TRUE))) / SPEC_BIN_2D, tolerance = 1e-6)) &&
+                      all(b10h_hd$x >= log10(min(d10_data$unit_price, na.rm = TRUE)) - b10h_hd$width[1] & b10h_hd$x <= log10(max(d10_data$unit_price, na.rm = TRUE)) + b10h_hd$width[1]) &&
+                      all(purrr::map_lgl(c("clean", "briefing", "dark"), b10h_ramp)) && identical(ggplot2::get_labs(b10h_h)$fill, "Orders") &&
+                      sum(purrr::map_lgl(b10h_h$layers, function(l) inherits(l$geom, "GeomSmooth"))) == 2L &&
+                      all(purrr::map_dbl(ggplot2::ggplot_build(b10h_h)$data[purrr::map_lgl(b10h_h$layers, function(l) inherits(l$geom, "GeomSmooth"))], function(d) mean(10^d$x > 17 & 10^d$x < 47)) == 0) &&
+                      any(grepl("3,000 points would hide one another, so the chart counts rows in hexagons: each hexagon counts rows", attr(b10h_h, "notes"), fixed = TRUE)) &&
+                      identical(ggplot2::get_labs(with_hex(TRUE, spec_plot(b10h_spec, d10_data, utils::modifyList(d10_cb, list(row_is = "one point of one dataset")), d10_pal("clean"))))$fill, "Rows")))
+b10h_w <- if (hex_here) spec_widget(b10h_h)
+b10h_wp <- if (hex_here) attr(b10h_h, "widget_plot")()
+b10h_wd <- if (hex_here) ggplot2::ggplot_build(b10h_wp)$data[[1]]
+b10h_rw <- spec_widget(b10h_r)
+check("10b-15: the interactive chart of the hexagons: its data layer is a GeomInteractiveHex on the hex statistic (ggiraph's geom_hex_interactive, installed and called at start-up by app.R), each hexagon's tooltip is 'Orders in this hexagon: n' with n its count (the picture's counts, in the picture's order), builds with no warning and matches the picture layer for layer (widget_match()); the SVG has a polygon for each hexagon; with the branch off the twin is the cell one ('Orders in this cell') as before",
+      identical(WIDGET_GEOMS[["geom_hex"]], "geom_hex_interactive") && "geom_hex_interactive" %in% getNamespaceExports("ggiraph") && identical(widget_hex_tip("Rows", c(1, 2500)), c("Rows in this hexagon: 1", "Rows in this hexagon: 2,500")) &&
+        grepl("geom_hex_interactive = character(0)", paste(readLines("app.R", warn = FALSE), collapse = "\n"), fixed = TRUE) &&
+        all(grepl("^Orders in this cell: [0-9,]+$", ggplot2::ggplot_build(attr(b10h_r, "widget_plot")())$data[[1]]$tooltip)) && !length(widget_match(b10h_r, b10h_rw)) &&
+        (!hex_here || (any(purrr::map_lgl(b10h_wp$layers, function(l) identical(class(l$geom)[1], "GeomInteractiveHex") && grepl("Binhex", class(l$stat)[1]))) &&
+                         all(grepl("^Orders in this hexagon: [0-9,]+$", b10h_wd$tooltip)) && identical(b10h_wd$tooltip, paste0("Orders in this hexagon: ", fact_count(b10h_hd$count))) && identical(b10h_wd$count, b10h_hd$count) &&
+                         inherits(b10h_w, "girafe") && !length(attr(b10h_w, "warnings")) && !length(widget_match(b10h_h, b10h_w)) &&
+                         lengths(regmatches(b10h_w$x$html, gregexpr("<polygon", b10h_w$x$html, fixed = TRUE))) >= nrow(b10h_hd) && !grepl("in this cell", b10h_w$x$html, fixed = TRUE))))
+# the printed code, run alone in a fresh R process: hexagons when the chart is, rectangles when it is not (and then it never names hexbin)
+b10h_code_r <- spec_code(attr(b10h_r, "spec"), d10_cb, file.path("tests", "data", "orders.csv"), d10_pal("clean"))
+b10h_code_h <- if (hex_here) spec_code(b10h_hs, d10_cb, file.path("tests", "data", "orders.csv"), d10_pal("clean"))
+b10h_runner <- file.path(work_dir, "b10h_run.R")
+writeLines(c("args <- commandArgs(TRUE)",
+             "files <- sort(list.files(args[1], pattern = '^code_.*[.]R$', full.names = TRUE))",
+             "out <- lapply(files, function(f) tryCatch({",
+             "  env <- new.env(parent = globalenv())",
+             "  old <- setwd(args[2]); on.exit(setwd(old))",
+             "  p <- suppressMessages(eval(parse(f, encoding = 'UTF-8'), env))",
+             "  b <- ggplot2::ggplot_build(p)",
+             "  list(geoms = vapply(p$layers, function(l) class(l$geom)[1], ''), rows = vapply(b$data, nrow, 1L), fill = ggplot2::get_labs(p)$fill, count = b$data[[1]]$count)",
+             "}, error = function(e) list(error = conditionMessage(e))))",
+             "saveRDS(out, file.path(args[1], 'out.rds'))"), b10h_runner)
+b10h_run <- function(codes) {
+  dir = file.path(work_dir, "b10h_codes")
+  unlink(dir, recursive = TRUE)
+  dir.create(dir)
+  purrr::iwalk(codes, function(code, i) writeLines(code, file.path(dir, sprintf("code_%02d.R", i)), useBytes = TRUE))
+  system2(file.path(R.home("bin"), "Rscript"), c("--no-init-file", shQuote(b10h_runner), shQuote(dir), shQuote(normalizePath(file.path("tests", "data"), winslash = "/"))), stdout = FALSE, stderr = FALSE)
+  if (file.exists(file.path(dir, "out.rds"))) readRDS(file.path(dir, "out.rds")) else list()
+}
+b10h_runs <- b10h_run(c(list(b10h_code_r), if (hex_here) list(b10h_code_h)))
+check("10b-16: the code printed for the chart runs alone in a fresh R process and gives the card's chart: the rectangles' code has a geom_bin_2d() with its edges and never says hexbin or geom_hex, and runs to the card's cells (same counts); the hexagons' code has geom_hex(bins = 30L) and says in a comment that geom_hex() needs the hexbin package (it does: it is fine for the code to need it), and runs to the card's hexagons (same counts, legend 'Orders')",
+      grepl("geom_bin_2d(breaks = list(", b10h_code_r, fixed = TRUE) && !grepl("hex", b10h_code_r, ignore.case = TRUE) && length(b10h_runs) >= 1L && is.null(b10h_runs[[1]]$error) &&
+        identical(unname(b10h_runs[[1]]$geoms), c("GeomBin2d", "GeomSmooth", "GeomSmooth")) && identical(as.numeric(b10h_runs[[1]]$count), as.numeric(b10h_rd$count)) && identical(b10h_runs[[1]]$fill, "Orders") &&
+        (!hex_here || (grepl("geom_hex(bins = 30L)", b10h_code_h, fixed = TRUE) && !grepl("geom_bin_2d", b10h_code_h, fixed = TRUE) && grepl("# The hexagons are drawn by geom_hex(), which needs the hexbin package", b10h_code_h, fixed = TRUE) &&
+                         length(b10h_runs) == 2L && is.null(b10h_runs[[2]]$error) && identical(unname(b10h_runs[[2]]$geoms), c("GeomHex", "GeomSmooth", "GeomSmooth")) &&
+                         identical(as.numeric(b10h_runs[[2]]$count), as.numeric(b10h_hd$count)) && identical(b10h_runs[[2]]$rows, vapply(ggplot2::ggplot_build(b10h_h)$data, nrow, 1L)) && identical(b10h_runs[[2]]$fill, "Orders"))))
+# the animation: the hexagons come in a column at a time from the left, each fading in; the last frame is the static chart
+b10h_ctx <- if (hex_here) video_context(with_hex(TRUE, video_plot(b10h_spec, d10_data, d10_cb, d10_pal())), d10_cb)
+b10h_frame <- function(p) video_frame(b10h_ctx, p)
+b10h_f0 <- if (hex_here) b10h_frame(0)
+b10h_f3 <- if (hex_here) b10h_frame(0.3)
+b10h_f1 <- if (hex_here) b10h_frame(1)
+b10h_static <- if (hex_here) { cv = attr(b10h_ctx$plot, "canvas"); ggplot2::ggplot_build(with_hex(TRUE, spec_plot(b10h_ctx$spec, d10_data, d10_cb, d10_pal(), web = list(width = cv[["width"]], height = cv[["height"]], bare = FALSE))))$data }
+b10h_png <- function(f, name) { out = file.path(work_dir, name); video_draw(f, out, 4, 2.25, 60); png::readPNG(out) }
+check("10b-17: the motion of the hexagons: the layer is a 'tiles' layer; the first frame has none of them, at 30 per cent some are in (the leftmost columns first, at a strength between 0 and 1 while they come in), the last frame is the static chart (built data identical, layer by layer, to spec_plot() on the same canvas), the scales never move, and the middle frame draws as a picture that is not the first frame's",
+      !hex_here || (identical(b10h_ctx$roles[1], "tiles") && nrow(b10h_f0$data[[1]]) == 0L && nrow(b10h_f3$data[[1]]) > 0L && nrow(b10h_f3$data[[1]]) < nrow(b10h_f1$data[[1]]) &&
+                      any(b10h_f3$data[[1]]$alpha < 1) && all(b10h_f3$data[[1]]$alpha > 0) && isTRUE(all.equal(sort(b10h_f3$data[[1]]$x), sort(b10h_f1$data[[1]]$x)[seq_len(nrow(b10h_f3$data[[1]]))])) &&
+                      identical(b10h_f1$data, b10h_static) && identical(video_scales(b10h_f0), video_scales(b10h_f1)) && identical(video_scales(b10h_f3), video_scales(b10h_f1)) &&
+                      !identical(b10h_png(b10h_f3, "b10h_mid.png"), b10h_png(b10h_f0, "b10h_first.png"))))
+# the facts are the points', never the cells': hexagons change nothing in what the headline may say; and the deployment asks for hexbin without requiring it
+b10h_facts <- function(hex) { p = b10h_plot(b10h_spec, hex); spec_facts(attr(p, "spec"), attr(p, "table"), d10_cb)$text }
+b10h_app_exprs <- as.list(parse("app.R", keep.source = FALSE))
+b10h_pkgs <- eval(purrr::keep(b10h_app_exprs, function(e) is.call(e) && identical(as.character(e[[1]]), "<-") && identical(as.character(e[[2]]), "APP_PACKAGES"))[[1]][[3]])
+b10h_calls <- purrr::keep(b10h_app_exprs, function(e) is.call(e) && identical(e[[1]], quote(requireNamespace)) && identical(e[[2]], "hexbin"))
+check("10b-18: the facts are the same with hexagons and with rectangles (a headline is written from the rows, not from the cells), and app.R names hexbin in a top-level requireNamespace() call, which is what rsconnect reads (tidyr's way), without listing it in APP_PACKAGES, so an absent hexbin stops nothing at start-up (and R/ makes no such call: no file in R/ calls requireNamespace(), which the check of R/ above holds)",
+      (!hex_here || identical(b10h_facts(TRUE), b10h_facts(FALSE))) && length(b10h_calls) == 1L && !"hexbin" %in% b10h_pkgs && "tidyr" %in% b10h_pkgs)
+}   # the fast run only
+# <<< 10h end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
