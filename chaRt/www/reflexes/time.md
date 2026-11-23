@@ -1,6 +1,6 @@
 # Time
 
-Version: 0.1
+Version: 0.2
 
 A measure over time: line, slope.
 
@@ -24,3 +24,17 @@ A measure over time: line, slope.
 - **Say:** Unless the column's label says the amounts are adjusted for inflation, say in `say` that they are not.
 - **Label:** Money over time, as recorded
 - **Source:** Tufte 1983, graphical integrity 4 (deflated and standardised units of money in time series), as presented in SURV727.
+
+### index_to_compare_growth
+- **When:** The question is which series grew faster, and the series differ a lot in size.
+- **Say:** Set `index` to `first`, so every line starts at 100 and its height is growth since the first period.
+- **Never:** Do not index when the question is about amounts, and do not describe an indexed value as an amount.
+- **Label:** Indexed to compare growth
+- **Source:** Design rule of this app; Tufte 1983 on comparing like with like.
+
+### smooth_on_request
+- **When:** The analyst asks for a trend, a moving average or a smoother line in a noisy series.
+- **Say:** Set `smooth` to a number of periods that covers one cycle (12 for monthly data with a yearly cycle, 4 for quarterly). The raw values stay visible behind it.
+- **Never:** Do not smooth on your own, and do not report a smoothed value as if it were a month's value.
+- **Label:** Moving average over raw values
+- **Source:** Design rule of this app (a smoother must not replace the data it summarises).

@@ -2205,7 +2205,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
 DASH_DPI <- 300L                # pixels per inch of the pictures in the file
 DASH_THUMB_DPI <- 40L           # ... and of the small ones in the dialog
 DASH_ROW_FAMILIES <- c("scatter", "bubble", "box")
-DASH_TOTAL_FAMILIES <- c("bar", "dot", "line", "slope", "heatmap")
+DASH_TOTAL_FAMILIES <- c("bar", "dot", "line", "slope", "heatmap", "dumbbell")
 DASH_MODES <- c(Picture = "picture", Interactive = "interactive", Video = "video")   # the dialog offers Video only when this server makes videos (video_available())
 DASH_BOX_CHOICES <- c(rows = "Rows", columns = "Columns", third = "Period, or the file name")
 DASH_DISCLOSURE <- paste("In the interactive version the values of every plotted row are written into the file, so anyone who opens it can read",
@@ -3110,14 +3110,26 @@ METHOD_THUMB_SPECS <- list(
   histogram = list(family = "histogram", x = "revenue"),
   box = list(family = "box", x = "region", y = "price"),
   heatmap = list(family = "heatmap", x = "year", y = "region", color = "price", fn = "mean", labels = "off"),
-  small = list(family = "line", x = "year", y = "revenue", facet = "region", fn = "sum"))
+  small = list(family = "line", x = "year", y = "revenue", facet = "region", fn = "sum"),
+  dumbbell = list(family = "dumbbell", y = "region", x = "revenue", color = "year", fn = "sum",
+                  filter = list(list(column = "year", op = "in", value = c(2015L, 2024L)))),
+  violin = list(family = "box", x = "region", y = "price", shape = "violin"),
+  indexed = list(family = "line", x = "year", y = "revenue", color = "region", fn = "sum", index = "first"),
+  smoothed = list(family = "line", x = "year", y = "revenue", fn = "sum", smooth = 3L),
+  density = list(family = "scatter", x = "units", y = "price", density = "on"))
+# A violin needs groups of at least SPEC_VIOLIN_MIN rows, which the five regions of ten years do not have: its thumbnail is drawn from 40 made-up prices in each region.
+METHOD_THUMB_ROWS <- c("violin")
 METHOD_THUMB_ALT <- c(
   bar = "A small bar chart: one bar for each of five groups.", line = "A small line chart: one line for each of five groups over ten years.",
   slope = "A small slope chart: five groups at two points in time, joined by lines.",
   scatter = "A small scatter chart: one point for each row, with a fitted curve.",
   bubble = "A small bubble chart: five points, the size of each showing a third measure.",
   histogram = "A small histogram: how one measure is spread out.", box = "A small box chart: the spread of one measure for each of five groups.",
-  heatmap = "A small heatmap: one measure in the cells of two groupings.", small = "Small multiples: the same line chart repeated in a panel for each of five groups.")
+  heatmap = "A small heatmap: one measure in the cells of two groupings.", small = "Small multiples: the same line chart repeated in a panel for each of five groups.",
+  dumbbell = "A small dumbbell chart: for each of five groups, two dots joined by a line, one for each of two years.",
+  violin = "A small violin chart: the shape of one measure in each of five groups, with a box inside each.",
+  indexed = "A small indexed line chart: five lines that all start at 100.", smoothed = "A small line chart: a line and its moving average over it.",
+  density = "A small density chart: counts of rows in the cells of a grid, from two measures.")
 METHOD_THUMB_NOTE <- paste("The small pictures are drawn by chaRt from a made-up table of five regions over ten years. They show the form of each",
                            "chart, not a finding.")
 
@@ -3135,6 +3147,14 @@ method_thumb_data <- function() {
   tibble::tibble(region = grid$region, year = grid$year, units = units, price = price, revenue = round(units * price, 2))
 }
 
+# 40 made-up prices in each of the five regions, the same every time and made with no random numbers: a violin's thumbnail needs groups of 30 rows or more.
+method_thumb_rows <- function() {
+  regions = c("North", "South", "East", "West", "Central")
+  grid = expand.grid(i = 1:40, region = regions, stringsAsFactors = FALSE)
+  r = match(grid$region, regions)
+  tibble::tibble(region = grid$region, price = round(8 + 3 * r + 9 * (1 + sin(grid$i * 12.9898 + r * 78.233))^2, 2))
+}
+
 # One thumbnail as a data address, drawn on the device chart_device() opens, as every chart is.
 method_thumb_draw <- function(spec, data, cb) {
   p = spec_plot(spec, data, cb)
@@ -3150,7 +3170,11 @@ method_thumbs <- function() {
     data = method_thumb_data()
     cb = new_codebook(profile_data(data), "made-up table", nrow(data))
     cb$row_is = "one region in one year"
-    METHOD_CACHE$thumbs = purrr::map(METHOD_THUMB_SPECS, function(s) tryCatch(method_thumb_draw(s, data, cb), error = function(e) NULL))
+    rows = method_thumb_rows()
+    cb_rows = new_codebook(profile_data(rows), "made-up table", nrow(rows))
+    cb_rows$row_is = "one price in one region"
+    METHOD_CACHE$thumbs = purrr::imap(METHOD_THUMB_SPECS, function(s, key)
+      tryCatch(if (key %in% METHOD_THUMB_ROWS) method_thumb_draw(s, rows, cb_rows) else method_thumb_draw(s, data, cb), error = function(e) NULL))
   }
   METHOD_CACHE$thumbs
 }

@@ -55,6 +55,11 @@ how the rows were collected.
 | How does a spread differ across groups? | Box | One measure, several groups; medians and ranges side by side. | "How does {measure} vary across {group}?" |
 | How do two groupings combine? | Heatmap | Two category columns and one number per cell. | "Show {measure} by {group} and {group2}." |
 | One pattern, many groups | Small multiples | Any of the above, when there are too many groups for colour. | "Show {measure} in a panel for each {group}." |
+| How much did each group change between two periods or conditions? | Dumbbell | Exactly two periods or conditions and more than a few groups: each group's two dots share one scale, so the gap is read as a length. | "Compare {measure} for each {group} at the two values of {group2}." |
+| What shape does a measure take in each group? | Violin | Only when you ask for the shape: a violin with its box inside, for groups of at least 30 rows. | "Show the shape of {measure} in each {group}, as violins." |
+| Which series grew fastest? | Indexed line | Series that differ a lot in size: each line is divided by its first value, so every line starts at 100. | "Index {measure} over {time} for each {group}, to compare growth." |
+| What is the trend in a noisy series? | Smoothed line | Only when you ask for a trend: a moving average over the raw line, which stays visible in grey. | "Show a 12-period moving average of {measure} over {time}." |
+| Is one measure related to another when there are thousands of rows? | Density | A scatter with more than 2,000 points: R counts rows in cells instead of drawing points that pile up. | "Is {measure} related to {measure2}? Show it as counts in cells." |
 
 You can also change a chart you have selected: "only 2024", "highlight West", "sort by value",
 "use a log scale", "mark the highest point", "remove the numbers on the bars".

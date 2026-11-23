@@ -1,6 +1,6 @@
 # Distribution
 
-Version: 0.1
+Version: 0.2
 
 How one measure is spread: histogram, box.
 
@@ -24,3 +24,10 @@ as general practice where that is what they are.
 - **Never:** Do not use a box for a measure with only a few distinct values.
 - **Label:** Spread across groups as boxes
 - **Source:** General practice; box plots of slices and as scatterplot margins appear in SURV752, Correlation (Slicing; Enhancing Scatterplots: Boxplots), where the class notes a box encodes less of the data than a rug.
+
+### violin_on_request
+- **When:** The analyst asks for the shape of a distribution in each group, or for a violin.
+- **Say:** Use the `box` family with `shape` set to `violin`. The box inside still carries the median and quartiles.
+- **Never:** Do not choose a violin on your own for a first look; a box or a panel of histograms says more with less.
+- **Label:** Violin only when asked
+- **Source:** Design rule of this app (a smoothed density can suggest shape the rows do not support).

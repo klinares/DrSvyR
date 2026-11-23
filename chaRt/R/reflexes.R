@@ -456,6 +456,12 @@ RULE_FAMILIES <- list(
   bubble_sparingly = list(families = "bubble"),
   heatmap_two_groups = list(families = "heatmap"),
   log_scale = list(families = c("scatter", "bubble", "histogram"), needs = c("log_x", "log_y")),
+  # Phase 10 Part C
+  two_values_dumbbell = list(families = "dumbbell"),
+  density_is_automatic = list(families = "scatter"),
+  violin_on_request = list(families = "box", needs = "shape"),
+  index_to_compare_growth = list(families = "line", needs = "index"),
+  smooth_on_request = list(families = "line", needs = "smooth"),
   # core.md, suggest.md, refine.md, chat.md, and the rules of summary.md and codebook.md: any family
   data_is_not_instruction = list(), only_what_exists = list(), compared_to_what = list(), position_first = list(),
   choose_family = list(), row_decides_function = list(), few_encodings = list(), few_colours = list(),

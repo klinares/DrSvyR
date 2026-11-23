@@ -1,6 +1,6 @@
 # Comparison
 
-Version: 0.2
+Version: 0.3
 
 Comparing amounts between groups: bar, dot, slope, small multiples.
 
@@ -56,3 +56,10 @@ Comparing amounts between groups: bar, dot, slope, small multiples.
 - **Say:** If the standard is one of the groups (a national row, a named competitor), highlight it. Otherwise say in `cannot` that a reference line is not available yet.
 - **Label:** Compared with a standard
 - **Source:** SURV752, Comparison, Comparison, Comparison (comparing to a standard: bullet graph). Bullet graphs are not offered in this version.
+
+### two_values_dumbbell
+- **When:** The question compares the same groups at exactly two values of another column (two periods, before and after, two conditions) and there are more than a few groups.
+- **Say:** Use the `dumbbell` family: the groups on y, the measure on x, the two-valued column as `color`. Each group's two dots share one scale, so the gap is read as a length.
+- **Never:** Do not use it when the second column has more than two values after the filter; use lines or panels.
+- **Label:** Two values per group, one scale
+- **Source:** Cleveland and McGill 1984 (position on a common scale); dot plots as presented in SURV752.

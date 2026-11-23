@@ -1,6 +1,6 @@
 # Relationship
 
-Version: 0.1
+Version: 0.2
 
 Two measures against each other: scatter, bubble, heatmap.
 
@@ -57,3 +57,10 @@ Two measures against each other: scatter, bubble, heatmap.
 - **Never:** Do not use a log scale on a measure that has zero or negative values, or on the value axis of a bar.
 - **Label:** Log scale for a wide range
 - **Source:** General practice; not from the course materials.
+
+### density_is_automatic
+- **When:** A scatter would draw thousands of points.
+- **Say:** Leave `density` out or set it to `auto`; R counts rows in cells when the points would pile up. Set `on` or `off` only when the analyst asks.
+- **Never:** Do not sample rows or cut the data to thin a scatter.
+- **Label:** Crowded points shown as counts
+- **Source:** Design rule of this app; overplotting as presented in SURV752.

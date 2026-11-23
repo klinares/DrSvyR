@@ -22,8 +22,8 @@ SPEC_FLIP_BARS <- 8L         # bars, dots or boxes drawn sideways above this man
 SPEC_FLIP_CHARS <- 12L       # ... or when a label is longer than this
 SPEC_COLOURS <- 7L           # more colours than this: the lint speaks
 SPEC_LINES <- 5L             # more lines than this with no highlight or facet: the lint speaks
-SPEC_ALPHA_N <- 2000L        # points above this many are drawn transparent
-SPEC_BIN_N <- 20000L         # points above this many are drawn as binned counts
+SPEC_ALPHA_N <- 2000L        # points above this many are drawn transparent (a scatter: under `density` auto, as binned counts instead)
+SPEC_BIN_N <- 20000L         # a bubble chart's points above this many are drawn as binned counts
 SPEC_WIDGET_N <- 5000L       # marks above this many: no interactive version (each mark is an element of the page with its tooltip)
 SPEC_BINS <- c(5L, 60L)      # a histogram's bins, given or chosen
 SPEC_ALPHA <- 0.3            # transparency of crowded points
@@ -61,20 +61,26 @@ SPEC_CAPTION_WIDTH <- 95L    # the source line breaks past this many characters
 SPEC_OPS_WORDS <- c("==" = "is", "!=" = "is not", ">" = "is more than", ">=" = "is at least", "<" = "is less than", "<=" = "is at most",
                     "in" = "is one of")
 
-SPEC_FAMILIES <- c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap")
+SPEC_FAMILIES <- c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap", "dumbbell")
 SPEC_FNS <- c("none", "count", "share", "sum", "mean", "median")
 SPEC_OPS <- c("==", "!=", ">", ">=", "<", "<=", "in")
 SPEC_SORTS <- c("value_desc", "value_asc", "level_order", "alphabetical")
 SPEC_FITS <- c("none", "loess", "linear")
+SPEC_DENSITY <- c("auto", "off", "on")      # a scatter's crowded points as counts in cells
+SPEC_SHAPES <- c("box", "violin")           # a box chart's marks
+SPEC_INDEX <- c("none", "first")            # a line chart divided by each series' first value
+SPEC_SMOOTH <- c(2L, 24L)                   # a line chart's moving average, in periods ("none" is no average)
+SPEC_VIOLIN_MIN <- 30L                      # a group of fewer rows than this is drawn as a plain box under shape violin
 SPEC_FIELDS <- c("family", "x", "y", "color", "size", "facet", "fn", "filter", "top_n", "sort", "log_x", "log_y",
                  "fit", "rug", "bins", "free_y", "highlight", "title", "subtitle", "caption", "x_label", "y_label",
-                 "interactive", "rule", "say", "midpoint", "labels", "annotate")
+                 "interactive", "rule", "say", "midpoint", "labels", "annotate", "density", "shape", "index", "smooth")
 SPEC_COLUMN_FIELDS <- c("x", "y", "color", "size", "facet")
 SPEC_TEXT_FIELDS <- c("title", "subtitle", "caption", "x_label", "y_label", "rule", "say")
 SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 
 # Fields the lint adds; never accepted from outside.
 SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".cell_labels", ".top_n",
+                      ".violin", ".plain_box", ".index_unit", ".index_start", ".name_room",
                       ".fit_range", ".n_colours", ".annotate", ".value_labels", ".names", ".label_rows", ".repel",
                       ".end_value", ".source", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor",
                       ".fig_width", ".fig_height", ".bare", ".few_breaks", ".facet_cols")
@@ -138,8 +144,8 @@ values_of <- function(v) unlist(v, use.names = FALSE)
 spec_columns <- function(s)
   unique(c(unlist(s[SPEC_COLUMN_FIELDS], use.names = FALSE), s$highlight$column))
 
-# The column top_n and highlight act on in a bar, dot, line or slope.
-ranked_column <- function(s) if (s$family %in% c("bar", "dot")) s$x else s$color
+# The column top_n and highlight act on in a bar, dot, line, slope or dumbbell.
+ranked_column <- function(s) if (s$family %in% c("bar", "dot")) s$x else if (identical(s$family, "dumbbell")) s$y else s$color
 
 
 # ---- defaults ----------------------------------------------------------------------------------
@@ -158,8 +164,16 @@ spec_defaults <- function(spec) {
   s = purrr::reduce(names(d), function(s, k) { if (is.null(s[[k]]) && !is.null(d[[k]])) s[[k]] = d[[k]]; s }, .init = spec)
   # YAML 1.1, which the yaml package follows, reads a bare on or off as TRUE or FALSE: for `labels` they mean on and off.
   if (is_flag1(s$labels)) s$labels = if (s$labels) "on" else "off"
+  if (is_flag1(s$density)) s$density = if (s$density) "on" else "off"
   s
 }
+
+# What the four forms of Phase 10 Part C say, read from the spec: `density` (absent is auto), the moving average's periods (NULL for none or
+#   absent), and whether a line chart is indexed to its first value.
+density_mode <- function(s) s$density %||% "auto"
+smooth_k <- function(s) if (is_whole1(s$smooth)) as.integer(s$smooth)
+index_first <- function(s) identical(s$index, "first")
+violin_shape <- function(s) identical(s$family, "box") && identical(s$shape, "violin")
 
 effective_sort <- function(s, cb) {
   if (!s$family %in% c("bar", "dot", "box")) return(NULL)
@@ -217,11 +231,13 @@ SPEC_FAMILY_ROLES <- list(
   bubble = list(x = "measure", y = "measure", color = "group", size = "measure"),
   histogram = list(x = "measure"),
   box = list(x = "group", y = "measure"),
-  heatmap = list(x = c("group", "time"), y = "group", color = "measure"))
+  heatmap = list(x = c("group", "time"), y = "group", color = "measure"),
+  dumbbell = list(y = c("group", "name"), x = "measure", color = "group"))
 
 # The column fields each family must have.
 SPEC_REQUIRED <- list(bar = "x", dot = "x", line = c("x", "y"), slope = c("x", "y", "color"), scatter = c("x", "y"),
-                      bubble = c("x", "y", "size"), histogram = "x", box = c("x", "y"), heatmap = c("x", "y"))
+                      bubble = c("x", "y", "size"), histogram = "x", box = c("x", "y"), heatmap = c("x", "y"),
+                      dumbbell = c("x", "y", "color"))
 
 # The functions each family allows. `on` names the field whose presence decides: `without` when it
 #   is absent, `with` when it is given; a family with no `on` allows `with` always.
@@ -231,12 +247,13 @@ SPEC_FAMILY_FNS <- list(
   line = list(with = c("sum", "mean", "median", "none")),
   slope = list(with = c("sum", "mean", "median", "none")),
   scatter = list(with = "none"), bubble = list(with = "none"), histogram = list(with = "none"), box = list(with = "none"),
-  heatmap = list(on = "color", without = "count", with = c("sum", "mean", "median")))
+  heatmap = list(on = "color", without = "count", with = c("sum", "mean", "median")),
+  dumbbell = list(with = c("sum", "mean", "median", "none")))
 
 # The families a field is for, when it is not for every family.
 SPEC_FIELD_FAMILIES <- list(
-  facet = setdiff(SPEC_FAMILIES, "slope"),
-  top_n = c("bar", "dot", "line", "slope"),
+  facet = setdiff(SPEC_FAMILIES, c("slope", "dumbbell")),
+  top_n = c("bar", "dot", "line", "slope", "dumbbell"),
   sort = c("bar", "dot", "box"),
   fit = c("scatter", "bubble"),
   rug = "scatter",
@@ -246,7 +263,11 @@ SPEC_FIELD_FAMILIES <- list(
   log_y = c("bar", "dot", "line", "scatter", "bubble", "box"),
   highlight = c("bar", "dot", "line", "slope", "scatter", "bubble"),
   labels = c("bar", "dot", "line", "slope", "scatter", "bubble", "heatmap"),
-  annotate = c("bar", "dot", "line", "scatter", "bubble"))
+  annotate = c("bar", "dot", "line", "scatter", "bubble"),
+  density = "scatter",
+  shape = "box",
+  index = "line",
+  smooth = "line")
 
 # The kinds of column, in words.
 SPEC_KIND_TEXT <- c(group = paste0("a group (category, ordered, flag, or whole numbers with at most ", CODEBOOK_MAX_LEVELS, " values)"),
@@ -310,6 +331,8 @@ spec_check <- function(spec, cb, palette = chart_palette_default()) {
                     " groups. Highlight a few values or use small multiples (facet)."))
     if (identical(f, "x") && identical(fam, "box") && is.null(s$filter) && e$distinct > SPEC_BOX_GROUPS)
       return(paste0("x: '", v, "' has ", e$distinct, " values; a box plot takes at most ", SPEC_BOX_GROUPS, " boxes."))
+    if (identical(f, "color") && identical(fam, "dumbbell") && is.null(s$filter) && e$distinct != 2L)
+      return(paste0("color: '", v, "' has ", e$distinct, " values; a dumbbell compares exactly two. Filter the column to two values, or use lines or small multiples."))
     NULL
   }))
   missing_cols = purrr::compact(purrr::map(SPEC_REQUIRED[[fam]], function(f)
@@ -366,8 +389,37 @@ spec_check <- function(spec, cb, palette = chart_palette_default()) {
       paste0("log_x: only a measure on the x axis of a ", or_list(SPEC_FIELD_FAMILIES$log_x), " can take a log scale."),
     if (isTRUE(s$log_y) && !field_for("log_y", fam))
       paste0("log_y: a ", fam, " chart has no y scale to log."),
-    check_highlight(s, cb), check_labels(s), check_annotate(s))
+    check_highlight(s, cb), check_labels(s), check_annotate(s), check_forms(s))
   unique(out)
+}
+
+# The four forms of Phase 10 Part C (density, shape, index, smooth): each takes its words, is for its family only, and a moving average
+#   takes no highlight and no annotate (a mark would name a raw value on a smoothed chart).
+check_forms <- function(s) {
+  fam = s$family
+  words = function(f, ok) paste0(f, " must be one of ", paste(ok, collapse = ", "), ".")
+  only = function(f, what) paste0(f, ": only a ", or_list(SPEC_FIELD_FAMILIES[[f]]), " chart ", what, " (a ", fam, " chart was given one).")
+  c(if (!is.null(s$density)) {
+      if (!is_text1(s$density) || !s$density %in% SPEC_DENSITY) words("density", SPEC_DENSITY)
+      else if (!field_for("density", fam)) only("density", "counts rows in cells")
+      else if (identical(s$density, "on") && !is.null(s$highlight))
+        "density: counting rows in cells leaves no single point to highlight; use auto or off, or drop the highlight."
+    },
+    if (!is.null(s$shape)) {
+      if (!is_text1(s$shape) || !s$shape %in% SPEC_SHAPES) words("shape", SPEC_SHAPES)
+      else if (!field_for("shape", fam)) only("shape", "has a shape")
+    },
+    if (!is.null(s$index)) {
+      if (!is_text1(s$index) || !s$index %in% SPEC_INDEX) words("index", SPEC_INDEX)
+      else if (!field_for("index", fam)) only("index", "can be indexed")
+    },
+    if (!is.null(s$smooth)) {
+      if (!(is_text1(s$smooth) && identical(s$smooth, "none")) && !(is_whole1(s$smooth) && s$smooth >= SPEC_SMOOTH[1] && s$smooth <= SPEC_SMOOTH[2]))
+        paste0("smooth must be none, or a whole number of periods from ", SPEC_SMOOTH[1], " to ", SPEC_SMOOTH[2], ".")
+      else if (!field_for("smooth", fam)) only("smooth", "takes a moving average")
+      else if (!is.null(smooth_k(s)) && (!is.null(s$highlight) || length(values_of(s$annotate))))
+        "smooth: a chart with a moving average takes no highlight and no annotate; leave them out, or set smooth to none."
+    })
 }
 
 check_highlight <- function(s, cb) {
@@ -430,6 +482,10 @@ spec_reference <- function() {
         annotate = paste0("a list of at most ", SPEC_ANNOTATE_MAX, " of ", paste(SPEC_ANNOTATE, collapse = ", "),
                           ": R finds the point, marks it and writes its value; bar and dot take highest or lowest, scatter and bubble the highest or ",
                           "lowest y, line any of them (for several lines, the highlighted one, else the one with the highest value); never write the text"),
+        density = paste0("one of ", paste(SPEC_DENSITY, collapse = ", "), ": auto counts rows in cells when a scatter has over ", SPEC_ALPHA_N, " points; only when asked"),
+        shape = paste0("one of ", paste(SPEC_SHAPES, collapse = ", "), ": violin shows the shape of each group of ", SPEC_VIOLIN_MIN, " rows or more; only when asked"),
+        index = paste0("one of ", paste(SPEC_INDEX, collapse = ", "), ": first divides each line by its first value, times 100"),
+        smooth = paste0("none, or a whole number from ", SPEC_SMOOTH[1], " to ", SPEC_SMOOTH[2], ": a moving average over the raw line; not with highlight or annotate; only when asked"),
         stop("spec_reference() has no line for the field '", f, "'.", call. = FALSE))
     extra = switch(f, log_x = "; a measure on x", free_y = "; only with facet", "")
     paste0("- ", f, ": ", what, for_text(f), extra)
@@ -483,11 +539,17 @@ filter_call <- function(s, cb) {
 }
 
 # The value column after the aggregation: n, share, or the measure's own name.
-value_name <- function(s) switch(s$fn, count = "n", share = "share",
-  none = if (identical(s$family, "heatmap")) s$color else s$y,
-  if (identical(s$family, "heatmap")) s$color else s$y)
+value_name <- function(s) switch(s$fn, count = "n", share = "share", measure_of(s))
 
-group_columns <- function(s) unique(c(s$x, if (identical(s$family, "heatmap")) s$y else s$color, s$facet))
+# The column that holds the measure when the table is not counted: a heatmap's colour, a dumbbell's x, otherwise y.
+measure_of <- function(s) switch(s$family, heatmap = s$color, dumbbell = s$x, s$y)
+
+group_columns <- function(s) switch(s$family, dumbbell = unique(c(s$y, s$color)),
+  unique(c(s$x, if (identical(s$family, "heatmap")) s$y else s$color, s$facet)))
+
+# The column a line's moving average is written to (Phase 10 Part C), and the column the plot draws as the line's value.
+SMOOTH_COLUMN <- "moving_average"
+plotted_value <- function(s) if (!is.null(smooth_k(s))) SMOOTH_COLUMN else value_name(s)
 
 aggregate_calls <- function(s) {
   fam = s$family
@@ -523,6 +585,17 @@ top_of <- function(s) s$.top_n %||% s$top_n
 
 rank_calls <- function(s, cb) {
   fam = s$family
+  # A dumbbell is sorted by its later value (the later of its colour's two values, the second level), largest on top; top_n keeps the
+  #   first n groups of that order. The colour is made a factor first (its level order, or alphabetical), so that "later" is its larger code.
+  if (identical(fam, "dumbbell")) {
+    col = sym(s$color); y = sym(s$y); v = sym(value_name(s))
+    code = call("as.integer", col)
+    return(c(list(mutate_call(s$color, level_order_call(cb_entry(cb, s$color), s$color))),
+             list(mutate_call(".later", call("sum", call("if_else", call("==", code, call("max", code)), v, 0)), s$y),
+                  call("arrange", call("desc", sym(".later")), y)),
+             if (!is.null(s$top_n)) list(call("filter", call("<=", call("consecutive_id", y), as.numeric(top_of(s))))),
+             list(mutate_call(s$y, call("factor", y, levels = call("unique", y))), call("select", call("-", sym(".later"))))))
+  }
   if (fam %in% c("line", "slope")) {
     if (is.null(s$top_n)) return(NULL)
     col = sym(s$color)
@@ -567,7 +640,7 @@ needs_factor <- function(e) identical(e$type, "ordered") || identical(storage_of
 
 factor_call <- function(s, cb) {
   fam = s$family
-  want = c(if (!is.null(s$color) && !identical(fam, "heatmap")) s$color,
+  want = c(if (!is.null(s$color) && !fam %in% c("heatmap", "dumbbell")) s$color,
            if (!is.null(s$facet) && identical(cb_entry(cb, s$facet)$type, "ordered")) s$facet,
            if (identical(fam, "heatmap") && is_group_like(cb_entry(cb, s$x))) s$x)
   need = unique(c(purrr::keep(want, function(col) needs_factor(cb_entry(cb, col))),
@@ -582,13 +655,39 @@ highlight_call <- function(s, cb) {
   mutate_call("highlighted", call("%in%", sym(h$column), value_call(cb_entry(cb, h$column), h$values)))
 }
 
+# A line chart indexed to its first value (Phase 10 Part C): each series (a colour, a panel, or both) divided by its value at its first x and
+#   multiplied by 100. It comes after top_n, which ranks by the amounts.
+index_calls <- function(s) {
+  if (!index_first(s)) return(NULL)
+  v = value_name(s)
+  by = unique(c(s$color, s$facet))
+  list(as.call(c(list(sym("mutate")),
+                 stats::setNames(list(call("/", call("*", 100, sym(v)), call("first", sym(v), order_by = sym(s$x)))), v),
+                 if (length(by)) list(.by = by_arg(by)))))
+}
+
+# The trailing moving average of the plotted value over `smooth` points of a series, in a column of its own; NA until a series has that many.
+#   Rows are put in the order of x first (the average runs along it).
+smooth_calls <- function(s) {
+  k = smooth_k(s)
+  if (is.null(k)) return(NULL)
+  by = unique(c(s$color, s$facet))
+  avg = call("as.numeric", as.call(list(call("::", sym("stats"), sym("filter")), sym(value_name(s)), call("rep", call("/", 1, as.numeric(k)), as.numeric(k)), sides = 1)))
+  list(call("arrange", sym(s$x)),
+       as.call(c(list(sym("mutate")), stats::setNames(list(avg), SMOOTH_COLUMN), if (length(by)) list(.by = by_arg(by)))))
+}
+
 # The table's steps, as calls without their data argument, in three parts: `base` (the filter and
 #   the rows left out for missing values), `agg` (the aggregation) and `post` (top_n, the order,
-#   factors, the highlight). The data checks run after `base`; ties are counted after `agg`.
-table_steps <- function(s, cb)
+#   the index and the moving average, factors, the highlight). The data checks run after `base`; ties are counted after `agg`; `ranked` is
+#   how many steps of `post` come before the index (the rows the index check reads).
+table_steps <- function(s, cb) {
+  ranked = rank_calls(s, cb)
   list(base = purrr::compact(list(filter_call(s, cb), as.call(c(sym("drop_na"), purrr::map(spec_columns(s), sym))))),
        agg = aggregate_calls(s),
-       post = purrr::compact(c(rank_calls(s, cb), list(factor_call(s, cb), highlight_call(s, cb)))))
+       post = purrr::compact(c(ranked, index_calls(s), smooth_calls(s), list(factor_call(s, cb), highlight_call(s, cb)))),
+       ranked = length(ranked))
+}
 
 # The environment the calls are evaluated in: the exports of dplyr, tidyr, ggplot2 and scales,
 #   over the global environment (where chart_theme() and the rest of R/ live).
@@ -633,8 +732,12 @@ data_checks <- function(s, base, max_colours = chart_palette_max()) {
                      " values after the filter; use top_n (at most ", SPEC_TOP_MAX, ") or a filter that leaves at most ", SPEC_TOP_MAX, "."))
   if (identical(fam, "slope") && nd(s$x) != 2L)
     spec_fail(paste0("x: a slope chart needs exactly two values of '", s$x, "' after the filter; it has ", nd(s$x), "."))
-  if (identical(s$fn, "none") && fam %in% c("bar", "dot", "line", "slope")) {
-    keys = unique(c(s$x, s$color, s$facet))
+  if (identical(fam, "dumbbell") && nd(s$color) != 2L)
+    spec_fail(paste0("color: a dumbbell needs exactly two values of '", s$color, "' after the filter; it has ", nd(s$color), ". Filter the column to two values."))
+  if (identical(fam, "dumbbell") && is.null(s$top_n) && nd(s$y) > SPEC_TOP_MAX)
+    spec_fail(paste0("y: '", s$y, "' has ", nd(s$y), " values after the filter; use top_n (at most ", SPEC_TOP_MAX, ") or a filter that leaves at most ", SPEC_TOP_MAX, "."))
+  if (identical(s$fn, "none") && fam %in% c("bar", "dot", "line", "slope", "dumbbell")) {
+    keys = if (identical(fam, "dumbbell")) unique(c(s$y, s$color)) else unique(c(s$x, s$color, s$facet))
     if (anyDuplicated(base[keys]))
       spec_fail(paste0("fn: with fn none each combination of ", paste0("'", keys, "'", collapse = ", "),
                        " must have one row, but some have more; choose a function such as sum, mean or median."))
@@ -645,6 +748,56 @@ data_checks <- function(s, base, max_colours = chart_palette_max()) {
     if (length(absent))
       spec_fail(paste0("highlight: ", paste0("'", absent, "'", collapse = ", "), if (length(absent) == 1L) " is not a value" else " are not values",
                        " of '", h$column, "' after the filter."))
+  }
+  invisible(TRUE)
+}
+
+# The rules that need the aggregated table (Phase 10 Part C). `agg` is the table after the aggregation, `kept` the rows left after top_n
+#   (the ones drawn). A dumbbell needs both values of its colour for every group. An index needs every line to start at the chart's first
+#   x, with a positive value. A moving average needs every line to have at least that many points. A series is named when its column is
+#   a group (an id or text column's values are never put in a sentence).
+agg_checks <- function(s, cb, agg, kept) {
+  who = function(col, keys) {
+    keys = unique(as.character(keys))
+    if (is_group_like(cb_entry(cb, col)))
+      paste0(if (length(keys) > 3L) paste0(paste0("'", utils::head(keys, 3L), "'", collapse = ", "), " and ", length(keys) - 3L, " more") else paste0("'", keys, "'", collapse = ", "))
+    else paste0(length(keys), if (length(keys) == 1L) " value" else " values", " of '", col, "'")
+  }
+  if (identical(s$family, "dumbbell")) {
+    both = tapply(as.character(kept[[s$color]]), as.character(kept[[s$y]]), function(x) length(unique(x)))
+    one = sum(both < 2L) == 1L
+    if (any(both < 2L))
+      spec_fail(paste0("color: ", who(s$y, names(both)[both < 2L]), if (one) " has" else " have", " only one of the two values of '", s$color,
+                       "', so no gap can be drawn; filter ", if (one) "it" else "them", " out."))
+  }
+  if (!identical(s$family, "line") || (!index_first(s) && is.null(smooth_k(s)))) return(invisible(TRUE))
+  keys = unique(c(s$color, s$facet))
+  series = if (length(keys)) split(seq_len(nrow(kept)), lapply(keys, function(k) as.character(kept[[k]])), drop = TRUE) else list(seq_len(nrow(kept)))
+  col = if (length(keys)) keys[[1]]
+  name_of = function(ix) if (!is.null(col)) as.character(kept[[col]][ix[[1]]]) else "the line"
+  if (index_first(s)) {
+    v = value_name(s)
+    start = min(kept[[s$x]])
+    bad = purrr::keep(series, function(ix) {
+      d = kept[ix, , drop = FALSE]
+      first = d[[v]][which.min(d[[s$x]])]
+      min(d[[s$x]]) != start || !is.finite(first) || first <= 0
+    })
+    one = length(bad) == 1L
+    if (length(bad))
+      spec_fail(paste0("index: ", if (!is.null(col)) who(col, purrr::map_chr(bad, name_of)) else "the line", if (one) " has" else " have",
+                       " no value above zero at the chart's first ", cb_label(cb, s$x), " (the first value is zero, below zero or missing), so ",
+                       if (one) "it" else "they", " cannot be indexed. Leave index out, or filter ", if (one) "it" else "them", " out."))
+  }
+  k = smooth_k(s)
+  if (!is.null(k)) {
+    short = purrr::keep(series, function(ix) length(ix) < k)
+    one = length(short) == 1L
+    if (length(short))
+      spec_fail(paste0("smooth: a moving average of ", k, " periods needs ", k, " points in a line, but ",
+                       if (!is.null(col)) paste0(who(col, purrr::map_chr(short, name_of)), if (one) " has" else " have", " fewer")
+                       else paste0("the line has only ", length(short[[1]])),
+                       "; use a smaller smooth, or filter the short lines out."))
   }
   invisible(TRUE)
 }
@@ -689,9 +842,10 @@ spec_table <- function(spec, data, cb, palette = chart_palette_default()) {
   data_checks(s, base, palette_groups_max(palette))
   agg = run_steps(base, st$agg)
   if (is.null(s$.top_n)) s$.top_n = tie_fit(s, agg)
-  if (!is.null(s$.top_n)) st$post = table_steps(s, cb)$post
+  if (!is.null(s$.top_n)) st <- table_steps(s, cb)
+  if (s$family %in% c("line", "dumbbell")) agg_checks(s, cb, agg, run_steps(agg, st$post[seq_len(st$ranked)]))
   out = run_steps(agg, st$post)
-  ranked = if (s$family %in% c("bar", "dot", "line", "slope")) ranked_column(s)
+  ranked = if (s$family %in% c("bar", "dot", "line", "slope", "dumbbell")) ranked_column(s)
   structure(out, rows_used = nrow(base), rows_dropped = nrow(filtered) - nrow(base),
             groups_total = if (!is.null(ranked)) length(unique(base[[ranked]])) else NA_integer_,
             ties = cut_ties(s, agg, out),
@@ -712,9 +866,21 @@ spec_settle <- function(s, cb, table) {
   }
   top = attr(table, "top")
   if (!is.null(top)) s$.top_n = unname(top[["shown"]])
-  if (!is.null(s$top_n) && is.null(s$subtitle))
-    s$subtitle = paste0("Top ", top_of(s), " of ", attr(table, "groups_total"))
+  # The subtitle R writes when the analyst has not: the top_n's, and a moving average's ("<k>-period moving average; raw values in grey").
+  auto = c(if (!is.null(s$top_n)) paste0("Top ", top_of(s), " of ", attr(table, "groups_total")),
+           if (!is.null(smooth_k(s))) paste0(smooth_k(s), "-period moving average; raw values in grey"))
+  if (length(auto) && is.null(s$subtitle)) s$subtitle = paste(auto, collapse = "; ")
   s
+}
+
+# The word a line's index title uses for its first period: "month" or "quarter" (a series of dates a month or a quarter apart), "year"
+#   (a year apart), otherwise "period".
+index_unit <- function(x) {
+  x = sort(unique(x))
+  p = fact_period(x)
+  if (!is.null(p)) return(p)
+  if (inherits(x, c("Date", "POSIXt")) && length(x) >= 3L && isTRUE(stats::median(as.numeric(diff(as.Date(x)))) %in% c(365, 366))) return("year")
+  "period"
 }
 
 # Whether a curve can be fitted to one group's rows as geom_smooth() fits it, on the scales' own
@@ -778,7 +944,7 @@ mark_count <- function(s, table) {
 #   any two neighbours are closer than SPEC_LABEL_GAP of the y range. With a highlight, only the
 #   highlighted lines are labelled. `order` is the lines from the highest end value down.
 label_plan <- function(s, table) {
-  v = value_name(s)
+  v = plotted_value(s)
   rows = if (!is.null(s$highlight)) table[table$highlighted, , drop = FALSE] else table
   panel = if (!is.null(s$facet) && !identical(s$facet, s$color)) s$facet
   ends = if (identical(s$family, "slope")) rows[as.character(rows[[s$x]]) == levels(table[[s$x]])[2], , drop = FALSE]
@@ -786,7 +952,7 @@ label_plan <- function(s, table) {
   # a label is as tall in a shorter panel but takes a larger share of it: on a drawing made for a screen the gap grows with it
   #   (SPEC_LABEL_GAP is for the panel of the usual 7 by 4.5, 2.6 inches high)
   grow = if (is.null(s$.fig_width)) 1 else max(1, 2.6 / panel_inches(s, table)[["h"]])
-  gap = SPEC_LABEL_GAP * grow * diff(range(table[[v]]))
+  gap = SPEC_LABEL_GAP * grow * diff(range(table[[v]], na.rm = TRUE))
   groups = if (is.null(panel)) list(ends[[v]]) else split(ends[[v]], ends[[panel]])
   close = any(purrr::map_lgl(groups, function(vals) length(vals) > 1L && any(diff(sort(vals)) < gap)))
   list(fits = !close, order = unique(as.character(ends[[s$color]][order(-ends[[v]])])), ends = ends)
@@ -818,6 +984,36 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
                             else paste0("the ", tie[["shown"]], " shown are the first alphabetically.")))
   if (fam %in% c("bar", "dot") && nrow(table) > 1L && length(unique(table[[v]])) == 1L)
     notes = c(notes, "Every value shown is the same.")
+  # An indexed line chart names the period it starts from (Phase 10 Part C); the picture depends on it.
+  if (identical(fam, "line") && index_first(s) && nrow(table)) {
+    first_x = min(table[[s$x]])
+    s$.index_unit = index_unit(table[[s$x]])
+    s$.index_start = fact_time(first_x)
+    notes = c(notes, paste0("Every line is divided by its own value at the first ", s$.index_unit, " (", s$.index_start,
+                            ") and multiplied by 100, so each starts at 100; the picture depends on the starting period."))
+  }
+  if (identical(fam, "line") && !is.null(smooth_k(s)))
+    notes = c(notes, paste0("The grey line is the raw values; the line in colour is their moving average over ", smooth_k(s),
+                            " periods, which starts at the ", smooth_k(s), "th point of a line, so it is shorter than the grey one."))
+  # A dumbbell names its two values above its first row, on either side of its dots, and needs room on the value axis for the names.
+  if (identical(fam, "dumbbell")) {
+    w = 1.15 * 1.4 * max(nchar(as.character(unique(table[[s$color]])))) * SPEC_LABEL_CHAR_END_IN + 0.1     # bold type, and the label stands off its dot
+    s$.name_room = round(max(0.05, 1.02 * w / max(0.5, fig_panel_w(s) - w)), 2)
+  }
+  # A violin (Phase 10 Part C): a group of at least SPEC_VIOLIN_MIN rows is drawn as a violin with its box inside, a group of fewer rows as
+  #   a plain box, because a density drawn from few rows shows a shape that is not there.
+  if (violin_shape(s)) {
+    sizes = tapply(seq_len(nrow(table)), widget_keys(table, c(s$x, s$facet)), length)
+    s$.violin = any(sizes >= SPEC_VIOLIN_MIN)
+    s$.plain_box = any(sizes < SPEC_VIOLIN_MIN)
+    few = gsub("\r", " / ", names(sizes)[sizes < SPEC_VIOLIN_MIN], fixed = TRUE)
+    if (!s$.violin)
+      notes = c(notes, paste0("No group has ", SPEC_VIOLIN_MIN, " rows, so every group is drawn as a plain box: a density from so few rows shows a shape that is not there."))
+    else if (length(few))
+      notes = c(notes, paste0(length(few), if (length(few) == 1L) " group has" else " groups have", " fewer than ", SPEC_VIOLIN_MIN, " rows (",
+                              paste(utils::head(few, 3L), collapse = ", "), if (length(few) > 3L) paste0(" and ", length(few) - 3L, " more"),
+                              "), so ", if (length(few) == 1L) "it is" else "they are", " drawn as a plain box: a density from so few rows shows a shape that is not there."))
+  }
   # Many bars, dots or boxes, or long labels: drawn sideways.
   if (fam %in% c("bar", "dot", "box")) {
     labels = as.character(unique(table[[s$x]]))
@@ -838,6 +1034,7 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
   #   whenever they fit. The value joins the name when both fit SPEC_LABEL_CHARS (a marked last point always carries it:
   #   lint_marks() merges the mark into the end label).
   mode = s$labels %||% "auto"
+  v = plotted_value(s)     # the value the end labels sit at and write: a line's moving average when it has one
   if (fam %in% c("line", "slope") && !is.null(s$color) && !identical(s$color, s$facet)) {
     lab = label_plan(s, table)
     n_lab = if (!is.null(s$highlight)) length(unique(as.character(table[[s$color]][table$highlighted]))) else nd(s$color)
@@ -885,9 +1082,17 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
     keys = table[c(s$x, s$y, s$color)]
     shared = duplicated(keys) | duplicated(keys, fromLast = TRUE)
     jitter = identical(fam, "scatter") && is.null(s$highlight) && n <= SPEC_BIN_N && n > 0L && mean(shared) > SPEC_OVERLAP_SHARE
-    if (n > SPEC_BIN_N) {
+    # Density (Phase 10 Part C): a scatter's points become counts of rows in cells of a grid when `density` is on, or when it is auto and
+    #   the points would pile up (more than SPEC_ALPHA_N, and no highlight, which names single points); a bubble chart's only past SPEC_BIN_N.
+    #   Cells replace the see-through points and the moving of points. ggplot2's geom_bin_2d() draws rectangles (hexagons would need the hexbin package, which is not here).
+    binned = switch(if (identical(fam, "scatter")) density_mode(s) else "bubble",
+                    on = TRUE, off = FALSE, auto = n > SPEC_ALPHA_N && is.null(s$highlight), bubble = n > SPEC_BIN_N)
+    if (binned) {
       s$.binned = TRUE
-      notes = c(notes, paste0(format_num(n), " points would hide one another, so the chart shows how many fall in each cell of a grid."))
+      notes = c(notes, paste0(if (n > SPEC_ALPHA_N) paste0(format_num(n), " points would hide one another, so the chart counts rows in cells of a grid"),
+                              if (n <= SPEC_ALPHA_N) "The chart counts rows in cells of a grid",
+                              ": each cell counts rows, and a darker cell has more of them.",
+                              if (!is.null(s$color)) paste0(" The colour of '", s$color, "' is not drawn in cells; panels (facet) keep its groups apart.")))
     } else if (jitter) {
       s$.jitter = TRUE
       s$.alpha = SPEC_ALPHA
@@ -979,6 +1184,7 @@ check_annotate <- function(s) {
 #   facts' own; the written code carries a copy).
 value_text_call <- function(s, col) {
   comma = s$family %in% c("bar", "dot", "line", "slope", "heatmap")
+  if (index_first(s)) return(call("chart_number", sym(col)))
   switch(s$fn %||% "none",
     count = call("chart_count", sym(col)),
     share = call("chart_fixed", call("*", 100, sym(col)), 1L, "%"),
@@ -1284,8 +1490,12 @@ lint_marks <- function(s, cb, table) {
       at = c(vals[ann_rows], if (show) vals[setdiff(seq_len(n), ann_rows)])
       bold = c(rep(1.12, length(ann_rows)), rep(1, length(texts) - length(ann_rows)))
       parts = strsplit(texts, "\n", fixed = TRUE)
-      long = if (isTRUE(s$.flip)) purrr::map_dbl(parts, function(l) max(nchar(l))) * SPEC_LABEL_CHAR_IN * bold + 0.08
-             else (lengths(parts) + 1.2) * SPEC_LABEL_HEIGHT_IN
+      # a call-out is a box: its padding (0.3 of a line each side, and the border) is more room again than its text
+      pad = c(rep(2 * 0.3 * SPEC_LABEL_HEIGHT_IN + 0.02, length(ann_rows)), rep(0, length(texts) - length(ann_rows)))
+      # upright: a call-out's box stands off its anchor by vjust times the height of its own lines, then is that tall itself
+      up_need = (lengths(parts) + 1.2) * SPEC_LABEL_HEIGHT_IN
+      up_need[seq_along(ann_rows)] = pmax(up_need[seq_along(ann_rows)], (abs(ann_v) + 1) * lengths(parts)[seq_along(ann_rows)] * SPEC_LABEL_HEIGHT_IN)
+      long = if (isTRUE(s$.flip)) purrr::map_dbl(parts, function(l) max(nchar(l))) * SPEC_LABEL_CHAR_IN * bold + 0.08 + pad else up_need + pad
       # A text whose mark ends at share a of the value range needs a / (1 + r) + long / P <= 1 of the panel P, with r the room
       #   (expansion is a share of the data's range): r >= a / (1 - long / P) - 1.
       a = abs(at - (if (all(at >= 0)) lo else 0)) / span
@@ -1363,13 +1573,14 @@ spec_palette <- function(palette = chart_palette_default()) {
   list(qual = qual, max = palette_groups_max(palette),
        seq = chart_sequential(palette$sequential), div = chart_diverging(palette$diverging),
        style = style, single = palette_single(palette_for_n(1L, palette$qualitative, style), style), grey = st$grey, fit = st$fit, outline = st$outline, box_fill = st$box_fill,
+       panel = st$panel, slate = st$text_2,
        rug = st$text_2, label = st$text_2, strong = st$text, fonts = chart_font_values(chart_theme_calls(style)))
 }
 
 # The note for a chart whose groups outnumber the chosen qualitative palette's colours, so it is
 #   drawn with the default palette instead; NULL otherwise.
 palette_note <- function(s, cb, palette = chart_palette_default()) {
-  coloured = !is.null(s$color) && is.null(s$highlight) && !identical(s$family, "heatmap") && !isTRUE(s$.binned)
+  coloured = !is.null(s$color) && is.null(s$highlight) && !s$family %in% c("heatmap", "dumbbell") && !isTRUE(s$.binned)
   if (!coloured) return(NULL)
   n = colour_count(s, cb, s$color)
   q = palette$qualitative
@@ -1407,7 +1618,8 @@ colour_count <- function(s, cb, col) {
 #   facts and the tooltip keep the dictionary's label as it is (title = FALSE), so their words do not change.
 value_label <- function(s, cb, title = FALSE) {
   if (identical(s$family, "histogram")) return("Count")
-  col = if (identical(s$family, "heatmap")) s$color %||% s$y else s$y %||% s$x
+  if (index_first(s)) return(paste0("Index (first ", s$.index_unit %||% "period", " = 100)"))
+  col = if (identical(s$family, "heatmap")) s$color %||% s$y else if (identical(s$family, "dumbbell")) s$x else s$y %||% s$x
   lab = if (title) col_title(cb, col, capital = FALSE) else cb_label(cb, col)
   switch(s$fn, count = "Count", share = "Share of rows", sum = paste("Total", lab), mean = paste("Mean", lab),
          median = paste("Median", lab), if (title) col_title(cb, col) else lab)
@@ -1524,6 +1736,11 @@ time_scale <- function(s, cb, room) {
   as.call(c(list(sym("scale_x_continuous"), breaks = breaks), if (!is.null(expand)) list(expand = expand)))
 }
 
+# The names of a sideways bar or dot chart run down its y axis; the axis stands off its first and last row by 0.6 of a row, and by a whole row when a
+#   call-out of several lines (a phone's) stands beside the last one, so that its box is inside the panel.
+flip_scale <- function(s)
+  as.call(c(list(sym("scale_y_discrete"), limits = sym("rev")), if (length(s$.annotate) && annotation_lines(s)) list(expand = call("expansion", add = 1))))
+
 bar_calls <- function(s, cb, pal) {
   v = value_name(s); flip = isTRUE(s$.flip); col = s$color
   main = if (flip) aes_call(x = v, y = s$x, fill = col) else aes_call(x = s$x, y = v, fill = col)
@@ -1534,7 +1751,7 @@ bar_calls <- function(s, cb, pal) {
                                  call("scale_fill_manual", values = pal$qual(colour_count(s, cb, col))))
     else list(call("geom_col", fill = pal$single))
   c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, if (flip) "x" else "y", TRUE),
-    if (flip) list(call("scale_y_discrete", limits = sym("rev"))))
+    if (flip) list(flip_scale(s)))
 }
 
 dot_calls <- function(s, cb, pal) {
@@ -1546,7 +1763,7 @@ dot_calls <- function(s, cb, pal) {
                                  call("scale_colour_manual", values = pal$qual(colour_count(s, cb, col))))
     else list(call("geom_point", size = 3, colour = pal$single))
   c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, if (flip) "x" else "y", FALSE),
-    if (flip) list(call("scale_y_discrete", limits = sym("rev"))))
+    if (flip) list(flip_scale(s)))
 }
 
 # How much room a time axis leaves on its right for end labels, as a share of the axis: the longest label (characters, at
@@ -1583,7 +1800,7 @@ end_rows <- function(s, extra = NULL) {
 # End labels: drawn only when the lint found that none would touch, so nothing is dropped.
 end_labels <- function(s, rows, colour = NULL) {
   name = if (!is.null(s$color) && !identical(s$color, s$facet)) sym(s$color)
-  num = value_text_call(s, value_name(s))
+  num = value_text_call(s, plotted_value(s))
   value = if (isTRUE(s$.end_value)) num
   # A marked last point: its words join its line's end label (and its value, if the end labels carry none).
   merged = purrr::keep(s$.annotate %||% list(), function(g) isTRUE(g$merged))
@@ -1601,7 +1818,8 @@ end_labels <- function(s, rows, colour = NULL) {
 }
 
 line_calls <- function(s, cb, pal) {
-  v = value_name(s); col = s$color; slope = identical(s$family, "slope")
+  v = plotted_value(s); col = s$color; slope = identical(s$family, "slope")
+  smooth = !is.null(smooth_k(s))
   same = !is.null(col) && identical(col, s$facet)
   labelled = isTRUE(s$.labels)
   legend = !is.null(s$.legend_order)
@@ -1634,6 +1852,14 @@ line_calls <- function(s, cb, pal) {
       list(as.call(c(list(sym("scale_colour_manual"), values = pal$qual(k)), if (legend) list(breaks = s$.legend_order)))),
       if (labelled) list(end_labels(s, end_rows(s)), call("guides", colour = "none")))
   }
+  # A moving average (Phase 10 Part C): the layers above draw the average in the series colour; the raw values are behind them, in the grey.
+  if (smooth) {
+    raw = call("geom_line", aes_call(y = value_name(s)), colour = pal$grey, linewidth = 0.5)
+    layers = purrr::map(layers, function(cl) if (is.call(cl) && identical(cl[[1]], sym("geom_line"))) as.call(c(as.list(cl), list(na.rm = TRUE))) else cl)
+    layers = c(layers[1], list(raw), layers[-1])
+  }
+  # An indexed chart has its rule at 100: where a line is neither above nor below its first period.
+  if (index_first(s)) layers = c(layers, list(call("geom_hline", yintercept = 100, colour = pal$rug, linewidth = 0.4, linetype = "dashed")))
   room = labelled
   xscale = if (slope) as.call(c(list(sym("scale_x_discrete")), if (date_column(cb, s$x)) list(labels = TIME_LABELS_DISCRETE),
                                 list(expand = call("expansion", add = if (room) c(0.3, 0.8) else c(0.3, 0.3)))))
@@ -1652,14 +1878,16 @@ side_labels <- function(s, pal) {
   shown = if (is.null(rows)) quote(highlighted) else call("&", quote(highlighted), call("%in%", quote(row_number()), as.numeric(rows)))
   named = call("filter", call("mutate", sym("chart_table"), label_hjust = hjust), shown)
   if (!shared_repel(s))
-    return(label_layer(s, named, aes_call(label = s$highlight$column, hjust = "label_hjust"), pal$strong, bold = TRUE))
+    return(list(label_layer(s, named, aes_call(label = s$highlight$column, hjust = "label_hjust"), pal$strong, bold = TRUE)))
   # Names and annotations in one layer moved by ggrepel (Phase 7b): layers do not push one another apart, so a name and an
-  #   annotation drawn in two could land on each other.
+  #   annotation drawn in two could land on each other. The annotations are call-outs (boxes with a leader, Phase 10 Part C) and the names
+  #   are not: each row says its own box fill (none for a name) and its border (none for a name).
   words = purrr::map(s$.annotate, function(g)
-    call("mutate", annotation_data(s, g), label_text = annotation_label(s, g), label_hjust = g$hjust))
-  both = as.call(c(list(sym("bind_rows"), call("mutate", named, label_text = call("as.character", sym(s$highlight$column)))), words))
+    call("mutate", annotation_data(s, g), label_text = annotation_label(s, g), label_hjust = 0.5, box_fill = pal$panel, box_line = CALLOUT_LINE))
+  both = as.call(c(list(sym("bind_rows"), call("mutate", named, label_text = call("as.character", sym(s$highlight$column)), label_hjust = 0.5, box_fill = NA_character_, box_line = 0)), words))
   clear = if (!is.null(s$.rug_floor)) list(xlim = c(s$.rug_floor[["x"]], NA), ylim = c(s$.rug_floor[["y"]], NA))
-  do.call(label_layer, c(list(s, both, aes_call(label = "label_text", hjust = "label_hjust"), pal$strong, bold = TRUE), clear), quote = TRUE)
+  list(do.call(callout_layer, c(list(s, both, aes_call(label = "label_text", hjust = "label_hjust", fill = "box_fill", linewidth = "box_line"), pal, per_row = TRUE), clear), quote = TRUE),
+       quote(scale_fill_identity()), quote(scale_linewidth_identity()))
 }
 
 # Whether a scatter's or bubble's names and annotations share one ggrepel layer (ggrepel installed, both drawn).
@@ -1692,11 +1920,14 @@ scatter_calls <- function(s, cb, pal) {
     n = colour_count(s, cb, col)
     purrr::compact(list(call("scale_colour_manual", values = pal$qual(n)), legend_rows("colour", n, solid = length(alpha) > 0L)))
   }
-  geom = if (binned) list(call("geom_bin_2d", bins = SPEC_BIN_2D), call("scale_fill_gradientn", colours = pal$seq))
+  geom = if (binned) list(call("geom_bin_2d", bins = SPEC_BIN_2D),
+                          call("scale_fill_gradientn", colours = pal$seq, breaks = HEAT_BREAKS_FEW, labels = quote(label_comma())),
+                          # a colour bar long enough for its labels, as a heatmap's
+                          call("guides", fill = call("guide_colourbar", theme = call("theme", legend.key.width = call("unit", if (!is.null(s$.fig_width)) min(2.4, fig_panel_w(s) - 0.4) else 2.4, "in")))))
     else if (!is.null(s$highlight))
       c(list(point(data = data_where(quote(!highlighted)), colour = pal$grey),
              point(data = data_where(quote(highlighted)), colour = CHART_HIGHLIGHT)),
-        purrr::compact(list(side_labels(s, pal))))
+        side_labels(s, pal))
     else if (!is.null(col)) c(list(point()), colours)
     else list(point(colour = pal$single))
   c(list(call("ggplot", sym("chart_table"), main)), geom, fit_calls(s, cb, pal),
@@ -1744,9 +1975,46 @@ histogram_calls <- function(s, cb, pal)
 box_calls <- function(s, cb, pal) {
   flip = isTRUE(s$.flip)
   main = if (flip) aes_call(x = s$y, y = s$x) else aes_call(x = s$x, y = s$y)
-  c(list(call("ggplot", sym("chart_table"), main), call("geom_boxplot", fill = pal$box_fill, colour = pal$single, width = 0.6)),
+  # shape violin (Phase 10 Part C): a group of at least SPEC_VIOLIN_MIN rows is a violin (trimmed to its data, every violin as wide as the
+  #   widest) with a slim box inside that carries the median and quartiles; a group of fewer rows stays the plain box.
+  by = by_arg(unique(c(s$x, s$facet)))
+  rows_of = function(op) as.call(list(sym("filter"), sym("chart_table"), call(op, quote(n()), as.numeric(SPEC_VIOLIN_MIN)), .by = by))
+  plain = call("geom_boxplot", fill = pal$box_fill, colour = pal$single, width = 0.6)
+  marks = if (violin_shape(s) && isTRUE(s$.violin))
+    c(list(call("geom_violin", data = rows_of(">="), fill = pal$box_fill, colour = pal$single, trim = TRUE, scale = "width", width = 0.9),
+           call("geom_boxplot", data = rows_of(">="), fill = pal$single, colour = pal$single, width = 0.12, outlier.shape = NA, median.colour = pal$box_fill)),
+      if (isTRUE(s$.plain_box)) list(as.call(c(as.list(plain), list(data = rows_of("<"))))))
+  else list(plain)
+  c(c(list(call("ggplot", sym("chart_table"), main)), marks),
     if (flip) list(call("scale_y_discrete", limits = sym("rev"))),
     if (isTRUE(s$log_y)) list(if (flip) quote(scale_x_log10()) else quote(scale_y_log10())))
+}
+
+# A dumbbell (Phase 10 Part C): for each group on y, two dots on the value's one scale joined by a line, one for each of the two values of
+#   the colour column. The earlier value (the colour's first level) is the slate, the later the accent; the groups are in the order of the
+#   later value (rank_calls()). The legend is replaced by the two names written above the first row, each on the outer side of its dot.
+dumbbell_calls <- function(s, cb, pal) {
+  v = value_name(s); col = sym(s$color); y = sym(s$y)
+  code = call("as.integer", col)
+  at = function(op) call("filter", sym("chart_table"), call("==", code, call(op, code)))
+  top = call("filter", sym("chart_table"), call("==", y, call("[", call("levels", y), 1L)))
+  names_at = call("mutate", top,
+                  label_hjust = call("if_else", call("==", call("rank", sym(v), ties.method = "first"), 1L), 1.15, -0.15),
+                  text_colour = call("if_else", call("==", code, call("min", code)), pal$slate, pal$single))
+  room = s$.name_room %||% 0.12
+  list(call("ggplot", sym("chart_table"), aes_call(x = v, y = s$y)),
+       call("geom_line", aes_call(group = s$y), orientation = "y", colour = pal$grey, linewidth = 1.6),
+       call("geom_point", data = at("min"), colour = pal$slate, size = 3.5),
+       call("geom_point", data = at("max"), colour = pal$single, size = 3.5),
+       call("geom_text", data = names_at, aes_call(label = s$color, hjust = "label_hjust", colour = "text_colour"), vjust = -1.2,
+            size = SPEC_LABEL_MM, family = sym("chart_font"), fontface = "bold"),
+       quote(scale_colour_identity()),
+       # the breaks are inside the data's range (the scale hands its function the range with the room added): a tick at the edge of the room made for
+       #   the names would put its label past the picture's edge
+       call("scale_x_continuous", labels = quote(label_comma()),
+            breaks = substitute(function(x) { r <- range(chart_table$V); b <- breaks_extended()(x); b[b >= r[1] & b <= r[2]] }, list(V = sym(v))),
+            expand = call("expansion", mult = c(room, room))),
+       call("scale_y_discrete", limits = sym("rev"), expand = call("expansion", add = c(0.6, 1))))
 }
 
 # A cell's value in black or white, whichever stands out more against the cell's colour (its
@@ -1799,6 +2067,7 @@ HEAT_BREAKS_FEW <- quote(function(x) {
 
 # Which axis carries the light grid: the value axis.
 grid_of <- function(s) switch(s$family,
+  dumbbell = "x",
   bar = , dot = if (isTRUE(s$.value_labels)) "none" else if (isTRUE(s$.flip)) "x" else "y",
   box = if (isTRUE(s$.flip)) "x" else "y",
   scatter = , bubble = if (isTRUE(s$.binned)) "none" else "xy",
@@ -1816,10 +2085,11 @@ labs_call <- function(s, cb) {
                col_title(cb, s$color),
     fill = if (identical(s$family, "heatmap")) value_label(s, cb, title = TRUE)
            else if (identical(s$family, "bar") && !is.null(s$color) && is.null(s$highlight)) col_title(cb, s$color)
-           else if (isTRUE(s$.binned)) "Count",
+           else if (isTRUE(s$.binned)) "Rows",
     size = if (identical(s$family, "bubble")) col_title(cb, s$size)))
-  # A sideways bar or dot lists names on its y axis; that axis needs no title unless the spec gives one.
-  axes = if (flip && s$family %in% c("bar", "dot")) list(x = yl, y = s$x_label)
+  # A sideways bar or dot lists names on its y axis; that axis needs no title unless the spec gives one (so does a dumbbell's).
+  axes = if (identical(s$family, "dumbbell")) list(x = s$x_label %||% value_label(s, cb, title = TRUE), y = s$y_label)
+         else if (flip && s$family %in% c("bar", "dot")) list(x = yl, y = s$x_label)
          else if (flip) list(x = yl, y = xl) else list(x = xl, y = yl)
   if (is.null(axes$y)) axes = c(axes["x"], list(y = NULL))
   # on a drawing made for a screen an axis title that is wider than its axis is broken into lines (the x title over the panel's
@@ -1870,6 +2140,47 @@ label_layer <- function(s, data, mapping, colour, bold = FALSE, repel = TRUE, ..
   as.call(c(list(quote(ggrepel::geom_text_repel)), fixed,
             list(direction = "both", seed = SPEC_JITTER_SEED, max.overlaps = Inf, box.padding = 0.2, min.segment.length = 0.3,
                  segment.colour = colour, segment.size = 0.3)))
+}
+
+# A call-out (Phase 10 Part C): the words of an `annotate` mark in a small box, the style's text colour on its panel colour with a thin
+#   border, and, where ggrepel moves the box away from its point (a scatter, a bubble, a line), a thin leader to the point (min.segment.length
+#   0, so the leader is always there). A bar's or dot's box stands against the end of its mark, so it needs none; without ggrepel a box
+#   stands beside its point by hjust and vjust. `per_row`: the layer's mapping gives each row its own fill and border (the shared layer of names
+#   and call-outs, where a name has neither).
+CALLOUT_LINE <- 0.25
+callout_layer <- function(s, data, mapping, pal, repel = TRUE, per_row = FALSE, ...) {
+  box = c(list(data = data, mapping), list(family = sym("chart_font"), size = SPEC_LABEL_MM, colour = pal$strong, fontface = "bold",
+                                           label.r = call("unit", 0.15, "lines"), label.padding = call("unit", 0.3, "lines")),
+          if (!per_row) list(fill = pal$panel, linewidth = CALLOUT_LINE), list(...))
+  if (!repel || !isTRUE(s$.repel)) return(as.call(c(list(sym("geom_label")), box)))
+  as.call(c(list(quote(ggrepel::geom_label_repel)), box,
+            list(direction = "both", seed = SPEC_JITTER_SEED, max.overlaps = Inf, box.padding = if (per_row) 0.3 else 0.6,
+                 point.padding = call("unit", if (per_row) 0.3 else 1.4, "lines"), min.segment.length = if (per_row) 0.3 else 0,
+                 segment.colour = pal$strong, segment.size = 0.3)))
+}
+
+# A call-out on a line, scatter or bubble: a box and a thin leader to the point. The box stands off the point by a share of each axis's range
+#   (CALLOUT_OFFSET: along x away from the nearer edge, along y above or below as the Phase 7b rules say, g$hjust and g$vjust), the leader runs from
+#   the point to the box's corner or edge, and the box (fill, then text) is drawn over the leader's end. On a log axis the shift is in log
+#   units. The leader, the ring and the box are three layers of the chart; the code that comes with it draws them as they are.
+CALLOUT_OFFSET <- c(x = 0.05, y = 0.08)
+callout_calls <- function(s, g, data, pal, ring) {
+  scatter = s$family %in% c("scatter", "bubble")
+  xcol = s$x
+  ycol = if (scatter) s$y else value_name(s)
+  above = g$vjust < 0
+  side = g$hjust
+  shift = function(col, frac, log) {
+    spread = call("diff", call("range", if (log) call("log10", call("$", sym("chart_table"), sym(col))) else call("$", sym("chart_table"), sym(col))))
+    if (log) call("*", sym(col), call("^", 10, call("*", frac, spread))) else call("+", sym(col), call("*", frac, spread))
+  }
+  moved = call("mutate", data,
+               .cx = shift(xcol, if (side == 0) CALLOUT_OFFSET[["x"]] else if (side == 1) -CALLOUT_OFFSET[["x"]] else 0, isTRUE(s$log_x) && scatter),
+               .cy = shift(ycol, if (above) CALLOUT_OFFSET[["y"]] else -CALLOUT_OFFSET[["y"]], isTRUE(s$log_y)))
+  leader = call("geom_segment", data = moved, aes_call(x = xcol, y = ycol, xend = ".cx", yend = ".cy"), inherit.aes = FALSE,
+                colour = pal$strong, linewidth = 0.3)
+  c(list(leader), ring, list(callout_layer(s, moved, aes_call(x = ".cx", y = ".cy", label = annotation_label(s, g)), pal, repel = FALSE,
+                                           inherit.aes = FALSE, hjust = side, vjust = if (above) 0 else 1)))
 }
 
 # The rows of chart_table a label layer draws: all (rows NULL), or those row numbers.
@@ -1925,8 +2236,9 @@ annotation_label <- function(s, g) {
             if (identical(s$family, "line")) list(" (", x_text_call(s, g$x_text), ")"), if (nzchar(tie)) list(tie)))
 }
 
-# What an annotate marks: a ring round a point (line, dot, scatter, bubble; a bar has no point, so only its words),
-#   and its words in bold in the style's text colour, placed by the lint.
+# What an annotate marks (a call-out, Phase 10 Part C): a ring round a point (line, dot, scatter, bubble; a bar has no point, so only its box),
+#   and its words in bold in a small box, the style's text colour on its panel colour, with a thin leader to the point (callout_calls()); the
+#   side the box stands on is placed by the lint (the Phase 7b rules).
 annotation_calls <- function(s, cb, pal) {
   groups = s$.annotate
   if (!length(groups)) return(list())
@@ -1938,10 +2250,10 @@ annotation_calls <- function(s, cb, pal) {
     if (isTRUE(g$merged)) return(ring)
     # drawn with the names, in one layer (side_labels())
     if (shared_repel(s)) return(ring)
-    # a label moved by ggrepel keeps clear of a rug's band (xlim, ylim in the data's units, worked out by the lint)
-    clear = if (isTRUE(s$.repel) && !is.null(s$.rug_floor)) list(xlim = c(s$.rug_floor[["x"]], NA), ylim = c(s$.rug_floor[["y"]], NA))
-    c(ring, list(do.call(label_layer, c(list(s, data, aes_call(label = annotation_label(s, g)), pal$strong, bold = TRUE,
-                                             repel = !s$family %in% c("bar", "dot"), hjust = g$hjust, vjust = g$vjust), clear), quote = TRUE)))
+    # a bar's or dot's box stands against the end of its mark (the Phase 7b rules: hjust and vjust)
+    if (s$family %in% c("bar", "dot"))
+      return(c(ring, list(callout_layer(s, data, aes_call(label = annotation_label(s, g)), pal, repel = FALSE, hjust = g$hjust, vjust = g$vjust))))
+    c(callout_calls(s, g, data, pal, ring))
   }), recursive = FALSE)
 }
 
@@ -1952,7 +2264,7 @@ mark_calls <- function(s, cb, pal) c(value_label_calls(s, cb, pal), annotation_c
 #   swaps the data layers for their ggiraph twins (widget_calls()); every other layer is the same.
 plot_calls <- function(s, cb, pal = spec_palette(), interactive = FALSE) {
   build = switch(s$family, bar = bar_calls, dot = dot_calls, line = , slope = line_calls, scatter = , bubble = scatter_calls,
-                 histogram = histogram_calls, box = box_calls, heatmap = heatmap_calls)
+                 histogram = histogram_calls, box = box_calls, heatmap = heatmap_calls, dumbbell = dumbbell_calls)
   calls = few_breaks_calls(c(build(s, cb, pal), mark_calls(s, cb, pal), purrr::compact(list(facet_call(s), labs_call(s, cb))), theme_calls(s, pal)), s)
   if (interactive) widget_calls(calls, s, cb) else calls
 }
@@ -2157,7 +2469,8 @@ fact_time <- function(x) {
 
 # The plotted value as the chart's value axis shows it.
 fact_value_fmt <- function(s) {
-  comma = s$family %in% c("bar", "dot", "line", "slope", "heatmap")
+  comma = s$family %in% c("bar", "dot", "line", "slope", "heatmap", "dumbbell")
+  if (index_first(s)) return(function(x) fact_num(x, TRUE))
   switch(s$fn, count = fact_count, share = function(x) fact_pct(100 * x), function(x) fact_num(x, comma))
 }
 
@@ -2204,6 +2517,7 @@ facts_groups <- function(s, t) {
   switch(s$family,
     bar = , dot = , box = n(s$x),
     line = , slope = if (!is.null(s$color)) n(s$color),
+    dumbbell = n(s$y),
     heatmap = paste0(n(s$y), " rows and ", n(s$x), " columns"),
     histogram = if (!is.null(s$facet)) n(s$facet),
     if (length(unique(c(s$color, s$facet)))) n(unique(c(s$color, s$facet))))
@@ -2234,6 +2548,7 @@ facts_head <- function(s, cb, table, nm, exploratory) {
     scatter = , bubble = paste0(lab(s$y), " against ", lab(s$x), if (identical(fam, "bubble")) paste0(", sized by ", lab(s$size))),
     histogram = paste0("Count of rows by ", lab(s$x)),
     box = paste0(lab(s$y), " by ", lab(s$x)),
+    dumbbell = paste0(value_label(s, cb), " by ", lab(s$y), ", at the two values of ", lab(s$color)),
     heatmap = paste0(value_label(s, cb), " by ", lab(s$x), " (columns) and ", lab(s$y), " (rows)"),
     line = , slope = paste0(value_label(s, cb), " by ", lab(s$x), if (!is.null(s$color)) paste0(", one line for each ", lab(s$color))),
     paste0(value_label(s, cb), " by ", lab(s$x)))
@@ -2250,6 +2565,9 @@ facts_head <- function(s, cb, table, nm, exploratory) {
     filters, shown,
     if (!is.null(h)) paste0("Highlighted: ", paste(nm(h$column, values_of(h$values)), collapse = ", "), " (", lab(h$column), ")"),
     if (!identical(s$fit, "none") && fam %in% c("scatter", "bubble")) paste0("Fitted curve: ", if (identical(s$fit, "linear")) "a straight line" else "loess"),
+    if (index_first(s)) paste0("Indexed: every line is divided by its own value at the first ", s$.index_unit %||% "period", " (", fact_time(min(table[[s$x]])),
+                               ") and multiplied by 100, so it starts at 100"),
+    if (!is.null(smooth_k(s))) paste0("Moving average: ", smooth_k(s), " periods; the facts below are of the raw values, and the average at the end of each line is given"),
     paste0("Rows used: ", fact_count(attr(table, "rows_used"))),
     paste0("Rows after the filter: ", fact_count(attr(table, "rows_used") + dropped)),
     if (!is.null(groups)) paste0("Groups shown: ", groups),
@@ -2323,22 +2641,50 @@ facts_lines <- function(s, cb, t, nm, fmt) {
     # A series of fewer than three points has no highest or lowest worth naming.
     extremes = if (n >= SPEC_FACTS_LINE_POINTS) paste0(", highest ", fmt(y[i_hi]), " (", tm[i_hi], "), lowest ", fmt(y[i_lo]), " (", tm[i_lo], ")")
       else paste0(", only ", fact_count(n), if (n == 1L) " point" else " points", ", so no highest or lowest is given")
-    list(name = who, change = y[n] - y[1], highlighted = isTRUE(any(d$highlighted)), points = n,
-         text = paste0(who, ": first ", fmt(y[1]), " (", tm[1], "), last ", fmt(y[n]), " (", tm[n], "), change ",
-                       fmt(y[n] - y[1]), if (y[1] > 0) paste0(" (", fact_pct(100 * (y[n] - y[1]) / y[1]), ")"),
-                       if (y[1] > 0 && y[n] > 0) paste0(", end is ", fact_times(y[n] / y[1]), " times start"),
-                       extremes, fact_year_before(d[[s$x]], y, tm, fmt)))
+    # An indexed line: its index at the end and at its peak (every line starts at 100); the amounts are not in the chart.
+    text = if (index_first(s)) paste0(who, ": index ", fmt(y[1]), " at the start (", tm[1], "), ", fmt(y[n]), " at the end (", tm[n], "), ", fmt(y[i_hi]), " at its peak (", tm[i_hi], ")")
+      else paste0(who, ": first ", fmt(y[1]), " (", tm[1], "), last ", fmt(y[n]), " (", tm[n], "), change ",
+                  fmt(y[n] - y[1]), if (y[1] > 0) paste0(" (", fact_pct(100 * (y[n] - y[1]) / y[1]), ")"),
+                  if (y[1] > 0 && y[n] > 0) paste0(", end is ", fact_times(y[n] / y[1]), " times start"),
+                  extremes, fact_year_before(d[[s$x]], y, tm, fmt))
+    ma = if (!is.null(smooth_k(s))) paste0("Moving average over ", smooth_k(s), " periods, at the end of ", who, " (", tm[n], "): ", fmt(d[[SMOOTH_COLUMN]][n]))
+    list(name = who, change = y[n] - y[1], end = y[n], highlighted = isTRUE(any(d$highlighted)), points = n, text = text, ma = ma)
   })
   pts = purrr::map_int(one, "points")
   per_series = paste0("Points per series: ", if (min(pts) == max(pts)) fact_count(min(pts)) else paste0(fact_count(min(pts)), " to ", fact_count(max(pts))))
   chg = purrr::map_dbl(one, "change")
   keep = fact_lines_keep(chg, purrr::map_lgl(one, "highlighted"))
+  ends = purrr::map_dbl(one, "end")
   c(per_series,
     if (length(keep) < length(one))
       paste0("Lines described: ", length(keep), " of ", length(one), ", the highlighted ones and those with the largest and smallest change"),
     unname(purrr::map_chr(one[keep], "text")),
-    if (length(one) > 1L && max(chg) > 0) paste0("Rose most: ", one[[which.max(chg)]]$name, " (", fmt(max(chg)), ")"),
-    if (length(one) > 1L && min(chg) < 0) paste0("Fell most: ", one[[which.min(chg)]]$name, " (", fmt(min(chg)), ")"))
+    if (index_first(s)) {
+      c(if (length(one) > 1L) paste0("Highest index at the end: ", one[[which.max(ends)]]$name, " (", fmt(max(ends)), ")"),
+        if (length(one) > 1L) paste0("Lowest index at the end: ", one[[which.min(ends)]]$name, " (", fmt(min(ends)), ")"),
+        paste0("Lines above 100 at the end: ", sum(ends > 100), " of ", length(one)))
+    } else c(
+      if (length(one) > 1L && max(chg) > 0) paste0("Rose most: ", one[[which.max(chg)]]$name, " (", fmt(max(chg)), ")"),
+      if (length(one) > 1L && min(chg) < 0) paste0("Fell most: ", one[[which.min(chg)]]$name, " (", fmt(min(chg)), ")")),
+    unname(purrr::map_chr(purrr::compact(purrr::map(one[keep], "ma")), identity)))
+}
+
+# A dumbbell's facts: for each group (in the chart's order, the largest later value first) its two values and their difference, the second
+#   less the first; the largest and the smallest difference; how many groups rose, fell or stayed.
+facts_dumbbell <- function(s, cb, t, nm, fmt) {
+  v = value_name(s)
+  f = t[[s$color]]
+  lv = intersect(levels(f), as.character(f))
+  groups = unique(as.character(t[[s$y]]))
+  at = function(l) { d = t[as.character(f) == l, , drop = FALSE]; stats::setNames(d[[v]], as.character(d[[s$y]]))[groups] }
+  a = at(lv[1]); b = at(lv[2]); diff = b - a
+  shown = nm(s$y, groups)
+  who = function(at) paste(shown[at], collapse = ", ")
+  c(paste0("First value: ", lv[1], "; second value: ", lv[2], " (", cb_label(cb, s$color), ")"),
+    paste0(shown, ": ", lv[1], " ", fmt(a), ", ", lv[2], " ", fmt(b), ", difference ", fmt(diff), ifelse(a > 0, paste0(" (", fact_pct(100 * diff / a), ")"), "")),
+    paste0("Largest difference (second less first): ", who(fact_same(diff, max(diff))), " (", fmt(max(diff)), ")"),
+    paste0("Smallest difference (second less first): ", who(fact_same(diff, min(diff))), " (", fmt(min(diff)), ")"),
+    paste0("Groups where the second value is higher: ", sum(diff > 0), "; lower: ", sum(diff < 0), if (any(diff == 0)) paste0("; equal: ", sum(diff == 0))))
 }
 
 facts_slope <- function(s, cb, t, nm, fmt) {
@@ -2502,6 +2848,7 @@ facts_heatmap <- function(s, cb, t, nm, fmt, rows = NULL) {
 spec_facts <- function(spec, table, cb, exploratory = FALSE, data = NULL) {
   s = spec_settle(spec_defaults(spec_public(spec)), cb, table)
   s$.binned = spec$.binned
+  s$.index_unit = spec$.index_unit
   namer = fact_namer(cb)
   nm = namer$name
   fmt = fact_value_fmt(s)
@@ -2511,6 +2858,7 @@ spec_facts <- function(spec, table, cb, exploratory = FALSE, data = NULL) {
     bar = , dot = facts_bars(s, cb, t, nm, fmt),
     line = facts_lines(s, cb, t, nm, fmt),
     slope = facts_slope(s, cb, t, nm, fmt),
+    dumbbell = facts_dumbbell(s, cb, t, nm, fmt),
     box = facts_box(s, cb, t, nm),
     heatmap = facts_heatmap(s, cb, t, nm, fmt, rows))
   t = as.data.frame(table)
@@ -2537,7 +2885,7 @@ spec_facts <- function(spec, table, cb, exploratory = FALSE, data = NULL) {
 #   The data layers that have a twin:
 WIDGET_GEOMS <- c(geom_col = "geom_col_interactive", geom_point = "geom_point_interactive", geom_line = "geom_line_interactive",
                   geom_histogram = "geom_histogram_interactive", geom_boxplot = "geom_boxplot_interactive",
-                  geom_tile = "geom_tile_interactive", geom_bin_2d = "geom_bin_2d_interactive")
+                  geom_tile = "geom_tile_interactive", geom_bin_2d = "geom_bin_2d_interactive", geom_violin = "geom_violin_interactive")
 WIDGET_TIP <- ".tip"        # the columns widget_table() adds to the plotted table: the tooltip text and the hover group
 WIDGET_HOVER <- ".hover"
 WIDGET_SERIES <- ".series"  # ... and, for a line, the tooltip of the line itself: its series (a pointer on the line between two points)
@@ -2575,10 +2923,14 @@ widget_tips <- function(s, cb, table) {
   fmt = fact_value_fmt(s)
   part = function(col) widget_line(cb_label(cb, col), widget_shown(cb, table, col))
   value = widget_line(value_label(s, cb), fmt(table[[v]]))
+  # a moving average's tooltip gives the average beside the raw value (NA until a line has that many points)
+  average = if (!is.null(smooth_k(s)))
+    list(widget_line(paste0("Moving average over ", smooth_k(s), " periods"), ifelse(is.na(table[[SMOOTH_COLUMN]]), "not yet", fmt(table[[SMOOTH_COLUMN]]))))
   main = switch(fam,
     scatter = , bubble = list(part(s$x), part(s$y)),
     heatmap = list(part(s$x), part(s$y), value),
-    line = , slope = list(widget_line(cb_label(cb, s$x), fact_time(table[[s$x]])), value),
+    line = , slope = c(list(widget_line(cb_label(cb, s$x), fact_time(table[[s$x]])), value), average),
+    dumbbell = list(part(s$y), value),
     list(part(s$x), value))
   shown = c(s$x, if (fam %in% c("scatter", "bubble")) s$y)
   extra = setdiff(unique(c(if (!identical(fam, "heatmap")) s$color, if (identical(fam, "bubble")) s$size, s$facet,
@@ -2615,6 +2967,7 @@ widget_hover <- function(s, table) {
   keys = widget_keys(table, c(s$x, s$facet))
   switch(s$family,
     line = , slope = if (coloured) series(s$color) else rep("s1", n),
+    dumbbell = { y = as.character(table[[s$y]]); paste0("g", match(y, unique(y))) },
     bar = , dot = , scatter = , bubble = if (coloured) series(s$color) else paste0("m", seq_len(n)),
     box = paste0("g", match(keys, unique(keys))),
     paste0("m", seq_len(n)))
@@ -2622,7 +2975,21 @@ widget_hover <- function(s, table) {
 
 # The tooltip of a line or a slope itself (not of one of its points): the name of its colour's value, or, with no colour, what the line shows.
 widget_series <- function(s, cb, table) {
-  if (!s$family %in% c("line", "slope")) return(rep(NA_character_, nrow(table)))
+  if (!s$family %in% c("line", "slope", "dumbbell")) return(rep(NA_character_, nrow(table)))
+  # a dumbbell's line is its group's: both values and the difference (the second less the first)
+  if (identical(s$family, "dumbbell")) {
+    f = table[[s$color]]
+    lv = intersect(levels(f), as.character(f))
+    v = table[[value_name(s)]]
+    fmt = fact_value_fmt(s)
+    y = as.character(table[[s$y]])
+    text = purrr::map_chr(unique(y), function(k) {
+      a = v[y == k & as.character(f) == lv[1]]; b = v[y == k & as.character(f) == lv[2]]
+      paste(c(widget_line(cb_label(cb, s$y), k), widget_line(lv[1], fmt(a)), widget_line(lv[2], fmt(b)),
+              widget_line("Difference (second less first)", fmt(b - a))), collapse = "\n")
+    })
+    return(unname(text[match(y, unique(y))]))
+  }
   if (!is.null(s$color) && !identical(s$color, s$facet)) widget_line(cb_label(cb, s$color), table[[s$color]])
   else rep(widget_esc(value_label(s, cb)), nrow(table))
 }
@@ -2670,13 +3037,16 @@ widget_calls <- function(calls, s, cb) {
   is_group = identical(s$family, "bar") && !is.null(s$color) && is.null(s$highlight)
   group = if (is_group) call("as.integer", call("interaction", sym(s$x), sym(s$color), lex.order = TRUE, drop = TRUE))
   stat_mark = aes_call(tooltip = stat_tip, data_id = call("after_stat", call("paste0", "b", quote(seq_along(count)))))
+  # a violin is one shape for each group of its x, and the tooltip and hover group would renumber the groups: it is given the picture's own (the groups of x present in its rows)
+  violin = c(as.list(mark), list(group = call("as.integer", call("factor", sym(s$x))))) |> as.call()
   unlist(purrr::map(calls, function(cl) {
     f = if (is.call(cl) && is.symbol(cl[[1]])) as.character(cl[[1]]) else ""
     if (!f %in% names(WIDGET_GEOMS) || (f == "geom_point" && "shape" %in% names(cl))) return(list(cl))
     if (f %in% c("geom_histogram", "geom_bin_2d")) return(list(twin(widget_with_aes(cl, stat_mark), f)))
+    if (identical(f, "geom_violin")) return(list(twin(widget_with_aes(cl, violin), f)))
     if (!identical(f, "geom_line")) return(list(twin(widget_with_aes(cl, if (identical(f, "geom_col") && is_group) c(as.list(mark), list(group = group)) |> as.call() else mark), f)))
     line = twin(widget_with_aes(cl, aes_call(tooltip = sym(WIDGET_SERIES), data_id = sym(WIDGET_HOVER))), f)
-    if (identical(s$family, "slope")) return(list(line))
+    if (s$family %in% c("slope", "dumbbell")) return(list(line))
     hit = widget_with_aes(cl, mark)
     hit$linewidth = NULL
     hit$size = WIDGET_HIT_SIZE
@@ -2811,6 +3181,8 @@ spec_size <- function(spec, table) {
   save = if (isTRUE(spec$.bare)) SPEC_BARE_INCHES else 0
   if (isTRUE(spec$.flip) && !is.null(spec$x))
     h = max(h, 1.5 - save + SPEC_ROW_INCHES * length(unique(table[[spec$x]])))
+  if (identical(spec$family, "dumbbell"))
+    h = max(h, 1.9 - save + SPEC_ROW_INCHES * length(unique(table[[spec$y]])))
   if (!is.null(spec$facet)) {
     panels = length(unique(table[[spec$facet]]))
     across = fig_across(spec, panels)
@@ -2898,9 +3270,9 @@ video_staggered <- function(key, panel, m) {
 #   chart), "curve", "box", "tiles", "rug", "label" (text, and the ring round a marked point: they fade in at the end) or "keep".
 video_role <- function(layer, d, s) {
   geom = class(layer$geom)[[1]]
-  if (geom %in% c("GeomText", "GeomLabel", "GeomTextRepel", "GeomLabelRepel")) return("label")
+  if (geom %in% c("GeomText", "GeomLabel", "GeomTextRepel", "GeomLabelRepel", "GeomSegment")) return("label")
   if (identical(geom, "GeomPoint") && nrow(d) && all(d$shape %in% 1)) return("label")
-  switch(geom, GeomCol = , GeomBar = , GeomRect = "bars", GeomLine = "line", GeomSmooth = "curve", GeomBoxplot = "box", GeomTile = "tiles",
+  switch(geom, GeomCol = , GeomBar = , GeomRect = "bars", GeomLine = "line", GeomSmooth = "curve", GeomBoxplot = "box", GeomViolin = "violin", GeomTile = , GeomBin2d = "tiles",
          GeomRug = "rug", GeomPoint = if (identical(s$family, "dot")) "dots" else if (identical(s$family, "slope")) "linepoints" else "points",
          "keep")
 }
@@ -2971,6 +3343,42 @@ video_rug <- function(d, share, allx) {
   d[findInterval(d$x, sort(allx)) <= share * (n + max(2, SPEC_VIDEO_RAMP * n)), , drop = FALSE]
 }
 
+# A violin grows from its middle: its width (the built `violinwidth`, a share of the widest) times the share, a violin that has not
+#   started is not drawn.
+video_violins <- function(d, m) {
+  if (!nrow(d)) return(d)
+  flipped = isTRUE(d$flipped_aes[[1]])
+  # a violin is many rows (its outline), all with one clock: the clock of its first row
+  grp = paste(d$PANEL, d$group)
+  first = !duplicated(grp)
+  kg = video_staggered(if (flipped) -d$y[first] else d$x[first], d$PANEL[first], m)
+  k = kg[match(grp, grp[first])]
+  d$violinwidth = d$violinwidth * k
+  d[k > 0, , drop = FALSE]
+}
+
+# A dumbbell comes in two moves (Phase 10 Part C): the first dots of each row appear, top row first, over the first share of the motion;
+#   then each row's line and second dot travel out from the first dot to their places, again top row first. `first` is the built data of
+#   the first dots (where each row's line starts).
+SPEC_VIDEO_DUMBBELL_FIRST <- 0.3
+video_dumbbell <- function(d, m, role, first) {
+  if (!nrow(d)) return(d)
+  # how far each row has got: the rows of the first dots (one for each group) say the order, so a group's two dots and its line move together
+  at = paste(d$PANEL, d$y)
+  by_row = function(mm) video_staggered(-first$y, first$PANEL, mm)[match(at, paste(first$PANEL, first$y))]
+  if (identical(role, "dumbbell_first")) {
+    k = by_row(video_clamp(m / SPEC_VIDEO_DUMBBELL_FIRST))
+    d$alpha = pmin(ifelse(is.na(d$alpha), 1, d$alpha), video_clamp(4 * k))
+    return(d[k > 0, , drop = FALSE])
+  }
+  k = by_row(video_clamp((m - SPEC_VIDEO_DUMBBELL_FIRST) / (1 - SPEC_VIDEO_DUMBBELL_FIRST)))
+  start = first$x[match(at, paste(first$PANEL, first$y))]
+  moves = abs(d$x - start) > 1e-9
+  d$x = ifelse(moves, start + (d$x - start) * k, d$x)
+  if (identical(role, "dumbbell_second")) d$alpha = pmin(ifelse(is.na(d$alpha), 1, d$alpha), video_clamp(4 * k))
+  d[k > 0, , drop = FALSE]
+}
+
 # A box opens from its median outward: whiskers, quartiles and notches are the median plus their built distance times the share, a
 #   box that has not started is not drawn, and the outlying points come once it is open.
 video_boxes <- function(d, m) {
@@ -3009,6 +3417,13 @@ video_context <- function(p, cb) {
   b = ggplot2::ggplot_build(p)
   s = attr(p, "spec")
   roles = purrr::map_chr(seq_along(p$layers), function(i) video_role(p$layers[[i]], b$data[[i]], s))
+  # a dumbbell's layers: its line, its first dots, its second dots (in the order the plot draws them)
+  if (identical(s$family, "dumbbell")) {
+    dots = which(roles == "dots" | roles == "points")
+    roles[roles == "line"] = "dumbbell_line"
+    roles[dots[1]] = "dumbbell_first"
+    roles[dots[2]] = "dumbbell_second"
+  }
   xs = function(role) unlist(purrr::map(b$data[roles == role], function(d) d$x), use.names = FALSE)
   e = if (!is.null(s$x)) cb_entry(cb, s$x)
   list(plot = p, built = b, spec = s, roles = roles, line_x = if (length(c(xs("line"), xs("linepoints")))) range(c(xs("line"), xs("linepoints")), na.rm = TRUE),
@@ -3036,6 +3451,8 @@ video_layer <- function(ctx, i, ph) {
          rug = video_rug(d, points_share, ctx$point_x),
          box = video_boxes(d, m),
          tiles = video_tiles(d, m, ctx$by_column),
+         violin = video_violins(d, m),
+         dumbbell_first = , dumbbell_second = , dumbbell_line = video_dumbbell(d, m, role, ctx$built$data[[which(ctx$roles == "dumbbell_first")]]),
          d)
 }
 
