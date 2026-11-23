@@ -3,6 +3,7 @@
 tests/*.out
 !tests/live_run_9.out
 !tests/live_run_10.out
+!tests/live_run_10b.out
 tests/gallery.html
 tests/style_sheet.html
 tests/live_gallery.html
@@ -16,3 +17,5 @@ tests/mockup_reference.png
 # Phase 9 Part B: the videos made from stand-in charts, one per family in Clean and in Dark, and the page that shows them all.
 tests/videos/
 tests/videos.html
+# Phase 10b: screenshots of the final live dashboard, for the manager (not committed).
+tests/final_*.png
