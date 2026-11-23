@@ -117,7 +117,7 @@ transform:
   sort: value_desc     # none | value_desc | value_asc | level_order | alphabetical
 scales: {log_x: false, log_y: false}
 fit: none              # scatter only: none | loess | linear
-density: auto          # scatter only: auto | on | off. Crowded points (over 2,000) become counts of rows in cells (30 across on the scale drawn, or at the values of an axis with at most 40; the style's own ramp)
+density: auto          # scatter only: auto | on | off. Crowded points (over 2,000) become counts of rows in cells: hexagons 30 across on the scale drawn when hexbin is installed, else rectangles (and always rectangles, at its values, when an axis has at most 40 different values); the style's own ramp
 shape: box             # box only: box | violin (a violin for groups of 30 rows or more, with its box inside)
 index: none            # line only: none | first (each line divided by its first value, times 100; one panel, so no facet)
 smooth: none           # line only: none, or 2 to 24 periods of moving average, over the raw line in grey

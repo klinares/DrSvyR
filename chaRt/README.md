@@ -24,7 +24,7 @@ survey microdata.
    line"). "Style" sets one of seven styles (Clean, Minimal, Magazine, Data desk, Newspaper, Dark, Briefing: an off-white ground, a hairline grid across the chart, condensed upper-case titles, one deep blue and slate greys) and
    the palettes for every chart. In every style a highlight is the style's accent against its slate grey, and R never colours the largest bar by itself. Beyond bars, lines, scatters, histograms, boxes and heatmaps there are a
    dumbbell (each group's two values, for exactly two periods or conditions, on one scale), a density view
-   (a scatter of more than 2,000 points becomes counts of rows in cells, in the style's own colours, by itself), a violin with its box
+   (a scatter of more than 2,000 points becomes counts of rows, in the style's own colours, by itself: hexagons 30 across when the `hexbin` package is installed, rectangles when it is not, and rectangles at the values of an axis that has at most 40 different values), a violin with its box
    (when you ask for the shape: filled lightly in the series colour, with the outlying rows as dots), lines indexed to 100 at their first period (to compare growth: all in one panel, the lines you highlight in the accent and the others in grey, named at their ends), a moving
    average over the raw line (when you ask for a trend), and call-outs: a marked point is a small box with a
    thin leader. A card can be shown as an interactive chart ("Interactive": the same chart as an SVG, with a tooltip and hover on each mark and no zoom) or a
@@ -95,7 +95,7 @@ install.packages(c("shiny", "bslib", "purrr", "commonmark", "digest", "dplyr", "
 
 These are optional and the app starts without them: `ragg` (the usual chart device), `svglite`
 (SVG files in the export), `systemfonts` (the bundled typefaces), `paletteer` (more palettes) and
-`av` (videos). Built and tested with ellmer 0.4.2 and R 4.6.
+`av` (videos) and `hexbin` (the density view is hexagons with it and rectangles without; `install.packages("hexbin")`; a deployment asks Connect for it when it is installed where the app is published). Built and tested with ellmer 0.4.2 and R 4.6.
 
 From the folder that holds `chaRt/` (the repository root), in R, RStudio or an R terminal:
 
