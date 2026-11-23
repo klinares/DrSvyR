@@ -47,7 +47,8 @@ HEAVY_CHECKS <- c(
   "9C-9: the files of the bundle alone",                                          # the bundle copied alone and loaded as the app
   "9C-10: the checks of the bundle can fail",                                       # three more loads and a package list worked out again
   "10A-13: every frame of the MP4",                                               # a dashboard with a video, the MP4 decoded and read back
-  "10A-14: printed by Chrome")                                                     # the dashboard and the codebook printed to PDF in the Dark style with a long marking
+  "10A-14: printed by Chrome",                                                     # the dashboard and the codebook printed to PDF in the Dark style with a long marking
+  "10B-9: in Chrome the export with ten interactive charts")                       # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
 
 results <- new.env()
 results$all <- logical(0)
@@ -398,17 +399,91 @@ check("every gold spec: spec_plot() builds, and ggplot_build() runs with no erro
       all(purrr::map_lgl(gold_plots, function(r) is.null(r$error) && !length(r$said) && inherits(r$plot, "ggplot"))))
 
 
-# ---- Phase 2: the plotly version of each gold chart -------------------------------------
+# ---- Phase 2: the interactive version of each gold chart (ggiraph, Phase 10 Part B) -------------------
 
 gold_widgets <- purrr::map(gold_plots, function(r) if (inherits(r$plot, "ggplot")) tryCatch(spec_widget(r$plot), error = function(e) e))
 widget_warnings <- unlist(purrr::map2(gold_widgets, gold_plots, function(w, r)
   if (inherits(w, "htmlwidget") && length(attr(w, "warnings"))) paste0(r$name, ": ", attr(w, "warnings"))))
-cat("      ggplotly() warnings: ", if (length(widget_warnings)) "" else "none", "\n", sep = "")
+cat("      girafe() warnings: ", if (length(widget_warnings)) "" else "none", "\n", sep = "")
 purrr::walk(widget_warnings, function(x) cat("        ", x, "\n", sep = ""))
-check("every gold spec: spec_widget() returns an htmlwidget (its warnings, if any, are printed above)",
-      all(purrr::map_lgl(gold_widgets, function(w) inherits(w, "htmlwidget"))))
-check("the widget's mode bar is the download button only",
-      all(purrr::map_lgl(gold_widgets, function(w) identical(w$x$config$modeBarButtons, list(list("toImage"))))))
+# The text of every <text> element of a widget's SVG, as written (the tags cut and the escapes undone), and a text element's attribute.
+svg_texts <- function(w) {
+  m = regmatches(w$x$html, gregexpr("<text[^>]*>[^<]*</text>", w$x$html))[[1]]
+  x = sub("</text>$", "", sub("^<text[^>]*>", "", m))
+  gsub("&amp;", "&", gsub("&gt;", ">", gsub("&lt;", "<", gsub("&quot;", "\"", gsub("&#39;|&apos;", "'", x)))))
+}
+svg_text_attr <- function(w, text, attr) {
+  m = regmatches(w$x$html, gregexpr(paste0("<text[^>]*>", text, "</text>"), w$x$html, fixed = FALSE))[[1]][1]
+  sub(paste0(".*", attr, "='([^']*)'.*"), "\\1", m)
+}
+check("every gold spec: spec_widget() returns a girafe htmlwidget whose SVG carries tooltips and hover groups (its warnings, if any, are printed above)",
+      all(purrr::map_lgl(gold_widgets, function(w) inherits(w, "girafe") && inherits(w, "htmlwidget") && grepl("title='", w$x$html, fixed = TRUE) &&
+                           grepl("data-id='", w$x$html, fixed = TRUE) && grepl("<svg", w$x$html, fixed = TRUE))))
+check("the widget has no toolbar and no zoom: every group of toolbar buttons is hidden (so no download button), zoom stays at 1, a click selects nothing, and the SVG scales with its card (rescale)",
+      all(purrr::map_lgl(gold_widgets, function(w) {
+        s = w$x$settings
+        all(c("selection", "zoom", "misc", "saveaspng") %in% s$toolbar$hidden) && identical(s$zoom$min, 1) && identical(s$zoom$max, 1) &&
+          identical(s$select$type, "none") && isTRUE(s$sizing$rescale) && grepl("opacity:0.25", s$hover_inv$css, fixed = TRUE)
+      })))
+# The interactive version and the picture must match: what the widget's plot is made of is what the picture's plot is made of, layer for layer
+#   (the built data of every layer the picture has), the scales (limits, breaks, labels), the labels (title, subtitle, caption, axis and legend
+#   titles), the theme, the panels and the coordinates, and every word the picture writes (the labels, annotations and the cell values) is a
+#   <text> of the SVG. The widget may have more (the invisible points that carry a line's tooltips), never less. Returns the differences.
+widget_match <- function(p, w = spec_widget(p), wp = attr(p, "widget_plot")()) {
+  bs = ggplot2::ggplot_build(p)
+  bw = ggplot2::ggplot_build(wp)
+  is_hit = function(l) isTRUE(l$aes_params$alpha == 0) && identical(l$aes_params$size, WIDGET_HIT_SIZE)
+  mine = which(!purrr::map_lgl(wp$layers, is_hit))
+  if (length(mine) != length(p$layers)) return(paste0("the picture has ", length(p$layers), " layers and the interactive chart ", length(mine)))
+  layer_diff = purrr::map_chr(seq_along(p$layers), function(i) {
+    ds = bs$data[[i]]; dw = bw$data[[mine[i]]]
+    # `group` is left out for marks (the hover group is a discrete aesthetic, so ggplot2 numbers the groups of a bar or point by it too) and kept for the
+    #   layers a group draws as one thing (a line, a box, a curve): the same rows in the same groups
+    cols = setdiff(names(ds), c("tooltip", "data_id", "group"))
+    if (inherits(p$layers[[i]]$geom, c("GeomPath", "GeomBoxplot", "GeomSmooth")) && !identical(match(ds$group, unique(ds$group)), match(dw$group, unique(dw$group)))) return(paste0("layer ", i, " is grouped differently"))
+    wg = wp$layers[[mine[i]]]
+    # the twin is a subclass of the picture's geom, or (a binned scatter's cells) a twin of its own made from the same statistic
+    if (!inherits(wg$geom, class(p$layers[[i]]$geom)[1]) && !(grepl("^GeomInteractive", class(wg$geom)[1]) && identical(class(wg$stat)[1], class(p$layers[[i]]$stat)[1])))
+      return(paste0("layer ", i, " is not a ", class(p$layers[[i]]$geom)[1]))
+    if (nrow(ds) != nrow(dw)) return(paste0("layer ", i, " has ", nrow(ds), " rows in the picture and ", nrow(dw), " in the interactive chart"))
+    bad = cols[!purrr::map_lgl(cols, function(cn) cn %in% names(dw) && isTRUE(all.equal(ds[[cn]], dw[[cn]])))]
+    if (length(bad)) paste0("layer ", i, " differs in ", paste(bad, collapse = ", ")) else ""
+  })
+  scales_of = function(b) { sc = b$plot$scales$scales; stats::setNames(purrr::map(sc, function(s) list(lim = s$get_limits(), br = s$get_breaks(), lab = s$get_labels(s$get_breaks()))), purrr::map_chr(sc, function(s) paste(s$aesthetics, collapse = "+"))) }
+  ss = scales_of(bs); sw = scales_of(bw)
+  scale_diff = purrr::map_chr(names(ss), function(n) if (!n %in% names(sw)) paste0("the scale ", n, " is missing") else if (!isTRUE(all.equal(ss[[n]], sw[[n]]))) paste0("the scale ", n, " differs") else "")
+  ls = ggplot2::get_labs(bs); lw = ggplot2::get_labs(bw)
+  label_diff = purrr::map_chr(names(ls), function(n) if (!isTRUE(all.equal(ls[[n]], lw[[n]]))) paste0("the label ", n, " differs") else "")
+  other = c(if (!isTRUE(all.equal(p$theme, wp$theme))) "the theme differs", if (!identical(class(p$facet), class(wp$facet))) "the panels differ",
+            if (!identical(class(p$coordinates), class(wp$coordinates))) "the coordinates differ")
+  words = unlist(purrr::map(bs$data, function(d) if ("label" %in% names(d)) unlist(strsplit(as.character(d$label), "\n", fixed = TRUE))))
+  head_words = unlist(strsplit(c(ls$title, ls$subtitle, ls$caption), "
+", fixed = TRUE))
+  seen = trimws(svg_texts(w))
+  text_diff = paste0("the text '", setdiff(trimws(c(words, head_words)), seen), "' is not in the SVG")[seq_len(length(setdiff(trimws(c(words, head_words)), seen)))]
+  out = c(layer_diff, scale_diff, label_diff, other, text_diff)
+  out[nzchar(out)]
+}
+gold_match <- purrr::map2(gold_plots, gold_widgets, function(r, w) if (inherits(r$plot, "ggplot") && inherits(w, "girafe")) tryCatch(widget_match(r$plot, w), error = function(e) paste("error:", conditionMessage(e))) else "no widget")
+purrr::walk2(gold_match, gold_plots, function(m, r) if (length(m)) cat("      does not match: ", r$name, ": ", paste(m, collapse = "; "), "\n", sep = ""))
+# the check can fail: a layer left out, a label left out, a scale changed, a text layer left out each give a difference
+match_mut <- function(p, edit) {
+  q = p; orig = attr(p, "widget_plot")
+  attr(q, "widget_plot") = function() edit(orig())
+  tryCatch(widget_match(q), error = function(e) paste("error:", conditionMessage(e)))
+}
+gold_mut <- local({
+  k = function(pat) purrr::detect(gold_plots, function(r) grepl(pat, r$name, fixed = TRUE))$plot
+  drop_last = function(wp) { wp$layers = wp$layers[-length(wp$layers)]; wp }
+  list(layer = match_mut(k("top 10 political rights"), function(wp) { wp$layers = wp$layers[-1]; wp }),
+       label_layer = match_mut(k("height against weight by foot"), drop_last),
+       title = match_mut(k("top 10 political rights"), function(wp) { wp$labels$title = "Another title"; wp }),
+       scale = match_mut(k("top 10 political rights"), function(wp) wp + ggplot2::scale_y_continuous(limits = c(0, 99))),
+       theme = match_mut(k("top 10 political rights"), function(wp) wp + ggplot2::theme(panel.grid.major = ggplot2::element_line(colour = "red"))))
+})
+check(paste0("every gold spec (", length(gold), ") the interactive version matches the picture: every layer the picture has is in it with the same built data, and the same scales, labels (title, subtitle, caption, axes, legends), theme, panels and coordinates, and every label, annotation and cell value the picture writes is a text of its SVG; the check fails when a layer, a label layer, the title, a scale or the theme is changed in the interactive plot"),
+      all(purrr::map_lgl(gold_match, function(m) !length(m))) && length(gold_match) == length(gold) &&
+        all(purrr::map_lgl(gold_mut, function(m) length(m) > 0L)))
 check("spec_size(): 7 by 4.5 by default, taller for many sideways bars and for rows of panels",
       identical(spec_size(list(family = "bar"), data.frame()), c(width = 7, height = 4.5)) &&
         spec_size(list(family = "bar", x = "a", .flip = TRUE), data.frame(a = letters))[["height"]] > 4.5 &&
@@ -651,17 +726,19 @@ if (!is.null(lat)) check("2b-15: the Latin-1 gold bar draws with those names, an
 if (!is.null(fh_bar) && !is.null(ball_g)) {
   cap = spec_widget(spec_plot(list(family = "bar", x = "Position", title = "A title", subtitle = "A subtitle", caption = "A caption"),
                               ball_g$data, ball_g$cb))
-  check("2b-16: the widget shows the title and the subtitle, and the caption below the chart",
-        grepl("Top 11 of 195", fh_bar$widget$x$layout$title$text, fixed = TRUE) &&
-          grepl("A title", cap$x$layout$title$text, fixed = TRUE) && grepl("A subtitle", cap$x$layout$title$text, fixed = TRUE) &&
-          any(purrr::map_lgl(cap$x$layout$annotations, function(a) identical(a$text, "A caption"))))
+  check("2b-16: the widget's SVG has the title, the subtitle and the caption, in the picture's own words",
+        any(grepl("Top 11 of 195", svg_texts(fh_bar$widget), fixed = TRUE)) &&
+          all(c("A title", "A subtitle", "A caption") %in% svg_texts(cap)))
 }
 if (!is.null(lines8)) {
-  modes = unlist(purrr::map(lines8$widget$x$data, "mode"))
-  check("2b-18: the widget has no direct labels, and shows the legend",
-        !any(grepl("text", modes)) && any(unlist(purrr::map(lines8$widget$x$data, "showlegend"))) &&
-          !any(unlist(purrr::map(lines3$widget$x$data, "mode")) == "text"))
+  w_series <- function(w) regmatches(w$x$html, gregexpr("<polyline[^>]*data-id='s[0-9]+'[^>]*>", w$x$html))[[1]]
+  w_points <- function(w) regmatches(w$x$html, gregexpr("<circle[^>]*fill-opacity='0'[^>]*title='[^']*'[^>]*>", w$x$html))[[1]]
+  check("2b-18: a line chart's widget has one polyline for each line with its own hover group (8 and 3), a tooltip on each point (the invisible points: 80 and 30), the legend, and the names and values at the line ends that the picture has",
+        length(w_series(lines8$widget)) == 8L && length(unique(sub(".*data-id='(s[0-9]+)'.*", "\\1", w_series(lines8$widget)))) == 8L && length(w_points(lines8$widget)) == 80L &&
+          length(w_series(lines3$widget)) == 3L && length(w_points(lines3$widget)) == 30L && all(c("North", "South") %in% svg_texts(lines8$widget)) &&
+          all(unlist(strsplit(as.character(unlist(purrr::map(ggplot2::ggplot_build(lines3$plot)$data, function(d) d$label))), "\n", fixed = TRUE)) %in% svg_texts(lines3$widget)))
 }
+
 
 
 # ---- Phase 2c: palettes ---------------------------------------------------------------------
@@ -1151,7 +1228,7 @@ eval_lines <- unlist(purrr::map(code_files, function(f) {
 }))
 eval_allowed <- c("R/spec.R: eval(pipeline, spec_env(chart_data = data, ...))",
                   "R/spec.R: p = eval(plus_call(plot_calls(ls, cb, pal)), env)",
-                  "R/spec.R: attr(p, \"widget_plot\") = eval(plus_call(plot_calls(ls, cb, pal, widget = TRUE)), env)",
+                  "R/spec.R: eval(plus_call(plot_calls(ls, cb, pal, interactive = TRUE)), wenv)",
                   "R/spec.R: time_labels <- function() eval(TIME_LABELS, baseenv())")
 check(paste0("no file in app.R or R/ turns text into code, and eval() is used only on the calls spec.R builds",
              if (length(text_to_code) || !setequal(eval_lines, eval_allowed))
@@ -1393,7 +1470,7 @@ if (!is.null(ball_g)) {
     ggplot2::ggplot_build(p)
     p
   }, warning = function(w) { a5_said <<- c(a5_said, conditionMessage(w)); invokeRestart("muffleWarning") })
-  a5_layers <- purrr::keep(attr(a5_p, "widget_plot")$layers, function(l) inherits(l$geom, "GeomSmooth"))
+  a5_layers <- purrr::keep(attr(a5_p, "widget_plot")()$layers, function(l) inherits(l$geom, "GeomSmooth"))
   a5_code <- spec_code(attr(a5_p, "spec"), ball_g$cb, ball_g$path)
   a5_none <- spec_plot(list(family = "scatter", x = "Attack", y = "Defence", fit = "linear", title = "t",
                             filter = list(list(column = "Position", op = "==", value = "Goalkeeper"))), ball_g$data, ball_g$cb)
@@ -2212,7 +2289,7 @@ shiny::testServer(mod_explore_server, args = list(state = b_state, ask = b_ask),
   interactive_on <- html("c3_view"); interactive_btn <- html("c3_card")
   c6_set(session, "c3", "interactive", 2)
   c6_set(session, "c3", "code", 1)
-  b_out$views <- grepl("plotly", interactive_on, fixed = TRUE) && cell(interactive_btn, "Static") && grepl("c3_static", html("c3_view"), fixed = TRUE) && sent_n() == n5
+  b_out$views <- grepl("girafe", interactive_on, fixed = TRUE) && cell(interactive_btn, "Static") && grepl("c3_static", html("c3_view"), fixed = TRUE) && sent_n() == n5
 
   # Suggest charts: the fixed message, exploratory charts
   session$setInputs(suggest = 1)
@@ -2276,7 +2353,7 @@ check("6-C 18: Write headlines sends one call with only the charts that have non
       isTRUE(b_out$write) && isTRUE(b_out$write_none))
 check("6-C 19: Undo on a chart whose text was written marks it changed since it was written; Headline on it writes again and clears the mark",
       isTRUE(b_out$undo_marked) && isTRUE(b_out$rewrite))
-check("6-C 20: Interactive swaps in the plotly output (the button then says Static) and Code opens its dialog, neither with a call", isTRUE(b_out$views))
+check("6-C 20: Interactive swaps in the girafe output (the button then says Static) and Code opens its dialog, neither with a call", isTRUE(b_out$views))
 check("6-C 21: Suggest charts sends exactly the suggestion message, its charts are exploratory, and the click shows as the analyst's line in the chat", isTRUE(b_out$suggest))
 check("6-C 22: Style: a palette chosen in its dialog is kept and shared through state, with no call", isTRUE(b_out$style))
 check("6-C 23: Remove takes the chart off the canvas, state and stories; removing the selected chart clears the selection, removing another keeps it", isTRUE(b_out$remove))
@@ -3061,15 +3138,15 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
   b7_drawn <- inherits(b7_np, "ggplot") && !inherits(tryCatch(spec_png(b7_np, b7_np_png), error = function(e) e), "error") && file.size(b7_np_png) > 1000
   b7_code_missing <- if (inherits(b7_np, "ggplot")) spec_code(attr(b7_np, "spec"), pan_g$cb, pan_g$path, b7_pal("newspaper")) else ""
   b7_wid_missing <- if (inherits(b7_np, "ggplot")) spec_widget(b7_np) else NULL
-  b7_fam_missing <- unique(unlist(rapply(b7_wid_missing$x$layout, function(x) x, how = "unlist")[grepl("family", names(unlist(b7_wid_missing$x$layout)))]))
+  b7_fam_missing <- unique(unlist(regmatches(b7_wid_missing$x$html, gregexpr("(?<=font-family=')[^']*", b7_wid_missing$x$html, perl = TRUE))))
   assign("chart_font_available", b7_real_avail, envir = globalenv())
   b7_start_ok <- paste(as.character(start_ui()), collapse = "")
   check("7B-1: with the fonts missing the app still builds, charts draw (static, in the default sans and serif), the written code says it falls back, and Start here says so once; with them there it says nothing",
         inherits(b7_none, "logical") && identical(unname(b7_none), c(FALSE, FALSE)) && b7_miss_page && b7_drawn &&
           identical(b7_chart_font_family_missing, list(sans = "sans", serif = "serif")))
-  check("7B-1: Start here names the missing typefaces exactly once, and the plotly version then asks for the generic fonts, not for a name the browser lacks",
+  check("7B-1: Start here names the missing typefaces exactly once, and the interactive version's SVG then asks for the generic fonts, not for a name the browser lacks",
         lengths(gregexpr("is not available here|are not available here", b7_start))[[1]] == 1L && grepl("Inter and Source Serif 4", b7_start, fixed = TRUE) &&
-          !grepl("not available here", b7_start_ok, fixed = TRUE) && all(grepl("sans-serif|serif", b7_fam_missing)) && !any(b7_fam_missing %in% c("sans")) &&
+          !grepl("not available here", b7_start_ok, fixed = TRUE) && length(b7_fam_missing) >= 1L && all(b7_fam_missing %in% c("sans-serif", "serif")) &&
           grepl("else \"sans\"", b7_code_missing, fixed = TRUE) && grepl("else \"serif\"", b7_code_missing, fixed = TRUE))
 
   # 2. six styles, neutral names
@@ -3215,24 +3292,24 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
           identical(attr(b7_drawn_dark, "table"), attr(b7_drawn_clean, "table")) && identical(attr(b7_drawn_dark, "notes"), attr(b7_drawn_clean, "notes")) &&
           identical(attr(b7_drawn_dark, "spec"), attr(b7_drawn_clean, "spec")))
 
-  # 6. the plotly version and the written code follow the style
-  b7_rgba <- function(hex) { v = grDevices::col2rgb(hex)[, 1]; paste0("rgba(", paste(v, collapse = ","), ",1)") }
+  # 6. the interactive version and the written code follow the style
+  b7_has <- function(x, pat) grepl(pat, x, fixed = TRUE)
   b7_wspec <- list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "A title", subtitle = "A subtitle", caption = "A caption", labels = "off")
   b7_widgets <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) spec_widget(spec_plot(b7_wspec, pan_g$data, pan_g$cb, b7_pal(s))))
-  b7_has <- function(x, pat) grepl(pat, x, fixed = TRUE)
-  check("7B-6: spec_widget() follows the style: the figure's paper and plot colours are the style's, the title's colour and family, the subtitle's colour and the caption's colour are the style's (Source Serif 4 for Newspaper's title and subtitle), and the bundled families come with their generic fallback",
+  b7_face <- function(font, weight) paste0(if (identical(font, "serif")) "Source Serif 4" else "Inter", if (identical(weight, "semibold")) " SemiBold")
+  check("7B-6: spec_widget() follows the style: in the SVG the title's colour and typeface (Source Serif 4 for Newspaper's title and subtitle, a semibold face where the style asks for one), the subtitle's colour and typeface and the caption's colour are the style's, and the ground is the style's background",
         all(purrr::map_lgl(b7_styles, function(s) {
-          st = CHART_STYLES[[s]]; l = b7_widgets[[s]]$x$layout
-          identical(l$paper_bgcolor, b7_rgba(st$background)) && identical(l$plot_bgcolor, b7_rgba(st$panel)) &&
-            identical(l$title$font$color, st$text) && b7_has(l$title$text, paste0("color:", st$text_2)) &&
-            identical(l$annotations[[length(l$annotations)]]$font$color, st$caption) &&
-            grepl(if (identical(st$title_font, "serif")) "Source Serif 4', serif" else "Inter', Inter, sans-serif|Inter, sans-serif", l$title$font$family) &&
-            identical(l$annotations[[length(l$annotations)]]$text, "A caption") && b7_has(l$title$text, "font-family:")
-        })) && b7_has(b7_widgets$newspaper$x$layout$title$text, "Source Serif 4") && !b7_has(b7_widgets$clean$x$layout$title$text, "Source Serif 4"))
-  b7_shapes <- purrr::map(b7_widgets, function(w) w$x$layout$shapes)
-  check("7B-6: spec_widget() keeps Newspaper's rule (plotly drops the second axis the static chart draws it with, so the figure draws a line across the top of its plot area, in the rule's colour) and adds none to the other styles; every style's figure builds with no warning",
-        length(b7_shapes$newspaper) == 1L && identical(b7_shapes$newspaper[[1]]$line$color, CHART_STYLES$newspaper$rule) &&
-          identical(b7_shapes$newspaper[[1]]$y0, 1) && !any(purrr::map_lgl(b7_shapes[setdiff(b7_styles, "newspaper")], length)) &&
+          st = CHART_STYLES[[s]]; w = b7_widgets[[s]]
+          identical(svg_text_attr(w, "A title", "fill"), st$text) && identical(svg_text_attr(w, "A subtitle", "fill"), st$text_2) &&
+            identical(svg_text_attr(w, "A caption", "fill"), st$caption) &&
+            identical(svg_text_attr(w, "A title", "font-family"), b7_face(st$title_font, st$title_weight)) &&
+            identical(svg_text_attr(w, "A subtitle", "font-family"), b7_face(st$subtitle_font, "regular")) &&
+            grepl(paste0("fill='", st$background, "' fill-opacity='1' stroke='none'"), w$x$html, fixed = TRUE)
+        })) && identical(svg_text_attr(b7_widgets$newspaper, "A title", "font-family"), "Source Serif 4") &&
+          !identical(svg_text_attr(b7_widgets$clean, "A title", "font-family"), "Source Serif 4"))
+  b7_rule <- function(w) grepl(paste0("stroke='", CHART_STYLES$newspaper$rule, "'"), w$x$html, fixed = TRUE)
+  check("7B-6: spec_widget() draws Newspaper's rule (the picture's own second axis line, a line in the rule's colour in the SVG) and no other style has one; every style's widget builds with no warning",
+        b7_rule(b7_widgets$newspaper) && !any(purrr::map_lgl(b7_widgets[setdiff(b7_styles, "newspaper")], b7_rule)) &&
           all(purrr::map_lgl(b7_widgets, function(w) !length(attr(w, "warnings")))))
   # the written code of every style, run alone in a fresh R process
   b7_gold_ok <- which(purrr::map_lgl(gold_plots, function(r) inherits(r$plot, "ggplot")))
@@ -3664,32 +3741,23 @@ if (c7_ok) {
 }
 
 if (c7_ok) {
-  # 5. the plotly version: labels and annotations survive, or the notes say which did not
+  # 5. the interactive version: every label and annotation of the picture is in it, with no note that says otherwise
   c7_dot <- c7_plot(list(family = "dot", x = "region", y = "revenue", fn = "sum", title = "t", top_n = 8))
   c7_battery <- list(bar = c7_p8, dot = c7_dot, bar_annotated = c7_pa, bar_grouped = c7_pg_on, line_annotated = c7_pc, line_end_labels = c7_pl3, scatter_annotated = c7_psa,
                      scatter_names = c7_ps_on, heatmap = c7_ph)
   c7_w <- purrr::map(c7_battery, spec_widget)
-  # plotly writes a line break as <br /> (an upright bar's annotation is on two lines, Phase 7b)
-  c7_wtexts <- function(w) gsub("<br />", "\n", unlist(purrr::map(w$x$data, function(tr) if (identical(tr$mode, "text")) as.character(tr$text))), fixed = TRUE)
-  c7_wpos <- function(w) unique(unlist(purrr::map(w$x$data, function(tr) if (identical(tr$mode, "text")) tr$textposition)))
-  c7_wnotes <- purrr::map(c7_w, function(w) attr(w, "notes"))
-  c7_lost <- purrr::map2(c7_battery, c7_w, function(p, w) setdiff(c7_labels(p), c7_wtexts(w)))
-  check("7C-5: spec_widget() keeps the value labels, the annotations and the heatmap's cell values as text traces in plotly (the same words as the static chart), and every label that is not in it is named by a note: nothing is lost without a sentence",
-        all(purrr::map_lgl(c7_w, function(w) !length(attr(w, "warnings")))) &&
-          setequal(c7_wtexts(c7_w$bar), c7_labels(c7_p8)) && setequal(c7_wtexts(c7_w$dot), c7_labels(c7_dot)) && setequal(c7_wtexts(c7_w$bar_annotated), c7_labels(c7_pa)) &&
-          setequal(c7_wtexts(c7_w$bar_grouped), c7_labels(c7_pg_on)) && setequal(c7_wtexts(c7_w$scatter_annotated), c7_labels(c7_psa)) && setequal(c7_wtexts(c7_w$heatmap), c7_labels(c7_ph)) &&
-          any(startsWith(c7_wtexts(c7_w$line_annotated), "Highest: ")) && any(startsWith(c7_wtexts(c7_w$line_annotated), "Lowest: ")) &&
-          all(purrr::map2_lgl(c7_lost, c7_wnotes, function(lost, notes) !length(lost) || length(notes) > 0L)) &&
-          !length(c7_wnotes$heatmap) && length(c7_wnotes$bar) == 1L)
-  check("7C-5: what plotly does not keep is said: the names and values at the line ends (it has a legend), the names ggrepel moved apart that would run into another (left out, counted), a label's place (above its mark, to the right of a sideways bar) and weight; plotly gets each text trace's position and the chart's font",
-        any(grepl("names and values at the line ends are not drawn in the interactive version", c7_wnotes$line_end_labels, fixed = TRUE)) &&
-          all(c7_lost$line_end_labels == setdiff(c7_labels(c7_pl3), c7_wtexts(c7_w$line_end_labels))) && length(c7_lost$line_end_labels) == 3L &&
-          any(grepl("labels that the static chart moves apart are left out of the interactive version because they would run into another label or a mark", c7_wnotes$scatter_names, fixed = TRUE)) &&
-          length(c7_wtexts(c7_w$scatter_names)) < length(c7_labels(c7_ps_on)) && all(c7_wtexts(c7_w$scatter_names) %in% c7_labels(c7_ps_on)) &&
-          any(grepl("not bold and sits above its mark", c7_wnotes$bar, fixed = TRUE)) && identical(c7_wpos(c7_w$bar), "top center") && identical(c7_wpos(c7_w$heatmap), "middle center") &&
-          identical(c7_wpos(spec_widget(c7_plot(list(family = "bar", x = "Nationality", top_n = 13, fn = "count", title = "t", labels = "on"), ball_g))), "middle right") &&
-          all(purrr::map_lgl(c7_w$bar$x$data, function(tr) !identical(tr$mode, "text") || grepl(chart_font_family("sans"), tr$textfont$family, fixed = TRUE))) &&
-          identical(attr(c7_w$bar, "notes"), widget_notes(attr(c7_p8, "spec"))))
+  # the words of the picture, a line at a time (an upright bar's annotation is on two lines, Phase 7b), and the texts of the SVG
+  c7_swords <- function(p) unlist(strsplit(c7_labels(p), "\n", fixed = TRUE))
+  c7_lost <- purrr::map2(c7_battery, c7_w, function(p, w) setdiff(trimws(c7_swords(p)), trimws(svg_texts(w))))
+  c7_match <- purrr::map2(c7_battery, c7_w, function(p, w) widget_match(p, w))
+  check("7C-5: spec_widget() keeps every value label, annotation, end label, name on a point and cell value of the picture as a text of its SVG (the same words, none left out), builds with no warning, matches the picture layer for layer (widget_match()), and has no note that anything is missing",
+        all(purrr::map_lgl(c7_w, function(w) !length(attr(w, "warnings")) && is.null(attr(w, "notes")))) && !exists("widget_notes") &&
+          all(lengths(c7_lost) == 0L) && all(lengths(c7_match) == 0L) && length(c7_swords(c7_ps_on)) >= 3L && length(c7_swords(c7_pl3)) == 3L &&
+          length(c7_swords(c7_ph)) > 5L && any(grepl("highest", svg_texts(c7_w$line_annotated), ignore.case = TRUE)) && any(grepl("lowest", svg_texts(c7_w$line_annotated), ignore.case = TRUE)) &&
+          all(c7_swords(c7_pl3) %in% svg_texts(c7_w$line_end_labels)))
+  check("7C-5: a label is as the picture has it: an annotation is bold in the SVG, a value label is not, names ggrepel moved apart are all there (as many texts as the picture's),",
+        identical(svg_text_attr(c7_w$bar_annotated, "Highest[^<]*", "font-weight"), "bold") && !grepl("font-weight='bold'", regmatches(c7_w$bar$x$html, regexpr(paste0("<text[^>]*>", c7_swords(c7_p8)[1], "</text>"), c7_w$bar$x$html))) &&
+          sum(svg_texts(c7_w$scatter_names) %in% c7_swords(c7_ps_on)) >= length(unique(c7_swords(c7_ps_on))) )
 
   # 6. every number R writes for a label or an annotation is in the chart's facts
   c7_many_sp <- list(family = "line", x = "year", y = "v", color = "g", fn = "sum", title = "t", annotate = list("highest"))
@@ -4961,11 +5029,11 @@ p8c_pic <- p8c_pv(p8c_s$scatter, "picture")
 p8c_int <- p8c_pv(p8c_s$scatter, "interactive")
 p8c_box <- p8c_pv(p8c_s$box, "interactive")
 p8c_tot <- p8c_pv(p8c_s$line, "interactive")
-check("8C-10: the picture export of a scatter holds no row value (a price planted in one row, 987654.321, is in no file of the unpacked zip, nor in a rounded form); the interactive export of the same scatter holds it, and so does an interactive box chart, while an interactive line chart of means holds only totals (not the planted value); so the disclosure sentence is true",
-      !p8c_has(p8c_pic$dir, "987654.321") && !p8c_has(p8c_pic$dir, "987654.32") && !p8c_has(p8c_pic$dir, "987654") && identical(p8c_pic$zip$modes, "picture") &&
-        grepl("987654.321", p8c_int$html, fixed = TRUE) && identical(p8c_int$zip$modes, "interactive") && grepl("987654.321", p8c_box$html, fixed = TRUE) &&
-        identical(p8c_tot$zip$modes, "interactive") && !p8c_has(p8c_tot$dir, "987654.321") && grepl("\"type\":\"scatter\"", p8c_int$html, fixed = TRUE) &&
-        p8c_has(p8c_int$dir, "987654") && !p8c_has(p8c_planted, "987654"))
+check("8C-10: the picture export of a scatter holds no row value (a price planted in one row, 987654.321, is in no file of the unpacked zip, nor in a rounded form); the interactive export of the same scatter holds it as its tooltip writes it (three significant digits, 988000, as the facts write a number) and so does an interactive box chart (the highest value its box and points reach), while an interactive line chart of means holds only totals (not the planted value); so the disclosure sentence is true",
+      !p8c_has(p8c_pic$dir, "987654.321") && !p8c_has(p8c_pic$dir, "987654.32") && !p8c_has(p8c_pic$dir, "987654") && !p8c_has(p8c_pic$dir, "988000") && identical(p8c_pic$zip$modes, "picture") &&
+        grepl("price: 988000", p8c_int$html, fixed = TRUE) && identical(p8c_int$zip$modes, "interactive") && grepl("988000", p8c_box$html, fixed = TRUE) &&
+        identical(p8c_tot$zip$modes, "interactive") && !p8c_has(p8c_tot$dir, "988000") && !p8c_has(p8c_tot$dir, "987654") && grepl("class=\"girafe html-widget", p8c_int$html, fixed = TRUE) &&
+        !p8c_has(p8c_planted, "988000"))
 p8c_fam <- function(...) chart_from_rows(list(...))
 p8c_hm <- list(family = "heatmap", x = "year", y = "region", color = "price", fn = "mean")
 check("8C-11: which interactive charts carry rows: a scatter, bubble or box always; a bar, dot, line, slope or heatmap only when its marks are rows (fn none), not when it is counts, shares, sums, means or medians; a histogram never; the default way a chart goes in is a picture for those that carry rows (even when the card shows the interactive view) and for the others the card's view",
@@ -4979,27 +5047,28 @@ check("8C-11: which interactive charts carry rows: a scatter, bubble or box alwa
         identical(dashboard_default_mode(list(spec = p8c_s$line), TRUE), "interactive"))
 
 # 8. the interactive file: the widget scripts are written into it from the installed packages, nothing is requested, and a picture-only file holds none
-p8c_plotly_js <- system.file("htmlwidgets/lib/plotlyjs/plotly-latest.min.js", package = "plotly")
+p8c_girafe_js <- system.file("htmlwidgets/girafe.js", package = "ggiraph")
 p8c_n_script <- function(h) lengths(gregexpr("<script>", h, fixed = TRUE)) * grepl("<script>", h, fixed = TRUE)
-check("8C-12: only when a chart is interactive does the page hold the scripts its widget needs (htmlwidgets, plotly's binding, typedarray, jquery, crosstalk and plotly.js: six <script> elements with their text inside, read from the installed packages, no src), the file is larger by about the weight of plotly.js, no request leaves it (the search finds none, scripts set aside), and a picture-only page has no <script> at all",
-      file.exists(p8c_plotly_js) && p8c_n_script(p8c_int$html) >= 6L && !grepl("<script src", p8c_int$html, fixed = TRUE) && !grepl("<script[^>]* src=", p8c_int$html) &&
-        nchar(p8c_int$html, "bytes") > nchar(p8c_pic$html, "bytes") + file.size(p8c_plotly_js) && !length(p8c_requests(p8c_int$html)) && p8c_balanced(p8c_int$html) &&
-        grepl("class=\"plotly html-widget\"", p8c_int$html, fixed = TRUE) && grepl("data-for=\"htmlwidget-", p8c_int$html, fixed = TRUE) &&
-        !grepl("<script", p8c_pic$html, fixed = TRUE) && !grepl("class=\"plotly html-widget\"", p8c_pic$html, fixed = TRUE) &&
-        p8c_n_script(p8c_html(p8c_dm)) >= 6L)
+p8c_script_bytes <- function(h) sum(nchar(regmatches(h, gregexpr("(?s)<script>.*?</script>", h, perl = TRUE))[[1]], "bytes"))
+check("8C-12: only when a chart is interactive does the page hold the scripts its widget needs (htmlwidgets and girafe's binding: two <script> elements with their text inside, read from the installed packages, no src, the binding's own text in the page), the scripts weigh under 0.3 MB (plotly.js alone was 3.6 MB), no request leaves the page (the search finds none, scripts set aside), and a picture-only page has no <script> and no widget",
+      file.exists(p8c_girafe_js) && p8c_n_script(p8c_int$html) >= 2L && !grepl("<script src", p8c_int$html, fixed = TRUE) && !grepl("<script[^>]* src=", p8c_int$html) &&
+        p8c_script_bytes(p8c_int$html) > file.size(p8c_girafe_js) && p8c_script_bytes(p8c_int$html) < 0.3 * 1048576 && !length(p8c_requests(p8c_int$html)) && p8c_balanced(p8c_int$html) &&
+        grepl("class=\"girafe html-widget", p8c_int$html, fixed = TRUE) && grepl("data-for=\"htmlwidget-", p8c_int$html, fixed = TRUE) &&
+        !grepl("<script", p8c_pic$html, fixed = TRUE) && !grepl("class=\"girafe html-widget", p8c_pic$html, fixed = TRUE) &&
+        p8c_n_script(p8c_html(p8c_dm)) >= 2L)
 
 # 9. a chart whose interactive version cannot be made goes in as a picture and the dialog's result and the About card say so
-p8c_failw <- function(p) stop("plotly could not convert this plot\nsecond line of the message")
+p8c_failw <- function(p) stop("the chart package could not draw this plot\nsecond line of the message")
 p8c_nobuild <- function(e) list(modes = character(0), fallbacks = character(0), zip = NA_character_, error = conditionMessage(e))
 p8c_zf <- tryCatch(p8c_build(list(p8c_item(1, p8c_s$scatter, mode = "interactive"), p8c_item(2, p8c_s$bar, mode = "interactive")),
                              widget = function(p) if (identical(attr(p, "spec")$family, "scatter")) p8c_failw(p) else spec_widget(p)), error = p8c_nobuild)
 p8c_hf <- if (!is.na(p8c_zf$zip)) p8c_html(p8c_dir(p8c_zf$zip)) else ""
 p8c_zf1 <- tryCatch(p8c_build(list(p8c_item(1, p8c_s$scatter, mode = "interactive")), widget = p8c_failw), error = p8c_nobuild)
 p8c_hf1 <- if (!is.na(p8c_zf1$zip)) p8c_html(p8c_dir(p8c_zf1$zip)) else ""
-check("8C-13: when spec_widget() fails for a chart (stand-in: plotly stops), that chart is written as a picture (the build does not fail), the build says why with the first line of the message, the other interactive chart is still interactive, the page says in its About card that it is a picture because its interactive version could not be made, and with no widget left it holds no script",
-      identical(p8c_zf$modes, c("picture", "interactive")) && identical(unname(p8c_zf$fallbacks), c("plotly could not convert this plot", NA)) && identical(names(p8c_zf$fallbacks), c("Units against price", "Orders by region")) &&
-        grepl("'Units against price' is a picture because its interactive version could not be made: plotly could not convert this plot", p8c_hf, fixed = TRUE) &&
-        grepl("1 picture and 1 interactive.", p8c_hf, fixed = TRUE) && lengths(gregexpr("<img src=\"data:image/png", p8c_hf, fixed = TRUE)) == 1L && p8c_n_script(p8c_hf) >= 6L &&
+check("8C-13: when spec_widget() fails for a chart (stand-in: the chart package stops), that chart is written as a picture (the build does not fail), the build says why with the first line of the message, the other interactive chart is still interactive, the page says in its About card that it is a picture because its interactive version could not be made, and with no widget left it holds no script",
+      identical(p8c_zf$modes, c("picture", "interactive")) && identical(unname(p8c_zf$fallbacks), c("the chart package could not draw this plot", NA)) && identical(names(p8c_zf$fallbacks), c("Units against price", "Orders by region")) &&
+        grepl("'Units against price' is a picture because its interactive version could not be made: the chart package could not draw this plot", p8c_hf, fixed = TRUE) &&
+        grepl("1 picture and 1 interactive.", p8c_hf, fixed = TRUE) && lengths(gregexpr("<img src=\"data:image/png", p8c_hf, fixed = TRUE)) == 1L && p8c_n_script(p8c_hf) >= 2L &&
         identical(p8c_zf1$modes, "picture") && !grepl("<script", p8c_hf1, fixed = TRUE) && grepl("1 picture and 0 interactive.", p8c_hf1, fixed = TRUE))
 
 # 10. a failing step: the build stops, says which step, and leaves nothing
@@ -5278,7 +5347,7 @@ check("8C-25: no Quarto, no pandoc and no model in the export: no string of R/ o
       !any(grepl("quarto|pandoc", p8c_strings, ignore.case = TRUE)) && !any(c("saveWidget", "render", "system", "system2", "shell", "shell.exec") %in% p8c_fncalls) &&
         !any(c("llm_json", "ask", "make_call", "chat_turn", "summarize_charts", "summarize_inputs", "label_columns", "chat_append_message") %in% p8c_called) &&
         !any(c("for", "while", "repeat") %in% p8c_called) && "zipr" %in% p8c_called &&
-        identical(get("dash_widget")(spec_widget(spec_plot(p8c_s$bar, p8c_data, p8c_cb)))$deps[[1]]$name, "htmlwidgets"))
+        all(c("htmlwidgets", "girafe-binding", "girafe-css") %in% purrr::map_chr(get("dash_widget")(spec_widget(spec_plot(p8c_s$bar, p8c_data, p8c_cb)))$deps, "name")))
 }   # end of the fast run's 8C part (sections 1 to 16)
 
 
@@ -6717,17 +6786,18 @@ check(paste0("9C-7: a bundle of chaRt/ by .rscignore (rsconnect::listDeploymentF
         !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "phase9_prompt.md"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, ".Renviron"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "Rplots.pdf"))) &&
         !p9c_bundle_ok(p9c_tree(c(p9c_rsc, "www"))))
 
-# The packages the bundle would ask for: every one of APP_PACKAGES, and the ones the app uses without listing (av, svglite, ragg, systemfonts, paletteer, plotly), with the dependencies.
+# The packages the bundle would ask for: every one of APP_PACKAGES, and the ones the app uses without listing (av, svglite, ragg, systemfonts, paletteer), with the dependencies.
 p9c_app_packages <- eval(purrr::keep(as.list(parse("app.R", keep.source = FALSE)), function(e) is.call(e) && identical(as.character(e[[1]]), "<-") && identical(as.character(e[[2]]), "APP_PACKAGES"))[[1]][[3]])
 p9c_pkgs_ok <- function(deps) {
-  need = unique(c(p9c_app_packages, "shiny", "bslib", "purrr", "av", "svglite", "ragg", "systemfonts", "paletteer", "plotly", "zip", "commonmark"))
-  is.data.frame(deps) && all(c("Package", "Version", "Source") %in% names(deps)) && all(need %in% deps$Package) && !"ggiraph" %in% deps$Package && !anyDuplicated(deps$Package) && all(nzchar(deps$Version))
+  need = unique(c(p9c_app_packages, "shiny", "bslib", "purrr", "av", "svglite", "ragg", "systemfonts", "paletteer", "zip", "commonmark"))
+  is.data.frame(deps) && all(c("Package", "Version", "Source") %in% names(deps)) && all(need %in% deps$Package) && "ggiraph" %in% need && !"plotly" %in% deps$Package && !anyDuplicated(deps$Package) && all(nzchar(deps$Version))
 }
 p9c_deps <- if (p9c_has_rsconnect) tryCatch(rsconnect:::appDependencies("."), error = function(e) e)
 check(paste0("9C-8: the packages a bundle would ask Connect for (rsconnect:::appDependencies, from the code in the bundle, no server contacted) are ", if (is.data.frame(p9c_deps)) nrow(p9c_deps) else "?", " with their versions, and hold every package of APP_PACKAGES ",
-             "and av, svglite, ragg, systemfonts, paletteer, plotly, zip and commonmark (ggiraph is not used and not asked for); the check refuses a list without av, one without zip and one that adds ggiraph"),
+             "and av, svglite, ragg, systemfonts, paletteer, zip and commonmark, ggiraph (the interactive charts) among them and plotly not (nothing uses it); the check refuses a list without av, one without zip, one without ggiraph and one that adds plotly"),
       length(p9c_app_packages) >= 15L && p9c_pkgs_ok(p9c_deps) &&
-        !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "av", ]) && !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "zip", ]) && !p9c_pkgs_ok(rbind(p9c_deps, transform(p9c_deps[1, ], Package = "ggiraph"))))
+        !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "av", ]) && !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "zip", ]) && !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "ggiraph", ]) &&
+        !p9c_pkgs_ok(rbind(p9c_deps, transform(p9c_deps[1, ], Package = "plotly"))))
 
 if (run_heavy) {   # the heavy run only: 9C-9 and 9C-10 (the bundle's own files loaded as an app, four times, and its packages worked out twice more); not indented, to keep the diff small
 
@@ -7108,6 +7178,196 @@ check("10A-14: printed by Chrome (the Dark style, a marking of 80 characters tha
                            grepl("body.long .page{padding-top:22mm", p10_text(p10_pr$dir, "dashboard.html"), fixed = TRUE)))
 
 }   # end of the heavy run part of Phase 10 Part A
+
+# ---- Phase 10 Part B: interactive charts with ggiraph in place of plotly ----------------------------------------------------------
+#
+# Their fixtures are their own (between >>> 10B begin and <<< 10B end), so a changed copy of one function can be run against them alone.
+#   The checks of the gold specs (the widgets, the match of the picture and the interactive view) are in Phase 2 above; the weight of the
+#   export, the scripts of the page and the disclosure are 8C-10 to 8C-13; the packages of the bundle are 9C-8.
+# >>> 10B begin
+
+if (run_fast) {   # the fast run only: the widgets of a small fixture, their tooltips and hover groups, the typefaces, the page
+
+b10_file <- file.path(work_dir, "b10.csv")
+b10_df <- data.frame(region = rep(c("East", "West"), each = 3), year = rep(2020:2022, 2), sales = c(1234.567, 20, 0.5, 300, 4000.4, 5), units = c(10, 20, 30, 40, 50, 60),
+                     secret = paste0("NOTPLOTTED", 1:6), stringsAsFactors = FALSE)
+readr::write_csv(b10_df, b10_file)
+b10_rd <- reread_data(b10_file, "b10.csv", character(0))
+b10_cb <- utils::modifyList(b10_rd$codebook, list(row_is = "one row"))
+b10_data <- b10_rd$read$data
+b10_plot <- function(spec, data = b10_data, cb = b10_cb) spec_plot(spec, data, cb)
+b10_tips <- function(spec, data = b10_data, cb = b10_cb) { p = b10_plot(spec, data, cb); t = widget_table(attr(p, "spec"), cb, attr(p, "table")); stats::setNames(t$.tip, NULL) }
+b10_s <- list(
+  bar = list(family = "bar", x = "region", y = "sales", fn = "sum", title = "t"),
+  line = list(family = "line", x = "year", y = "sales", color = "region", fn = "none", title = "t"),
+  scatter = list(family = "scatter", x = "units", y = "sales", color = "region", title = "t"),
+  box = list(family = "box", x = "region", y = "units", title = "t"),
+  heat = list(family = "heatmap", x = "region", y = "year", color = "sales", fn = "sum", title = "t"),
+  hist = list(family = "histogram", x = "sales", bins = 5L, title = "t"))
+b10_t <- purrr::map(b10_s[c("bar", "line", "scatter", "box", "heat")], function(s) { p = b10_plot(s); widget_table(attr(p, "spec"), b10_cb, attr(p, "table")) })
+b10_w <- purrr::map(b10_s, function(s) spec_widget(b10_plot(s)))
+b10_titles <- function(w) {
+  m = regmatches(w$x$html, gregexpr("title='[^']*'", w$x$html))[[1]]
+  unesc = function(x) gsub("&amp;", "&", gsub("&gt;", ">", gsub("&lt;", "<", gsub("&quot;", "\"", gsub("&apos;", "'", x)))))
+  # what the page's script shows: the attribute's value (the markup's escapes undone once), decoded once more by decodeContent(), then set as HTML
+  unesc(unesc(sub("'$", "", sub("^title='", "", m))))
+}
+check("10B-1: the tooltip of a mark is written by R from the plotted table, with the facts' formats (three significant digits, thousands separated for a bar, line and heatmap, none for a scatter's x and y), each value named with its label: a bar's group and total, a line's year, value and colour, a scatter point's x, y and colour, a heatmap cell's x, y and total, a box chart's group with its rows, median, quartiles and extremes (the group's, on each of its rows)",
+      identical(b10_t$bar$.tip[b10_t$bar$region == "East"], "region: East\nTotal sales: 1,260") && identical(b10_t$bar$.tip[b10_t$bar$region == "West"], "region: West\nTotal sales: 4,310") &&
+        identical(b10_t$line$.tip[1], "year: 2020\nsales: 1,230\nregion: East") && identical(b10_t$line$.tip[6], "year: 2022\nsales: 5\nregion: West") &&
+        identical(b10_t$scatter$.tip[1], "units: 10\nsales: 1230\nregion: East") &&
+        identical(b10_t$heat$.tip[b10_t$heat$region == "East" & b10_t$heat$year == 2020], "region: East\nyear: 2020\nTotal sales: 1,230") &&
+        identical(unique(b10_t$box$.tip[b10_t$box$region == "East"]), "region: East\nRows: 3\nMedian units: 20\nMiddle half: 15 to 25\nLowest to highest: 10 to 30") &&
+        identical(unique(b10_t$box$.tip[b10_t$box$region == "West"]), "region: West\nRows: 3\nMedian units: 50\nMiddle half: 45 to 55\nLowest to highest: 40 to 60"))
+b10_hist <- ggplot2::ggplot_build(attr(b10_plot(b10_s$hist), "widget_plot")())$data[[1]]
+b10_hist_static <- ggplot2::ggplot_build(b10_plot(b10_s$hist))$data[[1]]
+check("10B-1: a histogram bin's tooltip is written from the bins ggplot2 computes (its range and its count, as the facts write them), on the same bins as the picture; a cell of a binned scatter says how many rows it counts",
+      nrow(b10_hist) == nrow(b10_hist_static) && all(b10_hist$count == b10_hist_static$count) && sum(b10_hist$count) == 6 &&
+        identical(b10_hist$tooltip, paste0("sales: ", fact_num(b10_hist$xmin, FALSE), " to ", fact_num(b10_hist$xmax, FALSE), "
+Count: ", fact_count(b10_hist$count))) &&
+        identical(widget_cell_tip(c(1, 2500)), c("Rows in this cell: 1", "Rows in this cell: 2,500")))
+check("10B-2: a point drawn from a row carries the columns the chart plots and no other: the scatter's tooltip is its x, its y and its colour, and the column that is not plotted (a free text with a marker in it) is in no tooltip, no table of the widget and nowhere in the page text of the widget; a heatmap, bar and line carry only their own columns",
+      all(grepl("^units: [0-9]+\nsales: [0-9.]+\nregion: (East|West)$", b10_tips(b10_s$scatter))) && !any(grepl("NOTPLOTTED", unlist(purrr::map(b10_t, function(t) c(t$.tip, names(t)))))) &&
+        !any(purrr::map_lgl(b10_w, function(w) grepl("NOTPLOTTED", w$x$html, fixed = TRUE))) && !any(grepl("secret", names(attr(b10_plot(b10_s$scatter), "table")), fixed = TRUE)) &&
+        all(purrr::map_lgl(b10_t, function(t) setequal(setdiff(names(t), c(".tip", ".hover", ".series")), intersect(names(t), c("region", "year", "sales", "units", "n", "share", "highlighted"))))))
+# a value of the file with markup in it, and a quote and an ampersand, in every family that names a group
+b10_hostile <- c("<img src=x onerror=alert(1)>", "\"Q\" & 'R'")
+b10_hdf <- b10_df
+b10_hdf$region <- rep(b10_hostile, each = 3)
+b10_hfile <- file.path(work_dir, "b10_hostile.csv")
+readr::write_csv(b10_hdf, b10_hfile)
+b10_hrd <- reread_data(b10_hfile, "b10_hostile.csv", character(0))
+b10_hcb <- utils::modifyList(b10_hrd$codebook, list(row_is = "one row"))
+b10_hw <- purrr::map(b10_s[c("bar", "line", "scatter", "box", "heat")], function(s) spec_widget(b10_plot(s, b10_hrd$read$data, b10_hcb)))
+b10_ht <- purrr::map(b10_hw, b10_titles)
+check("10B-3: a value of the file with a tag in it (<img src=x onerror=alert(1)>), or quotes and an ampersand, comes out of every family's tooltip as text: after the page's script has decoded the attribute (twice) it holds &lt;img src=x onerror=alert(1)&gt;, never an <img>, and the only markup is the line break R wrote (<br/>); the SVG holds no <img and no onerror attribute; a hover group is a number we make (s1, m4, g2), never a value",
+      all(purrr::map_lgl(b10_ht, function(tt) !any(grepl("<img|<script|onerror=[^&]*>", tt)) && any(grepl("&lt;img src=x onerror=alert(1)&gt;", tt, fixed = TRUE)) && any(grepl("<br/>", tt, fixed = TRUE)))) &&
+        all(purrr::map_lgl(b10_ht, function(tt) any(grepl("&quot;Q&quot; &amp; &#39;R&#39;", tt, fixed = TRUE)))) &&
+        !any(purrr::map_lgl(b10_hw, function(w) grepl("<img", w$x$html, fixed = TRUE))) &&
+        all(purrr::map_lgl(b10_hw, function(w) all(grepl("^[smgb][0-9]+$", unlist(regmatches(w$x$html, gregexpr("(?<=data-id=')[^']*", w$x$html, perl = TRUE))))))) &&
+        !any(grepl("<", unlist(purrr::map(b10_s[c("bar", "line", "scatter", "box", "heat")], function(s) b10_tips(s, b10_hrd$read$data, b10_hcb))))))
+b10_ids <- function(w) unlist(regmatches(w$x$html, gregexpr("(?<=data-id=')[^']*", w$x$html, perl = TRUE)))
+check("10B-4: the hover group of a mark: a line is its series (the lines of two colours have two groups, one colourless line one group, the tooltip points of a line carry its group), a bar and a heatmap cell are each their own, a coloured scatter's point is its colour's, a box is its group; the widget dims every mark outside the hovered group (opacity 0.25) and outlines the hovered mark in the style's text colour",
+      identical(sort(unique(b10_ids(b10_w$line))), c("s1", "s2")) && length(b10_ids(b10_w$line)) == 2L + 6L && length(unique(b10_ids(b10_w$bar))) == 2L &&
+        identical(sort(unique(b10_ids(b10_w$scatter))), c("s1", "s2")) && length(b10_ids(b10_w$scatter)) == 6L && identical(sort(unique(b10_ids(b10_w$box))), c("g1", "g2")) &&
+        length(unique(b10_ids(b10_w$heat))) == 6L && identical(unique(b10_ids(spec_widget(b10_plot(list(family = "line", x = "year", y = "sales", fn = "mean", title = "t"))))), "s1") &&
+        all(grepl("opacity:0.25", purrr::map_chr(b10_w, function(w) w$x$settings$hover_inv$css), fixed = TRUE)) &&
+        all(grepl(paste0("stroke:", CHART_STYLES$clean$text), purrr::map_chr(b10_w, function(w) w$x$settings$hover$css), fixed = TRUE)) &&
+        grepl("stroke:#ECEFF2", spec_widget(spec_plot(b10_s$bar, b10_data, b10_cb, utils::modifyList(chart_palette_default(), list(style = "dark"))))$x$settings$hover$css, fixed = TRUE) &&
+        all(grepl("^svg_", purrr::map_chr(b10_w, function(w) w$x$uid))))
+b10_fonts <- function(w) unique(unlist(regmatches(w$x$html, gregexpr("(?<=font-family=')[^']*", w$x$html, perl = TRUE))))
+b10_tw <- function(open, fam) {
+  open()
+  on.exit(grDevices::dev.off())
+  grid::convertWidth(grid::grobWidth(grid::textGrob("Orders by region 2,740,000", gp = grid::gpar(fontfamily = fam, fontsize = 12))), "in", valueOnly = TRUE)
+}
+b10_declared <- function(style) unique(regmatches(dash_font_css(style), gregexpr("(?<=font-family:')[^']*", dash_font_css(style), perl = TRUE))[[1]])
+b10_style_fonts <- purrr::map(stats::setNames(names(CHART_STYLES), names(CHART_STYLES)), function(s)
+  b10_fonts(spec_widget(spec_plot(list(family = "line", x = "year", y = "sales", facet = "region", fn = "none", title = "T", subtitle = "S", caption = "C"), b10_data, b10_cb,
+                                  utils::modifyList(chart_palette_default(), list(style = s))))))
+b10_dsvg <- function() ggiraph::dsvg(tempfile(fileext = ".svg"), width = 7, height = 4, fonts = list(sans = "Inter"))
+b10_ragg <- function() chart_device(tempfile(fileext = ".png"), 7, 4, 72, "ragg")
+check("10B-5: the typefaces: in each of the six styles every text of the widget's SVG is in a bundled family (Inter, Inter SemiBold, Source Serif 4) or the default sans-serif or serif, and the page of that style declares a @font-face for each bundled one it names (dash_font_css()), so the browser draws the SVG's text in the faces of the picture (Newspaper's title in Source Serif 4, Minimal's in Inter SemiBold); the bundled files are the ones systemfonts has for those names, and the SVG device measures a string within 3 per cent of ragg and not as the default sans (more than 2 per cent from it)",
+      all(purrr::map2_lgl(b10_style_fonts, names(b10_style_fonts), function(f, s) all(f %in% c(b10_declared(s), "sans-serif", "serif")) && "Inter" %in% f)) &&
+        "Source Serif 4" %in% b10_style_fonts$newspaper && "Inter SemiBold" %in% b10_style_fonts$minimal && !"Source Serif 4" %in% b10_style_fonts$clean &&
+        grepl("Inter-Regular.ttf$", systemfonts::match_fonts("Inter")$path) && grepl("Inter-SemiBold.ttf$", systemfonts::match_fonts("Inter SemiBold")$path) &&
+        abs(b10_tw(b10_dsvg, "Inter") / b10_tw(b10_ragg, "Inter") - 1) < 0.03 && abs(b10_tw(b10_dsvg, "Inter SemiBold") / b10_tw(b10_ragg, "Inter SemiBold") - 1) < 0.03 &&
+        (!chart_font_available("Arial") || abs(b10_tw(b10_dsvg, "Arial") / b10_tw(b10_dsvg, "Inter") - 1) > 0.02) &&
+        identical(widget_font_set()$dsvg_fonts$sans, "Inter") && identical(widget_font_set()$dsvg_fonts$serif, "Source Serif 4") && !length(widget_font_set()$dependencies))
+b10_page <- p8c_html(p8c_dir(p8c_build(list(p8c_item(1, p8c_s$bar, "interactive"), p8c_item(2, p8c_s$scatter, "interactive")))$zip))
+b10_css <- regmatches(b10_page, regexpr("(?s)<style>.*?</style>", b10_page, perl = TRUE))
+check("10B-6: the interactive card of the exported page scales with the page and holds no sideways scroll: its box is as wide as a picture's (100 per cent, at most 700 px) and clips nothing it needs, the old minimum width of 36rem and the sideways scroll of the plotly card are gone, the widget has no height of its own (the SVG sets it), and the widget's scripts and styles (htmlwidgets, girafe, htmltools-fill) are written into the page, with no plotly in it",
+      grepl(".widget{width:100%;max-width:700px;overflow:hidden;}", b10_page, fixed = TRUE) && !grepl("min-width:36rem", b10_page, fixed = TRUE) && !grepl(".widget{overflow-x:auto;}", b10_page, fixed = TRUE) &&
+        !grepl("plotly", b10_page, ignore.case = TRUE) && grepl("class=\"girafe html-widget", b10_page, fixed = TRUE) && all(grepl("style=\"width:100%;height:auto;\"", regmatches(b10_page, gregexpr("<div class=\"girafe html-widget[^>]*>", b10_page))[[1]])) && !grepl("width:960px", b10_page, fixed = TRUE) &&
+        grepl("ggiraph-svg", b10_page, fixed = TRUE) && grepl("data-for=\"htmlwidget-", b10_page, fixed = TRUE) &&
+        identical(DASH_DISCLOSURE, "In the interactive version the values of every plotted row are written into the file, so anyone who opens it can read them; a picture holds none."))
+b10_files <- c("app.R", r_files, file.path("probe", "app.R"))
+b10_plotly_in <- function(files) unlist(purrr::map(files, function(f) {
+  pd = utils::getParseData(parse(f, keep.source = TRUE))
+  hit = pd[(pd$token == "SYMBOL_PACKAGE" & pd$text == "plotly") | (pd$token == "STR_CONST" & grepl("plotly", pd$text, ignore.case = TRUE)), ]
+  if (nrow(hit)) paste0(f, ":", hit$line1)
+}))
+b10_fake <- tempfile(fileext = ".R")
+writeLines(c("f <- function() plotly::plot_ly()", "g <- c(\"plotly\", \"yaml\")"), b10_fake)
+b10_app <- eval(purrr::keep(as.list(parse("app.R", keep.source = FALSE)), function(e) is.call(e) && identical(as.character(e[[1]]), "<-") && identical(as.character(e[[2]]), "APP_PACKAGES"))[[1]][[3]])
+b10_exports <- getNamespaceExports("ggiraph")
+b10_twins <- c("geom_col_interactive", "geom_point_interactive", "geom_line_interactive", "geom_histogram_interactive", "geom_boxplot_interactive", "geom_tile_interactive", "geom_bin_2d_interactive")
+check("10B-7: plotly is out of the app: no call, package name or string in app.R, R/ or the probe names it, APP_PACKAGES lists ggiraph and not plotly, app.R checks the ggiraph functions and arguments it calls at start-up (the check names them, and they exist in the installed ggiraph 0.9 or later), every ggiraph twin spec.R swaps in is exported, and the check for plotly finds a planted call",
+      !length(b10_plotly_in(b10_files)) && length(b10_plotly_in(b10_fake)) == 2L && "ggiraph" %in% b10_app && !"plotly" %in% b10_app && utils::packageVersion("ggiraph") >= "0.9.0" &&
+        grepl("The ggiraph functions and arguments R/spec.R calls", paste(readLines("app.R", warn = FALSE), collapse = "\n"), fixed = TRUE) &&
+        all(b10_twins %in% b10_exports) && all(unname(WIDGET_GEOMS) %in% b10_exports) && all(c("girafe", "girafe_css", "opts_sizing", "opts_toolbar", "opts_zoom", "opts_selection", "opts_hover", "opts_hover_inv", "opts_tooltip", "girafeOutput", "renderGirafe") %in% b10_exports) &&
+        !any(grepl("plotly::", unlist(purrr::map(b10_files, readLines, warn = FALSE)), fixed = TRUE)) && !exists("widget_notes") && !exists("scale_fonts") && !exists("font_stacks") && !exists("tooltip_call"))
+b10_geoms <- function(p) purrr::map_chr(attr(p, "widget_plot")()$layers, function(l) class(l$geom)[1])
+b10_g <- purrr::map(b10_s, function(s) b10_geoms(b10_plot(s)))
+b10_sl <- b10_plot(list(family = "slope", x = "year", y = "sales", color = "region", fn = "sum", title = "t", filter = list(list(column = "year", op = "in", value = c(2020L, 2022L)))))
+b10_sg <- b10_geoms(b10_sl)
+b10_an <- b10_geoms(b10_plot(list(family = "scatter", x = "units", y = "sales", fit = "linear", rug = TRUE, annotate = list("highest"), title = "t")))
+check("10B-8: the layers of the interactive plot are the picture's layers with the data layers swapped for their twins: a bar chart's geom is GeomInteractiveCol, a scatter's GeomInteractivePoint, a heatmap's GeomInteractiveTile, a box chart's GeomInteractiveBoxplot, a histogram's GeomInteractiveBar, a line chart's layers are GeomInteractiveLine plus one invisible GeomInteractivePoint (alpha 0, the tooltip carrier), a slope chart's lines carry the hover group and its drawn points the tooltips (no invisible point), and an annotation's ring, the fitted curve and the rug stay plain layers",
+      "GeomInteractiveCol" %in% b10_g$bar && "GeomInteractivePoint" %in% b10_g$scatter && "GeomInteractiveTile" %in% b10_g$heat && "GeomInteractiveBoxplot" %in% b10_g$box && "GeomInteractiveBar" %in% b10_g$hist &&
+        sum(b10_g$line == "GeomInteractiveLine") == 1L && sum(b10_g$line == "GeomInteractivePoint") == 1L && sum(b10_sg == "GeomInteractiveLine") == 1L && sum(b10_sg == "GeomInteractivePoint") == 1L &&
+        !any(purrr::map_lgl(attr(b10_sl, "widget_plot")()$layers, function(l) isTRUE(l$aes_params$alpha == 0))) && sum(purrr::map_lgl(attr(b10_plot(b10_s$line), "widget_plot")()$layers, function(l) isTRUE(l$aes_params$alpha == 0))) == 1L &&
+        sum(b10_an == "GeomInteractivePoint") == 1L && all(c("GeomPoint", "GeomRug") %in% b10_an) && any(c("GeomText", "GeomTextRepel") %in% b10_an) && !any(grepl("Interactive", b10_an[b10_an != "GeomInteractivePoint"])))
+b10_big <- file.path(work_dir, "b10_big.csv")
+local({ set.seed(10); n = 25000L; readr::write_csv(data.frame(a = round(stats::rnorm(n), 3), b = round(stats::rnorm(n), 3), g = sample(c("u", "v"), n, replace = TRUE)), b10_big) })
+b10_brd <- reread_data(b10_big, "b10_big.csv", character(0))
+b10_bcb <- utils::modifyList(b10_brd$codebook, list(row_is = "one point"))
+b10_bp <- spec_plot(list(family = "scatter", x = "a", y = "b", title = "t"), b10_brd$read$data, b10_bcb)
+b10_bw <- spec_widget(b10_bp)
+b10_bt <- ggplot2::ggplot_build(attr(b10_bp, "widget_plot")())$data[[1]]
+check("10B-8: a scatter of 25,000 points is drawn as binned counts in the picture and in the interactive version (GeomInteractiveTile on the 2d bin statistic), a cell's tooltip says how many rows it counts and its count is the picture's, and the widget stays small (1,600 cells at most, under 0.5 MB of SVG)",
+      isTRUE(attr(b10_bp, "spec")$.binned) && any(purrr::map_lgl(attr(b10_bp, "widget_plot")()$layers, function(l) identical(class(l$geom)[1], "GeomInteractiveTile") && grepl("Bin2d", class(l$stat)[1]))) &&
+        all(grepl("^Rows in this cell: [0-9,]+$", b10_bt$tooltip)) && identical(sum(b10_bt$count), 25000) && identical(b10_bt$count, ggplot2::ggplot_build(b10_bp)$data[[1]]$count) &&
+        nrow(b10_bt) <= 1600L && nchar(b10_bw$x$html) < 0.5 * 1048576 && !length(widget_match(b10_bp, b10_bw)))
+
+}   # end of the fast run's Phase 10 Part B
+
+# the heavy run: the export built with every family interactive, laid out and hovered in Chrome
+if (run_heavy) {
+
+b10h_data <- p10_data
+b10h_data$region[1:40] <- "<img src=x onerror=alert(1)>"
+b10h_specs <- list(
+  bar = list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "Revenue by region"),
+  dot = list(family = "dot", x = "product_category", y = "unit_price", fn = "mean", title = "Price by category"),
+  line = list(family = "line", x = "order_month", y = "revenue", color = "channel", fn = "sum", title = "Revenue by month", annotate = list("highest")),
+  slope = list(family = "slope", x = "year", y = "revenue", color = "channel", fn = "sum", title = "Revenue by year", filter = list(list(column = "year", op = "in", value = c(2022L, 2024L)))),
+  scatter = list(family = "scatter", x = "units", y = "unit_price", color = "channel", title = "Units against price"),
+  bubble = list(family = "bubble", x = "units", y = "unit_price", size = "revenue", title = "Bubbles", filter = list(list(column = "year", op = "==", value = 2024L))),
+  hist = list(family = "histogram", x = "revenue", title = "Revenue of an order"),
+  box = list(family = "box", x = "channel", y = "unit_price", title = "Price by channel"),
+  heat = list(family = "heatmap", x = "quarter", y = "region", color = "revenue", fn = "mean", title = "Revenue by quarter and region"),
+  small = list(family = "line", x = "order_month", y = "revenue", facet = "channel", fn = "sum", title = "Revenue by month and channel"))
+b10h_out <- file.path(tempfile("b10h_zip_"), "d.zip")
+dir.create(dirname(b10h_out))
+b10h_res <- build_dashboard(purrr::imap(unname(b10h_specs), function(sp, i) p10_item(i, sp, "interactive")), b10h_data, p10_cb, utils::modifyList(chart_palette_default(), list(style = "dark")),
+                            p10_set, p10_path, b10h_out, model = "test-model")
+b10h_dir <- p10_unzip(b10h_res$zip)
+b10h_js <- paste0(
+  "window.addEventListener('load',function(){setTimeout(function(){",
+  "var o={cw:document.documentElement.clientWidth,sw:document.documentElement.scrollWidth};",
+  "var svgs=[].slice.call(document.querySelectorAll('svg.ggiraph-svg'));o.n=svgs.length;",
+  "o.card=svgs.map(function(s){return Math.round(s.closest('.card').getBoundingClientRect().width)});o.w=svgs.map(function(s){return Math.round(s.getBoundingClientRect().width)});",
+  "o.cut=svgs.map(function(s){var r=s.getBoundingClientRect();var bad=0;[].forEach.call(s.querySelectorAll('text'),function(t){var b=t.getBoundingClientRect();",
+  "if(b.width>0&&(b.left<r.left-1||b.right>r.right+1||b.top<r.top-1||b.bottom>r.bottom+1))bad++;});return bad});",
+  "o.texts=svgs.map(function(s){return s.querySelectorAll('text').length});",
+  "var rs=svgs[0].querySelectorAll('rect[data-id]');var el=rs[rs.length-1];var r=el.getBoundingClientRect();",
+  "var ev={bubbles:true,cancelable:true,clientX:r.left+r.width/2,clientY:r.top+r.height/2,view:window,pointerType:'mouse',isPrimary:true,pointerId:1};",
+  "el.dispatchEvent(new PointerEvent('pointerover',ev));el.dispatchEvent(new PointerEvent('pointermove',ev));",
+  "var done=function(){var t=[].filter.call(document.querySelectorAll('div'),function(d){return /tooltip_svg/.test(d.className)})[0];",
+  "o.tip=encodeURIComponent(t?t.innerText:'');o.tiph=encodeURIComponent(t?t.innerHTML:'');o.tipimg=t?t.querySelectorAll('img,script').length:-1;o.dim=svgs[0].querySelectorAll('[class*=hover_inv]').length;o.hov=svgs[0].querySelectorAll('[class*=hover_data]').length;",
+  "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9\" content=\"'+JSON.stringify(o).replace(/\"/g,'&quot;')+'\">');};",
+  "setTimeout(done,1500);},400);});")
+b10h_dom <- if (p9_has_chrome) purrr::map(list(w1280 = 1280, w500 = 500), function(w) { d = p9_dom(file.path(b10h_dir, "dashboard.html"), w, b10h_js); if (!is.null(d)) { d$tip = utils::URLdecode(d$tip); d$tiph = utils::URLdecode(d$tiph) }; d })
+check("10B-9: in Chrome the export with ten interactive charts (every family, in the Dark style, one group named with a tag) at 1280 and at 500 pixels: all ten are girafe widgets, none is wider than its card (700 pixels at most), the page has no sideways scroll, no text of any SVG is cut by its edge (the chart scales down with its card), pointing at the last bar (the group named with the tag) shows its tooltip (the group's name as text: the tag is shown as <img src=x onerror=alert(1)> and holds no element), dims other marks and marks the pointed one",
+      !p9_has_chrome || (!is.null(b10h_dom$w1280) && !is.null(b10h_dom$w500) && all(purrr::map_lgl(b10h_dom, function(d)
+        d$n == 10L && d$sw <= d$cw && all(d$w <= d$card) && all(d$w <= 700L) && all(d$cut == 0L) && all(d$texts > 5L) && d$tipimg == 0L && d$dim > 0L && d$hov >= 1L &&
+          grepl("^region: ", d$tip) && grepl("Total revenue: ", d$tip, fixed = TRUE))) &&
+        all(purrr::map_lgl(b10h_dom, function(d) grepl("region: <img src=x onerror=alert(1)>
+Total revenue: ", d$tip, fixed = TRUE) && grepl("region: &lt;img src=x onerror=alert(1)&gt;<br>Total revenue: ", d$tiph, fixed = TRUE))) && b10h_dom$w500$w[1] < b10h_dom$w1280$w[1] && b10h_dom$w500$w[1] <= 500L))
+
+}   # end of the heavy run's Phase 10 Part B
+# <<< 10B end
+
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
 #

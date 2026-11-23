@@ -2,7 +2,7 @@
 #   Run from inside chaRt/, from PowerShell or the RStudio terminal:
 #     Rscript --no-init-file tests/gallery.R
 #   It writes tests/gallery.html (git-ignored): one section per gold spec with its lint notes, the
-#   static chart, the plotly version, the first rows of the table and the code. tests/smoke.R
+#   static chart, the interactive version (ggiraph), the first rows of the table and the code. tests/smoke.R
 #   sources this file for the helpers only; the gallery is built only when it is run as a script.
 
 GOLD_COURSE_DIR <- "D:/repos/UMD_JPSM_coursework/Data_visualization_SURV752/assignments"
@@ -204,8 +204,8 @@ gallery_section <- function(item, i) {
     "**Lint notes**\n\n", notes, "\n\n",
     ":::: {style=\"display:flex; flex-wrap:wrap; gap:2rem; align-items:flex-start\"}\n", box, "**Static (ggplot2)**\n\n",
     r(size_opts, sprintf("print(gallery[[%d]]$plot)", i)), "\n:::\n",
-    box, "**Interactive (plotly)**",
-    if (length(item$warnings)) paste0(" - ggplotly() warned: ", paste(item$warnings, collapse = "; ")) else "", "\n\n",
+    box, "**Interactive (ggiraph)**",
+    if (length(item$warnings)) paste0(" - girafe() warned: ", paste(item$warnings, collapse = "; ")) else "", "\n\n",
     if (!is.null(item$widget)) r(size_opts, sprintf("gallery[[%d]]$widget", i)) else paste("*No widget:*", item$widget_error),
     "\n:::\n::::\n\n",
     "**The table** (", item$rows[["shown"]], " rows drawn from ", item$rows[["used"]], " used; ", item$rows[["dropped"]],
@@ -219,9 +219,9 @@ gallery_qmd <- function(items, rds, palettes = list(), palettes_rds = NULL) past
   "---\ntitle: chaRt gallery\nsubtitle: Every gold spec, static and interactive\n",
   "format:\n  html:\n    embed-resources: true\n    page-layout: full\n    toc: true\n    toc-depth: 2\n",
   "execute:\n  echo: false\n  warning: true\n  message: true\n---\n\n",
-  "Each section shows one gold spec from `tests/gold_specs.yaml`: the lint's notes, the static chart beside its plotly ",
+  "Each section shows one gold spec from `tests/gold_specs.yaml`: the lint's notes, the static chart beside its interactive ",
   "version at the same size, the first rows of the table that is drawn, and the R code that reproduces the chart.\n\n",
-  "```{r}\n#| include: false\nlibrary(ggplot2)\nlibrary(plotly)\ngallery <- readRDS(", deparse(rds), ")\n",
+  "```{r}\n#| include: false\nlibrary(ggplot2)\nlibrary(ggiraph)\ngallery <- readRDS(", deparse(rds), ")\n",
   if (!is.null(palettes_rds)) paste0("palettes <- readRDS(", deparse(palettes_rds), ")\n"), "```\n\n",
   paste(purrr::imap_chr(items, gallery_section), collapse = "\n\n"),
   if (length(palettes)) paste0("\n\n", palette_section(palettes)))
