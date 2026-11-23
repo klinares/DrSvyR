@@ -5,32 +5,38 @@
 #   grDevices, ragg and svglite (when installed: chart_device()), systemfonts (when installed: without it charts
 #   draw in the default fonts) and paletteer when it is installed (the app starts without it), and nothing else
 #   from the app.
-#   R/spec.R reads CHART_HIGHLIGHT, chart_style(), chart_theme_calls(), chart_style_layers(),
+#   R/spec.R reads chart_style(), chart_theme_calls(), chart_style_layers(),
 #   chart_font_values(), style_marks(), chart_palette(), chart_sequential(), chart_diverging() and
 #   chart_palette_default(); the code a chart comes with carries chart_theme_calls() written out
 #   as plain ggplot2 calls. Function definitions and constants only.
 
 
-# A highlight: the named values in CHART_HIGHLIGHT, everything else in the style's `grey`.
-CHART_HIGHLIGHT <- "#D55E00"
+# A highlight (Phase 10 Part D): the named values in the style's `accent`, everything else in the style's `slate` (a mid grey
+#   that still shows on a projector; the two are at least 3 to 1 apart and each at least 3 to 1 from the background, checked in
+#   tests/smoke.R). Emphasis is a statement: R never highlights a mark on its own.
 
 # ---- type ------------------------------------------------------------------------------------------
 
-# The two bundled families (www/fonts/, both under the SIL Open Font License 1.1, each with its
+# The three bundled families (www/fonts/, all under the SIL Open Font License 1.1, each with its
 #   licence file). Each is registered with systemfonts under two names: the family itself (regular, and
 #   bold for face = "bold") and "<family> SemiBold" (semibold as its plain face), since register_font()
 #   takes four faces, not a weight; `fallback` is what a chart draws in when the family is neither
-#   registered nor installed.
+#   registered nor installed. The display family (Barlow Condensed, the Briefing style's headlines) has no regular
+#   face: its "regular" is the SemiBold file, and `weights` says that a page declares only its bold face.
 CHART_FONT_DIR <- file.path("www", "fonts")
 CHART_FONTS <- list(
   sans = list(family = "Inter", fallback = "sans", css = "Inter, sans-serif",
               regular = "Inter-Regular.ttf", semibold = "Inter-SemiBold.ttf", bold = "Inter-Bold.ttf"),
   serif = list(family = "Source Serif 4", fallback = "serif", css = "'Source Serif 4', serif",
-               regular = "SourceSerif4-Regular.ttf", semibold = "SourceSerif4-Semibold.ttf", bold = "SourceSerif4-Bold.ttf"))
+               regular = "SourceSerif4-Regular.ttf", semibold = "SourceSerif4-Semibold.ttf", bold = "SourceSerif4-Bold.ttf"),
+  display = list(family = "Barlow Condensed", fallback = "sans", css = "'Barlow Condensed', 'Arial Narrow', sans-serif",
+                 regular = "BarlowCondensed-SemiBold.ttf", semibold = "BarlowCondensed-SemiBold.ttf", bold = "BarlowCondensed-Bold.ttf",
+                 weights = 700))
 
 # The variables the written code and the theme use for a family: sans regular is chart_font, and so on.
 CHART_FONT_VARS <- list(chart_font = c("sans", "regular"), chart_font_semibold = c("sans", "semibold"),
-                        chart_serif = c("serif", "regular"), chart_serif_semibold = c("serif", "semibold"))
+                        chart_serif = c("serif", "regular"), chart_serif_semibold = c("serif", "semibold"),
+                        chart_display = c("display", "regular"))
 
 # The name a family is registered under, for a weight: "regular" or "semibold".
 chart_font_name <- function(role, weight = "regular") {
@@ -162,7 +168,7 @@ chart_device_options <- function() {
 #                           a box's fill
 #   swap                    "lighten" on a dark background: a mark colour under CHART_MARK_CONTRAST on it is
 #                           replaced by its own lightened version (chart_lighten()); NA: none
-#   A series with no colour column is drawn in the chosen qualitative palette's first colour in every style.
+#   A series with no colour column is drawn in the chosen qualitative palette's first colour (or the style's `single`).
 #   The Phase 7 checks (tests/smoke.R): text, text_2 and caption against the background 4.5 to 1 or more;
 #   the grid below text; `grey` visible against the background but weaker than any palette colour.
 CHART_MARK_CONTRAST <- 3
@@ -172,38 +178,76 @@ CHART_STYLES <- list(
                background = "#FFFFFF", panel = "#FFFFFF", text = "#1A1A1A", text_2 = "#4D4D4D", caption = "#6B6B6B",
                grid = "#E5E5E5", grid_axes = "value", grid_width = 0.4, axis_line = NA, ticks = NA,
                title_font = "sans", title_weight = "bold", title_size = 1.2, subtitle_font = "sans", strip = "bold",
-               rule = NA, lift = FALSE, grey = "#C4C4C4", fit = "#4D4D4D", outline = "#FFFFFF", box_fill = "#F2F2F2", swap = NA),
+               rule = NA, lift = FALSE, grey = "#C4C4C4", fit = "#4D4D4D", outline = "#FFFFFF", box_fill = "#F2F2F2", swap = NA,
+               accent = "#0A4580", slate = "#8A95A3", single = NA, title_case = NA, axis_size = 1, subtitle_size = 1),
   minimal = list(label = "Minimal", note = "No grid and no axis line; ticks only. The least ink that still reads.",
                  background = "#FFFFFF", panel = "#FFFFFF", text = "#262626", text_2 = "#4D4D4D", caption = "#6B6B6B",
                  grid = "#E5E5E5", grid_axes = "none", grid_width = 0.4, axis_line = NA, ticks = "#4D4D4D",
                  title_font = "sans", title_weight = "semibold", title_size = 1.15, subtitle_font = "sans", strip = "semibold",
-                 rule = NA, lift = FALSE, grey = "#C4C4C4", fit = "#4D4D4D", outline = "#FFFFFF", box_fill = "#FFFFFF", swap = NA),
+                 rule = NA, lift = FALSE, grey = "#C4C4C4", fit = "#4D4D4D", outline = "#FFFFFF", box_fill = "#FFFFFF", swap = NA,
+                 accent = "#0A4580", slate = "#8A95A3", single = NA, title_case = NA, axis_size = 1, subtitle_size = 1),
   magazine = list(label = "Magazine", note = "A pale tint, a white grid, a heavy title.",
                   background = "#E6EDF2", panel = "#E6EDF2", text = "#14202B", text_2 = "#38464F", caption = "#4F5D66",
                   grid = "#FFFFFF", grid_axes = "value", grid_width = 0.7, axis_line = NA, ticks = NA,
                   title_font = "sans", title_weight = "bold", title_size = 1.5, subtitle_font = "sans", strip = "bold",
-                  rule = NA, lift = TRUE, grey = "#B5C0C9", fit = "#2B3A45", outline = "#E6EDF2", box_fill = "#F7FAFC", swap = NA),
+                  rule = NA, lift = TRUE, grey = "#B5C0C9", fit = "#2B3A45", outline = "#E6EDF2", box_fill = "#F7FAFC", swap = NA,
+                  accent = "#0A3668", slate = "#7A8794", single = NA, title_case = NA, axis_size = 1, subtitle_size = 1),
   desk = list(label = "Data desk", note = "Light grey, a darker grid both ways, a large bold title.",
               background = "#EBEBEB", panel = "#EBEBEB", text = "#111111", text_2 = "#333333", caption = "#4A4A4A",
               grid = "#C2C2C2", grid_axes = "both", grid_width = 0.4, axis_line = NA, ticks = NA,
               title_font = "sans", title_weight = "bold", title_size = 1.6, subtitle_font = "sans", strip = "bold",
-              rule = NA, lift = FALSE, grey = "#BDBDBD", fit = "#333333", outline = "#EBEBEB", box_fill = "#F7F7F7", swap = NA),
+              rule = NA, lift = FALSE, grey = "#BDBDBD", fit = "#333333", outline = "#EBEBEB", box_fill = "#F7F7F7", swap = NA,
+              accent = "#0A3668", slate = "#7C8590", single = NA, title_case = NA, axis_size = 1, subtitle_size = 1),
   newspaper = list(label = "Newspaper", note = "White, a serif title, a thin black rule under the title block, a hairline grid.",
                    background = "#FFFFFF", panel = "#FFFFFF", text = "#111111", text_2 = "#404040", caption = "#595959",
                    grid = "#D9D9D9", grid_axes = "value", grid_width = 0.2, axis_line = NA, ticks = NA,
                    title_font = "serif", title_weight = "bold", title_size = 1.35, subtitle_font = "serif", strip = "bold",
-                   rule = "#000000", lift = FALSE, grey = "#C4C4C4", fit = "#404040", outline = "#FFFFFF", box_fill = "#F2F2F2", swap = NA),
+                   rule = "#000000", lift = FALSE, grey = "#C4C4C4", fit = "#404040", outline = "#FFFFFF", box_fill = "#F2F2F2", swap = NA,
+                   accent = "#0A4580", slate = "#8A95A3", single = NA, title_case = NA, axis_size = 1, subtitle_size = 1),
   dark = list(label = "Dark", note = "Near-black, light text, a muted grid.",
               background = "#14171C", panel = "#14171C", text = "#ECEFF2", text_2 = "#B9C0C8", caption = "#9AA3AD",
               grid = "#303640", grid_axes = "value", grid_width = 0.4, axis_line = NA, ticks = NA,
               title_font = "sans", title_weight = "bold", title_size = 1.2, subtitle_font = "sans", strip = "bold",
-              rule = NA, lift = FALSE, grey = "#565E68", fit = "#C8CED6", outline = "#14171C", box_fill = "#232932", swap = "lighten"))
+              rule = NA, lift = FALSE, grey = "#565E68", fit = "#C8CED6", outline = "#14171C", box_fill = "#232932", swap = "lighten",
+              accent = "#9ACBFF", slate = "#5F6B79", single = NA, title_case = NA, axis_size = 1, subtitle_size = 1),
+  briefing = list(label = "Briefing", note = "Off-white, a hairline grid across the chart, condensed upper-case titles, one deep blue and slate greys.",
+                  background = "#F7F6F2", panel = "#F7F6F2", text = "#1C2431", text_2 = "#5B6470", caption = "#656D78",
+                  grid = "#D9D8D2", grid_axes = "horizontal", grid_width = 0.25, axis_line = NA, ticks = NA,
+                  title_font = "display", title_weight = "bold", title_size = 1.55, subtitle_font = "sans", strip = "bold",
+                  rule = NA, lift = FALSE, grey = "#C9CED6", fit = "#3B4656", outline = "#F7F6F2", box_fill = "#FFFFFF", swap = NA,
+                  accent = "#173A75", slate = "#7F8A99", single = "#173A75", title_case = "upper", axis_size = 0.9, subtitle_size = 0.85))
 
 # The style of that name; an error for one that is not there.
 chart_style <- function(name = CHART_STYLE_DEFAULT) {
   s = CHART_STYLES[[name %||% CHART_STYLE_DEFAULT]]
   if (is.null(s)) stop("There is no style '", name, "'.", call. = FALSE)
   s
+}
+
+# Upper case for a title (the style's `title_case`, Phase 10 Part D), by words: the text is cut at its spaces and every word is
+#   upper-cased except one that holds a digit ("2024", "34%", "Q3"), one that holds a superscript 2 or 3, a micro sign or a degree sign, a unit from CHART_CASE_UNITS
+#   (as written, lower case: "kg", "km/h", "kWh" keeps its capitals) and one with a capital after a lower-case letter inside it
+#   ("kWh", "GHz", "iPhone": a unit or a name whose case carries meaning). The stored text is not changed; this is what is drawn.
+CHART_CASE_UNITS <- c("kg", "g", "mg", "lb", "lbs", "oz", "km", "m", "cm", "mm", "mi", "ft", "ml", "l", "dl", "mph", "kph", "hz", "khz", "mhz",
+                      "ghz", "kb", "mb", "gb", "tb", "kw", "kwh", "mw", "mwh", "gw", "gwh", "kv", "kcal", "km/h", "m/s")
+
+# The pieces of a text, words and the spaces between them, with whether each keeps its case: data frame(text, keep).
+chart_case_tokens <- function(text) {
+  pieces = regmatches(text, gregexpr("\\S+|\\s+", text))[[1]]
+  keeps = function(p) {
+    core = gsub("^[^[:alnum:]/]+|[^[:alnum:]/]+$", "", p)
+    grepl("[0-9]", p) || grepl(paste0("[", intToUtf8(c(178L, 179L, 181L, 176L)), "]"), p) || core %in% CHART_CASE_UNITS || grepl("[[:lower:]][[:upper:]]", core)
+  }
+  data.frame(text = pieces, keep = vapply(pieces, function(p) !grepl("^\\s+$", p) && keeps(p), logical(1), USE.NAMES = FALSE) | grepl("^\\s+$", pieces),
+             stringsAsFactors = FALSE, row.names = NULL)
+}
+
+# A title as a style draws it: upper case where its title_case says "upper" (words that keep their case keep it, see
+#   chart_case_tokens()), as written otherwise; a text that is not one string (NULL, NA) is returned as it is.
+chart_title_case <- function(text, style = CHART_STYLE_DEFAULT) {
+  if (!identical(chart_style(style)$title_case, "upper") || !is.character(text) || length(text) != 1L || is.na(text) || !nzchar(text)) return(text)
+  tk = chart_case_tokens(text)
+  paste(ifelse(tk$keep, tk$text, toupper(tk$text)), collapse = "")
 }
 
 # WCAG contrast ratio of two colours (vectorised over the first), from relative luminance.
@@ -519,6 +563,9 @@ palette_cvd <- function(name, n = CHART_CVD_N) {
 #   else its first usable colour; in a style, under the same rule as every colour (style_marks(): lightened on Dark when it is
 #   under 3 to 1 on the background).
 palette_single <- function(name, style = CHART_STYLE_DEFAULT) {
+  # a style that has its own colour for a single series (Briefing: its deep blue) uses it with the default palette; a palette the analyst chose keeps its own
+  own_style = chart_style(style)$single
+  if (!is.na(own_style) && identical(name, chart_palette_default()$qualitative)) return(own_style)
   own = CHART_PALETTES[[name]]$single
   if (is.null(own)) return(palette_usable(name, style)[[1]])
   style_marks(own, style)[[1]]
@@ -597,7 +644,7 @@ chart_theme_calls <- function(style = CHART_STYLE_DEFAULT, grid = "y", legend = 
     do.call(e, c(list("element_text"), args), quote = TRUE)
   }
   axes = if (identical(grid, "none") || identical(st$grid_axes, "none")) "none"
-         else if (identical(st$grid_axes, "both")) "xy" else grid
+         else if (identical(st$grid_axes, "both")) "xy" else if (identical(st$grid_axes, "horizontal")) "y" else grid
   grid_el = function(axis) if (axes %in% c(axis, "xy")) line(st$grid, st$grid_width) else blank
   ticked = !is.na(st$ticks)
   args = list(
@@ -611,11 +658,11 @@ chart_theme_calls <- function(style = CHART_STYLE_DEFAULT, grid = "y", legend = 
     axis.ticks.length = if (ticked) call("unit", 3, "pt"),
     plot.title = text(st$title_font, st$title_weight, size = call("rel", st$title_size), hjust = 0, colour = st$text),
     plot.title.position = "plot",
-    plot.subtitle = text(st$subtitle_font, "regular", hjust = 0, colour = st$text_2),
+    plot.subtitle = text(st$subtitle_font, "regular", hjust = 0, colour = st$text_2, size = if (st$subtitle_size != 1) call("rel", st$subtitle_size)),
     plot.caption = e("element_text", colour = st$caption, hjust = 0),
     plot.caption.position = "plot",
-    axis.title = e("element_text", colour = st$text_2),
-    axis.text = e("element_text", colour = st$text_2),
+    axis.title = e("element_text", colour = st$text_2, size = if (st$axis_size != 1) call("rel", st$axis_size)),
+    axis.text = e("element_text", colour = st$text_2, size = if (st$axis_size != 1) call("rel", round(0.8 * st$axis_size, 3))),
     axis.text.y = if (isTRUE(lift) && isTRUE(st$lift)) e("element_text", colour = st$text_2, hjust = 1, vjust = -0.35, margin = call("margin", r = 4)),
     strip.text = text("sans", st$strip, hjust = 0, colour = st$text),
     legend.position = legend,

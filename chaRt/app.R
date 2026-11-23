@@ -131,7 +131,7 @@ check_reflex_files()
 #   has lost the table stops the app here, naming the file.
 check_methodology_file()
 
-# The two bundled typefaces in www/fonts/ (Inter and Source Serif 4), registered with systemfonts so that charts are
+# The three bundled typefaces in www/fonts/ (Inter, Source Serif 4 and Barlow Condensed), registered with systemfonts so that charts are
 #   drawn in them whatever the server has installed. Missing files or no systemfonts: the app starts, charts
 #   are drawn in the default fonts, and Start here says so once (chart_fonts_missing()).
 chart_fonts_register()
