@@ -2,6 +2,7 @@
 .Rhistory
 tests/*.out
 !tests/live_run_9.out
+!tests/live_run_10.out
 tests/gallery.html
 tests/style_sheet.html
 tests/live_gallery.html
