@@ -702,8 +702,10 @@ chart_theme_calls <- function(style = CHART_STYLE_DEFAULT, grid = "y", legend = 
     axis.text.x.top = if (!is.na(st$rule)) blank,
     axis.ticks.x.top = if (!is.na(st$rule)) blank,
     axis.title.x.top = if (!is.na(st$rule)) blank)
-  list(e("theme_minimal", base_size = base_size, base_family = quote(chart_font)),
-       as.call(c(list(as.name("theme")), purrr::compact(args))))
+  # a style made from an office's theme adds its text settings last, as a plain theme() call (style_from_theme())
+  c(list(e("theme_minimal", base_size = base_size, base_family = quote(chart_font)),
+         as.call(c(list(as.name("theme")), purrr::compact(args)))),
+    if (!is.null(st$layer)) list(st$layer))
 }
 
 # Layers a style adds besides its theme: the thin rule under the title block is the top axis line, so a
@@ -723,8 +725,186 @@ theme_value <- function(x, env) {
 }
 
 # The ggplot2 theme of a style: the calls of chart_theme_calls(), applied with the fonts it can draw in.
+#   A style made from an office's ggplot theme (style_from_theme(), below) gets that theme itself as the last layer, then the
+#   legend's place again (a theme function sets its own legend place, and this chart has asked for one).
 chart_theme <- function(style = CHART_STYLE_DEFAULT, base_size = 12, grid = "y", legend = "top", lift = FALSE) {
   cls = chart_theme_calls(style, grid, legend, lift, base_size)
   env = list2env(chart_font_values(cls), parent = asNamespace("ggplot2"))
-  purrr::reduce(purrr::map(cls, theme_value, env = env), `+`)
+  th = purrr::reduce(purrr::map(cls, theme_value, env = env), `+`)
+  tpl = chart_style(style)$template
+  if (is.null(tpl)) th else th + tpl + ggplot2::theme(legend.position = legend)
+}
+
+
+# ---- an office's own ggplot theme ----------------------------------------------------------------------
+
+# An office may have a ggplot theme function of its own (a file that never leaves its machine). app.R names the file and the
+#   function (APP_THEME_FILE, APP_THEME_FUNCTION); theme_style_load() sources the file into an environment of its own, calls the
+#   function and makes a style of what it returns (style_from_theme()), registered under APP_THEME_NAME and made the default. A file
+#   that is not there, does not parse, or has no such function leaves the app as it was, with one sentence for Start here.
+# How a theme becomes a style: each element is resolved with ggplot2::calc_element(element, theme) on the completed theme
+#   (ggplot2::complete_theme()), so what a theme inherits is read too. The table's fields come from it; what a theme cannot say
+#   (accent, slate, the colour of a series with no groups) comes from the arguments, by default the Clean style's. The text settings
+#   a field does not hold (the title's colour and alignment, the colours of axis, legend and panel names, a family installed here
+#   that is not one of the bundled ones) are kept as `layer`: one plain theme() call that chart_theme_calls() adds last, so the
+#   code a chart comes with runs without the template. Sizes are carried by the fields (title, subtitle, axis), not by the layer.
+
+# A colour as "#RRGGBB" (NA for none or transparent): calc_element() gives "#EBEBEBFF", "white" or NA.
+theme_hex <- function(col) {
+  if (is.null(col) || length(col) != 1L || is.na(col) || !nzchar(col)) return(NA_character_)
+  v = tryCatch(grDevices::col2rgb(col, alpha = TRUE), error = function(e) NULL)
+  if (is.null(v) || v[4, 1] == 0) return(NA_character_)
+  grDevices::rgb(v[1, 1], v[2, 1], v[3, 1], maxColorValue = 255)
+}
+
+# A colour between two: `share` of the way from a to b.
+theme_mix <- function(a, b, share) {
+  x = grDevices::col2rgb(a); y = grDevices::col2rgb(b)
+  v = round(x + (y - x) * share)
+  grDevices::rgb(v[1, 1], v[2, 1], v[3, 1], maxColorValue = 255)
+}
+
+# One element of a completed theme, or NULL when it is blank (or cannot be resolved).
+theme_element <- function(ct, name) {
+  el = tryCatch(ggplot2::calc_element(name, ct), error = function(e) NULL)
+  if (is.null(el) || S7::S7_inherits(el, ggplot2::element_blank)) NULL else el
+}
+
+# A property of an element (S7, read with @), or `default` when the element is blank or the property empty.
+theme_prop <- function(el, prop, default = NULL) {
+  if (is.null(el)) return(default)
+  v = tryCatch(S7::prop(el, prop), error = function(e) NULL)
+  if (is.null(v) || length(v) == 0L || (length(v) == 1L && is.na(v))) default else v
+}
+
+# The family names a theme writes in, with no bundled family and no generic name ("", sans, serif, mono) among them: these are
+#   the ones that must be installed here for the theme to look as it was made.
+theme_families <- function(ct) {
+  nm = c("text", "plot.title", "plot.subtitle", "plot.caption", "axis.title", "axis.text", "strip.text", "legend.title", "legend.text")
+  fam = unique(unlist(purrr::map(nm, function(n) theme_prop(theme_element(ct, n), "family", ""))))
+  setdiff(fam[nzchar(fam)], c("sans", "serif", "mono", purrr::map_chr(CHART_FONTS, "family")))
+}
+
+# Which bundled role a family name stands for: a bundled family by its name, "serif" for serif, otherwise sans.
+theme_font_role <- function(family) {
+  bundled = purrr::map_chr(CHART_FONTS, "family")
+  if (family %in% bundled) names(bundled)[bundled == family][[1]] else if (identical(family, "serif")) "serif" else "sans"
+}
+
+# A style (a CHART_STYLES entry with every field the other styles have) from a ggplot theme. accent, slate and single are what a
+#   theme cannot give; their defaults are the Clean style's. Besides the fields: `layer` (the plain theme() call above), `template`
+#   (the theme itself, added last by chart_theme()) and `fonts_missing` (families the theme names that this machine cannot draw in;
+#   their text is drawn in the default sans).
+style_from_theme <- function(theme, name, accent = CHART_STYLES$clean$accent, slate = CHART_STYLES$clean$slate, single = CHART_STYLES$clean$single) {
+  if (!ggplot2::is_theme(theme)) stop("'", name, "' is not a ggplot theme.", call. = FALSE)
+  ct = ggplot2::complete_theme(theme)
+  el = function(n) theme_element(ct, n)
+  col = function(n, default) theme_hex(theme_prop(el(n), "colour")) %|na|% default
+  base = theme_prop(el("text"), "size", 11)
+  background = theme_hex(theme_prop(el("plot.background"), "fill")) %|na|% "#FFFFFF"
+  panel = theme_hex(theme_prop(el("panel.background"), "fill")) %|na|% background
+  text = col("text", "#1A1A1A")
+  gx = el("panel.grid.major.x"); gy = el("panel.grid.major.y")
+  grid_line = gy %||% gx
+  weight = function(n) if (grepl("bold", theme_prop(el(n), "face", "plain"))) "bold" else "regular"
+  missing = purrr::keep(theme_families(ct), function(f) !chart_font_available(f))
+  family = function(n) {
+    f = theme_prop(el(n), "family", "")
+    if (nzchar(f) && f %in% missing) "sans" else if (nzchar(f)) f else "sans"
+  }
+  dark = chart_contrast(background, "#000000") < chart_contrast(background, "#FFFFFF")
+  size_of = function(n, of) round(theme_prop(el(n), "size", base * of) / base, 2)
+  st = list(label = name, note = "Made from your office's ggplot theme.",
+            background = background, panel = panel, text = text, text_2 = col("axis.text", theme_mix(text, background, 0.3)),
+            caption = col("plot.caption", theme_mix(text, background, 0.4)),
+            grid = theme_hex(theme_prop(grid_line, "colour")) %|na|% theme_mix(background, text, 0.12),
+            grid_axes = if (!is.null(gx) && !is.null(gy)) "both" else if (!is.null(gy)) "horizontal" else if (!is.null(gx)) "value" else "none",
+            grid_width = round(theme_prop(grid_line, "linewidth", 0.4), 2),
+            axis_line = theme_hex(theme_prop(el("axis.line.x"), "colour")), ticks = theme_hex(theme_prop(el("axis.ticks.x"), "colour")),
+            title_font = theme_font_role(family("plot.title")), title_weight = weight("plot.title"), title_size = size_of("plot.title", 1.2),
+            subtitle_font = theme_font_role(family("plot.subtitle")), strip = if (identical(weight("strip.text"), "bold")) "bold" else "semibold",
+            rule = NA, lift = FALSE, grey = theme_mix(background, text, 0.25), fit = col("axis.text", theme_mix(text, background, 0.3)),
+            outline = background, box_fill = theme_mix(panel, text, 0.05), swap = if (dark) "lighten" else NA,
+            accent = accent, slate = slate, single = single, title_case = NA,
+            axis_size = round(theme_prop(el("axis.text.x"), "size", base * 0.8) / (0.8 * base), 2), subtitle_size = size_of("plot.subtitle", 1))
+  # the layer: the text settings the fields do not hold, as plain element_text() calls
+  txt = function(n, hjust = FALSE, face = FALSE) {
+    e = el(n)
+    if (is.null(e)) return(NULL)
+    f = family(n)
+    args = purrr::compact(list(family = if (!f %in% c("sans", "serif", purrr::map_chr(CHART_FONTS, "family"))) f,
+                               face = if (face) theme_prop(e, "face"), colour = theme_hex(theme_prop(e, "colour")) %|na|% NULL,
+                               hjust = if (hjust) theme_prop(e, "hjust")))
+    if (length(args)) as.call(c(list(as.name("element_text")), args))
+  }
+  layer = purrr::compact(list(plot.title = txt("plot.title", hjust = TRUE), plot.subtitle = txt("plot.subtitle", hjust = TRUE),
+                              plot.caption = txt("plot.caption", hjust = TRUE), axis.title = txt("axis.title"), axis.text = txt("axis.text"),
+                              strip.text = txt("strip.text"), legend.title = txt("legend.title"), legend.text = txt("legend.text")))
+  c(st, list(layer = if (length(layer)) as.call(c(list(as.name("theme")), layer)), template = theme, fonts_missing = unname(missing)))
+}
+
+# NA-coalescing: b when a is NA (or NULL).
+`%|na|%` <- function(a, b) if (is.null(a) || (length(a) == 1L && is.na(a))) b else a
+
+# The contrast checks of a style, as a table: each pair, its ratio, the least it needs and whether it passes. Text against the
+#   background needs 4.5 to 1 (the title's own colour too, when the layer gives it one); accent and slate against the background and
+#   against each other need CHART_MARK_CONTRAST (the highlight rule of Phase 10 Part D).
+style_contrast <- function(st) {
+  title = st$layer$plot.title$colour %||% st$text
+  pairs = list(c("text", st$text, st$background, 4.5), c("title", title, st$background, 4.5), c("axis text", st$text_2, st$background, 4.5),
+               c("caption", st$caption, st$background, 4.5), c("accent", st$accent, st$background, CHART_MARK_CONTRAST),
+               c("slate", st$slate, st$background, CHART_MARK_CONTRAST), c("accent against slate", st$accent, st$slate, CHART_MARK_CONTRAST))
+  out = purrr::map_dfr(pairs, function(p) tibble::tibble(pair = p[[1]], a = p[[2]], b = p[[3]], ratio = round(chart_contrast(p[[2]], p[[3]]), 2), needs = as.numeric(p[[4]])))
+  out$pass = out$ratio >= out$needs
+  out
+}
+
+# The key a style name is registered under: lower case, letters and digits ("Office" is "office").
+theme_style_key <- function(name) gsub("[^a-z0-9]+", "_", tolower(trimws(name)))
+
+# Loads an office's theme: the file sourced into an environment of its own (its parent the global one, so the packages the app has
+#   attached are found; nothing it defines lands in the global environment), the function called, the style made. Returns a list:
+#   ok, key, style, and notes, the sentences for Start here (none when no file is set; one when it cannot be used; when it is used,
+#   one for each font it names that is missing here and one for the contrast pairs that fail). It never stops the app.
+theme_style_load <- function(file, fn, name = "Office", accent = CHART_STYLES$clean$accent, slate = CHART_STYLES$clean$slate) {
+  fallback = paste0("so charts use the ", chart_style(CHART_STYLE_DEFAULT)$label, " style.")
+  no = function(why) list(ok = FALSE, key = NULL, style = NULL, notes = paste0("The office theme ", why, ", ", fallback))
+  if (!is_text1(file) || !nzchar(file)) return(list(ok = FALSE, key = NULL, style = NULL, notes = character(0)))
+  if (!file.exists(file)) return(no(paste0("file ", basename(file), " is not there")))
+  env = new.env(parent = globalenv())
+  loaded = tryCatch({ sys.source(file, envir = env); TRUE }, error = function(e) conditionMessage(e))
+  if (!isTRUE(loaded)) return(no(paste0("file ", basename(file), " could not be read (", sub("\n.*$", "", loaded), ")")))
+  if (!is_text1(fn) || !exists(fn, envir = env, inherits = FALSE) || !is.function(get(fn, envir = env)))
+    return(no(paste0("file ", basename(file), " has no function called ", fn)))
+  th = tryCatch(get(fn, envir = env)(), error = function(e) e)
+  if (inherits(th, "error")) return(no(paste0("function ", fn, " stopped with an error (", sub("\n.*$", "", conditionMessage(th)), ")")))
+  if (!ggplot2::is_theme(th)) return(no(paste0("function ", fn, " did not return a ggplot theme")))
+  st = tryCatch(style_from_theme(th, name, accent, slate), error = function(e) e)
+  if (inherits(st, "error")) return(no(paste0("could not be turned into a style (", conditionMessage(st), ")")))
+  ct = style_contrast(st)
+  bad = ct[!ct$pass, ]
+  notes = c(if (length(st$fonts_missing)) paste0("The office theme names the font", if (length(st$fonts_missing) > 1L) "s ", if (length(st$fonts_missing) == 1L) " ",
+                                                 paste(st$fonts_missing, collapse = " and "), ", which this machine does not have, so its text is drawn in the default sans."),
+            if (nrow(bad)) paste0("Some colours of the office theme are hard to tell apart: ",
+                                  paste0(bad$pair, " ", format(bad$ratio, nsmall = 1), " to 1 (needs ", bad$needs, ")", collapse = "; "), "."))
+  list(ok = TRUE, key = theme_style_key(name), style = st, notes = notes)
+}
+
+# Puts a loaded style into CHART_STYLES (in the global environment, where R/ lives) and, when default is TRUE, makes it the default.
+#   Returns what it replaced (CHART_STYLES and CHART_STYLE_DEFAULT as they were), so a test can put them back.
+theme_style_register <- function(loaded, default = TRUE) {
+  was = list(styles = CHART_STYLES, default = CHART_STYLE_DEFAULT)
+  if (!isTRUE(loaded$ok)) return(invisible(was))
+  styles = CHART_STYLES
+  styles[[loaded$key]] = loaded$style
+  assign("CHART_STYLES", styles, envir = globalenv())
+  if (isTRUE(default)) assign("CHART_STYLE_DEFAULT", loaded$key, envir = globalenv())
+  invisible(was)
+}
+
+# Puts back what theme_style_register() replaced.
+theme_style_restore <- function(was) {
+  assign("CHART_STYLES", was$styles, envir = globalenv())
+  assign("CHART_STYLE_DEFAULT", was$default, envir = globalenv())
+  invisible(NULL)
 }

@@ -107,6 +107,7 @@ start_ui <- function()
            "summary describes the file, not a population. Start on the Data page, then go to Explore."),
     device_note(),
     fonts_note(),
+    theme_note(),
     video_note(),
     mod_key_ui("key"),
     mod_connect_ui("connect"))
@@ -141,6 +142,13 @@ fonts_note <- function() {
   many = length(missing) > 1L
   warn_box(paste0("The typeface", if (many) "s ", if (!many) " ", if (many) paste0(paste(utils::head(missing, -1L), collapse = ", "), " and ", utils::tail(missing, 1L)) else missing, if (many) " are" else " is",
                   " not available here, so charts are drawn in the default ", paste(unique(purrr::map_chr(CHART_FONTS[names(missing)], "fallback")), collapse = " and "), " font", if (many) "s", "."))
+}
+
+# Said once on Start here about the office's ggplot theme (APP_THEME_FILE in app.R): why it is not used, a font it names that is
+#   missing here, or colours of it that fail the contrast checks; a warning, never an error. Nothing when no theme is set or all is well.
+theme_note <- function(notes = if (exists("APP_THEME_NOTES", envir = globalenv())) get("APP_THEME_NOTES", envir = globalenv()) else character(0)) {
+  if (!length(notes)) return(NULL)
+  tagList(purrr::map(notes, warn_box))
 }
 
 # A tab that a later phase builds.

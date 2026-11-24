@@ -111,6 +111,32 @@ Anthropic's API; `work` is an OpenAI-style endpoint whose base URL and model id 
 fill in at work. The environment variable `CHART_PROFILE` picks one; without it `APP_DEFAULT_PROFILE`
 (`home`) is used. The banner, logo, upload limit and Source code link are in the same section.
 
+## Using your office's ggplot theme
+
+If your office has a ggplot theme function, chaRt can use it as a chart style and make it the default. The file stays where it
+is (on the work machine): it is read when the app starts and is never copied into this folder. Five settings at the top of `app.R`:
+
+| Setting | What it is |
+|---|---|
+| `APP_THEME_FILE` | The path of the R file that defines the theme function. `""` (the default) means none. Keep the file outside `chaRt/`, so that it is not committed or published. |
+| `APP_THEME_FUNCTION` | The name of the function in that file. It is called with no arguments and must return a ggplot theme. |
+| `APP_THEME_NAME` | What the Style dialog calls the style (`"Office"`). |
+| `APP_THEME_ACCENT` | The colour of a highlighted mark, which a theme cannot give. |
+| `APP_THEME_SLATE` | The colour of the marks behind a highlight, which a theme cannot give either. |
+
+When the app starts, it sources the file into an environment of its own and calls the function. It reads every element with
+`ggplot2::calc_element()` and fills a style from it (`style_from_theme()` in `R/theme.R`), with your theme added last.
+- **Code that comes with a chart:** it carries your theme's values as a plain `theme()` call, so it runs on a machine without
+  the file.
+- **When the theme can't be used:** a missing file, a syntax error or a wrong function name leaves the usual default style. The
+  app still starts, and Start here says why in one sentence.
+- **Missing fonts:** a font your theme names that this machine does not have is drawn in the default sans, and Start here
+  names it.
+- **Colours that fail the contrast checks:** they are listed on Start here as a warning.
+
+Two stand-ins are in `tests/`, a light one and a dark one, to try the settings with. For example, set `APP_THEME_FILE` to
+`"tests/theme_standin_light.R"` and `APP_THEME_FUNCTION` to `"theme_standin_light"`.
+
 ## Publish: the probe first, then the app
 
 Both go to Posit Connect with `rsconnect`. Run these yourself at work; nothing here publishes.

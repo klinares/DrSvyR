@@ -433,6 +433,11 @@ sheet_section <- function(heading, intro, cells)
        html = paste0("<section><h2>", htmltools::htmlEscape(heading), "</h2><p class=\"intro\">", htmltools::htmlEscape(intro), "</p><div class=\"grid\">",
                      paste(purrr::map_chr(cells, "html"), collapse = ""), "</div></section>"))
 
+# The stand-ins for an office's ggplot theme (section G): the file, the function, the style's name, and the highlight colours given to it.
+STYLE_SHEET_THEMES <- list(
+  list(file = file.path("tests", "theme_standin_light.R"), fn = "theme_standin_light", name = "Office light"),
+  list(file = file.path("tests", "theme_standin_dark.R"), fn = "theme_standin_dark", name = "Office dark", accent = "#9ACBFF", slate = "#5F6B79"))
+
 build_style_sheet <- function(out = STYLE_SHEET_OUT) {
   work = tempfile("style_sheet_")
   dir.create(work)
@@ -512,7 +517,21 @@ build_style_sheet <- function(out = STYLE_SHEET_OUT) {
   sec_f = sheet_section("Phase 7b", paste0("The charts of the faults found by looking (items 1, 2, 3, 4, 6 and 8), ",
                                            if (have_before) paste0("before (drawn by the code at commit ", PHASE7B_BEFORE, ", exported with git archive) and after.")
                                            else "after only (the code before could not be exported from git here)."), f)
-  secs = list(sec_f, sec_a, sec_b, sec_c, sec_d, sec_e)
+  # G. an office's own ggplot theme: the two stand-ins in tests/ (the real theme stays on the work machine), each loaded as app.R loads
+  #   one, registered for the drawing only (not made the default) and put back; a bar, a line and a scatter in each
+  g = purrr::list_flatten(purrr::map(STYLE_SHEET_THEMES, function(t) {
+    loaded = theme_style_load(t$file, t$fn, t$name, t$accent %||% CHART_STYLES$clean$accent, t$slate %||% CHART_STYLES$clean$slate)
+    if (!isTRUE(loaded$ok)) return(list())
+    was = theme_style_register(loaded, default = FALSE)
+    on.exit(theme_style_restore(was))
+    purrr::compact(purrr::map(c("bar", "line", "scatter"), function(fam) {
+      x = if (identical(fam, "line")) panel else gold[[fam]]
+      if (is.null(x)) return(NULL)
+      sheet_cell(paste0(fam, ", ", t$name, " (stand-in theme)"), x$spec, x$g, sheet_palette(loaded$key))
+    }))
+  }))
+  sec_g = sheet_section("An office's ggplot theme (stand-ins)", "Two stand-in theme functions in tests/, read with style_from_theme() as app.R reads APP_THEME_FILE: a light one with a serif title in its own colour, and a dark one whose title font is missing here (drawn in the default sans) and whose caption fails the contrast check.", unname(g))
+  secs = list(sec_f, sec_a, sec_b, sec_c, sec_d, sec_e, sec_g)
   total = sum(purrr::map_int(secs, "n"))
   html = paste0("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
                 "<title>chaRt style sheet</title><style>body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:1300px;background:#fff;color:#1a1a1a}",

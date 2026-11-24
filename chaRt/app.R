@@ -22,6 +22,19 @@ APP_MAX_UPLOAD_MB <- 50
 # Where the "Source code" button in the header links to. At work, point it at the internal copy.
 APP_SOURCE_URL <- "https://github.com/klinares/drsvyr/tree/main/chaRt"
 
+# The office's own ggplot theme, used as a chart style and made the default (README: "Using your office's ggplot theme").
+#   APP_THEME_FILE      the R file that defines the theme function; "" for none. It is read where the app runs and is not part of
+#                       this repository (keep it outside chaRt/, or name it in .rscignore if it must not be published).
+#   APP_THEME_FUNCTION  the name of the function in that file; it is called with no arguments and returns a ggplot theme.
+#   APP_THEME_NAME      what the Style dialog calls the style.
+#   APP_THEME_ACCENT, APP_THEME_SLATE   the highlight colours a theme cannot give (a highlighted mark, and the marks behind it).
+#   A file that is not there or cannot be used leaves the present default, and Start here says why in one sentence.
+APP_THEME_FILE <- ""
+APP_THEME_FUNCTION <- "theme_office"
+APP_THEME_NAME <- "Office"
+APP_THEME_ACCENT <- "#0A4580"
+APP_THEME_SLATE <- "#8A95A3"
+
 # The profile used when the environment variable CHART_PROFILE is not set: "home" or "work".
 APP_DEFAULT_PROFILE <- "home"
 
@@ -140,6 +153,15 @@ check_methodology_file()
 #   drawn in them whatever the server has installed. Missing files or no systemfonts: the app starts, charts
 #   are drawn in the default fonts, and Start here says so once (chart_fonts_missing()).
 chart_fonts_register()
+
+# The office's theme (APP_THEME_FILE, above), after the fonts so that a font it names is looked for among them too: sourced into
+#   an environment of its own, made into a style, registered and made the default (R/theme.R). It never stops the app: what went
+#   wrong is a sentence on Start here (APP_THEME_NOTES, read by theme_note() in R/ui.R).
+local({
+  loaded = theme_style_load(APP_THEME_FILE, APP_THEME_FUNCTION, APP_THEME_NAME, APP_THEME_ACCENT, APP_THEME_SLATE)
+  theme_style_register(loaded)
+  assign("APP_THEME_NOTES", loaded$notes, envir = globalenv())
+})
 
 
 # ---- 4. process settings ----------------------------------------------------

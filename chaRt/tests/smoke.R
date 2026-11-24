@@ -4036,12 +4036,13 @@ if (run_fast) {   # the fast run (moved from the heavy run in Phase 10b: the hea
   # Phase 7b adds a row of its (look) charts: after, and before when the old code could be exported from git
   d7_before <- grepl("before (drawn by the code at commit", d7_sheet, fixed = TRUE)
   d7_expect <- 9L * length(CHART_STYLES) + 2L * length(chart_palettes("qualitative")) + 3L + 9L * 2L + 2L * d7_met_of("qualitative") + d7_met_of("sequential") + d7_met_of("diverging") +
-    length(PHASE7B_LOOK) * (if (d7_before) 2L else 1L)
+    length(PHASE7B_LOOK) * (if (d7_before) 2L else 1L) + 3L * length(STYLE_SHEET_THEMES)
   d7_sheet_src <- paste(readLines(file.path("tests", "gallery.R"), encoding = "UTF-8"), collapse = "\n")
   d7_build_src <- sub("(?s)^.*(build_style_sheet <- function.*?)\nif \\(sys.nframe.*$", "\\1", d7_sheet_src, perl = TRUE)
   cat("      style sheet: ", d7_n_imgs, " charts (expected ", d7_expect, "), ", round(file.size(d7_sheet_file) / 1e6, 1), " MB\n", sep = "")
-  check("7D-2: tests/style_sheet.html: every family in every style (63), every qualitative palette on Clean and on Dark, the three labelled charts, one chart of each family with labels and annotate in Newspaper and Dark, and the MetBrewer palettes on offer: the count of drawn charts is the count expected from the app's own palette lists, none failed to draw",
+  check("7D-2: tests/style_sheet.html: every family in every style (63), every qualitative palette on Clean and on Dark, the three labelled charts, one chart of each family with labels and annotate in Newspaper and Dark, the MetBrewer palettes on offer, and a bar, a line and a scatter in each stand-in office theme: the count of drawn charts is the count expected from the app's own palette lists, none failed to draw",
         d7_n_imgs == d7_expect && d7_n_figs == d7_n_imgs && !grepl("Could not draw this", d7_sheet, fixed = TRUE) &&
+          all(purrr::map_lgl(c("bar", "line", "scatter"), function(f) all(purrr::map_lgl(STYLE_SHEET_THEMES, function(t) grepl(paste0("alt=\"", f, ", ", t$name, " (stand-in theme)"), d7_sheet, fixed = TRUE))))) &&
           all(purrr::map_lgl(names(CHART_STYLES), function(s) lengths(regmatches(d7_sheet, gregexpr(paste0(", ", CHART_STYLES[[s]]$label, "\""), d7_sheet, fixed = TRUE))) >= 9L)) &&
           all(purrr::map_lgl(c("bar", "dot", "line", "slope", "scatter", "bubble", "histogram", "box", "heatmap"), function(f) grepl(paste0("alt=\"", f, ", "), d7_sheet, fixed = TRUE) && grepl(paste0(f, ", (labels and annotate|labels|cell values|no labels or annotate for this family), Newspaper"), d7_sheet) && grepl(paste0(f, ", [a-z ,]*Dark"), d7_sheet))) &&
           all(purrr::map_lgl(unname(chart_palettes("qualitative")), function(l) grepl(paste0(htmltools::htmlEscape(l), " on Clean"), d7_sheet, fixed = TRUE) && grepl(paste0(htmltools::htmlEscape(l), " on Dark"), d7_sheet, fixed = TRUE))) &&
@@ -8305,6 +8306,105 @@ check("10b-18: the facts are the same with hexagons and with rectangles (a headl
       (!hex_here || identical(b10h_facts(TRUE), b10h_facts(FALSE))) && length(b10h_calls) == 1L && !"hexbin" %in% b10h_pkgs && "tidyr" %in% b10h_pkgs)
 }   # the fast run only
 # <<< 10h end
+
+# ---- an office's own ggplot theme as a style (APP_THEME_FILE in app.R; style_from_theme() in R/theme.R) ------------------------------------------
+# >>> 10t begin
+# The real theme stays on the work machine; two stand-ins in tests/ take its place: a light one on theme_minimal() with its own title colour, a grid across
+#   the chart only and a serif title, and a dark one whose title is in a font no machine here has and whose caption is too dim for its ground.
+if (run_fast) {   # the fast run only; not indented, to keep the diff small
+t10_light_file <- file.path("tests", "theme_standin_light.R")
+t10_dark_file <- file.path("tests", "theme_standin_dark.R")
+t10_light <- theme_style_load(t10_light_file, "theme_standin_light", "Office light")
+t10_dark <- theme_style_load(t10_dark_file, "theme_standin_dark", "Office dark", accent = CHART_STYLES$dark$accent, slate = CHART_STYLES$dark$slate)
+t10_fields <- names(CHART_STYLES$clean)
+t10_filled <- function(st) setequal(setdiff(names(st), c("layer", "template", "fonts_missing")), t10_fields) &&
+  all(purrr::map_lgl(t10_fields, function(f) !is.null(st[[f]]) && length(st[[f]]) == 1L)) &&
+  all(purrr::map_lgl(c("background", "panel", "text", "text_2", "caption", "grid", "grey", "fit", "outline", "box_fill", "accent", "slate"), function(f) grepl("^#[0-9A-F]{6}$", st[[f]]))) &&
+  st$grid_axes %in% c("value", "both", "none", "horizontal") && st$title_font %in% names(CHART_FONTS) && st$subtitle_font %in% names(CHART_FONTS) &&
+  st$title_weight %in% c("regular", "semibold", "bold") && is.numeric(st$title_size) && is.numeric(st$grid_width)
+t10_l <- t10_light$style
+t10_d <- t10_dark$style
+check("10t-1: style_from_theme() fills every field the other styles have from each stand-in (resolved with ggplot2::calc_element() on the completed theme) and reads what the theme sets: the light one's ground #FBFAF7, its serif bold title 1.45 times the base, its grid across the chart only ('horizontal', #DCDAD3, 0.3) and its x axis line, its title colour #7A1F2B and alignment kept as a plain theme() call (the layer); the dark one's ground #1B1F24 with 'lighten' for marks, a grid both ways, and no axis line; accent and slate are the arguments (Clean's by default, Dark's when given)",
+      isTRUE(t10_light$ok) && isTRUE(t10_dark$ok) && t10_filled(t10_l) && t10_filled(t10_d) &&
+        identical(t10_l$background, "#FBFAF7") && identical(t10_l$title_font, "serif") && identical(t10_l$title_weight, "bold") && identical(t10_l$title_size, 1.45) &&
+        identical(t10_l$grid_axes, "horizontal") && identical(t10_l$grid, "#DCDAD3") && identical(t10_l$grid_width, 0.3) && identical(t10_l$axis_line, "#22252A") && is.na(t10_l$ticks) &&
+        identical(t10_l$layer$plot.title$colour, "#7A1F2B") && identical(t10_l$layer$plot.title$hjust, 0) && identical(t10_l$accent, CHART_STYLES$clean$accent) && identical(t10_l$slate, CHART_STYLES$clean$slate) &&
+        identical(t10_d$background, "#1B1F24") && identical(t10_d$swap, "lighten") && identical(t10_d$grid_axes, "both") && is.na(t10_d$axis_line) && identical(t10_d$accent, CHART_STYLES$dark$accent) &&
+        ggplot2::is_theme(t10_l$template) && identical(t10_light$key, "office_light"))
+t10_l_ct <- style_contrast(t10_l)
+t10_d_ct <- style_contrast(t10_d)
+t10_d_clean <- theme_style_load(t10_dark_file, "theme_standin_dark", "Office dark")
+t10_note_html <- as.character(theme_note(t10_dark$notes))
+check("10t-2: the contrast checks run on a theme's style and report: seven pairs (text, title, axis text and caption at 4.5 to 1; accent, slate and accent against slate at 3); the light stand-in fails only its slate on its cream ground (Clean's slate, 2.9 to 1), the dark one its dim caption (2.4 to 1), and with Clean's accent on the dark ground the accent as well; a failing pair is one sentence of the load's notes, shown on Start here as a warning box (theme_note()), never an error: the style is still made and registered",
+      nrow(t10_l_ct) == 7L && identical(t10_l_ct$pair[!t10_l_ct$pass], "slate") && identical(t10_d_ct$pair[!t10_d_ct$pass], "caption") &&
+        setequal(style_contrast(t10_d_clean$style)$pair[!style_contrast(t10_d_clean$style)$pass], c("caption", "accent")) &&
+        any(grepl("^Some colours of the office theme are hard to tell apart: caption 2.4", t10_dark$notes)) && any(grepl("slate 2.9", t10_light$notes, fixed = TRUE)) &&
+        isTRUE(t10_dark$ok) && grepl("border-left: 3px solid var(--bs-warning", t10_note_html, fixed = TRUE) && grepl("caption 2.4", t10_note_html, fixed = TRUE) && is.null(theme_note(character(0))))
+t10_bad_syntax <- file.path(work_dir, "theme_bad_syntax.R")
+writeLines("theme_office <- function( {", t10_bad_syntax)
+t10_bad_value <- file.path(work_dir, "theme_bad_value.R")
+writeLines(c("theme_office <- function() list(a = 1)", "theme_stops <- function() stop('no theme today')"), t10_bad_value)
+t10_was <- list(styles = CHART_STYLES, default = CHART_STYLE_DEFAULT)
+t10_falls <- list(missing = theme_style_load(file.path(work_dir, "no_such_theme.R"), "theme_office"), syntax = theme_style_load(t10_bad_syntax, "theme_office"),
+                  wrong_name = theme_style_load(t10_light_file, "theme_office"), not_theme = theme_style_load(t10_bad_value, "theme_office"),
+                  stops = theme_style_load(t10_bad_value, "theme_stops"))
+t10_reg_error <- tryCatch({ purrr::walk(t10_falls, theme_style_register); NULL }, error = function(e) e)
+t10_none <- theme_style_load("", "theme_office")
+check("10t-3: a theme file that is not there, one with a syntax error, a wrong function name, a function that returns no theme and one that stops each fall back cleanly: no error, not ok, one sentence for Start here that says what went wrong and that charts use the present default (Clean), and registering it changes neither CHART_STYLES nor the default; no file set (APP_THEME_FILE \"\") says nothing",
+      all(purrr::map_lgl(t10_falls, function(x) identical(x$ok, FALSE) && length(x$notes) == 1L && grepl("so charts use the Clean style\\.$", x$notes))) &&
+        grepl("no_such_theme.R is not there", t10_falls$missing$notes, fixed = TRUE) && grepl("could not be read", t10_falls$syntax$notes, fixed = TRUE) &&
+        grepl("has no function called theme_office", t10_falls$wrong_name$notes, fixed = TRUE) && grepl("did not return a ggplot theme", t10_falls$not_theme$notes, fixed = TRUE) &&
+        grepl("stopped with an error (no theme today)", t10_falls$stops$notes, fixed = TRUE) &&
+        is.null(t10_reg_error) && identical(CHART_STYLES, t10_was$styles) && identical(CHART_STYLE_DEFAULT, t10_was$default) && identical(t10_none$ok, FALSE) && !length(t10_none$notes))
+# registered and made the default, as app.R does; the charts drawn in it; then put back
+t10_bar <- list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "Revenue by region")
+t10_line <- list(family = "line", x = "order_month", y = "revenue", fn = "sum", title = "Revenue by month")
+t10_old <- theme_style_register(t10_light)
+t10_default_now <- CHART_STYLE_DEFAULT
+t10_pal_default <- chart_palette_default()$style
+t10_p <- spec_plot(t10_bar, d10_data, d10_cb, chart_palette_default())
+t10_th <- ggplot2::complete_theme(t10_p$theme)
+t10_small <- ggplot2::complete_theme(chart_theme("office_light", legend = "none"))
+t10_in_dialog <- "office_light" %in% names(CHART_STYLES)
+theme_style_restore(t10_old)
+check("10t-4: a loaded theme is registered and made the default (theme_style_register(), as app.R does): CHART_STYLE_DEFAULT is its key and a new dashboard's palette has it; a chart drawn by default has the theme's ground and title colour (the layer is the last theme call); chart_theme() for it adds the template itself as the last layer, then the legend's place the chart asked for; theme_style_restore() puts CHART_STYLES and the default back",
+      identical(t10_default_now, "office_light") && identical(t10_pal_default, "office_light") && t10_in_dialog &&
+        identical(theme_hex(ggplot2::calc_element("plot.background", t10_th)@fill), "#FBFAF7") && identical(theme_hex(ggplot2::calc_element("plot.title", t10_th)@colour), "#7A1F2B") &&
+        identical(theme_hex(ggplot2::calc_element("panel.grid.major.y", t10_small)@colour), "#DCDAD3") && identical(t10_small$legend.position, "none") && identical(ggplot2::calc_element("text", t10_small)@size, 11) &&
+        identical(theme_hex(ggplot2::calc_element("plot.title", t10_small)@colour), "#7A1F2B") &&
+        identical(CHART_STYLES, t10_was$styles) && identical(CHART_STYLE_DEFAULT, t10_was$default))
+# the code a chart comes with runs without the template: the resolved values are a plain theme() call
+t10_old <- theme_style_register(t10_light, default = FALSE)
+t10_code <- spec_code(attr(spec_plot(t10_line, d10_data, d10_cb, d10_pal("office_light")), "spec"), d10_cb, file.path("tests", "data", "orders.csv"), d10_pal("office_light"))
+theme_style_restore(t10_old)
+t10_runner <- file.path(work_dir, "t10_run.R")
+writeLines(c("args <- commandArgs(TRUE)",
+             "out <- tryCatch({",
+             "  env <- new.env(parent = globalenv()); old <- setwd(args[2]); on.exit(setwd(old))",
+             "  p <- suppressMessages(eval(parse(args[1], encoding = 'UTF-8'), env))",
+             "  ct <- ggplot2::complete_theme(p$theme)",
+             "  b <- ggplot2::ggplot_build(p)",
+             "  list(bg = ggplot2::calc_element('plot.background', ct)@fill, title = ggplot2::calc_element('plot.title', ct)@colour, rows = nrow(b$data[[1]]),",
+             "       template = exists('theme_standin_light'))",
+             "}, error = function(e) list(error = conditionMessage(e)))",
+             "saveRDS(out, file.path(dirname(args[1]), 't10_out.rds'))"), t10_runner)
+t10_code_file <- file.path(work_dir, "t10_code.R")
+writeLines(t10_code, t10_code_file, useBytes = TRUE)
+system2(file.path(R.home("bin"), "Rscript"), c("--no-init-file", shQuote(t10_runner), shQuote(t10_code_file), shQuote(normalizePath(file.path("tests", "data"), winslash = "/"))), stdout = FALSE, stderr = FALSE)
+t10_run <- if (file.exists(file.path(work_dir, "t10_out.rds"))) readRDS(file.path(work_dir, "t10_out.rds")) else list(error = "no output")
+check("10t-5: spec_code() for a chart in a theme's style prints code that runs alone in a fresh R process with no template: it carries the theme's resolved values as a plain theme() call (the title colour #7A1F2B and its alignment), never the template's file or function, and the chart it draws has the theme's ground and title colour",
+      grepl("theme\\(plot.title = element_text\\(colour = \"#7A1F2B\",\\s+hjust = 0\\)", t10_code) &&!grepl("theme_standin|APP_THEME|source\\(", t10_code) &&
+        is.null(t10_run$error) && identical(tolower(t10_run$bg), "#fbfaf7") && identical(toupper(t10_run$title), "#7A1F2B") && isTRUE(t10_run$rows > 0) && identical(t10_run$template, FALSE))
+# a font the theme names that this machine does not have: drawn in the default sans, and Start here says which
+t10_old <- theme_style_register(t10_dark, default = FALSE)
+t10_dark_th <- ggplot2::complete_theme(spec_plot(t10_bar, d10_data, d10_cb, d10_pal("office_dark"))$theme)
+theme_style_restore(t10_old)
+check("10t-6: a font the theme names that is not registered or installed (the dark stand-in's 'Corporate Sans') is drawn in the default sans: the title's family is the bundled sans (or 'sans' where it is not there), never the missing name, the layer does not carry it, and the load's notes name it in one sentence for Start here",
+      identical(t10_d$fonts_missing, "Corporate Sans") && identical(t10_d$title_font, "sans") &&
+        ggplot2::calc_element("plot.title", t10_dark_th)@family %in% c(chart_font_family("sans"), "sans") && !grepl("Corporate", paste(deparse(t10_d$layer), collapse = "")) &&
+        any(grepl("names the font Corporate Sans, which this machine does not have, so its text is drawn in the default sans.", t10_dark$notes, fixed = TRUE)))
+}   # the fast run only
+# <<< 10t end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
