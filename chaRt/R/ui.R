@@ -2278,7 +2278,7 @@ DASH_VIDEO_JS <- "(function () {
 #   The box is as wide as the video was drawn for (set on the box), never wider.
 DASH_VIDEO_CSS <- paste0(
   ".video-box{width:100%;}\n",
-  ".video-box video,.video-box .still{display:block;width:100%;height:auto;aspect-ratio:16/9;}\n",
+  ".video-box video,.video-box .still{display:block;width:100%;height:auto;}\n",
   ".video-box .still{display:none;}\n",
   ".video-box .replay{display:inline-block;margin:.45rem 0 0;font:inherit;font-size:.85rem;line-height:1.2;color:var(--text);background:transparent;border:1px solid var(--text2);border-radius:.25rem;padding:.25rem .8rem;cursor:pointer;}\n",
   ".video-box .replay[hidden]{display:none;}\n",
@@ -2760,12 +2760,12 @@ dash_picture_tag <- function(it, full, alt) {
 #   (css pixels = the file's pixels over DASH_SCALE), so its text is the size it was drawn at. The poster is a data address too.
 dash_video_tag <- function(it, alt) {
   v = it$video
-  px = SPEC_VIDEO_DASH_PX[[v$size %||% "desk"]]
+  px = v$px %||% SPEC_VIDEO_DASH_PX[[v$size %||% "desk"]]
   css = round(px / DASH_SCALE)
   tags$div(class = "video-box", style = paste0("max-width:", css[["width"]], "px;"),
     tags$video(src = v$uri, poster = v$poster, controls = NA, muted = NA, playsinline = NA, preload = "none", `data-once` = NA, `aria-label` = paste0("Video: ", alt),
-               width = css[["width"]], height = css[["height"]]),
-    tags$img(class = "still", src = v$poster, alt = alt, width = css[["width"]], height = css[["height"]]),
+               width = css[["width"]], height = if ("height" %in% names(css)) css[["height"]]),
+    tags$img(class = "still", src = v$poster, alt = alt, width = css[["width"]], height = if ("height" %in% names(css)) css[["height"]]),
     tags$button(type = "button", class = "replay", hidden = NA, `aria-label` = paste0("Replay the video: ", alt), "Replay"))
 }
 
@@ -3082,10 +3082,10 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, mark
 dash_video <- function(chart, stage, file, data, cb, palette, marking, size = "desk") {
   poster = tempfile(fileext = ".png")
   on.exit(unlink(poster))
-  r = spec_video(chart$spec, data, cb, palette, file.path(stage, file), size = SPEC_VIDEO_DASH_PX[[size]], bare = TRUE, widths = SPEC_VIDEO_DASH_WIDTHS[[size]],
+  r = spec_video(chart$spec, data, cb, palette, file.path(stage, file), size = SPEC_VIDEO_DASH_PX[[size]], bare = TRUE, web = dash_web(size),
                  poster = poster, marking = marking)
   list(file = file, uri = dash_data_uri(file.path(stage, file), "video/mp4"), poster = dash_data_uri(poster, "image/png"), seconds = r$seconds, drawn = r$drawn,
-       canvas = r$canvas, size = size)
+       canvas = r$canvas, size = size, px = r$px)
 }
 
 # Whether a card asks for a whole row by what it is (Phase 10b): a table, a chart drawn wide (many sideways bars), or small multiples of more

@@ -1496,7 +1496,7 @@ if (!is.null(ball_g)) {
   check("5-A: the goalkeepers get no curve and the note, with no warning; the code leaves their curve out too; with no groups, 'No curve: ...'",
         "No curve for Goalkeeper: too few different values of Attack." %in% attr(a5_p, "notes") && !length(a5_said) &&
           length(purrr::keep(a5_p$layers, function(l) inherits(l$geom, "GeomSmooth"))) == 3L && length(a5_layers) == 3L &&
-          !code_has(a5_code, "Goalkeeper") && lengths(gregexpr("geom_smooth(", a5_code, fixed = TRUE)) == 3L &&
+          !code_has(gsub("[A-Za-z]+ = \"#", "\"#", a5_code), "Goalkeeper") && grepl("Goalkeeper = ", a5_code, fixed = TRUE) && lengths(gregexpr("geom_smooth(", a5_code, fixed = TRUE)) == 3L &&
           "No curve: too few different values of Attack." %in% attr(a5_none, "notes") &&
           !any(purrr::map_lgl(a5_none$layers, function(l) inherits(l$geom, "GeomSmooth"))))
 }
@@ -6666,11 +6666,11 @@ p9b_page_mp4 <- purrr::map(p9b_zv, function(t) jsonlite::base64_dec(p9b_b64(t, "
 p9b_zip_mp4 <- file.path(p9b_z$dir, c("charts/01_revenue_by_region.mp4", "charts/03_revenue_by_month.mp4"))
 p9b_poster_png <- file.path(tempdir(), "p9b_poster_page.png")
 writeBin(jsonlite::base64_dec(p9b_b64(p9b_zv[[1]], "poster")), p9b_poster_png)
-check("9B-17: a dashboard with two videos and a picture: each video chart's MP4 is in charts/ (and is the very file in the page, byte for byte), the page has two <video> elements with a poster that is a PNG of the video's own size (Phase 10b: drawn for the card, 1088 by 612 for a card that shares its row, 1280 by 720 for one that has its row: the first video is the first, the second the full-width last card), a Replay button under each, and the reduced-motion rule and one script, the picture chart has no video, nothing is requested from outside, the result says '1 as a picture and 0 interactive and 2 videos', and the page's weight is reported",
+check("9B-17: a dashboard with two videos and a picture: each video chart's MP4 is in charts/ (and is the very file in the page, byte for byte), the page has two <video> elements with a poster that is a PNG of the video's own size (Phase 10b: drawn as the card's picture with the marking bands above and below: 1080 wide for a card that shares its row, 1280 for one that has its row, as high as the picture's shape and the bands make it (even, and taller than 16 to 9): the first video is the first, the second the full-width last card), a Replay button under each, and the reduced-motion rule and one script, the picture chart has no video, nothing is requested from outside, the result says '1 as a picture and 0 interactive and 2 videos', and the page's weight is reported",
       all(file.exists(p9b_zip_mp4)) && length(p9b_zv) == 2L && length(p9b_page_mp4) == 2L && identical(p9b_page_mp4[[1]], readBin(p9b_zip_mp4[[1]], "raw", file.size(p9b_zip_mp4[[1]]))) &&
-        identical(p9b_page_mp4[[2]], readBin(p9b_zip_mp4[[2]], "raw", file.size(p9b_zip_mp4[[2]]))) && identical(unname(p8c_png_size(p9b_poster_png)), c(1088L, 612L)) &&
-        all(c(av::av_media_info(p9b_zip_mp4[[1]])$video$width, av::av_media_info(p9b_zip_mp4[[1]])$video$height) == c(1088, 612)) &&
-        all(c(av::av_media_info(p9b_zip_mp4[[2]])$video$width, av::av_media_info(p9b_zip_mp4[[2]])$video$height) == c(1280, 720)) &&
+        identical(p9b_page_mp4[[2]], readBin(p9b_zip_mp4[[2]], "raw", file.size(p9b_zip_mp4[[2]]))) && identical(unname(p8c_png_size(p9b_poster_png)), as.integer(c(av::av_media_info(p9b_zip_mp4[[1]])$video$width, av::av_media_info(p9b_zip_mp4[[1]])$video$height))) &&
+        av::av_media_info(p9b_zip_mp4[[1]])$video$width == 1080 && av::av_media_info(p9b_zip_mp4[[1]])$video$height %% 2 == 0 && av::av_media_info(p9b_zip_mp4[[1]])$video$height > 1080 * 9 / 16 &&
+        av::av_media_info(p9b_zip_mp4[[2]])$video$width == 1280 && av::av_media_info(p9b_zip_mp4[[2]])$video$height %% 2 == 0 && av::av_media_info(p9b_zip_mp4[[2]])$video$height > 720 &&
         lengths(gregexpr("<button type=\"button\" class=\"replay\" hidden", p9b_zh, fixed = TRUE)) == 2L && lengths(gregexpr("aria-label=\"Replay the video: ", p9b_zh, fixed = TRUE)) == 2L &&
         all(grepl("poster=\"data:image/png;base64,", p9b_zv, fixed = TRUE)) && grepl("prefers-reduced-motion:reduce", p9b_zh, fixed = TRUE) && lengths(gregexpr("<script>", p9b_zh, fixed = TRUE)) == 1L &&
         identical(p9b_z$modes, c("video", "picture", "video")) && grepl("1 picture, 0 interactive and 2 videos.", p9b_zh, fixed = TRUE) && length(p8c_requests(p9b_zh)) == 0L &&
@@ -6704,8 +6704,8 @@ p9b_play_js <- paste0("var v=document.querySelector('video');var d={};var done=f
 if (!p9_has_chrome) cat("note  Chrome was not found: the video is not played by 9B-18\n")
 p9b_played <- if (p9_has_chrome) p9b_chrome_run(file.path(p9b_z$dir, "dashboard.html"), p9b_play_js)
 p9b_reduced <- if (p9_has_chrome) p9b_chrome_run(file.path(p9b_z$dir, "dashboard.html"), p9b_play_js, "--force-prefers-reduced-motion")
-check("9B-18: in Chrome the exported <video> plays: its data is loaded (readyState 2 or more, no error), it is 1088 by 612 (the card's size) and 5.6 seconds long, its time moves once play() is called, it neither loops nor autoplays by itself; and with the system asking for reduced motion the video is not displayed and the still is (not run where Chrome is not installed)",
-      !p9_has_chrome || (!is.null(p9b_played) && p9b_played$rs >= 2L && identical(as.integer(p9b_played$err), 0L) && p9b_played$w == 1088 && p9b_played$h == 612 && abs(p9b_played$dur - 135 / 24) < 0.1 && p9b_played$t > 0 &&
+check("9B-18: in Chrome the exported <video> plays: its data is loaded (readyState 2 or more, no error), it is 1080 wide and taller than 16 to 9 (the card picture's shape and the two marking bands) and 5.6 seconds long, its time moves once play() is called, it neither loops nor autoplays by itself; and with the system asking for reduced motion the video is not displayed and the still is (not run where Chrome is not installed)",
+      !p9_has_chrome || (!is.null(p9b_played) && p9b_played$rs >= 2L && identical(as.integer(p9b_played$err), 0L) && p9b_played$w == 1080 && p9b_played$h %% 2 == 0 && p9b_played$h > 1080 * 9 / 16 && abs(p9b_played$dur - 135 / 24) < 0.1 && p9b_played$t > 0 &&
                            !isTRUE(p9b_played$loop) && !isTRUE(p9b_played$auto) && identical(p9b_played$vdisp, "block") && identical(p9b_played$still, "none") &&
                            !is.null(p9b_reduced) && identical(p9b_reduced$vdisp, "none") && identical(p9b_reduced$still, "block")))
 # >>> 9B end of heavy
@@ -7198,13 +7198,13 @@ p10_vframes <- tryCatch(suppressMessages(av::av_video_images(p10_mp4, destdir = 
 p10_vband <- function(f) {
   im <- png::readPNG(f)
   h <- dim(im)[1]
-  band <- as.integer(round(MARKING_BAND_IN * 200))                     # the card video is 1280 pixels for 6.4 inches: 200 dpi
+  band <- as.integer(round(MARKING_BAND_IN * DASH_CSS_DPI * DASH_SCALE))   # the card video is drawn as the card's picture: 192 dots to the inch
   rows <- c(4L, band %/% 2L, band - 4L)
   all(purrr::map_lgl(rows, function(r) p10_is_red(p10_px(im, r, 6L), 14) && p10_is_red(p10_px(im, h - r + 1L, 6L), 14))) && !p10_is_red(p10_px(im, band + 10L, 6L), 30) &&
     sum(im[seq_len(band), , 1] > 0.9 & im[seq_len(band), , 2] > 0.9 & im[seq_len(band), , 3] > 0.9) > 80L
 }
-check("10A-13: every frame of the MP4 in charts/ read back has the band: the video is 1280 by 720, and on each frame decoded (at 3 a second: the first, the middle and the last among them) the top and bottom rows are #b40404 within the encoder's tolerance, white type stands in the band, and the rows under and over the bands are not red; the video in charts/ is the file the page plays",
-      length(p10_vframes) >= 12L && identical(dim(png::readPNG(p10_vframes[1]))[1:2], c(720L, 1280L)) && all(purrr::map_lgl(p10_vframes, p10_vband)) &&
+check("10A-13: every frame of the MP4 in charts/ read back has the band: the video is 1280 wide and as high as the card picture's shape and the bands make it, and on each frame decoded (at 3 a second: the first, the middle and the last among them) the top and bottom rows are #b40404 within the encoder's tolerance, white type stands in the band, and the rows under and over the bands are not red; the video in charts/ is the file the page plays",
+      length(p10_vframes) >= 12L && dim(png::readPNG(p10_vframes[1]))[2] == 1280L && dim(png::readPNG(p10_vframes[1]))[1] %% 2L == 0L && dim(png::readPNG(p10_vframes[1]))[1] > 720L && all(purrr::map_lgl(p10_vframes, p10_vband)) &&
         av::av_media_info(p10_mp4)$video$width == 1280 && grepl(substr(dash_b64(p10_mp4), 1L, 200L), p10_text(p10_v$dir, "dashboard.html"), fixed = TRUE))
 
 # the pages printed by Chrome: a band at the top and at the bottom of every page, nothing under a band, a light ground (the Dark style, and a marking long enough to wrap)
@@ -8143,15 +8143,15 @@ check("10b-9: an interactive chart is sized to its card like a picture and asks 
         grepl(".card.full:not(.table-card)>.source{grid-column:2;grid-row:6;}}", b10b_z$html, fixed = TRUE) && grepl(".card.full:not(.table-card)>h2{grid-column:1/-1;grid-row:1;}", b10b_z$html, fixed = TRUE) &&
         all(purrr::map_lgl(b10b_cards, function(h) { at <- purrr::map_int(c("<h2>", "class=\"card-sub\"", "class=\"slot\"", "class=\"summary\"", "class=\"source\""), function(k) as.integer(regexpr(k, h, fixed = TRUE))); all(at > 0L) && !is.unsorted(at) })) &&
         !grepl("max-width:1120px", b10b_z$html, fixed = TRUE))
-b10b_vh <- dash_video_tag(list(video = list(uri = "data:video/mp4;base64,AA==", poster = "data:image/png;base64,AA==", size = "desk")), "Alt text")
-b10b_vhw <- dash_video_tag(list(video = list(uri = "data:video/mp4;base64,AA==", poster = "data:image/png;base64,AA==", size = "wide")), "Alt text")
+b10b_vh <- dash_video_tag(list(video = list(uri = "data:video/mp4;base64,AA==", poster = "data:image/png;base64,AA==", size = "desk", px = c(width = 1080, height = 768))), "Alt text")
+b10b_vhw <- dash_video_tag(list(video = list(uri = "data:video/mp4;base64,AA==", poster = "data:image/png;base64,AA==", size = "wide", px = c(width = 1280, height = 924))), "Alt text")
 b10b_vs <- gsub("\\s+", " ", as.character(b10b_vh))
 check("10b-10: the video card shows the finished chart before play (its poster, a PNG of the last frame at the video's own pixels) and under reduced motion (the still), rests on its last frame when it ends (the browser keeps it; the box never wider than the video was drawn for: 544 CSS pixels for a card that shares its row, 640 for one that has its row, twice those in pixels), and has a Replay button under it that the page's script shows, a real button (reachable by keyboard, labelled 'Replay the video: <what it shows>'); the script starts the video again from the start; nothing plays before the script runs",
-      grepl("<div class=\"video-box\" style=\"max-width:544px;\">", b10b_vs, fixed = TRUE) && grepl("max-width:640px;", as.character(b10b_vhw), fixed = TRUE) && grepl("preload=\"none\"", b10b_vs, fixed = TRUE) &&
-        grepl("poster=\"data:image/png;base64,AA==\"", b10b_vs, fixed = TRUE) && grepl("<img class=\"still\" src=\"data:image/png;base64,AA==\"", b10b_vs, fixed = TRUE) && grepl("width=\"544\" height=\"306\"", b10b_vs, fixed = TRUE) &&
+      grepl("<div class=\"video-box\" style=\"max-width:540px;\">", b10b_vs, fixed = TRUE) && grepl("max-width:640px;", as.character(b10b_vhw), fixed = TRUE) && grepl("preload=\"none\"", b10b_vs, fixed = TRUE) &&
+        grepl("poster=\"data:image/png;base64,AA==\"", b10b_vs, fixed = TRUE) && grepl("<img class=\"still\" src=\"data:image/png;base64,AA==\"", b10b_vs, fixed = TRUE) && grepl("width=\"540\" height=\"384\"", b10b_vs, fixed = TRUE) &&
         !grepl("autoplay|loop", b10b_vs) && grepl("<button type=\"button\" class=\"replay\" hidden aria-label=\"Replay the video: Alt text\">Replay</button>", b10b_vs, fixed = TRUE) &&
-        identical(SPEC_VIDEO_DASH_PX$desk, c(width = 1088, height = 612)) && identical(SPEC_VIDEO_DASH_PX$wide, c(width = 1280, height = 720)) &&
-        identical(unname(SPEC_VIDEO_DASH_PX$desk[["width"]] / SPEC_VIDEO_DASH_WIDTHS[["desk"]]), 192) && identical(unname(SPEC_VIDEO_DASH_PX$wide[["width"]] / SPEC_VIDEO_DASH_WIDTHS[["wide"]]), 192) &&
+        SPEC_VIDEO_DASH_PX$desk[["width"]] == DASH_DESK_PX * DASH_SCALE && SPEC_VIDEO_DASH_PX$wide[["width"]] == DASH_WIDE_PX * DASH_SCALE && !grepl("aspect-ratio:16/9", DASH_VIDEO_CSS, fixed = TRUE) &&
+        identical(as.integer(grepl("height=", as.character(dash_video_tag(list(video = list(uri = "u", poster = "p", size = "desk")), "a")))), 0L) &&
         grepl("button.replay", DASH_VIDEO_JS, fixed = TRUE) && grepl("b.hidden = false;", DASH_VIDEO_JS, fixed = TRUE) && grepl("v.currentTime = 0;", DASH_VIDEO_JS, fixed = TRUE) && grepl(".play()", DASH_VIDEO_JS, fixed = TRUE) &&
         regexpr("b.hidden = false;", DASH_VIDEO_JS, fixed = TRUE)[[1]] < regexpr("IntersectionObserver", DASH_VIDEO_JS, fixed = TRUE)[[1]] &&
         grepl(".video-box .replay[hidden]{display:none;}", DASH_VIDEO_CSS, fixed = TRUE) && grepl(":focus-visible{outline:3px solid", DASH_VIDEO_CSS, fixed = TRUE) &&
@@ -8428,6 +8428,63 @@ check("10v-1: a line chart whose legend stands in for its end labels (labels off
         identical(v10_leg$cols[names(v10_lab$cols)], v10_lab$cols) && identical(v10_hl_sp$.legend_levels, c("Partner", "Store")) &&
         identical(v10_hl_got, chart_palette(2L, chart_palette_default()$qualitative, "clean")) &&
         grepl("values = c(Online = ", spec_code(v10_leg$spec, d10_cb, file.path("tests", "data", "orders.csv"), d10_pal("clean")), fixed = TRUE))
+# one chart of every family that can have a colour legend (a heatmap's fill is a continuous ramp, not series): each series has the colour of its
+#   level in the palette, the same in the picture, the interactive view and the video, and the scale names its colours by series
+v10_f24 <- list(list(column = "year", op = "in", value = list(2024)))
+v10_two <- list(list(column = "year", op = "in", value = list(2022, 2024)))
+v10_specs <- list(
+  bar = list(family = "bar", x = "region", y = "revenue", fn = "sum", color = "channel", title = "t"),
+  dot = list(family = "dot", x = "region", y = "unit_price", fn = "mean", color = "channel", title = "t"),
+  scatter = list(family = "scatter", x = "units", y = "revenue", color = "channel", filter = v10_f24, title = "t"),
+  bubble = list(family = "bubble", x = "units", y = "unit_price", size = "revenue", color = "channel", filter = v10_f24, title = "t"),
+  slope = list(family = "slope", x = "year", y = "revenue", fn = "sum", color = "region", labels = "off", filter = v10_two, title = "t"),
+  line = list(family = "line", x = "order_month", y = "revenue", fn = "sum", color = "channel", labels = "off", title = "t"))
+v10_map <- function(p, col) {
+  b = ggplot2::ggplot_build(p)
+  lev = levels(droplevels(as.factor(attr(p, "table")[[col]] %||% p$data[[col]])))
+  sc = purrr::detect(b$plot$scales$scales, function(x) any(c("colour", "fill") %in% x$aesthetics) && x$is_discrete())
+  if (is.null(sc)) NULL else stats::setNames(sc$map(lev), lev)
+}
+v10_fam <- purrr::imap(v10_specs, function(s, fam) {
+  p = spec_plot(s, d10_data, d10_cb, d10_pal("clean"))
+  sp = attr(p, "spec")
+  lev = sp$.colour_levels
+  want = stats::setNames(spec_palette(d10_pal("clean"))$qual(colour_count(sp, d10_cb, sp$color))[seq_along(lev)], lev)
+  views = list(picture = v10_map(p, s$color), interactive = v10_map(attr(p, "widget_plot")(), s$color), video = v10_map(video_plot(s, d10_data, d10_cb, d10_pal("clean")), s$color),
+               labelled = if (fam %in% c("line", "slope")) v10_map(spec_plot(utils::modifyList(s, list(labels = "on")), d10_data, d10_cb, d10_pal("clean")), s$color))
+  code = spec_code(sp, d10_cb, file.path("tests", "data", "orders.csv"), d10_pal("clean"))
+  list(ok = length(lev) >= 2L && all(purrr::map_lgl(purrr::compact(views), function(v) identical(v[lev], want))),
+       named = grepl(paste0("values = c(", lev[[1]], " = "), code, fixed = TRUE))
+})
+v10_db <- spec_plot(list(family = "dumbbell", y = "region", x = "revenue", fn = "sum", color = "year", filter = v10_two, title = "t"), d10_data, d10_cb, d10_pal("clean"))
+v10_db_pts <- purrr::keep(ggplot2::ggplot_build(v10_db)$data, function(x) "size" %in% names(x) && !"label" %in% names(x) && nrow(x) > 0L)
+cat("      colour by series, per family: ", paste(names(v10_fam), purrr::map_chr(v10_fam, function(x) if (x$ok && x$named) "ok" else "WRONG"), sep = " ", collapse = ", "), "\n", sep = "")
+check("10v-1b: every family that can have a colour legend gives each series the colour of its level in the palette, the same in the picture, the interactive view and the video (and, for a line or a slope, with a legend as with end labels): bar, dot, scatter, bubble, slope and line, one chart each from orders.csv; the printed code names the colours by series; a dumbbell's earlier value is the slate and its later the accent, by level; a heatmap is exempt (a continuous ramp, no series)",
+      all(purrr::map_lgl(v10_fam, "ok")) && all(purrr::map_lgl(v10_fam, "named")) && length(v10_db_pts) >= 2L &&
+        identical(unique(v10_db_pts[[1]]$colour), CHART_STYLES$clean$slate) && identical(unique(v10_db_pts[[2]]$colour), CHART_STYLES$clean$accent))
+# a card's video lays out like the card's picture: drawn with the picture's web, at the picture's size, the marking bands added above and below; so the
+#   line chart whose 16 to 9 half-card video once swapped its end labels for a legend keeps them, and the last frame is the picture's chart
+v10_card <- function(size) {
+  pic = spec_plot(v10_line, d10_data, d10_cb, d10_pal("clean"), web = dash_web(size))
+  vp = video_plot(v10_line, d10_data, d10_cb, d10_pal("clean"), bare = TRUE, band = MARKING_BAND_IN, web = dash_web(size))
+  last = video_frame(video_context(vp, d10_cb), 1)
+  ps = attr(pic, "spec"); vs = attr(vp, "spec"); sz = spec_size(ps, attr(pic, "table"))
+  list(ok = isTRUE(ps$.labels) && identical(vs$.labels, ps$.labels) && identical(vs$.legend_order, ps$.legend_order) && identical(last$data, ggplot2::ggplot_build(pic)$data) &&
+         identical(last$plot$theme$legend.position, pic$theme$legend.position) &&
+         isTRUE(all.equal(unname(attr(vp, "canvas")), unname(c(sz[["width"]], sz[["height"]] + 2 * MARKING_BAND_IN)))),
+       labels = ps$.labels)
+}
+v10_desk <- v10_card("desk")
+v10_wide <- v10_card("wide")
+v10_old169 <- attr(video_plot(v10_line, d10_data, d10_cb, d10_pal("clean"), bare = TRUE, band = MARKING_BAND_IN, widths = 1088 / 192), "spec")
+v10_seen <- new.env()
+v10_real_video <- spec_video
+assign("spec_video", function(...) { v10_seen$args <- list(...); stop("stand-in") }, envir = globalenv())
+v10_dv <- tryCatch(dash_video(list(spec = v10_line), tempdir(), "x.mp4", d10_data, d10_cb, d10_pal("clean"), "UNCLASSIFIED", "desk"), error = function(e) conditionMessage(e))
+assign("spec_video", v10_real_video, envir = globalenv())
+check("10v-2: a card's video lays out like the card's picture: dash_video() draws it with the picture's own web (dash_web() of its card) and the marking; video_plot() with that web draws the picture's chart at the picture's size, the canvas that size with the two marking bands added above and below (not 16 to 9); its end labels and legend are the picture's (the monthly revenue line of three channels has end labels in both, where the old 16 to 9 half-card canvas swapped them for a legend), and its last frame is the picture's chart, layer for layer, for a card that shares its row and for one that has it; the download keeps 16 to 9",
+      v10_desk$ok && v10_wide$ok && isFALSE(v10_old169$.labels) && identical(v10_seen$args$web, dash_web("desk")) && identical(v10_seen$args$marking, "UNCLASSIFIED") &&
+        identical(spec_video, v10_real_video) && identical(unname(SPEC_VIDEO_PX$download), c(1920, 1080)) && is.null(formals(video_plot)$web) && is.null(formals(spec_video)$web))
 }
 # <<< 10v end
 

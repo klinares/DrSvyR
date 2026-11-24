@@ -82,7 +82,7 @@ SPEC_TEXT_FIELDS <- c("title", "subtitle", "caption", "x_label", "y_label", "rul
 SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 
 # Fields the lint adds; never accepted from outside.
-SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".legend_levels", ".cell_labels", ".top_n",
+SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".legend_levels", ".colour_levels", ".cell_labels", ".top_n",
                       ".violin", ".plain_box", ".index_unit", ".index_start", ".name_room",
                       ".fit_range", ".bin_breaks", ".hex", ".label_series", ".n_colours", ".annotate", ".value_labels", ".names", ".label_rows", ".repel",
                       ".end_value", ".source", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor",
@@ -996,6 +996,9 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
   v = value_name(s)
   nd = function(col) length(unique(table[[col]]))
   notes = character(0)
+  # The series of the colour column in the order the colours go to them (their levels): each colour is named by its series in the
+  #   picture, the interactive view, the video and the code (series_values()), so no legend order and no view can give a series another colour.
+  if (!is.null(s$color) && !identical(fam, "heatmap") && s$color %in% names(table)) s$.colour_levels = levels(droplevels(as.factor(table[[s$color]])))
   # A bar's value axis starts at zero (the bar layers always include zero), so no log scale.
   if (identical(fam, "bar") && isTRUE(s$log_y)) {
     s$log_y = FALSE
@@ -1816,7 +1819,7 @@ bar_calls <- function(s, cb, pal) {
                                           call("scale_fill_manual", values = highlight_values(pal), guide = "none"))
     else if (!is.null(col)) list(call("geom_col", position = if (flip) call("position_dodge", width = 0.8, reverse = TRUE) else call("position_dodge", width = 0.8),
                                       width = 0.75),
-                                 call("scale_fill_manual", values = pal$qual(colour_count(s, cb, col))))
+                                 call("scale_fill_manual", values = series_values(pal$qual(colour_count(s, cb, col)), s)))
     else list(call("geom_col", fill = pal$single))
   c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, if (flip) "x" else "y", TRUE),
     if (flip) list(flip_scale(s)))
@@ -1828,7 +1831,7 @@ dot_calls <- function(s, cb, pal) {
   geom = if (!is.null(s$highlight)) list(call("geom_point", aes_call(colour = "highlighted"), size = 3),
                                           call("scale_colour_manual", values = highlight_values(pal), guide = "none"))
     else if (!is.null(col)) list(call("geom_point", size = 3),
-                                 call("scale_colour_manual", values = pal$qual(colour_count(s, cb, col))))
+                                 call("scale_colour_manual", values = series_values(pal$qual(colour_count(s, cb, col)), s)))
     else list(call("geom_point", size = 3, colour = pal$single))
   c(list(call("ggplot", sym("chart_table"), main)), geom, value_scale(s, if (flip) "x" else "y", FALSE),
     if (flip) list(flip_scale(s)))
@@ -1889,9 +1892,12 @@ end_labels <- function(s, rows, colour = NULL) {
 # The colours of a line chart whose legend names the series, named by the series they belong to. scale_colour_manual() with unnamed
 #   values and `breaks` gives the colours to the breaks in their order, so a legend listed by last value (.legend_order) would hand a
 #   series another series' colour; named by the levels (.legend_levels), each series keeps the colour it has in the picture.
-legend_values <- function(cols, s) {
-  lev = s$.legend_levels
-  if (is.null(lev) || length(lev) != length(cols)) cols else stats::setNames(cols, lev)
+legend_values <- function(cols, s) series_values(cols, s, s$.legend_levels)
+
+# The colours of a colour column, named by the series they go to (`lev`, its levels: s$.colour_levels, set by spec_lint()), so that a
+#   colour belongs to its series and not to a place in a list. Unnamed when the levels are not known or outnumber the colours.
+series_values <- function(cols, s, lev = s$.colour_levels) {
+  if (is.null(lev) || length(lev) > length(cols)) cols else stats::setNames(cols[seq_along(lev)], lev)
 }
 
 line_calls <- function(s, cb, pal) {
@@ -1934,7 +1940,7 @@ line_calls <- function(s, cb, pal) {
       if (labelled) list(end_labels(s, end_rows(s), pal$single)))
   } else {
     c(list(base(colour = col, group = col), call("geom_line", linewidth = 0.9)), points(),
-      list(as.call(c(list(sym("scale_colour_manual"), values = if (legend) legend_values(pal$qual(k), s) else pal$qual(k)), if (legend) list(breaks = s$.legend_order)))),
+      list(as.call(c(list(sym("scale_colour_manual"), values = if (legend) legend_values(pal$qual(k), s) else series_values(pal$qual(k), s)), if (legend) list(breaks = s$.legend_order)))),
       if (labelled) list(end_labels(s, end_rows(s)), call("guides", colour = "none")))
   }
   # A moving average (Phase 10 Part C): the layers above draw the average in the series colour; the raw values are behind them, in the grey.
@@ -2066,7 +2072,7 @@ scatter_calls <- function(s, cb, pal) {
   point = function(...) as.call(c(list(sym("geom_point")), list(...), alpha))
   colours = if (!is.null(col) && !binned) {
     n = colour_count(s, cb, col)
-    purrr::compact(list(call("scale_colour_manual", values = pal$qual(n)), legend_rows("colour", n, solid = length(alpha) > 0L)))
+    purrr::compact(list(call("scale_colour_manual", values = series_values(pal$qual(n), s)), legend_rows("colour", n, solid = length(alpha) > 0L)))
   }
   geom = if (binned) list(bin_call(s),
                           call("scale_fill_gradientn", colours = pal$ramp, breaks = HEAT_BREAKS_FEW, labels = quote(label_comma())),
@@ -3419,8 +3425,11 @@ SPEC_VIDEO_WIDTHS <- c(8, 10, 12)       # the widths in inches of the 16 to 9 ca
 # The dashboard's video (Phase 10b) is drawn for the width it is shown at, as its pictures are: the pixels of the file are twice the CSS pixels of the
 #   card (a sharp picture on a screen of twice the density), and the canvas is the CSS width over 96 inches wide, so its text comes out near 12 CSS
 #   pixels. `desk` is a card that shares its row (544 CSS pixels), `wide` one in a full-row card (640).
-SPEC_VIDEO_DASH_PX <- list(desk = c(width = 1088, height = 612), wide = c(width = 1280, height = 720))
-SPEC_VIDEO_DASH_WIDTHS <- c(desk = 1088 / 192, wide = 1280 / 192)   # the canvas widths in inches that go with them (192 dots per inch)
+# A card's video is drawn as the card's picture is (spec_plot() with the picture's `web`, at its size from spec_size()) and the marking bands
+#   added above and below it, so it lays out like the picture: the same end labels, legend and breaks. Its width in pixels is the picture's
+#   (CSS pixels times DASH_SCALE: 1080 for a card that shares its row, 1280 for one with its row); its height follows from the picture's shape and
+#   the bands (spec_video() rounds it to an even number, as H.264 needs). The 1920 by 1080 download keeps its 16 to 9 frame.
+SPEC_VIDEO_DASH_PX <- list(desk = c(width = 1080), wide = c(width = 1280))
 SPEC_VIDEO_STAGGER <- 0.5               # each bar, dot, box or column starts this much later than the one before, the last by this share of the motion
 SPEC_VIDEO_POINTS_SHARE <- 0.7          # a scatter or bubble with a fitted curve: the points take this share of the motion, then the curve is drawn
 SPEC_VIDEO_RAMP <- 0.04                 # points growing in at once, as a share of all the points (at least 2)
@@ -3655,7 +3664,16 @@ video_frame <- function(ctx, progress) {
 #   chart (sideways bars and rows of panels need more than the usual 4.5; past the widest, the chart is drawn as it fits). The wider the
 #   canvas, the smaller its text on the screen, which is why the widths are few and the first is the usual one. `bare`: no title, subtitle
 #   or source line (the dashboard's page says them). Returns the plot, with the canvas in inches as attribute "canvas".
-video_plot <- function(spec, data, cb, palette = chart_palette_default(), bare = FALSE, widths = SPEC_VIDEO_WIDTHS, band = 0) {
+#   With `web` (a card's video: the `web` its picture is drawn with) the chart is drawn exactly as that picture, at the size spec_size() gives it,
+#   and the canvas is that size with `band` inches added above and below for the marking: the picture's shape, not 16 to 9.
+video_plot <- function(spec, data, cb, palette = chart_palette_default(), bare = FALSE, widths = SPEC_VIDEO_WIDTHS, band = 0, web = NULL) {
+  if (!is.null(web)) {
+    p = spec_plot(spec, data, cb, palette, web = web)
+    sz = spec_size(attr(p, "spec"), attr(p, "table"))
+    attr(p, "canvas") = c(width = sz[["width"]], height = sz[["height"]] + 2 * band)
+    attr(p, "chart") = c(width = sz[["width"]], height = sz[["height"]])
+    return(p)
+  }
   at = function(w) {
     h = w * 9 / 16
     p = spec_plot(spec, data, cb, palette, web = list(width = w, height = h - 2 * band, bare = bare))
@@ -3716,12 +3734,18 @@ video_inputs <- function(files, each = 1L, fps = SPEC_VIDEO_FPS) {
 #   frame keeps its 16 to 9 shape and the chart is drawn in the rows between the bands (video_plot() `band`), so the last frame is spec_png() of the same
 #   plot with the same marking, pixel for pixel.
 spec_video <- function(spec, data, cb, palette = chart_palette_default(), file, size = SPEC_VIDEO_PX$download, small = NULL, bare = FALSE,
-                       drawn_fps = NULL, widths = SPEC_VIDEO_WIDTHS, on_frame = NULL, poster = NULL, keep = NULL, marking = NULL) {
+                       drawn_fps = NULL, widths = SPEC_VIDEO_WIDTHS, on_frame = NULL, poster = NULL, keep = NULL, marking = NULL, web = NULL) {
   if (!video_available()) stop(video_unavailable_text(), call. = FALSE)
   started = proc.time()[["elapsed"]]
-  ctx = video_context(video_plot(spec, data, cb, palette, bare, widths, band = if (is.null(marking)) 0 else MARKING_BAND_IN), cb)
+  ctx = video_context(video_plot(spec, data, cb, palette, bare, widths, band = if (is.null(marking)) 0 else MARKING_BAND_IN, web = web), cb)
   canvas = attr(ctx$plot, "canvas")
   dpi = size[["width"]] / canvas[["width"]]
+  # a card's video (`web`): its height follows from the canvas, rounded to an even number of pixels (H.264 with yuv420p needs both even)
+  #   and the canvas made that many pixels high (less than a pixel taller or shorter than the picture and its bands)
+  if (!is.null(web)) {
+    size = c(width = size[["width"]], height = 2 * round(size[["width"]] * canvas[["height"]] / canvas[["width"]] / 2))
+    canvas[["height"]] = size[["height"]] / dpi
+  }
   dir = keep %||% tempfile("chart_video_")
   dir.create(dir, showWarnings = FALSE, recursive = TRUE)
   if (is.null(keep)) on.exit(unlink(dir, recursive = TRUE), add = TRUE)
@@ -3742,6 +3766,6 @@ spec_video <- function(spec, data, cb, palette = chart_palette_default(), file, 
   encode = function(out, filter) av::av_encode_video(inputs, out, framerate = SPEC_VIDEO_FPS, vfilter = filter, codec = "libx264", verbose = FALSE)
   encode(file, "format=yuv420p")
   if (!is.null(small)) encode(small, paste0("scale=", SPEC_VIDEO_PX$card[["width"]], ":", SPEC_VIDEO_PX$card[["height"]], ":flags=lanczos,format=yuv420p"))
-  list(file = file, small = small, drawn = n, inputs = length(inputs), canvas = canvas, plot = ctx$plot, drawn_fps = drawn_fps,
+  list(file = file, small = small, drawn = n, inputs = length(inputs), canvas = canvas, plot = ctx$plot, drawn_fps = drawn_fps, px = size,
        seconds = c(draw = drawn_at - started, encode = proc.time()[["elapsed"]] - drawn_at))
 }
