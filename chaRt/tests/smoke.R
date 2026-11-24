@@ -8406,6 +8406,31 @@ check("10t-6: a font the theme names that is not registered or installed (the da
 }   # the fast run only
 # <<< 10t end
 
+# ---- a line chart whose legend stands in for its end labels keeps each series' colour (found in the half-card videos, Clean too) ----------------------
+# >>> 10v begin
+if (run_fast) {
+v10_line <- list(family = "line", x = "order_month", y = "revenue", fn = "sum", color = "channel", title = "Revenue by month and channel")
+v10_cols <- function(spec) {
+  p = spec_plot(spec, d10_data, d10_cb, d10_pal("clean"))
+  b = ggplot2::ggplot_build(p)
+  d = b$data[[1]]
+  lev = levels(droplevels(as.factor(attr(p, "table")[[spec$color]])))
+  list(spec = attr(p, "spec"), cols = stats::setNames(unique(d[order(d$group), c("group", "colour")])$colour, lev[sort(unique(d$group))]))
+}
+v10_lab <- v10_cols(utils::modifyList(v10_line, list(labels = "on")))
+v10_leg <- v10_cols(utils::modifyList(v10_line, list(labels = "off")))
+v10_hl <- spec_plot(utils::modifyList(v10_line, list(labels = "off", highlight = list(column = "channel", values = list("Store", "Partner")))), d10_data, d10_cb, d10_pal("clean"))
+v10_hl_d <- purrr::detect(ggplot2::ggplot_build(v10_hl)$data, function(x) length(unique(x$colour)) == 2L)
+v10_hl_sp <- attr(v10_hl, "spec")
+v10_hl_got <- purrr::map_chr(c("Partner", "Store"), function(lv) unique(v10_hl_d$colour[v10_hl_d$group == match(lv, sort(c("Partner", "Store")))]))
+check("10v-1: a line chart whose legend stands in for its end labels (labels off, or ends too close on a short drawing such as a half-card video) gives every series the colour it has with end labels: the legend lists the series by last value (Online, Store, Partner) but the colours are named by level, so Store keeps its green and Partner its blue; a highlighted pair keeps the palette's colours in level order; the printed code names the colours by series",
+      !is.null(v10_leg$spec$.legend_order) && !identical(v10_leg$spec$.legend_order, v10_leg$spec$.legend_levels) &&
+        identical(v10_leg$cols[names(v10_lab$cols)], v10_lab$cols) && identical(v10_hl_sp$.legend_levels, c("Partner", "Store")) &&
+        identical(v10_hl_got, chart_palette(2L, chart_palette_default()$qualitative, "clean")) &&
+        grepl("values = c(Online = ", spec_code(v10_leg$spec, d10_cb, file.path("tests", "data", "orders.csv"), d10_pal("clean")), fixed = TRUE))
+}
+# <<< 10v end
+
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
 #

@@ -82,7 +82,7 @@ SPEC_TEXT_FIELDS <- c("title", "subtitle", "caption", "x_label", "y_label", "rul
 SPEC_FLAG_FIELDS <- c("log_x", "log_y", "rug", "free_y", "interactive")
 
 # Fields the lint adds; never accepted from outside.
-SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".cell_labels", ".top_n",
+SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".labels", ".legend_order", ".legend_levels", ".cell_labels", ".top_n",
                       ".violin", ".plain_box", ".index_unit", ".index_start", ".name_room",
                       ".fit_range", ".bin_breaks", ".hex", ".label_series", ".n_colours", ".annotate", ".value_labels", ".names", ".label_rows", ".repel",
                       ".end_value", ".source", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor",
@@ -1108,6 +1108,8 @@ spec_lint <- function(spec, cb, table, max_colours = chart_palette_max()) {
                                  else paste0("The ", nd(s$color), " lines end too close together to be labelled and are too many to colour; highlight a few."))
       else {
         s$.legend_order = lab$order
+        # the colours go to the series by their levels, as in the picture with end labels (the legend only lists them by last value)
+        s$.legend_levels = levels(droplevels(as.factor(if (!is.null(s$highlight)) table[[s$color]][table$highlighted] else table[[s$color]])))
         if (!wanted && !identical(mode, "off"))
           notes = c(notes, paste0(n_lab, " lines are too many to label at their ends; a legend names them (labels: on writes the names at the line ends)."))
       }
@@ -1884,6 +1886,14 @@ end_labels <- function(s, rows, colour = NULL) {
             if (!is.null(colour)) list(colour = colour)))
 }
 
+# The colours of a line chart whose legend names the series, named by the series they belong to. scale_colour_manual() with unnamed
+#   values and `breaks` gives the colours to the breaks in their order, so a legend listed by last value (.legend_order) would hand a
+#   series another series' colour; named by the levels (.legend_levels), each series keeps the colour it has in the picture.
+legend_values <- function(cols, s) {
+  lev = s$.legend_levels
+  if (is.null(lev) || length(lev) != length(cols)) cols else stats::setNames(cols, lev)
+}
+
 line_calls <- function(s, cb, pal) {
   v = plotted_value(s); col = s$color; slope = identical(s$family, "slope")
   smooth = !is.null(smooth_k(s))
@@ -1913,7 +1923,7 @@ line_calls <- function(s, cb, pal) {
     lit = if (legend && nh <= pal$max)
       c(list(call("geom_line", data = data_where(quote(highlighted)), aes_call(colour = col), linewidth = 1.1)),
         if (slope) list(call("geom_point", data = data_where(quote(highlighted)), aes_call(colour = col), size = 2.5)),
-        list(call("scale_colour_manual", values = pal$qual(nh), breaks = s$.legend_order)))
+        list(call("scale_colour_manual", values = legend_values(pal$qual(nh), s), breaks = s$.legend_order)))
     else
       c(list(call("geom_line", data = data_where(quote(highlighted)), colour = pal$accent, linewidth = 1.1)),
         points(colour = pal$accent, data = data_where(quote(highlighted))),
@@ -1924,7 +1934,7 @@ line_calls <- function(s, cb, pal) {
       if (labelled) list(end_labels(s, end_rows(s), pal$single)))
   } else {
     c(list(base(colour = col, group = col), call("geom_line", linewidth = 0.9)), points(),
-      list(as.call(c(list(sym("scale_colour_manual"), values = pal$qual(k)), if (legend) list(breaks = s$.legend_order)))),
+      list(as.call(c(list(sym("scale_colour_manual"), values = if (legend) legend_values(pal$qual(k), s) else pal$qual(k)), if (legend) list(breaks = s$.legend_order)))),
       if (labelled) list(end_labels(s, end_rows(s)), call("guides", colour = "none")))
   }
   # A moving average (Phase 10 Part C): the layers above draw the average in the series colour; the raw values are behind them, in the grey.
