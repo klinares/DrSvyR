@@ -986,6 +986,21 @@ if (!inherits(rfiles, "error")) {
         setequal(names(got_sha), names(REFLEX_SHA)) && !length(changed))
 }
 
+# Phase 11: the manager's design reflex file and the design skills (not ours to edit), with the checksum this test holds (sha256, line endings
+#   normalised, as for the reflex files). Update it here when the manager sends a new copy.
+MANAGER_FILE_SHA <- c(
+  "www/reflexes/design.md" = "71094f87d90516f907208179414cf4c466d130d0dc1aa13fc3f15f03c461d6a5",
+  "www/skills/README.md" = "6ec60afd19f2aec5fe83a4c4e5b60aa928ce18dcf7b02c9124dc6bbde3c9795a",
+  "www/skills/editorial.md" = "53f340b2f766ad9ee1e0c57c3f1d4c9f9c7c8b05e7284bbe1b5b136af035ad99")
+manager_sha <- purrr::map_chr(names(MANAGER_FILE_SHA), function(f) {
+  if (!file.exists(f)) return(NA_character_)
+  b = readBin(f, "raw", file.size(f))
+  digest::digest(b[b != as.raw(13)], algo = "sha256", serialize = FALSE)
+})
+check(paste0("11-0: the manager's design files (www/reflexes/design.md, www/skills/README.md, www/skills/editorial.md) have the checksums this test holds",
+             if (any(is.na(manager_sha) | manager_sha != MANAGER_FILE_SHA)) paste0(" (changed or missing: ", paste(names(MANAGER_FILE_SHA)[is.na(manager_sha) | manager_sha != MANAGER_FILE_SHA], collapse = ", "), ")")),
+      identical(unname(manager_sha), unname(MANAGER_FILE_SHA)))
+
 # A copy of the files with one broken, and the message check_reflex_files() stops with.
 broken_message <- function(file, change) {
   d = file.path(work_dir, paste0("reflexes_", sub("[.]md$", "", file), "_", length(list.files(work_dir))))
