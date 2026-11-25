@@ -3816,7 +3816,7 @@ DESIGN_DENY <- list(
   environment = c("environment", "globalenv", "emptyenv", "topenv", "baseenv", "parent.frame", "parent.env", "sys.call", "sys.calls", "sys.frame",
                   "sys.frames", "sys.function", "sys.on.exit", "sys.status", "new.env", "as.environment", "list2env", "env2list", "as.list.environment", "environmentName",
                   "lockEnvironment", "lockBinding", "unlockBinding", "search", "searchpaths", "asNamespace", "getNamespace", "getNamespaceExports", "ls", "rm",
-                  "nargs", "interactive", "missing"),
+                  "nargs", "interactive", "missing", ".env"),
   loops = c("for", "while", "repeat", "break", "next"))
 
 DESIGN_DENY_WHY <- c(code = "runs or builds code that was not checked",
@@ -3951,6 +3951,9 @@ DESIGN_MARKUP <- "(?i)<\\s*/?\\s*(img|a|link|script|iframe|style|svg|object|embe
 # The functions a design may call, as a named list of functions (built once, from the installed packages): ggplot2's typed list, scales', the other
 #   packages' when installed, and base R's. The size-limited versions of c(), paste(), paste0(), rep(), seq(), seq_len(), `:`, format() and formatC()
 #   stand in for the base ones. Attribute "package" says where each name came from.
+# The functions whose arguments are evaluated in a data mask (ggplot2's aesthetics, dplyr's verbs): a bare name in them is a variable of the data.
+DESIGN_MASKED <- c("aes", "after_stat", "after_scale", "stage", "vars", "mutate", "filter", "arrange", "group_by", "summarise", "slice_max", "slice_min")
+
 design_toolkit <- function() {
   if (!is.null(.design_cache$toolkit)) return(.design_cache$toolkit)
   from = function(pkg, names) {
@@ -4016,7 +4019,33 @@ design_limited <- function() {
          if (isTRUE(abs(num(to) - num(from)) + 1 > DESIGN_MAX_LEN)) too_big()
          base::`:`(from, to)
        },
-       format = guard_args(base::format, "format"), formatC = guard_args(base::formatC, "formatC"))
+       format = after(guard_args(base::format, "format")), formatC = after(guard_args(base::formatC, "formatC")))
+}
+
+# The replacement forms a design's `x[i] <- v`, `x[[i]] <- v` and `x$a <- v` use: a numeric index past DESIGN_MAX_LEN is refused before R makes the
+#   vector that long (`x[9999 * 99999] <- 1` would make 8 GB), and so is a result longer than that. (`x$a <- v` adds at most one element and keeps
+#   base R's form.)
+design_replace <- function() {
+  too_big = function() stop("The code makes a vector longer than ", format(DESIGN_MAX_LEN, big.mark = ",", scientific = FALSE), " or text longer than ",
+                            format(DESIGN_MAX_CHARS, big.mark = ",", scientific = FALSE), " characters.", call. = FALSE)
+  far = function(i) is.numeric(i) && length(i) && isTRUE(suppressWarnings(max(abs(i), na.rm = TRUE)) > DESIGN_MAX_LEN)
+  index = function(...) tryCatch(list(...), error = function(e) list())   # x[] <- v and x[i, ] <- v have empty indices
+  done = function(r) if (length(r) > DESIGN_MAX_LEN) too_big() else r
+  list(`[<-` = function(x, ..., value) { if (any(purrr::map_lgl(index(...), far))) too_big(); done(base::`[<-`(x, ..., value = value)) },
+       `[[<-` = function(x, ..., value) { if (any(purrr::map_lgl(index(...), far))) too_big(); done(base::`[[<-`(x, ..., value = value)) })
+}
+
+# ggtext draws markup through gridtext, whose <img> tag reads a picture from a file or a web address. A design's text can be computed while the plot is
+#   built (an aesthetic, a scale's labels function), after any check of the plot's strings, so gridtext's image reader is replaced, for the rest of the
+#   process, by one that refuses: the app itself draws no pictures in its texts. Called by design_run() before a design is evaluated.
+design_block_images <- function() {
+  if (isTRUE(.design_cache$images_blocked) || !length(find.package("gridtext", quiet = TRUE))) return(invisible(FALSE))
+  utils::assignInNamespace("read_image", function(path, ...) {
+    .design_cache$image_hit = TRUE
+    stop("A text has HTML or image markup in it; texts on a chart are plain words.", call. = FALSE)
+  }, ns = "gridtext")
+  .design_cache$images_blocked = TRUE
+  invisible(TRUE)
 }
 
 # Every toolkit function with an argument of DESIGN_RISKY made to check that argument's value first (matched by name, positional arguments too) and then
@@ -4139,6 +4168,9 @@ design_walk <- function(e, cx, depth = 0L) {
         return(paste0("`", name, "` is not in the toolkit, so the code may not call it; use only the functions listed in TOOLKIT."))
       here = design_string_args(e, name, cx)
       if (length(here)) return(here)
+      # inside aes(), after_stat() and the like, and in dplyr's verbs, a bare name is a variable of the data (a column mutate() made, a statistic's
+      #   `count`), found in a data mask whose parent is the design's own environment, so it is allowed as in a formula unless it is on the deny list
+      if (name %in% DESIGN_MASKED) return(unlist(purrr::map(rest, function(x) design_walk(x, utils::modifyList(cx, list(formula = TRUE)), depth + 1L))))
       all_of(rest)
     })
 }
@@ -4338,6 +4370,7 @@ design_env <- function(objects, toolkit = design_toolkit()) {
   e = new.env(parent = emptyenv())
   list2env(toolkit, envir = e)
   list2env(stats::setNames(purrr::map(DESIGN_REPLACE, get, envir = baseenv()), DESIGN_REPLACE), envir = e)
+  list2env(design_replace(), envir = e)
   list2env(DESIGN_CONSTANTS, envir = e)
   list2env(list(`::` = design_ns_get), envir = e)
   list2env(objects, envir = e)
@@ -4395,6 +4428,8 @@ design_run <- function(code, d, facts, txt, tok, pal, size = SPEC_SIZE[c("width"
   g = design_guard(code, names(d))
   if (!g$ok) return(out(FALSE, g$reason))
   env = design_env(list(d = d, facts = facts, txt = txt, tok = tok, pal = pal))
+  design_block_images()
+  .design_cache$image_hit = FALSE
   file = tempfile("design_", fileext = chart_device_ext())
   reset = function() setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE)
   res = tryCatch({
@@ -4415,6 +4450,7 @@ design_run <- function(code, d, facts, txt, tok, pal, size = SPEC_SIZE[c("width"
     msg = design_message(res)
     why = if (grepl("time limit", msg, fixed = TRUE)) paste0("The design took longer than ", limit, " seconds to build and draw and was stopped; use fewer layers, panels or labels.")
           else if (grepl("^(The last expression|A text has HTML|The code makes a vector)", msg)) msg
+          else if (isTRUE(.design_cache$image_hit)) "A text has HTML or image markup in it; texts on a chart are plain words."
           else paste0("The code stopped with an error: ", msg, if (!grepl("[.]$", msg)) ".")
     return(out(FALSE, why))
   }

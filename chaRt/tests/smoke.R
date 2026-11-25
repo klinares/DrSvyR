@@ -8729,7 +8729,7 @@ a11_hostile <- list(
   a11_h("write.csv, writeLines", 'write.csv(d, "{W}/d.csv"); writeLines("x", "{W}/x.txt")', "guard", "never allowed"),
   a11_h("pdf()", 'pdf("{W}/x.pdf")', "guard", "never allowed"),
   a11_h("tryCatch", 'tryCatch(1, error = function(e) 2)', "guard", "never allowed"),
-  a11_h("the data pronoun's environment", 'ggplot(d, aes(x = .env$print))', "guard", "not a column"),
+  a11_h("the data pronoun's environment", 'ggplot(d, aes(x = .env$print))', "guard", "never allowed"),
   a11_h("a system() call inside aes()", 'ggplot(d, aes(x = system("echo hi")))', "guard", "never allowed"),
   a11_h("a system() call inside a formula", 'ggplot(d) + geom_point(aes(x = 1, y = 1), data = ~ system("echo hi"))', "guard", "never allowed"),
   a11_h("a system() call inside geom_function", 'ggplot() + geom_function(fun = function(x) system("echo hi")) + xlim(0, 1)', "guard", "never allowed"),
@@ -8876,7 +8876,7 @@ check("11A-10: the guard's own limits: 6,000 characters and no more (a code of e
         design_guard("ggplot(d, aes(x = date, y = source)) + geom_point(aes(colour = file))", c("date", "source", "file"))$ok &&
         !design_guard("ggplot(d, aes(x = date)) + geom_point() + system(date)", c("date"))$ok &&
         design_guard("last <- filter(d, x == max(x)); f <- function(v, k = 2) round(v / k, 1); ggplot(last, aes(x, y)) + geom_text(aes(label = f(y)))", c("x", "y"))$ok &&
-        !design_guard("ggplot(d, aes(x, y)) + geom_point()", c("x"))$ok)
+        !design_guard("z <- y + 1; ggplot(d, aes(x)) + geom_point()", c("x"))$ok)
 
 # ---- what a design is given -----------------------------------------------------------------------------
 a11_br <- a11_in(a11_bar_sp, "briefing")
@@ -8901,6 +8901,39 @@ check("11A-12: a design is drawn once through chart_device() (a PNG of the size 
         { w = design_run('ggplot(d, aes(region, revenue)) + geom_col() + scale_y_continuous(limits = c(0, 500000))', a11_bar$d, a11_bar$facts, a11_bar$txt, a11_bar$tok, a11_bar$pal)
           ck = design_checks(w$plot, a11_bar$d, a11_bar$facts, a11_bar$spec, "", a11_bar$txt, w$warnings); !ck$ok && any(grepl("left rows out", ck$reasons)) })
 if (!is.null(a11_pic$file)) unlink(a11_pic$file)
+# the lead's review: markup made while the plot is built (an aesthetic, a scale's or a legend's labels function) is past any check of the plot's strings, so
+#   gridtext's image reader refuses for the rest of the process; a numeric index far past the limit, and a formatC() of 200 MB, are refused like the size
+#   limits; a bare name in aes(), after_stat() or a dplyr verb is a variable of the data (a column mutate() made, a statistic's count) and passes the guard,
+#   while a deny-listed name there is still refused
+a11_img <- tempfile("a11_img_", fileext = ".png")
+png::writePNG(array(1, c(4L, 4L, 3L)), a11_img)
+a11_imgp <- gsub("\\\\", "/", a11_img)
+a11_run <- function(code) design_run(code, a11_bar$d, a11_bar$facts, a11_bar$txt, a11_bar$tok, a11_bar$pal)
+a11_rv <- list(
+  aes = a11_run(sprintf("ggplot(d, aes(region, revenue)) + geom_col() + geom_richtext(aes(label = paste0('<i', 'mg src=\"%s\">')))", a11_imgp)),
+  axis = a11_run(sprintf("ggplot(d, aes(region, revenue)) + geom_col() + scale_x_discrete(labels = function(x) paste0('<i', 'mg src=\"%s\">')) + theme(axis.text.x = element_markdown())", a11_imgp)),
+  legend = a11_run(sprintf("ggplot(d, aes(region, revenue, fill = region)) + geom_col() + scale_fill_discrete(labels = function(x) paste0('<i', 'mg src=\"%s\">')) + theme(legend.text = element_markdown())", a11_imgp)),
+  web = a11_run("ggplot(d, aes(region, revenue)) + geom_col() + geom_richtext(aes(label = paste0('<i', 'mg src=\"http://127.0.0.1:9/x.png\">')))"),
+  index = a11_run(sprintf("x <- 1; x[%s] <- 1; ggplot(d, aes(region, revenue)) + geom_col()", a11_big)),
+  index2 = a11_run(sprintf("y <- list(); y[[%s]] <- 1; ggplot(d, aes(region, revenue)) + geom_col()", a11_big)),
+  formatc = a11_run("x <- formatC(seq_len(999999), width = 200); ggplot(d, aes(region, revenue)) + geom_col()"),
+  forms = a11_run("x <- c(1, 2, 3); x[] <- 0; x[2] <- 5; y <- list(a = 1); y[['b']] <- 2; d2 <- d; d2[1, 'revenue'] <- d2[1, 'revenue']; d2$w <- 1; ggplot(d2, aes(region, revenue)) + geom_col()"),
+  mutated = a11_run("d2 <- mutate(d, share = revenue / sum(revenue)); ggplot(d2, aes(region, share)) + geom_col()"),
+  stat = a11_run("ggplot(d, aes(revenue)) + geom_histogram(aes(y = after_stat(count)), bins = 3)"),
+  bold = a11_run("ggplot(d, aes(region, revenue)) + geom_col() + geom_richtext(aes(label = paste0('<b>', comma(revenue), '</b>')), vjust = -0.2)"),
+  link = a11_run("ggplot(d, aes(region, revenue)) + geom_col() + labs(title = '<a href=\"http://127.0.0.1:9/\">Revenue</a>') + theme(plot.title = element_markdown())"))
+a11_rv_g <- list(sys = design_guard("ggplot(d, aes(region, system('echo x'))) + geom_col()", names(a11_bar$d)),
+                 env = design_guard("ggplot(d, aes(region, Sys.getenv)) + geom_col()", names(a11_bar$d)))
+a11_reader <- tryCatch({ get("read_image", envir = asNamespace("gridtext"))(a11_img); "read" }, error = function(e) "refused")
+unlink(a11_img)
+purrr::iwalk(a11_rv, function(r, nm) cat("      11A-13 '", nm, "': ", if (isTRUE(r$ok)) "ran" else r$reason, "\n", sep = ""))
+check("11A-13: markup made while the plot is built (an aesthetic, an axis's or a legend's labels function, a web address) is refused before any picture is read, and gridtext's image reader refuses; a link in a title (no picture) is refused by the check of the plot's strings before drawing; a far numeric index, a far [[ index and a 200 MB formatC() are refused; ordinary replacements, a column made by mutate(), after_stat(count) and plain bold markup run; a deny-listed name inside aes() is still refused",
+      all(purrr::map_lgl(a11_rv[c("aes", "axis", "legend", "web")], function(r) !isTRUE(r$ok) && identical(r$reason, "A text has HTML or image markup in it; texts on a chart are plain words."))) &&
+        identical(a11_reader, "refused") &&
+        !isTRUE(a11_rv$link$ok) && grepl("^A text has HTML or image markup in it [(]", a11_rv$link$reason) &&
+        all(purrr::map_lgl(a11_rv[c("index", "index2", "formatc")], function(r) !isTRUE(r$ok) && grepl("longer than", r$reason, fixed = TRUE) && one_sentence(r$reason))) &&
+        all(purrr::map_lgl(a11_rv[c("forms", "mutated", "stat", "bold")], function(r) isTRUE(r$ok))) &&
+        !a11_rv_g$sys$ok && grepl("never allowed", a11_rv_g$sys$reason, fixed = TRUE) && !a11_rv_g$env$ok && grepl("never allowed", a11_rv_g$env$reason, fixed = TRUE))
 rm("a11_canary_fn", envir = globalenv())
 Sys.unsetenv("CHART_11A_CANARY")
 }   # the fast run only

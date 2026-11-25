@@ -11,6 +11,7 @@ stopifnot("Run from inside chaRt/" = file.exists("app.R") && dir.exists("R"))
 suppressMessages(app <- shiny::shinyAppDir("."))
 run_fast <- TRUE
 a11_big_override <- "10^7"
+a11_orig_read <- get("read_image", envir = asNamespace("gridtext"))   # gridtext's own reader, for mutation M29
 smoke <- readLines(file.path("tests", "smoke.R"), encoding = "UTF-8")
 block <- parse(text = smoke[grep("^# >>> 11A begin", smoke):grep("^# <<< 11A end", smoke)], keep.source = FALSE)
 spec_file <- file.path("R", "spec.R")
@@ -63,7 +64,12 @@ mutations <- list(
   mut("M25", "rows removed by a scale's limits are not refused", "if (length(hit)) paste0(\"ggplot2 left rows out", "if (FALSE) paste0(\"ggplot2 left rows out"),
   mut("M26", "the provided objects may be changed", "if (nm %in% cx$provided) return(paste0(", "if (FALSE) return(paste0("),
   mut("M27", "`<<-` is no longer named as refused", "`<<-` = , `->>` =", "`<<-x` = , `->>x` ="),
-  mut("M28", "the run environment's `::` finds any base function", "if (identical(p, \"base\") && identical(n, \"chooseOpsMethod\")) base::chooseOpsMethod else stop(", "if (TRUE) get(n, envir = baseenv()) else stop("))
+  mut("M28", "the run environment's `::` finds any base function", "if (identical(p, \"base\") && identical(n, \"chooseOpsMethod\")) base::chooseOpsMethod else stop(", "if (TRUE) get(n, envir = baseenv()) else stop("),
+  # the lead's review (check 11A-13). M29 puts gridtext's own image reader back, since an earlier run in this process has replaced it.
+  mut("M29", "gridtext's image reader is not replaced (markup made while the plot is built reads a picture)", "  design_block_images()\n  .design_cache$image_hit = FALSE",
+      "  utils::assignInNamespace(\"read_image\", a11_orig_read, ns = \"gridtext\"); .design_cache$images_blocked = FALSE\n  .design_cache$image_hit = FALSE"),
+  mut("M30", "the limited replacement forms removed (a far index makes the vector)", "  list2env(design_replace(), envir = e)\n", ""),
+  mut("M31", "a bare name in aes() or a dplyr verb is refused unless it is a column of d", "  if (name %in% DESIGN_MASKED) return(", "  if (FALSE) return("))
 wanted <- commandArgs(trailingOnly = TRUE)
 if (length(wanted)) mutations <- purrr::keep(mutations, function(m) m$id %in% wanted)
 
