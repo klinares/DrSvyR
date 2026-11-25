@@ -1263,11 +1263,14 @@ eval_lines <- unlist(purrr::map(code_files, function(f) {
 eval_allowed <- c("R/spec.R: eval(pipeline, spec_env(chart_data = data, ...))",
                   "R/spec.R: p = eval(plus_call(plot_calls(ls, cb, pal)), env)",
                   "R/spec.R: eval(plus_call(plot_calls(ls, cb, pal, interactive = TRUE)), wenv)",
-                  "R/spec.R: time_labels <- function() eval(TIME_LABELS, baseenv())")
+                  "R/spec.R: time_labels <- function() eval(TIME_LABELS, baseenv())",
+                  # Phase 11 Part A: the model's drawing code, parsed once by design_guard() (a syntax tree, never evaluated there) and evaluated only by
+                  #   design_run(), after the guard, in an environment whose parent is emptyenv() (check 11A-3 to 11A-6)
+                  "R/spec.R: plot = purrr::reduce(as.list(g$exprs), function(acc, e) eval(e, env), .init = NULL)")
 check(paste0("no file in app.R or R/ turns text into code, and eval() is used only on the calls spec.R builds",
-             if (length(text_to_code) || !setequal(eval_lines, eval_allowed))
+             if (!identical(sub(":[0-9]+ ", " ", text_to_code), "R/spec.R parse") || !setequal(eval_lines, eval_allowed))
                paste0(" (", paste(c(text_to_code, setdiff(eval_lines, eval_allowed)), collapse = "; "), ")")),
-      !length(text_to_code) && setequal(eval_lines, eval_allowed))
+      identical(sub(":[0-9]+ ", " ", text_to_code), "R/spec.R parse") && setequal(eval_lines, eval_allowed))
 
 if (!inherits(wide, "error")) {
   si_badpick <- stand_in(list(to_json(list(charts = list(), cannot = list()))))
@@ -4378,12 +4381,13 @@ p8_hits <- function(f) {
 }
 p8_found <- unlist(purrr::map(c("app.R", r_files), p8_hits))
 p8_gal <- unlist(purrr::map("tests/gallery.R", p8_hits))
-p8_expect <- c("spec.R: marking_band calls convertWidth, stringWidth", "theme.R: chart_device calls agg_png, png, svglite")   # Phase 10 Part A: marking_band() measures its letters, and is reached only from marking_draw(), which spec_png() and video_draw() call after chart_device() has opened the device
+p8_expect <- c("spec.R: marking_band calls convertWidth, stringWidth", "spec.R: design_text_boxes calls deviceLoc, convertWidth, grobWidth, convertHeight, grobHeight", "theme.R: chart_device calls agg_png, png, svglite")   # Phase 10 Part A: marking_band() measures its letters, and is reached only from marking_draw(), which spec_png() and video_draw() call after chart_device() has opened the device; Phase 11 Part A: design_text_boxes() measures the texts of a designed chart, inside the device it opens through chart_device()
 check(paste0("8A-2: no function in app.R or R/ opens a graphics device or measures text outside chart_device() in R/theme.R (png, jpeg, agg_png, svglite, pdf, ggsave, strwidth, grid unit conversions and the like)",
              if (!identical(p8_found, p8_expect)) paste0(" (found: ", paste(p8_found, collapse = "; "), ")")),
       identical(p8_found, p8_expect) &&
         any(grepl("chart_device\\(", deparse(body(spec_png)))) && any(grepl("chart_device\\(", deparse(body(drawn_text_boxes)))) &&
         !any(grepl("agg_png", deparse(body(drawn_text_boxes)), fixed = TRUE)) && !any(grepl("agg_png|png\\(", deparse(body(spec_png)))) &&
+        any(grepl("chart_device\\(", deparse(body(design_text_boxes)))) && any(grepl("chart_device\\(", deparse(body(design_draw)))) && !any(grepl("agg_png|png\\(|pdf\\(", c(deparse(body(design_text_boxes)), deparse(body(design_draw))))) &&
         !any(grepl("agg_png", p8_gal, fixed = TRUE)) &&
         any(grepl("marking_draw(", deparse(body(spec_png)), fixed = TRUE)) && any(grepl("marking_draw(", deparse(body(video_draw)), fixed = TRUE)) &&
         sum(purrr::map_lgl(purrr::keep(ls(globalenv()), function(n) is.function(get(n, globalenv()))), function(n) any(grepl("marking_band(", deparse(body(get(n, globalenv()))), fixed = TRUE)))) == 1L)
@@ -8502,6 +8506,405 @@ check("10v-2: a card's video lays out like the card's picture: dash_video() draw
         identical(spec_video, v10_real_video) && identical(unname(SPEC_VIDEO_PX$download), c(1920, 1080)) && is.null(formals(video_plot)$web) && is.null(formals(spec_video)$web))
 }
 # <<< 10v end
+
+
+# ---- Phase 11 Part A: the model's drawing code under an allow-list (R/spec.R: design_guard(), design_run(), design_checks()) ---------------------
+# >>> 11A begin
+# No model call. The model's drawing code is text from outside; these checks are the heart of the part. Hostile codes (a table below: each is refused by the
+#   guard with a plain sentence, or passes the guard and is harmless in the run, which is proved by what did not change: no file written in a watched folder, the
+#   environment variable a code tries to set untouched, the session's options, working folder, devices, search path and global environment as they were, and
+#   the time limit reset). Then designs that must pass guard, run and checks, and designs that each check must refuse. Their fixtures are their own, so a changed
+#   copy of one function can be run against them alone (the mutation runs of the worker's report). This is an allow-list interpreter, not a proven sandbox.
+if (run_fast) {   # the fast run only; not indented, to keep the diff small
+a11_big <- if (exists("a11_big_override")) a11_big_override else "10^9"   # a mutation run that removes the size limits uses a smaller vector
+a11_o <- read_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+a11_cb <- new_codebook(profile_data(a11_o$data), "orders.csv", nrow(a11_o$data), "-99", a11_o$encoding)
+a11_in <- function(spec, style = "clean") {
+  tb = spec_table(spec, a11_o$data, a11_cb)
+  list(d = as.data.frame(tb), facts = design_facts(spec, tb, a11_cb), txt = design_text(spec, style, a11_cb), tok = design_tokens(style), pal = design_pal(), spec = spec)
+}
+a11_bar_sp <- list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Revenue by region.", subtitle = "All years", sort = "value_desc")
+a11_line_sp <- list(family = "line", x = "order_month", y = "revenue", fn = "sum", color = "channel", title = "Monthly revenue by channel")
+a11_sc_sp <- list(family = "scatter", x = "units", y = "unit_price", title = "Unit price against units")
+a11_db_sp <- list(family = "dumbbell", y = "region", x = "revenue", color = "year", fn = "sum",
+                  filter = list(list(column = "year", op = "in", value = list(2022, 2024))), title = "Revenue by region, 2022 and 2024", x_label = "Revenue")
+a11_scf_sp <- list(family = "scatter", x = "units", y = "unit_price", facet = "channel", title = "Unit price against units, by channel")
+a11_heat_sp <- list(family = "heatmap", x = "region", y = "product_category", fn = "count", title = "Orders by region and category")
+a11_bar <- a11_in(a11_bar_sp)
+a11_scf <- a11_in(a11_scf_sp)
+a11_heat <- a11_in(a11_heat_sp)
+a11_line <- a11_in(a11_line_sp)
+a11_sc <- a11_in(a11_sc_sp)
+a11_db <- a11_in(a11_db_sp)
+
+# a drawing's text, as the Editorial skill asks: left-aligned title block, hairline value grid, muted axis text, the style's tokens
+a11_theme <- 'theme_minimal(base_family = tok$body_family, base_size = tok$base_size) +
+  theme(plot.background = element_rect(fill = tok$ground, colour = NA), panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(colour = tok$grid, linewidth = 0.3),
+        plot.title = element_text(family = tok$title_family, face = tok$title_face, colour = tok$text, hjust = 0),
+        plot.subtitle = element_text(colour = tok$muted, hjust = 0), plot.caption = element_text(colour = tok$caption, hjust = 0),
+        axis.text = element_text(colour = tok$muted), axis.title = element_text(colour = tok$muted))'
+a11_good <- list(
+  bar = list(inp = a11_bar, code = paste0('ggplot(d, aes(x = region, y = revenue)) +
+  geom_col(fill = tok$accent, width = 0.7) +
+  geom_text(aes(label = comma(revenue)), vjust = -0.5, colour = tok$text, family = tok$body_family, size = 3.5) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12)), labels = label_comma()) +
+  labs(title = txt$title, subtitle = txt$subtitle, x = NULL, y = NULL) + ', a11_theme)),
+  sideways_bar = list(inp = a11_bar, code = paste0('ggplot(d, aes(x = fct_rev(fct_inorder(region)), y = revenue)) +
+  geom_col(fill = tok$accent, width = 0.7) +
+  geom_text(aes(label = comma(revenue)), hjust = -0.1, colour = tok$text, family = tok$body_family, size = 3.5) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.18))) +
+  coord_flip() +
+  labs(title = txt$title, subtitle = txt$subtitle, x = NULL, y = NULL) + ', a11_theme)),
+  line = list(inp = a11_line, code = paste0('ends <- filter(d, order_month == max(order_month))
+ggplot(d, aes(x = order_month, y = revenue, colour = channel)) +
+  geom_line(linewidth = 0.9) +
+  geom_text(data = ends, aes(label = channel), hjust = -0.1, family = tok$body_family, size = 3.5, colour = tok$text) +
+  scale_colour_manual(values = pal(3)) +
+  scale_x_date(expand = expansion(mult = c(0.02, 0.2))) +
+  scale_y_continuous(labels = label_comma()) +
+  guides(colour = "none") +
+  labs(title = txt$title, subtitle = txt$subtitle, x = NULL, y = NULL) + ', a11_theme)),
+  scatter = list(inp = a11_sc, code = paste0('ggplot(d, aes(x = units, y = unit_price)) + geom_point(colour = tok$accent, alpha = 0.35, size = 1.6) +
+  scale_x_continuous(labels = label_comma()) + scale_y_continuous(labels = label_dollar()) +
+  labs(title = txt$title, subtitle = txt$subtitle, x = txt$x, y = txt$y) + ', a11_theme)),
+  dumbbell = list(inp = a11_db, code = paste0('ggplot(d, aes(x = revenue, y = fct_reorder(region, revenue))) +
+  geom_line(aes(group = region), colour = tok$slate, linewidth = 1.2) +
+  geom_point(aes(colour = factor(year)), size = 3.5) +
+  scale_colour_manual(values = c(tok$slate, tok$accent)) +
+  scale_x_continuous(labels = label_comma()) +
+  labs(title = txt$title, subtitle = txt$subtitle, x = txt$x, y = NULL, colour = NULL) + ', a11_theme)),
+  annotated = list(inp = a11_bar, code = paste0('ggplot(d, aes(x = region, y = revenue)) +
+  geom_col(fill = tok$slate, width = 0.7) +
+  geom_col(data = filter(d, revenue == max(revenue)), fill = tok$accent, width = 0.7) +
+  annotate("text", x = 2.2, y = max(d$revenue), label = facts$highest$text, hjust = 0, colour = tok$text, family = tok$body_family, size = 4) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12)), labels = label_comma()) +
+  labs(title = txt$title, subtitle = txt$subtitle, x = NULL, y = NULL) + ', a11_theme)),
+  scatter_facets = list(inp = a11_scf, code = paste0('ggplot(d, aes(x = units, y = unit_price)) + geom_point(colour = tok$slate, alpha = 0.3, size = 1.2) +
+  geom_smooth(method = "loess", formula = y ~ x, colour = tok$accent, se = FALSE) + facet_wrap(~ channel) +
+  labs(title = txt$title, subtitle = txt$subtitle, x = txt$x, y = txt$y) + ', a11_theme, ' + theme(strip.text = element_text(colour = tok$text))')),
+  heatmap = list(inp = a11_heat, code = paste0('ggplot(d, aes(x = region, y = product_category, fill = n)) + geom_tile(colour = tok$ground) +
+  geom_text(aes(label = comma(n)), size = 3, colour = "#FFFFFF") + scale_fill_gradient(low = "#35618F", high = tok$accent, guide = "none") +
+  labs(title = txt$title, x = NULL, y = NULL) + ', a11_theme)),
+  patchwork = list(inp = a11_bar, code = paste0('one <- ggplot(d, aes(x = region, y = revenue)) + geom_col(fill = tok$accent) + labs(title = txt$title, x = NULL, y = NULL) + ', a11_theme, '
+two <- ggplot(d, aes(x = region, y = revenue)) + geom_col(fill = tok$slate) + labs(title = txt$subtitle, x = NULL, y = NULL) + ', a11_theme, '
+one | two')))
+a11_runs <- purrr::map(a11_good, function(g) {
+  r = design_run(g$code, g$inp$d, g$inp$facts, g$inp$txt, g$inp$tok, g$inp$pal)
+  list(run = r, ck = if (r$ok) design_checks(r$plot, g$inp$d, g$inp$facts, g$inp$spec, g$code, g$inp$txt, r$warnings))
+})
+purrr::iwalk(a11_runs, function(r, nm) cat("      design '", nm, "': ", if (!r$run$ok) paste("refused:", r$run$reason) else if (r$ck$ok) "passes guard, run and checks" else paste("checks refuse:", paste(r$ck$reasons, collapse = " ")),
+                                           " (", round(r$run$seconds, 2), " s)\n", sep = ""))
+check(paste0("11A-1: ", length(a11_good), " realistic designs (a bar with values, a sideways ranked bar, a line with end labels on a date axis, a scatter, a dumbbell, a bar with a fact as its annotation and a ",
+             "filter(), a faceted scatter with a loess curve, a heatmap with white numbers on dark tiles, two bars side by side as a patchwork) pass the guard, run in the allow-list environment, draw through chart_device() and pass every check of design_checks()"),
+      length(a11_good) >= 5L && all(purrr::map_lgl(a11_runs, function(r) isTRUE(r$run$ok) && length(r$run$warnings) == 0L && isTRUE(r$ck$ok))) &&
+        all(purrr::map_lgl(a11_runs, function(r) inherits(r$run$plot, "ggplot") && inherits(r$run$built, "ggplot_built"))) &&
+        inherits(a11_runs$patchwork$run$plot, "patchwork"))
+
+# ---- the toolkit ----------------------------------------------------------------------------------
+a11_tk <- design_toolkit()
+a11_pk <- attr(a11_tk, "package")
+a11_missing <- c(setdiff(DESIGN_GGPLOT2, getNamespaceExports("ggplot2")), setdiff(DESIGN_SCALES, getNamespaceExports("scales")),
+                 setdiff(DESIGN_OTHER$dplyr, getNamespaceExports("dplyr")), setdiff(DESIGN_OTHER$forcats, getNamespaceExports("forcats")),
+                 setdiff(DESIGN_OTHER$ggrepel, getNamespaceExports("ggrepel")), setdiff(DESIGN_OTHER$ggtext, getNamespaceExports("ggtext")),
+                 setdiff(DESIGN_OTHER$patchwork, getNamespaceExports("patchwork")), DESIGN_BASE[!purrr::map_lgl(DESIGN_BASE, exists, envir = baseenv())])
+a11_left_out <- c("sec_axis", "dup_axis", "coord_polar", "coord_radial", "ggsave", "geom_sf", "geom_sf_label", "geom_sf_text", "stat_sf", "stat_sf_coordinates", "coord_sf",
+                  "geom_map", "annotation_map", "annotation_borders", "annotation_custom", "annotation_raster", "theme_set", "theme_update", "theme_replace", "theme_get",
+                  "from_theme", "labeller", "as_labeller", "label_parsed", "label_bquote", "layer", "aes_string", "aes_", "qplot", "guide_custom", "element_grob", "label_glue",
+                  "label_math", "label_parse", "ggproto", "continuous_scale", "discrete_scale", "ggplot_build", "ggplot_gtable", "print", "eval", "get", "system", "library")
+check(paste0("11A-2: DESIGN_TOOLKIT (", length(a11_tk), " functions): every name typed in its lists exists in the installed ggplot2 ", as.character(utils::packageVersion("ggplot2")), ", scales, dplyr, forcats, ggrepel, ggtext, patchwork ",
+             "and base R (none is guessed); the second axes, pies, file writers, map and sf functions, theme setters and string evaluators are left out; none of DESIGN_DENY is in it; each function has its package"),
+      !length(a11_missing) && length(a11_tk) > 300L && is.function(a11_tk$ggplot) && is.function(a11_tk$geom_text_repel) && is.function(a11_tk$element_markdown) && is.function(a11_tk$plot_layout) &&
+        is.function(a11_tk$fct_reorder) && is.function(a11_tk$label_comma) && !any(a11_left_out %in% names(a11_tk)) && !any(unlist(DESIGN_DENY) %in% names(a11_tk)) &&
+        !anyDuplicated(names(a11_tk)) && identical(unname(attr(a11_tk, "package")[c("ggplot", "label_comma", "mutate", "c", "fct_rev", "plot_layout")]),
+                                                   c("ggplot2", "scales", "dplyr", "base", "forcats", "patchwork")) &&
+        all(purrr::map_lgl(a11_tk, is.function)) && grepl("ggplot2: ggplot aes", design_toolkit_text(), fixed = TRUE) && grepl("provided objects: d", design_toolkit_text(), fixed = TRUE))
+
+# ---- the environment a design runs in ---------------------------------------------------------------
+a11_env <- design_env(list(d = a11_bar$d, facts = a11_bar$facts, txt = a11_bar$txt, tok = a11_bar$tok, pal = a11_bar$pal))
+a11_resolves <- function(nm) tryCatch({ eval(parse(text = nm), a11_env); TRUE }, error = function(e) FALSE)
+a11_names <- c("system", "system2", "eval", "get", "Sys.getenv", "Sys.setenv", "library", "readRDS", "file", "url", "options", "environment", "globalenv", "ggsave", "png", "print", "source",
+               "do.call", "match.fun", "Reduce", "sapply", "parse", "quote", "ggplot_build", "theme_set", "sec_axis", "coord_polar", "stop", "cat", "Sys.sleep", "q", "quit", "readline",
+               "baseenv", "emptyenv", "parent.frame", "sys.call", "new.env", "assign", "exists", "mget", "get0", "trace", "on.exit", "tryCatch", "unlink", "writeLines", "setwd")
+check(paste0("11A-3: the environment a design is evaluated in has emptyenv() as its parent and holds only the toolkit, `$<-`, `[<-` and `[[<-`, a `::` that finds one base function, the constants and the five ",
+             "provided objects: none of ", length(a11_names), " dangerous names resolves in it, d, facts, txt, tok and pal do, and its `::` refuses everything but base::chooseOpsMethod"),
+      identical(parent.env(a11_env), emptyenv()) && setequal(ls(a11_env, all.names = TRUE), c(names(a11_tk), DESIGN_REPLACE, names(DESIGN_CONSTANTS), "::", DESIGN_PROVIDED)) &&
+        !any(purrr::map_lgl(a11_names, a11_resolves)) && all(purrr::map_lgl(c("d", "facts", "txt", "tok", "pal", "ggplot", "mutate", "c", "T"), a11_resolves)) &&
+        is.function(eval(parse(text = "base::chooseOpsMethod"), a11_env)) && inherits(tryCatch(eval(parse(text = "base::system"), a11_env), error = function(e) e), "error") &&
+        inherits(tryCatch(eval(parse(text = "ggplot2:::theme_grey"), a11_env), error = function(e) e), "error"))
+
+# ---- hostile codes ------------------------------------------------------------------------------------
+# Each: a label, the code, where it must stop ("guard": design_guard() refuses it; "run": the guard lets it pass and the run refuses it; "ran": the guard lets it pass
+#   and the run draws it, harmlessly) and a pattern the reason must match. `{W}` is a watched folder, `{BIG}` a vector of 10^9 numbers (or fewer in a mutation run).
+# A function in the global environment, where a string turned into a function name by ggplot2's or forcats' own code would find it (their namespaces see the
+#   search path): if any code below reaches it, it counts a hit.
+a11_canary_env <- new.env()
+a11_canary_env$hits <- 0L
+assign("a11_canary_fn", function(...) { a11_canary_env$hits <- a11_canary_env$hits + 1L; NULL }, envir = globalenv())
+a11_watch <- file.path(tempdir(), "a11_watch")
+dir.create(a11_watch, showWarnings = FALSE)
+a11_w <- gsub("\\\\", "/", a11_watch)
+Sys.setenv(CHART_11A_CANARY = "intact")
+a11_dbl <- paste(c("x <- 1:2", rep("x <- c(x, x)", 25)), collapse = "\n")
+a11_h <- function(label, code, where, rx = NA_character_) list(label = label, code = code, where = where, rx = rx)
+a11_hostile <- list(
+  a11_h("system()", 'system("echo hi > {W}/system.txt")', "guard", "never allowed"),
+  a11_h("base::system", 'base::system("echo hi > {W}/base.txt")', "guard", "`::`"),
+  a11_h("get(\"sys\" %+% \"tem\")(...)", 'get("sys" %+% "tem")("echo hi > {W}/get.txt")', "guard", "plain name"),
+  a11_h("do.call(\"system\", ...)", 'do.call("system", list("echo hi > {W}/docall.txt"))', "guard", "never allowed"),
+  a11_h("(function() eval(...))()", '(function() eval(parse(text = "system(\'echo hi\')")))()', "guard", "plain name"),
+  a11_h("a call through match.fun", 'f <- match.fun("system"); f("echo hi > {W}/matchfun.txt")', "guard", "never allowed"),
+  a11_h("Reduce(", 'Reduce(`+`, 1:3)', "guard", "never allowed"),
+  a11_h("environment(ggplot)", 'environment(ggplot)', "guard", "never allowed"),
+  a11_h("ggplot2:::x", 'ggplot2:::theme_grey()', "guard", "`::`"),
+  a11_h("ggsave", 'ggsave("{W}/ggsave.png", ggplot(d))', "guard", "never allowed"),
+  a11_h("png()", 'png("{W}/png.png")', "guard", "never allowed"),
+  a11_h("read.csv", 'read.csv("{W}/x.csv")', "guard", "never allowed"),
+  a11_h("readRDS", 'readRDS("{W}/x.rds")', "guard", "never allowed"),
+  a11_h("file()", 'file("{W}/file.txt", "w")', "guard", "never allowed"),
+  a11_h("url()", 'url("http://127.0.0.1:9/x")', "guard", "never allowed"),
+  a11_h("repeat", 'repeat { x <- 1 }', "guard", "loop"),
+  a11_h("while (TRUE)", 'while (TRUE) { x <- 1 }', "guard", "loop"),
+  a11_h("for", 'for (i in 1:3) x <- i', "guard", "loop"),
+  a11_h("a 10^9-element vector", 'x <- rep(0, {BIG}); ggplot(d, aes(region, revenue)) + geom_col()', "run", "longer than"),
+  a11_h("a 10^7-string vector", 'x <- rep("a", 10^7); ggplot(d, aes(region, revenue)) + geom_col()', "run", "longer than"),
+  a11_h("seq_len(10^9)", 'x <- seq_len({BIG}); ggplot(d, aes(region, revenue)) + geom_col()', "run", "longer than"),
+  a11_h("1:(10^9)", 'x <- 1:({BIG}); ggplot(d, aes(region, revenue)) + geom_col()', "run", "longer than"),
+  a11_h("seq(1, 10^9, by = 1)", 'x <- seq(1, {BIG}, by = 1); ggplot(d, aes(region, revenue)) + geom_col()', "run", "longer than"),
+  a11_h("a vector doubled 25 times", paste0(a11_dbl, "\nggplot(d, aes(region, revenue)) + geom_col()"), "run", "longer than"),
+  a11_h("format(width = 10^9)", 'x <- format(1, width = 10^9); ggplot(d, aes(region, revenue)) + geom_col()', "run", "too large"),
+  a11_h("a number written as 1e9", 'ggplot(d, aes(region, revenue)) + geom_col() + xlim(0, 1e9)', "guard", "too large"),
+  a11_h("a deparse-and-eval", 'eval(parse(text = deparse(quote(1 + 1))))', "guard", "never allowed"),
+  a11_h("Sys.getenv of the key", 'key <- Sys.getenv("ANTHROPIC_API_KEY"); ggplot(d, aes(region, revenue)) + geom_col() + labs(title = key)', "guard", "never allowed"),
+  a11_h("redefine c, then call it", 'c <- function(...) 1; c(1)', "guard", "belongs to the toolkit"),
+  a11_h("redefine ggplot, then call it", 'ggplot <- function(...) 1; ggplot(d)', "guard", "belongs to the toolkit"),
+  a11_h("redefine `+`", '`+` <- function(a, b) 1; 1 + 2', "guard", "belongs to the toolkit"),
+  a11_h("`attributes<-`", '`attributes<-`(d, NULL)', "guard", "never allowed"),
+  a11_h("attributes(d) <- NULL", 'attributes(d) <- NULL', "guard", "may be assigned"),
+  a11_h("`body<-`", 'f <- function() 1; `body<-`(f, value = quote(2))', "guard", "never allowed"),
+  a11_h("body(f) <- ...", 'f <- function() 1; body(f) <- 2', "guard", "may be assigned"),
+  a11_h("trace", 'trace("print", quote(1))', "guard", "never allowed"),
+  a11_h("on.exit", 'on.exit(system("echo hi > {W}/onexit.txt"))', "guard", "never allowed"),
+  a11_h("Sys.sleep(60)", 'Sys.sleep(60)', "guard", "never allowed"),
+  a11_h("a recursive anonymous function", 'f <- function(n) f(n + 1); f(1)', "guard", "calls itself"),
+  a11_h("two functions calling each other", 'f <- function(n) g(n); g <- function(n) f(n); f(1)', "guard", "calls itself"),
+  a11_h("Recall", 'f <- function(n) Recall(n + 1); f(1)', "guard", "never allowed"),
+  a11_h("library(x)", 'library(ggrepel)', "guard", "never allowed"),
+  a11_h("requireNamespace", 'requireNamespace("ggrepel")', "guard", "never allowed"),
+  a11_h("options(error = ...)", 'options(error = function() 1)', "guard", "never allowed"),
+  a11_h("reg.finalizer", 'reg.finalizer(environment(), function(e) 1)', "guard", "never allowed"),
+  a11_h("quit()", 'quit()', "guard", "never allowed"),
+  a11_h("q()", 'q()', "guard", "never allowed"),
+  a11_h("Sys.setenv", 'Sys.setenv(CHART_11A_CANARY = "changed")', "guard", "never allowed"),
+  a11_h("setwd", 'setwd("{W}")', "guard", "never allowed"),
+  a11_h("unlink", 'unlink("{W}", recursive = TRUE)', "guard", "never allowed"),
+  a11_h("sink", 'sink("{W}/sink.txt")', "guard", "never allowed"),
+  a11_h("saveRDS", 'saveRDS(d, "{W}/d.rds")', "guard", "never allowed"),
+  a11_h("download.file", 'download.file("http://127.0.0.1:9/x", "{W}/dl.txt")', "guard", "never allowed"),
+  a11_h("system2 and shell", 'system2("echo", "hi"); shell("echo hi")', "guard", "never allowed"),
+  a11_h("source", 'source("{W}/x.R")', "guard", "never allowed"),
+  a11_h("loadNamespace", 'loadNamespace("ggplot2")', "guard", "never allowed"),
+  a11_h(".Internal", '.Internal(system("echo hi", FALSE, FALSE))', "guard", "never allowed"),
+  a11_h(".Call", '.Call("x")', "guard", "never allowed"),
+  a11_h("globalenv and parent.frame", 'x <- globalenv(); y <- parent.frame()', "guard", "never allowed"),
+  a11_h("sys.call", 'sys.call()', "guard", "never allowed"),
+  a11_h("assign and mget", 'assign("x", 1); mget("d")', "guard", "never allowed"),
+  a11_h("a string called as a function", '"system"("echo hi > {W}/str.txt")', "guard", "never allowed"),
+  a11_h("a unicode-escaped name called", '"\\u0073ystem"("echo hi")', "guard", "never allowed"),
+  a11_h("a string in a variable, then called", 'f <- "system"; f("echo hi > {W}/var.txt")', "guard", "not in the toolkit"),
+  a11_h("`::` as a function", '`::`(base, system)("echo hi")', "guard", "plain name"),
+  a11_h("a call of a call", 'ggplot(d)(1)', "guard", "plain name"),
+  a11_h("a call through $", 'x <- list(); x$f <- function() 1; x$f()', "guard", "plain name"),
+  a11_h("a default argument that calls system", 'f <- function(x = system("echo hi")) x; f()', "guard", "never allowed"),
+  a11_h("<<-", 'x <<- 1', "guard", "own variables"),
+  a11_h("d$x <- 1", 'd$x <- 1', "guard", "may not change it"),
+  a11_h("tok$accent <- ...", 'tok$accent <- "red"', "guard", "may not change it"),
+  a11_h("an element of a variable it did not make", 'x[[1]] <- 1', "guard", "not a variable the code made"),
+  a11_h("names(d) <- ...", 'names(d) <- c("a", "b")', "guard", "may be assigned"),
+  a11_h("`$<-` called by name", '`$<-`(d, "x", 1)', "guard", "not in the toolkit"),
+  a11_h("sapply", 'sapply(1:3, function(i) i)', "guard", "never allowed"),
+  a11_h("quote and bquote", 'quote(system("echo hi")); bquote(.(1))', "guard", "never allowed"),
+  a11_h("new.env", 'e <- new.env()', "guard", "never allowed"),
+  a11_h("cat to a file", 'cat("x", file = "{W}/cat.txt")', "guard", "never allowed"),
+  a11_h("write.csv, writeLines", 'write.csv(d, "{W}/d.csv"); writeLines("x", "{W}/x.txt")', "guard", "never allowed"),
+  a11_h("pdf()", 'pdf("{W}/x.pdf")', "guard", "never allowed"),
+  a11_h("tryCatch", 'tryCatch(1, error = function(e) 2)', "guard", "never allowed"),
+  a11_h("the data pronoun's environment", 'ggplot(d, aes(x = .env$print))', "guard", "not a column"),
+  a11_h("a system() call inside aes()", 'ggplot(d, aes(x = system("echo hi")))', "guard", "never allowed"),
+  a11_h("a system() call inside a formula", 'ggplot(d) + geom_point(aes(x = 1, y = 1), data = ~ system("echo hi"))', "guard", "never allowed"),
+  a11_h("a system() call inside geom_function", 'ggplot() + geom_function(fun = function(x) system("echo hi")) + xlim(0, 1)', "guard", "never allowed"),
+  a11_h("stat_summary(fun = \"print\")", 'ggplot(d, aes(region, revenue)) + stat_summary(fun = "print")', "guard", "would be turned into a function"),
+  a11_h("stat_function(fun = \"print\")", 'ggplot() + stat_function(fun = "print") + xlim(0, 1)', "guard", "would be turned into a function"),
+  a11_h("geom_smooth(method = \"print\")", 'ggplot(d, aes(region, revenue)) + geom_smooth(method = "print")', "guard", "method"),
+  a11_h("a transform given as a string", 'ggplot(d, aes(region, revenue)) + scale_y_continuous(transform = "print")', "guard", "transform"),
+  a11_h("facet_wrap(\"print('x')\")", 'ggplot(d, aes(region, revenue)) + geom_col() + facet_wrap("print(\'x\')")', "guard", "column name"),
+  a11_h("annotate(parse = TRUE)", 'ggplot(d, aes(region, revenue)) + annotate("text", x = 1, y = 1, label = "system(\'echo\')", parse = TRUE)', "guard", "`parse`"),
+  a11_h("a second axis (sec_axis)", 'ggplot(d, aes(region, revenue)) + geom_col() + scale_y_continuous(sec.axis = sec_axis(~ . * 2))', "guard", "not in the toolkit"),
+  a11_h("a pie (coord_polar)", 'ggplot(d, aes(region, revenue)) + geom_col() + coord_polar()', "guard", "not in the toolkit"),
+  a11_h("theme_set", 'theme_set(theme_bw())', "guard", "not in the toolkit"),
+  a11_h("ggplot_build", 'ggplot_build(ggplot(d))', "guard", "not in the toolkit"),
+  a11_h("aes_string", 'ggplot(d) + aes_string(x = "region")', "guard", "not in the toolkit"),
+  a11_h("a number tricked by with()", 'with(d, system("echo hi"))', "guard", "never allowed"),
+  a11_h("a parse error", 'ggplot(d, aes(region, revenue)) +', "guard", "does not parse"),
+  a11_h("code over 6,000 characters", paste0("x <- 1 # ", strrep("a", 6100)), "guard", "at most"),
+  a11_h("empty code", "  ", "guard", "no code"),
+  a11_h("a code that is not a chart", 'x <- 1', "run", "not a ggplot"),
+  a11_h("a computed facet string", 'ggplot(d, aes(region, revenue)) + geom_col() + facet_wrap(paste0("a11_", "canary_fn()"))', "run", "must be a column name"),
+  a11_h("a computed facet string (facet_grid)", 'ggplot(d, aes(region, revenue)) + geom_col() + facet_grid(rows = paste0("a11_", "canary_fn()"))', "run", "must be a column name"),
+  a11_h("a computed function string (stat_summary fun)", 'ggplot(d, aes(region, revenue)) + stat_summary(fun = paste0("a11_", "canary_fn"))', "run", "must name a toolkit function"),
+  a11_h("a computed function string (stat_summary fun.data)", 'ggplot(d, aes(region, revenue)) + stat_summary(fun.data = paste0("a11_", "canary_fn"))', "run", "must name a toolkit function"),
+  a11_h("a computed function string (stat_summary_2d)", 'ggplot(d, aes(region, revenue, z = revenue)) + stat_summary_2d(fun = paste0("a11_", "canary_fn"))', "run", "must name a toolkit function"),
+  a11_h("a computed method string (geom_smooth)", 'ggplot(d, aes(region, revenue)) + geom_smooth(method = paste0("a11_", "canary_fn"))', "run", "is not one of"),
+  a11_h("a computed transformation string", 'ggplot(d, aes(region, revenue)) + scale_y_continuous(transform = paste0("a11_", "canary_fn"))', "run", "is not one of"),
+  a11_h("a computed .fun string (fct_reorder)", 'ggplot(d, aes(fct_reorder(region, revenue, .fun = paste0("a11_", "canary_fn")), revenue)) + geom_col()', "run", "must name a toolkit function"),
+  a11_h("a computed labeller string", 'ggplot(d, aes(region, revenue)) + geom_col() + facet_wrap(~ region, labeller = paste0("a11_", "canary_fn"))', "run", "must name a toolkit function"),
+  a11_h("a function string that names `system`", 'ggplot(d, aes(region, revenue)) + stat_summary(fun = paste0("sys", "tem"))', "run", "must name a toolkit function"),
+  a11_h("200,000 grid points (geom_function n)", 'ggplot() + geom_function(fun = function(x) x, n = 200000) + xlim(0, 1)', "run", "more than a chart needs"),
+  a11_h("text of 100,000 pt (element_text size)", 'ggplot(d, aes(region, revenue)) + geom_col() + theme(axis.text = element_text(size = 100000))', "run", "larger than a chart needs"),
+  a11_h("a point of size 10^6 (geom_point)", 'ggplot(d, aes(region, revenue)) + geom_point(size = 10^6)', "run", "larger than a chart needs"),
+  a11_h("a text of a million characters", 'x <- paste0(rep("abcdefghij", 100000), collapse = ""); ggplot(d, aes(region, revenue)) + geom_col() + labs(title = x)', "run", "longer than"),
+  a11_h("a million bins (stat_bin_2d)", 'ggplot(d, aes(region, revenue)) + stat_bin_2d(bins = 1e6)', "run", "more than a chart needs"),
+  a11_h("head(d, 3) as the data of a bar", 'ggplot(head(d, 3), aes(region, revenue)) + geom_col()', "ran", NA),
+  a11_h("a label that is a column name that is code", 'ggplot(d, aes(x = region, y = .data[[names(d)[3]]])) + geom_col() + labs(title = names(d)[3], x = NULL, y = NULL)', "ran", NA),
+  a11_h("markup with an image in a title (ggtext)", 'ggplot(d, aes(region, revenue)) + geom_col() + labs(title = "<img src=\'{W}/x.png\'>") + theme(plot.title = element_markdown())', "run", "markup"),
+  a11_h("markup with an image in a column's value (ggtext)", 'ggplot(d, aes(region, revenue)) + geom_col() + geom_richtext(aes(label = region))', "run", "markup"))
+a11_cases <- purrr::map_chr(a11_hostile, "label")
+
+# The state that must not change.
+a11_state <- function() list(envvar = Sys.getenv("CHART_11A_CANARY"), files = sort(list.files(a11_watch, all.files = TRUE, recursive = TRUE)), wd = getwd(),
+                             globals = sort(grep("^a11_", ls(globalenv(), all.names = TRUE), value = TRUE, invert = TRUE)), options = digest::digest(options()), devices = grDevices::dev.list(), search = search(),
+                             tmp = length(list.files(tempdir(), pattern = "^design_")), canary = a11_canary_env$hits)
+a11_before <- a11_state()
+a11_d_evil <- a11_bar$d[, c("region", "revenue", "revenue")]
+names(a11_d_evil) <- c("region", "revenue", "Sys.setenv(CHART_11A_CANARY = 'changed')")
+a11_d_markup <- a11_bar$d; a11_d_markup$region <- as.character(a11_d_markup$region); a11_d_markup$region[1] <- paste0("<img src='", a11_w, "/x.png'>")
+a11_one <- function(h) {
+  code = gsub("{BIG}", a11_big, gsub("{W}", a11_w, h$code, fixed = TRUE), fixed = TRUE)
+  d = if (grepl("column name that is code", h$label)) a11_d_evil else if (grepl("column's value", h$label)) a11_d_markup else a11_bar$d
+  t0 = Sys.time()
+  g = design_guard(code, names(d))
+  r = if (g$ok) design_run(code, d, a11_bar$facts, a11_bar$txt, a11_bar$tok, a11_bar$pal)
+  list(label = h$label, where = h$where, rx = h$rx, guard = g, run = r, secs = as.numeric(difftime(Sys.time(), t0, units = "secs")))
+}
+a11_res <- purrr::map(a11_hostile, a11_one)
+a11_after <- a11_state()
+one_sentence <- function(x) is.character(x) && length(x) == 1L && !is.na(x) && nzchar(x) && !grepl("\n", x) && nchar(x) < 400L && grepl("[.]$", x)
+a11_stopped_at <- purrr::map_chr(a11_res, function(r) if (!r$guard$ok) "guard" else if (!r$run$ok) "run" else "ran")
+a11_reason <- purrr::map_chr(a11_res, function(r) if (!r$guard$ok) r$guard$reason else if (!r$run$ok) r$run$reason else NA_character_)
+purrr::walk(seq_along(a11_res), function(i) cat(sprintf("      hostile %2d  %-58s %s: %s (%.1f s)\n", i, a11_cases[[i]], toupper(a11_stopped_at[[i]]),
+                                                       if (is.na(a11_reason[[i]])) "drawn as text, nothing reached" else a11_reason[[i]], a11_res[[i]]$secs)))
+a11_where_ok <- purrr::map_lgl(seq_along(a11_res), function(i) identical(a11_stopped_at[[i]], a11_hostile[[i]]$where))
+a11_rx_ok <- purrr::map_lgl(seq_along(a11_res), function(i) is.na(a11_hostile[[i]]$rx) || grepl(a11_hostile[[i]]$rx, a11_reason[[i]], fixed = TRUE))
+if (!all(a11_where_ok & a11_rx_ok)) cat("      NOT as expected: ", paste(a11_cases[!(a11_where_ok & a11_rx_ok)], collapse = "; "), "\n", sep = "")
+check(paste0("11A-4: ", length(a11_hostile), " hostile codes (system(), base::system, get(\"sys\" %+% \"tem\"), do.call, (function() eval(...))(), match.fun, Reduce, environment(ggplot), ggplot2:::, ggsave, png, read.csv, ",
+             "readRDS, file, url, repeat, while (TRUE), a 10^9-element vector, a deparse-and-eval, Sys.getenv of the key, redefining c and ggplot, attributes<-, body<-, trace, on.exit, Sys.sleep(60), a recursive ",
+             "anonymous function, a label from a column name that is code, library, requireNamespace, options(error = ...), reg.finalizer, quit(), q(), and the rest): each stops where it must (the guard, ",
+             "or the run) with the reason that names the cause, in one plain sentence"),
+      length(a11_hostile) >= 40L && length(a11_cases) == length(unique(a11_cases)) && all(a11_where_ok) && all(a11_rx_ok) &&
+        all(purrr::map_lgl(a11_reason[a11_stopped_at != "ran"], one_sentence)) && sum(a11_stopped_at == "guard") >= 40L)
+check("11A-5: nothing the hostile codes reached changed (a function planted in the global environment, where a string turned into a function name by ggplot2's or forcats' code would find it, was never called): the folder they were told to write in is empty, the environment variable one tried to set is as it was, the options, working folder, global environment, open devices, search path and temporary pictures are as they were, and the two codes that ran drew only a chart",
+      identical(a11_before, a11_after) && identical(a11_after$canary, 0L) && identical(a11_after$files, character(0)) && identical(a11_after$envvar, "intact") &&
+        sum(a11_stopped_at == "ran") == 2L && !any(file.exists(file.path(a11_w, c("facet.txt", "system.txt", "png.png", "ggsave.png")))) &&
+        identical(Sys.getenv("CHART_11A_CANARY"), "intact") && all(purrr::map_dbl(a11_res, "secs") < 10))
+
+# ---- the time limit ---------------------------------------------------------------------------------
+# 2,600 panels: the guard passes it (every function is the toolkit's), the drawing would take minutes; the limit is 20 seconds of elapsed time and of cpu time.
+a11_slow_code <- 'ggplot(d, aes(units, unit_price)) + geom_point() + facet_wrap(~ unit_price)'
+a11_slow <- tryCatch(design_run(a11_slow_code, a11_sc$d, a11_sc$facts, a11_sc$txt, a11_sc$tok, a11_sc$pal), error = function(e) e)
+a11_nap <- tryCatch({ t = Sys.time(); Sys.sleep(1.2); as.numeric(difftime(Sys.time(), t, units = "secs")) }, error = function(e) NA_real_)
+# and after a design that finished well inside a short limit (1 s), a pause longer than that limit is not cut off either
+a11_quick <- design_run(a11_good$bar$code, a11_bar$d, a11_bar$facts, a11_bar$txt, a11_bar$tok, a11_bar$pal, limit = 1)
+a11_nap2 <- tryCatch({ t = Sys.time(); Sys.sleep(1.6); as.numeric(difftime(Sys.time(), t, units = "secs")) }, error = function(e) NA_real_)
+cat("      a design of 2,600 panels: ", if (!inherits(a11_slow, "error")) paste0(a11_slow$reason, " (", round(a11_slow$seconds, 1), " s)") else conditionMessage(a11_slow), "\n", sep = "")
+check("11A-6: the time limit: a design the guard passes and that would take minutes to draw (2,600 panels) is stopped at 20 seconds and returned as a refusal with a sentence (within 25 s); the limit is reset afterwards (a pause of 1.2 s straight after, and of 1.6 s after a design that finished inside a 1 s limit, is not cut off), and the default is DESIGN_TIME_LIMIT = 20",
+      identical(DESIGN_TIME_LIMIT, 20) && identical(formals(design_run)$limit, quote(DESIGN_TIME_LIMIT)) && !inherits(a11_slow, "error") && isFALSE(a11_slow$ok) && a11_slow$seconds >= 19 && a11_slow$seconds < 25 &&
+        grepl("longer than 20 seconds", a11_slow$reason, fixed = TRUE) && one_sentence(a11_slow$reason) && isTRUE(a11_nap > 1) && isTRUE(a11_quick$ok) && isTRUE(a11_nap2 > 1.5) && is.null(a11_slow$plot) && length(list.files(tempdir(), pattern = "^design_")) == 0L)
+
+# ---- designs each check must refuse ------------------------------------------------------------------
+# Each is a design that passes the guard and the run (so the check, not the guard, is what refuses it).
+a11_bar_code <- a11_good$bar$code
+a11_bad <- list(
+  typed_number = list(inp = a11_bar, rx = "42%|not in the facts", code = sub('title = txt$title', 'title = "Revenue grew 42% in the last year"', a11_bar_code, fixed = TRUE)),
+  typed_number_label = list(inp = a11_bar, rx = "not in the facts", code = sub('label = comma(revenue)', 'label = "up 87"', a11_bar_code, fixed = TRUE)),
+  bar_not_from_zero = list(inp = a11_bar, rx = "not through zero", code = sub('labs(', 'coord_cartesian(ylim = c(300000, 950000)) + labs(', a11_bar_code, fixed = TRUE)),
+  bar_on_log_axis = list(inp = a11_bar, rx = "not through zero", code = sub('labs(', 'scale_y_log10() + labs(', a11_bar_code, fixed = TRUE)),
+  area_not_from_zero = list(inp = a11_line, rx = "not through zero", code = 'ggplot(d, aes(order_month, revenue, fill = channel)) + geom_area() + coord_cartesian(ylim = c(50000, 150000))'),
+  dropped_rows = list(inp = a11_bar, rx = "plots 3 of the 6 rows", code = sub('ggplot(d, aes(x = region, y = revenue))', 'ggplot(slice_max(d, revenue, n = 3), aes(x = region, y = revenue))', a11_bar_code, fixed = TRUE)),
+  dropped_rows_by_head = list(inp = a11_bar, rx = "plots 3 of the 6 rows", code = sub('ggplot(d, aes(x = region, y = revenue))', 'ggplot(head(d, 3), aes(x = region, y = revenue))', a11_bar_code, fixed = TRUE)),
+  more_rows_than_d = list(inp = a11_bar, rx = "more rows than d|may not plot more rows", code = sub('geom_col(fill = tok$accent, width = 0.7)', 'geom_col(data = d[rep(1:6, 2), ], fill = tok$accent, width = 0.7)', a11_bar_code, fixed = TRUE)),
+  log_axis_when_linear = list(inp = a11_sc, rx = "axes are continuous and log|log", code = sub('scale_y_continuous(labels = label_dollar())', 'scale_y_log10()', a11_good$scatter$code, fixed = TRUE)),
+  date_made_discrete = list(inp = a11_line, rx = "discrete", code = sub('aes(x = order_month, y = revenue, colour = channel)', 'aes(x = factor(order_month), y = revenue, colour = channel, group = channel)', sub('scale_x_date(expand = expansion(mult = c(0.02, 0.2))) +', '', a11_good$line$code, fixed = TRUE), fixed = TRUE)),
+  low_contrast_axis_text = list(inp = a11_bar, rx = "contrast", code = sub('axis.text = element_text(colour = tok$muted)', 'axis.text = element_text(colour = "#C8C8C8")', a11_bar_code, fixed = TRUE)),
+  low_contrast_title = list(inp = a11_bar, rx = "contrast", code = sub('plot.title = element_text(family = tok$title_family, face = tok$title_face, colour = tok$text, hjust = 0)', 'plot.title = element_text(colour = tok$grid, hjust = 0)', a11_bar_code, fixed = TRUE)),
+  low_contrast_labels = list(inp = a11_bar, rx = "contrast", code = sub('colour = tok$text, family = tok$body_family, size = 3.5', 'colour = "#BBBBBB", family = tok$body_family, size = 3.5', a11_bar_code, fixed = TRUE)),
+  white_text_on_light_tile = list(inp = a11_heat, rx = "contrast", code = sub('low = "#35618F"', 'low = "#CFE3F7"', a11_good$heatmap$code, fixed = TRUE)),
+  clipped_text = list(inp = a11_bar, rx = "runs past the panel", code = sub('labs(', 'annotate("text", x = 6, y = 900000, label = "A long note that runs well past the right edge of the panel", hjust = 0, colour = tok$text) + labs(', a11_bar_code, fixed = TRUE)),
+  overlapping_text = list(inp = a11_bar, rx = "overlap", code = sub('labs(', 'annotate("text", x = 3, y = 600000, label = "Highest by far", colour = tok$text) + annotate("text", x = 3.05, y = 600000, label = "Lowest by far", colour = tok$text) + labs(', a11_bar_code, fixed = TRUE)))
+a11_bad_res <- purrr::map(a11_bad, function(b) {
+  r = design_run(b$code, b$inp$d, b$inp$facts, b$inp$txt, b$inp$tok, b$inp$pal)
+  list(run = r, ck = if (r$ok) design_checks(r$plot, b$inp$d, b$inp$facts, b$inp$spec, b$code, b$inp$txt, r$warnings), rx = b$rx)
+})
+purrr::iwalk(a11_bad_res, function(r, nm) cat("      bad design '", nm, "': ", if (!r$run$ok) paste("NOT RUN:", r$run$reason) else if (r$ck$ok) "NOT REFUSED" else paste(r$ck$reasons, collapse = " | "), "\n", sep = ""))
+a11_refused_by <- function(r) r$run$ok && !r$ck$ok && any(grepl(r$rx, r$ck$reasons)) && all(purrr::map_lgl(r$ck$reasons, one_sentence))
+check(paste0("11A-7: each check refuses its crafted design with one plain sentence (the designs pass the guard and the run first): ", length(a11_bad), " designs (a number typed into a title, a number typed into a label, a bar not ",
+             "starting at zero, a bar on a log axis, an area not starting at zero, rows dropped by slice_max() and by head() with no filter(), a layer given more rows than d, a log axis the spec does not have, a date axis made discrete, ",
+             "low-contrast axis text, title and labels, white numbers on a light tile, a clipped text, two overlapping texts)"),
+      length(a11_bad) >= 10L && all(purrr::map_lgl(a11_bad_res, a11_refused_by)))
+# the same designs, each mended, pass: the refusals above are about the one thing that was wrong
+a11_mend <- list(
+  typed_number = a11_bar_code, bar_not_from_zero = a11_bar_code,
+  filter_is_allowed = sub('ggplot(d, aes(x = region, y = revenue))', 'ggplot(filter(d, revenue > 300000), aes(x = region, y = revenue))', a11_bar_code, fixed = TRUE),
+  a_fact_as_the_title = sub('subtitle = txt$subtitle', 'subtitle = facts$total$text', a11_bar_code, fixed = TRUE),
+  a_value_of_d_in_the_title = sub('title = txt$title', 'title = paste0("West is ", comma(max(d$revenue)))', a11_bar_code, fixed = TRUE))
+a11_mend_res <- purrr::imap(a11_mend, function(code, nm) {
+  r = design_run(code, a11_bar$d, a11_bar$facts, a11_bar$txt, a11_bar$tok, a11_bar$pal)
+  list(r = r, ck = if (r$ok) design_checks(r$plot, a11_bar$d, a11_bar$facts, a11_bar$spec, code, a11_bar$txt, r$warnings))
+})
+purrr::iwalk(a11_mend_res, function(m, nm) cat("      mended '", nm, "': ", if (!m$r$ok) m$r$reason else if (m$ck$ok) "passes" else paste(m$ck$reasons, collapse = " | "), "\n", sep = ""))
+check("11A-8: the row rule and the number rule let through what they should: a filter() on d leaves rows out, a fact's own text and a value of d written with comma() are numbers the facts or d hold",
+      all(purrr::map_lgl(a11_mend_res, function(m) isTRUE(m$r$ok) && isTRUE(m$ck$ok))))
+# a second axis cannot be written in the toolkit, but a plot made some other way is still refused by the check (the checks do not rely on the guard)
+a11_sec <- ggplot2::ggplot(a11_bar$d, ggplot2::aes(region, revenue)) + ggplot2::geom_col() + ggplot2::scale_y_continuous(sec.axis = ggplot2::sec_axis(~ . * 2))
+a11_sec_ck <- design_checks(a11_sec, a11_bar$d, a11_bar$facts, a11_bar$spec, "", a11_bar$txt)
+a11_flat <- design_checks(ggplot2::ggplot(a11_bar$d, ggplot2::aes(region, revenue)) + ggplot2::geom_col() + ggplot2::coord_cartesian(ylim = c(0, 1e6)), a11_bar$d, a11_bar$facts, a11_bar$spec, "", a11_bar$txt)
+check("11A-9: a second axis is refused by design_checks() (a plot made without the toolkit, with sec_axis()) in one sentence, and the same bar chart without it passes",
+      !a11_sec_ck$ok && any(grepl("second axis", a11_sec_ck$reasons)) && all(purrr::map_lgl(a11_sec_ck$reasons, one_sentence)) && isTRUE(a11_flat$ok))
+# what the guard says of a design with the pieces the model is told it has
+check("11A-10: the guard's own limits: 6,000 characters and no more (a code of exactly 6,000 passes the length rule), a parse error is a refusal that names the line, a column named like a deny-listed function (date, source, file) is still a column, and a code that uses d's own column names, toolkit names as variables (last, first) and its own function passes",
+      !design_guard(strrep("x", 6001L))$ok && grepl("6,000", design_guard(strrep("x", 6001L))$reason, fixed = TRUE) &&
+        design_guard(paste0("x <- 1 #", strrep("a", 5990L)))$ok && grepl("does not parse: line 1", design_guard("ggplot(d))")$reason, fixed = TRUE) &&
+        design_guard("ggplot(d, aes(x = date, y = source)) + geom_point(aes(colour = file))", c("date", "source", "file"))$ok &&
+        !design_guard("ggplot(d, aes(x = date)) + geom_point() + system(date)", c("date"))$ok &&
+        design_guard("last <- filter(d, x == max(x)); f <- function(v, k = 2) round(v / k, 1); ggplot(last, aes(x, y)) + geom_text(aes(label = f(y)))", c("x", "y"))$ok &&
+        !design_guard("ggplot(d, aes(x, y)) + geom_point()", c("x"))$ok)
+
+# ---- what a design is given -----------------------------------------------------------------------------
+a11_br <- a11_in(a11_bar_sp, "briefing")
+check("11A-11: tok, pal, txt and facts: tok has the style's values as a plain list (ground, panel, text, muted, accent, slate, grid, title_family, body_family, base_size); pal(n) gives the palette's first n colours and refuses past its number with a sentence; txt has the title after the heading stop and the style's case (Briefing: upper case; the trailing full stop gone), subtitle, caption and axis titles; facts is a named list whose entries hold the line as written, its label and its numbers as R values",
+      all(c("ground", "panel", "text", "muted", "accent", "slate", "grid", "title_family", "body_family", "base_size") %in% names(a11_bar$tok)) && is.list(a11_bar$tok) && !is.object(a11_bar$tok) &&
+        identical(a11_bar$tok$accent, CHART_STYLES$clean$accent) && identical(a11_br$tok$ground, CHART_STYLES$briefing$background) && identical(a11_br$tok$title_face, "bold") &&
+        identical(a11_bar$pal(3), chart_palette(3, style = "clean")) && length(a11_bar$pal(5)) == 5L && inherits(tryCatch(a11_bar$pal(99), error = function(e) e), "error") &&
+        inherits(tryCatch(a11_bar$pal("x"), error = function(e) e), "error") && identical(a11_bar$txt$title, "Revenue by region") && identical(a11_br$txt$title, "REVENUE BY REGION") &&
+        identical(a11_bar$txt$subtitle, "All years") && identical(a11_bar$txt$x, "Region") && identical(a11_bar$txt$y, "Total revenue") && is.null(a11_bar$txt$caption) &&
+        is.list(a11_bar$facts) && !is.null(names(a11_bar$facts)) && !anyDuplicated(names(a11_bar$facts)) &&
+        all(purrr::map_lgl(a11_bar$facts, function(f) is.list(f) && is.character(f$text) && is.character(f$label) && is.numeric(f$number))) &&
+        identical(a11_bar$facts$rows_used$number, 3000) && identical(a11_bar$facts$west$label, "West") && identical(a11_bar$facts$west$number, 940000) &&
+        grepl("Highest: West (940,000)", a11_bar$facts$highest$text, fixed = TRUE) && identical(a11_bar$facts$highest$number, 940000) &&
+        grepl("West: 940,000", design_facts_text(a11_bar$facts), fixed = TRUE) && !length(check_numbers(design_facts_text(a11_bar$facts), design_facts_text(a11_bar$facts))))
+# the picture and the counts
+a11_pic <- design_run(a11_good$bar$code, a11_bar$d, a11_bar$facts, a11_bar$txt, a11_bar$tok, a11_bar$pal, keep = TRUE)
+a11_png <- if (isTRUE(a11_pic$ok)) png::readPNG(a11_pic$file)
+check("11A-12: a design is drawn once through chart_device() (a PNG of the size asked for, 7 by 4.5 inches at 120 dpi), the picture is kept only when asked, and the warnings a run raises are caught and returned, not printed",
+      isTRUE(a11_pic$ok) && file.exists(a11_pic$file) && identical(dim(a11_png)[1:2], c(540L, 840L)) && is.null(design_run(a11_good$bar$code, a11_bar$d, a11_bar$facts, a11_bar$txt, a11_bar$tok, a11_bar$pal)$file) &&
+        any(grepl("draw\\(|chart_device\\(", deparse(body(design_draw)))) && !any(grepl("png\\(|pdf\\(|agg_png", deparse(body(design_draw)))) &&
+        { w = design_run('ggplot(d, aes(region, revenue)) + geom_col() + scale_y_continuous(limits = c(0, 500000))', a11_bar$d, a11_bar$facts, a11_bar$txt, a11_bar$tok, a11_bar$pal); isTRUE(w$ok) && any(grepl("Removed", w$warnings)) } &&
+        { w = design_run('ggplot(d, aes(region, revenue)) + geom_col() + scale_y_continuous(limits = c(0, 500000))', a11_bar$d, a11_bar$facts, a11_bar$txt, a11_bar$tok, a11_bar$pal)
+          ck = design_checks(w$plot, a11_bar$d, a11_bar$facts, a11_bar$spec, "", a11_bar$txt, w$warnings); !ck$ok && any(grepl("left rows out", ck$reasons)) })
+if (!is.null(a11_pic$file)) unlink(a11_pic$file)
+rm("a11_canary_fn", envir = globalenv())
+Sys.unsetenv("CHART_11A_CANARY")
+}   # the fast run only
+# <<< 11A end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
