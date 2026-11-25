@@ -973,7 +973,8 @@ REFLEX_SHA <- c(
   "suggest.md" = "510448474300239e9f90e7cc3ed540e57e5e48fbe4e4fa3e6ec3c22d964efb29",
   "refine.md" = "04a081673a2365eb09695bdcab36a052a10e4812cdf9583314bf27969d03add5",
   "summary.md" = "976d0b9126c6cf016714251ae20a92dde61a926d826c6bf8f53fbcd6391741be",
-  "chat.md" = "e978258b6d2d463003bfd8926ac34a151447157bb4b7ef1f5c9917b40a0295a3")
+  "chat.md" = "e978258b6d2d463003bfd8926ac34a151447157bb4b7ef1f5c9917b40a0295a3",
+  "design.md" = "71094f87d90516f907208179414cf4c466d130d0dc1aa13fc3f15f03c461d6a5")   # the manager's (11-0 below holds the same sum); the design call's file
 
 rfiles <- tryCatch(check_reflex_files(), error = function(e) e)
 check(paste0("every reflex file parses (", if (inherits(rfiles, "error")) conditionMessage(rfiles) else length(rfiles), ")"),
@@ -1431,7 +1432,7 @@ if (!inherits(messy, "error")) {
   ends_with_own <- function(call, user) endsWith(user, paste0("REPLY FORMAT\n", read_reflex_file(CALL_REPLY[[call]])$output_format))
   check("4-B: the chat call has the eight files, suggest.md and refine.md among them; chat and label messages end with their own file's reply format",
         identical(CALL_FILES$chat, c("core.md", "comparison.md", "relationship.md", "distribution.md", "time.md", "suggest.md", "refine.md", "chat.md")) &&
-          identical(names(CALL_FILES), c("label", "chat", "summarize")) && identical(names(CALL_REPLY), names(CALL_FILES)) &&
+          identical(names(CALL_FILES), c("label", "chat", "summarize", "design")) && identical(CALL_FILES$design, "design.md") && identical(names(CALL_REPLY), names(CALL_FILES)) &&
           ends_with_own("chat", assemble_chat("q", list(), NULL, messy$codebook, b_cols)) &&
           ends_with_own("label", assemble_user("label", messy$codebook, b_cols)) &&
           !grepl('"ask"', assemble_user("label", messy$codebook, b_cols), fixed = TRUE) &&
@@ -6871,15 +6872,18 @@ check(paste0("9C-7: a bundle of chaRt/ by .rscignore (rsconnect::listDeploymentF
 # The packages the bundle would ask for: every one of APP_PACKAGES, and the ones the app uses without listing (av, svglite, ragg, systemfonts, paletteer), with the dependencies.
 p9c_app_packages <- eval(purrr::keep(as.list(parse("app.R", keep.source = FALSE)), function(e) is.call(e) && identical(as.character(e[[1]]), "<-") && identical(as.character(e[[2]]), "APP_PACKAGES"))[[1]][[3]])
 p9c_pkgs_ok <- function(deps) {
-  need = unique(c(p9c_app_packages, "shiny", "bslib", "purrr", "av", "svglite", "ragg", "systemfonts", "paletteer", "zip", "commonmark", if (hex_here) "hexbin"))
+  need = unique(c(p9c_app_packages, "shiny", "bslib", "purrr", "av", "svglite", "ragg", "systemfonts", "paletteer", "zip", "commonmark", if (hex_here) "hexbin",
+                  # Phase 11 Part B: the toolkit of a design takes these by name from a string, so app.R names them in requireNamespace() calls
+                  purrr::keep(c("ggrepel", "ggtext", "patchwork", "forcats"), function(p) requireNamespace(p, quietly = TRUE))))
   is.data.frame(deps) && all(c("Package", "Version", "Source") %in% names(deps)) && all(need %in% deps$Package) && "ggiraph" %in% need && !"plotly" %in% deps$Package && !anyDuplicated(deps$Package) && all(nzchar(deps$Version))
 }
 p9c_deps <- if (p9c_has_rsconnect) tryCatch(rsconnect:::appDependencies("."), error = function(e) e)
 check(paste0("9C-8: the packages a bundle would ask Connect for (rsconnect:::appDependencies, from the code in the bundle, no server contacted) are ", if (is.data.frame(p9c_deps)) nrow(p9c_deps) else "?", " with their versions, and hold every package of APP_PACKAGES ",
-             "and av, svglite, ragg, systemfonts, paletteer, zip and commonmark, ggiraph (the interactive charts) among them, and hexbin (the density view's hexagons: app.R names it in a requireNamespace() call, not in APP_PACKAGES) where it is installed, and plotly not (nothing uses it); the check refuses a list without av, one without zip, one without ggiraph, one without hexbin and one that adds plotly"),
+             "and av, svglite, ragg, systemfonts, paletteer, zip and commonmark, ggiraph (the interactive charts) among them, and hexbin (the density view's hexagons: app.R names it in a requireNamespace() call, not in APP_PACKAGES) where it is installed, and ggrepel, ggtext, patchwork and forcats (a design's toolkit: the same) where they are, and plotly not (nothing uses it); the check refuses a list without av, one without zip, one without ggiraph, one without hexbin, one without ggtext or without patchwork and one that adds plotly"),
       length(p9c_app_packages) >= 15L && p9c_pkgs_ok(p9c_deps) &&
         !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "av", ]) && !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "zip", ]) && !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "ggiraph", ]) &&
-        (!hex_here || !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "hexbin", ])) && !p9c_pkgs_ok(rbind(p9c_deps, transform(p9c_deps[1, ], Package = "plotly"))))
+        (!hex_here || !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "hexbin", ])) && !p9c_pkgs_ok(rbind(p9c_deps, transform(p9c_deps[1, ], Package = "plotly"))) &&
+        (!requireNamespace("ggtext", quietly = TRUE) || !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "ggtext", ])) && (!requireNamespace("patchwork", quietly = TRUE) || !p9c_pkgs_ok(p9c_deps[p9c_deps$Package != "patchwork", ])))
 
 if (run_heavy) {   # the heavy run only: 9C-9 and 9C-10 (the bundle's own files loaded as an app, four times, and its packages worked out twice more); not indented, to keep the diff small
 
@@ -6907,8 +6911,12 @@ check("9C-9: the files of the bundle alone (copied into a new folder, nothing el
 p9c_no_meth <- p9c_loads(p9c_stage(p9c_files, drop = "www/methodology.md"))
 p9c_no_reflex <- p9c_loads(p9c_stage(p9c_files, drop = grep("^www/reflexes/", p9c_files, value = TRUE)))
 p9c_no_zip_deps <- if (p9c_has_rsconnect) tryCatch(rsconnect:::appDependencies(p9c_stage(p9c_files, edit = list(file = "R/ui.R", from = "zip::", to = "utils::"))), error = function(e) e)
-check("9C-10: the checks of the bundle can fail: a bundle without www/methodology.md and one without the reflex files do not load as the app, and one whose code no longer names zip:: asks Connect for no zip package (and the packages check refuses it)",
-      isTRUE(p9c_bundle_loads) && !p9c_no_meth && !p9c_no_reflex && (!p9c_has_rsconnect || (is.data.frame(p9c_no_zip_deps) && !"zip" %in% p9c_no_zip_deps$Package && !p9c_pkgs_ok(p9c_no_zip_deps))))
+# Phase 11 Part B: the same for ggtext, which the toolkit of a design takes by name from a string: without the requireNamespace() call in app.R a deployment would not ask for it
+p9c_no_ggtext_deps <- if (p9c_has_rsconnect && requireNamespace("ggtext", quietly = TRUE))
+  tryCatch(rsconnect:::appDependencies(p9c_stage(p9c_files, edit = list(file = "app.R", from = "requireNamespace(\"ggtext\", quietly = TRUE)", to = "invisible(NULL)"))), error = function(e) e)
+check("9C-10: the checks of the bundle can fail: a bundle without www/methodology.md and one without the reflex files do not load as the app, and one whose code no longer names zip:: asks Connect for no zip package (and the packages check refuses it), nor one without app.R's requireNamespace(\"ggtext\") call for ggtext (where it is installed)",
+      isTRUE(p9c_bundle_loads) && !p9c_no_meth && !p9c_no_reflex && (!p9c_has_rsconnect || (is.data.frame(p9c_no_zip_deps) && !"zip" %in% p9c_no_zip_deps$Package && !p9c_pkgs_ok(p9c_no_zip_deps))) &&
+        (is.null(p9c_no_ggtext_deps) || (is.data.frame(p9c_no_ggtext_deps) && !"ggtext" %in% p9c_no_ggtext_deps$Package && !p9c_pkgs_ok(p9c_no_ggtext_deps))))
 
 }   # end of the heavy run part of the bundle checks
 
@@ -8938,6 +8946,514 @@ rm("a11_canary_fn", envir = globalenv())
 Sys.unsetenv("CHART_11A_CANARY")
 }   # the fast run only
 # <<< 11A end
+
+
+# >>> 11B begin
+# No model call. Phase 11 Part B: the model writes the drawing code for a chart (design_chart()), R runs and checks it, and the model looks at the picture. Every
+#   path is tried with a stand-in for the model (the transport is the `ask` function, as in the earlier phases), so nothing here reaches a network: the first
+#   check of the stand-in is that it is the only way a message leaves. The blocks of the message are read as text; the messy file stands in for a file with
+#   rows that must not go anywhere. Self-contained (its own fixtures), so a changed copy of one function can be run against it alone (tests/mutate_11B.R).
+if (run_fast) {   # the fast run only; not indented, to keep the diff small
+b11_to_json <- function(x) as.character(jsonlite::toJSON(x, auto_unbox = TRUE))
+b11_o <- read_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+b11_cb <- new_codebook(profile_data(b11_o$data), "orders.csv", nrow(b11_o$data), "-99", b11_o$encoding)
+b11_cb$row_is <- "one order"
+b11_chart <- function(spec, id = "c1") new_chart(id, spec)
+b11_bar <- b11_chart(list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Revenue by region.", subtitle = "All years", sort = "value_desc"))
+b11_scatter <- b11_chart(list(family = "scatter", x = "units", y = "unit_price", title = "Unit price against units"))
+b11_rows <- b11_chart(list(family = "bar", x = "order_id", y = "revenue", fn = "none", top_n = 8, title = "The biggest orders"))
+b11_skills <- skills_load(office_dir = NULL)
+b11_ed <- b11_skills$editorial
+b11_theme <- 'theme_minimal(base_family = tok$body_family, base_size = tok$base_size) +
+  theme(plot.background = element_rect(fill = tok$ground, colour = NA), panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(colour = tok$grid, linewidth = 0.3),
+        plot.title = element_text(family = tok$title_family, face = tok$title_face, colour = tok$text, hjust = 0),
+        plot.subtitle = element_text(colour = tok$muted, hjust = 0), plot.caption = element_text(colour = tok$caption, hjust = 0),
+        axis.text = element_text(colour = tok$muted), axis.title = element_text(colour = tok$muted))'
+b11_code <- function(fill = "tok$accent", extra = "")
+  paste0('ggplot(d, aes(x = region, y = revenue)) +
+  geom_col(fill = ', fill, ', width = 0.7) +
+  geom_text(aes(label = comma(revenue)), vjust = -0.5, colour = tok$text, family = tok$body_family, size = 3.5) ', extra, ' +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12)), labels = label_comma()) +
+  labs(title = txt$title, subtitle = txt$subtitle, x = NULL, y = NULL) + ', b11_theme)
+b11_good <- b11_code()
+b11_slate <- b11_code("tok$slate")
+b11_dark <- b11_code("tok$text")
+b11_hostile <- 'system("echo hello")'
+b11_invented <- b11_code(extra = '+ annotate("text", x = 2, y = 100000, label = "Revenue 12345", colour = tok$text, size = 3.5)')
+b11_png_dim <- function(f) { b = readBin(f, "raw", 24L); c(width = sum(as.integer(b[17:20]) * 256^(3:0)), height = sum(as.integer(b[21:24]) * 256^(3:0))) }
+
+# The stand-in for the model: it answers each call from `replies` in order (an object, a function of the message that gives one, or an error), writes down what it
+#   was sent (the message, the system prompt and any picture files, whose size it reads then, since the file is removed when the design is replaced), and
+#   returns what llm_json() returns. A reply is checked by `validate`, as llm_json() does.
+b11_si <- function(replies) {
+  env = new.env()
+  env$sent = list()
+  env$ask = function(user, m, system_prompt = NULL, max_tokens, validate = NULL, images = NULL, ...) {
+    i = length(env$sent) + 1L
+    env$sent[[i]] = list(user = user, system = system_prompt, images = images, widths = if (length(images)) vapply(images, function(f) unname(b11_png_dim(f)[["width"]]), numeric(1)),
+                         images_exist = if (length(images)) all(file.exists(images)))
+    r = replies[[min(i, length(replies))]]
+    if (is.function(r)) r = r(user)
+    if (inherits(r, "error")) stop(r)
+    if (!is.null(validate)) validate(r)
+    list(obj = r, raw = b11_to_json(r), finish = "success", tokens = c(1000, 200, 0), user_sent = user, model = "stand-in", attempts = 1L, seconds = 0.01, refused = list())
+  }
+  env
+}
+b11_design <- function(code, motion = "rise") list(code = code, motion = motion, say = "A quiet bar chart with the values on the bars.")
+b11_ok <- list(ok = TRUE, say = "Nothing to change.")
+b11_run <- function(replies, chart = b11_bar, skill = b11_ed, ...) {
+  si = b11_si(replies)
+  st = character(0)
+  r = design_chart(chart, skill, b11_o$data, b11_cb, ask = si$ask, stage = function(s) st <<- c(st, s), ...)
+  list(r = r, si = si, stages = st)
+}
+b11_alone <- function(f) tryCatch(f(), error = function(e) e)
+
+# ---- the paths of design_chart() ----------------------------------------------------------------------
+b11_p1 <- b11_run(list(b11_design(b11_good), b11_ok))
+cat("      11B good design: ", b11_p1$r$design$review, " (", round(b11_p1$r$seconds, 1), " s, ", b11_p1$r$design$calls, " calls)\n", sep = "")
+d1 <- b11_p1$r$design
+check("11B-1: a design that is good the first time: one design call and one review call (the picture attached, a PNG at most 1,200 pixels wide that is there when the call is made); the code, motion and the model's sentence are kept; the picture file is a PNG; both calls are recorded and none is a repair",
+      isTRUE(b11_p1$r$ok) && is.na(b11_p1$r$reason) && identical(b11_p1$r$calls$call, c("design", "review")) && identical(b11_p1$r$calls$images, c(0L, 1L)) && !any(b11_p1$r$calls$repair) &&
+        all(b11_p1$r$calls$ok) && length(b11_p1$si$sent) == 2L && is.null(b11_p1$si$sent[[1]]$images) && length(b11_p1$si$sent[[2]]$images) == 1L &&
+        isTRUE(b11_p1$si$sent[[2]]$images_exist) && b11_p1$si$sent[[2]]$widths <= 1200 && b11_p1$si$sent[[2]]$widths > 600 &&
+        identical(d1$code, b11_good) && identical(d1$motion, "rise") && is_text1(d1$say) && length(b11_p1$r$refusals) == 0L && d1$changed == 0L && d1$rounds == 1L &&
+        grepl("found nothing to change", d1$review, fixed = TRUE) && isTRUE(d1$looked) && identical(unname(b11_png_dim(d1$file)[["width"]]), unname(b11_p1$si$sent[[2]]$widths)) &&
+        identical(d1$skill, list(id = "editorial", title = "Editorial", version = "0.1", office = FALSE)) && inherits(d1$plot, "ggplot") && nrow(d1$table) == 6L &&
+        grepl("asking the model", b11_p1$stages[1], fixed = TRUE) && any(grepl("looking at the picture, round 1 of 2", b11_p1$stages, fixed = TRUE)))
+
+# refused (by the guard, and by a check), then repaired: one repair call that carries the sentence
+b11_p2 <- b11_run(list(b11_design(b11_hostile), b11_design(b11_good), b11_ok))
+b11_p2n <- b11_run(list(b11_design(b11_invented), b11_design(b11_good), b11_ok))
+b11_rep <- b11_p2$si$sent[[2]]$user
+check("11B-2: a design the guard refuses (system()) and one a check refuses (a number written on the chart that is not in the facts) each get exactly one repair call, whose message is the first message, the model's own reply, the refusal's sentence and the ask to correct it; the repaired design stands, is reviewed and is recorded (design, design with repair, review)",
+      isTRUE(b11_p2$r$ok) && isTRUE(b11_p2n$r$ok) && identical(b11_p2$r$calls$call, c("design", "design", "review")) && identical(b11_p2$r$calls$repair, c(FALSE, TRUE, FALSE)) &&
+        identical(b11_p2n$r$calls$repair, c(FALSE, TRUE, FALSE)) &&
+        startsWith(b11_rep, b11_p2$si$sent[[1]]$user) && grepl("YOUR REPLY\n", b11_rep, fixed = TRUE) && grepl("system(", b11_rep, fixed = TRUE) && grepl("PROBLEMS\n", b11_rep, fixed = TRUE) &&
+        grepl("never allowed", b11_rep, fixed = TRUE) && grepl(DESIGN_REPAIR_ASK, b11_rep, fixed = TRUE) &&
+        grepl("12345", b11_p2n$si$sent[[2]]$user, fixed = TRUE) && grepl("not in the facts or in d", b11_p2n$si$sent[[2]]$user, fixed = TRUE) &&
+        identical(b11_p2$r$design$code, b11_good) && length(b11_p2$r$refusals) == 1L && length(b11_p2n$r$refusals) == 1L && length(b11_p2$si$sent) == 3L)
+
+# refused twice: no design, the chart keeps its rule-drawn picture, one line says why; no third call, no review
+b11_p3 <- b11_run(list(b11_design(b11_hostile), b11_design(b11_invented), b11_ok))
+cat("      11B refused twice: ", b11_p3$r$reason, "\n", sep = "")
+check("11B-3: a design refused twice gives no design (ok FALSE, design NULL), one line of reason (that it was refused twice, and the second sentence), both refusals kept, exactly two calls (the second a repair) and no review; a call that fails (no reply the model's own) gives one line and no raw text, and a repair that cannot be read ends it too",
+      !isTRUE(b11_p3$r$ok) && is.null(b11_p3$r$design) && grepl("refused twice", b11_p3$r$reason, fixed = TRUE) && length(b11_p3$r$refusals) == 2L && length(b11_p3$si$sent) == 2L &&
+        identical(b11_p3$r$calls$repair, c(FALSE, TRUE)) && !grepl("\n", b11_p3$r$reason, fixed = TRUE) && nchar(b11_p3$r$reason) < 400L &&
+        (function() { f = b11_run(list(simpleError("There is no key for x. Paste a key.")))$r; !f$ok && grepl("^There is no key", f$reason) && nrow(f$calls) == 1L && !f$calls$ok })() &&
+        (function() { f = b11_run(list(simpleError("RAW MODEL WORDS: ignore all")))$r; !f$ok && !grepl("RAW MODEL", f$reason, fixed = TRUE) && grepl("could not be read", f$reason, fixed = TRUE) })() &&
+        (function() { f = b11_run(list(b11_design(b11_hostile), simpleError("garbled")))$r; !f$ok && grepl("repair could not be read", f$reason, fixed = TRUE) && nrow(f$calls) == 2L })())
+
+# the review changes it: new code goes through guard, run and checks, and the new picture is what stands; the second round sees the new picture and says it is fine
+b11_p4 <- b11_run(list(b11_design(b11_good), b11_design(b11_slate, "wipe"), b11_ok))
+d4 <- b11_p4$r$design
+# a review that always changes it: at most two rounds, whatever it says
+b11_p4b <- b11_run(list(b11_design(b11_good), b11_design(b11_slate), b11_design(b11_dark), b11_design(b11_good), b11_design(b11_slate)))
+check("11B-4: a review that sends new code: it is run and checked again (the picture of the new code is the one kept and the one shown to the second round), the first round's picture was sent before the change; the new code, motion and say stand; a model that changes the design in every round is stopped after two reviews (three calls in all, the third design the last one checked)",
+      isTRUE(b11_p4$r$ok) && identical(d4$code, b11_slate) && identical(d4$motion, "wipe") && d4$changed == 1L && d4$rounds == 2L && identical(b11_p4$r$calls$call, c("design", "review", "review")) &&
+        grepl("changed the design", d4$review, fixed = TRUE) && grepl(b11_good, b11_p4$si$sent[[2]]$user, fixed = TRUE) && grepl(b11_slate, b11_p4$si$sent[[3]]$user, fixed = TRUE) &&
+        length(b11_p4$si$sent[[3]]$images) == 1L && !identical(b11_p4$si$sent[[2]]$images, b11_p4$si$sent[[3]]$images) &&
+        isTRUE(b11_alone(function() { a = png::readPNG(d4$file); b = png::readPNG(b11_p1$r$design$file); !isTRUE(all.equal(a, b)) })) &&
+        isTRUE(b11_p4b$r$ok) && length(b11_p4b$si$sent) == 3L && b11_p4b$r$design$rounds == 2L && b11_p4b$r$design$changed == 2L && identical(b11_p4b$r$design$code, b11_dark) &&
+        identical(b11_p4b$r$calls$call, c("design", "review", "review")) && DESIGN_REVIEW_ROUNDS == 2L)
+
+# the review breaks it: code that is refused leaves the earlier good design standing, ends the reviewing, and is not repaired
+b11_p5 <- b11_run(list(b11_design(b11_good), b11_design(b11_hostile), b11_design(b11_slate)))
+d5 <- b11_p5$r$design
+cat("      11B review breaks it: ", d5$review, "\n", sep = "")
+check("11B-5: a review whose new code is refused (the guard, here system()) leaves the earlier good design standing (the same code, the same picture file, still there), says so in the review line, keeps the refusal, makes no repair call and no third call",
+      isTRUE(b11_p5$r$ok) && identical(d5$code, b11_good) && d5$changed == 0L && identical(b11_p5$r$calls$call, c("design", "review")) && length(b11_p5$si$sent) == 2L && file.exists(d5$file) &&
+        grepl("refused", d5$review, fixed = TRUE) && grepl("the design before it stands", d5$review, fixed = TRUE) && length(b11_p5$r$refusals) == 1L && grepl("never allowed", b11_p5$r$refusals, fixed = TRUE) &&
+        isTRUE(b11_alone(function() isTRUE(all.equal(png::readPNG(d5$file), png::readPNG(b11_p1$r$design$file))))) &&
+        (function() { x = b11_run(list(b11_design(b11_good), b11_design(b11_invented)))$r$design; identical(x$code, b11_good) && grepl("was refused", x$review, fixed = TRUE) })())
+
+# no picture allowed
+b11_p6 <- list(none = b11_run(list(b11_design(b11_good), b11_ok), images = "none"),
+               agg_rows = b11_run(list(b11_design('ggplot(d, aes(x = units, y = unit_price)) + geom_point(colour = tok$accent) + scale_x_continuous(labels = label_comma()) + scale_y_continuous(labels = label_dollar()) +
+                                                    labs(title = txt$title, subtitle = txt$subtitle, x = txt$x, y = txt$y) + theme_minimal(base_family = tok$body_family)'), b11_ok), chart = b11_scatter, images = "aggregated"),
+               agg_bar = b11_run(list(b11_design(b11_good), b11_ok), images = "aggregated"),
+               all_rows = b11_run(list(b11_design('ggplot(d, aes(x = units, y = unit_price)) + geom_point(colour = tok$accent) + scale_x_continuous(labels = label_comma()) + scale_y_continuous(labels = label_dollar()) +
+                                                    labs(title = txt$title, subtitle = txt$subtitle, x = txt$x, y = txt$y) + theme_minimal(base_family = tok$body_family)'), b11_ok), chart = b11_scatter, images = "all"))
+old_images <- get0("APP_DESIGN_IMAGES", envir = globalenv(), inherits = FALSE)
+assign("APP_DESIGN_IMAGES", "none", envir = globalenv())
+b11_p6g <- b11_run(list(b11_design(b11_good), b11_ok))
+assign("APP_DESIGN_IMAGES", "no such setting", envir = globalenv())
+b11_p6bad <- list(setting = design_images_setting(), run = b11_run(list(b11_design(b11_good), b11_ok)))
+assign("APP_DESIGN_IMAGES", old_images, envir = globalenv())
+check("11B-6: no picture allowed: APP_DESIGN_IMAGES \"none\" skips the review (one call, no image sent, the design stands and says it was not reviewed by looking and why); \"aggregated\" sends the picture of a bar of totals and not of a scatter (whose marks are rows); \"all\" sends the scatter's; design_chart() reads the setting from the app's own when none is passed, and an unknown value sends none",
+      isTRUE(b11_p6$none$r$ok) && length(b11_p6$none$si$sent) == 1L && is.null(b11_p6$none$si$sent[[1]]$images) && identical(b11_p6$none$r$calls$call, "design") && !isTRUE(b11_p6$none$r$design$looked) &&
+        grepl("Not reviewed by looking", b11_p6$none$r$design$review, fixed = TRUE) && grepl("APP_DESIGN_IMAGES", b11_p6$none$r$design$review, fixed = TRUE) &&
+        isTRUE(b11_p6$agg_rows$r$ok) && length(b11_p6$agg_rows$si$sent) == 1L && grepl("shows rows of the file as marks", b11_p6$agg_rows$r$design$review, fixed = TRUE) &&
+        isTRUE(b11_p6$agg_bar$r$ok) && length(b11_p6$agg_bar$si$sent) == 2L && length(b11_p6$agg_bar$si$sent[[2]]$images) == 1L &&
+        isTRUE(b11_p6$all_rows$r$ok) && length(b11_p6$all_rows$si$sent) == 2L && length(b11_p6$all_rows$si$sent[[2]]$images) == 1L &&
+        isTRUE(b11_p6g$r$ok) && length(b11_p6g$si$sent) == 1L && identical(b11_p6bad$setting, "none") && length(b11_p6bad$run$si$sent) == 1L &&
+        identical(design_images_setting(), old_images %||% "all") &&
+        identical(c(design_image_ok("all", b11_scatter$spec), design_image_ok("aggregated", b11_scatter$spec), design_image_ok("aggregated", b11_bar$spec), design_image_ok("none", b11_bar$spec)), c(TRUE, FALSE, TRUE, FALSE)))
+
+# ---- the transport: what llm_json() and ellmer do with a picture -----------------------------------------------
+b11_png <- b11_p1$r$design$file
+b11_seen <- new.env()
+b11_complete <- function(m, system_prompt, user, max_tokens, key, images = NULL) {
+  b11_seen$images <- c(b11_seen$images, list(images))
+  b11_seen$n <- (b11_seen$n %||% 0L) + 1L
+  structure('{"ok": true, "say": "Fine."}', provider = "stand-in", finish = "success", tokens = c(10, 5, 0), seconds = 0.01)
+}
+b11_old_complete <- function(m, system_prompt, user, max_tokens, key) structure('{"ok": true}', provider = "stand-in", finish = "success", tokens = c(10, 5, 0), seconds = 0.01)
+calls_before <- .llm_state$calls
+b11_a <- llm_json("hi", APP_MODEL, system_prompt = "s", max_tokens = 100L, key = "k", complete = b11_complete, images = b11_png)
+b11_b <- llm_json("hi", APP_MODEL, system_prompt = "s", max_tokens = 100L, key = "k", complete = b11_complete)
+b11_c <- llm_json("hi", APP_MODEL, system_prompt = "s", max_tokens = 100L, key = "k", complete = b11_old_complete)
+b11_ci <- ellmer::content_image_file(b11_png, resize = "none")
+b11_turn <- ellmer::Turn("user", list(ellmer::ContentText("hello"), b11_ci))
+b11_json <- purrr::map(list(anthropic = ellmer::chat_anthropic(credentials = function() "k", echo = "none", model = "m"),
+                            openai = ellmer::chat_openai_compatible(base_url = "http://localhost:1/v1", credentials = function() "k", model = "m", echo = "none")),
+                       function(ch) ellmer:::as_json(ch$get_provider(), b11_turn))
+b11_kinds <- list(anthropic = purrr::map_chr(b11_json$anthropic$content, "type"), openai = purrr::map_chr(b11_json$openai[[1]]$content, "type"))
+check("11B-7: the picture's way to the model: llm_json(images =) hands the file paths to the transport only when there are some (a transport written before this phase, with no `images`, still works for every other call), the calls are counted (3 here) and recorded; the installed ellmer (0.4.2) makes a picture with content_image_file(resize = \"none\") (no magick, the file as drawn) and writes it into the request as an image block for the Anthropic provider and an image_url part for the OpenAI style; app.R checks that content_image_file() has those arguments; llm_complete() sends the pictures after the text",
+      identical(b11_seen$images[[1]], b11_png) && is.null(b11_seen$images[[2]]) && identical(b11_seen$n, 2L) && .llm_state$calls - calls_before == 3L && isTRUE(b11_a$obj$ok) && isTRUE(b11_c$obj$ok) &&
+        inherits(b11_ci, "ellmer::ContentImageInline") && identical(b11_ci@type, "image/png") && identical(b11_kinds$anthropic, c("text", "image")) && identical(b11_kinds$openai, c("text", "image_url")) &&
+        identical(names(formals(llm_complete))[7], "images") && grepl("content_image_file", paste(deparse(body(llm_complete)), collapse = " "), fixed = TRUE) &&
+        grepl("content_image_file = c(\"path\", \"resize\")", paste(readLines("app.R", warn = FALSE), collapse = "\n"), fixed = TRUE) &&
+        identical(call_record("design", "s", "u", NULL, FALSE, 2L)$images, 2L) && identical(LLM_MAX_TOKENS[["review"]], 16000L))
+
+# ---- the message: sections, sizes, and what is not in it ---------------------------------------------------
+b11_inp <- design_input(b11_bar, b11_o$data, b11_cb)
+b11_msg <- design_user(b11_inp, b11_ed)
+b11_sys <- assemble_system("design")
+b11_sections <- c("SKILL", "TOOLKIT", "SPEC", "TABLE", "FACTS", "TOKENS", "TEXT")
+b11_at <- purrr::map_int(b11_sections, function(s) as.integer(regexpr(paste0("<", s, ">\n"), b11_msg, fixed = TRUE)))
+b11_block <- function(msg, s) sub(paste0("(?s)^.*<", s, ">\n(.*?)\n</", s, ">.*$"), "\\1", msg, perl = TRUE)
+b11_tok_est <- function(x) round(nchar(x) / 4)
+cat("      11B message (characters / 4 as the tokens): ", paste(c(b11_sections, "reply format", "system prompt"), c(purrr::map_dbl(b11_sections, function(s) b11_tok_est(b11_block(b11_msg, s))), b11_tok_est(sub("(?s)^.*(REPLY FORMAT.*)$", "\\1", b11_msg, perl = TRUE)), b11_tok_est(b11_sys)), sep = " ", collapse = ", "), "; whole message ", b11_tok_est(b11_msg), "\n", sep = "")
+# the messy file: ids, free text and a 45-level text column, SECRET planted in each
+b11_mpath <- file.path(tempdir(), "b11_messy.csv")
+make_messy(b11_mpath)
+b11_m <- read_data(b11_mpath, "messy.csv")
+b11_mcb <- new_codebook(profile_data(b11_m$data), "messy.csv", nrow(b11_m$data))
+b11_mcb$row_is <- "one visit"
+b11_mcharts <- list(
+  city = b11_chart(list(family = "bar", x = "city", fn = "count", top_n = 10, title = "Visits by city", highlight = list(column = "city", values = list(SECRET)))),
+  ids = b11_chart(list(family = "bar", x = "record_id", y = "score_1", fn = "none", top_n = 12, title = "Scores by record")),
+  comment = b11_chart(list(family = "bar", x = "comment", fn = "count", top_n = 12, title = "Visits by comment")),
+  scatter = b11_chart(list(family = "scatter", x = "score", y = "score_1", title = "One score against the other")))
+b11_mmsgs <- purrr::map(b11_mcharts, function(ch) tryCatch(design_user(design_input(ch, b11_m$data, b11_mcb), b11_ed), error = function(e) conditionMessage(e)))
+b11_secret_values <- unique(unlist(purrr::map(c("comment", "record_id", "city"), function(n) as.character(b11_m$data[[n]]))))
+b11_secret_values <- b11_secret_values[nchar(b11_secret_values) >= 6L]
+b11_leaks <- purrr::map(b11_mmsgs, function(m) purrr::keep(b11_secret_values, function(v) grepl(v, m, fixed = TRUE)))
+b11_scatter_msg <- design_user(design_input(b11_scatter, b11_o$data, b11_cb), b11_ed)
+b11_rows_msg <- design_user(design_input(b11_rows, b11_o$data, b11_cb), b11_ed)
+b11_big_ids <- as.character(b11_o$data$order_id[!is.na(b11_o$data$order_id)])
+b11_row_values <- as.character(b11_o$data$unit_price[1:200])
+b11_scatter_rows_in <- sum(purrr::map_lgl(b11_row_values, function(v) grepl(paste0("(^|[^0-9.])", gsub(".", "[.]", v, fixed = TRUE), "([^0-9.]|$)"), b11_block(b11_scatter_msg, "TABLE"))))
+cat("      11B: values of the messy file's id, text and category columns found in the messages: ", sum(lengths(b11_leaks)), "; SECRET in them: ", sum(grepl(SECRET, unlist(b11_mmsgs), fixed = TRUE)), "\n", sep = "")
+check("11B-8: the message has the sections SKILL, TOOLKIT, SPEC, TABLE, FACTS, TOKENS and TEXT in that order, then the reply format of design.md; the system prompt is design.md's persona, reflexes and prohibitions only (no spec reference, no Source or Label); an aggregated table of six rows is in TABLE as rows, with its columns (type, n, range or levels); a table of rows (a scatter of 3,000 points, a bar for each of eight orders) is never sent as rows, only as columns with their ranges",
+      identical(unname(b11_at), sort(unname(b11_at))) && all(b11_at > 0L) && endsWith(b11_msg, paste0("REPLY FORMAT\n", read_reflex_file("design.md")$output_format, collapse = "")) &&
+        grepl("region | category | 6 | 6 levels: West, East, North, Québec, South, Central", b11_msg, fixed = TRUE) && grepl("revenue | number | 6 | 206461 to 939502", b11_msg, fixed = TRUE) &&
+        grepl("West | 939502", b11_block(b11_msg, "TABLE"), fixed = TRUE) && grepl("ggplot2: ggplot aes", b11_block(b11_msg, "TOOLKIT"), fixed = TRUE) &&
+        identical(b11_block(b11_msg, "SKILL"), b11_ed$text) && grepl("tok$accent = \"#0A4580\"", b11_msg, fixed = TRUE) && grepl("txt$title = \"Revenue by region\"", b11_msg, fixed = TRUE) &&
+        grepl("facts$highest: Highest: West (940,000)", b11_msg, fixed = TRUE) && grepl("\"fn\":\"sum\"", b11_msg, fixed = TRUE) &&
+        startsWith(b11_sys, read_reflex_file("design.md")$persona) && grepl("REFLEXES: Design: drawing code for one chart (v0.1)", b11_sys, fixed = TRUE) && !grepl("SPEC REFERENCE|Source:|Label:", b11_sys) &&
+        grepl("Rows: not sent (this chart's marks are rows of the file)", b11_block(b11_scatter_msg, "TABLE"), fixed = TRUE) && grepl("units | number | 3000 |", b11_block(b11_scatter_msg, "TABLE"), fixed = TRUE) &&
+        b11_scatter_rows_in <= 3L && !grepl("Rows (the aggregated table", b11_scatter_msg, fixed = TRUE) &&
+        grepl("Rows: not sent (this chart's marks are rows of the file)", b11_block(b11_rows_msg, "TABLE"), fixed = TRUE) && 
+        !any(purrr::map_lgl(as.character(attr(spec_plot(b11_rows$spec, b11_o$data, b11_cb), "table")$order_id), function(i) grepl(paste0("(^|[^0-9])", i, "( |$)"), b11_block(b11_rows_msg, "TABLE")))) &&
+        design_png_width(b11_p1$r$design$file) == 1050)
+check("11B-9: the messy file (an identifier, free text and a 45-level text column, SECRET_VALUE_123 planted in each): no message of a design holds SECRET_VALUE_123 or any value of those columns (six characters or more) for a bar by city that highlights it, a bar by record, a bar by comment or a scatter; the columns are there as a count of different values that is not listed; the values stand as placeholders ([[N1]]), the spec's highlight too",
+      all(purrr::map_lgl(b11_mmsgs, is_text1)) && !any(grepl(SECRET, unlist(b11_mmsgs), fixed = TRUE)) && !any(lengths(b11_leaks) > 0L) &&
+        grepl("city | category | 11 | 11 different values, not listed", b11_mmsgs$city, fixed = TRUE) && grepl("\"highlight\":{\"column\":\"city\",\"values\":[\"[[N1]]\"]}", b11_mmsgs$city, fixed = TRUE) &&
+        grepl("[[N2]] | 5 | FALSE", b11_mmsgs$city, fixed = TRUE) && grepl("record_id | category | 12 | 12 different values, not listed", b11_mmsgs$ids, fixed = TRUE) &&
+        grepl("Rows: not sent", b11_mmsgs$scatter, fixed = TRUE) && grepl("\"title\":\"Visits by city\"", b11_mmsgs$city, fixed = TRUE) &&
+        !grepl("please call me", paste(unlist(b11_mmsgs), collapse = " "), fixed = TRUE))
+
+# ---- skills ------------------------------------------------------------------------------------------------
+b11_dir <- tempfile("b11_skills_")
+dir.create(b11_dir)
+b11_mark <- "OFFICEMARK_Zq7_do_not_log"
+writeLines(c("# Briefing house style", "", "Version: 2.3", "", "## Intent", "", "A dense page for a minister: ", "one claim, one number.", "", "## Composition", "", paste("- Use the office blue.", b11_mark),
+             "", "## Checklist for the review", "", paste("1. Is the claim legible?", b11_mark)), file.path(b11_dir, "house.md"))
+writeLines(c("# Too long", "Version: 1", "## Intent", "A skill over the limit.", rep("- a line", 130L)), file.path(b11_dir, "long.md"))
+writeLines(c("# No intent", "Version: 1", "## Composition", "- x"), file.path(b11_dir, "nointent.md"))
+writeLines(c("# Plain", "", "Version: 0.3", "", "## Intent", "", "PLAINMARK: a plain skill.", "", "## Checklist for the review", "", "1. Is it plain?"), file.path(b11_dir, "plain.md"))
+writeLines("a readme", file.path(b11_dir, "README.md"))
+b11_all <- skills_load(office_dir = b11_dir)
+old_dir <- get0("APP_SKILLS_DIR", envir = globalenv(), inherits = FALSE)
+assign("APP_SKILLS_DIR", b11_dir, envir = globalenv())
+b11_via <- skills_load()
+assign("APP_SKILLS_DIR", file.path(b11_dir, "nowhere"), envir = globalenv())
+b11_none <- list(skills = skills_load(), notes = skills_notes())
+assign("APP_SKILLS_DIR", old_dir, envir = globalenv())
+b11_office <- b11_all[["office:house"]]
+b11_plain <- b11_all[["office:plain"]]
+b11_sk_msgs <- list(editorial = design_user(b11_inp, b11_ed), office = design_user(b11_inp, b11_office), plain = design_user(b11_inp, b11_plain), wish = design_user(b11_inp, b11_ed, "Put the legend inside the plot, and use a darker background."))
+b11_off <- b11_run(list(b11_design(b11_good), b11_ok), skill = b11_office)
+b11_all_text <- function(x) paste(c(utils::capture.output(str(x, give.attr = FALSE, max.level = 6)), rawToChar(serialize(x, NULL, ascii = TRUE))), collapse = "\n")
+b11_off_rec <- b11_off$r[c("ok", "reason", "refusals", "calls", "seconds")]
+b11_off_rec$design <- b11_off$r$design[setdiff(names(b11_off$r$design), "plot")]
+b11_files_after <- paste(unlist(purrr::map(list.files(b11_dir, full.names = TRUE), readLines, warn = FALSE)), collapse = "\n")
+check("11B-10: skills: www/skills/ gives Editorial (title, version, the Intent line as one line, a checklist; README.md is not a skill); a skill of 130 lines is refused with a sentence that gives the limit (120) and one with no Intent with one that says so; an office folder (a stand-in in a temp folder) is read after the app's own, its ids start 'office:', and APP_SKILLS_DIR is read when it is set and exists and a folder named but absent says so on Start here; a skill's text goes in whole after SKILL's marker and the chosen skill's text, and no other's, reaches the message; a wish goes in a block of its own after the skill",
+      identical(names(b11_skills), "editorial") && b11_ed$ok && identical(b11_ed$title, "Editorial") && identical(b11_ed$version, "0.1") && startsWith(b11_ed$intent, "A chart for a general reader in a magazine") && !grepl("\n", b11_ed$intent) &&
+        grepl("Can the point of the chart be seen in five seconds", b11_ed$checklist, fixed = TRUE) && b11_ed$lines == 55L &&
+        !b11_all$`office:long`$ok && grepl("134", b11_all$`office:long`$reason) && grepl("at most 120", b11_all$`office:long`$reason, fixed = TRUE) && !b11_all$`office:nointent`$ok && grepl("no Intent", b11_all$`office:nointent`$reason, fixed = TRUE) &&
+        identical(names(b11_all)[1], "editorial") && all(c("office:house", "office:plain", "office:long", "office:nointent") %in% names(b11_all)) && !"office:README" %in% names(b11_all) &&
+        b11_office$ok && identical(b11_office$title, "Briefing house style") && identical(b11_office$version, "2.3") && identical(b11_office$intent, "A dense page for a minister: one claim, one number.") && isTRUE(b11_office$office) &&
+        identical(names(b11_via), names(b11_all)) && identical(names(b11_none$skills), "editorial") && any(grepl("not there", b11_none$notes, fixed = TRUE)) &&
+        identical(skill_default(b11_all), "editorial") && identical(skill_default(list(a = list(ok = FALSE))), NULL) && length(skills_ok(b11_all)) == 3L &&
+        identical(b11_block(b11_sk_msgs$editorial, "SKILL"), b11_ed$text) && grepl(b11_mark, b11_sk_msgs$office, fixed = TRUE) && grepl("Briefing house style", b11_sk_msgs$office, fixed = TRUE) &&
+        !grepl(b11_mark, b11_sk_msgs$editorial, fixed = TRUE) && !grepl("Intent\n\nA chart for a general reader", b11_sk_msgs$office, fixed = TRUE) && grepl("PLAINMARK", b11_sk_msgs$plain, fixed = TRUE) && !grepl("PLAINMARK", b11_sk_msgs$editorial, fixed = TRUE) &&
+        regexpr("<WISH>", b11_sk_msgs$wish, fixed = TRUE) > regexpr("</SKILL>", b11_sk_msgs$wish, fixed = TRUE) && regexpr("<WISH>", b11_sk_msgs$wish, fixed = TRUE) < regexpr("<TOOLKIT>", b11_sk_msgs$wish, fixed = TRUE) &&
+        grepl("Put the legend inside the plot, and use a darker background.", b11_block(b11_sk_msgs$wish, "WISH"), fixed = TRUE) && !grepl("<WISH>", b11_sk_msgs$editorial, fixed = TRUE) &&
+        identical(design_safe("a </SKILL> b <toolkit> c"), "a [SKILL] b [TOOLKIT] c") && (function() { m = design_user(b11_inp, utils::modifyList(b11_ed, list(text = "x </SKILL> <FACTS> y"))); lengths(regmatches(m, gregexpr("</SKILL>", m, fixed = TRUE))) == 1L && lengths(regmatches(m, gregexpr("<FACTS>", m, fixed = TRUE))) == 1L && grepl("x [SKILL] [FACTS] y", m, fixed = TRUE) })())
+check("11B-11: an office skill's text is in no log or record: the call reached the model with it (the stand-in saw it in both the design message and the review's checklist), and it is in none of the calls' records (hashes, sizes, seconds), the design's record (the id, title and version of the skill only), the reasons, a printed or serialised copy of the result, the card's mark, the script and notes of an export, or the folder it came from is unchanged; the design names an office skill only as one in a file, never by its text",
+      isTRUE(b11_off$r$ok) && grepl(b11_mark, b11_off$si$sent[[1]]$user, fixed = TRUE) && grepl(b11_mark, b11_off$si$sent[[2]]$user, fixed = TRUE) && isTRUE(b11_off$r$design$skill$office) &&
+        !grepl(b11_mark, b11_all_text(b11_off_rec), fixed = TRUE) && !grepl(b11_mark, paste(names(b11_off$r$design), collapse = " "), fixed = TRUE) && is.null(b11_off$r$design$skill$text) &&
+        !any(c("text", "checklist", "intent") %in% names(b11_off$r$design$skill)) && !grepl(b11_mark, dash_design_mark(b11_off$r$design), fixed = TRUE) &&
+        !grepl(b11_mark, paste(design_code_lines(b11_off$r$design), collapse = "\n"), fixed = TRUE) && !grepl("Briefing house style", paste(design_script(b11_off$r$design, b11_inp, "x.csv", "t"), collapse = "\n"), fixed = TRUE) &&
+        identical(design_skill_label(b11_off$r$design$skill), "an office design skill") && grepl(b11_mark, b11_files_after, fixed = TRUE) &&
+        !any(purrr::map_lgl(list.files(tempdir(), pattern = "[.](log|txt|rds|md)$", full.names = TRUE), function(f) grepl(b11_mark, paste(readLines(f, warn = FALSE), collapse = " "), fixed = TRUE))))
+
+# ---- the words about what the model is sent ---------------------------------------------------------------
+b11_start <- as.character(start_ui())
+b11_method <- as.character(mod_method_ui("method"))
+b11_readme <- paste(readLines("README.md", warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+b11_app_txt <- paste(readLines("app.R", warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+b11_priv <- purrr::map(stats::setNames(DESIGN_IMAGES, DESIGN_IMAGES), function(s) paste(privacy_text(s), collapse = " "))
+b11_one_page <- function(s) as.character(privacy_ui(s))
+cat("      11B privacy words (the default setting):\n        ", paste(strwrap(paste(privacy_text("all"), collapse = " "), 150), collapse = "\n        "), "\n", sep = "")
+check("11B-12: what the model is sent is said truthfully on Start here, above the Methodology text and in the README: rows are never sent as text; an aggregated table of at most 60 rows is sent to design a chart; the picture of a chart, which for a scatter, bubble, box or violin shows rows as marks, is sent when Design is used; and which pictures this server sends follows APP_DESIGN_IMAGES (all, aggregated, none: three different sentences, the default \"all\"); app.R names the setting and stops at start-up on an unknown value; www/methodology.md is untouched (its checksum, 11-0)",
+      grepl("never receives the rows of your file as text", b11_start, fixed = TRUE) && grepl("at most 60 rows (never rows of your file)", b11_start, fixed = TRUE) && grepl("the picture of the chart", b11_start, fixed = TRUE) &&
+        grepl("individual rows as marks", b11_start, fixed = TRUE) && grepl("never receives the rows of your file as text", b11_method, fixed = TRUE) && grepl("and the model is sent more", b11_method, fixed = TRUE) &&
+        regexpr("and the model is sent more", b11_method, fixed = TRUE) < regexpr("How chaRt chooses and draws a chart", b11_method, fixed = TRUE) &&
+        length(unique(unlist(b11_priv))) == 3L && grepl("every chart that is designed", b11_priv$all, fixed = TRUE) && grepl("only of charts drawn from aggregated tables", b11_priv$aggregated, fixed = TRUE) &&
+        grepl("sends no picture", b11_priv$none, fixed = TRUE) && grepl(design_privacy_images(design_images_setting()), b11_start, fixed = TRUE) && grepl("APP_DESIGN_IMAGES <- \"all\"", b11_app_txt, fixed = TRUE) &&
+        grepl("it must be one of: all, aggregated, none", b11_app_txt, fixed = TRUE) && grepl("APP_SKILLS_DIR <- \"\"", b11_app_txt, fixed = TRUE) &&
+        grepl("APP_DESIGN_IMAGES", b11_readme, fixed = TRUE) && grepl("at most 60 rows", b11_readme, fixed = TRUE) && !grepl("The model never sees the rows, and every number comes from R.", b11_readme, fixed = TRUE))
+
+# ---- in the app: Design on a card, Design all, the Style dialog, the chat, no model call for the phrases -------------------
+b11_read <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+b11_cb_ready <- utils::modifyList(b11_read$codebook, list(row_is = "one order"))
+b11_state <- function()
+  shiny::reactiveValues(key_version = 0L, data = b11_read$read$data, problems = b11_read$read$problems, profile = b11_read$profile, codebook = b11_cb_ready,
+                        path = file.path("tests", "data", "orders.csv"), calls = NULL, charts = list(), canvas = character(0), stories = list(), tables = list(),
+                        palette = chart_palette_default())
+b11_replies <- list(
+  "revenue by region" = list(charts = list(list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Revenue by region", subtitle = "All years", sort = "value_desc"))),
+  "average revenue by region" = list(charts = list(list(family = "bar", x = "region", y = "revenue", fn = "mean", title = "Average revenue by region", sort = "value_desc"))),
+  "which is biggest?" = list(ask = "Which measure?"))
+b11_ui_si <- local({
+  env = new.env()
+  env$sent = list()
+  env$ask = function(user, m, system_prompt = NULL, max_tokens, validate = NULL, images = NULL, ...) {
+    kind = if (grepl("<CHECKLIST>", user, fixed = TRUE)) "review" else if (grepl("<SKILL>", user, fixed = TRUE)) "design" else if (grepl("\nANALYST: ", user, fixed = TRUE)) "chat" else "other"
+    env$sent[[length(env$sent) + 1L]] = list(kind = kind, user = user, images = images)
+    obj = switch(kind, design = b11_design(b11_good), review = b11_ok,
+                 chat = b11_replies[[sub("(?s)^.*\nANALYST: (.*)\n\nREPLY FORMAT\n.*$", "\\1", user, perl = TRUE)]] %||% list(ask = "Which?"), list(ask = "?"))
+    if (!is.null(validate)) validate(obj)
+    list(obj = obj, raw = b11_to_json(obj), finish = "success", tokens = c(100, 20, 0), user_sent = user, model = "x", attempts = 1L, seconds = 0.1, refused = list())
+  }
+  env$kinds = function() vapply(env$sent, function(s) s$kind, character(1))
+  env
+})
+b11_ui <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = b11_state(), ask = b11_ui_si$ask), {
+  session$flushReact()
+  html <- function(name) gsub("&#39;", "'", paste(as.character(output[[name]]$html), collapse = ""), fixed = TRUE)
+  n_kind <- function(k) sum(b11_ui_si$kinds() == k)
+  st <- function() get("state", envir = parent.env(environment()))
+  session$setInputs(chat_user_input = "revenue by region")
+  session$setInputs(chat_user_input = "average revenue by region")
+  ids <- isolate(state$canvas)
+  b11_ui$cards <- identical(ids, c("c2", "c1")) && grepl(">Design<", html("c1_card"), fixed = TRUE) && !grepl("Designed with", html("c1_card"), fixed = TRUE) &&
+    !grepl("Designed drawing", html("c1_card"), fixed = TRUE) && grepl("chart-call", html("c1_card"), fixed = TRUE) && grepl("data-working=\"Designing\"", html("c1_card"), fixed = TRUE) &&
+    grepl(">Design all<", html("bar"), fixed = TRUE) && identical(skill_chosen()$id, "editorial") && !isTRUE(isolate(dopts$auto)) && n_kind("design") == 0L && n_kind("chat") == 2L
+  # a click on Design: the model is asked, the card shows the design
+  session$setInputs(c1_design = 1)
+  dz <- isolate(made$design$c1())
+  b11_ui$design <- !is.null(dz) && isTRUE(isolate(made$showd$c1())) && n_kind("design") == 1L && n_kind("review") == 1L && n_kind("chat") == 2L &&
+    identical(utils::tail(isolate(state$calls$call), 2L), c("design", "review")) && identical(utils::tail(isolate(state$calls$images), 2L), c(0L, 1L)) && identical(dz$key, digest::digest(list(spec_hash(isolate(state$charts$c1$spec)), isolate(palette()), isolate(data_key())))) &&
+    grepl("Designed with Editorial.", html("c1_card"), fixed = TRUE) && grepl("Designed drawing", html("c1_card"), fixed = TRUE) && grepl("found nothing to change", html("c1_card"), fixed = TRUE) &&
+    grepl("The model's note: A quiet bar chart", html("c1_card"), fixed = TRUE) && grepl("c1_dstatic", html("c1_view"), fixed = TRUE) && !grepl("c1_static", html("c1_view"), fixed = TRUE) &&
+    !grepl("Designed with", html("c2_card"), fixed = TRUE) && grepl("c2_static", html("c2_view"), fixed = TRUE) && file.exists(dz$file)
+  # the switch back to the standard drawing, and the designed drawing again
+  items_shown <- dash_items()
+  session$setInputs(c1_showd = FALSE)
+  items_standard <- dash_items()
+  b11_ui$items <- identical(items_shown[[2]]$id, "c1") && !is.null(items_shown[[2]]$design) && identical(items_shown[[2]]$design$code, b11_good) && is.null(items_shown[[1]]$design) &&
+    is.null(items_standard[[2]]$design)
+  b11_ui$standard <- !isTRUE(isolate(made$showd$c1())) && grepl("c1_static", html("c1_view"), fixed = TRUE) && !is.null(isolate(made$design$c1())) && is.null(design_shown("c1"))
+  session$setInputs(c1_showd = TRUE)
+  b11_ui$again <- isTRUE(isolate(made$showd$c1())) && grepl("c1_dstatic", html("c1_view"), fixed = TRUE) && !is.null(design_shown("c1"))
+  # Interactive on a designed bar: the designed drawing with tooltips
+  session$setInputs(c1_interactive = 1)
+  b11_ui$interactive <- isTRUE(isolate(made$interactive$c1())) && grepl("c1_dwidget", html("c1_view"), fixed = TRUE) && length(isolate(made$dwidget$c1())) > 0L
+  session$setInputs(c1_interactive = 2)
+  # the chat: phrases that ask for a design are R's own (no chat call), with a chart selected; a wish goes to the design call; without a selection they say so
+  chat_before <- n_kind("chat")
+  session$setInputs(chat_user_input = "make it look better")
+  b11_ui$no_selection <- n_kind("chat") == chat_before && n_kind("design") == 1L && grepl(md_text(DESIGN_NONE), made$log[[length(made$log)]]$content, fixed = TRUE)
+  session$setInputs(c1_select = 1)
+  session$setInputs(chat_user_input = "Make it publication ready.")
+  after_phrase <- list(chat = n_kind("chat"), design = n_kind("design"), review = n_kind("review"), said = made$log[[length(made$log)]]$content)
+  session$setInputs(chat_user_input = "put the legend inside and use a darker background")
+  wish_msg <- b11_ui_si$sent[[length(b11_ui_si$sent) - 1L]]$user
+  after_wish <- list(chat = n_kind("chat"), design = n_kind("design"), said = made$log[[length(made$log)]]$content)
+  session$setInputs(chat_user_input = "redesign this")
+  session$setInputs(chat_user_input = "design this")
+  session$setInputs(chat_user_input = "which is biggest?")
+  b11_ui$chat <- after_phrase$chat == chat_before && after_phrase$design == 2L && after_phrase$review == 2L && grepl("Designed Revenue by region with Editorial", after_phrase$said, fixed = TRUE) &&
+    grepl("No chat call was made", after_phrase$said, fixed = TRUE) && after_wish$chat == chat_before && after_wish$design == 3L && grepl("<WISH>", wish_msg, fixed = TRUE) &&
+    grepl("put the legend inside and use a darker background", b11_block(wish_msg, "WISH"), fixed = TRUE) && grepl("with your wish", after_wish$said, fixed = TRUE) &&
+    n_kind("design") == 5L && n_kind("chat") == chat_before + 1L && identical(isolate(made$design$c1())$wish, NULL) &&
+    all(vapply(b11_ui_si$sent[b11_ui_si$kinds() == "design"], function(s) !grepl("OFFICEMARK", s$user, fixed = TRUE), logical(1)))
+  # Design all: the other chart only (c1's design stands), and again: nothing left to do
+  session$setInputs(design_all = 1)
+  b11_ui$all <- !is.null(isolate(made$design$c2())) && n_kind("design") == 6L && n_kind("review") == 6L && grepl("Designed 1 of 1 chart with Editorial", made$log[[length(made$log)]]$content, fixed = TRUE) &&
+    nrow(isolate(state$calls)) == n_kind("chat") + n_kind("design") + n_kind("review") && n_kind("chat") == 3L && grepl("Designed with Editorial", html("c2_card"), fixed = TRUE)
+  calls_all <- nrow(isolate(state$calls))
+  session$setInputs(design_all = 2)
+  b11_ui$all_again <- n_kind("design") == 6L && grepl("already has a design that matches it", made$log[[length(made$log)]]$content, fixed = TRUE) && nrow(isolate(state$calls)) == calls_all
+  # a changed chart drops its design (a design is of the chart it was made for), and says why
+  dz2 <- isolate(made$design$c2())
+  session$setInputs(c2_select = 1)
+  p <- isolate(palette())
+  p$style <- "dark"
+  palette(p)
+  session$flushReact()
+  b11_ui$dropped <- is.null(isolate(made$design$c2())) && is.null(isolate(made$design$c1())) && grepl("because the chart, the style or the data changed", html("c2_card"), fixed = TRUE) && !grepl("Designed with", html("c2_card"), fixed = TRUE) &&
+    grepl("c2_static", html("c2_view"), fixed = TRUE) && !file.exists(dz2$file)
+  p$style <- "clean"
+  palette(p)
+  # the Style dialog's choices: the skill, and designing new charts automatically (off until it is switched on)
+  session$setInputs(design_skill = "no-such-skill")
+  skill_kept <- identical(isolate(dopts$skill), "editorial")
+  session$setInputs(design_auto = TRUE)
+  designs_before <- n_kind("design")
+  session$setInputs(chat_user_input = "revenue by region")
+  b11_ui$auto <- skill_kept && isTRUE(isolate(dopts$auto)) && n_kind("design") == designs_before + 1L && !is.null(isolate(made$design$c3())) && grepl("Designed 1 of 1 chart with Editorial", made$log[[length(made$log)]]$content, fixed = TRUE)
+  session$setInputs(design_auto = FALSE)
+  session$setInputs(chat_user_input = "revenue by region")
+  b11_ui$auto_off <- !isTRUE(isolate(dopts$auto)) && n_kind("design") == designs_before + 1L && is.null(isolate(made$design$c4()))
+  b11_ui$closing <- length(ls(made$design)) == 4L
+})
+check("11B-13: in the app: every card has Design (a call button with its working words) and the canvas Design all; a click on Design asks the model once for a design and once to look at its picture, records both calls (the second with its picture), shows the designed drawing with its mark (\"Designed with Editorial\", what the review found, the model's sentence), a switch to the standard drawing and back, and the designed drawing with tooltips when Interactive is pressed; the export carries the design only while the card shows it; Design all designs only the charts without a current design and says what it did, and again it says there is nothing to do; a changed style drops the design and says why; the skill and \"Design new charts automatically\" (off at first) of the Style dialog take effect, an unknown skill is not accepted",
+      isTRUE(b11_ui$cards) && isTRUE(b11_ui$design) && isTRUE(b11_ui$items) && isTRUE(b11_ui$standard) && isTRUE(b11_ui$again) && isTRUE(b11_ui$interactive) && isTRUE(b11_ui$all) && isTRUE(b11_ui$all_again) && isTRUE(b11_ui$dropped) &&
+        isTRUE(b11_ui$auto) && isTRUE(b11_ui$auto_off))
+check("11B-14: in the chat, with a chart selected, \"redesign this\", \"design this\", \"Make it publication ready.\" and \"make it look better\" are R's own (no chat call, only the design calls: each design is a design call and a review); with no chart selected they say to click one and call nothing; a message that asks for a specific look (\"put the legend inside and use a darker background\") goes to the design call as a WISH block after the skill, also with no chat call; a question and a request to change the chart's form still go to the model as before; the phrases and the wish test are what the browser's script uses for the working words",
+      isTRUE(b11_ui$no_selection) && isTRUE(b11_ui$chat) &&
+        all(purrr::map_lgl(c("redesign this", "design this", "make it look better", "Make it publication ready.", "make this publication-ready", "can you please polish it", "make the chart look professional", "make it ready for print"), design_request)) &&
+        !any(purrr::map_lgl(c("design a survey", "show revenue by region", "make it a bar chart", "make it look at the east", "what is the design effect", "redesign this by channel"), design_request)) &&
+        all(purrr::map_lgl(c("put the legend inside", "make the title bigger", "use a darker background", "remove the gridlines", "make the labels bold", "move the caption to the left"), design_wish)) &&
+        !any(purrr::map_lgl(c("show revenue by month", "change the bars to a line chart", "make the title say Sales", "group the bars by channel", "only the top 5", "what is the legend", "put it by region", "design this"), design_wish)) &&
+        grepl("WORDS.design", EXPLORE_JS, fixed = TRUE) && grepl(as.character(jsonlite::toJSON(DESIGN_PATTERN, auto_unbox = TRUE)), EXPLORE_JS, fixed = TRUE) && identical(WORKING_WORDS[["design"]], "Designing"))
+# ---- what carries a design: the export, and the interactive view ---------------------------------------------------
+b11_smooth_code <- 'ggplot(d, aes(x = units, y = unit_price)) + geom_point(colour = tok$slate, alpha = 0.3, size = 1.2) +
+  geom_smooth(method = "loess", formula = y ~ x, colour = tok$accent, se = FALSE) +
+  scale_x_continuous(labels = label_comma()) + scale_y_continuous(labels = label_dollar()) +
+  labs(title = txt$title, subtitle = txt$subtitle, x = txt$x, y = txt$y) + theme_minimal(base_family = tok$body_family)'
+b11_line_code <- 'ggplot(d, aes(x = order_month, y = revenue, colour = channel)) + geom_line() + scale_colour_manual(values = pal(3)) + labs(title = txt$title, x = NULL, y = NULL) + theme_minimal(base_family = tok$body_family)'
+b11_hist_code <- 'ggplot(d, aes(x = units)) + geom_histogram(bins = 20, fill = tok$accent) + labs(title = txt$title, x = txt$x) + theme_minimal(base_family = tok$body_family)'
+b11_pw_code <- paste0('one <- ggplot(d, aes(x = region, y = revenue)) + geom_col(fill = tok$accent) + labs(title = txt$title, x = NULL, y = NULL) + ', b11_theme, '
+two <- ggplot(d, aes(x = region, y = revenue)) + geom_col(fill = tok$slate) + labs(title = txt$subtitle, x = NULL, y = NULL) + ', b11_theme, '
+one | two')
+b11_scatter24 <- b11_chart(list(family = "scatter", x = "units", y = "unit_price", filter = list(list(column = "year", op = "in", value = list(2024))), title = "Unit price against units, 2024"), "c3")
+b11_plot_of <- function(code, chart) {
+  inp = design_input(chart, b11_o$data, b11_cb)
+  r = design_run(code, inp$d, inp$facts, inp$txt, inp$tok, inp$pal, size = inp$size, dpi = 40L)
+  if (!r$ok) stop(r$reason)
+  list(plot = r$plot, size = inp$size)
+}
+b11_ia <- list(bar = b11_plot_of(b11_good, b11_bar), smooth = b11_plot_of(b11_smooth_code, b11_scatter), hist = b11_plot_of(b11_hist_code, b11_scatter), pw = b11_plot_of(b11_pw_code, b11_bar))
+b11_ok_of <- function(x) design_interactive_ok(x$plot)
+b11_w_bar <- design_widget(b11_ia$bar$plot, b11_ia$bar$size)
+b11_w_smooth <- design_widget(b11_ia$smooth$plot, b11_ia$smooth$size)
+b11_w_html <- if (length(b11_w_bar)) b11_w_bar$x$html else ""
+cat("      11B interactive decision: bar ", b11_ok_of(b11_ia$bar)$ok, "; smooth: ", b11_ok_of(b11_ia$smooth)$reason, "; histogram: ", b11_ok_of(b11_ia$hist)$reason, "; patchwork: ", b11_ok_of(b11_ia$pw)$reason, "\n", sep = "")
+check("11B-15: whether a design can have tooltips is decided from its built layers: one ggplot whose every mark layer (a geom of the marks list) is a column, bar, point or tile that ggiraph has a twin for and that is drawn from its data as it is; a bar with value labels is interactive, and design_widget() makes it again layer by layer, builds it and finds the same rows and positions as the design's own build, with a tooltip written by R from the layer's own data (\"region: West\", \"revenue: 939,500\", HTML-escaped); a scatter with a loess curve, a histogram and two plots put together are not, each with a sentence that says why",
+      isTRUE(b11_ok_of(b11_ia$bar)$ok) && length(b11_w_bar) > 0L && inherits(b11_w_bar, "girafe") && grepl("region: West", b11_w_html, fixed = TRUE) && grepl("revenue: 939,500", b11_w_html, fixed = TRUE) &&
+        !isTRUE(b11_ok_of(b11_ia$smooth)$ok) && grepl("geom_smooth", b11_ok_of(b11_ia$smooth)$reason, fixed = TRUE) && !length(b11_w_smooth) && grepl("geom_smooth", attr(b11_w_smooth, "why"), fixed = TRUE) &&
+        !isTRUE(b11_ok_of(b11_ia$hist)$ok) && grepl("count, a bin or a fitted line", b11_ok_of(b11_ia$hist)$reason, fixed = TRUE) &&
+        !isTRUE(b11_ok_of(b11_ia$pw)$ok) && grepl("several plots", b11_ok_of(b11_ia$pw)$reason, fixed = TRUE) && !length(design_widget(b11_ia$pw$plot, b11_ia$pw$size)) &&
+        !isTRUE(design_interactive_ok(NULL)$ok) && identical(DESIGN_TWINS[["GeomCol"]], "geom_col_interactive") && all(DESIGN_TWINS %in% getNamespaceExports("ggiraph")) &&
+        !"GeomLine" %in% names(DESIGN_TWINS) && !isTRUE(b11_ok_of(b11_plot_of(b11_line_code, b11_chart(list(family = "line", x = "order_month", y = "revenue", fn = "sum", color = "channel", title = "Monthly revenue by channel"))))$ok))
+
+b11_set <- list(title = "Dash", subtitle = "", author = "A. Analyst", date = as.Date("2026-11-24"), intro = "", boxes = c("rows", "columns", "third"), keys = character(0), marking = "UNCLASSIFIED//FOR TEST")
+b11_item <- function(ch, dz, mode = "picture") list(id = ch$id, chart = ch, story = NULL, mode = mode, design = dz, stale = NA_character_)
+b11_dz <- function(code, chart, skill = b11_ed) {
+  inp = design_input(chart, b11_o$data, b11_cb)
+  x = b11_plot_of(code, chart)
+  list(skill = list(id = skill$id, title = skill$title, version = skill$version, office = isTRUE(skill$office)), code = code, motion = "rise", say = "A design.", review = "Reviewed by looking: the model looked at the picture and found nothing to change.",
+       size = x$size, table = inp$d, plot = x$plot, calls = 2L)
+}
+b11_bar2 <- b11_chart(list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Revenue by region, again", sort = "value_desc"), "c2")
+b11_dz_bar <- b11_dz(b11_good, b11_bar)
+b11_dz_bar2 <- b11_dz(b11_slate, b11_bar2)
+b11_dz_smooth <- b11_dz(b11_smooth_code, b11_scatter24)
+b11_zip <- function(items) {
+  out = file.path(tempfile("b11_zip_"), "d.zip")
+  dir.create(dirname(out))
+  res = build_dashboard(items, b11_o$data, b11_cb, chart_palette_default(), b11_set, file.path("tests", "data", "orders.csv"), out, model = "test-model")
+  d = tempfile("b11_unz_")
+  dir.create(d)
+  zip::unzip(res$zip, exdir = d)
+  c(res, list(dir = d))
+}
+b11_t0 <- Sys.time()
+b11_ex <- b11_zip(list(b11_item(b11_bar, b11_dz_bar), b11_item(b11_bar2, b11_dz_bar2, "interactive"), b11_item(b11_scatter24, b11_dz_smooth, "interactive")))
+b11_ex_s <- as.numeric(difftime(Sys.time(), b11_t0, units = "secs"))
+b11_html <- paste(readLines(file.path(b11_ex$dir, "dashboard.html"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+b11_rs <- readLines(file.path(b11_ex$dir, "charts.R"), warn = FALSE, encoding = "UTF-8")
+b11_png <- file.path(b11_ex$dir, grep("^charts/01_.*[.]png$", names(b11_ex$files), value = TRUE))
+b11_csv <- file.path(b11_ex$dir, grep("^charts/01_.*_table[.]csv$", names(b11_ex$files), value = TRUE))
+# charts.R run alone in a fresh R process, in the folder of the zip (no app, no data file but the CSVs): every designed chart is a ggplot that draws
+b11_alone_out <- tempfile("b11_alone_", fileext = ".png")
+b11_runner <- tempfile("b11_runner_", fileext = ".R")
+writeLines(c(paste0("setwd(", deparse(b11_ex$dir), ")"), "suppressWarnings(suppressMessages(source('charts.R')))", "stopifnot(inherits(chart, 'ggplot'))",
+             paste0("grDevices::png(", deparse(b11_alone_out), ", width = 700, height = 450); suppressWarnings(print(chart)); grDevices::dev.off()"), "cat('DRAWN')"), b11_runner)
+b11_alone_res <- tryCatch(system2(file.path(R.home("bin"), "Rscript"), c("--no-init-file", shQuote(b11_runner)), stdout = TRUE, stderr = TRUE), error = function(e) conditionMessage(e))
+cat("      11B export: ", length(b11_ex$files), " files in ", round(b11_ex_s, 1), " s; charts.R alone: ", paste(utils::tail(b11_alone_res, 1L), collapse = " "), "\n", sep = "")
+check("11B-16: the export carries a design: for a designed card the zip has the picture at 300 dpi (2,100 pixels wide, taller by the marking's two bands), the SVG when svglite is there, the plotted table as a CSV beside the script whose first line is the marking, and in charts.R the code that runs alone (the libraries it uses, the table read back from its CSV with the line skipped and its levels restored, the facts, words, tokens and palette it is given): sourced in a fresh R process with nothing else it draws a ggplot; the page holds the designed picture without its own title (the page says the title), says in About that charts were designed and by which skill, and a designed bar that is interactive has the tooltips of the design, while a design with a fitted curve gets the standard interactive version with a line that says so; the codebook is the same file as for any dashboard",
+      isTRUE(b11_ex$modes[1] == "picture") && identical(unname(b11_ex$modes[2:3]), c("interactive", "interactive")) && all(is.na(b11_ex$fallbacks)) && length(b11_png) == 1L && file.exists(b11_png) && length(b11_csv) == 1L &&
+        identical(unname(b11_png_dim(b11_png)), c(2100, 1470)) && (!svglite_installed() || any(grepl("^charts/01_.*[.]svg$", names(b11_ex$files)))) &&
+        identical(readLines(b11_csv, n = 1L), "# UNCLASSIFIED//FOR TEST") && identical(dim(utils::read.csv(b11_csv, skip = 1L)), c(6L, 2L)) && identical(names(utils::read.csv(b11_csv, skip = 1L)), c("region", "revenue")) &&
+        any(b11_rs == "library(ggplot2)") && any(b11_rs == "library(scales)") &&
+        any(grepl("^d <- read.csv\\(\"charts/01_.*_table[.]csv\", skip = 1", b11_rs)) && any(grepl("^facts <- list\\(", b11_rs)) && any(grepl("^tok <- list\\(", b11_rs)) && any(grepl("^pal <- function\\(n\\)", b11_rs)) &&
+        any(grepl("Designed with Editorial (version 0.1)", b11_rs, fixed = TRUE)) && identical(b11_rs[1], "# UNCLASSIFIED//FOR TEST") &&
+        identical(utils::tail(b11_alone_res, 1L), "DRAWN") && file.exists(b11_alone_out) && file.size(b11_alone_out) > 5000 &&
+        grepl("Designed charts", b11_html, fixed = TRUE) && grepl("Editorial (version 0.1)", b11_html, fixed = TRUE) &&
+        grepl("region: West", b11_html, fixed = TRUE) && grepl("The standard interactive version: the designed drawing is a picture (a layer of the design, geom_smooth, has no interactive version)", b11_html, fixed = TRUE) &&
+        grepl("<picture", b11_html, fixed = TRUE) && !grepl("Revenue by region, again</text>", b11_html, fixed = TRUE) &&
+        file.exists(file.path(b11_ex$dir, "codebook.html")) && file.exists(file.path(b11_ex$dir, "data_dictionary.yaml")))
+# a design that cannot be drawn again (its code is refused now) and a chart with no design: the standard drawing is written, the build does not stop, and the
+#   dialog's note says what is true of each
+b11_bad <- b11_dz_bar
+b11_bad$code <- b11_hostile
+b11_ex2 <- b11_zip(list(b11_item(b11_bar, b11_bad), b11_item(b11_bar2, NULL)))
+b11_notes <- list(picture = dash_design_note(b11_dz_bar, b11_bar$spec, "picture"), inter = dash_design_note(b11_dz_bar, b11_bar$spec, "interactive"), inter_smooth = dash_design_note(b11_dz_smooth, b11_scatter24$spec, "interactive"),
+                  video = dash_design_note(b11_dz_bar, b11_bar$spec, "video"), rows = dash_design_note(b11_dz_smooth, b11_scatter24$spec, "picture"))
+check("11B-17: a design that cannot be drawn again when the dashboard is built falls back to the standard drawing for that card (a PNG of the standard drawing, no table CSV, the card's note says the designed drawing could not be made and why) and does not stop the build; a card with no design is as it was before (no table CSV, its own code); the export dialog's note for a designed chart says where the picture comes from and that the plotted table is written beside the script, that the CSV holds the rows when the chart plots rows, what Interactive does for that design (tooltips, or the standard view and the reason) and that a video is made from the standard drawing",
+      is.character(b11_ex2$fallbacks[[1]]) && grepl("never allowed", b11_ex2$fallbacks[[1]], fixed = TRUE) && identical(unname(b11_ex2$fallback_of[1]), "designed drawing") && is.na(b11_ex2$fallbacks[[2]]) &&
+        !any(grepl("_table[.]csv$", names(b11_ex2$files))) && sum(grepl("[.]png$", names(b11_ex2$files))) == 2L && !any(grepl("Designed with", readLines(file.path(b11_ex2$dir, "charts.R"), warn = FALSE))) &&
+        any(grepl("spec_plot|ggplot\\(", readLines(file.path(b11_ex2$dir, "charts.R"), warn = FALSE))) &&
+        grepl("run again on the file as it is now", b11_notes$picture, fixed = TRUE) && grepl("beside charts.R as a CSV", b11_notes$picture, fixed = TRUE) && !grepl("holds the rows", b11_notes$picture, fixed = TRUE) &&
+        grepl("holds the rows this chart plots", b11_notes$rows, fixed = TRUE) && grepl("Interactive: tooltips on the designed drawing", b11_notes$inter, fixed = TRUE) &&
+        grepl("Interactive: the standard interactive view, because the designed drawing cannot have tooltips (a layer of the design, geom_smooth", b11_notes$inter_smooth, fixed = TRUE) &&
+        grepl("A video is made from the standard drawing", b11_notes$video, fixed = TRUE))
+
+# ---- the packages a deployment must ask Connect for ---------------------------------------------------------------
+b11_app_exprs <- as.list(parse("app.R", keep.source = FALSE))
+b11_app_packages <- eval(purrr::keep(b11_app_exprs, function(x) is.call(x) && identical(as.character(x[[1]]), "<-") && identical(as.character(x[[2]]), "APP_PACKAGES"))[[1]][[3]])
+b11_smoke_txt <- paste(readLines(file.path("tests", "smoke.R"), warn = FALSE, encoding = "UTF-8"), collapse = "
+")
+b11_named <- vapply(b11_app_exprs, function(e) if (is.call(e) && identical(e[[1]], quote(requireNamespace)) && is.character(e[[2]])) e[[2]] else NA_character_, character(1))
+b11_tk <- design_toolkit()
+check("11B-18: ggrepel, ggtext, patchwork and forcats, which the toolkit takes by name from a string (a deployment reads calls, not strings), are each named in a top-level requireNamespace() call of app.R, as hexbin and tidyr are, and are not in APP_PACKAGES (the app starts without them); every one that is installed is in the toolkit; no file of R/ calls requireNamespace() (the check of R/ above); the packages check 9C-8 holds them among the packages a bundle asks for",
+      all(c("ggrepel", "ggtext", "patchwork", "forcats") %in% b11_named) && all(c("hexbin", "tidyr") %in% b11_named) && !any(c("ggrepel", "ggtext", "patchwork", "forcats") %in% b11_app_packages) &&
+        (!requireNamespace("ggrepel", quietly = TRUE) || is.function(b11_tk$geom_text_repel)) && (!requireNamespace("ggtext", quietly = TRUE) || is.function(b11_tk$element_markdown)) &&
+        (!requireNamespace("patchwork", quietly = TRUE) || is.function(b11_tk$plot_layout)) && (!requireNamespace("forcats", quietly = TRUE) || is.function(b11_tk$fct_reorder)) &&
+        grepl("\"ggrepel\", \"ggtext\", \"patchwork\", \"forcats\"", b11_smoke_txt, fixed = TRUE))
+}   # the fast run only
+# <<< 11B end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
