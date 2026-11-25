@@ -69,7 +69,20 @@ mutations <- list(
   mut("M29", "gridtext's image reader is not replaced (markup made while the plot is built reads a picture)", "  design_block_images()\n  .design_cache$image_hit = FALSE",
       "  utils::assignInNamespace(\"read_image\", a11_orig_read, ns = \"gridtext\"); .design_cache$images_blocked = FALSE\n  .design_cache$image_hit = FALSE"),
   mut("M30", "the limited replacement forms removed (a far index makes the vector)", "  list2env(design_replace(), envir = e)\n", ""),
-  mut("M31", "a bare name in aes() or a dplyr verb is refused unless it is a column of d", "  if (name %in% DESIGN_MASKED) return(", "  if (FALSE) return("))
+  mut("M31", "a bare name in aes() or a dplyr verb is refused unless it is a column of d", "  if (name %in% DESIGN_MASKED) return(", "  if (FALSE) return("),
+  # after the first live run (check 11A-14)
+  mut("M32", "Inf is refused as a number too large", "any(is.finite(e) & abs(e) >= DESIGN_MAX_NUM, na.rm = TRUE)", "any(abs(e) >= DESIGN_MAX_NUM, na.rm = TRUE)"),
+  mut("M33", "a factory's function called at once is refused", "  if (is.call(fn) && is.symbol(fn[[1]]) && as.character(fn[[1]]) %in% DESIGN_FACTORIES", "  if (FALSE && is.call(fn) && is.symbol(fn[[1]]) && as.character(fn[[1]]) %in% DESIGN_FACTORIES"),
+  mut("M34", "a column the code makes is not a name of its own", "  c(here, cols, unlist(", "  c(here, unlist("),
+  mut("M35", "the tokens' slate grey is the style's, whatever its contrast", "slate = rd(st$slate)", "slate = st$slate"),
+  # the second round of fixes after the live run (check 11A-15)
+  mut("M36", "a variable of the code's own may not have a deny-listed name", "    else if (fn_value) design_deny_reason(nm)", "    else design_deny_reason(nm)"),
+  mut("M37", "any factory called at once, not only label_ and breaks_", "as.character(fn[[1]]) %in% DESIGN_FACTORIES && as.character(fn[[1]]) %in% cx$callable)", "TRUE)"),
+  mut("M38", "all text on layers needs only 3 to 1", "need = ifelse(series, 3, 4.5)", "need = 3"),
+  mut("M39", "a series name need not be in a series colour for 3 to 1", "series = norm(col) %in% series_cols & (same | label %in% series_names)", "series = (same | label %in% series_names)"),
+  mut("M40", "R does not add the source line", "if (isTRUE(caption) && is_text1(txt$caption) && design_no_caption(plot))", "if (FALSE)"),
+  mut("M41", "TOOLKIT does not say what is refused", "\"\", design_refused_text()), collapse", "\"\"), collapse"),
+  mut("M42", "the source line is added without the braces", "paste0(\"{\\n\", code, \"\\n} +\\n  labs(caption = txt$caption)\")", "paste0(code, \" +\\n  labs(caption = txt$caption)\")"))
 wanted <- commandArgs(trailingOnly = TRUE)
 if (length(wanted)) mutations <- purrr::keep(mutations, function(m) m$id %in% wanted)
 

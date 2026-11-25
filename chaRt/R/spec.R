@@ -3959,6 +3959,11 @@ DESIGN_MARKUP <- "(?i)<\\s*/?\\s*(img|a|link|script|iframe|style|svg|object|embe
 # The functions a design may call, as a named list of functions (built once, from the installed packages): ggplot2's typed list, scales', the other
 #   packages' when installed, and base R's. The size-limited versions of c(), paste(), paste0(), rep(), seq(), seq_len(), `:`, format() and formatC()
 #   stand in for the base ones. Attribute "package" says where each name came from.
+# The toolkit functions that make a function (a label or breaks function) which a design may call at once: `label_comma()(x)`.
+DESIGN_FACTORIES <- c("label_bytes", "label_comma", "label_currency", "label_date", "label_date_short", "label_dollar", "label_log", "label_number",
+                      "label_number_auto", "label_number_si", "label_ordinal", "label_percent", "label_pvalue", "label_scientific", "label_time",
+                      "label_timespan", "label_wrap", "label_wrap_gen", "breaks_extended", "breaks_log", "breaks_pretty", "breaks_width", "breaks_timespan", "breaks_exp")
+
 # The functions whose arguments are evaluated in a data mask (ggplot2's aesthetics, dplyr's verbs): a bare name in them is a variable of the data.
 DESIGN_MASKED <- c("aes", "after_stat", "after_scale", "stage", "vars", "mutate", "filter", "arrange", "group_by", "summarise", "slice_max", "slice_min")
 
@@ -4101,7 +4106,31 @@ design_toolkit_text <- function() {
   pk = attr(tk, "package")
   by = split(names(tk), factor(pk[names(tk)], levels = unique(pk[names(tk)])))
   paste(c(purrr::imap_chr(by, function(n, p) paste0(p, ": ", paste(if (identical(p, "base")) c(n, "|>") else n, collapse = " "))),
-          "provided objects: d (the table), facts, txt, tok, and the function pal(n)"), collapse = "\n")
+          "provided objects: d (the table), facts, txt, tok, and the function pal(n)", "", design_refused_text()), collapse = "\n")
+}
+
+# What the guard and the checks refuse, said to the model in TOOLKIT so that it does not write it (made from the same constants and lists they use).
+design_refused_text <- function() {
+  big = function(x) format(x, big.mark = ",", scientific = FALSE)
+  deny = purrr::imap_chr(DESIGN_DENY, function(n, k) paste0("  - ", k, " (it ", DESIGN_DENY_WHY[[k]], "): ", paste(unique(n), collapse = " ")))
+  c("refused before the code runs:",
+    "  - calling a function that is not listed above; `::`, `:::`, `@`, `<<-`, `->>`; loops (for, while, repeat)",
+    "  - calling a function by anything but its plain name: `(f)()`, `x$f()`, `x[[\"f\"]]()`, `f()()`; the one exception is a label_ or breaks_ function made and called at once, as in `label_comma()(x)` or `label_wrap(28)(txt$title)`",
+    "  - assigning to d, facts, txt, tok, pal, a constant, or a base or toolkit function; changing d in place (make a copy, or use mutate())",
+    paste0("  - a number of ", big(DESIGN_MAX_NUM), " or more written in the code (Inf and -Inf are fine, as the edge of the panel); code longer than ", big(DESIGN_MAX_CODE), " characters"),
+    "  - a string where a function, a method or a transformation is wanted (`fun = \"mean\"`): give the function itself",
+    "  - these names, as functions called; a column or a variable of your own may still have one of these names (dd$date, mutate(d, cat = ...)):",
+    deny,
+    "refused while it runs:",
+    paste0("  - a vector longer than ", big(DESIGN_MAX_LEN), ", text longer than ", big(DESIGN_MAX_CHARS), " characters, more than ", big(DESIGN_COUNT_MAX), " bins or points; more than ", DESIGN_TIME_LIMIT, " seconds to build and draw"),
+    "  - HTML or image markup in any text (plain bold through element_markdown() or geom_richtext() is allowed; no <img>, no links)",
+    "refused when the drawing is checked:",
+    "  - a mark layer with fewer rows than d (leave rows out only with filter()) or more rows than d; rows a scale's limits drop",
+    "  - bars and areas whose value axis does not include zero; a second axis; an axis whose type (continuous, log, date, discrete) is not the spec's",
+    "  - a number written on the chart that is not in facts or d",
+    "  - text cut off at the panel or the device, or two texts that overlap",
+    "  - text under 4.5 to 1 contrast with what is behind it (a series name drawn in its series' colour needs 3 to 1); tok$text, tok$muted, tok$caption, tok$accent and tok$slate all pass on tok$ground and tok$panel",
+    "the caption: if the chart writes none, R adds txt$caption (the source line) under it; write it yourself to place or style it")
 }
 
 # What a name on the deny list is refused for, as one sentence; NULL for a name not on it.
@@ -4118,12 +4147,19 @@ design_deny_reason <- function(name) {
 design_collect <- function(e) {
   if (!is.call(e)) return(list())
   head = if (is.symbol(e[[1]])) as.character(e[[1]]) else ""
+  # a column the code makes (`dd$cat <- ...`, mutate(d, cat = ...)) is a name of its own too: used bare in aes() it is that column, even when the name is
+  #   also a function's (cat, date); a call to the function is still refused, and the run's environment has no such function to find
+  col_of = function(t) if (is.call(t) && is.symbol(t[[1]]) && as.character(t[[1]]) %in% c("$", "[[") && length(t) == 3L && (is.symbol(t[[3]]) || is.character(t[[3]])))
+    as.character(t[[3]])
+  made = if (head %in% c("<-", "=") && length(e) == 3L) col_of(e[[2]])
+  named = if (head %in% c("mutate", "summarise") && !is.null(names(e))) setdiff(names(e)[-1], "")
+  cols = purrr::map(c(made, named), function(n) list(name = n, fun = FALSE, formal = FALSE))
   here = if (head %in% c("<-", "=") && length(e) == 3L && is.symbol(e[[2]]))
     list(list(name = as.character(e[[2]]), fun = is.call(e[[3]]) && identical(e[[3]][[1]], as.name("function")), formal = FALSE))
   else if (identical(head, "function") && length(e) >= 2L && !is.null(e[[2]]))
     purrr::map(names(e[[2]]), function(n) list(name = n, fun = FALSE, formal = TRUE))
   else list()
-  c(here, unlist(purrr::map(design_args(e, all = TRUE), design_collect), recursive = FALSE))
+  c(here, cols, unlist(purrr::map(design_args(e, all = TRUE), design_collect), recursive = FALSE))
 }
 
 # The elements of a call that are there (an empty argument, as in x[1, ], is not), the function position left out unless `all`. A function's
@@ -4145,6 +4181,10 @@ design_walk <- function(e, cx, depth = 0L) {
   if (is.symbol(e)) return(design_symbol(as.character(e), cx))
   if (!is.call(e)) return(design_constant(e))
   fn = e[[1]]
+  # a label or breaks function made by a toolkit factory and called at once (`label_comma()(x)`, `label_wrap(28)(txt$title)`): the factory is a toolkit
+  #   function and what it makes only formats or places values, so the call is walked as the factory's call and its arguments
+  if (is.call(fn) && is.symbol(fn[[1]]) && as.character(fn[[1]]) %in% DESIGN_FACTORIES && as.character(fn[[1]]) %in% cx$callable)
+    return(c(next_(fn), all_of(design_args(e))))
   if (is.call(fn)) {
     op = if (is.symbol(fn[[1]])) as.character(fn[[1]]) else ""
     why = switch(op,
@@ -4196,7 +4236,9 @@ design_symbol <- function(name, cx) {
 }
 
 design_constant <- function(e) {
-  if (is.numeric(e) && any(abs(e) >= DESIGN_MAX_NUM, na.rm = TRUE)) return(paste0("The number ", format(max(abs(e)), scientific = FALSE), " is too large for a design to need."))
+  # Inf and -Inf are ggplot2's way of saying "the edge of the panel" (annotate(y = Inf), min.segment.length = Inf), not a size: the size limits refuse them where
+  #   they would be a length (rep(), seq_len(), an index)
+  if (is.numeric(e) && any(is.finite(e) & abs(e) >= DESIGN_MAX_NUM, na.rm = TRUE)) return(paste0("The number ", format(max(abs(e[is.finite(e)])), scientific = FALSE), " is too large for a design to need."))
   character(0)
 }
 
@@ -4220,8 +4262,10 @@ design_assign <- function(e, cx, depth) {
   reserved = c(cx$provided, names(DESIGN_CONSTANTS), DESIGN_BASE, if (fn_value) cx$callable)
   why = if (is.symbol(target)) {
     nm = as.character(target)
+    # the deny list is about calls: a variable of the code's own may have a deny-listed name (`cat <- ...`, `date <- ...`), since a call to that name is
+    #   still refused and the run's environment has no such function; a function of the code's own may not (it could be handed on as a function's value)
     if (nm %in% reserved) paste0("`", nm, "` belongs to the toolkit or to what is provided, so the code may not assign to it; use a name of your own.")
-    else design_deny_reason(nm)
+    else if (fn_value) design_deny_reason(nm)
   } else if (is.call(target) && is.symbol(target[[1]]) && as.character(target[[1]]) %in% c("$", "[", "[[")) design_assign_element(target, cx, depth)
   else "Only a variable, or an element of a variable the code made (`x$a <- 1`, `x[1] <- 1`), may be assigned to; `names(x) <- ...`, `attr(x, ...) <- ...` and the like are not allowed."
   c(why, value)
@@ -4309,10 +4353,23 @@ design_guard <- function(code, cols = character(0)) {
 # The chosen style's values as a plain list: ground (the plot's fill), panel, text, muted (axis text, subtitle), accent, slate, grid, caption (the caption's
 #   colour), title_family, body_family (a family the machine can draw: the bundled one when registered, else the default), title_face ("bold" or
 #   "plain": a semibold family has its weight in its name) and base_size.
+design_readable <- function(col, grounds, toward, needs = 4.6) {
+  if (is.null(col) || is.na(col)) return(toward)
+  shares = seq(0, 1, by = 0.05)
+  ok = purrr::detect(shares, function(s) all(chart_contrast(theme_mix(col, toward, s), grounds) >= needs))
+  theme_mix(col, toward, ok %||% 1)
+}
+
 design_tokens <- function(style = CHART_STYLE_DEFAULT) {
   st = if (is.list(style)) style else chart_style(style)
   semi = identical(st$title_weight, "semibold")
-  list(ground = st$background, panel = st$panel, text = st$text, muted = st$text_2, accent = st$accent, slate = st$slate, grid = st$grid, caption = st$caption,
+  # every colour a design may write text in (text, muted, caption, accent, slate) must pass design_checks()' 4.5 to 1 on the ground and the panel: a style's
+  #   colour that does not (Briefing's slate grey #7F8A99 is 3.2 to 1 on its own ground) is moved toward the text colour, in steps of 5%, until it does
+  #   (design_readable()); a colour that passes is left as it is
+  grounds = unique(c(st$background, st$panel %||% st$background))
+  rd = function(col) design_readable(col, grounds, st$text)
+  list(ground = st$background, panel = st$panel, text = st$text, muted = rd(st$text_2), accent = rd(st$accent), slate = rd(st$slate), grid = st$grid,
+       caption = rd(st$caption),
        title_family = chart_font_family(st$title_font, if (semi) "semibold" else "regular"), title_face = if (semi) "plain" else st$title_weight %||% "bold",
        body_family = chart_font_family("sans"), base_size = 12)
 }
@@ -4427,10 +4484,12 @@ design_table <- function(table) {
 #   patchwork; and it is drawn once, through chart_device(), at `size` inches (so a fault in drawing is found here, and the picture exists).
 #   Returns list(ok, reason, plot, built, warnings, file, seconds): `reason` is one sentence when not ok; `file` is the picture (a path made for this
 #   call, removed unless `keep`); `built` is ggplot_build() of the plot.
-design_run <- function(code, d, facts, txt, tok, pal, size = SPEC_SIZE[c("width", "height")], limit = DESIGN_TIME_LIMIT, dpi = 120, keep = FALSE) {
+design_run <- function(code, d, facts, txt, tok, pal, size = SPEC_SIZE[c("width", "height")], limit = DESIGN_TIME_LIMIT, dpi = 120, keep = FALSE, caption = FALSE) {
   said = character(0)
+  added = FALSE
   out = function(ok, why = NA_character_, plot = NULL, built = NULL, file = NULL)
-    list(ok = ok, reason = why, plot = plot, built = built, warnings = unique(said), file = file, seconds = as.numeric(difftime(Sys.time(), t0, units = "secs")))
+    list(ok = ok, reason = why, plot = plot, built = built, warnings = unique(said), file = file, seconds = as.numeric(difftime(Sys.time(), t0, units = "secs")),
+         code = if (added) design_caption_code(code) else code, caption_added = added)
   t0 = Sys.time()
   d = design_table(d)
   g = design_guard(code, names(d))
@@ -4445,6 +4504,11 @@ design_run <- function(code, d, facts, txt, tok, pal, size = SPEC_SIZE[c("width"
     withCallingHandlers({
       plot = purrr::reduce(as.list(g$exprs), function(acc, e) eval(e, env), .init = NULL)
       if (!ggplot2::is_ggplot(plot)) stop("The last expression is not a ggplot or a patchwork; it must be the finished chart.", call. = FALSE)
+      # `caption`: a design that writes no caption is given the app's source line (txt$caption) by R, as design_caption_code() writes it in the code
+      if (isTRUE(caption) && is_text1(txt$caption) && design_no_caption(plot)) {
+        plot = plot + ggplot2::labs(caption = txt$caption)
+        added = TRUE
+      }
       markup = design_markup_faults(plot)
       if (!is.null(markup)) stop(markup, call. = FALSE)
       built = ggplot2::ggplot_build(plot)
@@ -4465,6 +4529,15 @@ design_run <- function(code, d, facts, txt, tok, pal, size = SPEC_SIZE[c("width"
   if (!keep) unlink(file)
   out(TRUE, plot = res$plot, built = res$built, file = if (keep) file)
 }
+
+# Whether a plot (the last plot of a patchwork) writes no caption.
+design_no_caption <- function(plot) {
+  cap = tryCatch(plot$labels$caption, error = function(e) NULL)
+  !(is.character(cap) && any(nzchar(trimws(cap))))
+}
+
+# The code with the source line added, as design_run() adds it to the plot: the code's statements in braces, then `+ labs(caption = txt$caption)`.
+design_caption_code <- function(code) paste0("{\n", code, "\n} +\n  labs(caption = txt$caption)")
 
 # ---- the checks on a drawn design ---------------------------------------------------------------------------------------------
 
@@ -4632,6 +4705,9 @@ design_background <- function(th) {
 
 # Text against its background at 4.5 to 1: the title, subtitle, caption, axis titles and axis text, the legend's and the strips' text when there are
 #   legends or panels, and the colour of each text layer's labels (against the panel's background, or the fill of a bar or tile, or a label's own box).
+#   One exception, at 3 to 1: a series name drawn in that series' colour (a direct label in place of a legend), where the colour is the mark's, so the
+#   name is as easy to see as the line or bar it names. A series name is a break or label of a colour or fill scale, or the label of a text layer whose
+#   label and colour map the same variable; a series colour is one a mark layer (not a text layer) is drawn in. All other text keeps 4.5 to 1.
 design_check_contrast <- function(parts) {
   contrast = function(a, b) tryCatch(min(chart_contrast(a, b)), error = function(e) NA_real_)
   unlist(purrr::map(parts, function(p) {
@@ -4651,7 +4727,7 @@ design_check_contrast <- function(parts) {
       if (!is.character(col) || length(col) != 1L || is.na(col) || identical(col, "transparent")) return(NA_character_)
       ratio = contrast(col, bg)
       if (isTRUE(ratio < 4.5)) paste0("The ", sub("[.]", " ", el), " is set in ", col, ", a contrast of ", format(ratio, digits = 2), " to 1 against the background ", bg,
-                                       "; text needs at least 4.5 to 1.") else NA_character_
+                                       "; text needs at least 4.5 to 1 (write it in tok$text or tok$muted, or a darker shade of the colour).") else NA_character_
     })
     # what a text stands on: the fill of the bar, tile or box its anchor is inside of (strictly inside: a label just above a bar stands on the panel), a
     #   label's own box, else the plot's background
@@ -4661,9 +4737,21 @@ design_check_contrast <- function(parts) {
       dt = utils::head(dt[!is.na(dt$fill) & !dt$fill %in% c("NA", "transparent"), c("xmin", "xmax", "ymin", "ymax", "fill")], 3000L)
       if (nrow(dt)) data.frame(lapply(dt, function(v) if (is.numeric(v)) v else as.character(v)), stringsAsFactors = FALSE)
     }))
+    norm = function(x) toupper(substr(as.character(x), 1L, 7L))
+    marks = which(!purrr::map_lgl(p$layers, function(l) inherits(l$geom, DESIGN_TEXT_GEOMS)))
+    series_cols = unique(norm(unlist(purrr::map(marks, function(j) { dt = b$data[[j]]; c(dt$colour, dt$fill) }))))
+    series_cols = setdiff(series_cols, c(NA, "NA", "TRANSPA"))
+    series_names = unique(unlist(purrr::map(intersect(nonpos, c("colour", "fill")), function(a) {
+      sc = b$plot$scales$get_scales(a)
+      if (is.null(sc) || !sc$is_discrete()) return(character(0))
+      c(as.character(tryCatch(sc$get_breaks(), error = function(e) NULL)), as.character(tryCatch(sc$get_labels(), error = function(e) NULL)))
+    })))
     from_layers = purrr::map(seq_along(p$layers), function(i) {
       l = p$layers[[i]]
       if (!inherits(l$geom, DESIGN_TEXT_GEOMS)) return(NA_character_)
+      # the layer's label and colour map the same variable (`aes(label = region, colour = region)`): its labels are series names
+      mp = c(as.list(l$mapping), if (isTRUE(l$inherit.aes)) as.list(p$mapping)[setdiff(names(p$mapping), names(l$mapping))])
+      same = !is.null(mp$label) && !is.null(mp$colour %||% mp$color) && identical(rlang::quo_text(mp$label), rlang::quo_text(mp$colour %||% mp$color))
       data = utils::head(b$data[[i]], 500L)
       if (!all(c("x", "y", "colour") %in% names(data))) return(NA_character_)
       own = inherits(l$geom, c("GeomLabel", "GeomLabelRepel")) && "fill" %in% names(data)
@@ -4675,10 +4763,15 @@ design_check_contrast <- function(parts) {
       })
       col = as.character(data$colour)
       ratio = purrr::map2_dbl(col, stands_on, function(a, bx) if (is.na(a) || a %in% c("NA", "transparent")) NA_real_ else contrast(a, bx))
-      if (!any(ratio < 4.5, na.rm = TRUE)) return(NA_character_)
-      worst = which.min(ratio)
+      label = if ("label" %in% names(data)) as.character(data$label) else rep(NA_character_, nrow(data))
+      series = norm(col) %in% series_cols & (same | label %in% series_names)
+      need = ifelse(series, 3, 4.5)
+      short = !is.na(ratio) & ratio < need
+      if (!any(short)) return(NA_character_)
+      worst = which(short)[which.min((ratio / need)[short])]
       paste0("The text of layer ", i, " (", design_layer_name(l), ") is drawn in ", col[[worst]], ", a contrast of ", format(ratio[[worst]], digits = 2), " to 1 against ",
-             stands_on[[worst]], " behind it; text needs at least 4.5 to 1.")
+             stands_on[[worst]], " behind it; ", if (series[[worst]]) "a series name in its series' colour needs at least 3 to 1" else "text needs at least 4.5 to 1",
+             " (write it in tok$text or tok$muted, or a darker shade of the colour).")
     })
     unlist(c(from_theme, from_layers))
   }))
@@ -4761,7 +4854,7 @@ design_text_faults <- function(p, size = SPEC_SIZE[c("width", "height")], tol = 
     !is.na(b$panel[[i]]) && identical(b$panel[[i]], b$panel[[j]]) &&
       min(b$x1[[i]], b$x1[[j]]) - max(b$x0[[i]], b$x0[[j]]) > tol && min(b$y1[[i]], b$y1[[j]]) - max(b$y0[[i]], b$y0[[j]]) > tol
   })
-  list(faults = c(purrr::map_chr(outside, function(i) paste0("The text '", substr(b$label[[i]], 1, 40), "' runs past the ", b$inside[[i]], " and would be cut off; shorten it or move it.")),
+  list(faults = c(purrr::map_chr(outside, function(i) paste0("The text '", substr(b$label[[i]], 1, 40), "' runs past the ", b$inside[[i]], " and would be cut off; shorten it, move it, or give the scale room with expansion().")),
                   purrr::map_chr(meet, function(ij) paste0("The texts '", substr(b$label[[ij[1]]], 1, 30), "' and '", substr(b$label[[ij[2]]], 1, 30), "' overlap; move or drop one."))),
        boxes = b)
 }

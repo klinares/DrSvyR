@@ -8946,6 +8946,91 @@ check("11A-13: markup made while the plot is built (an aesthetic, an axis's or a
         all(purrr::map_lgl(a11_rv[c("index", "index2", "formatc")], function(r) !isTRUE(r$ok) && grepl("longer than", r$reason, fixed = TRUE) && one_sentence(r$reason))) &&
         all(purrr::map_lgl(a11_rv[c("forms", "mutated", "stat", "bold")], function(r) isTRUE(r$ok))) &&
         !a11_rv_g$sys$ok && grepl("never allowed", a11_rv_g$sys$reason, fixed = TRUE) && !a11_rv_g$env$ok && grepl("never allowed", a11_rv_g$env$reason, fixed = TRUE))
+# the lead's fixes after the first live run (Part F): the model wrote `y = Inf`, `label_comma()(x)`, `label_wrap(28)(txt$title)` and a column of its own
+#   called `cat`, all refused; and Briefing's own muted grey failed the contrast check the design is held to, and the source line was not given to the design
+a11_g <- function(code) design_guard(code, names(a11_bar$d))
+a11_lf <- list(
+  inf = a11_g("ggplot(d, aes(region, revenue)) + geom_col() + annotate('text', x = 1, y = Inf, label = 'Top', vjust = 1.2) + geom_text_repel(aes(label = region), min.segment.length = Inf)"),
+  fac = a11_g("ggplot(d, aes(region, revenue)) + geom_col() + labs(title = label_wrap(28)(txt$title), subtitle = paste('Top:', label_comma()(max(d$revenue))))"),
+  colm = a11_g("dd <- d; dd$cat <- as.character(dd$region); ggplot(dd, aes(region, revenue, group = cat)) + geom_col()"),
+  mutm = a11_g("dd <- mutate(d, date = region); ggplot(dd, aes(date, revenue)) + geom_col()"),
+  big = a11_g("x <- 1e9; ggplot(d, aes(region, revenue)) + geom_col()"),
+  callcat = a11_g("dd <- d; dd$cat <- 1; cat('x'); ggplot(dd, aes(region, revenue)) + geom_col()"),
+  notfac = a11_g("ggplot(d)(1)"),
+  anon = a11_g("(function() system('echo x'))()"),
+  facarg = a11_g("ggplot(d, aes(region, revenue)) + geom_col() + labs(title = label_comma()(system('echo x')))"))
+a11_lr <- list(fac = a11_run("ggplot(d, aes(region, revenue)) + geom_col() + labs(title = label_wrap(28)(txt$title), subtitle = paste('Top:', label_comma()(max(d$revenue))))"),
+               repinf = a11_run("x <- rep(0, Inf); ggplot(d, aes(region, revenue)) + geom_col()"))
+a11_btok <- design_tokens("briefing")
+a11_grounds <- unique(c(CHART_STYLES$briefing$background, CHART_STYLES$briefing$panel %||% CHART_STYLES$briefing$background))
+a11_dinp <- design_input(new_chart("c1", a11_bar_sp), a11_o$data, a11_cb)
+check("11A-14: after the first live run: Inf (the panel's edge) passes the guard while 1e9 is still refused and rep(0, Inf) is stopped in the run; a label or breaks function made by a toolkit factory may be called at once (label_comma()(x), label_wrap(28)(txt$title)) and runs, while ggplot(d)(1), an anonymous function called at once and a factory given system() are still refused; a column the code makes (dd$cat, mutate(d, date = ...)) may be used bare in aes() while a call to cat() is still refused; every text colour of the tokens (text, muted, caption, accent, slate) passes 4.5 to 1 on the ground and the panel in every style (Briefing's own slate grey, 3.2 to 1, does not); and the design is given the source line as txt$caption when the spec has none",
+      isTRUE(a11_lf$inf$ok) && isTRUE(a11_lf$fac$ok) && isTRUE(a11_lf$colm$ok) && isTRUE(a11_lf$mutm$ok) && !a11_lf$big$ok && !a11_lf$callcat$ok && grepl("never allowed", a11_lf$callcat$reason, fixed = TRUE) &&
+        !a11_lf$notfac$ok && !a11_lf$anon$ok && !a11_lf$facarg$ok && grepl("never allowed", a11_lf$facarg$reason, fixed = TRUE) &&
+        isTRUE(a11_lr$fac$ok) && !isTRUE(a11_lr$repinf$ok) &&
+        all(purrr::map_lgl(names(CHART_STYLES), function(st) { tk = design_tokens(st); g = unique(c(CHART_STYLES[[st]]$background, CHART_STYLES[[st]]$panel %||% CHART_STYLES[[st]]$background))
+          all(purrr::map_lgl(tk[c("text", "muted", "caption", "accent", "slate")], function(col) all(chart_contrast(col, g) >= 4.5))) })) &&
+        any(chart_contrast(CHART_STYLES$briefing$slate, a11_grounds) < 4.5) && !identical(a11_btok$slate, CHART_STYLES$briefing$slate) && identical(a11_btok$text, CHART_STYLES$briefing$text) &&
+        is.character(a11_dinp$txt$caption) && grepl("^Source: ", a11_dinp$txt$caption) && grepl("3,000", a11_dinp$txt$caption, fixed = TRUE))
+# The rules loosened after the first live run, each tried as a way in (check 11A-15): Inf where it would be a length, a factory call that is not a toolkit
+#   label_ or breaks_ factory or that carries a call to something refused, a deny-listed name made a variable and then handed on as a function, the source
+#   line wrapped around code that tries to break out of the braces; and the exception to the contrast rule held to what it is for
+a11_x15 <- list(
+  idx_inf = a11_run("x <- 1; x[Inf] <- 1; ggplot(d, aes(region, revenue)) + geom_col()"),
+  seq_inf = a11_run("x <- seq_len(Inf); ggplot(d, aes(region, revenue)) + geom_col()"),
+  bins_inf = a11_run("ggplot(d, aes(revenue)) + geom_histogram(bins = Inf)"),
+  var_fun = a11_run("cat <- 'system'; ggplot(d, aes(region, revenue)) + stat_summary(fun = cat, geom = 'point')"),
+  var_fun2 = a11_run("eval <- 'system'; ggplot(d, aes(region, revenue)) + geom_col() + geom_smooth(aes(group = 1), method = eval)"),
+  own_var = a11_run("system <- 'Revenue'; dd <- d; dd$cat <- dd$region; ggplot(dd, aes(cat, revenue)) + geom_col() + labs(title = system)"))
+a11_g15 <- list(
+  fac3 = a11_g("ggplot(d, aes(region, revenue)) + geom_col() + labs(title = label_comma()()(1))"),
+  facns = a11_g("ggplot(d, aes(region, revenue)) + geom_col() + labs(title = scales::label_comma()(1))"),
+  facsys = a11_g("ggplot(d, aes(region, revenue)) + geom_col() + labs(title = label_comma(prefix = Sys.getenv('HOME'))(1))"),
+  facget = a11_g("ggplot(d, aes(region, revenue)) + geom_col() + labs(title = label_wrap(28)(get('system')))"),
+  fac_own = a11_g("f <- function(...) function(x) x; ggplot(d, aes(region, revenue)) + geom_col() + labs(title = f()('a'))"),
+  fac_redef = a11_g("label_comma <- function(...) function(x) x; ggplot(d, aes(region, revenue)) + geom_col()"),
+  fac_other = a11_g("ggplot(d, aes(region, revenue)) + geom_col() + labs(title = scale_x_discrete()(1))"),
+  fn_deny = a11_g("system <- function(x) x; ggplot(d, aes(region, revenue)) + geom_col()"),
+  call_after = a11_g("system <- 'echo x'; system(system); ggplot(d, aes(region, revenue)) + geom_col()"),
+  get_var = a11_g("get <- 'system'; ggplot(d, aes(region, revenue)) + geom_col() + labs(title = get('x'))"),
+  col_call = a11_g("dd <- mutate(d, eval = 1); ggplot(dd, aes(region, eval(revenue))) + geom_col()"),
+  bare_fn = a11_g("ggplot(d, aes(region, revenue)) + stat_summary(fun = Sys.getenv, geom = 'point')"),
+  brace = a11_g(design_caption_code("ggplot(d, aes(region, revenue)) + geom_col() # a comment at the end")),
+  escape = a11_g(design_caption_code("ggplot(d, aes(region, revenue)) + geom_col()\n}; system('echo x'); {")))
+a11_cap_txt <- utils::modifyList(a11_bar$txt, list(caption = "Source: orders.csv."))
+a11_cap <- design_run("ggplot(d, aes(region, revenue)) + geom_col()", a11_bar$d, a11_bar$facts, a11_cap_txt, a11_bar$tok, a11_bar$pal, caption = TRUE)
+a11_cap_own <- design_run("ggplot(d, aes(region, revenue)) + geom_col() + labs(caption = 'Mine')", a11_bar$d, a11_bar$facts, a11_cap_txt, a11_bar$tok, a11_bar$pal, caption = TRUE)
+a11_cap_re <- if (isTRUE(a11_cap$ok)) design_run(a11_cap$code, a11_bar$d, a11_bar$facts, a11_cap_txt, a11_bar$tok, a11_bar$pal)
+a11_cap_cm <- design_run("x <- 1\nggplot(d, aes(region, revenue)) + geom_col() # the end", a11_bar$d, a11_bar$facts, a11_cap_txt, a11_bar$tok, a11_bar$pal, caption = TRUE)
+a11_cap_cm2 <- if (isTRUE(a11_cap_cm$ok)) design_run(a11_cap_cm$code, a11_bar$d, a11_bar$facts, a11_cap_txt, a11_bar$tok, a11_bar$pal)
+# contrast: a light grey (about 3 to 1 on white) as every series' colour, naming its series at the line's end, passes; the same grey for value labels, a
+#   series name drawn in a grey no mark uses, and the legend's text in it are refused
+a11_ln_last <- "filter(d, order_month == max(order_month))"
+a11_grey <- "#949494"
+a11_ct <- function(code) {
+  r = design_run(code, a11_line$d, a11_line$facts, a11_line$txt, a11_line$tok, a11_line$pal)
+  if (isTRUE(r$ok)) stats::na.omit(design_check_contrast(design_parts(r$plot))) else paste("RUN:", r$reason)
+}
+a11_ct_base <- sprintf("ggplot(d, aes(order_month, revenue, colour = channel)) + geom_line() + scale_colour_manual(values = c('%s', '%s', '%s')) + theme_minimal()", a11_grey, a11_grey, a11_grey)
+a11_c15 <- list(
+  series = a11_ct(paste0(a11_ct_base, " + geom_text(data = ", a11_ln_last, ", aes(label = channel), hjust = 0) + theme(legend.position = 'none')")),
+  values = a11_ct(paste0(a11_ct_base, " + geom_text(data = ", a11_ln_last, ", aes(label = comma(revenue)), hjust = 0) + theme(legend.position = 'none')")),
+  other_col = a11_ct(paste0(a11_ct_base, " + geom_text(data = ", a11_ln_last, ", aes(label = channel), hjust = 0, colour = '#939393') + theme(legend.position = 'none')")),
+  legend = a11_ct(paste0(a11_ct_base, " + theme(legend.text = element_text(colour = '", a11_grey, "'))")))
+purrr::iwalk(c(a11_x15, a11_g15), function(r, nm) cat("      11A-15 '", nm, "': ", if (isTRUE(r$ok)) "passes" else r$reason, "\n", sep = ""))
+purrr::iwalk(a11_c15, function(r, nm) cat("      11A-15 contrast '", nm, "': ", if (length(r)) paste(r, collapse = " | ") else "passes", "\n", sep = ""))
+check("11A-15: each loosened rule tried as a way in: Inf as an index, a seq_len() length or a number of bins is stopped; a factory call nested twice, through ::, carrying Sys.getenv() or get(), made by the code's own function, a redefined factory, and a scale called as a function are refused, and every factory is a toolkit name starting with label_ or breaks_; a deny-listed name made a variable is refused when handed on as a function's value (fun = cat, method = eval, both strings naming refused functions) while it runs as a plain value and a column, and a function of the code's own with such a name, a call to it after it was made a variable, get('x') after `get <-`, eval() on a column called eval and a deny-listed function passed bare are refused; R's source line wraps the code in braces that a trailing comment does not break and that code closing them cannot escape, is added only when the design writes no caption, and the wrapped code runs again with it; a series name in its series' 3:1 grey passes, while value labels in that grey, a series name in a grey no mark uses and legend text in it are refused; TOOLKIT says what is refused",
+      all(purrr::map_lgl(a11_x15[c("idx_inf", "seq_inf", "bins_inf", "var_fun", "var_fun2")], function(r) !isTRUE(r$ok))) && isTRUE(a11_x15$own_var$ok) &&
+        all(purrr::map_lgl(a11_g15[setdiff(names(a11_g15), "brace")], function(r) !isTRUE(r$ok))) && isTRUE(a11_g15$brace$ok) &&
+        grepl("never allowed", a11_g15$fn_deny$reason, fixed = TRUE) && grepl("never allowed", a11_g15$call_after$reason, fixed = TRUE) && grepl("never allowed", a11_g15$get_var$reason, fixed = TRUE) &&
+        all(grepl("^(label|breaks)_", DESIGN_FACTORIES)) && all(DESIGN_FACTORIES %in% names(design_toolkit())) &&
+        isTRUE(a11_cap$ok) && isTRUE(a11_cap$caption_added) && identical(a11_cap$plot$labels$caption, "Source: orders.csv.") && startsWith(a11_cap$code, "{\n") &&
+        isTRUE(a11_cap_own$ok) && !isTRUE(a11_cap_own$caption_added) && identical(a11_cap_own$plot$labels$caption, "Mine") &&
+        isTRUE(a11_cap_re$ok) && identical(a11_cap_re$plot$labels$caption, "Source: orders.csv.") && isTRUE(a11_cap_cm2$ok) && identical(a11_cap_cm2$plot$labels$caption, "Source: orders.csv.") &&
+        length(a11_c15$series) == 0L && length(a11_c15$values) > 0L && !grepl("^RUN", a11_c15$values[1]) && grepl("4.5 to 1", a11_c15$values[1], fixed = TRUE) &&
+        length(a11_c15$other_col) > 0L && !grepl("^RUN", a11_c15$other_col[1]) && length(a11_c15$legend) > 0L && any(grepl("legend text", a11_c15$legend, fixed = TRUE)) &&
+        grepl("refused before the code runs", design_toolkit_text(), fixed = TRUE) && grepl("label_comma()(x)", design_toolkit_text(), fixed = TRUE) &&
+        grepl("output (it writes to the console", design_toolkit_text(), fixed = TRUE) && grepl("R adds txt$caption", design_toolkit_text(), fixed = TRUE) && grepl("needs 3 to 1", design_toolkit_text(), fixed = TRUE))
 rm("a11_canary_fn", envir = globalenv())
 Sys.unsetenv("CHART_11A_CANARY")
 }   # the fast run only
@@ -8979,7 +9064,7 @@ b11_code <- function(fill = "tok$accent", extra = "")
   geom_col(fill = ', fill, ', width = 0.7) +
   geom_text(aes(label = comma(revenue)), vjust = -0.5, colour = tok$text, family = tok$body_family, size = 3.5) ', extra, ' +
   scale_y_continuous(expand = expansion(mult = c(0, 0.12)), labels = label_comma()) +
-  labs(title = txt$title, subtitle = txt$subtitle, x = NULL, y = NULL) + ', b11_theme)
+  labs(title = txt$title, subtitle = txt$subtitle, caption = txt$caption, x = NULL, y = NULL) + ', b11_theme)
 b11_good <- b11_code()
 b11_slate <- b11_code("tok$slate")
 b11_dark <- b11_code("tok$text")

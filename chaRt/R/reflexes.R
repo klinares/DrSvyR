@@ -1202,6 +1202,9 @@ design_input <- function(chart, data, cb, palette = chart_palette_default()) {
   back = function(x) names_back(x, f$names)
   facts = purrr::map(facts_tok, function(e) list(text = back(e$text), label = back(e$label), number = e$number))
   txt = design_text(chart$spec, style, cb)
+  # the standard drawing writes the source line ("Source: orders.csv. 3,000 rows.") as its caption when the analyst wrote none; a design is given it as txt$caption
+  #   so a designed chart keeps it
+  if (is.null(txt$caption) && is_text1(ls$caption)) txt$caption = ls$caption
   d = design_table(table)
   list(spec = chart$spec, ls = ls, d = d, facts = facts, facts_tok = facts_tok, map = map, txt = txt,
        txt_tok = purrr::map(txt, function(x) if (is.character(x)) names_out(x, map) else x), tok = design_tokens(style), pal = design_pal(palette),
@@ -1362,11 +1365,11 @@ design_chart <- function(chart, skill, data, cb, palette = chart_palette_default
   }
   # Guard, run and checks of one piece of code: list(ok, why) or list(ok, run).
   attempt = function(code) {
-    r = design_run(code, inp$d, inp$facts, inp$txt, inp$tok, inp$pal, size = inp$size, dpi = dpi, keep = TRUE)
+    r = design_run(code, inp$d, inp$facts, inp$txt, inp$tok, inp$pal, size = inp$size, dpi = dpi, keep = TRUE, caption = TRUE)
     if (!r$ok) return(list(ok = FALSE, why = r$reason))
-    ck = design_checks(r$plot, inp$d, inp$facts, inp$spec, code, inp$txt, r$warnings, axes = inp$axes, size = inp$size)
+    ck = design_checks(r$plot, inp$d, inp$facts, inp$spec, r$code, inp$txt, r$warnings, axes = inp$axes, size = inp$size)
     if (!ck$ok) { unlink(r$file); return(list(ok = FALSE, why = paste(ck$reasons, collapse = " "))) }
-    list(ok = TRUE, run = r)
+    list(ok = TRUE, run = r, code = r$code)
   }
 
   say_stage("asking the model for a design")
@@ -1395,6 +1398,7 @@ design_chart <- function(chart, skill, data, cb, palette = chart_palette_default
     }
   }
 
+  code = cur$code   # with the source line, when R added it
   # The review by looking. A picture that may not be sent, or a device that draws SVG, ends it before it starts.
   allowed = design_image_ok(images, inp$spec)
   look = allowed && endsWith(cur$run$file, ".png")
@@ -1421,7 +1425,7 @@ design_chart <- function(chart, skill, data, cb, palette = chart_palette_default
       return(st)
     }
     unlink(st$run$file)
-    st$code = new
+    st$code = a$code
     st$run = a$run
     st$motion = design_motion(rv$res$obj, st$motion)
     st$say = design_say(rv$res$obj, st$say)

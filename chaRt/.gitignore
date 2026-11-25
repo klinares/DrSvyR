@@ -4,6 +4,8 @@ tests/*.out
 !tests/live_run_9.out
 !tests/live_run_10.out
 !tests/live_run_10b.out
+!tests/live_run_11.out
+!tests/live_run_11b.out
 tests/gallery.html
 tests/style_sheet.html
 tests/live_gallery.html
@@ -19,3 +21,6 @@ tests/videos/
 tests/videos.html
 # Phase 10b: screenshots of the final live dashboard, for the manager (not committed).
 tests/final_*.png
+# Phase 11 Part F: the live comparison page of standard and designed charts (pictures inside, a few MB) and its dry run, for the manager to open.
+tests/designed.html
+tests/*_dry.html
