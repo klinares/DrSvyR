@@ -3769,3 +3769,980 @@ spec_video <- function(spec, data, cb, palette = chart_palette_default(), file, 
   list(file = file, small = small, drawn = n, inputs = length(inputs), canvas = canvas, plot = ctx$plot, drawn_fps = drawn_fps, px = size,
        seconds = c(draw = drawn_at - started, encode = proc.time()[["elapsed"]] - drawn_at))
 }
+
+
+# ---- Phase 11 Part A: the model's drawing code, run under an allow-list ---------------------------------------------------------
+# In Phase 11 the model writes the R code that draws a chart from the table R computed. That code is text from outside (a column
+#   name or a label may carry instructions), and the app runs on a server. So the code is never trusted:
+#     design_guard(code, cols)    reads it as a syntax tree and refuses it unless every call is a function of the toolkit, every symbol is a
+#                                 provided object, a toolkit function, a column of d or a variable the code made itself, and it uses none
+#                                 of what DESIGN_DENY names;
+#     design_run(code, ...)       evaluates the guarded code in a fresh environment whose parent is emptyenv() and which holds only the toolkit
+#                                 and the five provided objects, under a time limit, and draws it through chart_device();
+#     design_checks(plot, ...)    refuses a drawn design that writes a number R did not give, clips or overlaps text, starts a bar above
+#                                 zero, adds a second axis, drops rows, changes an axis' scale type or sets text below 4.5 to 1.
+#   This is an allow-list interpreter, not a proven sandbox (STATUS.md, Phase 11 Part A, says what it does not cover).
+
+DESIGN_MAX_CODE <- 6000L      # characters
+DESIGN_MAX_LEN <- 1e6         # the longest vector the toolkit's c(), paste(), rep(), seq() and `:` will make
+DESIGN_MAX_CHARS <- 1e5       # the most characters in all the strings of one result of c(), paste() or paste0() (a label that long would be drawn as one text)
+DESIGN_MAX_NUM <- 1e7         # a number written in the code may not be this large (a width, a length, a count)
+DESIGN_MAX_DEPTH <- 60L       # how deeply the syntax tree may nest
+DESIGN_TIME_LIMIT <- 20       # seconds of elapsed and of cpu time for evaluating, building and drawing
+DESIGN_ROW_EXTRA <- 12L       # a layer of labels, rules or leaders may have this many rows more than d (an annotation, not a mark)
+DESIGN_PROVIDED <- c("d", "facts", "txt", "tok", "pal")
+DESIGN_CONSTANTS <- list(T = TRUE, F = FALSE, pi = pi, letters = letters, LETTERS = LETTERS, month.name = month.name, month.abb = month.abb)
+
+# What may not be named at all, with the sentence that says why (one sentence is the reason a refusal gives). Everything not in the
+#   toolkit is refused anyway; this list is kept for clarity, and so that the reason names the real danger.
+DESIGN_DENY <- list(
+  code = c("eval", "evalq", "eval.parent", "parse", "str2lang", "str2expression", "deparse", "deparse1", "substitute", "quote", "bquote", "expression",
+           "body", "body<-", "formals", "formals<-", "do.call", "match.fun", "match.call", "match.arg", "Recall", "Reduce", "Filter", "Map", "Position", "Find",
+           "sapply", "lapply", "vapply", "mapply", "rapply", "apply", "outer", "Vectorize", "local", "with", "within", "as.function", "as.call", "call",
+           "delayedAssign", "makeActiveBinding", "on.exit", "trace", "untrace", "reg.finalizer", "get", "get0", "mget", "assign", "exists", "switch",
+           "force", "identity", "Negate", ".Internal", ".Call", ".External", ".Primitive", ".C", ".Fortran", "UseMethod", "NextMethod",
+           "standardGeneric", "setClass", "setMethod", "attributes<-", "attr<-", "attr", "attributes", "class<-", "oldClass<-", "levels<-", "names<-",
+           "dim<-", "dimnames<-", "environment<-", "parent.env<-", "mode<-", "storage.mode<-", "is.na<-", "units<-", "body<-", "substr<-", "regmatches<-"),
+  files = c("file", "url", "gzfile", "bzfile", "xzfile", "unz", "pipe", "fifo", "socketConnection", "download.file", "source", "sys.source", "library",
+            "require", "requireNamespace", "loadNamespace", "attachNamespace", "readRDS", "saveRDS", "readLines", "writeLines", "readline", "scan", "read.csv",
+            "read.table", "read.delim", "write.csv", "write.table", "load", "save", "save.image", "dput", "dget", "dump", "sink", "unlink", "file.remove", "file.create", "file.copy", "file.rename", "file.exists", "file.path", "dir.create", "list.files", "dir",
+            "tempfile", "tempdir", "readBin", "writeBin", "readChar", "writeChar", "ggsave", "png", "pdf", "jpeg", "svg", "tiff", "bmp", "dev.off", "dev.new",
+            "graphics.off", "write", "textConnection", "rawConnection", "open", "close", "flush"),
+  output = c("print", "cat", "message", "warning", "stop", "invisible", "suppressWarnings", "suppressMessages", "tryCatch", "try", "withCallingHandlers", "signalCondition", "simpleError"),
+  system = c("system", "system2", "shell", "shell.exec", "Sys.getenv", "Sys.setenv", "Sys.unsetenv", "Sys.setlocale", "Sys.getlocale", "Sys.time",
+             "Sys.sleep", "Sys.info", "Sys.getpid", "Sys.chmod", "Sys.umask", "Sys.glob", "options", "getOption", "setwd", "getwd", "quit", "q",
+             "proc.time", "date", "browseURL", "install.packages", "remove.packages", "unloadNamespace", "set.seed", "gc", "Rprof", "debug", "browser", "stopifnot",
+             "setTimeLimit", "setSessionTimeLimit", "mem.maxVSize", "Cstack_info", "R.home", "commandArgs"),
+  environment = c("environment", "globalenv", "emptyenv", "topenv", "baseenv", "parent.frame", "parent.env", "sys.call", "sys.calls", "sys.frame",
+                  "sys.frames", "sys.function", "sys.on.exit", "sys.status", "new.env", "as.environment", "list2env", "env2list", "as.list.environment", "environmentName",
+                  "lockEnvironment", "lockBinding", "unlockBinding", "search", "searchpaths", "asNamespace", "getNamespace", "getNamespaceExports", "ls", "rm",
+                  "nargs", "interactive", "missing"),
+  loops = c("for", "while", "repeat", "break", "next"))
+
+DESIGN_DENY_WHY <- c(code = "runs or builds code that was not checked",
+                     files = "reads, writes or opens files, connections or devices",
+                     system = "reaches the machine or the session (programs, settings, the clock, the process)",
+                     output = "writes to the console or raises or handles conditions",
+                     environment = "looks at or changes R's environments or functions",
+                     loops = "is a loop, and loops are not available (use the vectorised functions)")
+
+# The ggplot2 names of the toolkit, typed out, so that a new function in a later ggplot2 is not in it until someone reads it. Left out on purpose:
+#   sec_axis, dup_axis (a second axis); coord_polar, coord_radial (pies); ggsave and anything that writes a file; geom_sf, geom_sf_label, geom_sf_text,
+#   stat_sf, stat_sf_coordinates, coord_sf, layer_sf, geom_map, annotation_map, annotation_borders, coord_map, coord_quickmap, coord_munch (maps and sf);
+#   annotation_custom, annotation_raster (a picture is a decoration that could be read as data, and annotation_custom takes any grob);
+#   theme_set, theme_update, theme_replace, theme_get and the theme_sub_* helpers (they change or read the session's theme); from_theme (evaluates
+#   an expression of its own); labeller, as_labeller, label_parsed, label_bquote (parse or evaluate text); layer, aes_string, aes_, aes_q, qplot,
+#   guide_custom, guide_gengrob, guide_geom, guide_merge, guide_train, guide_transform, element_grob, element_render, scale_type and every low-level
+#   constructor (continuous_scale, discrete_scale, ggproto and the like).
+DESIGN_GGPLOT2 <- c(
+  "ggplot", "aes", "after_stat", "after_scale", "stage", "vars", "labs", "xlab", "ylab", "ggtitle", "guides", "annotate", "theme", "rel", "margin",
+  "margin_auto", "margin_part", "unit", "arrow", "expansion", "expand_limits", "lims", "xlim", "ylim", "waiver", "alpha", "fill_alpha", "mean_se", "mean_sdl",
+  "geom_abline", "geom_area", "geom_bar", "geom_bin_2d", "geom_bin2d", "geom_blank", "geom_boxplot", "geom_col", "geom_contour", "geom_contour_filled",
+  "geom_crossbar", "geom_curve", "geom_density", "geom_density_2d", "geom_density_2d_filled", "geom_density2d", "geom_density2d_filled",
+  "geom_dotplot", "geom_errorbar", "geom_errorbarh", "geom_freqpoly", "geom_function", "geom_hex", "geom_histogram", "geom_hline", "geom_jitter",
+  "geom_label", "geom_line", "geom_linerange", "geom_path", "geom_point", "geom_pointrange", "geom_polygon", "geom_qq", "geom_qq_line", "geom_quantile",
+  "geom_raster", "geom_rect", "geom_ribbon", "geom_rug", "geom_segment", "geom_smooth", "geom_spoke", "geom_step", "geom_text", "geom_tile", "geom_violin",
+  "geom_vline",
+  "stat_align", "stat_bin", "stat_bin_2d", "stat_bin_hex", "stat_bin2d", "stat_binhex", "stat_boxplot", "stat_connect", "stat_contour", "stat_contour_filled",
+  "stat_count", "stat_density", "stat_density_2d", "stat_density_2d_filled", "stat_density2d", "stat_density2d_filled", "stat_ecdf", "stat_ellipse",
+  "stat_function", "stat_identity", "stat_manual", "stat_qq", "stat_qq_line", "stat_quantile", "stat_smooth", "stat_spoke", "stat_sum", "stat_summary",
+  "stat_summary_2d", "stat_summary_bin", "stat_summary_hex", "stat_summary2d", "stat_unique", "stat_ydensity",
+  "scale_alpha", "scale_alpha_binned", "scale_alpha_continuous", "scale_alpha_date", "scale_alpha_datetime", "scale_alpha_discrete", "scale_alpha_identity",
+  "scale_alpha_manual", "scale_alpha_ordinal", "scale_color_binned", "scale_color_brewer", "scale_color_continuous", "scale_color_date",
+  "scale_color_datetime", "scale_color_discrete", "scale_color_distiller", "scale_color_fermenter", "scale_color_gradient", "scale_color_gradient2",
+  "scale_color_gradientn", "scale_color_grey", "scale_color_hue", "scale_color_identity", "scale_color_manual", "scale_color_ordinal", "scale_color_steps",
+  "scale_color_steps2", "scale_color_stepsn", "scale_color_viridis_b", "scale_color_viridis_c", "scale_color_viridis_d", "scale_colour_binned",
+  "scale_colour_brewer", "scale_colour_continuous", "scale_colour_date", "scale_colour_datetime", "scale_colour_discrete", "scale_colour_distiller",
+  "scale_colour_fermenter", "scale_colour_gradient", "scale_colour_gradient2", "scale_colour_gradientn", "scale_colour_grey", "scale_colour_hue",
+  "scale_colour_identity", "scale_colour_manual", "scale_colour_ordinal", "scale_colour_steps", "scale_colour_steps2", "scale_colour_stepsn",
+  "scale_colour_viridis_b", "scale_colour_viridis_c", "scale_colour_viridis_d", "scale_continuous_identity", "scale_discrete_identity",
+  "scale_discrete_manual", "scale_fill_binned", "scale_fill_brewer", "scale_fill_continuous", "scale_fill_date", "scale_fill_datetime", "scale_fill_discrete",
+  "scale_fill_distiller", "scale_fill_fermenter", "scale_fill_gradient", "scale_fill_gradient2", "scale_fill_gradientn", "scale_fill_grey", "scale_fill_hue",
+  "scale_fill_identity", "scale_fill_manual", "scale_fill_ordinal", "scale_fill_steps", "scale_fill_steps2", "scale_fill_stepsn", "scale_fill_viridis_b",
+  "scale_fill_viridis_c", "scale_fill_viridis_d", "scale_linetype", "scale_linetype_binned", "scale_linetype_continuous", "scale_linetype_discrete",
+  "scale_linetype_identity", "scale_linetype_manual", "scale_linewidth", "scale_linewidth_binned", "scale_linewidth_continuous", "scale_linewidth_date",
+  "scale_linewidth_datetime", "scale_linewidth_discrete", "scale_linewidth_identity", "scale_linewidth_manual", "scale_linewidth_ordinal", "scale_radius",
+  "scale_shape", "scale_shape_binned", "scale_shape_continuous", "scale_shape_discrete", "scale_shape_identity", "scale_shape_manual", "scale_shape_ordinal",
+  "scale_size", "scale_size_area", "scale_size_binned", "scale_size_binned_area", "scale_size_continuous", "scale_size_date", "scale_size_datetime",
+  "scale_size_discrete", "scale_size_identity", "scale_size_manual", "scale_size_ordinal", "scale_x_binned", "scale_x_continuous", "scale_x_date",
+  "scale_x_datetime", "scale_x_discrete", "scale_x_log10", "scale_x_reverse", "scale_x_sqrt", "scale_x_time", "scale_y_binned", "scale_y_continuous",
+  "scale_y_date", "scale_y_datetime", "scale_y_discrete", "scale_y_log10", "scale_y_reverse", "scale_y_sqrt", "scale_y_time",
+  "coord_cartesian", "coord_equal", "coord_fixed", "coord_flip", "coord_trans", "coord_transform",
+  "facet_grid", "facet_null", "facet_wrap", "label_both", "label_context", "label_value", "label_wrap_gen",
+  "position_dodge", "position_dodge2", "position_fill", "position_identity", "position_jitter", "position_jitterdodge", "position_nudge", "position_stack",
+  "guide_axis", "guide_axis_logticks", "guide_axis_stack", "guide_axis_theta", "guide_bins", "guide_colorbar", "guide_colorsteps", "guide_colourbar",
+  "guide_coloursteps", "guide_legend", "guide_none", "annotation_logticks",
+  "draw_key_abline", "draw_key_blank", "draw_key_boxplot", "draw_key_crossbar", "draw_key_dotplot", "draw_key_label", "draw_key_linerange", "draw_key_path",
+  "draw_key_point", "draw_key_pointrange", "draw_key_polygon", "draw_key_rect", "draw_key_smooth", "draw_key_text", "draw_key_timeseries", "draw_key_vline",
+  "draw_key_vpath",
+  "element_blank", "element_geom", "element_line", "element_point", "element_polygon", "element_rect", "element_text",
+  "theme_bw", "theme_classic", "theme_dark", "theme_gray", "theme_grey", "theme_light", "theme_linedraw", "theme_minimal", "theme_test", "theme_void")
+
+# scales: the label_*, breaks_* and the few helpers a design needs. Left out: label_glue (glue evaluates the code in its braces), label_math, label_parse
+#   (parse text), label_dictionary.
+DESIGN_SCALES <- c(
+  "label_bytes", "label_comma", "label_currency", "label_date", "label_date_short", "label_dollar", "label_log", "label_number", "label_number_auto",
+  "label_number_si", "label_ordinal", "label_percent", "label_pvalue", "label_scientific", "label_time", "label_timespan", "label_wrap",
+  "breaks_exp", "breaks_extended", "breaks_log", "breaks_pretty", "breaks_timespan", "breaks_width",
+  "alpha", "comma", "percent", "dollar", "rescale", "rescale_mid", "number", "oob_keep", "oob_squish")
+
+# The other packages, each used only when it is installed.
+DESIGN_OTHER <- list(
+  ggrepel = c("geom_text_repel", "geom_label_repel"),
+  ggtext = c("element_markdown", "element_textbox_simple", "geom_richtext"),
+  patchwork = c("plot_layout", "plot_annotation", "plot_spacer", "wrap_plots"),
+  dplyr = c("mutate", "filter", "arrange", "group_by", "ungroup", "summarise", "slice_max", "slice_min", "slice_head", "desc", "n", "if_else", "case_when",
+            "lag", "lead", "row_number", "first", "last"),
+  forcats = c("fct_reorder", "fct_rev", "fct_inorder"))
+
+# Base R: the operators and the small fixed list of functions; `|>` is syntax (the parser writes it as an ordinary call) and has no binding.
+#   Beyond the list of the phase prompt: ~ (a formula, for facets, case_when and geom_smooth), !, %in%, %%, %/%, &&, ||, : (a range, size-limited),
+#   ceiling, floor, pmin, pmax, cumsum, diff, is.numeric, as.integer, nlevels, any, all, which, isTRUE.
+DESIGN_BASE <- c("+", "-", "*", "/", "^", "%%", "%/%", "%in%", "==", "!=", "<", ">", "<=", ">=", "&", "|", "!", "&&", "||", "~", ":",
+                 "c", "list", "length", "rev", "seq", "seq_len", "seq_along", "rep", "max", "min", "range", "sum", "mean", "round", "signif", "abs", "sqrt",
+                 "log", "log10", "exp", "paste", "paste0", "sprintf", "format", "formatC", "nchar", "toupper", "tolower", "substr", "trimws", "ifelse", "is.na",
+                 "factor", "levels", "as.character", "as.numeric", "as.Date", "which.max", "which.min", "unique", "sort", "order", "nrow", "ncol",
+                 "names", "[", "[[", "$", "(", "{", "<-", "=", "if", "function",
+                 "ceiling", "floor", "pmin", "pmax", "cumsum", "diff", "is.numeric", "as.integer", "nlevels", "any", "all", "which", "isTRUE")
+# head() and tail() are utils' and median() is stats', not base R's.
+DESIGN_UTILS <- c("head", "tail")
+DESIGN_STATS <- "median"
+# The base names that are syntax of the language, not functions a design may call by name: the guard handles them itself.
+DESIGN_SYNTAX <- c("<-", "=", "function", "(", "{", "if", "$", "[", "[[", "~")
+
+# What the replacement forms of assignment need to find in the environment (x$a <- 1 calls `$<-`): there, never callable by name (the guard refuses a call).
+DESIGN_REPLACE <- c("$<-", "[<-", "[[<-")
+
+# Arguments that hold a function, and the strings they may be given (a string becomes a function through match.fun() or rlang::as_function(), and in
+#   ggplot2's namespace that finds any function of base R).
+DESIGN_FUN_ARGS <- c("fun", "fun.data", "fun.y", "fun.x", "fun.min", "fun.max", "fun.ymin", "fun.ymax", "fun.xmin", "fun.xmax", ".fun", "labeller", "key_glyph",
+                     "oob", "rescaler", "FUN", "connection")
+DESIGN_METHODS <- c("lm", "loess", "glm", "gam", "auto")
+DESIGN_TRANSFORMS <- c("identity", "log10", "log", "log2", "sqrt", "reverse", "reciprocal", "exp", "log1p")
+
+# The arguments whose value ggplot2 or forcats may turn into code: a string becomes a function through match.fun() or rlang::as_function(), which look in
+#   ggplot2's namespace and find all of base R; a facet given as a string is parsed and evaluated. design_screened() wraps every toolkit function that has one
+#   and stops a value that is not a function (or a string naming a toolkit function), a method of the short list, a transformation of the short list, or
+#   a facet that is anything but a column name, or a number of bins or points above DESIGN_COUNT_MAX, or a size above DESIGN_MAGNITUDE_MAX: so a string the code builds (paste0("sys", "tem(...)")) is stopped too, not only a literal one.
+DESIGN_RISKY <- list(fun = c("fun", "fun.data", "fun.y", "fun.x", "fun.min", "fun.max", "fun.ymin", "fun.ymax", "fun.xmin", "fun.xmax", ".fun", "labeller", "connection", "FUN"),
+                     method = "method", transform = c("transform", "trans"), facet = c("facets", "rows", "cols"), count = c("bins", "n", "n.breaks"),
+                     magnitude = c("size", "base_size", "linewidth", "stroke", "range"))
+DESIGN_COUNT_MAX <- 10000    # the most bins, grid points or breaks a chart is given
+DESIGN_MAGNITUDE_MAX <- 300  # the largest size (points, millimetres) of a mark, a line or a text: a glyph or a circle of 100,000 is a bitmap of that many pixels
+
+# The functions that are given text or a number for how much to make, with the largest value each argument may take.
+DESIGN_SIZES <- list(format = c(width = 200, nsmall = 20, digits = 22), formatC = c(width = 200, digits = 22))
+
+# The geoms that are marks (they must plot every row of d unless a filter() is in the code) and the stat layers' kin; every other geom is a label, a
+#   rule, a leader or a helper and may have DESIGN_ROW_EXTRA rows more than d.
+DESIGN_MARK_GEOMS <- c("GeomPoint", "GeomCol", "GeomBar", "GeomLine", "GeomPath", "GeomArea", "GeomRibbon", "GeomTile", "GeomRaster", "GeomBoxplot",
+                       "GeomViolin", "GeomPolygon", "GeomStep", "GeomErrorbar", "GeomLinerange", "GeomPointrange", "GeomCrossbar", "GeomSmooth",
+                       "GeomDensity", "GeomHex", "GeomBin2d", "GeomDotplot")
+DESIGN_TEXT_GEOMS <- c("GeomText", "GeomLabel", "GeomTextRepel", "GeomLabelRepel", "GeomRichtext")
+DESIGN_FILL_GEOMS <- c("GeomCol", "GeomBar", "GeomTile", "GeomRect", "GeomArea", "GeomRibbon", "GeomBoxplot", "GeomViolin", "GeomPolygon", "GeomRaster",
+                       "GeomHex", "GeomBin2d", "GeomCrossbar")
+
+# Markup the ggtext functions would render: an image or a link reads a file (or a address), a tag can carry a style. A text that has any is refused
+#   before the drawing is made, wherever it comes from (a label, a column's value, a scale's labels).
+DESIGN_MARKUP <- "(?i)<\\s*/?\\s*(img|a|link|script|iframe|style|svg|object|embed|image|use|foreignObject|base|meta|form|input)\\b|\\bsrc\\s*=|\\bhref\\s*=|url\\s*\\(|!\\[[^]]*\\]\\("
+
+.design_cache <- new.env(parent = emptyenv())
+
+# The functions a design may call, as a named list of functions (built once, from the installed packages): ggplot2's typed list, scales', the other
+#   packages' when installed, and base R's. The size-limited versions of c(), paste(), paste0(), rep(), seq(), seq_len(), `:`, format() and formatC()
+#   stand in for the base ones. Attribute "package" says where each name came from.
+design_toolkit <- function() {
+  if (!is.null(.design_cache$toolkit)) return(.design_cache$toolkit)
+  from = function(pkg, names) {
+    base = identical(pkg, "base")
+    if (!base && !length(find.package(pkg, quiet = TRUE))) return(list())
+    ok = if (base) names[purrr::map_lgl(names, exists, envir = baseenv(), inherits = FALSE)] else names[names %in% getNamespaceExports(pkg)]
+    stats::setNames(purrr::map(ok, function(n) if (base) get(n, envir = baseenv()) else getExportedValue(pkg, n)), ok)
+  }
+  sets = c(list(ggplot2 = DESIGN_GGPLOT2, scales = DESIGN_SCALES, base = DESIGN_BASE, utils = DESIGN_UTILS, stats = DESIGN_STATS), DESIGN_OTHER)
+  parts = purrr::imap(sets, function(names, pkg) from(pkg, names))
+  fns = unlist(unname(parts), recursive = FALSE)
+  fns = fns[!duplicated(names(fns))]           # alpha is in ggplot2 and in scales: the first one stays
+  pkgs = stats::setNames(rep(names(parts), lengths(parts)), unlist(purrr::map(parts, names)))[names(fns)]
+  fns = design_screened(utils::modifyList(fns, design_limited()))
+  attr(fns, "package") = pkgs
+  .design_cache$toolkit = fns
+  fns
+}
+
+# The size-limited stand-ins: each refuses (with an error the run turns into a refusal) a result longer than DESIGN_MAX_LEN, or a width past the
+#   limits of DESIGN_SIZES. rep(), seq(), seq_len() and `:` work the size out first, since the harm is in making the vector.
+design_limited <- function() {
+  too_big = function() stop("The code makes a vector longer than ", format(DESIGN_MAX_LEN, big.mark = ",", scientific = FALSE), " or text longer than ",
+                            format(DESIGN_MAX_CHARS, big.mark = ",", scientific = FALSE), " characters.", call. = FALSE)
+  after = function(f) function(...) {
+    r = f(...)
+    if (length(r) > DESIGN_MAX_LEN || (is.character(r) && sum(nchar(r, keepNA = FALSE)) > DESIGN_MAX_CHARS)) too_big()
+    r
+  }
+  num = function(x) suppressWarnings(as.numeric(x))
+  guard_args = function(f, name) function(...) {
+    a = list(...)
+    over = purrr::imap_lgl(DESIGN_SIZES[[name]], function(limit, arg) !is.null(a[[arg]]) && isTRUE(any(num(a[[arg]]) > limit)))
+    if (any(over)) stop("The code asks ", name, "() for a ", paste(names(over)[over], collapse = " and "), " that is too large.", call. = FALSE)
+    f(...)
+  }
+  list(c = after(base::c), paste = after(base::paste), paste0 = after(base::paste0),
+       rep = function(x, ...) {
+         a = list(...)
+         each = if (!is.null(a$each)) num(a$each) else 1
+         times = if (!is.null(a$times)) a$times else if (length(a) && (is.null(names(a)) || !nzchar(names(a)[1]))) a[[1]] else 1
+         n = if (!is.null(a$length.out)) num(a$length.out) else length(x) * each * (if (length(times) > 1L) sum(num(times)) / length(x) else num(times))
+         if (isTRUE(n > DESIGN_MAX_LEN)) too_big()
+         base::rep(x, ...)
+       },
+       seq = function(...) {
+         cl = tryCatch(match.call(base::seq.default, as.call(c(list(quote(seq.default)), list(...)))), error = function(e) NULL)
+         a = if (!is.null(cl)) as.list(cl)[-1] else list()
+         n = tryCatch(suppressWarnings(
+           if (!is.null(a$length.out)) num(a$length.out)
+           else if (!is.null(a$from) && !is.null(a$to) && !is.null(a$by)) abs(num(a$to) - num(a$from)) / abs(num(a$by)) + 1
+           else if (!is.null(a$from) && !is.null(a$to)) abs(num(a$to) - num(a$from)) + 1
+           else if (length(a$from) == 1L && is.null(a$to) && is.numeric(a$from)) a$from
+           else 0), error = function(e) 0)
+         if (isTRUE(suppressWarnings(max(c(n, 0), na.rm = TRUE)) > DESIGN_MAX_LEN)) too_big()
+         base::seq(...)
+       },
+       seq_len = function(length.out) {
+         if (isTRUE(num(length.out) > DESIGN_MAX_LEN)) too_big()
+         base::seq_len(length.out)
+       },
+       `:` = function(from, to) {
+         if (isTRUE(abs(num(to) - num(from)) + 1 > DESIGN_MAX_LEN)) too_big()
+         base::`:`(from, to)
+       },
+       format = guard_args(base::format, "format"), formatC = guard_args(base::formatC, "formatC"))
+}
+
+# Every toolkit function with an argument of DESIGN_RISKY made to check that argument's value first (matched by name, positional arguments too) and then
+#   call the function with the same arguments. coord_trans() and coord_transform() take their transformations as x and y.
+design_screened <- function(fns) {
+  risky = unlist(DESIGN_RISKY, use.names = FALSE)
+  kind = stats::setNames(rep(names(DESIGN_RISKY), lengths(DESIGN_RISKY)), risky)
+  callable = names(fns)
+  word = function(v) paste0("\"", utils::head(v, 1), "\"")
+  screen = function(f, name) {
+    force(f)
+    function(...) {
+      a = list(...)
+      cl = tryCatch(match.call(f, as.call(c(list(quote(f)), a))), error = function(e) NULL)
+      m = if (!is.null(cl)) as.list(cl)[-1] else a
+      coord = name %in% c("coord_trans", "coord_transform")
+      kinds = ifelse(names(m) %in% risky, kind[names(m)], ifelse(coord & names(m) %in% c("x", "y"), "transform", NA_character_))
+      bad = purrr::map2_chr(m, kinds, function(v, k) {
+        if (is.na(k)) return(NA_character_)
+        switch(k,
+          fun = if (is.null(v) || is.function(v) || (is.character(v) && all(v %in% callable))) NA_character_ else paste0("A string given where a function is expected (", word(v), ") must name a toolkit function; give the function itself."),
+          method = if (is.null(v) || is.function(v) || (is.character(v) && all(v %in% DESIGN_METHODS))) NA_character_ else paste0("The method ", word(v), " is not one of ", paste(DESIGN_METHODS, collapse = ", "), "."),
+          transform = if (is.null(v) || !is.character(v) || all(v %in% DESIGN_TRANSFORMS)) NA_character_ else paste0("The transformation ", word(v), " is not one of ", paste(DESIGN_TRANSFORMS, collapse = ", "), "."),
+          facet = if (!is.character(v) || all(grepl("^[A-Za-z.][A-Za-z0-9._]*$", v))) NA_character_ else paste0("A facet given as a string must be a column name, not ", word(v[!grepl("^[A-Za-z.][A-Za-z0-9._]*$", v)]), "."),
+          count = if (!is.numeric(v) || all(v <= DESIGN_COUNT_MAX, na.rm = TRUE)) NA_character_ else paste0("A count of ", format(max(v, na.rm = TRUE), big.mark = ",", scientific = FALSE), " bins or points is more than a chart needs (at most ", format(DESIGN_COUNT_MAX, big.mark = ","), ")."),
+          magnitude = if (!is.numeric(v) || inherits(v, "rel") || all(abs(v) <= DESIGN_MAGNITUDE_MAX, na.rm = TRUE)) NA_character_ else paste0("A size of ", format(max(abs(v), na.rm = TRUE), big.mark = ",", scientific = FALSE), " is larger than a chart needs (at most ", DESIGN_MAGNITUDE_MAX, ")."),
+          NA_character_)
+      })
+      if (any(!is.na(bad))) stop(bad[!is.na(bad)][[1]], call. = FALSE)
+      do.call(f, a)
+    }
+  }
+  # a layer function takes its statistic's arguments (fun, n, bins) in `...`; the dots of aes(), vars(), mutate() and the like are quoted, not evaluated, and
+  #   must be left alone
+  # (dplyr's verbs quote their arguments, whatever they are called: slice_max(d, revenue, n = 3) has an `n`, and `revenue` is a column)
+  hit = purrr::keep(setdiff(names(fns), DESIGN_OTHER$dplyr), function(n) is.function(fns[[n]]) && !is.primitive(fns[[n]]) &&
+                      (any(names(formals(fns[[n]])) %in% risky) || n %in% c("coord_trans", "coord_transform") ||
+                         (grepl("^(geom|stat)_", n) && "..." %in% names(formals(fns[[n]])))))
+  utils::modifyList(fns, stats::setNames(purrr::map(hit, function(n) screen(fns[[n]], n)), hit))
+}
+
+# The toolkit as the model is told it: one line a package, the names in order (the `|>` pipe is syntax and listed with the base names).
+design_toolkit_text <- function() {
+  tk = design_toolkit()
+  pk = attr(tk, "package")
+  by = split(names(tk), factor(pk[names(tk)], levels = unique(pk[names(tk)])))
+  paste(c(purrr::imap_chr(by, function(n, p) paste0(p, ": ", paste(if (identical(p, "base")) c(n, "|>") else n, collapse = " "))),
+          "provided objects: d (the table), facts, txt, tok, and the function pal(n)"), collapse = "\n")
+}
+
+# What a name on the deny list is refused for, as one sentence; NULL for a name not on it.
+design_deny_reason <- function(name) {
+  hit = purrr::detect(names(DESIGN_DENY), function(k) name %in% DESIGN_DENY[[k]])
+  if (is.null(hit)) return(NULL)
+  paste0("`", name, "` is never allowed in a design: it ", DESIGN_DENY_WHY[[hit]], ".")
+}
+
+# ---- the guard ----------------------------------------------------------------------------------------------------------------
+
+# The names the code assigns (with <- or =, to a plain name) and the parameters of its own functions: a list of list(name, fun, formal) over the
+#   whole tree; `fun` says the assigned value is a function written in the code.
+design_collect <- function(e) {
+  if (!is.call(e)) return(list())
+  head = if (is.symbol(e[[1]])) as.character(e[[1]]) else ""
+  here = if (head %in% c("<-", "=") && length(e) == 3L && is.symbol(e[[2]]))
+    list(list(name = as.character(e[[2]]), fun = is.call(e[[3]]) && identical(e[[3]][[1]], as.name("function")), formal = FALSE))
+  else if (identical(head, "function") && length(e) >= 2L && !is.null(e[[2]]))
+    purrr::map(names(e[[2]]), function(n) list(name = n, fun = FALSE, formal = TRUE))
+  else list()
+  c(here, unlist(purrr::map(design_args(e, all = TRUE), design_collect), recursive = FALSE))
+}
+
+# The elements of a call that are there (an empty argument, as in x[1, ], is not), the function position left out unless `all`. A function's
+#   formals are a pairlist: their defaults are in it.
+design_args <- function(e, all = FALSE) {
+  l = as.list(e)
+  idx = seq_along(l)
+  if (!all && !is.pairlist(e)) idx = idx[-1]
+  keep = idx[!purrr::map_lgl(idx, function(i) identical(l[[i]], quote(expr = )))]
+  purrr::map(keep, function(i) l[[i]])
+}
+
+# The first problem a syntax tree has, as a sentence, or character(0). `cx`: callable (the toolkit's names and pal), provided, cols, plain (the names
+#   the code assigns and its parameters), funs (the names assigned only function literals), dots (a function of the code takes ...).
+design_walk <- function(e, cx, depth = 0L) {
+  if (depth > DESIGN_MAX_DEPTH) return("The code is nested too deeply.")
+  next_ = function(x) design_walk(x, cx, depth + 1L)
+  all_of = function(xs) unlist(purrr::map(xs, next_))
+  if (is.symbol(e)) return(design_symbol(as.character(e), cx))
+  if (!is.call(e)) return(design_constant(e))
+  fn = e[[1]]
+  if (is.call(fn)) {
+    op = if (is.symbol(fn[[1]])) as.character(fn[[1]]) else ""
+    why = switch(op,
+      `::` = , `:::` = "`::` and `:::` are not allowed: a design uses only the functions of the toolkit, by their plain names.",
+      `@` = "`@` is not allowed: a design does not look inside objects.",
+      "A function must be called by its plain name: calls such as `(f)()`, `f()()`, `x$f()` and `x[[\"f\"]]()` are not allowed.")
+    return(why)
+  }
+  if (!is.symbol(fn)) return("A function must be called by its plain name.")
+  name = as.character(fn)
+  deny = design_deny_reason(name)
+  if (!is.null(deny)) return(deny)
+  rest = design_args(e)
+  switch(name,
+    `::` = , `:::` = "`::` and `:::` are not allowed: a design uses only the functions of the toolkit, by their plain names.",
+    `@` = "`@` is not allowed: a design does not look inside objects.",
+    `<<-` = , `->>` = "`<<-` is not allowed: a design assigns only to its own variables, with `<-` or `=`.",
+    `function` = design_function(e, cx, depth),
+    `<-` = , `=` = design_assign(e, cx, depth),
+    `~` = {
+      # the symbols of a formula (`y ~ x`, `~ region`, `. ~ g`) are variables of the layer's data or of its aesthetics, found when the plot is built; a call
+      #   inside it is checked like any other
+      cx_f = utils::modifyList(cx, list(formula = TRUE))
+      unlist(purrr::map(rest, function(x) design_walk(x, cx_f, depth + 1L)))
+    },
+    `$` = if (length(e) != 3L || !(is.symbol(e[[3]]) || is.character(e[[3]]))) "`$` takes a plain name after it." else next_(e[[2]]),
+    {
+      if (!(name %in% cx$callable || name %in% cx$funs))
+        return(paste0("`", name, "` is not in the toolkit, so the code may not call it; use only the functions listed in TOOLKIT."))
+      here = design_string_args(e, name, cx)
+      if (length(here)) return(here)
+      all_of(rest)
+    })
+}
+
+# A symbol used as a value: a provided object, a toolkit function, a column of d, or a variable the code made.
+design_symbol <- function(name, cx) {
+  if (!nzchar(name)) return(character(0))
+  # a column of d, or a variable of the code's own, is a value even when its name is also on the deny list (a column called `date`, `source` or `file`);
+  #   calling it is another matter (design_walk() refuses a call to a deny-listed name first)
+  mine = name %in% c(cx$cols, cx$plain) || (isTRUE(cx$formula) && is.null(design_deny_reason(name)))
+  deny = if (!mine) design_deny_reason(name)
+  if (!is.null(deny)) return(deny)
+  ok = mine || name %in% c(cx$provided, cx$callable, names(DESIGN_CONSTANTS), ".data") || (identical(name, "...") && isTRUE(cx$dots))
+  if (ok) character(0) else paste0("`", name, "` is not a column of d, a provided object, a toolkit function or a variable the code made.")
+}
+
+design_constant <- function(e) {
+  if (is.numeric(e) && any(abs(e) >= DESIGN_MAX_NUM, na.rm = TRUE)) return(paste0("The number ", format(max(abs(e)), scientific = FALSE), " is too large for a design to need."))
+  character(0)
+}
+
+# `function(...) body`: the defaults and the body are walked like the rest, and a function may not call itself.
+design_function <- function(e, cx, depth) {
+  defaults = if (length(e) >= 2L && !is.null(e[[2]])) design_args(e[[2]], all = TRUE) else list()
+  body = if (length(e) >= 3L) list(e[[3]]) else list()
+  unlist(purrr::map(c(defaults, body), function(x) design_walk(x, cx, depth + 1L)))
+}
+
+# `target <- value`: the target is a plain name that is not the toolkit's or a provided object, or an element ($, [, [[) of a variable the code made;
+#   the value is walked.
+design_assign <- function(e, cx, depth) {
+  if (length(e) != 3L) return("An assignment needs a name and a value.")
+  target = e[[2]]
+  value = design_walk(e[[3]], cx, depth + 1L)
+  # What may not be assigned to: what is provided, the constants, base R's operators and functions, and any toolkit name that the code would make into a
+  #   function of its own (a redefinition of ggplot() or c()). A toolkit name given a plain value (`last <- filter(d, ...)`, a dplyr function and a
+  #   natural name) only hides the function from the code itself.
+  fn_value = is.call(e[[3]]) && identical(e[[3]][[1]], as.name("function"))
+  reserved = c(cx$provided, names(DESIGN_CONSTANTS), DESIGN_BASE, if (fn_value) cx$callable)
+  why = if (is.symbol(target)) {
+    nm = as.character(target)
+    if (nm %in% reserved) paste0("`", nm, "` belongs to the toolkit or to what is provided, so the code may not assign to it; use a name of your own.")
+    else design_deny_reason(nm)
+  } else if (is.call(target) && is.symbol(target[[1]]) && as.character(target[[1]]) %in% c("$", "[", "[[")) design_assign_element(target, cx, depth)
+  else "Only a variable, or an element of a variable the code made (`x$a <- 1`, `x[1] <- 1`), may be assigned to; `names(x) <- ...`, `attr(x, ...) <- ...` and the like are not allowed."
+  c(why, value)
+}
+
+# `x$a`, `x[i]`, `x[[i]]` as the target of an assignment: x (through any depth of elements) must be a variable the code made, not d, facts, txt, tok.
+design_assign_element <- function(target, cx, depth) {
+  root = function(t) if (is.call(t) && is.symbol(t[[1]]) && as.character(t[[1]]) %in% c("$", "[", "[[")) root(t[[2]]) else t
+  r = root(target)
+  if (!is.symbol(r)) return("Only an element of a variable the code made may be assigned to.")
+  nm = as.character(r)
+  if (nm %in% cx$provided) return(paste0("`", nm, "` is provided to be read: the code may not change it (make a variable of your own, or use mutate())."))
+  if (!(nm %in% cx$plain)) return(paste0("`", nm, "` is not a variable the code made, so the code may not assign to an element of it."))
+  index = if (identical(as.character(target[[1]]), "$")) character(0) else unlist(purrr::map(design_args(target)[-1], function(x) design_walk(x, cx, depth + 1L)))
+  inner = if (is.call(target[[2]])) design_assign_element(target[[2]], cx, depth) else character(0)
+  c(index, inner)
+}
+
+# A string given where a function is expected is turned into one by match.fun() or as_function(), which look in ggplot2's namespace and so find
+#   all of base R: it must name a toolkit function, or for `method` and `transform` one of the short lists. In facet_wrap() and facet_grid() a
+#   string is a column name and may be nothing else.
+design_string_args <- function(e, name, cx) {
+  args = as.list(e)[-1]
+  nms = names(args) %||% rep("", length(args))
+  present = !purrr::map_lgl(seq_along(args), function(i) identical(args[[i]], quote(expr = )))
+  args = args[present]
+  nms = nms[present]
+  is_chr = purrr::map_lgl(args, function(a) is.character(a) && length(a) == 1L)
+  txt = purrr::map_chr(args, function(a) if (is.character(a) && length(a) == 1L) a else NA_character_)
+  bad = purrr::pmap_chr(list(nms, txt, is_chr), function(n, s, ok) {
+    if (!ok) return(NA_character_)
+    if (n %in% DESIGN_FUN_ARGS && !(s %in% cx$callable)) return(paste0("The string \"", s, "\" given as `", n, "` would be turned into a function; give a function of the toolkit, not a string."))
+    if (n == "method" && !(s %in% DESIGN_METHODS)) return(paste0("The string \"", s, "\" given as `method` is not one of ", paste(DESIGN_METHODS, collapse = ", "), "."))
+    if (n %in% c("transform", "trans") && !(s %in% DESIGN_TRANSFORMS)) return(paste0("The string \"", s, "\" given as `", n, "` is not one of ", paste(DESIGN_TRANSFORMS, collapse = ", "), "."))
+    if (name %in% c("facet_wrap", "facet_grid") && !grepl("^[A-Za-z.][A-Za-z0-9._]*$", s)) return(paste0("A string in ", name, "() must be a column name, not \"", s, "\"."))
+    NA_character_
+  })
+  parse_arg = isTRUE(any(nms == "parse" & purrr::map_lgl(args, function(a) !identical(a, FALSE))))
+  found = c(bad[!is.na(bad)], if (parse_arg) "`parse` is not allowed: text is drawn as it is, not read as a formula.")
+  if (length(found)) found[[1]]
+}
+
+# Whether any function of the code that is defined in terms of the others calls back into itself (directly, or through the others).
+design_cycle <- function(exprs, funs) {
+  defs = unlist(purrr::map(as.list(exprs), function(e) design_defs(e)), recursive = FALSE)
+  refs = purrr::map(defs, function(b) intersect(all.names(b), funs))
+  reach = purrr::reduce(seq_along(funs), function(acc, i) purrr::map(acc, function(r) unique(c(r, unlist(acc[intersect(r, names(acc))])))), .init = refs)
+  hit = purrr::keep(names(reach), function(n) n %in% reach[[n]])
+  if (length(hit)) hit[[1]]
+}
+
+# The function literals the code assigns to a name, by name: list(f = function(...) body, ...) as expressions.
+design_defs <- function(e) {
+  if (!is.call(e)) return(list())
+  here = if (is.symbol(e[[1]]) && as.character(e[[1]]) %in% c("<-", "=") && length(e) == 3L && is.symbol(e[[2]]) && is.call(e[[3]]) && identical(e[[3]][[1]], as.name("function")))
+    stats::setNames(list(e[[3]]), as.character(e[[2]]))
+  else list()
+  c(here, unlist(purrr::map(design_args(e, all = TRUE), design_defs), recursive = FALSE))
+}
+
+# The guard. `code`: the model's text; `cols`: the names of d's columns. Returns list(ok, reason, exprs): reason is one plain sentence when not ok.
+design_guard <- function(code, cols = character(0)) {
+  fail = function(why) list(ok = FALSE, reason = why, exprs = NULL)
+  if (!is.character(code) || length(code) != 1L || is.na(code) || !nzchar(trimws(code))) return(fail("The design has no code."))
+  if (nchar(code, type = "chars") > DESIGN_MAX_CODE)
+    return(fail(paste0("The code is ", format(nchar(code, type = "chars"), big.mark = ","), " characters; at most ", format(DESIGN_MAX_CODE, big.mark = ","), " are allowed.")))
+  exprs = tryCatch(parse(text = code, keep.source = FALSE), error = function(e) e)
+  if (inherits(exprs, "error")) return(fail(paste0("The code does not parse: ", trimws(sub("\n.*", "", sub("^<text>:", "line ", conditionMessage(exprs)))), ".")))
+  if (!length(exprs)) return(fail("The design has no code."))
+  records = unlist(purrr::map(as.list(exprs), design_collect), recursive = FALSE)
+  rec_names = purrr::map_chr(records, "name")
+  assigned = records[!purrr::map_lgl(records, "formal")]
+  funs = unique(purrr::keep(purrr::map_chr(assigned, "name"), function(n) all(purrr::map_lgl(assigned[purrr::map_chr(assigned, "name") == n], "fun"))))
+  cx = list(callable = c(names(design_toolkit()), "pal"), provided = DESIGN_PROVIDED, cols = cols, plain = unique(rec_names), funs = funs,
+            dots = "..." %in% rec_names)
+  why = unlist(purrr::map(as.list(exprs), function(e) design_walk(e, cx)))
+  loop = if (!length(why) && length(funs)) design_cycle(exprs, funs)
+  if (!length(why) && !is.null(loop)) why = paste0("The function `", loop, "` calls itself (directly or through another function of the code); recursion is not available.")
+  if (length(why)) fail(why[[1]]) else list(ok = TRUE, reason = NA_character_, exprs = exprs)
+}
+
+
+# ---- what the design is given: tok, pal, txt and facts -------------------------------------------------------------------------
+
+# The chosen style's values as a plain list: ground (the plot's fill), panel, text, muted (axis text, subtitle), accent, slate, grid, caption (the caption's
+#   colour), title_family, body_family (a family the machine can draw: the bundled one when registered, else the default), title_face ("bold" or
+#   "plain": a semibold family has its weight in its name) and base_size.
+design_tokens <- function(style = CHART_STYLE_DEFAULT) {
+  st = if (is.list(style)) style else chart_style(style)
+  semi = identical(st$title_weight, "semibold")
+  list(ground = st$background, panel = st$panel, text = st$text, muted = st$text_2, accent = st$accent, slate = st$slate, grid = st$grid, caption = st$caption,
+       title_family = chart_font_family(st$title_font, if (semi) "semibold" else "regular"), title_face = if (semi) "plain" else st$title_weight %||% "bold",
+       body_family = chart_font_family("sans"), base_size = 12)
+}
+
+# pal(n): the first n colours of the chosen qualitative palette, as the chart would draw n groups (an error with a sentence past the palette's number).
+design_pal <- function(palette = chart_palette_default()) {
+  qual = spec_palette(palette)$qual
+  function(n) {
+    n = suppressWarnings(as.integer(n))
+    if (length(n) != 1L || is.na(n) || n < 1L) stop("pal(n) takes a whole number of colours, 1 or more.", call. = FALSE)
+    qual(n)
+  }
+}
+
+# The spec's words after the app's own rules: the title without its trailing full stop and in upper case where the style says so, the subtitle and
+#   caption as written, the axis titles the chart would draw (the spec's, else the dictionary's). A missing text is NULL.
+design_text <- function(spec, style = CHART_STYLE_DEFAULT, cb = NULL) {
+  s = spec_defaults(spec_public(spec))
+  fam = s$family
+  x = s$x_label %||% if (!is.null(cb) && is_text1(s$x)) col_title(cb, s$x)
+  y = s$y_label %||% if (!is.null(cb)) if (fam %in% c("box", "scatter", "bubble", "heatmap") && is_text1(s$y)) col_title(cb, s$y) else value_label(s, cb, title = TRUE)
+  list(title = if (is_text1(s$title)) chart_title_case(chart_heading_text(s$title), style), subtitle = if (is_text1(s$subtitle)) s$subtitle,
+       caption = if (is_text1(s$caption)) s$caption, x = x, y = y)
+}
+
+# The facts of a chart as a named list, one entry for each line of spec_facts()'s text that has a label: list(text = the line as written (the values of id
+#   and text columns are tokens, [[N1]]), label = what stands before the first colon, number = the numbers written in the rest of the line, as R
+#   values (a numeric vector, empty when there is none)). The name is the label in lower case with its non-letters made underscores, made unique
+#   ("highest", "lowest", "west"). A line of a panel's facts is indented in spec_facts(); here it is an entry of its own, with the panel's line before it.
+design_facts <- function(spec, table, cb, data = NULL) {
+  txt = spec_facts(spec, table, cb, data = data)$text
+  lines = trimws(strsplit(txt, "\n", fixed = TRUE)[[1]])
+  lines = lines[nzchar(lines)]
+  label = sub("^-\\s*", "", sub(":.*$", "", lines))
+  value = ifelse(grepl(":", lines, fixed = TRUE), trimws(sub("^[^:]*:", "", lines)), "")
+  number = purrr::map(value, function(v) if (nzchar(v)) purrr::map_dbl(text_numbers(v), "value") else numeric(0))
+  plain = suppressWarnings(iconv(label, "UTF-8", "ASCII//TRANSLIT", sub = ""))
+  key = gsub("^_+|_+$", "", gsub("[^a-z0-9]+", "_", tolower(ifelse(is.na(plain), label, plain))))
+  key[!nzchar(key)] = "fact"
+  stats::setNames(purrr::pmap(list(lines, label, number), function(t, l, n) list(text = t, label = l, number = n)), make.unique(key, sep = "_"))
+}
+
+# Every fact's line as one text (what check_numbers() reads), and the facts as a model is shown them.
+design_facts_text <- function(facts) {
+  if (is.character(facts)) return(paste(facts, collapse = "\n"))
+  paste(purrr::map_chr(facts, function(f) if (is.list(f)) f$text %||% "" else as.character(f)), collapse = "\n")
+}
+
+# ---- running the code -----------------------------------------------------------------------------------------------------------
+
+# R's own dispatch of an operator (`+` on a ggplot) evaluates `base::chooseOpsMethod(...)` in the environment of the call, so a design's environment must
+#   find `::`. This one finds that single function and nothing else (the guard refuses `::` in a design anyway; this is for the run, if the guard were wrong).
+design_ns_get <- function(pkg, name) {
+  p = as.character(substitute(pkg))
+  n = as.character(substitute(name))
+  if (identical(p, "base") && identical(n, "chooseOpsMethod")) base::chooseOpsMethod else stop("`::` is not available in a design.", call. = FALSE)
+}
+
+# The environment a design is evaluated in: its parent is emptyenv(), so a name the guard missed does not resolve, and it holds the toolkit, the
+#   replacement forms the language needs for `x$a <- 1`, a few constants, a `::` that finds one base function (design_ns_get()), and the five provided
+#   objects.
+design_env <- function(objects, toolkit = design_toolkit()) {
+  e = new.env(parent = emptyenv())
+  list2env(toolkit, envir = e)
+  list2env(stats::setNames(purrr::map(DESIGN_REPLACE, get, envir = baseenv()), DESIGN_REPLACE), envir = e)
+  list2env(DESIGN_CONSTANTS, envir = e)
+  list2env(list(`::` = design_ns_get), envir = e)
+  list2env(objects, envir = e)
+  e
+}
+
+# One line of an error: no colour codes, no line breaks, at most 220 characters.
+design_message <- function(cond) {
+  m = gsub("\033\\[[0-9;]*m", "", conditionMessage(cond))
+  m = trimws(gsub("\\s+", " ", m))
+  if (nchar(m) > 220L) paste0(substr(m, 1, 217L), "...") else m
+}
+
+# The strings a plot carries that could be markup (its labels, the character columns of its data and of each layer's, a scale's labels and name):
+#   a text with an image, a link or a tag in it is refused before anything is drawn, since ggtext renders HTML (an image tag reads a file).
+design_markup_faults <- function(plot) {
+  chr = function(x) if (is.character(x)) x else if (is.factor(x)) as.character(x)
+  cols = function(df) if (is.data.frame(df)) unlist(purrr::map(df, chr), use.names = FALSE)
+  layer_data = purrr::map(plot$layers, function(l) tryCatch(l$layer_data(plot$data), error = function(e) NULL))
+  scales = purrr::map(plot$scales$scales, function(s) c(chr(s$name), if (is.character(s$labels)) s$labels))
+  strings = unique(unlist(c(purrr::map(plot$labels, chr), list(cols(plot$data)), purrr::map(layer_data, cols), scales), use.names = FALSE))
+  strings = strings[!is.na(strings)]
+  hit = strings[grepl(DESIGN_MARKUP, strings, perl = TRUE)]
+  if (length(hit)) paste0("A text has HTML or image markup in it (\"", substr(hit[[1]], 1, 40), "\"); texts on a chart are plain words.")
+}
+
+# Draws a plot to `file` through chart_device() (never png() or pdf()) and closes only the device it opened, whatever happens.
+design_draw <- function(plot, file, size, dpi) {
+  chart_device(file, size[["width"]], size[["height"]], dpi)
+  dev = grDevices::dev.cur()
+  on.exit(grDevices::dev.off(dev))
+  print(plot)
+  invisible(file)
+}
+
+# The table as a design is given it: a plain data frame, with only the attributes of one (names, row names, class) and no list columns: what readr
+#   and spec_table() hang on it (the column spec, the problems, the counts) is not the design's to read.
+design_table <- function(table) {
+  t = as.data.frame(table, stringsAsFactors = FALSE)
+  attributes(t)[setdiff(names(attributes(t)), c("names", "row.names", "class"))] = NULL
+  t
+}
+
+# Runs a design. The code is guarded first; it is evaluated in design_env() (the toolkit and d, facts, txt, tok, pal and nothing else) under a time
+#   limit that covers evaluating, building and drawing, and reset afterwards whatever happens; the warnings are caught; the result must be a ggplot or a
+#   patchwork; and it is drawn once, through chart_device(), at `size` inches (so a fault in drawing is found here, and the picture exists).
+#   Returns list(ok, reason, plot, built, warnings, file, seconds): `reason` is one sentence when not ok; `file` is the picture (a path made for this
+#   call, removed unless `keep`); `built` is ggplot_build() of the plot.
+design_run <- function(code, d, facts, txt, tok, pal, size = SPEC_SIZE[c("width", "height")], limit = DESIGN_TIME_LIMIT, dpi = 120, keep = FALSE) {
+  said = character(0)
+  out = function(ok, why = NA_character_, plot = NULL, built = NULL, file = NULL)
+    list(ok = ok, reason = why, plot = plot, built = built, warnings = unique(said), file = file, seconds = as.numeric(difftime(Sys.time(), t0, units = "secs")))
+  t0 = Sys.time()
+  d = design_table(d)
+  g = design_guard(code, names(d))
+  if (!g$ok) return(out(FALSE, g$reason))
+  env = design_env(list(d = d, facts = facts, txt = txt, tok = tok, pal = pal))
+  file = tempfile("design_", fileext = chart_device_ext())
+  reset = function() setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE)
+  res = tryCatch({
+    setTimeLimit(cpu = limit, elapsed = limit, transient = FALSE)
+    withCallingHandlers({
+      plot = purrr::reduce(as.list(g$exprs), function(acc, e) eval(e, env), .init = NULL)
+      if (!ggplot2::is_ggplot(plot)) stop("The last expression is not a ggplot or a patchwork; it must be the finished chart.", call. = FALSE)
+      markup = design_markup_faults(plot)
+      if (!is.null(markup)) stop(markup, call. = FALSE)
+      built = ggplot2::ggplot_build(plot)
+      design_draw(plot, file, size, dpi)
+      list(plot = plot, built = built)
+    }, warning = function(w) { said <<- c(said, design_message(w)); invokeRestart("muffleWarning") },
+       message = function(m) { said <<- c(said, design_message(m)); invokeRestart("muffleMessage") })
+  }, error = function(e) e, finally = reset())
+  if (inherits(res, "error")) {
+    unlink(file)
+    msg = design_message(res)
+    why = if (grepl("time limit", msg, fixed = TRUE)) paste0("The design took longer than ", limit, " seconds to build and draw and was stopped; use fewer layers, panels or labels.")
+          else if (grepl("^(The last expression|A text has HTML|The code makes a vector)", msg)) msg
+          else paste0("The code stopped with an error: ", msg, if (!grepl("[.]$", msg)) ".")
+    return(out(FALSE, why))
+  }
+  if (!keep) unlink(file)
+  out(TRUE, plot = res$plot, built = res$built, file = if (keep) file)
+}
+
+# ---- the checks on a drawn design ---------------------------------------------------------------------------------------------
+
+# The plain ggplots a design is made of: the plots of a patchwork and its last one, or the plot itself.
+design_parts <- function(plot) {
+  patches = tryCatch(plot$patches$plots, error = function(e) NULL)
+  c(unname(patches), list(plot))
+}
+
+# "geom_col" for a layer.
+design_layer_name <- function(layer) paste0("geom_", tolower(gsub("([a-z0-9])([A-Z])", "\\1_\\2", sub("^Geom", "", class(layer$geom)[1]))))
+
+# Rows. Every layer's input is what ggplot2 gives it: its own data, else the plot's (a function applied to it too). A mark (DESIGN_MARK_GEOMS) may not
+#   be given more rows than d has, nor fewer unless the code has a filter() call (the one explicit way to leave rows out; head(), slice_*() and
+#   summarise() change what is plotted without saying so, and a mark made from fewer rows is a drop). A stat layer (histogram, summary, smooth,
+#   density, boxplot) is held to the same on what it is GIVEN, not on what it makes: its output has as many rows as the statistic makes. Any other
+#   layer (labels, rules, leaders) may have DESIGN_ROW_EXTRA rows more than d, and as few as it likes.
+design_check_rows <- function(parts, d, code) {
+  nd = nrow(d)
+  filtered = grepl("(^|[^A-Za-z0-9_.])filter\\s*\\(", code)
+  unlist(purrr::map(parts, function(p) purrr::map_chr(seq_along(p$layers), function(i) {
+    l = p$layers[[i]]
+    n = tryCatch(nrow(l$layer_data(p$data)), error = function(e) NA_integer_)
+    if (is.na(n) || inherits(l$geom, "GeomBlank")) return(NA_character_)
+    mark = inherits(l$geom, DESIGN_MARK_GEOMS)
+    nm = design_layer_name(l)
+    if (n > nd + if (mark) 0L else DESIGN_ROW_EXTRA)
+      return(paste0("Layer ", i, " (", nm, ") is given ", n, " rows but the table d has ", nd, "; a layer may not plot more rows than d."))
+    if (mark && n < nd && !filtered)
+      return(paste0("Layer ", i, " (", nm, ") plots ", n, " of the ", nd, " rows of d; keep every row, or leave rows out only with an explicit filter() on d."))
+    NA_character_
+  })))
+}
+
+# Bars, columns and areas include zero on the value axis. The value axis is the one the layer's data says (flipped_aes), seen through coord_flip();
+#   its range is the panel's, after the scale's limits and the coordinates' (coord_cartesian(ylim = ) too), mapped back through the scale's transformation
+#   (a log axis never includes zero).
+design_check_zero <- function(parts) {
+  unlist(purrr::map(parts, function(p) {
+    b = ggplot2::ggplot_build(p)
+    flip_coord = inherits(b$plot$coordinates, "CoordFlip")
+    purrr::map_chr(seq_along(p$layers), function(i) {
+      l = p$layers[[i]]
+      if (!inherits(l$geom, c("GeomBar", "GeomArea"))) return(NA_character_)
+      data = b$data[[i]]
+      flipped = isTRUE(any(data$flipped_aes %in% TRUE))
+      axis = if (flipped) "x" else "y"
+      display = if (xor(flipped, flip_coord)) "x" else "y"
+      sc = b$layout[[paste0("panel_scales_", axis)]][[1]]
+      if (is.null(sc) || inherits(sc, "ScaleDiscretePosition")) return(NA_character_)
+      rng = b$layout$panel_params[[1]][[paste0(if (inherits(b$plot$coordinates, c("CoordCartesian", "CoordFlip"))) display else axis, ".range")]]
+      tr = tryCatch(sc$get_transformation(), error = function(e) NULL)
+      lim = range(if (!is.null(tr)) tr$inverse(rng) else rng, na.rm = TRUE)
+      if (is.finite(lim[[1]]) && lim[[1]] <= 1e-9 * max(abs(lim)) && lim[[2]] >= -1e-9 * max(abs(lim))) return(NA_character_)
+      paste0("Layer ", i, " (", design_layer_name(l), ") is a bar or an area but its value axis runs from ", format(lim[[1]], digits = 4), " to ",
+             format(lim[[2]], digits = 4), ", not through zero; bars and areas start at zero (and never on a log axis).")
+    })
+  }))
+}
+
+# No second axis: a scale with a secondary axis (sec.axis, from sec_axis() or dup_axis()).
+design_check_second_axis <- function(parts) {
+  second = purrr::map_lgl(parts, function(p) {
+    b = ggplot2::ggplot_build(p)
+    any(purrr::map_lgl(c(b$layout$panel_scales_x[1], b$layout$panel_scales_y[1]), function(sc) inherits(tryCatch(sc$secondary.axis, error = function(e) NULL), "AxisSecondary")))
+  })
+  if (any(second)) "The chart has a second axis; a design may not add one (it invites reading two scales as one)."
+}
+
+# The scale type of one position scale: discrete, date, log, continuous, or the name of its transformation (sqrt, reverse) or "binned".
+design_scale_type <- function(sc) {
+  if (inherits(sc, "ScaleDiscretePosition")) return("discrete")
+  if (inherits(sc, c("ScaleContinuousDate", "ScaleContinuousDatetime"))) return("date")
+  if (inherits(sc, "ScaleBinnedPosition")) return("binned")
+  tr = tryCatch(sc$get_transformation()$name, error = function(e) "identity")
+  if (tr %in% c("hms", "time")) "date" else if (grepl("^log", tr)) "log" else if (identical(tr, "identity")) "continuous" else tr
+}
+
+# The scale types the spec asks for, as list(a, b): the types each axis may be (a character vector each; the axes may stand either way round, so a
+#   bar chart may be drawn sideways). A Date column is a date axis, text or a factor a discrete one, a number a continuous one (a log one when the
+#   spec has log_x or log_y); a whole-number column with at most 40 values (a year, a rank) may be continuous or discrete. A column that is not in d
+#   leaves its axis unchecked (NULL).
+design_axes <- function(spec, d) {
+  s = spec_defaults(spec_public(spec))
+  fam = s$family
+  ycol = if (fam %in% c("scatter", "bubble", "box", "heatmap", "dumbbell") && is_text1(s$y)) s$y else tryCatch(value_name(s), error = function(e) NULL)
+  xcol = s$x
+  one = function(col, log) {
+    if (!is_text1(col) || !col %in% names(d)) return(NULL)
+    x = d[[col]]
+    if (inherits(x, c("Date", "POSIXct"))) "date"
+    else if (is.numeric(x) && !is.factor(x)) {
+      if (isTRUE(log)) "log"
+      else if (all(x == round(x), na.rm = TRUE) && length(unique(x)) <= 40L) c("continuous", "discrete") else "continuous"
+    } else "discrete"
+  }
+  list(a = one(xcol, s$log_x), b = one(ycol, s$log_y))
+}
+
+# The type of each axis is the spec's: the types of the first panel's x and y scales, either way round, against design_axes()'s.
+design_check_scales <- function(p, axes) {
+  if (is.null(axes) || is.null(axes$a) || is.null(axes$b)) return(NULL)
+  b = ggplot2::ggplot_build(p)
+  sx = b$layout$panel_scales_x[[1]]
+  sy = b$layout$panel_scales_y[[1]]
+  if (is.null(sx) || is.null(sy)) return(NULL)
+  tx = design_scale_type(sx)
+  ty = design_scale_type(sy)
+  ok = (tx %in% axes$a && ty %in% axes$b) || (tx %in% axes$b && ty %in% axes$a)
+  if (!ok) paste0("The axes are ", tx, " and ", ty, " but the spec's are ", paste(axes$a, collapse = " or "), " and ", paste(axes$b, collapse = " or "),
+                  "; keep each axis' scale type (a log axis only when the spec has log_x or log_y; a date axis stays a date axis).")
+}
+
+# Everything d and the facts and the spec's own words allow a text to say, as one text for check_numbers(): the facts, the values and names of d (numbers,
+#   shares as percentages, dates, categories), and the words of txt.
+design_known_text <- function(d, facts, txt) {
+  num_cols = purrr::keep(d, function(x) is.numeric(x) && !is.factor(x))
+  nums = purrr::map(num_cols, function(x) {
+    u = unique(x[is.finite(x)])
+    u = utils::head(u, 20000L)
+    c(format(u, digits = 15, scientific = FALSE, trim = TRUE), if (length(u) && all(u >= -1 & u <= 1)) format(u * 100, digits = 15, scientific = FALSE, trim = TRUE))
+  })
+  dates = purrr::map(purrr::keep(d, function(x) inherits(x, c("Date", "POSIXct"))), function(x) {
+    u = utils::head(unique(as.Date(x)), 5000L)
+    c(format(u, "%Y-%m-%d"), format(u, "%b %Y"), format(u, "%e %b %Y"), format(u, "%B %Y"))
+  })
+  cats = purrr::map(purrr::keep(d, function(x) is.character(x) || is.factor(x)), function(x) utils::head(unique(as.character(x)), 2000L))
+  paste(c(design_facts_text(facts), names(d), unlist(nums), unlist(dates), unlist(cats), unlist(txt)), collapse = " ")
+}
+
+# The strings a design writes on the chart: its labels (title, subtitle, caption, axis and legend titles) and every label its layers draw.
+design_drawn_strings <- function(parts, boxes) {
+  labs = unlist(purrr::map(parts, function(p) {
+    b = ggplot2::ggplot_build(p)
+    l = ggplot2::get_labs(b)
+    purrr::keep(unlist(l[intersect(names(l), c("title", "subtitle", "caption", "x", "y", "colour", "color", "fill", "size", "alt", "tag"))]), is.character)
+  }))
+  layer_labels = unlist(purrr::map(parts, function(p) {
+    b = ggplot2::ggplot_build(p)
+    purrr::map(seq_along(p$layers), function(i)
+      if (inherits(p$layers[[i]]$geom, DESIGN_TEXT_GEOMS) && "label" %in% names(b$data[[i]])) as.character(b$data[[i]]$label))
+  }))
+  unique(c(labs, layer_labels, if (!is.null(boxes) && nrow(boxes)) boxes$label[!is.na(boxes$panel)]))   # the page's texts include the axis' numbers, which the scale writes, not the design
+}
+
+# The numbers written on the chart are in the facts or in d (check_numbers()).
+design_check_numbers <- function(strings, d, facts, spec, txt) {
+  bad = check_numbers(paste(strings[!is.na(strings)], collapse = " | "), design_known_text(d, facts, txt), spec)
+  if (length(bad)) paste0("The chart writes ", paste0("\"", utils::head(bad, 4L), "\"", collapse = ", "), " which ", if (length(bad) > 1L) "are numbers that are" else "is a number that is",
+                          " not in the facts or in d; write only numbers from facts or from d, formatted with the functions provided.")
+}
+
+# The theme of a plot as it is drawn (a complete theme replaces the default; an incomplete one is added to it), with every element worked out.
+design_theme <- function(p) ggplot2::complete_theme(if (isTRUE(attr(p$theme, "complete"))) p$theme else ggplot2::get_theme() + p$theme)
+
+# The background text is read against: the plot's fill, else the panel's, else white (the device's).
+design_background <- function(th) {
+  fill = function(el) {
+    e = tryCatch(ggplot2::calc_element(el, th), error = function(e) NULL)
+    f = if (!is.null(e) && !inherits(e, c("element_blank", "ggplot2::element_blank"))) e$fill
+    if (is.character(f) && length(f) == 1L && !is.na(f) && !identical(f, "transparent")) f
+  }
+  fill("plot.background") %||% fill("panel.background") %||% "white"
+}
+
+# Text against its background at 4.5 to 1: the title, subtitle, caption, axis titles and axis text, the legend's and the strips' text when there are
+#   legends or panels, and the colour of each text layer's labels (against the panel's background, or the fill of a bar or tile, or a label's own box).
+design_check_contrast <- function(parts) {
+  contrast = function(a, b) tryCatch(min(chart_contrast(a, b)), error = function(e) NA_real_)
+  unlist(purrr::map(parts, function(p) {
+    b = ggplot2::ggplot_build(p)
+    th = tryCatch(design_theme(p), error = function(e) NULL)
+    if (is.null(th)) return(character(0))
+    bg = design_background(th)
+    labs = ggplot2::get_labs(b)
+    has_label = function(k) is.character(labs[[k]]) && any(nzchar(labs[[k]]))
+    nonpos = setdiff(unlist(purrr::map(b$plot$scales$scales, "aesthetics")), c("x", "y", "xmin", "xmax", "ymin", "ymax", "xend", "yend"))
+    elements = c(plot.title = has_label("title"), plot.subtitle = has_label("subtitle"), plot.caption = has_label("caption"), axis.title.x = has_label("x"),
+                 axis.title.y = has_label("y"), axis.text.x = TRUE, axis.text.y = TRUE, legend.text = length(nonpos) > 0L, legend.title = length(nonpos) > 0L,
+                 strip.text = !inherits(p$facet, "FacetNull"))
+    from_theme = purrr::imap(elements[elements], function(on, el) {
+      e = tryCatch(ggplot2::calc_element(el, th), error = function(e) NULL)
+      col = if (!is.null(e) && !inherits(e, c("element_blank", "ggplot2::element_blank"))) e$colour
+      if (!is.character(col) || length(col) != 1L || is.na(col) || identical(col, "transparent")) return(NA_character_)
+      ratio = contrast(col, bg)
+      if (isTRUE(ratio < 4.5)) paste0("The ", sub("[.]", " ", el), " is set in ", col, ", a contrast of ", format(ratio, digits = 2), " to 1 against the background ", bg,
+                                       "; text needs at least 4.5 to 1.") else NA_character_
+    })
+    # what a text stands on: the fill of the bar, tile or box its anchor is inside of (strictly inside: a label just above a bar stands on the panel), a
+    #   label's own box, else the plot's background
+    rects = do.call(rbind, purrr::map(seq_along(p$layers), function(i) {
+      dt = b$data[[i]]
+      if (!inherits(p$layers[[i]]$geom, DESIGN_FILL_GEOMS) || !all(c("xmin", "xmax", "ymin", "ymax", "fill") %in% names(dt))) return(NULL)
+      dt = utils::head(dt[!is.na(dt$fill) & !dt$fill %in% c("NA", "transparent"), c("xmin", "xmax", "ymin", "ymax", "fill")], 3000L)
+      if (nrow(dt)) data.frame(lapply(dt, function(v) if (is.numeric(v)) v else as.character(v)), stringsAsFactors = FALSE)
+    }))
+    from_layers = purrr::map(seq_along(p$layers), function(i) {
+      l = p$layers[[i]]
+      if (!inherits(l$geom, DESIGN_TEXT_GEOMS)) return(NA_character_)
+      data = utils::head(b$data[[i]], 500L)
+      if (!all(c("x", "y", "colour") %in% names(data))) return(NA_character_)
+      own = inherits(l$geom, c("GeomLabel", "GeomLabelRepel")) && "fill" %in% names(data)
+      stands_on = purrr::map_chr(seq_len(nrow(data)), function(k) {
+        if (own && !is.na(data$fill[[k]]) && !data$fill[[k]] %in% c("NA", "transparent")) return(as.character(data$fill[[k]]))
+        x = suppressWarnings(as.numeric(data$x[[k]])); y = suppressWarnings(as.numeric(data$y[[k]]))
+        inside = if (!is.null(rects) && !is.na(x) && !is.na(y)) which(x > rects$xmin + 1e-9 & x < rects$xmax - 1e-9 & y > rects$ymin + 1e-9 & y < rects$ymax - 1e-9)
+        if (length(inside)) rects$fill[[utils::tail(inside, 1L)]] else bg
+      })
+      col = as.character(data$colour)
+      ratio = purrr::map2_dbl(col, stands_on, function(a, bx) if (is.na(a) || a %in% c("NA", "transparent")) NA_real_ else contrast(a, bx))
+      if (!any(ratio < 4.5, na.rm = TRUE)) return(NA_character_)
+      worst = which.min(ratio)
+      paste0("The text of layer ", i, " (", design_layer_name(l), ") is drawn in ", col[[worst]], ", a contrast of ", format(ratio[[worst]], digits = 2), " to 1 against ",
+             stands_on[[worst]], " behind it; text needs at least 4.5 to 1.")
+    })
+    unlist(c(from_theme, from_layers))
+  }))
+}
+
+# The measures of every text a plot draws, inches from the device's lower left, on a device chart_device() opens (the same measure as
+#   drawn_text_boxes() in tests/gallery.R, for any plot, with no spec): one row for each text of a panel (value labels, annotations, ggrepel's after
+#   grid.force()) and of the page (titles, axis text, legends), with the box it must stay inside (its panel's when the plot clips to its panels, else the
+#   device's) and the panel it is in (NA for the page's). A geom_label's box reaches past its text by its padding.
+design_text_boxes <- function(p, size = SPEC_SIZE[c("width", "height")], dpi = 96) {
+  f = tempfile(fileext = chart_device_ext())
+  chart_device(f, size[["width"]], size[["height"]], dpi)
+  dev = grDevices::dev.cur()
+  on.exit({ grDevices::dev.off(dev); unlink(f) })
+  withCallingHandlers(print(p), warning = function(w) invokeRestart("muffleWarning"), message = function(m) invokeRestart("muffleMessage"))
+  grid::grid.force()
+  ls = grid::grid.ls(viewports = TRUE, print = FALSE, fullNames = TRUE)
+  rows = which(ls$type == "grobListing" & grepl("^text\\[", ls$name))
+  dsz = grDevices::dev.size("in")
+  clip = !identical(p$coordinates$clip, "off")
+  boxes = purrr::map(rows, function(i) tryCatch({
+    name = sub("^text\\[(.*)\\]$", "\\1", ls$name[[i]])
+    parts = sub("^viewport\\[(.*)\\]$", "\\1", strsplit(sub("^viewport\\[ROOT\\]::", "", ls$vpPath[[i]]), "::")[[1]])
+    vp = do.call(grid::vpPath, as.list(parts))
+    gp = do.call(grid::gPath, as.list(c(sub("^[A-Za-z]+\\[(.*)\\]$", "\\1", strsplit(ls$gPath[[i]], "::")[[1]]), name)))
+    g = grid::grid.get(gp, strict = TRUE)
+    lab = as.character(g$label)
+    n = length(lab)
+    if (!n || !is.character(lab)) return(NULL)
+    panel_at = which(startsWith(parts, "panel"))[1]
+    pb = if (!is.na(panel_at)) {
+      grid::downViewport(do.call(grid::vpPath, as.list(parts[seq_len(panel_at)])))
+      on.exit(grid::upViewport(0), add = TRUE)
+      grid::deviceLoc(grid::unit(c(0, 1), "npc"), grid::unit(c(0, 1), "npc"))
+    }
+    grid::upViewport(0)
+    grid::downViewport(vp)
+    one_gp = function(k) do.call(grid::gpar, purrr::map(unclass(g$gp), function(v) if (length(v) > 1L) v[[(k - 1L) %% length(v) + 1L]] else v))
+    xs = rep_len(g$x, n); ys = rep_len(g$y, n)
+    loc = purrr::map(seq_len(n), function(k) {
+      grid::pushViewport(grid::viewport(gp = one_gp(k)))
+      on.exit(grid::popViewport())
+      l = grid::deviceLoc(xs[k], ys[k])
+      c(x = as.numeric(l$x), y = as.numeric(l$y))
+    })
+    tg = purrr::map(seq_len(n), function(k) grid::textGrob(lab[[k]], gp = one_gp(k)))
+    w = purrr::map_dbl(tg, function(x) grid::convertWidth(grid::grobWidth(x), "in", valueOnly = TRUE))
+    h = purrr::map_dbl(tg, function(x) grid::convertHeight(grid::grobHeight(x), "in", valueOnly = TRUE) + grid::convertHeight(grid::grobDescent(x), "in", valueOnly = TRUE))
+    grid::upViewport(0)
+    hj = rep_len(as.numeric(g$hjust %||% 0.5), n)
+    vj = rep_len(as.numeric(g$vjust %||% 0.5), n)
+    ax = purrr::map_dbl(loc, "x"); ay = purrr::map_dbl(loc, "y")
+    pad = if (grepl("label", ls$gPath[[i]], ignore.case = TRUE)) 0.3 * 1.2 * SPEC_LABEL_MM * 2.845 / 72 + 0.01 else 0
+    in_panel = !is.na(panel_at)
+    # the box of a text turned by `rot` degrees about its anchor: the bounding box of its four corners
+    th = rep_len(as.numeric(g$rot %||% 0), n) * pi / 180
+    corner = function(xl, yl) list(x = ax + cos(th) * xl - sin(th) * yl, y = ay + sin(th) * xl + cos(th) * yl)
+    cs = list(corner(-hj * w, -vj * h), corner((1 - hj) * w, -vj * h), corner(-hj * w, (1 - vj) * h), corner((1 - hj) * w, (1 - vj) * h))
+    lo = function(k) do.call(pmin, purrr::map(cs, k))
+    hi = function(k) do.call(pmax, purrr::map(cs, k))
+    data.frame(label = lab, x0 = lo("x") - pad, x1 = hi("x") + pad, y0 = lo("y") - pad, y1 = hi("y") + pad,
+               px0 = if (in_panel && clip) as.numeric(pb$x[1]) else 0, px1 = if (in_panel && clip) as.numeric(pb$x[2]) else dsz[[1]],
+               py0 = if (in_panel && clip) as.numeric(pb$y[1]) else 0, py1 = if (in_panel && clip) as.numeric(pb$y[2]) else dsz[[2]],
+               panel = if (in_panel) sub(".*viewport\\[(panel[^]]*)\\].*", "\\1", ls$vpPath[[i]]) else NA_character_,
+               inside = if (in_panel && clip) "panel" else "device", stringsAsFactors = FALSE)
+  }, error = function(e) { grid::upViewport(0); NULL }))
+  out = do.call(rbind, purrr::compact(boxes))
+  if (is.null(out)) data.frame(label = character(0)) else out
+}
+
+# The faults of the texts as drawn, as sentences: a text that runs past its panel (when the plot clips to its panels) or past the device, and two
+#   texts of one panel that overlap (by more than `tol` inches each way). Returns list(faults, boxes).
+design_text_faults <- function(p, size = SPEC_SIZE[c("width", "height")], tol = 0.02) {
+  b = design_text_boxes(p, size)
+  if (!nrow(b)) return(list(faults = character(0), boxes = b))
+  outside = purrr::keep(seq_len(nrow(b)), function(i) b$x0[[i]] < b$px0[[i]] - tol || b$x1[[i]] > b$px1[[i]] + tol || b$y0[[i]] < b$py0[[i]] - tol || b$y1[[i]] > b$py1[[i]] + tol)
+  pairs = if (nrow(b) > 1L) utils::combn(nrow(b), 2L, simplify = FALSE) else list()
+  meet = purrr::keep(pairs, function(ij) {
+    i = ij[1]; j = ij[2]
+    !is.na(b$panel[[i]]) && identical(b$panel[[i]], b$panel[[j]]) &&
+      min(b$x1[[i]], b$x1[[j]]) - max(b$x0[[i]], b$x0[[j]]) > tol && min(b$y1[[i]], b$y1[[j]]) - max(b$y0[[i]], b$y0[[j]]) > tol
+  })
+  list(faults = c(purrr::map_chr(outside, function(i) paste0("The text '", substr(b$label[[i]], 1, 40), "' runs past the ", b$inside[[i]], " and would be cut off; shorten it or move it.")),
+                  purrr::map_chr(meet, function(ij) paste0("The texts '", substr(b$label[[ij[1]]], 1, 30), "' and '", substr(b$label[[ij[2]]], 1, 30), "' overlap; move or drop one."))),
+       boxes = b)
+}
+
+# Rows removed by the scales or by missing values are rows not drawn.
+design_check_warnings <- function(warnings) {
+  hit = warnings[grepl("Removed [0-9]+ rows?", warnings)]
+  if (length(hit)) paste0("ggplot2 left rows out of the drawing (\"", substr(hit[[1]], 1, 80), "\"); every row of d is plotted, so no scale limit may cut values off.")
+}
+
+# The checks. `plot`: what design_run() returned; `d`: the table; `facts`: design_facts()'s list (or text); `spec`: the checked spec; `code`: the design's
+#   code (for the filter() rule); `txt`: the provided words; `warnings`: design_run()'s; `axes`: design_axes() (NULL leaves the scale types unchecked);
+#   `text`: whether to draw the plot again to measure its texts. Returns list(ok, reasons): one plain sentence for each thing wrong, first the cheapest.
+design_checks <- function(plot, d, facts, spec, code = "", txt = NULL, warnings = character(0), axes = design_axes(spec, d), size = SPEC_SIZE[c("width", "height")], text = TRUE) {
+  parts = design_parts(plot)
+  caught = function(f) tryCatch(f(), error = function(e) paste0("The chart could not be checked: ", design_message(e)))
+  faults = c(
+    caught(function() design_check_second_axis(parts)),
+    caught(function() design_check_rows(parts, d, code)),
+    caught(function() design_check_zero(parts)),
+    caught(function() design_check_scales(parts[[length(parts)]], axes)),
+    caught(function() design_check_warnings(warnings)),
+    caught(function() design_check_contrast(parts)))
+  tf = if (text) tryCatch(design_text_faults(plot, size), error = function(e) list(faults = paste0("The texts could not be measured: ", design_message(e)), boxes = NULL))
+  numbers = caught(function() design_check_numbers(design_drawn_strings(parts, tf$boxes), d, facts, spec, txt))
+  reasons = unique(as.character(stats::na.omit(c(faults, numbers, tf$faults))))
+  list(ok = !length(reasons), reasons = reasons)
+}
