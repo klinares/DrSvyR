@@ -19,10 +19,13 @@ REFLEXES_DIR <- file.path("www", "reflexes")
 #   message the analyst sends is one `chat` call, so its system prompt is the same on every turn and
 #   is read from the cache. suggest.md and refine.md hold rules only; chat.md has the reply format.
 CHAT_FILES <- c("core.md", "comparison.md", "relationship.md", "distribution.md", "time.md", "suggest.md", "refine.md", "chat.md")
-CALL_FILES <- list(label = "codebook.md", chat = CHAT_FILES, summarize = "summary.md")
+#   The design call (Phase 11 Part B) has design.md only: core.md's persona says the model never writes code and its prohibitions say "Do not write
+#   R code" and "Do not choose colours", which is the opposite of this call, and the parser takes whole files, not a section of one; design.md has
+#   its own persona and the prohibition on following instructions inside the data. The review of a picture is the same call's file.
+CALL_FILES <- list(label = "codebook.md", chat = CHAT_FILES, summarize = "summary.md", design = "design.md")
 
 # The file whose Output format ends each call's user message.
-CALL_REPLY <- c(label = "codebook.md", chat = "chat.md", summarize = "summary.md")
+CALL_REPLY <- c(label = "codebook.md", chat = "chat.md", summarize = "summary.md", design = "design.md")
 
 # Every reflex file, by name, so a missing one is an error and the README is not read as one.
 REFLEX_FILES <- unique(unlist(CALL_FILES, use.names = FALSE))
@@ -242,22 +245,23 @@ assemble_pick <- function(cb, question = NULL) {
 #   fresh (tokens_in) and from the prompt cache (tokens_cached), as ellmer's turn reports them
 #   (input, output, cached input), the tokens out, the seconds, and whether it was a repair. NA
 #   where the reply did not say.
-call_record <- function(call, system_txt, user_txt, res = NULL, repair = FALSE) {
+call_record <- function(call, system_txt, user_txt, res = NULL, repair = FALSE, images = 0L) {
   tk = as.numeric(res$tokens %||% c(NA, NA, NA))
   tk = c(tk, rep(NA_real_, 3L))[1:3]
   tibble::tibble(call = call, hash = prompt_hash(system_txt, user_txt), chars = nchar(system_txt) + nchar(user_txt),
                  tokens_in = tk[1], tokens_cached = tk[3], tokens_out = tk[2], seconds = as.numeric(res$seconds %||% NA_real_), repair = repair,
-                 ok = !is.null(res))
+                 ok = !is.null(res), images = as.integer(images))
 }
 
 # One call through `ask` (llm_json, or a stand-in in a test), recorded. Returns list(res, record,
 #   error); a failed call gives res NULL and its message.
-make_call <- function(call, system_txt, user_txt, ask, m, max_tokens, validate = NULL, repair = FALSE) {
-  res = tryCatch(ask(user_txt, m, system_prompt = system_txt, max_tokens = max_tokens, validate = validate),
+make_call <- function(call, system_txt, user_txt, ask, m, max_tokens, validate = NULL, repair = FALSE, images = NULL) {
+  res = tryCatch(if (length(images)) ask(user_txt, m, system_prompt = system_txt, max_tokens = max_tokens, validate = validate, images = images)
+                 else ask(user_txt, m, system_prompt = system_txt, max_tokens = max_tokens, validate = validate),
                  error = function(e) e)
   failed = inherits(res, "error")
   list(res = if (!failed) res, error = if (failed) conditionMessage(res),
-       record = call_record(call, system_txt, user_txt, if (!failed) res, repair))
+       record = call_record(call, system_txt, user_txt, if (!failed) res, repair, length(images)))
 }
 
 json_list <- function(x) if (is.null(x)) list() else if (is.list(x) && is.null(names(x))) x else list(x)
@@ -976,4 +980,499 @@ example_questions <- function(cb, templates = methodology_templates(), max = EXA
   can = purrr::map_lgl(templates$slots, function(s) length(s) > 0L && all(s %in% names(values)))
   t = utils::head(templates[can, ], max)
   tibble::tibble(question = purrr::map_chr(t$template, fill_template, values), family = t$chart, template = t$template)
+}
+
+
+# ---- design: the model writes the drawing code, R runs it and checks it (Phase 11 Part B) ----------------------------------------
+#   The spec, the plotted table and the facts are computed and checked as before. The model is given a skill (a markdown file the analyst chose), the
+#   toolkit, the spec, the table's columns (and its rows when it is aggregated and small), the facts, the style's tokens and the chart's words, and replies
+#   with R code that draws the table. design_guard(), design_run() and design_checks() (R/spec.R) decide whether that code may run and whether its picture
+#   may stand; a refusal is one sentence the model is shown once. Then the model looks at the picture (when the setting allows a picture to leave) and
+#   either says it is fine or sends code that goes through the same checks again; at most two rounds. Whatever fails, the chart keeps its rule-drawn
+#   picture and says in one line why. Every call is recorded, as the others are.
+
+DESIGN_TABLE_ROWS_MAX <- 60L       # the rows of an aggregated table sent with a design call; more are not sent
+DESIGN_LEVELS_MAX <- 12L           # the levels of a category listed in TABLE
+DESIGN_REVIEW_ROUNDS <- 2L         # the most times the model looks at the picture
+DESIGN_IMAGE_PX <- 1200L           # the widest a picture sent to the model may be
+DESIGN_IMAGE_DPI <- 150L           # drawn at this many pixels an inch, or fewer when that would be wider than DESIGN_IMAGE_PX
+DESIGN_IMAGES <- c("all", "aggregated", "none")
+DESIGN_WISH_MAX <- 300L            # characters of an analyst's wish that go to the model
+DESIGN_FACTS_MAX <- 40L            # the facts sent
+DESIGN_MOTIONS <- c("draw", "rise", "wipe", "fade")
+DESIGN_TEXT_FIELDS <- c("title", "subtitle", "caption", "x_label", "y_label")   # the spec's free text, searched for names
+DESIGN_REPAIR_ASK <- paste("The code you wrote was refused for the reason under PROBLEMS. Send the whole reply again with corrected code:",
+                           "the same chart, the same kind of design, the one problem fixed, using only the toolkit.")
+DESIGN_REVIEW_ASK <- paste("The picture of the chart your code draws is attached. Look at it as an editor and check it against the CHECKLIST.",
+                           "Reply {\"ok\": true, \"say\": \"...\"} if it would be printed as it is, or the whole corrected code in the reply format. Do not change it for the sake of change.")
+
+# The section markers of the design messages cannot be opened or closed from inside: in a text from outside they are written [SKILL] and so on.
+design_safe <- function(x) gsub("(?i)</?(SKILL|TOOLKIT|SPEC|TABLE|FACTS|TOKENS|TEXT|WISH|CHECKLIST|CODE)>", "[\\U\\1]", x, perl = TRUE)
+
+# One line, at most `n` characters.
+design_line <- function(x, n = 220L) {
+  one = trimws(gsub("[[:space:]]+", " ", paste(as.character(x), collapse = " ")))
+  if (nchar(one) > n) paste0(substr(one, 1L, n - 3L), "...") else one
+}
+
+
+# ---- the setting: which pictures may leave --------------------------------------------------------------------------------------------
+
+# APP_DESIGN_IMAGES (app.R): "all", "aggregated" or "none". An unknown value sends none (app.R stops at start-up on one; this is for a call made without it).
+design_images_setting <- function() {
+  v = get0("APP_DESIGN_IMAGES", envir = globalenv(), inherits = FALSE, ifnotfound = "all")
+  if (is_text1(v) && v %in% DESIGN_IMAGES) v else "none"
+}
+
+# Whether the picture of this chart may be sent to the model under the setting: every chart ("all"), only a chart drawn from an aggregated table, not one
+#   whose marks are rows of the file, such as a scatter, a bubble, a box or a violin ("aggregated"), or none.
+design_image_ok <- function(setting, spec) switch(setting, all = TRUE, aggregated = !chart_from_rows(spec), FALSE)
+
+design_image_why <- function(setting, spec) {
+  if (identical(setting, "none")) "this server sends no pictures (APP_DESIGN_IMAGES is \"none\")"
+  else if (identical(setting, "aggregated") && chart_from_rows(spec)) "this chart shows rows of the file as marks and this server sends only pictures of aggregated charts (APP_DESIGN_IMAGES is \"aggregated\")"
+  else "the picture may not be sent here"
+}
+
+
+# ---- skills ---------------------------------------------------------------------------------------------------------------------------
+
+SKILLS_DIR <- file.path("www", "skills")
+SKILL_MAX_LINES <- 120L
+SKILL_INTENT_CHARS <- 300L
+
+# The text under a "## name" heading of a skill, as lines.
+skill_section <- function(lines, name) {
+  at = which(trimws(lines) == paste("##", name))
+  if (!length(at)) return(NULL)
+  rest = lines[-seq_len(at[1])]
+  stop_at = which(grepl("^## ", rest))
+  rest[seq_len(if (length(stop_at)) stop_at[1] - 1L else length(rest))]
+}
+
+# One skill file, read: id (the file's name, "office:" first for a file of APP_SKILLS_DIR), title (its first "# " line), version (its "Version:" line), intent
+#   (the Intent section as one line), checklist (the Checklist for the review section, or NULL), text (the whole file, line endings made plain), lines, office,
+#   and ok. A skill that is over SKILL_MAX_LINES lines, that cannot be read, or that has no title or no Intent is not ok, and `reason` says why in one
+#   sentence. The text of a skill from an office folder is held here only to be sent to the model: nothing else keeps it (the calls' records hold hashes,
+#   a design holds the id, the title and the version, no export or report writes it).
+skill_read <- function(path, office = FALSE) {
+  file = basename(path)
+  id = paste0(if (office) "office:", tools::file_path_sans_ext(file))
+  bad = function(why, title = NULL) list(id = id, ok = FALSE, reason = why, office = office, title = title %||% tools::file_path_sans_ext(file), file = file)
+  lines = tryCatch(readLines(path, encoding = "UTF-8", warn = FALSE), error = function(e) NULL)
+  if (is.null(lines) || !all(validUTF8(lines))) return(bad(paste0("The skill file ", file, " could not be read as UTF-8 text, so it is not used.")))
+  lines = sub("\r$", "", lines)
+  if (length(lines) > SKILL_MAX_LINES)
+    return(bad(paste0("The skill file ", file, " has ", length(lines), " lines; a skill may have at most ", SKILL_MAX_LINES, ", because it is sent with every design call. It is not used.")))
+  title = sub("^# ", "", grep("^# ", lines, value = TRUE)[1])
+  if (is.na(title) || !nzchar(trimws(title))) return(bad(paste0("The skill file ", file, " has no '# title' line, so it is not used.")))
+  ver = grep("^Version:", lines, value = TRUE)
+  intent = skill_section(lines, "Intent")
+  one = if (!is.null(intent)) trimws(gsub("[[:space:]]+", " ", paste(intent[nzchar(trimws(intent))], collapse = " ")))
+  if (is.null(one) || !nzchar(one)) return(bad(paste0("The skill file ", file, " has no Intent section (the line the Style dialog shows), so it is not used."), trimws(title)))
+  check = skill_section(lines, "Checklist for the review")
+  list(id = id, ok = TRUE, reason = NA_character_, office = office, title = trimws(title),
+       version = if (length(ver)) trimws(sub("^Version:", "", ver[1])) else "none given",
+       intent = if (nchar(one) > SKILL_INTENT_CHARS) paste0(substr(one, 1L, SKILL_INTENT_CHARS - 3L), "...") else one,
+       checklist = if (!is.null(check) && any(nzchar(trimws(check)))) paste(check[nzchar(trimws(check))], collapse = "\n"),
+       text = paste(lines, collapse = "\n"), lines = length(lines), file = file)
+}
+
+# The folder of an office's own skills: APP_SKILLS_DIR (app.R) when it is set and the folder exists, else NULL.
+skills_office_dir <- function() {
+  d = get0("APP_SKILLS_DIR", envir = globalenv(), inherits = FALSE, ifnotfound = "")
+  if (is_text1(d) && nzchar(trimws(d)) && dir.exists(d)) d
+}
+
+# Every skill of www/skills/ and of the office folder, read (README.md is the folder's note, not a skill), in name order, the app's own first.
+skills_load <- function(dir = SKILLS_DIR, office_dir = skills_office_dir()) {
+  files = function(d) if (!is.null(d) && dir.exists(d)) sort(list.files(d, pattern = "[.]md$", full.names = TRUE, ignore.case = TRUE)) else character(0)
+  keep = function(f) !tolower(basename(f)) %in% "readme.md"
+  own = purrr::map(purrr::keep(files(dir), keep), skill_read)
+  office = purrr::map(purrr::keep(files(office_dir), keep), skill_read, office = TRUE)
+  out = c(own, office)
+  purrr::set_names(out, purrr::map_chr(out, "id"))
+}
+
+skills_ok <- function(skills) purrr::keep(skills, function(s) isTRUE(s$ok))
+
+# The skill a new session starts with: Editorial when it is there, else the first usable one; NULL when there is none.
+skill_default <- function(skills) {
+  ok = skills_ok(skills)
+  if (!length(ok)) return(NULL)
+  if ("editorial" %in% names(ok)) "editorial" else names(ok)[[1]]
+}
+
+# What Start here says about the skills that could not be used, or about a folder that is named but not there (one sentence each).
+skills_notes <- function(skills = skills_load()) {
+  d = get0("APP_SKILLS_DIR", envir = globalenv(), inherits = FALSE, ifnotfound = "")
+  c(if (is_text1(d) && nzchar(trimws(d)) && !dir.exists(d)) "APP_SKILLS_DIR names a folder that is not there, so no office skill was read.",
+    unlist(purrr::map(skills, function(s) if (!isTRUE(s$ok)) s$reason), use.names = FALSE),
+    if (!length(skills_ok(skills))) "No design skill is available, so Design is switched off.")
+}
+
+
+# ---- what the design call is given -----------------------------------------------------------------------------------------------------
+
+# A leaf of the spec that is a name or value of an identifier or text column is a placeholder in the message ([[N1]], as in the facts); free text is
+#   searched for the names (names_out()); every other value goes as it is.
+design_leaf <- function(x, map, free = FALSE) {
+  if (!is.character(x) || !length(map)) return(x)
+  if (free) return(names_out(x, map))
+  hit = match(x, unname(map))
+  ifelse(is.na(hit), x, names(map)[hit])
+}
+
+# The map of placeholders (token = name) with a token for each value in `values` that has none yet, numbered after the last.
+design_extend_map <- function(map, values) {
+  values = unique(as.character(values[!is.na(values)]))
+  new = setdiff(values, unname(map))
+  if (!length(new)) return(map)
+  c(map, stats::setNames(new, paste0("[[N", length(map) + seq_along(new), "]]")))
+}
+
+# The values of the spec that are names of identifier or text columns and that the facts may not have met (a filter's value, a highlight): so that they too are
+#   placeholders in the message.
+design_spec_names <- function(spec, cb) {
+  s = spec_public(spec)
+  name_cols = purrr::keep(chart_columns(s, cb), function(n) { e = cb_entry(cb, n); !is.null(e) && is_name_like(e) })
+  if (!length(name_cols)) return(character(0))
+  fl = s$filter
+  fl = if (!is.null(names(fl))) list(fl) else fl
+  from_filter = unlist(purrr::map(fl, function(f) if (f$column %in% name_cols) as.character(unlist(f$value))), use.names = FALSE)
+  as.character(c(from_filter, unlist(s$highlight$values, use.names = FALSE)))
+}
+
+# The spec as JSON for the message, with the placeholders.
+design_spec_json <- function(spec, map) {
+  s = purrr::imap(spec_public(spec), function(v, k) rapply(list(v), function(x) design_leaf(x, map, free = k %in% DESIGN_TEXT_FIELDS), classes = "character", how = "replace")[[1]])
+  as.character(jsonlite::toJSON(s, auto_unbox = TRUE, digits = NA))
+}
+
+# Everything a design needs about one chart: the plot as the app draws it (for its lint-settled spec, its table and its size), the table as a data frame, the
+#   facts (with real names for the run, with placeholders for the message), the words (the same), the style's tokens, the palette function, the size in inches
+#   and the scale types the spec asks for. R computes all of it from the chart and the file; no model is called.
+design_input <- function(chart, data, cb, palette = chart_palette_default()) {
+  p = spec_plot(chart$spec, data, cb, palette)
+  ls = attr(p, "spec")
+  table = attr(p, "table")
+  style = palette$style %||% CHART_STYLE_DEFAULT
+  f = spec_facts(ls, table, cb, isTRUE(chart$exploratory), data)
+  map = design_extend_map(f$names, design_spec_names(chart$spec, cb))
+  facts_tok = design_facts(ls, table, cb, data)
+  back = function(x) names_back(x, f$names)
+  facts = purrr::map(facts_tok, function(e) list(text = back(e$text), label = back(e$label), number = e$number))
+  txt = design_text(chart$spec, style, cb)
+  d = design_table(table)
+  list(spec = chart$spec, ls = ls, d = d, facts = facts, facts_tok = facts_tok, map = map, txt = txt,
+       txt_tok = purrr::map(txt, function(x) if (is.character(x)) names_out(x, map) else x), tok = design_tokens(style), pal = design_pal(palette),
+       size = spec_size(ls, table), axes = design_axes(chart$spec, d), aggregated = !chart_from_rows(chart$spec), cb = cb, style = style)
+}
+
+# A column of the table whose values are not sent: an identifier or free text of the dictionary, or any text column with more levels than may be listed.
+design_name_column <- function(x, e) (is.character(x) || is.factor(x)) && ((!is.null(e) && is_name_like(e)) || length(unique(x[!is.na(x)])) > DESIGN_LEVELS_MAX)
+
+# The table's columns as the message gives them: name | type | n (values not missing) | range, or the levels of a category (at most DESIGN_LEVELS_MAX). A
+#   column that design_name_column() says is names gives only how many different values it has.
+design_table_columns <- function(d, cb) {
+  num = function(x) format(signif(x, 6), scientific = FALSE, trim = TRUE, drop0trailing = TRUE)
+  one = function(nm) {
+    x = d[[nm]]
+    present = x[!is.na(x)]
+    k = length(unique(present))
+    type = if (inherits(x, c("Date", "POSIXct"))) "date" else if (is.factor(x)) "category" else if (is.character(x)) "text" else if (is.numeric(x)) "number" else class(x)[1]
+    what = if (!length(present)) "no values"
+      else if (design_name_column(x, cb_entry(cb, nm))) paste0(k, " different values, not listed")
+      else if (is.character(x) || is.factor(x)) paste0(k, " levels: ", paste(if (is.factor(x)) intersect(levels(x), as.character(present)) else sort(unique(as.character(present))), collapse = ", "))
+      else if (inherits(x, c("Date", "POSIXct"))) paste(format(range(as.Date(present)), "%Y-%m-%d"), collapse = " to ")
+      else if (is.numeric(x)) paste(num(range(present)), collapse = " to ")
+      else paste(k, "different values")
+    paste(nm, type, length(present), what, sep = " | ")
+  }
+  c("Columns (name | type | n | range or levels):", purrr::map_chr(names(d), one))
+}
+
+# The rows of an aggregated table of at most DESIGN_TABLE_ROWS_MAX rows, as lines; the values of identifier and text columns are placeholders. The text says
+#   when the rows are not sent and why. Rows of the analyst's file are never sent: a table of rows (fn none, a scatter) is not aggregated.
+design_table_rows <- function(d, cb, map, aggregated) {
+  if (!aggregated) return("Rows: not sent (this chart's marks are rows of the file).")
+  if (nrow(d) > DESIGN_TABLE_ROWS_MAX) return(paste0("Rows: not sent (the table has ", nrow(d), " rows; at most ", DESIGN_TABLE_ROWS_MAX, " are sent)."))
+  name_cols = purrr::keep(names(d), function(n) design_name_column(d[[n]], cb_entry(cb, n)))
+  map = design_extend_map(map, unlist(purrr::map(name_cols, function(n) as.character(d[[n]])), use.names = FALSE))
+  cell = function(n) {
+    x = d[[n]]
+    if (n %in% name_cols) names(map)[match(as.character(x), unname(map))]
+    else if (inherits(x, c("Date", "POSIXct"))) format(as.Date(x), "%Y-%m-%d")
+    else if (is.numeric(x)) format(signif(x, 6), scientific = FALSE, trim = TRUE, drop0trailing = TRUE)
+    else as.character(x)
+  }
+  cols = purrr::map(stats::setNames(names(d), names(d)), cell)
+  c(paste0("Rows (the aggregated table, ", nrow(d), " rows):"), paste(names(d), collapse = " | "),
+    if (nrow(d)) do.call(paste, c(unname(cols), sep = " | ")))
+}
+
+# The FACTS block lines: facts$<name>, its line as the facts write it, and its numbers.
+design_facts_block <- function(facts) {
+  facts = utils::head(facts, DESIGN_FACTS_MAX)
+  c("Each line is facts$<name>: use facts$<name>$text for its words, $number for its numbers and $label for its label.",
+    purrr::imap_chr(facts, function(e, nm) paste0("facts$", nm, ": ", e$text, if (length(e$number)) paste0("   [number: ", paste(format(e$number, digits = 15, scientific = FALSE, trim = TRUE), collapse = ", "), "]"))))
+}
+
+design_block <- function(name, lines) paste(c(paste0("<", name, ">"), lines, paste0("</", name, ">")), collapse = "\n")
+
+# The user message of a design call: SKILL, the WISH when there is one (added after the skill), TOOLKIT, SPEC, TABLE, FACTS, TOKENS and TEXT, then the
+#   reply format. A skill is a file the analyst chose; the spec, table, facts and words go with placeholders for identifier and text values.
+design_user <- function(inp, skill, wish = NULL, dir = REFLEXES_DIR) {
+  tok = purrr::imap_chr(inp$tok, function(v, k) paste0("tok$", k, " = ", if (is.character(v)) paste0("\"", v, "\"") else format(v)))
+  txt = purrr::imap_chr(inp$txt_tok, function(v, k) paste0("txt$", k, " = ", if (is.null(v)) "NULL" else paste0("\"", gsub("\"", "'", v), "\"")))
+  w = clean_question(wish)
+  paste(c(design_block("SKILL", design_safe(skill$text)),
+          if (nzchar(w)) design_block("WISH", c("The analyst asks for this look. Follow the skill otherwise; the rules above still hold.", design_safe(substr(w, 1L, DESIGN_WISH_MAX)))),
+          design_block("TOOLKIT", design_toolkit_text()),
+          design_block("SPEC", design_safe(design_spec_json(inp$spec, inp$map))),
+          design_block("TABLE", design_safe(c(design_table_columns(inp$d, inp$cb), design_table_rows(inp$d, inp$cb, inp$map, inp$aggregated)))),
+          design_block("FACTS", design_safe(design_facts_block(inp$facts_tok))),
+          design_block("TOKENS", tok),
+          design_block("TEXT", design_safe(txt)),
+          reply_format("design", dir)), collapse = "\n\n")
+}
+
+# The user message of a review: the skill's checklist, the code, the wish if there was one, what to do; the picture travels beside it.
+design_review_user <- function(skill, code, wish = NULL, dir = REFLEXES_DIR) {
+  w = clean_question(wish)
+  paste(c(design_block("CHECKLIST", design_safe(skill$checklist %||% "Is anything clipped, overlapping, too small, too loud, redundant or misleading? Does every bar start at zero and does every number come from the facts?")),
+          design_block("CODE", design_safe(code)),
+          if (nzchar(w)) design_block("WISH", design_safe(substr(w, 1L, DESIGN_WISH_MAX))),
+          DESIGN_REVIEW_ASK, reply_format("design", dir)), collapse = "\n\n")
+}
+
+# The code of a reply: the string, or the lines joined; NULL when there is none.
+design_reply_code <- function(obj) {
+  code = obj[["code"]]
+  if (is.list(code)) code = unlist(code, use.names = FALSE)
+  if (!is.character(code) || !length(code)) return(NULL)
+  one = paste(code, collapse = "\n")
+  if (nzchar(trimws(one))) one
+}
+
+validate_design <- function(obj) {
+  if (!is.list(obj) || is.null(design_reply_code(obj))) stop("The reply has no code.", call. = FALSE)
+  invisible(TRUE)
+}
+
+# A review's reply is ok, or code.
+validate_review <- function(obj) {
+  if (!is.list(obj) || (!isTRUE(obj[["ok"]]) && is.null(design_reply_code(obj)))) stop("The reply is neither ok nor code.", call. = FALSE)
+  invisible(TRUE)
+}
+
+design_motion <- function(obj, was = "fade") {
+  m = obj[["motion"]]
+  if (is_text1(m) && tolower(trimws(m)) %in% DESIGN_MOTIONS) tolower(trimws(m)) else was
+}
+
+design_say <- function(obj, was = NA_character_) {
+  # design.md asks for one sentence with no number; a sentence with a digit in it is not shown (the number check has no facts to read it against).
+  if (is_text1(obj[["say"]]) && nzchar(trimws(obj[["say"]])) && !grepl("[0-9]", obj[["say"]])) design_line(obj[["say"]], 300L) else was
+}
+
+# What a failed call says on the card, in one line: the model's own wording is never shown (a reply could hold anything); what a person can act on is.
+design_call_line <- function(msg) {
+  m = design_line(msg, 200L)
+  if (grepl("^There is no key|^The endpoint refused|retry cap|^The call to ", m)) m else "the model's reply could not be read as a design"
+}
+
+# The width in pixels of a PNG, from its header (no package needed); NA for a file that is not one.
+design_png_width <- function(file) {
+  b = tryCatch(readBin(file, "raw", 24L), error = function(e) raw(0))
+  if (length(b) < 24L || !identical(b[1:4], as.raw(c(0x89, 0x50, 0x4e, 0x47)))) return(NA_integer_)
+  sum(as.integer(b[17:20]) * 256^(3:0))
+}
+
+
+# ---- one design ---------------------------------------------------------------------------------------------------------------------
+
+# Designs one chart: call; guard, run and checks; on a refusal one repair call with the sentence; then up to `rounds` reviews by looking, each a call with the
+#   picture, whose reply is ok or new code that goes through the guard, the run and the checks again. A review that gives code that is refused leaves the
+#   earlier design standing and ends the reviewing. `ask` makes the calls (llm_json, or a stand-in in a test: it is the whole transport), `images` is the
+#   setting (design_images_setting()), `stage` is told in words what is happening (the card's working line), `wish` is an analyst's request for a look.
+#   Returns list(ok, reason, design, refusals, calls, seconds): `reason` is one line when not ok (the card says it and keeps its rule-drawn picture); `design`
+#   is list(skill = id, title, version and office, code, motion, say, wish, review, rounds, changed, refusals, file, size, table, seconds, calls); `file` is the
+#   PNG of the design at the size sent to the model (at most DESIGN_IMAGE_PX wide), left for the caller to use and remove; `calls` is the records of the calls.
+#   No text of the skill is in the result: only its id, title and version.
+design_chart <- function(chart, skill, data, cb, palette = chart_palette_default(), ask = llm_json, m = APP_MODEL, wish = NULL, images = design_images_setting(),
+                         rounds = DESIGN_REVIEW_ROUNDS, stage = function(s) invisible(NULL), dir = REFLEXES_DIR) {
+  started = Sys.time()
+  acc = new.env()
+  acc$records = list()
+  acc$refusals = character(0)
+  say_stage = function(s) { stage(s); invisible(NULL) }
+  finish = function(ok, reason = NA_character_, design = NULL)
+    list(ok = ok, reason = reason, design = design, refusals = acc$refusals, calls = dplyr::bind_rows(acc$records),
+         seconds = as.numeric(difftime(Sys.time(), started, units = "secs")))
+  failed = function(why) finish(FALSE, design_line(why, 240L))
+  if (is.null(skill) || !isTRUE(skill$ok)) return(failed("no design skill is chosen"))
+  inp = tryCatch(design_input(chart, data, cb, palette), error = function(e) e)
+  if (inherits(inp, "error")) return(failed("the chart could not be drawn from its spec, so there is nothing to design"))
+  system_txt = assemble_system("design", dir)
+  dpi = min(DESIGN_IMAGE_DPI, floor(DESIGN_IMAGE_PX / inp$size[["width"]]))
+  call = function(kind, user, validate, repair = FALSE, images = NULL) {
+    r = make_call(kind, system_txt, user, ask, m, LLM_MAX_TOKENS[[kind]], validate, repair = repair, images = images)
+    acc$records = c(acc$records, list(r$record))
+    r
+  }
+  # Guard, run and checks of one piece of code: list(ok, why) or list(ok, run).
+  attempt = function(code) {
+    r = design_run(code, inp$d, inp$facts, inp$txt, inp$tok, inp$pal, size = inp$size, dpi = dpi, keep = TRUE)
+    if (!r$ok) return(list(ok = FALSE, why = r$reason))
+    ck = design_checks(r$plot, inp$d, inp$facts, inp$spec, code, inp$txt, r$warnings, axes = inp$axes, size = inp$size)
+    if (!ck$ok) { unlink(r$file); return(list(ok = FALSE, why = paste(ck$reasons, collapse = " "))) }
+    list(ok = TRUE, run = r)
+  }
+
+  say_stage("asking the model for a design")
+  user_txt = design_user(inp, skill, wish, dir)
+  first = call("design", user_txt, validate_design)
+  if (is.null(first$res)) return(failed(design_call_line(first$error)))
+  code = design_reply_code(first$res$obj)
+  motion = design_motion(first$res$obj)
+  said = design_say(first$res$obj)
+  say_stage("drawing it and checking the drawing")
+  cur = attempt(code)
+  if (!cur$ok) {
+    acc$refusals = cur$why
+    say_stage("repairing the design the checks refused")
+    repair_user = paste(user_txt, paste0("YOUR REPLY\n", first$res$raw), paste0("PROBLEMS\n", cur$why), DESIGN_REPAIR_ASK, sep = "\n\n")
+    second = call("design", repair_user, validate_design, repair = TRUE)
+    if (is.null(second$res)) return(failed(paste0("the design was refused (", design_line(cur$why, 120L), ") and the repair could not be read")))
+    code = design_reply_code(second$res$obj)
+    motion = design_motion(second$res$obj, motion)
+    said = design_say(second$res$obj, said)
+    say_stage("drawing the repaired design and checking it")
+    cur = attempt(code)
+    if (!cur$ok) {
+      acc$refusals = c(acc$refusals, cur$why)
+      return(failed(paste0("the design was refused twice; the second time: ", design_line(cur$why, 160L))))
+    }
+  }
+
+  # The review by looking. A picture that may not be sent, or a device that draws SVG, ends it before it starts.
+  allowed = design_image_ok(images, inp$spec)
+  look = allowed && endsWith(cur$run$file, ".png")
+  skip = if (!look) paste0("Not reviewed by looking: ", if (!allowed) design_image_why(images, inp$spec) else "this server draws SVG pictures, which cannot be shown to the model", ".")
+  st = purrr::reduce(seq_len(if (look) rounds else 0L), function(st, i) {
+    if (st$done) return(st)
+    say_stage(paste0("the model is looking at the picture, round ", i, " of ", rounds))
+    stopifnot(is.na(design_png_width(st$run$file)) || design_png_width(st$run$file) <= DESIGN_IMAGE_PX)
+    rv = call("review", design_review_user(skill, st$code, wish, dir), validate_review, images = st$run$file)
+    st$rounds = i
+    if (is.null(rv$res)) { st$done = TRUE; st$status = "unreadable"; return(st) }
+    new = if (isTRUE(rv$res$obj[["ok"]])) NULL else design_reply_code(rv$res$obj)
+    if (is.null(new) || identical(trimws(new), trimws(st$code))) {
+      st$done = TRUE
+      return(st)
+    }
+    say_stage("checking the change the model made")
+    a = attempt(new)
+    if (!a$ok) {
+      acc$refusals = c(acc$refusals, a$why)
+      st$done = TRUE
+      st$status = "refused"
+      st$why = design_line(a$why, 140L)
+      return(st)
+    }
+    unlink(st$run$file)
+    st$code = new
+    st$run = a$run
+    st$motion = design_motion(rv$res$obj, st$motion)
+    st$say = design_say(rv$res$obj, st$say)
+    st$changed = st$changed + 1L
+    st
+  }, .init = list(code = code, run = cur$run, motion = motion, say = said, done = FALSE, rounds = 0L, changed = 0L, status = "ok", why = NA_character_))
+  review = if (!look) skip else paste0("Reviewed by looking: the model looked at the picture and ",
+    if (st$changed > 0L) paste0("changed the design", if (st$changed > 1L) paste0(" ", st$changed, " times")) else if (identical(st$status, "refused")) "wanted to change the design" else "found nothing to change",
+    switch(st$status, refused = paste0(if (st$changed > 0L) "; its next change" else "; the change", " was refused (", st$why, "), so the design before it stands"),
+           unreadable = "; a later look could not be read, so the design before it stands", ""), ".")
+  finish(TRUE, design = list(
+    skill = list(id = skill$id, title = skill$title, version = skill$version, office = isTRUE(skill$office)), code = st$code, motion = st$motion, say = st$say,
+    wish = if (nzchar(clean_question(wish))) substr(clean_question(wish), 1L, DESIGN_WISH_MAX), review = review, looked = look, rounds = st$rounds, changed = st$changed,
+    refusals = acc$refusals, file = st$run$file, plot = st$run$plot, size = inp$size, table = inp$d, seconds = as.numeric(difftime(Sys.time(), started, units = "secs")),
+    calls = length(acc$records)))
+}
+
+
+# ---- whether a design's drawing can have tooltips -------------------------------------------------------------------------------------
+
+# A design is drawn by the model's code, so its layers are not the app's own and cannot be swapped for ggiraph's by name as spec_widget() does. The rule that
+#   decides, mechanically: the design can be given tooltips when it is one ggplot (not a patchwork of several), has at least one mark layer, and each of its
+#   mark layers (a geom of DESIGN_MARK_GEOMS) is a column, bar, point or tile that ggiraph has an interactive twin for (DESIGN_TWINS, each looked up in the installed ggiraph) and is
+#   drawn from its data as it is (StatIdentity: a count, a bin or a fitted line has no row to give a tooltip to). Layers that are not marks (labels, rules,
+#   leaders, annotations) stay as they are. Anything else: not interactive, with the sentence that says why. design_widget() then builds it and compares.
+#   A line is not among DESIGN_TWINS: a line's tooltip belongs to the whole line (ggiraph takes one for each group), and the standard interactive view puts one on
+#   each vertex with invisible points, which a design's own line layer cannot do mechanically.
+DESIGN_TWINS <- c(GeomCol = "geom_col_interactive", GeomBar = "geom_bar_interactive", GeomPoint = "geom_point_interactive", GeomTile = "geom_tile_interactive")
+
+design_twin_class <- function(layer) class(layer$geom)[class(layer$geom) %in% names(DESIGN_TWINS)][1]
+
+design_interactive_ok <- function(plot) {
+  no = function(why) list(ok = FALSE, reason = why)
+  if (!inherits(plot, "ggplot") || inherits(plot, "patchwork")) return(no("a design made of several plots put together has no tooltips"))
+  marks = purrr::keep(plot$layers, function(l) inherits(l$geom, DESIGN_MARK_GEOMS))
+  if (!length(marks)) return(no("the design has no layer of marks to give tooltips to"))
+  lacks = purrr::keep(marks, function(l) is.na(design_twin_class(l)))
+  if (length(lacks)) return(no(paste0("a layer of the design, ", design_layer_name(lacks[[1]]), ", has no interactive version")))
+  if (!all(purrr::map_lgl(marks, function(l) inherits(l$stat, "StatIdentity")))) return(no("a layer of marks is a count, a bin or a fitted line, which has no row to give a tooltip to"))
+  if (!all(DESIGN_TWINS[unique(purrr::map_chr(marks, design_twin_class))] %in% getNamespaceExports("ggiraph"))) return(no("the installed ggiraph lacks the interactive version of a layer"))
+  list(ok = TRUE, reason = NA_character_)
+}
+
+# The tooltip of a mark, written by R from the layer's own data: each aesthetic the layer maps (x, y, colour, fill, size) as "label: value", the label from
+#   the plot's labels (else the aesthetic's name), numbers to four significant digits, HTML-escaped. NULL when a mapping cannot be read.
+design_tooltips <- function(plot, layer, ld) {
+  map = c(as.list(if (isTRUE(layer$inherit.aes)) plot$mapping else NULL), as.list(layer$mapping))
+  map = map[names(map) %in% c("x", "y", "colour", "color", "fill", "size")]
+  map = map[!duplicated(names(map), fromLast = TRUE)]
+  if (!length(map)) return(NULL)
+  value = function(v) if (inherits(v, c("Date", "POSIXct"))) format(as.Date(v), "%Y-%m-%d")
+                      else if (is.numeric(v) && !is.factor(v)) format(signif(v, 4), big.mark = ",", scientific = FALSE, trim = TRUE, drop0trailing = TRUE) else as.character(v)
+  cols = tryCatch(purrr::imap(map, function(q, a) {
+    lab = plot$labels[[sub("^color$", "colour", a)]]
+    paste0(htmltools::htmlEscape(if (is.character(lab) && nzchar(lab[[1]])) lab[[1]] else rlang::as_label(q)), ": ", htmltools::htmlEscape(value(rlang::eval_tidy(q, ld))))
+  }), error = function(e) NULL)
+  if (is.null(cols) || any(lengths(cols) != nrow(ld))) return(NULL)
+  do.call(paste, c(unname(cols), sep = "<br/>"))
+}
+
+# The design as an interactive chart (ggiraph): each mark layer made again by its twin, with the layer's own data and a tooltip and an id; the result is
+#   built and compared with the design's own build (the same number of rows and the same x and y positions in every layer), and where it differs the design is
+#   not interactive. Returns the widget, or NULL with an attribute "why". The picture is still the model's drawing.
+design_widget <- function(plot, size, palette = chart_palette_default()) {
+  no = function(why) structure(list(), why = why)
+  ok = design_interactive_ok(plot)
+  if (!ok$ok) return(no(ok$reason))
+  swapped = tryCatch(purrr::map(plot$layers, function(l) {
+    if (!inherits(l$geom, DESIGN_MARK_GEOMS)) return(l)
+    ld = as.data.frame(l$layer_data(plot$data))
+    tip = design_tooltips(plot, l, ld)
+    if (is.null(tip)) stop("no tooltip")
+    ld$.tip = tip
+    ld$.id = seq_len(nrow(ld))
+    twin = getExportedValue("ggiraph", DESIGN_TWINS[[design_twin_class(l)]])
+    own = l$geom_params[names(l$geom_params) %in% c("width", "orientation", "just", "lineend", "linejoin", "na.rm", "linemitre")]
+    do.call(twin, c(list(mapping = ggplot2::aes(tooltip = .tip, data_id = .id), data = ld, stat = "identity", position = l$position, show.legend = l$show.legend, inherit.aes = TRUE),
+                    l$aes_params, own))
+  }), error = function(e) NULL)
+  if (is.null(swapped)) return(no("a tooltip could not be written for a layer of marks"))
+  p2 = plot
+  p2$layers = swapped
+  same = tryCatch({
+    a = ggplot2::ggplot_build(plot)$data
+    b = ggplot2::ggplot_build(p2)$data
+    length(a) == length(b) && all(purrr::map2_lgl(a, b, function(x, y) nrow(x) == nrow(y) &&
+      all(purrr::map_lgl(intersect(c("x", "y", "xmin", "xmax", "ymin", "ymax"), names(x)), function(n) isTRUE(all.equal(x[[n]], y[[n]]))))))
+  }, error = function(e) FALSE)
+  if (!isTRUE(same)) return(no("the chart drawn with tooltips differs from the design's own drawing, so the design is shown as a picture"))
+  w = ggiraph::girafe(ggobj = p2, width_svg = size[["width"]], height_svg = size[["height"]], font_set = widget_font_set(), options = widget_options(chart_style(palette$style)))
+  w$x$html = gsub("font-family='sans'", "font-family='sans-serif'", w$x$html, fixed = TRUE)
+  w
 }

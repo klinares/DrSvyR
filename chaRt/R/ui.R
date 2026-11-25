@@ -105,12 +105,31 @@ start_ui <- function()
            "that follow written visualization rules, and lets you change a chart by chat. Charts collect ",
            "on a canvas, each with a headline and a short summary of what it shows. Every chart and ",
            "summary describes the file, not a population. Start on the Data page, then go to Explore."),
+    privacy_ui(),
     device_note(),
     fonts_note(),
     theme_note(),
+    skills_note(),
     video_note(),
     mod_key_ui("key"),
     mod_connect_ui("connect"))
+
+# What the model is sent, in words, for Start here, the Methodology page and the README (Phase 11 Part B: the model used to be told nothing of the file but
+#   its columns; a design call sends more). The setting APP_DESIGN_IMAGES says which pictures leave this server.
+PRIVACY_BASE <- paste("The model never receives the rows of your file as text. It is sent the data dictionary, a summary of each column in play, and, to write a headline,",
+                      "the numbers R worked out for that chart, with the names from identifier and text columns replaced by placeholders.")
+PRIVACY_DESIGN <- paste("When you press Design, the model is also sent the table the chart plots, if that table is aggregated and has at most", DESIGN_TABLE_ROWS_MAX,
+                        "rows (never rows of your file), and the picture of the chart, so that it can look at its own drawing and correct it.",
+                        "The picture of a scatter, bubble, box or violin chart shows individual rows as marks, so those rows can be read from it.")
+design_privacy_images <- function(setting = design_images_setting())
+  switch(setting,
+         all = "This server sends the picture of every chart that is designed.",
+         aggregated = "This server sends the picture only of charts drawn from aggregated tables, never of a chart whose marks are rows of the file.",
+         "This server sends no picture, so a design is not reviewed by looking.")
+privacy_text <- function(setting = design_images_setting()) c(PRIVACY_BASE, PRIVACY_DESIGN, design_privacy_images(setting))
+
+privacy_ui <- function(setting = design_images_setting())
+  advice_box(tags$p(tags$strong("What the model is sent")), purrr::map(privacy_text(setting), tags$p))
 
 # Said once on Start here: which device draws the charts (chart_device() in R/theme.R). ragg is the usual answer and
 #   is said quietly; cairo or svglite, which a server without ragg falls back to, is said in a box, with what they
@@ -147,6 +166,12 @@ fonts_note <- function() {
 # Said once on Start here about the office's ggplot theme (APP_THEME_FILE in app.R): why it is not used, a font it names that is
 #   missing here, or colours of it that fail the contrast checks; a warning, never an error. Nothing when no theme is set or all is well.
 theme_note <- function(notes = if (exists("APP_THEME_NOTES", envir = globalenv())) get("APP_THEME_NOTES", envir = globalenv()) else character(0)) {
+  if (!length(notes)) return(NULL)
+  tagList(purrr::map(notes, warn_box))
+}
+
+# Said once on Start here about the design skills that could not be used (a file over 120 lines, one with no Intent), or a skills folder that is not there.
+skills_note <- function(notes = skills_notes()) {
   if (!length(notes)) return(NULL)
   tagList(purrr::map(notes, warn_box))
 }
@@ -592,6 +617,32 @@ animate_request <- function(msg) {
 }
 ANIMATE_NONE <- "Click a chart first, then ask me to animate it."
 
+# A message that only asks for the selected chart to be designed: "design this", "redesign this", "make it look better", "make it publication ready", with at
+#   most a polite word or two around it. R starts a design with no chat call. Plain groups only, so the same pattern runs in the browser's script.
+DESIGN_PATTERN <- paste0("^(please )?((can|could) you )?(please )?(((re)?design|restyle|polish|beautify)( (this|it|that|the chart|this chart|the selected chart))?|",
+                         "make (it|this|that|the chart|this chart) (look (better|nicer|great|good|professional|prettier)|publication[- ]ready|publishable|print[- ]ready|better)|",
+                         "make (it|this|that|the chart|this chart) ready for (publication|print))( please)?$")
+design_request <- function(msg) {
+  m = tolower(trimws(gsub("[[:space:]]+", " ", as.character(msg))))
+  m = trimws(sub("[.!?]+$", "", m))
+  length(m) == 1L && !is.na(m) && grepl(DESIGN_PATTERN, m, perl = TRUE)
+}
+DESIGN_NONE <- "Click a chart first, then ask me to design it."
+
+# A message that asks for a specific look of the selected chart ("put the legend inside", "make the title bigger", "use a darker background"): a verb of
+#   changing a look, a thing that has a look, and none of the words of changing what the chart is made of (its form, columns, groups, filters or numbers). R sends
+#   it to the design call as its WISH (no chat call). Anything doubtful is the analyst's own message and goes to the chat as before.
+DESIGN_WISH_VERBS <- "\\b(put|move|place|make|use|set|change|remove|hide|add|give|increase|decrease|reduce|enlarge|shrink|turn|drop|lighten|darken|thicken|centre|center|align|rotate|space|widen|narrow|tidy)\\b"
+DESIGN_WISH_THINGS <- "\\b(legend|title|subtitle|caption|background|font|typeface|labels?|gridlines?|grid lines?|grid|axis|axes|margins?|spacing|text|annotations?|colou?rs?|border|bars?|lines?|points|dots|headline)\\b"
+DESIGN_WISH_NOT <- paste0("\\b(bar chart|line chart|scatter|histogram|heatmap|heat map|box ?plot|violin|dot chart|slope|dumbbell|bubble|pie|facet|panels?|small multiples|",
+                          "group(ed)? by|split by|by [a-z_]+|per [a-z_]+|filter|only|exclude|include|top [0-9]+|sort|order|log scale|log axis|percent|share|average|mean|total|sum|count|",
+                          "to say|to read|say|reads?|called|named|wording|rename)\\b")
+design_wish <- function(msg) {
+  m = tolower(trimws(gsub("[[:space:]]+", " ", as.character(msg))))
+  length(m) == 1L && !is.na(m) && nchar(m) >= 6L && nchar(m) <= DESIGN_WISH_MAX && !design_request(m) &&
+    grepl(DESIGN_WISH_VERBS, m, perl = TRUE) && grepl(DESIGN_WISH_THINGS, m, perl = TRUE) && !grepl(DESIGN_WISH_NOT, m, perl = TRUE)
+}
+
 SETUP_SUMMARY <- paste("Choose the columns for the summary table in the dialog. R works the numbers out from the file; no model is asked, and",
                            "nothing of the table is sent to one.")
 SUMMARY_PRIVACY <-"Worked out by R from the file and drawn in your browser; no model is asked and nothing here is sent to one."
@@ -934,7 +985,7 @@ copy_js <- function(code_id)
 #   motion. It is not a chat message: nothing is added to the chat's messages. A link to #open-data-page opens
 #   the Data page.
 WORKING_WORDS <- c(chat = "Thinking", suggest = "Thinking", headlines = "Writing headlines", headline = "Writing a headline",
-                   label = "Labelling columns", setup = "Working", dashboard = "Building the dashboard", animate = "Drawing the video")
+                   label = "Labelling columns", setup = "Working", dashboard = "Building the dashboard", animate = "Drawing the video", design = "Designing")
 WORKING_LATER <- ", still working"
 WORKING_LATER_MS <- 8000L
 EXPLORE_CSS <- "
@@ -1046,6 +1097,7 @@ EXPLORE_JS <- paste0("
     if (text === 'Label the columns') return WORDS.label;
     if (/^Treat '.*' as missing$/.test(text) || /^A row is /.test(text)) return WORDS.setup;
     if (new RegExp(", jsonlite::toJSON(ANIMATE_PATTERN, auto_unbox = TRUE), ", 'i').test(text.trim().replace(/[.!?]+$/, ''))) return WORDS.animate;
+    if (new RegExp(", jsonlite::toJSON(DESIGN_PATTERN, auto_unbox = TRUE), ", 'i').test(text.trim().replace(/[.!?]+$/, ''))) return WORDS.design;
     return WORDS.chat;
   }
   function busy(on) {
@@ -1120,6 +1172,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     last = reactiveVal(NULL)           # the analyst's last message and the model's reply text to it, and nothing else
     busy = reactiveVal(FALSE)          # TRUE while a call to the model runs
     palette = reactiveVal(chart_palette_default())
+    skills = skills_load()             # the design skills found (www/skills/ and APP_SKILLS_DIR), read once; an office skill's text stays in this list
+    dopts = reactiveValues(skill = skill_default(skills), auto = FALSE)   # the skill chosen in the Style dialog, and whether new charts are designed at once
     treat = reactiveVal(character(0))  # the values the chat offers to treat as missing
     guess = reactiveVal(NULL)          # the model's guess at what one row is, offered while the dictionary has none
     story_note = reactiveValues()      # per chart: the sentence when no headline could be written
@@ -1142,7 +1196,12 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     made$dash = new.env()              # per chart: whether it is in the dashboard (a reactiveVal, TRUE when the card is made)
     made$video = new.env()             # per chart: its video (a reactiveVal: NULL, or list(key, file, small, seconds, frames)); the key is what it was drawn from
     made$showv = new.env()             #   and whether the card shows it in place of the picture (a reactiveVal)
+    made$design = new.env()            # per chart: its design (a reactiveVal: NULL, or what design_chart() made, with the key it was made from and its plot)
+    made$showd = new.env()             #   whether the card shows the designed drawing (a reactiveVal), and the one line that says why a design was not used or was dropped
+    made$dnote = new.env()
+    made$dwidget = new.env()           #   and the designed drawing with tooltips (a reactive), which is empty, with a reason, when its layers cannot have them
     made$video_dir = NULL              # this session's folder of video files, made when the first video is
+    session$onSessionEnded(function() purrr::walk(ls(made$design), function(i) { dz = shiny::isolate(made$design[[i]]()); if (!is.null(dz)) unlink(dz$file) }))
     made$thumbs = new.env()            # the small pictures of the export dialog, by chart spec, palette and data
     made$tn = 0L                       # summary tables made, for their ids (t1, t2, ...)
     made$table = new.env()             # per table: its definition (title, measures, by, ci), a reactiveVal; a table's switch for the dashboard is in made$dash
@@ -1327,8 +1386,10 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       state$calls = dplyr::bind_rows(isolate(state$calls), r$calls)
       last(r$last)
       if (identical(r$kind, "spec") && !is.null(r$chart)) set_chart(r$chart)
-      if (identical(r$kind, "charts")) add_charts(r$charts)
+      new_ids = if (identical(r$kind, "charts")) add_charts(r$charts)
       say(chat_reply_text(r), one_line(r$`next`))
+      # "Design new charts automatically" (Style, off by default): each new chart is designed after the reply, one design after another.
+      if (isTRUE(isolate(dopts$auto)) && length(new_ids) && !is.null(skill_chosen())) design_many(new_ids)
       invisible(r)
     }
 
@@ -1351,6 +1412,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       if (m %in% made$rows_offered) return(function() say("That row guess is not on offer now. Write what one row is on the Data page."))
       # A message that only asks for the selected chart to be animated is answered by R: no model call.
       if (animate_request(m)) return(animate_selected)
+      # So is one that only asks for it to be designed, and one that asks for a specific look of a selected chart (a wish for the design call).
+      if (design_request(m)) return(design_selected)
+      if (design_wish(m) && !is.null(selected_chart(unname(purrr::map(chart_ids(), chart_of)), isolate(selected())))) return(function() design_selected(wish = m))
       # A message that only asks for summary statistics is answered by R opening the dialog of the summary table: no model call.
       if (summary_request(m)) return(function() if (isTRUE(open_table_dialog())) say(SETUP_SUMMARY))
       NULL
@@ -1533,6 +1597,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                                                             if (n_tables) paste0(", ", format_num(n_tables), if (n_tables == 1L) " table" else " tables"))),
                tags$span(class = "text-muted small chart-in-dashboard", paste0(format_num(n_in), " of ", format_num(length(cards)), " in the dashboard")),
                actionButton(ns("add_table"), "Add a summary table", class = "btn-sm btn-outline-secondary"),
+               actionButton(ns("design_all"), "Design all", class = "btn-sm btn-outline-primary chart-call", `data-working` = WORKING_WORDS[["design"]],
+                            title = "Designs each chart on the canvas that has no current design: two to four model calls for each", disabled = if (is.null(skill_chosen())) NA),
                actionButton(ns("export"), "Export dashboard", class = "btn-sm btn-outline-secondary"),
                if (!is.null(chosen))
                  tagList(tags$span(class = "small", paste0("Selected: ", chosen)),
@@ -1588,8 +1654,28 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                    palette_swatch_script(unlist(purrr::map(names(EXPLORE_PALETTE_KINDS), function(kind) names(chart_palettes(kind))))),
                    purrr::imap(EXPLORE_PALETTE_KINDS, function(label, kind)
                      selectizeInput(ns(paste0("pal_", kind)), label, choices = chart_palette_groups(kind), selected = pal[[kind]],
-                                    width = "100%", options = list(render = I(PALETTE_SWATCH_RENDER))))))))
+                                    width = "100%", options = list(render = I(PALETTE_SWATCH_RENDER)))))),
+        tags$hr(),
+        tags$h6("Design"),
+        tags$p(class = "small text-muted", "Design asks the model to draw a chart again, following the skill below; R runs and checks its code, and the chart keeps its standard drawing as the fall-back. ",
+               "A design costs two to four model calls: the design, a second if R refuses its drawing, and up to two looks at the picture."),
+        if (length(skills_ok(skills)))
+          radioButtons(ns("design_skill"), "Design skill", width = "100%", selected = isolate(dopts$skill),
+                       choiceNames = unname(purrr::map(skills_ok(skills), function(sk) tags$span(tags$span(class = "chart-style-name", sk$title),
+                                                                                                 if (isTRUE(sk$office)) tags$span(class = "badge bg-secondary ms-1", "Office"),
+                                                                                                 tags$span(class = "d-block small text-muted", sk$intent)))),
+                       choiceValues = names(skills_ok(skills)))
+        else tags$p(class = "small", style = warn_style, "No design skill is available."),
+        purrr::map(purrr::keep(skills, function(sk) !isTRUE(sk$ok)), function(sk) tags$p(class = "small", style = warn_style, sk$reason)) |> unname(),
+        bslib::input_switch(ns("design_auto"), "Design new charts automatically", value = isolate(dopts$auto)),
+        tags$p(class = "small text-muted", "Off by default. When on, each chart the chat adds is designed after it is drawn."),
+        tags$p(class = "small text-muted", paste(privacy_text(), collapse = " "))))
     })
+    observeEvent(input$design_skill, {
+      v = input$design_skill
+      if (is_text1(v) && v %in% names(skills_ok(skills)) && !identical(isolate(dopts$skill), v)) dopts$skill = v
+    }, ignoreInit = TRUE)
+    observeEvent(input$design_auto, dopts$auto <- isTRUE(input$design_auto), ignoreInit = TRUE)
     observeEvent(input$style_choice, {
       p = isolate(palette())
       v = input$style_choice
@@ -1624,7 +1710,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     dash_items = function() {
       ids = purrr::keep(isolate(state$canvas), function(i) (!is.null(chart_of(i)) || !is.null(table_of(i))) && in_dash(i))
       purrr::map(ids, function(i) if (!is.null(table_of(i))) list(id = i, table = table_of(i), mode = "table", stale = NA_character_)
-                                  else list(id = i, chart = chart_of(i), story = story_of(i), mode = "picture",
+                                  else list(id = i, chart = chart_of(i), story = story_of(i), mode = "picture", design = design_shown(i),
                                             stale = story_stale(story_of(i), chart_of(i), isolate(data_key()))))
     }
     item_title = function(it) if (!is.null(it$table)) it$table$title else chart_title(it$chart, "Untitled chart")
@@ -1689,11 +1775,14 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       chart_items = purrr::keep(items, function(it) is.null(it$table))
       purrr::walk(chart_items, function(it)
         output[[paste0("dash_note_", it$id)]] = renderUI({
-          if (identical(input[[dash_mode_id(it$id)]], "interactive") && chart_from_rows(it$chart$spec))
-            tags$p(class = "small mb-0", style = warn_style, DASH_DISCLOSURE)
-          else if (identical(input[[dash_mode_id(it$id)]], "video"))
-            tagList(tags$p(class = "small mb-0 text-muted", DASH_VIDEO_TIME),
-                    if (chart_from_rows(it$chart$spec)) tags$p(class = "small mb-0", style = warn_style, DASH_VIDEO_DISCLOSURE))
+          mode = input[[dash_mode_id(it$id)]]
+          tagList(
+            if (!is.null(it$design)) tags$p(class = "small mb-0 text-muted", dash_design_note(it$design, it$chart$spec, mode)),
+            if (identical(mode, "interactive") && (chart_from_rows(it$chart$spec)))
+              tags$p(class = "small mb-0", style = warn_style, DASH_DISCLOSURE)
+            else if (identical(mode, "video"))
+              tagList(tags$p(class = "small mb-0 text-muted", DASH_VIDEO_TIME),
+                      if (chart_from_rows(it$chart$spec)) tags$p(class = "small mb-0", style = warn_style, DASH_VIDEO_DISCLOSURE)))
         }))
       dash_result(NULL)
       dash_gen(isolate(dash_gen()) + 1L)
@@ -1822,6 +1911,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       sel = isTRUE(made$sel[[chart_id]]())
       interactive = isTRUE(made$interactive[[chart_id]]())
       note = story_note[[chart_id]]
+      dz = made$design[[chart_id]]()
+      dnote = made$dnote[[chart_id]]()
       title = chart_title(ch, "Untitled chart")
       stale = story_stale(st, ch, data_key())
       ids = state$canvas                 # the order of the dashboard: the cards' Move up and Move down read it
@@ -1848,6 +1939,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                    btn("undo", "Undo", disabled = !length(ch$history)),
                    btn("interactive", if (interactive) "Static" else "Interactive"),
                    if (video_available()) btn("animate", "Animate", "btn-outline-primary chart-call", `data-working` = WORKING_WORDS[["animate"]]),
+                   btn("design", "Design", "btn-outline-primary chart-call", `data-working` = WORKING_WORDS[["design"]], disabled = if (is.null(skill_chosen())) NA),
                    btn("code", "Code"),
                    btn("edit", "Edit text"),
                    btn("headline", "Headline", "btn-outline-primary chart-call", `data-working` = WORKING_WORDS[["headline"]]),
@@ -1855,12 +1947,15 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
           # The dashboard's choice and order: the switch, and one place up or down (the canvas order is the dashboard's).
           tags$div(class = "d-flex flex-wrap align-items-center gap-2 chart-dash-row",
                    bslib::input_switch(ns(cid(chart_id, "dash")), "In dashboard", value = isolate(in_dash(chart_id))),
+                   if (!is.null(dz)) bslib::input_switch(ns(cid(chart_id, "showd")), "Designed drawing", value = isolate(isTRUE(made$showd[[chart_id]]()))),
                    btn("up", "Move up", disabled = isTRUE(at <= 1L)), btn("down", "Move down", disabled = isTRUE(at >= length(ids))))),
         bslib::card_body(
           fillable = FALSE, fill = FALSE,
           # the chart's slot takes what the row's height leaves, so a short card has no blank block under it
           tags$div(class = "chart-slot", uiOutput(ns(cid(chart_id, "view")))),
           uiOutput(ns(cid(chart_id, "notes"))),
+          if (!is.null(dz)) tags$p(class = "small text-muted mb-1 chart-designed", dash_design_mark(dz)),
+          if (!is.null(dnote)) tags$p(class = "small mb-1 chart-design-note", style = warn_style, dnote),
           if (!is.null(st)) tags$p(class = "mb-1 chart-summary", st$summary),
           if (!is.na(stale)) tags$p(class = "small mb-1", style = warn_style, if (identical(stale, "chart")) SUMMARY_STALE else SUMMARY_STALE_DATA),
           if (!is.null(st) && length(st$problems)) check_line(st$problems, ok = NULL),
@@ -1869,6 +1964,85 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                  if (!is.null(label)) paste0("Rule: ", label),
                  if (isTRUE(ch$exploratory)) tags$span(class = "badge bg-secondary ms-1", "Exploratory"))))
     }
+
+    # ---- a chart's design ------------------------------------------------------------------------------------------
+
+    skill_chosen = function() skills_ok(skills)[[isolate(dopts$skill) %||% ""]]
+    # What a design is made from: the spec, the palette and style, and the data. A design whose key is not the chart's key now is dropped.
+    design_key = function(chart_id) {
+      ch = made$chart[[chart_id]]()   # not isolated: the observer that drops a design depends on the spec, the palette and the data
+      if (is.null(ch)) NULL else digest::digest(list(spec_hash(ch$spec), palette(), data_key()))
+    }
+    drop_design = function(chart_id, why = NULL) {
+      dz = isolate(made$design[[chart_id]]())
+      if (!is.null(dz)) unlink(dz$file)
+      made$design[[chart_id]](NULL)
+      made$showd[[chart_id]](FALSE)
+      if (!is.null(why)) made$dnote[[chart_id]](why)
+    }
+    # A design that stands for the card now (made from the chart as it is), or NULL.
+    design_current = function(chart_id) {
+      dz = isolate(made$design[[chart_id]]())
+      if (!is.null(dz) && identical(dz$key, isolate(design_key(chart_id)))) dz
+    }
+    # The design the card is showing, or NULL: the export carries what the card shows.
+    design_shown = function(chart_id) if (isTRUE(isolate(made$showd[[chart_id]]()))) design_current(chart_id)
+
+    # One design: design_chart() with this session's skill, key and model, the calls recorded, the stages said in the working line. Returns TRUE when the
+    #   card now has a design; if not, the card keeps its standard drawing and says why in one line. `prefix` goes before the stage ("Chart 2 of 5: ").
+    design_now = function(chart_id, wish = NULL, prefix = "") {
+      ch = chart_of(chart_id)
+      skill = skill_chosen()
+      if (is.null(ch)) return(invisible(FALSE))
+      if (is.null(skill)) { made$dnote[[chart_id]]("Not designed: no design skill is available."); return(invisible(FALSE)) }
+      res = tryCatch(design_chart(ch, skill, isolate(state$data), isolate(state$codebook), isolate(palette()), ask = ask, wish = wish, images = design_images_setting(),
+                                  stage = function(s) session$sendCustomMessage("chart-progress", list(words = paste0(prefix, "Designing: ", s)))),
+                     error = function(e) list(ok = FALSE, reason = design_line(conditionMessage(dash_root_error(e)), 160L), calls = NULL))
+      state$calls = dplyr::bind_rows(isolate(state$calls), res$calls)
+      if (!isTRUE(res$ok)) {
+        made$dnote[[chart_id]](paste0("The design was not used: ", sub("[.]$", "", res$reason), ". The chart keeps its standard drawing."))
+        return(invisible(FALSE))
+      }
+      drop_design(chart_id)
+      dz = res$design
+      dz$key = isolate(design_key(chart_id))
+      made$design[[chart_id]](dz)
+      made$showd[[chart_id]](TRUE)
+      made$showv[[chart_id]](FALSE)
+      made$dnote[[chart_id]](NULL)
+      invisible(TRUE)
+    }
+    # Several, in turn, and what happened in one line each.
+    design_many = function(ids) {
+      n = length(ids)
+      done = purrr::imap_lgl(ids, function(i, k) isTRUE(design_now(i, prefix = if (n > 1L) paste0("Chart ", k, " of ", n, ": ") else "")))
+      title_of = function(i) md_text(chart_title(chart_of(i), i))
+      say(paste(c(paste0("Designed ", sum(done), " of ", n, if (n == 1L) " chart" else " charts", " with ", md_text(skill_chosen()$title), ". Each card has a switch between the designed and the standard drawing, and Code shows what the model wrote."),
+                  purrr::map_chr(ids[!done], function(i) paste0(title_of(i), ": ", md_text(isolate(made$dnote[[i]]())))),
+                  paste0(sum(vapply(ids[done], function(i) isolate(made$design[[i]]())$calls, numeric(1))), " model calls.")), collapse = "\n\n"))
+      invisible(done)
+    }
+    # The chat's "design this" (and a wish for a look): the selected chart, or the sentence that says to click one. No chat call is made.
+    design_selected = function(wish = NULL) {
+      sel = isolate(selected())
+      if (is.null(sel) || is.null(chart_of(sel))) return(say(md_text(DESIGN_NONE)))
+      if (!send_ok("Designing")) return(invisible())
+      if (isTRUE(design_now(sel, wish))) {
+        dz = isolate(made$design[[sel]]())
+        say(paste0("Designed ", md_text(chart_title(chart_of(sel), "the chart")), " with ", md_text(dz$skill$title), if (!is.null(dz$wish)) paste0(", with your wish: ", md_text(dz$wish)), ". ",
+                   "The card's \"Designed drawing\" switch goes back to the standard drawing; Code shows what the model wrote. No chat call was made: ", dz$calls, " design calls."))
+      } else say(md_text(isolate(made$dnote[[sel]]()) %||% "The design was not used."))
+    }
+    observeEvent(input$design_all, with_busy({
+      say("Design all", role = "user")
+      if (send_ok("Designing")) {
+        ids = chart_ids()
+        todo = purrr::keep(ids, function(i) is.null(design_current(i)))
+        if (!length(ids)) say("There are no charts on the canvas yet.")
+        else if (!length(todo)) say("Every chart on the canvas already has a design that matches it. Press Design on a card to design it again.")
+        else design_many(todo)
+      }
+    }))
 
     # ---- a chart's video -------------------------------------------------------------------------------------------
 
@@ -1951,6 +2125,14 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       made$dash[[chart_id]] = reactiveVal(TRUE)
       made$video[[chart_id]] = reactiveVal(NULL)
       made$showv[[chart_id]] = reactiveVal(FALSE)
+      made$design[[chart_id]] = reactiveVal(NULL)
+      made$showd[[chart_id]] = reactiveVal(FALSE)
+      made$dnote[[chart_id]] = reactiveVal(NULL)
+      made$dwidget[[chart_id]] = reactive({
+        dz = made$design[[chart_id]]()
+        if (is.null(dz)) return(NULL)
+        tryCatch(design_widget(dz$plot, dz$size, palette()), error = function(e) structure(list(), why = "the design could not be drawn with tooltips"))
+      })
       drawn = reactive(tryCatch(spec_plot(made$chart[[chart_id]]()$spec, state$data, state$codebook, palette()), error = function(e) e))
       # The facts the checks in the Edit text dialog compare against, from the chart as it is now.
       facts = reactive({
@@ -1975,11 +2157,37 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         if (inherits(p, "error")) stop(conditionMessage(p), call. = FALSE)
         spec_widget(p)
       })
+      output[[cid(chart_id, "dstatic")]] = renderImage({
+        dz = design_current(chart_id)
+        if (is.null(dz)) stop("The design is not there.", call. = FALSE)
+        list(src = dz$file, contentType = chart_device_type(), alt = paste("Designed drawing:", attr(drawn(), "spec")$title %||% "chart"),
+             width = round(dz$size[["width"]] * CSS_PPI), height = round(dz$size[["height"]] * CSS_PPI), style = "max-width:100%; height:auto;")
+      }, deleteFile = FALSE)
+      output[[cid(chart_id, "dwidget")]] = ggiraph::renderGirafe({
+        w = made$dwidget[[chart_id]]()
+        if (!length(w)) stop(attr(w, "why") %||% "no design", call. = FALSE)
+        w
+      })
       output[[cid(chart_id, "view")]] = renderUI({
         v = made$video[[chart_id]]()
+        dz = made$design[[chart_id]]()
+        shown = !is.null(dz) && isTRUE(made$showd[[chart_id]]()) && identical(dz$key, design_key(chart_id))
         if (isTRUE(made$showv[[chart_id]]()) && !is.null(v) && identical(v$key, video_key(chart_id))) video_view(chart_id, v)
-        else if (isTRUE(made$interactive[[chart_id]]())) ggiraph::girafeOutput(ns(cid(chart_id, "widget")), width = "100%")
+        else if (isTRUE(made$interactive[[chart_id]]())) {
+          # A designed drawing is interactive only when design_widget() can give its layers tooltips; otherwise the standard interactive view, labelled as such.
+          w = if (shown) made$dwidget[[chart_id]]()
+          if (shown && length(w)) ggiraph::girafeOutput(ns(cid(chart_id, "dwidget")), width = "100%")
+          else tagList(ggiraph::girafeOutput(ns(cid(chart_id, "widget")), width = "100%"),
+                       if (shown) tags$p(class = "small text-muted mb-0 chart-standard-interactive", paste0("The standard interactive view: the designed drawing is a picture (", attr(w, "why") %||% "no tooltips", ").")))
+        }
+        else if (shown) imageOutput(ns(cid(chart_id, "dstatic")), height = "auto")
         else imageOutput(ns(cid(chart_id, "static")), height = "auto")
+      })
+      # The design is dropped when what it was made from changes (the chart's spec, the palette or style, the data): the card shows the standard drawing again.
+      observe({
+        dz = made$design[[chart_id]]()
+        if (!is.null(dz) && !identical(dz$key, design_key(chart_id)))
+          drop_design(chart_id, "The designed drawing was dropped because the chart, the style or the data changed. Press Design to make it again.")
       })
       # The video is dropped when what it was drawn from changes (the chart's spec, the palette or style, the data): the card shows the picture again.
       observe({
@@ -2004,6 +2212,11 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         if (isTRUE(isolate(rv()))) made$showv[[chart_id]](FALSE)
       })
       observeEvent(input[[cid(chart_id, "animate")]], with_busy(animate_chart(chart_id)))
+      observeEvent(input[[cid(chart_id, "design")]], with_busy(if (send_ok("Designing")) design_now(chart_id)))
+      observeEvent(input[[cid(chart_id, "showd")]], {
+        v = isTRUE(input[[cid(chart_id, "showd")]])
+        if (!identical(isolate(made$showd[[chart_id]]()), v)) made$showd[[chart_id]](v)
+      }, ignoreInit = TRUE)
       observeEvent(input[[cid(chart_id, "picture")]], made$showv[[chart_id]](FALSE))
       observeEvent(input[[cid(chart_id, "undo")]], {
         ch = chart_of(chart_id)
@@ -2030,12 +2243,15 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         # The chart as drawn: the spec as the lint left it (sideways bars, end labels, the legend's order, the source line), the
         #   palette and style chosen, so the code gives the card's chart.
         p = drawn()
-        code = if (inherits(p, "error")) conditionMessage(p)
+        dz = design_shown(chart_id)
+        code = if (!is.null(dz)) design_code_lines(dz)
+               else if (inherits(p, "error")) conditionMessage(p)
                else tryCatch(spec_code(attr(p, "spec"), isolate(state$codebook), isolate(state$path), isolate(palette())), error = function(e) conditionMessage(e))
         code_id = ns(cid(chart_id, "code_text"))
         showModal(modalDialog(
           title = paste0("Code: ", chart_title(ch)), size = "l", easyClose = TRUE,
           tags$pre(id = code_id, class = "small", paste(code, collapse = "\n")),
+          if (!is.null(dz)) tagList(tags$h6("The table it draws"), design_table_tag(dz$table)),
           footer = tagList(tags$button(type = "button", class = "btn btn-sm btn-outline-primary", onclick = copy_js(code_id), "Copy code"),
                            modalButton("Close"))))
       })
@@ -2720,6 +2936,11 @@ dash_about <- function(items, settings, cb, data, model) {
                                                    " or edited. The title, subtitle, author and introduction above are the author's own and are not checked.")
                         else "No headline or summary in this dashboard was written by a model. The title, subtitle, author and introduction above are the author's own and are not checked."),
       if (length(charts)) entry("What the checks said", tags$ul(purrr::map(charts, function(it) tags$li(paste0(it$title, ": ", dash_text_status(it), "."))))),
+      if (any(purrr::map_lgl(charts, function(it) isTRUE(it$designed))))
+        entry("Designed charts", paste0(sum(purrr::map_lgl(charts, function(it) isTRUE(it$designed))), " chart(s) were drawn from code that a model wrote, following ",
+                                        paste(unique(purrr::map_chr(purrr::keep(charts, function(it) isTRUE(it$designed)), function(it) design_skill_label(it$design$skill))), collapse = " and "),
+                                        ". R checked the code against a list of functions it may call, ran it on the table of the chart, and refused a drawing that cut off or covered text, left out rows, cut a bar's zero or wrote a number that was not in the chart's facts. The model was shown the picture of each chart it designed. ",
+                                        "Each designed chart's script and table are in charts.R and charts/.")),
       if (length(charts)) entry("The charts", paste0(sum(modes == "picture"), if (sum(modes == "picture") == 1L) " picture" else " pictures",
                                  if (any(modes == "video")) paste0(", ", sum(modes == "interactive"), " interactive and ", sum(modes == "video"), if (sum(modes == "video") == 1L) " video. " else " videos. ")
                                  else paste0(" and ", sum(modes == "interactive"), " interactive. "),
@@ -2782,9 +3003,10 @@ dash_card <- function(it, full = FALSE, style = NULL) {
     if (is_text1(it$chart_subtitle) && nzchar(it$chart_subtitle)) tags$p(class = "card-note", it$chart_subtitle),
     # the chart's slot grows to the height of the row, so a short card has no blank block under it (the chart stands in the middle of it)
     tags$div(class = "slot",
-      if (identical(it$mode, "interactive")) tags$div(class = "widget", HTML(it$widget_html))
+      if (identical(it$mode, "interactive")) tagList(tags$div(class = "widget", HTML(it$widget_html)))
       else if (identical(it$mode, "video")) dash_video_tag(it, alt)
       else dash_picture_tag(it, full, alt)),
+    if (is_text1(it$widget_note) && !identical(it$mode, "picture")) tags$p(class = "card-note", it$widget_note),
     if (is_text1(it$summary) && nzchar(trimws(it$summary))) tags$p(class = "summary", it$summary),
     if (length(it$notes)) tags$ul(class = "notes", purrr::map(it$notes, tags$li)),
     if (is_text1(it$source)) tags$p(class = "source", it$source))
@@ -3058,21 +3280,32 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, mark
   p = dash_step(what, spec_plot(chart$spec, data, cb, palette))
   s = attr(p, "spec")
   stem = file.path("charts", sprintf("%02d_%s", i, dash_slug(title)))
-  pic_file = paste0(stem, chart_device_ext(kind))
-  size = dash_step(what, spec_png(p, file.path(stage, pic_file), dpi = DASH_DPI, kind = kind, marking = marking))
-  vector_file = if (!identical(kind, "svglite") && svglite_installed()) paste0(stem, ".svg")
-  if (!is.null(vector_file)) dash_step(what, spec_png(p, file.path(stage, vector_file), size = size, kind = "svglite", marking = marking))
-  code = tryCatch(spec_code(s, cb, path, palette), error = function(e) paste0("# The code of this chart could not be written: ", conditionMessage(e)))
+  # A chart whose card shows its design is written from the design (the picture, the script and the table beside it); when the design cannot be drawn
+  #   again, the standard drawing is written and the card says why.
+  designed = if (!is.null(it$design)) tryCatch(dash_design_files(it$design, chart, i, stem, stage, data, cb, palette, kind, marking), error = function(e) conditionMessage(dash_root_error(e)))
+  if (is.list(designed)) {
+    size = designed$size
+    pic_file = NULL
+    vector_file = NULL
+    code = designed$code
+  } else {
+    pic_file = paste0(stem, chart_device_ext(kind))
+    size = dash_step(what, spec_png(p, file.path(stage, pic_file), dpi = DASH_DPI, kind = kind, marking = marking))
+    vector_file = if (!identical(kind, "svglite") && svglite_installed()) paste0(stem, ".svg")
+    if (!is.null(vector_file)) dash_step(what, spec_png(p, file.path(stage, vector_file), size = size, kind = "svglite", marking = marking))
+    code = tryCatch(spec_code(s, cb, path, palette), error = function(e) paste0("# The code of this chart could not be written: ", conditionMessage(e)))
+  }
   facts = tryCatch({ f = spec_facts(s, attr(p, "table"), cb, data = data); dash_fact_choices(f$text, f$names) }, error = function(e) list())
   st = it$story
   panels = if (!is.null(s$facet) && s$facet %in% names(attr(p, "table"))) length(unique(attr(p, "table")[[s$facet]])) else 1L
   list(id = it$id, title = title, headline = if (!is.null(st)) st$headline, summary = if (!is.null(st)) st$summary, story = st, chart_subtitle = s$subtitle,
-       mode = it$mode, fallback = NULL, fallback_of = NULL, facts = facts,
+       mode = it$mode, fallback = if (is.character(designed)) designed, fallback_of = if (is.character(designed)) "designed drawing", facts = facts,
+       designed = is.list(designed), design = if (is.list(designed)) it$design,
        # a chart drawn on a canvas wider than 8 inches (many sideways bars) is shown across the page, or its text would be too small to read
        natural_wide = identical(unname(size[["width"]]), SPEC_SIZE[["max_width"]]),
        panels = panels,
        notes = attr(p, "notes"), source = s$caption,
-       files = c(pic_file, vector_file), code = code)
+       files = if (is.list(designed)) designed$files else c(pic_file, vector_file), code = code)
 }
 
 # The video of a chart for the page: the chart drawn without title, subtitle or source line (the page says them), for the width it is shown at
@@ -3103,6 +3336,25 @@ dash_pictures <- function(m, full, i, chart, data, cb, palette, kind, widget = s
   if (identical(m$mode, "table")) return(m)
   card = if (full) "wide" else "desk"
   what = paste0("drawing chart ", i, " (", m$title, ")")
+  # A designed chart: its picture for the page (the design without its title and caption, as wide as it was designed), and, when it is interactive, the design
+  #   itself with tooltips if design_widget() can give its layers some, else the standard interactive version with a line that says so.
+  dp = NULL
+  if (isTRUE(m$designed)) {
+    dp = tryCatch(dash_design_picture(m$design, chart, data, cb, palette, kind), error = function(e) conditionMessage(dash_root_error(e)))
+    if (!is.list(dp)) {
+      m$fallback = sub("\n.*$", "", dp)
+      m$fallback_of = "designed drawing"
+      m$designed = FALSE
+      dp = NULL
+    } else if (identical(m$mode, "interactive")) {
+      w = tryCatch(design_widget(dp$plot, dp$size, palette), error = function(e) structure(list(), why = "the design could not be drawn with tooltips"))
+      if (length(w)) {
+        dw = tryCatch(dash_widget(w), error = function(e) NULL)
+        if (is.list(dw)) return(utils::modifyList(m, list(widget_html = dw$html, deps = dw$deps)))
+      }
+      m$widget_note = paste0("The standard interactive version: the designed drawing is a picture (", attr(w, "why") %||% "its layers cannot have tooltips", ").")
+    }
+  }
   if (identical(m$mode, "interactive")) {
     w = tryCatch(dash_widget(widget(spec_plot(chart$spec, data, cb, palette, web = dash_web(card)))), error = function(e) conditionMessage(e))
     if (is.list(w)) return(utils::modifyList(m, list(widget_html = w$html, deps = w$deps)))
@@ -3128,8 +3380,8 @@ dash_pictures <- function(m, full, i, chart, data, cb, palette, kind, widget = s
     list(uri = dash_data_uri(f, chart_device_type(kind)), pixels = round(sz * DASH_CSS_DPI))
   }
   light = if (identical(palette$style, "dark")) utils::modifyList(palette, list(style = "clean"))
-  m$pictures = list(desk = draw("desk"), phone = draw("phone"), wide = if (full) draw("wide"),
-                    print = if (!is.null(light)) draw("desk", light))
+  m$pictures = if (!is.null(dp)) list(desk = dp$pic, phone = dp$pic, wide = if (full) dp$pic)
+               else list(desk = draw("desk"), phone = draw("phone"), wide = if (full) draw("wide"), print = if (!is.null(light)) draw("desk", light))
   m
 }
 
@@ -3166,6 +3418,107 @@ dash_table_row <- function(it, i, cb) {
                     tags$div(class = "small text-muted", paste0("Columns: ", paste(purrr::map_chr(t$measures, function(n) summary_choice(purrr::detect(cb$columns, function(e) identical(e$name, n)) %||% list(name = n))), collapse = ", "),
                                                                if (is_text1(t$by) && nzchar(t$by)) paste0("; by ", t$by), if (!isTRUE(t$ci)) "; without 95% intervals")),
                     tags$div(class = "small", "Goes in the page as a table (no model text) and in charts/ as a CSV.")))
+}
+
+# ---- what carries a design: the code with its table, the script that runs alone ------------------------------------------------------------
+
+# How a design names its skill in a file or a page: the title and version of an app skill; an office's own skill is only called one (its name is the office's).
+design_skill_label <- function(skill) if (isTRUE(skill$office)) "an office design skill" else paste0(skill$title, " (version ", skill$version, ")")
+
+# The code as the Code dialog shows it: what it is, then the model's code as written.
+design_code_lines <- function(dz)
+  c(paste0("# Designed with ", design_skill_label(dz$skill), ". The model wrote the code below; R checked it against a list of the functions it may call,"),
+    "# ran it on the table shown under it, and checked the drawing (zero baselines, no clipped or overlapping text, every number from the facts).",
+    "# d is that table; facts, txt, tok and pal(n) are given by the app (the exported charts.R defines them, so it runs on its own).",
+    strsplit(dz$code, "\n", fixed = TRUE)[[1]])
+
+# The table a design draws, for the Code dialog: its first rows, and how many there are (the export writes them all as a CSV).
+design_table_tag <- function(table, n = 20L) {
+  t = utils::head(as.data.frame(table), n)
+  cell = function(x) if (inherits(x, c("Date", "POSIXct"))) format(as.Date(x), "%Y-%m-%d") else if (is.numeric(x)) format(signif(x, 6), scientific = FALSE, trim = TRUE, drop0trailing = TRUE) else as.character(x)
+  tagList(
+    tags$div(class = "table-responsive",
+             tags$table(class = "table table-sm small",
+                        tags$thead(tags$tr(purrr::map(names(t), tags$th))),
+                        tags$tbody(purrr::map(seq_len(nrow(t)), function(i) tags$tr(purrr::map(names(t), function(n) tags$td(cell(t[[n]][[i]])))))))),
+    tags$p(class = "small text-muted", paste0(format(nrow(table), big.mark = ","), if (nrow(table) == 1L) " row" else " rows", if (nrow(table) > n) paste0(", the first ", n, " shown"),
+                                              ". Exported, the whole table is a CSV beside charts.R.")))
+}
+
+# The line under a designed card: which skill, what the model said (when it said one sentence without a number), and whether it looked at the picture.
+dash_design_mark <- function(dz)
+  paste(c(paste0("Designed with ", dz$skill$title, "."), dz$review, if (is_text1(dz$say)) paste0("The model's note: ", dz$say)), collapse = " ")
+
+# What the export dialog says about a designed chart: where its picture comes from, what is written beside the script, and what each way of showing it does.
+dash_design_note <- function(dz, spec, mode) {
+  inter = if (identical(mode, "interactive")) {
+    ok = if (!is.null(dz$plot)) design_interactive_ok(dz$plot) else list(ok = FALSE, reason = "the design's drawing is not there")
+    if (isTRUE(ok$ok)) " Interactive: tooltips on the designed drawing."
+    else paste0(" Interactive: the standard interactive view, because the designed drawing cannot have tooltips (", ok$reason, ").")
+  }
+  paste0("Designed with ", design_skill_label(dz$skill), ": the picture is the model's code run again on the file as it is now. The plotted table is written beside charts.R as a CSV so the script runs alone",
+         if (chart_from_rows(spec)) ", and that CSV holds the rows this chart plots" else "", ".",
+         inter, if (identical(mode, "video")) " A video is made from the standard drawing, not the design." else "")
+}
+
+# The script of one designed chart, so that it runs alone: the packages its code uses, the table read back from its CSV (dates and levels as they were), the
+#   facts, words, tokens and palette function the code is given, and the code, whose last expression draws the chart. `inp` is design_input()'s; `csv` is the
+#   CSV's path relative to charts.R; `marking_skip` is the number of lines to skip (the marking's comment line).
+design_script <- function(dz, inp, csv, title = "", skip = 1L) {
+  fns = unique(all.names(parse(text = dz$code, keep.source = FALSE)))
+  pk = attr(design_toolkit(), "package")
+  libs = union("ggplot2", setdiff(unique(pk[intersect(fns, names(pk))]), c("base", "utils", "stats")))
+  d = inp$d
+  restore = unlist(purrr::imap(d, function(x, nm) {
+    ref = paste0("d[[", deparse(nm), "]]")
+    if (inherits(x, "Date")) paste0(ref, " <- as.Date(", ref, ")")
+    else if (inherits(x, "POSIXct")) paste0(ref, " <- as.POSIXct(", ref, ", tz = \"UTC\")")
+    else if (is.factor(x)) paste0(ref, " <- factor(", ref, ", levels = ", paste(deparse(levels(x), width.cutoff = 500L), collapse = ""), ")")
+  }), use.names = FALSE)
+  dput_lines = function(x) paste(deparse(x, width.cutoff = 100L), collapse = "\n")
+  pals = purrr::compact(purrr::map(1:12, function(n) tryCatch(inp$pal(n), error = function(e) NULL)))
+  c(paste0("# Chart: ", title, ". Designed with ", design_skill_label(dz$skill), "."),
+    "# The model wrote the drawing code; it runs on the table below. d, facts, txt, tok and pal are what the app gave it.",
+    paste0("library(", libs, ")"), "",
+    paste0("d <- read.csv(", deparse(csv), ", skip = ", skip, ", check.names = FALSE, stringsAsFactors = FALSE)   # the first line of the CSV is the marking"),
+    restore,
+    paste0("facts <- ", dput_lines(inp$facts)),
+    paste0("txt <- ", dput_lines(inp$txt)),
+    paste0("tok <- ", dput_lines(inp$tok)),
+    paste0("pal <- function(n) ", dput_lines(pals), "[[n]]"),
+    "chart <- local({",
+    paste0("  ", strsplit(dz$code, "\n", fixed = TRUE)[[1]]),
+    "})",
+    "chart   # draws it; ggsave(\"chart.png\", chart, width = 7, height = 4.5, dpi = 300) saves it")
+}
+
+# The files of one designed chart for the zip: the picture at DASH_DPI with the marking (and an SVG when svglite is there), the plotted table as a CSV
+#   (the marking is its first line, a reader skips it), and the script that runs alone. The drawing is made again from the design's code on the file as it
+#   is now (the card's design key held that it is the same chart, style and data). Returns list(files, code, size, plot) or stops with the sentence.
+dash_design_files <- function(dz, chart, i, stem, stage, data, cb, palette, kind, marking) {
+  inp = design_input(chart, data, cb, palette)
+  r = design_run(dz$code, inp$d, inp$facts, inp$txt, inp$tok, inp$pal, size = inp$size, dpi = 40L)
+  if (!r$ok) stop(r$reason, call. = FALSE)
+  pic_file = paste0(stem, chart_device_ext(kind))
+  spec_png(r$plot, file.path(stage, pic_file), size = inp$size, dpi = DASH_DPI, kind = kind, marking = marking)
+  vector_file = if (!identical(kind, "svglite") && svglite_installed()) paste0(stem, ".svg")
+  if (!is.null(vector_file)) spec_png(r$plot, file.path(stage, vector_file), size = inp$size, kind = "svglite", marking = marking)
+  csv_file = paste0(stem, "_table.csv")
+  readr::write_csv(inp$d, file.path(stage, csv_file))
+  marking_prepend(file.path(stage, csv_file), marking_comment(marking))
+  list(files = c(pic_file, vector_file, csv_file), size = inp$size, plot = r$plot,
+       code = design_script(dz, inp, csv_file, chart_title(chart, "Untitled chart")))
+}
+
+# The picture of a designed chart for the page: the design drawn without its title, subtitle and caption (the page says them), once, as wide as it was designed;
+#   the page scales it for the card and for a phone. A design has no phone drawing of its own. Stops with the sentence when it cannot be drawn.
+dash_design_picture <- function(dz, chart, data, cb, palette, kind) {
+  inp = design_input(chart, data, cb, palette)
+  bare = inp$txt[setdiff(names(inp$txt), c("title", "subtitle", "caption"))]
+  r = design_run(dz$code, inp$d, inp$facts, bare, inp$tok, inp$pal, size = inp$size, dpi = DASH_CSS_DPI * DASH_SCALE, keep = TRUE)
+  if (!r$ok) stop(r$reason, call. = FALSE)
+  on.exit(unlink(r$file))
+  list(pic = list(uri = dash_data_uri(r$file, chart_device_type(kind)), pixels = round(inp$size * DASH_CSS_DPI)), plot = r$plot, size = inp$size, palette = palette)
 }
 
 # Builds the dashboard zip. `items` is list(id, chart, story, mode, stale) for each chosen chart in the order shown (a summary table is an item
@@ -3525,6 +3878,7 @@ METHOD_CSS <- "
 mod_method_ui <- function(id) {
   ns = NS(id)
   tagList(
+    method_privacy_ui(),
     method_text_ui(),
     tags$section(id = "method-questions", tags$h2("Questions for your file"), uiOutput(ns("questions"))),
     method_rules_ui(),
@@ -3532,6 +3886,14 @@ mod_method_ui <- function(id) {
     method_styles_ui(),
     tags$style(HTML(METHOD_CSS)))
 }
+
+# Put above the manager's text (www/methodology.md, which is not edited here): its first paragraph says the model never sees the rows, which holds for
+#   choosing a chart and writing a headline and is not the whole of it once a chart can be designed.
+method_privacy_ui <- function(setting = design_images_setting())
+  advice_box(tags$p(tags$strong("A note before the text below.")),
+             tags$p("The text below says the model reads a description of your columns, never the rows, and that it does not draw. That is how it chooses a chart and writes a headline, and the rule-drawn chart ",
+                    "stays the first drawing and the fall-back. Designing a chart is the exception: the model writes the drawing code, R checks it against a list of the functions it may call and runs it, and the model is sent more:"),
+             purrr::map(privacy_text(setting), tags$p))
 
 # "Questions for your file": what is there to say before a file is read, when none of the templates fits it, and the
 #   questions, each with a button. The text of a question comes from the analyst's own labels; it is put in the page as

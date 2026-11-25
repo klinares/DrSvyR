@@ -47,12 +47,43 @@ survey microdata.
 
 The Methodology page says how a chart is chosen and drawn and where each rule comes from.
 
+## Design: the model draws, R computes
+
+Each card has **Design**, and the canvas has **Design all**. The chart appears at once in the rule-drawn form and stays the
+fall-back: a design is a second drawing of the same table, made by the model following a **design skill** (a markdown file; the
+Style dialog lists them with each one's Intent line, and has "Design new charts automatically", off at first, because a design
+costs two to four model calls). R computes the spec, the plotted table and the facts as always. The model writes drawing code
+for that table; R refuses code that calls anything outside a list of functions (`design_toolkit()`), runs what remains in an
+environment that holds nothing else, and refuses a drawing that cuts a bar's zero, drops rows, adds a second axis, writes a
+number that is not in the facts, or clips, overlaps or lowers the contrast of its text. A refusal is one sentence the model is
+shown once. Then the model looks at the picture and either says it is fine or sends corrected code, which is checked in the same
+way, at most twice. If anything fails the card keeps its standard drawing and says in one line why.
+
+A designed card shows "Designed with <skill>", a switch between the designed and the standard drawing, and Code shows the
+code the model wrote with the table it draws. In the chat, "design this", "redesign this", "make it look better" and "make it
+publication ready" start a design with no chat call; a message that asks for a specific look ("put the legend inside", "make the
+title bigger") goes to the design call as the analyst's WISH. The export carries the picture, the 300 dpi file, the code as part of
+`charts.R` with the table beside it as a CSV so the script runs alone, and the classification marking on all of it. The interactive
+view of a designed chart has tooltips when every layer of marks is one ggiraph has a twin for (bars, columns, points and tiles drawn from
+their data as they are; not lines, counts, bins or fitted curves); otherwise the card offers the picture and the standard interactive view, labelled as such.
+
+This is an allow-list interpreter, not a proven sandbox: see `DESIGN.md` section 19.
+
+| Setting in `app.R` | What it is |
+|---|---|
+| `APP_DESIGN_IMAGES` | `"all"` (the default), `"aggregated"` or `"none"`: which pictures may be sent to the model for the review. |
+| `APP_SKILLS_DIR` | A folder of the office's own design skills (markdown files of at most 120 lines: a title, `Version:`, an Intent section and a checklist for the review; see `www/skills/README.md`). `""` for none. They are read where the app runs. The text of an office skill goes to the model with a design call and is never written to a log, a report or an export. |
+
+`ggrepel`, `ggtext`, `patchwork` and `forcats` are optional: a design may use their functions when they are installed, and
+`app.R` names them in `requireNamespace()` calls so that a deployment asks Connect for them.
+
 ## What it will not do
 
 - It does not apply survey weights or a sample design. Summary statistics and their 95% intervals
   assume a simple random sample of independent rows, and say so under every table.
-- It does not run anything the model writes. The model returns a small structured specification;
-  R checks it and draws every chart. The model does not choose colours.
+- It runs code the model wrote only when you press Design, and then only under an allow-list of functions, with R
+  checking the drawing (see "Design" below). Everywhere else the model returns a small structured specification;
+  R checks it and draws every chart. The model does not choose colours: a designed chart uses the style's own colours and palette.
 - It does not clean, reshape or join data. It reads one delimited text file of up to 50 MB.
 - It does not test hypotheses or fit models. A chart can show a fitted line; that is a drawing, not
   a test.
@@ -63,7 +94,7 @@ The Methodology page says how a chart is chosen and drawn and where each rule co
 
 ## The key rule
 
-**The model never sees the rows, and every number comes from R.**
+**The model never receives the rows of your file as text, and every number comes from R.**
 
 - The model is sent the data dictionary (file name, row count, what a row is, and each column's name,
   label, type, role and share missing) and, for the columns in play, a summary: a number's range and
@@ -71,6 +102,13 @@ The Methodology page says how a chart is chosen and drawn and where each rule co
   identifiers or free text is sent as a count of distinct values only. Writing a headline sends the
   numbers R computed for that chart's table, with names in identifier and text columns replaced by
   placeholders.
+- **Design sends more, and says so.** When you press Design on a chart, the model is also sent the table the chart plots
+  if that table is aggregated and has at most 60 rows (never rows of your file; the names in identifier and text columns
+  are placeholders), the design skill you chose and the chart's facts. It then looks at the picture of the chart, to correct
+  its own drawing. The picture of a scatter, bubble, box or violin chart shows individual rows as marks, so those rows can
+  be read from it. `APP_DESIGN_IMAGES` in `app.R` limits this: `"all"` (the default) sends the picture of every chart that is
+  designed, `"aggregated"` sends only pictures of charts drawn from aggregated tables, and `"none"` sends no picture (a
+  design is then not reviewed by looking). Start here and the Methodology page say the same in the app.
 - R computes every number. A headline, a summary or a chat answer that states a number is checked
   against what R computed; a failed text is sent back once and then shown flagged.
 - A picture and a video in the exported dashboard hold no rows. An interactive chart holds the
@@ -187,7 +225,7 @@ long they take). `tests/llm_check.R` and `tests/live_run_9.R` make live model ca
 | `R/spec.R` | The chart spec, its checks, the ggplot, the interactive version (ggiraph), the R code of a chart, the video engine |
 | `R/theme.R` | The typefaces, the seven styles, the palettes, the one chart device |
 | `R/llm.R` | The session key, the model call, JSON repair, the connection check |
-| `R/reflexes.R` | The prompts and the three model calls (labels, chat, headlines) with their number and word checks |
+| `R/reflexes.R` | The prompts and the model calls (labels, chat, headlines, design) with their number and word checks, the design skills |
 | `R/ui.R` | Every page, the canvas, the dashboard and codebook writers |
 | `www/reflexes/` | The rules the model is given, one markdown file per topic, written outside this repository |
 | `www/fonts/` | Inter, Source Serif 4 and Barlow Condensed (SemiBold and Bold: the Briefing style's titles), under the SIL Open Font License |

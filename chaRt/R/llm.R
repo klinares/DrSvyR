@@ -11,7 +11,7 @@
 # max_tokens per kind of call; the model's thinking counts against it (Sonnet 5.5 thinks by default,
 #   at effort high). A reply that reaches the ceiling is a failure, not a short answer,
 #   and is not retried: the same prompt is cut off at the same place.
-LLM_MAX_TOKENS <- c(label = 8000L, chat = 8000L, summarize = 8000L, ping = 200L)
+LLM_MAX_TOKENS <- c(label = 8000L, chat = 8000L, summarize = 8000L, design = 16000L, review = 16000L, ping = 200L)
 
 # Seconds before a request gives up (ellmer reads the option ellmer_timeout_s).
 LLM_TIMEOUT_S <- 600
@@ -133,14 +133,19 @@ llm_reply <- function(chat, reply, m, started) {
             seconds = as.numeric(difftime(Sys.time(), started, units = "secs")))
 }
 
-# One request, one fresh chat object: no history carries from one request to the next.
-llm_complete <- function(m, system_prompt, user, max_tokens, key = llm_key_for(m), timeout = LLM_TIMEOUT_S) {
+# One request, one fresh chat object: no history carries from one request to the next. `images` are paths of picture files sent with the
+#   message (Phase 11 Part B: the model looks at the chart it drew). Checked in ellmer 0.4.2: chat$chat() takes content objects after the
+#   text, ellmer::content_image_file() makes one from a PNG, and both providers write it into the request (Anthropic as an "image" block with a
+#   base64 source, the OpenAI style as an "image_url" part holding a data address). resize = "none" sends the file as it is (the default,
+#   "low", needs the magick package and would shrink it to 512 pixels); the caller draws the file at the size to send.
+llm_complete <- function(m, system_prompt, user, max_tokens, key = llm_key_for(m), timeout = LLM_TIMEOUT_S, images = NULL) {
   old = options(ellmer_timeout_s = timeout)
   on.exit(options(old), add = TRUE)
   chat = llm_chat(m, system_prompt, max_tokens, key)
   started = Sys.time()
+  pictures = purrr::map(as.character(images), function(f) ellmer::content_image_file(f, resize = "none"))
   # The reply is made first: llm_reply() reads the chat's last turn, which exists only after it.
-  reply = tryCatch(chat$chat(user, echo = "none"), error = function(e) llm_refuse(e, m, key))
+  reply = tryCatch(do.call(chat$chat, c(list(user), pictures, list(echo = "none"))), error = function(e) llm_refuse(e, m, key))
   llm_reply(chat, reply, m, started)
 }
 
@@ -269,6 +274,7 @@ clean_model_reply <- function(txt) {
 
 # The prompt's example object echoed back: it parses, but it is no answer.
 is_placeholder_reply <- function(obj) {
+  if (is.list(obj) && isTRUE(obj[["ok"]])) return(FALSE)   # {"ok": true} is a design review's answer (Phase 11 Part B), with or without a sentence
   vals = unlist(obj, use.names = FALSE)
   vals = vals[is.character(vals)]
   !length(vals) || all(trimws(vals) %in% c("", "...", "…"))
@@ -283,12 +289,13 @@ is_placeholder_reply <- function(obj) {
 #   the quota: once a session has used that many repeat attempts, the next call fails at once.
 #   complete makes the request, so a test can stand in for the network; first is a first attempt
 #   already made (in QuestionR by llm_complete_all(), which chaRt does not have, CLAUDE.md
-#   rule 3). Returns obj, raw, finish, tokens, user_sent, model, attempts,
+#   rule 3). images: paths of picture files sent with the message (passed to `complete` only when there are some, so a
+#   stand-in that takes no `images` still works for every other call). Returns obj, raw, finish, tokens, user_sent, model, attempts,
 #   seconds and refused (why each attempt before the one returned was refused); a failure carries the
 #   last raw reply as $raw.
 llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL, pattern = "(?s)\\{.*\\}",
                      max_times = 3L, session_cap = 10L, pause_base = 2, pause_min = 1, key = NULL,
-                     complete = llm_complete, first = NULL) {
+                     complete = llm_complete, first = NULL, images = NULL) {
   key = key %||% llm_key_for(m)
   if (is.null(key) || !nzchar(key)) no_key(m)
   ask = paste0(user, "\n\n", JSON_QUOTE_RULE)
@@ -297,7 +304,7 @@ llm_json <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL,
       llm_fail(paste0("The session's retry cap of ", session_cap, " is reached. The prompt or the endpoint needs ",
                       "attention; more attempts would spend quota without diagnosing it."), class = "llm_client_error")
     .llm_state$calls <- .llm_state$calls + 1L
-    out = if (is.null(first)) complete(m, system_prompt, ask, max_tokens, key)
+    out = if (is.null(first)) { if (length(images)) complete(m, system_prompt, ask, max_tokens, key, images = images) else complete(m, system_prompt, ask, max_tokens, key) }
           else { made = first; first <<- NULL; if (inherits(made, "error")) stop(made); made }
     finish = attr(out, "finish") %||% "unknown"
     txt = as.character(out)

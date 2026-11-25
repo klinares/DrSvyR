@@ -35,6 +35,18 @@ APP_THEME_NAME <- "Office"
 APP_THEME_ACCENT <- "#0A4580"
 APP_THEME_SLATE <- "#8A95A3"
 
+# Design (Phase 11 Part B): the model writes the drawing code for a chart and then looks at the picture it made.
+#   APP_DESIGN_IMAGES  which pictures may be sent to the model, to review a design by looking: "all" (every chart; the default), "aggregated" (only a chart
+#                      drawn from an aggregated table, never one whose marks are rows of the file, such as a scatter, a bubble, a box or a violin) or "none"
+#                      (no picture leaves; a design is not reviewed). Rows of the file are never sent as text, whatever this says. The picture of a chart
+#                      that shows rows as marks does show those rows, which is why this setting is here.
+#   APP_SKILLS_DIR     a folder of the office's own design skills (markdown files, see www/skills/README.md); "" for none. They are read where the app runs and
+#                      are sent to the model with a design call; the text of one is never written to a log, a report or an export.
+APP_DESIGN_IMAGES <- "all"
+APP_SKILLS_DIR <- ""
+if (!APP_DESIGN_IMAGES %in% c("all", "aggregated", "none"))
+  stop("APP_DESIGN_IMAGES is '", APP_DESIGN_IMAGES, "'; it must be one of: all, aggregated, none.", call. = FALSE)
+
 # The profile used when the environment variable CHART_PROFILE is not set: "home" or "work".
 APP_DEFAULT_PROFILE <- "home"
 
@@ -79,6 +91,15 @@ requireNamespace("tidyr", quietly = TRUE)
 #   deployment does not read; this call is what it reads, so Connect installs hexbin when it is installed here (Phase 10b hexagons, found by 9C-8).
 requireNamespace("hexbin", quietly = TRUE)
 
+# ggrepel, ggtext, patchwork and forcats are optional too: the toolkit a design may use (R/spec.R, design_toolkit()) takes their functions by name from
+#   whichever of them is installed, and a design that uses none of them still draws. R/ finds them with find.package() and getExportedValue() on a name
+#   in a string, which a deployment does not read; these calls are what it reads, so Connect installs them when they are installed where the app is
+#   published (Phase 11 Part B, found by 9C-8). The ggtext and patchwork functions are the ones the toolkit lists.
+requireNamespace("ggrepel", quietly = TRUE)
+requireNamespace("ggtext", quietly = TRUE)
+requireNamespace("patchwork", quietly = TRUE)
+requireNamespace("forcats", quietly = TRUE)
+
 local({
   missing = discard(APP_PACKAGES, requireNamespace, quietly = TRUE)
   if (length(missing)) stop("Not installed, so the app cannot start: ", paste(missing, collapse = ", "), call. = FALSE)
@@ -90,7 +111,8 @@ local({
   calls = list(chat_anthropic = c("system_prompt", "params", "model", "cache", "base_url", "credentials", "echo"),
                chat_openai_compatible = c("base_url", "name", "system_prompt", "credentials", "model", "params",
                                           "api_args", "echo"),
-               params = c("temperature", "max_tokens", "reasoning_effort"))
+               params = c("temperature", "max_tokens", "reasoning_effort"),
+               content_image_file = c("path", "resize"))
   gone = unlist(imap(calls, function(args, fn) {
     if (!fn %in% getNamespaceExports("ellmer")) return(fn)
     absent = setdiff(args, names(formals(getExportedValue("ellmer", fn))))
@@ -138,7 +160,7 @@ walk(sort(list.files("R", pattern = "[.]R$", full.names = TRUE)), function(f)
 # runApp() evaluates this file in an environment of its own, so the settings R/ reads are put
 #   in the global environment, where R/ lives.
 list2env(list(APP_CLASSIFICATION = APP_CLASSIFICATION, APP_PROFILE = APP_PROFILE, APP_PROFILES = APP_PROFILES,
-              APP_MODEL = APP_MODEL, APP_MAX_UPLOAD_MB = APP_MAX_UPLOAD_MB),
+              APP_MODEL = APP_MODEL, APP_MAX_UPLOAD_MB = APP_MAX_UPLOAD_MB, APP_DESIGN_IMAGES = APP_DESIGN_IMAGES, APP_SKILLS_DIR = APP_SKILLS_DIR),
          envir = globalenv())
 
 # Every reflex file in www/reflexes/ parsed now, so one that has lost its shape stops the app here,
