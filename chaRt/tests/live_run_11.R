@@ -10,7 +10,8 @@
 #      (APP_DESIGN_IMAGES "all"); if the endpoint refuses the picture on the first design, the rest are designed with the picture off and the run says so;
 #   3. tests/designed.html: each chart's standard drawing and designed drawing side by side at card size, the design's say, the rounds, the refusals with
 #      their sentences, the calls and seconds, and the design code;
-#   4. a dashboard of the designed charts in the Briefing style (pictures; Part C's design videos are not built), unpacked into tests/dashboard_designed/.
+#   4. a dashboard of the designed charts in the Briefing style, unpacked into tests/dashboard_designed/: pictures, and in the second attempt (LIVE11_REDESIGN=1)
+#      two of the eight as videos made from their designs by design_video() (Phase 11 Part C): the monthly line and the ranked bar when they were accepted.
 # Calls are counted: the chat part may use LIVE11_CHAT_MAX, the designs what is left of LIVE11_MAX; a design is started only while at least
 #   LIVE11_DESIGN_MIN calls are left. The call after the limit is refused and the run says so.
 # What is written: tests/live_run_11.out (text: each turn, each design, the calls), tests/live_replies_11.rds (the replies), tests/designed.html,
@@ -262,13 +263,20 @@ writeLines(html, html_file, useBytes = TRUE)
 say("\n  wrote ", html_file, " (", format(round(file.info(html_file)$size / 1e6, 2), nsmall = 2), " MB)")
 
 # ---- the designed dashboard --------------------------------------------------------------------------------------------------------------
-say("\n---- Export: the designed charts, ", LIVE11_STYLE, " style (pictures; no design videos: Part C is not done)")
+# In the second attempt two of the eight are built as video: design_video() (Phase 11 Part C) makes each from its design (the data layers come in by the design's own
+#   motion, then the text), so the export shows what Part C makes of a real designed chart. The monthly line and the ranked bar when they were accepted, else the
+#   first two accepted. The first attempt, and a server without video, build pictures only.
+accepted_ids <- purrr::map_chr(purrr::keep(designs, function(x) isTRUE(x$res$ok)), "id")
+family_of <- function(id) by_id(run$canvas, id)$spec$family
+first_of <- function(fam) purrr::keep(accepted_ids, function(id) identical(family_of(id), fam))[1]
+video_ids <- if (redo && design_video_available()) utils::head(unique(stats::na.omit(c(first_of("line"), first_of("bar"), accepted_ids))), 2L) else character(0)
+say("\n---- Export: the designed charts, ", LIVE11_STYLE, " style (", if (length(video_ids)) paste0(length(video_ids), " of them as video, made from their designs: ", paste(video_ids, collapse = ", "), "; the rest pictures") else "pictures; no video", ")")
 items <- purrr::map(designs, function(x) {
   ch = by_id(run$canvas, x$id)
   s = by_id(run$stories, x$id)
   story = if (!is.null(s) && is_text1(s$headline)) list(headline = s$headline, summary = s$summary, hash = spec_hash(ch$spec), data = "d", facts = s$facts %||% "", spec = ch$spec,
                                                         problems = s$problems %||% character(0))
-  list(id = x$id, chart = ch, story = story, mode = "picture", design = if (isTRUE(x$res$ok)) x$res$design, stale = NA_character_)
+  list(id = x$id, chart = ch, story = story, mode = if (x$id %in% video_ids) "video" else "picture", design = if (isTRUE(x$res$ok)) x$res$design, stale = NA_character_)
 })
 settings <- list(marking = "UNCLASSIFIED//FOR TEST", title = "Orders, designed", subtitle = "Eight charts of 3,000 synthetic orders, designed with the Editorial skill", author = "chaRt live run",
                  date = Sys.Date(),
@@ -287,6 +295,9 @@ if (inherits(built, "error")) {
   say("  built in ", sprintf("%.1f", built$seconds), " s: ", format(round(built$bytes / 1e6, 2), nsmall = 2), " MB; modes: ", paste(built$modes, collapse = ", "), "; device ", built$device)
   fb = built$fallbacks[!is.na(built$fallbacks)]
   if (length(fb)) say("  FELL BACK: ", paste(names(fb), fb, sep = " - ", collapse = "; "))
+  vn = built$video_notes[!is.na(built$video_notes)]
+  if (length(vn)) say("  VIDEO NOTES: ", paste(names(vn), vn, sep = " - ", collapse = "; "))
+  say("  videos: ", sum(built$modes == "video"))
   say("  unpacked into ", dash_dir, "/")
 }
 purrr::walk(designs, function(x) if (isTRUE(x$res$ok) && !is.null(x$res$design$file)) unlink(x$res$design$file))

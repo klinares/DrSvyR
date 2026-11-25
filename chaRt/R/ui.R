@@ -2192,6 +2192,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                                                                                        " (a table in the page and a CSV in charts/).") else "")),
                    unname(purrr::imap(res$fallbacks[!is.na(res$fallbacks)], function(why, t)
                      tags$p(class = "small mb-1", style = warn_style, paste0("'", t, "' is a picture: its ", res$fallback_of[[t]] %||% "interactive version", " could not be made (", why, ").")))),
+                   unname(purrr::imap(res$video_notes[!is.na(res$video_notes)], function(note, t) tags$p(class = "small mb-1", paste0("'", t, "': ", note)))),
                    tags$p(class = "small mb-0", "Unzip it and open dashboard.html in any browser; it needs no connection.")),
         tags$div(class = "d-flex flex-wrap align-items-center gap-2 mt-3",
                  actionButton(ns("dash_build"), "Build the dashboard", class = "btn-primary chart-call", `data-working` = WORKING_WORDS[["dashboard"]],
@@ -3457,7 +3458,8 @@ dash_about <- function(items, settings, cb, data, model) {
                                  if (any(modes == "interactive"))
                                    "An interactive chart carries the values of the rows it plots, in this file." else "A picture holds no row values.",
                                  if (any(modes == "video")) " A video holds no row values: it is pictures of the chart.",
-                                 purrr::map_chr(fell, function(it) paste0(" '", it$title, "' is a picture because its ", it$fallback_of %||% "interactive version", " could not be made: ", it$fallback)) |> paste(collapse = ""))),
+                                 purrr::map_chr(fell, function(it) paste0(" '", it$title, "' is a picture because its ", it$fallback_of %||% "interactive version", " could not be made: ", it$fallback)) |> paste(collapse = ""),
+                                 purrr::map_chr(purrr::keep(items, function(it) is_text1(it$video_note)), function(it) paste0(" '", it$title, "': ", it$video_note)) |> paste(collapse = ""))),
       if (length(tables)) entry("The summary tables", paste0(length(tables), if (length(tables) == 1L) " table" else " tables", " of statistics, worked out by R from the rows of the file with no model; ",
                                  "each is also a CSV in charts/. A table shows statistics of columns and groups, never a row. The note under each says how its numbers were made. The tables: ",
                                  paste(purrr::map_chr(tables, "title"), collapse = "; "), ".")),
@@ -3846,6 +3848,18 @@ dash_video <- function(chart, stage, file, data, cb, palette, marking, size = "d
        canvas = r$canvas, size = size, px = r$px)
 }
 
+# The video of a designed chart for the page (Phase 11 Part C): design_video() on the design's code, for the card's width as dash_video() is, without title,
+#   subtitle or source line, with the marking's bands, and the finished design as the poster. Returns what dash_video() does, and `mode` ("layers": the design's
+#   data layers come in by its motion, then its labels; "wipe": the three drawings did not add up, the whole picture wipes in) with `reason` (why it wipes).
+dash_design_video <- function(dz, chart, stage, file, data, cb, palette, marking, size = "desk") {
+  inp = design_input(chart, data, cb, palette)
+  poster = tempfile(fileext = ".png")
+  on.exit(unlink(poster))
+  r = design_video(dz$code, inp, dz$motion, file.path(stage, file), width_px = SPEC_VIDEO_DASH_PX[[size]][["width"]], marking = marking, bare = TRUE, poster = poster)
+  list(file = file, uri = dash_data_uri(file.path(stage, file), "video/mp4"), poster = dash_data_uri(poster, "image/png"), seconds = r$seconds, drawn = r$drawn,
+       canvas = r$canvas, size = size, px = r$px, designed = TRUE, mode = r$mode, reason = r$reason, motion = r$motion)
+}
+
 # Whether a card asks for a whole row by what it is (Phase 10b): a table, a chart drawn wide (many sideways bars), or small multiples of more
 #   than DASH_FULL_PANELS panels, which are cramped in half a row. An interactive chart no longer does: it is sized to its card as a picture is.
 #   `m` is a made card: list(mode, natural_wide, panels).
@@ -3886,8 +3900,19 @@ dash_pictures <- function(m, full, i, chart, data, cb, palette, kind, widget = s
     m$fallback = sub("\n.*$", "", w)
     m$mode = "picture"
   } else if (identical(m$mode, "video")) {
-    v = tryCatch(dash_video(chart, stage, file.path("charts", sprintf("%02d_%s.mp4", i, dash_slug(m$title))), data, cb, palette, marking, card),
-                 error = function(e) conditionMessage(e))
+    vfile = file.path("charts", sprintf("%02d_%s.mp4", i, dash_slug(m$title)))
+    # A designed chart's video is made from the design (design_video()); when that cannot be made, the standard drawing's video is, and the card says so.
+    v = NULL
+    if (isTRUE(m$designed)) {
+      v = tryCatch(dash_design_video(m$design, chart, stage, vfile, data, cb, palette, marking, card), error = function(e) conditionMessage(e))
+      m$video_note = if (is.list(v)) { if (identical(v$mode, "wipe")) paste0("The video wipes the designed drawing in from the left as one picture, because ", v$reason, ".") }
+                     else paste0("The video of the designed drawing could not be made (", sub("\n.*$", "", v), "), so it is a video of the standard drawing.")
+    }
+    if (!is.list(v)) {
+      v = tryCatch(dash_video(chart, stage, vfile, data, cb, palette, marking, card), error = function(e) conditionMessage(e))
+      if (is.list(v) && isTRUE(m$designed)) { m$designed = FALSE; m$design = NULL }
+      if (!is.list(v)) m$video_note = NULL
+    }
     if (is.list(v)) {
       m$video = v
       m$files = c(m$files, v$file)
@@ -3996,7 +4021,7 @@ dash_design_note <- function(dz, spec, mode) {
   }
   paste0("Designed with ", design_skill_label(dz$skill), ": the picture is the model's code run again on the file as it is now. The plotted table is written beside charts.R as a CSV so the script runs alone",
          if (chart_from_rows(spec)) ", and that CSV holds the rows this chart plots" else "", ".",
-         inter, if (identical(mode, "video")) " A video is made from the standard drawing, not the design." else "")
+         inter, if (identical(mode, "video")) " A video is drawn from the design: its marks come in by the motion the model chose (rise, draw, wipe or fade), then its labels fade in; if the design's layers cannot be drawn apart, the whole picture wipes in from the left." else "")
 }
 
 # The script of one designed chart, so that it runs alone: the packages its code uses, the table read back from its CSV (dates and levels as they were), the
@@ -4101,6 +4126,7 @@ build_dashboard <- function(items, data, cb, palette, settings, path, zip_file, 
   list(zip = zip_file, bytes = file.size(zip_file), seconds = proc.time()[["elapsed"]] - started,
        files = stats::setNames(listing$uncompressed_size, listing$filename), modes = purrr::map_chr(made, "mode"), full = full,
        fallbacks = stats::setNames(purrr::map_chr(made, function(m) m$fallback %||% NA_character_), purrr::map_chr(made, "title")),
+       video_notes = stats::setNames(purrr::map_chr(made, function(m) m$video_note %||% NA_character_), purrr::map_chr(made, "title")),
        fallback_of = stats::setNames(purrr::map_chr(made, function(m) m$fallback_of %||% "interactive version"), purrr::map_chr(made, "title")), device = kind)
 }
 

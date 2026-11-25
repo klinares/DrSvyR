@@ -3352,13 +3352,13 @@ marking_band <- function(text, width_in, kind = chart_device_kind()) {
 }
 
 # Draws `draw()` (which draws the chart in the current viewport) between a band at the top and one at the bottom of the open device, which is
-#   `width_in` inches wide. Starts a new page.
-marking_draw <- function(marking, width_in, draw, kind = chart_device_kind()) {
+#   `width_in` inches wide. Starts a new page. `bands` FALSE leaves the two bands empty (the layout is the same: a transparent layer of a designed video).
+marking_draw <- function(marking, width_in, draw, kind = chart_device_kind(), bands = TRUE) {
   band = grid::unit(MARKING_BAND_IN, "inches")
   grid::grid.newpage()
   grid::pushViewport(grid::viewport(layout = grid::grid.layout(3, 1, heights = grid::unit.c(band, grid::unit(1, "null"), band))))
   grob = marking_band(marking, width_in, kind)
-  purrr::walk(c(1L, 3L), function(row) {
+  purrr::walk(if (bands) c(1L, 3L) else integer(0), function(row) {
     grid::pushViewport(grid::viewport(layout.pos.row = row))
     grid::grid.draw(grob)
     grid::popViewport()
@@ -4882,4 +4882,244 @@ design_checks <- function(plot, d, facts, spec, code = "", txt = NULL, warnings 
   numbers = caught(function() design_check_numbers(design_drawn_strings(parts, tf$boxes), d, facts, spec, txt))
   reasons = unique(as.character(stats::na.omit(c(faults, numbers, tf$faults))))
   list(ok = !length(reasons), reasons = reasons)
+}
+
+
+# ---- Phase 11 Part C: motion for any chart ---------------------------------------------------------------------------------------
+# A designed chart can be anything, so its motion is not made from what the chart is (spec_video() does that for the app's own families) but from the
+#   finished picture. design_video() draws the finished design THREE times at the video's size, from one built plot (so the data are the same in each):
+#     (a) the frame: everything but the data and text layers, on the design's own background: the axes, grid, legend words, titles and caption (they
+#         are the theme's, not layers) and the classification bands;
+#     (b) the data layers, on a transparent background, with every part of the theme made invisible but keeping its place (the panel is the same size);
+#     (c) the text and annotation layers, the same way.
+#   Which layer is which is decided from the built plot's geoms, never from the model's words (design_layer_role()): a layer whose geom is a text geom
+#   (the DESIGN_TEXT_GEOMS, ggrepel's and ggtext's, and any other geom whose class is Text, Label, RichText or Textbox, in any case: ggtext's is GeomRichText, which DESIGN_TEXT_GEOMS spells GeomRichtext) is text; a layer that is not a
+#   mark geom but is a small, fixed set of drawing instructions (what annotate(), geom_hline(yintercept = ) and the like make: inherit.aes FALSE,
+#   show.legend FALSE, StatIdentity, at most DESIGN_ROW_EXTRA rows of its own data) is an annotation and goes with the text; annotate("text") is text
+#   by its geom, annotate("point") a mark by its geom; every other layer is data. The frames are then array arithmetic on the three pictures (the png
+#   package) and the encoder is av's, as in Phase 9; ggplot draws no frame. The data layers come in by the design's `motion` (design_video_mask()),
+#   then the text layer fades in, then the finished picture is held; the timings and the easing are Phase 9's (video_phases(), video_ease()).
+#   When the three drawings do not add up to the finished picture, the video wipes the finished picture in from the left instead, and says why.
+
+png_installed <- function() length(find.package("png", quiet = TRUE)) > 0L
+
+# Whether this server can make a designed chart's video: a video (av with H.264, a device that writes PNG) and the png package that reads and writes the pictures.
+design_video_available <- function() video_available() && png_installed()
+
+# The softness of the moving edge of the mask, as a share of the data's width (or height for rise): `draw` and `wipe` move left to right, `draw` with the
+#   softer edge; `rise` goes bottom to top (left to right for sideways bars); `fade` has no edge.
+DESIGN_VIDEO_SOFT <- c(draw = 0.15, wipe = 0.06, rise = 0.12, fade = 0)
+DESIGN_VIDEO_LEVEL <- 4 / 255   # a pixel whose colour differs from the finished picture's by more than this in any channel is a pixel that differs
+DESIGN_VIDEO_SHARE <- 0.002     # and the three drawings are the finished picture when no more than this share of the pixels differ
+
+# What a layer of a design is for the motion: "text", "annotation" (these two come in with the labels) or "data".
+design_layer_role <- function(layer) {
+  if (inherits(layer$geom, DESIGN_TEXT_GEOMS) || grepl("^Geom(Text|Label|Richtext|Textbox)", class(layer$geom)[1], ignore.case = TRUE)) return("text")
+  fixed = !inherits(layer$geom, DESIGN_MARK_GEOMS) && isFALSE(layer$inherit.aes) && isFALSE(layer$show.legend) && inherits(layer$stat, "StatIdentity") &&
+    is.data.frame(layer$data) && nrow(layer$data) <= DESIGN_ROW_EXTRA
+  if (fixed) "annotation" else "data"
+}
+
+# Whether the marks grow along x: sideways bars (coord_flip(), or a discrete y against a continuous x).
+design_horizontal <- function(plot, built) {
+  discrete = function(sc) isTRUE(tryCatch(sc$is_discrete(), error = function(e) FALSE))
+  inherits(plot$coordinates, "CoordFlip") ||
+    (discrete(built$layout$panel_scales_y[[1]]) && !discrete(built$layout$panel_scales_x[[1]]))
+}
+
+# A theme that keeps the place of everything and shows none of it: every text, rectangle and line the plot's theme draws (blank ones stay blank, since they
+#   take no room) in a colour that is not there. Added to a plot's own theme, it leaves the panel exactly where it was.
+design_clear_theme <- function(plot) {
+  th = design_theme(plot)
+  tree = ggplot2::get_element_tree()
+  drawn = function(el) {
+    e = tryCatch(ggplot2::calc_element(el, th), error = function(err) NULL)
+    !is.null(e) && !inherits(e, c("element_blank", "ggplot2::element_blank"))
+  }
+  of = function(cls) purrr::keep(names(tree)[purrr::map_lgl(tree, function(e) identical(e$class, cls))], drawn)
+  els = c(stats::setNames(rep(list(ggplot2::element_text(colour = "transparent")), length(of(ggplot2::element_text))), of(ggplot2::element_text)),
+          stats::setNames(rep(list(ggplot2::element_rect(fill = NA, colour = NA)), length(of(ggplot2::element_rect))), of(ggplot2::element_rect)),
+          stats::setNames(rep(list(ggplot2::element_line(colour = NA)), length(of(ggplot2::element_line))), of(ggplot2::element_line)))
+  do.call(ggplot2::theme, els)
+}
+
+# One drawing of the built plot `b` as a PNG `w_in` by `h_in` inches (the canvas, bands included): the layers in `hide` have their data taken away (a layer with
+#   no rows draws nothing, and the scales, panel and legend are the finished chart's, as in Phase 9), `clear` makes the theme invisible, `bg` is the device's
+#   background and `bands` whether the classification bands are painted (the viewport is the same either way).
+design_layer_draw <- function(b, hide, clear, file, w_in, h_in, dpi, marking, bands, bg, plot) {
+  b$data[hide] = purrr::map(b$data[hide], function(d) d[0, , drop = FALSE])
+  if (clear) b$plot$theme = b$plot$theme + design_clear_theme(plot)
+  chart_device(file, w_in, h_in, dpi, bg = bg)
+  on.exit(grDevices::dev.off())
+  withCallingHandlers({
+    gt = ggplot2::ggplot_gtable(b)
+    if (is.null(marking)) {
+      grid::grid.newpage()
+      grid::grid.draw(gt)
+    } else marking_draw(marking, w_in, function() grid::grid.draw(gt), bands = bands)
+  }, warning = function(w) invokeRestart("muffleWarning"), message = function(m) invokeRestart("muffleMessage"))
+  invisible(file)
+}
+
+# A PNG as list(rgb = array h by w by 3, alpha = matrix h by w).
+design_read_png <- function(file) {
+  a = png::readPNG(file)
+  if (length(dim(a)) == 2L) a = array(a, dim = c(dim(a), 1L))
+  d = dim(a)
+  list(rgb = if (d[[3]] >= 3L) a[, , 1:3, drop = FALSE] else a[, , c(1L, 1L, 1L), drop = FALSE],
+       alpha = if (d[[3]] %in% c(2L, 4L)) a[, , d[[3]]] else matrix(1, d[[1]], d[[2]]))
+}
+
+# A picture written from an array (values 0 to 1, h by w by 3).
+design_write_png <- function(a, file) png::writePNG(a, file)
+
+# `layer` laid over `base` with `alpha` (a matrix) of its own opacity at each pixel.
+design_over <- function(base, layer, alpha) base + (layer - base) * array(alpha, dim = dim(base))
+
+# The mask of the data layers' reveal at eased progress `e` (0 to 1): 1 where the layer is shown, 0 where not yet, a soft edge of `soft` (of the whole run)
+#   between them; `rel` is each pixel's place along the direction of the motion, 0 to 1 across the data.
+design_video_mask <- function(e, rel, soft) video_clamp((e * (1 + soft) - rel) / soft)
+
+# The rows and columns that hold ink (alpha above nothing): list(rows = first and last row, cols = first and last column), or NULL.
+design_ink_box <- function(alpha) {
+  rows = which(rowSums(alpha > 0.002) > 0)
+  cols = which(colSums(alpha > 0.002) > 0)
+  if (length(rows) && length(cols)) list(rows = range(rows), cols = range(cols))
+}
+
+# The place of each row or column along a run that has ink from `from` to `to` of `n`: 0 at the first, 1 at the last (outside the ink, beyond).
+design_run_rel <- function(n, from, to) (seq_len(n) - from + 0.5) / (to - from + 1)
+
+# Whether the design can be drawn in layers: one plot, not a patchwork. Returns NULL when it can, else the sentence.
+design_layers_why <- function(plot) {
+  if (length(design_parts(plot)) > 1L) return("the design is several plots put together (a patchwork), which have no one panel to take the layers out of")
+  NULL
+}
+
+# A designed chart's video, written to `file`. `code` is the design's code, `inp` design_input()'s list for the chart, `motion` one of DESIGN_MOTIONS (the
+#   design's own, else "fade"). The canvas is the design's size in inches (`inp$size`) with the marking's two bands added above and below when `marking` is given
+#   (as spec_video() does for a card), `width_px` pixels wide and as high as that makes it, rounded to an even number (H.264 needs both even). `bare`: no title,
+#   subtitle or source line (the page says them). `poster` names a file that gets the finished picture; `keep` a folder to leave the frames in; `on_frame(i, n)`
+#   is called after each frame is made.
+#   The last frame is the finished picture itself, drawn once through the same built plot, and `check` says how close the three drawings come to it. If they do not
+#   (share of pixels that differ above DESIGN_VIDEO_SHARE), or nothing of the data is drawn, or the design is a patchwork, the video wipes the finished picture
+#   in from the left over the ground colour (the bands stay), and `reason` says why. Returns list(file, mode = "layers" or "wipe", reason, motion, roles, check, drawn,
+#   inputs, canvas, px, plot, seconds = c(draw, compose, encode)).
+design_video <- function(code, inp, motion = "fade", file, width_px = SPEC_VIDEO_PX$download[["width"]], marking = NULL, bare = FALSE, poster = NULL, keep = NULL,
+                         on_frame = NULL) {
+  if (!design_video_available()) stop(if (!video_available()) video_unavailable_text() else "Videos of designs are unavailable on this server: the png package is not installed.", call. = FALSE)
+  motion = if (is_text1(motion) && tolower(trimws(motion)) %in% DESIGN_MOTIONS) tolower(trimws(motion)) else "fade"
+  t0 = proc.time()[["elapsed"]]
+  txt = if (bare) inp$txt[setdiff(names(inp$txt), c("title", "subtitle", "caption"))] else inp$txt
+  r = design_run(code, inp$d, inp$facts, txt, inp$tok, inp$pal, size = inp$size, dpi = 20)
+  if (!r$ok) stop(r$reason, call. = FALSE)
+  plot = r$plot
+  b = r$built
+  band = if (is.null(marking)) 0 else MARKING_BAND_IN
+  w_in = unname(inp$size[["width"]])
+  w_px = 2L * as.integer(ceiling(width_px / 2))
+  dpi = w_px / w_in
+  h_px = 2L * as.integer(round((inp$size[["height"]] + 2 * band) * dpi / 2))
+  h_in = h_px / dpi
+  canvas = c(width = w_in, height = h_in)
+  dir = keep %||% tempfile("chart_design_video_")
+  dir.create(dir, showWarnings = FALSE, recursive = TRUE)
+  if (is.null(keep)) on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+  draw = function(name, hide, clear, bands, bg)
+    design_layer_draw(b, hide, clear, file.path(dir, paste0(name, ".png")), w_in, h_in, dpi, marking, bands, bg, plot)
+  limit = 4 * DESIGN_TIME_LIMIT
+  setTimeLimit(cpu = limit, elapsed = limit, transient = FALSE)
+  on.exit(setTimeLimit(cpu = Inf, elapsed = Inf, transient = FALSE), add = TRUE)
+  roles = purrr::map_chr(plot$layers, design_layer_role)
+  all = seq_along(roles)
+  # The four drawings and the comparison: list(full_file, full, layers, check, why); `layers` is NULL when they cannot be used, with `why`.
+  separate = function() {
+    full_file = draw("full", integer(0), FALSE, TRUE, NULL)
+    why = design_layers_why(plot)
+    parts = if (is.null(why)) {
+      f_frame = draw("frame", all, FALSE, TRUE, NULL)
+      f_data = tryCatch(draw("data", which(roles != "data"), TRUE, FALSE, "transparent"), error = function(e) design_message(e))
+      f_text = if (is.character(f_data) && !file.exists(f_data)) f_data else tryCatch(draw("text", which(roles == "data"), TRUE, FALSE, "transparent"), error = function(e) design_message(e))
+      if (!file.exists(f_data) || !file.exists(f_text)) { why = paste0("the layers could not be drawn on their own (", if (!file.exists(f_data)) f_data else f_text, ")"); NULL }
+      else list(frame = f_frame, data = f_data, text = f_text)
+    }
+    full = design_read_png(full_file)
+    layers = NULL
+    check = NULL
+    if (!is.null(parts)) {
+      layers = purrr::map(parts, design_read_png)
+      ink_b = design_ink_box(layers$data$alpha)
+      final = design_over(design_over(layers$frame$rgb, layers$data$rgb, layers$data$alpha), layers$text$rgb, layers$text$alpha)
+      gap = pmax(abs(final[, , 1] - full$rgb[, , 1]), abs(final[, , 2] - full$rgb[, , 2]), abs(final[, , 3] - full$rgb[, , 3]))
+      hidden = max(abs(layers$frame$rgb - full$rgb))
+      check = list(share = mean(gap > DESIGN_VIDEO_LEVEL), max = max(gap), hides = hidden > DESIGN_VIDEO_LEVEL, ink = !is.null(ink_b))
+      why = if (!identical(dim(layers$frame$rgb), dim(full$rgb))) "the layers were drawn at a different size from the finished picture"
+            else if (is.null(ink_b)) "the data layers draw nothing of their own that can be told from the frame"
+            else if (!check$hides) "the frame, drawn without the data and text layers, is the same picture as the finished design"
+            else if (check$share > DESIGN_VIDEO_SHARE)
+              paste0("the frame, the data layers and the text layers drawn separately do not add up to the finished design (", format(round(100 * check$share, 2), nsmall = 2),
+                     "% of its pixels differ; its layers cross in an order the three drawings cannot reproduce, or a label lands in another place each time it is drawn)")
+      if (!is.null(why)) layers = NULL
+    }
+    list(full_file = full_file, full = full, layers = layers, check = check, why = why)
+  }
+  sep = separate()
+  # Once in about forty videos here one of the four drawings came out in another typeface ("Quebec" written without its accent, the letters heavier) and a pixel off,
+  #   and the layers did not add up; no repeated plain drawing did that (300 in a row), so the cause is not known. The four are drawn once more before the video
+  #   gives up on the layers because they do not add up (a design that really does not add up fails the second time too).
+  if (is.null(sep$layers) && !is.null(sep$check) && isTRUE(sep$check$share > DESIGN_VIDEO_SHARE)) sep = separate()
+  full_file = sep$full_file; full = sep$full; layers = sep$layers; check = sep$check; why = sep$why
+  drawn = proc.time()[["elapsed"]]
+  n = video_frame_count(SPEC_VIDEO_FPS)
+  progress = seq(0, 1, length.out = n)
+  files = file.path(dir, sprintf("frame_%04d.png", seq_len(n)))
+  hw = dim(full$rgb)[1:2]
+  if (!is.null(layers)) {
+    ab = layers$data$alpha
+    ac = layers$text$alpha
+    ink = design_ink_box(ab)
+    horizontal = design_horizontal(plot, b)
+    along_x = identical(motion, "wipe") || identical(motion, "draw") || (identical(motion, "rise") && horizontal)
+    soft = DESIGN_VIDEO_SOFT[[motion]]
+    rel = if (identical(motion, "fade")) NULL
+          else if (along_x) design_run_rel(hw[[2]], ink$cols[[1]], ink$cols[[2]])
+          else rev(design_run_rel(hw[[1]], ink$rows[[1]], ink$rows[[2]]))   # row 1 is the top; the bottom comes in first
+    mask_at = function(e) {
+      if (is.null(rel)) return(ab * e)
+      m = design_video_mask(e, rel, soft)
+      ab * (if (along_x) matrix(rep(m, each = hw[[1]]), hw[[1]], hw[[2]]) else matrix(rep(m, times = hw[[2]]), hw[[1]], hw[[2]]))
+    }
+    compose = function(p) {
+      ph = video_phases(p)
+      e = video_ease(ph$motion)
+      k = video_ease(ph$labels)
+      img = if (e > 0) design_over(layers$frame$rgb, layers$data$rgb, mask_at(e)) else layers$frame$rgb
+      if (k > 0) design_over(img, layers$text$rgb, ac * k) else img
+    }
+  } else {
+    # the whole-chart wipe: the finished picture comes in over the ground colour, from the left, between the bands (which stay)
+    ground = as.numeric(grDevices::col2rgb(inp$tok$ground)) / 255
+    band_px = as.integer(round(band * dpi))
+    rows = (band_px + 1L):(hw[[1]] - band_px)
+    base = full$rgb
+    base[rows, , ] = array(rep(ground, each = length(rows) * hw[[2]]), dim = c(length(rows), hw[[2]], 3L))
+    rel = design_run_rel(hw[[2]], 1L, hw[[2]])
+    mask = matrix(0, hw[[1]], hw[[2]])
+    compose = function(p) {
+      m = design_video_mask(video_ease(video_phases(p)$motion), rel, DESIGN_VIDEO_SOFT[["wipe"]])
+      mask[rows, ] = matrix(rep(m, each = length(rows)), length(rows), hw[[2]])
+      design_over(base, full$rgb, mask)
+    }
+  }
+  purrr::iwalk(progress, function(p, i) {
+    if (p >= 1) file.copy(full_file, files[[i]], overwrite = TRUE) else design_write_png(compose(p), files[[i]])
+    if (is.function(on_frame)) on_frame(i, n)
+  })
+  if (!is.null(poster)) file.copy(full_file, poster, overwrite = TRUE)
+  composed = proc.time()[["elapsed"]]
+  inputs = video_inputs(files)
+  av::av_encode_video(inputs, file, framerate = SPEC_VIDEO_FPS, vfilter = "format=yuv420p", codec = "libx264", verbose = FALSE)
+  list(file = file, mode = if (!is.null(layers)) "layers" else "wipe", reason = if (is.null(layers)) why else NA_character_, motion = motion, roles = roles, check = check,
+       drawn = n, inputs = length(inputs), canvas = canvas, px = c(width = w_px, height = h_px), plot = plot, final = files[[n]],
+       seconds = c(draw = drawn - t0, compose = composed - drawn, encode = proc.time()[["elapsed"]] - composed))
 }

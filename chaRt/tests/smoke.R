@@ -49,7 +49,9 @@ HEAVY_CHECKS <- c(
   "10D-10: the five-chart dashboard in Briefing",                                  # reads the seven pages built by 9A-8
   "10D-11: in Chrome at 1400 and 500 pixels",
   "10b-11: in Chrome, in Briefing, at 1400 and 1000 pixels",                       # the page laid out at four widths
-  "10b-12: in Chrome the Replay button")                                             # the video page, Replay clicked                                       # the cards of a row measured in Chrome in Clean and Briefing                       # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
+  "10b-12: in Chrome the Replay button",
+  "11C-7: the export makes a designed chart's video from the design",                            # a dashboard with two designed videos (1080 pixels wide) built, the MP4s read back
+  "11C-8: a designed video that cannot be made does not stop the build")                         # and one whose design video is refused, with the standard video made instead                                             # the video page, Replay clicked                                       # the cards of a row measured in Chrome in Clean and Briefing                       # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
 
 results <- new.env()
 results$all <- logical(0)
@@ -4382,7 +4384,7 @@ p8_hits <- function(f) {
 }
 p8_found <- unlist(purrr::map(c("app.R", r_files), p8_hits))
 p8_gal <- unlist(purrr::map("tests/gallery.R", p8_hits))
-p8_expect <- c("spec.R: marking_band calls convertWidth, stringWidth", "spec.R: design_text_boxes calls deviceLoc, convertWidth, grobWidth, convertHeight, grobHeight", "theme.R: chart_device calls agg_png, png, svglite")   # Phase 10 Part A: marking_band() measures its letters, and is reached only from marking_draw(), which spec_png() and video_draw() call after chart_device() has opened the device; Phase 11 Part A: design_text_boxes() measures the texts of a designed chart, inside the device it opens through chart_device()
+p8_expect <- c("spec.R: marking_band calls convertWidth, stringWidth", "spec.R: design_text_boxes calls deviceLoc, convertWidth, grobWidth, convertHeight, grobHeight", "spec.R: design_read_png calls png", "spec.R: design_write_png calls png", "theme.R: chart_device calls agg_png, png, svglite")   # Phase 10 Part A: marking_band() measures its letters, and is reached only from marking_draw(), which spec_png() and video_draw() call after chart_device() has opened the device; Phase 11 Part A: design_text_boxes() measures the texts of a designed chart, inside the device it opens through chart_device()
 check(paste0("8A-2: no function in app.R or R/ opens a graphics device or measures text outside chart_device() in R/theme.R (png, jpeg, agg_png, svglite, pdf, ggsave, strwidth, grid unit conversions and the like)",
              if (!identical(p8_found, p8_expect)) paste0(" (found: ", paste(p8_found, collapse = "; "), ")")),
       identical(p8_found, p8_expect) &&
@@ -9520,14 +9522,14 @@ b11_bad$code <- b11_hostile
 b11_ex2 <- b11_zip(list(b11_item(b11_bar, b11_bad), b11_item(b11_bar2, NULL)))
 b11_notes <- list(picture = dash_design_note(b11_dz_bar, b11_bar$spec, "picture"), inter = dash_design_note(b11_dz_bar, b11_bar$spec, "interactive"), inter_smooth = dash_design_note(b11_dz_smooth, b11_scatter24$spec, "interactive"),
                   video = dash_design_note(b11_dz_bar, b11_bar$spec, "video"), rows = dash_design_note(b11_dz_smooth, b11_scatter24$spec, "picture"))
-check("11B-17: a design that cannot be drawn again when the dashboard is built falls back to the standard drawing for that card (a PNG of the standard drawing, no table CSV, the card's note says the designed drawing could not be made and why) and does not stop the build; a card with no design is as it was before (no table CSV, its own code); the export dialog's note for a designed chart says where the picture comes from and that the plotted table is written beside the script, that the CSV holds the rows when the chart plots rows, what Interactive does for that design (tooltips, or the standard view and the reason) and that a video is made from the standard drawing",
+check("11B-17: a design that cannot be drawn again when the dashboard is built falls back to the standard drawing for that card (a PNG of the standard drawing, no table CSV, the card's note says the designed drawing could not be made and why) and does not stop the build; a card with no design is as it was before (no table CSV, its own code); the export dialog's note for a designed chart says where the picture comes from and that the plotted table is written beside the script, that the CSV holds the rows when the chart plots rows, what Interactive does for that design (tooltips, or the standard view and the reason) and that a video is drawn from the design",
       is.character(b11_ex2$fallbacks[[1]]) && grepl("never allowed", b11_ex2$fallbacks[[1]], fixed = TRUE) && identical(unname(b11_ex2$fallback_of[1]), "designed drawing") && is.na(b11_ex2$fallbacks[[2]]) &&
         !any(grepl("_table[.]csv$", names(b11_ex2$files))) && sum(grepl("[.]png$", names(b11_ex2$files))) == 2L && !any(grepl("Designed with", readLines(file.path(b11_ex2$dir, "charts.R"), warn = FALSE))) &&
         any(grepl("spec_plot|ggplot\\(", readLines(file.path(b11_ex2$dir, "charts.R"), warn = FALSE))) &&
         grepl("run again on the file as it is now", b11_notes$picture, fixed = TRUE) && grepl("beside charts.R as a CSV", b11_notes$picture, fixed = TRUE) && !grepl("holds the rows", b11_notes$picture, fixed = TRUE) &&
         grepl("holds the rows this chart plots", b11_notes$rows, fixed = TRUE) && grepl("Interactive: tooltips on the designed drawing", b11_notes$inter, fixed = TRUE) &&
         grepl("Interactive: the standard interactive view, because the designed drawing cannot have tooltips (a layer of the design, geom_smooth", b11_notes$inter_smooth, fixed = TRUE) &&
-        grepl("A video is made from the standard drawing", b11_notes$video, fixed = TRUE))
+        grepl("A video is drawn from the design", b11_notes$video, fixed = TRUE))
 
 # ---- the packages a deployment must ask Connect for ---------------------------------------------------------------
 b11_app_exprs <- as.list(parse("app.R", keep.source = FALSE))
@@ -9543,6 +9545,308 @@ check("11B-18: ggrepel, ggtext, patchwork and forcats, which the toolkit takes b
         grepl("\"ggrepel\", \"ggtext\", \"patchwork\", \"forcats\"", b11_smoke_txt, fixed = TRUE))
 }   # the fast run only
 # <<< 11B end
+
+
+# >>> 11C begin
+# No model call. Phase 11 Part C: motion for any chart. design_video() draws a finished design three times (the frame; the data layers; the text and
+#   annotation layers) from one built plot, composes the frames as arrays with the png package and encodes them with av; the data layers come in by the design's
+#   motion (draw and wipe from the left with a soft edge, rise from the bottom or, for sideways bars, from the left, fade by opacity), then the text fades in, then
+#   the finished picture is held; where the three drawings do not add up to the finished picture the whole picture wipes in. The designs are stand-in code on
+#   the orders file (as the 11B block's are); nothing reaches a network. Self-contained (its own fixtures), so a changed copy of one function can be run against it
+#   alone (tests/mutate_11C.R). The videos are drawn narrow (480 pixels) where the check is about the frames and at the card's 1080 where it is about the seconds.
+#   The fixtures (the data, the designs' code, the helpers) are made in both runs; 11C-1 to 11C-6 and 11C-9 are the fast run's, and 11C-7 and 11C-8, which build
+#   dashboards with real videos at the card's width (about 47 s), are the heavy run's (HEAVY_CHECKS).
+c11_o <- read_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+c11_cb <- new_codebook(profile_data(c11_o$data), "orders.csv", nrow(c11_o$data), "-99", c11_o$encoding)
+c11_cb$row_is <- "one order"
+c11_chart <- new_chart("c1", list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Revenue by region.", subtitle = "All years", sort = "value_desc"))
+c11_chart2 <- new_chart("c2", list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Revenue by region, again", sort = "value_desc"))
+c11_theme <- 'theme_minimal(base_family = tok$body_family, base_size = tok$base_size) +
+  theme(plot.background = element_rect(fill = tok$ground, colour = NA), panel.grid.minor = element_blank(), panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(colour = tok$grid, linewidth = 0.3),
+        plot.title = element_text(family = tok$title_family, face = tok$title_face, colour = tok$text, hjust = 0),
+        plot.subtitle = element_text(colour = tok$muted, hjust = 0), plot.caption = element_text(colour = tok$caption, hjust = 0),
+        axis.text = element_text(colour = tok$muted), axis.title = element_text(colour = tok$muted))'
+c11_labels <- '  geom_text(aes(label = comma(revenue)), vjust = -0.5, colour = tok$text, family = tok$body_family, size = 3.5) +\n'
+c11_code <- function(layers = "", before = "")
+  paste0('ggplot(d, aes(x = region, y = revenue)) +\n', before, '  geom_col(fill = tok$accent, width = 0.7) +\n', layers,
+         '  scale_y_continuous(expand = expansion(mult = c(0, 0.12)), labels = label_comma()) +\n  labs(title = txt$title, subtitle = txt$subtitle, caption = txt$caption, x = NULL, y = NULL) + ', c11_theme)
+c11_plain <- c11_code()
+c11_with_text <- c11_code(c11_labels)
+c11_hbars <- paste0('ggplot(d, aes(x = revenue, y = region)) +\n  geom_col(fill = tok$accent, width = 0.7) +\n  scale_x_continuous(expand = expansion(mult = c(0, 0.12)), labels = label_comma()) +\n',
+                    '  labs(title = txt$title, subtitle = txt$subtitle, caption = txt$caption, x = NULL, y = NULL) + ', c11_theme)
+c11_flipped <- paste0('ggplot(d, aes(x = region, y = revenue)) +\n  geom_col(fill = tok$accent, width = 0.7) + coord_flip() +\n  labs(title = txt$title, x = NULL, y = NULL) + ', c11_theme)
+c11_pw <- paste0('one <- ggplot(d, aes(x = region, y = revenue)) + geom_col(fill = tok$accent) + labs(title = txt$title, x = NULL, y = NULL) + ', c11_theme, '
+two <- ggplot(d, aes(x = region, y = revenue)) + geom_col(fill = tok$slate) + labs(title = txt$subtitle, x = NULL, y = NULL) + ', c11_theme, '
+one | two')
+# a translucent rectangle written BEFORE the bars: the finished picture has the bars over it, the three drawings would put it over them
+c11_crossed <- c11_code(before = '  annotate("rect", xmin = 0.5, xmax = 4.5, ymin = 0, ymax = 600000, fill = tok$text, alpha = 0.5) +\n')
+# only text layers: no data layer draws anything
+c11_only_text <- paste0('ggplot(d, aes(x = region, y = revenue)) + geom_text(aes(label = region), colour = tok$text) + labs(title = txt$title, x = NULL, y = NULL) + ', c11_theme)
+c11_mark <- "UNCLASSIFIED//FOR TEST"
+c11_inp <- design_input(c11_chart, c11_o$data, c11_cb)
+c11_acc <- as.numeric(grDevices::col2rgb(c11_inp$tok$accent)) / 255
+c11_near <- function(x, col) sum(abs(x[, , 1] - col[[1]]) < 0.03 & abs(x[, , 2] - col[[2]]) < 0.03 & abs(x[, , 3] - col[[3]]) < 0.03)
+c11_secs <- new.env()
+c11_secs$all <- numeric(0)
+c11_png_dim <- function(f) { b = readBin(f, "raw", 24L); c(width = sum(as.integer(b[17:20]) * 256^(3:0)), height = sum(as.integer(b[21:24]) * 256^(3:0))) }
+c11_rgb <- function(f) design_read_png(f)$rgb
+# One video of `code` for `chart`: the result of design_video(), the folder its frames and the three drawings were left in, and a reader for a frame.
+c11_make <- function(code, motion, width = 480, marking = NULL, bare = TRUE, chart = c11_chart) {
+  inp = design_input(chart, c11_o$data, c11_cb)
+  dir = tempfile("c11_")
+  out = tempfile(fileext = ".mp4")
+  r = design_video(code, inp, motion, out, width_px = width, marking = marking, bare = bare, keep = dir)
+  c11_secs$all = c(c11_secs$all, sum(r$seconds))
+  list(r = r, dir = dir, inp = inp, file = out, frame = function(i) c11_rgb(file.path(dir, sprintf("frame_%04d.png", i))), at = function(n) c11_rgb(file.path(dir, paste0(n, ".png"))))
+}
+# The finished picture at the video's own size, drawn by spec_png() (print(plot)), as the dashboard draws a picture. Drawn three times and the one that two of
+#   the three agree on is taken: about one drawing in forty here comes out in another typeface and a pixel off (see design_video()), which a test must not trip on.
+c11_picture <- function(m, marking = NULL) {
+  one = function() {
+    f = tempfile(fileext = ".png")
+    band = if (is.null(marking)) 0 else MARKING_BAND_IN
+    spec_png(m$r$plot, f, size = c(width = unname(m$inp$size[["width"]]), height = m$r$canvas[["height"]] - 2 * band), dpi = m$r$px[["width"]] / m$r$canvas[["width"]], marking = marking)
+    png::readPNG(f)
+  }
+  d = list(one(), one(), one())
+  if (identical(d[[1]], d[[2]]) || identical(d[[1]], d[[3]])) d[[1]] else d[[2]]
+}
+# How much of each column (or row) of the data layer is shown in frame i: what the frame adds to the empty frame, over what the finished picture adds (only
+#   columns or rows that have data in them), 0 to 1.
+c11_shown <- function(m, i, by) {
+  a = m$at("frame"); full = m$at("full"); fr = m$frame(i)
+  num = rowSums(abs(fr - a), dims = 2)
+  den = rowSums(abs(full - a), dims = 2)
+  s = if (identical(by, "col")) colSums(num) else rowSums(num)
+  t = if (identical(by, "col")) colSums(den) else rowSums(den)
+  f = ifelse(t > 0.5, pmin(1, s / t), NA_real_)
+  f[!is.na(f)]
+}
+c11_ends <- function(f) { k = max(1L, length(f) %/% 3L); c(first = mean(f[seq_len(k)]), last = mean(f[(length(f) - k + 1L):length(f)])) }
+c11_same <- function(a, b, tol = 0) identical(dim(a), dim(b)) && max(abs(a - b)) <= tol
+c11_stub <- function(name, fn, code) {
+  old = get(name, envir = globalenv())
+  assign(name, fn, envir = globalenv())
+  on.exit(assign(name, old, envir = globalenv()))
+  force(code)
+}
+
+if (run_fast) {   # the fast run only (11C-1 to 11C-6); not indented, to keep the diff small
+# ---- every motion kind ---------------------------------------------------------------------------------------------
+c11_t0 <- Sys.time()
+c11_m <- list(draw = c11_make(c11_plain, "draw"), wipe = c11_make(c11_plain, "wipe"), rise = c11_make(c11_plain, "rise"), fade = c11_make(c11_plain, "fade"),
+              rise_h = c11_make(c11_hbars, "rise"))
+c11_unknown <- c11_make(c11_plain, "spin", width = 320)
+c11_na <- c11_make(c11_plain, NA, width = 320)
+c11_info <- purrr::imap(c11_m, function(m, k) {
+  by = if (identical(k, "rise")) "row" else "col"
+  f = c11_shown(m, 37L, by)
+  if (identical(k, "rise")) f = rev(f)   # rows run from the top: the bottom is where the marks start
+  list(mode = m$r$mode, reason = m$r$reason, motion = m$r$motion, n = m$r$drawn, first = c11_same(m$frame(1L), m$at("frame")), last = c11_same(m$frame(m$r$drawn), m$at("full")),
+       ends = c11_ends(f), soft = max(purrr::map_int(c(30L, 37L, 44L), function(j) { g = c11_shown(m, j, by); sum(g > 0.05 & g < 0.95) })), spread = diff(range(f)), mean = mean(f), mid = !c11_same(m$frame(37L), m$at("frame"), 0.004) && !c11_same(m$frame(37L), m$at("full"), 0.004),
+       file = file.exists(m$file) && file.size(m$file) > 1000, info = av::av_media_info(m$file)$video)
+})
+cat("      11C every motion kind: ", paste(purrr::imap_chr(c11_info, function(i, k) paste0(k, " ", i$mode, if (!identical(i$mode, "layers")) paste0(" [", i$reason, "]"), " (edge ", round(i$ends[["first"]], 2), " to ", round(i$ends[["last"]], 2), ", ", i$soft, " columns soft)")), collapse = "; "),
+    " (", round(as.numeric(difftime(Sys.time(), c11_t0, units = "secs")), 1), " s)\n", sep = "")
+check("11C-1: every motion kind works from the finished picture: for draw, wipe, rise (bars up from the baseline, and sideways bars left to right) and fade, in layers mode, the first frame is the empty frame (axes and grid, no mark), the last is the finished picture, a frame in the middle is neither; at the middle of the motion draw and wipe have shown the left of the data and not the right (and the edge is soft: several columns between 0 and all), rise the bottom and not the top (sideways bars: the left, not the right), and fade has shown every part of the data alike at a share between 0.3 and 0.7; the video is a real MP4 of 87 drawn frames and 135 in the file; an unknown or missing motion is fade",
+      all(purrr::map_lgl(c11_info, function(i) identical(i$mode, "layers") && i$first && i$last && i$mid && i$n == 87L && i$file && i$info$width == 480 && i$info$height %% 2 == 0)) &&
+        all(purrr::map_lgl(c11_info[c("draw", "wipe", "rise", "rise_h")], function(i) i$ends[["first"]] > 0.85 && i$ends[["last"]] < 0.2 && i$soft >= 5L)) &&
+        c11_info$draw$soft > c11_info$wipe$soft &&
+        c11_info$fade$spread < 0.1 && c11_info$fade$mean > 0.3 && c11_info$fade$mean < 0.7 &&
+        identical(c11_info$draw$motion, "draw") && identical(c11_info$rise_h$motion, "rise") && identical(c11_unknown$r$motion, "fade") && identical(c11_na$r$motion, "fade") &&
+        c11_m$draw$r$inputs == 87L + round(SPEC_VIDEO_HOLD_S * SPEC_VIDEO_FPS) && identical(unname(c11_m$draw$r$px), c(480L, c11_m$draw$r$px[["height"]])) &&
+        isTRUE(design_horizontal(c11_m$rise_h$r$plot, ggplot2::ggplot_build(c11_m$rise_h$r$plot))) && !isTRUE(design_horizontal(c11_m$rise$r$plot, ggplot2::ggplot_build(c11_m$rise$r$plot))) &&
+        { p = c11_make(c11_flipped, "rise", width = 320); isTRUE(design_horizontal(p$r$plot, ggplot2::ggplot_build(p$r$plot))) && identical(p$r$mode, "layers") })
+
+# the order in time: the marks come in first, the text waits until they are all in and then fades in, then the finished picture is held
+c11_t <- c11_make(c11_with_text, "rise", width = 720)
+c11_a <- c11_t$at("frame"); c11_b <- design_read_png(file.path(c11_t$dir, "data.png")); c11_c <- design_read_png(file.path(c11_t$dir, "text.png"))
+c11_data_only <- design_over(c11_a, c11_b$rgb, c11_b$alpha)
+c11_text_zone <- c11_c$alpha > 0.5 & c11_b$alpha == 0
+c11_zone <- function(x) x[array(c11_text_zone, dim = dim(x))]
+c11_f60 <- c11_t$frame(60L); c11_f73 <- c11_t$frame(73L); c11_f80 <- c11_t$frame(80L)
+check("11C-1b: the text comes after the marks: while the marks are coming in (frame 60) no text is on the picture (where the text will be, the frame is the empty frame), when they are all in (frame 73) the picture is the marks alone (within one level), then the text fades in (frame 80 is between the marks alone and the finished picture, and its labels are fainter than the finished ones), and the last frame has all of it; the text layer is not drawn at all when there is none (the bar without value labels is the marks alone at the end)",
+      sum(c11_text_zone) > 200 && max(abs(c11_zone(c11_f60) - c11_zone(c11_a))) < 0.005 && c11_same(c11_f73, c11_data_only, 0.005) &&
+        !c11_same(c11_f80, c11_data_only, 0.01) && !c11_same(c11_f80, c11_t$at("full"), 0.01) &&
+        mean(abs(c11_zone(c11_f80) - c11_zone(c11_a))) > 0.02 && mean(abs(c11_zone(c11_f80) - c11_zone(c11_a))) < mean(abs(c11_zone(c11_t$at("full")) - c11_zone(c11_a))) &&
+        c11_same(c11_t$frame(87L), c11_t$at("full")) && all(c11_m$draw$r$roles == "data") &&
+        c11_same(c11_m$draw$frame(87L), design_over(c11_m$draw$at("frame"), design_read_png(file.path(c11_m$draw$dir, "data.png"))$rgb, design_read_png(file.path(c11_m$draw$dir, "data.png"))$alpha), 0.005))
+
+# ---- the last frame is the finished picture ------------------------------------------------------------------------
+c11_k <- list(none = c11_t, marked = c11_make(c11_with_text, "draw", marking = c11_mark, bare = FALSE))
+c11_pic <- list(none = c11_picture(c11_k$none), marked = c11_picture(c11_k$marked, c11_mark))
+c11_dec_dir <- tempfile("c11_dec_")
+c11_dec <- tryCatch(suppressMessages(utils::capture.output(utils::capture.output(imgs <- av::av_video_images(c11_k$marked$file, destdir = c11_dec_dir, format = "png", fps = 24), type = "message"), type = "output")), error = function(e) NULL)
+c11_dec_last <- if (dir.exists(c11_dec_dir)) { fs <- sort(list.files(c11_dec_dir, full.names = TRUE)); png::readPNG(fs[length(fs)]) }
+c11_final <- function(m) design_over(design_over(m$at("frame"), design_read_png(file.path(m$dir, "data.png"))$rgb, design_read_png(file.path(m$dir, "data.png"))$alpha),
+                                      design_read_png(file.path(m$dir, "text.png"))$rgb, design_read_png(file.path(m$dir, "text.png"))$alpha)
+check("11C-2: the last frame is the finished picture, pixel for pixel: the last frame of the video (the held one) is identical to spec_png() of the same design at the same size, for a video without a marking and for one with it (the bands) and with its title block; the three drawings composed at full strength come to the finished picture within one level in every channel (a share of 0.000 of the pixels differ by more than DESIGN_VIDEO_LEVEL), and the MP4 read back ends on the same picture within the encoder's tolerance",
+      identical(c11_k$none$frame(87L), c11_pic$none[, , 1:3]) && identical(c11_k$marked$frame(87L), c11_pic$marked[, , 1:3]) && identical(dim(c11_pic$marked)[1:2], rev(unname(c11_k$marked$r$px))) &&
+        c11_k$none$r$check$share == 0 && c11_k$marked$r$check$share == 0 && c11_k$none$r$check$max <= 1.5 / 255 && c11_k$marked$r$check$max <= 1.5 / 255 &&
+        max(abs(c11_final(c11_k$marked) - c11_pic$marked[, , 1:3])) <= 1.5 / 255 &&
+        !is.null(c11_dec_last) && identical(dim(c11_dec_last)[1:2], dim(c11_pic$marked)[1:2]) && mean(abs(c11_dec_last[, , 1:3] - c11_pic$marked[, , 1:3])) < 0.01)
+
+# ---- which layer is which ------------------------------------------------------------------------------------------
+c11_roles_code <- paste0('ggplot(d, aes(x = region, y = revenue)) +
+  geom_col(fill = tok$accent, width = 0.7) +
+  geom_text(aes(label = comma(revenue)), vjust = -0.5, colour = tok$text, size = 3.5) +
+  geom_label(aes(label = region, y = 50000), colour = tok$text, fill = tok$ground, size = 3) +
+  annotate("text", x = 4, y = 800000, label = "A note", colour = tok$text) +
+  annotate("segment", x = 4, xend = 5, y = 700000, yend = 500000, colour = tok$text) +
+  annotate("rect", xmin = 0.6, xmax = 1.4, ymin = 0, ymax = 1000, fill = tok$slate, alpha = 0.3) +
+  annotate("point", x = 3, y = 900000, colour = tok$accent) +
+  geom_hline(yintercept = 300000, colour = tok$slate) +
+  geom_point(aes(y = revenue / 2), colour = tok$slate) +
+  geom_line(aes(y = revenue / 3, group = 1), colour = tok$slate) +
+  labs(title = txt$title, x = NULL, y = NULL) + ', c11_theme)
+c11_rp <- design_run(c11_roles_code, c11_inp$d, c11_inp$facts, c11_inp$txt, c11_inp$tok, c11_inp$pal, size = c11_inp$size, dpi = 40)
+c11_roles <- if (isTRUE(c11_rp$ok)) purrr::map_chr(c11_rp$plot$layers, design_layer_role)
+c11_extra <- purrr::keep(c(repel = "geom_text_repel(aes(label = region), colour = tok$text)", rich = "geom_richtext(aes(label = region), colour = tok$text)"),
+                         function(x) !is.na(names(design_toolkit())[match(sub("[(].*$", "", x), names(design_toolkit()))]))
+c11_extra_roles <- purrr::map_chr(c11_extra, function(x) {
+  r = design_run(paste0('ggplot(d, aes(x = region, y = revenue)) + geom_col() + ', x, ' + labs(title = txt$title) + theme_minimal()'), c11_inp$d, c11_inp$facts, c11_inp$txt, c11_inp$tok, c11_inp$pal, size = c11_inp$size, dpi = 40)
+  if (r$ok) design_layer_role(r$plot$layers[[2]]) else paste0("refused: ", r$reason)
+})
+c11_L <- c11_make(c11_with_text, "rise", width = 600, bare = FALSE)
+c11_Lf <- c11_L$at("frame"); c11_Lfull <- c11_L$at("full")
+c11_Ld <- png::readPNG(file.path(c11_L$dir, "data.png")); c11_Lt <- png::readPNG(file.path(c11_L$dir, "text.png"))
+c11_top <- seq_len(round(0.12 * dim(c11_Lf)[1]))
+check("11C-3: layer membership is decided from the built plot's geoms: geom_col, geom_point, geom_line and annotate(\"point\") are data; geom_text, geom_label and annotate(\"text\") are text (and ggrepel's geom_text_repel and ggtext's geom_richtext, where installed); annotate(\"segment\"), annotate(\"rect\") and geom_hline(yintercept = ) are annotations that come in with the text; the frame drawing has no mark in it (no pixel of the bars' colour, which the finished picture has in thousands) but keeps the title; the data layer has marks and nothing of the theme (no ink where the title is, nothing outside the marks), the text layer has the labels and none of the theme either, and both are on a transparent background (a PNG with an alpha channel, the corner clear)",
+      isTRUE(c11_rp$ok) && identical(unname(c11_roles), c("data", "text", "text", "text", "annotation", "annotation", "data", "annotation", "data", "data")) &&
+        all(c11_extra_roles == "text") && length(c11_extra_roles) == length(c11_extra) && identical(unname(c11_L$r$roles), c("data", "text")) &&
+        c11_near(c11_Lf, c11_acc) == 0L && c11_near(c11_Lfull, c11_acc) > 2000L && max(abs(c11_Lf[c11_top, , ] - c11_Lfull[c11_top, , ])) < 0.004 && length(unique(as.vector(round(c11_Lf[c11_top, , 1], 3)))) > 3L &&
+        length(dim(c11_Ld)) == 3L && dim(c11_Ld)[3] == 4L && c11_Ld[1, 1, 4] == 0 && c11_Lt[1, 1, 4] == 0 && sum(c11_Ld[, , 4] > 0) > 5000L && sum(c11_Lt[, , 4] > 0) > 200L &&
+        sum(c11_Ld[c11_top, , 4]) == 0 && sum(c11_Lt[c11_top, , 4]) == 0 && sum(c11_Ld[, 1:30, 4]) == 0 && sum(c11_Ld[, , 4] > 0) < 0.45 * length(c11_Ld[, , 4]) &&
+        c11_near(c11_Ld[, , 1:3], c11_acc) > 2000L)
+
+# ---- when the drawings do not add up ------------------------------------------------------------------------------
+c11_fb <- list(patchwork = c11_make(c11_pw, "rise"), crossed = c11_make(c11_crossed, "rise"), only_text = c11_make(c11_only_text, "draw"))
+c11_fbm <- list(patchwork = c11_make(c11_pw, "rise", marking = c11_mark), crossed = c11_make(c11_crossed, "wipe", marking = c11_mark))
+c11_ground <- as.numeric(grDevices::col2rgb(c11_inp$tok$ground)) / 255
+c11_band_px <- function(m) as.integer(round(MARKING_BAND_IN * m$r$px[["width"]] / m$r$canvas[["width"]]))
+c11_wipe_ok <- function(m, marking = FALSE) {
+  full = m$at("full"); n = m$r$drawn; h = dim(full)[1]; w = dim(full)[2]
+  b = if (marking) c11_band_px(m) else 0L
+  rows = (b + 1L):(h - b)
+  f1 = m$frame(1L); fm = m$frame(37L)
+  left = seq_len(w %/% 6); right = (w - w %/% 6 + 1L):w
+  in_rows = function(x, cols) x[rows, cols, ]
+  g = array(rep(c11_ground, each = length(rows) * length(right)), dim = c(length(rows), length(right), 3L))
+  all(abs(in_rows(f1, right) - g) < 0.005) && c11_same(m$frame(n), full) &&
+    c11_same(in_rows(fm, left), in_rows(full, left), 0.005) && max(abs(in_rows(fm, right) - g)) < 0.005 &&
+    (b == 0L || (c11_same(f1[seq_len(b), , ], full[seq_len(b), , ]) && c11_same(f1[(h - b + 1L):h, , ], full[(h - b + 1L):h, , ]) && c11_same(fm[seq_len(b), , ], full[seq_len(b), , ])))
+}
+cat("      11C fallback reasons: patchwork: ", c11_fb$patchwork$r$reason, "; crossed: ", c11_fb$crossed$r$reason, "; only text: ", c11_fb$only_text$r$reason, "\n", sep = "")
+check("11C-4: when the three drawings cannot be separated cleanly the video wipes the whole finished picture in from the left over the ground colour, and says why: a patchwork (several plots, no one panel); a design whose layers cross in an order the three drawings cannot reproduce (a translucent rectangle written before the bars, which the composition would lay over them: the three drawings differ from the picture in more than 0.2% of the pixels); a design whose data layers draw nothing (text only); each is mode wipe with its reason, the first frame is the ground colour between the bands, a frame in the middle has the finished picture on the left and the ground on the right, the last frame is the finished picture, and the bands never change; the fallback is not used for a design that separates (11C-1)",
+      all(purrr::map_chr(c11_fb, function(m) m$r$mode) == "wipe") && all(purrr::map_chr(c11_fbm, function(m) m$r$mode) == "wipe") &&
+        grepl("patchwork", c11_fb$patchwork$r$reason, fixed = TRUE) && grepl("do not add up to the finished design", c11_fb$crossed$r$reason, fixed = TRUE) && grepl("% of its pixels differ", c11_fb$crossed$r$reason, fixed = TRUE) &&
+        grepl("draw nothing", c11_fb$only_text$r$reason, fixed = TRUE) && c11_fb$crossed$r$check$share > DESIGN_VIDEO_SHARE && is.null(c11_fb$patchwork$r$check) &&
+        all(purrr::map_lgl(c11_fb, c11_wipe_ok)) && all(purrr::map_lgl(c11_fbm, c11_wipe_ok, marking = TRUE)) &&
+        identical(c11_fbm$patchwork$frame(87L), png::readPNG(file.path(c11_fbm$patchwork$dir, "full.png"))[, , 1:3]) &&
+        all(is.na(purrr::map_chr(c11_m, function(m) m$r$reason))) && identical(c11_m$rise$r$mode, "layers"))
+
+# ---- the classification bands and the card's proportions (Phase 10b) -----------------------------------------------
+c11_bm <- c11_k$marked
+c11_bh <- dim(c11_bm$at("full"))[1]; c11_bp <- c11_band_px(c11_bm)
+c11_bands_same <- function(m, i) { f = m$frame(i); full = m$at("full"); h = dim(full)[1]; b = c11_band_px(m)
+  c11_same(f[seq_len(b), , ], full[seq_len(b), , ]) && c11_same(f[(h - b + 1L):h, , ], full[(h - b + 1L):h, , ]) }
+c11_size <- c11_bm$inp$size
+check("11C-5: the classification bands and the card's proportions are Phase 10b's: with a marking the canvas is the design's size with the two bands (0.2 inch) added above and below, so the video is as high as the picture and its bands make it (rounded to an even number of pixels), its width the card's; the band rows are the finished picture's in the first frame, in a frame in the middle and in the last, in every motion kind; the bands are red with white text (the marking colour in the top row); without a marking there are no bands and the canvas is the design's own; the video's own width and height are those of the MP4",
+      identical(unname(c11_bm$r$canvas[["width"]]), unname(c11_size[["width"]])) && abs(c11_bm$r$canvas[["height"]] - (c11_size[["height"]] + 2 * MARKING_BAND_IN)) < 1 / c11_bm$r$px[["width"]] * c11_size[["width"]] &&
+        c11_bm$r$px[["height"]] %% 2 == 0 && c11_bm$r$px[["width"]] == 480 && c11_bh == c11_bm$r$px[["height"]] &&
+        abs(c11_bm$r$px[["height"]] / c11_bm$r$px[["width"]] - (c11_size[["height"]] + 2 * MARKING_BAND_IN) / c11_size[["width"]]) < 1 / c11_bm$r$px[["width"]] &&
+        all(purrr::map_lgl(c(1L, 20L, 37L, 60L, 87L), function(i) c11_bands_same(c11_bm, i))) && all(purrr::map_lgl(c(1L, 37L, 87L), function(i) c11_bands_same(c11_fbm$crossed, i))) &&
+        abs(c11_bm$frame(1L)[1, 240, 1] - 0.7) < 0.1 && c11_bm$frame(1L)[1, 240, 2] < 0.15 &&
+        abs(c11_k$none$r$px[["height"]] / c11_k$none$r$px[["width"]] - c11_size[["height"]] / c11_size[["width"]]) < 1 / c11_k$none$r$px[["width"]] &&
+        av::av_media_info(c11_bm$file)$video$height == c11_bm$r$px[["height"]] && av::av_media_info(c11_bm$file)$video$width == 480)
+
+# ---- the seconds, and that ggplot draws no frame --------------------------------------------------------------------
+c11_n <- new.env()
+c11_n$draw <- 0L; c11_n$frame <- 0L
+c11_card <- c11_stub("design_layer_draw", local({ old = design_layer_draw; function(...) { c11_n$draw = c11_n$draw + 1L; old(...) } }),
+  c11_stub("video_draw", local({ old = video_draw; function(...) { c11_n$frame = c11_n$frame + 1L; old(...) } }),
+    c11_make(c11_with_text, "rise", width = SPEC_VIDEO_DASH_PX$desk[["width"]], marking = c11_mark, bare = TRUE)))
+c11_total <- sum(c11_card$r$seconds)
+cat("      11C a card's video (1080 pixels wide, marked): ", paste(names(c11_card$r$seconds), round(c11_card$r$seconds, 1), collapse = ", "), " = ", round(c11_total, 1), " s; all videos of this block: mean ",
+    round(mean(c11_secs$all), 1), " s, range ", round(min(c11_secs$all), 1), " to ", round(max(c11_secs$all), 1), " s (", length(c11_secs$all), " videos)\n", sep = "")
+check("11C-6: no frame is drawn by ggplot: a card's video (1080 pixels wide, with the marking) makes four drawings (the finished picture and the three layers; eight when the first four did not add up and were made again) and no video_draw() frame, the 87 frames are array arithmetic on them, the video takes less than 30 seconds in all (the drawings, the composing, the encoding are timed separately in seconds), and its file has the card's width and an even height",
+      c11_n$draw %in% c(4L, 8L) && c11_n$frame == 0L && c11_card$r$drawn == 87L && length(list.files(c11_card$dir, "^frame_")) == 87L && c11_total < 30 && all(c11_card$r$seconds >= 0) &&
+        identical(names(c11_card$r$seconds), c("draw", "compose", "encode")) && c11_card$r$seconds[["draw"]] < 10 && av::av_media_info(c11_card$file)$video$width == 1080 &&
+        av::av_media_info(c11_card$file)$video$height %% 2 == 0)
+}
+
+# ---- the export ---------------------------------------------------------------------------------------------------
+c11_skill <- skills_load(office_dir = NULL)$editorial
+c11_set <- list(title = "Dash", subtitle = "", author = "A. Analyst", date = as.Date("2026-11-25"), intro = "", boxes = c("rows", "columns", "third"), keys = character(0), marking = c11_mark)
+c11_item <- function(ch, dz, mode) list(id = ch$id, chart = ch, story = NULL, mode = mode, design = dz, stale = NA_character_)
+c11_dz <- function(code, chart, motion = "rise") {
+  inp = design_input(chart, c11_o$data, c11_cb)
+  r = design_run(code, inp$d, inp$facts, inp$txt, inp$tok, inp$pal, size = inp$size, dpi = 40L)
+  list(skill = list(id = c11_skill$id, title = c11_skill$title, version = c11_skill$version, office = FALSE), code = code, motion = motion, say = "A design.", review = "Not reviewed.",
+       size = inp$size, table = inp$d, plot = r$plot, calls = 2L)
+}
+c11_zip <- function(items) {
+  out = file.path(tempfile("c11_zip_"), "d.zip")
+  dir.create(dirname(out))
+  res = build_dashboard(items, c11_o$data, c11_cb, chart_palette_default(), c11_set, file.path("tests", "data", "orders.csv"), out, model = "test-model")
+  d = tempfile("c11_unz_")
+  dir.create(d)
+  zip::unzip(res$zip, exdir = d)
+  c(res, list(dir = d))
+}
+if (run_heavy) {   # the heavy run only (11C-7 and 11C-8)
+c11_t1 <- Sys.time()
+c11_ex <- c11_zip(list(c11_item(c11_chart, c11_dz(c11_with_text, c11_chart), "video"), c11_item(c11_chart2, c11_dz(c11_pw, c11_chart2), "video"), c11_item(new_chart("c3", c11_chart$spec), c11_dz(c11_plain, c11_chart), "picture")))
+c11_ex_s <- as.numeric(difftime(Sys.time(), c11_t1, units = "secs"))
+c11_mp4 <- file.path(c11_ex$dir, grep("^charts/0[12]_.*[.]mp4$", names(c11_ex$files), value = TRUE))
+c11_html <- paste(readLines(file.path(c11_ex$dir, "dashboard.html"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+c11_ex_inp <- design_input(c11_chart, c11_o$data, c11_cb)
+c11_ex_info <- purrr::map(c11_mp4, function(f) av::av_media_info(f)$video)
+c11_ex_dir <- tempfile("c11_exdec_")
+invisible(utils::capture.output(utils::capture.output(c11_ex_imgs <- av::av_video_images(c11_mp4[[1]], destdir = c11_ex_dir, format = "png", fps = 24), type = "message"), type = "output"))
+c11_ex_imgs <- sort(c11_ex_imgs)
+c11_ex_first <- png::readPNG(c11_ex_imgs[[1]]); c11_ex_last <- png::readPNG(c11_ex_imgs[[length(c11_ex_imgs)]])
+cat("      11C export with two designed videos: ", length(c11_ex$files), " files in ", round(c11_ex_s, 1), " s; notes: ", paste(stats::na.omit(c11_ex$video_notes), collapse = " | "), "\n", sep = "")
+check("11C-7: the export makes a designed chart's video from the design: a card whose mode is video and that has a design is an MP4 in the zip and on the page (a <video> with its poster, preload none), as wide as a card that shares its row (1080) and as high as the design's picture with its two bands makes it (even), its first frame has no bar in it and its last has them (and the bands are red in both); a patchwork design is an MP4 too, wiped in as one picture, and the dashboard says so (in the build's result and in the page's About block) and gives the reason; a designed card in picture mode is still a picture; the dialog's note for a designed video says it is drawn from the design",
+      identical(unname(c11_ex$modes), c("video", "video", "picture")) && length(c11_mp4) == 2L && all(file.exists(c11_mp4)) && all(purrr::map_lgl(c11_ex_info, function(i) i$width == 1080L && i$height %% 2 == 0)) &&
+        c11_ex_info[[1]]$height == 2 * round((c11_ex_inp$size[["height"]] + 2 * MARKING_BAND_IN) * 1080 / c11_ex_inp$size[["width"]] / 2) &&
+        is.na(c11_ex$video_notes[[1]]) && grepl("patchwork", c11_ex$video_notes[[2]], fixed = TRUE) && grepl("wipes the designed drawing in from the left as one picture", c11_ex$video_notes[[2]], fixed = TRUE) && is.na(c11_ex$video_notes[[3]]) &&
+        all(is.na(c11_ex$fallbacks)) && grepl("<video", c11_html, fixed = TRUE) && grepl("preload=\"none\"", c11_html, fixed = TRUE) && grepl("poster=", c11_html, fixed = TRUE) &&
+        grepl("wipes the designed drawing in from the left as one picture", c11_html, fixed = TRUE) && grepl("Designed charts", c11_html, fixed = TRUE) &&
+        c11_near(c11_ex_first, c11_acc) < 50L && c11_near(c11_ex_last, c11_acc) > 1000L && c11_ex_first[2, 40, 1] > 0.6 && c11_ex_first[2, 40, 2] < 0.2 && c11_ex_last[2, 40, 1] > 0.6 &&
+        grepl("A video is drawn from the design", dash_design_note(c11_dz(c11_plain, c11_chart), c11_chart$spec, "video"), fixed = TRUE) &&
+        !grepl("A video is made from the standard drawing", dash_design_note(c11_dz(c11_plain, c11_chart), c11_chart$spec, "video"), fixed = TRUE))
+
+# a design whose video cannot be made: the dashboard makes the standard drawing's video and the page says so; the build does not stop
+c11_ex2 <- c11_stub("design_video", function(...) stop("the drawings could not be made", call. = FALSE), c11_zip(list(c11_item(c11_chart, c11_dz(c11_with_text, c11_chart), "video"))))
+c11_html2 <- paste(readLines(file.path(c11_ex2$dir, "dashboard.html"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+c11_mp42 <- file.path(c11_ex2$dir, grep("^charts/01_.*[.]mp4$", names(c11_ex2$files), value = TRUE))
+check("11C-8: a designed video that cannot be made does not stop the build: the card is the standard drawing's video (an MP4 in the zip as wide as a card that has its row, 1280, a <video> on the page, mode video), the build's result and the page both say that the video of the designed drawing could not be made and why, and that it is a video of the standard drawing; the card is no longer called designed in the page (no Designed charts block); a card that has no design is as before (no note)",
+      identical(unname(c11_ex2$modes), "video") && length(c11_mp42) == 1L && file.exists(c11_mp42) && grepl("The video of the designed drawing could not be made (the drawings could not be made)", c11_ex2$video_notes[[1]], fixed = TRUE) &&
+        grepl("so it is a video of the standard drawing", c11_ex2$video_notes[[1]], fixed = TRUE) && is.na(c11_ex2$fallbacks[[1]]) && grepl("<video", c11_html2, fixed = TRUE) &&
+        grepl("could not be made (the drawings could not be made), so it is a video of the standard drawing", c11_html2, fixed = TRUE) && !grepl("Designed charts", c11_html2, fixed = TRUE) &&
+        av::av_media_info(c11_mp42)$video$width == 1280)
+}
+
+if (run_fast) {   # the fast run only (11C-9)
+# ---- the code's own rules -------------------------------------------------------------------------------------------
+c11_src <- paste(readLines(file.path("R", "spec.R"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+c11_part <- sub("^.*# ---- Phase 11 Part C: motion for any chart", "", c11_src)
+c11_part_code <- paste(grep("^\\s*#", strsplit(c11_part, "\n", fixed = TRUE)[[1]], invert = TRUE, value = TRUE), collapse = "\n")
+c11_tx <- tempfile(fileext = ".png")
+chart_device(c11_tx, 1, 1, 20, bg = "transparent"); grid::grid.rect(gp = grid::gpar(fill = NA, col = NA)); grDevices::dev.off()
+c11_tx_png <- png::readPNG(c11_tx)
+check("11C-9: the code keeps the rules: Part C's code in R/spec.R has no for or while loop, opens no device but through chart_device() (design_layer_draw() and spec_png() only: no png(), ragg or svglite call, no pdf() or dev.new()), uses the png package only to read and write pictures (png::readPNG and png::writePNG) and av only to encode, makes no model call, and names no file of the app's own; chart_device() takes a background (bg) and a transparent one gives a PNG with an alpha channel; marking_draw() can leave the bands out; the video is available where av, libx264, a PNG device and the png package are",
+      !grepl("\\b(for|while|repeat)\\s*\\(", c11_part_code) && !grepl("\\b(ragg|svglite)::|grDevices::(png|pdf|jpeg|svg|dev[.]new)\\(|[^_:A-Za-z.]png\\(|\\bpdf\\(|dev[.]new\\(", c11_part_code) &&
+        grepl("chart_device(file, w_in, h_in, dpi, bg = bg)", c11_part_code, fixed = TRUE) &&
+        identical(sort(unique(regmatches(c11_part_code, gregexpr("png::[A-Za-z]+", c11_part_code))[[1]])), c("png::readPNG", "png::writePNG")) &&
+        !grepl("llm_json|ellmer|make_call|\\bask\\(", c11_part_code) && length(dim(c11_tx_png)) == 3L && dim(c11_tx_png)[3] == 4L && c11_tx_png[1, 1, 4] == 0 &&
+        "bands" %in% names(formals(marking_draw)) && "bg" %in% names(formals(chart_device)) && !any(grepl("design_video", list.files("R", full.names = FALSE))) &&
+        identical(design_video_available(), video_available() && png_installed()) &&
+        (function() { x = c11_stub("png_installed", function() FALSE, design_video_available()); !x })())
+}
+# <<< 11C end
 
 
 # >>> 11D begin
