@@ -3946,7 +3946,9 @@ DESIGN_SIZES <- list(format = c(width = 200, nsmall = 20, digits = 22), formatC 
 DESIGN_MARK_GEOMS <- c("GeomPoint", "GeomCol", "GeomBar", "GeomLine", "GeomPath", "GeomArea", "GeomRibbon", "GeomTile", "GeomRaster", "GeomBoxplot",
                        "GeomViolin", "GeomPolygon", "GeomStep", "GeomErrorbar", "GeomLinerange", "GeomPointrange", "GeomCrossbar", "GeomSmooth",
                        "GeomDensity", "GeomHex", "GeomBin2d", "GeomDotplot")
-DESIGN_TEXT_GEOMS <- c("GeomText", "GeomLabel", "GeomTextRepel", "GeomLabelRepel", "GeomRichtext")
+# ggtext's geoms are GeomRichText and GeomTextBox (capital T and B); their boxes, like geom_label()'s, are the ground their text stands on
+DESIGN_TEXT_GEOMS <- c("GeomText", "GeomLabel", "GeomTextRepel", "GeomLabelRepel", "GeomRichText", "GeomTextBox")
+DESIGN_BOX_GEOMS <- c("GeomLabel", "GeomLabelRepel", "GeomRichText", "GeomTextBox")
 DESIGN_FILL_GEOMS <- c("GeomCol", "GeomBar", "GeomTile", "GeomRect", "GeomArea", "GeomRibbon", "GeomBoxplot", "GeomViolin", "GeomPolygon", "GeomRaster",
                        "GeomHex", "GeomBin2d", "GeomCrossbar")
 
@@ -4754,7 +4756,7 @@ design_check_contrast <- function(parts) {
       same = !is.null(mp$label) && !is.null(mp$colour %||% mp$color) && identical(rlang::quo_text(mp$label), rlang::quo_text(mp$colour %||% mp$color))
       data = utils::head(b$data[[i]], 500L)
       if (!all(c("x", "y", "colour") %in% names(data))) return(NA_character_)
-      own = inherits(l$geom, c("GeomLabel", "GeomLabelRepel")) && "fill" %in% names(data)
+      own = inherits(l$geom, DESIGN_BOX_GEOMS) && "fill" %in% names(data)
       stands_on = purrr::map_chr(seq_len(nrow(data)), function(k) {
         if (own && !is.na(data$fill[[k]]) && !data$fill[[k]] %in% c("NA", "transparent")) return(as.character(data$fill[[k]]))
         x = suppressWarnings(as.numeric(data$x[[k]])); y = suppressWarnings(as.numeric(data$y[[k]]))
@@ -4893,7 +4895,7 @@ design_checks <- function(plot, d, facts, spec, code = "", txt = NULL, warnings 
 #     (b) the data layers, on a transparent background, with every part of the theme made invisible but keeping its place (the panel is the same size);
 #     (c) the text and annotation layers, the same way.
 #   Which layer is which is decided from the built plot's geoms, never from the model's words (design_layer_role()): a layer whose geom is a text geom
-#   (the DESIGN_TEXT_GEOMS, ggrepel's and ggtext's, and any other geom whose class is Text, Label, RichText or Textbox, in any case: ggtext's is GeomRichText, which DESIGN_TEXT_GEOMS spells GeomRichtext) is text; a layer that is not a
+#   (the DESIGN_TEXT_GEOMS, ggrepel's and ggtext's, and any other geom whose class is Text, Label, RichText or Textbox, in any case) is text; a layer that is not a
 #   mark geom but is a small, fixed set of drawing instructions (what annotate(), geom_hline(yintercept = ) and the like make: inherit.aes FALSE,
 #   show.legend FALSE, StatIdentity, at most DESIGN_ROW_EXTRA rows of its own data) is an annotation and goes with the text; annotate("text") is text
 #   by its geom, annotate("point") a mark by its geom; every other layer is data. The frames are then array arithmetic on the three pictures (the png

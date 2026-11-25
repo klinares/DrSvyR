@@ -9033,6 +9033,18 @@ check("11A-15: each loosened rule tried as a way in: Inf as an index, a seq_len(
         length(a11_c15$other_col) > 0L && !grepl("^RUN", a11_c15$other_col[1]) && length(a11_c15$legend) > 0L && any(grepl("legend text", a11_c15$legend, fixed = TRUE)) &&
         grepl("refused before the code runs", design_toolkit_text(), fixed = TRUE) && grepl("label_comma()(x)", design_toolkit_text(), fixed = TRUE) &&
         grepl("output (it writes to the console", design_toolkit_text(), fixed = TRUE) && grepl("R adds txt$caption", design_toolkit_text(), fixed = TRUE) && grepl("needs 3 to 1", design_toolkit_text(), fixed = TRUE))
+# 11A-16: ggtext's text geoms are text to the checks (their classes are GeomRichText and GeomTextBox): a value label written with geom_richtext() in the
+#   3:1 grey is refused, as geom_text()'s is, and its box is the ground its text stands on (white text on a box in tok$text passes; on the panel it would be 1 to 1)
+a11_rt_last <- paste0("ggplot(d, aes(order_month, revenue, colour = channel)) + geom_line(colour = tok$text) + theme_minimal() + theme(legend.position = 'none') + ",
+                      "geom_richtext(data = ", a11_ln_last, ", aes(label = comma(revenue)), hjust = 0, label.colour = NA, ")
+a11_c16 <- list(grey = a11_ct(paste0(a11_rt_last, "colour = '", a11_grey, "', fill = NA)")),
+                box = a11_ct(paste0(a11_rt_last, "colour = '#FFFFFF', fill = tok$text)")),
+                plain = a11_ct(paste0(a11_rt_last, "colour = tok$text, fill = NA)")))
+purrr::iwalk(a11_c16, function(r, nm) cat("      11A-16 '", nm, "': ", if (length(r)) paste(r, collapse = " | ") else "passes", "\n", sep = ""))
+check("11A-16: ggtext's geom_richtext() and geom_textbox() are text geoms to the contrast and row checks: a geom_richtext() value label in a 3:1 grey is refused at 4.5 to 1, while white text on its box in tok$text and a label in tok$text pass",
+      all(c("GeomRichText", "GeomTextBox") %in% DESIGN_TEXT_GEOMS) && inherits(ggtext::geom_richtext()$geom, DESIGN_TEXT_GEOMS) && inherits(ggtext::geom_textbox()$geom, DESIGN_TEXT_GEOMS) &&
+        length(a11_c16$grey) > 0L && !grepl("^RUN", a11_c16$grey[1]) && grepl("4.5 to 1", a11_c16$grey[1], fixed = TRUE) &&
+        length(a11_c16$box) == 0L && length(a11_c16$plain) == 0L)
 rm("a11_canary_fn", envir = globalenv())
 Sys.unsetenv("CHART_11A_CANARY")
 }   # the fast run only

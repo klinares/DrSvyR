@@ -21,6 +21,9 @@
 #   that hands it back (no call, no review); each chart that fell back is designed again, live, with what is left of LIVE11_MAX after the first
 #   attempt's calls. One review round at most, given only while two calls are left for every chart still to design after it. Writes tests/live_run_11b.out,
 #   phase11_design2 in tests/live_replies_11.rds, and the same tests/designed.html and tests/dashboard_designed/ as the first attempt.
+# LIVE11_REPLAY=1 makes no call: the second attempt's eight designs (phase11_design2) are handed back by the stand-in, each with the motion its reply
+#   named, checked again and built into tests/designed.html and tests/dashboard_designed/ with two of them as video. Any call is refused; nothing is added
+#   to tests/live_replies_11.rds. Writes tests/live_run_11c.out.
 # CHART_LIVE_DRY=1 makes no call and needs no key: eight gold specs and a stand-in designer that writes one plain code, to try the plumbing; it writes
 #   tests/live_run_11_dry.out and tests/designed_dry.html and tests/dashboard_designed_dry/.
 
@@ -45,10 +48,11 @@ LIVE11_TURNS <- list(
 LIVE11_EXPECT <- c("a ranked bar", "a line with several series", "a scatter of 3,000 points", "a dumbbell", "an indexed line", "a box by group", "a heatmap", "a histogram")
 
 dry <- identical(Sys.getenv("CHART_LIVE_DRY"), "1")
-redo <- !dry && identical(Sys.getenv("LIVE11_REDESIGN"), "1")
+replay_all <- !dry && identical(Sys.getenv("LIVE11_REPLAY"), "1")
+redo <- !dry && (identical(Sys.getenv("LIVE11_REDESIGN"), "1") || replay_all)
 key <- Sys.getenv("ANTHROPIC_API_KEY")
 sfx <- if (dry) "_dry" else ""
-out_file <- file.path("tests", paste0("live_run_11", sfx, if (redo) "b", ".out"))
+out_file <- file.path("tests", paste0("live_run_11", sfx, if (replay_all) "c" else if (redo) "b", ".out"))
 html_file <- file.path("tests", paste0("designed", sfx, ".html"))
 dash_dir <- file.path("tests", paste0("dashboard_designed", sfx))
 if (file.exists(out_file)) file.remove(out_file)
@@ -61,7 +65,7 @@ say <- function(...) {
 }
 
 say("chaRt Phase 11 Part F: live comparison on tests/data/orders.csv, ", format(Sys.time(), "%Y-%m-%d %H:%M"), if (dry) " (DRY: no call, gold specs and a stand-in designer)",
-    if (redo) " (SECOND ATTEMPT: the first attempt's canvas; the charts that fell back are designed again)")
+    if (replay_all) " (REPLAY: the second attempt's designs handed back; no call)" else if (redo) " (SECOND ATTEMPT: the first attempt's canvas; the charts that fell back are designed again)")
 home <- APP_PROFILES$home
 if (grepl("opus", home$id, ignore.case = TRUE)) stop("Live tests call Sonnet models only; '", home$id, "' is an Opus model.", call. = FALSE)
 say("Model: ", home$id, " at ", home$base_url, "; limit ", LIVE11_MAX, " calls (chat ", LIVE11_CHAT_MAX, "); skill ", LIVE11_SKILL, "; tokens of the ", LIVE11_STYLE, " style")
@@ -85,13 +89,14 @@ if (dry) {
   stories = purrr::imap(canvas, function(ch, i) list(id = ch$id, headline = paste("Stand-in headline for chart", i), summary = paste0("A stand-in summary for chart ", i, "."), checked = TRUE,
                                                    problems = character(0), repaired = FALSE, facts = ""))
   run = list(cb = cb0, canvas = canvas, stories = stories, turns = list(), calls = tibble::tibble())
-} else if (!nzchar(key)) {
+} else if (!nzchar(key) && !replay_all) {
   say("Result: no call was made; ANTHROPIC_API_KEY is not set.")
   quit(status = 0)
 } else if (redo) {
   first <- readRDS(file.path("tests", "live_replies_11.rds"))
   run = first$phase11_chat
-  prev = first$phase11_design
+  prev = if (replay_all) first$phase11_design2 else first$phase11_design
+  if (replay_all && is.null(prev)) { say("Result: no second attempt is saved; nothing to replay."); quit(status = 0) }
   say("The canvas of the first attempt (", run$when, ") is reused: ", length(run$canvas), " charts; that attempt made ", nrow(run$calls), " chat calls and ", length(prev$log), " design calls.")
 } else {
   run = live_chat(home, key, say, rds = file.path("tests", "live_replies_11.rds"), max_calls = LIVE11_CHAT_MAX, plan = LIVE11_TURNS, phase = "phase11_chat")
@@ -101,7 +106,7 @@ read <- reread_data(LIVE_ORDERS, basename(LIVE_ORDERS), LIVE_ORDERS_MISSING)
 data <- read$read$data
 cb <- run$cb
 chat_used <- if (dry) 0L else nrow(run$calls)
-prior_designs <- if (redo) length(prev$log) else 0L
+prior_designs <- if (replay_all) length(first$phase11_design$log) + length(prev$log) else if (redo) length(prev$log) else 0L
 say("\n---- The chat part used ", chat_used, " calls; ", length(run$canvas), " charts on the canvas")
 if (!dry && !redo) purrr::walk(run$turns, function(t) say("  turn ", t$n, " \"", t$message, "\": expected ", LIVE11_EXPECT[[t$n]], "; came back ", t$kind,
                                                  if (length(t$added)) paste0(" (", paste(t$added, collapse = ", "), ")")))
@@ -149,14 +154,14 @@ skills <- skills_load()
 skill <- skills_ok(skills)[[LIVE11_SKILL]]
 if (is.null(skill)) { say("The ", LIVE11_SKILL, " skill is not there; nothing is designed."); quit(status = 0) }
 budget <- LIVE11_MAX - chat_used - prior_designs
-asker <- if (dry) dry_asker() else design_asker(key, budget)
+asker <- if (dry) dry_asker() else design_asker(key, if (replay_all) 0L else budget)
 # the second attempt: the first attempt's accepted code, handed back by a stand-in (no call), so that it is checked again under the new rules
-replay_asker <- function(code, say_txt) {
+replay_asker <- function(code, say_txt, motion = "none") {
   env = new.env()
   env$n = 0L
   env$ask = function(user, m, system_prompt = NULL, max_tokens, validate = NULL, images = NULL) {
     env$n = env$n + 1L
-    obj = list(code = code, motion = "none", say = say_txt %||% "")
+    obj = list(code = code, motion = motion, say = say_txt %||% "")
     if (!is.null(validate)) validate(obj)
     list(obj = obj, raw = as.character(jsonlite::toJSON(obj, auto_unbox = TRUE)), finish = "success", tokens = c(0, 0, 0), user_sent = user, model = "replay of the first attempt",
          attempts = 1L, seconds = 0, refused = list())
@@ -164,6 +169,13 @@ replay_asker <- function(code, say_txt) {
   env
 }
 prev_of <- function(id) if (redo) purrr::detect(prev$designs, function(x) identical(x$id, id))
+# the motion a saved design was given: the last reply in the saved log whose code is that design's code ("none" when no reply holds it, as for a replayed design)
+motion_of <- function(code) {
+  objs = purrr::map(prev$log, function(l) tryCatch(jsonlite::fromJSON(l$raw), error = function(e) NULL))
+  hit = purrr::keep(objs, function(o) is.list(o) && identical(o$code, code) && is_text1(o$motion))
+  if (length(hit)) hit[[length(hit)]]$motion else "none"
+}
+
 to_redo <- if (redo) purrr::map_chr(purrr::keep(run$canvas, function(ch) !isTRUE(prev_of(ch$id)$ok)), "id") else character(0)
 say("\n---- Designs: skill ", skill$title, " (version ", skill$version, "); ", budget, " calls left for them")
 images <- "all"
@@ -180,7 +192,7 @@ designs <- purrr::reduce(run$canvas, function(acc, ch) {
   after = length(to_redo) - match(ch$id, to_redo, nomatch = length(to_redo))
   rounds = if (redo && !replay && (budget - asker$n) - 2L * after < 3L) 0L else if (redo) 1L else DESIGN_REVIEW_ROUNDS
   if (redo && !replay && rounds == 0L) say("    [", ch$id, "] no review round: ", budget - asker$n, " calls left and ", after, " more charts to design")
-  res = tryCatch(design_chart(ch, skill, data, cb, palette, ask = if (replay) replay_asker(old$code, old$say)$ask else asker$ask, m = home,
+  res = tryCatch(design_chart(ch, skill, data, cb, palette, ask = if (replay) replay_asker(old$code, old$say, if (replay_all) motion_of(old$code) else "none")$ask else asker$ask, m = home,
                               images = if (replay || rounds == 0L) "none" else images, rounds = rounds,
                               stage = function(s) say("    [", ch$id, "] ", s)),
                  error = function(e) list(ok = FALSE, reason = conditionMessage(e), calls = NULL, refusals = character(0)))
@@ -205,7 +217,7 @@ designs <- purrr::reduce(run$canvas, function(acc, ch) {
 }, .init = list())
 ok_n <- sum(purrr::map_lgl(designs, function(x) isTRUE(x$res$ok)))
 say("\n---- ", ok_n, " of ", length(designs), " designs accepted; design calls ", asker$n, " of ", budget, if (asker$refused) paste0(" (", asker$refused, " refused at the limit)"))
-if (!dry) {
+if (!dry && !replay_all) {
   rds = file.path("tests", "live_replies_11.rds")
   all = if (file.exists(rds)) readRDS(rds) else list()
   all[[if (redo) "phase11_design2" else "phase11_design"]] = list(model = home$id, when = format(Sys.time(), "%Y-%m-%d %H:%M"), skill = list(id = skill$id, title = skill$title, version = skill$version),
@@ -302,4 +314,4 @@ if (inherits(built, "error")) {
 }
 purrr::walk(designs, function(x) if (isTRUE(x$res$ok) && !is.null(x$res$design$file)) unlink(x$res$design$file))
 say("\nDone. Calls made: ", chat_used + prior_designs + asker$n, " of ", LIVE11_MAX, " allowed (chat ", chat_used, ", designs ", prior_designs + asker$n,
-    if (redo) paste0(": ", prior_designs, " in the first attempt, ", asker$n, " in this one"), ").")
+    if (replay_all) paste0(": ", prior_designs, " in the two attempts, none in this replay") else if (redo) paste0(": ", prior_designs, " in the first attempt, ", asker$n, " in this one"), ").")

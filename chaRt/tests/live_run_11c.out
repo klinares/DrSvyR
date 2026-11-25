@@ -1,0 +1,91 @@
+chaRt Phase 11 Part F: live comparison on tests/data/orders.csv, 2026-11-25 13:14 (REPLAY: the second attempt's designs handed back; no call)
+Model: claude-sonnet-5-5 at https://api.anthropic.com/v1; limit 45 calls (chat 13); skill editorial; tokens of the briefing style
+The column dictionary of the Phase 10 live run is reused: no label call.
+The canvas of the first attempt (2026-11-25 02:03) is reused: 8 charts; that attempt made 10 chat calls and 15 design calls.
+
+---- The chat part used 10 calls; 8 charts on the canvas
+
+---- Designs: skill Editorial (version 0.1); 2 calls left for them
+    [c8] asking the model for a design
+    [c8] drawing it and checking the drawing
+    [c8] the first attempt's accepted code, checked again: passes
+
+  c8 (Distribution of order revenue, histogram): DESIGNED; calls 0; 2 s
+    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and found nothing to change.
+    say: One accent colour for the bars, a single phrase from the facts beside the tallest bin and another at the end of the long tail, light value grid only, and a left-aligned title block with generous space above the plot.
+    motion: rise
+    design      0.0 s, 18,253 chars, tokens in: fresh      0, cached      0; out     0
+    [c7] asking the model for a design
+    [c7] drawing it and checking the drawing
+    [c7] the first attempt's accepted code, checked again: passes
+
+  c7 (Number of orders by region and product category, heatmap): DESIGNED; calls 0; 1 s
+    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and changed the design.
+    say: The title ran to the very edge of the canvas and risked clipping, so I reduced its size to sit inside the margin; the heatmap itself is unchanged.
+    motion: fade
+    design      0.0 s, 20,500 chars, tokens in: fresh      0, cached      0; out     0
+    [c6] asking the model for a design
+    [c6] drawing it and checking the drawing
+    [c6] the first attempt's accepted code, checked again: passes
+
+  c6 (Unit price by sales channel, box): DESIGNED; calls 0; 1 s
+    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and found nothing to change.
+    say: Same horizontal boxes in the single accent, but the two median notes now start at their medians and run rightward into empty panel space so nothing is cut off.
+    motion: fade
+    design      0.0 s, 18,506 chars, tokens in: fresh      0, cached      0; out     0
+    [c5] asking the model for a design
+    [c5] drawing it and checking the drawing
+    [c5] the first attempt's accepted code, checked again: passes
+
+  c5 (Monthly revenue by product category, indexed, line): DESIGNED; calls 0; 1 s
+    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and found nothing to change.
+    say: One accent line for the category that ends highest, the other six in quiet slate with names and end values at their right ends instead of a legend, a dashed baseline at the start index, and only light horizontal grid lines.
+    motion: draw
+    design      0.0 s, 19,900 chars, tokens in: fresh      0, cached      0; out     0
+    [c4] asking the model for a design
+    [c4] drawing it and checking the drawing
+    [c4] the first attempt's accepted code, checked again: passes
+
+  c4 (Total revenue by region, 2022 and 2024, dumbbell): DESIGNED; calls 0; 1 s
+    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and found nothing to change.
+    say: Same dumbbell design, but the discrete axis now has extra room at the top and the value axis more room on the right, so the year names above the leading region and its value label sit inside the panel.
+    motion: fade
+    design      0.0 s, 19,778 chars, tokens in: fresh      0, cached      0; out     0
+    [c3] asking the model for a design
+    [c3] drawing it and checking the drawing
+    [c3] the first attempt's accepted code, checked again: passes
+
+  c3 (Units ordered against unit price, every order, scatter): DESIGNED; calls 0; 2 s
+    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and changed the design.
+    say: The curve label was struck through by the line and sat on dense points, so I moved it into the empty space above the curve at the right, keeping the accent colour so it still reads as the line's name.
+    motion: fade
+    design      0.0 s, 18,689 chars, tokens in: fresh      0, cached      0; out     0
+    [c2] asking the model for a design
+    [c2] drawing it and checking the drawing
+    [c2] the first attempt's accepted code, checked again: passes
+
+  c2 (Total revenue by month and channel, line): DESIGNED; calls 0; 1 s
+    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and wanted to change the design; the change was refused (The text of layer 2 (geom_text_repel) is drawn in #E69F00, a contrast of 2.1 to 1 against #F7F6F2 behind it; a series name in its series'...), so the design before it stands.
+    say: Same three-line chart with names at the line ends, now set in the dark text colour so they read clearly against the ground while the lines keep their palette colours.
+    motion: draw
+    design      0.0 s, 19,351 chars, tokens in: fresh      0, cached      0; out     0
+    [c1] asking the model for a design
+    [c1] drawing it and checking the drawing
+    [c1] the first attempt's accepted code, checked again: passes
+
+  c1 (Total revenue by region, bar): DESIGNED; calls 0; 1 s
+    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and found nothing to change.
+    say: The ranked horizontal bars keep the single accent colour with values at the bar ends, and the value axis now has enough room on the right so the longest label sits fully inside the panel.
+    motion: rise
+    design      0.0 s, 18,860 chars, tokens in: fresh      0, cached      0; out     0
+
+---- 8 of 8 designs accepted; design calls 0 of 2
+
+  wrote tests/designed.html (1.55 MB)
+
+---- Export: the designed charts, briefing style (2 of them as video, made from their designs: c5, c1; the rest pictures)
+  built in 26.2 s: 4.18 MB; modes: picture, picture, picture, video, picture, picture, picture, video; device ragg
+  videos: 2
+  unpacked into tests/dashboard_designed/
+
+Done. Calls made: 43 of 45 allowed (chat 10, designs 33: 33 in the two attempts, none in this replay).

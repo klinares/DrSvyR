@@ -82,7 +82,10 @@ mutations <- list(
   mut("M39", "a series name need not be in a series colour for 3 to 1", "series = norm(col) %in% series_cols & (same | label %in% series_names)", "series = (same | label %in% series_names)"),
   mut("M40", "R does not add the source line", "if (isTRUE(caption) && is_text1(txt$caption) && design_no_caption(plot))", "if (FALSE)"),
   mut("M41", "TOOLKIT does not say what is refused", "\"\", design_refused_text()), collapse", "\"\"), collapse"),
-  mut("M42", "the source line is added without the braces", "paste0(\"{\\n\", code, \"\\n} +\\n  labs(caption = txt$caption)\")", "paste0(code, \" +\\n  labs(caption = txt$caption)\")"))
+  mut("M42", "the source line is added without the braces", "paste0(\"{\\n\", code, \"\\n} +\\n  labs(caption = txt$caption)\")", "paste0(code, \" +\\n  labs(caption = txt$caption)\")"),
+  # ggtext's class names (check 11A-16)
+  mut("M43", "ggtext's geoms spelled as before (GeomRichtext), so they count as marks", "\"GeomLabelRepel\", \"GeomRichText\", \"GeomTextBox\")\nDESIGN_BOX", "\"GeomLabelRepel\", \"GeomRichtext\")\nDESIGN_BOX"),
+  mut("M44", "a ggtext box is not the ground of its text", "DESIGN_BOX_GEOMS <- c(\"GeomLabel\", \"GeomLabelRepel\", \"GeomRichText\", \"GeomTextBox\")", "DESIGN_BOX_GEOMS <- c(\"GeomLabel\", \"GeomLabelRepel\")"))
 wanted <- commandArgs(trailingOnly = TRUE)
 if (length(wanted)) mutations <- purrr::keep(mutations, function(m) m$id %in% wanted)
 

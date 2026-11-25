@@ -6,6 +6,7 @@ tests/*.out
 !tests/live_run_10b.out
 !tests/live_run_11.out
 !tests/live_run_11b.out
+!tests/live_run_11c.out
 tests/gallery.html
 tests/style_sheet.html
 tests/live_gallery.html
