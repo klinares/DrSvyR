@@ -245,12 +245,12 @@ assemble_pick <- function(cb, question = NULL) {
 #   fresh (tokens_in) and from the prompt cache (tokens_cached), as ellmer's turn reports them
 #   (input, output, cached input), the tokens out, the seconds, and whether it was a repair. NA
 #   where the reply did not say.
-call_record <- function(call, system_txt, user_txt, res = NULL, repair = FALSE, images = 0L) {
+call_record <- function(call, system_txt, user_txt, res = NULL, repair = FALSE) {
   tk = as.numeric(res$tokens %||% c(NA, NA, NA))
   tk = c(tk, rep(NA_real_, 3L))[1:3]
   tibble::tibble(call = call, hash = prompt_hash(system_txt, user_txt), chars = nchar(system_txt) + nchar(user_txt),
                  tokens_in = tk[1], tokens_cached = tk[3], tokens_out = tk[2], seconds = as.numeric(res$seconds %||% NA_real_), repair = repair,
-                 ok = !is.null(res), images = as.integer(images))
+                 ok = !is.null(res))
 }
 
 # One call through `ask` (llm_json, or a stand-in in a test), recorded. Returns list(res, record,
@@ -261,7 +261,7 @@ make_call <- function(call, system_txt, user_txt, ask, m, max_tokens, validate =
                  error = function(e) e)
   failed = inherits(res, "error")
   list(res = if (!failed) res, error = if (failed) conditionMessage(res),
-       record = call_record(call, system_txt, user_txt, if (!failed) res, repair, length(images)))
+       record = call_record(call, system_txt, user_txt, if (!failed) res, repair))
 }
 
 json_list <- function(x) if (is.null(x)) list() else if (is.list(x) && is.null(names(x))) x else list(x)
@@ -483,7 +483,10 @@ RULE_FAMILIES <- list(
   next_steps = list(), facts_only = list(), headline_states_the_point = list(), change_over_time = list(), few_numbers = list(),
   describes_the_file = list(), no_cause = list(), nothing_to_say = list(), rows_left_out = list(),
   first_look = list(), names_as_given = list(), label_from_evidence = list(), say_when_guessing = list(),
-  a_row = list())
+  a_row = list(),
+  # design.md (Phase 11 Part B): the rules of the design call, never named by a spec (chat_rule_ids() reads the chat call's files only): any family
+  numbers_are_given = list(), the_chart_stays_true = list(), hierarchy_first = list(), label_the_data = list(), text_is_given = list(),
+  only_the_toolkit = list(), review_like_an_editor = list())
 
 # Whether the reflex `rule` may be named by `spec`: its family is one the rule is for, and the fields
 #   it needs are set (a flag counts only when true). A rule with no entry fits every chart.
@@ -1427,7 +1430,9 @@ design_interactive_ok <- function(plot) {
 }
 
 # The tooltip of a mark, written by R from the layer's own data: each aesthetic the layer maps (x, y, colour, fill, size) as "label: value", the label from
-#   the plot's labels (else the aesthetic's name), numbers to four significant digits, HTML-escaped. NULL when a mapping cannot be read.
+#   the plot's labels (else the column's name), numbers to four significant digits, HTML-escaped. Only an aesthetic that is a bare column of the layer's data
+#   is read (no code of the design is evaluated again: this is never text turned into code); a mapping that is a call, a constant or not a column gives NULL,
+#   and the design is not interactive.
 design_tooltips <- function(plot, layer, ld) {
   map = c(as.list(if (isTRUE(layer$inherit.aes)) plot$mapping else NULL), as.list(layer$mapping))
   map = map[names(map) %in% c("x", "y", "colour", "color", "fill", "size")]
@@ -1435,11 +1440,14 @@ design_tooltips <- function(plot, layer, ld) {
   if (!length(map)) return(NULL)
   value = function(v) if (inherits(v, c("Date", "POSIXct"))) format(as.Date(v), "%Y-%m-%d")
                       else if (is.numeric(v) && !is.factor(v)) format(signif(v, 4), big.mark = ",", scientific = FALSE, trim = TRUE, drop0trailing = TRUE) else as.character(v)
-  cols = tryCatch(purrr::imap(map, function(q, a) {
+  column = function(q) { e = rlang::quo_get_expr(q); if (is.symbol(e) && as.character(e) %in% names(ld)) as.character(e) }
+  named = purrr::map(map, column)
+  if (any(purrr::map_lgl(named, is.null))) return(NULL)
+  cols = purrr::imap(named, function(cn, a) {
     lab = plot$labels[[sub("^color$", "colour", a)]]
-    paste0(htmltools::htmlEscape(if (is.character(lab) && nzchar(lab[[1]])) lab[[1]] else rlang::as_label(q)), ": ", htmltools::htmlEscape(value(rlang::eval_tidy(q, ld))))
-  }), error = function(e) NULL)
-  if (is.null(cols) || any(lengths(cols) != nrow(ld))) return(NULL)
+    paste0(htmltools::htmlEscape(if (is.character(lab) && nzchar(lab[[1]])) lab[[1]] else cn), ": ", htmltools::htmlEscape(value(ld[[cn]])))
+  })
+  if (any(lengths(cols) != nrow(ld))) return(NULL)
   do.call(paste, c(unname(cols), sep = "<br/>"))
 }
 

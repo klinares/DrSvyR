@@ -2756,7 +2756,7 @@ ui_find <- function(e, names) {
   c(if (nm %in% names) list(e), unlist(purrr::map(as.list(e), ui_find, names = names), recursive = FALSE))
 }
 SAY_OK_SYMBOLS <- c("KEY_HINT", "DATA_PAGE_LINK", "what", "landed", "unsure", "n_texts")
-SAY_OK_HELPERS <- c("md_text", "chat_reply_text", "story_line")
+SAY_OK_HELPERS <- c("md_text", "chat_reply_text", "story_line", "design_many_text", "design_one_text")   # Phase 11 Part B: the two that say what a design did
 say_safe <- function(e) {
   if (is.character(e) || is.numeric(e) || is.logical(e) || is.null(e)) return(TRUE)
   if (is.symbol(e)) return(grepl("^SETUP_", as.character(e)) || as.character(e) %in% SAY_OK_SYMBOLS)
@@ -2777,7 +2777,7 @@ ui_other_appends <- purrr::map_lgl(setdiff(c(r_files, "app.R"), "R/ui.R"), funct
 check("6-D 18: R/ui.R has one chat_append_message() call, inside say(), and every say() call's text is built only through md_text(), a helper that calls it (chat_reply_text, story_line), a constant or a number",
       length(ui_append) == 1L && !any(ui_other_appends) && grepl("chat_append_message", ui_def("say"), fixed = TRUE) && length(ui_say_calls) >= 20L &&
         all(ui_text_ok) && grepl("suggestion_list(suggestions)", ui_def("say"), fixed = TRUE) &&
-        all(purrr::map_lgl(c("chat_reply_text", "story_line", "suggestion_list"), function(h) grepl("md_text(", ui_def(h), fixed = TRUE))) &&
+        all(purrr::map_lgl(c("chat_reply_text", "story_line", "suggestion_list", "design_many_text", "design_one_text"), function(h) grepl("md_text(", ui_def(h), fixed = TRUE))) &&
         grepl("htmlEscape(texts, attribute = TRUE)", ui_def("suggestion_list"), fixed = TRUE) && grepl("htmlEscape", ui_def("md_text"), fixed = TRUE) &&
         say_safe(quote(paste0("a ", md_text(x)))) && !say_safe(quote(res$error)) && !say_safe(quote(paste0("a ", cb$file))) && !say_safe(quote(some_value)))
 
@@ -4773,17 +4773,17 @@ p8b_rlabelled <- unlist(purrr::map(p8b_rfiles, function(s) purrr::keep(unname(s$
 p8b_shown <- unlist(regmatches(p8b_rules_html, gregexpr("(?<=<div class=\"fw-semibold\">)[^<]*(?=</div>)", p8b_rules_html, perl = TRUE)))
 p8b_esc <- function(x) htmltools::htmlEscape(x)
 p8b_blocks <- strsplit(p8b_rules_html, "<div class=\"chart-rule mb-3\">", fixed = TRUE)[[1]][-1]
-check("8B-7: 'The rules the model follows' holds every reflex rule that has a Label exactly once (61 across 9 files), each with its label, its When and Say lines and its Source as the parser read them, in one collapsed section for each file with its title, file name and version; the file with no labelled rule (codebook.md) has no section; the count of rules without a label is said",
-      length(p8b_rlabelled) == 61L && identical(sort(p8b_shown), sort(purrr::map_chr(p8b_rlabelled, "label"))) && !anyDuplicated(purrr::map_chr(p8b_rlabelled, function(r) paste(r$id, r$label))) &&
-        length(gregexpr("<div class=\"chart-rule mb-3\">", p8b_rules_html, fixed = TRUE)[[1]]) == 61L &&
-        length(p8b_blocks) == 61L &&
+check("8B-7: 'The rules the model follows' holds every reflex rule that has a Label exactly once (68 across 10 files: design.md's seven came with Phase 11 Part B), each with its label, its When and Say lines and its Source as the parser read them, in one collapsed section for each file with its title, file name and version; the file with no labelled rule (codebook.md) has no section; the count of rules without a label is said",
+      length(p8b_rlabelled) == 68L && identical(sort(p8b_shown), sort(purrr::map_chr(p8b_rlabelled, "label"))) && !anyDuplicated(purrr::map_chr(p8b_rlabelled, function(r) paste(r$id, r$label))) &&
+        length(gregexpr("<div class=\"chart-rule mb-3\">", p8b_rules_html, fixed = TRUE)[[1]]) == 68L &&
+        length(p8b_blocks) == 68L &&
         all(purrr::map2_lgl(p8b_rlabelled, p8b_blocks, function(r, b) grepl(paste0(">", p8b_esc(r$label), "<"), b, fixed = TRUE) && grepl("When: ", b, fixed = TRUE) &&
                               grepl(p8b_esc(r$when), b, fixed = TRUE) && grepl("Say: ", b, fixed = TRUE) && grepl(p8b_esc(r$say), b, fixed = TRUE) &&
                               grepl("Source: ", b, fixed = TRUE) && grepl(p8b_esc(r$source), b, fixed = TRUE))) &&
-        length(gregexpr("<details class=\"chart-rule-file mb-2\">", p8b_rules_html, fixed = TRUE)[[1]]) == 9L && !grepl("<details[^>]* open", p8b_rules_html) &&
+        length(gregexpr("<details class=\"chart-rule-file mb-2\">", p8b_rules_html, fixed = TRUE)[[1]]) == 10L && !grepl("<details[^>]* open", p8b_rules_html) &&
         all(purrr::map_lgl(p8b_rfiles[purrr::map_lgl(p8b_rfiles, function(s) any(!is.na(purrr::map_chr(s$reflexes, "label"))))],
                            function(s) grepl(paste0(s$title, " (", s$file, ", version ", s$version, ")"), p8b_rules_html, fixed = TRUE))) &&
-        !grepl("codebook.md", p8b_rules_html, fixed = TRUE) && grepl("61 rules are listed here, in 9 files; 10 more have no label and are not listed.", p8b_rules_html, fixed = TRUE))
+        !grepl("codebook.md", p8b_rules_html, fixed = TRUE) && grepl("68 rules are listed here, in 10 files; 10 more have no label and are not listed.", p8b_rules_html, fixed = TRUE))
 
 # 8. how a reply is checked: the page says what the code does, and what it says holds
 p8b_checks_html <- paste(as.character(method_checks_ui()), collapse = "")
@@ -9015,8 +9015,8 @@ b11_alone <- function(f) tryCatch(f(), error = function(e) e)
 b11_p1 <- b11_run(list(b11_design(b11_good), b11_ok))
 cat("      11B good design: ", b11_p1$r$design$review, " (", round(b11_p1$r$seconds, 1), " s, ", b11_p1$r$design$calls, " calls)\n", sep = "")
 d1 <- b11_p1$r$design
-check("11B-1: a design that is good the first time: one design call and one review call (the picture attached, a PNG at most 1,200 pixels wide that is there when the call is made); the code, motion and the model's sentence are kept; the picture file is a PNG; both calls are recorded and none is a repair",
-      isTRUE(b11_p1$r$ok) && is.na(b11_p1$r$reason) && identical(b11_p1$r$calls$call, c("design", "review")) && identical(b11_p1$r$calls$images, c(0L, 1L)) && !any(b11_p1$r$calls$repair) &&
+check("11B-1: a design that is good the first time: one design call and one review call (the picture attached, a PNG at most 1,200 pixels wide that is there when the call is made); the code, motion and the model's sentence are kept; the picture file is a PNG; both calls are recorded (the review is the one with a picture) and none is a repair",
+      isTRUE(b11_p1$r$ok) && is.na(b11_p1$r$reason) && identical(b11_p1$r$calls$call, c("design", "review")) && !any(b11_p1$r$calls$repair) &&
         all(b11_p1$r$calls$ok) && length(b11_p1$si$sent) == 2L && is.null(b11_p1$si$sent[[1]]$images) && length(b11_p1$si$sent[[2]]$images) == 1L &&
         isTRUE(b11_p1$si$sent[[2]]$images_exist) && b11_p1$si$sent[[2]]$widths <= 1200 && b11_p1$si$sent[[2]]$widths > 600 &&
         identical(d1$code, b11_good) && identical(d1$motion, "rise") && is_text1(d1$say) && length(b11_p1$r$refusals) == 0L && d1$changed == 0L && d1$rounds == 1L &&
@@ -9111,12 +9111,12 @@ b11_json <- purrr::map(list(anthropic = ellmer::chat_anthropic(credentials = fun
                             openai = ellmer::chat_openai_compatible(base_url = "http://localhost:1/v1", credentials = function() "k", model = "m", echo = "none")),
                        function(ch) ellmer:::as_json(ch$get_provider(), b11_turn))
 b11_kinds <- list(anthropic = purrr::map_chr(b11_json$anthropic$content, "type"), openai = purrr::map_chr(b11_json$openai[[1]]$content, "type"))
-check("11B-7: the picture's way to the model: llm_json(images =) hands the file paths to the transport only when there are some (a transport written before this phase, with no `images`, still works for every other call), the calls are counted (3 here) and recorded; the installed ellmer (0.4.2) makes a picture with content_image_file(resize = \"none\") (no magick, the file as drawn) and writes it into the request as an image block for the Anthropic provider and an image_url part for the OpenAI style; app.R checks that content_image_file() has those arguments; llm_complete() sends the pictures after the text",
+check("11B-7: the picture's way to the model: llm_json(images =) hands the file paths to the transport only when there are some (a transport written before this phase, with no `images`, still works for every other call), the calls are counted (3 here); the installed ellmer (0.4.2) makes a picture with content_image_file(resize = \"none\") (no magick, the file as drawn) and writes it into the request as an image block for the Anthropic provider and an image_url part for the OpenAI style; app.R checks that content_image_file() has those arguments; llm_complete() sends the pictures after the text",
       identical(b11_seen$images[[1]], b11_png) && is.null(b11_seen$images[[2]]) && identical(b11_seen$n, 2L) && .llm_state$calls - calls_before == 3L && isTRUE(b11_a$obj$ok) && isTRUE(b11_c$obj$ok) &&
         inherits(b11_ci, "ellmer::ContentImageInline") && identical(b11_ci@type, "image/png") && identical(b11_kinds$anthropic, c("text", "image")) && identical(b11_kinds$openai, c("text", "image_url")) &&
         identical(names(formals(llm_complete))[7], "images") && grepl("content_image_file", paste(deparse(body(llm_complete)), collapse = " "), fixed = TRUE) &&
         grepl("content_image_file = c(\"path\", \"resize\")", paste(readLines("app.R", warn = FALSE), collapse = "\n"), fixed = TRUE) &&
-        identical(call_record("design", "s", "u", NULL, FALSE, 2L)$images, 2L) && identical(LLM_MAX_TOKENS[["review"]], 16000L))
+        identical(LLM_MAX_TOKENS[["review"]], 16000L) && identical(LLM_MAX_TOKENS[["design"]], 16000L))
 
 # ---- the message: sections, sizes, and what is not in it ---------------------------------------------------
 b11_inp <- design_input(b11_bar, b11_o$data, b11_cb)
@@ -9271,7 +9271,7 @@ shiny::testServer(mod_explore_server, args = list(state = b11_state(), ask = b11
   session$setInputs(c1_design = 1)
   dz <- isolate(made$design$c1())
   b11_ui$design <- !is.null(dz) && isTRUE(isolate(made$showd$c1())) && n_kind("design") == 1L && n_kind("review") == 1L && n_kind("chat") == 2L &&
-    identical(utils::tail(isolate(state$calls$call), 2L), c("design", "review")) && identical(utils::tail(isolate(state$calls$images), 2L), c(0L, 1L)) && identical(dz$key, digest::digest(list(spec_hash(isolate(state$charts$c1$spec)), isolate(palette()), isolate(data_key())))) &&
+    identical(utils::tail(isolate(state$calls$call), 2L), c("design", "review")) && length(b11_ui_si$sent[[length(b11_ui_si$sent)]]$images) == 1L && is.null(b11_ui_si$sent[[length(b11_ui_si$sent) - 1L]]$images) && identical(dz$key, digest::digest(list(spec_hash(isolate(state$charts$c1$spec)), isolate(palette()), isolate(data_key())))) &&
     grepl("Designed with Editorial.", html("c1_card"), fixed = TRUE) && grepl("Designed drawing", html("c1_card"), fixed = TRUE) && grepl("found nothing to change", html("c1_card"), fixed = TRUE) &&
     grepl("The model's note: A quiet bar chart", html("c1_card"), fixed = TRUE) && grepl("c1_dstatic", html("c1_view"), fixed = TRUE) && !grepl("c1_static", html("c1_view"), fixed = TRUE) &&
     !grepl("Designed with", html("c2_card"), fixed = TRUE) && grepl("c2_static", html("c2_view"), fixed = TRUE) && file.exists(dz$file)

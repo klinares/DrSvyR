@@ -2013,13 +2013,13 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       invisible(TRUE)
     }
     # Several, in turn, and what happened in one line each.
+    calls_made = function() { cl = isolate(state$calls); if (is.null(cl)) 0L else nrow(cl) }
     design_many = function(ids) {
       n = length(ids)
+      before = calls_made()
       done = purrr::imap_lgl(ids, function(i, k) isTRUE(design_now(i, prefix = if (n > 1L) paste0("Chart ", k, " of ", n, ": ") else "")))
-      title_of = function(i) md_text(chart_title(chart_of(i), i))
-      say(paste(c(paste0("Designed ", sum(done), " of ", n, if (n == 1L) " chart" else " charts", " with ", md_text(skill_chosen()$title), ". Each card has a switch between the designed and the standard drawing, and Code shows what the model wrote."),
-                  purrr::map_chr(ids[!done], function(i) paste0(title_of(i), ": ", md_text(isolate(made$dnote[[i]]())))),
-                  paste0(sum(vapply(ids[done], function(i) isolate(made$design[[i]]())$calls, numeric(1))), " model calls.")), collapse = "\n\n"))
+      say(design_many_text(skill_chosen()$title, purrr::map_chr(ids, function(i) chart_title(chart_of(i), i)), purrr::map_chr(ids, function(i) isolate(made$dnote[[i]]()) %||% ""), done,
+                           calls_made() - before))
       invisible(done)
     }
     # The chat's "design this" (and a wish for a look): the selected chart, or the sentence that says to click one. No chat call is made.
@@ -2027,10 +2027,10 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       sel = isolate(selected())
       if (is.null(sel) || is.null(chart_of(sel))) return(say(md_text(DESIGN_NONE)))
       if (!send_ok("Designing")) return(invisible())
+      before = calls_made()
       if (isTRUE(design_now(sel, wish))) {
         dz = isolate(made$design[[sel]]())
-        say(paste0("Designed ", md_text(chart_title(chart_of(sel), "the chart")), " with ", md_text(dz$skill$title), if (!is.null(dz$wish)) paste0(", with your wish: ", md_text(dz$wish)), ". ",
-                   "The card's \"Designed drawing\" switch goes back to the standard drawing; Code shows what the model wrote. No chat call was made: ", dz$calls, " design calls."))
+        say(design_one_text(chart_title(chart_of(sel), "the chart"), dz$skill$title, dz$wish, calls_made() - before))
       } else say(md_text(isolate(made$dnote[[sel]]()) %||% "The design was not used."))
     }
     observeEvent(input$design_all, with_busy({
@@ -3425,6 +3425,16 @@ dash_table_row <- function(it, i, cb) {
 # How a design names its skill in a file or a page: the title and version of an app skill; an office's own skill is only called one (its name is the office's).
 design_skill_label <- function(skill) if (isTRUE(skill$office)) "an office design skill" else paste0(skill$title, " (version ", skill$version, ")")
 
+# What the chat says after designs (Phase 11 Part B): every piece that came from the file, the analyst or the model goes through md_text().
+design_many_text <- function(skill_title, titles, notes, designed, calls)
+  paste(c(paste0("Designed ", sum(designed), " of ", length(designed), if (length(designed) == 1L) " chart" else " charts", " with ", md_text(skill_title),
+                 ". Each card has a switch between the designed and the standard drawing, and Code shows what the model wrote."),
+          if (any(!designed)) paste0(md_text(titles[!designed]), ": ", md_text(notes[!designed])),
+          paste0(calls, " model calls.")), collapse = "\n\n")
+design_one_text <- function(title, skill_title, wish, calls)
+  paste0("Designed ", md_text(title), " with ", md_text(skill_title), if (!is.null(wish)) paste0(", with your wish: ", md_text(wish)), ". ",
+         "The card's \"Designed drawing\" switch goes back to the standard drawing; Code shows what the model wrote. No chat call was made: ", calls, " design calls.")
+
 # The code as the Code dialog shows it: what it is, then the model's code as written.
 design_code_lines <- function(dz)
   c(paste0("# Designed with ", design_skill_label(dz$skill), ". The model wrote the code below; R checked it against a list of the functions it may call,"),
@@ -3465,7 +3475,8 @@ dash_design_note <- function(dz, spec, mode) {
 #   facts, words, tokens and palette function the code is given, and the code, whose last expression draws the chart. `inp` is design_input()'s; `csv` is the
 #   CSV's path relative to charts.R; `marking_skip` is the number of lines to skip (the marking's comment line).
 design_script <- function(dz, inp, csv, title = "", skip = 1L) {
-  fns = unique(all.names(parse(text = dz$code, keep.source = FALSE)))
+  g = design_guard(dz$code, names(inp$d))   # the guard's own reading of the code (a syntax tree, never evaluated)
+  fns = if (isTRUE(g$ok)) unique(unlist(purrr::map(as.list(g$exprs), all.names))) else character(0)
   pk = attr(design_toolkit(), "package")
   libs = union("ggplot2", setdiff(unique(pk[intersect(fns, names(pk))]), c("base", "utils", "stats")))
   d = inp$d
