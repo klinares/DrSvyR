@@ -1617,7 +1617,7 @@ lint_marks <- function(s, cb, table) {
 #   else the file name>. <n> rows<; the filter in words><; m left out for missing values>."
 source_line <- function(s, cb, table) {
   src = trimws(cb$source %||% "")
-  src = if (nzchar(src)) sub("[.]+$", "", src) else cb$file %||% "the data file"
+  src = if (nzchar(src)) sub("[.]+$", "", src) else paste0(cb$file %||% "the data file", if (is_text1(cb$sheet)) paste0(", sheet ", cb$sheet))
   n = attr(table, "rows_used") %||% nrow(table)
   dropped = attr(table, "rows_dropped") %||% 0L
   parts = c(paste0(fact_count(n), if (n == 1L) " row" else " rows"), filter_phrases(s, cb),
@@ -2574,12 +2574,18 @@ spec_code <- function(spec, cb, file, palette = chart_palette_default()) {
   s = spec_defaults(spec)
   names_now = purrr::map_chr(cb$columns, "name")
   enc = cb$encoding %||% "UTF-8"
-  h = file_header(file, length(names_now), enc)
+  excel = is_text1(cb$sheet)   # an Excel sheet: read by readxl, from the cells the analyst chose, with the names the codebook has
+  h = if (!excel) file_header(file, length(names_now), enc)
   renamed = if (!is.null(h)) which(h$names != names_now) else integer(0)
-  read = as.call(c(list(sym("read_delim"), cb$file %||% basename(file)), if (!is.null(h)) list(delim = h$delim),
-                   list(na = c(DATA_NA, missing_codes(cb))),
-                   if (!enc %in% c("UTF-8", "ASCII")) list(locale = call("locale", encoding = enc)),
-                   list(trim_ws = TRUE, guess_max = Inf, show_col_types = FALSE)))
+  read = if (excel)
+    as.call(c(list(sym("read_excel"), cb$file %||% basename(file), sheet = cb$sheet), if (is_text1(cb$range)) list(range = cb$range),
+              list(col_names = names_now, na = c(DATA_NA, missing_codes(cb)), trim_ws = TRUE, guess_max = max(as.integer(cb$rows %||% 1000L), 1L))))
+  else as.call(c(list(sym("read_delim"), cb$file %||% basename(file)), if (!is.null(h)) list(delim = h$delim),
+                 list(na = c(DATA_NA, missing_codes(cb))),
+                 if (!enc %in% c("UTF-8", "ASCII")) list(locale = call("locale", encoding = enc)),
+                 list(trim_ws = TRUE, guess_max = Inf, show_col_types = FALSE)))
+  text_nums = if (excel && length(cb$text_numbers))
+    call("mutate", call("across", call("all_of", as.character(unlist(cb$text_numbers))), quote(function(x) as.numeric(gsub(",", "", x, fixed = TRUE)))))
   rename = if (length(renamed)) as.call(c(list(sym("rename")), stats::setNames(purrr::map(h$names[renamed], sym), names_now[renamed])))
   st = table_steps(s, cb)
   steps = c(st$base, st$agg, st$post)
@@ -2587,12 +2593,14 @@ spec_code <- function(spec, cb, file, palette = chart_palette_default()) {
   plot = plot_calls(s, cb, pal)
   plot_text = paste(purrr::imap_chr(plot, function(cl, i) code_text(cl, 2L, if (i < length(plot)) " +" else "")), collapse = " +\n  ")
   step_text = paste(purrr::imap_chr(steps, function(cl, i) code_text(cl, 2L, if (i < length(steps)) " |>" else "")), collapse = " |>\n  ")
-  libs = c("readr", "dplyr", "tidyr", "ggplot2", if (grepl("label_|breaks_|pal_gradient_n|rescale", plot_text)) "scales")
+  libs = c(if (excel) "readxl" else "readr", "dplyr", "tidyr", "ggplot2", if (grepl("label_|breaks_|pal_gradient_n|rescale", plot_text)) "scales")
   helpers = label_helpers(plot)
   paste0(paste0("library(", libs, ")", collapse = "\n"), "\n\n",
-         "# The data, read as chaRt reads it: these values mean missing, and column types are guessed from every row.\n",
+         if (excel) "# The data, read as chaRt reads the sheet: the cells of its rows, these values mean missing, and column types are guessed from every row.\n"
+         else "# The data, read as chaRt reads it: these values mean missing, and column types are guessed from every row.\n",
          "# Set the working directory to the folder that holds the file (setwd()), or write its full path here.\n",
-         "chart_data <- ", code_text(read, 14L, if (!is.null(rename)) " |>" else ""),
+         "chart_data <- ", code_text(read, 14L, if (!is.null(rename) || !is.null(text_nums)) " |>" else ""),
+         if (!is.null(text_nums)) paste0(" |>\n  ", code_text(text_nums, 2L), "  # numbers the sheet stores as text"),
          if (!is.null(rename)) paste0(" |>\n  ", code_text(rename, 2L), "  # blank or repeated names in the file, as in the codebook"),
          "\n\n# The table that is drawn.\n",
          "chart_table <- chart_data |>\n  ", step_text, "\n\n",

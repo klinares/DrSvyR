@@ -368,6 +368,10 @@ Where this section and an earlier one disagree, this section holds.
    naming the file by its base name and carrying its encoding and missing-value codes.
 8. **Encoding** is guessed, shown, and corrected by the analyst on the Data tab; it is kept in the
    codebook.
+   **Excel workbooks** (Phase 11 Part D) are read by readxl: a sheet picker, the header row found (first row with text in most
+   columns) and changeable, blank leading rows and columns skipped, merged header cells filled across and joined to the row below, dates as
+   dates, numbers stored as text offered in the chat (never converted unasked), and a sheet that holds two tables asks which (never guessed).
+   The codebook then carries `sheet`, `range` and `text_numbers`; the source line and the chart's code name the sheet.
 9. **A title describes; a headline is checked.** When a model writes a spec it has not seen the
    plotted values, so `title` says what is plotted and may not state a finding
    (`title_describes` in `core.md`). The headline that states the finding is written in Phase 5

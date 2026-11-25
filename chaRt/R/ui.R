@@ -249,19 +249,22 @@ data_page_ui <- function()
           tags$h4("Summary statistics"),
           mod_summary_ui("summary"))
 
-# The data file: a delimited file, what R found in it, and an optional saved data dictionary.
+# The data file: a delimited file or an Excel workbook, what R found in it, and an optional saved data dictionary. For a workbook the
+#   page also shows which sheet, which table when the sheet holds several, and the row the header is on (excel_box()).
 mod_data_ui <- function(id) {
   ns = NS(id)
   tagList(
-    fileInput(ns("file"), paste0("Data file: CSV or other delimited text, up to ", APP_MAX_UPLOAD_MB, " MB"),
-              accept = c(".csv", ".tsv", ".txt", ".tab"), width = "100%"),
+    fileInput(ns("file"), paste0("Data file: CSV or other delimited text, or an Excel workbook (.xlsx, .xls), up to ", APP_MAX_UPLOAD_MB, " MB"),
+              accept = c(".csv", ".tsv", ".txt", ".tab", EXCEL_ACCEPT), width = "100%"),
+    uiOutput(ns("excel_box")),
     textAreaInput(ns("missing"), "Values that mean missing, one per line", rows = 2, width = "100%",
                   placeholder = "for example: ..\n-99"),
     tags$p(class = "text-muted small", "Blank cells and NA are always missing. Anything else is missing only if you list it here; ",
            "a value must match a whole cell."),
-    selectInput(ns("encoding"), "File encoding", choices = encoding_choices(NULL), width = "100%"),
-    tags$p(class = "text-muted small", "The encoding is guessed. If names with accents look wrong, choose another and read again: ",
-           "windows-1252 for Western European files, ISO-8859-2 for Central European ones."),
+    conditionalPanel("!output.excel_file", ns = ns,
+      selectInput(ns("encoding"), "File encoding", choices = encoding_choices(NULL), width = "100%"),
+      tags$p(class = "text-muted small", "The encoding is guessed. If names with accents look wrong, choose another and read again: ",
+             "windows-1252 for Western European files, ISO-8859-2 for Central European ones.")),
     actionButton(ns("reread"), "Read again", class = "btn-sm mb-3"),
     uiOutput(ns("reread_note")),
     uiOutput(ns("summary")),
@@ -269,6 +272,29 @@ mod_data_ui <- function(id) {
     tags$hr(),
     fileInput(ns("codebook"), "Optional: a saved data_dictionary.yaml for this file", accept = c(".yaml", ".yml"), width = "100%"),
     uiOutput(ns("codebook_note")))
+}
+
+# What the Data page shows of an Excel workbook, from what read_excel_data() found (`ex`, state$excel): the sheet to read (names and row
+#   counts; a hidden sheet named as hidden; for an .xls, a sentence that hidden sheets cannot be told), which table when the sheet holds more
+#   than one (none selected until the analyst chooses), and the row the header is on, which R found and the analyst may change.
+EXCEL_ACCEPT <- paste0(".", EXCEL_EXTENSIONS)
+excel_box <- function(ns, ex) {
+  if (is.null(ex)) return(NULL)
+  many = nrow(ex$sheets) > 1L
+  tagList(tags$div(class = "border rounded p-2 mb-3",
+    tags$strong("Excel workbook"),
+    if (many) selectInput(ns("sheet"), "Sheet (rows used in each)", choices = excel_sheet_choices(ex$sheets), selected = ex$sheet, width = "100%", selectize = FALSE),
+    if (many && !ex$hidden_known) tags$p(class = "text-muted small", "This is an .xls file: it does not say which sheets are hidden, so hidden ones cannot be told and every sheet is listed as it is."),
+    if (many && ex$hidden_known && any(ex$sheets$hidden)) tags$p(class = "text-muted small", "Hidden sheets are listed as hidden; you can still read one."),
+    if (nrow(ex$tables) > 1L)
+      radioButtons(ns("table"), paste0("This sheet holds ", nrow(ex$tables), " tables. Which one?"), choices = excel_table_choices(ex$tables),
+                   selected = if (!is.null(ex$table)) as.character(ex$table) else character(0), width = "100%"),
+    if (identical(ex$ask, "table")) tags$p(class = "small", style = "color: var(--bs-warning-text-emphasis, #8a5a00);", "No table is read until you choose one."),
+    if (!is.null(ex$header)) tagList(
+      numericInput(ns("header"), "Header is on row", value = ex$header, min = 1, step = 1, width = "12rem"),
+      tags$p(class = "text-muted small", "R takes the first row with text in most columns as the header, and the rows below it as the data. ",
+             "Rows are numbered as Excel numbers them. Change the row if R chose wrongly. Blank rows and columns before the table are skipped, ",
+             "merged header cells are filled across and joined to the row below, and nothing is written to the workbook."))))
 }
 
 # The File encoding choices: the guess first (its value is "", its label names what the guess
@@ -284,6 +310,7 @@ mod_data_server <- function(id, state) {
     codebook_note = reactiveVal(NULL)
     reread_note = reactiveVal(NULL)
     upload = reactiveVal(NULL)         # the data file as uploaded, kept so it can be read again
+    excel_opts = function() isolate(state$excel)$opts   # what was chosen of an Excel workbook (sheet, header, table, numbers), NULL for a delimited file
     detected = reactiveVal(NULL)       # the encoding the guess picked for that file
 
     # The encoding chosen on the tab: NULL for the guess.
@@ -303,17 +330,40 @@ mod_data_server <- function(id, state) {
       }
       read_error(NULL)
       state$path = isolate(upload())$path
-      state$data = res$read$data
+      state$excel = res$read$excel        # kept after an error, so the controls stay to put it right
+      state$data = res$read$data          # NULL while the analyst has not said which table of a sheet
       state$problems = res$read$problems
       state$profile = res$profile
       state$codebook = codebook
-      invisible(TRUE)
+      invisible(!is.null(res$read$data))
     }
+    # An Excel workbook read again with one thing changed (the sheet, the table, the header row).
+    excel_again = function(change, keep = TRUE) {
+      u = upload()
+      if (is.null(u) || is.null(excel_opts())) return()
+      res = tryCatch(reread_data(u$path, u$name, parse_missing(input$missing), old = if (keep) isolate(state$codebook), excel = utils::modifyList(excel_opts(), change)),
+                     error = function(e) e)
+      ok = take(res)
+      reread_note(if (ok) advice_box(if (keep) "Read again. Your labels, roles and row sentence are kept for the columns that are still there." else "Read again."))
+    }
+    observeEvent(input$sheet, if (!is.null(excel_opts()) && !identical(input$sheet, excel_opts()$sheet))
+      excel_again(list(sheet = input$sheet, header = NULL, table = NULL, numbers = NULL), keep = FALSE), ignoreInit = TRUE)
+    observeEvent(input$table, if (!is.null(excel_opts()) && !identical(as.integer(input$table), excel_opts()$table))
+      excel_again(list(table = as.integer(input$table), header = NULL, numbers = NULL), keep = FALSE), ignoreInit = TRUE)
+    observeEvent(input$header, {
+      h = input$header
+      if (!is.null(excel_opts()) && is.numeric(h) && !is.na(h) && !identical(as.integer(h), isolate(state$excel)$header))
+        excel_again(list(header = as.integer(h), numbers = NULL))
+    }, ignoreInit = TRUE)
+    output$excel_box = renderUI(excel_box(session$ns, state$excel))
+    output$excel_file = renderText(if (!is.null(state$excel)) "yes" else "")
+    outputOptions(output, "excel_file", suspendWhenHidden = FALSE)
 
     observeEvent(input$file, {
       f = input$file
       upload(list(path = f$datapath, name = f$name))
       codebook_note(NULL); reread_note(NULL); detected(NULL)
+      state$excel = NULL
       res = tryCatch(reread_data(f$datapath, f$name, parse_missing(input$missing)), error = function(e) e)
       take(res)
       show_encoding(res, NULL)
@@ -325,7 +375,7 @@ mod_data_server <- function(id, state) {
       u = upload()
       if (is.null(u)) return(reread_note(warn_box("Choose a data file first.")))
       enc = chosen_encoding()
-      res = tryCatch(reread_data(u$path, u$name, parse_missing(input$missing), old = state$codebook, encoding = enc),
+      res = tryCatch(reread_data(u$path, u$name, parse_missing(input$missing), old = state$codebook, encoding = enc, excel = excel_opts()),
                      error = function(e) e)
       ok = take(res)
       show_encoding(res, enc)
@@ -352,12 +402,13 @@ mod_data_server <- function(id, state) {
       up = tryCatch(read_codebook(input$codebook$datapath), error = function(e) e)
       if (inherits(up, "error")) return(codebook_note(warn_box(conditionMessage(up))))
       codes = missing_codes(up)
-      res = tryCatch(reread_data(u$path, u$name, codes, encoding = up$encoding), error = function(e) e)
+      res = tryCatch(reread_data(u$path, u$name, codes, encoding = up$encoding, excel = excel_opts()), error = function(e) e)
       if (inherits(res, "error")) return(codebook_note(warn_box(conditionMessage(res))))
+      if (is.null(res$read$data)) return(codebook_note(warn_box("Choose which table of the sheet to read first, then the data dictionary.")))
       why = check_codebook(up, res$profile)
       if (length(why))
         return(codebook_note(warn_box(tags$strong("The data dictionary was not applied."), tags$ul(purrr::map(why, tags$li)))))
-      take(res, apply_codebook(up, res$profile, u$name, nrow(res$read$data), res$read$encoding))
+      take(res, apply_codebook(up, res$profile, u$name, nrow(res$read$data), res$read$encoding, res$read$excel))
       updateTextAreaInput(session, "missing", value = paste(codes, collapse = "\n"))
       show_encoding(res, up$encoding)
       reread_note(NULL)
@@ -369,9 +420,9 @@ mod_data_server <- function(id, state) {
 
     output$summary = renderUI({
       if (!is.null(read_error())) return(warn_box(read_error()))
-      if (is.null(state$data)) return(NULL)
+      if (is.null(state$data)) return(if (identical(state$excel$ask, "table") && length(state$problems)) warn_box(tags$ul(purrr::map(state$problems, tags$li))))
       tagList(
-        tags$p(tags$strong(state$codebook$file),
+        tags$p(tags$strong(paste0(state$codebook$file, if (is_text1(state$codebook$sheet)) paste0(", sheet ", state$codebook$sheet))),
                paste0(": ", format_num(nrow(state$data)), " rows, ", format_num(ncol(state$data)), " columns.")),
         if (length(state$problems)) warn_box(tags$ul(purrr::map(state$problems, tags$li)))
         else tags$p(class = "text-success", "No problems found."))
@@ -929,6 +980,9 @@ suggestion_list <- function(texts)
 # The words of the setup buttons: what a click sends, which R recognizes and answers without a model call.
 treat_text <- function(value) paste0("Treat '", value, "' as missing")
 TREAT_PATTERN <- "^Treat '(.*)' as missing$"
+# The same for a column of an Excel sheet that holds only numbers stored as text: a button reads it as numbers.
+numbers_text <- function(col) paste0("Read '", col, "' as numbers")
+NUMBERS_PATTERN <- "^Read '(.*)' as numbers$"
 row_text <- function(guess) paste0("A row is ", guess)
 
 # A chart's title for the chat and the screen reader, or `fallback` when it has none.
@@ -1175,6 +1229,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     skills = skills_load()             # the design skills found (www/skills/ and APP_SKILLS_DIR), read once; an office skill's text stays in this list
     dopts = reactiveValues(skill = skill_default(skills), auto = FALSE)   # the skill chosen in the Style dialog, and whether new charts are designed at once
     treat = reactiveVal(character(0))  # the values the chat offers to treat as missing
+    numbers_offer = reactiveVal(character(0))   # the columns of an Excel sheet the chat offers to read as numbers (they are stored as text)
     guess = reactiveVal(NULL)          # the model's guess at what one row is, offered while the dictionary has none
     story_note = reactiveValues()      # per chart: the sentence when no headline could be written
     made = new.env()
@@ -1402,6 +1457,11 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       m = trimws(msg)
       value = purrr::detect(treat(), function(w) identical(m, treat_text(w)))
       if (!is.null(value)) return(function() treat_missing(value))
+      col = purrr::detect(numbers_offer(), function(w) identical(m, numbers_text(w)))
+      if (!is.null(col)) return(function() treat_missing(numbers = col))
+      if (grepl(NUMBERS_PATTERN, m, perl = TRUE))
+        return(function() say(paste0("No button offers to read '", md_text(sub(NUMBERS_PATTERN, "\\1", m, perl = TRUE)), "' as numbers now: the sheet holds no such column of numbers stored as text, ",
+                                     "or it is already read as numbers. Nothing was changed and the model was not asked.")))
       if (grepl(TREAT_PATTERN, m, perl = TRUE))
         return(function() say(paste0("No button offers '", md_text(sub(TREAT_PATTERN, "\\1", m, perl = TRUE)), "' now: the file holds no such value among its numbers, ",
                                      "or it is already treated as missing. Nothing was changed and the model was not asked.")))
@@ -1450,18 +1510,22 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     # ---- setup: R's own messages --------------------------------------------------------------------
 
     # Treat a value as missing: the file is read again with it, as the Data page does, and the new read is said.
-    treat_missing = function(value) {
+    #   For an Excel sheet `numbers` names a column of text to read as numbers; the sheet, table and header the analyst chose are kept.
+    treat_missing = function(value = NULL, numbers = NULL) {
       cb = isolate(state$codebook)
       path = isolate(state$path)
       if (is.null(cb) || !is_text1(path) || !file.exists(path))
         return(say("The file is no longer there to read again. Choose it again on the Data page."))
-      res = tryCatch(reread_data(path, cb$file, unique(c(missing_codes(cb), value)), old = cb, encoding = cb$encoding), error = function(e) e)
+      excel = isolate(state$excel)$opts
+      if (!is.null(excel) && length(numbers)) excel$numbers = unique(c(excel$numbers, numbers))
+      res = tryCatch(reread_data(path, cb$file, unique(c(missing_codes(cb), value)), old = cb, encoding = cb$encoding, excel = excel), error = function(e) e)
       if (inherits(res, "error")) return(say(md_text(conditionMessage(res))))
       same = identical(res$read$data, isolate(state$data))
       made$reread = if (!same) value
+      made$reread_numbers = if (!same) numbers
       made$notes = res$notes
-      state$data = res$read$data; state$problems = res$read$problems; state$profile = res$profile; state$codebook = res$codebook
-      if (same) say(paste0("Nothing changed: no cell is exactly '", md_text(value), "'."))
+      state$data = res$read$data; state$problems = res$read$problems; state$profile = res$profile; state$codebook = res$codebook; state$excel = res$read$excel
+      if (same) say(if (is.null(value)) "Nothing changed." else paste0("Nothing changed: no cell is exactly '", md_text(value), "'."))
       invisible()
     }
 
@@ -1502,14 +1566,14 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       data = state$data
       cb = state$codebook
       if (is.null(data) || is.null(cb)) return()
-      key = list(file = cb$file, columns = names(data))
+      key = list(file = cb$file, sheet = cb$sheet, columns = names(data))
       fresh = !identical(made$key, key)
       if (fresh && !is.null(made$key)) {
         reset_canvas()
         guess(NULL)
         made$log = list()
         shinychat::chat_clear("chat")
-        say("A different file was read, so the canvas and the conversation start again.")
+        say(paste0("A different ", if (identical(made$key$file, key$file)) "sheet" else "file", " was read, so the canvas and the conversation start again."))
       }
       if (fresh) { made$ready_for = NULL; made$rows_offered = character(0) }
       made$key = key
@@ -1528,19 +1592,27 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       # A value on a button must be one line, to sit in the markup of one suggestion.
       words = purrr::discard(missing_candidates(data), function(w) grepl("[\r\n]", w))
       treat(words)
+      cols = if (is_text1(cb$sheet)) text_number_columns(data) else character(0)
+      numbers_offer(cols)
       again = made$reread
+      again_numbers = made$reread_numbers
       made$reread = NULL
+      made$reread_numbers = NULL
       problems = state$problems
-      say(c(paste0("Read ", md_text(cb$file), if (!is.null(again)) paste0(" again with '", md_text(again), "' as missing"), ": ", format_num(nrow(data)), " rows, ",
-                   format_num(ncol(data)), " columns."),
+      say(c(paste0("Read ", md_text(cb$file), if (is_text1(cb$sheet)) paste0(", sheet ", md_text(cb$sheet)),
+                   if (!is.null(again)) paste0(" again with '", md_text(again), "' as missing"),
+                   if (length(again_numbers)) paste0(" again with ", paste0("'", md_text(again_numbers), "'", collapse = ", "), " read as numbers"),
+                   ": ", format_num(nrow(data)), " rows, ", format_num(ncol(data)), " columns."),
             if (length(problems)) paste0("- ", md_text(problems), collapse = "\n") else "No problems found.",
             if (length(made$notes)) paste0("- ", md_text(made$notes), collapse = "\n"),
             if (changed && length(chart_ids()))
               paste0("The data changed, so the ", length(chart_ids()), if (length(chart_ids()) == 1L) " chart on the canvas was" else " charts on the canvas were",
                      " drawn again from it.", if (n_texts) paste0(" ", n_texts, if (n_texts == 1L) " headline and summary is" else " headlines and summaries are",
                                                                   " marked as changed since written, because their numbers may no longer hold. Press Write headlines to write them again.")),
-            if (length(words)) "If one of these stands for missing, press it and the file is read again:"),
-          if (length(words)) treat_text(words))
+            if (length(words)) "If one of these stands for missing, press it and the file is read again:",
+            if (length(cols)) paste0("The sheet stores ", if (length(cols) == 1L) "this column" else "these columns", " of numbers as text: ", paste(md_text(cols), collapse = ", "),
+                                     ". To read ", if (length(cols) == 1L) "it" else "one", " as numbers, press its button.")),
+          c(if (length(words)) treat_text(words), if (length(cols)) numbers_text(cols)))
       made$notes = character(0)
       made$label_offer = FALSE
       if (codebook_ready(cb)) {
@@ -2856,7 +2928,7 @@ canvas_box_values <- function(data, cb) {
   list(rows = list(title = "Rows", label = if (n_rows == 1L) "Row" else "Rows", value = format_num(n_rows), full = format_num(n_rows), cls = ""),
        columns = list(title = "Columns", label = if (n_cols == 1L) "Column" else "Columns", value = format_num(n_cols), full = format_num(n_cols), cls = ""),
        third = if (!is.null(period)) list(title = "Period", label = "Period", value = period$short, full = period$full, cls = "chart-box-period")
-               else list(title = "File", label = "File", value = cb$file %||% "", full = cb$file %||% "", cls = "chart-box-file"))
+               else list(title = "File", label = "File", value = cb$file %||% "", full = paste0(cb$file %||% "", if (is_text1(cb$sheet)) paste0(", sheet ", cb$sheet)), cls = "chart-box-file"))
 }
 
 # The scripts and style sheets of a widget's dependencies, read from the installed packages' files, as <style> and <script>
@@ -2927,7 +2999,7 @@ dash_about <- function(items, settings, cb, data, model) {
   tags$section(class = "about", `aria-labelledby` = "about-heading",
     tags$h2(id = "about-heading", "About this dashboard"),
     tags$dl(
-      entry("The file", paste0(cb$file %||% "the data file", ": ", format_num(nrow(data)), " rows and ", format_num(ncol(data)), " columns.",
+      entry("The file", paste0(cb$file %||% "the data file", if (is_text1(cb$sheet)) paste0(", sheet ", cb$sheet), ": ", format_num(nrow(data)), " rows and ", format_num(ncol(data)), " columns.",
                                if (codebook_ready(cb)) paste0(" One row is ", trimws(cb$row_is), "."),
                                if (is_text1(cb$source) && nzchar(trimws(cb$source))) paste0(" Source: ", trimws(cb$source), "."))),
       entry("Made", paste0(dash_date_text(settings$date), if (nzchar(trimws(settings$author %||% ""))) paste0(", by ", trimws(settings$author)), ".")),

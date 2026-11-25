@@ -9456,6 +9456,226 @@ check("11B-18: ggrepel, ggtext, patchwork and forcats, which the toolkit takes b
 # <<< 11B end
 
 
+# >>> 11D begin
+# No model call. Phase 11 Part D: read_data() takes an Excel workbook (.xlsx, .xls) through readxl: a sheet picker (names, row counts, hidden ones named as hidden),
+#   the header row found and changeable, blank leading rows and columns skipped, merged header cells filled across and joined to the row below, dates as dates,
+#   numbers stored as text offered in the chat (as missing codes are), formulas as their values, two tables on one sheet asked about (never guessed), and nothing
+#   written to the file. The workbooks are made here, in tempdir(), and nothing is committed: writexl makes the plain ones (two sheets, dates, text, two tables
+#   side by side and stacked); it cannot make merged cells, a hidden sheet, a formula or a blank offset, so d11_book() writes the XML parts of a minimal .xlsx
+#   itself and zips them with zip::zip(). An .xls cannot be made without Excel, so none is read here: the sentence for it is checked on the page's text only.
+#   Self-contained (its own fixtures), so a changed copy of read_data() can be run against it alone (tests/mutate_11D.R).
+if (run_fast) {   # the fast run only; not indented, to keep the diff small
+d11_dir <- tempfile("d11"); dir.create(d11_dir)
+d11_path <- function(name) file.path(d11_dir, name)
+d11_sum <- function(paths) unname(tools::md5sum(paths))
+d11_write <- function(sheets, name, col_names = TRUE) { p = d11_path(name); writexl::write_xlsx(sheets, p, col_names = col_names); p }
+d11_xml_esc <- function(x) gsub("<", "&lt;", gsub("&", "&amp;", x, fixed = TRUE), fixed = TRUE)
+# A cell as XML: NULL or NA is no cell; text is an inline string; list(f =, v =) is a formula with its cached value; a number is a number.
+d11_cell <- function(v, ref) {
+  if (is.null(v) || (length(v) == 1L && !is.list(v) && is.na(v))) return("")
+  if (is.list(v)) return(sprintf("<c r=\"%s\"><f>%s</f><v>%s</v></c>", ref, v$f, v$v))
+  if (is.character(v)) return(sprintf("<c r=\"%s\" t=\"inlineStr\"><is><t>%s</t></is></c>", ref, d11_xml_esc(v)))
+  sprintf("<c r=\"%s\"><v>%s</v></c>", ref, format(v, digits = 15))
+}
+d11_sheet_xml <- function(rows, merges = character(0)) {
+  body = paste(purrr::imap_chr(rows, function(row, i)
+    sprintf("<row r=\"%d\">%s</row>", i, paste(purrr::imap_chr(row, function(v, j) d11_cell(v, paste0(excel_col_letter(j), i))), collapse = ""))), collapse = "")
+  paste0("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>", body,
+         "</sheetData>", if (length(merges)) paste0("<mergeCells count=\"", length(merges), "\">", paste0("<mergeCell ref=\"", merges, "\"/>", collapse = ""), "</mergeCells>"), "</worksheet>")
+}
+# `sheets`: a named list, each a list of rows (a row is a list of cells, NULL for a blank one); `hidden`: the names of sheets with state="hidden"; `merges`: by sheet name.
+d11_book <- function(sheets, name, hidden = character(0), merges = list()) {
+  td = tempfile("d11b"); dir.create(file.path(td, "xl", "worksheets"), recursive = TRUE); dir.create(file.path(td, "xl", "_rels")); dir.create(file.path(td, "_rels"))
+  on.exit(unlink(td, recursive = TRUE))
+  put = function(part, txt) writeLines(txt, file.path(td, part), useBytes = TRUE)
+  head = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+  n = length(sheets)
+  type = "application/vnd.openxmlformats-officedocument.spreadsheetml."
+  put("[Content_Types].xml", paste0(head, "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>",
+                                    "<Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/xl/workbook.xml\" ContentType=\"", type, "sheet.main+xml\"/>",
+                                    paste0("<Override PartName=\"/xl/worksheets/sheet", seq_len(n), ".xml\" ContentType=\"", type, "worksheet+xml\"/>", collapse = ""), "</Types>"))
+  put("_rels/.rels", paste0(head, "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" ",
+                            "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>"))
+  put("xl/workbook.xml", paste0(head, "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets>",
+                                paste0("<sheet name=\"", d11_xml_esc(names(sheets)), "\" sheetId=\"", seq_len(n), "\"", ifelse(names(sheets) %in% hidden, " state=\"hidden\"", ""), " r:id=\"rId", seq_len(n), "\"/>", collapse = ""),
+                                "</sheets></workbook>"))
+  put("xl/_rels/workbook.xml.rels", paste0(head, "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">",
+                                           paste0("<Relationship Id=\"rId", seq_len(n), "\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet", seq_len(n), ".xml\"/>", collapse = ""),
+                                           "</Relationships>"))
+  purrr::iwalk(unname(sheets), function(rows, i) put(paste0("xl/worksheets/sheet", i, ".xml"), d11_sheet_xml(rows, merges[[names(sheets)[i]]] %||% character(0))))
+  p = d11_path(name)
+  zip::zip(p, list.files(td, recursive = TRUE, all.files = TRUE), root = td)
+  p
+}
+
+# ---- the workbooks
+d11_orders <- data.frame(region = c("North", "South", "East"), units = c(10, 20, 30), revenue = c(100.5, 200, 300))
+f_two <- d11_write(list(Orders = d11_orders, Regions = data.frame(code = c("N", "S"), name = c("North", "South"))), "orders.xlsx")
+f_dates <- d11_write(list(Days = data.frame(day = as.Date(c("2024-01-05", "2024-02-10")), stamp = as.POSIXct(c("2024-01-05 08:30:00", "2024-02-10 17:45:00"), tz = "UTC"), v = c(1, 2))), "dates.xlsx")
+f_text <- d11_write(list(Sheet1 = data.frame(id = c("001", "002", "003"), n = c("12", "7", "1,000"), amount = c("5", "n/a", "9"), word = c("a", "b", "c"))), "text.xlsx")
+f_side <- d11_write(list(Two = stats::setNames(data.frame(c("a", "1", "2", "3"), c("b", "x", "y", "z"), NA_character_, c("c", "p", "q", "r"), c("d", "10", "20", "30")), c("A", "B", "C", "D", "E"))), "side.xlsx", col_names = FALSE)
+f_stack <- d11_write(list(Two = data.frame(A = c("a", "1", "2", "3", NA, "x", "10", "20"), B = c("b", "x", "y", "z", NA, "y", "20", "30"))), "stack.xlsx", col_names = FALSE)
+f_offset <- d11_book(list(Data = list(list(), list(), list(NULL, NULL, "Quarterly orders"), list(NULL, NULL, "region", "units", "revenue"),
+                                      list(NULL, NULL, "North", 10, 100.5), list(NULL, NULL, "South", 20, 200), list(NULL, NULL, "East", 30, 300))), "offset.xlsx")
+f_merge <- d11_book(list(Sales = list(list("id", "Sales", NULL, "Region"), list(NULL, "Q1", "Q2", NULL), list("a", 1, 2, "N"), list("b", 3, 4, "S"))), "merge.xlsx", merges = list(Sales = "B1:C1"))
+f_title <- d11_book(list(T = list(list("Orders report"), list(), list("region", "units"), list("North", 10), list("South", 20))), "title.xlsx")
+f_hidden <- d11_book(list(`R&D old` = list(list("k", "v"), list("a", 1)), Current = list(list("region", "units"), list("North", 10), list("South", 20))), "hidden.xlsx", hidden = "R&D old")
+f_formula <- d11_book(list(F = list(list("a", "b"), list(5, list(f = "A2*2", v = 10)), list(7, list(f = "A3*2", v = 14)))), "formula.xlsx")
+f_messy <- d11_book(list(Data = list(list("id", NULL, "amount", "notes"), list(1, "x", "12", NULL), list(2, "y", "n/a", NULL), list(3, "z", "5", NULL))), "messy.xlsx")
+d11_files <- c(f_two, f_dates, f_text, f_side, f_stack, f_offset, f_merge, f_title, f_hidden, f_formula, f_messy)
+d11_before <- d11_sum(d11_files)
+d11_read <- function(p, ...) read_data(p, basename(p), ...)
+
+# ---- 1. sheets: two sheets, a picker with names and row counts, the first sheet read, the other on request
+d11_a <- d11_read(f_two)
+d11_b <- d11_read(f_two, excel = list(sheet = "Regions"))
+d11_ch <- excel_sheet_choices(d11_a$excel$sheets)
+check("11D-1: a workbook of two sheets: the picker lists both with their row counts (the rows of the sheet that hold anything, the header's among them), the first sheet is read when none is asked for (three rows, the numbers as numbers), the other when named, and a sheet that is not there is refused in a sentence",
+      is_excel("a.XLSX") && is_excel("b.xls") && !is_excel("c.csv") && identical(d11_a$excel$sheets$sheet, c("Orders", "Regions")) && identical(d11_a$excel$sheets$rows, c(4L, 3L)) &&
+        identical(unname(d11_ch), c("Orders", "Regions")) && identical(names(d11_ch), c("Orders (4 rows)", "Regions (3 rows)")) &&
+        identical(d11_a$excel$sheet, "Orders") && identical(names(d11_a$data), c("region", "units", "revenue")) && nrow(d11_a$data) == 3L && is.numeric(d11_a$data$units) && identical(d11_a$data$revenue, c(100.5, 200, 300)) &&
+        identical(d11_b$excel$sheet, "Regions") && identical(names(d11_b$data), c("code", "name")) && nrow(d11_b$data) == 2L && length(d11_a$problems) == 0L &&
+        inherits(tryCatch(d11_read(f_two, excel = list(sheet = "Nope")), error = function(e) e), "error") &&
+        grepl("no sheet called Nope", tryCatch(d11_read(f_two, excel = list(sheet = "Nope")), error = conditionMessage), fixed = TRUE))
+
+# ---- 2. the source line names the file and the sheet; a delimited file's line is as before
+d11_rr <- reread_data(f_two, "orders.xlsx", character(0), excel = list(sheet = "Regions"))
+d11_rr$codebook$row_is <- "one region"
+d11_p <- spec_plot(list(family = "bar", x = "name", fn = "count", title = "Regions"), d11_rr$read$data, d11_rr$codebook)
+d11_csv <- read_data(file.path("tests", "data", "orders.csv"), "orders.csv")
+d11_cbc <- new_codebook(profile_data(d11_csv$data), "orders.csv", nrow(d11_csv$data)); d11_cbc$row_is <- "one order"
+d11_pc <- spec_plot(list(family = "bar", x = "region", fn = "count", title = "Orders"), d11_csv$data, d11_cbc)
+check("11D-2: the source line names the file and the sheet (\"Source: orders.xlsx, sheet Regions. 2 rows.\"), the codebook carries the sheet and the cells read, the dictionary's own source still replaces it, and a delimited file's line and codebook are as before",
+      identical(d11_p$labels$caption, "Source: orders.xlsx, sheet Regions. 2 rows.") && identical(d11_rr$codebook$sheet, "Regions") && identical(d11_rr$codebook$range, "A2:B3") &&
+        identical(spec_plot(list(family = "bar", x = "name", fn = "count", title = "Regions"), d11_rr$read$data, codebook_source(d11_rr$codebook, "The regions list."))$labels$caption, "Source: The regions list. 2 rows.") &&
+        identical(sub("[0-9,]+ rows[.]$", "", d11_pc$labels$caption), "Source: orders.csv. ") && is.null(d11_cbc$sheet) && is.null(d11_cbc$range) && !is.null(d11_rr$profile))
+
+# ---- 3. an offset table: blank rows and columns first, a title line on top of the header
+d11_o <- d11_read(f_offset)
+d11_oh <- d11_read(f_offset, excel = list(header = 5))
+d11_oe <- purrr::map(c(2, 9, 4.5), function(h) tryCatch(d11_read(f_offset, excel = list(header = h)), error = conditionMessage))
+check("11D-3: an offset table (two blank rows and two blank columns first, a title line directly above the header): the header is found as the first row with text in most columns (row 4, not the title's row 3), the blank leading rows and columns are skipped, the title row is said to be left out, the numbers stay numbers, \"Header is on row\" changes it (row 5 makes the first data row the header), and a row outside the table is refused in a sentence",
+      d11_o$excel$header == 4L && identical(names(d11_o$data), c("region", "units", "revenue")) && nrow(d11_o$data) == 3L && identical(d11_o$data$units, c(10, 20, 30)) && identical(d11_o$excel$range, "C5:E7") &&
+        identical(d11_o$excel$tables$range, "C3:E7") && "Row 3 above the header was left out." %in% d11_o$problems &&
+        d11_oh$excel$header == 5L && identical(names(d11_oh$data), c("North", "10", "100.5")) && nrow(d11_oh$data) == 2L && identical(d11_oh$excel$opts$header, 5L) &&
+        all(purrr::map_lgl(d11_oe, function(m) is.character(m) && grepl("is not a row of the table (rows 3 to 7", m, fixed = TRUE))))
+
+# ---- 4. merged header cells filled across and joined to the row below
+d11_m <- d11_read(f_merge)
+check("11D-4: merged header cells (Sales over B1:C1, Q1 and Q2 below it): the merge is filled across and joined to the row below (\"Sales Q1\", \"Sales Q2\"), a column with no second line keeps its name, the data start under the second line, and the join is said in the problems list",
+      identical(names(d11_m$data), c("id", "Sales Q1", "Sales Q2", "Region")) && nrow(d11_m$data) == 2L && identical(d11_m$data$`Sales Q2`, c(2, 4)) && identical(d11_m$excel$range, "A3:D4") &&
+        d11_m$excel$header == 1L && any(grepl("The header joins the merged cells of row 1 with row 2 (for example Sales Q1)", d11_m$problems, fixed = TRUE)))
+
+# ---- 5. dates read as dates
+d11_d <- d11_read(f_dates)
+d11_dp <- profile_data(d11_d$data)
+check("11D-5: Excel dates are read as dates: a date column is a Date (whole days), a column with times of day keeps them (POSIXct, 08:30 and 17:45), a plain number is a number, and the profile types the date column as a date",
+      inherits(d11_d$data$day, "Date") && identical(as.character(d11_d$data$day), c("2024-01-05", "2024-02-10")) && inherits(d11_d$data$stamp, "POSIXct") &&
+        identical(format(d11_d$data$stamp, "%H:%M", tz = "UTC"), c("08:30", "17:45")) && is.numeric(d11_d$data$v) && identical(d11_dp[[1]]$type, "date"))
+
+# ---- 6. numbers stored as text are offered, never applied; a code with a leading zero is not a number
+d11_t <- d11_read(f_text)
+d11_tn <- d11_read(f_text, excel = list(numbers = c("n", "id", "word")))
+d11_tm <- d11_read(f_text, missing = "n/a")
+check("11D-6: numbers stored as text: a column that holds only numbers as text (n: 12, 7, 1,000) is read as text and offered for conversion with a sentence in the problems list, \"001\" (a code) and a word column are not offered, a column that is mostly numbers with a word keeps the missing-code sentence, naming it as the choice reads it makes numbers (1000), asking for a column that is not offered changes nothing, and the same column is offered once \"n/a\" is a missing value",
+      identical(text_number_columns(d11_t$data), "n") && is.character(d11_t$data$n) && any(grepl("Column n holds only numbers, but the sheet stores them as text", d11_t$problems, fixed = TRUE)) &&
+        !any(grepl("Column id|Column word", d11_t$problems)) && any(grepl("Column amount is mostly numbers but also holds 1 other value ('n/a')", d11_t$problems, fixed = TRUE)) &&
+        identical(d11_tn$data$n, c(12, 7, 1000)) && identical(d11_tn$excel$numbers, "n") && is.character(d11_tn$data$id) && is.character(d11_tn$data$word) && any(grepl("Column n was read as numbers", d11_tn$problems, fixed = TRUE)) &&
+        identical(text_number_columns(d11_tm$data), c("n", "amount")) && identical(number_from_text(c(" 1,000 ", "2.5")), c(1000, 2.5)))
+
+# ---- 7. two tables on one sheet: asked, never guessed
+d11_s0 <- d11_read(f_side)
+d11_s2 <- d11_read(f_side, excel = list(table = 2))
+d11_k0 <- d11_read(f_stack)
+d11_k1 <- d11_read(f_stack, excel = list(table = 1))
+d11_k2 <- d11_read(f_stack, excel = list(table = 2))
+d11_r0 <- reread_data(f_stack, "stack.xlsx", character(0))
+d11_ti <- d11_read(f_title)
+check("11D-7: two tables on one sheet (side by side, divided by a blank column; stacked, divided by a blank row): no table is read until the analyst chooses (data NULL, the question in the problems list, the tables listed with their cells and first words, reread_data() gives no dictionary), the chosen table is read with its own header, a table out of range is refused, and a sheet with a title line and one table asks nothing (the title is said to be left out)",
+      is.null(d11_s0$data) && identical(d11_s0$excel$ask, "table") && identical(d11_s0$excel$tables$range, c("A1:B4", "D1:E4")) && identical(d11_s0$excel$tables$starts, c("a, b", "c, d")) && any(grepl("holds 2 tables", d11_s0$problems, fixed = TRUE)) &&
+        identical(names(d11_s2$data), c("c", "d")) && identical(d11_s2$data$d, c("10", "20", "30")) && d11_s2$excel$table == 2L && is.null(d11_s2$excel$ask) &&
+        is.null(d11_k0$data) && identical(d11_k0$excel$tables$range, c("A1:B4", "A6:B8")) && identical(names(d11_k1$data), c("a", "b")) && nrow(d11_k1$data) == 3L &&
+        identical(names(d11_k2$data), c("x", "y")) && identical(d11_k2$data$x, c("10", "20")) && is.null(d11_r0$profile) && is.null(d11_r0$codebook) && is.null(d11_r0$read$data) &&
+        grepl("has no table 3", tryCatch(d11_read(f_stack, excel = list(table = 3)), error = conditionMessage), fixed = TRUE) &&
+        !is.null(d11_ti$data) && is.null(d11_ti$excel$ask) && identical(names(d11_ti$data), c("region", "units")) && any(grepl("Row 1 (A1) holds a single line of text outside any table (Orders report); it was left out.", d11_ti$problems, fixed = TRUE)))
+
+# ---- 8. hidden sheets
+d11_h <- d11_read(f_hidden)
+d11_hh <- d11_read(f_hidden, excel = list(sheet = "R&D old"))
+d11_hc <- excel_sheet_choices(d11_h$excel$sheets)
+d11_xls <- list(sheets = data.frame(sheet = c("A", "B"), hidden = NA, rows = c(2L, 3L)), sheet = "A", tables = d11_o$excel$tables, hidden_known = FALSE, header = 1L)
+check("11D-8: hidden sheets (an .xlsx whose workbook.xml says state=\"hidden\" for \"R&D old\"): the sheet list marks it hidden (the name read with its & decoded), the first sheet that is not hidden is read when none is asked for, a hidden sheet can still be read and is said to be hidden, and for an .xls (no fixture can be made without Excel) the page says hidden sheets cannot be told and marks none",
+      identical(d11_h$excel$sheets$hidden, c(TRUE, FALSE)) && identical(d11_h$excel$sheet, "Current") && identical(names(d11_h$data), c("region", "units")) && identical(names(d11_hc), c("R&D old (2 rows, hidden)", "Current (3 rows)")) &&
+        identical(d11_hh$excel$sheet, "R&D old") && identical(names(d11_hh$data), c("k", "v")) && "The sheet R&D old is hidden in the workbook." %in% d11_hh$problems && length(d11_h$problems) == 0L &&
+        identical(names(excel_sheet_choices(d11_xls$sheets)), c("A (2 rows)", "B (3 rows)")) &&
+        grepl("does not say which sheets are hidden", as.character(excel_box(identity, d11_xls)), fixed = TRUE) && grepl("hidden", as.character(excel_box(identity, d11_h$excel)), fixed = TRUE))
+
+# ---- 9. a formula is read as its value
+d11_f <- d11_read(f_formula)
+check("11D-9: a formula is read as the value Excel saved for it (b is A2*2: 10 and 14, not the formula's text)",
+      identical(d11_f$data$b, c(10, 14)) && identical(d11_f$data$a, c(5, 7)) && is.numeric(d11_f$data$b))
+
+# ---- 10. the problems list for a sheet is the one for a CSV
+d11_me <- d11_read(f_messy)
+check("11D-10: the problems list for a sheet is the one for a CSV: a blank header is named column_2 and said, a column with nothing in it is said, a column that is mostly numbers with a word is said, and a clean sheet says nothing",
+      identical(names(d11_me$data), c("id", "column_2", "amount", "notes")) && "Column 2 had no name; it is now called column_2." %in% d11_me$problems && "Column notes is entirely missing." %in% d11_me$problems &&
+        any(grepl("Column amount is mostly numbers but also holds 1 other value ('n/a')", d11_me$problems, fixed = TRUE)) && length(d11_a$problems) == 0L)
+
+# ---- 11. the chat: the setup message names the sheet, offers the text numbers, and a press reads them as numbers; the sheet, header and table survive a press
+d11_asked <- new.env(); d11_asked$n <- 0L
+d11_ask <- function(...) { d11_asked$n <- d11_asked$n + 1L; stop("no model call is expected here") }
+d11_rt <- reread_data(f_text, "text.xlsx", character(0))
+d11_st <- shiny::reactiveValues(key_version = 0L, data = d11_rt$read$data, problems = d11_rt$read$problems, profile = d11_rt$profile, codebook = d11_rt$codebook, excel = d11_rt$read$excel,
+                                path = f_text, calls = NULL, charts = list(), canvas = character(0), stories = list(), palette = chart_palette_default())
+d11_chat <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = d11_st, ask = d11_ask), {
+  session$flushReact()
+  first <- made$log[[1]]$content
+  d11_chat$first <- grepl(paste0("Read ", md_text("text.xlsx"), ", sheet ", md_text("Sheet1"), ": 3 rows, 4 columns."), first, fixed = TRUE) &&
+    grepl(md_text("Column n holds only numbers, but the sheet stores them as text"), first, fixed = TRUE) &&
+    grepl(paste0("data-suggestion=\"Read &#39;n&#39; as numbers\">", md_text("Read 'n' as numbers"), "</span>"), first, fixed = TRUE) && grepl("Treat &#39;n/a&#39; as missing", first, fixed = TRUE) &&
+    identical(numbers_offer(), "n") && !grepl("Read &#39;amount&#39; as numbers", first, fixed = TRUE)
+  session$setInputs(chat_user_input = "Read 'n' as numbers")
+  d11_chat$read <- is.numeric(d11_st$data$n) && identical(d11_st$data$n, c(12, 7, 1000)) && identical(d11_st$excel$opts$numbers, "n") && identical(d11_st$codebook$text_numbers, list("n")) &&
+    any(purrr::map_lgl(made$log, function(m) grepl(paste0("Read ", md_text("text.xlsx"), ", sheet ", md_text("Sheet1"), " again with 'n' read as numbers: 3 rows, 4 columns."), m$content, fixed = TRUE))) && length(numbers_offer()) == 0L
+  session$setInputs(chat_user_input = "Treat 'n/a' as missing")
+  d11_chat$kept <- is.numeric(d11_st$data$n) && identical(missing_codes(d11_st$codebook), "n/a") && identical(numbers_offer(), "amount") && identical(d11_st$codebook$sheet, "Sheet1") && is.numeric(d11_st$data$n)
+  session$setInputs(chat_user_input = "Read 'word' as numbers")
+  d11_chat$refused <- grepl("No button offers to read 'word' as numbers now", made$log[[length(made$log)]]$content, fixed = TRUE) && !is.numeric(d11_st$data$word)
+})
+check("11D-11: the chat for a sheet: the setup message names the file and the sheet, offers \"Read 'n' as numbers\" for the column of text numbers (not for \"001\" or a word column), a press reads the file again with it as numbers (no model call) and says so, the same sheet is read when \"n/a\" is then treated as missing and the column stays numbers, and a button that is not on offer does nothing and says so",
+      isTRUE(d11_chat$first) && isTRUE(d11_chat$read) && isTRUE(d11_chat$kept) && isTRUE(d11_chat$refused) && d11_asked$n == 0L && identical(numbers_text("n"), "Read 'n' as numbers"))
+
+# ---- 12. the code of a chart reads the sheet: the same data
+d11_code_rr <- reread_data(f_text, "text.xlsx", character(0), excel = list(numbers = "n"))
+d11_code_rr$codebook$row_is <- "one row"
+d11_code <- spec_code(list(family = "bar", x = "word", y = "n", fn = "sum", title = "n by word"), d11_code_rr$codebook, f_text)
+d11_env <- new.env()
+d11_run <- local({ wd = setwd(d11_dir); on.exit(setwd(wd)); tryCatch({ eval(parse(text = d11_code), d11_env); NULL }, error = conditionMessage) })
+check("11D-12: the code a chart comes with for a sheet reads it with readxl (read_excel with the file, the sheet, the cells of its rows and the names the dictionary has, the numbers stored as text turned to numbers) and, run beside the file, makes the same data",
+      grepl("library(readxl)", d11_code, fixed = TRUE) && !grepl("read_delim", d11_code, fixed = TRUE) && grepl("read_excel(\"text.xlsx\", sheet = \"Sheet1\", range = \"A2:D4\", col_names = c(\"id\", \"n\", \"amount\", \"word\")", gsub("[[:space:]]+", " ", d11_code), fixed = TRUE) && grepl("guess_max = 3L)", gsub("[[:space:]]+", " ", d11_code), fixed = TRUE) &&
+        grepl("as.numeric(gsub(\",\", \"\", x, fixed = TRUE))", d11_code, fixed = TRUE) && is.null(d11_run) && identical(as.data.frame(d11_env$chart_data), as.data.frame(d11_code_rr$read$data)))
+
+# ---- 13. the page, the packages, and the file untouched
+d11_ui <- as.character(mod_data_ui("data"))
+d11_box <- as.character(excel_box(function(id) paste0("data-", id), d11_k0$excel))
+d11_box1 <- as.character(excel_box(function(id) paste0("data-", id), d11_o$excel))
+d11_app_exprs <- as.list(parse("app.R", keep.source = FALSE))
+d11_pkgs <- eval(purrr::keep(d11_app_exprs, function(x) is.call(x) && identical(as.character(x[[1]]), "<-") && identical(as.character(x[[2]]), "APP_PACKAGES"))[[1]][[3]])
+d11_data_src <- paste(readLines(file.path("R", "data.R"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+check("11D-13: the page and the packages: the data file input accepts .xlsx and .xls and says so, an Excel read shows its sheet picker, the table question (radio buttons, none chosen until the analyst picks) and \"Header is on row\" with the row R found, the encoding select is hidden for a workbook, readxl is in APP_PACKAGES (so a missing readxl stops the app at start-up, by name) and R/data.R calls it as readxl:: (which a deployment reads)",
+      grepl(".xlsx", d11_ui, fixed = TRUE) && grepl(".xls\"", d11_ui, fixed = TRUE) && grepl("Excel workbook (.xlsx, .xls)", d11_ui, fixed = TRUE) &&
+        grepl("!output.excel_file", d11_ui, fixed = TRUE) &&
+        grepl("This sheet holds 2 tables. Which one?", d11_box, fixed = TRUE) && grepl("type=\"radio\"", d11_box, fixed = TRUE) && !grepl("checked", d11_box, fixed = TRUE) && !grepl("Header is on row", d11_box, fixed = TRUE) &&
+        grepl("Header is on row", d11_box1, fixed = TRUE) && grepl("value=\"4\"", d11_box1, fixed = TRUE) && !grepl("Which one?", d11_box1, fixed = TRUE) &&
+        "readxl" %in% d11_pkgs && grepl("readxl::read_excel(", d11_data_src, fixed = TRUE) && grepl("readxl::excel_sheets(", d11_data_src, fixed = TRUE))
+d11_after <- d11_sum(d11_files)
+check("11D-14: nothing is written to the workbook: the checksum of every workbook made here, taken before the first read and after every read above (sheets, header, tables, numbers, the chat, the code), is the same, and no file was added beside them",
+      identical(d11_before, d11_after) && !anyNA(d11_after) && setequal(list.files(d11_dir), basename(d11_files)))
+}   # the fast run only
+# <<< 11D end
+
+
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
 #
 # This file is read as code (not run): every check( call is found with the guard it sits under, `if (run_fast ...)` or `if (run_heavy)`.

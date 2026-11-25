@@ -79,7 +79,7 @@ library(bslib)
 library(purrr)
 
 # Called as pkg::fn() in R/ and never attached; listed so a missing one stops the app here, by name.
-APP_PACKAGES <- c("commonmark", "digest", "dplyr", "ellmer", "ggiraph", "ggplot2", "htmltools", "httr2", "jsonlite", "readr", "rlang", "S7", "scales",
+APP_PACKAGES <- c("commonmark", "digest", "dplyr", "ellmer", "ggiraph", "ggplot2", "htmltools", "httr2", "jsonlite", "readr", "readxl", "rlang", "S7", "scales",
                   "shinychat", "tibble", "tidyr", "yaml", "zip")
 
 # tidyr is used only by name (R/spec.R takes the exports of SPEC_PACKAGES), so a deployment, which finds the packages to install by reading the
@@ -210,7 +210,8 @@ options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 #   chart drawn this session, by id (charts), and the ids of those on the canvas, newest first (canvas), where a summary table is a card
 #   too (its id is in canvas and its definition, by id, in tables; the chat sees only the charts);
 #   the headline and summary written for a chart, by id (stories); the three palettes; and ask_request, a question that
-#   Methodology's "Ask this" button hands to Explore.
+#   Methodology's "Ask this" button hands to Explore. The Data page also sets `excel` (not listed above: what was found in an Excel workbook and chosen, and
+#   opts, the choices that read the same sheet again); it is NULL for a delimited file.
 new_state <- function() reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL,
                                        path = NULL, calls = NULL, charts = list(), canvas = character(0), stories = list(),
                                        tables = list(), palette = chart_palette_default(), ask_request = NULL)

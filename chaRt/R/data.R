@@ -188,12 +188,21 @@ latin_delim <- function(path, encoding) {
   DELIM_CANDIDATES[which.max(widths)]
 }
 
+# The sentences about columns that hold for a delimited file and for a sheet: a column with nothing in it, and a column of text
+#   whose values are mostly numbers.
+column_problems <- function(data) {
+  empty_cols = names(data)[purrr::map_lgl(as.list(data), function(x) nrow(data) > 0L && all(is.na(x)))]
+  c(purrr::map_chr(empty_cols, function(nm) paste0("Column ", nm, " is entirely missing.")),
+    unlist(purrr::imap(as.list(data), mostly_numbers_note)))
+}
+
 # readr guesses the delimiter when delim is NULL: readr passes it to vroom, whose help says it
 #   then guesses from , tab space | : and ;. A file it cannot guess for (one column, say) is read
 #   with a comma. Types are guessed from every row (guess_max = Inf). The values in `missing` are
 #   added to DATA_NA; readr's `na` matches a whole cell, after the spaces around it are trimmed
 #   (trim_ws), never part of one.
-read_data <- function(path, name = basename(path), missing = character(), encoding = NULL) {
+read_data <- function(path, name = basename(path), missing = character(), encoding = NULL, excel = NULL) {
+  if (is_excel(name)) return(read_excel_data(path, name, missing, excel))
   na = unique(c(DATA_NA, parse_missing(missing)))
   enc = file_encoding(path, encoding)
   read = function(delim)
@@ -214,15 +223,264 @@ read_data <- function(path, name = basename(path), missing = character(), encodi
     paste0(length(rows_bad), if (length(rows_bad) == 1L) " row" else " rows", " could not be read as expected (file line ",
            paste(utils::head(rows_bad, PROBLEM_ROWS_SHOWN), collapse = ", "), if (length(rows_bad) > PROBLEM_ROWS_SHOWN) ", ...",
            "); values there may be missing or in the wrong column.")
-  empty_cols = names(data)[purrr::map_lgl(data, function(x) nrow(data) > 0L && all(is.na(x)))]
-  problems = c(enc$note, names_fixed$notes, parse_note,
-               purrr::map_chr(empty_cols, function(nm) paste0("Column ", nm, " is entirely missing.")),
-               unlist(purrr::imap(as.list(data), mostly_numbers_note)),
+  problems = c(enc$note, names_fixed$notes, parse_note, column_problems(data),
                if (!nrow(data)) "The file has no rows.",
                if (ncol(data) == 1L) "The file has only one column; if it should have more, its delimiter may not be one readr recognises.")
   list(data = data, problems = as.character(problems), encoding = enc$encoding)
 }
 
+
+# ---- B1b. read an Excel sheet -------------------------------------------------------------------------------------
+#   readxl reads the cells; this section decides which cells are the table. Nothing is written to the workbook (it is read,
+#   and for .xlsx two of its XML parts are read as text, to find hidden sheets and merged cells). What the analyst may choose
+#   is `excel` (read_data(excel =)): sheet (a name), header (a row number as Excel numbers rows), table (which of several on
+#   the sheet, 1, 2, ...) and numbers (columns of text to read as numbers). Not given: the first sheet that is not hidden, the
+#   header R finds, and, where a sheet holds more than one table, no table (the analyst is asked; R never guesses).
+
+EXCEL_EXTENSIONS <- c("xlsx", "xls")
+is_excel <- function(name) tolower(tools::file_ext(name)) %in% EXCEL_EXTENSIONS
+
+# The longest piece of a cell's text shown in a sentence or a label.
+EXCEL_SHOWN_CHARS <- 24L
+
+# A number stored as text: digits with an optional sign, thousands commas, decimals and exponent. A value with a leading zero
+#   ("007", a code or a zip) is never one.
+NUMBER_TEXT <- "^[-+]?([0-9]+|[0-9]{1,3}(,[0-9]{3})+)([.][0-9]+)?([eE][-+]?[0-9]+)?$|^[-+]?[.][0-9]+$"
+number_text_ok <- function(x) {
+  v = trimws(x[!is.na(x)])
+  length(v) > 0L && all(grepl(NUMBER_TEXT, v)) && !any(grepl("^[-+]?0[0-9]", v))
+}
+# The columns of text that hold only numbers (never applied: the chat offers them), and the numbers they hold.
+text_number_columns <- function(data) names(data)[purrr::map_lgl(as.list(data), function(x) is.character(x) && number_text_ok(x))]
+number_from_text <- function(x) as.numeric(gsub(",", "", trimws(x), fixed = TRUE))
+
+# Column letters and numbers ("AB" is 28), and a range such as "B2:E10" as c(row1, column1, row2, column2).
+excel_col_letter <- function(n)
+  purrr::map_chr(n, function(k) if (k <= 26L) LETTERS[k] else paste0(excel_col_letter((k - 1L) %/% 26L), LETTERS[(k - 1L) %% 26L + 1L]))
+excel_col_number <- function(txt)
+  purrr::map_int(strsplit(toupper(txt), ""), function(ch) as.integer(sum(match(ch, LETTERS) * 26^(rev(seq_along(ch)) - 1))))
+excel_ref <- function(ref) {
+  p = strsplit(ref, ":", fixed = TRUE)[[1]]
+  p = c(p, p)[1:2]
+  as.integer(c(gsub("\\D", "", p[1]), excel_col_number(gsub("[^A-Za-z]", "", p[1])),
+               gsub("\\D", "", p[2]), excel_col_number(gsub("[^A-Za-z]", "", p[2]))))
+}
+excel_range_text <- function(r1, c1, r2, c2) paste0(excel_col_letter(c1), r1, ":", excel_col_letter(c2), r2)
+
+# Attributes and tags of an XML text, by pattern (the two parts read are simple and Excel writes them one way).
+xml_unescape <- function(x) {
+  x = gsub("&lt;", "<", x, fixed = TRUE)
+  x = gsub("&gt;", ">", x, fixed = TRUE)
+  x = gsub("&quot;", "\"", x, fixed = TRUE)
+  x = gsub("&apos;", "'", x, fixed = TRUE)
+  gsub("&amp;", "&", x, fixed = TRUE)
+}
+xml_tags <- function(xml, name) if (is.na(xml)) character(0) else regmatches(xml, gregexpr(paste0("<", name, "\\s[^>]*>"), xml))[[1]]
+xml_attr <- function(tags, attr)
+  purrr::map_chr(tags, function(tag) {
+    m = regmatches(tag, regexec(paste0("\\s", attr, "=\"([^\"]*)\""), tag))[[1]]
+    if (length(m) == 2L) xml_unescape(m[2]) else NA_character_
+  })
+
+# One part of an .xlsx (a zip) as text, read without unpacking the rest; NA when it is not there.
+zip_text <- function(path, part) {
+  dir = tempfile("xlpart")
+  dir.create(dir)
+  on.exit(unlink(dir, recursive = TRUE))
+  got = suppressWarnings(tryCatch(utils::unzip(path, files = part, exdir = dir), error = function(e) character(0)))
+  if (length(got)) paste(readLines(got[1], warn = FALSE, encoding = "UTF-8"), collapse = "") else NA_character_
+}
+
+# The sheets of a workbook in order: name, hidden (TRUE or FALSE; NA for an .xls, which does not say) and the part of the zip
+#   that holds the sheet (NA for an .xls). For an .xlsx a sheet is hidden when workbook.xml says state="hidden" (or
+#   "veryHidden") for it.
+excel_workbook <- function(path) {
+  names = readxl::excel_sheets(path)
+  plain = data.frame(sheet = names, hidden = NA, part = NA_character_, stringsAsFactors = FALSE)
+  if (!identical(readBin(path, "raw", 2L), as.raw(c(0x50, 0x4b)))) return(plain)
+  tags = xml_tags(zip_text(path, "xl/workbook.xml"), "sheet")
+  if (!identical(xml_attr(tags, "name"), names)) return(plain)
+  rels = xml_tags(zip_text(path, "xl/_rels/workbook.xml.rels"), "Relationship")
+  target = xml_attr(rels, "Target")[match(xml_attr(tags, "r:id"), xml_attr(rels, "Id"))]
+  state = xml_attr(tags, "state")
+  data.frame(sheet = names, hidden = !is.na(state) & state %in% c("hidden", "veryHidden"),
+             part = ifelse(is.na(target), NA_character_, ifelse(startsWith(target, "/"), substring(target, 2L), paste0("xl/", target))),
+             stringsAsFactors = FALSE)
+}
+
+# The merged ranges of one sheet of an .xlsx, each c(row1, column1, row2, column2); none for an .xls (readxl does not say).
+excel_merges <- function(path, part) {
+  if (is.na(part)) return(list())
+  refs = xml_attr(xml_tags(zip_text(path, part), "mergeCell"), "ref")
+  purrr::map(refs[!is.na(refs)], excel_ref)
+}
+
+# A sheet's cells as text from cell A1 (so a row number is the number Excel shows): `label` (the text of each cell, "" where
+#   it is blank), the number of rows and columns. Dates come as their serial numbers here; this is only for finding the
+#   table, and the table itself is read again with readxl's own types.
+excel_grid <- function(path, sheet) {
+  g = tryCatch(suppressMessages(readxl::read_excel(path, sheet = sheet, range = readxl::cell_limits(c(1L, 1L), c(NA_integer_, NA_integer_)),
+                                                   col_names = FALSE, col_types = "text", .name_repair = "minimal")),
+               error = function(e) NULL)
+  if (is.null(g) || !nrow(g) || !ncol(g)) return(list(label = matrix("", 0L, 0L), nr = 0L, nc = 0L))
+  m = as.matrix(g)
+  m[is.na(m)] = ""
+  m = matrix(trimws(m), nrow = nrow(m))
+  list(label = m, nr = nrow(m), nc = ncol(m))
+}
+
+# Runs of TRUE as start and end positions.
+true_runs <- function(flags) {
+  r = rle(as.logical(flags))
+  end = cumsum(r$lengths)
+  data.frame(start = (end - r$lengths + 1L)[r$values], end = end[r$values])
+}
+
+# The blocks of cells on a sheet, found by blank columns and blank rows: columns first (side by side), then rows within each
+#   (stacked). A block of one row (a title, a note, a source line) is not a table; a table has a header and a row. Returns
+#   tables and notes, each with r1, c1, r2, c2 (the edges trimmed to cells that are not blank), tables in reading order.
+excel_blocks <- function(label) {
+  blank = if (length(label)) label == "" else matrix(TRUE, 0L, 0L)
+  none = data.frame(r1 = integer(0), c1 = integer(0), r2 = integer(0), c2 = integer(0))
+  if (!length(blank) || all(blank)) return(list(tables = none, notes = none))
+  cols = true_runs(colSums(!blank) > 0)
+  blocks = dplyr::bind_rows(purrr::map(seq_len(nrow(cols)), function(i) {
+    part = blank[, cols$start[i]:cols$end[i], drop = FALSE]
+    rows = true_runs(rowSums(!part) > 0)
+    dplyr::bind_rows(purrr::map(seq_len(nrow(rows)), function(k) {
+      cells = !blank[rows$start[k]:rows$end[k], cols$start[i]:cols$end[i], drop = FALSE]
+      used = which(colSums(cells) > 0)
+      data.frame(r1 = rows$start[k], c1 = cols$start[i] + min(used) - 1L, r2 = rows$end[k], c2 = cols$start[i] + max(used) - 1L)
+    }))
+  }))
+  blocks = blocks[order(blocks$r1, blocks$c1), ]
+  one_row = blocks$r1 == blocks$r2
+  list(tables = blocks[!one_row, , drop = FALSE], notes = blocks[one_row, , drop = FALSE])
+}
+
+# The words shown for the cells of a row in a sentence or a list.
+excel_shown <- function(x) {
+  x = x[nzchar(x)]
+  purrr::map_chr(x, function(v) if (nchar(v) > EXCEL_SHOWN_CHARS) paste0(substr(v, 1L, EXCEL_SHOWN_CHARS), "...") else v)
+}
+
+# The sheet list for the picker (names and row counts; hidden ones named as hidden) and the table list for the choice.
+rows_word <- function(n) ifelse(n == 1L, " row", " rows")
+excel_sheet_choices <- function(sheets)
+  stats::setNames(sheets$sheet, paste0(sheets$sheet, " (", format_num(sheets$rows), rows_word(sheets$rows),
+                                       if (anyNA(sheets$hidden)) "" else ifelse(sheets$hidden, ", hidden", ""), ")"))
+excel_table_choices <- function(tables)
+  stats::setNames(as.character(seq_len(nrow(tables))),
+                  paste0("Table ", seq_len(nrow(tables)), ": ", tables$range, ", ", format_num(tables$rows), rows_word(tables$rows), ", starting ", tables$starts))
+
+# A column of Excel dates and times: dates when every time is midnight.
+excel_dates <- function(x) if (inherits(x, "POSIXct") && all(is.na(x) | format(x, "%H:%M:%S", tz = "UTC") == "00:00:00")) as.Date(x, tz = "UTC") else x
+
+excel_unreadable <- function(name, e)
+  stop("The file ", name, " could not be read as an Excel workbook: ", gsub("\\s+", " ", conditionMessage(e)), call. = FALSE)
+
+# An Excel sheet read as read_data() reads a delimited file: list(data, problems, encoding) and `excel`, what was found and chosen
+#   (sheets, sheet, tables, table, header, range, ask, hidden_known, numbers and opts, the choices that read the same again).
+#   `data` is NULL while the analyst has not said which of several tables on the sheet (excel$ask is "table").
+read_excel_data <- function(path, name, missing = character(), excel = NULL) {
+  opts = excel %||% list()
+  na = unique(c(DATA_NA, parse_missing(missing)))
+  wb = tryCatch(excel_workbook(path), error = function(e) excel_unreadable(name, e))
+  if (!nrow(wb)) excel_unreadable(name, simpleError("it has no sheets"))
+  grids = stats::setNames(purrr::map(wb$sheet, function(s) tryCatch(excel_grid(path, s), error = function(e) excel_unreadable(name, e))), wb$sheet)
+  sheets = data.frame(sheet = wb$sheet, hidden = wb$hidden, rows = unname(purrr::map_int(grids, function(g) sum(rowSums(g$label != "") > 0))),
+                      stringsAsFactors = FALSE, row.names = NULL)
+  visible = wb$sheet[!(wb$hidden %in% TRUE)]
+  sheet = if (is_text1(opts$sheet)) opts$sheet else if (length(visible)) visible[1] else wb$sheet[1]
+  if (!sheet %in% wb$sheet) stop("The workbook has no sheet called ", sheet, ".", call. = FALSE)
+  grid = grids[[sheet]]
+  merges = excel_merges(path, wb$part[match(sheet, wb$sheet)])
+  blocks = excel_blocks(grid$label)
+  tables = blocks$tables
+  tables$range = excel_range_text(tables$r1, tables$c1, tables$r2, tables$c2)[seq_len(nrow(tables))]
+  tables$rows = tables$r2 - tables$r1 + 1L
+  tables$starts = purrr::map_chr(seq_len(nrow(tables)), function(i)
+    paste(utils::head(excel_shown(grid$label[tables$r1[i], tables$c1[i]:tables$c2[i]]), 4L), collapse = ", "))
+  notes = unname(purrr::map_chr(seq_len(nrow(blocks$notes)), function(i) {
+    n = blocks$notes[i, ]
+    paste0("Row ", n$r1, " (", if (n$c1 == n$c2) paste0(excel_col_letter(n$c1), n$r1) else excel_range_text(n$r1, n$c1, n$r2, n$c2), ") holds a single line of text outside any table (",
+           paste(utils::head(excel_shown(grid$label[n$r1, n$c1:n$c2]), 3L), collapse = ", "), "); it was left out.")
+  }))
+  info = list(sheets = sheets, sheet = sheet, tables = tables, table = NULL, header = NULL, range = NULL, ask = NULL,
+              hidden_known = !anyNA(wb$hidden), numbers = character(0), opts = list(sheet = sheet))
+  lead = c(if (isTRUE(wb$hidden[match(sheet, wb$sheet)])) paste0("The sheet ", sheet, " is hidden in the workbook."),
+           if (anyNA(wb$hidden) && nrow(wb) > 1L)
+             "This is an .xls file, which does not say which sheets are hidden, so the sheet list cannot tell.",
+           notes)
+  if (!nrow(tables))
+    return(list(data = tibble::tibble(), encoding = "UTF-8", excel = info,
+                problems = c(lead, paste0("The sheet ", sheet, " holds no table: no block of cells with a header and at least one row."))))
+  if (nrow(tables) > 1L && is.null(opts$table)) {
+    info$ask = "table"
+    return(list(data = NULL, encoding = "UTF-8", excel = info,
+                problems = c(lead, paste0("The sheet ", sheet, " holds ", nrow(tables), " tables (blocks of cells set apart by a blank row or column). ",
+                                          "Choose one; none is read until you do."))))
+  }
+  pick = if (is.null(opts$table)) 1L else suppressWarnings(as.integer(opts$table))
+  if (is.na(pick) || pick < 1L || pick > nrow(tables))
+    stop("The sheet ", sheet, " has no table ", opts$table, " (it has ", nrow(tables), ").", call. = FALSE)
+  tb = tables[pick, ]
+  info$table = pick
+  if (nrow(tables) > 1L) info$opts$table = pick
+  # The header: the first row of the table with text in most of its columns, once merged cells are filled across; or the row asked for.
+  txt = purrr::reduce(merges, function(t, m) {
+    if (m[4] > m[2] && m[1] <= grid$nr && m[2] <= grid$nc) t[m[1], m[2]:min(m[4], grid$nc)] = t[m[1], m[2]]
+    t
+  }, .init = grid$label)
+  word = txt != "" & is.na(suppressWarnings(as.numeric(txt)))
+  width = tb$c2 - tb$c1 + 1L
+  in_cols = tb$c1:tb$c2
+  most = which(2 * rowSums(word[tb$r1:tb$r2, in_cols, drop = FALSE]) > width)
+  asked = opts$header
+  if (!is.null(asked) && (!is.numeric(asked) || length(asked) != 1L || is.na(asked) || asked != round(asked) || asked < tb$r1 || asked > tb$r2))
+    stop("Row ", paste(asked, collapse = " "), " is not a row of the table (rows ", tb$r1, " to ", tb$r2, " of the sheet ", sheet, "). Choose a row inside it.", call. = FALSE)
+  hrow = if (!is.null(asked)) as.integer(asked) else if (length(most)) tb$r1 + most[1] - 1L else tb$r1
+  info$header = hrow
+  if (!is.null(asked)) info$opts$header = hrow
+  top = txt[hrow, in_cols]
+  below = if (hrow < tb$r2) txt[hrow + 1L, in_cols] else rep("", width)
+  merged = any(purrr::map_lgl(merges, function(m) m[1] == hrow && m[4] > m[2] && m[2] <= tb$c2 && m[4] >= tb$c1))
+  joined = merged && any(nzchar(below))
+  header_names = if (joined) purrr::map2_chr(top, below, function(a, b) paste(unique(c(a, b)[nzchar(c(a, b))]), collapse = " ")) else top
+  names_fixed = repair_names(header_names)
+  first = hrow + 1L + joined
+  info$range = if (first <= tb$r2) excel_range_text(first, tb$c1, tb$r2, tb$c2)
+  above = hrow - tb$r1
+  header_notes = c(if (is.null(asked) && !length(most))
+                     paste0("No row of the table has text in most columns, so row ", hrow, " is read as the header; change it under 'Header is on row'."),
+                   if (above > 0L) paste0(if (above == 1L) "Row " else "Rows ", tb$r1, if (above > 1L) paste0(" to ", hrow - 1L), " above the header ",
+                                          if (above == 1L) "was" else "were", " left out."),
+                   if (joined) paste0("The header joins the merged cells of row ", hrow, " with row ", hrow + 1L,
+                                      " (for example ", excel_shown(header_names[nzchar(below)][1]), ")."))
+  raw = if (first <= tb$r2)
+    tryCatch(suppressWarnings(suppressMessages(readxl::read_excel(path, sheet = sheet, range = readxl::cell_limits(c(first, tb$c1), c(tb$r2, tb$c2)),
+                                                                  col_names = FALSE, na = na, trim_ws = TRUE, guess_max = tb$r2 - first + 1L,
+                                                                  .name_repair = "minimal"))),
+             error = function(e) excel_unreadable(name, e))
+  cols = if (is.null(raw)) rep(list(logical(0)), width)
+         else c(as.list(raw), rep(list(rep(NA, nrow(raw))), max(0L, width - ncol(raw))))[seq_len(width)]
+  data = tibble::as_tibble(stats::setNames(purrr::map(cols, excel_dates), names_fixed$names))
+  offered = text_number_columns(data)
+  wanted = intersect(as.character(opts$numbers %||% character(0)), offered)
+  data[wanted] = purrr::map(as.list(data)[wanted], number_from_text)
+  info$numbers = wanted
+  if (length(wanted)) info$opts$numbers = wanted
+  left = setdiff(offered, wanted)
+  text_note = function(nm) paste0("Column ", nm, " holds only numbers, but the sheet stores them as text (for example ",
+                                  paste0("'", utils::head(unique(as.list(data)[[nm]]), 2L), "'", collapse = ", "), "), so it is read as text. The chat offers to read it as numbers.")
+  problems = c(lead, header_notes, names_fixed$notes,
+               purrr::map_chr(left, text_note),
+               purrr::map_chr(wanted, function(nm) paste0("Column ", nm, " was read as numbers: the sheet stores them as text.")),
+               column_problems(data[setdiff(names(data), left)]),
+               if (!nrow(data)) "The table has a header and no rows.",
+               if (ncol(data) == 1L) "The table has only one column.")
+  list(data = data, problems = as.character(problems), encoding = "UTF-8", excel = info)
+}
 
 # ---- B2. profile and type ----------------------------------------------------------------
 
@@ -357,6 +615,16 @@ codebook_source <- function(cb, source = NULL) {
   cb
 }
 
+# The sheet an Excel file was read from, three more optional file-level fields (after row_is): `sheet`, `range` (the cells of the rows read,
+#   such as "B4:F20", so the code of a chart can read just them) and `text_numbers` (the columns of text that were read as numbers). A
+#   delimited file has none of them.
+codebook_sheet <- function(cb, excel = NULL) {
+  cb$sheet = NULL; cb$range = NULL; cb$text_numbers = NULL
+  if (is.null(excel) || is.null(excel$sheet)) return(cb)
+  append(cb, c(list(sheet = excel$sheet), if (is_text1(excel$range)) list(range = excel$range),
+               if (length(excel$numbers)) list(text_numbers = as.list(excel$numbers))), after = match("row_is", names(cb)))
+}
+
 write_codebook <- function(cb, path) {
   yaml::write_yaml(cb, path, precision = YAML_PRECISION, fileEncoding = "UTF-8")
   invisible(path)
@@ -422,13 +690,14 @@ check_codebook <- function(cb, profile) {
 
 # The codebook for the file in hand with what an uploaded one decides: label, label_source,
 #   type, role, an ordered column's order and row_is. Every fact comes from the profile.
-apply_codebook <- function(cb, profile, file, rows, encoding = "UTF-8") {
+apply_codebook <- function(cb, profile, file, rows, encoding = "UTF-8", excel = NULL) {
   why = check_codebook(cb, profile)
   if (length(why)) stop(paste(why, collapse = " "), call. = FALSE)
   up = stats::setNames(cb$columns, purrr::map_chr(cb$columns, "name"))
   out = new_codebook(profile, file, rows, missing_codes(cb), encoding)
   out$row_is = if (is.character(cb$row_is) && length(cb$row_is) == 1L) cb$row_is else ""
   out = codebook_source(out, cb$source)
+  out = codebook_sheet(out, excel)
   out$columns = purrr::map(profile, function(p) {
     e = up[[p$name]]
     codebook_entry(p, label = e$label, label_source = e$label_source, type = e$type, role = e$role, order = e$order,
@@ -441,10 +710,11 @@ apply_codebook <- function(cb, profile, file, rows, encoding = "UTF-8") {
 #   for every column whose name is unchanged, its label, label source and role, and its type and
 #   order when the data can still be them; and the row sentence. Returns read (data and problems),
 #   profile, codebook and notes (a sentence for each type, order or role that had to be dropped).
-reread_data <- function(path, name, missing, old = NULL, encoding = NULL) {
-  r = read_data(path, name, missing, encoding)
+reread_data <- function(path, name, missing, old = NULL, encoding = NULL, excel = NULL) {
+  r = read_data(path, name, missing, encoding, excel)
+  if (is.null(r$data)) return(list(read = r, profile = NULL, codebook = NULL, notes = character(0)))   # an Excel sheet with several tables: none chosen yet
   prof = profile_data(r$data)
-  cb = new_codebook(prof, name, nrow(r$data), missing, r$encoding)
+  cb = codebook_sheet(new_codebook(prof, name, nrow(r$data), missing, r$encoding), r$excel)
   if (is.null(old)) return(list(read = r, profile = prof, codebook = cb, notes = character(0)))
   before = stats::setNames(old$columns, purrr::map_chr(old$columns, "name"))
   carried = purrr::map(cb$columns, function(e) {
