@@ -1979,7 +1979,7 @@ if (!is.null(ball_g)) {
   k_last <- b6_run(list(list(ask = "Which?")), "and now?", last = list(message = "first", reply = "second"))
   k_chain <- b6_run(list(list(ask = "Which?")), "third", last = k_ask$r$last)
   check("6-B 18: LAST EXCHANGE gives the one turn passed back, between SELECTED and ANALYST:; the next turn is given the last one's own last",
-        grepl("</SELECTED>\n\nLAST EXCHANGE\nANALYST: first\nREPLY: second\n\nANALYST: and now?\n\nREPLY FORMAT", k_last$si$sent[[1]]$user, fixed = TRUE) &&
+        grepl("(?s)</SELECTED>\n\n(<FACTS>.*</FACTS>\n\n)?LAST EXCHANGE\nANALYST: first\nREPLY: second\n\nANALYST: and now[?]\n\nREPLY FORMAT", k_last$si$sent[[1]]$user, perl = TRUE) &&
           lengths(gregexpr("LAST EXCHANGE", k_last$si$sent[[1]]$user, fixed = TRUE)) == 1L &&
           grepl("LAST EXCHANGE\nANALYST: only one league\nREPLY: Which league?\n\nANALYST: third", k_chain$si$sent[[1]]$user, fixed = TRUE))
 }
@@ -5237,22 +5237,25 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8c_st2, ask 
   session$setInputs(export = 1)
   m <- p8c_modal_html()
   p8c_d$m1 <- m
+  mw <- gsub("&#39;", "'", paste(as.character(output$dash_warns$html), collapse = ""), fixed = TRUE)   # the warnings follow the switches (Phase 11 Part E): an output of their own
   p8c_d$fields <- grepl("Export dashboard", m, fixed = TRUE) && grepl("dash_title", m, fixed = TRUE) && grepl("value=\"Dashboard: sales.csv\"", m, fixed = TRUE) && grepl("dash_subtitle", m, fixed = TRUE) &&
     grepl("dash_author", m, fixed = TRUE) && grepl("dash_date", m, fixed = TRUE) && grepl(format(Sys.Date()), m, fixed = TRUE) && grepl("<textarea[^>]*dash_intro", m) &&
     grepl(htmltools::htmlEscape(DASH_INTRO_NOTE), m, fixed = TRUE) && grepl("not checked by the number check", m, fixed = TRUE) &&
     lengths(gregexpr("type=\"checkbox\" name=\"proxy1-dash_boxes\"", m, fixed = TRUE)) == 3L && lengths(gregexpr("name=\"proxy1-dash_boxes\"[^>]*checked", m)) == 3L &&
     grepl(">Rows<", m, fixed = TRUE) && grepl(">Columns<", m, fixed = TRUE) && grepl(">Period<", m, fixed = TRUE)
-  titles_at <- purrr::map_int(c("1. Price by region", "2. Orders by region", "3. Price of an order"), function(t) regexpr(t, m, fixed = TRUE)[[1]])
-  p8c_d$charts <- all(titles_at > 0L) && !is.unsorted(titles_at) && !grepl("Units against price", m, fixed = TRUE) && lengths(gregexpr("<img src=\"data:image/png;base64,", m, fixed = TRUE)) == 3L &&
-    all(purrr::map_lgl(c("c4", "c1", "c3"), function(i) lengths(gregexpr(paste0("name=\"proxy1-dash_mode_", i, "\""), m, fixed = TRUE)) == 3L)) && !grepl("dash_mode_c2", m, fixed = TRUE) &&   # picture, interactive or video (Phase 9 Part B: was two)
+  # Phase 11 Part E: the dialog lists every card with a switch, so the one that is switched off is there, its switch off (it was left out of the list before)
+  titles_at <- purrr::map_int(c("Price by region", "Orders by region", "Price of an order"), function(t) regexpr(t, m, fixed = TRUE)[[1]])
+  p8c_d$charts <- all(titles_at > 0L) && !is.unsorted(titles_at) && grepl("Units against price", m, fixed = TRUE) && lengths(gregexpr("<img src=\"data:image/png;base64,", m, fixed = TRUE)) == 4L &&
+    all(purrr::map_lgl(c("c4", "c1", "c3"), function(i) lengths(gregexpr(paste0("name=\"proxy1-dash_mode_", i, "\""), m, fixed = TRUE)) == 3L)) && lengths(gregexpr("id=\"proxy1-dash_in_c[0-9]\"[^>]*checked", m)) == 3L &&
+    lengths(gregexpr("id=\"proxy1-dash_in_c[0-9]\"", m)) == 4L && !grepl("id=\"proxy1-dash_in_c2\"[^>]*checked", m) &&   # picture, interactive or video (Phase 9 Part B: was two)
     grepl("Orders are spread across four regions", m, fixed = TRUE) && grepl("Move up and Move down", m, fixed = TRUE) &&
-    lengths(gregexpr("name=\"proxy1-dash_mode_[a-z0-9]+\" value=\"picture\" checked", m)) == 3L
-  p8c_d$warn <- grepl("No headline yet: Price of an order. The page shows the chart's title in its place.", gsub("&#39;", "'", m, fixed = TRUE), fixed = TRUE) &&
-    grepl("Marked as changed since it was written: Price by region.", m, fixed = TRUE) && !grepl(PALETTE_CVD_WARNING, m, fixed = TRUE) && !grepl("No headline yet: [^.]*Orders by region", m)
+    lengths(gregexpr("name=\"proxy1-dash_mode_[a-z0-9]+\" value=\"picture\" checked", m)) == 4L
+  p8c_d$warn <- grepl("No headline yet: Price of an order. The page shows the chart's title in its place.", mw, fixed = TRUE) &&
+    grepl("Marked as changed since it was written: Price by region.", mw, fixed = TRUE) && !grepl(PALETTE_CVD_WARNING, mw, fixed = TRUE) && !grepl("No headline yet: [^.]*Orders by region", mw)
   # a chosen palette that fails the colour-vision mark is warned of, in the dialog
   session$setInputs(pal_sequential = "ylgnbu")
   session$setInputs(export = 2)
-  m2 <- p8c_modal_html()
+  m2 <- paste(as.character(output$dash_warns$html), collapse = "")
   p8c_d$palette <- !palette_passes("ylgnbu") && grepl(PALETTE_CVD_WARNING, m2, fixed = TRUE) && grepl("sequential fill palette", m2, fixed = TRUE)
   session$setInputs(pal_sequential = "viridis")
   # the choice per chart: the default is a picture for a chart drawn from rows (the box) even when its card is interactive, and the card's view for a bar
@@ -6274,8 +6277,9 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = p9d_xs, ask =
   p9d_xe$modal <- grepl("Summary table", m, fixed = TRUE) && grepl("1. Score alone", m, fixed = TRUE) && grepl("2. Score and rating by group", m, fixed = TRUE) && grepl("3. Score by group", m, fixed = TRUE) &&
     grepl("Columns: score, rating; by grp", m, fixed = TRUE) && !grepl("dash_mode_t", m, fixed = TRUE) && !grepl("<img", m, fixed = TRUE) && grepl("each summary table as a CSV", m, fixed = TRUE) &&
     grepl("No chart in the dashboard has a line of facts that can be a key number", m, fixed = TRUE) && !grepl("No headline yet", m, fixed = TRUE)
-  p9d_xe$warn <- lengths(gregexpr("fewer than 5 rows", m, fixed = TRUE)) == 1L && grepl("which can describe individuals", m, fixed = TRUE) && grepl("Nothing is hidden", m, fixed = TRUE) &&
-    grepl("Marked in: Score and rating by group; Score by group.", m, fixed = TRUE) && !grepl("Marked in:[^.]*Score alone", m)
+  mw <- paste(as.character(output$dash_warns$html), collapse = "")   # the warnings are an output of their own since Phase 11 Part E
+  p9d_xe$warn <- lengths(gregexpr("fewer than 5 rows", mw, fixed = TRUE)) == 1L && grepl("which can describe individuals", mw, fixed = TRUE) && grepl("Nothing is hidden", mw, fixed = TRUE) &&
+    grepl("Marked in: Score and rating by group; Score by group.", mw, fixed = TRUE) && !grepl("Marked in:[^.]*Score alone", mw)
   # the build with tables: a zip with the tables as CSV
   session$setInputs(dash_title = "T", dash_subtitle = "", dash_author = "", dash_intro = "", dash_boxes = c("rows", "columns", "third"), dash_build = 1)
   res <- dash_result()
@@ -6285,7 +6289,7 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = p9d_xs, ask =
   session$setInputs(t1_remove = 1)
   session$setInputs(t2_remove = 1)
   session$setInputs(export = 2)
-  p9d_xe$no_warn <- !grepl("fewer than 5 rows", shown(), fixed = TRUE) && identical(p9d_xs$canvas, "t3") && !length(p9d_xs$tables$t1) && !length(p9d_xs$tables$t2)
+  p9d_xe$no_warn <- !grepl("fewer than 5 rows", paste(shown(), paste(as.character(output$dash_warns$html), collapse = "")), fixed = TRUE) && identical(p9d_xs$canvas, "t3") && !length(p9d_xs$tables$t1) && !length(p9d_xs$tables$t2)
   # a table out of the dashboard is not an export item; with every card out the dialog says so
   session$setInputs(t3_dash = FALSE)
   session$setInputs(export = 3)
@@ -9674,6 +9678,496 @@ check("11D-14: nothing is written to the workbook: the checksum of every workboo
       identical(d11_before, d11_after) && !anyNA(d11_after) && setequal(list.files(d11_dir), basename(d11_files)))
 }   # the fast run only
 # <<< 11D end
+
+# >>> 11E begin
+# No model call. Phase 11 Part E: a dashboard the analyst arranges, and questions about a chart. Order by dragging (the server's side of it: where a card or a section
+#   lands) and by the Move buttons; sections (a heading card, the cards under it up to the next heading, collapse, moved with its cards, left out as a whole); text
+#   edited where it stands, with the number and word checks; the export dialog as a list of sections and cards with a switch each; the page with the order, the
+#   sections and the switches; and the chat's message with the selected chart's FACTS (names as placeholders) so that a question about the chart is a `tell` checked
+#   against them. The model is a stand-in (the transport is the `ask` function, as in the earlier phases). Self-contained, so a changed copy of one function of R/
+#   can be run against it alone (tests/mutate_11E.R). What no check here does: a drag with a mouse (the page's script is looked at in the browser, and its text is
+#   read here), and a click in the page (the server's side of an edit is called with what the page sends).
+if (run_fast) {   # the fast run only; not indented, to keep the diff small
+e11_json <- function(x) as.character(jsonlite::toJSON(x, auto_unbox = TRUE))
+e11_read <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+e11_cb <- utils::modifyList(e11_read$codebook, list(row_is = "one order"))
+e11_data <- e11_read$read$data
+e11_state <- function()
+  shiny::reactiveValues(key_version = 0L, data = e11_data, problems = e11_read$read$problems, profile = e11_read$profile, codebook = e11_cb,
+                        path = file.path("tests", "data", "orders.csv"), calls = NULL, charts = list(), canvas = character(0), stories = list(), tables = list(),
+                        sections = list(), palette = chart_palette_default())
+e11_specs <- list(
+  list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Revenue by region", sort = "value_desc"),
+  list(family = "bar", x = "channel", y = "revenue", fn = "sum", title = "Revenue by channel", sort = "value_desc"),
+  list(family = "bar", x = "product_category", y = "units", fn = "sum", title = "Units by product category", sort = "value_desc"),
+  list(family = "line", x = "order_month", y = "revenue", fn = "sum", title = "Monthly revenue"),
+  list(family = "bar", x = "priority", fn = "count", title = "Orders by priority"),
+  list(family = "histogram", x = "units", title = "How many units an order has"))
+# The stand-in model. `reply` is a function of the message that gives the object; the headline call is answered for the charts it names.
+e11_si <- new.env()
+e11_si$sent <- list()
+e11_si$reply <- function(user) list(ask = "Which?")
+e11_si$ask <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL, images = NULL, ...) {
+  e11_si$sent[[length(e11_si$sent) + 1L]] <- list(user = user, system = system_prompt)
+  obj <- if (grepl("<CHARTS>", user, fixed = TRUE)) {
+    ids <- regmatches(user, gregexpr("(?<=CHART )c[0-9]+", user, perl = TRUE))[[1]]
+    list(charts = purrr::map(ids, function(i) if (identical(i, "c1")) list(id = i, headline = "West is the highest, at 940,000", summary = "West has the highest revenue, 940,000, and Central the lowest, 206,000.")
+                             else list(id = i, headline = paste("Chart", i, "at a glance"), summary = "The chart shows how the values compare.")))
+  } else e11_si$reply(user)
+  if (!is.null(validate)) validate(obj)
+  list(obj = obj, raw = e11_json(obj), finish = "success", tokens = c(100, 20, 0), user_sent = user, model = "stand-in", attempts = 1L, seconds = 0.1, refused = list())
+}
+e11_seen <- new.env()
+e11_build <- function(items, data, cb, palette, settings, path, zip_file, ...) {
+  e11_seen$items <- items
+  e11_seen$settings <- settings
+  file.create(zip_file)
+  list(zip = zip_file, bytes = 0, seconds = 0, files = character(0), modes = purrr::map_chr(items, "mode"), full = rep(FALSE, length(items)),
+       fallbacks = stats::setNames(rep(NA_character_, length(items)), purrr::map_chr(items, function(it) it$id)), fallback_of = character(0), device = "stand-in")
+}
+
+# ---- the order of the canvas, as functions of ids ------------------------------------------------------------------------------
+e11_ids <- c("c1", "c2", "s1", "c3", "c4", "s2", "c5", "c6")
+e11_secs <- c("s1", "s2")
+e11_blocks <- canvas_blocks(e11_ids, e11_secs)
+check("11E-1: the canvas is a list of ids and a heading owns the cards under it up to the next heading: the section of each id (a heading stands under itself, the cards before the first heading under none), the blocks (the headless cards first), a card dropped before or after another card or on a heading (the lower half of a heading makes it the first of its section), a section dropped on a card of another section lands before or after that section whole and never inside it, a drop on itself or on its own cards changes nothing, and a section moved by one goes past the block next to it with its cards (the first cannot go up, nor the last down)",
+      identical(canvas_section_of(e11_ids, e11_secs), c(NA, NA, "s1", "s1", "s1", "s2", "s2", "s2")) && identical(canvas_section_of(character(0), e11_secs), character(0)) &&
+        identical(e11_blocks, list(c("c1", "c2"), c("s1", "c3", "c4"), c("s2", "c5", "c6"))) && identical(canvas_blocks(c("s1", "c1"), "s1"), list(c("s1", "c1"))) &&
+        identical(canvas_reorder(e11_ids, e11_secs, "c5", "c1", FALSE), c("c5", "c1", "c2", "s1", "c3", "c4", "s2", "c6")) &&
+        identical(canvas_reorder(e11_ids, e11_secs, "c1", "c4", TRUE), c("c2", "s1", "c3", "c4", "c1", "s2", "c5", "c6")) &&
+        identical(canvas_reorder(e11_ids, e11_secs, "c1", "s2", TRUE), c("c2", "s1", "c3", "c4", "s2", "c1", "c5", "c6")) &&
+        identical(canvas_section_of(canvas_reorder(e11_ids, e11_secs, "c1", "s2", TRUE), e11_secs)[6], "s2") &&
+        identical(canvas_reorder(e11_ids, e11_secs, "s2", "c3", FALSE), c("c1", "c2", "s2", "c5", "c6", "s1", "c3", "c4")) &&
+        identical(canvas_reorder(e11_ids, e11_secs, "s1", "c6", TRUE), c("c1", "c2", "s2", "c5", "c6", "s1", "c3", "c4")) &&
+        identical(canvas_reorder(e11_ids, e11_secs, "s1", "c4", TRUE), e11_ids) && identical(canvas_reorder(e11_ids, e11_secs, "c3", "c3", TRUE), e11_ids) &&
+        identical(canvas_reorder(e11_ids, e11_secs, "c9", "c3", TRUE), e11_ids) && identical(canvas_reorder(e11_ids, e11_secs, "c3", "c9", TRUE), e11_ids) &&
+        identical(canvas_move_block(e11_ids, e11_secs, "s2", -1L), c("c1", "c2", "s2", "c5", "c6", "s1", "c3", "c4")) &&
+        identical(canvas_move_block(e11_ids, e11_secs, "s1", 1L), c("c1", "c2", "s2", "c5", "c6", "s1", "c3", "c4")) &&
+        identical(canvas_move_block(e11_ids, e11_secs, "s1", -1L), c("s1", "c3", "c4", "c1", "c2", "s2", "c5", "c6")) &&
+        identical(canvas_move_block(e11_ids, e11_secs, "s2", 1L), e11_ids) && identical(canvas_move_block(c("s1", "c1", "s2", "c2"), e11_secs, "s1", -1L), c("s1", "c1", "s2", "c2")) &&
+        identical(dash_layout_by(c(FALSE, FALSE, FALSE, FALSE, FALSE), c("", "s1", "s1", "s1", "s2")), c(TRUE, FALSE, FALSE, TRUE, TRUE)) &&
+        identical(dash_layout_by(c(FALSE, FALSE, FALSE), c("", "", "")), dash_layout(c(FALSE, FALSE, FALSE))) && identical(dash_layout_by(logical(0), character(0)), logical(0)))
+
+# ---- in the app: six cards, two sections, dragging, Move, collapse, the switches, the order that reaches the export ---------------------
+e11_out <- new.env()
+e11_shown <- new.env()
+e11_old_show <- get0("showModal", envir = globalenv(), inherits = FALSE)
+assign("showModal", function(ui, session = NULL) assign("modal", ui, envir = e11_shown), envir = globalenv())
+e11_st <- e11_state()
+e11_si$reply <- function(user) {
+  q <- sub("(?s)^.*\nANALYST: (.*)\n\nREPLY FORMAT\n.*$", "\\1", user, perl = TRUE)
+  if (identical(q, "six charts")) list(charts = e11_specs) else list(ask = "Which?")
+}
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = e11_st, ask = e11_si$ask, build = e11_build), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  at <- function(h, id) regexpr(paste0(id, "_card"), h, fixed = TRUE)[[1]]
+  squash <- function(h) gsub(">[[:space:]]+<", "><", h)
+  session$setInputs(chat_user_input = "six charts")
+  e11_out$six <- identical(isolate(state$canvas), paste0("c", 1:6)) && length(isolate(state$sections)) == 0L && grepl(">Add a section<", html("bar"), fixed = TRUE) &&
+    grepl(">6 charts<", html("bar"), fixed = TRUE)
+  # "Add a section" with nothing selected: at the top; with a card selected: before it
+  session$setInputs(add_section = 1)
+  session$setInputs(c4_select = 1)
+  session$setInputs(add_section = 2)
+  secs <- section_ids()
+  e11_out$added <- identical(isolate(state$canvas), c("s1", "c1", "c2", "c3", "s2", "c4", "c5", "c6")) && identical(secs, c("s1", "s2")) && identical(isolate(state$sections$s1$title), SECTION_TITLE_DEFAULT) &&
+    identical(isolate(state$sections$s1$text), "") && identical(canvas_section_of(isolate(state$canvas), secs), c("s1", "s1", "s1", "s1", "s2", "s2", "s2", "s2")) &&
+    grepl(">6 charts, 2 sections<", html("bar"), fixed = TRUE) && grepl("6 of 6 in the dashboard", html("bar"), fixed = TRUE)
+  # the heading card's words, edited where they stand
+  session$setInputs(s1_ed = list(field = "title", value = "Where the money is", t = 1))
+  session$setInputs(s1_ed = list(field = "text", value = "Revenue and units, by the usual cuts.", t = 2))
+  session$setInputs(s2_ed = list(field = "title", value = "Over time and shape", t = 3))
+  session$setInputs(s2_ed = list(field = "title", value = "   ", t = 4))
+  e11_out$section_words <- identical(isolate(state$sections$s1$title), "Where the money is") && identical(isolate(state$sections$s1$text), "Revenue and units, by the usual cuts.") &&
+    identical(isolate(state$sections$s2$title), SECTION_TITLE_DEFAULT) && grepl("Where the money is", html("s1_card"), fixed = TRUE) && grepl("Revenue and units, by the usual cuts.", html("s1_card"), fixed = TRUE) &&
+    grepl("Click to add a line of text", html("s2_card"), fixed = TRUE)
+  session$setInputs(s2_ed = list(field = "title", value = "Over time and shape", t = 5))
+  # the canvas: each section's heading, then its cards (a heading before its cards), in the order of the canvas
+  h <- html("cards")
+  e11_out$layout <- at(h, "s1") > 0L && at(h, "s1") < at(h, "c1") && at(h, "c1") < at(h, "c2") && at(h, "c3") < at(h, "s2") && at(h, "s2") < at(h, "c4") && at(h, "c4") < at(h, "c6") &&
+    lengths(gregexpr("bslib-grid", h, fixed = TRUE)) >= 2L
+  # the card carries what the script needs: the id it lands on, a handle that can be picked up, the words as targets of an edit
+  c1h <- html("c1_card")
+  s1h <- html("s1_card")
+  e11_out$markup <- grepl("data-canvas-id=\"c1\"", c1h, fixed = TRUE) && grepl("class=\"chart-drag\"", c1h, fixed = TRUE) && grepl("draggable=\"true\"", c1h, fixed = TRUE) &&
+    grepl("data-field=\"title\"", c1h, fixed = TRUE) && grepl("data-input=\"proxy1-c1_ed\"", c1h, fixed = TRUE) && grepl("data-canvas-id=\"s1\"", s1h, fixed = TRUE) && grepl("draggable=\"true\"", s1h, fixed = TRUE) &&
+    grepl("data-field=\"text\"", s1h, fixed = TRUE) && grepl(">Collapse<", squash(s1h), fixed = TRUE) && grepl(">Remove section<", squash(s1h), fixed = TRUE) && grepl(">Move up<", squash(s1h), fixed = TRUE) &&
+    grepl("data-drop-input=\"x-canvas_move\"", paste(as.character(mod_explore_ui("x")), collapse = ""), fixed = TRUE)
+  # dragging: a card on another card, before or after; a card on a heading; a section on a card (with its cards); bad input does nothing
+  session$setInputs(canvas_move = list(id = "c5", target = "c1", after = FALSE, t = 1))
+  after_drag1 <- isolate(state$canvas)
+  session$setInputs(canvas_move = list(id = "c5", target = "c4", after = FALSE, t = 2))
+  after_drag2 <- isolate(state$canvas)
+  session$setInputs(canvas_move = list(id = "c2", target = "s2", after = TRUE, t = 3))
+  after_drag3 <- isolate(state$canvas)
+  session$setInputs(canvas_move = list(id = "nothing", target = "c1", after = TRUE, t = 4))
+  session$setInputs(canvas_move = list(id = "c1", target = "c1", after = TRUE, t = 5))
+  session$setInputs(canvas_move = "c1")
+  after_bad <- isolate(state$canvas)
+  e11_out$drag <- identical(after_drag1, c("s1", "c5", "c1", "c2", "c3", "s2", "c4", "c6")) && identical(after_drag2, c("s1", "c1", "c2", "c3", "s2", "c5", "c4", "c6")) &&
+    identical(after_drag3, c("s1", "c1", "c3", "s2", "c2", "c5", "c4", "c6")) && identical(after_bad, after_drag3) &&
+    identical(canvas_section_of(after_drag3, secs)[match("c2", after_drag3)], "s2")
+  # the Move buttons, the keyboard's way: a card goes one place (past a heading it changes section), the first cannot go up and the last cannot go down
+  isolate(state$canvas <- c("s1", "c1", "c2", "c3", "s2", "c4", "c5", "c6"))
+  session$setInputs(c1_down = 1)
+  b1 <- isolate(state$canvas)
+  session$setInputs(c3_up = 1)
+  b2 <- isolate(state$canvas)
+  session$setInputs(c1_down = 2)
+  b3 <- isolate(state$canvas)
+  session$setInputs(s1_up = 1)
+  session$setInputs(c6_down = 1)
+  e11_out$buttons <- identical(b1, c("s1", "c2", "c1", "c3", "s2", "c4", "c5", "c6")) && identical(b2, c("s1", "c2", "c3", "c1", "s2", "c4", "c5", "c6")) &&
+    identical(b3, c("s1", "c2", "c3", "s2", "c1", "c4", "c5", "c6")) && identical(isolate(state$canvas), b3) && identical(canvas_section_of(b3, secs)[match("c1", b3)], "s2")
+  isolate(state$canvas <- c("s1", "c1", "c2", "c3", "s2", "c4", "c5", "c6"))
+  session$setInputs(s2_up = 1)
+  moved_up <- isolate(state$canvas)
+  session$setInputs(s2_up = 2)
+  stays <- isolate(state$canvas)
+  session$setInputs(s1_down = 1)
+  moved_down <- isolate(state$canvas)
+  e11_out$move_section <- identical(moved_up, c("s2", "c4", "c5", "c6", "s1", "c1", "c2", "c3")) && identical(stays, moved_up) && identical(moved_down, moved_up) &&
+    identical(isolate(state$canvas), moved_up) && grepl("disabled", regmatches(squash(html("s2_card")), regexpr("<button[^>]*s2_up[^>]*>", squash(html("s2_card"))))) &&
+    !grepl("disabled", regmatches(squash(html("s2_card")), regexpr("<button[^>]*s2_down[^>]*>", squash(html("s2_card")))))
+  session$setInputs(s1_up = 2)
+  back <- isolate(state$canvas)
+  e11_out$move_back <- identical(back, c("s1", "c1", "c2", "c3", "s2", "c4", "c5", "c6"))
+  isolate(state$canvas <- c("s1", "c1", "c2", "c3", "s2", "c4", "c5", "c6"))
+  session$flushReact()
+  # the export follows the order: the stand-in builder is given the items in the canvas order, each with its section
+  isolate(state$canvas <- c("s2", "c4", "c5", "c6", "s1", "c1", "c2", "c3"))
+  session$setInputs(dash_build = 1)
+  seen_order <- purrr::map_chr(e11_seen$items, "id")
+  seen_sections <- purrr::map_chr(e11_seen$items, function(it) it$section$id %||% "")
+  e11_out$export_order <- identical(seen_order, c("c4", "c5", "c6", "c1", "c2", "c3")) && identical(seen_sections, c("s2", "s2", "s2", "s1", "s1", "s1")) &&
+    identical(e11_seen$items[[1]]$section$title, "Over time and shape") && identical(e11_seen$items[[4]]$section$text, "Revenue and units, by the usual cuts.")
+  isolate(state$canvas <- c("s1", "c1", "c2", "c3", "s2", "c4", "c5", "c6"))
+  # collapse: the cards under it go from the canvas (the cards' outputs stay); the export is not changed; expand brings them back
+  session$setInputs(s1_collapse = 1)
+  hc <- html("cards")
+  e11_out$collapsed <- isTRUE(isolate(state$sections$s1$collapsed)) && at(hc, "c1") < 0L && at(hc, "c2") < 0L && at(hc, "c3") < 0L && at(hc, "s1") > 0L && at(hc, "c4") > at(hc, "s2") &&
+    identical(purrr::map_chr(dash_items(), "id"), paste0("c", 1:6)) && grepl(">Expand<", squash(html("s1_card")), fixed = TRUE) && grepl("3 cards \\(hidden\\)", html("s1_card")) && grepl("aria-expanded=\"false\"", html("s1_card"), fixed = TRUE)
+  session$setInputs(s1_collapse = 2)
+  he <- html("cards")
+  e11_out$expanded <- !isTRUE(isolate(state$sections$s1$collapsed)) && at(he, "c1") > at(he, "s1") && at(he, "c3") > 0L && grepl(">Collapse<", squash(html("s1_card")), fixed = TRUE)
+  # the switches: a section that is off leaves out its cards (their own switches stay on); a card that is off is left out; the dialog's switch is the card's
+  session$setInputs(s2_dash = FALSE)
+  off_section <- purrr::map_chr(dash_items(), "id")
+  cards_still_on <- all(purrr::map_lgl(c("c4", "c5", "c6"), in_dash))
+  bar_off <- html("bar")
+  session$setInputs(s2_dash = TRUE)
+  session$setInputs(c2_dash = FALSE)
+  off_card <- purrr::map_chr(dash_items(), "id")
+  session$setInputs(export = 1)
+  session$setInputs(dash_in_c2 = TRUE, dash_in_s1 = FALSE)
+  via_dialog <- list(items = purrr::map_chr(dash_items(), "id"), c2 = in_dash("c2"), s1 = in_dash("s1"), card_c1 = in_dash("c1"))
+  session$setInputs(dash_in_s1 = TRUE, dash_in_c5 = FALSE)
+  via_dialog2 <- purrr::map_chr(dash_items(), "id")
+  session$setInputs(dash_in_c5 = TRUE)
+  e11_out$switches <- identical(off_section, paste0("c", 1:3)) && cards_still_on && grepl("3 of 6 in the dashboard", bar_off, fixed = TRUE) && identical(off_card, c("c1", "c3", "c4", "c5", "c6")) &&
+    identical(via_dialog$items, c("c4", "c5", "c6")) && isTRUE(via_dialog$c2) && !isTRUE(via_dialog$s1) && isTRUE(via_dialog$card_c1) && identical(via_dialog2, c("c1", "c2", "c3", "c4", "c6")) &&
+    identical(purrr::map_chr(dash_items(), "id"), paste0("c", 1:6))
+  # nothing in the dashboard: the dialog says so and the build is refused in words
+  session$setInputs(s1_dash = FALSE, s2_dash = FALSE)
+  session$setInputs(export = 2)
+  m_none <- paste(as.character(e11_shown$modal), collapse = "")
+  session$setInputs(dash_build = 2)
+  refused <- isolate(dash_result())
+  e11_out$none <- length(dash_items()) == 0L && grepl("No chart is in the dashboard", m_none, fixed = TRUE) && isTRUE(refused$refused) && grepl("every card, or every section, is switched off", refused$lines, fixed = TRUE)
+  session$setInputs(s1_dash = TRUE, s2_dash = TRUE)
+  # the dialog: the dashboard as it will be, sections and cards in order, a switch on each, the form of each card, a small picture of each chart
+  session$setInputs(c2_dash = TRUE)
+  session$setInputs(export = 3)
+  e11_out$dialog_html <- paste(as.character(e11_shown$modal), collapse = "")
+}), error = function(e) message("note  a Part E screen scenario stopped: ", conditionMessage(e)), finally = if (is.null(e11_old_show)) rm("showModal", envir = globalenv()) else assign("showModal", e11_old_show, envir = globalenv()))
+check("11E-2: in the app, with six charts: \"Add a section\" puts a heading card at the top of the canvas, or before the selected card; the bar counts the sections and counts only cards in \"x of y in the dashboard\"; a heading's title and line of text are edited where they stand (a blank title is the default one); the canvas shows each heading before its cards, in blocks; a card and a heading carry the id they land on, a handle that can be picked up, and their words as targets of an edit; the page's drop input is named in the canvas",
+      isTRUE(e11_out$six) && isTRUE(e11_out$added) && isTRUE(e11_out$section_words) && isTRUE(e11_out$layout) && isTRUE(e11_out$markup))
+check("11E-3: dragging reaches the canvas: a card dropped on another card goes before or after it, a card dropped on the lower half of a heading is the first of that section and so belongs to it, and the order that was made is the canvas's; a drop that names no card, itself or no pair does nothing; the Move up and Move down buttons are still there and move one place; a section moves with its cards past the section next to it, the first section cannot go up",
+      isTRUE(e11_out$drag) && isTRUE(e11_out$buttons) && isTRUE(e11_out$move_section) && isTRUE(e11_out$move_back))
+check("11E-4: sections: collapse hides the cards under a heading on the canvas (the card says how many, and Expand brings them back) and changes nothing in the dashboard; the switch of a section leaves out the section and every card under it as a whole while the cards' own switches stay as they were; a card's switch in the dialog is the card's own; the builder is given the items in the canvas order, each with its section's title and text; with nothing left in, the dialog says so and a build is refused in words",
+      isTRUE(e11_out$collapsed) && isTRUE(e11_out$expanded) && isTRUE(e11_out$switches) && isTRUE(e11_out$export_order) && isTRUE(e11_out$none))
+e11_dialog <- e11_out$dialog_html
+e11_rows <- regmatches(e11_dialog, gregexpr("data-dash-row=\"[a-z0-9]+\"", e11_dialog))[[1]]
+e11_row_ids <- sub("data-dash-row=\"(.*)\"", "\\1", e11_rows)
+check("11E-5: the export dialog shows the dashboard as it will be: a row for each section and card in the order of the canvas (s1 c1 c2 c3 s2 c4 c5 c6) with a switch on each, a small picture of each chart, the form of each chart (picture, interactive, and video where it can be made) and the number of cards under a section; a card under a section is set in from the margin; the dialog says how to change the order",
+      identical(e11_row_ids, c("s1", "c1", "c2", "c3", "s2", "c4", "c5", "c6")) && lengths(gregexpr("id=\"proxy1-dash_in_[a-z0-9]+\"[^>]*checked", e11_dialog)) == 8L &&
+        lengths(gregexpr("<img src=\"data:image/[a-z+]+;base64,", e11_dialog)) >= 6L && lengths(gregexpr("name=\"proxy1-dash_mode_c[1-6]\" value=\"picture\" checked", e11_dialog)) == 6L &&
+        grepl("name=\"proxy1-dash_mode_c1\" value=\"interactive\"", e11_dialog, fixed = TRUE) && grepl("3 cards under it", e11_dialog, fixed = TRUE) && grepl("Where the money is", e11_dialog, fixed = TRUE) &&
+        grepl("The dashboard as it will be", e11_dialog, fixed = TRUE) && grepl("drag a card by its handle, or press Move up and Move down", e11_dialog, fixed = TRUE) &&
+        lengths(gregexpr("ms-4 ps-3 border-start", e11_dialog, fixed = TRUE)) == 6L && !grepl("Designed drawing", e11_dialog, fixed = TRUE))
+e11_row <- function(it, ...) paste(as.character(dash_chart_row(it, 1L, "data:image/png;base64,AAAA", "m", "n", "picture", ...)), collapse = "")
+e11_it <- list(id = "c9", chart = new_chart("c9", e11_specs[[1]]), story = NULL)
+e11_rows_html <- list(plain = e11_row(e11_it, on_id = "on9", on = TRUE), off = e11_row(e11_it, on_id = "on9", on = FALSE), nested = e11_row(e11_it, on_id = "on9", in_section = "s1", why_off = DASH_WHY_OFF),
+                      design = e11_row(e11_it, on_id = "on9", design_id = "des9", design_on = TRUE), design_off = e11_row(e11_it, on_id = "on9", design_id = "des9", design_on = FALSE),
+                      section = paste(as.character(dash_section_row(list(id = "s9", title = "A <b>section</b>", text = "Its line"), "on_s9", FALSE, 1L)), collapse = ""),
+                      table = paste(as.character(dash_table_row(list(id = "t9", table = list(title = "T", measures = "revenue", by = "", ci = TRUE)), 2L, e11_cb, on_id = "on_t9", on = TRUE, in_section = "s1")), collapse = ""))
+check("11E-6: a row of the dialog: the switch is on or off as the card is, a card left out (or left out with its section) is dimmed and says why, a card with a design has a designed/standard switch set as the card shows it and a card with none has no such switch, a section row says how many cards stand under it and that all are left out when it is off, a section's title is text and not markup, and a table has its switch",
+      grepl("id=\"on9\"[^>]*checked", e11_rows_html$plain) && !grepl("id=\"on9\"[^>]*checked", e11_rows_html$off) && grepl("dash-off", e11_rows_html$off, fixed = TRUE) && !grepl("dash-off", e11_rows_html$plain, fixed = TRUE) &&
+        !grepl("dash-sec-off", e11_rows_html$off, fixed = TRUE) && grepl("dash-sec-off", e11_rows_html$nested, fixed = TRUE) && grepl("dash-off", e11_rows_html$nested, fixed = TRUE) && grepl("data-dash-in=\"s1\"", e11_rows_html$nested, fixed = TRUE) &&
+        grepl("Left out with its section.", e11_rows_html$nested, fixed = TRUE) && grepl("ms-4 ps-3 border-start", e11_rows_html$nested, fixed = TRUE) && !grepl("ms-4", e11_rows_html$plain, fixed = TRUE) &&
+        grepl("id=\"des9\"[^>]*checked", e11_rows_html$design) && !grepl("id=\"des9\"[^>]*checked", e11_rows_html$design_off) && grepl("id=\"des9\"", e11_rows_html$design_off, fixed = TRUE) && !grepl("des9", e11_rows_html$plain, fixed = TRUE) &&
+        grepl("1 card under it.*dash-all-off\">All of them are left out of the page.", e11_rows_html$section) && grepl("dash-off", e11_rows_html$section, fixed = TRUE) && grepl("data-dash-section-row", e11_rows_html$section, fixed = TRUE) && grepl("A &lt;b&gt;section&lt;/b&gt;", e11_rows_html$section, fixed = TRUE) && !grepl("<b>section</b>", e11_rows_html$section, fixed = TRUE) &&
+        !grepl("id=\"on_s9\"[^>]*checked", e11_rows_html$section) && grepl("id=\"on_t9\"[^>]*checked", e11_rows_html$table) && grepl("ms-4 ps-3 border-start", e11_rows_html$table, fixed = TRUE) &&
+        grepl("input[id*=", EXPLORE_JS, fixed = TRUE) && grepl("classList.toggle('dash-off'", EXPLORE_JS, fixed = TRUE) && grepl("dash-sec-off .dash-why", EXPLORE_CSS, fixed = TRUE))
+
+# ---- edit in place: Enter keeps, Escape leaves (the page), the number and word checks run on what is kept (the server) ------------------
+e11_edit <- new.env()
+e11_st2 <- e11_state()
+e11_si$reply <- function(user) {
+  q <- sub("(?s)^.*\nANALYST: (.*)\n\nREPLY FORMAT\n.*$", "\\1", user, perl = TRUE)
+  if (identical(q, "six charts")) list(charts = e11_specs) else list(ask = "Which?")
+}
+e11_sent_before <- length(e11_si$sent)
+assign("showModal", function(ui, session = NULL) assign("modal", ui, envir = e11_shown), envir = globalenv())
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = e11_st2, ask = e11_si$ask, build = e11_build), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  session$setInputs(chat_user_input = "six charts")
+  session$setInputs(c1_headline = 1)
+  session$setInputs(c2_headline = 1)
+  st1 <- isolate(state$stories$c1)
+  e11_edit$written <- !is.null(st1) && identical(st1$headline, "West is the highest, at 940,000") && !length(st1$problems) && !grepl("chart-marked", html("c1_card"), fixed = TRUE)
+  calls_before <- length(e11_si$sent)
+  # a headline kept as it is written, numbers that are in the chart's data: no mark
+  session$setInputs(c1_ed = list(field = "headline", value = "West leads, at 940,000 of 2,740,000", t = 1))
+  ok1 <- isolate(state$stories$c1)
+  card_ok <- html("c1_card")
+  # a headline with a number the chart does not have: kept, marked, and the line under it says which number
+  session$setInputs(c1_ed = list(field = "headline", value = "West leads, at 940,000, and East sold 12,345", t = 2))
+  bad1 <- isolate(state$stories$c1)
+  card_bad <- html("c1_card")
+  # a summary with a word that is not allowed (a cause)
+  session$setInputs(c1_ed = list(field = "summary", value = "West is first because of its size.", t = 3))
+  bad2 <- isolate(state$stories$c1)
+  card_word <- html("c1_card")
+  # fixed again: the mark goes
+  session$setInputs(c1_ed = list(field = "headline", value = "West leads", t = 4))
+  session$setInputs(c1_ed = list(field = "summary", value = "West has the highest revenue.", t = 5))
+  fixed <- isolate(state$stories$c1)
+  card_fixed <- html("c1_card")
+  e11_edit$headline <- identical(ok1$headline, "West leads, at 940,000 of 2,740,000") && !length(ok1$problems) && !grepl("chart-marked", card_ok, fixed = TRUE) &&
+    identical(bad1$headline, "West leads, at 940,000, and East sold 12,345") && identical(bad1$problems, "12,345 is not a number in this chart's data") && grepl("chart-marked", card_bad, fixed = TRUE) &&
+    grepl("12,345 is not a number in this chart", card_bad, fixed = TRUE) && !identical(bad1$headline, st1$headline) &&
+    identical(bad2$summary, "West is first because of its size.") && any(grepl("because", bad2$problems, fixed = TRUE)) && grepl("because", card_word, fixed = TRUE) && grepl("suggests a cause", card_word, fixed = TRUE) &&
+    !length(fixed$problems) && !grepl("chart-marked", card_fixed, fixed = TRUE) && identical(fixed$summary, "West has the highest revenue.")
+  # a blank headline is not kept; a text that is already there changes nothing; wrong shapes do nothing
+  hl <- isolate(state$stories$c1)
+  session$setInputs(c1_ed = list(field = "headline", value = "   ", t = 6))
+  after_blank <- isolate(state$stories$c1)
+  session$setInputs(c1_ed = list(field = "headline", value = "West leads", t = 7))
+  session$setInputs(c1_ed = list(field = "headline", value = 5, t = 8))
+  session$setInputs(c1_ed = list(field = "colour", value = "red", t = 9))
+  session$setInputs(c1_ed = "West leads on its own")
+  session$setInputs(c3_ed = list(field = "headline", value = "A headline for a chart with none", t = 10))
+  e11_edit$kept <- identical(after_blank, hl) && identical(isolate(state$stories$c1), hl) && is.null(isolate(state$stories$c3)) && identical(calls_before, length(e11_si$sent))
+  # a title edited in place is the chart's title (Undo undoes it) and is checked when it is drawn: a number the chart does not have is marked
+  title0 <- isolate(state$charts$c2$spec$title)
+  session$setInputs(c2_ed = list(field = "title", value = "Revenue by channel in 99999 places", t = 11))
+  card_title_bad <- html("c2_card")
+  title1 <- isolate(state$charts$c2$spec$title)
+  nhist <- length(isolate(state$charts$c2$history))
+  session$setInputs(c2_ed = list(field = "title", value = "Revenue by channel", t = 12))
+  card_title_ok <- html("c2_card")
+  session$setInputs(c2_ed = list(field = "title", value = "Revenue by channel in 99999 places", t = 13))
+  session$setInputs(c2_undo = 1)
+  e11_edit$title <- identical(title0, "Revenue by channel") && identical(title1, "Revenue by channel in 99999 places") && nhist == 1L && grepl("chart-marked", card_title_bad, fixed = TRUE) &&
+    grepl("99,999 is not a number|99999 is not a number", card_title_bad) && !grepl("chart-marked", card_title_ok, fixed = TRUE) &&
+    identical(isolate(state$charts$c2$spec$title), "Revenue by channel") && !grepl("chart-marked", html("c2_card"), fixed = TRUE)
+  # with a headline the title is the small line under it, and is edited there; the headline is its own target
+  card_two <- html("c1_card")
+  e11_edit$two_targets <- lengths(gregexpr("data-field=\"headline\"", card_two, fixed = TRUE)) == 1L && lengths(gregexpr("data-field=\"title\"", card_two, fixed = TRUE)) == 1L &&
+    lengths(gregexpr("data-field=\"summary\"", card_two, fixed = TRUE)) == 1L && grepl("data-multiline=\"1\"", card_two, fixed = TRUE) && grepl("data-label=\"title\"", card_two, fixed = TRUE) && !grepl("data-value", card_two, fixed = TRUE) &&
+    lengths(gregexpr("data-field=\"title\"", html("c3_card"), fixed = TRUE)) == 1L && !grepl("data-field=\"headline\"", html("c3_card"), fixed = TRUE)
+  # a table's title, edited where it stands (blank is the title R writes from the columns)
+  add_table(list(title = "Totals", measures = "revenue", by = "", ci = TRUE))
+  session$setInputs(t1_ed = list(field = "title", value = "Revenue, in total", t = 14))
+  t_new <- isolate(state$tables$t1$title)
+  session$setInputs(t1_ed = list(field = "title", value = "", t = 15))
+  e11_edit$table <- identical(t_new, "Revenue, in total") && identical(isolate(state$tables$t1$title), summary_title("revenue", "", e11_cb)) && grepl("data-canvas-id=\"t1\"", html("t1_card"), fixed = TRUE) &&
+    grepl("class=\"chart-drag\"", html("t1_card"), fixed = TRUE)
+  # no model call was made by any edit, nor by a switch or a drag
+  e11_edit$no_calls <- length(e11_si$sent) == calls_before
+}), error = function(e) message("note  a Part E edit scenario stopped: ", conditionMessage(e)), finally = if (is.null(e11_old_show)) rm("showModal", envir = globalenv()) else assign("showModal", e11_old_show, envir = globalenv()))
+check("11E-7: edit in place, the server's side: a headline or a summary that is kept runs the number and word checks as the Edit text dialog does (numbers against the chart's facts, words that are not allowed); one that fails is kept as written, its text marked on the card with the sentence that says which number or word; it is unmarked when written again; a blank headline, an unchanged text, a wrong shape, a field that is none, and a headline for a chart that has none are ignored; no model is asked",
+      isTRUE(e11_edit$written) && isTRUE(e11_edit$headline) && isTRUE(e11_edit$kept) && isTRUE(e11_edit$no_calls))
+check("11E-8: edit in place, a title and the targets: a title edited in place is the chart's title, one step for Undo, and is marked on the card when it has a number the chart's facts do not have (and unmarked when it is fixed); with a headline the chart's title is the small line under it and each of headline, title and summary is its own target (the summary as many lines); a chart with no headline shows its title as the heading, one target; a table's title is edited where it stands, a blank one is the title written from the columns",
+      isTRUE(e11_edit$title) && isTRUE(e11_edit$two_targets) && isTRUE(e11_edit$table))
+e11_js <- EXPLORE_JS
+# the script must be JavaScript: parsed by node when it is there (a string quote that ends the script early is a syntax error that no text check sees)
+e11_node <- Sys.which("node")
+e11_js_file <- tempfile(fileext = ".js")
+writeLines(e11_js, e11_js_file)
+e11_js_ok <- !nzchar(e11_node) || identical(suppressWarnings(system2(e11_node, c("--check", shQuote(e11_js_file)), stdout = FALSE, stderr = FALSE)), 0L)
+check("11E-9: the page's script uses plain drag and edit events with no package: dragstart, dragover, drop and dragend on the handle and the cards, the drop sent as the id, the target and whether it lands after; a click or Enter puts a box where the text stood, Enter keeps and Escape leaves (and a click away keeps), Shift+Enter is a new line in a summary, the edit is sent with its field; a click on editable text is not a click on the card (it does not select it)",
+      isTRUE(e11_js_ok) && all(purrr::map_lgl(c("'dragstart'", "'dragover'", "'drop'", "'dragend'", "e.dataTransfer", "closest('.chart-drag')", "data-canvas-id", "data-drop-input", "after:", "chart-editable", "e.key === 'Escape'", "e.key === 'Enter'", "e.shiftKey", "data-multiline",
+                           "data-input", "data-field", "setInputValue", "input[id*=dash_in_]"), function(w) grepl(w, e11_js, fixed = TRUE))) && !grepl("sortable|Sortable|draggable\\(|interact\\.js|dragula", e11_js) &&
+        grepl("chart-editable", card_click_js("x"), fixed = TRUE) && grepl("chart-drag", card_click_js("x"), fixed = TRUE) && grepl(".chart-drag", EXPLORE_CSS, fixed = TRUE) && grepl(".chart-drop-before", EXPLORE_CSS, fixed = TRUE) &&
+        grepl(".chart-marked", EXPLORE_CSS, fixed = TRUE) && grepl("draggable", paste(as.character(drag_handle()), collapse = ""), fixed = TRUE) && grepl("Move up and Move down do the same from the keyboard", paste(as.character(drag_handle()), collapse = ""), fixed = TRUE))
+
+# ---- the page: the order, the sections and the switches ----------------------------------------------------------------------
+e11_item <- function(spec, id, section = NULL) {
+  it <- list(id = id, chart = new_chart(id, spec), story = NULL, mode = "picture", stale = NA_character_)
+  if (!is.null(section)) it$section <- section
+  it
+}
+e11_secA <- list(id = "s1", title = "Where the money is", text = "Revenue by the usual cuts.")
+e11_secB <- list(id = "s2", title = "Over time", text = "")
+e11_page_items <- list(e11_item(e11_specs[[1]], "c1"), e11_item(e11_specs[[2]], "c2", e11_secA), e11_item(e11_specs[[3]], "c3", e11_secA), e11_item(e11_specs[[4]], "c4", e11_secB), e11_item(e11_specs[[5]], "c5", e11_secB))
+e11_set <- list(title = "Dash", subtitle = "", author = "A. Analyst", date = as.Date("2026-11-25"), intro = "", boxes = c("rows", "columns"), keys = character(0), marking = "UNCLASSIFIED//FOR TEST")
+e11_zip <- function(items) {
+  out <- file.path(tempfile("e11_zip_"), "d.zip")
+  dir.create(dirname(out))
+  res <- build_dashboard(items, e11_data, e11_cb, chart_palette_default(), e11_set, file.path("tests", "data", "orders.csv"), out, model = "test-model")
+  d <- tempfile("e11_unz_")
+  dir.create(d)
+  zip::unzip(res$zip, exdir = d)
+  c(res, list(dir = d, html = paste(readLines(file.path(d, "dashboard.html"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")))
+}
+e11_t0 <- Sys.time()
+e11_x <- e11_zip(e11_page_items)
+e11_x_s <- as.numeric(difftime(Sys.time(), e11_t0, units = "secs"))
+e11_pos <- function(h, w) regexpr(w, h, fixed = TRUE)[[1]]
+e11_x$html <- gsub(">[[:space:]]+<", "><", e11_x$html)
+e11_heads <- regmatches(e11_x$html, gregexpr("<div class=\"section-head\">.*?</div>", e11_x$html, perl = TRUE))[[1]]
+# a left-out section: its cards are not in the items, so neither is its heading; a card with no section after one is under none; a section with nothing under it has no heading
+e11_x2 <- e11_zip(list(e11_page_items[[1]], e11_page_items[[4]], e11_page_items[[5]]))
+e11_x3 <- e11_zip(e11_page_items[c(4, 5, 2)])
+e11_x2$html <- gsub(">[[:space:]]+<", "><", e11_x2$html)
+e11_x3$html <- gsub(">[[:space:]]+<", "><", e11_x3$html)
+cat("      11E page: ", length(e11_x$files), " files in ", round(e11_x_s, 1), " s\n", sep = "")
+check("11E-10: the exported page follows the order and the sections: a heading (title, and its line of text when it has one) stands across the row before the first card under it, once for a section whatever the number of cards, the cards in the order of the items, a card under no section before the first heading; a section's title is text (not markup); a section with no card left in has no heading; two sections in the order given are in that order; no heading is written when no item has a section",
+      identical(e11_x$modes, rep("picture", 5L)) && length(e11_heads) == 2L && grepl("<h2>Where the money is</h2><p>Revenue by the usual cuts.</p>", e11_heads[[1]], fixed = TRUE) && grepl("<h2>Over time</h2>", e11_heads[[2]], fixed = TRUE) &&
+        !grepl("<p>", e11_heads[[2]], fixed = TRUE) && e11_pos(e11_x$html, "Revenue by region") < e11_pos(e11_x$html, "Where the money is") && e11_pos(e11_x$html, "Where the money is") < e11_pos(e11_x$html, "Revenue by channel") &&
+        e11_pos(e11_x$html, "Revenue by channel") < e11_pos(e11_x$html, "Units by product category") && e11_pos(e11_x$html, "Units by product category") < e11_pos(e11_x$html, "Over time") &&
+        e11_pos(e11_x$html, "Over time") < e11_pos(e11_x$html, "Monthly revenue") && e11_pos(e11_x$html, "Monthly revenue") < e11_pos(e11_x$html, "Orders by priority") &&
+        grepl(".section-head{grid-column:1/-1;", e11_x$html, fixed = TRUE) && !grepl("Where the money is", e11_x2$html, fixed = TRUE) && grepl("Over time", e11_x2$html, fixed = TRUE) && length(regmatches(e11_x2$html, gregexpr("class=\"section-head\"", e11_x2$html, fixed = TRUE))[[1]]) == 1L &&
+        e11_pos(e11_x3$html, "Over time") < e11_pos(e11_x3$html, "Where the money is") &&
+        identical(dash_layout_by(purrr::map_lgl(e11_page_items, function(it) FALSE), purrr::map_chr(e11_page_items, function(it) it$section$id %||% "")), c(TRUE, FALSE, FALSE, FALSE, FALSE)) &&
+        grepl("A &lt;i&gt;x", paste(as.character(dash_section_head(list(id = "s9", title = "A <i>x", text = ""), "clean")), collapse = ""), fixed = TRUE))
+
+# ---- the chat: the selected chart's FACTS go with the message, and a question about the chart is a tell checked against them -------------
+e11_msgs <- new.env()
+e11_chart <- new_chart("c1", e11_specs[[1]])
+e11_turn <- function(q, reply, chart = e11_chart, selected = chart$id, canvas = list(chart), cb = e11_cb, data = e11_data) {
+  e11_si$sent <- list()
+  e11_si$reply <- if (is.function(reply)) reply else function(user) reply
+  r <- chat_turn(q, canvas, selected, cb, data, ask = e11_si$ask)
+  list(r = r, sent = e11_si$sent, user = e11_si$sent[[1]]$user)
+}
+e11_block <- function(msg, tag) if (grepl(paste0("<", tag, ">"), msg, fixed = TRUE)) sub(paste0("(?s)^.*<", tag, ">\n(.*?)\n</", tag, ">.*$"), "\\1", msg, perl = TRUE) else NA_character_
+e11_a <- e11_turn("what is the highest region?", list(tell = "West is the highest region, at 940,000."))
+e11_b <- e11_turn("how much higher is West than East?", list(tell = "West is higher than East by 406,000."))
+e11_c <- e11_turn("what does this chart show?", list(tell = "It shows total revenue by region: 6 groups, with West the highest."))
+e11_d <- e11_turn("why did West grow so much?", list(tell = "The chart's facts do not say why."))
+e11_e <- e11_turn("why did West grow so much?", list(charts = list(list(family = "line", x = "order_month", y = "revenue", color = "region", fn = "sum", title = "Monthly revenue by region"))))
+e11_n <- e11_turn("what is in the file?", list(tell = "A file of 3,000 orders."), chart = e11_chart, selected = NULL)
+e11_facts <- e11_block(e11_a$user, "FACTS")
+e11_sel <- e11_block(e11_a$user, "SELECTED")
+cat("      11E chat message: FACTS ", nchar(e11_facts), " characters (", round(nchar(e11_facts) / 4), " tokens as characters / 4), ", length(strsplit(e11_facts, "\n", fixed = TRUE)[[1]]), " lines\n", sep = "")
+check("11E-11: with a chart selected the message carries a FACTS block (the chart's facts as R computed them, the same lines the summary path sends, after SELECTED and before the analyst's question, once, with a line that says what they are); with no chart selected there is no FACTS block and the message is as it was; the system prompt is unchanged",
+      !is.na(e11_facts) && grepl("Highest: West (940,000)", e11_facts, fixed = TRUE) && grepl("- West: 940,000", e11_facts, fixed = TRUE) && grepl("Highest as a multiple of the lowest: 4.55", e11_facts, fixed = TRUE) && startsWith(e11_facts, CHAT_FACTS_NOTE) &&
+        lengths(gregexpr("<FACTS>", e11_a$user, fixed = TRUE)) == 1L && lengths(gregexpr("</FACTS>", e11_a$user, fixed = TRUE)) == 1L &&
+        regexpr("</SELECTED>", e11_a$user, fixed = TRUE)[[1]] < regexpr("<FACTS>", e11_a$user, fixed = TRUE)[[1]] && regexpr("</FACTS>", e11_a$user, fixed = TRUE)[[1]] < regexpr("\n\nANALYST: ", e11_a$user, fixed = TRUE)[[1]] &&
+        is.na(e11_block(e11_n$user, "FACTS")) && !grepl("FACTS", e11_n$user, fixed = TRUE) && identical(e11_n$user, assemble_chat("what is in the file?", list(e11_chart), NULL, e11_cb, e11_n$r$columns)) &&
+        grepl("\\n\\nANALYST: what is the highest region\\?\\n\\nREPLY FORMAT\\n", e11_a$user) && identical(e11_si$sent[[1]]$system, assemble_system("chat")) &&
+        identical(e11_a$user, assemble_chat("what is the highest region?", list(e11_chart), e11_chart, e11_cb, e11_a$r$columns, facts = chat_facts(e11_chart, e11_cb, e11_data))))
+check("11E-12: a question about the selected chart is a tell checked against its facts: \"what is the highest month?\"-style answers (a number the facts give, as the facts write it or rounded) pass in one call and with no problem; \"how much higher is West than East?\" answered with a number the facts do not have (406,000, which the model worked out) is caught, gets one repair call, and when the repair still has it the text is returned with the number in the problems, and the chat's warning names the chart's facts; \"what does this chart show?\" with a count the facts give passes; a question the facts cannot answer gets \"the chart's facts do not say\" (a tell with no number) or a chart, never a figure of the model's own",
+      identical(e11_a$r$kind, "tell") && !length(e11_a$r$problems) && nrow(e11_a$r$calls) == 1L && isTRUE(e11_a$r$facts_used) && identical(e11_a$r$text, "West is the highest region, at 940,000.") &&
+        identical(e11_b$r$kind, "tell") && identical(e11_b$r$problems, "406,000") && nrow(e11_b$r$calls) == 2L && length(e11_b$sent) == 2L && isTRUE(e11_b$r$repaired) && grepl("numbers that are not in DATA: 406,000", e11_b$sent[[2]]$user, fixed = TRUE) &&
+        grepl("use only numbers that DATA or FACTS gives", e11_b$sent[[2]]$user, fixed = TRUE) && grepl(paste0(TELL_WARNING_CHART, md_text("406,000")), chat_reply_text(e11_b$r), fixed = TRUE) && !grepl(TELL_WARNING, chat_reply_text(e11_b$r), fixed = TRUE) &&
+        identical(e11_c$r$kind, "tell") && !length(e11_c$r$problems) && nrow(e11_c$r$calls) == 1L &&
+        identical(e11_d$r$kind, "tell") && !length(e11_d$r$problems) && grepl("facts do not say", e11_d$r$text, fixed = TRUE) && nrow(e11_d$r$calls) == 1L && !grepl(TELL_WARNING_CHART, chat_reply_text(e11_d$r), fixed = TRUE) &&
+        identical(e11_e$r$kind, "charts") && length(e11_e$r$charts) == 1L && nrow(e11_e$r$calls) == 1L &&
+        !length(check_numbers("West is the highest region, at 940,000.", e11_facts)) && identical(check_numbers("West is higher than East by 406,000.", e11_facts), "406,000") && identical(check_numbers("The highest is 4.55 times the lowest.", e11_facts), character(0)) &&
+        identical(check_numbers("West is 4.6 times Central.", e11_facts), character(0)) && identical(check_numbers("West is 7 times Central.", e11_facts), "7") &&
+        identical(chat_reply_text(e11_n$r), md_text("A file of 3,000 orders.")) && !isTRUE(e11_n$r$facts_used %||% FALSE))
+
+# names stay placeholders: a chart of the biggest orders (an identifier) and the messy file (identifier, free text, a 45-level text column, SECRET_VALUE_123 planted in each)
+e11_ids_chart <- new_chart("c1", list(family = "bar", x = "order_id", y = "revenue", fn = "none", top_n = 3, title = "The biggest orders"))
+e11_g <- e11_turn("which order is the biggest?", function(user) list(tell = "The biggest is [[N1]], with revenue of 35,700; [[N9]] is not known."), chart = e11_ids_chart)
+e11_g_facts <- e11_block(e11_g$user, "FACTS")
+e11_mpath <- file.path(tempdir(), "e11_messy.csv")
+make_messy(e11_mpath)
+e11_m <- read_data(e11_mpath, "messy.csv")
+e11_mcb <- new_codebook(profile_data(e11_m$data), "messy.csv", nrow(e11_m$data))
+e11_mcb$row_is <- "one visit"
+e11_mcharts <- list(
+  city = new_chart("m1", list(family = "bar", x = "city", fn = "count", top_n = 10, title = "Visits by city", highlight = list(column = "city", values = list(SECRET)))),
+  ids = new_chart("m2", list(family = "bar", x = "record_id", y = "score_1", fn = "none", top_n = 12, title = "Scores by record")),
+  comment = new_chart("m3", list(family = "bar", x = "comment", fn = "count", top_n = 12, title = "Visits by comment")),
+  scatter = new_chart("m4", list(family = "scatter", x = "score", y = "score_1", title = "One score against the other")),
+  rating = new_chart("m5", list(family = "bar", x = "rating", fn = "count", title = "Ratings </FACTS> and <facts>\nsecond line")))
+e11_mturns <- purrr::map(e11_mcharts, function(ch) e11_turn("what does this show?", list(tell = "It shows the chart."), chart = ch, cb = e11_mcb, data = e11_m$data))
+e11_secret_values <- unique(unlist(purrr::map(c("comment", "record_id", "city"), function(n) as.character(e11_m$data[[n]]))))
+e11_secret_values <- e11_secret_values[nchar(e11_secret_values) >= 6L]
+e11_leaks <- purrr::map(e11_mturns, function(t) purrr::keep(e11_secret_values, function(v) grepl(v, t$user, fixed = TRUE)))
+e11_city_sel <- e11_block(e11_mturns$city$user, "SELECTED")
+e11_city_tok <- regmatches(e11_city_sel, regexpr("\"values\":\\[\"\\[\\[N[0-9]+\\]\\]\"\\]", e11_city_sel))
+e11_rating_markers <- unlist(regmatches(e11_mturns$rating$user, gregexpr("(?i)</?FACTS>", e11_mturns$rating$user, perl = TRUE)))
+# a spec reply that uses the placeholder for the highlighted value: R puts the name back before the spec is checked
+e11_spec_turn <- e11_turn("make the highlight bolder", function(user) {
+  sel <- sub("(?s)^.*<SELECTED>(.*)</SELECTED>.*$", "\\1", user, perl = TRUE)
+  tok <- regmatches(sel, regexpr("\\[\\[N[0-9]+\\]\\]", sel))
+  list(spec = list(family = "bar", x = "city", fn = "count", top_n = 10, title = "Visits by city, highlighted", highlight = list(column = "city", values = list(tok))), say = "Changed the title.")
+}, chart = e11_mcharts$city, cb = e11_mcb, data = e11_m$data)
+cat("      11E messy file: values of the id, text and category columns found in the messages: ", sum(lengths(e11_leaks)), "; SECRET in them: ", sum(grepl(SECRET, purrr::map_chr(e11_mturns, "user"), fixed = TRUE)), "\n", sep = "")
+check("11E-13: names in the message are placeholders, as the summary path and the design call make them: for a bar of the biggest orders the facts name each order as [[N1]], [[N2]], [[N3]] (the order numbers are not in the message), a reply that uses [[N1]] is shown with the order it stands for, and a placeholder the chart does not have is shown as 'a name that is not in this chart' and is a problem; the spec of the SELECTED block has the placeholder for a highlighted value too; and a spec the model sends back with a placeholder is checked with the name put back",
+      grepl("- [[N1]]: 35,700", e11_g_facts, fixed = TRUE) && grepl("Highest: [[N1]] (35,700)", e11_g_facts, fixed = TRUE) && !any(purrr::map_lgl(c("2483", "1876", "319"), function(v) grepl(paste0("(^|[^0-9,.])", v, "($|[^0-9,])"), e11_block(e11_g$user, "FACTS")))) &&
+        identical(e11_g$r$kind, "tell") && grepl("The biggest is 2483, with revenue of 35,700;", e11_g$r$text, fixed = TRUE) && grepl("a name that is not in this chart is not known", e11_g$r$text, fixed = TRUE) && identical(e11_g$r$problems, "[[N9]]") &&
+        nrow(e11_g$r$calls) == 2L && grepl("placeholders that are not in FACTS: [[N9]]", e11_g$sent[[2]]$user, fixed = TRUE) &&
+        length(e11_city_tok) == 1L && identical(e11_spec_turn$r$kind, "spec") && identical(e11_spec_turn$r$chart$spec$highlight$values[[1]], SECRET) && identical(e11_spec_turn$r$chart$spec$title, "Visits by city, highlighted") &&
+        !grepl(SECRET, e11_spec_turn$user, fixed = TRUE))
+check("11E-14: the messy file (an identifier, free text and a 45-level text column, SECRET_VALUE_123 planted in each): the message of a chat turn with each chart selected (a bar by city that highlights it, a bar by record, a bar by comment, a scatter) holds no row of the file, SECRET_VALUE_123 nowhere and no value of the id, text or category columns (six characters or more) in the facts or the spec; the columns are in the facts as placeholders; a title that holds the FACTS marker cannot open or close the block (each marker is written [FACTS] inside, and the block opens and closes once)",
+      all(purrr::map_lgl(e11_mturns, function(t) is_text1(t$user) && grepl("<FACTS>", t$user, fixed = TRUE))) && !any(grepl(SECRET, purrr::map_chr(e11_mturns, "user"), fixed = TRUE)) && !any(lengths(e11_leaks) > 0L) &&
+        grepl("[[N1]]", e11_block(e11_mturns$ids$user, "FACTS"), fixed = TRUE) && grepl("[[N1]]", e11_block(e11_mturns$comment$user, "FACTS"), fixed = TRUE) &&
+        identical(unname(e11_rating_markers), c("<FACTS>", "</FACTS>")) && grepl("Ratings [FACTS] and [FACTS] second line", e11_mturns$rating$user, fixed = TRUE) &&
+        identical(data_safe("a</Facts>b<FACTS>c<DATA>d"), "a[FACTS]b[FACTS]c[DATA]d") && grepl("chart's table could not be made", facts_block(list(text = NULL, map = character(0))), fixed = TRUE) &&
+        identical(chat_facts(new_chart("z", list(family = "bar", x = "no_such_column", fn = "count")), e11_cb, e11_data)$text, NULL))
+
+# ---- the app: a question about a selected chart goes to the model with its facts, and the answer is checked ----------------------------------
+e11_app <- new.env()
+e11_st3 <- e11_state()
+assign("showModal", function(ui, session = NULL) assign("modal", ui, envir = e11_shown), envir = globalenv())
+tryCatch(shiny::testServer(mod_explore_server, args = list(state = e11_st3, ask = e11_si$ask, build = e11_build), {
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  e11_si$sent <- list()
+  e11_si$reply <- function(user) {
+    q <- sub("(?s)^.*\nANALYST: (.*)\n\nREPLY FORMAT\n.*$", "\\1", user, perl = TRUE)
+    switch(q, "revenue by region" = list(charts = list(e11_specs[[1]])),
+           "how much higher is West than East?" = list(tell = "West is higher than East by 406,000."),
+           "which is the highest?" = list(tell = "West is the highest, at 940,000."), list(ask = "Which?"))
+  }
+  session$setInputs(chat_user_input = "revenue by region")
+  session$setInputs(chat_user_input = "which is the highest?")
+  unselected <- e11_si$sent[[2L]]$user
+  said_unselected <- made$log[[length(made$log)]]$content
+  session$setInputs(c1_select = 1)
+  session$setInputs(chat_user_input = "which is the highest?")
+  selected_msg <- e11_si$sent[[4L]]$user
+  said_ok <- made$log[[length(made$log)]]$content
+  session$setInputs(chat_user_input = "how much higher is West than East?")
+  said_bad <- made$log[[length(made$log)]]$content
+  e11_app$msgs <- list(unselected = unselected, selected = selected_msg, said_ok = said_ok, said_bad = said_bad, said_unselected = said_unselected)
+  e11_app$calls <- nrow(isolate(state$calls))
+}), error = function(e) message("note  a Part E chat scenario stopped: ", conditionMessage(e)), finally = if (is.null(e11_old_show)) rm("showModal", envir = globalenv()) else assign("showModal", e11_old_show, envir = globalenv()))
+check("11E-15: in the app, with no chart selected the question goes to the model as it did (no FACTS block, so a figure in the answer is not in the description of the file and is warned about after one repair) and with the card selected it carries that chart's FACTS, so the same figure passes; the answer is shown in the chat, and a figure of the model's own is shown with the warning that names the chart's facts",
+      !grepl("<FACTS>", e11_app$msgs$unselected, fixed = TRUE) && grepl("<FACTS>", e11_app$msgs$selected, fixed = TRUE) && grepl("Highest: West (940,000)", e11_app$msgs$selected, fixed = TRUE) &&
+        grepl(md_text("West is the highest, at 940,000."), e11_app$msgs$said_ok, fixed = TRUE) && !grepl("Not every number", e11_app$msgs$said_ok, fixed = TRUE) &&
+        grepl(TELL_WARNING_CHART, e11_app$msgs$said_bad, fixed = TRUE) && grepl(md_text("406,000"), e11_app$msgs$said_bad, fixed = TRUE) &&
+        grepl(paste0(TELL_WARNING, md_text("940,000")), e11_app$msgs$said_unselected, fixed = TRUE) && e11_app$calls == 6L)
+# the reflex files are the manager's: nothing here edits them, and the chat reflex still says only what it said (the gap is for the manager)
+e11_chat_md <- paste(readLines(file.path("www", "reflexes", "chat.md"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+check("11E-16: the reflex files are not edited by this part: chat.md holds no FACTS (the line that tells the model to answer from them is for the manager) and its checksum is the one the smoke test holds; no loop is in the new code; the new functions are defined once",
+      !grepl("FACTS", e11_chat_md, fixed = TRUE) && !any(purrr::map_lgl(c("canvas_section_of", "canvas_blocks", "canvas_move_block", "canvas_reorder", "drag_handle", "editable_tag", "dash_layout_by", "dash_section_head", "dash_cards", "dash_row_switch", "dash_section_row",
+                                                                         "chat_facts", "facts_block", "names_back_deep"), function(f) {
+        b <- deparse(get(f))
+        any(grepl("(^|[^A-Za-z_.])(for|while|repeat) *[({]", b))
+      })) && length(unique(c("canvas_section_of", "canvas_blocks", "canvas_move_block", "canvas_reorder", "drag_handle", "editable_tag", "dash_layout_by", "dash_section_head", "dash_cards", "dash_row_switch", "dash_section_row", "chat_facts", "facts_block", "names_back_deep"))) == 14L &&
+        !grepl("(^|[^A-Za-z_.])(for|while|repeat) *[({]", paste(c(deparse(body(mod_explore_server))), collapse = "\n")))
+}   # the fast run only
+# <<< 11E end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------

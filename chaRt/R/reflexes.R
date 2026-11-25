@@ -186,10 +186,10 @@ data_head <- function(cb)
   paste0("File: ", cb$file, "; ", format_num(cb$rows), " rows; one row is: ",
          if (codebook_ready(cb)) trimws(cb$row_is) else "not yet given")
 
-# A name, label, level or title holding <DATA>, <CANVAS> or <SELECTED>, or the closing marker (any
+# A name, label, level or title holding <DATA>, <CANVAS>, <SELECTED> or <FACTS>, or the closing marker (any
 #   case), would open or close a block from inside: in the block those markers are written [DATA],
-#   [CANVAS] and [SELECTED]. The codebook and the specs are not changed.
-data_safe <- function(x) gsub("(?i)</?(DATA|CANVAS|SELECTED)>", "[\\U\\1]", x, perl = TRUE)
+#   [CANVAS], [SELECTED] and [FACTS]. The codebook and the specs are not changed.
+data_safe <- function(x) gsub("(?i)</?(DATA|CANVAS|SELECTED|FACTS)>", "[\\U\\1]", x, perl = TRUE)
 
 data_block <- function(cb, columns) {
   paste(c("<DATA>", data_safe(c(data_head(cb),
@@ -417,7 +417,7 @@ SUGGEST_MESSAGE <- "(suggest charts for this file)"
 PICK_FAILED <- "The model's reply could not be read as a choice of columns, so nothing was drawn."
 REPAIR_ASK <- "Send the whole reply again with those charts corrected or removed."
 CHAT_SPEC_REPAIR_ASK <- "Send the whole reply again with the spec corrected, or give ask or cannot instead."
-CHAT_TELL_REPAIR_ASK <- "Send the whole reply again with the text corrected: use only numbers that DATA gives, or none."
+CHAT_TELL_REPAIR_ASK <- "Send the whole reply again with the text corrected: use only numbers that DATA or FACTS gives, or none."
 CHAT_FAILED <- "The model's reply could not be read, so nothing was changed."
 CHAT_NOT_ONE <- paste("The model's reply did not give exactly one of charts, a changed chart, a question, a reason it cannot,",
                       "or a description of the file, so nothing was changed.")
@@ -577,20 +577,48 @@ canvas_block <- function(canvas, cb)
   paste(c("<CANVAS>", if (length(canvas)) purrr::map_chr(unname(canvas), canvas_line, cb = cb) else "empty", "</CANVAS>"), collapse = "\n")
 
 # The SELECTED block: the chart's id, CURRENT SPEC, NOTES; or "none".
-selected_block <- function(chart) {
+selected_block <- function(chart, map = character(0)) {
   if (is.null(chart)) return("<SELECTED>\nnone\n</SELECTED>")
   notes = if (length(chart$notes)) paste0("- ", chart$notes, collapse = "\n") else "none"
-  json = jsonlite::toJSON(spec_public(chart$spec), auto_unbox = TRUE, digits = NA)
+  # With placeholders (Phase 11 Part E: the chart's FACTS go with it), a value of an identifier or text column in the spec is its placeholder, as in the facts.
+  json = if (length(map)) design_spec_json(chart$spec, map) else jsonlite::toJSON(spec_public(chart$spec), auto_unbox = TRUE, digits = NA)
   paste0("<SELECTED>\n", data_safe(paste(chart$id, "CURRENT SPEC", json, "NOTES", notes, sep = "\n")), "\n</SELECTED>")
 }
+
+# The FACTS block of a chat turn with a chart selected (Phase 11 Part E): the chart's facts as R computed them from the plotted table (spec_facts(), the
+#   same lines the summary path sends), so a question about the chart is answered from them. The values of identifier and text columns are placeholders
+#   ([[N1]], ...), as in the summary path and the design call; the rows of the file are not in it. Its marker cannot be opened or closed from inside.
+CHAT_FACTS_NOTE <- paste("The facts of the selected chart, worked out by R from the numbers it draws. A name of an identifier or text column stands as a placeholder,",
+                         "[[N1]], [[N2]]: write a placeholder exactly as it is here.")
+CHAT_FACTS_NONE <- "none: this chart's table could not be made, so it has no facts."
+facts_block <- function(facts)
+  paste(c("<FACTS>", if (is.null(facts$text)) CHAT_FACTS_NONE else c(CHAT_FACTS_NOTE, data_safe(facts$text)), "</FACTS>"), collapse = "\n")
+
+# What a chat turn knows of the selected chart's facts: list(text, map), the text with placeholders and the map (token = name) of every placeholder the message
+#   may hold (those of the facts, and those of a filter value or highlight of the spec that the facts did not meet); list(text = NULL, map) when the chart's
+#   table cannot be made.
+chat_facts <- function(chart, cb, data, palette = chart_palette_default()) {
+  x = tryCatch(summary_input(chart, cb, data, palette), error = function(e) list(error = TRUE))
+  map = design_extend_map(x$facts$names %||% character(0), tryCatch(design_spec_names(chart$spec, cb), error = function(e) character(0)))
+  list(text = if (is.null(x$error)) x$facts$text, map = map)
+}
+
+# A reply's text (or a spec) with the placeholders written as the names they stand for.
+names_back_deep <- function(x, map) {
+  if (!length(map)) return(x)
+  rapply(list(x), function(v) names_back(v, map), classes = "character", how = "replace")[[1]]
+}
+# What a placeholder that is not in the map is shown as: it is not a name of this chart.
+CHAT_UNKNOWN_NAME <- "a name that is not in this chart"
 
 # The user message of a chat turn, in this order: the DATA block (the index, and detail for
 #   `columns`), CANVAS, SELECTED, LAST EXCHANGE (one turn back, when there was one), ANALYST: and the
 #   message (outside every block), then chat.md's reply format.
-assemble_chat <- function(message, canvas, chart, cb, columns, last = NULL, dir = REFLEXES_DIR)
+assemble_chat <- function(message, canvas, chart, cb, columns, last = NULL, dir = REFLEXES_DIR, facts = NULL)
   paste(c(data_block(cb, columns),
           canvas_block(canvas, cb),
-          selected_block(chart),
+          selected_block(chart, facts$map %||% character(0)),
+          if (!is.null(facts)) facts_block(facts),
           if (!is.null(last)) paste0("LAST EXCHANGE\nANALYST: ", data_safe(clean_question(last$message)), "\nREPLY: ", data_safe(last$reply)),
           paste("ANALYST:", clean_question(message)),
           reply_format("chat", dir)),
@@ -662,8 +690,10 @@ chat_turn <- function(message, canvas, selected, cb, data, last = NULL, ask = ll
     columns = utils::head(unique(intersect(c(if (!is.null(chart)) chart_columns(chart$spec, cb), chosen), in_play)), CODEBOOK_MAX_DETAIL)
   }
   system_txt = assemble_system("chat")
-  user_txt = assemble_chat(q, canvas, chart, cb, columns, last)
-  facts_text = data_block(cb, columns)
+  # With a chart selected its FACTS go with the message (Phase 11 Part E), and a tell about it is checked against them as well as against DATA.
+  cf = if (!is.null(chart)) chat_facts(chart, cb, data, palette)
+  user_txt = assemble_chat(q, canvas, chart, cb, columns, last, facts = cf)
+  facts_text = paste(c(data_block(cb, columns), cf$text), collapse = "\n")
   rule_ids = chat_rule_ids()
   exploratory = identical(q, SUGGEST_MESSAGE)
 
@@ -681,12 +711,18 @@ chat_turn <- function(message, canvas, selected, cb, data, last = NULL, ask = ll
       tell = {
         text = trimws(obj[["tell"]])
         problems = check_numbers(text, facts_text)
-        need(done("tell", text, nxt = nxt, problems = problems, repaired = repaired),
-             if (length(problems)) paste0("numbers that are not in DATA: ", paste(problems, collapse = ", ")), CHAT_TELL_REPAIR_ASK)
+        unknown = if (!is.null(cf)) setdiff(unlist(regmatches(text, gregexpr("\\[\\[N[0-9]+\\]\\]", text))), names(cf$map))
+        shown = if (!is.null(cf)) names_back(text, cf$map) else text
+        shown = if (length(unknown)) names_back(shown, stats::setNames(rep(CHAT_UNKNOWN_NAME, length(unknown)), unknown)) else shown
+        got = done("tell", shown, nxt = nxt, problems = c(problems, unknown), repaired = repaired)
+        got$facts_used = !is.null(cf$text)
+        need(got, if (length(problems) || length(unknown)) paste(c(
+              if (length(problems)) paste0("numbers that are not in DATA: ", paste(problems, collapse = ", ")),
+              if (length(unknown)) paste0("placeholders that are not in FACTS: ", paste(unknown, collapse = ", "))), collapse = "; "), CHAT_TELL_REPAIR_ASK)
       },
       spec = {
         if (is.null(chart)) return(done("failed", CHAT_NO_SELECTION, repaired = repaired))
-        checked = check_chart(obj[["spec"]], cb, data, palette, rule_ids)
+        checked = check_chart(if (!is.null(cf)) names_back_deep(obj[["spec"]], cf$map) else obj[["spec"]], cb, data, palette, rule_ids)
         if (!checked$ok)
           return(need(done("failed", checked$sentences, repaired = repaired), paste(checked$sentences, collapse = " "), CHAT_SPEC_REPAIR_ASK))
         say = if (is_text1(obj[["say"]]) && nzchar(trimws(obj[["say"]]))) trimws(obj[["say"]]) else "The chart was changed."

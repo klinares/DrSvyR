@@ -930,6 +930,7 @@ check_line <- function(problems, ok = SUMMARY_ALL_OK) {
 
 # The warning line under a description of the file that holds a number DATA does not give.
 TELL_WARNING <- "Not every number here is in the description of the file: "
+TELL_WARNING_CHART <- "Not every number here is in this chart's facts: "
 
 # Text from a model or a file, made safe for a chat message. shinychat 0.4.0 draws an assistant message as markdown
 #   with raw HTML switched on and no sanitiser (see the note above say() in mod_explore_server()), so anything that is
@@ -965,7 +966,7 @@ chat_reply_text <- function(r) {
   }
   if (identical(r$kind, "spec")) return(paste(c(md_text(r$text), if (length(r$new_notes)) paste("Note:", md_text(r$new_notes))), collapse = "\n\n"))
   paste(c(md_text(paste(r$text, collapse = " ")),
-          if (identical(r$kind, "tell") && length(r$problems)) paste0(TELL_WARNING, md_text(paste(r$problems, collapse = ", ")), ".")),
+          if (identical(r$kind, "tell") && length(r$problems)) paste0(if (isTRUE(r$facts_used)) TELL_WARNING_CHART else TELL_WARNING, md_text(paste(r$problems, collapse = ", ")), ".")),
         collapse = "\n\n")
 }
 
@@ -1018,7 +1019,7 @@ period_text <- function(rng) {
 # A click on a card selects it, unless it lands on a button, link, box or the full screen button, which have
 #   their own meaning. The value carries the time, so the same card clicked twice still reaches the server.
 card_click_js <- function(input_id)
-  paste0("if (event.target.closest('button, a, input, select, textarea, label, video, .girafe, .bslib-full-screen-enter')) return; ",
+  paste0("if (event.target.closest('button, a, input, select, textarea, label, video, .girafe, .bslib-full-screen-enter, .chart-editable, .chart-drag')) return; ",
          "Shiny.setInputValue('", input_id, "', {id: this.dataset.chartId, t: Date.now()}, {priority: 'event'});")
 
 # The copy button of the Code dialog.
@@ -1116,6 +1117,25 @@ EXPLORE_CSS <- "
 .chart-working-dot:nth-child(3) { animation-delay: .4s; margin-right: .5rem; }
 @keyframes chart-working-pulse { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .chart-working-dot { animation: none; opacity: .7; } }
+/* Phase 11 Part E: the handle a card is dragged by, the line that shows where it will land, text edited where it stands, and a section's heading */
+.chart-drag { display: inline-block; cursor: grab; user-select: none; padding: 0 .4rem; color: var(--bs-secondary-color); font-weight: 700; letter-spacing: -.2em; line-height: 1.6; }
+.chart-drag:hover { color: var(--bs-body-color); }
+.chart-dragging { opacity: .45; }
+.chart-drop-before { box-shadow: 0 -5px 0 0 var(--bs-primary-text-emphasis, #0d6efd); }
+.chart-drop-after { box-shadow: 0 5px 0 0 var(--bs-primary-text-emphasis, #0d6efd); }
+.chart-editable { cursor: text; }
+.chart-editable:hover, .chart-editable:focus-visible { outline: 1px dashed var(--bs-secondary-color); outline-offset: 2px; }
+.chart-marked { text-decoration: underline wavy var(--bs-warning-text-emphasis, #8a5a00); text-underline-offset: .25em; }
+.chart-inline-input { width: 100%; min-width: 12rem; }
+.chart-card .card-header > .chart-edit-wide, .chart-card .card-header > div:first-child { width: 100%; }
+/* the export dialog's rows: left out is dimmed, and says why (kept true to the switches by the page's script) */
+[data-dash-row] .dash-why, [data-dash-row] .dash-all-off { display: none; }
+[data-dash-row].dash-off .dash-body { opacity: .55; }
+[data-dash-row].dash-sec-off .dash-why { display: block; }
+[data-dash-row].dash-off .dash-all-off { display: block; }
+.chart-section { border-top: 3px solid var(--bs-primary-text-emphasis, #0d6efd); padding-top: .5rem; }
+.chart-section-title { font-size: 1.35rem; line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
+.chart-section-text { margin: .25rem 0 0; max-width: 75ch; overflow-wrap: anywhere; }
 "
 EXPLORE_JS <- paste0("
 (function () {
@@ -1182,6 +1202,108 @@ EXPLORE_JS <- paste0("
     Shiny.addCustomMessageHandler('chart-busy', function (m) { busy(m.on); });
     Shiny.addCustomMessageHandler('chart-progress', function (m) { progress(m.words); });
   }
+  // Phase 11 Part E. Dragging: a card, a table or a section is picked up by its handle (class chart-drag) and put down on another card; the
+  //   server is told which and whether it lands before or after (the lower right half of the target is after). Plain drag events, no package:
+  //   the Move up and Move down buttons do the same from the keyboard.
+  var dragging = null;
+  function mark(el, cls) {
+    document.querySelectorAll('.chart-drop-before, .chart-drop-after').forEach(function (x) { x.classList.remove('chart-drop-before', 'chart-drop-after'); });
+    if (el) el.classList.add(cls);
+  }
+  function over(e) {
+    var t = dragging && e.target.closest ? e.target.closest('[data-canvas-id]') : null;
+    if (!t || t.getAttribute('data-canvas-id') === dragging) return null;
+    var r = t.getBoundingClientRect();
+    return { el: t, after: ((e.clientX - r.left) / r.width + (e.clientY - r.top) / r.height) > 1 };
+  }
+  document.addEventListener('dragstart', function (e) {
+    var h = e.target.closest && e.target.closest('.chart-drag');
+    var card = h && h.closest('[data-canvas-id]');
+    if (!card) return;
+    dragging = card.getAttribute('data-canvas-id');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragging);
+    if (e.dataTransfer.setDragImage) e.dataTransfer.setDragImage(card, 16, 16);
+    setTimeout(function () { card.classList.add('chart-dragging'); }, 0);
+  });
+  document.addEventListener('dragover', function (e) {
+    var o = over(e);
+    if (!o) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    mark(o.el, o.after ? 'chart-drop-after' : 'chart-drop-before');
+  });
+  document.addEventListener('drop', function (e) {
+    var o = over(e);
+    var canvas = o && o.el.closest('.chart-canvas');
+    if (!o || !canvas) return;
+    e.preventDefault();
+    Shiny.setInputValue(canvas.getAttribute('data-drop-input'),
+      { id: dragging, target: o.el.getAttribute('data-canvas-id'), after: o.after, t: Date.now() }, { priority: 'event' });
+  });
+  document.addEventListener('dragend', function () {
+    dragging = null;
+    mark(null);
+    document.querySelectorAll('.chart-dragging').forEach(function (x) { x.classList.remove('chart-dragging'); });
+  });
+  // Editing where the text stands: a click (or Enter on the focused text) puts a box in its place; Enter keeps the edit (the server is told), Escape
+  //   leaves it, and so does nothing changed. Leaving the box by a click elsewhere keeps the edit. Shift+Enter is a new line in a summary.
+  function editStart(el) {
+    var next = el.nextElementSibling;
+    if (next && next.classList.contains('chart-inline-input')) return;
+    var multi = el.getAttribute('data-multiline') === '1';
+    var input = document.createElement(multi ? 'textarea' : 'input');
+    if (!multi) input.type = 'text'; else input.rows = 4;
+    input.className = 'form-control form-control-sm chart-inline-input';
+    var original = el.getAttribute('data-empty') === '1' ? '' : el.textContent.trim();
+    input.value = original;
+    input.setAttribute('aria-label', 'Edit the ' + (el.getAttribute('data-label') || 'text') + '. Enter keeps it, Escape leaves it.');
+    var done = false;
+    function finish(keep) {
+      if (done) return;
+      done = true;
+      var v = input.value;
+      input.remove();
+      el.hidden = false;
+      if (keep && v !== original)
+        Shiny.setInputValue(el.getAttribute('data-input'), { field: el.getAttribute('data-field'), value: v, t: Date.now() }, { priority: 'event' });
+    }
+    input.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+      else if (e.key === 'Enter' && !(multi && e.shiftKey)) { e.preventDefault(); finish(true); }
+    });
+    input.addEventListener('blur', function () { finish(true); });
+    el.hidden = true;
+    el.parentNode.insertBefore(input, el.nextSibling);
+    input.focus();
+    input.select();
+  }
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest && e.target.closest('.chart-editable');
+    if (el) editStart(el);
+  });
+  // The export dialog: a row is dimmed when its switch is off or its section's is, as the switches are flipped.
+  document.addEventListener('change', function (e) {
+    if (!e.target || !e.target.id || e.target.id.indexOf('dash_in_') < 0) return;
+    var rows = document.querySelectorAll('[data-dash-row]');
+    var off = {};
+    rows.forEach(function (r) {
+      var sw = r.querySelector('input[id*=dash_in_]');
+      if (r.hasAttribute('data-dash-section-row') && sw) off[r.getAttribute('data-dash-row')] = !sw.checked;
+    });
+    rows.forEach(function (r) {
+      var sw = r.querySelector('input[id*=dash_in_]');
+      var sec =r.getAttribute('data-dash-in');
+      var via = !!(sec && off[sec]);
+      r.classList.toggle('dash-off', !!(sw && !sw.checked) || via);
+      r.classList.toggle('dash-sec-off', via);
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    var el = e.target.classList && e.target.classList.contains('chart-editable') ? e.target : null;
+    if (el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); editStart(el); }
+  });
 })();
 ")
 
@@ -1209,7 +1331,7 @@ mod_explore_ui <- function(id) {
                                    actionButton(ns("write_headlines"), "Write headlines", class = "btn-sm btn-outline-primary chart-call",
                                                 `data-working` = WORKING_WORDS[["headlines"]])),
                           working_line()))),
-    tags$div(class = "chart-canvas",
+    tags$div(class = "chart-canvas", `data-drop-input` = ns("canvas_move"),
              uiOutput(ns("gate")), uiOutput(ns("boxes")), uiOutput(ns("bar")), uiOutput(ns("cards")), uiOutput(ns("foot"))),
     tags$style(HTML(EXPLORE_CSS)),
     tags$style(HTML(SUMMARY_CSS)),
@@ -1261,6 +1383,11 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     made$tn = 0L                       # summary tables made, for their ids (t1, t2, ...)
     made$table = new.env()             # per table: its definition (title, measures, by, ci), a reactiveVal; a table's switch for the dashboard is in made$dash
     made$tbl = new.env()               #   and the numbers worked out for it (summary_table(), or the error), a reactive, so a new palette does not work them again
+    made$sn = 0L                       # sections made, for their ids (s1, s2, ...); a section is a heading card on the canvas, its definition in state$sections
+    made$section = new.env()           # per section: its definition (title, text, collapsed), a reactiveVal; a section's switch for the dashboard is in made$dash
+    made$facts = new.env()             # per chart: its facts as the checks of the Edit text dialog and of the in-place edits read them (a reactive)
+    made$edited = new.env()            # per chart: the title last edited in place (a reactiveVal: NULL or list(text)), so that a title which fails the checks is marked
+    dash_on = reactiveVal(0L)          # counts the switches flipped in the export dialog, so that its warnings are drawn again
     table_msg = reactiveVal(NULL)      # what the Add a summary table dialog says when it cannot add (no measure chosen)
     dash_result = reactiveVal(NULL)    # what the last build of the dashboard gave, or the error it met
     dash_gen = reactiveVal(0L)         # counts builds and openings, so the dialog's button area is drawn again
@@ -1353,12 +1480,25 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     # One place up or down in the canvas, which is the order of the dashboard; the first cannot go up nor the last down.
     move_chart = function(chart_id, by) {
       ids = isolate(state$canvas)
+      # A section moves with its cards, past the section (or the cards before the first heading) next to it.
+      if (chart_id %in% section_ids()) return(invisible(state$canvas <- canvas_move_block(ids, section_ids(), chart_id, by)))
       at = match(chart_id, ids)
       to = at + by
       if (is.na(at) || to < 1L || to > length(ids)) return(invisible())
       ids[c(at, to)] = ids[c(to, at)]
       state$canvas = ids
     }
+    # Sections (Phase 11 Part E): a heading card on the canvas, a title and a line of text. The cards under it, up to the next heading, belong to it. Its
+    #   definition (id, title, text, collapsed) is in state$sections; the canvas order holds its id among the cards' ids.
+    section_of = function(id) (isolate(state$sections) %||% list())[[id]]
+    section_ids = function() names(isolate(state$sections) %||% list())
+    set_section = function(id, def) {
+      ss = isolate(state$sections) %||% list()
+      ss[[id]] = def
+      state$sections = ss
+      if (!is.null(made$section[[id]])) made$section[[id]](def)
+    }
+    section_info = function(id) { d = section_of(id); list(id = id, title = d$title, text = d$text) }
     notes_for = function(spec) {
       r = check_chart(spec, isolate(state$codebook), isolate(state$data), isolate(palette()), chat_rule_ids())
       if (isTRUE(r$ok)) r$notes else character(0)
@@ -1392,9 +1532,77 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       state$canvas = setdiff(isolate(state$canvas), table_id)
     }
 
+    # Removing a section takes its heading off the canvas; its cards stay, under the section before it (or under none).
+    remove_section = function(section_id) {
+      ss = isolate(state$sections) %||% list(); ss[[section_id]] = NULL; state$sections = ss
+      state$canvas = setdiff(isolate(state$canvas), section_id)
+    }
+
+    # "Add a section": a heading card, before the selected chart when one is selected, else at the top of the canvas.
+    add_section = function() {
+      made$sn = made$sn + 1L
+      id = paste0("s", made$sn)
+      set_section(id, list(id = id, title = SECTION_TITLE_DEFAULT, text = "", collapsed = FALSE))
+      make_section(id)
+      ids = isolate(state$canvas)
+      sel = isolate(selected())
+      at = if (is_text1(sel)) match(sel, ids) else NA_integer_
+      state$canvas = if (is.na(at)) c(id, ids) else append(ids, id, after = at - 1L)
+      invisible(id)
+    }
+
+    # Text edited where it stands (a card's headline, title or summary, a table's or a section's title, a section's text): `v` is what the page sent,
+    #   list(field, value). A headline or summary is kept and checked as the Edit text dialog checks it (numbers and words against the chart's facts; a text that
+    #   fails is kept, marked, and the line under it says why); a title is the chart's title (Undo undoes it) and is checked the same way when the card is drawn.
+    #   A blank headline is not kept. No model is asked.
+    edit_in_place = function(id, v) {
+      if (!is.list(v) || !is_text1(v$field) || !is.character(v$value) || length(v$value) != 1L || is.na(v$value)) return(invisible())
+      value = trimws(v$value)
+      field = v$field
+      if (!is.null(section_of(id))) {
+        def = section_of(id)
+        if (identical(field, "title")) def$title = if (nzchar(value)) value else SECTION_TITLE_DEFAULT
+        else if (identical(field, "text")) def$text = value
+        else return(invisible())
+        return(invisible(set_section(id, def)))
+      }
+      if (!is.null(table_of(id))) {
+        def = table_of(id)
+        if (!identical(field, "title")) return(invisible())
+        def$title = if (nzchar(value)) value else summary_title(def$measures, def$by, isolate(state$codebook))
+        ts = isolate(state$tables); ts[[id]] = def; state$tables = ts
+        return(invisible(made$table[[id]](def)))
+      }
+      ch = chart_of(id)
+      if (is.null(ch)) return(invisible())
+      if (field %in% c("headline", "summary")) {
+        st = story_of(id)
+        if (is.null(st) || !nzchar(value) || identical(st[[field]], value)) return(invisible())
+        st[[field]] = value
+        return(invisible(set_story(id, recheck_story(st))))
+      }
+      if (!identical(field, "title")) return(invisible())
+      spec = ch$spec
+      spec$title = if (nzchar(value)) value
+      made$edited[[id]](list(text = if (nzchar(value)) value))
+      if (!identical(spec, ch$spec)) set_chart(chart_apply(ch, spec, notes_for(spec)))
+      invisible()
+    }
+
+    # A card's switch in the export dialog is the card's own "In dashboard" switch: the two are kept the same.
+    dash_switch = function(id) observeEvent(input[[paste0("dash_in_", id)]], {
+      v = isTRUE(input[[paste0("dash_in_", id)]])
+      rv = made$dash[[id]]
+      if (!is.null(rv) && !identical(isolate(rv()), v)) {
+        rv(v)
+        bslib::update_switch(cid(id, "dash"), value = v, session = session)
+      }
+      dash_on(isolate(dash_on()) + 1L)
+    }, ignoreInit = TRUE)
+
     reset_canvas = function() {
       set_selected(NULL)
-      state$charts = list(); state$stories = list(); state$canvas = character(0); state$tables = list()
+      state$charts = list(); state$stories = list(); state$canvas = character(0); state$tables = list(); state$sections = list()
       last(NULL)
     }
 
@@ -1658,17 +1866,23 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     output$bar = renderUI({
       if (!ready()) return(NULL)
       cards = state$canvas
-      n = length(purrr::keep(cards, function(i) !is.null(state$charts[[i]])))     # charts; the rest of the canvas is summary tables
-      n_tables = length(cards) - n
+      secs = names(state$sections)
+      body = setdiff(cards, secs)                                                    # the charts and the tables; a section is a heading, not a card
+      n = length(purrr::keep(body, function(i) !is.null(state$charts[[i]])))     # charts; the rest of the canvas is summary tables
+      n_tables = length(body) - n
       sel = selected()
       chosen = if (!is.null(sel) && !is.null(made$chart[[sel]])) chart_title(made$chart[[sel]](), sel)
-      n_in = sum(purrr::map_lgl(cards, in_dash))
+      sec_of = canvas_section_of(cards, secs)
+      n_in = sum(purrr::map2_lgl(cards, sec_of, function(i, s) !i %in% secs && in_dash(i) && (is.na(s) || in_dash(s))))
       tags$div(class = "d-flex align-items-center flex-wrap gap-2 my-2",
                actionButton(ns("style"), "Style", class = "btn-sm btn-outline-secondary"),
                tags$span(class = "text-muted small", paste0(format_num(n), if (n == 1L) " chart" else " charts",
-                                                            if (n_tables) paste0(", ", format_num(n_tables), if (n_tables == 1L) " table" else " tables"))),
-               tags$span(class = "text-muted small chart-in-dashboard", paste0(format_num(n_in), " of ", format_num(length(cards)), " in the dashboard")),
+                                                            if (n_tables) paste0(", ", format_num(n_tables), if (n_tables == 1L) " table" else " tables"),
+                                                            if (length(secs)) paste0(", ", format_num(length(secs)), if (length(secs) == 1L) " section" else " sections"))),
+               tags$span(class = "text-muted small chart-in-dashboard", paste0(format_num(n_in), " of ", format_num(length(body)), " in the dashboard")),
                actionButton(ns("add_table"), "Add a summary table", class = "btn-sm btn-outline-secondary"),
+               actionButton(ns("add_section"), "Add a section", class = "btn-sm btn-outline-secondary",
+                            title = "A heading card; the cards under it, up to the next heading, belong to it. It goes before the selected chart, or at the top."),
                actionButton(ns("design_all"), "Design all", class = "btn-sm btn-outline-primary chart-call", `data-working` = WORKING_WORDS[["design"]],
                             title = "Designs each chart on the canvas that has no current design: two to four model calls for each", disabled = if (is.null(skill_chosen())) NA),
                actionButton(ns("export"), "Export dashboard", class = "btn-sm btn-outline-secondary"),
@@ -1685,13 +1899,33 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       tags$p(class = "small mb-0", style = "color: var(--bs-warning-text-emphasis, #8a5a00);", PALETTE_CVD_WARNING)
     })
 
+    # What the arrangement of the canvas is, so that the cards are laid out again only when the order, the sections or a collapse change (not when a section's words do).
+    canvas_layout = reactive({
+      ss = state$sections
+      list(ids = state$canvas, secs = names(ss), collapsed = names(purrr::keep(ss, function(d) isTRUE(d$collapsed))))
+    })
+    # The canvas in blocks: each section's heading and then its cards (two to a row, as before), none shown while the section is collapsed; the cards before the
+    #   first heading come first.
     output$cards = renderUI({
       if (!ready()) return(NULL)
-      ids = state$canvas
-      if (!length(ids)) return(tags$p(class = "text-muted", "No charts yet. Ask a question, or press Suggest charts."))
-      do.call(bslib::layout_column_wrap,
-              c(list(width = 1 / 2, fill = FALSE, heights_equal = "row"),
-                purrr::map(ids, function(i) uiOutput(ns(cid(i, "card"))))))
+      lay = canvas_layout()
+      if (!length(lay$ids)) return(tags$p(class = "text-muted", "No charts yet. Ask a question, or press Suggest charts."))
+      tagList(purrr::map(canvas_blocks(lay$ids, lay$secs), function(b) {
+        head = b[[1]] %in% lay$secs
+        cards = if (head) b[-1] else b
+        shown = if (head && b[[1]] %in% lay$collapsed) character(0) else cards
+        tagList(if (head) uiOutput(ns(cid(b[[1]], "card"))),
+                if (length(shown))
+                  do.call(bslib::layout_column_wrap, c(list(width = 1 / 2, fill = FALSE, heights_equal = "row"), purrr::map(shown, function(i) uiOutput(ns(cid(i, "card")))))))
+      }))
+    })
+    observeEvent(input$add_section, add_section())
+    # A card put down by hand: the page says which card (or section), on which card, before or after.
+    observeEvent(input$canvas_move, {
+      v = input$canvas_move
+      ids = isolate(state$canvas)
+      if (!is.list(v) || !is_text1(v$id) || !is_text1(v$target) || !v$id %in% ids || !v$target %in% ids) return()
+      state$canvas = canvas_reorder(ids, section_ids(), v$id, v$target, isTRUE(v$after))
     })
 
     output$foot = renderUI({
@@ -1779,11 +2013,19 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
 
     # The chosen charts, in the order of the canvas, as build_dashboard() takes them (the mode is the dialog's to fill in).
     #   A summary table is an item too (list(id, table, mode = "table"), with no chart or story), at its place in the canvas order.
+    # A card as the dashboard takes it, whatever its switch says (the dialog lists every card).
+    canvas_entry = function(i) {
+      if (!is.null(table_of(i))) list(id = i, table = table_of(i), mode = "table", stale = NA_character_)
+      else list(id = i, chart = chart_of(i), story = story_of(i), mode = "picture", design = design_shown(i),
+                stale = story_stale(story_of(i), chart_of(i), isolate(data_key())))
+    }
+    # What goes in: the charts and tables whose switch is on, and whose section's switch is on (a section that is off leaves out every card under it), in the
+    #   order of the canvas, each with the section it stands under (id, title, text) for the page's headings.
     dash_items = function() {
-      ids = purrr::keep(isolate(state$canvas), function(i) (!is.null(chart_of(i)) || !is.null(table_of(i))) && in_dash(i))
-      purrr::map(ids, function(i) if (!is.null(table_of(i))) list(id = i, table = table_of(i), mode = "table", stale = NA_character_)
-                                  else list(id = i, chart = chart_of(i), story = story_of(i), mode = "picture", design = design_shown(i),
-                                            stale = story_stale(story_of(i), chart_of(i), isolate(data_key()))))
+      ids = isolate(state$canvas)
+      sec = canvas_section_of(ids, section_ids())
+      on = purrr::map2_lgl(ids, sec, function(i, s) (!is.null(chart_of(i)) || !is.null(table_of(i))) && in_dash(i) && (is.na(s) || in_dash(s)))
+      purrr::map2(ids[on], sec[on], function(i, s) { it = canvas_entry(i); if (!is.na(s)) it$section = section_info(s); it })
     }
     item_title = function(it) if (!is.null(it$table)) it$table$title else chart_title(it$chart, "Untitled chart")
 
@@ -1836,15 +2078,28 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       items = dash_items()
       if (!length(items))
         return(showModal(modalDialog(title = "Export dashboard", easyClose = TRUE, footer = modalButton("Close"),
-                                     warn_box("No chart is in the dashboard. Switch \"In dashboard\" on for at least one card, then press Export dashboard again."))))
-      titles = purrr::map_chr(items, item_title)
-      has_head = purrr::map_lgl(items, function(it) !is.null(it$table) || (!is.null(it$story) && is_text1(it$story$headline) && nzchar(trimws(it$story$headline))))
-      # A table with a group that has fewer than SUMMARY_SMALL_ROWS rows is named once in one warning (nothing is hidden).
-      small = purrr::map_chr(purrr::keep(items, function(it) !is.null(it$table) && is_text1(it$table$by) && nzchar(it$table$by)), function(it)
-        if (isTRUE(tryCatch(any(summary_table(isolate(state$data), isolate(state$codebook), it$table$measures, it$table$by)$small), error = function(e) FALSE))) it$table$title else NA_character_)
-      warns = dashboard_warnings(titles, has_head, purrr::map_chr(items, "stale"), isolate(palette()), small = small[!is.na(small)])
+                                     warn_box("No chart is in the dashboard. Switch \"In dashboard\" on for at least one card (and for its section), then press Export dashboard again."))))
+      # The dashboard as it will be: every section and card of the canvas in order, each with its switch (the same as the one on the canvas).
+      ids = isolate(state$canvas)
+      secs = section_ids()
+      sec_of = stats::setNames(canvas_section_of(ids, secs), ids)
+      entries = purrr::compact(purrr::map(ids, function(i)
+        if (i %in% secs) list(id = i, section = section_info(i)) else if (!is.null(chart_of(i)) || !is.null(table_of(i))) canvas_entry(i)))
       boxes = canvas_box_values(isolate(state$data), isolate(state$codebook))
-      chart_items = purrr::keep(items, function(it) is.null(it$table))
+      chart_items = purrr::keep(entries, function(it) is.null(it$table) && is.null(it$section))
+      # The warnings follow the switches: what is left out is not warned about.
+      output$dash_warns = renderUI({
+        dash_on()
+        its = dash_items()
+        if (!length(its)) return(NULL)
+        titles = purrr::map_chr(its, item_title)
+        has_head = purrr::map_lgl(its, function(it) !is.null(it$table) || (!is.null(it$story) && is_text1(it$story$headline) && nzchar(trimws(it$story$headline))))
+        # A table with a group that has fewer than SUMMARY_SMALL_ROWS rows is named once in one warning (nothing is hidden).
+        small = purrr::map_chr(purrr::keep(its, function(it) !is.null(it$table) && is_text1(it$table$by) && nzchar(it$table$by)), function(it)
+          if (isTRUE(tryCatch(any(summary_table(isolate(state$data), isolate(state$codebook), it$table$measures, it$table$by)$small), error = function(e) FALSE))) it$table$title else NA_character_)
+        warns = dashboard_warnings(titles, has_head, purrr::map_chr(its, "stale"), isolate(palette()), small = small[!is.na(small)])
+        if (length(warns)) tags$div(class = "mb-3", purrr::map(unname(warns), function(w) tags$p(class = "small mb-1", style = warn_style, w)))
+      })
       purrr::walk(chart_items, function(it)
         output[[paste0("dash_note_", it$id)]] = renderUI({
           mode = input[[dash_mode_id(it$id)]]
@@ -1858,12 +2113,13 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         }))
       dash_result(NULL)
       dash_gen(isolate(dash_gen()) + 1L)
+      number = cumsum(purrr::map_lgl(entries, function(it) is.null(it$section)))
       showModal(modalDialog(
         title = "Export dashboard", size = "l", easyClose = FALSE, footer = modalButton("Close"),
         tags$p(class = "small text-muted", "One zip, named after the marking: the dashboard as one page, the data dictionary and a codebook page, and each chart as a picture and a script (a video as an MP4, each summary table as a CSV). ",
                "On the page each chart is drawn at the size it is shown, and again for a phone. ",
                "Nothing here calls a model."),
-        if (length(warns)) tags$div(class = "mb-3", purrr::map(unname(warns), function(w) tags$p(class = "small mb-1", style = warn_style, w))),
+        uiOutput(ns("dash_warns")),
         tags$div(class = "row g-2",
                  tags$div(class = "col-md-6", textInput(ns("dash_title"), "Title", value = isolate(dash_fields$title) %||% dash_title_default(), width = "100%")),
                  tags$div(class = "col-md-6", textInput(ns("dash_subtitle"), "Subtitle", value = isolate(dash_fields$subtitle) %||% "", width = "100%")),
@@ -1880,7 +2136,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                            choiceNames = unname(c(DASH_BOX_CHOICES[1:2], boxes$third$title)), choiceValues = names(DASH_BOX_CHOICES)),
         tags$h6("Key numbers (up to three)"),
         tags$p(class = "small text-muted", "Each is a line from the facts of one chart, worked out by R from the numbers the chart draws, and is shown as one more box at the top of the page with the chart's name under it. ",
-               "You pick it from the list; it is never typed."),
+               "You pick it from the list; it is never typed. A number of a chart that is left out is not shown."),
         {
           choices = dash_key_choices(chart_items)
           if (length(choices) > 1L)
@@ -1888,14 +2144,24 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
               tags$div(class = "col-md-4", selectInput(ns(paste0("dash_key", k)), paste("Key number", k), choices = choices, selected = "", width = "100%"))))
           else tags$p(class = "small text-muted", "No chart in the dashboard has a line of facts that can be a key number.")
         },
-        tags$h6("Charts, in the order of the canvas"),
-        tags$p(class = "small text-muted", "Change the order with Move up and Move down on the cards, and leave a chart out with its \"In dashboard\" switch. ",
+        tags$h6("The dashboard as it will be"),
+        tags$p(class = "small text-muted", "Sections and cards in the order of the canvas, each with a small picture. The switch on a card leaves it out; the switch on a section leaves out the section and every card under it (the cards' own switches stay as they are). ",
+               "Change the order on the canvas: drag a card by its handle, or press Move up and Move down. ",
                "A picture is the smallest file. An interactive chart is written into the page as its drawing (an SVG with a tooltip on each mark) and the scripts of the chart package (about 0.2 MB, once); a chart of thousands of marks makes the page larger.",
                if (video_available()) " A video is drawn again for the page, as it will be shown there, and plays once when it scrolls into view."),
-        purrr::imap(items, function(it, i)
-          if (!is.null(it$table)) dash_table_row(it, i, isolate(state$codebook))
-          else dash_chart_row(it, i, dash_thumb(it$chart), ns(dash_mode_id(it$id)), ns(paste0("dash_note_", it$id)),
-                              dashboard_default_mode(it$chart, isolate(made$interactive[[it$id]]())))),
+        purrr::map2(entries, number, function(it, k) {
+          sec = sec_of[[it$id]]
+          on_id = ns(paste0("dash_in_", it$id))
+          if (!is.null(it$section))
+            return(dash_section_row(it$section, on_id, isolate(in_dash(it$id)), n_cards = sum(sec_of == it$id, na.rm = TRUE) - 1L))
+          nested = !is.na(sec)
+          why_off = if (nested && !isolate(in_dash(sec))) DASH_WHY_OFF
+          if (!is.null(it$table)) dash_table_row(it, k, isolate(state$codebook), on_id = on_id, on = isolate(in_dash(it$id)), in_section = if (nested) sec, why_off = why_off)
+          else dash_chart_row(it, k, dash_thumb(it$chart), ns(dash_mode_id(it$id)), ns(paste0("dash_note_", it$id)),
+                              dashboard_default_mode(it$chart, isolate(made$interactive[[it$id]]())),
+                              on_id = on_id, on = isolate(in_dash(it$id)), in_section = if (nested) sec, why_off = why_off,
+                              design_id = if (!is.null(design_current(it$id))) ns(paste0("dash_des_", it$id)), design_on = isTRUE(isolate(made$showd[[it$id]]())))
+        }),
         uiOutput(ns("dash_action"))))
     })
     # The marking field says at once, under itself, why a blank or a too long marking will be refused when the dashboard is built.
@@ -1948,8 +2214,12 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         items = purrr::map(dash_items(), function(it) {
           m = input[[dash_mode_id(it$id)]]
           if (is.null(it$table)) it$mode = if (is_text1(m) && m %in% DASH_MODES) m else dashboard_default_mode(it$chart, isolate(made$interactive[[it$id]]()))
+          # a card with a design: the dialog's own choice, designed or standard (the card's, when the dialog is not there)
+          des = input[[paste0("dash_des_", it$id)]]
+          if (is.null(it$table) && !is.null(des)) it$design = if (isTRUE(des)) design_current(it$id)
           it
         })
+        if (!length(items)) return(list(ok = FALSE, refused = TRUE, lines = "No chart is in the dashboard: every card, or every section, is switched off. Switch one on and build again."))
         d = input$dash_date
         mk = marking_clean(if (is.null(input$dash_marking)) APP_CLASSIFICATION else input$dash_marking)   # no field (a test with no dialog): the default; a blank is refused
         if (!mk$ok) return(list(ok = FALSE, refused = TRUE, lines = mk$why))
@@ -1998,12 +2268,23 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       sty = chart_style(palette()$style %||% CHART_STYLE_DEFAULT)
       heading = function(text) tags$div(class = css_class("fw-semibold chart-heading", if (identical(sty$title_case, "upper")) "chart-upper"),
                                         style = paste0("font-family: ", CHART_FONTS[[sty$title_font]]$css, ";"), dash_heading_text(text, palette()$style %||% CHART_STYLE_DEFAULT))
+      # The words stand where they are edited (Phase 11 Part E): a click puts a box in their place, Enter keeps what is written, Escape leaves it. A headline and
+      #   a summary that fail the number or word check are kept and marked (and the line under them says why); a title is checked the same way when it was edited here.
+      ed_id = ns(cid(chart_id, "ed"))
+      bad_in = function(headline, summary) !is.null(st) && !is.null(st$facts) && !summary_ok(summary_problems(headline, summary, st$facts, st$spec))
+      ed = made$edited[[chart_id]]()
+      title_bad = if (!is.null(ed) && identical(ed$text, ch$spec$title)) {
+        x = made$facts[[chart_id]]()
+        if (!is.null(x)) problem_sentences(summary_problems(ed$text, NULL, x$text, x$spec)) else character(0)
+      } else character(0)
+      title_tag = function(tag) editable_tag(tag, ed_id, "title", ch$spec$title %||% "", "title", bad = length(title_bad) > 0L)
       head = if (!is.null(st) && is_text1(st$headline) && nzchar(st$headline))
-        tags$div(heading(st$headline), tags$div(class = "small text-muted chart-card-sub", title))
-      else heading(title)
+        tags$div(editable_tag(heading(st$headline), ed_id, "headline", st$headline, "headline", bad = bad_in(st$headline, NULL)),
+                 title_tag(tags$div(class = "small text-muted chart-card-sub", title)), if (length(title_bad)) check_line(title_bad, ok = NULL))
+      else tags$div(title_tag(heading(title)), if (length(title_bad)) check_line(title_bad, ok = NULL))
       bslib::card(
         full_screen = TRUE, fill = FALSE, class = paste("chart-card", if (sel) "chart-selected"),
-        `data-chart-id` = chart_id, onclick = card_click_js(ns("card_click")),
+        `data-chart-id` = chart_id, `data-canvas-id` = chart_id, onclick = card_click_js(ns("card_click")),
         bslib::card_header(
           class = "d-flex flex-column gap-2", head,
           tags$div(class = "d-flex flex-wrap gap-1",
@@ -2017,7 +2298,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                    btn("headline", "Headline", "btn-outline-primary chart-call", `data-working` = WORKING_WORDS[["headline"]]),
                    btn("remove", "Remove", "btn-outline-danger")),
           # The dashboard's choice and order: the switch, and one place up or down (the canvas order is the dashboard's).
-          tags$div(class = "d-flex flex-wrap align-items-center gap-2 chart-dash-row",
+          tags$div(class = "d-flex flex-wrap align-items-center gap-2 chart-dash-row", drag_handle(),
                    bslib::input_switch(ns(cid(chart_id, "dash")), "In dashboard", value = isolate(in_dash(chart_id))),
                    if (!is.null(dz)) bslib::input_switch(ns(cid(chart_id, "showd")), "Designed drawing", value = isolate(isTRUE(made$showd[[chart_id]]()))),
                    btn("up", "Move up", disabled = isTRUE(at <= 1L)), btn("down", "Move down", disabled = isTRUE(at >= length(ids))))),
@@ -2028,7 +2309,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
           uiOutput(ns(cid(chart_id, "notes"))),
           if (!is.null(dz)) tags$p(class = "small text-muted mb-1 chart-designed", dash_design_mark(dz)),
           if (!is.null(dnote)) tags$p(class = "small mb-1 chart-design-note", style = warn_style, dnote),
-          if (!is.null(st)) tags$p(class = "mb-1 chart-summary", st$summary),
+          if (!is.null(st)) editable_tag(tags$p(class = "mb-1 chart-summary", st$summary), ed_id, "summary", st$summary, "summary", multiline = TRUE, bad = bad_in(NULL, st$summary)),
           if (!is.na(stale)) tags$p(class = "small mb-1", style = warn_style, if (identical(stale, "chart")) SUMMARY_STALE else SUMMARY_STALE_DATA),
           if (!is.null(st) && length(st$problems)) check_line(st$problems, ok = NULL),
           if (!is.null(note)) tags$p(class = "small mb-1", style = warn_style, note),
@@ -2200,6 +2481,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       made$design[[chart_id]] = reactiveVal(NULL)
       made$showd[[chart_id]] = reactiveVal(FALSE)
       made$dnote[[chart_id]] = reactiveVal(NULL)
+      made$edited[[chart_id]] = reactiveVal(NULL)
       made$dwidget[[chart_id]] = reactive({
         dz = made$design[[chart_id]]()
         if (is.null(dz)) return(NULL)
@@ -2212,6 +2494,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         if (is.null(x$error)) list(text = names_back(x$facts$text, x$facts$names), spec = x$spec)
       })
 
+      made$facts[[chart_id]] = facts
       output[[cid(chart_id, "card")]] = renderUI(card_ui(chart_id))
       # Drawn at SPEC_DPI pixels per inch and shown at its size in inches, so it is sharper, not larger.
       output[[cid(chart_id, "static")]] = renderImage({
@@ -2306,6 +2589,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       }, ignoreInit = TRUE)
       observeEvent(input[[cid(chart_id, "up")]], move_chart(chart_id, -1L))
       observeEvent(input[[cid(chart_id, "down")]], move_chart(chart_id, 1L))
+      observeEvent(input[[cid(chart_id, "ed")]], edit_in_place(chart_id, input[[cid(chart_id, "ed")]]))
+      dash_switch(chart_id)
       observeEvent(input[[cid(chart_id, "headline")]], with_busy(if (send_ok("Writing a headline")) say(story_line(write_stories(chart_id)))))
 
       # Code: a dialog with the R code of this chart and a button that copies it.
@@ -2387,6 +2672,84 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       invisible()
     }
 
+    # ---- a section's card ---------------------------------------------------------------------------------------------
+
+    # The heading card: its title and its line of text (each edited where it stands, or with Edit text), Collapse (hides the cards under it on the canvas; the
+    #   export is not changed by it), Remove section (the cards stay), the switch for the dashboard (off leaves out the section and its cards), Move up and
+    #   Move down (the section goes with its cards, past the section next to it), and the handle it is dragged by.
+    section_card_ui = function(sid) {
+      def = made$section[[sid]]()
+      if (is.null(def)) return(NULL)
+      blocks = canvas_blocks(state$canvas, names(state$sections))
+      at = which(purrr::map_lgl(blocks, function(b) identical(b[[1]], sid)))
+      n = if (length(at)) length(blocks[[at]]) - 1L else 0L
+      collapsed = isTRUE(def$collapsed)
+      sty = chart_style(palette()$style %||% CHART_STYLE_DEFAULT)
+      btn = function(what, text, class = "btn-outline-secondary", ...)
+        actionButton(ns(cid(sid, what)), text, class = paste("btn-sm", class), ...)
+      ed_id = ns(cid(sid, "ed"))
+      tags$div(class = "chart-section my-3", `data-canvas-id` = sid, `data-section-id` = sid, role = "group", `aria-label` = paste("Section:", def$title),
+               tags$div(class = "d-flex align-items-start gap-2", drag_handle(),
+                        tags$div(class = "flex-grow-1 min-w-0",
+                                 editable_tag(tags$h2(class = css_class("fw-semibold chart-section-title", if (identical(sty$title_case, "upper")) "chart-upper"),
+                                                      style = paste0("font-family: ", CHART_FONTS[[sty$title_font]]$css, ";"),
+                                                      dash_heading_text(def$title, palette()$style %||% CHART_STYLE_DEFAULT)), ed_id, "title", def$title, "section title"),
+                                 editable_tag(if (nzchar(def$text)) tags$p(class = "chart-section-text", def$text)
+                                              else tags$p(class = "chart-section-text small text-muted", "Click to add a line of text"),
+                                              ed_id, "text", def$text, "section text", multiline = TRUE))),
+               tags$div(class = "d-flex flex-wrap align-items-center gap-2 mt-2 chart-dash-row",
+                        btn("collapse", if (collapsed) "Expand" else "Collapse", `aria-expanded` = if (collapsed) "false" else "true"),
+                        btn("edit", "Edit text"),
+                        btn("remove", "Remove section", "btn-outline-danger"),
+                        tags$span(class = "small text-muted", paste0(n, if (n == 1L) " card" else " cards", if (collapsed && n) " (hidden)")),
+                        bslib::input_switch(ns(cid(sid, "dash")), "In dashboard", value = isolate(in_dash(sid))),
+                        btn("up", "Move up", disabled = isTRUE(at <= 1L)), btn("down", "Move down", disabled = isTRUE(at >= length(blocks)))))
+    }
+
+    # A section's outputs and observers, made once, when it is added.
+    make_section = function(sid) {
+      if (sid %in% made$ids) return(invisible())
+      made$ids = c(made$ids, sid)
+      made$section[[sid]] = reactiveVal(section_of(sid))
+      made$dash[[sid]] = reactiveVal(TRUE)
+      output[[cid(sid, "card")]] = renderUI(section_card_ui(sid))
+      observeEvent(input[[cid(sid, "remove")]], remove_section(sid))
+      observeEvent(input[[cid(sid, "dash")]], {
+        rv = made$dash[[sid]]
+        v = isTRUE(input[[cid(sid, "dash")]])
+        if (!identical(isolate(rv()), v)) rv(v)
+      }, ignoreInit = TRUE)
+      dash_switch(sid)
+      observeEvent(input[[cid(sid, "up")]], move_chart(sid, -1L))
+      observeEvent(input[[cid(sid, "down")]], move_chart(sid, 1L))
+      observeEvent(input[[cid(sid, "collapse")]], {
+        def = section_of(sid)
+        if (!is.null(def)) { def$collapsed = !isTRUE(def$collapsed); set_section(sid, def) }
+      })
+      observeEvent(input[[cid(sid, "ed")]], edit_in_place(sid, input[[cid(sid, "ed")]]))
+      # Edit text: the title and the line of text, applied with the button (the same as editing them where they stand). Nothing here is checked: a section's words
+      #   say nothing about a chart.
+      observeEvent(input[[cid(sid, "edit")]], {
+        def = section_of(sid)
+        if (is.null(def)) return()
+        showModal(modalDialog(
+          title = paste0("Edit text: ", def$title), size = "l", easyClose = FALSE,
+          textInput(ns(cid(sid, "w_title")), "Title", value = def$title, width = "100%"),
+          textAreaInput(ns(cid(sid, "w_text")), "Line of text (optional)", value = def$text, width = "100%", rows = 3),
+          footer = tagList(modalButton("Close"), actionButton(ns(cid(sid, "apply")), "Apply wording", class = "btn-primary"))))
+      })
+      observeEvent(input[[cid(sid, "apply")]], {
+        def = section_of(sid)
+        if (is.null(def)) return()
+        title = trimws(input[[cid(sid, "w_title")]] %||% "")
+        def$title = if (nzchar(title)) title else SECTION_TITLE_DEFAULT
+        def$text = trimws(input[[cid(sid, "w_text")]] %||% "")
+        set_section(sid, def)
+        removeModal()
+      })
+      invisible()
+    }
+
     # ---- a summary table's card ---------------------------------------------------------------------------------------
 
     # The Add a summary table dialog: the measures (one or more), a group to take them by (optional), a title and the switch for the 95%
@@ -2454,14 +2817,14 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       btn = function(what, text, class = "btn-outline-secondary", ...)
         actionButton(ns(cid(table_id, what)), text, class = paste("btn-sm", class), ...)
       bslib::card(
-        full_screen = TRUE, fill = FALSE, class = "chart-card chart-table-card", `data-table-id` = table_id,
+        full_screen = TRUE, fill = FALSE, class = "chart-card chart-table-card", `data-table-id` = table_id, `data-canvas-id` = table_id,
         bslib::card_header(
           class = "d-flex flex-column align-items-start gap-2",
-          tags$div(class = css_class("fw-semibold chart-heading", if (identical(st$title_case, "upper")) "chart-upper"), style = paste0("font-family: ", CHART_FONTS[[st$title_font]]$css, ";"),
-                   dash_heading_text(def$title, palette()$style %||% CHART_STYLE_DEFAULT)),
+          editable_tag(tags$div(class = css_class("fw-semibold chart-heading", if (identical(st$title_case, "upper")) "chart-upper"), style = paste0("font-family: ", CHART_FONTS[[st$title_font]]$css, ";"),
+                               dash_heading_text(def$title, palette()$style %||% CHART_STYLE_DEFAULT)), ns(cid(table_id, "ed")), "title", def$title, "title"),
 
           tags$div(class = "d-flex flex-wrap gap-1", btn("edit", "Edit text"), btn("remove", "Remove", "btn-outline-danger")),
-          tags$div(class = "d-flex flex-wrap align-items-center gap-2 chart-dash-row",
+          tags$div(class = "d-flex flex-wrap align-items-center gap-2 chart-dash-row", drag_handle(),
                    bslib::input_switch(ns(cid(table_id, "dash")), "In dashboard", value = isolate(in_dash(table_id))),
                    btn("up", "Move up", disabled = isTRUE(at <= 1L)), btn("down", "Move down", disabled = isTRUE(at >= length(ids))))),
         bslib::card_body(
@@ -2488,6 +2851,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       }, ignoreInit = TRUE)
       observeEvent(input[[cid(table_id, "up")]], move_chart(table_id, -1L))
       observeEvent(input[[cid(table_id, "down")]], move_chart(table_id, 1L))
+      observeEvent(input[[cid(table_id, "ed")]], edit_in_place(table_id, input[[cid(table_id, "ed")]]))
+      dash_switch(table_id)
       # Edit text: the title only (a table holds no other text), applied with the button; blank is the title R writes from the columns.
       observeEvent(input[[cid(table_id, "edit")]], {
         def = table_of(table_id)
@@ -2511,6 +2876,65 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
   })
 }
 
+
+# ---- Sections and the order of the canvas (Phase 11 Part E) ---------------------------------------------------------------
+#   The canvas is a list of ids: charts (c1), tables (t1) and sections (s1). A section is a heading; the cards under it, up to the next heading, belong to it.
+#   The functions below take the ids and `secs`, the ids that are sections, and return ids (no state): the order is the dashboard's.
+
+SECTION_TITLE_DEFAULT <- "New section"
+
+# The section each id stands under: the last heading at or before it (a heading stands under itself); NA before the first heading.
+canvas_section_of <- function(ids, secs) {
+  if (!length(ids)) return(character(0))
+  as.character(unlist(utils::tail(purrr::accumulate(ids, function(cur, i) if (i %in% secs) i else cur, .init = NA_character_), -1L)))
+}
+
+# The canvas in blocks: a heading with the cards under it; the cards before the first heading are the first block (with no heading).
+canvas_blocks <- function(ids, secs) {
+  if (!length(ids)) return(list())
+  key = canvas_section_of(ids, secs)
+  key = ifelse(is.na(key), "", key)
+  unname(split(ids, factor(key, levels = unique(key))))
+}
+
+# A section moved `by` places among the blocks, with its cards; the ids as they were when it cannot move.
+canvas_move_block <- function(ids, secs, id, by) {
+  blocks = canvas_blocks(ids, secs)
+  at = which(purrr::map_lgl(blocks, function(b) identical(b[[1]], id)))
+  to = at + by
+  if (length(at) != 1L || to < 1L || to > length(blocks)) return(ids)
+  blocks[c(at, to)] = blocks[c(to, at)]
+  unlist(blocks)
+}
+
+# `id` (a card, or a section, which takes its cards) put before or after `target`. A card lands before or after the card (or heading) it is dropped on, so a card
+#   dropped on the lower half of a heading is the first of that section. A section lands before or after the block of the card it is dropped on, never inside it.
+canvas_reorder <- function(ids, secs, id, target, after = FALSE) {
+  if (!id %in% ids || !target %in% ids || identical(id, target)) return(ids)
+  moving = if (id %in% secs) unlist(purrr::keep(canvas_blocks(ids, secs), function(b) identical(b[[1]], id))) else id
+  if (target %in% moving) return(ids)
+  rest = setdiff(ids, moving)
+  ref = target
+  if (id %in% secs) {
+    block = purrr::detect(canvas_blocks(rest, secs), function(b) target %in% b)
+    ref = if (after) utils::tail(block, 1L) else block[[1]]
+  }
+  at = match(ref, rest)
+  append(rest, moving, after = if (after) at else at - 1L)
+}
+
+# The handle a card is dragged by (the page's script, EXPLORE_JS, does the rest).
+drag_handle <- function()
+  tags$span(class = "chart-drag", draggable = "true", role = "img", `aria-label` = "Drag handle",
+            title = "Drag to move. Move up and Move down do the same from the keyboard.", HTML("&#8942;&#8942;"))
+
+# A text that is edited where it stands: the tag, made a target of the page's in-place edit (EXPLORE_JS), which starts the box with the text as shown. `value` says
+#   whether there is a text (none: the box starts empty, whatever the tag shows in its place), `field` is what the server is told, `bad` marks a text that failed the checks.
+editable_tag <- function(tag, input_id, field, value, label, multiline = FALSE, bad = FALSE)
+  htmltools::tagAppendAttributes(tag, class = css_class("chart-editable", if (bad) "chart-marked"), tabindex = "0", role = "button",
+                                 title = paste0("Click to edit the ", label, ". Enter keeps it, Escape leaves it."),
+                                 `data-input` = input_id, `data-field` = field, `data-empty` = if (!is_text1(value) || !nzchar(value)) "1", `data-label` = label,
+                                 `data-multiline` = if (multiline) "1")
 
 # ---- Exporting the dashboard ------------------------------------------------------------------------------------------
 #   The analyst chooses the charts that go in (the "In dashboard" switch on each card), puts them in order (Move up, Move down)
@@ -2672,6 +3096,14 @@ dash_layout <- function(wide) {
   }, .init = list(full = rep(FALSE, n), open = FALSE, last = 0L))
   if (out$open) out$full[[out$last]] = TRUE
   out$full
+}
+
+# The same, a section at a time: a heading takes a whole row, so a card does not share its row with one of another section. `section` is the id of the section
+#   each card stands under ("" for none), in order.
+dash_layout_by <- function(wide, section) {
+  if (!length(wide)) return(logical(0))
+  runs = rep(seq_along(rle(section)$lengths), rle(section)$lengths)
+  unlist(purrr::map(unname(split(wide, factor(runs, levels = unique(runs)))), dash_layout))
 }
 
 # The rows of a page that have a hole, given which cards have a row to themselves: lay the cards out two to a row, in order, as the
@@ -2845,6 +3277,12 @@ dash_css <- function(style, accent) {
     ".key-what{color:var(--caption);font-size:.85rem;line-height:1.3;margin-top:.3rem;overflow-wrap:anywhere;}\n",
     ".grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;align-items:stretch;}\n",
     "@media (min-width:", DASH_TWO_PX, "px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}.card.full img{max-width:none;}}\n",
+    # A section's heading (Phase 11 Part E): across the row, over the cards under it, a rule in the accent above it.
+    ".section-head{grid-column:1/-1;margin:.9rem 0 -.25rem;padding-top:.7rem;border-top:2px solid var(--accent);}\n",
+    ".section-head h2{font-family:var(--title-font);font-weight:", title_weight, ";font-size:1.6rem;line-height:1.2;margin:0;overflow-wrap:anywhere;}\n",
+    ".section-head p{color:var(--text2);margin:.35rem 0 0;max-width:70ch;overflow-wrap:anywhere;}\n",
+    if (identical(st$title_case, "upper")) ".section-head h2{text-transform:uppercase;letter-spacing:.005em;}.section-head h2 .keep{text-transform:none;}\n",
+    "@media print{.section-head{break-after:avoid;page-break-after:avoid;margin:1rem 0 .5rem;}}\n",
     # A card is a column that fills the height of its row (the grid stretches it); its chart's slot takes what is left, so the chart stands in the
     #   middle of the card and no blank block is under a short one.
     ".card{min-width:0;display:flex;flex-direction:column;}\n.card .slot{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;min-width:0;}\n",
@@ -3167,6 +3605,21 @@ dash_heading_text <- function(text, style) {
     if (is_span) tags$span(class = "keep", paste(tk$text[from:to], collapse = "")) else paste(tk$text[from:to], collapse = ""))
 }
 
+# A section's heading in the page: its title, and its line of text when there is one, across the whole row.
+dash_section_head <- function(sec, style)
+  tags$div(class = "section-head", tags$h2(dash_heading_text(sec$title, style)),
+           if (is_text1(sec$text) && nzchar(trimws(sec$text))) tags$p(sec$text))
+
+# The cards of the page in order, a section's heading before the first card under it. A card has `section` (id, title, text) when it stands under one.
+dash_cards <- function(items, full, style) {
+  cards = purrr::map2(items, full, dash_card, style = style)
+  purrr::imap(cards, function(card, k) {
+    sec = items[[k]]$section
+    first = !is.null(sec) && (k == 1L || !identical(items[[k - 1L]]$section$id, sec$id))
+    tagList(if (first) dash_section_head(sec, style), card)
+  })
+}
+
 # The page, as one string: the masthead (title, subtitle, author, date, the introduction at a reading measure), the boxes, a card for each chart
 #   in order (those with a row to themselves, from `full`), and the foot (the About text and "Made with chaRt"); the style sheet, typefaces,
 #   pictures and (when a chart is interactive) scripts all inside it.
@@ -3186,7 +3639,7 @@ dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALS
                 tags$p(class = "byline", if (nzchar(author)) tags$span(class = "author", author), if (nzchar(author)) " · ", tags$time(dash_date_text(settings$date))),
                 tags$div(class = "intro", dash_paragraphs(settings$intro))),
     dash_keys_tag(keys, narrow = identical(chart_style(style)$title_font, "display")),
-    tags$main(class = "grid", purrr::map2(items, full, dash_card, style = style)),
+    tags$main(class = "grid", dash_cards(items, full, style)),
     tags$footer(class = "foot", dash_about(items, settings, cb, data, model), tags$p(class = "made", "Made with chaRt")),
     if (any(purrr::map_chr(items, "mode") == "video")) tags$script(HTML(DASH_VIDEO_JS))), dash_band(mark, "bottom"))
   dash_document(head, body)
@@ -3481,14 +3934,17 @@ dash_table_card <- function(it, full = TRUE, style = NULL)
     summary_tag(it$tb, it$ci))
 
 # A table in the dialog's list: its title and the columns it takes, and what is written (a table in the page and a CSV in charts/).
-dash_table_row <- function(it, i, cb) {
+dash_table_row <- function(it, i, cb, on_id = NULL, on = TRUE, in_section = NULL, why_off = NULL) {
   t = it$table
-  tags$div(class = "d-flex gap-3 align-items-start border-bottom py-2",
-           tags$div(class = "small text-muted", style = "width:9rem; flex:none;", "Summary table"),
-           tags$div(class = "flex-grow-1",
+  tags$div(class = css_class("d-flex gap-3 align-items-start border-bottom py-2", if (!is.null(in_section)) "ms-4 ps-3 border-start", if (!isTRUE(on) || !is.null(why_off)) "dash-off", if (!is.null(why_off)) "dash-sec-off"),
+           `data-dash-row` = it$id, `data-dash-in` = in_section,
+           if (!is.null(on_id)) dash_row_switch(on_id, on),
+           tags$div(class = "small text-muted dash-body", style = "width:9rem; flex:none;", "Summary table"),
+           tags$div(class = "flex-grow-1 dash-body",
                     tags$div(class = "fw-semibold", paste0(i, ". ", t$title)),
                     tags$div(class = "small text-muted", paste0("Columns: ", paste(purrr::map_chr(t$measures, function(n) summary_choice(purrr::detect(cb$columns, function(e) identical(e$name, n)) %||% list(name = n))), collapse = ", "),
                                                                if (is_text1(t$by) && nzchar(t$by)) paste0("; by ", t$by), if (!isTRUE(t$ci)) "; without 95% intervals")),
+                    tags$div(class = "small dash-why", DASH_WHY_OFF),
                     tags$div(class = "small", "Goes in the page as a table (no model text) and in charts/ as a CSV.")))
 }
 
@@ -3625,9 +4081,10 @@ build_dashboard <- function(items, data, cb, palette, settings, path, zip_file, 
   made = tryCatch(purrr::imap(unname(items), function(it, i)
                     if (!is.null(it$table)) dash_table(it, i, stage, data, cb, mark) else dash_chart(it, i, stage, data, cb, palette, path, widget, kind, mark)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
-  full = dash_layout(purrr::map_lgl(made, dash_card_wide))
+  full = dash_layout_by(purrr::map_lgl(made, dash_card_wide), purrr::map_chr(unname(items), function(it) it$section$id %||% ""))
   made = tryCatch(purrr::pmap(list(made, full, seq_along(made), unname(items)), function(m, f, i, it) dash_pictures(m, f, i, it$chart, data, cb, palette, kind, widget, stage, mark)),
                   error = function(e) stop(conditionMessage(dash_root_error(e)), call. = FALSE))
+  made = purrr::map2(made, unname(items), function(m, it) { m$section = it$section; m })   # the section each card stands under, for the page's headings
   dash_step("writing dashboard.html", writeBin(charToRaw(enc2utf8(dash_page(made, settings, cb, data, palette, model, full))), file.path(stage, "dashboard.html")))
   dash_step("writing codebook.html", writeBin(charToRaw(enc2utf8(codebook_page(cb, palette, settings$date, data, mark))), file.path(stage, "codebook.html")))
   dash_step("writing data_dictionary.yaml", { write_codebook(cb, file.path(stage, "data_dictionary.yaml")); marking_prepend(file.path(stage, "data_dictionary.yaml"), marking_comment(mark)) })
@@ -3655,18 +4112,44 @@ dash_last_lines <- function(msg) paste(utils::tail(substr(strsplit(as.character(
 
 # One chart in the dialog's list: its small picture, its title and headline, the choice of picture or interactive, and the line
 #   that says what an interactive version of it carries. `mode_id` is the radio's input id and `note_id` its note's output id.
-dash_chart_row <- function(it, i, thumb, mode_id, note_id, mode) {
+dash_chart_row <- function(it, i, thumb, mode_id, note_id, mode, on_id = NULL, on = TRUE, in_section = NULL, why_off = NULL, design_id = NULL, design_on = FALSE) {
   head = if (!is.null(it$story) && is_text1(it$story$headline) && nzchar(it$story$headline)) it$story$headline
-  tags$div(class = "d-flex gap-3 align-items-start border-bottom py-2",
-           if (!is.null(thumb)) tags$img(src = thumb, alt = paste("Small picture of", chart_title(it$chart, "this chart")),
-                                         style = "width:9rem; height:auto; border:1px solid rgba(128,128,128,.5); flex:none;")
-           else tags$div(class = "small text-muted", style = "width:9rem; flex:none;", "No picture: this chart could not be drawn."),
-           tags$div(class = "flex-grow-1",
-                    tags$div(class = "fw-semibold", paste0(i, ". ", chart_title(it$chart, "Untitled chart"))),
-                    if (!is.null(head)) tags$div(class = "small text-muted", head),
-                    radioButtons(mode_id, NULL, choices = if (video_available()) DASH_MODES else DASH_MODES[DASH_MODES != "video"], selected = mode, inline = TRUE),
-                    uiOutput(note_id)))
+  off = !isTRUE(on) || !is.null(why_off)   # the page's script keeps these classes true to the switches as they are flipped (EXPLORE_JS)
+  tags$div(class = css_class("d-flex gap-3 align-items-start border-bottom py-2", if (!is.null(in_section)) "ms-4 ps-3 border-start", if (off) "dash-off", if (!is.null(why_off)) "dash-sec-off"),
+           `data-dash-row` = it$id, `data-dash-in` = in_section,
+           if (!is.null(on_id)) dash_row_switch(on_id, on),
+           tags$div(class = "d-flex gap-3 align-items-start flex-grow-1 dash-body",
+                    if (!is.null(thumb)) tags$img(src = thumb, alt = paste("Small picture of", chart_title(it$chart, "this chart")),
+                                                  style = "width:9rem; height:auto; border:1px solid rgba(128,128,128,.5); flex:none;")
+                    else tags$div(class = "small text-muted", style = "width:9rem; flex:none;", "No picture: this chart could not be drawn."),
+                    tags$div(class = "flex-grow-1",
+                             tags$div(class = "fw-semibold", paste0(i, ". ", chart_title(it$chart, "Untitled chart"))),
+                             if (!is.null(head)) tags$div(class = "small text-muted", head),
+                             tags$div(class = "small dash-why", DASH_WHY_OFF),
+                             radioButtons(mode_id, NULL, choices = if (video_available()) DASH_MODES else DASH_MODES[DASH_MODES != "video"], selected = mode, inline = TRUE),
+                             if (!is.null(design_id)) bslib::input_switch(design_id, "Designed drawing (off: the standard drawing)", value = design_on),
+                             uiOutput(note_id))))
 }
+
+DASH_WHY_OFF <- "Left out with its section."
+
+# The switch at the left of a row of the dialog: the card's own "In dashboard" switch.
+dash_row_switch <- function(on_id, on)
+  tags$div(style = "width:6.5rem; flex:none;", bslib::input_switch(on_id, "Include", value = isTRUE(on)))
+
+# A section in the dialog's list: its title and line of text, how many cards stand under it, and its switch (off leaves out every card under it).
+dash_section_row <- function(sec, on_id, on, n_cards = 0L)
+  tags$div(class = css_class("d-flex gap-3 align-items-start border-top border-bottom py-2 mt-2", if (!isTRUE(on)) "dash-off"), `data-dash-row` = sec$id, `data-dash-section-row` = "1",
+           dash_row_switch(on_id, on),
+           tags$div(class = "d-flex gap-3 align-items-start flex-grow-1 dash-body",
+                    tags$div(style = "width:9rem; flex:none;", `aria-hidden` = "true",
+                             tags$div(style = "height:6px; width:60%; background:currentColor; opacity:.75; margin:.35rem 0;"),
+                             tags$div(style = "height:4px; width:90%; background:currentColor; opacity:.3;")),
+                    tags$div(class = "flex-grow-1",
+                             tags$div(class = "small text-uppercase text-muted", "Section"),
+                             tags$div(class = "fw-semibold", sec$title),
+                             if (is_text1(sec$text) && nzchar(sec$text)) tags$div(class = "small text-muted", sec$text),
+                             tags$div(class = "small", paste0(n_cards, if (n_cards == 1L) " card" else " cards", " under it"), tags$div(class = "small dash-all-off", "All of them are left out of the page.")))))
 
 # ---- Methodology -----------------------------------------------------------------------------------------------------
 #   The page, in this order: www/methodology.md as HTML (the manager's text, never edited here; a small drawn example

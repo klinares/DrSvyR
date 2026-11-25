@@ -208,13 +208,14 @@ options(shiny.maxRequestSize = APP_MAX_UPLOAD_MB * 1024^2)
 #   sentences about it (problems), its profile, the data dictionary the analyst edits (codebook) and the
 #   path of the upload (for the code a chart comes with); the record of every model call (calls); every
 #   chart drawn this session, by id (charts), and the ids of those on the canvas, newest first (canvas), where a summary table is a card
-#   too (its id is in canvas and its definition, by id, in tables; the chat sees only the charts);
+#   too (its id is in canvas and its definition, by id, in tables; the chat sees only the charts), and so is a section, a heading card (its id is in canvas and
+#   its definition, by id, in sections: title, text, collapsed);
 #   the headline and summary written for a chart, by id (stories); the three palettes; and ask_request, a question that
 #   Methodology's "Ask this" button hands to Explore. The Data page also sets `excel` (not listed above: what was found in an Excel workbook and chosen, and
 #   opts, the choices that read the same sheet again); it is NULL for a delimited file.
 new_state <- function() reactiveValues(key_version = 0L, data = NULL, problems = NULL, profile = NULL, codebook = NULL,
                                        path = NULL, calls = NULL, charts = list(), canvas = character(0), stories = list(),
-                                       tables = list(), palette = chart_palette_default(), ask_request = NULL)
+                                       tables = list(), sections = list(), palette = chart_palette_default(), ask_request = NULL)
 
 
 # ---- 6. layout --------------------------------------------------------------
