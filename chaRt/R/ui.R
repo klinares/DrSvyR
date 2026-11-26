@@ -2943,66 +2943,125 @@ DASH_VIDEO_DISCLOSURE <- paste("An animated chart carries no rows: it is picture
                                 "to a reader whose system asks for less motion, and in print.")
 DASH_VIDEO_TIME <- "An animated chart takes some seconds to draw; its frames are written into the page."
 
-# The player of an animated chart (Phase 12), in the page and in the app's card: plain script, no library. A box holds the finished chart as an <img> (what a
-#   reader sees without script, with less motion asked for, in print, and when the motion ends) and its frames as data addresses in a JSON script element
-#   (every frame but the last, each with the number of times in a row it is shown; the last is the <img>). The player draws the frames on a <canvas> laid over
-#   the <img> (the <img> keeps its place and is hidden while it plays), one timer for each frame kept, held for its repeats at 12 a second (data-fps); when the
-#   last frame is due it takes the canvas away, so the box rests on the <img>. It plays once, when half of the box is first on the screen (read from its place
-#   on the page when the page is ready, scrolls or is resized: no IntersectionObserver, which does not run in a browser without a screen), and the "Replay"
-#   button under it, hidden until the script runs, plays it again. Under prefers-reduced-motion it never plays and the button stays hidden. Before print it
-#   stops. A box added later (the app's card, drawn by Shiny) is found by a MutationObserver.
-MOTION_JS <- "(function () {
-  var reduced = function () { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; };
-  var stop = function (box) {
+# The player of an animated chart (Phase 12; Phase 12b), in the page and in the app's card: plain script, no library. A box holds the finished chart as an <img>
+#   (what a reader sees without script, with less motion asked for, in print, when the motion ends, and when the frames cannot be read) and its frames as data
+#   addresses in a JSON script element (every frame but the last, each with the number of times in a row it is shown; the last is the <img>).
+# - Before a box has played, its <img> is hidden (the class motion-js on <html>, set as the page starts by MOTION_HEAD_JS and by this script, under the style
+#   sheet's rule; never under reduced motion, never in print), so a card that is going to play never shows the finished chart first.
+# - When a box comes within a screen of the view, or Replay is pressed, it is made ready (`prepare`): an Image for each frame, loaded and decoded, the first
+#   before the rest (a frame counts as ready when it has loaded, and its decode() is waited for at most 250 ms: decode() does not settle in a browser on
+#   virtual time; a frame that has already failed to load is failed at once); the first is drawn on a <canvas> laid over the <img> as soon as it is decoded, so the box shows the start of the motion, not a blank. A box that moves
+#   more than a screen away before it played lets its images go. If the frames cannot be read or decoded (in MOTION_WAIT_MS), the box rests on the <img>.
+# - It plays once, when half of the box is first on the screen and its frames are decoded (the place is read when the page is ready, scrolls or is resized:
+#   no IntersectionObserver, which does not run in a browser without a screen), from frame 0: one timer for each frame kept, held for its repeats at 12 a
+#   second (data-fps); when the last frame is due it takes the canvas away and lets the images go, so the box rests on the <img> (data-still).
+# - The "Replay" button under it, hidden until the script runs, makes the images again and plays from the first. Under prefers-reduced-motion nothing is made
+#   or played and the button stays hidden. Before print a box that is playing or getting ready stops and rests on the <img>. A box added later (the app's
+#   card, drawn by Shiny) is found by a MutationObserver.
+# - The canvas is drawn in software (willReadFrequently): on a canvas drawn by the graphics card, every frame drawn becomes a texture that Chrome keeps
+#   after the page has let the frame go (about 290 MB in the GPU process for each of the five test charts' cards that played, tests/motion_realtime_12b.mjs).
+MOTION_WAIT_MS <- 10000L
+MOTION_JS <- paste0("(function () {
+  var reduced = function () { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); };
+  window.chartMotion = true;
+  if (!reduced()) document.documentElement.classList.add('motion-js');
+  var loaded = function (im) { return new Promise(function (ok, no) { if (im.complete) { if (im.naturalWidth) ok(); else no(); } else { im.onload = ok; im.onerror = no; } }); };
+  var decode = function (im) { return loaded(im).then(function () { return im.decode ? Promise.race([im.decode().catch(function () {}), new Promise(function (ok) { setTimeout(ok, 250); })]) : null; }); };
+  var release = function (box) {
     if (box._timer) { clearTimeout(box._timer); box._timer = null; }
     if (box._canvas) { box._canvas.remove(); box._canvas = null; }
-    var img = box.querySelector('img.motion-still'); if (img) img.style.visibility = '';
-    box.removeAttribute('data-playing');
+    box._images = null; box._frames = null; box._ready = false; box._want = false; box._token = (box._token || 0) + 1;
+    box.removeAttribute('data-playing'); box.removeAttribute('data-loading');
   };
-  var play = function (box) {
-    if (reduced() || !box._frames) return;
-    stop(box);
-    var img = box.querySelector('img.motion-still'), d = box._frames, fps = +box.getAttribute('data-fps') || 12;
-    var c = document.createElement('canvas');
+  var rest = function (box) { release(box); box.setAttribute('data-still', ''); };
+  var canvas = function (box) {
+    if (box._canvas) return box._canvas;
+    var img = box.querySelector('img.motion-still'), c = document.createElement('canvas');
     c.width = img.naturalWidth || +img.getAttribute('width'); c.height = img.naturalHeight || +img.getAttribute('height');
     c.className = 'motion-canvas'; c.setAttribute('aria-hidden', 'true');
     box.querySelector('.motion-stage').appendChild(c);
-    box._canvas = c; box.setAttribute('data-playing', '');
-    var g = c.getContext('2d');
+    box._canvas = c;
+    return c;
+  };
+  var draw = function (box, i) {
+    var im = box._images[i], c = canvas(box), g = c.getContext('2d', { willReadFrequently: true });
+    if (!(im.complete && im.naturalWidth)) return;
+    g.clearRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height);
+  };
+  var play = function (box) {
+    if (reduced()) return;
+    if (!box._ready) { box._want = true; prepare(box); return; }
+    box._want = false;
+    if (box._timer) clearTimeout(box._timer);
+    var d = box._frames, fps = +box.getAttribute('data-fps') || 12;
+    box.setAttribute('data-playing', '');
     var show = function (i) {
-      if (i >= d.frames.length) { box.setAttribute('data-played', String((+box.getAttribute('data-played') || 0) + 1)); stop(box); return; }
-      var im = box._images[i];
-      if (im.complete && im.naturalWidth) { g.clearRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height); img.style.visibility = 'hidden'; }
+      if (i >= d.frames.length) { box.setAttribute('data-played', String((+box.getAttribute('data-played') || 0) + 1)); rest(box); return; }
+      draw(box, i);
       box.setAttribute('data-frame', String(i));
       box._timer = setTimeout(function () { show(i + 1); }, Math.round(1000 * d.repeats[i] / fps));
     };
     show(0);
+  };
+  var prepare = function (box) {
+    if (box._images || reduced()) return;
+    var token = box._token = (box._token || 0) + 1;
+    var fail = function () { if (box._token !== token) return; rest(box); box._seen = true; box.setAttribute('data-failed', ''); };
+    try { box._frames = JSON.parse(box.querySelector('script.motion-frames').textContent); } catch (e) { box._frames = null; }
+    if (!box._frames || !box._frames.frames || !box._frames.frames.length) { fail(); return; }
+    box.setAttribute('data-loading', '');
+    box._images = box._frames.frames.map(function (u) { var im = new Image(); im.src = u; return im; });
+    var wait = setTimeout(fail, ", MOTION_WAIT_MS, ");
+    decode(box._images[0]).then(function () {
+      if (box._token !== token) return;
+      draw(box, 0);
+      return Promise.all(box._images.slice(1).map(decode)).then(function () {
+        if (box._token !== token) return;
+        clearTimeout(wait); box._ready = true; box.removeAttribute('data-loading');
+        if (box._want) play(box); else look();
+      });
+    }).catch(function () { clearTimeout(wait); fail(); });
   };
   var inView = function (box) {
     var r = box.getBoundingClientRect(), h = window.innerHeight || document.documentElement.clientHeight;
     if (!r.height || !h) return false;
     return Math.min(r.bottom, h) - Math.max(r.top, 0) >= Math.min(r.height, h) / 2;
   };
+  var near = function (box) {
+    var r = box.getBoundingClientRect(), h = window.innerHeight || document.documentElement.clientHeight;
+    return r.bottom > -h && r.top < 2 * h;
+  };
   var boxes = [];
-  var look = function () { boxes.forEach(function (box) { if (!box._seen && inView(box)) { box._seen = true; play(box); } }); };
+  var look = function () {
+    boxes = boxes.filter(function (box) { return box.isConnected; });
+    boxes.forEach(function (box) {
+      if (box._seen) return;
+      if (inView(box)) { box._seen = true; play(box); }
+      else if (near(box)) prepare(box);
+      else if (box._images) release(box);
+    });
+  };
   var ready = function (box) {
-    if (box._ready) return; box._ready = true;
-    var j = box.querySelector('script.motion-frames');
-    try { box._frames = JSON.parse(j.textContent); } catch (e) { return; }
+    if (box._known) return; box._known = true;
     if (reduced()) return;
-    box._images = box._frames.frames.map(function (u) { var im = new Image(); im.src = u; return im; });
     var btn = box.querySelector('button.motion-replay');
-    if (btn) { btn.hidden = false; btn.addEventListener('click', function () { box._seen = true; play(box); }); }
+    if (btn) { btn.hidden = false; btn.addEventListener('click', function () { box._seen = true; box.removeAttribute('data-failed'); release(box); play(box); }); }
     boxes.push(box);
   };
   var all = function () { document.querySelectorAll('.motion').forEach(ready); look(); };
   window.addEventListener('scroll', look, { passive: true });
   window.addEventListener('resize', look);
   window.addEventListener('load', look);
-  window.addEventListener('beforeprint', function () { document.querySelectorAll('.motion').forEach(stop); });
+  window.addEventListener('beforeprint', function () { boxes.forEach(function (box) { if (box._images) { box._seen = true; rest(box); } }); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', all); else all();
   if ('MutationObserver' in window) new MutationObserver(all).observe(document.documentElement, { childList: true, subtree: true });
-})();"
+})();")
+
+# The first script of a page that holds an animated chart, in its <head>: it marks <html> with motion-js before any card is drawn, so the style sheet hides
+#   the finished pictures of the cards that are going to play (not under reduced motion). If the player has not run by the time the page has loaded (a browser
+#   that cannot run it), the mark is taken away and every card shows its finished chart.
+MOTION_HEAD_JS <- paste0("(function () { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; var h = document.documentElement; h.classList.add('motion-js'); ",
+                         "window.addEventListener('load', function () { if (!window.chartMotion) h.classList.remove('motion-js'); }); })();")
 
 # The box of an animated chart: as wide as its frames were drawn for (set on the box), never wider. The canvas lies over the finished picture while it plays;
 #   in print and under reduced motion only the finished picture is shown.
@@ -3010,6 +3069,7 @@ DASH_VIDEO_CSS <- paste0(
   ".motion{width:100%;}\n",
   ".motion-stage{position:relative;}\n",
   ".motion img.motion-still{display:block;width:100%;height:auto;}\n",
+  "html.motion-js .motion:not([data-still]) img.motion-still,.motion[data-playing] img.motion-still{visibility:hidden;}\n",
   ".motion canvas.motion-canvas{position:absolute;left:0;top:0;width:100%;height:100%;}\n",
   ".motion .motion-replay{display:inline-block;margin:.45rem 0 0;font:inherit;font-size:.85rem;line-height:1.2;color:var(--text);background:transparent;border:1px solid var(--text2);border-radius:.25rem;padding:.25rem .8rem;cursor:pointer;}\n",
   ".motion .motion-replay[hidden]{display:none;}\n",
@@ -3677,6 +3737,7 @@ dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALS
   title = if (nzchar(trimws(settings$title %||% ""))) trimws(settings$title) else paste("Dashboard:", cb$file %||% "the data file")
   author = trimws(settings$author %||% "")
   head = tagList(tags$meta(charset = "utf-8"), tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"), tags$title(title),
+                   if (any(purrr::map_chr(items, "mode") == "video")) tags$script(HTML(MOTION_HEAD_JS)),
                    tags$style(HTML(paste(dash_font_css(style), dash_css(style, accent), sep = "\n"))), dash_inline_dependencies(deps))
   body = tags$body(class = if (nchar(mark) > 55L) "long", dash_band(mark, "top"), tags$div(class = "page",
     tags$header(class = "masthead", tags$h1(dash_heading_text(title, style)),

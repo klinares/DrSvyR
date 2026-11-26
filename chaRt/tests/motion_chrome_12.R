@@ -43,7 +43,7 @@ p12_js <- function(body) paste0("(function(){", P12_REQ_JS, "var write=function(
                                 "var boxes=[];var st=function(b){var j=JSON.parse(b.querySelector('script.motion-frames').textContent);",
                                 "return {played:b.getAttribute('data-played'),frame:b.getAttribute('data-frame'),playing:b.hasAttribute('data-playing'),canvas:!!b.querySelector('canvas'),",
                                 "btn:!b.querySelector('button.motion-replay').hidden,btnTag:b.querySelector('button.motion-replay').tagName,btnText:b.querySelector('button.motion-replay').textContent,",
-                                "still:b.querySelector('img.motion-still').style.visibility,last:j.frames.length-1,top:Math.round(b.getBoundingClientRect().top)};};",
+                                "still:getComputedStyle(b.querySelector('img.motion-still')).visibility,images:b._images?b._images.length:0,last:j.frames.length-1,top:Math.round(b.getBoundingClientRect().top)};};",
                                 "window.addEventListener('load',function(){boxes=[].slice.call(document.querySelectorAll('.motion'));", body, "});})();")
 # The first box is scrolled into view at load; at 6 s (its 3.6 s of motion done) it is read, Replay is pressed (focused first, as a keyboard reader would), it is read
 #   again 1.5 s later (mid-play) and at 12 s (done again). The other boxes are read at the end: they were never on the screen, so they never played.

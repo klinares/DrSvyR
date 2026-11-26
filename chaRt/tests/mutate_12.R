@@ -44,13 +44,13 @@ mutations <- list(
   mut("M06", "the bands are drawn on the last frame only", "spec.R", "canvas[[\"height\"]], dpi, marking = marking)\n    if (is.function(on_frame)) on_frame(i, n)",
       "canvas[[\"height\"]], dpi, marking = if (p >= 1) marking)\n    if (is.function(on_frame)) on_frame(i, n)"),
   mut("M07", "the player stops five frames before the last", "ui.R", "if (i >= d.frames.length) {", "if (i >= d.frames.length - 5) {"),
-  mut("M08", "the player does not start when the card comes into view", "ui.R", "if (!box._seen && inView(box)) { box._seen = true; play(box); }", "if (!box._seen && inView(box)) { box._seen = true; }"),
-  mut("M09", "Replay does not play", "ui.R", "btn.addEventListener('click', function () { box._seen = true; play(box); });", "btn.addEventListener('click', function () { box._seen = true; });"),
-  mut("M10", "reduced motion is not asked about", "ui.R", "var reduced = function () { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; };", "var reduced = function () { return false; };"),
+  mut("M08", "the player does not start when the card comes into view", "ui.R", "if (inView(box)) { box._seen = true; play(box); }", "if (inView(box)) { box._seen = true; }"),
+  mut("M09", "Replay does not play", "ui.R", "btn.addEventListener('click', function () { box._seen = true; box.removeAttribute('data-failed'); release(box); play(box); });", "btn.addEventListener('click', function () { box._seen = true; box.removeAttribute('data-failed'); release(box); });"),
+  mut("M10", "reduced motion is not asked about", "ui.R", "var reduced = function () { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); };", "var reduced = function () { return false; };"),
   mut("M11", "print shows the canvas mid-play (no print rules, no stop before print)", "ui.R",
       c("  \"@media print{.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\\n\")",
         ".motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;max-width:100%;}",
-        "  window.addEventListener('beforeprint', function () { document.querySelectorAll('.motion').forEach(stop); });\n"),
+        "  window.addEventListener('beforeprint', function () { boxes.forEach(function (box) { if (box._images) { box._seen = true; rest(box); } }); });\n"),
       c("  \"\")", "", "")),
   mut("M12", "the player asks the network for something", "ui.R", "    boxes.push(box);\n", "    boxes.push(box);\n    var probe = new Image(); probe.src = 'codebook.html';\n"))
 wanted <- commandArgs(trailingOnly = TRUE)

@@ -1,8 +1,14 @@
 # chaRt: status
 
-## Current state (2026-11-25, after Phase 12: motion without av, played by the browser)
+## Current state (2026-11-26, after Phase 12b: the player's first second and its memory)
 
 Branch `chart`, not pushed. Everything below was built and tested at home on R 4.6.1. No test makes a model call unless it says so. The phase-by-phase record is under History; the Phase 10 report is `manager/done-10.md`, the Phase 10b report `manager/done-10b.md`, the Phase 11 report `manager/done-11.md`, the Phase 12 report `manager/done-12.md`.
+
+**Phase 12b, done** (2026-11-26; `manager/done-12.md`, section 9; no model call).
+- **The first second.** Seen in headed Chrome with real time (`tests/motion_realtime_12b.mjs`, Node over the DevTools protocol): the Phase 12 player showed each card's finished chart for about 150 ms, then jumped to frame 1 (frame 0 was never drawn). Now a mark set in `<head>` (`MOTION_HEAD_JS`) hides a card's finished picture until its first play; frame 0 is drawn first (about 120 ms after load), and the play starts only when every frame has loaded. Before that, the card is blank for about 100 ms. No script, reduced motion and print still show the finished chart at once; a card whose frames cannot be read falls back to it.
+- **Memory.** Frame images are made when a card comes within a screen of the view and let go when it stops (Replay makes them again), and the canvas is drawn in software: on a canvas drawn by the graphics card, every frame drawn stayed in the GPU process. The five-chart page at rest: 932 MB of Chrome before, 400 MB after; twelve animated charts (22.4 MB page): 985 MB before, 413 MB after, about 460 MB while a card plays.
+- **Pages to open:** `tests/dashboard_motion/` (Clean), `tests/dashboard_motion_briefing/`, `tests/dashboard_motion12/` (`tests/motion_pages_12b.R`); `tests/dashboard_designed/` replayed with `LIVE11_REPLAY=1`, its two designed cards now animated.
+- **Smoke on the final code:** fast 642 of 642, heavy 29 of 29 (12b-1 to 12b-4 new, Chrome with real time). Mutations: `tests/mutate_12b.R` 8 of 8, `tests/mutate_12.R` 12 of 12 caught (baseline 6 of 6).
 
 **Phase 12, done** (2026-11-25; the report is `manager/done-12.md`; no model call). The app no longer uses the av package: av did not work well on the work server.
 - **Motion is frames the browser plays.** `spec_video()` and `design_video()` return 44 PNG frames (12 a second, 3.6 s, at the card's width, no stored hold; identical neighbours kept once with a repeat count, `motion_pack()`). An animated card in `dashboard.html` is the finished chart as an `<img>`, the frames as base64 PNG in a JSON script element, and a Replay button; `MOTION_JS` (R/ui.R, plain JavaScript, inline, no library) plays it once when the card comes into view and stops on the finished chart. Reduced motion, no script and print all show the finished chart. The app's card uses the same player; it has no download and no marking now.
