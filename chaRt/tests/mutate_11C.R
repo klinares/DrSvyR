@@ -10,7 +10,7 @@
 #   sideways bars, from the left), fade by opacity, the text waiting for the marks and then coming in, the last frame being the finished picture itself, the frame
 #   having no marks in it, which layer is text and which an annotation, the layers being transparent, theme-free and without the bands, the check that the
 #   three drawings add up to the finished picture, the patchwork fallback, the card's proportions with the bands, and the export using the design for a
-#   designed video.
+#   designed animated chart (Phase 12: frames, no encoder).
 
 stopifnot("Run from inside chaRt/" = file.exists("app.R") && dir.exists("R"))
 suppressMessages(app <- shiny::shinyAppDir("."))
@@ -54,8 +54,8 @@ mutations <- list(
   mut("M11", "the frame drawing leaves out the classification bands", "spec.R", "f_frame = draw(\"frame\", all, FALSE, TRUE, NULL)", "f_frame = draw(\"frame\", all, FALSE, FALSE, NULL)"),
   mut("M12", "the three drawings are not compared with the finished picture", "spec.R", "          else if (check$share > DESIGN_VIDEO_SHARE)", "          else if (FALSE)"),
   mut("M13", "a patchwork is drawn in layers", "spec.R", "if (length(design_parts(plot)) > 1L) return(", "if (FALSE) return("),
-  mut("M14", "the video is as high as the design without its bands", "spec.R", "h_px = 2L * as.integer(round((inp$size[[\"height\"]] + 2 * band) * dpi / 2))", "h_px = 2L * as.integer(round(inp$size[[\"height\"]] * dpi / 2))"),
-  mut("M15", "the export makes a designed card's video from the standard drawing", "ui.R", "    if (isTRUE(m$designed)) {\n      v = tryCatch(dash_design_video(", "    if (FALSE) {\n      v = tryCatch(dash_design_video("),
+  mut("M14", "the frames are as high as the design without its bands", "spec.R", "h_px = as.integer(round((inp$size[[\"height\"]] + 2 * band) * dpi))", "h_px = as.integer(round(inp$size[[\"height\"]] * dpi))"),
+  mut("M15", "the export animates a designed card from the standard drawing", "ui.R", "    if (isTRUE(m$designed)) {\n      v = tryCatch(dash_design_video(", "    if (FALSE) {\n      v = tryCatch(dash_design_video("),
   mut("M16", "chart_device() ignores a transparent background", "theme.R", "ragg::agg_png(file, width = w, height = h, units = \"px\", res = dpi, background = bg)", "ragg::agg_png(file, width = w, height = h, units = \"px\", res = dpi)"),
   mut("M17", "the theme of the data and text layers is not made invisible", "spec.R", "  if (clear) b$plot$theme = b$plot$theme + design_clear_theme(plot)", "  if (FALSE) b$plot$theme = b$plot$theme + design_clear_theme(plot)"))
 wanted <- commandArgs(trailingOnly = TRUE)

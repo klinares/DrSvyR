@@ -1,8 +1,15 @@
 # chaRt: status
 
-## Current state (2026-11-25, after Phase 11: the model designs a chart, and R checks and animates it)
+## Current state (2026-11-25, after Phase 12: motion without av, played by the browser)
 
-Branch `chart`, not pushed. Everything below was built and tested at home on R 4.6.1. No test makes a model call unless it says so. The phase-by-phase record is under History; the Phase 10 report is `manager/done-10.md`, the Phase 10b report `manager/done-10b.md`, the Phase 11 report `manager/done-11.md`.
+Branch `chart`, not pushed. Everything below was built and tested at home on R 4.6.1. No test makes a model call unless it says so. The phase-by-phase record is under History; the Phase 10 report is `manager/done-10.md`, the Phase 10b report `manager/done-10b.md`, the Phase 11 report `manager/done-11.md`, the Phase 12 report `manager/done-12.md`.
+
+**Phase 12, done** (2026-11-25; the report is `manager/done-12.md`; no model call). The app no longer uses the av package: av did not work well on the work server.
+- **Motion is frames the browser plays.** `spec_video()` and `design_video()` return 44 PNG frames (12 a second, 3.6 s, at the card's width, no stored hold; identical neighbours kept once with a repeat count, `motion_pack()`). An animated card in `dashboard.html` is the finished chart as an `<img>`, the frames as base64 PNG in a JSON script element, and a Replay button; `MOTION_JS` (R/ui.R, plain JavaScript, inline, no library) plays it once when the card comes into view and stops on the finished chart. Reduced motion, no script and print all show the finished chart. The app's card uses the same player; it has no download and no marking now.
+- **Gone:** `av_installed()`, `av_has_h264()`, both `av::av_encode_video()` calls, the MP4s in the zip, the card's Download MP4, av in the README and in the probe (gganimate, gifski and ffmpeg too; the probe's Video table is a Motion table). `video_available()` needs only a PNG device. 12A-1 loads the app with av hidden.
+- **Weight:** the five-chart test dashboard with all five animated is 10.6 MB (1.9 MB as pictures). The line chart (adds 2.7 MB) and the small multiples (2.9 MB) are each over 2 MB; their last frames cost most. The export dialog shows the estimated added size beside each animated chart.
+- **Words:** "Video" is "Animated" in the dialog; "video" and "MP4" are gone from the interface and the README where they promised a file.
+- **Smoke on the final code:** fast 642 of 642, heavy 25 of 25. Mutations: `tests/mutate_12.R` 12 of 12, `tests/mutate_11C.R` 17 of 17.
 
 **Phase 11, done** (2026-11-25; the report is `manager/done-11.md`). All six parts are committed, in Kevin's order (A, B, D, F, E, C), with 43 of the 60 live calls used, all in Part F. After Part C:
 - **A hole in the guard was closed.** The text-geom list spelled ggtext's class `GeomRichtext` (it is `GeomRichText`) and lacked `GeomTextBox`, so a `geom_richtext()` label's contrast was never checked. Both are now listed, and a ggtext box is the ground of its text, as `geom_label()`'s is. Check 11A-16; mutations M43 and M44.

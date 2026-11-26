@@ -28,20 +28,20 @@ survey microdata.
    (when you ask for the shape: filled lightly in the series colour, with the outlying rows as dots), lines indexed to 100 at their first period (to compare growth: all in one panel, the lines you highlight in the accent and the others in grey, named at their ends), a moving
    average over the raw line (when you ask for a trend), and call-outs: a marked point is a small box with a
    thin leader. A card can be shown as an interactive chart ("Interactive": the same chart as an SVG, with a tooltip and hover on each mark and no zoom) or a
-   short video ("Animate"). "Write headlines" gives each chart a headline and a summary. The "In
+   animated chart ("Animate": its marks come in, then its labels, and it stops on the finished chart; the browser plays the frames, no video file is made). "Write headlines" gives each chart a headline and a summary. The "In
    dashboard" switch and Move up and Move down on each card choose what goes in the dashboard and in
    what order. "Add a summary table" puts a table of descriptive statistics on the canvas.
 5. **Export.** "Export dashboard" asks for a title, subtitle, author, date and introduction, a
    classification marking (it starts as the marking shown above every screen, `APP_CLASSIFICATION` in
    `app.R`; it cannot be blank and is at most 80 characters), up to three key numbers (a strip of at most six at the top of the page: each a small-capital label over its value, with the file's
    rows, columns and period), and for each
-   chart a picture, an interactive chart or a video, each drawn for the size of its card (a card with a row to itself, on a wide screen, has the chart on the left and the text on the right; a video stands on its finished chart before it plays and after, with a Replay button). "Build the dashboard" makes
+   chart a picture, an interactive chart or an animated chart, each drawn for the size of its card (a card with a row to itself, on a wide screen, has the chart on the left and the text on the right; an animated chart's frames are written into the page, it plays once when it scrolls into view and stops on the finished chart, with a Replay button; with less motion asked for, without script and in print it is the finished chart). "Build the dashboard" makes
    `<marking>_dashboard_<date>.zip` (the marking in lower case with other characters as underscores,
    so `unclassified_dashboard_2026-11-22.zip`) with `dashboard.html` and `codebook.html` (each one
    file), `data_dictionary.yaml`, `charts.R` and a `charts/` folder (PNG at 300 dpi, SVG when
-   svglite is installed, MP4 for a video, CSV for a table). Everything in it carries the marking: a
+   svglite is installed, CSV for a table; an animated chart is a PNG and SVG there like any other, and moves only in the page). Everything in it carries the marking: a
    red band at the top and the bottom of each page (and of every printed page), of each PNG and SVG
-   and of every frame of each MP4, and a first line `# <marking>` in `charts.R`, the dictionary and
+   and of every frame of an animated chart, and a first line `# <marking>` in `charts.R`, the dictionary and
    each CSV (a program that reads a CSV must skip that one line: `readr::read_csv(file, skip = 1)`).
    The marking is yours to state: the app does not judge or change it, and it is never sent to the model.
 
@@ -111,7 +111,7 @@ This is an allow-list interpreter, not a proven sandbox: see `DESIGN.md` section
   design is then not reviewed by looking). Start here and the Methodology page say the same in the app.
 - R computes every number. A headline, a summary or a chat answer that states a number is checked
   against what R computed; a failed text is sent back once and then shown flagged.
-- A picture and a video in the exported dashboard hold no rows. An interactive chart holds the
+- A picture and an animated chart in the exported dashboard hold no rows. An interactive chart holds the
   values of every row it plots (in its tooltips, to three significant digits, and in the drawing),
   and the export dialog says so beside the choice.
 
@@ -132,8 +132,8 @@ install.packages(c("shiny", "bslib", "purrr", "commonmark", "digest", "dplyr", "
 ```
 
 These are optional and the app starts without them: `ragg` (the usual chart device), `svglite`
-(SVG files in the export), `systemfonts` (the bundled typefaces), `paletteer` (more palettes) and
-`av` (videos) and `hexbin` (the density view is hexagons with it and rectangles without; `install.packages("hexbin")`; a deployment asks Connect for it when it is installed where the app is published). Built and tested with ellmer 0.4.2 and R 4.6.
+(SVG files in the export), `systemfonts` (the bundled typefaces), `paletteer` (more palettes),
+`png` (animated designed charts) and `hexbin` (the density view is hexagons with it and rectangles without; `install.packages("hexbin")`; a deployment asks Connect for it when it is installed where the app is published). Built and tested with ellmer 0.4.2 and R 4.6.
 
 From the folder that holds `chaRt/` (the repository root), in R, RStudio or an R terminal:
 
@@ -181,8 +181,8 @@ Both go to Posit Connect with `rsconnect`. Run these yourself at work; nothing h
 
 1. **The probe** is a separate one-page app that needs only shiny, makes no model call and needs no
    key. It reports the server's R and package versions, whether Quarto is found, how a chart draws
-   without X11 (ragg, cairo, svglite, and a font), and whether a short MP4 can be made (av,
-   libx264, ten frames encoded, then 30 frames of 1280 by 720 drawn and encoded, with the seconds).
+   without X11 (ragg, cairo, svglite, and a font), and how long the 44 frames of an animated chart take to draw
+   (1080 by 760) and what they weigh in a page.
    Publish it, open it, wait for the tables to fill in, and copy the text under "Copy results":
 
    ```r
@@ -222,7 +222,7 @@ long they take). `tests/llm_check.R` and `tests/live_run_9.R` make live model ca
 |---|---|
 | `app.R` | Settings, profiles, the packages check, the page and the server |
 | `R/data.R` | Reading a file, the data dictionary, summary statistics |
-| `R/spec.R` | The chart spec, its checks, the ggplot, the interactive version (ggiraph), the R code of a chart, the video engine |
+| `R/spec.R` | The chart spec, its checks, the ggplot, the interactive version (ggiraph), the R code of a chart, the frames of an animated chart |
 | `R/theme.R` | The typefaces, the seven styles, the palettes, the one chart device |
 | `R/llm.R` | The session key, the model call, JSON repair, the connection check |
 | `R/reflexes.R` | The prompts and the model calls (labels, chat, headlines, design) with their number and word checks, the design skills |

@@ -149,7 +149,7 @@ device_note <- function() {
 #   or a device that writes SVG), in a box, with why (video_unavailable_text() in R/spec.R).
 video_note <- function() {
   why = video_unavailable_text()
-  if (is.null(why)) tags$p(class = "text-muted small", "Charts can be made into short videos with the av package (the Animate button on a chart).")
+  if (is.null(why)) tags$p(class = "text-muted small", "Charts can be animated: the Animate button on a chart draws its frames, and the card (and an exported dashboard) plays them in the browser.")
   else warn_box(why)
 }
 
@@ -658,7 +658,7 @@ summary_request <- function(msg) {
 
 # A message that only asks for the selected chart to be animated: "animate", "animate this", "play it", "make it a video", "make a video of this",
 #   with at most a polite word or two around it. R answers it with no model call. Plain groups only, so the same pattern runs in the browser's
-#   script (the working line says "Drawing the video" at once).
+#   script (the working line says "Drawing the animation" at once).
 ANIMATE_PATTERN <- paste0("^(please )?((can|could) you )?(animate( (this|it|that|the chart|this chart))?|play (it|this|that)|",
                           "(make|turn) (it|this|that) (into |in)?a video|(make|create) (me )?a video( of (this|it|that|the chart|this chart))?)( please)?$")
 animate_request <- function(msg) {
@@ -1040,7 +1040,7 @@ copy_js <- function(code_id)
 #   motion. It is not a chat message: nothing is added to the chat's messages. A link to #open-data-page opens
 #   the Data page.
 WORKING_WORDS <- c(chat = "Thinking", suggest = "Thinking", headlines = "Writing headlines", headline = "Writing a headline",
-                   label = "Labelling columns", setup = "Working", dashboard = "Building the dashboard", animate = "Drawing the video", design = "Designing")
+                   label = "Labelling columns", setup = "Working", dashboard = "Building the dashboard", animate = "Drawing the animation", design = "Designing")
 WORKING_LATER <- ", still working"
 WORKING_LATER_MS <- 8000L
 EXPLORE_CSS <- "
@@ -1335,7 +1335,9 @@ mod_explore_ui <- function(id) {
              uiOutput(ns("gate")), uiOutput(ns("boxes")), uiOutput(ns("bar")), uiOutput(ns("cards")), uiOutput(ns("foot"))),
     tags$style(HTML(EXPLORE_CSS)),
     tags$style(HTML(SUMMARY_CSS)),
-    tags$script(HTML(EXPLORE_JS)))
+    tags$script(HTML(EXPLORE_JS)),
+    tags$style(HTML(DASH_VIDEO_CSS)),   # the player of an animated chart on a card (Phase 12), the page's own
+    tags$script(HTML(MOTION_JS)))
 }
 
 # ask is the function that asks the model (llm_json, or a stand-in in a test); build is the function that builds the dashboard zip
@@ -1371,13 +1373,12 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     made$sel = new.env()               #   one chart draws only that chart again
     made$interactive = new.env()
     made$dash = new.env()              # per chart: whether it is in the dashboard (a reactiveVal, TRUE when the card is made)
-    made$video = new.env()             # per chart: its video (a reactiveVal: NULL, or list(key, file, small, seconds, frames)); the key is what it was drawn from
+    made$video = new.env()             # per chart: its motion (a reactiveVal: NULL, or list(key, frames_json, last, px, ...) of dash_motion_of()); the key is what it was drawn from
     made$showv = new.env()             #   and whether the card shows it in place of the picture (a reactiveVal)
     made$design = new.env()            # per chart: its design (a reactiveVal: NULL, or what design_chart() made, with the key it was made from and its plot)
     made$showd = new.env()             #   whether the card shows the designed drawing (a reactiveVal), and the one line that says why a design was not used or was dropped
     made$dnote = new.env()
     made$dwidget = new.env()           #   and the designed drawing with tooltips (a reactive), which is empty, with a reason, when its layers cannot have them
-    made$video_dir = NULL              # this session's folder of video files, made when the first video is
     session$onSessionEnded(function() purrr::walk(ls(made$design), function(i) { dz = shiny::isolate(made$design[[i]]()); if (!is.null(dz)) unlink(dz$file) }))
     made$thumbs = new.env()            # the small pictures of the export dialog, by chart spec, palette and data
     made$tn = 0L                       # summary tables made, for their ids (t1, t2, ...)
@@ -2108,7 +2109,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
             if (identical(mode, "interactive") && (chart_from_rows(it$chart$spec)))
               tags$p(class = "small mb-0", style = warn_style, DASH_DISCLOSURE)
             else if (identical(mode, "video"))
-              tagList(tags$p(class = "small mb-0 text-muted", DASH_VIDEO_TIME),
+              tagList(tags$p(class = "small mb-0 text-muted", DASH_VIDEO_TIME,
+                             tryCatch(paste0(" It adds about ", dash_size_text(dash_motion_estimate(it$chart, isolate(state$data), isolate(state$codebook), isolate(palette()))), " to the page."),
+                                      error = function(e) "")),
                       if (chart_from_rows(it$chart$spec)) tags$p(class = "small mb-0", style = warn_style, DASH_VIDEO_DISCLOSURE)))
         }))
       dash_result(NULL)
@@ -2116,7 +2119,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       number = cumsum(purrr::map_lgl(entries, function(it) is.null(it$section)))
       showModal(modalDialog(
         title = "Export dashboard", size = "l", easyClose = FALSE, footer = modalButton("Close"),
-        tags$p(class = "small text-muted", "One zip, named after the marking: the dashboard as one page, the data dictionary and a codebook page, and each chart as a picture and a script (a video as an MP4, each summary table as a CSV). ",
+        tags$p(class = "small text-muted", "One zip, named after the marking: the dashboard as one page, the data dictionary and a codebook page, and each chart as a picture and a script (each summary table as a CSV; an animated chart is a picture there, and moves only in the page). ",
                "On the page each chart is drawn at the size it is shown, and again for a phone. ",
                "Nothing here calls a model."),
         uiOutput(ns("dash_warns")),
@@ -2148,7 +2151,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         tags$p(class = "small text-muted", "Sections and cards in the order of the canvas, each with a small picture. The switch on a card leaves it out; the switch on a section leaves out the section and every card under it (the cards' own switches stay as they are). ",
                "Change the order on the canvas: drag a card by its handle, or press Move up and Move down. ",
                "A picture is the smallest file. An interactive chart is written into the page as its drawing (an SVG with a tooltip on each mark) and the scripts of the chart package (about 0.2 MB, once); a chart of thousands of marks makes the page larger.",
-               if (video_available()) " A video is drawn again for the page, as it will be shown there, and plays once when it scrolls into view."),
+               if (video_available()) " An animated chart's frames are drawn for the page, as it will be shown there, and written into it; it plays once when it scrolls into view and stops on the finished chart."),
         purrr::map2(entries, number, function(it, k) {
           sec = sec_of[[it$id]]
           on_id = ns(paste0("dash_in_", it$id))
@@ -2187,7 +2190,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                    tags$p(class = "mb-1", paste0("Built ", res$name, ": ", dash_size_text(res$bytes), " in ", format(round(res$seconds, 1), nsmall = 1), " seconds. ",
                                                  sum(res$modes != "table"), if (sum(res$modes != "table") == 1L) " chart: " else " charts: ", sum(res$modes == "picture"), " as ",
                                                  if (sum(res$modes == "picture") == 1L) "a picture" else "pictures", " and ", sum(res$modes == "interactive"), " interactive",
-                                                 if (any(res$modes == "video")) paste0(" and ", sum(res$modes == "video"), if (sum(res$modes == "video") == 1L) " video" else " videos") else "", ".",
+                                                 if (any(res$modes == "video")) paste0(" and ", sum(res$modes == "video"), " animated") else "", ".",
                                                  if (any(res$modes == "table")) paste0(" ", sum(res$modes == "table"), if (sum(res$modes == "table") == 1L) " summary table" else " summary tables",
                                                                                        " (a table in the page and a CSV in charts/).") else "")),
                    unname(purrr::imap(res$fallbacks[!is.na(res$fallbacks)], function(why, t)
@@ -2199,7 +2202,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                               onclick = paste0("this.disabled = true; document.getElementById('", ns("dash_build_busy"), "').style.display = 'block';")),
                  if (isTRUE(res$ok)) downloadButton(ns("dash_download"), paste("Download", res$name), class = "btn-outline-secondary")),
         tags$p(id = ns("dash_build_busy"), class = "text-muted small", style = "display:none; margin-top:0.25rem;",
-               paste0(WORKING_WORDS[["dashboard"]], ". With interactive charts or videos this can take a few minutes; the page stays as it is until it is done.")))
+               paste0(WORKING_WORDS[["dashboard"]], ". With interactive or animated charts this can take a few minutes; the page stays as it is until it is done.")))
     })
     output$dash_download = downloadHandler(
       filename = function() isolate(dash_result())$name %||% "dashboard.zip",
@@ -2398,40 +2401,27 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       }
     }))
 
-    # ---- a chart's video -------------------------------------------------------------------------------------------
+    # ---- a chart's motion (Phase 12: frames the browser plays, no file) -------------------------------------------------
 
-    # What a video is drawn from: the spec, the palette and style, and the data. A video whose key is not the chart's key now is dropped.
-    # The marking a card's video is drawn with (its Download MP4 is a file that leaves the app): the one written in the export dialog this session,
-    #   or APP_CLASSIFICATION when none is there or it is refused. A video is dropped when this changes, so a file never carries an old marking.
-    card_marking = function() {
-      m = marking_clean(if (is.null(dash_fields$marking)) APP_CLASSIFICATION else dash_fields$marking)
-      if (m$ok) m$text else marking_of()
-    }
+    # What a motion is drawn from: the spec, the palette and style, and the data. A motion whose key is not the chart's key now is dropped.
     video_key = function(chart_id) {
-      ch = made$chart[[chart_id]]()   # not isolated: the observer that drops a video depends on the spec, the palette and the data
-      if (is.null(ch)) NULL else digest::digest(list(spec_hash(ch$spec), palette(), data_key(), card_marking()))
+      ch = made$chart[[chart_id]]()   # not isolated: the observer that drops a motion depends on the spec, the palette and the data
+      if (is.null(ch)) NULL else digest::digest(list(spec_hash(ch$spec), palette(), data_key()))
     }
     drop_video = function(chart_id) {
-      v = isolate(made$video[[chart_id]]())
-      if (!is.null(v)) unlink(c(v$file, v$small))
       made$video[[chart_id]](NULL)
       made$showv[[chart_id]](FALSE)
     }
-    # The card's view of a video: the 1280 by 720 file as a data address (no resource path, which Connect would need), played at once, muted,
-    #   once, with its controls; then Replay (a line of script, no round trip), Download MP4 (the 1920 by 1080 file) and Picture.
+    # The card's view of a motion: the page's player (motion_tag(), MOTION_JS, which the app's page carries once), the frames as data addresses (no resource path,
+    #   which Connect would need), played once when the card shows it; then Replay (the player's own button) and Picture.
     video_view = function(chart_id, v) {
-      id = ns(cid(chart_id, "video"))
       tagList(
-        tags$video(id = id, class = "chart-video", src = dash_data_uri(v$small, "video/mp4"), autoplay = NA, muted = NA, playsinline = NA, controls = NA,
-                   preload = "auto", `aria-label` = paste("Video of", chart_title(chart_of(chart_id), "this chart")), style = "display:block; width:100%; max-width:960px; height:auto;"),
+        motion_tag(v$frames_json, v$last, round(v$px / DASH_SCALE), paste("Animated chart:", chart_title(chart_of(chart_id), "this chart")), v$fps),
         tags$div(class = "d-flex flex-wrap gap-1 mt-2",
-                 tags$button(type = "button", class = "btn btn-sm btn-outline-secondary",
-                             onclick = paste0("var v = document.getElementById('", id, "'); v.currentTime = 0; v.play();"), "Replay"),
-                 downloadButton(ns(cid(chart_id, "mp4")), "Download MP4", class = "btn-sm btn-outline-secondary", icon = NULL),
                  actionButton(ns(cid(chart_id, "picture")), "Picture", class = "btn-sm btn-outline-secondary")))
     }
-    # Animate: draws the video unless the chart has a current one, and shows it in place of the picture. The frames done are said in the working line
-    #   as they are drawn (a custom message from inside the call). It returns TRUE when the card shows a video.
+    # Animate: draws the frames unless the chart has a current motion, and shows it in place of the picture. The frames done are said in the working line
+    #   as they are drawn (a custom message from inside the call). It returns TRUE when the card shows the motion.
     animate_chart = function(chart_id) {
       ch = chart_of(chart_id)
       if (is.null(ch) || !video_available()) return(invisible(FALSE))
@@ -2439,21 +2429,15 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       key = video_key(chart_id)
       if (is.null(v) || !identical(v$key, key)) {
         drop_video(chart_id)
-        if (is.null(made$video_dir)) {
-          made$video_dir = tempfile("chart_videos_")
-          dir.create(made$video_dir)
-          session$onSessionEnded(function() unlink(made$video_dir, recursive = TRUE))
-        }
-        stem = file.path(made$video_dir, paste0(chart_id, "_", substr(key, 1L, 8L)))
         words = WORKING_WORDS[["animate"]]
-        res = tryCatch(spec_video(ch$spec, isolate(state$data), isolate(state$codebook), isolate(palette()), file = paste0(stem, "_1080.mp4"), small = paste0(stem, "_720.mp4"), marking = card_marking(),
-                                  on_frame = function(i, n) session$sendCustomMessage("chart-progress", list(words = if (i < n) paste0(words, ", ", i, " of ", n, " frames") else paste0(words, ", encoding it")))),
+        res = tryCatch(spec_video(ch$spec, isolate(state$data), isolate(state$codebook), isolate(palette()), width = SPEC_VIDEO_DASH_PX$desk[["width"]],
+                                  on_frame = function(i, n) session$sendCustomMessage("chart-progress", list(words = paste0(words, ", ", i, " of ", n, " frames")))),
                        error = function(e) e)
         if (inherits(res, "error")) {
-          say(paste0("The video could not be made: ", md_text(conditionMessage(res)), " The chart is unchanged."))
+          say(paste0("The animation could not be made: ", md_text(conditionMessage(res)), " The chart is unchanged."))
           return(invisible(FALSE))
         }
-        made$video[[chart_id]](list(key = key, file = res$file, small = res$small, seconds = res$seconds, frames = res$drawn))
+        made$video[[chart_id]](c(list(key = key), dash_motion_of(res, "desk")))
       }
       made$interactive[[chart_id]](FALSE)
       made$showv[[chart_id]](TRUE)
@@ -2465,7 +2449,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       if (!is.null(why)) return(say(md_text(why)))
       sel = isolate(selected())
       if (is.null(sel) || is.null(chart_of(sel))) return(say(md_text(ANIMATE_NONE)))
-      if (isTRUE(animate_chart(sel))) say(paste0("Made a video of ", md_text(chart_title(chart_of(sel), "the chart")), ". It plays once on the card: Replay plays it again, Download MP4 saves it and Picture goes back. No model was asked."))
+      if (isTRUE(animate_chart(sel))) say(paste0("Animated ", md_text(chart_title(chart_of(sel), "the chart")), ". It plays once on the card and stops on the finished chart: Replay plays it again and Picture goes back. No model was asked."))
     }
 
     # A chart's outputs and observers, made once, when it is added.
@@ -2545,14 +2529,11 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         if (!is.null(dz) && !identical(dz$key, design_key(chart_id)))
           drop_design(chart_id, "The designed drawing was dropped because the chart, the style or the data changed. Press Design to make it again.")
       })
-      # The video is dropped when what it was drawn from changes (the chart's spec, the palette or style, the data): the card shows the picture again.
+      # The motion is dropped when what it was drawn from changes (the chart's spec, the palette or style, the data): the card shows the picture again.
       observe({
         v = made$video[[chart_id]]()
         if (!is.null(v) && !identical(v$key, video_key(chart_id))) drop_video(chart_id)
       })
-      output[[cid(chart_id, "mp4")]] = downloadHandler(
-        filename = function() paste0(dash_slug(chart_title(chart_of(chart_id), "chart")), ".mp4"),
-        content = function(file) file.copy(isolate(made$video[[chart_id]]())$file, file, overwrite = TRUE), contentType = "video/mp4")
       output[[cid(chart_id, "notes")]] = renderUI({
         p = drawn()
         if (inherits(p, "error")) return(warn_box(conditionMessage(p)))
@@ -2954,52 +2935,123 @@ DASH_DPI <- 300L                # pixels per inch of the pictures in the file
 DASH_THUMB_DPI <- 40L           # ... and of the small ones in the dialog
 DASH_ROW_FAMILIES <- c("scatter", "bubble", "box")
 DASH_TOTAL_FAMILIES <- c("bar", "dot", "line", "slope", "heatmap", "dumbbell")
-DASH_MODES <- c(Picture = "picture", Interactive = "interactive", Video = "video")   # the dialog offers Video only when this server makes videos (video_available())
+DASH_MODES <- c(Picture = "picture", Interactive = "interactive", Animated = "video")   # the dialog offers Animated only when this server can draw the frames (video_available())
 DASH_BOX_CHOICES <- c(rows = "Rows", columns = "Columns", third = "Period, or the file name")
 DASH_DISCLOSURE <- paste("In the interactive version the values of every plotted row are written into the file, so anyone who opens it can read",
                          "them; a picture holds none.")
-DASH_VIDEO_DISCLOSURE <- paste("A video carries no rows: it is pictures of the chart, so no value of the file can be read from it. The page shows the chart as it is at the end of",
-                                "the video, as a still, to a reader whose system asks for less motion.")
-DASH_VIDEO_TIME <- "A video takes about half a minute to draw and adds a few hundred kilobytes to the page."
+DASH_VIDEO_DISCLOSURE <- paste("An animated chart carries no rows: it is pictures of the chart, so no value of the file can be read from it. The page shows the finished chart, as a still,",
+                                "to a reader whose system asks for less motion, and in print.")
+DASH_VIDEO_TIME <- "An animated chart takes some seconds to draw; its frames are written into the page."
 
-# The script of the page, only when a video is in it. Each video plays once, when half of it is on the screen; with no IntersectionObserver, or
-#   for a reader whose system asks for less motion, nothing plays by itself. A video stands on its poster before it plays (the finished chart, a
-#   PNG of its last frame), and rests on its last frame when it ends (the browser keeps it there); the "Replay" button under it, hidden until
-#   this script runs (without a script the player's own controls play it), starts it again from the beginning.
-DASH_VIDEO_JS <- "(function () {
-  var replay = function (v) { v.currentTime = 0; var p = v.play(); if (p && p.catch) p.catch(function () {}); };
-  document.querySelectorAll('.video-box').forEach(function (box) {
-    var v = box.querySelector('video'), b = box.querySelector('button.replay');
-    if (!v || !b) return;
-    b.hidden = false;
-    b.addEventListener('click', function () { replay(v); });
-  });
-  var videos = document.querySelectorAll('video[data-once]');
-  if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  var seen = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      if (!e.isIntersecting) return;
-      seen.unobserve(e.target);
-      var p = e.target.play();
-      if (p && p.catch) p.catch(function () {});
-    });
-  }, { threshold: 0.5 });
-  videos.forEach(function (v) { seen.observe(v); });
+# The player of an animated chart (Phase 12), in the page and in the app's card: plain script, no library. A box holds the finished chart as an <img> (what a
+#   reader sees without script, with less motion asked for, in print, and when the motion ends) and its frames as data addresses in a JSON script element
+#   (every frame but the last, each with the number of times in a row it is shown; the last is the <img>). The player draws the frames on a <canvas> laid over
+#   the <img> (the <img> keeps its place and is hidden while it plays), one timer for each frame kept, held for its repeats at 12 a second (data-fps); when the
+#   last frame is due it takes the canvas away, so the box rests on the <img>. It plays once, when half of the box is first on the screen (read from its place
+#   on the page when the page is ready, scrolls or is resized: no IntersectionObserver, which does not run in a browser without a screen), and the "Replay"
+#   button under it, hidden until the script runs, plays it again. Under prefers-reduced-motion it never plays and the button stays hidden. Before print it
+#   stops. A box added later (the app's card, drawn by Shiny) is found by a MutationObserver.
+MOTION_JS <- "(function () {
+  var reduced = function () { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; };
+  var stop = function (box) {
+    if (box._timer) { clearTimeout(box._timer); box._timer = null; }
+    if (box._canvas) { box._canvas.remove(); box._canvas = null; }
+    var img = box.querySelector('img.motion-still'); if (img) img.style.visibility = '';
+    box.removeAttribute('data-playing');
+  };
+  var play = function (box) {
+    if (reduced() || !box._frames) return;
+    stop(box);
+    var img = box.querySelector('img.motion-still'), d = box._frames, fps = +box.getAttribute('data-fps') || 12;
+    var c = document.createElement('canvas');
+    c.width = img.naturalWidth || +img.getAttribute('width'); c.height = img.naturalHeight || +img.getAttribute('height');
+    c.className = 'motion-canvas'; c.setAttribute('aria-hidden', 'true');
+    box.querySelector('.motion-stage').appendChild(c);
+    box._canvas = c; box.setAttribute('data-playing', '');
+    var g = c.getContext('2d');
+    var show = function (i) {
+      if (i >= d.frames.length) { box.setAttribute('data-played', String((+box.getAttribute('data-played') || 0) + 1)); stop(box); return; }
+      var im = box._images[i];
+      if (im.complete && im.naturalWidth) { g.clearRect(0, 0, c.width, c.height); g.drawImage(im, 0, 0, c.width, c.height); img.style.visibility = 'hidden'; }
+      box.setAttribute('data-frame', String(i));
+      box._timer = setTimeout(function () { show(i + 1); }, Math.round(1000 * d.repeats[i] / fps));
+    };
+    show(0);
+  };
+  var inView = function (box) {
+    var r = box.getBoundingClientRect(), h = window.innerHeight || document.documentElement.clientHeight;
+    if (!r.height || !h) return false;
+    return Math.min(r.bottom, h) - Math.max(r.top, 0) >= Math.min(r.height, h) / 2;
+  };
+  var boxes = [];
+  var look = function () { boxes.forEach(function (box) { if (!box._seen && inView(box)) { box._seen = true; play(box); } }); };
+  var ready = function (box) {
+    if (box._ready) return; box._ready = true;
+    var j = box.querySelector('script.motion-frames');
+    try { box._frames = JSON.parse(j.textContent); } catch (e) { return; }
+    if (reduced()) return;
+    box._images = box._frames.frames.map(function (u) { var im = new Image(); im.src = u; return im; });
+    var btn = box.querySelector('button.motion-replay');
+    if (btn) { btn.hidden = false; btn.addEventListener('click', function () { box._seen = true; play(box); }); }
+    boxes.push(box);
+  };
+  var all = function () { document.querySelectorAll('.motion').forEach(ready); look(); };
+  window.addEventListener('scroll', look, { passive: true });
+  window.addEventListener('resize', look);
+  window.addEventListener('load', look);
+  window.addEventListener('beforeprint', function () { document.querySelectorAll('.motion').forEach(stop); });
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', all); else all();
+  if ('MutationObserver' in window) new MutationObserver(all).observe(document.documentElement, { childList: true, subtree: true });
 })();"
 
-# The video, and the still that stands in for it (for a reader whose system asks for less motion, and in print), and the Replay button under it.
-#   The box is as wide as the video was drawn for (set on the box), never wider.
+# The box of an animated chart: as wide as its frames were drawn for (set on the box), never wider. The canvas lies over the finished picture while it plays;
+#   in print and under reduced motion only the finished picture is shown.
 DASH_VIDEO_CSS <- paste0(
-  ".video-box{width:100%;}\n",
-  ".video-box video,.video-box .still{display:block;width:100%;height:auto;}\n",
-  ".video-box .still{display:none;}\n",
-  ".video-box .replay{display:inline-block;margin:.45rem 0 0;font:inherit;font-size:.85rem;line-height:1.2;color:var(--text);background:transparent;border:1px solid var(--text2);border-radius:.25rem;padding:.25rem .8rem;cursor:pointer;}\n",
-  ".video-box .replay[hidden]{display:none;}\n",
-  ".video-box .replay:hover{background:var(--box);}\n",
-  ".video-box .replay:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}\n",
-  "@media (prefers-reduced-motion:reduce){.video-box video,.video-box .replay{display:none;}.video-box .still{display:block;}}\n")
+  ".motion{width:100%;}\n",
+  ".motion-stage{position:relative;}\n",
+  ".motion img.motion-still{display:block;width:100%;height:auto;}\n",
+  ".motion canvas.motion-canvas{position:absolute;left:0;top:0;width:100%;height:100%;}\n",
+  ".motion .motion-replay{display:inline-block;margin:.45rem 0 0;font:inherit;font-size:.85rem;line-height:1.2;color:var(--text);background:transparent;border:1px solid var(--text2);border-radius:.25rem;padding:.25rem .8rem;cursor:pointer;}\n",
+  ".motion .motion-replay[hidden]{display:none;}\n",
+  ".motion .motion-replay:hover{background:var(--box);}\n",
+  ".motion .motion-replay:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}\n",
+  "@media (prefers-reduced-motion:reduce){.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\n",
+  "@media print{.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\n")
 
-DASH_MARKING_NOTE <- paste("The marking is written into every file of the zip: a band at the top and bottom of each page, picture and video, a first line of the script, the data dictionary",
+# The frames of a motion as the player reads them: the frames but the last as data addresses with their repeat counts, as JSON. `mo` is what spec_video() or
+#   design_video() returned.
+motion_frames_json <- function(mo) {
+  k = length(mo$files) - 1L
+  jsonlite::toJSON(list(frames = purrr::map_chr(utils::head(mo$files, k), function(f) dash_data_uri(f, "image/png")), repeats = utils::head(mo$repeats, k)), auto_unbox = FALSE)
+}
+
+# The estimate of the bytes an animated chart adds to the page, said in the export dialog before it is built: its finished picture is drawn once, as its last frame
+#   would be for a card that shares its row (with the marking's bands), and the frames but the last are taken to weigh DASH_MOTION_EST_SHARE of it each, as base64.
+#   The share is what the five stand-in charts of the test dashboard weighed (tests/motion_weight_12.R: 0.65 to 0.73; the early frames hold less ink).
+DASH_MOTION_EST_SHARE <- 0.7
+dash_motion_estimate <- function(chart, data, cb, palette, size = "desk") {
+  f = tempfile(fileext = ".png")
+  on.exit(unlink(f))
+  p = video_plot(chart$spec, data, cb, palette, bare = TRUE, band = MARKING_BAND_IN, web = dash_web(size))
+  cv = attr(p, "canvas")
+  w = SPEC_VIDEO_DASH_PX[[size]][["width"]]
+  video_draw(ggplot2::ggplot_build(p), f, cv[["width"]], cv[["height"]], w / cv[["width"]], marking = APP_CLASSIFICATION)
+  4 / 3 * file.size(f) * DASH_MOTION_EST_SHARE * (video_frame_count() - 1L)
+}
+
+# The bytes an animated chart adds to a page beyond its finished picture: the frames but the last, as base64 (four characters for three bytes).
+motion_added_bytes <- function(mo) sum(4 * ceiling(file.size(utils::head(mo$files, -1L)) / 3))
+
+# The markup of an animated chart: the box, the finished chart as an <img> (`last`: its data address), the frames, and the Replay button. `css` is the width and height
+#   it is shown at, in CSS pixels; `fps` the frames a second.
+motion_tag <- function(frames_json, last, css, alt, fps = SPEC_VIDEO_FPS) {
+  tags$div(class = "motion", style = paste0("max-width:", css[["width"]], "px;"), `data-fps` = fps,
+    tags$div(class = "motion-stage", tags$img(class = "motion-still", src = last, alt = alt, width = css[["width"]], height = css[["height"]])),
+    tags$script(type = "application/json", class = "motion-frames", HTML(frames_json)),
+    tags$button(type = "button", class = "motion-replay", hidden = NA, `aria-label` = paste0("Replay the animation: ", alt), "Replay"))
+}
+
+DASH_MARKING_NOTE <- paste("The marking is written into every file of the zip: a band at the top and bottom of each page and picture (and of every frame of an animated chart), a first line of the script, the data dictionary",
                           "and each table's CSV (a reader must skip that line), and the start of the zip's name. It is your statement: chaRt does not judge or change it, and it is never sent to a model.",
                           "It cannot be blank, and it is at most", MARKING_MAX, "characters.")
 DASH_INTRO_NOTE <- "Plain text, shown as you write it. It is not checked by the number check."
@@ -3352,7 +3404,7 @@ dash_css <- function(style, accent) {
     ".mark{position:fixed;left:8mm;right:8mm;}.mark.top{top:6mm;}.mark.bottom{bottom:6mm;}",
     "body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FFFFFF;color:#111111;}.page{max-width:none;padding:", DASH_PRINT_ROOM_MM[["one"]], "mm 14mm;box-decoration-break:clone;-webkit-box-decoration-break:clone;}",
     "body.long .page{padding-top:", DASH_PRINT_ROOM_MM[["two"]], "mm;padding-bottom:", DASH_PRINT_ROOM_MM[["two"]], "mm;}",
-    ".grid{display:block;}.card,.col-section,.key,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.video-box video,.video-box .replay{display:none;}.video-box .still{display:block;max-width:100%;}.col-section figure img.screen-only{display:none;}",
+    ".grid{display:block;}.card,.col-section,.key,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;max-width:100%;}.col-section figure img.screen-only{display:none;}",
     ".keys{display:flex;flex-wrap:wrap;overflow:visible;}.key{flex:1 1 10rem;}.masthead{break-after:avoid;}h2{break-after:avoid;}.stat-block .table-scroll{overflow:visible;}.stat-table{font-size:.7rem;}}\n")
 }
 
@@ -3453,11 +3505,11 @@ dash_about <- function(items, settings, cb, data, model) {
                                         ". R checked the code against a list of functions it may call, ran it on the table of the chart, and refused a drawing that cut off or covered text, left out rows, cut a bar's zero or wrote a number that was not in the chart's facts. The model was shown the picture of each chart it designed. ",
                                         "Each designed chart's script and table are in charts.R and charts/.")),
       if (length(charts)) entry("The charts", paste0(sum(modes == "picture"), if (sum(modes == "picture") == 1L) " picture" else " pictures",
-                                 if (any(modes == "video")) paste0(", ", sum(modes == "interactive"), " interactive and ", sum(modes == "video"), if (sum(modes == "video") == 1L) " video. " else " videos. ")
+                                 if (any(modes == "video")) paste0(", ", sum(modes == "interactive"), " interactive and ", sum(modes == "video"), " animated. ")
                                  else paste0(" and ", sum(modes == "interactive"), " interactive. "),
                                  if (any(modes == "interactive"))
                                    "An interactive chart carries the values of the rows it plots, in this file." else "A picture holds no row values.",
-                                 if (any(modes == "video")) " A video holds no row values: it is pictures of the chart.",
+                                 if (any(modes == "video")) " An animated chart holds no row values: it is pictures of the chart.",
                                  purrr::map_chr(fell, function(it) paste0(" '", it$title, "' is a picture because its ", it$fallback_of %||% "interactive version", " could not be made: ", it$fallback)) |> paste(collapse = ""),
                                  purrr::map_chr(purrr::keep(items, function(it) is_text1(it$video_note)), function(it) paste0(" '", it$title, "': ", it$video_note)) |> paste(collapse = ""))),
       if (length(tables)) entry("The summary tables", paste0(length(tables), if (length(tables) == 1L) " table" else " tables", " of statistics, worked out by R from the rows of the file with no model; ",
@@ -3486,20 +3538,11 @@ dash_picture_tag <- function(it, full, alt) {
     if (!is.null(paper)) tags$img(class = "print-only", src = paper$uri, alt = alt, width = paper$pixels[[1]], height = paper$pixels[[2]]))
 }
 
-# The video of a card as the page holds it: the MP4 as a data address in a <video> (controls, muted, no autoplay and no loop: the script of the page
-#   plays it once when it scrolls into view), the finished chart as its poster (a PNG of the last frame; with preload none no frame is decoded
-#   before play, so nothing but the poster can show) and, as a second element shown instead when the reader's system asks for less motion and in
-#   print, the same picture; under them a "Replay" button, hidden until the page's script runs. The box is as wide as the video was drawn for
-#   (css pixels = the file's pixels over DASH_SCALE), so its text is the size it was drawn at. The poster is a data address too.
+# An animated chart in the page (Phase 12): motion_tag() for its frames, shown as wide as they were drawn for (css pixels = the frames' pixels over DASH_SCALE), so its
+#   text is the size it was drawn at.
 dash_video_tag <- function(it, alt) {
   v = it$video
-  px = v$px %||% SPEC_VIDEO_DASH_PX[[v$size %||% "desk"]]
-  css = round(px / DASH_SCALE)
-  tags$div(class = "video-box", style = paste0("max-width:", css[["width"]], "px;"),
-    tags$video(src = v$uri, poster = v$poster, controls = NA, muted = NA, playsinline = NA, preload = "none", `data-once` = NA, `aria-label` = paste0("Video: ", alt),
-               width = css[["width"]], height = if ("height" %in% names(css)) css[["height"]]),
-    tags$img(class = "still", src = v$poster, alt = alt, width = css[["width"]], height = if ("height" %in% names(css)) css[["height"]]),
-    tags$button(type = "button", class = "replay", hidden = NA, `aria-label` = paste0("Replay the video: ", alt), "Replay"))
+  motion_tag(v$frames_json, v$last, round(v$px / DASH_SCALE), alt, v$fps %||% SPEC_VIDEO_FPS)
 }
 
 # One card of the page: the headline as its heading (the chart's title, if there is no headline), the chart's title as its subtitle (and
@@ -3643,7 +3686,7 @@ dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALS
     dash_keys_tag(keys, narrow = identical(chart_style(style)$title_font, "display")),
     tags$main(class = "grid", dash_cards(items, full, style)),
     tags$footer(class = "foot", dash_about(items, settings, cb, data, model), tags$p(class = "made", "Made with chaRt")),
-    if (any(purrr::map_chr(items, "mode") == "video")) tags$script(HTML(DASH_VIDEO_JS))), dash_band(mark, "bottom"))
+    if (any(purrr::map_chr(items, "mode") == "video")) tags$script(HTML(MOTION_JS))), dash_band(mark, "bottom"))
   dash_document(head, body)
 }
 
@@ -3835,29 +3878,25 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, mark
        files = if (is.list(designed)) designed$files else c(pic_file, vector_file), code = code)
 }
 
-# The video of a chart for the page: the chart drawn without title, subtitle or source line (the page says them), for the width it is shown at
-#   (`size`: desk, a card that shares its row, or wide, a card with a row to itself; SPEC_VIDEO_DASH_PX), as an MP4 in the staging folder
-#   (charts/ gets the same file), with the finished chart as the poster, a PNG of its last frame at the video's own pixels. Returns list(file,
-#   uri, poster, seconds, drawn, canvas, size): the file as a data address ready for the page, and the poster as one.
-dash_video <- function(chart, stage, file, data, cb, palette, marking, size = "desk") {
-  poster = tempfile(fileext = ".png")
-  on.exit(unlink(poster))
-  r = spec_video(chart$spec, data, cb, palette, file.path(stage, file), size = SPEC_VIDEO_DASH_PX[[size]], bare = TRUE, web = dash_web(size),
-                 poster = poster, marking = marking)
-  list(file = file, uri = dash_data_uri(file.path(stage, file), "video/mp4"), poster = dash_data_uri(poster, "image/png"), seconds = r$seconds, drawn = r$drawn,
-       canvas = r$canvas, size = size, px = r$px)
+# The motion of a chart for the page (Phase 12): its frames drawn without title, subtitle or source line (the page says them), for the width it is shown at
+#   (`size`: desk, a card that shares its row, or wide, a card with a row to itself; SPEC_VIDEO_DASH_PX), with the marking's bands, held in memory as data
+#   addresses (charts/ gets no file of them). Returns list(frames_json, last, px, fps, added, kept, drawn, seconds, size, canvas).
+dash_motion_of <- function(mo, size) {
+  on.exit(unlink(mo$dir, recursive = TRUE))
+  list(frames_json = motion_frames_json(mo), last = dash_data_uri(mo$last, "image/png"), px = mo$px, fps = mo$fps, added = motion_added_bytes(mo),
+       kept = length(mo$files), drawn = mo$drawn, seconds = mo$seconds, size = size, canvas = mo$canvas,
+       frame_bytes = file.size(mo$files), repeats = mo$repeats)
 }
+dash_video <- function(chart, data, cb, palette, marking, size = "desk")
+  dash_motion_of(spec_video(chart$spec, data, cb, palette, width = SPEC_VIDEO_DASH_PX[[size]][["width"]], bare = TRUE, web = dash_web(size), marking = marking), size)
 
-# The video of a designed chart for the page (Phase 11 Part C): design_video() on the design's code, for the card's width as dash_video() is, without title,
-#   subtitle or source line, with the marking's bands, and the finished design as the poster. Returns what dash_video() does, and `mode` ("layers": the design's
-#   data layers come in by its motion, then its labels; "wipe": the three drawings did not add up, the whole picture wipes in) with `reason` (why it wipes).
-dash_design_video <- function(dz, chart, stage, file, data, cb, palette, marking, size = "desk") {
+# The motion of a designed chart for the page (Phase 11 Part C): design_video() on the design's code, for the card's width as dash_video() is, without title,
+#   subtitle or source line, with the marking's bands. Returns what dash_video() does, and `mode` ("layers": the design's data layers come in by its motion, then
+#   its labels; "wipe": the three drawings did not add up, the whole picture wipes in) with `reason` (why it wipes).
+dash_design_video <- function(dz, chart, data, cb, palette, marking, size = "desk") {
   inp = design_input(chart, data, cb, palette)
-  poster = tempfile(fileext = ".png")
-  on.exit(unlink(poster))
-  r = design_video(dz$code, inp, dz$motion, file.path(stage, file), width_px = SPEC_VIDEO_DASH_PX[[size]][["width"]], marking = marking, bare = TRUE, poster = poster)
-  list(file = file, uri = dash_data_uri(file.path(stage, file), "video/mp4"), poster = dash_data_uri(poster, "image/png"), seconds = r$seconds, drawn = r$drawn,
-       canvas = r$canvas, size = size, px = r$px, designed = TRUE, mode = r$mode, reason = r$reason, motion = r$motion)
+  r = design_video(dz$code, inp, dz$motion, width_px = SPEC_VIDEO_DASH_PX[[size]][["width"]], marking = marking, bare = TRUE)
+  c(dash_motion_of(r, size), list(designed = TRUE, mode = r$mode, reason = r$reason, motion = r$motion))
 }
 
 # Whether a card asks for a whole row by what it is (Phase 10b): a table, a chart drawn wide (many sideways bars), or small multiples of more
@@ -3900,26 +3939,24 @@ dash_pictures <- function(m, full, i, chart, data, cb, palette, kind, widget = s
     m$fallback = sub("\n.*$", "", w)
     m$mode = "picture"
   } else if (identical(m$mode, "video")) {
-    vfile = file.path("charts", sprintf("%02d_%s.mp4", i, dash_slug(m$title)))
-    # A designed chart's video is made from the design (design_video()); when that cannot be made, the standard drawing's video is, and the card says so.
+    # A designed chart's motion is made from the design (design_video()); when that cannot be made, the standard drawing's motion is, and the card says so.
     v = NULL
     if (isTRUE(m$designed)) {
-      v = tryCatch(dash_design_video(m$design, chart, stage, vfile, data, cb, palette, marking, card), error = function(e) conditionMessage(e))
-      m$video_note = if (is.list(v)) { if (identical(v$mode, "wipe")) paste0("The video wipes the designed drawing in from the left as one picture, because ", v$reason, ".") }
-                     else paste0("The video of the designed drawing could not be made (", sub("\n.*$", "", v), "), so it is a video of the standard drawing.")
+      v = tryCatch(dash_design_video(m$design, chart, data, cb, palette, marking, card), error = function(e) conditionMessage(e))
+      m$video_note = if (is.list(v)) { if (identical(v$mode, "wipe")) paste0("The animation wipes the designed drawing in from the left as one picture, because ", v$reason, ".") }
+                     else paste0("The animation of the designed drawing could not be made (", sub("\n.*$", "", v), "), so it animates the standard drawing.")
     }
     if (!is.list(v)) {
-      v = tryCatch(dash_video(chart, stage, vfile, data, cb, palette, marking, card), error = function(e) conditionMessage(e))
+      v = tryCatch(dash_video(chart, data, cb, palette, marking, card), error = function(e) conditionMessage(e))
       if (is.list(v) && isTRUE(m$designed)) { m$designed = FALSE; m$design = NULL }
       if (!is.list(v)) m$video_note = NULL
     }
     if (is.list(v)) {
       m$video = v
-      m$files = c(m$files, v$file)
       return(m)
     }
     m$fallback = sub("\n.*$", "", v)
-    m$fallback_of = "video"
+    m$fallback_of = "animation"
     m$mode = "picture"
   }
   draw = function(size, pal = palette) {
@@ -4021,7 +4058,7 @@ dash_design_note <- function(dz, spec, mode) {
   }
   paste0("Designed with ", design_skill_label(dz$skill), ": the picture is the model's code run again on the file as it is now. The plotted table is written beside charts.R as a CSV so the script runs alone",
          if (chart_from_rows(spec)) ", and that CSV holds the rows this chart plots" else "", ".",
-         inter, if (identical(mode, "video")) " A video is drawn from the design: its marks come in by the motion the model chose (rise, draw, wipe or fade), then its labels fade in; if the design's layers cannot be drawn apart, the whole picture wipes in from the left." else "")
+         inter, if (identical(mode, "video")) " An animated chart is drawn from the design: its marks come in by the motion the model chose (rise, draw, wipe or fade), then its labels fade in; if the design's layers cannot be drawn apart, the whole picture wipes in from the left." else "")
 }
 
 # The script of one designed chart, so that it runs alone: the packages its code uses, the table read back from its CSV (dates and levels as they were), the

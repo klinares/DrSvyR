@@ -5,8 +5,8 @@
 #   others, and its answer is "yes", "no" or the error text. The table is repeated as plain text
 #   under "Copy results", to be typed back at home. Needs only shiny, so it starts on a bare server;
 #   that is why it uses base lapply() and vapply() rather than purrr (still no loops).
-# Three tables: the checks, Graphics (Phase 8: can this server draw without X11) and Video (Phase 9: can it make the
-#   MP4 behind Animate: av, libx264, ten frames encoded, 30 frames of 1280 by 720 drawn and encoded, with the seconds).
+# Three tables: the checks, Graphics (Phase 8: can this server draw without X11) and Motion (Phase 12: how long the frames of an
+#   animated chart take to draw here, and what they weigh in a page; chaRt uses no video encoder).
 
 library(shiny)
 
@@ -14,7 +14,7 @@ APP_CLASSIFICATION <- "UNCLASSIFIED"
 
 # The packages chaRt will need, reported with their versions.
 PROBE_PACKAGES <- c("ggiraph", "shinychat", "yaml", "quarto", "ragg", "htmltools", "knitr", "rmarkdown",
-                    "ggplot2", "readr", "dplyr", "tidyr", "tibble", "paletteer", "av", "gganimate", "gifski")
+                    "ggplot2", "readr", "dplyr", "tidyr", "tibble", "paletteer")
 
 # The three-line document rendered from inside the running app (plus the YAML fences).
 PROBE_QMD <- c("---",
@@ -137,38 +137,6 @@ quarto_render_dashboard <- function() quarto_render(PROBE_QMD_DASHBOARD, to = NU
 # The same, with embed-resources: true under the dashboard format.
 quarto_render_dashboard_embed <- function() quarto_render(PROBE_QMD_DASHBOARD_EMBED, to = NULL)
 
-# Whether an ffmpeg program is on the PATH (av brings its own copy of the libraries, so this is for
-#   the command line only).
-ffmpeg_found <- function() {
-  path = Sys.which("ffmpeg")
-  if (nzchar(path)) paste("yes,", unname(path)) else "no (not on the PATH)"
-}
-
-# Ten small PNG frames drawn here, encoded into an MP4 in tempdir() by av. The function and its
-#   arguments (av_encode_video(input, output, framerate)) are looked for in the installed av first,
-#   since av was not installed where this probe was written; without them the answer says so.
-av_mp4 <- function() {
-  if (!requireNamespace("av", quietly = TRUE)) return("no, not run: av not installed")
-  ok = "av_encode_video" %in% getNamespaceExports("av") &&
-    all(c("input", "output", "framerate") %in% names(formals(getExportedValue("av", "av_encode_video"))))
-  if (!ok) return("no, not run: this av has no av_encode_video(input, output, framerate)")
-  dir = tempfile("probe_frames_")
-  dir.create(dir)
-  frames = file.path(dir, sprintf("frame%02d.png", 1:10))
-  lapply(seq_along(frames), function(i) {
-    grDevices::png(frames[i], width = 320, height = 240, type = "cairo")
-    graphics::plot(1:10, (1:10) * i / 10, ylim = c(0, 10), main = paste("chaRt probe, frame", i))
-    grDevices::dev.off()
-  })
-  out = file.path(dir, "probe.mp4")
-  started = Sys.time()
-  getExportedValue("av", "av_encode_video")(frames, out, framerate = 5)
-  secs = as.numeric(difftime(Sys.time(), started, units = "secs"))
-  if (file.exists(out) && file.size(out) > 0)
-    paste0("yes, in ", sprintf("%.1f", secs), " s; ", round(file.size(out) / 1024, 1), " KB")
-  else "no (no file was written)"
-}
-
 cairo_png <- function() {
   f = tempfile(fileext = ".png")
   grDevices::png(f, width = 400, height = 300, type = "cairo")
@@ -193,7 +161,7 @@ tempdir_writable <- function() {
 #   draws one chart with each, and shows the pictures. Written here again, not shared with the app: this folder is published
 #   alone. Needs only shiny; the chart needs ggplot2 and falls back to base graphics without it.
 
-PROBE_GRAPHICS_PACKAGES <- c("ragg", "svglite", "Cairo", "systemfonts", "av")
+PROBE_GRAPHICS_PACKAGES <- c("ragg", "svglite", "Cairo", "systemfonts")
 PROBE_FONT_NAME <- "chaRt probe font"
 
 # The most useful parts of Sys.info(): the operating system and the machine. The host name and the user names it also holds
@@ -327,11 +295,10 @@ graphics_pictures <- function() {
     one("ragg", "ragg"), one("cairo", "png(type = \"cairo\")"), one("svglite", "svglite (an SVG, drawn by the browser)"))
 }
 
-# ---- Video: can this server make the MP4 that chaRt's Animate button makes? -----------------------------------------------------
-#   chaRt draws about 87 frames of a chart as PNG files and encodes them with the av package (libx264, yuv420p, 24 frames a second;
-#   the last frame repeated for a 2 second hold). This section shows whether av is here, whether its ffmpeg has libx264, whether ten
-#   small frames encode to an MP4 (the time, the size, the codec read back from the file), and how long 30 frames of 1280 by 720 take
-#   to draw and then to encode, on this server. The chart is a made-up bar chart whose bars rise, drawn the way chaRt draws a frame
+# ---- Motion: how long the frames of chaRt's Animate button take to draw here --------------------------------------------------
+#   chaRt draws 44 frames of a chart as PNG files (12 a second, 3.6 seconds, at a card's width of 1080 pixels), and the browser plays
+#   them from the page (Phase 12: no video file, no encoder). This section shows how long 44 frames of 1080 by 760 take to draw on this
+#   server and what they weigh, as files and as the base64 the page holds. The chart is a made-up bar chart whose bars rise, drawn the way chaRt draws a frame
 #   (the scale fixed at its final limits), with ragg when it is installed, else png(type = "cairo"). Written here again, not shared with
 #   the app: this folder is published alone. No model call, no key, no file from the user: every number below is made up here.
 
@@ -355,8 +322,8 @@ probe_frame <- function(progress) {
   if (requireNamespace("ggplot2", quietly = TRUE))
     print(ggplot2::ggplot(d, ggplot2::aes(x = region, y = value)) + ggplot2::geom_col(fill = "#0072B2") +
             ggplot2::scale_y_continuous(limits = c(0, 100)) +
-            ggplot2::labs(title = "chaRt probe: a frame of a video", x = NULL, y = NULL) + ggplot2::theme_minimal(base_size = 18))
-  else graphics::barplot(d$value, names.arg = as.character(d$region), ylim = c(0, 100), main = "chaRt probe: a frame of a video (base graphics)")
+            ggplot2::labs(title = "chaRt probe: a frame of an animated chart", x = NULL, y = NULL) + ggplot2::theme_minimal(base_size = 18))
+  else graphics::barplot(d$value, names.arg = as.character(d$region), ylim = c(0, 100), main = "chaRt probe: a frame of an animated chart (base graphics)")
   invisible(NULL)
 }
 
@@ -369,7 +336,7 @@ png_size <- function(file) {
 }
 
 # n frames at the given size into a new folder, timed. list(ok, files, secs, size, text); a failure is text, not an error.
-#   Kept for the session: the encode of the same 30 frames does not draw them again.
+#   Kept for the session: the weight of the same frames does not draw them again.
 probe_video_state <- new.env()
 probe_frames <- function(n, width, height) {
   key = paste(n, width, height)
@@ -394,64 +361,24 @@ probe_frames <- function(n, width, height) {
   out
 }
 
-# Whether the installed av has av_encode_video(input, output, framerate, vfilter, codec); "" when it has, else the sentence.
-av_missing <- function() {
-  if (!requireNamespace("av", quietly = TRUE)) return("no, not run: av is not installed")
-  if (!"av_encode_video" %in% getNamespaceExports("av") || !all(c("input", "output", "framerate", "vfilter", "codec") %in% names(formals(getExportedValue("av", "av_encode_video")))))
-    return("no, not run: this av has no av_encode_video(input, output, framerate, vfilter, codec)")
-  ""
-}
+PROBE_MOTION_FRAMES <- 44L
+PROBE_MOTION_PX <- c(width = 1080, height = 760)
 
-# The encoders this av's ffmpeg lists, as a character vector of names (empty when it cannot say).
-av_encoder_names <- function() {
-  e = tryCatch(getExportedValue("av", "av_encoders")(), error = function(e) NULL)
-  if (is.data.frame(e) && "name" %in% names(e)) as.character(e$name) else character(0)
-}
+video_frames_draw <- function() probe_frames(PROBE_MOTION_FRAMES, PROBE_MOTION_PX[["width"]], PROBE_MOTION_PX[["height"]])$text
 
-# Frames to an MP4 the way chaRt does it (libx264, yuv420p, 24 frames a second; the default codec when libx264 is not in the list,
-#   and the answer says so). The codec and frame count are read back from the file. list(ok, secs, kb, text).
-probe_encode <- function(frames, framerate = 24) {
-  gone = av_missing()
-  if (nzchar(gone)) return(list(ok = FALSE, text = gone))
-  x264 = "libx264" %in% av_encoder_names()
-  out = tempfile(fileext = ".mp4")
-  started = Sys.time()
-  getExportedValue("av", "av_encode_video")(frames, out, framerate = framerate, vfilter = "format=yuv420p", codec = if (x264) "libx264", verbose = FALSE)
-  secs = as.numeric(difftime(Sys.time(), started, units = "secs"))
-  if (!file.exists(out) || file.size(out) == 0) return(list(ok = FALSE, text = "no (no file was written)"))
-  info = tryCatch(getExportedValue("av", "av_video_info")(out)$video, error = function(e) NULL)
-  read_back = if (is.data.frame(info) && nrow(info)) paste0("; read back: ", info$codec[[1]], ", ", info$width[[1]], " by ", info$height[[1]]) else ""
-  list(ok = TRUE, secs = secs, kb = file.size(out) / 1024,
-       text = paste0("yes, in ", sprintf("%.2f", secs), " s; ", sprintf("%.1f", file.size(out) / 1024), " KB; ", if (x264) "libx264" else "NOT libx264 (not in av's encoder list; the default codec was used)", read_back))
-}
-
-video_ten_frames <- function() {
-  gone = av_missing()
-  if (nzchar(gone)) return(gone)
-  f = probe_frames(10, 640, 360)
+# What the same frames add to a page: their bytes as base64 (four characters for three bytes), the frames that are the same as the one before kept once.
+video_frames_weight <- function() {
+  f = probe_frames(PROBE_MOTION_FRAMES, PROBE_MOTION_PX[["width"]], PROBE_MOTION_PX[["height"]])
   if (!isTRUE(f$ok)) return(paste0("no, the frames could not be drawn: ", f$text))
-  probe_encode(f$files)$text
+  bytes = vapply(f$files, function(x) paste(readBin(x, "raw", file.size(x)), collapse = ""), character(1))
+  kept = f$files[c(TRUE, bytes[-1] != bytes[-length(bytes)])]
+  paste0("yes, ", length(kept), " of ", length(f$files), " frames kept; ", sprintf("%.2f", sum(4 * ceiling(file.size(kept) / 3)) / 1048576), " MB in the page as base64")
 }
 
-video_thirty_frames_draw <- function() probe_frames(30, 1280, 720)$text
-
-video_thirty_frames_encode <- function() {
-  gone = av_missing()
-  if (nzchar(gone)) return(gone)
-  f = probe_frames(30, 1280, 720)
-  if (!isTRUE(f$ok)) return(paste0("no, the frames could not be drawn: ", f$text))
-  probe_encode(f$files)$text
-}
-
-# The Video table: av, its encoder, then the three timed steps.
+# The Motion table: the frames drawn, timed, and their weight.
 video_rows <- function() {
-  list(list("av installed, with av_encode_video()", function() { gone = av_missing(); if (nzchar(gone)) gone else paste("yes,", as.character(utils::packageVersion("av"))) }),
-       list("libx264 is among the encoders of the ffmpeg inside av", function() {
-         gone = av_missing()
-         if (nzchar(gone)) gone else if ("libx264" %in% av_encoder_names()) "yes" else "no (chaRt then lets ffmpeg choose the codec)" }),
-       list("Ten frames (640 by 360) encode to an MP4 with av", video_ten_frames),
-       list("30 frames of 1280 by 720 draw (the size of a card's video)", video_thirty_frames_draw),
-       list("The same 30 frames encode to an MP4 with av", video_thirty_frames_encode))
+  list(list(paste0(PROBE_MOTION_FRAMES, " frames of ", PROBE_MOTION_PX[["width"]], " by ", PROBE_MOTION_PX[["height"]], " draw (the frames of an animated card)"), video_frames_draw),
+       list("Their weight in a page", video_frames_weight))
 }
 
 video_table <- function() {
@@ -473,8 +400,6 @@ run_checks <- function() {
          list("A .qmd with an R chunk (ggplot, then girafe) renders to self-contained HTML", quarto_render_r),
          list("A format: dashboard document renders from the app", quarto_render_dashboard),
          list("The same dashboard with embed-resources: true renders from the app", quarto_render_dashboard_embed),
-         list("An ffmpeg program is on the PATH", ffmpeg_found),
-         list("Ten PNG frames encode to an MP4 with av", av_mp4),
          list("A PNG draws with type = \"cairo\"", cairo_png),
          list("tempdir() is writable", tempdir_writable)))
   data.frame(Check = vapply(rows, function(r) r[[1]], character(1)),
@@ -502,8 +427,8 @@ ui <- fluidPage(
   tags$p("Can this server draw a chart without X11? What R and the machine say, then one chart drawn by each device that is available."),
   tableOutput("graphics"),
   uiOutput("graphics_pictures"),
-  tags$h3("Video"),
-  tags$p("Can this server make the MP4 behind chaRt's Animate button? av and its encoder, ten small frames encoded, then 30 frames of 1280 by 720 drawn and encoded, with the seconds. The chart is made up here."),
+  tags$h3("Motion"),
+  tags$p("How long the frames behind chaRt's Animate button take to draw on this server, and what they weigh in a page. The browser plays them as they are; no video file is made. The chart is made up here."),
   tableOutput("video"),
   tags$h4("Copy results"),
   tags$p("The same table as plain text, to copy or type back at home."),
@@ -515,7 +440,7 @@ server <- function(input, output, session) {
   graphics <- reactive(withProgress(message = "Drawing a chart with each device", value = 0.5, graphics_table()))
   output$graphics <- renderTable(graphics(), striped = TRUE, bordered = TRUE)
   output$graphics_pictures <- renderUI(tryCatch(graphics_pictures(), error = function(e) tags$p(paste("error:", conditionMessage(e)))))
-  video <- reactive(withProgress(message = "Encoding a short video", value = 0.5, video_table()))
+  video <- reactive(withProgress(message = "Drawing the frames of an animated chart", value = 0.5, video_table()))
   output$video <- renderTable(video(), striped = TRUE, bordered = TRUE)
   output$copy <- renderUI(
     textAreaInput("copy_text", NULL, value = as_text(rbind(checks(), graphics(), video())), width = "100%", rows = nrow(checks()) + nrow(graphics()) + nrow(video()) + 3))

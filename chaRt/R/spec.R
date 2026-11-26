@@ -3397,38 +3397,31 @@ fig_across <- function(s, panels) {
 }
 
 
-# ---- the video (Phase 9 Part B) ---------------------------------------------------------------------------------------------
-# A chart that moves: its marks come in over about 3 seconds, its numbers and names fade in over 0.6, and the finished chart is
-#   held for 2. The frames are drawn by our own renderer on the device chart_device() opens and encoded to MP4 by the av package
-#   (no gganimate). How a frame is made: the finished chart is built once (ggplot2::ggplot_build() of spec_plot()'s plot), so its
+# ---- motion (Phase 9 Part B; Phase 12: played by the browser, no encoder) ------------------------------------------------------
+# A chart that moves: its marks come in over about 3 seconds, its numbers and names fade in over 0.6, and it stops on the finished
+#   chart. The frames are drawn by our own renderer on the device chart_device() opens, as PNG files; the page (and the card in the app)
+#   plays them with a few lines of its own script (MOTION_JS in R/ui.R). There is no video file and no encoder (Phase 12: the av package
+#   is not used). How a frame is made: the finished chart is built once (ggplot2::ggplot_build() of spec_plot()'s plot), so its
 #   scales, breaks, axes, legends and panels are the finished chart's and cannot move; a frame is that built object with the
 #   data of each layer cut down for the moment (a line drawn up to some x, a bar at some share of its height, the points so far),
 #   which is how gganimate draws its frames too. At progress 1 every layer's data is the built data untouched, so the last frame
 #   is the static chart. Nothing here calls a model.
 
-# Whether the av package is installed (a function, so that a test can stand in for a server that has not got it).
-av_installed <- function() length(find.package("av", quiet = TRUE)) > 0L
-
-# Whether the av package's encoder can write H.264 (libx264), which every browser plays; without it av would choose a codec some browsers cannot play.
-av_has_h264 <- function() isTRUE(tryCatch("libx264" %in% av::av_encoders()$name, error = function(e) FALSE))
-
-# Whether this server can make a video: av with an H.264 encoder, and a device that writes pictures a video can be made of (not svglite's SVG).
-video_available <- function() av_installed() && av_has_h264() && chart_device_kind() %in% c("ragg", "cairo")
+# Whether this server can make a chart move: a device that writes PNG frames (ragg or cairo; not svglite's SVG, which the player cannot draw).
+#   Nothing else is needed: no encoder, no package beyond the device.
+video_available <- function() chart_device_kind() %in% c("ragg", "cairo")
 
 # Why it cannot, in words for Start here; NULL when it can.
 video_unavailable_text <- function() {
-  if (!av_installed()) return("Videos are unavailable on this server: the av package is not installed, so the Animate button is not shown.")
-  if (!av_has_h264()) return("Videos are unavailable on this server: the av package here has no H.264 encoder (libx264), so the Animate button is not shown.")
-  if (!chart_device_kind() %in% c("ragg", "cairo"))
-    return("Videos are unavailable on this server: charts are drawn here as SVG pictures, which a video cannot be made of, so the Animate button is not shown.")
+  if (!video_available())
+    return("Motion is unavailable on this server: charts are drawn here as SVG pictures, which the frames of an animated chart cannot be made of, so the Animate button is not shown.")
   NULL
 }
 
-SPEC_VIDEO_FPS <- 24L                   # frames a second in the file
+SPEC_VIDEO_FPS <- 12L                   # frames a second the browser shows (Phase 12: 12, not 24; the frames are stored in the page)
 SPEC_VIDEO_MOTION_S <- 3                # seconds the marks take to come in
 SPEC_VIDEO_LABELS_S <- 0.6              # seconds the labels, annotations and names take to fade in
-SPEC_VIDEO_HOLD_S <- 2                  # seconds the finished chart is held (its file repeated in the encoder's input, not drawn again)
-SPEC_VIDEO_PX <- list(card = c(width = 1280, height = 720), download = c(width = 1920, height = 1080))
+# There is no hold: the player stops on the last frame, which is the static chart, so it is not stored again.
 SPEC_VIDEO_WIDTHS <- c(8, 10, 12)       # the widths in inches of the 16 to 9 canvas a chart is drawn on (8 by 4.5, the usual), narrowest first; dots per inch are pixels over this
 # The dashboard's video (Phase 10b) is drawn for the width it is shown at, as its pictures are: the pixels of the file are twice the CSS pixels of the
 #   card (a sharp picture on a screen of twice the density), and the canvas is the CSS width over 96 inches wide, so its text comes out near 12 CSS
@@ -3436,12 +3429,11 @@ SPEC_VIDEO_WIDTHS <- c(8, 10, 12)       # the widths in inches of the 16 to 9 ca
 # A card's video is drawn as the card's picture is (spec_plot() with the picture's `web`, at its size from spec_size()) and the marking bands
 #   added above and below it, so it lays out like the picture: the same end labels, legend and breaks. Its width in pixels is the picture's
 #   (CSS pixels times DASH_SCALE: 1080 for a card that shares its row, 1280 for one with its row); its height follows from the picture's shape and
-#   the bands (spec_video() rounds it to an even number, as H.264 needs). The 1920 by 1080 download keeps its 16 to 9 frame.
+#   the bands. The card in the app is drawn at `desk`, the size of a card that shares its row on the page.
 SPEC_VIDEO_DASH_PX <- list(desk = c(width = 1080), wide = c(width = 1280))
 SPEC_VIDEO_STAGGER <- 0.5               # each bar, dot, box or column starts this much later than the one before, the last by this share of the motion
 SPEC_VIDEO_POINTS_SHARE <- 0.7          # a scatter or bubble with a fitted curve: the points take this share of the motion, then the curve is drawn
 SPEC_VIDEO_RAMP <- 0.04                 # points growing in at once, as a share of all the points (at least 2)
-SPEC_VIDEO_SLOW_S <- 45                 # a video that takes longer than this to draw is drawn at half the frame rate, each frame shown twice
 
 # Progress 0 to 1 over the motion and the labels together, as the share of each that has been done.
 video_phases <- function(progress) {
@@ -3727,55 +3719,44 @@ video_draw <- function(frame, file, width_in, height_in, dpi, kind = chart_devic
   invisible(file)
 }
 
-# The encoder's input for a video: each drawn file shown `each` times, then the last file again for the hold (not drawn again).
-video_inputs <- function(files, each = 1L, fps = SPEC_VIDEO_FPS) {
-  c(rep(files, each = each), rep(files[[length(files)]], round(SPEC_VIDEO_HOLD_S * fps)))
+# The frames as the page stores them (Phase 12): neighbouring frames that are the same picture (the same bytes, so the same pixels) are kept once, with the number of
+#   times in a row they are shown. `files` are the frames in order. Returns list(files = the frames kept, repeats = how many times each is shown); sum(repeats) is
+#   length(files) and the last file kept is the last frame.
+motion_pack <- function(files) {
+  keys = purrr::map_chr(files, function(f) digest::digest(file = f, algo = "md5"))
+  runs = rle(keys)
+  last = cumsum(runs$lengths)
+  list(files = files[last], repeats = as.integer(runs$lengths))
 }
 
-# A video of a chart, written to `file` (MP4, H.264, yuv420p, which a browser plays): `size` pixels wide and high (the download's
-#   1920 by 1080 unless said; SPEC_VIDEO_PX), and `small`, when given, a second file of the same frames scaled to the card's 1280 by
-#   720 by the encoder, so the frames are drawn once. `drawn_fps` is the frames drawn a second (24; 12 draws half as many and shows each
-#   twice; NULL: 24, unless one frame of the label phase, the dearest, shows the drawing would take more than SPEC_VIDEO_SLOW_S, and then
-#   12). `widths` are the canvases to try (video_plot()). `on_frame(i, n)` is called after each frame is drawn, `poster` names a file
-#   that gets the last frame (the finished chart) as a picture, and `keep` names a folder to leave the frame files in. Returns
-#   list(file, small, drawn, inputs, canvas, plot, drawn_fps, seconds = c(draw, encode)). Needs av (video_available()). `marking`, when given, draws the band of marking_draw() on every frame: the
-#   frame keeps its 16 to 9 shape and the chart is drawn in the rows between the bands (video_plot() `band`), so the last frame is spec_png() of the same
-#   plot with the same marking, pixel for pixel.
-spec_video <- function(spec, data, cb, palette = chart_palette_default(), file, size = SPEC_VIDEO_PX$download, small = NULL, bare = FALSE,
-                       drawn_fps = NULL, widths = SPEC_VIDEO_WIDTHS, on_frame = NULL, poster = NULL, keep = NULL, marking = NULL, web = NULL) {
+# A chart's motion (Phase 12): its frames as PNG files, drawn at `width` pixels (a card's: SPEC_VIDEO_DASH_PX) for the canvas video_plot() gives, 12 a second
+#   (SPEC_VIDEO_FPS), from the empty chart to the finished one; the player stops on the last, so there is no hold. `web` is the card picture's `web` (the chart is
+#   drawn exactly as that picture, at the size spec_size() gives it); without it, the 16 to 9 canvas of SPEC_VIDEO_WIDTHS. `marking`, when given, draws the
+#   band of marking_draw() on every frame, above and below the chart (video_plot() `band`), so the last frame is spec_png() of the same plot with the same marking,
+#   pixel for pixel. `dir` is the folder the frames are written to (a new temporary one unless given; the caller removes it). `on_frame(i, n)` is called after
+#   each frame is drawn. Returns list(files, repeats (motion_pack()), drawn (frames drawn), last (the last frame's file: the static chart), dir, canvas, px, plot,
+#   fps, seconds = c(draw)).
+spec_video <- function(spec, data, cb, palette = chart_palette_default(), width = SPEC_VIDEO_DASH_PX$desk[["width"]], bare = FALSE, widths = SPEC_VIDEO_WIDTHS,
+                       on_frame = NULL, dir = NULL, marking = NULL, web = NULL) {
   if (!video_available()) stop(video_unavailable_text(), call. = FALSE)
   started = proc.time()[["elapsed"]]
   ctx = video_context(video_plot(spec, data, cb, palette, bare, widths, band = if (is.null(marking)) 0 else MARKING_BAND_IN, web = web), cb)
   canvas = attr(ctx$plot, "canvas")
-  dpi = size[["width"]] / canvas[["width"]]
-  # a card's video (`web`): its height follows from the canvas, rounded to an even number of pixels (H.264 with yuv420p needs both even)
-  #   and the canvas made that many pixels high (less than a pixel taller or shorter than the picture and its bands)
-  if (!is.null(web)) {
-    size = c(width = size[["width"]], height = 2 * round(size[["width"]] * canvas[["height"]] / canvas[["width"]] / 2))
-    canvas[["height"]] = size[["height"]] / dpi
-  }
-  dir = keep %||% tempfile("chart_video_")
+  dpi = width / canvas[["width"]]
+  # the height in whole pixels, and the canvas made that many pixels high (less than a pixel taller or shorter than the picture and its bands)
+  px = c(width = as.integer(width), height = as.integer(round(width * canvas[["height"]] / canvas[["width"]])))
+  canvas[["height"]] = px[["height"]] / dpi
+  dir = dir %||% tempfile("chart_motion_")
   dir.create(dir, showWarnings = FALSE, recursive = TRUE)
-  if (is.null(keep)) on.exit(unlink(dir, recursive = TRUE), add = TRUE)
-  draw = function(p, f) video_draw(video_frame(ctx, p), f, canvas[["width"]], canvas[["height"]], dpi, marking = marking)
-  if (is.null(drawn_fps)) {
-    t = system.time(draw(0.97, file.path(dir, "probe.png")))[["elapsed"]]
-    drawn_fps = if (t * video_frame_count(SPEC_VIDEO_FPS) > SPEC_VIDEO_SLOW_S) SPEC_VIDEO_FPS %/% 2L else SPEC_VIDEO_FPS
-  }
-  n = video_frame_count(drawn_fps)
+  n = video_frame_count()
   files = file.path(dir, sprintf("frame_%04d.png", seq_len(n)))
   purrr::iwalk(seq(0, 1, length.out = n), function(p, i) {
-    draw(p, files[[i]])
+    video_draw(video_frame(ctx, p), files[[i]], canvas[["width"]], canvas[["height"]], dpi, marking = marking)
     if (is.function(on_frame)) on_frame(i, n)
   })
-  if (!is.null(poster)) file.copy(files[[n]], poster, overwrite = TRUE)
-  drawn_at = proc.time()[["elapsed"]]
-  inputs = video_inputs(files, each = as.integer(round(SPEC_VIDEO_FPS / drawn_fps)))
-  encode = function(out, filter) av::av_encode_video(inputs, out, framerate = SPEC_VIDEO_FPS, vfilter = filter, codec = "libx264", verbose = FALSE)
-  encode(file, "format=yuv420p")
-  if (!is.null(small)) encode(small, paste0("scale=", SPEC_VIDEO_PX$card[["width"]], ":", SPEC_VIDEO_PX$card[["height"]], ":flags=lanczos,format=yuv420p"))
-  list(file = file, small = small, drawn = n, inputs = length(inputs), canvas = canvas, plot = ctx$plot, drawn_fps = drawn_fps, px = size,
-       seconds = c(draw = drawn_at - started, encode = proc.time()[["elapsed"]] - drawn_at))
+  pk = motion_pack(files)
+  list(files = pk$files, repeats = pk$repeats, drawn = n, last = files[[n]], dir = dir, canvas = canvas, px = px, plot = ctx$plot, fps = SPEC_VIDEO_FPS,
+       seconds = c(draw = proc.time()[["elapsed"]] - started))
 }
 
 
@@ -4899,13 +4880,13 @@ design_checks <- function(plot, d, facts, spec, code = "", txt = NULL, warnings 
 #   mark geom but is a small, fixed set of drawing instructions (what annotate(), geom_hline(yintercept = ) and the like make: inherit.aes FALSE,
 #   show.legend FALSE, StatIdentity, at most DESIGN_ROW_EXTRA rows of its own data) is an annotation and goes with the text; annotate("text") is text
 #   by its geom, annotate("point") a mark by its geom; every other layer is data. The frames are then array arithmetic on the three pictures (the png
-#   package) and the encoder is av's, as in Phase 9; ggplot draws no frame. The data layers come in by the design's `motion` (design_video_mask()),
-#   then the text layer fades in, then the finished picture is held; the timings and the easing are Phase 9's (video_phases(), video_ease()).
+#   package), written as PNG files the page's player shows (Phase 12: no encoder); ggplot draws no frame. The data layers come in by the design's `motion` (design_video_mask()),
+#   then the text layer fades in, and the player stops on the finished picture; the timings and the easing are Phase 9's (video_phases(), video_ease()).
 #   When the three drawings do not add up to the finished picture, the video wipes the finished picture in from the left instead, and says why.
 
 png_installed <- function() length(find.package("png", quiet = TRUE)) > 0L
 
-# Whether this server can make a designed chart's video: a video (av with H.264, a device that writes PNG) and the png package that reads and writes the pictures.
+# Whether this server can make a designed chart move: a device that writes PNG (video_available()) and the png package that reads and writes the pictures.
 design_video_available <- function() video_available() && png_installed()
 
 # The softness of the moving edge of the mask, as a share of the data's width (or height for rise): `draw` and `wipe` move left to right, `draw` with the
@@ -4998,18 +4979,16 @@ design_layers_why <- function(plot) {
   NULL
 }
 
-# A designed chart's video, written to `file`. `code` is the design's code, `inp` design_input()'s list for the chart, `motion` one of DESIGN_MOTIONS (the
+# A designed chart's motion: its frames as PNG files in `dir` (a new temporary folder unless given). `code` is the design's code, `inp` design_input()'s list for the chart, `motion` one of DESIGN_MOTIONS (the
 #   design's own, else "fade"). The canvas is the design's size in inches (`inp$size`) with the marking's two bands added above and below when `marking` is given
-#   (as spec_video() does for a card), `width_px` pixels wide and as high as that makes it, rounded to an even number (H.264 needs both even). `bare`: no title,
-#   subtitle or source line (the page says them). `poster` names a file that gets the finished picture; `keep` a folder to leave the frames in; `on_frame(i, n)`
-#   is called after each frame is made.
+#   (as spec_video() does for a card), `width_px` pixels wide and as high as that makes it, in whole pixels. `bare`: no title,
+#   subtitle or source line (the page says them). `on_frame(i, n)` is called after each frame is made.
 #   The last frame is the finished picture itself, drawn once through the same built plot, and `check` says how close the three drawings come to it. If they do not
 #   (share of pixels that differ above DESIGN_VIDEO_SHARE), or nothing of the data is drawn, or the design is a patchwork, the video wipes the finished picture
-#   in from the left over the ground colour (the bands stay), and `reason` says why. Returns list(file, mode = "layers" or "wipe", reason, motion, roles, check, drawn,
-#   inputs, canvas, px, plot, seconds = c(draw, compose, encode)).
-design_video <- function(code, inp, motion = "fade", file, width_px = SPEC_VIDEO_PX$download[["width"]], marking = NULL, bare = FALSE, poster = NULL, keep = NULL,
-                         on_frame = NULL) {
-  if (!design_video_available()) stop(if (!video_available()) video_unavailable_text() else "Videos of designs are unavailable on this server: the png package is not installed.", call. = FALSE)
+#   in from the left over the ground colour (the bands stay), and `reason` says why. Returns list(files, repeats (motion_pack()), last, dir, mode = "layers" or "wipe",
+#   reason, motion, roles, check, drawn, canvas, px, plot, fps, seconds = c(draw, compose)). The three drawings and the full one are left in `dir` too.
+design_video <- function(code, inp, motion = "fade", width_px = SPEC_VIDEO_DASH_PX$desk[["width"]], marking = NULL, bare = FALSE, dir = NULL, on_frame = NULL) {
+  if (!design_video_available()) stop(if (!video_available()) video_unavailable_text() else "Motion for designs is unavailable on this server: the png package is not installed.", call. = FALSE)
   motion = if (is_text1(motion) && tolower(trimws(motion)) %in% DESIGN_MOTIONS) tolower(trimws(motion)) else "fade"
   t0 = proc.time()[["elapsed"]]
   txt = if (bare) inp$txt[setdiff(names(inp$txt), c("title", "subtitle", "caption"))] else inp$txt
@@ -5019,14 +4998,13 @@ design_video <- function(code, inp, motion = "fade", file, width_px = SPEC_VIDEO
   b = r$built
   band = if (is.null(marking)) 0 else MARKING_BAND_IN
   w_in = unname(inp$size[["width"]])
-  w_px = 2L * as.integer(ceiling(width_px / 2))
+  w_px = as.integer(round(width_px))
   dpi = w_px / w_in
-  h_px = 2L * as.integer(round((inp$size[["height"]] + 2 * band) * dpi / 2))
+  h_px = as.integer(round((inp$size[["height"]] + 2 * band) * dpi))
   h_in = h_px / dpi
   canvas = c(width = w_in, height = h_in)
-  dir = keep %||% tempfile("chart_design_video_")
+  dir = dir %||% tempfile("chart_design_motion_")
   dir.create(dir, showWarnings = FALSE, recursive = TRUE)
-  if (is.null(keep)) on.exit(unlink(dir, recursive = TRUE), add = TRUE)
   draw = function(name, hide, clear, bands, bg)
     design_layer_draw(b, hide, clear, file.path(dir, paste0(name, ".png")), w_in, h_in, dpi, marking, bands, bg, plot)
   limit = 4 * DESIGN_TIME_LIMIT
@@ -5117,11 +5095,8 @@ design_video <- function(code, inp, motion = "fade", file, width_px = SPEC_VIDEO
     if (p >= 1) file.copy(full_file, files[[i]], overwrite = TRUE) else design_write_png(compose(p), files[[i]])
     if (is.function(on_frame)) on_frame(i, n)
   })
-  if (!is.null(poster)) file.copy(full_file, poster, overwrite = TRUE)
-  composed = proc.time()[["elapsed"]]
-  inputs = video_inputs(files)
-  av::av_encode_video(inputs, file, framerate = SPEC_VIDEO_FPS, vfilter = "format=yuv420p", codec = "libx264", verbose = FALSE)
-  list(file = file, mode = if (!is.null(layers)) "layers" else "wipe", reason = if (is.null(layers)) why else NA_character_, motion = motion, roles = roles, check = check,
-       drawn = n, inputs = length(inputs), canvas = canvas, px = c(width = w_px, height = h_px), plot = plot, final = files[[n]],
-       seconds = c(draw = drawn - t0, compose = composed - drawn, encode = proc.time()[["elapsed"]] - composed))
+  pk = motion_pack(files)
+  list(files = pk$files, repeats = pk$repeats, last = files[[n]], dir = dir, mode = if (!is.null(layers)) "layers" else "wipe", reason = if (is.null(layers)) why else NA_character_,
+       motion = motion, roles = roles, check = check, drawn = n, canvas = canvas, px = c(width = w_px, height = h_px), plot = plot, final = files[[n]], fps = SPEC_VIDEO_FPS,
+       seconds = c(draw = drawn - t0, compose = proc.time()[["elapsed"]] - drawn))
 }
