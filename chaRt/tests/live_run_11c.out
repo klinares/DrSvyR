@@ -1,4 +1,4 @@
-chaRt Phase 11 Part F: live comparison on tests/data/orders.csv, 2026-11-26 09:54 (REPLAY: the second attempt's designs handed back; no call)
+chaRt Phase 11 Part F: live comparison on tests/data/orders.csv, 2026-11-26 13:25 (REPLAY: the second attempt's designs handed back; no call)
 Model: claude-sonnet-5-5 at https://api.anthropic.com/v1; limit 45 calls (chat 13); skill editorial; tokens of the briefing style
 The column dictionary of the Phase 10 live run is reused: no label call.
 The canvas of the first attempt (2026-11-25 02:03) is reused: 8 charts; that attempt made 10 chat calls and 15 design calls.
@@ -84,7 +84,7 @@ The canvas of the first attempt (2026-11-25 02:03) is reused: 8 charts; that att
   wrote tests/designed.html (1.55 MB)
 
 ---- Export: the designed charts, briefing style (2 of them as video, made from their designs: c5, c1; the rest pictures)
-  built in 23.7 s: 7.87 MB; modes: picture, picture, picture, video, picture, picture, picture, video; device ragg
+  built in 59.5 s: 7.60 MB; modes: picture, picture, picture, video, picture, picture, picture, video; device ragg
   videos: 2
   unpacked into tests/dashboard_designed/
 

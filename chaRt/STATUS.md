@@ -1,8 +1,15 @@
 # chaRt: status
 
-## Current state (2026-11-26, after Phase 12b: the player's first second and its memory)
+## Current state (2026-11-26, after Phase 12c: frame 0 first, no moving cards, no bands inside the page, full-row charts)
 
 Branch `chart`, not pushed. Everything below was built and tested at home on R 4.6.1. No test makes a model call unless it says so. The phase-by-phase record is under History; the Phase 10 report is `manager/done-10.md`, the Phase 10b report `manager/done-10b.md`, the Phase 11 report `manager/done-11.md`, the Phase 12 report `manager/done-12.md`.
+
+**Phase 12c, done** (2026-11-26; `manager/done-12.md`, section 10; no model call).
+- **Frame 0 from the first paint:** each animated box holds frame 0 as a picture (23 to 65 KB a card); no screenshot of a playing card is blank, headed Chrome with the CPU slowed four times. No script, reduced motion and print show the finished chart.
+- **Nothing moves:** the Replay button's room is kept from the first paint, and each card's frames stand after all the cards (the box names them), so a card is whole when first painted; no card's top or height changes on the screen.
+- **No band inside the page (Kevin's ruling):** the frames and pictures of animated cards carry no bands, as picture cards; the page keeps its two and charts/ its own. The five-chart page is 1.54 MB lighter (12.32 to 10.78 MB).
+- **A card with a row to itself** draws its chart across the row (DASH_WIDE_PX 1150, half as high as wide) with its texts under it; on a phone an animated card is its phone drawing, still, and in print its half-width drawing.
+- **Smoke on the final code:** fast 642 of 642, heavy 33 of 33 (12c-1 to 12c-4 new). Mutations: `tests/mutate_12c.R` 10 of 10, `tests/mutate_12b.R` 9 of 9, `tests/mutate_12.R` 12 of 12, `tests/mutate_11C.R` 17 of 17.
 
 **Phase 12b, done** (2026-11-26; `manager/done-12.md`, section 9; no model call).
 - **The first second.** Seen in headed Chrome with real time (`tests/motion_realtime_12b.mjs`, Node over the DevTools protocol): the Phase 12 player showed each card's finished chart for about 150 ms, then jumped to frame 1 (frame 0 was never drawn). Now a mark set in `<head>` (`MOTION_HEAD_JS`) hides a card's finished picture until its first play; frame 0 is drawn first (about 120 ms after load), and the play starts only when every frame has loaded. Before that, the card is blank for about 100 ms. No script, reduced motion and print still show the finished chart at once; a card whose frames cannot be read falls back to it.

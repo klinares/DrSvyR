@@ -3430,7 +3430,7 @@ SPEC_VIDEO_WIDTHS <- c(8, 10, 12)       # the widths in inches of the 16 to 9 ca
 #   added above and below it, so it lays out like the picture: the same end labels, legend and breaks. Its width in pixels is the picture's
 #   (CSS pixels times DASH_SCALE: 1080 for a card that shares its row, 1280 for one with its row); its height follows from the picture's shape and
 #   the bands. The card in the app is drawn at `desk`, the size of a card that shares its row on the page.
-SPEC_VIDEO_DASH_PX <- list(desk = c(width = 1080), wide = c(width = 1280))
+SPEC_VIDEO_DASH_PX <- list(desk = c(width = 1080), wide = c(width = 2300))   # the page's DASH_DESK_PX and DASH_WIDE_PX (R/ui.R) times DASH_SCALE: a card that shares its row, and one with the row to itself (Phase 12c: the full row)
 SPEC_VIDEO_STAGGER <- 0.5               # each bar, dot, box or column starts this much later than the one before, the last by this share of the motion
 SPEC_VIDEO_POINTS_SHARE <- 0.7          # a scatter or bubble with a fitted curve: the points take this share of the motion, then the curve is drawn
 SPEC_VIDEO_RAMP <- 0.04                 # points growing in at once, as a share of all the points (at least 2)

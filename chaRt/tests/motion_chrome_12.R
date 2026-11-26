@@ -40,7 +40,7 @@ P12_REQ_JS <- paste0("window.__p12req=[];var rec=function(u){u=String(u&&u.url||
                      "var x0=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){rec(u);return x0.apply(this,arguments);};")
 p12_js <- function(body) paste0("(function(){", P12_REQ_JS, "var write=function(o){o.req=window.__p12req;o.res=performance.getEntriesByType('resource').map(function(e){return e.name;});",
                                 "document.head.insertAdjacentHTML('beforeend','<meta name=\"p12\" content=\"'+JSON.stringify(o).replace(/\"/g,'&quot;')+'\">');};",
-                                "var boxes=[];var st=function(b){var j=JSON.parse(b.querySelector('script.motion-frames').textContent);",
+                                "var boxes=[];var st=function(b){var fid=b.getAttribute('data-frames');var j=JSON.parse((fid?document.getElementById(fid):b.querySelector('script.motion-frames')).textContent);",
                                 "return {played:b.getAttribute('data-played'),frame:b.getAttribute('data-frame'),playing:b.hasAttribute('data-playing'),canvas:!!b.querySelector('canvas'),",
                                 "btn:!b.querySelector('button.motion-replay').hidden,btnTag:b.querySelector('button.motion-replay').tagName,btnText:b.querySelector('button.motion-replay').textContent,",
                                 "still:getComputedStyle(b.querySelector('img.motion-still')).visibility,images:b._images?b._images.length:0,last:j.frames.length-1,top:Math.round(b.getBoundingClientRect().top)};};",

@@ -8,7 +8,7 @@
 #   carries the changed player) and says which checks failed; each mutation must make at least one fail. The original file is sourced again after each.
 #   Nothing on disk is changed. At least one mutation for each check: the player starting before the frames are decoded (as in Phase 12), the finished picture not hidden
 #   before the first play, no mark in <head> (12b-1); the print rule for the picture taken away (12b-2); no fallback when a frame cannot be read (12b-3); the
-#   images not let go, made for every card at load, and the canvas drawn by the graphics card (12b-4).
+#   images not let go, made for every card at load, and the canvas drawn by the graphics card (12b-4); and (Phase 12c) the frame-0 picture shown in print (12b-2).
 
 stopifnot("Run from inside chaRt/" = file.exists("app.R") && dir.exists("R"))
 suppressMessages(app <- shiny::shinyAppDir("."))
@@ -34,18 +34,18 @@ source_file <- function(f) sys.source(f, envir = globalenv(), keep.source = FALS
 # A mutation: `from` and `to` are pieces of text, in pairs; each `from` must be found exactly once.
 mut <- function(id, what, file, from, to) list(id = id, what = what, file = file, from = from, to = to)
 mutations <- list(
-  mut("M01", "the player starts before the frames are decoded, frame 0 not drawn first (the Phase 12 player)", "ui.R",
-      c("if (!box._ready) { box._want = true; prepare(box); return; }", "      draw(box, 0);\n      return Promise.all"),
-      c("if (!box._ready) { prepare(box); }", "      return Promise.all")),
+  mut("M01", "the player starts before the frames are decoded, frame 0 not drawn first (the Phase 12 player, with no frame-0 picture in the page)", "ui.R",
+      c("if (!box._ready) { box._want = true; prepare(box); return; }", "      draw(box, 0);\n      return Promise.all", "if (!is.null(first)) tags$img(class = \"motion-first\""),
+      c("if (!box._ready) { prepare(box); }", "      return Promise.all", "if (FALSE) tags$img(class = \"motion-first\"")),
   mut("M02", "the finished picture is not hidden before the first play", "ui.R",
       "\"html.motion-js .motion:not([data-still]) img.motion-still,.motion[data-playing] img.motion-still{visibility:hidden;}\\n\",",
       "\".motion[data-playing] img.motion-still{visibility:hidden;}\\n\","),
   mut("M03", "no mark in <head>: the page is marked only when the player runs, at the end of the body", "ui.R",
       "                   if (any(purrr::map_chr(items, \"mode\") == \"video\")) tags$script(HTML(MOTION_HEAD_JS)),\n", ""),
   mut("M04", "print does not show the finished picture of a card that has not played (both print rules)", "ui.R",
-      c("\"@media print{.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\\n\"",
+      c("\"@media print{.motion canvas.motion-canvas,.motion .motion-replay,.motion img.motion-first{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\\n\"",
         ".motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;max-width:100%;}"),
-      c("\"@media print{.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}}\\n\"",
+      c("\"@media print{.motion canvas.motion-canvas,.motion .motion-replay,.motion img.motion-first{display:none !important;}}\\n\"",
         ".motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{max-width:100%;}")),
   mut("M05", "a card whose frames cannot be read is not put back on its finished chart", "ui.R",
       "var fail = function () { if (box._token !== token) return; rest(box); box._seen = true;", "var fail = function () { if (box._token !== token) return; box._seen = true;"),
@@ -53,7 +53,10 @@ mutations <- list(
       "box._images = null; box._frames = null; box._ready = false;", "box._frames = box._frames;"),
   mut("M07", "every card's images are made at load", "ui.R",
       "      else if (near(box)) prepare(box);\n      else if (box._images) release(box);", "      else prepare(box);"),
-  mut("M08", "the canvas is drawn by the graphics card", "ui.R", "c.getContext('2d', { willReadFrequently: true })", "c.getContext('2d')"))
+  mut("M08", "the canvas is drawn by the graphics card", "ui.R", "c.getContext('2d', { willReadFrequently: true })", "c.getContext('2d')"),
+  mut("M09", "print shows the frame-0 picture over the finished one (Phase 12c)", "ui.R",
+      "\"@media print{.motion canvas.motion-canvas,.motion .motion-replay,.motion img.motion-first{display:none !important;}",
+      "\"@media print{.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-first{display:block !important;}"))
 wanted <- commandArgs(trailingOnly = TRUE)
 if (length(wanted)) mutations <- purrr::keep(mutations, function(m) m$id %in% wanted)
 

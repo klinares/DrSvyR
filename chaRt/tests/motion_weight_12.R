@@ -33,7 +33,7 @@ purrr::iwalk(specs, function(sp, nm) {
   one <- build(list(item(1, sp, "video")), paste0("one_", nm))
   pic <- build(list(item(1, sp, "picture")), paste0("pic_", nm))
   # the frames of this chart as the page holds them, drawn again here to name the dearest
-  mo <- dash_video(new_chart("c1", sp), data, cb, chart_palette_default(), APP_CLASSIFICATION, "wide")
+  mo <- dash_video(new_chart("c1", sp), data, cb, chart_palette_default(), "wide")
   top <- order(-mo$frame_bytes)[1:3]
   cat(sprintf("  %-8s alone: dashboard.html %s (as a picture %s); frames kept %d of %d (%s), added %s; dearest frames %s\n", nm, mb(file.size(one$html)), mb(file.size(pic$html)),
               mo$kept, mo$drawn, paste(mo$px, collapse = " by "), mb(mo$added), paste0(top, ": ", round(mo$frame_bytes[top] / 1024), " KB", collapse = ", ")))

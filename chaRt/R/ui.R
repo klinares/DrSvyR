@@ -2416,7 +2416,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     #   which Connect would need), played once when the card shows it; then Replay (the player's own button) and Picture.
     video_view = function(chart_id, v) {
       tagList(
-        motion_tag(v$frames_json, v$last, round(v$px / DASH_SCALE), paste("Animated chart:", chart_title(chart_of(chart_id), "this chart")), v$fps),
+        motion_tag(v$frames_json, v$last, round(v$px / DASH_SCALE), paste("Animated chart:", chart_title(chart_of(chart_id), "this chart")), v$fps, v$first),
         tags$div(class = "d-flex flex-wrap gap-1 mt-2",
                  actionButton(ns(cid(chart_id, "picture")), "Picture", class = "btn-sm btn-outline-secondary")))
     }
@@ -2945,7 +2945,9 @@ DASH_VIDEO_TIME <- "An animated chart takes some seconds to draw; its frames are
 
 # The player of an animated chart (Phase 12; Phase 12b), in the page and in the app's card: plain script, no library. A box holds the finished chart as an <img>
 #   (what a reader sees without script, with less motion asked for, in print, when the motion ends, and when the frames cannot be read) and its frames as data
-#   addresses in a JSON script element (every frame but the last, each with the number of times in a row it is shown; the last is the <img>).
+#   addresses in a JSON script element (every frame but the last, each with the number of times in a row it is shown; the last is the <img>). In the page
+#   (Phase 12c) that element stands after all the cards and the box names it (data-frames), so that a card's own markup is short and whole at the first
+#   paint; in the app's card it is inside the box. The frames are read only once the page has been read (not while it is loading).
 # - Before a box has played, its <img> is hidden (the class motion-js on <html>, set as the page starts by MOTION_HEAD_JS and by this script, under the style
 #   sheet's rule; never under reduced motion, never in print), so a card that is going to play never shows the finished chart first.
 # - When a box comes within a screen of the view, or Replay is pressed, it is made ready (`prepare`): an Image for each frame, loaded and decoded, the first
@@ -3003,11 +3005,12 @@ MOTION_JS <- paste0("(function () {
     };
     show(0);
   };
+  var holder = function (box) { var id = box.getAttribute('data-frames'); return id ? document.getElementById(id) : box.querySelector('script.motion-frames'); };
   var prepare = function (box) {
-    if (box._images || reduced()) return;
+    if (box._images || reduced() || document.readyState === 'loading') return;
     var token = box._token = (box._token || 0) + 1;
     var fail = function () { if (box._token !== token) return; rest(box); box._seen = true; box.setAttribute('data-failed', ''); };
-    try { box._frames = JSON.parse(box.querySelector('script.motion-frames').textContent); } catch (e) { box._frames = null; }
+    try { box._frames = JSON.parse(holder(box).textContent); } catch (e) { box._frames = null; }
     if (!box._frames || !box._frames.frames || !box._frames.frames.length) { fail(); return; }
     box.setAttribute('data-loading', '');
     box._images = box._frames.frames.map(function (u) { var im = new Image(); im.src = u; return im; });
@@ -3029,12 +3032,13 @@ MOTION_JS <- paste0("(function () {
   };
   var near = function (box) {
     var r = box.getBoundingClientRect(), h = window.innerHeight || document.documentElement.clientHeight;
-    return r.bottom > -h && r.top < 2 * h;
+    return !!r.height && r.bottom > -h && r.top < 2 * h;
   };
   var boxes = [];
   var look = function () {
     boxes = boxes.filter(function (box) { return box.isConnected; });
     boxes.forEach(function (box) {
+      if (box._want) { prepare(box); return; }
       if (box._seen) return;
       if (inView(box)) { box._seen = true; play(box); }
       else if (near(box)) prepare(box);
@@ -3070,13 +3074,17 @@ DASH_VIDEO_CSS <- paste0(
   ".motion-stage{position:relative;}\n",
   ".motion img.motion-still{display:block;width:100%;height:auto;}\n",
   "html.motion-js .motion:not([data-still]) img.motion-still,.motion[data-playing] img.motion-still{visibility:hidden;}\n",
+  ".motion img.motion-first{display:none;}html.motion-js .motion:not([data-still]) img.motion-first{display:block;position:absolute;left:0;top:0;width:100%;height:100%;}\n",
   ".motion canvas.motion-canvas{position:absolute;left:0;top:0;width:100%;height:100%;}\n",
   ".motion .motion-replay{display:inline-block;margin:.45rem 0 0;font:inherit;font-size:.85rem;line-height:1.2;color:var(--text);background:transparent;border:1px solid var(--text2);border-radius:.25rem;padding:.25rem .8rem;cursor:pointer;}\n",
   ".motion .motion-replay[hidden]{display:none;}\n",
+  # a phone (Phase 12c): the card's phone drawing in place of its motion; 599 is DASH_PHONE_MAX_PX (defined below this; a check holds them equal)
+  ".card img.motion-phone,img.motion-phone{display:none;}@media screen and (max-width:599px){.motion-wrap:has(+ img.motion-phone){display:none;}.card .motion-wrap + img.motion-phone,.motion-wrap + img.motion-phone{display:block;width:100%;height:auto;}}\n",
+  "html.motion-js .motion .motion-replay[hidden]{display:inline-block;visibility:hidden;}\n",
   ".motion .motion-replay:hover{background:var(--box);}\n",
   ".motion .motion-replay:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}\n",
-  "@media (prefers-reduced-motion:reduce){.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\n",
-  "@media print{.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\n")
+  "@media (prefers-reduced-motion:reduce){.motion canvas.motion-canvas,.motion .motion-replay,.motion img.motion-first{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\n",
+  "@media print{.motion canvas.motion-canvas,.motion .motion-replay,.motion img.motion-first{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\n")
 
 # The frames of a motion as the player reads them: the frames but the last as data addresses with their repeat counts, as JSON. `mo` is what spec_video() or
 #   design_video() returned.
@@ -3086,16 +3094,16 @@ motion_frames_json <- function(mo) {
 }
 
 # The estimate of the bytes an animated chart adds to the page, said in the export dialog before it is built: its finished picture is drawn once, as its last frame
-#   would be for a card that shares its row (with the marking's bands), and the frames but the last are taken to weigh DASH_MOTION_EST_SHARE of it each, as base64.
+#   would be for a card that shares its row (no bands: Phase 12c), and the frames but the last are taken to weigh DASH_MOTION_EST_SHARE of it each, as base64.
 #   The share is what the five stand-in charts of the test dashboard weighed (tests/motion_weight_12.R: 0.65 to 0.73; the early frames hold less ink).
 DASH_MOTION_EST_SHARE <- 0.7
 dash_motion_estimate <- function(chart, data, cb, palette, size = "desk") {
   f = tempfile(fileext = ".png")
   on.exit(unlink(f))
-  p = video_plot(chart$spec, data, cb, palette, bare = TRUE, band = MARKING_BAND_IN, web = dash_web(size))
+  p = video_plot(chart$spec, data, cb, palette, bare = TRUE, web = dash_web(size))
   cv = attr(p, "canvas")
   w = SPEC_VIDEO_DASH_PX[[size]][["width"]]
-  video_draw(ggplot2::ggplot_build(p), f, cv[["width"]], cv[["height"]], w / cv[["width"]], marking = APP_CLASSIFICATION)
+  video_draw(ggplot2::ggplot_build(p), f, cv[["width"]], cv[["height"]], w / cv[["width"]])
   4 / 3 * file.size(f) * DASH_MOTION_EST_SHARE * (video_frame_count() - 1L)
 }
 
@@ -3103,11 +3111,15 @@ dash_motion_estimate <- function(chart, data, cb, palette, size = "desk") {
 motion_added_bytes <- function(mo) sum(4 * ceiling(file.size(utils::head(mo$files, -1L)) / 3))
 
 # The markup of an animated chart: the box, the finished chart as an <img> (`last`: its data address), the frames, and the Replay button. `css` is the width and height
-#   it is shown at, in CSS pixels; `fps` the frames a second.
-motion_tag <- function(frames_json, last, css, alt, fps = SPEC_VIDEO_FPS) {
-  tags$div(class = "motion", style = paste0("max-width:", css[["width"]], "px;"), `data-fps` = fps,
-    tags$div(class = "motion-stage", tags$img(class = "motion-still", src = last, alt = alt, width = css[["width"]], height = css[["height"]])),
-    tags$script(type = "application/json", class = "motion-frames", HTML(frames_json)),
+#   it is shown at, in CSS pixels; `fps` the frames a second. `first` (Phase 12c), the data address of frame 0, is a second <img> laid over the finished one and shown
+#   only while the page is marked motion-js and the box has not played (DASH_VIDEO_CSS), so a card that is going to play shows the start of its motion from the
+#   first paint; without script, under reduced motion and in print it is not shown. It is decorative (empty alt, hidden from assistive technology).
+#   `frames_id`: the id of the frames' element when it stands elsewhere in the page (motion_frames_tag()); without it, the frames are inside the box.
+motion_tag <- function(frames_json, last, css, alt, fps = SPEC_VIDEO_FPS, first = NULL, frames_id = NULL) {
+  tags$div(class = "motion", style = paste0("max-width:", css[["width"]], "px;"), `data-fps` = fps, `data-frames` = frames_id,
+    tags$div(class = "motion-stage", tags$img(class = "motion-still", src = last, alt = alt, width = css[["width"]], height = css[["height"]]),
+             if (!is.null(first)) tags$img(class = "motion-first", src = first, alt = "", `aria-hidden` = "true", decoding = "sync", width = css[["width"]], height = css[["height"]])),
+    if (is.null(frames_id)) tags$script(type = "application/json", class = "motion-frames", HTML(frames_json)),
     tags$button(type = "button", class = "motion-replay", hidden = NA, `aria-label` = paste0("Replay the animation: ", alt), "Replay"))
 }
 
@@ -3121,17 +3133,18 @@ DASH_ERROR_TEXT <- paste("The dashboard was not built, and nothing was saved. Yo
 
 # The page and its pictures (Phase 9). The cards stand in a column at most DASH_PAGE_PX wide, centred, two to a row from DASH_TWO_PX
 #   and one below. A chart is drawn for the width it is shown at, so its text comes out near 12 CSS pixels: DASH_DESK_PX for a card
-#   that shares its row, DASH_WIDE_PX for one that has the row to itself, and a narrower drawing of DASH_PHONE_PX for a screen of
+#   that shares its row, DASH_WIDE_PX for one that has the row to itself (Phase 12c: the whole width of the row, about 1,155 CSS pixels inside a card of the
+#   widest page, with its texts under it; DASH_ASPECT keeps it to half as high as wide), and a narrower drawing of DASH_PHONE_PX for a screen of
 #   at most DASH_PHONE_MAX_PX pixels. A drawing is made at 96 CSS pixels to the inch and DASH_SCALE pixels for each one it is shown
 #   at, so it is sharp on a screen of twice the density. DASH_ASPECT is its height over its width.
 DASH_PAGE_PX <- 1240L
 DASH_TWO_PX <- 900L
 DASH_PHONE_MAX_PX <- 599L
 DASH_DESK_PX <- 540L
-DASH_WIDE_PX <- 640L
+DASH_WIDE_PX <- 1150L
 DASH_PHONE_PX <- 340L
 DASH_PRINT_ROOM_MM <- c(one = 17, two = 22)   # the room a printed page keeps at its top and at its bottom for the classification band: a marking of one line, and a long one (over 55 characters) that may wrap to two
-DASH_ASPECT <- c(desk = 0.64, wide = 0.66, phone = 0.8)
+DASH_ASPECT <- c(desk = 0.64, wide = 0.5, phone = 0.8)
 DASH_SCALE <- 2L
 DASH_CSS_DPI <- 96L
 DASH_KEYS_MAX <- 3L             # key numbers the analyst may add, each a line of a chart's facts
@@ -3389,7 +3402,7 @@ dash_css <- function(style, accent) {
     "@supports (width:1cqi){.key{container-type:inline-size;}.key-value{font-size:min(var(--max),calc(100cqi / var(--w)));}}\n",
     ".key-what{color:var(--caption);font-size:.85rem;line-height:1.3;margin-top:.3rem;overflow-wrap:anywhere;}\n",
     ".grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1.25rem;align-items:stretch;}\n",
-    "@media (min-width:", DASH_TWO_PX, "px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}.card.full img{max-width:none;}}\n",
+    "@media (min-width:", DASH_TWO_PX, "px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));}.card.full{grid-column:1/-1;}.card.full img,.card.full .widget{max-width:none;}}\n",
     # A section's heading (Phase 11 Part E): across the row, over the cards under it, a rule in the accent above it.
     ".section-head{grid-column:1/-1;margin:.9rem 0 -.25rem;padding-top:.7rem;border-top:2px solid var(--accent);}\n",
     ".section-head h2{font-family:var(--title-font);font-weight:", title_weight, ";font-size:1.6rem;line-height:1.2;margin:0;overflow-wrap:anywhere;}\n",
@@ -3399,15 +3412,8 @@ dash_css <- function(style, accent) {
     # A card is a column that fills the height of its row (the grid stretches it); its chart's slot takes what is left, so the chart stands in the
     #   middle of the card and no blank block is under a short one.
     ".card{min-width:0;display:flex;flex-direction:column;}\n.card .slot{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;min-width:0;}\n",
-    # A card that has a row to itself, on a screen wide enough for two columns (Phase 10b): the headline across the top, the chart on the left (62%),
-    #   and the chart's title, subtitle, summary, notes and source line in a column on the right (38%). Each sits in its own row of the right column
-    #   (a row is as high as its text; the last row takes what is left, with the chart spanning them all), so the text is not spread down the card.
-    #   Under DASH_TWO_PX, and in print, the parts stand one under another as in a card that shares its row.
-    "@media screen and (min-width:", DASH_TWO_PX, "px){.card.full:not(.table-card){display:grid;grid-template-columns:minmax(0,62fr) minmax(0,38fr);grid-template-rows:repeat(6,auto) 1fr;column-gap:1.5rem;align-content:start;}",
-    ".card.full:not(.table-card)>h2{grid-column:1/-1;grid-row:1;}.card.full:not(.table-card)>.slot{grid-column:1;grid-row:2/8;}",
-    ".card.full:not(.table-card)>.card-sub{grid-column:2;grid-row:2;}.card.full:not(.table-card)>.card-note{grid-column:2;grid-row:3;}",
-    ".card.full:not(.table-card)>.summary{grid-column:2;grid-row:4;margin-top:.2rem;}.card.full:not(.table-card)>.notes{grid-column:2;grid-row:5;}",
-    ".card.full:not(.table-card)>.source{grid-column:2;grid-row:6;}}\n",
+    # A card that has a row to itself (Phase 12c): its chart across the whole row (drawn at DASH_WIDE_PX), its texts under it, as in a card that shares its
+    #   row. (Phase 10b put the texts in a column on the right of a chart 62% wide.)
     ".card h2{font-family:var(--title-font);font-weight:", title_weight, ";font-size:1.3rem;line-height:1.3;margin:0 0 .5rem;overflow-wrap:anywhere;}\n",
     ".card-sub{color:var(--text2);font-size:.95rem;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
     ".card-note{color:var(--caption);font-size:.85rem;margin:0 0 .6rem;overflow-wrap:anywhere;}\n",
@@ -3464,7 +3470,7 @@ dash_css <- function(style, accent) {
     ".mark{position:fixed;left:8mm;right:8mm;}.mark.top{top:6mm;}.mark.bottom{bottom:6mm;}",
     "body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#FFFFFF;color:#111111;}.page{max-width:none;padding:", DASH_PRINT_ROOM_MM[["one"]], "mm 14mm;box-decoration-break:clone;-webkit-box-decoration-break:clone;}",
     "body.long .page{padding-top:", DASH_PRINT_ROOM_MM[["two"]], "mm;padding-bottom:", DASH_PRINT_ROOM_MM[["two"]], "mm;}",
-    ".grid{display:block;}.card,.col-section,.key,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;max-width:100%;}.col-section figure img.screen-only{display:none;}",
+    ".grid{display:block;}.card,.col-section,.key,.foot{break-inside:avoid;page-break-inside:avoid;}.card{margin:0 0 .8rem;}.card img{width:auto;max-width:100%;max-height:6.6in;}.card picture.screen-only,.card .motion-wrap.screen-only{display:none;}.card img.print-only,.col-section figure img.print-only{display:block;}.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;max-width:100%;}.col-section figure img.screen-only{display:none;}",
     ".keys{display:flex;flex-wrap:wrap;overflow:visible;}.key{flex:1 1 10rem;}.masthead{break-after:avoid;}h2{break-after:avoid;}.stat-block .table-scroll{overflow:visible;}.stat-table{font-size:.7rem;}}\n")
 }
 
@@ -3599,10 +3605,19 @@ dash_picture_tag <- function(it, full, alt) {
 }
 
 # An animated chart in the page (Phase 12): motion_tag() for its frames, shown as wide as they were drawn for (css pixels = the frames' pixels over DASH_SCALE), so its
-#   text is the size it was drawn at.
+#   text is the size it was drawn at. Phase 12c: on a screen of at most DASH_PHONE_MAX_PX pixels the motion is not shown (nor played) and the card is its phone
+#   drawing, still; in print, when there is one, the print drawing (the half-width one for a card that has its row, the Clean one for a dark style).
+# The id of an animated card's frames in the page, and their element, which the page puts after all its cards (NULL id: an item with no id keeps them in its box).
+motion_frames_id <- function(it) if (!is.null(it$id)) paste0("motion-frames-", it$id)
+motion_frames_tag <- function(it) tags$script(type = "application/json", class = "motion-frames", id = motion_frames_id(it), HTML(it$video$frames_json))
 dash_video_tag <- function(it, alt) {
   v = it$video
-  motion_tag(v$frames_json, v$last, round(v$px / DASH_SCALE), alt, v$fps %||% SPEC_VIDEO_FPS)
+  p = it$pictures
+  tagList(
+    tags$div(class = css_class("motion-wrap", if (!is.null(p$print)) "screen-only"),
+             motion_tag(v$frames_json, v$last, round(v$px / DASH_SCALE), alt, v$fps %||% SPEC_VIDEO_FPS, v$first, motion_frames_id(it))),
+    if (!is.null(p$phone)) tags$img(class = "motion-phone", src = p$phone$uri, alt = alt, width = p$phone$pixels[[1]], height = p$phone$pixels[[2]]),
+    if (!is.null(p$print)) tags$img(class = "print-only", src = p$print$uri, alt = alt, width = p$print$pixels[[1]], height = p$print$pixels[[2]]))
 }
 
 # One card of the page: the headline as its heading (the chart's title, if there is no headline), the chart's title as its subtitle (and
@@ -3747,6 +3762,7 @@ dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALS
     dash_keys_tag(keys, narrow = identical(chart_style(style)$title_font, "display")),
     tags$main(class = "grid", dash_cards(items, full, style)),
     tags$footer(class = "foot", dash_about(items, settings, cb, data, model), tags$p(class = "made", "Made with chaRt")),
+    purrr::map(purrr::keep(items, function(it) identical(it$mode, "video") && !is.null(it$id)), motion_frames_tag),
     if (any(purrr::map_chr(items, "mode") == "video")) tags$script(HTML(MOTION_JS))), dash_band(mark, "bottom"))
   dash_document(head, body)
 }
@@ -3940,23 +3956,26 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, mark
 }
 
 # The motion of a chart for the page (Phase 12): its frames drawn without title, subtitle or source line (the page says them), for the width it is shown at
-#   (`size`: desk, a card that shares its row, or wide, a card with a row to itself; SPEC_VIDEO_DASH_PX), with the marking's bands, held in memory as data
-#   addresses (charts/ gets no file of them). Returns list(frames_json, last, px, fps, added, kept, drawn, seconds, size, canvas).
+#   (`size`: desk, a card that shares its row, or wide, a card with a row to itself; SPEC_VIDEO_DASH_PX), held in memory as data
+#   addresses (charts/ gets no file of them). Returns list(frames_json, last, first (frame 0, for the box's first picture: Phase 12c), px, fps, added, first_bytes, kept, drawn, seconds, size, canvas).
 dash_motion_of <- function(mo, size) {
   on.exit(unlink(mo$dir, recursive = TRUE))
-  list(frames_json = motion_frames_json(mo), last = dash_data_uri(mo$last, "image/png"), px = mo$px, fps = mo$fps, added = motion_added_bytes(mo),
+  list(frames_json = motion_frames_json(mo), last = dash_data_uri(mo$last, "image/png"), first = dash_data_uri(mo$files[[1]], "image/png"), px = mo$px, fps = mo$fps,
+       added = motion_added_bytes(mo), first_bytes = 4 * ceiling(file.size(mo$files[[1]]) / 3),
        kept = length(mo$files), drawn = mo$drawn, seconds = mo$seconds, size = size, canvas = mo$canvas,
        frame_bytes = file.size(mo$files), repeats = mo$repeats)
 }
-dash_video <- function(chart, data, cb, palette, marking, size = "desk")
-  dash_motion_of(spec_video(chart$spec, data, cb, palette, width = SPEC_VIDEO_DASH_PX[[size]][["width"]], bare = TRUE, web = dash_web(size), marking = marking), size)
+#   Phase 12c, Kevin's ruling: a chart inside the page carries no classification bands of its own (the page has its two; the files in charts/, which leave the
+#   page, keep theirs), so the frames and the finished picture are drawn without them, as a picture card's drawings are.
+dash_video <- function(chart, data, cb, palette, size = "desk")
+  dash_motion_of(spec_video(chart$spec, data, cb, palette, width = SPEC_VIDEO_DASH_PX[[size]][["width"]], bare = TRUE, web = dash_web(size)), size)
 
 # The motion of a designed chart for the page (Phase 11 Part C): design_video() on the design's code, for the card's width as dash_video() is, without title,
-#   subtitle or source line, with the marking's bands. Returns what dash_video() does, and `mode` ("layers": the design's data layers come in by its motion, then
+#   subtitle or source line, and without bands (Phase 12c). Returns what dash_video() does, and `mode` ("layers": the design's data layers come in by its motion, then
 #   its labels; "wipe": the three drawings did not add up, the whole picture wipes in) with `reason` (why it wipes).
-dash_design_video <- function(dz, chart, data, cb, palette, marking, size = "desk") {
+dash_design_video <- function(dz, chart, data, cb, palette, size = "desk") {
   inp = design_input(chart, data, cb, palette)
-  r = design_video(dz$code, inp, dz$motion, width_px = SPEC_VIDEO_DASH_PX[[size]][["width"]], marking = marking, bare = TRUE)
+  r = design_video(dz$code, inp, dz$motion, width_px = SPEC_VIDEO_DASH_PX[[size]][["width"]], bare = TRUE)
   c(dash_motion_of(r, size), list(designed = TRUE, mode = r$mode, reason = r$reason, motion = r$motion))
 }
 
@@ -3994,6 +4013,14 @@ dash_pictures <- function(m, full, i, chart, data, cb, palette, kind, widget = s
       m$widget_note = paste0("The standard interactive version: the designed drawing is a picture (", attr(w, "why") %||% "its layers cannot have tooltips", ").")
     }
   }
+  draw = function(size, pal = palette) {
+    p = dash_step(what, spec_plot(chart$spec, data, cb, pal, web = dash_web(size)))
+    f = tempfile(fileext = chart_device_ext(kind))
+    on.exit(unlink(f))
+    sz = dash_step(what, spec_png(p, f, dpi = DASH_CSS_DPI * DASH_SCALE, kind = kind))
+    list(uri = dash_data_uri(f, chart_device_type(kind)), pixels = round(sz * DASH_CSS_DPI))
+  }
+  light = if (identical(palette$style, "dark")) utils::modifyList(palette, list(style = "clean"))
   if (identical(m$mode, "interactive")) {
     w = tryCatch(dash_widget(widget(spec_plot(chart$spec, data, cb, palette, web = dash_web(card)))), error = function(e) conditionMessage(e))
     if (is.list(w)) return(utils::modifyList(m, list(widget_html = w$html, deps = w$deps)))
@@ -4003,31 +4030,27 @@ dash_pictures <- function(m, full, i, chart, data, cb, palette, kind, widget = s
     # A designed chart's motion is made from the design (design_video()); when that cannot be made, the standard drawing's motion is, and the card says so.
     v = NULL
     if (isTRUE(m$designed)) {
-      v = tryCatch(dash_design_video(m$design, chart, data, cb, palette, marking, card), error = function(e) conditionMessage(e))
+      v = tryCatch(dash_design_video(m$design, chart, data, cb, palette, card), error = function(e) conditionMessage(e))
       m$video_note = if (is.list(v)) { if (identical(v$mode, "wipe")) paste0("The animation wipes the designed drawing in from the left as one picture, because ", v$reason, ".") }
                      else paste0("The animation of the designed drawing could not be made (", sub("\n.*$", "", v), "), so it animates the standard drawing.")
     }
     if (!is.list(v)) {
-      v = tryCatch(dash_video(chart, data, cb, palette, marking, card), error = function(e) conditionMessage(e))
+      v = tryCatch(dash_video(chart, data, cb, palette, card), error = function(e) conditionMessage(e))
       if (is.list(v) && isTRUE(m$designed)) { m$designed = FALSE; m$design = NULL }
       if (!is.list(v)) m$video_note = NULL
     }
     if (is.list(v)) {
       m$video = v
+      # Phase 12c: its still drawing for a phone (shown in place of the motion on a narrow screen, where frames drawn for the card would be too small to read),
+      #   and for print the half-width drawing when the card has its row or the style is dark (in Clean), as a picture card has
+      m$pictures = if (!is.null(dp) && isTRUE(m$designed)) list(phone = dp$pic, print = if (full) dp$pic)
+                   else list(phone = draw("phone"), print = if (!is.null(light)) draw("desk", light) else if (full) draw("desk"))
       return(m)
     }
     m$fallback = sub("\n.*$", "", v)
     m$fallback_of = "animation"
     m$mode = "picture"
   }
-  draw = function(size, pal = palette) {
-    p = dash_step(what, spec_plot(chart$spec, data, cb, pal, web = dash_web(size)))
-    f = tempfile(fileext = chart_device_ext(kind))
-    on.exit(unlink(f))
-    sz = dash_step(what, spec_png(p, f, dpi = DASH_CSS_DPI * DASH_SCALE, kind = kind))
-    list(uri = dash_data_uri(f, chart_device_type(kind)), pixels = round(sz * DASH_CSS_DPI))
-  }
-  light = if (identical(palette$style, "dark")) utils::modifyList(palette, list(style = "clean"))
   m$pictures = if (!is.null(dp)) list(desk = dp$pic, phone = dp$pic, wide = if (full) dp$pic)
                else list(desk = draw("desk"), phone = draw("phone"), wide = if (full) draw("wide"), print = if (!is.null(light)) draw("desk", light))
   m

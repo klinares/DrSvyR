@@ -42,11 +42,15 @@ HEAVY_CHECKS <- c(
   "9C-6: the check of the whole Motion table can fail",                           # and three changed probes
   "9C-9: the files of the bundle alone",                                          # the bundle copied alone and loaded as the app
   "9C-10: the checks of the bundle can fail",                                       # three more loads and a package list worked out again
-  "10A-13: every frame of the animated chart in the page",                        # a dashboard with an animated chart, its frames read back from the page
+  "10A-13: the animated chart in the page carries no band",                        # a dashboard with an animated chart, its frames read back from the page
   "12b-1: in Chrome with real time, as the page opens",                          # Node drives Chrome with real time over the DevTools protocol (Phase 12b)
   "12b-2: the finished chart shows at once where nothing plays",                # the same page with no script, reduced motion and print media
   "12b-3: a card whose frames cannot be read",                                  # the page with a broken frame
   "12b-4: a card's frame images are made when it is about to play",           # reads the first run
+  "12c-1: a card that is going to play shows its frame 0 from the first paint", # Phase 12c: headed Chrome, the CPU slowed four times
+  "12c-2: no card moves or grows on the screen",                               # reads that run
+  "12c-3: a card with a row to itself has its chart across the row",           # the page laid out at 1400 and 390 pixels
+  "12c-4: a chart inside the page carries no classification band",              # every picture and frame of that page read
   "10A-14: printed by Chrome",                                                     # the dashboard and the codebook printed to PDF in the Dark style with a long marking
   "10B-9: in Chrome the export with ten interactive charts",                    # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
   "10D-10: the five-chart dashboard in Briefing",                                  # reads the seven pages built by 9A-8
@@ -5537,11 +5541,11 @@ p9_fault_list <- c(p9_faults_of(p9_battery, "clean", c("desk", "phone")),
 p9_size_in <- function(p) spec_size(attr(p, "spec"), attr(p, "table"))
 p9_axis_px <- ggplot2::calc_element("axis.text.x", chart_theme("clean"))$size * DASH_CSS_DPI / 72
 check(paste0("9A-3: each chart is drawn at the size it is shown: a picture whose axis text comes out near 12 CSS pixels (",
-             round(p9_axis_px, 1), ") at the card's width (540 pixels for a card that shares its row, 640 for one that has its row, a column of 62 per cent beside the text), and a narrower drawing of 340 pixels for a screen of at most 599 pixels, chosen by a <picture> element's <source media>; every picture has twice the pixels it is shown at (the width and height of its tag are half those of its PNG); the full-row card also has the half-width drawing for a screen under 900; names and values at the ends of lines give way to a legend on a phone (and in small multiples, where a panel is short) when they would take too much of the axis or touch, a facet's panels are kept apart, and a heatmap's colour bar has three labels at most on the page and four or more as the app draws it; the label box check (drawn_text_faults) finds no text past its panel or over another in ",
+             round(p9_axis_px, 1), ") at the card's width (540 pixels for a card that shares its row, 1150 for one that has its row: the row's width, its texts under it, Phase 12c), and a narrower drawing of 340 pixels for a screen of at most 599 pixels, chosen by a <picture> element's <source media>; every picture has twice the pixels it is shown at (the width and height of its tag are half those of its PNG); the full-row card also has the half-width drawing for a screen under 900; names and values at the ends of lines give way to a legend on a phone (and in small multiples, where a panel is short) when they would take too much of the axis or touch, a facet's panels are kept apart, and a heatmap's colour bar has three labels at most on the page and four or more as the app draws it; the label box check (drawn_text_faults) finds no text past its panel or over another in ",
              length(p9_battery), " charts in Clean and the five stand-in charts in the other styles, at both sizes (and the wide size)"),
       DASH_SCALE == 2L && DASH_CSS_DPI * DASH_SCALE == SPEC_DPI && abs(p9_axis_px - 12) < 1.5 && length(p9_imgs) == 5L && length(p9_phone) == 5L && length(p9_half) == 3L &&
         lengths(gregexpr("<picture", p9_h, fixed = TRUE)) == 5L && all(purrr::map_lgl(p9_imgs, function(p) p9_close(p$px, 2L * c(p$w, p$h)))) &&
-        identical(purrr::map_int(p9_imgs, "w"), c(540L, 540L, 640L, 640L, 640L)) && all(purrr::map_int(p9_phone, function(p) p$px[[1]]) == 680L) && identical(p9_half[[1]]$px[[1]], 1080L) &&
+        identical(purrr::map_int(p9_imgs, "w"), c(540L, 540L, 1150L, 1150L, 1150L)) && all(purrr::map_int(p9_phone, function(p) p$px[[1]]) == 680L) && identical(p9_half[[1]]$px[[1]], 1080L) &&
         all(purrr::map_lgl(p9_phone, function(p) p$px[[2]] >= 540L)) &&
         all(purrr::map_lgl(p9_battery, function(sp) abs(p9_size_in(p9_web_plot(sp, "clean", "desk"))[["width"]] * 96 - 540) < 1e-6 && abs(p9_size_in(p9_web_plot(sp, "clean", "phone"))[["width"]] * 96 - 340) < 1e-6)) &&
         !length(p9_fault_list) && length(drawn_text_faults(p9_web_plot(p9_battery$line_col, "clean", "desk"))) == 0L &&
@@ -5763,7 +5767,7 @@ check("9A-10: print: every style's page prints on a light ground (@media print s
         length(p9_screen_dk) == 5L && length(p9_uris(p9_hd, "print-only")) == 5L && all(purrr::map_dbl(p9_screen_dk, p9_lum) < 0.2) && all(purrr::map_dbl(p9_uris(p9_hd, "print-only"), p9_lum) > 0.9) &&
         lengths(gregexpr("class=\"print-only\"", p9_h, fixed = TRUE)) == 3L &&
         grepl("<picture class=\"screen-only\">", p9_h, fixed = TRUE) && lengths(gregexpr("<picture class=\"screen-only\">", p9_h, fixed = TRUE)) == 3L &&
-        grepl(".card picture.screen-only{display:none;}.card img.print-only", p9_h, fixed = TRUE) &&
+        grepl(".card picture.screen-only,.card .motion-wrap.screen-only{display:none;}.card img.print-only", p9_h, fixed = TRUE) &&
         lengths(gregexpr("<img class=\"print-only\"", p9_six$dark$codebook, fixed = TRUE)) > 5L && !grepl("<img class=\"print-only\"", p9_six$clean$codebook, fixed = TRUE) &&
         (!p9_has_chrome || (
           all(p9_dark_layout$cards$vis == 1L) && all(p9_dark_layout$cards$shown > 400) &&
@@ -6364,7 +6368,7 @@ p9b_ph <- video_phases(c(0, 3 / 3.6, 1))
 check("9B-1: progress is eased with a cubic ease in and out (0 at 0, 1 at 1, one half at one half, slow at each end and fast between), the motion is 3 seconds and the labels 0.6 (the labels' phase begins exactly when the motion ends and ends with the last frame), the frames are 12 a second (Phase 12: 44 frames for 3.6 seconds), there is no hold (the player stops on the last frame), and a card's frames are 1080 pixels wide (1280 for a card with its row)",
       identical(video_ease(c(0, 1)), c(0, 1)) && abs(video_ease(0.5) - 0.5) < 1e-12 && video_ease(0.1) < 0.02 && video_ease(0.9) > 0.98 && all(diff(video_ease(seq(0, 1, 0.05))) > 0) &&
         identical(p9b_ph$motion, c(0, 1, 1)) && identical(p9b_ph$labels, c(0, 0, 1)) && SPEC_VIDEO_MOTION_S == 3 && SPEC_VIDEO_LABELS_S == 0.6 && SPEC_VIDEO_FPS == 12L &&
-        video_frame_count() == 44L && !exists("SPEC_VIDEO_HOLD_S") && !exists("video_inputs") && SPEC_VIDEO_DASH_PX$desk[["width"]] == 1080 && SPEC_VIDEO_DASH_PX$wide[["width"]] == 1280)
+        video_frame_count() == 44L && !exists("SPEC_VIDEO_HOLD_S") && !exists("video_inputs") && SPEC_VIDEO_DASH_PX$desk[["width"]] == 1080 && SPEC_VIDEO_DASH_PX$wide[["width"]] == 2300)
 
 # 9B-2 (Phase 12): neighbouring frames that are the same picture are stored once, with the number of times they are shown
 p9b_pk_dir <- tempfile("p9b_pack_"); dir.create(p9b_pk_dir)
@@ -6645,13 +6649,15 @@ p9b_mbox <- regmatches(p9b_vh, regexpr("(?s)<div class=\"motion\".*?</button>", 
 p9b_scripts <- regmatches(p9b_vh, gregexpr("(?s)<script>.*?</script>", p9b_vh, perl = TRUE))[[1]]
 p9b_js <- utils::tail(p9b_scripts, 1L)
 p9b_head <- sub("(?s)</head>.*$", "", p9b_vh, perl = TRUE)
-check("9B-14 (Phase 12): in the page an animated chart is a .motion box as wide as its frames over DASH_SCALE (540 CSS pixels), at 12 frames a second: the finished chart as an <img class=motion-still> (a data address) with its width and height, the frames before it and their repeat counts as JSON in a script element of type application/json, and a Replay <button> with a text label, hidden until the script runs; a first script in <head> (Phase 12b) marks the page so that a card's finished picture is hidden until its first play (not under reduced motion, not in print, and taken away if the player does not run), and the canvas is drawn in software; no <video>, no MP4, no file beside the page; the style sheet lays the canvas over the still while it plays and, under prefers-reduced-motion and in print, hides the canvas and the button and shows the still; the player (plain JavaScript, no library; a card is seen by its place on the page when the page loads, scrolls or is resized) is in the page only when an animated chart is, plays nothing under reduced motion and stops before print; a page of pictures has no script at all; the About card says what an animated chart carries",
+check("9B-14 (Phase 12): in the page an animated chart is a .motion box as wide as its frames over DASH_SCALE (540 CSS pixels), at 12 frames a second: the finished chart as an <img class=motion-still> (a data address) with its width and height, the frames before it and their repeat counts as JSON in a script element of type application/json (Phase 12c: after all the cards, named by the box's data-frames), and a Replay <button> with a text label, hidden until the script runs; a first script in <head> (Phase 12b) marks the page so that a card's finished picture is hidden until its first play (not under reduced motion, not in print, and taken away if the player does not run), and the canvas is drawn in software; no <video>, no MP4, no file beside the page; the style sheet lays the canvas over the still while it plays and, under prefers-reduced-motion and in print, hides the canvas and the button and shows the still; the player (plain JavaScript, no library; a card is seen by its place on the page when the page loads, scrolls or is resized) is in the page only when an animated chart is, plays nothing under reduced motion and stops before print; a page of pictures has no script at all; the About card says what an animated chart carries",
       length(p9b_mbox) == 1L && grepl("max-width:540px", p9b_mbox, fixed = TRUE) && grepl("data-fps=\"12\"", p9b_mbox, fixed = TRUE) &&
         grepl("<img class=\"motion-still\" src=\"data:image/png;base64,iVBORw0KGgo=\" alt=\"Revenue by region. A headline\" width=\"540\" height=\"378\"/>", p9b_mbox, fixed = TRUE) &&
-        grepl("<script type=\"application/json\" class=\"motion-frames\">{\"frames\":[\"data:image/png;base64,AAAA\",\"data:image/png;base64,BBBB\"],\"repeats\":[1,3]}</script>", p9b_mbox, fixed = TRUE) &&
+        grepl("data-frames=\"motion-frames-c1\"", p9b_mbox, fixed = TRUE) && !grepl("motion-frames\">", p9b_mbox, fixed = TRUE) &&
+        grepl("<script type=\"application/json\" class=\"motion-frames\" id=\"motion-frames-c1\">{\"frames\":[\"data:image/png;base64,AAAA\",\"data:image/png;base64,BBBB\"],\"repeats\":[1,3]}</script>", p9b_vh, fixed = TRUE) &&
+        regexpr("id=\"motion-frames-c1\"", p9b_vh, fixed = TRUE)[[1]] > regexpr("</main>", p9b_vh, fixed = TRUE)[[1]] &&
         grepl("<button type=\"button\" class=\"motion-replay\" hidden aria-label=\"Replay the animation: Revenue by region. A headline\">Replay</button>", p9b_mbox, fixed = TRUE) &&
-        !grepl("<video|video/mp4", p9b_vh) && grepl("@media (prefers-reduced-motion:reduce){.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;}}", p9b_vh, fixed = TRUE) &&
-        grepl("@media print{.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;}}", p9b_vh, fixed = TRUE) &&
+        !grepl("<video|video/mp4", p9b_vh) && grepl("@media (prefers-reduced-motion:reduce){.motion canvas.motion-canvas,.motion .motion-replay,.motion img.motion-first{display:none !important;}.motion img.motion-still{visibility:visible !important;}}", p9b_vh, fixed = TRUE) &&
+        grepl("@media print{.motion canvas.motion-canvas,.motion .motion-replay,.motion img.motion-first{display:none !important;}.motion img.motion-still{visibility:visible !important;}}", p9b_vh, fixed = TRUE) &&
         lengths(gregexpr("<script>", p9b_vh, fixed = TRUE)) == 2L && length(p9b_js) == 1L && grepl(paste0("<script>", MOTION_HEAD_JS, "</script>"), p9b_head, fixed = TRUE) &&
         grepl("html.motion-js .motion:not([data-still]) img.motion-still,.motion[data-playing] img.motion-still{visibility:hidden;}", p9b_vh, fixed = TRUE) && grepl("willReadFrequently: true", p9b_js, fixed = TRUE) && grepl("addEventListener('scroll', look", p9b_js, fixed = TRUE) && !grepl("IntersectionObserver", p9b_js, fixed = TRUE) && grepl("prefers-reduced-motion: reduce", p9b_js, fixed = TRUE) &&
         grepl("beforeprint", p9b_js, fixed = TRUE) && !grepl("src=|https?:|import ", p9b_js) &&
@@ -6693,13 +6699,14 @@ p9b_items <- list(p8c_item(1, p9b_s$bar, mode = "video"), p8c_item(2, p9b_s$scat
 p9b_zt <- system.time(p9b_z <- p9_build(p9b_items))
 p9b_zh <- p9b_z$html
 p9b_boxes <- regmatches(p9b_zh, gregexpr("(?s)<div class=\"motion\".*?</button>", p9b_zh, perl = TRUE))[[1]]
-p9b_fj <- purrr::map(p9b_boxes, function(b) jsonlite::fromJSON(sub("(?s)^.*<script type=\"application/json\" class=\"motion-frames\">(.*?)</script>.*$", "\\1", b, perl = TRUE)))
+p9b_fj <- purrr::map(p9b_boxes, function(b) { id <- sub("(?s)^.*data-frames=\"([^\"]+)\".*$", "\\1", b, perl = TRUE)
+  jsonlite::fromJSON(sub(paste0("(?s)^.*<script type=\"application/json\" class=\"motion-frames\" id=\"", id, "\">(.*?)</script>.*$"), "\\1", p9b_zh, perl = TRUE)) })
 p9b_still <- purrr::map(p9b_boxes, function(b) p9_uri_file(sub("^.*<img class=\"motion-still\" src=\"([^\"]*)\".*$", "\\1", b)))
 p9b_frame_sizes <- purrr::map(p9b_fj, function(j) unique(purrr::map(j$frames, function(u) p9_uri_size(u))))
 p9b_zip_files <- p8c_paths(p9b_z$dir)
-check("9B-17: a dashboard with two animated charts and a picture (Phase 12): the page has two .motion boxes, each with its frames as PNG data addresses all of the size of its finished picture (1080 wide for the card that shares its row, 1280 for the last card, which has its row), repeat counts that with the last frame add up to 44, and a Replay button; the zip holds no MP4 or other video file, charts/ holds a PNG (and an SVG where svglite is) for every chart, animated or not; one player script and the mark in <head> (Phase 12b), nothing requested from outside, the result says '1 picture, 0 interactive and 2 animated', and the page's weight is reported",
+check("9B-17: a dashboard with two animated charts and a picture (Phase 12): the page has two .motion boxes, each with its frames as PNG data addresses all of the size of its finished picture (1080 wide for the card that shares its row, 2300 for the last card, which has its row), repeat counts that with the last frame add up to 44, and a Replay button; the zip holds no MP4 or other video file, charts/ holds a PNG (and an SVG where svglite is) for every chart, animated or not; one player script and the mark in <head> (Phase 12b), nothing requested from outside, the result says '1 picture, 0 interactive and 2 animated', and the page's weight is reported",
       length(p9b_boxes) == 2L && all(purrr::map_lgl(seq_along(p9b_boxes), function(i) length(p9b_frame_sizes[[i]]) == 1L && identical(p9b_frame_sizes[[i]][[1]], unname(p8c_png_size(p9b_still[[i]]))))) &&
-        unname(p8c_png_size(p9b_still[[1]]))[[1]] == 1080L && unname(p8c_png_size(p9b_still[[2]]))[[1]] == 1280L &&
+        unname(p8c_png_size(p9b_still[[1]]))[[1]] == 1080L && unname(p8c_png_size(p9b_still[[2]]))[[1]] == 2300L &&
         all(purrr::map_lgl(p9b_fj, function(j) sum(j$repeats) + 1L == 44L && length(j$repeats) == length(j$frames))) &&
         !any(grepl("[.](mp4|webm|mov|gif|apng)$", p9b_zip_files, ignore.case = TRUE)) && all(paste0("charts/", c("01_revenue_by_region", "02_revenue_against_units", "03_revenue_by_month"), ".png") %in% p9b_zip_files) &&
         lengths(gregexpr("<button type=\"button\" class=\"motion-replay\" hidden", p9b_zh, fixed = TRUE)) == 2L && lengths(gregexpr("<script>", p9b_zh, fixed = TRUE)) == 2L &&
@@ -7190,10 +7197,10 @@ check("10A-12: a video frame keeps its 16 to 9 shape with the marking (6.4 by 3.
 
 if (run_heavy) {   # the heavy run only: a video encoded and read back, and the pages printed by Chrome
 
-# a dashboard with one animated chart: each of its frames in the page has the band (Phase 12: the frames are PNG data addresses in the page, no MP4)
+# a dashboard with one animated chart: its frames in the page carry no band (Phase 12c, Kevin's ruling), the page has its two, and charts/ keeps them
 p10_v <- p10_build(list(p10_item(1, p10_specs$bar, "video")), p10_mark)
 p10_vhtml <- p10_text(p10_v$dir, "dashboard.html")
-p10_vjson <- jsonlite::fromJSON(sub("(?s)^.*<script type=\"application/json\" class=\"motion-frames\">(.*?)</script>.*$", "\\1", p10_vhtml, perl = TRUE))
+p10_vjson <- jsonlite::fromJSON(sub("(?s)^.*<script type=\"application/json\" class=\"motion-frames\"[^>]*>(.*?)</script>.*$", "\\1", p10_vhtml, perl = TRUE))
 p10_vframes <- c(purrr::map_chr(p10_vjson$frames, p9_uri_file), p9_uri_file(sub("(?s)^.*<img class=\"motion-still\" src=\"([^\"]*)\".*$", "\\1", p10_vhtml, perl = TRUE)))
 p10_vband <- function(f) {
   im <- png::readPNG(f)
@@ -7203,8 +7210,14 @@ p10_vband <- function(f) {
   all(purrr::map_lgl(rows, function(r) p10_is_red(p10_px(im, r, 6L), 4) && p10_is_red(p10_px(im, h - r + 1L, 6L), 4))) && !p10_is_red(p10_px(im, band + 10L, 6L), 30) &&
     sum(im[seq_len(band), , 1] > 0.9 & im[seq_len(band), , 2] > 0.9 & im[seq_len(band), , 3] > 0.9) > 80L
 }
-check("10A-13: every frame of the animated chart in the page has the band (Phase 12): the frames (the ones kept, and the finished picture) are 1280 wide and as high as the card picture's shape and the bands make it, and on every one the top and bottom rows are #b40404, white type stands in the band, and the rows under and over the bands are not red; charts/ holds no video file",
-      length(p10_vframes) >= 20L && all(purrr::map_lgl(p10_vframes, function(f) dim(png::readPNG(f))[2] == 1280L)) && dim(png::readPNG(p10_vframes[1]))[1] > 720L && all(purrr::map_lgl(p10_vframes, p10_vband)) &&
+p10_vclear <- function(f) { im <- png::readPNG(f); h <- dim(im)[1]; !any(purrr::map_lgl(c(4L, h - 3L), function(r) p10_is_red(p10_px(im, r, 6L), 4))) }
+p10_vcharts <- list.files(file.path(p10_v$dir, "charts"), pattern = "[.]png$", full.names = TRUE)
+p10_fband <- function(f) { im <- png::readPNG(f); h <- dim(im)[1]; p10_is_red(p10_px(im, 4L, 6L), 4) && p10_is_red(p10_px(im, h - 3L, 6L), 4) }
+check("10A-13: the animated chart in the page carries no band of its own (Phase 12c, Kevin's ruling; Phase 12 held a band on every frame): the frames (the ones kept, and the finished picture) are 2300 wide and as high as the card picture's shape makes it, and on none of them is the top or bottom row red; the page has its own two bands with the marking, top and bottom; the chart's PNG in charts/ has the band at its top and bottom; charts/ holds no video file",
+      length(p10_vframes) >= 20L && all(purrr::map_lgl(p10_vframes, function(f) dim(png::readPNG(f))[2] == 2300L)) && dim(png::readPNG(p10_vframes[1]))[1] > 720L && all(purrr::map_lgl(p10_vframes, p10_vclear)) &&
+        grepl(paste0("<div class=\"mark top\" role=\"note\" aria-label=\"Classification marking\">", p10_mark, "</div>"), p10_vhtml, fixed = TRUE) &&
+        grepl(paste0("<div class=\"mark bottom\" role=\"note\" aria-label=\"Classification marking\">", p10_mark, "</div>"), p10_vhtml, fixed = TRUE) &&
+        length(p10_vcharts) >= 1L && all(purrr::map_lgl(p10_vcharts, p10_fband)) &&
         !any(grepl("[.](mp4|webm|mov|gif)$", list.files(p10_v$dir, recursive = TRUE), ignore.case = TRUE)))
 
 # the pages printed by Chrome: a band at the top and at the bottom of every page, nothing under a band, a light ground (the Dark style, and a marking long enough to wrap)
@@ -7426,9 +7439,9 @@ b10h_js <- paste0(
   "document.head.insertAdjacentHTML('beforeend','<meta name=\"p9\" content=\"'+JSON.stringify(o).replace(/\"/g,'&quot;')+'\">');};",
   "setTimeout(done,1500);},400);});")
 b10h_dom <- if (p9_has_chrome) purrr::map(list(w1280 = 1280, w500 = 500), function(w) { d = p9_dom(file.path(b10h_dir, "dashboard.html"), w, b10h_js); if (!is.null(d)) { d$tip = utils::URLdecode(d$tip); d$tiph = utils::URLdecode(d$tiph) }; d })
-check("10B-9: in Chrome the export with ten interactive charts (every family, in the Dark style, one group named with a tag) at 1280 and at 500 pixels: all ten are girafe widgets, none is wider than its card (700 pixels at most), the page has no sideways scroll, no text of any SVG is cut by its edge (the chart scales down with its card), pointing at the last bar (the group named with the tag) shows its tooltip (the group's name as text: the tag is shown as <img src=x onerror=alert(1)> and holds no element), dims other marks and marks the pointed one",
+check("10B-9: in Chrome the export with ten interactive charts (every family, in the Dark style, one group named with a tag) at 1280 and at 500 pixels: all ten are girafe widgets, none is wider than its card (one that shares its row is at most 700 pixels; one with its row is as wide as the row, Phase 12c), the page has no sideways scroll, no text of any SVG is cut by its edge (the chart scales down with its card), pointing at the last bar (the group named with the tag) shows its tooltip (the group's name as text: the tag is shown as <img src=x onerror=alert(1)> and holds no element), dims other marks and marks the pointed one",
       !p9_has_chrome || (!is.null(b10h_dom$w1280) && !is.null(b10h_dom$w500) && all(purrr::map_lgl(b10h_dom, function(d)
-        d$n == 10L && d$sw <= d$cw && all(d$w <= d$card) && all(d$w <= 700L) && all(d$cut == 0L) && all(d$texts > 5L) && d$tipimg == 0L && d$dim > 0L && d$hov >= 1L &&
+        d$n == 10L && d$sw <= d$cw && all(d$w <= d$card) && all(d$cut == 0L) && all(d$texts > 5L) && d$tipimg == 0L && d$dim > 0L && d$hov >= 1L &&
           grepl("^region: ", d$tip) && grepl("Total revenue: ", d$tip, fixed = TRUE))) &&
         all(purrr::map_lgl(b10h_dom, function(d) grepl("region: <img src=x onerror=alert(1)>
 Total revenue: ", d$tip, fixed = TRUE) && grepl("region: &lt;img src=x onerror=alert(1)&gt;<br>Total revenue: ", d$tiph, fixed = TRUE))) && b10h_dom$w500$w[1] < b10h_dom$w1280$w[1] && b10h_dom$w500$w[1] <= 500L))
@@ -7957,8 +7970,8 @@ d10_dodge <- function(web, style = "clean") {
 }
 d10_dd <- list(usual = d10_dodge(NULL), desk = d10_dodge(dash_web("desk")), phone = d10_dodge(dash_web("phone")), wide = d10_dodge(dash_web("wide")))
 d10_wid <- spec_widget(spec_plot(d10_heat, d10_data, d10_cb, d10_pal("clean"), web = dash_web("phone")))
-check("10D-8: the heatmap's 12 quarters on x ('2022 Q1' and on) are dodged into rows so that no two labels touch: 2 rows at the usual 7 inches and on a half-width card, 3 on a phone drawing, and 2 on the wide card too (Phase 10b: it is 640 pixels, the column beside the text, no longer 1120); the interactive version is built from the same layers and draws every label",
-      identical(d10_dd, list(usual = 2L, desk = 2L, phone = 3L, wide = 2L)) && HEAT_LABEL_IN == 0.62 &&
+check("10D-8: the heatmap's 12 quarters on x ('2022 Q1' and on) are dodged into rows so that no two labels touch: 2 rows at the usual 7 inches and on a half-width card, 3 on a phone drawing, and none on the wide card (Phase 12c: it is the row's width again, 1150 pixels); the interactive version is built from the same layers and draws every label",
+      identical(d10_dd, list(usual = 2L, desk = 2L, phone = 3L, wide = 1L)) && HEAT_LABEL_IN == 0.62 &&
         inherits(d10_wid, "girafe") && length(attr(d10_wid, "warnings")) == 0L &&
         all(purrr::map_lgl(c("2022 Q1", "2022 Q4", "2024 Q4"), function(l) grepl(l, d10_wid$x$html, fixed = TRUE))))
 
@@ -8002,11 +8015,11 @@ d10_dom <- if (p9_has_chrome) list(clean = p9_dom(file.path(p9_dirs, "dashboard.
 d10_rows_ok <- function(m, wide = FALSE) {
   cc <- m$cards
   same <- purrr::map_lgl(split(cc$h, cc$top), function(h) max(h) - min(h) <= 1)
-  # Phase 10b: a card that has its row, on a screen of 900 pixels or more, is a grid (the chart beside its text): its chart's slot ends where the card's padding does
-  shape <- if (wide) ifelse(cc$full, cc$dis == "grid" & cc$sgap <= cc$pad + 6, cc$dis == "flex" & cc$gap <= cc$pad + 6) else cc$dis == "flex" & cc$gap <= cc$pad + 6
+  # Phase 12c: every card is a flex column, a card that has its row too (Phase 10b made that one a grid, the chart beside its text)
+  shape <- cc$dis == "flex" & cc$gap <= cc$pad + 6
   all(same) && all(shape) && all(abs(cc$off - (cc$slotH - cc$picH) / 2) <= 2) && m$sw <= m$cw
 }
-check("10D-11: in Chrome at 1400 and 500 pixels, in Clean and in Briefing, the cards of a row are as high as each other (to a pixel), a card is a flex column (a card with a row to itself, on the wide screen, a grid: the chart beside its text), nothing blank stands under a short card (its last element, or the chart's slot in a grid, ends within its padding), the chart is centred in its slot, and the page does not scroll sideways; the first row's two cards have summaries of different length",
+check("10D-11: in Chrome at 1400 and 500 pixels, in Clean and in Briefing, the cards of a row are as high as each other (to a pixel), a card is a flex column (Phase 12c: a card with a row to itself too, its chart across the row and its text under it), nothing blank stands under a short card (its last element ends within its padding), the chart is centred in its slot, and the page does not scroll sideways; the first row's two cards have summaries of different length",
       !p9_has_chrome || (d10_rows_ok(d10_dom$clean, TRUE) && d10_rows_ok(d10_dom$briefing, TRUE) && d10_rows_ok(d10_dom$phone) &&
                            length(d10_dom$briefing$cards$h) == 5L && length(unique(d10_dom$briefing$cards$top)) == 4L && length(unique(d10_dom$phone$cards$top)) == 5L))
 
@@ -8134,20 +8147,18 @@ b10b_fake_widget <- function(p) { b10b_seen$width <- c(b10b_seen$width, attr(p, 
 b10b_items <- list(p8c_item(1, p9_s$bar, mode = "interactive"), p8c_item(2, p9_s$box, mode = "picture"), p8c_item(3, p9_s$line, mode = "interactive"))
 b10b_z <- p9_build(b10b_items, widget = b10b_fake_widget)
 b10b_cards <- regmatches(p8c_sq(b10b_z$html), gregexpr("<article class=\"card[^\"]*\">.*?</article>", p8c_sq(b10b_z$html), perl = TRUE))[[1]]
-check("10b-9: an interactive chart is sized to its card like a picture and asks for no row of its own: it is drawn for the half-width card (540 pixels) unless its card has a row (the last card alone: 640), so three cards (interactive, picture, interactive) are two to a row and one full; a card that has a row is a column of 62 per cent and one of 38 on a screen of 900 pixels or more (the headline across the top, the chart title, summary, notes and source in the right column, each in its own row) and stacked under that and in print; the card's parts keep their order",
-      identical(unname(b10b_seen$width), c(540 / 96, 640 / 96)) && identical(b10b_z$full, c(FALSE, FALSE, TRUE)) && identical(b10b_z$modes, c("interactive", "picture", "interactive")) &&
-        !dash_card_wide(list(mode = "interactive", panels = 1L)) && dash_card_wide(list(mode = "interactive", panels = 5L)) && DASH_WIDE_PX == 640L && DASH_DESK_PX == 540L &&
+check("10b-9: an interactive chart is sized to its card like a picture and asks for no row of its own: it is drawn for the half-width card (540 pixels) unless its card has a row (the last card alone: 1150, the row's width, Phase 12c), so three cards (interactive, picture, interactive) are two to a row and one full; a card that has a row has its chart across the row and its parts one under another, as a card that shares its row (Phase 12c: no column of 62 per cent beside a column of text); the card's parts keep their order",
+      identical(unname(b10b_seen$width), c(540 / 96, 1150 / 96)) && identical(b10b_z$full, c(FALSE, FALSE, TRUE)) && identical(b10b_z$modes, c("interactive", "picture", "interactive")) &&
+        !dash_card_wide(list(mode = "interactive", panels = 1L)) && dash_card_wide(list(mode = "interactive", panels = 5L)) && DASH_WIDE_PX == 1150L && DASH_DESK_PX == 540L &&
         length(b10b_cards) == 3L && grepl("class=\"card full\"", b10b_cards[3], fixed = TRUE) && grepl("class=\"widget\"", b10b_cards[1], fixed = TRUE) &&
-        grepl("@media screen and (min-width:900px){.card.full:not(.table-card){display:grid;grid-template-columns:minmax(0,62fr) minmax(0,38fr);grid-template-rows:repeat(6,auto) 1fr;", b10b_z$html, fixed = TRUE) &&
-        grepl(".card.full:not(.table-card)>.slot{grid-column:1;grid-row:2/8;}", b10b_z$html, fixed = TRUE) && grepl(".card.full:not(.table-card)>.summary{grid-column:2;grid-row:4;", b10b_z$html, fixed = TRUE) &&
-        grepl(".card.full:not(.table-card)>.source{grid-column:2;grid-row:6;}}", b10b_z$html, fixed = TRUE) && grepl(".card.full:not(.table-card)>h2{grid-column:1/-1;grid-row:1;}", b10b_z$html, fixed = TRUE) &&
+        !grepl("62fr", b10b_z$html, fixed = TRUE) && !grepl(".card.full:not(.table-card){display:grid", b10b_z$html, fixed = TRUE) && grepl(".card.full img,.card.full .widget{max-width:none;}", b10b_z$html, fixed = TRUE) &&
         all(purrr::map_lgl(b10b_cards, function(h) { at <- purrr::map_int(c("<h2>", "class=\"card-sub\"", "class=\"slot\"", "class=\"summary\"", "class=\"source\""), function(k) as.integer(regexpr(k, h, fixed = TRUE))); all(at > 0L) && !is.unsorted(at) })) &&
         !grepl("max-width:1120px", b10b_z$html, fixed = TRUE))
 b10b_vh <- dash_video_tag(list(video = list(frames_json = '{"frames":[],"repeats":[]}', last = "data:image/png;base64,AA==", size = "desk", px = c(width = 1080, height = 768), fps = 12L)), "Alt text")
-b10b_vhw <- dash_video_tag(list(video = list(frames_json = '{"frames":[],"repeats":[]}', last = "data:image/png;base64,AA==", size = "wide", px = c(width = 1280, height = 924), fps = 12L)), "Alt text")
+b10b_vhw <- dash_video_tag(list(video = list(frames_json = '{"frames":[],"repeats":[]}', last = "data:image/png;base64,AA==", size = "wide", px = c(width = 2300, height = 1150), fps = 12L)), "Alt text")
 b10b_vs <- gsub("\\s+", " ", as.character(b10b_vh))
-check("10b-10 (Phase 12): the animated card shows the finished chart before it plays, under reduced motion, without script and when it ends (its <img class=motion-still>, the last frame at the frames' own pixels; the player takes its canvas away at the end), the box never wider than the frames were drawn for (540 CSS pixels for a card that shares its row, 640 for one that has its row, twice those in pixels), and has a Replay button under it that the page's script shows, a real button (reachable by keyboard, labelled 'Replay the animation: <what it shows>') that plays the frames again from the first; nothing autoplays or loops by itself but once, on view; the style sheet hides the canvas and the button under reduced motion and in print",
-      grepl("<div class=\"motion\" style=\"max-width:540px;\" data-fps=\"12\">", b10b_vs, fixed = TRUE) && grepl("max-width:640px;", as.character(b10b_vhw), fixed = TRUE) &&
+check("10b-10 (Phase 12): the animated card shows the finished chart before it plays, under reduced motion, without script and when it ends (its <img class=motion-still>, the last frame at the frames' own pixels; the player takes its canvas away at the end), the box never wider than the frames were drawn for (540 CSS pixels for a card that shares its row, 1150 for one that has its row, twice those in pixels), and has a Replay button under it that the page's script shows, a real button (reachable by keyboard, labelled 'Replay the animation: <what it shows>') that plays the frames again from the first; nothing autoplays or loops by itself but once, on view; the style sheet hides the canvas and the button under reduced motion and in print",
+      grepl("<div class=\"motion\" style=\"max-width:540px;\" data-fps=\"12\">", b10b_vs, fixed = TRUE) && grepl("max-width:1150px;", as.character(b10b_vhw), fixed = TRUE) &&
         grepl("<img class=\"motion-still\" src=\"data:image/png;base64,AA==\" alt=\"Alt text\" width=\"540\" height=\"384\"/>", b10b_vs, fixed = TRUE) &&
         !grepl("autoplay|loop|<video", b10b_vs) && grepl("<button type=\"button\" class=\"motion-replay\" hidden aria-label=\"Replay the animation: Alt text\">Replay</button>", b10b_vs, fixed = TRUE) &&
         SPEC_VIDEO_DASH_PX$desk[["width"]] == DASH_DESK_PX * DASH_SCALE && SPEC_VIDEO_DASH_PX$wide[["width"]] == DASH_WIDE_PX * DASH_SCALE && !grepl("aspect-ratio:16/9", DASH_VIDEO_CSS, fixed = TRUE) &&
@@ -8155,7 +8166,7 @@ check("10b-10 (Phase 12): the animated card shows the finished chart before it p
         grepl("if (reduced()) return;", MOTION_JS, fixed = TRUE) && regexpr("if (reduced()) return;", MOTION_JS, fixed = TRUE)[[1]] < regexpr("btn.hidden = false;", MOTION_JS, fixed = TRUE)[[1]] &&
         grepl("box._canvas.remove()", MOTION_JS, fixed = TRUE) && !grepl("loop", MOTION_JS, fixed = TRUE) &&
         grepl(".motion .motion-replay[hidden]{display:none;}", DASH_VIDEO_CSS, fixed = TRUE) && grepl(":focus-visible{outline:3px solid", DASH_VIDEO_CSS, fixed = TRUE) &&
-        grepl("@media (prefers-reduced-motion:reduce){.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}", DASH_VIDEO_CSS, fixed = TRUE) &&
+        grepl("@media (prefers-reduced-motion:reduce){.motion canvas.motion-canvas,.motion .motion-replay,.motion img.motion-first{display:none !important;}", DASH_VIDEO_CSS, fixed = TRUE) &&
         grepl(".motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}", regmatches(b10b_z$html, regexpr("@media print\\{.*", b10b_z$html)), fixed = TRUE))
 }   # the fast run only
 if (run_heavy) {   # the heavy run only: the page laid out by Chrome (the card beside its text, the key strip, the Replay button); not indented, to keep the diff small
@@ -8171,10 +8182,8 @@ b10b_card_ok <- function(m, i, wide) {
   rect <- function(k) list(l = parts$r$l[k], t = parts$r$t[k], r = parts$r$r[k], b = parts$r$b[k])
   at <- seq_len(nrow(parts)); head <- which(parts$cls == "H2"); side <- setdiff(at, c(head, which(parts$cls == "slot")))
   clear <- all(purrr::map_lgl(utils::combn(at, 2, simplify = FALSE), function(ab) !b10b_hit(rect(ab[[1]]), rect(ab[[2]]))))
-  geom <- if (wide) {
-    share <- (slot$r - slot$l) / (card$r - card$l)
-    all(parts$r$l[side] > slot$r - 1) && share > 0.5 && share < 0.66 && all(abs(parts$r$t[side[1]] - slot$t) < 40) && all(abs(parts$r$l[side] - parts$r$l[side[1]]) < 1)
-  } else all(abs(parts$r$l[side] - slot$l) < 1) && all(parts$r$t[side[parts$r$t[side] > slot$t]] >= slot$b - 1)
+  geom <- all(abs(parts$r$l[side] - slot$l) < 1) && all(parts$r$t[side[parts$r$t[side] > slot$t]] >= slot$b - 1) &&
+    (!wide || (slot$r - slot$l) / (card$r - card$l) > 0.9)
   clear && isTRUE(geom)
 }
 b10b_page_ok <- function(m, wide) {
@@ -8182,7 +8191,7 @@ b10b_page_ok <- function(m, wide) {
   m$sw <= m$cw + 1 && nrow(m$full) >= 1L && all(purrr::map_lgl(seq_len(nrow(m$full)), function(i) b10b_card_ok(m, i, wide))) &&
     max(k$fs) - min(k$fs) < 0.3 && all(purrr::map_lgl(split(k$top, round(k$ltop)), function(t) max(t) - min(t) < 1.01))
 }
-check("10b-11: in Chrome, in Briefing, at 1400 and 1000 pixels a card that has its row is the chart in 62 per cent on the left and its text (chart title, summary, notes, source) in a column on the right, starting level with the chart, at 899 and 500 pixels the parts stand one under another; at every width no two parts of a card overlap, the page does not scroll sideways, and the values of the key strip share one type size and one baseline",
+check("10b-11: in Chrome, in Briefing, at 1400 and 1000 pixels a card that has its row has its chart across the card (its slot over 90 per cent of the card's width) and its text (chart title, summary, notes, source) one under another with the chart (Phase 12c), as at 899 and 500 pixels; at every width no two parts of a card overlap, the page does not scroll sideways, and the values of the key strip share one type size and one baseline",
       !p9_has_chrome || (!any(purrr::map_lgl(b10b_dom, is.null)) && b10b_page_ok(b10b_dom[["1400"]], TRUE) && b10b_page_ok(b10b_dom[["1000"]], TRUE) && b10b_page_ok(b10b_dom[["899"]], FALSE) && b10b_page_ok(b10b_dom[["500"]], FALSE)))
 b10b_replay_js <- p12_js(paste0("var b=boxes[0];var btn=b.querySelector('button.motion-replay');var d={};d.hidden=btn.hidden;d.disp=getComputedStyle(btn).display;btn.focus();",
                                 "d.focus=document.activeElement===btn;d.tab=btn.tabIndex;d.tag=btn.tagName;d.label=btn.getAttribute('aria-label');d.still=b.querySelector('img.motion-still').getAttribute('src').slice(0,22);",
@@ -8464,12 +8473,12 @@ check("10v-1b: every family that can have a colour legend gives each series the 
 #   line chart whose 16 to 9 half-card video once swapped its end labels for a legend keeps them, and the last frame is the picture's chart
 v10_card <- function(size) {
   pic = spec_plot(v10_line, d10_data, d10_cb, d10_pal("clean"), web = dash_web(size))
-  vp = video_plot(v10_line, d10_data, d10_cb, d10_pal("clean"), bare = TRUE, band = MARKING_BAND_IN, web = dash_web(size))
+  vp = video_plot(v10_line, d10_data, d10_cb, d10_pal("clean"), bare = TRUE, web = dash_web(size))
   last = video_frame(video_context(vp, d10_cb), 1)
   ps = attr(pic, "spec"); vs = attr(vp, "spec"); sz = spec_size(ps, attr(pic, "table"))
   list(ok = isTRUE(ps$.labels) && identical(vs$.labels, ps$.labels) && identical(vs$.legend_order, ps$.legend_order) && identical(last$data, ggplot2::ggplot_build(pic)$data) &&
          identical(last$plot$theme$legend.position, pic$theme$legend.position) &&
-         isTRUE(all.equal(unname(attr(vp, "canvas")), unname(c(sz[["width"]], sz[["height"]] + 2 * MARKING_BAND_IN)))),
+         isTRUE(all.equal(unname(attr(vp, "canvas")), unname(c(sz[["width"]], sz[["height"]])))),
        labels = ps$.labels)
 }
 v10_desk <- v10_card("desk")
@@ -8478,10 +8487,10 @@ v10_old169 <- attr(video_plot(v10_line, d10_data, d10_cb, d10_pal("clean"), bare
 v10_seen <- new.env()
 v10_real_video <- spec_video
 assign("spec_video", function(...) { v10_seen$args <- list(...); stop("stand-in") }, envir = globalenv())
-v10_dv <- tryCatch(dash_video(list(spec = v10_line), d10_data, d10_cb, d10_pal("clean"), "UNCLASSIFIED", "desk"), error = function(e) conditionMessage(e))
+v10_dv <- tryCatch(dash_video(list(spec = v10_line), d10_data, d10_cb, d10_pal("clean"), "desk"), error = function(e) conditionMessage(e))
 assign("spec_video", v10_real_video, envir = globalenv())
-check("10v-2: a card's video lays out like the card's picture: dash_video() draws it with the picture's own web (dash_web() of its card) and the marking; video_plot() with that web draws the picture's chart at the picture's size, the canvas that size with the two marking bands added above and below (not 16 to 9); its end labels and legend are the picture's (the monthly revenue line of three channels has end labels in both, where the old 16 to 9 half-card canvas swapped them for a legend), and its last frame is the picture's chart, layer for layer, for a card that shares its row and for one that has it (Phase 12: there is no download)",
-      v10_desk$ok && v10_wide$ok && isFALSE(v10_old169$.labels) && identical(v10_seen$args$web, dash_web("desk")) && identical(v10_seen$args$marking, "UNCLASSIFIED") &&
+check("10v-2: a card's video lays out like the card's picture: dash_video() draws it with the picture's own web (dash_web() of its card) and no marking (Phase 12c: a chart in the page has no bands of its own); video_plot() with that web draws the picture's chart at the picture's size, the canvas that size (no bands, not 16 to 9); its end labels and legend are the picture's (the monthly revenue line of three channels has end labels in both, where the old 16 to 9 half-card canvas swapped them for a legend), and its last frame is the picture's chart, layer for layer, for a card that shares its row and for one that has it (Phase 12: there is no download)",
+      v10_desk$ok && v10_wide$ok && isFALSE(v10_old169$.labels) && identical(v10_seen$args$web, dash_web("desk")) && is.null(v10_seen$args$marking) &&
         identical(v10_seen$args$width, 1080) && identical(spec_video, v10_real_video) && !exists("SPEC_VIDEO_PX") && is.null(formals(video_plot)$web) && is.null(formals(spec_video)$web))
 }
 # <<< 10v end
@@ -9779,20 +9788,20 @@ c11_html <- paste(readLines(file.path(c11_ex$dir, "dashboard.html"), warn = FALS
 c11_ex_inp <- design_input(c11_chart, c11_o$data, c11_cb)
 # the frames of each animated card, as the page holds them: the frames kept before the last (JSON) and the last (the still)
 c11_boxes <- function(h) purrr::map(regmatches(h, gregexpr("(?s)<div class=\"motion\".*?</button>", h, perl = TRUE))[[1]], function(b)
-  list(json = jsonlite::fromJSON(sub("(?s)^.*<script type=\"application/json\" class=\"motion-frames\">(.*?)</script>.*$", "\\1", b, perl = TRUE)),
+  list(json = jsonlite::fromJSON(sub(paste0("(?s)^.*<script type=\"application/json\" class=\"motion-frames\" id=\"", sub("(?s)^.*data-frames=\"([^\"]+)\".*$", "\\1", b, perl = TRUE), "\">(.*?)</script>.*$"), "\\1", h, perl = TRUE)),
        last = c11_uri_file(sub("^.*<img class=\"motion-still\" src=\"([^\"]*)\".*$", "\\1", b))))
 c11_ex_box <- c11_boxes(c11_html)
 c11_ex_first <- if (length(c11_ex_box)) png::readPNG(c11_uri_file(c11_ex_box[[1]]$json$frames[[1]]))
 c11_ex_last <- if (length(c11_ex_box)) png::readPNG(c11_ex_box[[1]]$last)
 c11_ex_dims <- purrr::map(c11_ex_box, function(x) unname(c11_png_dim(x$last)))
 cat("      11C export with two designed animated charts: ", length(c11_ex$files), " files in ", round(c11_ex_s, 1), " s; notes: ", paste(stats::na.omit(c11_ex$video_notes), collapse = " | "), "\n", sep = "")
-check("11C-7: the export makes a designed chart's motion from the design: a card whose mode is animated and that has a design is a .motion box on the page (Phase 12: its frames as PNG data addresses, no MP4 in the zip), as wide as a card that shares its row (1080) and as high as the design's picture with its two bands makes it, its first frame has no bar in it and its last has them (and the bands are red in both); a patchwork design is animated too, wiped in as one picture, and the dashboard says so (in the build's result and in the page's About block) and gives the reason; a designed card in picture mode is still a picture; the dialog's note for a designed animated chart says it is drawn from the design",
+check("11C-7: the export makes a designed chart's motion from the design: a card whose mode is animated and that has a design is a .motion box on the page (Phase 12: its frames as PNG data addresses, no MP4 in the zip), as wide as a card that shares its row (1080) and as high as the design's picture makes it (Phase 12c: no bands inside the page), its first frame has no bar in it and its last has them (and neither has a red band at its top); a patchwork design is animated too, wiped in as one picture, and the dashboard says so (in the build's result and in the page's About block) and gives the reason; a designed card in picture mode is still a picture; the dialog's note for a designed animated chart says it is drawn from the design",
       identical(unname(c11_ex$modes), c("video", "video", "picture")) && length(c11_ex_box) == 2L && !any(grepl("[.]mp4$", names(c11_ex$files))) && all(purrr::map_lgl(c11_ex_dims, function(d) d[[1]] == 1080L)) &&
-        c11_ex_dims[[1]][[2]] == round((c11_ex_inp$size[["height"]] + 2 * MARKING_BAND_IN) * 1080 / c11_ex_inp$size[["width"]]) &&
+        c11_ex_dims[[1]][[2]] == round(c11_ex_inp$size[["height"]] * 1080 / c11_ex_inp$size[["width"]]) &&
         is.na(c11_ex$video_notes[[1]]) && grepl("patchwork", c11_ex$video_notes[[2]], fixed = TRUE) && grepl("The animation wipes the designed drawing in from the left as one picture", c11_ex$video_notes[[2]], fixed = TRUE) && is.na(c11_ex$video_notes[[3]]) &&
         all(is.na(c11_ex$fallbacks)) && !grepl("<video", c11_html, fixed = TRUE) && grepl("class=\"motion-still\"", c11_html, fixed = TRUE) &&
         grepl("wipes the designed drawing in from the left as one picture", c11_html, fixed = TRUE) && grepl("Designed charts", c11_html, fixed = TRUE) &&
-        c11_near(c11_ex_first, c11_acc) < 50L && c11_near(c11_ex_last, c11_acc) > 1000L && c11_ex_first[2, 40, 1] > 0.6 && c11_ex_first[2, 40, 2] < 0.2 && c11_ex_last[2, 40, 1] > 0.6 &&
+        c11_near(c11_ex_first, c11_acc) < 50L && c11_near(c11_ex_last, c11_acc) > 1000L && c11_ex_first[2, 40, 2] > 0.5 && c11_ex_last[2, 40, 2] > 0.5 &&
         grepl("An animated chart is drawn from the design", dash_design_note(c11_dz(c11_plain, c11_chart), c11_chart$spec, "video"), fixed = TRUE) &&
         !grepl("video|MP4", dash_design_note(c11_dz(c11_plain, c11_chart), c11_chart$spec, "video")))
 
@@ -9800,11 +9809,11 @@ check("11C-7: the export makes a designed chart's motion from the design: a card
 c11_ex2 <- c11_stub("design_video", function(...) stop("the drawings could not be made", call. = FALSE), c11_zip(list(c11_item(c11_chart, c11_dz(c11_with_text, c11_chart), "video"))))
 c11_html2 <- paste(readLines(file.path(c11_ex2$dir, "dashboard.html"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
 c11_box2 <- c11_boxes(c11_html2)
-check("11C-8: a designed animation that cannot be made does not stop the build: the card animates the standard drawing (a .motion box on the page whose frames are as wide as a card that has its row, 1280, mode video, no MP4 in the zip), the build's result and the page both say that the animation of the designed drawing could not be made and why, and that it animates the standard drawing; the card is no longer called designed in the page (no Designed charts block); a card that has no design is as before (no note)",
+check("11C-8: a designed animation that cannot be made does not stop the build: the card animates the standard drawing (a .motion box on the page whose frames are as wide as a card that has its row, 2300, mode video, no MP4 in the zip), the build's result and the page both say that the animation of the designed drawing could not be made and why, and that it animates the standard drawing; the card is no longer called designed in the page (no Designed charts block); a card that has no design is as before (no note)",
       identical(unname(c11_ex2$modes), "video") && length(c11_box2) == 1L && !any(grepl("[.]mp4$", names(c11_ex2$files))) && grepl("The animation of the designed drawing could not be made (the drawings could not be made)", c11_ex2$video_notes[[1]], fixed = TRUE) &&
         grepl("so it animates the standard drawing", c11_ex2$video_notes[[1]], fixed = TRUE) && is.na(c11_ex2$fallbacks[[1]]) &&
         grepl("could not be made (the drawings could not be made), so it animates the standard drawing", c11_html2, fixed = TRUE) && !grepl("Designed charts", c11_html2, fixed = TRUE) &&
-        c11_png_dim(c11_box2[[1]]$last)[["width"]] == 1280)
+        c11_png_dim(c11_box2[[1]]$last)[["width"]] == 2300)
 }
 
 if (run_fast) {   # the fast run only (11C-9)
@@ -10608,8 +10617,17 @@ check("12C-3: the scales are the same on every frame: for the bar, the line and 
 p12_band <- as.integer(round(MARKING_BAND_IN * 540 / p12_mo$bar$canvas[["width"]]))
 p12_bands_ok <- function(f) { im <- png::readPNG(f); h <- dim(im)[1]
   all(purrr::map_lgl(c(1L, p12_band %/% 2L, p12_band - 1L), function(r) p12_is_red(im, r) && p12_is_red(im, h - r + 1L))) && !p12_is_red(im, p12_band + 3L) && !p12_is_red(im, h - p12_band - 2L) }
-check("12C-4: the classification bands are on every frame: every one of the 44 drawn frames of the bar and of the small multiples has the red band at the top and at the bottom (rows at its edge, its middle and its inner edge are #b40404) and none in the rows just inside them, the chart standing between the bands as in the static picture",
-      p12_band >= 6L && all(purrr::map_lgl(unlist(p12_all), p12_bands_ok)))
+# Phase 12c, Kevin's ruling: a chart inside the page carries no bands of its own. The frames the page gets of the bar (dash_video()) and its finished picture.
+p12_uri_file <- function(uri) { f <- tempfile(fileext = ".png"); writeBin(jsonlite::base64_dec(sub("^data:[^,]*,", "", uri)), f); f }
+p12_page <- dash_video(new_chart("c1", p12_s$bar), p12_data, p12_cb, chart_palette_default(), "desk")
+p12_page_files <- c(purrr::map_chr(jsonlite::fromJSON(as.character(p12_page$frames_json))$frames, p12_uri_file), p12_uri_file(p12_page$last))
+p12_pic_file <- tempfile(fileext = ".png")
+p12_pic_dim <- { spec_png(spec_plot(p12_s$bar, p12_data, p12_cb, chart_palette_default(), web = dash_web("desk")), p12_pic_file, dpi = DASH_CSS_DPI * DASH_SCALE); dim(png::readPNG(p12_pic_file))[1:2] }
+p12_no_band <- function(f) { im <- png::readPNG(f); h <- dim(im)[1]
+  !any(purrr::map_lgl(c(1L, 3L, h - 2L, h), function(r) p12_is_red(im, r))) && all(abs(dim(im)[1:2] - p12_pic_dim) <= 1L) }
+check("12C-4 (Phase 12c, Kevin's ruling): a chart inside the page carries no classification bands of its own: the frames the page gets of the bar (dash_video(), every one kept and the finished picture) have no red row at their top or bottom, and each is the size of the card's picture (no room left for bands); the bands stay on the page itself and on the files in charts/ (12c-4, 10A-13)",
+      length(p12_page_files) >= 20L && all(purrr::map_lgl(p12_page_files, p12_no_band)))
+unlink(c(p12_page_files, p12_pic_file))
 purrr::walk(p12_mo, function(m) unlink(m$dir, recursive = TRUE))
 }
 
@@ -10673,7 +10691,7 @@ b12_html <- file.path(b12_dir, "dashboard.html")
 b12_broken <- file.path(b12_dir, "broken.html")
 local({
   h <- paste(readLines(b12_html, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
-  m <- regexpr("(?s)(?<=<script type=\"application/json\" class=\"motion-frames\">).*?(?=</script>)", h, perl = TRUE)
+  m <- regexpr("(?s)<script type=\"application/json\" class=\"motion-frames\"[^>]*>\\K.*?(?=</script>)", h, perl = TRUE)
   j <- jsonlite::fromJSON(regmatches(h, m), simplifyVector = FALSE)
   j$frames[[6]] <- "data:image/png;base64,AAAAAAAA"
   regmatches(h, m) <- as.character(jsonlite::toJSON(j, auto_unbox = TRUE))
@@ -10725,8 +10743,8 @@ cat("      12b Chrome, real time: ", if (is.null(b12_open)) "not run" else paste
 check("12b-1: in Chrome with real time, as the page opens, a card that plays never shows its finished chart first and never skips its opening frames: for each of the two cards in view the first frame drawn on its canvas is frame 0, the frames drawn in its first play are all its kept frames in order (0, 1, 2, ... the last, none missed), and no paint before frame 0 is drawn shows the finished picture, and no screenshot taken before its first play ends (every 50 to 80 ms for the first 800 ms: at least five of the card) shows it (the picture is hidden, and the card's part of the screenshot is not the finished chart of the screenshot at rest) (not run where Node or Chrome is not installed)",
       !b12_has || (!is.null(b12_open) && all(purrr::map_lgl(b12_open, function(x) identical(x$played, "1") && identical(x$first, 0L) && identical(as.integer(x$frames), seq_len(x$kept) - 1L) &&
                                                                          !x$paint_finished && !x$shot_finished && x$shot_cut >= 5L))))
-b12_cards_still <- function(st) !is.null(st) && length(st$cards) > 0L && all(purrr::map_lgl(st$cards, function(k) identical(k$still, "visible") && !isTRUE(k$canvasShown)))
-check("12b-2: the finished chart shows at once where nothing plays: with the page's script off, every card shows its finished picture in every screenshot from the first (no motion-js mark, no canvas); with the system asking for reduced motion, the same, and no frame is drawn and no card plays; and printed (print media from 60 ms, while the cards load, and at 1 s, while the first row plays on the screen), every card's finished picture shows and no canvas (not run where Node or Chrome is not installed)",
+b12_cards_still <- function(st) !is.null(st) && length(st$cards) > 0L && all(purrr::map_lgl(st$cards, function(k) identical(k$still, "visible") && !isTRUE(k$canvasShown) && !isTRUE(k$first$shown)))
+check("12b-2: the finished chart shows at once where nothing plays: with the page's script off, every card shows its finished picture in every screenshot from the first (no motion-js mark, no canvas, and not its frame-0 picture: Phase 12c); with the system asking for reduced motion, the same, and no frame is drawn and no card plays; and printed (print media from 60 ms, while the cards load, and at 1 s, while the first row plays on the screen), every card's finished picture shows and no canvas (not run where Node or Chrome is not installed)",
       !b12_has || (!is.null(b12_ns) && !is.null(b12_rd) && !is.null(b12_pr) &&
         all(purrr::map_lgl(purrr::keep(b12_ns$shots, function(s) !is.null(s$state) && length(s$state$cards) > 0L), function(s) !isTRUE(s$state$motionJs) && b12_cards_still(s$state))) && b12_cards_still(b12_ns$rest) &&
         all(purrr::map_lgl(purrr::keep(b12_rd$shots, function(s) !is.null(s$state) && length(s$state$cards) > 0L), function(s) !isTRUE(s$state$motionJs) && b12_cards_still(s$state))) && b12_cards_still(b12_rd$rest) &&
@@ -10749,6 +10767,134 @@ check("12b-4: a card's frame images are made when it is about to play and let go
         identical(b12_obs$replay$end$cards[[1]]$played, "2") && b12_obs$replay$end$cards[[1]]$images == 0L && !isTRUE(b12_obs$replay$end$cards[[1]]$canvas)))
 }
 # <<< 12b end
+
+# >>> 12c begin
+# No model call. Phase 12c: what the manager saw in the built pages. A card that is going to play shows its frame 0 (a picture in the page's HTML) from the first
+#   paint; the Replay button's room is kept from the first paint, and a card's frames stand after all the cards, so no card moves or grows on the screen; a card
+#   with a row to itself has its chart across the row (DASH_WIDE_PX), its texts under it, and on a phone an animated card is its phone drawing. In Chrome with
+#   real time (tests/motion_realtime_12b.mjs): headed, the CPU slowed four times, for 12c-1 and 12c-2; the layout at 1400 and 390 pixels for 12c-3. The page:
+#   the bar and the line animated in the first row, the box a picture with its row, the small multiples animated with their row, the scatter a picture alone in
+#   the last row. Self-contained, so a changed copy of R/ui.R can be run against it alone (tests/mutate_12c.R). Not run where Node or Chrome is not installed.
+if (run_heavy) {   # the heavy run only (12c-1 to 12c-3)
+c12_node <- unname(Sys.which("node"))
+c12_has <- nzchar(c12_node) && file.exists("C:/Program Files/Google/Chrome/Application/chrome.exe") && requireNamespace("png", quietly = TRUE)
+if (!c12_has) cat("note  Node or Chrome was not found: 12c-1 to 12c-3 are not run\n")
+c12_o <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+c12_cb <- utils::modifyList(c12_o$codebook, list(row_is = "one order"))
+c12_item <- function(i, sp, mode) { ch <- new_chart(paste0("c", i), sp); list(id = ch$id, chart = ch, story = NULL, mode = mode, stale = NA_character_) }
+c12_items <- list(c12_item(1, list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "Revenue by region"), "video"),
+                  c12_item(2, list(family = "line", x = "order_month", y = "revenue", fn = "sum", title = "Revenue by month"), "video"),
+                  c12_item(3, list(family = "box", x = "channel", y = "unit_price", title = "Unit price by channel"), "picture"),
+                  c12_item(4, list(family = "line", x = "year", y = "revenue", fn = "sum", facet = "product_category", title = "Revenue by year in each category"), "video"),
+                  c12_item(5, list(family = "bar", x = "channel", y = "units", fn = "sum", title = "Units by channel"), "picture"))
+c12_zip <- file.path(tempfile("c12_zip_"), "d.zip")
+dir.create(dirname(c12_zip))
+c12_built <- build_dashboard(c12_items, c12_o$read$data, c12_cb, chart_palette_default(),
+                             list(title = "Motion", subtitle = "", author = "", date = as.Date("2026-11-26"), intro = "", boxes = character(0), keys = character(0)),
+                             file.path("tests", "data", "orders.csv"), c12_zip, model = "test-model")
+c12_dir <- tempfile("c12_unz_"); dir.create(c12_dir); zip::unzip(c12_built$zip, exdir = c12_dir)
+c12_html_file <- file.path(c12_dir, "dashboard.html")
+c12_html <- paste(readLines(c12_html_file, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+c12_run <- function(..., file = "observe.json") {
+  if (!c12_has) return(NULL)
+  out <- tempfile("c12_run_")
+  system2(c12_node, c(shQuote(normalizePath(file.path("tests", "motion_realtime_12b.mjs"))), shQuote(c12_html_file), ..., paste0("--out=", shQuote(out))), stdout = FALSE, stderr = FALSE)
+  f <- file.path(out, file)
+  if (!file.exists(f)) return(NULL)
+  c(jsonlite::fromJSON(f, simplifyVector = FALSE), list(dir = out))
+}
+# headed as the brief asks; a headed Chrome whose window draws nothing (a screen that is off or covered) gives no result in its time, and the same run is made
+#   headless with the CPU slowed as much; the summary line says which
+c12_obs <- c12_run("--headed", "--throttle=4", "--limit=60000")
+c12_mode <- "headed"
+if (c12_has && (is.null(c12_obs) || sum(purrr::map_lgl(c12_obs$shots, function(x) !is.null(x$file))) < 5L)) { c12_obs <- c12_run("--throttle=4"); c12_mode <- "headless (the headed window drew nothing)" }
+c12_wide <- c12_run("--mode=layout", "--width=1400", file = "layout.json")
+c12_phone <- c12_run("--mode=layout", "--width=390", "--height=844", file = "layout.json")
+# The frame-0 picture of each animated box in the page and the first of its frames (they must be the same data address), and the bytes it adds.
+c12_boxes <- regmatches(c12_html, gregexpr("(?s)<div class=\"motion\".*?</button>", c12_html, perl = TRUE))[[1]]
+c12_first <- purrr::map(c12_boxes, function(b) tryCatch({
+  id <- sub("(?s)^.*data-frames=\"([^\"]+)\".*$", "\\1", b, perl = TRUE)
+  j <- jsonlite::fromJSON(sub(paste0("(?s)^.*<script type=\"application/json\" class=\"motion-frames\" id=\"", id, "\">(.*?)</script>.*$"), "\\1", c12_html, perl = TRUE))
+  src <- sub("(?s)^.*<img class=\"motion-first\" src=\"([^\"]*)\".*$", "\\1", b, perl = TRUE)
+  list(same = identical(src, j$frames[[1]]), bytes = nchar(src, type = "bytes"), inside = grepl("class=\"motion-frames\"", b, fixed = TRUE))
+}, error = function(e) list(same = FALSE, bytes = 0, inside = TRUE)))
+# Blank: a card's part of a screenshot is blank when under 0.1% of its pixels (about 200 on a half-width card) differ (by over 0.1 in a channel) from its
+#   commonest colour. Frame 0 of a bar chart with no bands is only its axes' labels and titles, about half of one per cent of the card.
+c12_crop <- function(png_file, card) {
+  im <- png::readPNG(png_file)
+  if (round(card$top + card$height) < 1L || round(card$top) >= dim(im)[1] || card$width < 1) return(NULL)
+  im[seq(max(1L, round(card$top) + 1L), min(dim(im)[1], round(card$top + card$height))), seq(max(1L, round(card$left) + 1L), min(dim(im)[2], round(card$left + card$width))), 1:3, drop = FALSE]
+}
+c12_blank <- function(a) {
+  px <- matrix(a, ncol = 3L)
+  key <- apply(round(px * 20), 1, paste, collapse = ",")
+  mode <- px[match(names(which.max(table(key))), key), ]
+  mean(apply(abs(sweep(px, 2, mode)) > 0.1, 1, any)) < 0.001
+}
+c12_opening <- function(o, i) {
+  draws <- purrr::keep(o$log$draws, function(d) d$card == i - 1L)
+  first_t <- if (length(draws)) draws[[1]]$t else Inf
+  paints <- purrr::keep(o$log$paints, function(p) length(p$cards) >= i && p$t < first_t)
+  shots <- purrr::keep(o$shots, function(s) !is.null(s$file) && !is.null(s$state) && length(s$state$cards) >= i && is.null(s$state$cards[[i]]$played))
+  crops <- purrr::compact(purrr::map(shots, function(s) c12_crop(file.path(o$dir, s$file), s$state$cards[[i]])))
+  list(played = o$rest$cards[[i]]$played, paints = length(paints), first_shown = all(purrr::map_lgl(paints, function(p) isTRUE(p$cards[[i]]$first$shown) && isTRUE(p$cards[[i]]$first$loaded))),
+       shots = length(crops), blank = sum(purrr::map_lgl(crops, c12_blank)), first_ms = round(first_t))
+}
+c12_open <- if (!is.null(c12_obs)) purrr::map(1:2, function(i) c12_opening(c12_obs, i))
+cat("      12c Chrome, ", c12_mode, ", CPU slowed 4 times: ", if (is.null(c12_open)) "not run" else paste0(purrr::map_chr(c12_open, function(x) paste0("card frame 0 drawn at ", x$first_ms, " ms, ",
+    x$paints, " paints before it all with the frame-0 picture, ", x$shots, " screenshots of it, ", x$blank, " blank")), collapse = "; "),
+    "; the frame-0 picture adds ", paste(round(purrr::map_dbl(c12_first, "bytes") / 1024), collapse = ", "), " KB to its card\n", sep = "")
+check("12c-1: a card that is going to play shows its frame 0 from the first paint: in the page each of the three animated boxes holds a picture (img.motion-first) that is the first of its frames, the same data address; in headed Chrome with real time and the CPU slowed four times, for each of the two cards that play as the page opens, every paint before its canvas draws frame 0 shows that picture, loaded, and no screenshot of it before its play ends (at least five) is blank (a card's part of a screenshot is blank when under 0.1% of its pixels differ from its commonest colour) (not run where Node or Chrome is not installed)",
+      length(c12_first) == 3L && all(purrr::map_lgl(c12_first, function(x) isTRUE(x$same) && !x$inside)) &&
+        (!c12_has || (!is.null(c12_open) && all(purrr::map_lgl(c12_open, function(x) identical(x$played, "1") && x$paints >= 1L && isTRUE(x$first_shown) && x$shots >= 5L && x$blank == 0L)))))
+# Each card from the first paint at which it is whole (its source line has been read) to the end of play: its top and height; and any paint with a card on the
+#   screen that is not yet whole.
+c12_layout <- if (!is.null(c12_obs)) {
+  paints <- c(c12_obs$log$paints, list(c12_obs$rest))
+  n <- length(c12_obs$rest$layout)
+  list(moved = purrr::map_dbl(seq_len(n), function(i) {
+         w <- purrr::keep(paints, function(p) length(p$layout) >= i && isTRUE(p$layout[[i]][[3]]))
+         if (!length(w)) return(Inf)
+         max(diff(range(purrr::map_dbl(w, function(p) p$layout[[i]][[1]]))), diff(range(purrr::map_dbl(w, function(p) p$layout[[i]][[2]]))))
+       }),
+       partial_on_screen = sum(purrr::map_lgl(paints, function(p) any(purrr::map_lgl(p$layout, function(l) !isTRUE(l[[3]]) && isTRUE(l[[4]]))))))
+}
+cat("      12c layout: ", if (is.null(c12_layout)) "not run" else paste0("moved by ", paste(round(c12_layout$moved, 1), collapse = ", "), " px; paints with a part card on the screen ", c12_layout$partial_on_screen,
+    "; played ", paste(purrr::map_chr(c12_obs$rest$cards, function(k) k$played %||% "-"), collapse = ", ")), "
+", sep = "")
+check("12c-2: no card moves or grows on the screen as the page loads and plays: in the same run, from the first paint at which a card is whole (its source line has been read) to the end of play, no card's top or height changes by more than half a pixel (the Replay button's room is kept from the first paint; a card's frames stand after all the cards, so its own markup is short), and no paint shows a card that is not yet whole (not run where Node or Chrome is not installed)",
+      !c12_has || (!is.null(c12_layout) && length(c12_layout$moved) == 5L && all(c12_layout$moved <= 0.5) && c12_layout$partial_on_screen == 0L))
+c12_full_ok <- function(k) !is.null(k$chart) && k$chart$w >= k$card$w - k$pad - 12 && all(purrr::map_lgl(k$after, function(a) a$t >= k$slot$b - 1))
+check("12c-3: a card with a row to itself has its chart across the row and its texts under it: at 1400 pixels each of the three cards that has its row (a picture, an animated card and the last card) shows its chart within 12 pixels of the card's inner width, and every part after the chart's slot (notes, source) stands under it; the animated one's frames are drawn 2300 pixels wide (DASH_WIDE_PX, 1150, at twice the density); a card that shares its row is at most 560 wide; at 390 pixels the page does not scroll sideways, every animated card shows its phone drawing (not its motion) and every chart fits the screen, its texts under it (not run where Node or Chrome is not installed)",
+      DASH_WIDE_PX == 1150L && SPEC_VIDEO_DASH_PX$wide[["width"]] == DASH_WIDE_PX * DASH_SCALE && DASH_PHONE_MAX_PX == 599L && grepl("@media screen and (max-width:599px){.motion-wrap", DASH_VIDEO_CSS, fixed = TRUE) &&
+        (!c12_has || (!is.null(c12_wide) && !is.null(c12_phone) &&
+          sum(purrr::map_lgl(c12_wide$cards, "full")) == 3L && all(purrr::map_lgl(purrr::keep(c12_wide$cards, "full"), c12_full_ok)) &&
+          any(purrr::map_lgl(c12_wide$cards, function(k) isTRUE(k$full) && identical(k$kind, "motion") && identical(k$natural, 2300L))) &&
+          all(purrr::map_lgl(purrr::discard(c12_wide$cards, "full"), function(k) !is.null(k$chart) && k$chart$w <= 560)) &&
+          c12_phone$sw <= c12_phone$vw && sum(purrr::map_lgl(c12_phone$cards, function(k) identical(k$kind, "phone"))) == 3L &&
+          all(purrr::map_lgl(c12_phone$cards, function(k) !is.null(k$chart) && k$chart$r <= c12_phone$vw + 1 && all(purrr::map_lgl(k$after, function(a) a$t >= k$slot$b - 1)))))))
+# 12c-4 (Kevin's ruling): no band inside any card (every PNG in a card: pictures, frame-0 pictures, finished pictures, phone and print drawings; and every frame
+#   in the page), the page's own two bands, and the band on every file in charts/ (PNG: the red rows at top and bottom; SVG: the marking written in it).
+c12_red <- c(0xb4, 0x04, 0x04) / 255
+c12_is_red <- function(im, r) all(abs(im[r, 6L, 1:3] - c12_red) < 2 / 255)
+c12_uri_file <- function(uri) { f <- tempfile(fileext = ".png"); writeBin(jsonlite::base64_dec(sub("^data:[^,]*,", "", uri)), f); f }
+c12_banded <- function(f) { im <- png::readPNG(f); h <- dim(im)[1]; c12_is_red(im, 1L) || c12_is_red(im, 3L) || c12_is_red(im, h - 2L) || c12_is_red(im, h) }
+c12_cards <- regmatches(c12_html, gregexpr("(?s)<article class=\"card.*?</article>", c12_html, perl = TRUE))[[1]]
+c12_uris <- unique(c(unlist(regmatches(c12_cards, gregexpr("data:image/png;base64,[A-Za-z0-9+/=]+", c12_cards))),
+                     unlist(purrr::map(regmatches(c12_html, gregexpr("(?s)<script type=\"application/json\" class=\"motion-frames\"[^>]*>.*?</script>", c12_html, perl = TRUE))[[1]],
+                                       function(sc) jsonlite::fromJSON(sub("(?s)^<script[^>]*>(.*)</script>$", "\\1", sc, perl = TRUE))$frames))))
+c12_inside <- purrr::map_lgl(c12_uris, function(u) { f <- c12_uri_file(u); on.exit(unlink(f)); c12_banded(f) })
+c12_charts <- list.files(file.path(c12_dir, "charts"), full.names = TRUE)
+c12_png_ok <- purrr::map_lgl(grep("[.]png$", c12_charts, value = TRUE), function(f) { im <- png::readPNG(f); h <- dim(im)[1]; c12_is_red(im, 1L) && c12_is_red(im, h) })
+c12_svg_ok <- purrr::map_lgl(grep("[.]svg$", c12_charts, value = TRUE), function(f) grepl(APP_CLASSIFICATION, paste(readLines(f, warn = FALSE), collapse = " "), fixed = TRUE))
+cat("      12c bands: ", length(c12_uris), " pictures in the page's cards and frames, ", sum(c12_inside), " with a band; charts/ ", length(c12_png_ok), " PNG (", sum(c12_png_ok), " with the band), ",
+    length(c12_svg_ok), " SVG (", sum(c12_svg_ok), " with the marking)\n", sep = "")
+check("12c-4: a chart inside the page carries no classification band of its own (Kevin's ruling): of every PNG in the page's cards (pictures, frame-0 and finished pictures, phone and print drawings) and every frame of every animated card, none has a red row at its top or bottom; the page has its own two bands with the marking, top and bottom; every PNG in charts/ has the band at its top and bottom, and every SVG there has the marking written in it",
+      length(c12_uris) >= 100L && !any(c12_inside) && length(c12_png_ok) == 5L && all(c12_png_ok) && all(c12_svg_ok) &&
+        grepl(paste0("<div class=\"mark top\" role=\"note\" aria-label=\"Classification marking\">", APP_CLASSIFICATION, "</div>"), c12_html, fixed = TRUE) &&
+        grepl(paste0("<div class=\"mark bottom\" role=\"note\" aria-label=\"Classification marking\">", APP_CLASSIFICATION, "</div>"), c12_html, fixed = TRUE))
+}
+# <<< 12c end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------

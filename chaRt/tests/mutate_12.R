@@ -8,7 +8,7 @@
 #   failed; each mutation must make at least one fail. The changed copy is also handed to the new R process of 12A-1 (`p12_override`), which sources it after
 #   the app. The original file is sourced again after each. Nothing on disk is changed. One mutation for each check, at least: the app needing av (12A-1),
 #   frames not packed and the frame rate changed (12C-1), a last frame that is not the static chart (12C-2), scales that move (12C-3), bands only on the last
-#   frame (12C-4), and the player stopping early, not playing on view, Replay not playing, reduced motion ignored, print not protected and a request made (12C-5).
+#   frame (12C-4: Phase 12c, no band on the page frames), and the player stopping early, not playing on view, Replay not playing, reduced motion ignored, print not protected and a request made (12C-5).
 
 stopifnot("Run from inside chaRt/" = file.exists("app.R") && dir.exists("R"))
 suppressMessages(app <- shiny::shinyAppDir("."))
@@ -41,14 +41,14 @@ mutations <- list(
   mut("M04", "the last frame is not the finished chart", "spec.R", "  purrr::iwalk(seq(0, 1, length.out = n), function(p, i) {\n    video_draw(", "  purrr::iwalk(seq(0, 0.97, length.out = n), function(p, i) {\n    video_draw("),
   mut("M05", "each frame is built anew, so its scales follow its data", "spec.R", "  b = ctx$built\n  b$data = purrr::map(seq_along(ctx$roles)",
       "  b = ggplot2::ggplot_build(ctx$plot + ggplot2::expand_limits(y = progress * 2e6))\n  b$data = purrr::map(seq_along(ctx$roles)"),
-  mut("M06", "the bands are drawn on the last frame only", "spec.R", "canvas[[\"height\"]], dpi, marking = marking)\n    if (is.function(on_frame)) on_frame(i, n)",
-      "canvas[[\"height\"]], dpi, marking = if (p >= 1) marking)\n    if (is.function(on_frame)) on_frame(i, n)"),
+  mut("M06", "the page's frames carry the marking's bands again (Phase 12c: a chart in the page has none)", "ui.R",
+      "bare = TRUE, web = dash_web(size)), size)", "bare = TRUE, web = dash_web(size), marking = APP_CLASSIFICATION), size)"),
   mut("M07", "the player stops five frames before the last", "ui.R", "if (i >= d.frames.length) {", "if (i >= d.frames.length - 5) {"),
   mut("M08", "the player does not start when the card comes into view", "ui.R", "if (inView(box)) { box._seen = true; play(box); }", "if (inView(box)) { box._seen = true; }"),
   mut("M09", "Replay does not play", "ui.R", "btn.addEventListener('click', function () { box._seen = true; box.removeAttribute('data-failed'); release(box); play(box); });", "btn.addEventListener('click', function () { box._seen = true; box.removeAttribute('data-failed'); release(box); });"),
   mut("M10", "reduced motion is not asked about", "ui.R", "var reduced = function () { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); };", "var reduced = function () { return false; };"),
   mut("M11", "print shows the canvas mid-play (no print rules, no stop before print)", "ui.R",
-      c("  \"@media print{.motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\\n\")",
+      c("  \"@media print{.motion canvas.motion-canvas,.motion .motion-replay,.motion img.motion-first{display:none !important;}.motion img.motion-still{visibility:visible !important;}}\\n\")",
         ".motion canvas.motion-canvas,.motion .motion-replay{display:none !important;}.motion img.motion-still{visibility:visible !important;max-width:100%;}",
         "  window.addEventListener('beforeprint', function () { boxes.forEach(function (box) { if (box._images) { box._seen = true; rest(box); } }); });\n"),
       c("  \"\")", "", "")),
