@@ -191,8 +191,7 @@ Both go to Posit Connect with `rsconnect`. Run these yourself at work; nothing h
 
 2. **The app.** What goes up is decided by `.rscignore`: `app.R`, `R/` and `www/` (the reflex
    files, the typefaces and `methodology.md`) are in; `tests/`, `probe/`, `build/`, the notes
-   (`README.md`, `DESIGN.md`, `STATUS.md`), the phase prompts, `manager/` and any `.Renviron` are
-   out. `rsconnect::listDeploymentFiles("chaRt")` lists the bundle without publishing it, and
+   (`README.md`, `DESIGN.md`, `STATUS.md`) and any `.Renviron` are out. `rsconnect::listDeploymentFiles("chaRt")` lists the bundle without publishing it, and
    `tests/smoke.R` checks that list. Then:
 
    ```r
@@ -213,8 +212,8 @@ $env:CHART_SMOKE = "heavy"; Rscript --no-init-file tests/smoke.R; Remove-Item En
 ```
 
 The first is the fast run and the second the heavy run (see `STATUS.md` for what is in each and how
-long they take). `tests/llm_check.R` and `tests/live_run_9.R` make live model calls and need
-`ANTHROPIC_API_KEY` in the environment.
+long they take). `tests/llm_check.R` makes live model calls and needs `ANTHROPIC_API_KEY` in the
+environment; its saved replies (`tests/live_replies.rds`, git-ignored) are read by the fast run when present.
 
 ## What is in this folder
 
@@ -229,8 +228,44 @@ long they take). `tests/llm_check.R` and `tests/live_run_9.R` make live model ca
 | `R/ui.R` | Every page, the canvas, the dashboard and codebook writers |
 | `www/reflexes/` | The rules the model is given, one markdown file per topic, written outside this repository |
 | `www/fonts/` | Inter, Source Serif 4 and Barlow Condensed (SemiBold and Bold: the Briefing style's titles), under the SIL Open Font License |
-
 | `www/methodology.md` | The text of the Methodology page |
 | `probe/app.R` | The probe |
-| `tests/` | The smoke test, the live scripts, the gold specs, the sample file `tests/data/orders.csv`. Not deployed |
+| `tests/` | `smoke.R` and the files it needs: the gold specs and their gallery, the live check, the motion and theme helpers, the sample file `tests/data/orders.csv`. Not deployed |
 | `DESIGN.md`, `STATUS.md` | The design, and where the build stands |
+
+## Backlog
+
+Not built in version 1.0. Each is something the app does not do yet, or does only in part; none is
+hidden from the analyst where it matters.
+
+- **Identifiers used as chart labels.** Caution: a column of identifiers whose values repeat (a
+  customer id on many tickets) is typed as a category, so it can be charted, and its values then
+  appear as labels on the card, in `charts/` and on the exported page. To build: a name that marks an
+  identifier (`id`, `_id`, `uuid`, `key`) with more than 20 values is typed as one even when values
+  repeat; an identifier is not offered as a grouping; a chart that names its values says so.
+- **Order of categories.** Bands that begin with a number ("18-29", "Under 25,000") and words of a
+  known scale (low to high, never to always, strongly disagree to strongly agree) are not put in order
+  when a file is read. Today the order is set by hand in the data dictionary (type "ordered").
+- **The ordinal note on charts.** The summary table says that the mean of a short scale (a 1 to 5
+  item) treats the steps of the scale as equal; a chart of that mean does not say it yet.
+- **Full-row chart height.** A single-panel chart with a row of the page to itself is drawn at its
+  old proportions and is too tall (a box chart of three groups is about 1,300 by 700 pixels). To
+  build: 2.4 wide to 1 high for a single panel in a full row, as a named constant.
+- **The automatic log axis for skewed histograms.** A long-tailed measure (order revenue, skewness
+  15.6) is drawn as a few bars at the left of the panel. The histogram can already take a log x axis
+  from its spec (`log_x`); R does not choose it by itself yet (proposed: every value above zero and a
+  skewness above 2, said in the description line and in FACTS, and undone by asking for a linear scale).
+- **A histogram that piles up at both ends.** Its headline still gives the median. A bimodality
+  coefficient (threshold 0.555) was proposed and held back.
+- **Counts by month from a timestamp.** A date or a time can be an axis, but rows cannot be binned by
+  day, week or month to count them. The app refuses and says so.
+- **Durations.** No duration from two timestamps (time to close a ticket). The app refuses and says so.
+- **Money written as text.** "$32.66" in a CSV is read as text and not offered for conversion to a
+  number (an Excel sheet's numbers stored as text are offered). The app refuses and says so.
+- **Wide to long.** A file with one column per year cannot be reshaped to one row per year. The app
+  refuses and says so.
+- **Survey weights and design.** chaRt applies no weight and no design: every row counts once, and
+  the 95% intervals assume a simple random sample. When a file has a column that looks like a weight
+  or a stratum or cluster, the read message says so and ends: "For estimates of a population, use
+  survey software with the weights and the design." The summary table's interval line does not yet
+  add that the intervals may be too narrow for such a file.

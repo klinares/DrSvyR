@@ -6831,7 +6831,7 @@ p9c_by_hand <- function(dir) {
 }
 p9c_list <- function(dir) if (p9c_has_rsconnect) sort(rsconnect::listDeploymentFiles(dir)) else p9c_by_hand(dir)
 # A tree is bundled right: app.R is the only file at the top and R/ and www/ the only folders; every file under R/ and www/ is in (fonts, reflex files, methodology.md among them);
-#   nothing of tests/, manager/, probe/, build/, a phase prompt, the notes, a key file or a stray plot is.
+#   nothing of tests/, probe/, build/, the notes, a key file or a stray plot is.
 p9c_bundle_ok <- function(dir, files = p9c_list(dir)) {
   must = c("app.R", file.path("R", list.files(file.path(dir, "R"))), file.path("www", list.files(file.path(dir, "www"), recursive = TRUE)))
   all(must %in% files) && any(grepl("^www/fonts/.*[.]ttf$", files)) && any(grepl("^www/reflexes/.*[.]md$", files)) && "www/methodology.md" %in% files &&
@@ -6842,19 +6842,19 @@ p9c_bundle_ok <- function(dir, files = p9c_list(dir)) {
 p9c_tree <- function(rscignore = readLines(".rscignore")) {
   d = tempfile("p9c_tree_")
   dir.create(d)
-  ff = c("app.R", "R/a.R", "www/fonts/Inter-Regular.ttf", "www/reflexes/core.md", "www/methodology.md", "tests/smoke.R", "tests/data/orders.csv", "manager/q-001.md", "probe/app.R", "build/x.txt",
-         "phase9_prompt.md", "phase10_prompt.md", "README.md", "DESIGN.md", "STATUS.md", ".gitignore", ".Rhistory", ".Renviron", "Rplots.pdf")
+  ff = c("app.R", "R/a.R", "www/fonts/Inter-Regular.ttf", "www/reflexes/core.md", "www/methodology.md", "tests/smoke.R", "tests/data/orders.csv", "probe/app.R", "build/x.txt",
+         "README.md", "DESIGN.md", "STATUS.md", ".gitignore", ".Rhistory", ".Renviron", "Rplots.pdf")
   purrr::walk(ff, function(f) { dir.create(dirname(file.path(d, f)), recursive = TRUE, showWarnings = FALSE); writeLines("x", file.path(d, f)) })
   writeLines(rscignore, file.path(d, ".rscignore"))
   d
 }
 p9c_files <- p9c_list(".")
 p9c_rsc <- readLines(".rscignore")
-check(paste0("9C-7: a bundle of chaRt/ by .rscignore (rsconnect::listDeploymentFiles, nothing published) is app.R, R/ and www/ only: every file of R/ and www/ is in (the fonts, the reflex files, methodology.md), tests/, manager/, probe/, build/, ",
-             "the phase prompts, README, DESIGN, STATUS, .Renviron and Rplots.pdf are out; the list equals the one made by hand from .rscignore; it is under 5 MB; and the same check refuses a tree whose .rscignore lacks tests, manager, probe, a phase prompt, .Renviron or Rplots.pdf"),
+check(paste0("9C-7: a bundle of chaRt/ by .rscignore (rsconnect::listDeploymentFiles, nothing published) is app.R, R/ and www/ only: every file of R/ and www/ is in (the fonts, the reflex files, methodology.md), tests/, probe/, build/, ",
+             "README, DESIGN, STATUS, .Renviron and Rplots.pdf are out; the list equals the one made by hand from .rscignore; it is under 5 MB; and the same check refuses a tree whose .rscignore lacks tests, probe, .Renviron or Rplots.pdf"),
       p9c_bundle_ok(".") && identical(p9c_files, p9c_by_hand(".")) && sum(file.size(p9c_files)) < 5 * 1048576 && length(p9c_files) > 20L && length(p9c_files) < 100L &&
-        p9c_bundle_ok(p9c_tree()) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "tests"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "manager"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "probe"))) &&
-        !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "phase9_prompt.md"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, ".Renviron"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "Rplots.pdf"))) &&
+        p9c_bundle_ok(p9c_tree()) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "tests"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "probe"))) &&
+        !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, ".Renviron"))) && !p9c_bundle_ok(p9c_tree(setdiff(p9c_rsc, "Rplots.pdf"))) &&
         !p9c_bundle_ok(p9c_tree(c(p9c_rsc, "www"))))
 
 # The packages the bundle would ask for: every one of APP_PACKAGES, and the ones the app uses without listing (svglite, ragg, systemfonts, paletteer), with the dependencies; av not (Phase 12).

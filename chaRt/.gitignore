@@ -1,33 +1,10 @@
 # chaRt: what a local run leaves behind. The shared rules are in the root .gitignore.
 .Rhistory
+Rplots.pdf
 tests/*.out
-!tests/live_run_9.out
-!tests/live_run_10.out
-!tests/live_run_10b.out
-!tests/live_run_11.out
-!tests/live_run_11b.out
-!tests/live_run_11c.out
+# Pages the test helpers write when run by hand (tests/gallery.R, tests/live_gallery.R).
 tests/gallery.html
 tests/style_sheet.html
 tests/live_gallery.html
+# The saved replies of tests/llm_check.R's live calls; the fast run reads them when present.
 tests/live_replies.rds
-tests/live_replies_9.rds
-manager/*
-!manager/README.md
-# Phase 8 Part C: dashboards exported from stand-in charts, unpacked here for the manager to open.
-tests/dashboard_*/
-tests/mockup_reference.png
-# Phase 9 Part B: the videos made from stand-in charts, one per family in Clean and in Dark, and the page that shows them all.
-tests/videos/
-tests/videos.html
-# Phase 10b: screenshots of the final live dashboard, for the manager (not committed).
-tests/final_*.png
-# Phase 11 Part F: the live comparison page of standard and designed charts (pictures inside, a few MB) and its dry run, for the manager to open.
-tests/designed.html
-tests/*_dry.html
-tests/review/
-tests/rehearsal_*/
-tests/rehearsal_replies.rds
-tests/data/survey.csv
-tests/data/indicators_wide.xlsx
-tests/data/tickets.csv
