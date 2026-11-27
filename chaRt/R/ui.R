@@ -4265,6 +4265,11 @@ design_script <- function(dz, inp, csv, title = "", skip = 1L) {
     "chart <- local({",
     paste0("  ", strsplit(dz$code, "\n", fixed = TRUE)[[1]]),
     "})",
+    (function(a) paste0("chart <- chart + ggplot2::theme(plot.title.position = \"plot\"",
+                        if (!is.null(a)) paste0(", plot.subtitle = ", paste(deparse(as.call(c(quote(ggplot2::element_text), a)), width.cutoff = 500L), collapse = " ")),
+                        ")   # R's title block at the plot's left edge, in the style's look for the description when the design styles none"))(design_subtitle_args(inp, dz$code)),
+    (function(h) paste0("chart <- chart + ggplot2::labs(title = ", deparse(h$title %||% NULL, width.cutoff = 500L), ", subtitle = ", deparse(h$subtitle %||% NULL, width.cutoff = 500L),
+                       ")   # R's title block: the headline and the description"))(design_heads(inp, dz$plot %||% ggplot2::ggplot(), dz$code)),
     "chart   # draws it; ggsave(\"chart.png\", chart, width = 7, height = 4.5, dpi = 300) saves it")
 }
 
@@ -4273,8 +4278,10 @@ design_script <- function(dz, inp, csv, title = "", skip = 1L) {
 #   is now (the card's design key held that it is the same chart, style and data). Returns list(files, code, size, plot) or stops with the sentence.
 dash_design_files <- function(dz, chart, i, stem, stage, data, cb, palette, kind, marking) {
   inp = design_input(chart, data, cb, palette)
+  inp$txt = design_file_txt(inp$txt)   # night task 04: R's title block, not the design's (design_with_heads())
   r = design_run(dz$code, inp$d, inp$facts, inp$txt, inp$tok, inp$pal, size = inp$size, dpi = 40L)
   if (!r$ok) stop(r$reason, call. = FALSE)
+  r$plot = design_with_heads(inp, r$plot, dz$code)
   pic_file = paste0(stem, chart_device_ext(kind))
   spec_png(r$plot, file.path(stage, pic_file), size = inp$size, dpi = DASH_DPI, kind = kind, marking = marking)
   vector_file = if (!identical(kind, "svglite") && svglite_installed()) paste0(stem, ".svg")
@@ -4292,7 +4299,7 @@ dash_design_files <- function(dz, chart, i, stem, stage, data, cb, palette, kind
 #   until the design is dropped. Returns list(file, plot, size).
 design_card_picture <- function(dz, chart, data, cb, palette) {
   inp = design_input(chart, data, cb, palette)
-  bare = inp$txt[setdiff(names(inp$txt), c("title", "subtitle", "caption"))]
+  bare = design_card_txt(inp$txt)
   r = design_run(dz$code, inp$d, inp$facts, bare, inp$tok, inp$pal, size = inp$size, dpi = SPEC_DPI, keep = TRUE)
   if (!r$ok) stop(r$reason, call. = FALSE)
   list(file = r$file, plot = r$plot, size = inp$size)
@@ -4300,7 +4307,7 @@ design_card_picture <- function(dz, chart, data, cb, palette) {
 
 dash_design_picture <- function(dz, chart, data, cb, palette, kind) {
   inp = design_input(chart, data, cb, palette)
-  bare = inp$txt[setdiff(names(inp$txt), c("title", "subtitle", "caption"))]
+  bare = design_card_txt(inp$txt)
   r = design_run(dz$code, inp$d, inp$facts, bare, inp$tok, inp$pal, size = inp$size, dpi = DASH_CSS_DPI * DASH_SCALE, keep = TRUE)
   if (!r$ok) stop(r$reason, call. = FALSE)
   on.exit(unlink(r$file))

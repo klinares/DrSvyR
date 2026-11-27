@@ -2249,8 +2249,8 @@ grid_of <- function(s) switch(s$family,
 #   smaller size, never cut; the description (s$.description) and the spec's subtitle joined on one line when that fits the same way at the subtitle's size,
 #   else one under the other (each broken where it must be).
 HEAD_FIT <- 0.96
-labs_heads <- function(s, style = CHART_STYLE_DEFAULT) {
-  th = chart_theme(style)
+labs_heads <- function(s, style = CHART_STYLE_DEFAULT, theme = NULL) {
+  th = if (is.null(theme)) chart_theme(style) else chart_theme(style) + theme   # a design's own theme over the style's (night task 04)
   room = function(element) {
     m = ggplot2::calc_element("plot.margin", th)
     HEAD_FIT * ((s$.fig_width %||% SPEC_SIZE[["width"]]) * 72 - sum(as.numeric(m[c(2, 4)])))   # every style gives its margins in points (no unit is converted: 8A-2)

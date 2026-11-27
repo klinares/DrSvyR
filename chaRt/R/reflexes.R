@@ -1247,6 +1247,33 @@ design_input <- function(chart, data, cb, palette = chart_palette_default()) {
        size = spec_size(ls, table), axes = design_axes(chart$spec, d), aggregated = !chart_from_rows(chart$spec), cb = cb, style = style)
 }
 
+# Night task 04: a design is checked, and shown on a card, without its title, subtitle and caption: the card's heading carries the headline and the
+#   description, and the page the source, so a headline that changes later does not throw an accepted design away. A picture that leaves the page
+#   (charts/, charts.R) takes R's own title block over the design (design_with_heads()), each line measured to fit in the design's own theme.
+design_card_txt <- function(txt) txt[setdiff(names(txt), c("title", "subtitle", "caption"))]
+design_file_txt <- function(txt) txt[setdiff(names(txt), c("title", "subtitle"))]
+# Night task 05: a design whose own theme styles no subtitle (its code never names plot.subtitle) gets the style's look for the description line R adds: the
+#   style's face, colour and size, worked out on the style's theme. NULL when the design styles its own.
+design_subtitle_args <- function(inp, code) {
+  if (grepl("plot.subtitle", code %||% "", fixed = TRUE)) return(NULL)
+  e = ggplot2::calc_element("plot.subtitle", chart_theme(inp$style))
+  purrr::compact(list(family = e$family, face = e$face, colour = e$colour, size = e$size, hjust = e$hjust))
+}
+# R's title block stands where the style puts it, at the plot's left edge (a complete theme such as theme_minimal() puts a title at its panel's, which is not
+#   where labs_heads() measured its lines to fit), and in the style's look for the description when the design styles none.
+design_heads_theme <- function(inp, code) {
+  a = design_subtitle_args(inp, code)
+  ggplot2::theme(plot.title.position = "plot") + if (!is.null(a)) ggplot2::theme(plot.subtitle = do.call(ggplot2::element_text, a)) else ggplot2::theme()
+}
+design_heads <- function(inp, plot, code = NULL) {
+  labs_heads(list(.headline = inp$ls$.headline, .description = inp$ls$.description, title = inp$spec$title, subtitle = inp$spec$subtitle,
+                  .fig_width = inp$size[["width"]]), inp$style, theme = plot$theme + design_heads_theme(inp, code))
+}
+design_with_heads <- function(inp, plot, code = NULL) {
+  h = design_heads(inp, plot, code)
+  plot + design_heads_theme(inp, code) + ggplot2::labs(title = h$title, subtitle = h$subtitle)
+}
+
 # A column of the table whose values are not sent: an identifier or free text of the dictionary, or any text column with more levels than may be listed.
 design_name_column <- function(x, e) (is.character(x) || is.factor(x)) && ((!is.null(e) && is_name_like(e)) || length(unique(x[!is.na(x)])) > DESIGN_LEVELS_MAX)
 
@@ -1401,9 +1428,9 @@ design_chart <- function(chart, skill, data, cb, palette = chart_palette_default
   }
   # Guard, run and checks of one piece of code: list(ok, why) or list(ok, run).
   attempt = function(code) {
-    r = design_run(code, inp$d, inp$facts, inp$txt, inp$tok, inp$pal, size = inp$size, dpi = dpi, keep = TRUE, caption = TRUE)
+    r = design_run(code, inp$d, inp$facts, design_card_txt(inp$txt), inp$tok, inp$pal, size = inp$size, dpi = dpi, keep = TRUE, caption = TRUE)
     if (!r$ok) return(list(ok = FALSE, why = r$reason))
-    ck = design_checks(r$plot, inp$d, inp$facts, inp$spec, r$code, inp$txt, r$warnings, axes = inp$axes, size = inp$size)
+    ck = design_checks(r$plot, inp$d, inp$facts, inp$spec, r$code, design_card_txt(inp$txt), r$warnings, axes = inp$axes, size = inp$size)
     if (!ck$ok) { unlink(r$file); return(list(ok = FALSE, why = paste(ck$reasons, collapse = " "))) }
     list(ok = TRUE, run = r, code = r$code)
   }
