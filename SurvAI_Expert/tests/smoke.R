@@ -74,9 +74,77 @@ ok("a formula question also gathers R code, and a pinned formula comes first", l
   nrow(g$code) > 0 && identical(gp$formulas$group_id[1], pin$group_id) && gp$formulas$fid[1] == "F1"
 }))
 
-stub_ask <- function(question, profile, key, con, context, my_data, open_input, on_stage, on_text = function(x) NULL, pin = NULL) {
+# ---- advice mode: plan, gather, the answer's request and its checks (no model) ---------------------------------
+
+plan_a <- structure(clean_plan(list(mode = "advice", decision = "Whether to trim the raked weights", error_sources = c("adjustment", "sampling", "made up"),
+  intents = c("advice", "formula"), tags = list(tse = "adjustment", stage = "weighting", design = list(), topic = c("raking", "weight trimming")),
+  parts = list(list(question = "variance cost of unequal weights", queries = c("unequal weighting effect design effect weights"),
+                    formula_query = "design effect unequal weighting", code_query = ""),
+               list(question = "bias from trimming weights", queries = c("weight trimming bias variance trade-off"), formula_query = "", code_query = "")),
+  more_than_four = FALSE), read_vocab(), "After raking my weights run from 0.1 to 25. Should I trim them?"), usage = NULL)
+ok("an advice plan keeps its mode, decision and known error sources; a plan with no mode is a lookup",
+   plan_a$mode == "advice" && nzchar(plan_a$decision) && identical(plan_a$error_sources, c("adjustment", "sampling")) &&
+     clean_plan(list(intents = "concept", tags = list(), parts = list()), read_vocab(), "What is raking?")$mode == "lookup" &&
+     force_mode(plan_a, "lookup")$mode == "lookup" && force_mode(plan_a, "auto")$mode == "advice" && force_mode(plan_a, NULL)$mode == "advice")
+g_a <- gather(con, plan_a)
+ok("advice gathers at most 12 passages, at most 2 from one document, across its parts, with a formula",
+   local({ P = g_a$sources[g_a$sources$kind == "passage", ]
+           nrow(P) >= 6 && nrow(P) <= GATHER_ADVICE_PASSAGES && max(table(P$doc_id)) <= GATHER_PER_DOC && nrow(g_a$formulas) >= 1 }))
+my_survey <- list(population = "adults in the country", counts = "5,000 selected, 1,400 answered", weight = "wt", strata = "", cluster = "psu")
+ok("the request for advice names the decision, the error sources, the survey and the columns, and does not split into questions",
+   local({ u = answer_user(plan_a$question, g_a, NULL, my_survey)
+           grepl("The decision the person faces: Whether to trim", u, fixed = TRUE) && grepl("Sources of error at stake: adjustment, sampling", u, fixed = TRUE) &&
+             grepl("The person's survey (take it into account):", u, fixed = TRUE) && grepl("Who the survey is about: adults", u, fixed = TRUE) &&
+             grepl("The person's data (use these names in any R code):", u, fixed = TRUE) && grepl("Weight variable: wt", u, fixed = TRUE) &&
+             !grepl("separate questions", u) && !grepl("Strata variable", u) }))
+ok("advice is written from advise.md, a lookup from answer.md; the plan request carries the survey",
+   grepl("My assessment", answer_reflex(plan_a), fixed = TRUE) && !grepl("What I would do", answer_reflex(plan), fixed = TRUE) &&
+     grepl("Who the survey is about: adults", plan_request("Should I trim?", NULL, my_survey)$user, fixed = TRUE) &&
+     all(c("mode", "decision", "error_sources") %in% names(plan_request("x")$schema$properties)))
+advice <- structure(paste0("## What I understand\nYou raked and the weights now vary a lot.\n\n## Options\n",
+  "- Trim the largest weights. Trimming lowers variance but can add bias [S1].\n- Collapse the cells that produce them [S2].\n\n",
+  "## What I would do\nMy assessment: with weights from 0.1 to 25 I would first collapse sparse categories and then re-rake.\n",
+  "This statement about methods has no source at all.\n\n## What to check\n- Compare the estimates both ways.\n\n",
+  "## To sharpen this\n- How many categories does each raking variable have?"),
+  usage = list(sec = 0, usd = 0, tokens = c(input = 0, output = 0, cached = 0)))
+ck_a <- check_answer(advice, g_a)
+ok("advice checks: the headings are found, the assessment is counted and not flagged, one unsourced statement is",
+   !length(ck_a$headings_missing) && ck_a$assessments == 1L && ck_a$uncited == 1L && ck_a$cites_valid &&
+     identical(check_answer(sub("## Options", "## Choices", advice), g_a)$headings_missing, "Options") &&
+     !length(check_answer(advice, g)$headings_missing))
+ok("an advice answer renders, and the result records its mode",
+   local({ r = ask_result(plan_a$question, plan_a, g_a, advice, c(plan = 0, search = 0), "ask-open")
+           r$mode == "advice" && grepl("What I would do", r$html) && grepl("My assessment", r$html) }))
+ok("follow-ups keep the last three exchanges, oldest dropped; the older single exchange still reads",
+   local({ cx = reduce(1:4, function(a, i) add_turn(a, paste("q", i), paste("a", i)), .init = NULL)
+           length(cx$turns) == CONTEXT_TURNS && cx$turns[[1]]$question == "q 2" && grepl("q 4", context_text(cx), fixed = TRUE) &&
+             !grepl("q 1", context_text(cx), fixed = TRUE) && grepl("old q", context_text(list(question = "old q", answer = "old a"))) &&
+             context_text(NULL) == "" }))
+ok("a refused call says which profile setting to change, and never shows the key",
+   local({ e = call_error(simpleError("HTTP 400: 'response_format' is not supported; key sk-123"), "sk-123")
+           grepl("json = \"prompt\"", e, fixed = TRUE) && !grepl("sk-123", e) && grepl("stream = FALSE", call_error(simpleError("stream not allowed"), "k")) &&
+             identical(call_error(simpleError("timeout"), "k"), "timeout") }))
+ok("the work profile is OpenAI-compatible with the settings every endpoint accepts",
+   with(MODEL_PROFILES$work, api == "openai" && json == "prompt" && isFALSE(stream) && is.null(effort)))
+json_again_check <- function() {
+  real = call_model
+  on.exit(assign("call_model", real, envir = globalenv()))
+  seen = new.env()
+  seen$users = character()
+  assign("call_model", function(m, kind, system, user, key, schema = NULL) {
+    seen$users = c(seen$users, user)
+    structure(if (length(seen$users) == 1L) "Here it is: {not json" else "{\"a\": 1}",
+              usage = list(tokens = c(input = 1, output = 1, cached = 0), sec = 1, usd = 0.5))
+  }, envir = globalenv())
+  j = call_json(list(), "judge", "system", "question", "k")
+  identical(j$a, 1L) && attr(j, "usage")$usd == 1 && length(seen$users) == 2L && grepl("not one valid JSON", seen$users[2], fixed = TRUE)
+}
+ok("a reply that is not valid JSON is asked for once more, and both calls are counted", json_again_check())
+
+stub_ask <- function(question, profile, key, con, context, my_data, open_input, on_stage, on_text = function(x) NULL, pin = NULL, mode = NULL) {
   on_stage("plan"); on_stage("search"); on_stage("answer"); on_text("The ratio estimator")
   .stub$my_data = my_data
+  .stub$mode = mode
   .stub$pin = pin
   .stub$question = question
   promises::promise_resolve(ask_result(question, plan, g, canned, c(plan = 0, search = 0), open_input))
@@ -97,7 +165,12 @@ run_ask <- function(show) {
          grepl("<math", h) && grepl(sprintf("<summary>Sources (%d)</summary>", nrow(result()$cited)), h, fixed = TRUE) &&
            nrow(result()$cited) < nrow(g$sources) && !grepl("no citation", h))
       ok("Ask: two calls counted for the session", calls_made(session$token) == 2L)
-      ok("Ask: the answer is kept for a follow-up", identical(context()$question, plan$question))
+      ok("Ask: the answer is kept for a follow-up", identical(context()$turns[[1]]$question, plan$question))
+      ok("Ask: left to the tool, no mode is forced; the mode used is shown under the answer",
+         is.null(.stub$mode) && grepl("Quick answer, written from the library", h, fixed = TRUE))
+      session$setInputs(answer_mode = "advice", population = "adults", ask = 2)
+      settle(session, function() identical(.stub$mode, "advice"))
+      ok("Ask: 'Advise me' forces advice, and My survey reaches the question", identical(.stub$mode, "advice") && identical(.stub$my_data$population, "adults"))
       session$setInputs(open = "S1")
       ok("Ask: clicking a source opens its passage in a window", identical(shown(), "S1"))
       session$setInputs(new_topic = 1)
