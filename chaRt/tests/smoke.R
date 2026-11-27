@@ -10960,7 +10960,7 @@ check("13A-2: the manager's two thresholds, each a constant and each side tested
         all(purrr::map_lgl(h13_thr, function(h) identical(h$source, "r"))))
 # a headline that fails its checks is a bug: the chart shows "What is plotted: " and its description (a stand-in facts_headline() writes a number the facts lack)
 h13_real_fh <- facts_headline
-assign("facts_headline", function(s, cb, text) "West has the highest total revenue, 12,345", envir = globalenv())
+assign("facts_headline", function(s, cb, text, seen = NULL) "West has the highest total revenue, 12,345", envir = globalenv())
 h13_fb <- tryCatch(r_headline(new_chart("c1", h13_bar), h13_cb, h13_o$read$data), error = function(e) NULL)
 h13_fbp <- tryCatch(ggplot2::get_labs(spec_plot(h13_bar, h13_o$read$data, h13_cb)), error = function(e) NULL)
 assign("facts_headline", h13_real_fh, envir = globalenv())
@@ -11062,8 +11062,8 @@ check("13C-3: the manager's ruling when a chart changes: a model's headline is c
 h13_f3 <- "Highest: West (940,000)\nLowest: Central (206,000)\nTotal: 2,740,000"
 h13_lim <- list(ok = summary_problems("West leads at 940,000, Central trails at 206,000", NULL, h13_f3, list())$limits,
                 three = summary_problems("West 940,000, Central 206,000, in all 2,740,000", NULL, h13_f3, list())$limits,
-                long = summary_problems("West has by a long way the highest total revenue of all six regions shown", NULL, h13_f3, list())$limits,
-                twelve = summary_problems("West has by a long way the highest revenue of all six regions", NULL, h13_f3, list())$limits)
+                long = summary_problems("West has by far the highest total revenue of all six regions shown", NULL, h13_f3, list())$limits,
+                twelve = summary_problems("West has by far the highest total revenue of all six regions", NULL, h13_f3, list())$limits)
 h13_ask <- function(first, second) { env <- new.env(); env$n <- 0L
   env$ask <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL) { env$n <- env$n + 1L
     h <- if (env$n == 1L) first else second
@@ -11080,7 +11080,7 @@ h13_rep <- purrr::map(list(fixed = h13_ask("West 940,000, Central 206,000, in al
 h13_own <- recheck_story(list(headline = "West, Central and all: 940,000, 206,000 and 2,740,000", summary = NULL, facts = h13_ftext, spec = h13_bar, problems = character(0), headline_by = "analyst"))
 check("13C-4: the manager's ruling on length: a headline carries at most two numbers (HEADLINE_MAX_NUMBERS) and twelve words, whoever wrote it, both in the headline checks (two numbers and twelve words pass; three numbers, or thirteen words, fail and say so); a model's headline over a limit gets its one repair: fixed, it is the model's; still over, R's stays and the card says why; the analyst's own over a limit stays, marked; summary.md says the model may carry one number, or two for a change",
       HEADLINE_MAX_NUMBERS == 2L && HEADLINE_MAX_WORDS == 12L && !length(h13_lim$ok) && !length(h13_lim$twelve) &&
-        identical(h13_lim$three, "the headline carries 3 numbers; it may carry at most 2") && identical(h13_lim$long, "the headline has 14 words; it may have at most 12") &&
+        identical(h13_lim$three, "the headline carries 3 numbers; it may carry at most 2") && identical(h13_lim$long, "the headline has 13 words; it may have at most 12") &&
         h13_rep$fixed$calls == 2L && isTRUE(h13_rep$fixed$checked) && identical(h13_rep$fixed$shown$by, "model") &&
         h13_rep$still$calls == 2L && !isTRUE(h13_rep$still$checked) && identical(h13_rep$still$shown[c("text", "by")], list(text = h13_now$text, by = "r")) &&
         identical(h13_rep$still$shown$note, HEADLINE_MODEL_FAILED) &&

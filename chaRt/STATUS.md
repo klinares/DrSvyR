@@ -1,8 +1,15 @@
 # chaRt: status
 
-## Current state (2026-11-26, after Phase 12c: frame 0 first, no moving cards, no bands inside the page, full-row charts)
+## Current state (2026-11-26, after Phase 13: every title states the finding)
 
 Branch `chart`, not pushed. Everything below was built and tested at home on R 4.6.1. No test makes a model call unless it says so. The phase-by-phase record is under History; the Phase 10 report is `manager/done-10.md`, the Phase 10b report `manager/done-10b.md`, the Phase 11 report `manager/done-11.md`, the Phase 12 report `manager/done-12.md`.
+
+**Phase 13, done** (2026-11-26; `manager/done-13.md`; 2 live calls, Sonnet, for the look at the model's headlines).
+- **R writes a headline for every chart** from its FACTS (`facts_headline()`, `spec_headline()`, `r_headline()`), checked as a model's is; all 35 gold specs and four charts of the messy file pass, at most 11 words (`tests/headlines_13.R`, which also writes `tests/review/headlines.md`).
+- **The headline is the title,** once per card: a card's HTML heading carries it with the description under it and its picture has no title block; a picture that leaves the page (charts/, charts.R) carries it in the picture.
+- **The model's headline replaces R's when it passes** its checks; the card and "About this dashboard" say who wrote each. The analyst's own always stays, marked.
+- **The manager's three rulings:** a tail is named past a skewness (g1) of 1 and, in a headline, only from 30 rows; a model headline is checked again when its chart changes and gives way to R's if it fails; at most two numbers and 12 words, whoever wrote it (`www/reflexes/summary.md` 0.5).
+- **Smoke on the final code:** fast 653 of 653, heavy 35 of 35 (13A-1 to 13A-5, 13B-1 to 13B-4, 13C-1 to 13C-4 new). Mutations: `tests/mutate_13.R` 15 of 15 caught (baseline 13 of 13).
 
 **Phase 12c, done** (2026-11-26; `manager/done-12.md`, section 10; no model call).
 - **Frame 0 from the first paint:** each animated box holds frame 0 as a picture (23 to 65 KB a card); no screenshot of a playing card is blank, headed Chrome with the CPU slowed four times. No script, reduced motion and print show the finished chart.
