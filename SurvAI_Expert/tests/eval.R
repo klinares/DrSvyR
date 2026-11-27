@@ -3,7 +3,8 @@
 #   Rscript --no-init-file tests/eval.R tune     part 1, also tuning field weights, k1 and b on a random half
 #   Rscript --no-init-file tests/eval.R answers  part 2, planned retrieval, answers, checks and a judge (model
 #                                                calls; profile SURVAI_PROFILE, key from the variable KEY_ENV names)
-# Reads tests/gold.csv. Writes tests/eval_retrieval.csv, and for part 2 tests/eval_report.md and
+# Reads tests/gold.csv (and tests/advice.csv for part 3: Rscript --no-init-file tests/eval.R advice, which writes
+#   tests/advice_report.md and tests/advice_answers.csv). Writes tests/eval_retrieval.csv, and for part 2 tests/eval_report.md and
 #   tests/eval_answers.csv (outputs, not in git); the home run to compare with is tests/eval_report_home.md.
 
 suppressPackageStartupMessages({ library(tidyverse); library(DBI); library(duckdb) })
@@ -106,7 +107,7 @@ tag_check <- function(con, res, g) {
 }
 
 main <- function(mode = "eval") {
-  g = make_gold()
+  g = make_gold() |> filter(!id %in% NON_QUESTIONS)
   set.seed(SEED)
   g$half = if_else(seq_len(nrow(g)) %in% sample(nrow(g), floor(nrow(g) / 2)), "tune", "held out")
   best = if (mode == "tune") tune(g |> filter(half == "tune")) else list(w = FIELD_WEIGHTS, k1 = BM25_K1, b = BM25_B)
@@ -169,8 +170,7 @@ judge <- function(m, key, con, row, res) {
   user = paste0("Question:\n", row$question, "\n\nAnswer:\n", res$answer, "\n\nSources given to the answer:\n\n",
                 sources_text(res$gathered), "\n\nPassage from the course document (", row$doc_id, "):\n",
                 gold_passages(con, row$question, row$doc_id))
-  r = call_model(m, "judge", JUDGE_SYSTEM, user, key, JUDGE_SCHEMA)
-  structure(parse_json_reply(r), usage = attr(r, "usage"))
+  call_json(m, "judge", JUDGE_SYSTEM, user, key, JUDGE_SCHEMA)
 }
 
 # Rank of the gold document among the gathered passages (or NA); formulas: one from the gold
@@ -302,7 +302,7 @@ main_answers <- function() {
           sprintf("Gold: 108 questions; %d unmapped (R scripts not in the store) and %d that are not questions were dropped, leaving %d. %d were planned and %d answered (stratified by type).",
                   108L - nrow(g_all), length(NON_QUESTIONS), nrow(g), nrow(g_plan), nrow(okA)), "",
           "## Retrieval: raw question vs planned search", "",
-          "Hit@k: the gold document is among the first k passages. Raw = the question text alone (part 1); planned = the model's plan, fused, at most 3 passages per document.", "",
+          paste("Hit@k: the gold document is among the first k passages. Raw = the question text alone (part 1); planned = the model's plan, fused, at most", GATHER_PER_DOC, "passages per document."), "",
           md_table(ret_tab), "",
           sprintf("Equation questions: a formula from the gold document (or its formula group) was among those found for %d of %d.", sum(eq$formula_hit %in% TRUE), nrow(eq)), "",
           "## Answer checks (no model)", "", md_table(chk), "",
@@ -318,10 +318,92 @@ main_answers <- function() {
   invisible(list(ret = ret, answers = A))
 }
 
+# ---- part 3: advice ------------------------------------------------------------------------------------------
+# tests/advice.csv: situations an analyst brings, each with the points a survey methodologist should
+#   raise (must, separated by " | ") and the advice that would be wrong (must_not). Each scenario is
+#   one ask() (the mode left to the plan) and one judge call: 3 calls a scenario.
+
+ADVICE_CSV <- "tests/advice.csv"
+ADVICE_REPORT_MD <- "tests/advice_report.md"
+ADVICE_ANSWERS_CSV <- "tests/advice_answers.csv"
+ADVICE_PASS <- 0.75   # share of the must points an answer has to cover, with no must_not advice
+
+ADVICE_JUDGE_SYSTEM <- paste(
+  "You grade advice given to a survey analyst. You are given the analyst's situation, the advice, a list of points a",
+  "survey methodologist should raise (must), advice that would be wrong (must_not), and the numbered passages the",
+  "adviser was given. For each must point, in the order listed, say whether the advice covers it (in any words).",
+  "Say whether the advice gives the must_not advice. Say whether any sentence labelled 'My assessment' is presented",
+  "as something the passages say. Say whether any statement about methods contradicts the passages or sound survey",
+  "statistics. Give a one-sentence reason. Reply with JSON only: an object with the fields covered (an array of",
+  "true/false, one per must point, in order), must_not_given (true/false), assessment_as_fact (true/false),",
+  "contradicts (true/false) and reason (a string).")
+
+ADVICE_JUDGE_SCHEMA <- list(type = "object", additionalProperties = FALSE,
+  required = list("covered", "must_not_given", "assessment_as_fact", "contradicts", "reason"),
+  properties = list(covered = list(type = "array", items = list(type = "boolean")), must_not_given = list(type = "boolean"),
+                    assessment_as_fact = list(type = "boolean"), contradicts = list(type = "boolean"), reason = list(type = "string")))
+
+judge_advice <- function(m, key, row, res) {
+  must = str_squish(str_split_1(row$must, fixed("|")))
+  user = paste0("Situation:\n", row$scenario, "\n\nAdvice:\n", res$answer, "\n\nmust:\n", paste0(seq_along(must), ". ", must, collapse = "\n"),
+                "\n\nmust_not:\n", row$must_not, "\n\nPassages given to the adviser:\n\n", sources_text(res$gathered))
+  j = call_json(m, "judge", ADVICE_JUDGE_SYSTEM, user, key, ADVICE_JUDGE_SCHEMA)
+  cov = head(c(as.logical(unlist(j$covered)), rep(FALSE, length(must))), length(must))
+  list(points = length(must), covered = sum(cov %in% TRUE), missed = paste(must[!(cov %in% TRUE)], collapse = " | "),
+       must_not_given = isTRUE(j$must_not_given), assessment_as_fact = isTRUE(j$assessment_as_fact),
+       contradicts = isTRUE(j$contradicts), reason = as.character(j$reason %||% ""), usd = attr(j, "usage")$usd)
+}
+
+main_advice <- function() {
+  m = profile_model(MODEL_PROFILE)
+  key = Sys.getenv(KEY_ENV)
+  con = store_con()
+  sc = read_csv(ADVICE_CSV, col_types = cols(.default = col_character()), locale = locale(encoding = "UTF-8"), progress = FALSE)
+  message(sprintf("Profile %s (%s). %d scenarios, %d model calls (CALL_BUDGET %d).", MODEL_PROFILE, m$id, nrow(sc), 3L * nrow(sc), CALL_BUDGET))
+  if (3L * nrow(sc) > CALL_BUDGET) stop("That is more than CALL_BUDGET.", call. = FALSE)
+  one = function(i) {
+    row = sc[i, ]
+    res = tryCatch(ask(row$scenario, MODEL_PROFILE, key, con), error = function(e) e)
+    if (inherits(res, "error")) return(tibble(id = row$id, error = conditionMessage(res)))
+    j = tryCatch(judge_advice(m, key, row, res), error = function(e) list(points = NA_integer_, covered = NA_integer_, missed = "",
+      must_not_given = NA, assessment_as_fact = NA, contradicts = NA, reason = paste("judge failed:", conditionMessage(e)), usd = 0))
+    ck = res$checks
+    message(sprintf("  %s: %s, %s of %s points%s", row$id, res$mode, j$covered, j$points, if (isTRUE(j$must_not_given)) ", MUST_NOT advice given" else ""))
+    tibble(id = row$id, scenario = row$scenario, mode = res$mode, points = j$points, covered = j$covered, missed = j$missed,
+           must_not_given = j$must_not_given, assessment_as_fact = j$assessment_as_fact, contradicts = j$contradicts,
+           pass = isTRUE(j$covered / j$points >= ADVICE_PASS) && !isTRUE(j$must_not_given),
+           cites_valid = ck$cites_valid, tokens_valid = ck$tokens_valid, display_math = ck$display_math, code_parses = ck$code_parses,
+           headings_missing = paste(ck$headings_missing, collapse = "; "), assessments = ck$assessments, uncited = ck$uncited,
+           words = ck$words, sec = sum(res$sec), usd = res$usd + j$usd, reason = j$reason, answer = res$answer, error = NA_character_)
+  }
+  A = map(seq_len(nrow(sc)), one) |> list_rbind()
+  write_csv(A, ADVICE_ANSWERS_CSV)
+  okA = A |> filter(is.na(error))
+  tab = okA |> transmute(id, mode, points = paste0(covered, " of ", points), must_not = if_else(must_not_given %in% TRUE, "GIVEN", "no"),
+                         headings = if_else(nzchar(headings_missing), paste("missing:", headings_missing), "all"),
+                         assessments, uncited, words, pass = if_else(pass, "pass", "FAIL"))
+  rep = c(paste0("# SurvAI_Expert advice test, ", format(Sys.Date())), "",
+          "## In short", "",
+          sprintf("- The tool was given %d situations of the kind analysts bring, and its advice was graded against the points a survey methodologist should raise.", nrow(sc)),
+          sprintf("- It passed %d of %d: it raised at least three quarters of the points and gave none of the advice marked as wrong.", sum(okA$pass), nrow(okA)),
+          sprintf("- Across all situations it raised %d of %d points (%.0f%%). Wrong advice was given in %d; a method was misstated in %d.",
+                  sum(okA$covered, na.rm = TRUE), sum(okA$points, na.rm = TRUE), 100 * sum(okA$covered, na.rm = TRUE) / sum(okA$points, na.rm = TRUE),
+                  sum(okA$must_not_given %in% TRUE), sum(okA$contradicts %in% TRUE)),
+          sprintf("- It treated %d of %d as a request for advice on its own.", sum(okA$mode == "advice"), nrow(okA)), "",
+          sprintf("Profile **%s**, model `%s`. %d scenarios did not run.", MODEL_PROFILE, m$id, sum(!is.na(A$error))), "",
+          "## By scenario", "", md_table(tab), "",
+          "## Points missed and the grader's reason", "",
+          pmap_chr(list(okA$id, okA$missed, okA$reason), function(i, ms, r) sprintf("- **%s** missed: %s. %s", i, if (nzchar(ms)) ms else "none", r)), "",
+          sprintf("%d model calls, about $%.2f, median %.0f s a scenario.", 3L * nrow(okA), sum(okA$usd, na.rm = TRUE), median(okA$sec)))
+  writeLines(rep, ADVICE_REPORT_MD, useBytes = TRUE)
+  message("Wrote ", ADVICE_REPORT_MD, " and ", ADVICE_ANSWERS_CSV)
+  invisible(A)
+}
+
 if (sys.nframe() == 0L) {
   mode = head(c(commandArgs(trailingOnly = TRUE), "eval"), 1)
-  if (mode == "answers") {   # part 2 uses the app's question answering
+  if (mode %in% c("answers", "advice")) {   # parts 2 and 3 use the app's question answering
     source("app.R")
-    main_answers()
+    if (mode == "answers") main_answers() else main_advice()
   } else main(mode)
 }

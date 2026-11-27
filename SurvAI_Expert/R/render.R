@@ -38,35 +38,59 @@ check_answer <- function(answer, gathered) {
        display_math = str_detect(prose_only(answer), "\\$\\$|\\\\\\["),
        code_blocks = length(blocks), code_parses = all(parses), unverified = setdiff(fns, known),
        uncited = sum(!u$cited), uncited_text = u$text[!u$cited], units = length(u$text), not_from_library = sum(u$nfs),
+       assessments = sum(u$assess), headings_missing = if (identical(gathered$plan$mode, "advice")) missing_headings(answer) else character(),
        words = sum(str_count(str_remove_all(u$all, CITE_RX), "\\S+")))
+}
+
+# The required advice headings an answer lacks (a heading is a markdown heading or a bold line).
+missing_headings <- function(answer) {
+  l = str_squish(str_remove_all(str_split_1(as.character(answer), "\n"), "^\\s*#+\\s*|\\*\\*|:\\s*$"))
+  ADVICE_REQUIRED[!tolower(ADVICE_REQUIRED) %in% tolower(l)]
 }
 
 # "Not from the library:" labels outside knowledge; "Not from the store:" is the older wording.
 NFS_RX <- "^(?i)[*_\\s]*not from the (library|store):"
 CHECK_RX <- "^(?i)[*_\\s]*check:"
-WHAT_TO_CHECK_RX <- "^(?i)[#*_\\s]*(what to check|check before|things to check|before (running|using|you run))\\b"
+# Advice (www/reflexes/advise.md): the adviser's own reasoning is labelled, and needs no citation.
+ASSESS_RX <- "^(?i)[*_\\s]*my assessment:"
+ADVICE_HEADINGS <- c("What I understand", "Options", "What I would do", "How to do it", "What to check", "To sharpen this")
+ADVICE_REQUIRED <- c("What I understand", "Options", "What I would do", "What to check")
+# Sections whose lines are not statements of fact: instructions to the user, the adviser's
+#   restatement of the situation, and its questions back.
+WHAT_TO_CHECK_RX <- "^(?i)[#*_\\s]*(what to check|check before|things to check|before (running|using|you run)|what i understand|to sharpen this)\\b"
 HEADING_RX <- "^\\s*#|^\\s*\\*\\*[^*]+\\*\\*:?\\s*$"
 
 # Sentences and bullets of the prose, each with whether it carries a citation or the "Not from
 #   the library:" label (or begins "Check:", which flags sources that disagree). Headings, code,
 #   formula lines, tables and the lines under "What to check" (instructions to the user) are left
 #   out, and so are lead-ins (ending in ":") and fragments under four words; $all keeps every prose
-#   unit, for word counts.
+#   unit, for word counts. Under an "Options" heading (advice), a bullet's short first sentence that
+#   more follows ("Trim the largest weights. Trimming lowers ... [S1].") names the option and is not
+#   a statement.
+OPTIONS_RX <- "^(?i)\\s*(#+\\s*|\\*\\*)options\\b"
+OPTION_NAME_WORDS <- 8L
 prose_units <- function(answer) {
   l = str_split_1(str_remove_all(as.character(answer), "(?s)```.*?```"), "\n")
-  in_check = accumulate(seq_along(l), function(on, i) if (str_detect(l[i], WHAT_TO_CHECK_RX)) TRUE
-                        else if (str_detect(l[i], HEADING_RX)) FALSE else on, .init = FALSE)[-1]
-  l = l[!in_check & !str_detect(l, paste0("^\\s*$|^\\s*\\{\\{F:|^\\s*\\||", HEADING_RX))]
+  in_section = function(rx) accumulate(seq_along(l), function(on, i) if (str_detect(l[i], rx)) TRUE
+                                       else if (str_detect(l[i], HEADING_RX)) FALSE else on, .init = FALSE)[-1]
+  in_check = in_section(WHAT_TO_CHECK_RX)
+  in_opts = in_section(OPTIONS_RX)
+  keep_l = !in_check & !str_detect(l, paste0("^\\s*$|^\\s*\\{\\{F:|^\\s*\\||", HEADING_RX))
+  l = l[keep_l]
   bullet = str_detect(l, "^\\s*([-*+]|\\d+[.)])\\s+")
   para = cumsum(bullet | lag(bullet, default = TRUE))
   blocks = map_chr(split(str_remove(l, "^\\s*([-*+]|\\d+[.)])\\s+"), para), paste, collapse = " ")
+  option = map_lgl(split(in_opts[keep_l] & bullet, para), any)
   # a citation after the full stop belongs to the sentence before it
   blocks = str_replace_all(blocks, "([.!?])\\s*((?:\\[S\\d+[^\\]]*\\]\\s*)+)", " \\2\\1 ")
-  s = str_squish(unlist(str_split(blocks, "(?<=[.!?])\\s+(?=[A-Z*_(\\[])")))
-  s = s[nzchar(s)]
-  keep_s = !str_detect(s, ":\\s*$") & str_count(s, "\\S+") >= 4
-  t = s[keep_s]
-  list(text = t, cited = str_detect(t, CITE_RX) | str_detect(t, NFS_RX) | str_detect(t, CHECK_RX), nfs = str_detect(t, NFS_RX), all = s)
+  ss = map(str_split(blocks, "(?<=[.!?])\\s+(?=[A-Z*_(\\[])"), function(x) { x = str_squish(x); x[nzchar(x)] })
+  s = unlist(ss)
+  named = map2(ss, option, function(x, o)
+    if (o && length(x) > 1L && str_count(x[1], "\\S+") < OPTION_NAME_WORDS && !str_detect(x[1], CITE_RX)) x[-1] else x)
+  st = unlist(named)
+  t = st[!str_detect(st, ":\\s*$") & str_count(st, "\\S+") >= 4]
+  list(text = t, cited = str_detect(t, CITE_RX) | str_detect(t, NFS_RX) | str_detect(t, CHECK_RX) | str_detect(t, ASSESS_RX),
+       nfs = str_detect(t, NFS_RX), assess = str_detect(t, ASSESS_RX), all = s)
 }
 
 # The answer's uncited factual sentences wrapped in a dotted underline, before it is rendered.

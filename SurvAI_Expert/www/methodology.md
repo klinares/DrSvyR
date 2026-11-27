@@ -64,7 +64,7 @@ came from, so that each statement in an answer can be traced to the original.
   giving more weight to rare words and to the topic labels. Your own wording
   is always part of the search, because it often matches the original
   document best.
-- At most three passages are taken from any one document, so that one long
+- At most two passages are taken from any one document, so that one long
   document does not crowd out the others.
 - Formulas are never retyped by the writer of the answer. It names the
   formula it wants, and the exact formula from the library is put in its
@@ -84,15 +84,35 @@ came from, so that each statement in an answer can be traced to the original.
 - Anything it adds from outside the library is labelled
   "Not from the library".
 
+## Advice
+
+When you describe a situation or ask what to do, the tool answers as an adviser instead of
+looking one thing up. It searches the library for each side of the decision, then lays out two
+or three options, what each does to the sources of error and to cost, what it would do and
+why, how to carry it out, and what to check.
+
+Two kinds of statement appear in advice, and they are kept apart:
+
+- **What the library says.** Statements about methods come from the library, as in any other
+  answer.
+- **The tool's judgment.** Sentences that begin "My assessment" are the tool's own reasoning
+  about your survey. They are not from the library. Treat them as a colleague's opinion.
+
+The tool recommends; you decide. If it lacks a fact that would change its advice, it gives the
+advice for each case and asks. Fill in "My survey" on the Ask tab and it will not need to.
+
 ## How it was tested
 
 - The tool was tested on 103 questions written from the course materials:
   100 were searched and 40 answered in full.
-- 38 of the 40 answers (95%) were judged correct; none was judged incorrect.
+- 39 of the 40 answers (98%) were judged correct and 1 incorrect.
 - Every citation pointed to a real passage, and every formula shown came from
   the library rather than being typed by the model.
-- For 87% of the questions, the document the question was written from was
+- For 90% of the questions, the document the question was written from was
   among the first 10 passages found.
+- Advice was tested on 12 situations of the kind analysts bring. It passed
+  11: it raised at least three quarters of the points a survey methodologist
+  would raise, and gave none of the advice marked as wrong.
 
 <details><summary>More detail</summary>
 
@@ -100,11 +120,16 @@ came from, so that each statement in an answer can be traced to the original.
   right source was known in advance.
 - The answers were graded by the same language model, comparing each answer
   with the passage the question came from: correct, partly correct or
-  incorrect. The two answers judged partly correct left out part of what the
-  passage said.
+  incorrect. The answer judged incorrect was asked for the weights from
+  propensity score subclassification and gave a nonresponse adjustment
+  formula instead.
+- Advice was graded the same way, against a list of points written for each
+  situation in advance. Across the 12 it raised 41 of 47 points (87%). The
+  one that failed did not mention that subgroups have fewer degrees of
+  freedom.
 - The search results vary by a few points from run to run, because the
   search is planned afresh for each question.
-- Questions asking for a formula were the hardest to search: for 26 of 34,
+- Questions asking for a formula were the hardest to search: for 23 of 34,
   a formula from the right document was among those found.
 
 </details>

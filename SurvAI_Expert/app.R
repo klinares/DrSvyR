@@ -2,6 +2,7 @@
 #   sources, formulas from the store, and R code. One of the apps in the DrSvyR repository.
 #   Run:     shiny::runApp("SurvAI_Expert")
 #   Console: setwd("SurvAI_Expert"); source("app.R"); ask("How do I compute a design effect for a cluster sample?")
+#            ask("Only 12% answered our web survey. Can I use it?", mode = "advice")
 #   The store is data/store/survai.duckdb, built by build/03_store.R. README.md says how to set it up.
 
 
@@ -15,17 +16,23 @@ APP_OFFICE <- ""
 # The model per profile, called through ellmer only. Each question uses two calls.
 #   api        "anthropic" (ellmer::chat_anthropic) or "openai" (ellmer::chat_openai_compatible)
 #   base_url   where it is called; id: what the endpoint names the model
-#   effort     reasoning effort per kind of call, sent only when set
+#   effort     reasoning effort per kind of call; NULL sends no such argument at all
 #   json       how a reply is held to a JSON schema: "output_config" (Anthropic structured
-#              output), "response_format" (OpenAI style), or "prompt" (asked for in words only)
+#              output), "response_format" (OpenAI style), or "prompt" (asked for in words; the reply
+#              is parsed and checked in R, and asked for once more if it is not valid JSON)
+#   stream     TRUE: the answer appears as it is written; FALSE: one call, shown when complete
+#              (for an endpoint that cannot stream). Left out means TRUE.
 #   price      USD per million tokens (input, output, cached input), for the cost lines; NA when unknown
-#   work: placeholders in angle brackets, to be filled in at work.
+#   work: an OpenAI-compatible endpoint. Fill in base_url and id (the angle brackets). It starts
+#     with the settings every such endpoint accepts (json "prompt", stream FALSE, effort NULL);
+#     once the first question works, each can be turned up, one at a time. If a call is refused,
+#     the error says which of the three to change back.
 MODEL_PROFILES <- list(
   home = list(api = "anthropic", base_url = "https://api.anthropic.com/v1", id = "claude-sonnet-5-5",
               effort = c(plan = "low", answer = "medium", judge = "medium", report = "medium"), json = "output_config",
-              price = c(input = 2, output = 10, cached = 0.10)),
-  work = list(api = "<api at work: anthropic or openai>", base_url = "<work base url>", id = "<Opus 5 id at work>",
-              effort = c(plan = "low", answer = "medium", judge = "medium", report = "medium"), json = "response_format",
+              stream = TRUE, price = c(input = 2, output = 10, cached = 0.10)),
+  work = list(api = "openai", base_url = "<work base url, ending before /chat/completions>", id = "<Opus 5 id at work>",
+              effort = NULL, json = "prompt", stream = FALSE,
               price = c(input = NA, output = NA, cached = NA)))
 
 # The profile used when the environment variable SURVAI_PROFILE is not set: "home" or "work".

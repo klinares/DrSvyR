@@ -6,6 +6,9 @@
 LLM_MAX_TOKENS <- c(plan = 4000L, answer = 16000L, judge = 6000L, report = 32000L)   # thinking counts against these
 LLM_TIMEOUT_S <- 600
 INTENTS <- c("formula", "code", "advice", "concept")
+MODES <- c("lookup", "advice")   # lookup: the answer is in the library; advice: a situation to weigh (www/reflexes/advise.md)
+ADVICE_KINDS <- c("guidance", "worked example", "definition")   # kinds of passage raised in the ranking for advice
+GATHER_ADVICE_PASSAGES <- 12L
 PLAN_LIMITS <- c(tse = 2L, stage = 2L, design = 2L, topic = 3L)
 PLAN_QUERIES <- 3L        # per part
 PLAN_PARTS <- 4L          # a message with more distinct questions is answered for the first PLAN_PARTS
@@ -13,7 +16,7 @@ SEARCH_DEPTH <- 30L      # passages per query before fusion
 RRF_K <- 60              # reciprocal rank fusion: score = sum of 1 / (RRF_K + rank)
 GATHER_RAW_WEIGHT <- 3        # the question itself, always fused in as one more query, with this weight (at least 1);
                               #   3 chosen on the 100 planned gold questions (hit@5 0.70 with 0, 0.81 with 3)
-GATHER_PER_DOC <- 3L
+GATHER_PER_DOC <- 2L         # 2 found the gold document more often than 3 (hit@10 0.914 against 0.895 on the gold questions)
 # What gather() keeps, for a message of one part and per part of a message of several.
 GATHER_PASSAGES <- c(one = 10L, part = 6L)
 GATHER_FORMULAS <- c(one = 5L, part = 3L)            # found by the formula query
@@ -71,13 +74,23 @@ chat_usage <- function(chat, m, t0) {
   list(tokens = tok, sec = as.numeric(difftime(Sys.time(), t0, units = "secs")), usd = sum(tok * m$price[names(tok)]) / 1e6)
 }
 
+# A failed call's message with the key removed. When the endpoint refuses a feature, say which of the
+#   profile's three settings to change (app.R): nothing is switched off silently.
+call_error <- function(e, key) {
+  msg = gsub(key, "[key]", conditionMessage(e), fixed = TRUE)
+  hint = c("response_format|json_schema|output_config|structured" = "set json = \"prompt\"",
+           "stream" = "set stream = FALSE", "reasoning|effort" = "set effort = NULL")
+  h = hint[map_lgl(names(hint), function(rx) grepl(rx, msg, ignore.case = TRUE))]
+  if (length(h)) paste0(msg, "\nIf the endpoint does not support this, ", paste(h, collapse = " or "), " in this profile in app.R.") else msg
+}
+
 # One call: the reply text with attribute usage.
 call_model <- function(m, kind, system, user, key, schema = NULL) {
   chat = model_chat(m, kind, system, key, schema)
   t0 = Sys.time()
   old = options(ellmer_timeout_s = LLM_TIMEOUT_S)
   on.exit(options(old), add = TRUE)
-  txt = tryCatch(chat$chat(user), error = function(e) stop(gsub(key, "[key]", conditionMessage(e), fixed = TRUE), call. = FALSE))
+  txt = tryCatch(chat$chat(user), error = function(e) stop(call_error(e, key), call. = FALSE))
   structure(as.character(txt), usage = chat_usage(chat, m, t0))
 }
 
@@ -97,8 +110,10 @@ plan_schema <- function(v) {
   part = list(type = "object", additionalProperties = FALSE, required = list("question", "queries", "formula_query", "code_query"),
               properties = list(question = list(type = "string"), queries = arr(list(type = "string")),
                                 formula_query = list(type = "string"), code_query = list(type = "string")))
-  list(type = "object", additionalProperties = FALSE, required = list("intents", "tags", "parts", "more_than_four"),
-       properties = list(intents = arr(enum(INTENTS)), tags = tags, parts = arr(part), more_than_four = list(type = "boolean")))
+  list(type = "object", additionalProperties = FALSE,
+       required = list("mode", "decision", "error_sources", "intents", "tags", "parts", "more_than_four"),
+       properties = list(mode = enum(MODES), decision = list(type = "string"), error_sources = arr(enum(v$value[v$facet == "tse"])),
+                         intents = arr(enum(INTENTS)), tags = tags, parts = arr(part), more_than_four = list(type = "boolean")))
 }
 
 # Fields checked in R: unknown intents and tag values are dropped (and listed in $dropped); at most
@@ -119,7 +134,10 @@ clean_plan <- function(p, v, question) {
   if (!length(parts)) parts = list(list(question = question, queries = question, formula_query = "", code_query = ""))
   if (length(parts) == 1L) parts[[1]]$question = question
   first = function(x) { x = x[nzchar(x)]; if (length(x)) x[1] else "" }
-  list(question = question, intents = intersect(as.character(unlist(p$intents)), INTENTS), tags = ok, parts = parts,
+  list(question = question, mode = if (identical(as.character(p$mode %||% ""), "advice")) "advice" else "lookup",
+       decision = str_squish(as.character(p$decision %||% "")[1]),
+       error_sources = intersect(as.character(unlist(p$error_sources)), setdiff(v$value[v$facet == "tse"], "none")),
+       intents = intersect(as.character(unlist(p$intents)), INTENTS), tags = ok, parts = parts,
        more_than_four = more, queries = unique(unlist(map(parts, "queries"))),
        formula_query = first(map_chr(parts, "formula_query")), code_query = first(map_chr(parts, "code_query")),
        dropped = unlist(imap(tags, function(x, f) if (length(setdiff(x, ok[[f]]))) paste0(f, ": ", setdiff(x, ok[[f]])))))
@@ -127,19 +145,42 @@ clean_plan <- function(p, v, question) {
 
 # No sampling setting is sent: ellmer's params(temperature =) exists, but Claude Sonnet 5.5 refuses a
 #   non-default temperature (HTTP 400), and API version 2026-10-21 refuses it on every model.
-plan_request <- function(question, context = NULL) {
+plan_request <- function(question, context = NULL, my_data = NULL) {
   v = read_vocab()
   w = v[v$facet %in% names(PLAN_LIMITS), ]
-  list(v = v, schema = plan_schema(v), user = paste0(context_text(context), question),
+  list(v = v, schema = plan_schema(v), user = paste0(context_text(context), question, survey_text(my_data)),
        system = paste0(read_reflex("plan.md"), "\n\nVocabulary (facet: value: definition):\n",
                        paste(w$facet, w$value, w$definition, sep = ": ", collapse = "\n")))
 }
 
 plan_from_reply <- function(r, req, question) structure(clean_plan(parse_json_reply(r), req$v, question), usage = attr(r, "usage"))
 
-plan_question <- function(question, profile = MODEL_PROFILE, key = Sys.getenv(KEY_ENV), context = NULL) {
-  req = plan_request(question, context)
-  plan_from_reply(call_model(profile_model(profile), "plan", req$system, req$user, key, req$schema), req, question)
+# A reply that is not valid JSON (possible when the profile's json is "prompt") is asked for once more.
+JSON_AGAIN <- "\n\nYour last reply was not one valid JSON object. Reply again with the JSON object only: no words before or after it, no code fence."
+
+# Usage of two calls made for one purpose, added up.
+add_usage <- function(a, b) if (is.null(a)) b else list(tokens = a$tokens + b$tokens, sec = a$sec + b$sec, usd = a$usd + b$usd)
+
+# One call whose reply must be a JSON object (the plan, the judges): the parsed reply with attribute
+#   usage, asked for once more when the reply is not valid JSON; the usage counts both calls.
+call_json <- function(m, kind, system, user, key, schema = NULL) {
+  r = call_model(m, kind, system, user, key, schema)
+  tryCatch(structure(parse_json_reply(r), usage = attr(r, "usage")), error = function(e) {
+    r2 = call_model(m, kind, system, paste0(user, JSON_AGAIN), key, schema)
+    structure(parse_json_reply(r2), usage = add_usage(attr(r, "usage"), attr(r2, "usage")))
+  })
+}
+
+plan_question <- function(question, profile = MODEL_PROFILE, key = Sys.getenv(KEY_ENV), context = NULL, my_data = NULL) {
+  req = plan_request(question, context, my_data)
+  j = call_json(profile_model(profile), "plan", req$system, req$user, key, req$schema)
+  structure(clean_plan(j, req$v, question), usage = attr(j, "usage"))
+}
+
+# The mode the person chose on the Ask tab ("lookup" or "advice") replaces the plan's; anything else leaves it.
+force_mode <- function(plan, mode = NULL) {
+  if (!is.null(mode) && mode %in% MODES) plan$mode = mode
+  plan
 }
 
 # ---- gather -------------------------------------------------------------------------------------------------
@@ -184,9 +225,18 @@ gather <- function(con, plan, raw_weight = GATHER_RAW_WEIGHT, pin = NULL) {
   parts = plan_parts(plan)
   n = if (length(parts) == 1L) "one" else "part"
   one = n == "one"
-  want_f = map_lgl(parts, function(pt) if (one) "formula" %in% plan$intents || !is.null(pin) else nzchar(pt$formula_query))
-  Ps = map(parts, function(pt) part_passages(con, pt, plan$tags, GATHER_PASSAGES[[n]], raw_weight))
-  P = bind_rows(Ps) |> distinct(passage_id, .keep_all = TRUE)
+  # advice: the parts are the angles of one decision; guidance, worked examples and definitions are
+  #   raised (never filtered), and GATHER_ADVICE_PASSAGES are kept in all, the parts taking turns and
+  #   GATHER_PER_DOC holding across the parts (each part searches for all of them, so the turns can fill
+  #   what one document's cap leaves)
+  advice = identical(plan$mode, "advice")
+  tags = if (advice) c(plan$tags, list(kind = ADVICE_KINDS)) else plan$tags
+  kp = if (advice) GATHER_ADVICE_PASSAGES else GATHER_PASSAGES[[n]]
+  want_f = map_lgl(parts, function(pt) if (one) "formula" %in% plan$intents || !is.null(pin) || (advice && nzchar(pt$formula_query)) else nzchar(pt$formula_query))
+  Ps = map(parts, function(pt) part_passages(con, pt, tags, kp, raw_weight))
+  P = bind_rows(map(Ps, function(x) mutate(x, turn = row_number()))) |> distinct(passage_id, .keep_all = TRUE)
+  if (advice) P = P |> arrange(turn) |> group_by(doc_id) |> filter(row_number() <= GATHER_PER_DOC) |> ungroup() |>
+    head(GATHER_ADVICE_PASSAGES)
   Fp = pmap(list(parts, Ps, want_f), function(pt, pp, w) part_formulas(con, pt, pp, n, w))
   Fm = bind_rows(pin, Fp)
   Fm = if (nrow(Fm)) Fm |> distinct(group_id, .keep_all = TRUE) |> mutate(fid = paste0("F", row_number())) else tibble()
@@ -227,28 +277,60 @@ sources_text <- function(g) {
 # ---- answer and ask -----------------------------------------------------------------------------------------
 
 # A follow-up: the previous question and answer (the answer cut to CONTEXT_ANSWER_CHARS).
+# A follow-up: the last CONTEXT_TURNS questions and answers (each answer cut to CONTEXT_ANSWER_CHARS),
+#   so a discussion can build. context is list(turns = list(list(question, answer), ...)); the older
+#   list(question, answer) is one turn.
 CONTEXT_ANSWER_CHARS <- 1500L
+CONTEXT_TURNS <- 3L
+context_turns <- function(context) {
+  if (is.null(context)) return(list())
+  if (!is.null(context$turns)) return(tail(context$turns, CONTEXT_TURNS))
+  if (nzchar(context$question %||% "")) list(context[c("question", "answer")]) else list()
+}
+add_turn <- function(context, question, answer) list(turns = tail(c(context_turns(context), list(list(question = question, answer = answer))), CONTEXT_TURNS))
 context_text <- function(context) {
-  if (is.null(context) || !nzchar(context$question %||% "")) return("")
-  paste0("Previous question:\n", context$question, "\n\nPrevious answer:\n", str_trunc(context$answer %||% "", CONTEXT_ANSWER_CHARS),
+  t = context_turns(context)
+  if (!length(t)) return("")
+  paste0(paste(map_chr(t, function(x) paste0("Earlier question:\n", x$question, "\n\nEarlier answer:\n", str_trunc(x$answer %||% "", CONTEXT_ANSWER_CHARS))),
+               collapse = "\n\n"),
          "\n\nThe new question follows up on that exchange.\n\nQuestion:\n")
 }
 
 # The person's own design variables (My data on the Ask page), for the R code; empty fields left out.
-DATA_FIELDS <- c(weight = "Weight variable", strata = "Strata variable", cluster = "Cluster (PSU) variable",
+# My survey on the Ask page: the survey in the person's words (SURVEY_KEYS), then the columns of their
+#   data file, for the R code. Empty fields are left out.
+DATA_FIELDS <- c(population = "Who the survey is about", selection = "How people were chosen",
+                 collection = "How they answered", counts = "How many were selected and how many answered",
+                 estimates = "What must be estimated, and for which groups", limits = "Limits (budget, time, what cannot change)",
+                 design = "About the design",
+                 weight = "Weight variable", strata = "Strata variable", cluster = "Cluster (PSU) variable",
                  fpc = "Population size (finite population correction) variable", replicates = "Replicate weight variables",
-                 outcomes = "Outcome variables",
-                 design = "About the design")
-data_text <- function(my_data) {
+                 outcomes = "Outcome variables")
+SURVEY_KEYS <- c("population", "selection", "collection", "counts", "estimates", "limits", "design")
+fields_block <- function(my_data, keys, head) {
   x = keep(my_data %||% list(), function(v) is.character(v) && nzchar(str_squish(v)))
-  x = x[intersect(names(DATA_FIELDS), names(x))]
+  x = x[intersect(keys, names(x))]
   if (!length(x)) return("")
-  paste0("\n\nThe person's data (use these names in any R code):\n", paste0("- ", DATA_FIELDS[names(x)], ": ", str_squish(unlist(x)), collapse = "\n"))
+  paste0("\n\n", head, "\n", paste0("- ", DATA_FIELDS[names(x)], ": ", str_squish(unlist(x)), collapse = "\n"))
 }
+survey_text <- function(my_data) fields_block(my_data, SURVEY_KEYS, "The person's survey (take it into account):")
+data_text <- function(my_data) paste0(survey_text(my_data),
+  fields_block(my_data, setdiff(names(DATA_FIELDS), SURVEY_KEYS), "The person's data (use these names in any R code):"))
+
+# Advice: the decision and the sources of error the plan named.
+advice_text <- function(plan) {
+  if (!identical(plan$mode, "advice")) return("")
+  paste0(if (nzchar(plan$decision %||% "")) paste0("\n\nThe decision the person faces: ", plan$decision) else "",
+         if (length(plan$error_sources)) paste0("\nSources of error at stake: ", paste(plan$error_sources, collapse = ", ")) else "")
+}
+
+# What the answering model is told: advise.md for advice, answer.md for a lookup.
+answer_reflex <- function(plan) read_reflex(if (identical(plan$mode, "advice")) "advise.md" else "answer.md")
 
 # A message of several parts: the parts to answer, each under its own heading.
 parts_text <- function(plan) {
   parts = plan_parts(plan)
+  if (identical(plan$mode, "advice")) return("")   # an advice plan's parts are search angles, not separate questions
   more = if (isTRUE(plan$more_than_four)) paste0("\nThe message holds more than ", PLAN_PARTS, " questions. Answer only these ",
                                                  PLAN_PARTS, ", and end with one line asking the person to send the others separately.") else ""
   if (length(parts) < 2L) return(more)
@@ -259,7 +341,7 @@ parts_text <- function(plan) {
 answer_user <- function(question, gathered, context = NULL, my_data = NULL) {
   no_f = if (!nrow(gathered$formulas)) "\n\nNo formula ids were given with these sources: write no {{F:...}} tokens." else ""
   q = if (nzchar(context_text(context))) paste0(context_text(context), question) else paste0("Question:\n", question)
-  paste0(q, parts_text(gathered$plan), data_text(my_data), "\n\nSources:\n\n", sources_text(gathered), no_f)
+  paste0(q, parts_text(gathered$plan), advice_text(gathered$plan), data_text(my_data), "\n\nSources:\n\n", sources_text(gathered), no_f)
 }
 
 # stream = TRUE returns ellmer's stream generator (chunks of text) with the chat as attribute "chat".
@@ -267,15 +349,16 @@ answer_question <- function(question, gathered, profile = MODEL_PROFILE, key = S
                             context = NULL, my_data = NULL) {
   m = profile_model(profile)
   user = answer_user(question, gathered, context, my_data)
-  if (stream) { chat = model_chat(m, "answer", read_reflex("answer.md"), key); return(structure(chat$stream(user), chat = chat)) }
-  call_model(m, "answer", read_reflex("answer.md"), user, key)
+  if (stream) { chat = model_chat(m, "answer", answer_reflex(gathered$plan), key); return(structure(chat$stream(user), chat = chat)) }
+  call_model(m, "answer", answer_reflex(gathered$plan), user, key)
 }
 
 # pin: a formula group to give first (the Formulas tab's "Show me how in R").
+#   mode: "lookup" or "advice" to choose; NULL lets the plan decide.
 ask <- function(question, profile = MODEL_PROFILE, key = Sys.getenv(KEY_ENV), con = store_con(), plan = NULL,
-                context = NULL, my_data = NULL, pin = NULL) {
+                context = NULL, my_data = NULL, pin = NULL, mode = NULL) {
   t0 = Sys.time()
-  plan = plan %||% plan_question(question, profile, key, context)
+  plan = force_mode(plan %||% plan_question(question, profile, key, context, my_data), mode)
   t1 = Sys.time()
   g = gather(con, plan, pin = pin)
   t2 = Sys.time()
@@ -289,7 +372,7 @@ ask_result <- function(question, plan, g, a, sec, open_input = NULL) {
   rn = renumber_sources(a, g)
   r = render_answer(rn$answer, rn$gathered, open_input)
   use = compact(list(plan = attr(plan, "usage"), answer = attr(a, "usage")))
-  list(question = question, plan = plan, gathered = g, answer = as.character(a), checks = check_answer(a, g),
+  list(question = question, plan = plan, mode = plan$mode %||% "lookup", gathered = g, answer = as.character(a), checks = check_answer(a, g),
        html = r$html, cited = rn$cited, sec = c(sec, answer = attr(a, "usage")$sec %||% NA_real_),
        usd = sum(map_dbl(use, "usd")), calls = length(use))
 }
@@ -304,21 +387,28 @@ call_model_async <- function(m, kind, system, user, key, schema = NULL) {
   t0 = Sys.time()
   promises::then(chat$chat_async(user),
                  onFulfilled = function(txt) structure(as.character(txt), usage = chat_usage(chat, m, t0)),
-                 onRejected = function(e) stop(gsub(key, "[key]", conditionMessage(e), fixed = TRUE), call. = FALSE))
+                 onRejected = function(e) stop(call_error(e, key), call. = FALSE))
 }
 
-plan_question_async <- function(question, profile, key, context = NULL) {
-  req = plan_request(question, context)
-  promises::then(call_model_async(profile_model(profile), "plan", req$system, req$user, key, req$schema),
-                 function(r) plan_from_reply(r, req, question))
+plan_question_async <- function(question, profile, key, context = NULL, my_data = NULL) {
+  req = plan_request(question, context, my_data)
+  m = profile_model(profile)
+  promises::then(call_model_async(m, "plan", req$system, req$user, key, req$schema), function(r)
+    tryCatch(plan_from_reply(r, req, question), error = function(e)
+      promises::then(call_model_async(m, "plan", req$system, paste0(req$user, JSON_AGAIN), key, req$schema),
+                     function(r2) plan_from_reply(r2, req, question))))
 }
 
 # The answer as it streams: on_text(text so far) after each chunk; resolves to the whole reply.
 answer_stream_async <- function(question, gathered, profile, key, on_text = function(x) NULL, context = NULL, my_data = NULL) {
   m = profile_model(profile)
-  chat = model_chat(m, "answer", read_reflex("answer.md"), key)
+  user = answer_user(question, gathered, context, my_data)
+  # a profile with stream = FALSE (an endpoint that cannot stream): one call, the text shown when complete
+  if (isFALSE(m$stream)) return(promises::then(call_model_async(m, "answer", answer_reflex(gathered$plan), user, key),
+                                               function(a) { on_text(as.character(a)); a }))
+  chat = model_chat(m, "answer", answer_reflex(gathered$plan), key)
   t0 = Sys.time()
-  gen = chat$stream_async(answer_user(question, gathered, context, my_data))
+  gen = chat$stream_async(user)
   acc = new.env()
   acc$text = ""
   pump = function() promises::then(gen(), function(x) {
@@ -327,15 +417,16 @@ answer_stream_async <- function(question, gathered, profile, key, on_text = func
     on_text(acc$text)
     pump()
   })
-  promises::catch(pump(), function(e) stop(gsub(key, "[key]", conditionMessage(e), fixed = TRUE), call. = FALSE))
+  promises::catch(pump(), function(e) stop(call_error(e, key), call. = FALSE))
 }
 
 # plan, search, answer; on_stage("plan" | "search" | "answer") as each starts. Resolves to ask_result().
 ask_async <- function(question, profile, key, con, context = NULL, my_data = NULL, open_input = NULL,
-                      on_stage = function(s) NULL, on_text = function(x) NULL, pin = NULL) {
+                      on_stage = function(s) NULL, on_text = function(x) NULL, pin = NULL, mode = NULL) {
   t0 = Sys.time()
   on_stage("plan")
-  promises::then(plan_question_async(question, profile, key, context), function(plan) {
+  promises::then(plan_question_async(question, profile, key, context, my_data), function(plan) {
+    plan = force_mode(plan, mode)
     t1 = Sys.time()
     on_stage("search")
     g = gather(con, plan, pin = pin)
