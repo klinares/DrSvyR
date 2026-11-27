@@ -107,7 +107,7 @@ local({
 
     # What the user sees after sourcing inteRn.R. Everything else stays private.
     INTERN_EXPORTS <- c("ask", "%ask%", "open_intern", "close_intern", "intern_reset",
-                        "intern_config", "intern_help")
+                        "intern_config", "intern_help", "intern_undo")
 
     # Per-session state: the conversation, a key typed in "analyst" mode, and the
     #   function that asks the user to approve a tool call. An environment, so a
@@ -944,32 +944,182 @@ local({
       safe_lint(text)
     }
 
-    write_file_tool <- function(path, content) {
-      p = intern_check_path(path, "write")
-      if (has_scrub_marks(content))
+    # ---- protecting existing files -------------------------------------------
+    #
+    # Asked to change a script, a model sometimes sends only part of it, or a
+    #   comment such as "# ... rest of the code unchanged" where the code was,
+    #   and saving that wipes the file. So write_file refuses, for a file that
+    #   exists, content that is empty, has such a placeholder, or keeps less than
+    #   half of the file's lines; edit_file changes part of a file instead. Every
+    #   overwrite is backed up first, and intern_undo() puts the last one back.
+
+    # A comment that stands in for code: "# ...", "# ... rest unchanged",
+    #   "# rest of the script". A bare `...` is R code, so only comments count.
+    PLACEHOLDER <- paste0("(?i)^\\s*#+\\s*(\\.{3}|\u2026)\\s*$",
+                          "|^\\s*#.*(\\.{3}|\u2026).*\\b(rest|remain|unchanged|same|existing|previous|omitted|as before)",
+                          "|^\\s*#.*\\b(rest|remainder) of (the |your )?(code|file|script|function)",
+                          "|^\\s*#.*\\b(code|file|script) (is )?unchanged")
+    MIN_KEPT_SHARE <- 0.5
+    MIN_LINES_GUARDED <- 10L
+    MAX_BACKUPS_PER_FILE <- 20L
+
+    nonblank <- function(x) trimws(x[nzchar(trimws(x))])
+
+    # Why this would wipe out code in an existing file, or NULL if it is fine.
+    overwrite_problem <- function(old, new, label) {
+      old_nb = nonblank(old)
+      if (!length(old_nb)) return(NULL)
+      if (!length(nonblank(new)))
+        return(paste0("Not written: the new content of ", label, " is empty, which would erase it."))
+      holders = setdiff(new[grepl(PLACEHOLDER, new, perl = TRUE)], old)
+      if (length(holders))
+        return(paste0("Not written: the content has a placeholder instead of code (\"",
+                      trimws(holders[1]), "\"); saving it would delete the code it stands for. ",
+                      "To change part of ", label, ", use edit_file."))
+      kept = sum(unique(old_nb) %in% nonblank(new))
+      if (length(unique(old_nb)) >= MIN_LINES_GUARDED && kept < MIN_KEPT_SHARE * length(unique(old_nb)))
+        return(paste0("Not written: ", label, " exists and this content keeps only ", kept, " of its ",
+                      length(unique(old_nb)), " lines. To change part of a file, use edit_file. If the ",
+                      "user wants the whole file replaced, they can rename or delete it first, or you can ",
+                      "write to a new file name."))
+      NULL
+    }
+
+    # Said in the approval question when a change deletes a lot.
+    loss_note <- function(old, new) {
+      old_nb = nonblank(old)
+      gone = sum(!old_nb %in% nonblank(new))
+      if (gone >= 20L || (length(old_nb) && gone > 0.3 * length(old_nb)))
+        paste0(" WARNING: this removes ", gone, " of its ", length(old_nb), " lines.")
+      else ""
+    }
+
+    # Backups live in inteRn's own folder under the user's R data directory
+    #   (on Windows, AppData\Roaming), never in the project. index.csv lists them.
+    backup_dir <- function() file.path(tools::R_user_dir("inteRn", "data"), "backups")
+
+    backup_index <- function() {
+      f = file.path(backup_dir(), "index.csv")
+      if (!file.exists(f)) return(data.frame(time = character(0), path = character(0), copy = character(0)))
+      utils::read.csv(f, stringsAsFactors = FALSE, encoding = "UTF-8")
+    }
+
+    save_backup_index <- function(idx)
+      utils::write.csv(idx, file.path(backup_dir(), "index.csv"), row.names = FALSE, fileEncoding = "UTF-8")
+
+    backup_file <- function(p) {
+      if (!file.exists(p)) return(invisible(NULL))
+      dir.create(backup_dir(), recursive = TRUE, showWarnings = FALSE)
+      stamp = format(Sys.time(), "%Y-%m-%d %H:%M:%OS3")
+      copy = paste0(gsub("[^0-9]", "", stamp), "_", basename(p))
+      if (!file.copy(p, file.path(backup_dir(), copy)))
+        stop("Could not back up ", basename(p), ", so it was not changed.", call. = FALSE)
+      idx = rbind(backup_index(), data.frame(time = stamp, path = p, copy = copy))
+      mine = which(idx$path == p)
+      old = utils::head(mine, max(0L, length(mine) - MAX_BACKUPS_PER_FILE))
+      unlink(file.path(backup_dir(), idx$copy[old]))
+      save_backup_index(if (length(old)) idx[-old, ] else idx)
+      invisible(copy)
+    }
+
+    # Written to a temporary file first, so an error cannot leave half a file.
+    write_lines_safely <- function(lines, p) {
+      tmp = tempfile(tmpdir = dirname(p), fileext = ".intern-tmp")
+      on.exit(unlink(tmp), add = TRUE)
+      con = file(tmp, open = "w", encoding = "UTF-8")
+      writeLines(lines, con)
+      close(con)
+      if (!file.rename(tmp, p) && !file.copy(tmp, p, overwrite = TRUE))
+        stop("Could not save ", basename(p), ".", call. = FALSE)
+    }
+
+    # The checks, diff and approval shared by write_file and edit_file.
+    save_with_approval <- function(p, old, new, tool) {
+      if (has_scrub_marks(new))
         return(paste("Not written: the content contains a <redacted>, <path> or <email>",
                      "placeholder, which would replace the real value in the file.",
                      "Leave those lines out or ask the user for the value."))
-      problems = file_lint(p, content)
+      problems = file_lint(p, paste(new, collapse = "\n"))
       if (length(problems) && nrow(problems))
         return(paste0("Not written: the R code did not pass the lint gate:\n",
                       paste0("- line ", problems$line, ": ", problems$message, collapse = "\n"),
-                      "\nFix it and call write_file again."))
-      new = strsplit(content, "\r?\n")[[1]]
-      old = if (file.exists(p)) readLines(p, warn = FALSE, encoding = "UTF-8") else character(0)
+                      "\nFix it and call ", tool, " again."))
       with_approval(
-        paste0("inteRn wants to ", if (length(old)) "change " else "create ", basename(p), "."),
+        paste0("inteRn wants to ", if (length(old)) "change " else "create ", basename(p), ".",
+               loss_note(old, new)),
         c("Write it", "Don't write it"),
         detail = diff_text(old, new, basename(p)),
         show = function() show_diff(old, new, basename(p)),
         then = function(choice) {
           if (!identical(choice, "Write it"))
             return(REFUSED("write this file"))
-          con = file(p, open = "w", encoding = "UTF-8")
-          on.exit(close(con), add = TRUE)
-          writeLines(new, con)
+          backup_file(p)
+          write_lines_safely(new, p)
           sprintf("Wrote %s (%d lines).", basename(p), length(new))
         })
+    }
+
+    read_lines_utf8 <- function(p)
+      if (file.exists(p)) readLines(p, warn = FALSE, encoding = "UTF-8") else character(0)
+
+    write_file_tool <- function(path, content) {
+      p = intern_check_path(path, "write")
+      old = read_lines_utf8(p)
+      new = strsplit(content, "\r?\n")[[1]]
+      problem = overwrite_problem(old, new, basename(p))
+      if (!is.null(problem)) return(problem)
+      save_with_approval(p, old, new, "write_file")
+    }
+
+    # Replace one exact piece of an existing file; the rest is left as it is.
+    edit_file_tool <- function(path, old_text, new_text) {
+      p = intern_check_path(path, "write")
+      if (!file.exists(p)) return(paste0("There is no file '", path, "'; use write_file to create it."))
+      old_text = gsub("\r\n", "\n", old_text, fixed = TRUE)
+      new_text = gsub("\r\n", "\n", new_text, fixed = TRUE)
+      if (!nzchar(old_text)) return("Not changed: old_text is empty. Copy the exact text to replace.")
+      old = read_lines_utf8(p)
+      cur = paste(old, collapse = "\n")
+      at = gregexpr(old_text, cur, fixed = TRUE)[[1]]
+      hits = sum(at > 0)
+      if (hits == 0)
+        return(paste0("Not changed: old_text was not found in ", basename(p), ". Read the file again ",
+                      "and copy the text exactly, spaces included."))
+      if (hits > 1)
+        return(paste0("Not changed: old_text appears ", hits, " times in ", basename(p), ". Include ",
+                      "a few surrounding lines so it matches once."))
+      pos = at[1]
+      txt = paste0(substr(cur, 1, pos - 1), new_text,
+                   substr(cur, pos + nchar(old_text), nchar(cur)))
+      save_with_approval(p, old, strsplit(txt, "\n", fixed = TRUE)[[1]], "edit_file")
+    }
+
+    # Exported. Put back the version of a file from before inteRn's last change
+    #   to it (or, with no path, before inteRn's last change to any file). The
+    #   version it replaces is backed up too, so an undo can itself be undone.
+    intern_undo <- function(path = NULL) {
+      idx = backup_index()
+      if (!is.null(path)) {
+        p = normalizePath(path, winslash = "/", mustWork = FALSE)
+        same = if (on_windows()) tolower(idx$path) == tolower(p) else idx$path == p
+        idx = idx[same, ]
+      }
+      if (!nrow(idx)) {
+        message("inteRn has no backup", if (!is.null(path)) paste0(" of ", basename(path)), ".")
+        return(invisible(NULL))
+      }
+      last = idx[nrow(idx), ]
+      src = file.path(backup_dir(), last$copy)
+      if (!file.exists(src)) stop("The backup file is missing: ", src, call. = FALSE)
+      lines = readLines(src, warn = FALSE, encoding = "UTF-8")
+      all_idx = backup_index()
+      save_backup_index(all_idx[all_idx$copy != last$copy, ])
+      if (file.exists(last$path)) backup_file(last$path)
+      write_lines_safely(lines, last$path)
+      unlink(src)
+      message("Restored ", last$path, " to the version from ", last$time,
+              ". Run intern_undo() again to undo this.")
+      invisible(last$path)
     }
 
     # What the model is told when the user says no.
@@ -1110,11 +1260,25 @@ local({
       ellmer::tool(
         tool_text(function(path, content) write_file_tool(path, content)),
         name = "write_file",
-        description = paste("Create or replace a file in an allowed folder with the full new",
-                            "content. The user sees a diff and must approve."),
+        description = paste("Create a new file in an allowed folder, or replace a whole file.",
+                            "To change part of an existing file use edit_file instead: write_file",
+                            "refuses content that would drop most of an existing file, and any",
+                            "placeholder comment standing in for code. The user sees a diff and",
+                            "must approve."),
         arguments = list(
           path = ellmer::type_string("File path, relative to the working directory."),
-          content = ellmer::type_string("The complete new file content."))),
+          content = ellmer::type_string("The complete new file content, every line of it."))),
+      ellmer::tool(
+        tool_text(function(path, old_text, new_text) edit_file_tool(path, old_text, new_text)),
+        name = "edit_file",
+        description = paste("Change part of an existing file: replace one exact piece of text",
+                            "with new text and leave the rest as it is. Read the file first and",
+                            "copy old_text exactly; it must appear once. The user sees a diff and",
+                            "must approve."),
+        arguments = list(
+          path = ellmer::type_string("File path, relative to the working directory."),
+          old_text = ellmer::type_string("The exact text to replace, as it is in the file."),
+          new_text = ellmer::type_string("The text to put in its place (empty to delete it)."))),
       ellmer::tool(
         function(code) run_code_tool(code),
         name = "run_code",
@@ -1705,6 +1869,7 @@ local({
         "  intern_reset()   start over      intern_help()   show this again\n\n",
         "  It asks before running code or writing files. Code it hasn't run is\n",
         "  marked # UNTESTED: run it yourself before trusting it.\n",
+        "  intern_undo(\"script.R\")   put back a file as it was before inteRn's last change\n",
         if (!key_ok) paste0("\n  ! No API key found. Add ", INTERN_LLM$key_var,
                             "=... with usethis::edit_r_environ(), then restart R.\n"),
         "---------------------------------------------------------------------\n\n",

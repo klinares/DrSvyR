@@ -1,0 +1,134 @@
+chaRt Phase 10 Part E: live run on tests/data/orders.csv, 2026-11-23 09:16
+Model: claude-sonnet-5-5 at https://api.anthropic.com/v1; limit 6 calls; the dashboard in the briefing style, marked 'UNCLASSIFIED//FOR TEST'
+The column dictionary of the Phase 10 live run is reused (22 labels): no label call.
+
+---- orders.csv (3,000 rows, 22 columns; missing: -99, N/A; call limit 6)
+  label_columns(): 0 call(s)
+  labels proposed: 22; row_is_guess: one order; row_is set to 'one order'
+
+---- Turn 1: which categories grew fastest?
+  selected: nothing
+  seconds 14.1; tokens in: fresh 9,999, cached 0; out 1,651; calls 1; repairs 0
+  came back: charts
+  text: Indexing every category to its first year puts growth on one scale whatever the category's size; revenue is not adjusted for inflation, and nine lines in one panel is above the usual colour limit but the question covers every category. | Each category's two years share one scale, so the gap in amount is read as a length; this shows growth in amount, where the first chart shows it relative to the start. | I read 'categories' as product category; if you meant region or sales channel, say so and I will redo it.
+  next: Same for region | Same for sales channel | Highlight the fastest categories
+  added c1:
+      family: line
+      x: year
+      'y': revenue
+      color: product_category
+      fn: sum
+      index: first
+      title: Revenue index by product category and year
+      subtitle: Total revenue, first year = 100
+      rule: index_to_compare_growth
+  added c2:
+      family: dumbbell
+      'y': product_category
+      x: revenue
+      color: year
+      fn: sum
+      filter:
+      - column: year
+        op: in
+        value:
+        - 2022
+        - 2024
+      title: Total revenue by product category, 2022 and 2024
+      subtitle: Sum of revenue, first and last year
+      x_label: Total revenue (not adjusted for inflation)
+      rule: two_values_dumbbell
+    chat       14.1 s, 28,379 chars, tokens in: fresh  9,999, cached      0; out 1,651
+
+---- Turn 2: is unit price related to units?
+  selected: nothing
+  seconds 5.2; tokens in: fresh 1,989, cached 8,173; out 601; calls 1; repairs 0
+  came back: charts
+  text: A scatter shows each order as a point, so you can judge direction, strength and form; both axes use a log scale because most values sit low and the largest are over 100 times the smallest, and the smooth line shows the form without assuming a straight line.
+  next: Split by product category | Colour points by sales channel | Show revenue against units
+  added c3:
+      family: scatter
+      x: unit_price
+      'y': units
+      fn: none
+      fit: loess
+      log_x: yes
+      log_y: yes
+      title: Units ordered against unit price, one point per order
+      rule: scatter_for_two_measures
+    chat        5.2 s, 28,845 chars, tokens in: fresh  1,989, cached  8,173; out   601
+
+---- Turn 3: how has revenue changed month by month? show the trend
+  selected: nothing
+  seconds 5.3; tokens in: fresh 1,980, cached 8,173; out 594; calls 1; repairs 0
+  came back: charts
+  text: A line over the 36 months shows how monthly revenue moves, and the 12-month moving average over the raw values shows the trend; amounts are not adjusted for inflation.
+  next: Split the trend by region | Show revenue by channel over time | Remove the smoothing
+  added c4:
+      family: line
+      x: order_month
+      'y': revenue
+      fn: sum
+      smooth: 12
+      title: Total revenue by month
+      subtitle: January 2022 to December 2024, with a 12-month moving average
+      y_label: Revenue (monthly total)
+      rule: smooth_on_request
+    chat        5.3 s, 28,813 chars, tokens in: fresh  1,980, cached  8,173; out   594
+
+---- Headlines and summaries for 4 charts (1 call(s) planned)
+    summarize    4.2 s,  8,178 chars, tokens in: fresh  3,184, cached      0; out   594
+
+  c4: Total revenue by month
+    HEADLINE: Monthly revenue in these orders ended December 2024 at 142,000, its highest point.
+    SUMMARY:  Monthly total revenue ran from 39,000 in Jan 2022 to 142,000 in Dec 2024, the highest of the 36 months; the lowest was 33,800 in Jan 2023. Over the last year it went from 132,000 to 142,000, a change of 8.0%. The 12-period moving average at Dec 2024 was 94,500.
+    CHECK:    every number is in the facts; no forbidden word
+
+  c3: Units ordered against unit price, one point per order
+    HEADLINE: Orders with higher unit prices have fewer units ordered, correlation -0.82 on the log scale.
+    SUMMARY:  Across these 3,000 orders, units ordered fall as unit price rises, with a Pearson correlation of -0.82 on the log scale shown. The fitted curve gives 16.1 units at a unit price of 13.6 and 1.62 units at 783. Unit price ranges from 8.68 to 1230.
+    CHECK:    every number is in the facts; no forbidden word
+
+  c1: Revenue index by product category and year
+    HEADLINE: Every product category's revenue index ended 2024 above 100, led by Software at 210.
+    SUMMARY:  Software had the highest index at the end (210) and Tablets the lowest (115), with all 9 of 9 lines above 100 in 2024. Cables stood at 180 and Printers at 179, Phones at 154 and Storage at 123. Each line has three points, 2022 to 2024.
+    CHECK:    every number is in the facts; no forbidden word
+
+  c2: Total revenue by product category, 2022 and 2024
+    HEADLINE: Software revenue rose most between 2022 and 2024, by 105,000.
+    SUMMARY:  Total revenue was higher in 2024 than in 2022 for all 9 product categories in these orders. Software had the largest difference (105,000, from 95,600 to 201,000) and Tablets the smallest (13,500). The chart draws on 2,005 orders from those two years.
+    CHECK:    every number is in the facts; no forbidden word
+
+---- Totals
+  calls made 4 of 6 allowed (records: chat 3, summarize 1); repairs 0; failed 0
+  turns run 3 of 3 (charts 3, spec 0, ask 0, cannot 0, tell 0, failed 0)
+  tokens in: fresh 17,152, cached 16,346; out 3,440
+  seconds in calls 29; wall time 30
+  headlines and summaries: 4 (checked 4, not checked 0)
+  saved tests/live_replies_10b.rds (phase10b: 4 raw replies)
+
+---- The form each turn chose, against the form expected
+  turn 1 "which categories grew fastest?": kind charts; expected indexed lines in ONE panel (line, index: first, no facet); chose c1 = line, index: first, x: year, y: revenue, color: product_category | c2 = dumbbell, x: revenue, y: product_category, color: year
+  turn 2 "is unit price related to units?": kind charts; expected a scatter, density auto or absent; chose c3 = scatter, x: unit_price, y: units
+  turn 3 "how has revenue changed month by month? show the trend": kind charts; expected a line of revenue by month with smooth set; chose c4 = line, smooth: 12, x: order_month, y: revenue
+  the canvas at the end: c4 (line, smooth: 12, x: order_month, y: revenue); c3 (scatter, x: unit_price, y: units); c1 (line, index: first, x: year, y: revenue, color: product_category); c2 (dumbbell, x: revenue, y: product_category, color: year)
+
+---- Export: every chart on the canvas, briefing style, marked 'UNCLASSIFIED//FOR TEST'
+  modes: c4=video, c3=picture, c1=picture, c2=picture
+  built in 15.0 s: dashboard_final.zip, 2.31 MB; modes: video, picture, picture, picture; device ragg; rows to themselves: FALSE, FALSE, FALSE, FALSE
+  unpacked into tests/dashboard_final/ (git-ignored):
+    dashboard.html                                        1,877,754 bytes
+    codebook.html                                         1,492,676 bytes
+    data_dictionary.yaml                                      6,195 bytes
+    charts.R                                                 17,788 bytes
+    charts/01_total_revenue_by_month.mp4                     37,979 bytes
+    charts/01_total_revenue_by_month.png                    157,009 bytes
+    charts/01_total_revenue_by_month.svg                      6,579 bytes
+    charts/02_units_ordered_against_unit_price_one_poi.png     86,357 bytes
+    charts/02_units_ordered_against_unit_price_one_poi.svg     56,643 bytes
+    charts/03_revenue_index_by_product_category_and_ye.png    222,490 bytes
+    charts/03_revenue_index_by_product_category_and_ye.svg      7,448 bytes
+    charts/04_total_revenue_by_product_category_2022_a.png    124,597 bytes
+    charts/04_total_revenue_by_product_category_2022_a.svg      9,938 bytes
+
+Done. Calls made: 4 of 6 allowed.

@@ -1,0 +1,206 @@
+chaRt Phase 10 Part E: live run on tests/data/orders.csv, 2026-11-23 01:26
+Model: claude-sonnet-5-5 at https://api.anthropic.com/v1; limit 12 calls; the dashboard in the briefing style, marked 'UNCLASSIFIED//FOR TEST'
+
+---- orders.csv (3,000 rows, 22 columns; missing: -99, N/A; call limit 12)
+  label_columns(): 1 call(s)
+    label       3.6 s,  5,137 chars, tokens in: fresh  2,106, cached      0; out   494
+  labels proposed: 22; row_is_guess: one order; row_is set to 'one order'
+
+---- Turn 1: which categories grew fastest?
+  selected: nothing
+  seconds 10.9; tokens in: fresh 9,953, cached 0; out 1,276; calls 1; repairs 0
+  came back: charts
+  text: I read 'categories' as product category. Indexing puts every category on the same footing whatever its size, so you compare growth and not amounts; the revenue is not adjusted for inflation. | This shows each category's first and last year on one scale, so the gap is the change in amount, which complements the indexed view; the revenue is not adjusted for inflation.
+  next: Compare growth by region | Show only the fastest three | Show growth by sales channel
+  added c1:
+      family: line
+      x: year
+      'y': revenue
+      facet: product_category
+      fn: sum
+      index: first
+      title: Total revenue indexed to 2022, by product category
+      subtitle: 2022 = 100, 2022 to 2024
+      rule: index_to_compare_growth
+  added c2:
+      family: dumbbell
+      'y': product_category
+      x: revenue
+      color: year
+      fn: sum
+      filter:
+      - column: year
+        op: in
+        value:
+        - 2022
+        - 2024
+      title: Total revenue by product category, 2022 and 2024
+      rule: two_values_dumbbell
+    chat       10.9 s, 28,234 chars, tokens in: fresh  9,953, cached      0; out 1,276
+
+---- Turn 2: compare revenue by region in 2022 and 2024
+  selected: nothing
+  seconds 6.1; tokens in: fresh 1,978, cached 8,127; out 700; calls 1; repairs 0
+  came back: charts
+  text: A dumbbell puts each region's 2022 and 2024 totals on one shared scale, so the gap between them reads as a length; revenue amounts are not adjusted for inflation.
+  next: Show it as a slope chart | Break revenue down by channel | Revenue by region over all years
+  added c3:
+      family: dumbbell
+      'y': region
+      x: revenue
+      color: year
+      fn: sum
+      filter:
+      - column: year
+        op: in
+        value:
+        - 2022
+        - 2024
+      title: Total revenue by region, 2022 and 2024
+      subtitle: Orders from 2022 and 2024 only
+      x_label: Total revenue (sum of orders)
+      rule: two_values_dumbbell
+    chat        6.1 s, 28,621 chars, tokens in: fresh  1,978, cached  8,127; out   700
+
+---- Turn 3: is unit price related to units?
+  selected: nothing
+  seconds 4.4; tokens in: fresh 1,995, cached 8,127; out 529; calls 1; repairs 0
+  came back: charts
+  text: A scatter shows every order as a point, so you can judge direction, strength and form, and the loess line follows the shape without assuming a straight line; both axes use a log scale because most values sit low and a few are far higher.
+  next: Does it differ by product category? | Show it for Cables only | Compare units by channel
+  added c4:
+      family: scatter
+      x: unit_price
+      'y': units
+      fn: none
+      fit: loess
+      log_x: yes
+      log_y: yes
+      title: Units ordered against unit price, one point per order
+      rule: scatter_for_two_measures
+    chat        4.4 s, 28,639 chars, tokens in: fresh  1,995, cached  8,127; out   529
+
+---- Turn 4: how do prices vary by channel? show the shape
+  selected: nothing
+  seconds 6.7; tokens in: fresh 2,021, cached 8,127; out 770; calls 1; repairs 0
+  came back: charts
+  text: You asked for the shape of unit price in each channel, so a violin puts the three channels side by side on one price scale, with the median and quartiles marked inside.
+  next: Use a log scale for price | Show it as histograms by channel | Compare satisfaction by channel
+  added c5:
+      family: box
+      x: channel
+      'y': unit_price
+      fn: none
+      shape: violin
+      title: Distribution of unit price by sales channel
+      subtitle: One value per order
+      rule: violin_on_request
+    chat        6.7 s, 28,746 chars, tokens in: fresh  2,021, cached  8,127; out   770
+
+---- Turn 5: show revenue by month
+  selected: nothing
+  seconds 4.1; tokens in: fresh 2,046, cached 8,127; out 463; calls 1; repairs 0
+  came back: charts
+  text: A line over the 36 months shows how monthly revenue moves through time; revenue is summed because each row is one order, and the amounts are not adjusted for inflation.
+  next: Split by sales channel | Mark the highest month | Smooth with a moving average
+  added c6:
+      family: line
+      x: order_month
+      'y': revenue
+      fn: sum
+      title: Total revenue by month
+      subtitle: Monthly, 2022 to 2024; sum of order revenue
+      rule: line_for_time
+    chat        4.1 s, 28,803 chars, tokens in: fresh  2,046, cached  8,127; out   463
+
+---- Turn 6: show the trend
+  selected: c6 (Total revenue by month)
+  seconds 3.6; tokens in: fresh 2,149, cached 8,127; out 432; calls 1; repairs 0
+  came back: spec
+  text: I added a 12-month moving average over the monthly line, with the raw monthly values still visible behind it; each smoothed point is an average over a year, not a single month's value.
+  next: Show revenue by region over time | Index revenue to the first month | Facet monthly revenue by channel
+  changed c6:
+      family: line
+      x: order_month
+      'y': revenue
+      fn: sum
+      title: Total revenue by month
+      subtitle: Monthly, 2022 to 2024; sum of order revenue
+      smooth: 12
+      rule: line_for_time
+    chat        3.6 s, 29,005 chars, tokens in: fresh  2,149, cached  8,127; out   432
+
+---- Headlines and summaries for 6 charts (1 call(s) planned)
+    summarize   21.8 s, 10,419 chars, tokens in: fresh  4,197, cached      0; out 3,110
+    summarize (repair)    1.5 s,  7,427 chars, tokens in: fresh  1,257, cached  1,500; out   132
+
+  c6: Total revenue by month
+    HEADLINE: Monthly revenue peaked at 142,000 in the last month, December 2024.
+    SUMMARY:  Over the final year, revenue went from 132,000 (2023-12-01) to 142,000, a change of 8.0%. The lowest month was 33,800, in 2023-01-01. The line covers 3,000 orders.
+    CHECK:    every number is in the facts; no forbidden word
+
+  c5: Distribution of unit price by sales channel
+    HEADLINE: Median unit price is similar across channels: Store 124, Partner 114.
+    SUMMARY:  Store orders have the highest median unit price (124) and Partner orders the lowest (114). Prices are widely spread within every channel; Store runs from 9.6 to 1230.
+    CHECK:    every number is in the facts; no forbidden word
+
+  c4: Units ordered against unit price, one point per order
+    HEADLINE: Orders at higher unit prices have fewer units; correlation is -0.82.
+    SUMMARY:  Units ordered and unit price move in opposite directions across these orders, with a correlation of -0.82 on the log scale. The fitted curve falls from 16.1 units at the 10th percentile of unit price to 1.62 at the 90th. Those percentiles are prices of 13.6 and 783.
+    CHECK:    every number is in the facts; no forbidden word
+
+  c3: Total revenue by region, 2022 and 2024
+    HEADLINE: West revenue grew most between 2022 and 2024, up 285,000.
+    SUMMARY:  West rose from 173,000 in 2022 to 458,000 in 2024. Four of the six regions were higher in 2024 and two, South and Central, were lower; Central's difference was -1,850.
+    CHECK:    every number is in the facts; no forbidden word
+
+  c1: Total revenue indexed to 2022, by product category
+    HEADLINE: Every product category's revenue index ended 2024 above 100, Software highest at 210.
+    SUMMARY:  With 2022 set to 100, the 2024 index ran from 115 for Tablets to 210 for Software. Each panel has 3 points, one per year, and every line peaked in 2024, the last year. These figures come from 3,000 orders.
+    CHECK:    every number is in the facts; no forbidden word (after a repair)
+
+  c2: Total revenue by product category, 2022 and 2024
+    HEADLINE: Revenue rose in all nine product categories, most for Software at 105,000.
+    SUMMARY:  Software went from 95,600 in 2022 to 201,000 in 2024, the largest difference among these orders. Tablets had the smallest rise, 13,500. No category was lower in 2024.
+    CHECK:    every number is in the facts; no forbidden word
+
+---- Totals
+  calls made 9 of 12 allowed (records: chat 6, label 1, summarize 2); repairs 1; failed 0
+  turns run 6 of 6 (charts 5, spec 1, ask 0, cannot 0, tell 0, failed 0)
+  tokens in: fresh 27,702, cached 42,135; out 7,906
+  seconds in calls 63; wall time 64
+  headlines and summaries: 6 (checked 6, not checked 0)
+  saved tests/live_replies_10.rds (phase10: 9 raw replies)
+
+---- The form each turn chose, against the form expected
+  turn 1 "which categories grew fastest?": kind charts; expected indexed lines (line, index: first); chose c1 = line, index: first, x: year, y: revenue | c2 = dumbbell, x: revenue, y: product_category, color: year
+  turn 2 "compare revenue by region in 2022 and 2024": kind charts; expected a dumbbell (family dumbbell); chose c3 = dumbbell, x: revenue, y: region, color: year
+  turn 3 "is unit price related to units?": kind charts; expected density by auto (scatter, density auto or absent); chose c4 = scatter, x: unit_price, y: units
+  turn 4 "how do prices vary by channel? show the shape": kind charts; expected a violin (box, shape: violin); chose c5 = box, shape: violin, x: channel, y: unit_price
+  turn 5 "show revenue by month": kind charts; expected a line of revenue by month; chose c6 = line, smooth: 12, x: order_month, y: revenue
+  turn 6 "show the trend": kind spec; expected smooth set on the selected line; chose changed c6 in place; now line, smooth: 12, x: order_month, y: revenue
+  the canvas at the end: c6 (line, smooth: 12, x: order_month, y: revenue); c5 (box, shape: violin, x: channel, y: unit_price); c4 (scatter, x: unit_price, y: units); c3 (dumbbell, x: revenue, y: region, color: year); c1 (line, index: first, x: year, y: revenue); c2 (dumbbell, x: revenue, y: product_category, color: year)
+
+---- Export: every chart on the canvas, briefing style, marked 'UNCLASSIFIED//FOR TEST'
+  modes: c6=video, c5=picture, c4=picture, c3=interactive, c1=picture, c2=picture
+  built in 19.7 s: dashboard_live10.zip, 3.06 MB; modes: video, picture, picture, interactive, picture, picture; device ragg; rows to themselves: FALSE, FALSE, TRUE, TRUE, TRUE, TRUE
+  unpacked into tests/dashboard_live10/ (git-ignored):
+    dashboard.html                                        2,730,481 bytes
+    codebook.html                                         1,491,510 bytes
+    data_dictionary.yaml                                      6,195 bytes
+    charts.R                                                 23,242 bytes
+    charts/01_total_revenue_by_month.mp4                     41,156 bytes
+    charts/01_total_revenue_by_month.png                    149,190 bytes
+    charts/01_total_revenue_by_month.svg                      6,550 bytes
+    charts/02_distribution_of_unit_price_by_sales_chan.png    160,834 bytes
+    charts/02_distribution_of_unit_price_by_sales_chan.svg     50,730 bytes
+    charts/03_units_ordered_against_unit_price_one_poi.png     85,592 bytes
+    charts/03_units_ordered_against_unit_price_one_poi.svg     50,180 bytes
+    charts/04_total_revenue_by_region_2022_and_2024.png     103,329 bytes
+    charts/04_total_revenue_by_region_2022_and_2024.svg       8,056 bytes
+    charts/05_total_revenue_indexed_to_2022_by_product.png    211,370 bytes
+    charts/05_total_revenue_indexed_to_2022_by_product.svg     22,946 bytes
+    charts/06_total_revenue_by_product_category_2022_a.png    111,995 bytes
+    charts/06_total_revenue_by_product_category_2022_a.svg      9,714 bytes
+
+Done. Calls made: 9 of 12 allowed.
