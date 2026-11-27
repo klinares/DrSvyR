@@ -1,13 +1,12 @@
-# Mutation runs for the night task 03 checks (tests/smoke.R, the part between `>>> night05 begin` and `<<< night05 end`: N5-1 to N5-3, a designed chart after Phase 13).
+# Mutation runs for the night 05 checks (tests/smoke.R, the part between `>>> night05 begin` and `<<< night05 end`: N5-1 to N5-5, the designed picture and its title block).
 #   No model call. Run from inside chaRt/, one R process at a time:
 #     Rscript --no-init-file tests/mutate_night05.R                 every mutation
 #     Rscript --no-init-file tests/mutate_night05.R M01 M05         only these
 #     Rscript --no-init-file tests/mutate_night05.R NONE            the baseline only
-# What it does: as tests/mutate_13.R, for the night05 block: the baseline on the real code, then each mutation (a changed copy of R/spec.R or R/ui.R sourced
-#   into the global environment) must make at least one check fail. Nothing on disk is changed. At least one mutation for each rule: means and medians
-#   back on the ratio (1); every value the same said as "similar" (2); "no clear relation" again (3); a log-scale correlation not said (4); names split
-#   into words, and a sentence begun with a lower-case name (5); short and numeric group names bare (6); several lines as one, all alike not said, an
-#   index not a multiple, one series without its start (7); the full stop kept (8); and the page's faces not loaded at once, or swapped in late (N3-9).
+# What it does: as tests/mutate_night03.R, for the night05 block: the baseline on the real code, then each mutation (a changed copy of R/spec.R, R/reflexes.R or
+#   R/ui.R sourced into the global environment) must make at least one check fail. Nothing on disk is changed. The mutations: a card given the whole txt again (1);
+#   the headline's lines not broken (2); no style look for the description (3); the title block not put over the designed picture (4, 7); no description in it (5);
+#   the title left at the panel's edge (6); design_chart() checks a design with its title block again (8).
 
 stopifnot("Run from inside chaRt/" = file.exists("app.R") && dir.exists("R"))
 suppressMessages(app <- shiny::shinyAppDir("."))
@@ -16,7 +15,7 @@ run_heavy <- FALSE
 smoke <- readLines(file.path("tests", "smoke.R"), encoding = "UTF-8")
 block <- parse(text = smoke[grep("^# >>> night05 begin", smoke):grep("^# <<< night05 end", smoke)], keep.source = FALSE)
 read_file <- function(f) paste(readLines(file.path("R", f), encoding = "UTF-8"), collapse = "\n")
-texts <- list(reflexes.R = read_file("reflexes.R"), ui.R = read_file("ui.R"))
+texts <- list(spec.R = read_file("spec.R"), reflexes.R = read_file("reflexes.R"), ui.R = read_file("ui.R"))
 
 hits <- new.env()
 check <- function(what, cond) {
@@ -33,15 +32,16 @@ source_file <- function(f) sys.source(f, envir = globalenv(), keep.source = FALS
 # A mutation: `from` and `to` are pieces of text, in pairs; each `from` must be found exactly once.
 mut <- function(id, what, file, from, to) list(id = id, what = what, file = file, from = from, to = to)
 mutations <- list(
-  mut("M01", "a design is checked with its title block again", "reflexes.R", "design_run(code, inp$d, inp$facts, design_card_txt(inp$txt),", "design_run(code, inp$d, inp$facts, inp$txt,"),
-  mut("M02", "the title block in charts/ is not broken into lines", "reflexes.R", "  plot + ggplot2::labs(title = h$title, subtitle = h$subtitle)
-", "  plot + ggplot2::labs(title = gsub(\"\n\", \" \", h$title), subtitle = h$subtitle)
-"),
-  mut("M03", "the card's picture keeps the title block", "reflexes.R", "design_card_txt <- function(txt) txt[setdiff(names(txt), c(\"title\", \"subtitle\", \"caption\"))]", "design_card_txt <- function(txt) txt"),
-  mut("M04", "the description keeps the design's plain look", "reflexes.R", "  if (!grepl(\"plot.subtitle\", code, fixed = TRUE)) plot = ", "  if (FALSE) plot = "),
-  mut("M05", "charts/ has no description", "reflexes.R", "  plot + ggplot2::labs(title = h$title, subtitle = h$subtitle)
-", "  plot + ggplot2::labs(title = h$title, subtitle = NULL)
-"))
+  mut("M01", "a card is given the whole txt again (headline change throws a design away)", "reflexes.R",
+      "design_card_txt <- function(txt) txt[setdiff(names(txt), c(\"title\", \"subtitle\", \"caption\"))]", "design_card_txt <- function(txt) txt"),
+  mut("M02", "the headline's lines are not broken to fit", "spec.R", "    paste(lines, collapse = ", "    paste(text, collapse = "),
+  mut("M03", "a design that styles no subtitle gets no look for the description", "reflexes.R", "  if (grepl(\"plot.subtitle\", code %||% \"\", fixed = TRUE)) return(NULL)", "  return(NULL)"),
+  mut("M04", "the title block is not put over the designed picture", "reflexes.R", "  plot + design_heads_theme(inp, code) + ggplot2::labs(title = h$title, subtitle = h$subtitle)", "  plot"),
+  mut("M05", "the description is left out of the title block", "spec.R", "list(if (!is.null(s$.headline)) s$.description, s$subtitle)", "list(s$subtitle)"),
+  mut("M06", "the title stays at the panel's edge", "reflexes.R", "  ggplot2::theme(plot.title.position = \"plot\") + if", "  ggplot2::theme() + if"),
+  mut("M07", "the export does not use the title block", "ui.R", "r$plot = design_with_heads(inp, r$plot, dz$code)", "r$plot = r$plot"),
+  mut("M08", "design_chart() checks a design with its title block again", "reflexes.R",
+      "design_run(code, inp$d, inp$facts, design_card_txt(inp$txt),", "design_run(code, inp$d, inp$facts, inp$txt,"))
 wanted <- commandArgs(trailingOnly = TRUE)
 if (length(wanted)) mutations <- purrr::keep(mutations, function(m) m$id %in% wanted)
 

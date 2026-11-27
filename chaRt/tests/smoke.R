@@ -11312,15 +11312,17 @@ check("N3-9: a longer headline must not move the cards as the page loads (12c-2 
 # No model call. Night task 05: the designed picture and its title block. N5-1 a design accepted before its chart's headline changes is still accepted and shown after;
 #   N5-2 the title block of a designed picture in charts/ fits (no text cut off at the device, checked on the picture as drawn); N5-3 that picture has the headline once
 #   and the description once, the card's picture neither; N5-4 a design whose own theme styles no subtitle gets the style's look for the description line (one that does
-#   keeps its own). Self-contained, so tests/mutate_task05.R can run it alone.
-if (run_fast) {   # the fast run only (N5-1 to N5-4)
+#   keeps its own); N5-5 the first two again through design_chart() and the export, as the app takes them. Self-contained, so tests/mutate_night05.R can run it alone.
+if (run_fast) {   # the fast run only (N5-1 to N5-5)
 n5_o <- read_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
 n5_cb <- new_codebook(profile_data(n5_o$data), "orders.csv", nrow(n5_o$data), "-99", n5_o$encoding)
 n5_cb$row_is <- "one order"
 n5_pal <- chart_palette_default()
 n5_short <- "West has the highest total revenue, 940,000"
 n5_long <- "West and Cables have the most orders; Central and Printers the fewest, by a wide margin across every year"
-n5_chart <- function(headline) new_chart("c1", list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Total revenue by region", subtitle = "All years", sort = "value_desc", .headline = headline))
+# the headline goes on the stored chart's spec as the app puts it there (spec_stored(), in new_chart(), keeps no field that starts with a dot)
+n5_chart <- function(headline) { ch <- new_chart("c1", list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "Total revenue by region", subtitle = "All years", sort = "value_desc"))
+  ch$spec$.headline <- headline; ch }
 # a design that writes the headline and the subtitle from txt, in a complete theme that styles no subtitle (n5_own: one that styles its own)
 n5_code <- 'ggplot(d, aes(x = region, y = revenue)) + geom_col(fill = tok$accent) + labs(title = txt$title, subtitle = txt$subtitle, x = NULL, y = NULL) + theme_minimal(base_family = tok$body_family) + theme(plot.background = element_rect(fill = tok$ground, colour = NA))'
 n5_own <- sub("theme(plot.background", "theme(plot.subtitle = element_text(colour = tok$accent, hjust = 0), plot.background", n5_code, fixed = TRUE)
@@ -11355,7 +11357,7 @@ check("N5-1: a design accepted before its chart's headline changes is still acce
 n5_f <- n5_files(n5_code, n5_chart(n5_long))
 n5_fo <- n5_files(n5_own, n5_chart(n5_long))
 n5_faults <- design_text_faults(n5_f$plot, n5_f$size)$faults
-n5_head_lines <- length(strsplit(n5_f$plot$labels$title, "[\n]")[[1]])
+n5_head_lines <- if (is_text1(n5_f$plot$labels$title)) length(strsplit(n5_f$plot$labels$title, "\n", fixed = TRUE)[[1]]) else 0L
 check("N5-2: the title block of a designed picture in charts/ fits, checked on the picture as drawn: with a headline of 105 characters no text of the picture (the headline broken into lines, the description, the axes) runs past the device, the headline stands on two lines or more, and starts at the picture's left edge (plot.title.position is plot, not the panel's, which is where a complete theme puts it and where the lines were not measured to fit)",
       length(n5_faults) == 0L && n5_head_lines >= 2L && identical(n5_f$plot$theme$plot.title.position, "plot") && length(n5_labels(n5_f$plot, n5_f$size)) > 0L)
 n5_pl <- n5_labels(n5_f$plot, n5_f$size)
@@ -11368,60 +11370,34 @@ check("N5-4: a design whose own theme styles no subtitle gets the style's look f
       identical(n5_f$plot$theme$plot.subtitle$colour, n5_style$colour) && identical(n5_f$plot$theme$plot.subtitle$family, n5_style$family) && identical(n5_f$plot$theme$plot.subtitle$size, n5_style$size) &&
         any(grepl("plot.subtitle = ggplot2::element_text", n5_f$code, fixed = TRUE)) &&
         !identical(n5_fo$plot$theme$plot.subtitle$colour, n5_style$colour) && !any(grepl("plot.subtitle = ggplot2::element_text", n5_fo$code, fixed = TRUE)))
-}
-# <<< night05 end
-
-# >>> night05 begin
-# No model call. Night tasks 04 and 05: a designed chart after Phase 13. A design is checked, and shown on its card, without its title, subtitle and caption
-#   (the card's heading carries the headline and the description), so a headline that changes later does not throw it away; a picture that leaves the page
-#   (charts/) takes R's own title block over it, each line measured to fit, with the style's look for the description when the design styles none.
-#   Self-contained, so tests/mutate_night05.R can run it alone.
-if (run_fast) {   # the fast run only (N5-1 to N5-3)
-n5_o <- read_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
-n5_cb <- new_codebook(profile_data(n5_o$data), "orders.csv", nrow(n5_o$data), "-99", n5_o$encoding)
-n5_cb$row_is <- "one order"
+# N5-1 and N5-2 again through the whole path, as the app takes it: design_chart() with a stand-in model (no call) accepts a design whose title is large (26
+#   points) under a 2-word headline and under the long one, and dash_design_files() exports that accepted design for charts/ with the long headline
 n5_skill <- skills_load(office_dir = NULL)$editorial
-# a design whose title is large (26 points) and which styles no subtitle
-n5_code <- paste0('ggplot(d, aes(x = region, y = revenue)) + geom_col(fill = tok$accent, width = 0.7) +
+n5_big <- paste0('ggplot(d, aes(x = region, y = revenue)) + geom_col(fill = tok$accent, width = 0.7) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.12)), labels = label_comma()) +
   labs(title = txt$title, subtitle = txt$subtitle, caption = txt$caption, x = NULL, y = NULL) +
   theme_minimal(base_family = tok$body_family, base_size = tok$base_size) +
   theme(plot.background = element_rect(fill = tok$ground, colour = NA), panel.grid.minor = element_blank(),
         plot.title = element_text(family = tok$title_family, face = tok$title_face, colour = tok$text, size = 26, hjust = 0))')
-n5_chart <- function(head) new_chart("c1", list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "Revenue by region", .headline = head))
-n5_short <- "West leads"
-n5_long <- "West has by far the highest total revenue of all six regions"
 n5_ask <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL, images = NULL, ...) {
-  r <- list(code = n5_code, motion = "none", say = "A plain bar chart.")
+  r <- list(code = n5_big, motion = "none", say = "A plain bar chart.")
   if (!is.null(validate)) validate(r)
   list(obj = r, raw = as.character(jsonlite::toJSON(r, auto_unbox = TRUE)), finish = "success", tokens = c(1000, 200, 0), user_sent = user, model = "stand-in", attempts = 1L,
        seconds = 0.01, refused = list())
 }
 n5_design <- function(head) tryCatch(design_chart(n5_chart(head), n5_skill, n5_o$data, n5_cb, ask = n5_ask, images = "none"), error = function(e) list(ok = FALSE, reason = conditionMessage(e)))
-n5_before <- n5_design(n5_short)
-n5_after <- n5_design(n5_long)
-n5_card <- if (isTRUE(n5_before$ok)) tryCatch(design_card_picture(n5_before$design, n5_chart(n5_long), n5_o$data, n5_cb, chart_palette_default()), error = function(e) NULL)
-check("N5-1: a design accepted before its chart's headline changes is still accepted and shown after the change: the same code with a 2-word headline and with a 12-word one is accepted both times (it is checked without its title block, which the card's heading carries), and the card's picture is drawn for the new headline",
-      isTRUE(n5_before$ok) && isTRUE(n5_after$ok) && !is.null(n5_card) && file.exists(n5_card$file))
-# the picture for charts/, from the export's own function, with the new headline
-n5_stage <- file.path(tempdir(), "n5_stage")
-dir.create(n5_stage, showWarnings = FALSE)
-n5_files <- if (isTRUE(n5_before$ok)) tryCatch(dash_design_files(n5_before$design, n5_chart(n5_long), 1L, "01_revenue", n5_stage, n5_o$data, n5_cb, chart_palette_default(),
-                                                                  chart_device_kind(), "UNCLASSIFIED"), error = function(e) NULL)
-n5_size <- if (!is.null(n5_files)) n5_files$size
-n5_faults <- if (!is.null(n5_files)) design_text_faults(n5_files$plot, n5_size)
-n5_title <- if (!is.null(n5_files)) ggplot2::get_labs(n5_files$plot)$title
-check("N5-2: the title block of a designed picture in charts/ fits: the 12-word headline at the design's 26 points is broken into lines (two or more) and no text of the picture, drawn as it is drawn for charts/, runs past the device or overlaps another",
-      !is.null(n5_files) && is_text1(n5_title) && grepl("\n", n5_title, fixed = TRUE) && identical(gsub("\n", " ", n5_title, fixed = TRUE), chart_title_case(n5_long, CHART_STYLE_DEFAULT)) &&
-        !length(n5_faults$faults) && all(file.exists(file.path(n5_stage, n5_files$files))))
-n5_count <- function(boxes, text) sum(grepl(text, gsub("\n", " ", boxes$label, fixed = TRUE), fixed = TRUE))
-n5_card_boxes <- if (!is.null(n5_card)) design_text_boxes(n5_card$plot, n5_card$size)
-n5_sub <- if (!is.null(n5_files)) ggplot2::calc_element("plot.subtitle", ggplot2::theme_get() + n5_files$plot$theme)
-n5_style_sub <- ggplot2::calc_element("plot.subtitle", chart_theme(CHART_STYLE_DEFAULT))
-check("N5-3: a designed picture in charts/ has the headline once and the description once, the description in the style's look when the design styles no subtitle (the style's subtitle face and size); the card's picture has neither (its heading carries them)",
-      !is.null(n5_faults) && n5_count(n5_faults$boxes, "highest total revenue") == 1L && n5_count(n5_faults$boxes, "Revenue by region") == 1L &&
-        !is.null(n5_sub) && identical(n5_sub$family, n5_style_sub$family) && isTRUE(all.equal(n5_sub$size, n5_style_sub$size)) &&
-        !is.null(n5_card_boxes) && n5_count(n5_card_boxes, "highest total revenue") == 0L && n5_count(n5_card_boxes, "Revenue by region") == 0L)
+n5_d_before <- n5_design("West leads")
+n5_d_after <- n5_design(n5_long)
+n5_d_card <- if (isTRUE(n5_d_before$ok)) tryCatch(design_card_picture(n5_d_before$design, n5_chart(n5_long), n5_o$data, n5_cb, n5_pal), error = function(e) NULL)
+n5_d_stage <- tempfile("n5_d_stage_"); dir.create(n5_d_stage)
+n5_d_files <- if (isTRUE(n5_d_before$ok)) tryCatch(dash_design_files(n5_d_before$design, n5_chart(n5_long), 1L, "01_revenue", n5_d_stage, n5_o$data, n5_cb, n5_pal,
+                                                                      chart_device_kind(), "UNCLASSIFIED"), error = function(e) NULL)
+n5_d_title <- if (!is.null(n5_d_files)) ggplot2::get_labs(n5_d_files$plot)$title
+n5_d_faults <- if (!is.null(n5_d_files)) design_text_faults(n5_d_files$plot, n5_d_files$size)$faults
+check("N5-5: through the app's own path (design_chart() with a stand-in model, then dash_design_files()), a design with a 26-point title accepted under a 2-word headline is accepted again under the long one, its card picture is drawn, and its charts/ picture has the headline broken into two lines or more, word for word, with no text past the device and every file written",
+      isTRUE(n5_d_before$ok) && isTRUE(n5_d_after$ok) && !is.null(n5_d_card) && file.exists(n5_d_card$file) &&
+        !is.null(n5_d_files) && is_text1(n5_d_title) && grepl("\n", n5_d_title, fixed = TRUE) && identical(gsub("\n", " ", n5_d_title, fixed = TRUE), chart_title_case(n5_long, CHART_STYLE_DEFAULT)) &&
+        !length(n5_d_faults) && all(file.exists(file.path(n5_d_stage, n5_d_files$files))))
 }
 # <<< night05 end
 
