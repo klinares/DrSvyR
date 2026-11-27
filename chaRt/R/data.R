@@ -592,7 +592,10 @@ survey_columns <- function(data) {
 # The read message's sentences on both (the chat says them when a file is read), or none.
 MISSING_CODES_SAY <- "These columns of numbers hold values that look like codes for missing: "
 MISSING_CODES_THEN <- "chaRt counts them as numbers, in every mean, share, histogram and headline, until you enter them under 'Values that mean missing'."
-WEIGHTS_THEN <- "chaRt does not apply survey weights or the survey's design: every row counts once, so a chart describes the rows of this file, not a population."
+# Task 07 Part A, the manager's sentence, verbatim, at the end of the weights message.
+WEIGHTS_SOFTWARE <- "For estimates of a population, use survey software with the weights and the design."
+WEIGHTS_THEN <- paste("chaRt does not apply survey weights or the survey's design: every row counts once, so a chart describes the rows of this file, not a population.",
+                      WEIGHTS_SOFTWARE)
 read_cautions <- function(data) {
   codes = unlist(purrr::imap(as.list(data), function(x, nm) { w = numeric_code_words(x); if (length(w)) paste0(nm, " (", paste(w, collapse = ", "), ")") }))
   sv = survey_columns(data)
@@ -602,6 +605,31 @@ read_cautions <- function(data) {
       paste0(paste(c(if (length(sv$weights)) paste0(named(sv$weights, "Column ", "Columns "), if (length(sv$weights) == 1L) " looks like a survey weight" else " look like survey weights"),
                      if (length(sv$design)) paste0(named(sv$design, if (length(sv$weights)) "column " else "Column ", if (length(sv$weights)) "columns " else "Columns "),
                                                    " like the survey's design")), collapse = ", and "), ". ", WEIGHTS_THEN))
+}
+
+# Task 07 Part B: the warning goes where the number is. A column a chart or a summary table uses that holds values numeric_code_words() takes for codes
+#   of missing, which the analyst has not settled, carries CODES_SENTENCE on the card, in the exported page and in FACTS (a line that starts CODES_FACTS).
+#   The analyst settles them in one click from the note: entered as missing (the file is read again with them, so they are gone from the data), or kept
+#   as real values (codes_keep(): the column's dictionary entry holds them in `codes_real`, which a new read carries over). Returns a named list, column
+#   = its unsettled codes (as numeric_code_words() writes them), for the columns of `cols` that have any.
+CODES_FACTS <- "Possible codes for missing, counted as numbers"
+codes_sentence <- function(col, codes) paste0(col, " holds ", paste(codes, collapse = ", "), ", which look like codes for missing and are counted here as numbers.")
+codes_unsettled <- function(data, cb, cols) {
+  if (is.null(data)) return(list())
+  cols = intersect(unique(unlist(cols)), names(data))
+  found = stats::setNames(purrr::map(cols, function(col)
+    setdiff(numeric_code_words(data[[col]]), as.character(unlist(cb_entry(cb, col)$codes_real %||% list())))), cols)
+  purrr::keep(found, function(x) length(x) > 0L)
+}
+codes_sentences <- function(codes) unname(purrr::imap_chr(codes, function(v, col) codes_sentence(col, v)))
+# The analyst's "they are real values": each column of `codes` (codes_unsettled()'s list) keeps its codes as values.
+codes_keep <- function(cb, codes) {
+  cb$columns = purrr::map(cb$columns, function(e) {
+    if (is.null(codes[[e$name]])) return(e)
+    e$codes_real = unique(c(as.character(unlist(e$codes_real %||% list())), codes[[e$name]]))
+    e
+  })
+  cb
 }
 
 # The roles a column's current type allows.
@@ -744,8 +772,10 @@ apply_codebook <- function(cb, profile, file, rows, encoding = "UTF-8", excel = 
   out = codebook_sheet(out, excel)
   out$columns = purrr::map(profile, function(p) {
     e = up[[p$name]]
-    codebook_entry(p, label = e$label, label_source = e$label_source, type = e$type, role = e$role, order = e$order,
-                   sure = e$sure)
+    out = codebook_entry(p, label = e$label, label_source = e$label_source, type = e$type, role = e$role, order = e$order,
+                         sure = e$sure)
+    out$codes_real = e$codes_real   # task 07 Part B
+    out
   })
   out
 }
@@ -768,6 +798,7 @@ reread_data <- function(path, name, missing, old = NULL, encoding = NULL, excel 
     out$label = o$label
     out$label_source = o$label_source
     out$sure = if (identical(o$label_source, "ai_guess")) o$sure
+    out$codes_real = o$codes_real   # task 07 Part B: values the analyst said are real stay so
     # Only what the analyst chose is carried: a type other than R's own, a role other than the
     #   type's default. What R chose before is chosen again from the data now.
     notes = character(0)
@@ -1043,13 +1074,15 @@ summary_table <- function(data, cb, measures = NULL, by = NULL) {
   }
   by_x = if (!is.null(by)) as.character(data[[by]])
   groups = if (!is.null(by)) summary_levels(entries[[by]], by_x[!is.na(by_x)])$values
+  # task 07 Part B 5: a group of fewer than SUMMARY_SMALL_ROWS rows shows its estimate, its row count and its mark, and no interval (a dash)
   one = function(name, group, idx) {
     e = entries[[name]]
     x = data[[name]][idx]
     kind = summary_kind(e, x)
+    small = !is.null(by) && !identical(group, SUMMARY_ALL_ROWS) && length(idx) < SUMMARY_SMALL_ROWS
     purrr::map(summary_rows(e, x, kind, kind == "measure" && summary_scale(e, data[[name]])), function(r)
-      utils::modifyList(SUMMARY_FIELDS, c(list(column = name, label = e$label %||% name, kind = kind, group = group,
-                                                small = !is.null(by) && !identical(group, SUMMARY_ALL_ROWS) && length(idx) < SUMMARY_SMALL_ROWS), r)))
+      utils::modifyList(utils::modifyList(SUMMARY_FIELDS, c(list(column = name, label = e$label %||% name, kind = kind, group = group, small = small), r)),
+                        if (small) list(mean_ci_low = NA_real_, mean_ci_high = NA_real_, share_ci_low = NA_real_, share_ci_high = NA_real_) else list()))
   }
   everyone = seq_len(nrow(data))
   rows = unlist(purrr::map(chosen, function(name) {
@@ -1060,7 +1093,8 @@ summary_table <- function(data, cb, measures = NULL, by = NULL) {
   }), recursive = FALSE)
   out = dplyr::bind_rows(purrr::map(rows, tibble::as_tibble))
   attr(out, "summary") = list(by = by, by_label = if (!is.null(by)) entries[[by]]$label %||% by, by_missing = if (!is.null(by)) sum(is.na(by_x)) else 0L,
-                              rows = nrow(data))
+                              rows = nrow(data),
+                              codes = codes_unsettled(data, cb, chosen[purrr::map_lgl(chosen, function(nm) identical(summary_kind(entries[[nm]], data[[nm]]), "measure"))]))
   out
 }
 
@@ -1078,7 +1112,8 @@ summary_notes <- function(tb, ci = TRUE) {
     if (length(scaled)) paste0(SUMMARY_SCALE_MARK, " ", paste(scaled, collapse = ", "), " (mean, SD and interval): ", SUMMARY_SCALE_PHRASE, "."),
     if (any(tb$small %in% TRUE)) paste0("Groups marked '", SUMMARY_SMALL_MARK, "' have fewer than ", SUMMARY_SMALL_ROWS, " rows: ", "their statistics can describe individuals."),
     if (isTRUE(info$by_missing > 0L)) paste0(format_num(info$by_missing), if (info$by_missing == 1L) " row has" else " rows have", " no value for ", info$by_label,
-                                              " and ", if (info$by_missing == 1L) "is" else "are", " in '", SUMMARY_ALL_ROWS, "' only."))
+                                              " and ", if (info$by_missing == 1L) "is" else "are", " in '", SUMMARY_ALL_ROWS, "' only."),
+    codes_sentences(info$codes %||% list()))   # task 07 Part B
 }
 
 # How a cell is written, by the facts' functions (R/spec.R): a statistic to three significant digits with thousands separators, a count

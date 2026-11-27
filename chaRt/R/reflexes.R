@@ -841,9 +841,23 @@ summary_problems <- function(headline, summary, facts_text, spec, tokens = chara
   list(numbers = unique(unlist(purrr::map(fields, function(x) check_numbers(x, facts_text, spec)))),
        words = unique(unlist(purrr::map(fields, function(x) check_words(x, facts_text)))),
        tokens = unique(setdiff(found, tokens)),
-       limits = headline_limits(headline, facts_text))
+       limits = headline_limits(headline, facts_text),
+       codes = check_codes(headline, summary, facts_text))
 }
-summary_ok <- function(p) !length(p$numbers) && !length(p$words) && !length(p$tokens) && !length(p$limits)
+summary_ok <- function(p) !length(p$numbers) && !length(p$words) && !length(p$tokens) && !length(p$limits) && !length(p$codes)
+
+# Task 07 Part B 3: when FACTS has a line of CODES_FACTS (a column the chart uses holds values that look like codes for missing, counted as numbers),
+#   a headline and a summary must each say so: every one of those codes is written in it. Returns the sentence of each field that does not (none when
+#   both do, or FACTS has no such line).
+check_codes <- function(headline, summary, facts_text) {
+  codes = facts_codes(facts_text)
+  if (!length(codes)) return(character(0))
+  want = abs(suppressWarnings(as.numeric(codes)))
+  says = function(x) all(want %in% abs(purrr::map_dbl(text_numbers(x), "value")))
+  fields = list(headline = headline, summary = summary)
+  bad = purrr::keep(names(fields), function(f) is_text1(fields[[f]]) && nzchar(trimws(fields[[f]])) && !says(fields[[f]]))
+  purrr::map_chr(bad, function(f) paste0("the ", f, " does not say that ", paste(codes, collapse = ", "), " look like codes for missing and are counted as values"))
+}
 
 # The manager's ruling (Phase 13): a headline carries at most HEADLINE_MAX_NUMBERS numbers and HEADLINE_MAX_WORDS words, whoever wrote it. A year the
 #   facts hold is a time, not a number ("by Dec 2024"), and a group's name is a name (a rating of 4, which FACTS names before a colon: "- 4: 29"). A
@@ -854,7 +868,9 @@ headline_numbers <- function(text, facts_text) {
   ft = paste(facts_text %||% "", collapse = "\n")
   years = as.numeric(regmatches(ft, gregexpr("(?<![0-9])[12][0-9]{3}(?![0-9])", ft, perl = TRUE))[[1]])
   named = unique(trimws(sub(":.*$", "", sub("^- ", "", trimws(strsplit(ft, "\n", fixed = TRUE)[[1]])))))
-  sum(purrr::map_lgl(text_numbers(text), function(n) !(n$text %in% named) && !(n$value == round(n$value) && n$value >= 1000 && n$value < 3000 && n$value %in% years)))
+  codes = abs(suppressWarnings(as.numeric(facts_codes(ft))))   # task 07 Part B 3: the codes the headline must name are not counted against it
+  sum(purrr::map_lgl(text_numbers(text), function(n) !(n$text %in% named) && !(n$value %in% codes) &&
+                       !(n$value == round(n$value) && n$value >= 1000 && n$value < 3000 && n$value %in% years)))
 }
 headline_limits <- function(headline, facts_text) {
   if (!is_text1(headline) || !nzchar(trimws(headline))) return(character(0))
@@ -867,6 +883,7 @@ headline_limits <- function(headline, facts_text) {
 problem_sentences <- function(p)
   c(if (length(p$numbers)) paste0(p$numbers, " is not a number in this chart's data"),
     p$limits,
+    p$codes,
     purrr::map_chr(p$words, function(w)
       if (w %in% SUMMARY_CAUSE_WORDS) paste0("'", w, "' suggests a cause")
       else if (w %in% names(MULTIPLE_WORDS)) paste0("'", w, "' is a comparison the chart's facts do not state.")
@@ -879,7 +896,8 @@ problem_line <- function(id, p)
     if (length(p$numbers)) paste0("numbers that are not in its FACTS: ", paste(p$numbers, collapse = ", ")),
     if (length(p$words)) paste0("words that are not allowed: ", paste(p$words, collapse = ", ")),
     if (length(p$tokens)) paste0("tokens that are not known: ", paste(p$tokens, collapse = ", ")),
-    if (length(p$limits)) paste(p$limits, collapse = "; ")), collapse = "; "), ".")
+    if (length(p$limits)) paste(p$limits, collapse = "; "),
+    if (length(p$codes)) paste(p$codes, collapse = "; ")), collapse = "; "), ".")
 
 # One batch of at most SUMMARY_BATCH charts: one call, every reply checked, one repair call for the
 #   charts that failed, checked again. Returns list(results, records).

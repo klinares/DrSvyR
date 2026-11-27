@@ -5942,7 +5942,6 @@ p9d_bytb <- summary_table(p9d_data, p9d_cb, c("score", "rating", "grp", "when"),
 p9d_ga <- c(3.5, 5.5, 7.5, 8.5, 9.5, 10.5, 12.5)      # the rows with grp a
 p9d_gb <- c(13.5, 14.5, 19.5)                         # the rows with grp b
 p9d_half_a <- 2.446912 * sqrt(sum((p9d_ga - sum(p9d_ga) / 7)^2) / 6) / sqrt(7)       # t of 6 degrees of freedom
-p9d_half_b <- 4.302653 * sqrt(sum((p9d_gb - sum(p9d_gb) / 3)^2) / 2) / sqrt(3)       # t of 2 degrees of freedom
 p9d_sa <- p9d_pick(p9d_bytb, "score", "a")
 p9d_sb <- p9d_pick(p9d_bytb, "score", "b")
 p9d_sall <- p9d_pick(p9d_bytb, "score", "All rows")
@@ -5952,14 +5951,13 @@ p9d_na_by <- local({
   list(tb = summary_table(d, cb, "v", "g"), cb = cb, d = d)
 })
 p9d_g <- summary_table(p9d_na_by$d, p9d_na_by$cb, "g")
-check("9D-4: with a group: each measure has a row for each level of the group and one for 'All rows' (the rows of the file); the interval of a level rests on that level's own n (group a: 7 rows, t of 6 degrees of freedom; group b: 3 rows, t of 2), worked out by hand in the test; the other kinds (the group column itself, a date) are written once, for 'All rows'; a row with no value in the group column is in 'All rows' only, and the table says so; a group column with more than 30 levels, a measure and a name that is not a column are refused in plain words",
+check("9D-4: with a group: each measure has a row for each level of the group and one for 'All rows' (the rows of the file); the interval of a level rests on that level's own n (group a: 7 rows, t of 6 degrees of freedom), worked out by hand in the test, and a level under SUMMARY_SMALL_ROWS (group b: 3 rows) has none (task 07 Part B 5); the other kinds (the group column itself, a date) are written once, for 'All rows'; a row with no value in the group column is in 'All rows' only, and the table says so; a group column with more than 30 levels, a measure and a name that is not a column are refused in plain words",
       identical(p9d_bytb$group[p9d_bytb$column == "score"], c("a", "b", "All rows")) && identical(p9d_bytb$group[p9d_bytb$column == "rating"], c("a", "b", "All rows")) &&
         identical(unique(p9d_bytb$group[p9d_bytb$column %in% c("grp", "when")]), "All rows") &&
         identical(c(p9d_sa$n, p9d_sb$n, p9d_sall$n), c(7L, 3L, 10L)) && identical(c(p9d_sa$rows, p9d_sb$rows, p9d_sall$rows), c(7L, 3L, 10L)) &&
         p9d_4(p9d_sa$mean, mean(p9d_ga)) && p9d_4(c(p9d_sa$mean_ci_low, p9d_sa$mean_ci_high), mean(p9d_ga) + c(-1, 1) * p9d_half_a) &&
-        p9d_4(c(p9d_sb$mean_ci_low, p9d_sb$mean_ci_high), mean(p9d_gb) + c(-1, 1) * p9d_half_b) &&
+        p9d_4(p9d_sb$mean, mean(p9d_gb)) && is.na(p9d_sb$mean_ci_low) && is.na(p9d_sb$mean_ci_high) &&
         p9d_4(c(p9d_sall$mean_ci_low, p9d_sall$mean_ci_high), p9d_m + c(-1, 1) * p9d_half) &&
-        !isTRUE(all.equal(p9d_sa$mean_ci_high - p9d_sa$mean_ci_low, p9d_sb$mean_ci_high - p9d_sb$mean_ci_low)) &&
         identical(attr(p9d_na_by$tb, "summary")$by_missing, 2L) && identical(p9d_na_by$tb$n, c(5L, 3L, 10L)) && identical(p9d_na_by$tb$group, c("x", "y", "All rows")) &&
         any(grepl("2 rows have no value for g and are in 'All rows' only", summary_notes(p9d_na_by$tb), fixed = TRUE)) &&
         inherits(tryCatch(summary_table(p9d_many$d, p9d_many$cb, "v", "g"), error = function(e) e), "error") &&
@@ -5973,12 +5971,12 @@ check("9D-4: with a group: each measure has a row for each level of the group an
 # small groups: marked, not hidden; the dialog's warning is checked with the server below
 p9d_small_blocks <- summary_blocks(p9d_bytb, TRUE)
 p9d_small_meas <- p9d_small_blocks[[1]]$table
-check("9D-5: a level with fewer than 5 rows is marked in the table (group b has 3 rows: 'b (under 5 rows)'; group a with 7 rows and 'All rows' are not) and the note under the table says what the mark means; nothing is hidden (group b's statistics are all there, interval and all); without a group no row is marked, and a marked row is marked in the tibble (small) as well",
+check("9D-5: a level with fewer than 5 rows is marked in the table (group b has 3 rows: 'b (under 5 rows)'; group a with 7 rows and 'All rows' are not) and the note under the table says what the mark means; its estimate is shown (group b's mean and SD are there) and, by task 07 Part B 5, no interval (a dash); without a group no row is marked, and a marked row is marked in the tibble (small) as well",
       identical(p9d_bytb$small[p9d_bytb$column == "score"], c(FALSE, TRUE, FALSE)) && SUMMARY_SMALL_ROWS == 5L &&
         identical(p9d_small_meas$Group[p9d_small_meas$Column == "score"], c("a", "b (under 5 rows)", "All rows")) &&
         any(grepl("Groups marked 'under 5 rows' have fewer than 5 rows: their statistics can describe individuals.", summary_notes(p9d_bytb), fixed = TRUE)) &&
         !any(grepl("under 5 rows", summary_notes(p9d_tb), fixed = TRUE)) && !any(p9d_tb$small) &&
-        !is.na(p9d_sb$mean) && !is.na(p9d_sb$sd) && !is.na(p9d_sb$mean_ci_low) && p9d_sb$n == 3L)
+        !is.na(p9d_sb$mean) && !is.na(p9d_sb$sd) && is.na(p9d_sb$mean_ci_low) && p9d_sb$n == 3L)
 
 # the scale note: which columns get it, and what it says
 p9d_ord_cb <- p9d_cb
@@ -11400,6 +11398,154 @@ check("N5-5: through the app's own path (design_chart() with a stand-in model, t
         !length(n5_d_faults) && all(file.exists(file.path(n5_d_stage, n5_d_files$files))))
 }
 # <<< night05 end
+
+# >>> task07 begin
+# No model call. Task 07, the survey fixes: Part A, the sentence added to the weights message (T7-A1); Part B, the warning goes where the number is: a
+#   column a chart or a summary table uses that holds unsettled codes for missing carries a note on the card, in the exported page and in FACTS (T7-B1),
+#   the analyst settles them in one click, either way, and the note goes (T7-B2), R's headline opens with the codes or falls back, and a model's headline
+#   or summary that does not name them fails its check and gets its repair (T7-B3), a group under SUMMARY_SMALL_ROWS shows no interval (T7-B5); Part C, a
+#   small group is not crowned: FACTS names it with its rows (T7-C1), R's headline leaves it out and the card says so (T7-C2), its axis label carries its
+#   count, and a count is not affected (T7-C3). Self-contained, so tests/mutate_task07.R can run it alone.
+if (run_fast) {   # the fast run only (T7-A1 to T7-C3)
+# the data, made here: a survey whose 1 to 5 item q13_trust_media holds 98 (20 rows), 99 (8) and -9 (6), with a weight and a stratum, read from a file as
+#   the app reads one; and support tickets by team, where Escalations has 3 rows and the highest mean and median satisfaction
+t7_wd <- tempfile("t7_"); dir.create(t7_wd)
+t7_n <- 240L
+t7_q13 <- rep_len(c(1, 2, 2, 3, 4, 5), t7_n)
+t7_q13[seq(5L, by = 11L, length.out = 20L)] <- 98
+t7_q13[seq(7L, by = 29L, length.out = 8L)] <- 99
+t7_q13[seq(9L, by = 37L, length.out = 6L)] <- -9
+t7_survey <- data.frame(respondent_id = sprintf("R%04d", seq_len(t7_n)), region = rep_len(c("North", "South", "East"), t7_n),
+                        interview_date = as.Date("2026-03-01") + (seq_len(t7_n) - 1L) %/% 24L, q13_trust_media = t7_q13,
+                        q14_satisfied_life = rep_len(c(3, 4, 2, 5, 1), t7_n), weight = rep_len(c(0.8, 1.1, 1.2, 0.9), t7_n), stratum = rep_len(1:4, t7_n))
+t7_svpath <- file.path(t7_wd, "survey.csv")
+readr::write_csv(t7_survey, t7_svpath)
+t7_sv <- read_data(t7_svpath, "survey.csv", "")
+t7_svcb <- new_codebook(profile_data(t7_sv$data), "survey.csv", nrow(t7_sv$data), character(), t7_sv$encoding)
+t7_svcb$row_is <- "one respondent"
+t7_tickets <- data.frame(team = rep(c("Technical", "Billing", "Shipping", "Escalations"), c(60L, 50L, 40L, 3L)),
+                         satisfaction = c(rep_len(5:8, 150L), 9, 9, 10))
+t7_tkpath <- file.path(t7_wd, "tickets.csv")
+readr::write_csv(t7_tickets, t7_tkpath)
+t7_tk <- read_data(t7_tkpath, "tickets.csv", "")
+t7_tkcb <- new_codebook(profile_data(t7_tk$data), "tickets.csv", nrow(t7_tk$data), character(), t7_tk$encoding)
+t7_tkcb$row_is <- "one support ticket"
+t7_note <- "q13_trust_media holds 98, 99, -9, which look like codes for missing and are counted here as numbers."
+t7_hist <- new_chart("c1", list(family = "histogram", x = "q13_trust_media", title = "Trust in the media"))
+t7_page <- function(chart, data, cb) {   # the exported page's card of a chart, as the dashboard writes it (dash_chart(), then dash_card())
+  stage <- tempfile("t7_stage_"); dir.create(file.path(stage, "charts"), recursive = TRUE)
+  it <- dash_chart(list(id = chart$id, chart = chart, story = NULL, mode = "picture", stale = NA_character_), 1L, stage, data, cb, chart_palette_default(),
+                   file.path(t7_wd, cb$file), FALSE, chart_device_kind(), "UNCLASSIFIED")
+  list(it = it, html = as.character(dash_card(utils::modifyList(it, list(mode = "interactive", widget_html = "")))))
+}
+
+check("T7-A1: Part A, the weights message ends with the manager's sentence, verbatim, and the read message of a file with a weight column says it",
+      endsWith(WEIGHTS_THEN, " For estimates of a population, use survey software with the weights and the design.") &&
+        any(grepl("For estimates of a population, use survey software with the weights and the design.", read_cautions(t7_sv$data), fixed = TRUE)))
+
+# T7-B1: the note on the card, in the exported page and in FACTS, and under a summary table; a column with no codes carries none
+t7_p <- spec_plot(t7_hist$spec, t7_sv$data, t7_svcb)
+t7_f <- spec_facts(attr(t7_p, "spec"), attr(t7_p, "table"), t7_svcb, data = t7_sv$data)
+t7_pg <- tryCatch(t7_page(t7_hist, t7_sv$data, t7_svcb), error = function(e) NULL)
+t7_tb <- summary_table(t7_sv$data, t7_svcb, c("q13_trust_media", "q14_satisfied_life"))
+t7_clean <- spec_plot(list(family = "histogram", x = "q14_satisfied_life"), t7_sv$data, t7_svcb)
+check("T7-B1: Part B 1, a chart that uses a column with codes for missing the analyst has not settled carries the note on its card ('q13_trust_media holds 98, 99, -9, which look like codes for missing and are counted here as numbers.'), in the exported page and in FACTS; a summary table that uses it carries it under the table; a column with none carries no note",
+      t7_note %in% attr(t7_p, "notes") && identical(attr(t7_p, "codes"), list(q13_trust_media = c("98", "99", "-9"))) &&
+        any(grepl(paste0(CODES_FACTS, ": ", t7_note), strsplit(t7_f$text, "\n", fixed = TRUE)[[1]], fixed = TRUE)) &&
+        !is.null(t7_pg) && t7_note %in% t7_pg$it$notes && grepl(t7_note, t7_pg$html, fixed = TRUE) &&
+        t7_note %in% summary_notes(t7_tb) && grepl(t7_note, as.character(summary_tag(t7_tb)), fixed = TRUE) &&
+        !any(grepl("look like codes for missing", attr(t7_clean, "notes"), fixed = TRUE)) && !length(attr(t7_clean, "codes")))
+
+# T7-B2: either way of settling, and the note goes; "real values" is kept over a new read of the file
+t7_missing <- reread_data(t7_svpath, "survey.csv", c("98", "99", "-9"), old = t7_svcb)
+t7_p_missing <- spec_plot(t7_hist$spec, t7_missing$read$data, t7_missing$codebook)
+t7_real_cb <- codes_keep(t7_svcb, attr(t7_p, "codes"))
+t7_p_real <- spec_plot(t7_hist$spec, t7_sv$data, t7_real_cb)
+t7_again <- reread_data(t7_svpath, "survey.csv", character(), old = t7_real_cb)
+# the Explore page's server as it is loaded (so a changed copy sourced by tests/mutate_task07.R is what is read), written out on single spaces
+t7_ui_src <- gsub("[[:space:]]+", " ", paste(deparse(mod_explore_server, width.cutoff = 500L), collapse = " "))
+check("T7-B2: Part B 2, the analyst settles the codes in one click from the note, either way, and the note goes: entered as missing (the file read again with them), or kept as real values (the column's entry holds them, and a new read of the file keeps them so); the card and a summary table's card each give both links, and each link does what it says",
+      !length(attr(t7_p_missing, "codes")) && !any(grepl("look like codes", attr(t7_p_missing, "notes"), fixed = TRUE)) &&
+        !length(attr(t7_p_real, "codes")) && !any(grepl("look like codes", attr(t7_p_real, "notes"), fixed = TRUE)) &&
+        identical(as.character(unlist(cb_entry(t7_again$codebook, "q13_trust_media")$codes_real)), c("98", "99", "-9")) &&
+        !length(codes_unsettled(t7_again$read$data, t7_again$codebook, "q13_trust_media")) &&
+        lengths(regmatches(t7_ui_src, gregexpr("actionLink(ns(cid(chart_id, \"codes_missing\")), CODES_MISSING_BUTTON)", t7_ui_src, fixed = TRUE))) == 1L &&
+        lengths(regmatches(t7_ui_src, gregexpr("actionLink(ns(cid(table_id, \"codes_real\")), CODES_REAL_BUTTON)", t7_ui_src, fixed = TRUE))) == 1L &&
+        lengths(regmatches(t7_ui_src, gregexpr("treat_missing(value = unique(unlist(codes, use.names = FALSE)))", t7_ui_src, fixed = TRUE))) == 2L &&
+        lengths(regmatches(t7_ui_src, gregexpr("state$codebook = codes_keep(isolate(state$codebook), codes)", t7_ui_src, fixed = TRUE))) == 2L)
+
+# T7-B3: R's headline opens with the codes when it fits in 12 words, else the fallback; a model's headline or summary without them fails and is repaired
+t7_rh <- r_headline(t7_hist, t7_svcb, t7_sv$data)
+t7_long <- new_chart("c2", list(family = "line", x = "interview_date", y = "q13_trust_media", fn = "mean", title = "Mean trust in the media by day"))
+t7_rl <- r_headline(t7_long, t7_svcb, t7_sv$data)
+t7_lp <- spec_plot(t7_long$spec, t7_sv$data, t7_svcb)
+t7_plain <- facts_headline_plain(spec_settle(spec_defaults(spec_public(attr(t7_lp, "spec"))), t7_svcb, attr(t7_lp, "table")), t7_svcb, t7_rl$facts$text, names = t7_rl$facts$names)
+t7_plain_fits <- any(purrr::map_int(t7_plain, function(h) hl_words(names_back(h, t7_rl$facts$names))) <= HEADLINE_MAX_WORDS)
+t7_calls <- new.env(); t7_calls$users <- character(0)
+t7_ask <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL, ...) {
+  t7_calls$users <- c(t7_calls$users, user)
+  first <- length(t7_calls$users) == 1L
+  h <- if (first) "Median trust in the media is 2" else "With 98, 99, -9 counted as values, median trust is 2"
+  sm <- if (first) "Most answers are low." else "Answers of 98, 99 and -9 are counted as values; most answers are low."
+  raw <- as.character(jsonlite::toJSON(list(charts = list(list(id = "c1", headline = h, summary = sm))), auto_unbox = TRUE))
+  obj <- parse_json_block(raw); if (!is.null(validate)) validate(obj)
+  list(obj = obj, raw = raw, finish = "success", tokens = c(100, 20, 0), seconds = 0.1)
+}
+t7_sum <- summarize_charts(list(t7_hist), t7_svcb, t7_sv$data, ask = t7_ask)$charts[[1]]
+check("T7-B3: Part B 3, with the codes' line in FACTS R's headline begins 'With 98, 99, -9 counted as values,' when that fits in 12 words, and is the fallback 'What is plotted:' line when it does not (a line of the mean by day, whose own headline fits only without the opening); a model's headline or summary that does not name the codes fails its check, the repair call is told so, and the repaired pair passes",
+      startsWith(t7_rh$text, "With 98, 99, -9 counted as values, ") && identical(t7_rh$source, "r") && hl_words(t7_rh$text) <= HEADLINE_MAX_WORDS &&
+        identical(t7_rl$source, "fallback") && startsWith(t7_rl$text, HEADLINE_FALLBACK) && t7_plain_fits &&
+        length(check_codes("Median trust in the media is 2", NULL, t7_f$text)) == 1L && length(check_codes(NULL, "Most answers are low.", t7_f$text)) == 1L &&
+        !length(check_codes("With 98, 99, -9 counted as values, median trust is 2", NULL, t7_f$text)) && !length(check_codes("Median trust is 2", NULL, "Rows used: 10")) &&
+        length(t7_calls$users) == 2L && grepl("does not say that 98, 99, -9 look like codes for missing", t7_calls$users[[2]], fixed = TRUE) &&
+        isTRUE(t7_sum$checked) && isTRUE(t7_sum$repaired) && startsWith(t7_sum$headline, "With 98, 99, -9"))
+
+# T7-B5: a group under SUMMARY_SMALL_ROWS shows its estimate, its row count and its mark, and no interval
+t7_tt <- summary_table(t7_tk$data, t7_tkcb, "satisfaction", "team")
+t7_esc <- t7_tt[t7_tt$group %in% "Escalations", ]
+t7_blk <- summary_blocks(t7_tt)[[1]]$table
+t7_row <- t7_blk[purrr::map_lgl(seq_len(nrow(t7_blk)), function(i) any(grepl("Escalations", unlist(t7_blk[i, ]), fixed = TRUE))), ]
+check("T7-B5: Part B 5, a group of fewer than SUMMARY_SMALL_ROWS rows (Escalations, 3 rows) shows its mean, its row count and its mark, and a dash for its interval; a group of many rows keeps its interval",
+      nrow(t7_esc) == 1L && isTRUE(t7_esc$small) && t7_esc$rows == 3L && is.finite(t7_esc$mean) && is.na(t7_esc$mean_ci_low) && is.na(t7_esc$mean_ci_high) &&
+        nrow(t7_row) == 1L && any(unlist(t7_row) == SUMMARY_DASH) && any(grepl(SUMMARY_SMALL_MARK, unlist(t7_row), fixed = TRUE)) &&
+        all(is.finite(t7_tt$mean_ci_low[t7_tt$group %in% "Technical"])))
+
+# T7-C1 to C3: mean satisfaction by team (Escalations: 3 rows, the highest mean), a box of it, and a count of tickets by team
+t7_m <- new_chart("c3", list(family = "bar", x = "team", y = "satisfaction", fn = "mean", title = "Mean satisfaction by team"))
+t7_pm <- spec_plot(t7_m$spec, t7_tk$data, t7_tkcb)
+t7_fm <- spec_facts(attr(t7_pm, "spec"), attr(t7_pm, "table"), t7_tkcb, data = t7_tk$data)$text
+t7_bx <- new_chart("c4", list(family = "box", x = "team", y = "satisfaction", title = "Satisfaction by team"))
+t7_pb <- spec_plot(t7_bx$spec, t7_tk$data, t7_tkcb)
+t7_cnt <- spec_plot(list(family = "bar", x = "team", title = "Tickets by team"), t7_tk$data, t7_tkcb)
+t7_fc <- spec_facts(attr(t7_cnt, "spec"), attr(t7_cnt, "table"), t7_tkcb, data = t7_tk$data)$text
+check("T7-C1: Part C 1, FACTS of a chart of a mean (and of a box) names the groups under SUMMARY_SMALL_ROWS rows with their counts ('Groups of fewer than 5 rows: Escalations (3 rows)'); a count of tickets has no such line",
+      grepl(paste0(FACTS_SMALL, ": Escalations (3 rows)"), t7_fm, fixed = TRUE) &&
+        grepl(paste0(FACTS_SMALL, ": Escalations (3 rows)"), spec_facts(attr(t7_pb, "spec"), attr(t7_pb, "table"), t7_tkcb, data = t7_tk$data)$text, fixed = TRUE) &&
+        !grepl(FACTS_SMALL, t7_fc, fixed = TRUE))
+t7_rm <- r_headline(t7_m, t7_tkcb, t7_tk$data)
+t7_rb <- r_headline(t7_bx, t7_tkcb, t7_tk$data)
+# three groups that differ: Desk (3 rows) far above, North above South
+t7_dd <- data.frame(office = rep(c("North", "South", "Desk"), c(20L, 20L, 3L)), score = c(seq(10, 12, length.out = 20), seq(4, 6, length.out = 20), c(50, 51, 52)))
+t7_dcb <- new_codebook(profile_data(t7_dd), "offices.csv", nrow(t7_dd), character(), "UTF-8")
+t7_dcb$row_is <- "one visit"
+t7_lead <- new_chart("c5", list(family = "bar", x = "office", y = "score", fn = "mean", title = "Mean score by office"))
+t7_rlead <- r_headline(t7_lead, t7_dcb, t7_dd)
+t7_plead <- spec_plot(t7_lead$spec, t7_dd, t7_dcb)
+check("T7-C2: Part C 2, R's headline names the highest and lowest among the groups with enough rows: Escalations (3 rows, the highest mean and median) is named in no headline, and the card's note says 'Escalations has only 3 rows and is left out of the headline.'; where the others differ (North 11, South 5, Desk 51 from 3 rows) North is named highest and Desk is not",
+      !grepl("Escalations", t7_rm$text, fixed = TRUE) && !grepl("Escalations", t7_rb$text, fixed = TRUE) && identical(t7_rm$source, "r") &&
+        identical(t7_rlead$source, "r") && startsWith(t7_rlead$text, "North has the highest") && !grepl("Desk", t7_rlead$text, fixed = TRUE) &&
+        "Desk has only 3 rows and is left out of the headline." %in% attr(t7_plead, "notes") &&
+        "Escalations has only 3 rows and is left out of the headline." %in% attr(t7_pm, "notes") &&
+        "Escalations has only 3 rows and is left out of the headline." %in% attr(t7_pb, "notes") &&
+        !any(grepl("left out of the headline", attr(t7_cnt, "notes"), fixed = TRUE)))
+t7_axis <- function(p) { sc <- ggplot2::layer_scales(p); c(sc$x$get_labels(), if (inherits(sc$y, "ScaleDiscrete")) sc$y$get_labels()) }
+t7_code <- spec_code(attr(t7_pm, "spec"), t7_tkcb, t7_tkpath)
+check("T7-C3: Part C 3, on the chart a small group's axis label carries its count ('Escalations (3 rows)'), on a bar of means and on a box, and in the chart's code; a count of tickets by team is not affected",
+      "Escalations (3 rows)" %in% t7_axis(t7_pm) && "Escalations (3 rows)" %in% t7_axis(t7_pb) && !"Escalations" %in% t7_axis(t7_pm) &&
+        "Escalations" %in% t7_axis(t7_cnt) && !any(grepl("rows)", t7_axis(t7_cnt), fixed = TRUE)) &&
+        grepl("\" rows)\"", t7_code, fixed = TRUE))
+}
+# <<< task07 end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------

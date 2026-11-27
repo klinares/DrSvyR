@@ -88,7 +88,8 @@ SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".la
                       ".end_value", ".source", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor",
                       ".fig_width", ".fig_height", ".bare", ".few_breaks", ".facet_cols",
                       ".headline", ".description",   # Phase 13: the headline shown as the title (the caller's, else R's) and the description under it
-                      ".untitled")                   # ... and a drawing with no title block at all: a card whose HTML heading carries both
+                      ".untitled",                   # ... and a drawing with no title block at all: a card whose HTML heading carries both
+                      ".small")                      # task 07 Part C 3: the groups of fewer than SUMMARY_SMALL_ROWS rows, whose axis labels carry their count
 
 
 # ---- small helpers ----------------------------------------------------------------------------
@@ -856,7 +857,33 @@ spec_table <- function(spec, data, cb, palette = chart_palette_default()) {
   structure(out, rows_used = nrow(base), rows_dropped = nrow(filtered) - nrow(base),
             groups_total = if (!is.null(ranked)) length(unique(base[[ranked]])) else NA_integer_,
             ties = cut_ties(s, agg, out),
-            top = if (!is.null(s$.top_n)) c(asked = s$top_n, shown = s$.top_n))
+            top = if (!is.null(s$.top_n)) c(asked = s$top_n, shown = s$.top_n),
+            small_groups = small_groups_of(s, base, out))
+}
+
+# Task 07 Part C: the groups of a chart of a mean, a median or a share (a bar or a dot) or of a box chart that have fewer than SUMMARY_SMALL_ROWS rows
+#   behind them, as a named integer (group = rows), or NULL. Only the groups shown, and only a chart without panels: each group is a value of x.
+#   Counts and sums are not affected.
+small_groups_of <- function(s, base, out) {
+  if (!is.null(s$facet) || !s$family %in% c("bar", "dot", "box") || is.null(s$x) || !s$x %in% names(base)) return(NULL)
+  if (!identical(s$family, "box") && !(s$fn %||% "none") %in% c("mean", "median", "share")) return(NULL)
+  shown = unique(as.character(out[[s$x]]))
+  n = table(factor(as.character(base[[s$x]]), levels = shown))
+  small = n[n < SUMMARY_SMALL_ROWS]
+  if (length(small)) stats::setNames(as.integer(small), names(small))
+}
+# The card's note for a small group that would have been the highest or the lowest (R's headline leaves it out): by the values drawn (a bar or a dot)
+#   or the groups' medians (a box).
+small_left_out <- function(group, rows) paste0(group, " has only ", rows, " rows and is left out of the headline.")
+small_crowned <- function(s, table, small) {
+  if (!length(small)) return(character(0))
+  t = as.data.frame(table)
+  g = as.character(t[[s$x]])
+  v = if (identical(s$family, "box")) { m = tapply(t[[s$y]], g, stats::median); g = names(m); as.numeric(m) } else t[[value_name(s)]]
+  ok = is.finite(v)
+  if (!any(ok)) return(character(0))
+  ends = unique(c(g[ok][fact_same(v[ok], max(v[ok]))], g[ok][fact_same(v[ok], min(v[ok]))]))
+  intersect(names(small), ends)
 }
 
 
@@ -2474,7 +2501,24 @@ plot_calls <- function(s, cb, pal = spec_palette(), interactive = FALSE) {
   build = switch(s$family, bar = bar_calls, dot = dot_calls, line = , slope = line_calls, scatter = , bubble = scatter_calls,
                  histogram = histogram_calls, box = box_calls, heatmap = heatmap_calls, dumbbell = dumbbell_calls)
   calls = few_breaks_calls(c(build(s, cb, pal), mark_calls(s, cb, pal), purrr::compact(list(facet_call(s), labs_call(s, cb, pal$style))), theme_calls(s, pal)), s)
+  calls = small_axis_calls(calls, s)
   if (interactive) widget_calls(calls, s, cb) else calls
+}
+
+# Task 07 Part C 3: on a chart of a mean, a median or a share, or a box chart, a group of fewer than SUMMARY_SMALL_ROWS rows (s$.small, group = rows) has
+#   its count on its axis label, "Escalations (3 rows)": the labels of the group axis (y when the chart lies sideways), on the discrete scale the chart
+#   already has, else on one added for it.
+small_axis_calls <- function(calls, s) {
+  small = s$.small
+  if (!length(small) || !s$family %in% c("bar", "dot", "box")) return(calls)
+  axis = if (isTRUE(s$.flip)) "scale_y_discrete" else "scale_x_discrete"
+  labels = substitute(function(x) ifelse(x %in% N, paste0(x, " (", R[x], " rows)"), x), list(N = names(small), R = small))
+  at = which(purrr::map_lgl(calls, function(cl) is.call(cl) && is.symbol(cl[[1]]) && identical(as.character(cl[[1]]), axis)))
+  if (!length(at)) return(c(calls, list(call(axis, labels = labels))))
+  cl = calls[[at[1]]]
+  cl$labels = labels
+  calls[[at[1]]] = cl
+  calls
 }
 
 # A narrow drawing (.few_breaks) asks a continuous x axis for fewer breaks: n.breaks on its scale, or a scale made for it when the
@@ -2539,9 +2583,15 @@ spec_plot <- function(spec, data, cb, palette = chart_palette_default(), web = N
     ls$.description = s$title
     ls$.headline = head
   }
+  # task 07 Part C: a small group's axis label carries its row count; Part B: a column the chart uses that holds unsettled codes for missing
+  small = attr(table, "small_groups")
+  ls$.small = small
+  codes = codes_unsettled(data, cb, c(s$x, s$y, s$size, s$color))
   env = do.call(spec_env, c(list(chart_table = table), pal$fonts))
   p = eval(plus_call(plot_calls(ls, cb, pal)), env)
-  attr(p, "notes") = c(palette_note(ls, cb, palette), lint$notes)
+  attr(p, "notes") = c(codes_sentences(codes), purrr::map_chr(small_crowned(ls, table, small), function(g) small_left_out(g, small[[g]])),
+                       palette_note(ls, cb, palette), lint$notes)
+  attr(p, "codes") = codes
   attr(p, "spec") = ls
   attr(p, "table") = table
   attr(p, "widget_plot") = function() {
@@ -2676,7 +2726,9 @@ SPEC_FACTS_SKEW <- 1                            # Phase 13 (the manager's ruling
                                                 #   is the moment coefficient g1 = m3 / m2^(3/2), m2 and m3 the second and third moments about the mean, each divided by n (no
                                                 #   small-sample correction)
 FACTS_ACROSS <- "Across the panels, "            # Phase 13: the lines of small multiples' facts that compare every panel (facts_across())
-FACTS_ALL <- "All panels, "                      # ... and of a faceted histogram's, that describe all its rows together
+FACTS_ALL <- "All panels, "
+FACTS_SMALL <- paste0("Groups of fewer than ", SUMMARY_SMALL_ROWS, " rows")   # task 07 Part C 1: a mean, median or share chart's small groups, with their rows
+FACTS_BIG <- paste0("Among the groups of ", SUMMARY_SMALL_ROWS, " rows or more, ")   # ... and its extremes without them (facts_big())                      # ... and of a faceted histogram's, that describe all its rows together
 
 # How a number is written in the facts, always the same way for the same value: a measure to 3
 #   significant digits, with thousands separators when its axis shows them; a count whole, with
@@ -2825,6 +2877,8 @@ facts_head <- function(s, cb, table, nm, exploratory) {
     paste0("Rows used: ", fact_count(attr(table, "rows_used"))),
     paste0("Rows after the filter: ", fact_count(attr(table, "rows_used") + dropped)),
     if (!is.null(groups)) paste0("Groups shown: ", groups),
+    if (length(attr(table, "small_groups"))) paste0(FACTS_SMALL, ": ",
+      paste0(nm(s$x, names(attr(table, "small_groups"))), " (", attr(table, "small_groups"), " rows)", collapse = ", ")),
     if (dropped > 0L) paste0("Rows left out for missing values: ", fact_count(dropped)),
     paste0("Exploratory: ", if (isTRUE(exploratory)) "yes" else "no"))
 }
@@ -2849,15 +2903,25 @@ facts_extremes <- function(s, vals, labs, fmt) {
     })
 }
 
-facts_bars <- function(s, cb, t, nm, fmt, rows = NULL) {
+facts_bars <- function(s, cb, t, nm, fmt, rows = NULL, small = NULL) {
   v = value_name(s)
   xs = nm(s$x, t[[s$x]])
   if (is.null(s$color))
-    return(c("Values:", paste0("- ", xs, ": ", fmt(t[[v]])), facts_extremes(s, t[[v]], xs, fmt), facts_spread(s, rows, t)))
+    return(c("Values:", paste0("- ", xs, ": ", fmt(t[[v]])), facts_extremes(s, t[[v]], xs, fmt), facts_big(s, t[[v]], xs, as.character(t[[s$x]]), small, fmt),
+             facts_spread(s, rows, t)))
   cs = nm(s$color, t[[s$color]])
   within = purrr::imap(fact_split(t, s$x), function(d, k)
     c(paste0("Within ", nm(s$x, k), ":"), paste0("  ", facts_extremes(s, d[[v]], nm(s$color, d[[s$color]]), fmt))))
-  c("Values:", paste0("- ", xs, ", ", cs, ": ", fmt(t[[v]])), facts_extremes(s, t[[v]], paste0(xs, ", ", cs), fmt), unlist(within))
+  c("Values:", paste0("- ", xs, ", ", cs, ": ", fmt(t[[v]])), facts_extremes(s, t[[v]], paste0(xs, ", ", cs), fmt),
+    facts_big(s, t[[v]], paste0(xs, ", ", cs), as.character(t[[s$x]]), small, fmt), unlist(within))
+}
+
+# Task 07 Part C 2: when a group has fewer than SUMMARY_SMALL_ROWS rows, the highest and the lowest among the groups with enough rows, each line of
+#   facts_extremes() written again after FACTS_BIG (R's headline names these). `groups` is each value's group (x), `small` the small groups.
+facts_big <- function(s, vals, labs, groups, small, fmt) {
+  keep = !groups %in% small
+  if (!length(small) || !any(keep) || all(keep)) return(NULL)
+  paste0(FACTS_BIG, purrr::map_chr(facts_extremes(s, vals[keep], labs[keep], fmt), hl_lower))
 }
 
 # Night task 03: the spread within the groups shown, from the rows behind a bar or dot of means (FACTS_POOLED_SD: the pooled standard deviation, each
@@ -3075,11 +3139,15 @@ facts_histogram <- function(s, cb, t, nm) {
   })))
 }
 
-facts_box <- function(s, cb, t, nm) {
+facts_box <- function(s, cb, t, nm, small = NULL) {
   num = function(x) fact_num(x, FALSE)
   groups = fact_split(t, s$x)
   med = purrr::map_dbl(groups, function(d) stats::median(d[[s$y]]))
   shown = nm(s$x, names(groups))
+  keep = !names(groups) %in% small   # task 07 Part C 2: the highest and lowest median among the groups with enough rows
+  big = if (length(small) && any(keep) && !all(keep))
+    paste0(FACTS_BIG, c(paste0("highest median: ", paste(shown[keep][fact_same(med[keep], max(med[keep]))], collapse = ", "), " (", num(max(med[keep])), ")"),
+                        paste0("lowest median: ", paste(shown[keep][fact_same(med[keep], min(med[keep]))], collapse = ", "), " (", num(min(med[keep])), ")")))
   c(unname(purrr::map2_chr(groups, shown, function(d, k) {
       y = d[[s$y]]; q = stats::quantile(y, c(0.25, 0.5, 0.75), names = FALSE)
       paste0(k, ": rows ", fact_count(length(y)), ", median ", num(q[2]), ", quartiles ", num(q[1]), " and ", num(q[3]),
@@ -3087,6 +3155,7 @@ facts_box <- function(s, cb, t, nm) {
     })),
     paste0("Highest median: ", paste(shown[fact_same(med, max(med))], collapse = ", "), " (", num(max(med)), ")"),
     paste0("Lowest median: ", paste(shown[fact_same(med, min(med))], collapse = ", "), " (", num(min(med)), ")"),
+    big,
     if (length(groups) > 1L) paste0(FACTS_SPREAD, ": ", num(stats::median(purrr::map_dbl(groups, function(d) stats::IQR(d[[s$y]]))) / HEADLINE_IQR_SD)))
 }
 
@@ -3133,15 +3202,17 @@ spec_facts <- function(spec, table, cb, exploratory = FALSE, data = NULL) {
   namer = fact_namer(cb)
   nm = namer$name
   fmt = fact_value_fmt(s)
-  head = facts_head(s, cb, table, nm, exploratory)
+  codes = codes_sentences(codes_unsettled(data, cb, c(s$x, s$y, s$size, s$color)))   # task 07 Part B
+  head = c(facts_head(s, cb, table, nm, exploratory), if (length(codes)) paste0(CODES_FACTS, ": ", codes))
+  small = names(attr(table, "small_groups"))
   base = if (!is.null(data) && (identical(s$family, "heatmap") || (s$family %in% c("bar", "dot") && (s$fn %||% "none") %in% c("mean", "median"))))
     run_steps(data, table_steps(s, cb)$base)
   body_of = function(t, rows = base) switch(s$family,
-    bar = , dot = facts_bars(s, cb, t, nm, fmt, rows),
+    bar = , dot = facts_bars(s, cb, t, nm, fmt, rows, small),
     line = facts_lines(s, cb, t, nm, fmt),
     slope = facts_slope(s, cb, t, nm, fmt),
     dumbbell = facts_dumbbell(s, cb, t, nm, fmt),
-    box = facts_box(s, cb, t, nm),
+    box = facts_box(s, cb, t, nm, small),
     heatmap = facts_heatmap(s, cb, t, nm, fmt, rows))
   t = as.data.frame(table)
   body = if (s$family %in% c("scatter", "bubble")) facts_scatter(s, cb, t, nm)
@@ -3274,14 +3345,34 @@ hl_strip <- function(x) sub("(?<![A-Z])[.]\\s*$", "", trimws(x), perl = TRUE)
 
 # The headlines R can write for a chart from its FACTS (`text`, with tokens for names), the first the fullest: a later one is shorter, for names
 #   too long for the first. `s` is the settled spec spec_facts() used. Returns character(0) when FACTS lacks what the chart's purpose needs.
+# Task 07 Part B 3: with a line of CODES_FACTS in FACTS, every headline begins "With 98, 99, -9 counted as values," (the codes of every such line); one
+#   that is then too long is not written, and spec_headline() falls back to HEADLINE_FALLBACK when none is left.
 facts_headline <- function(s, cb, text, seen = NULL, names = NULL) {
+  heads = facts_headline_plain(s, cb, text, seen, names)
+  codes = facts_codes(text)
+  if (!length(codes) || !length(heads)) return(heads)
+  starts = paste0("^(", paste(HEADLINE_OWN_WORDS, collapse = "|"), ")\\b")
+  paste0("With ", paste(codes, collapse = ", "), " counted as values, ", purrr::map_chr(heads, function(h) if (grepl(starts, h, perl = TRUE)) hl_lower(h) else h))
+}
+# The first words of R's own headlines, which are written in lower case after the codes' opening (a group's or a column's name keeps its case).
+HEADLINE_OWN_WORDS <- c("Every", "All", "No", "Higher", "Median", "Mean", "Total", "Share")
+# The codes of every CODES_FACTS line of FACTS, each once, as written there.
+facts_codes <- function(text) {
+  lines = trimws(strsplit(paste(text %||% "", collapse = "\n"), "\n", fixed = TRUE)[[1]])
+  hits = lines[startsWith(lines, paste0(CODES_FACTS, ": "))]
+  unique(unlist(purrr::map(regmatches(hits, regexec(" holds (.*), which look like codes for missing", hits)), function(m) if (length(m) == 2L) strsplit(m[[2]], ", ", fixed = TRUE)[[1]])))
+}
+facts_headline_plain <- function(s, cb, text, seen = NULL, names = NULL) {
   lines = trimws(strsplit(text, "\n", fixed = TRUE)[[1]])
   # each line of FACTS the headline is made from is noted in `seen` (an environment, when given), for the manager's table (tests/headlines_13.R)
   note = function(l) { if (!is.null(seen) && length(l)) seen$lines = unique(c(seen$lines, l)); l }
   hl_fact = function(lines, label) { key = paste0(label, ": "); hit = lines[startsWith(lines, key)]; if (length(hit)) substring(note(hit[[1]]), nchar(key) + 1L) }
   fam = s$family
   faceted = !is.null(s$facet) && !identical(s$facet, s$color) && !fam %in% c("scatter", "bubble", "histogram")
-  fact = function(label) hl_fact(lines, if (faceted) paste0(FACTS_ACROSS, hl_lower(label)) else label)
+  # task 07 Part C 2: a group of fewer than SUMMARY_SMALL_ROWS rows is not named highest or lowest: the extremes among the others (FACTS_BIG) when FACTS has them
+  small_out = !faceted && any(startsWith(lines, FACTS_BIG))
+  fact = function(label) if (small_out && !is.null(hl_fact(lines, paste0(FACTS_BIG, hl_lower(label))))) hl_fact(lines, paste0(FACTS_BIG, hl_lower(label)))
+                         else hl_fact(lines, if (faceted) paste0(FACTS_ACROSS, hl_lower(label)) else label)
   vcol = if (identical(fam, "heatmap")) s$color %||% s$y else if (identical(fam, "dumbbell")) s$x else s$y %||% s$x
   measure = if (index_first(s)) "the index" else switch(s$fn %||% "none", count = hl_lower(row_word(cb)), share = paste("share of", hl_lower(row_word(cb))),
                    sum = paste("total", hl_label(cb, vcol)), mean = paste("mean", hl_label(cb, vcol)), median = paste("median", hl_label(cb, vcol)), hl_label(cb, vcol))
@@ -3304,14 +3395,14 @@ facts_headline <- function(s, cb, text, seen = NULL, names = NULL) {
       if (is.null(hi)) return(character(0))
       who = hl_group(hi$who, if (identical(fam, "heatmap")) c(s$y, s$x) else s$x, cb, names)
       # rule 2: every value the same is said, and nothing else
-      every = if (!identical(fam, "heatmap")) hl_fact(lines, "Every value shown")
+      every = if (!identical(fam, "heatmap") && !small_out) hl_fact(lines, "Every value shown")
       if (!is.null(every)) {
         n = hl_fact(lines, "Groups shown")
         return(c(paste0("All ", n, " ", hl_plural(groups), shown, " have the same ", measure, ", ", every), paste0("All ", n, " have the same ", measure, ", ", every)))
       }
       lo = hl_named(fact("Lowest"))
       if (!identical(fam, "heatmap") && !is.null(lo) && near(hi$value, lo$value, s$fn %||% "none")) return(similar(hi$value, measure))
-      ties = hl_num(hl_fact(lines, "Groups at the highest value"))
+      ties = hl_num(fact("Groups at the highest value"))
       verb = if (isTRUE(ties > 1)) "have" else "has"
       c(paste0(who, " ", verb, " ", most, ", ", hi$value), paste0(who, " ", if (verb == "has") "is" else "are", " highest, ", hi$value))
     },

@@ -947,6 +947,11 @@ HEADLINE_MODEL_CHANGED <- "The chart has changed and the model's headline no lon
 recheck_story <- function(st)
   utils::modifyList(st, list(problems = problem_sentences(summary_problems(st$headline, st$summary, st$facts, st$spec))))
 
+# Task 07 Part B 2: the words of the card's two ways to settle a column's codes for missing.
+CODES_SETTLE <- "Settle them: "
+CODES_MISSING_BUTTON <- "enter them as missing"
+CODES_REAL_BUTTON <- "they are real values"
+
 # The one line under a headline and summary, or under a title: all well, or what is not, in the
 #   warning colour.
 check_line <- function(problems, ok = SUMMARY_ALL_OK) {
@@ -1777,11 +1782,11 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       res = tryCatch(reread_data(path, cb$file, unique(c(missing_codes(cb), value)), old = cb, encoding = cb$encoding, excel = excel), error = function(e) e)
       if (inherits(res, "error")) return(say(md_text(conditionMessage(res))))
       same = identical(res$read$data, isolate(state$data))
-      made$reread = if (!same) value
+      made$reread = if (!same && length(value)) paste(value, collapse = "', '")
       made$reread_numbers = if (!same) numbers
       made$notes = res$notes
       state$data = res$read$data; state$problems = res$read$problems; state$profile = res$profile; state$codebook = res$codebook; state$excel = res$read$excel
-      if (same) say(if (is.null(value)) "Nothing changed." else paste0("Nothing changed: no cell is exactly '", md_text(value), "'."))
+      if (same) say(if (is.null(value)) "Nothing changed." else paste0("Nothing changed: no cell is exactly '", paste(md_text(value), collapse = "', '"), "'."))
       invisible()
     }
 
@@ -2607,7 +2612,23 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         p = drawn()
         if (inherits(p, "error")) return(warn_box(conditionMessage(p)))
         shown = attr(p, "notes")
-        if (length(shown)) tags$ul(class = "small text-muted chart-notes", purrr::map(shown, tags$li))
+        codes = attr(p, "codes")
+        tagList(
+          if (length(shown)) tags$ul(class = "small text-muted chart-notes", purrr::map(shown, tags$li)),
+          # task 07 Part B 2: one click settles the codes the note names; after either the note goes
+          if (length(codes)) tags$p(class = "small mb-1 chart-codes", CODES_SETTLE,
+                                    actionLink(ns(cid(chart_id, "codes_missing")), CODES_MISSING_BUTTON), " or ",
+                                    actionLink(ns(cid(chart_id, "codes_real")), CODES_REAL_BUTTON)))
+      })
+      observeEvent(input[[cid(chart_id, "codes_missing")]], {
+        codes = attr(isolate(drawn()), "codes")
+        if (length(codes)) treat_missing(value = unique(unlist(codes, use.names = FALSE)))
+      })
+      observeEvent(input[[cid(chart_id, "codes_real")]], {
+        codes = attr(isolate(drawn()), "codes")
+        if (!length(codes)) return()
+        state$codebook = codes_keep(isolate(state$codebook), codes)
+        say(paste0("Kept as real values: ", paste(md_text(codes_sentences(codes) |> sub(pattern = ", which look like.*$", replacement = "")), collapse = "; "), "."))
       })
 
       # The buttons of the header.
@@ -2888,7 +2909,11 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                    btn("up", "Move up", disabled = isTRUE(at <= 1L)), btn("down", "Move down", disabled = isTRUE(at >= length(ids))))),
         bslib::card_body(
           fillable = FALSE, fill = FALSE, style = paste0("font-family: ", CHART_FONTS[[st$subtitle_font]]$css, ";"),
-          if (inherits(tb, "error")) warn_box(conditionMessage(tb)) else summary_tag(tb, def$ci)))
+          if (inherits(tb, "error")) warn_box(conditionMessage(tb)) else summary_tag(tb, def$ci),
+          # task 07 Part B 2: the same two ways to settle the codes the table's notes name, as on a chart's card
+          if (!inherits(tb, "error") && length(attr(tb, "summary")$codes))
+            tags$p(class = "small mb-1 chart-codes", CODES_SETTLE, actionLink(ns(cid(table_id, "codes_missing")), CODES_MISSING_BUTTON), " or ",
+                   actionLink(ns(cid(table_id, "codes_real")), CODES_REAL_BUTTON))))
     }
 
     # A table's outputs and observers, made once, when it is added.
@@ -2903,6 +2928,15 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       })
       output[[cid(table_id, "card")]] = renderUI(table_card_ui(table_id))
       observeEvent(input[[cid(table_id, "remove")]], remove_table(table_id))
+      table_codes = function() { tb = isolate(made$tbl[[table_id]]()); if (inherits(tb, "error")) list() else attr(tb, "summary")$codes %||% list() }
+      observeEvent(input[[cid(table_id, "codes_missing")]], {
+        codes = table_codes()
+        if (length(codes)) treat_missing(value = unique(unlist(codes, use.names = FALSE)))
+      })
+      observeEvent(input[[cid(table_id, "codes_real")]], {
+        codes = table_codes()
+        if (length(codes)) state$codebook = codes_keep(isolate(state$codebook), codes)
+      })
       observeEvent(input[[cid(table_id, "dash")]], {
         rv = made$dash[[table_id]]
         v = isTRUE(input[[cid(table_id, "dash")]])
