@@ -146,7 +146,7 @@ formula_examples <- function(con, place_ids, name, k = 3L) {
     "nb AS (SELECT o.passage_id, min(abs(o.r - pr.r)) AS dist FROM o JOIN pr ON o.doc_id = pr.doc_id AND abs(o.r - pr.r) <= 1",
     "       GROUP BY o.passage_id)",
     "SELECT c.code_id, c.doc_id, c.passage_id, c.task, c.packages, c.functions, c.code, nb.dist",
-    "FROM code c JOIN nb USING (passage_id) WHERE NOT c.is_output ORDER BY nb.dist, c.code_id"),
+    "FROM code c JOIN nb USING (passage_id) WHERE c.usable ORDER BY nb.dist, c.code_id"),
     paste(dbQuoteString(con, ids), collapse = ", "))) |> as_tibble() else tibble()
   found = find_code(con, name %||% "", k = k)
   bind_rows(near, found) |> distinct(code_id, .keep_all = TRUE) |> head(k)
@@ -160,7 +160,7 @@ find_code <- function(con, query, packages = NULL, functions = NULL, k = 8) {
   dbGetQuery(con, sprintf(paste(
     "WITH cs AS (%s), ps AS (%s),",
     "sc AS (SELECT c.code_id, coalesce(cs.bm25, 0) + %f * coalesce(ps.bm25, 0) AS score FROM code c",
-    "LEFT JOIN cs USING (code_id) LEFT JOIN ps USING (passage_id) WHERE NOT c.is_output AND (cs.bm25 IS NOT NULL OR ps.bm25 IS NOT NULL))",
+    "LEFT JOIN cs USING (code_id) LEFT JOIN ps USING (passage_id) WHERE c.usable AND (cs.bm25 IS NOT NULL OR ps.bm25 IS NOT NULL))",
     "SELECT c.code_id, c.doc_id, c.passage_id, c.task, c.packages, c.functions, sc.score, c.code",
     "FROM sc JOIN code c USING (code_id) %s ORDER BY sc.score DESC, c.code_id LIMIT %d"),
     bm25_sql(con, INDEX$code, q), bm25_sql(con, INDEX$passage, q), PARENT_WEIGHT,
