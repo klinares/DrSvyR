@@ -4,6 +4,16 @@ weighting, and R code. The store is searched by keywords, so the plan decides wh
 
 Return one JSON object with these fields:
 
+- mode: "lookup" or "advice".
+  "lookup" when the answer is a fact, a formula, a definition or code that the materials hold:
+  "what is the design effect?", "how do I rake in R?".
+  "advice" when the person describes a situation or asks what to do, which method to choose,
+  whether something is acceptable, or how to plan or review a survey or an analysis: "only 12%
+  answered, can I use it?", "should I trim these weights?", "how should I design this sample?".
+  When in doubt between the two, a message that describes the person's own survey is "advice".
+- decision: for advice, one line naming the decision the person faces; "" for a lookup.
+- error_sources: for advice, the sources of error at stake, from the tse values in the vocabulary
+  below (not "none"), most important first, at most 4; an empty list for a lookup.
 - intents: what the answer needs, any of "formula", "code", "advice", "concept".
   "formula" when an equation or estimator is asked for or would answer the question;
   "code" when the person wants to do something in R; "advice" when they ask what to do or
@@ -26,6 +36,10 @@ Return one JSON object with these fields:
     design), or "" when it needs no formula.
   - code_query: keywords for the R code that part wants (the task and the function names), or
     "" when it needs no code.
+  In advice mode the parts are not separate questions: they are the angles of the one decision
+  that must each be looked up so the trade-off can be weighed, one per source of error or per
+  option, at most 4 ("nonresponse bias and how to assess it", "weighting adjustment to known
+  totals", "coverage of people with no email address"). Give each its own queries.
 - more_than_four: true when the message asks more than 4 distinct questions (the parts then
   hold the first 4), otherwise false.
 
