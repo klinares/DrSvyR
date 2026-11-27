@@ -49,3 +49,5 @@ SurvAI_Expert/data/catalog/practools/
 SurvAI_Expert/tests/eval_report.md
 SurvAI_Expert/tests/eval_answers.csv
 SurvAI_Expert/tests/eval_retrieval.csv
+SurvAI_Expert/tests/advice_report.md
+SurvAI_Expert/tests/advice_answers.csv
