@@ -1571,6 +1571,9 @@ b5_pool <- function(s, t, p, data) {
       d = d[order(d[[s$x]]), ]; y = d[[v]]; n = length(y)
       c(y, y[n] - y[1], 100 * (y[n] - y[1]) / y[1], d[[s$x]], signif(y[n] / y[1], 2))
     }))
+    # night task 03: how many lines rose and fell
+    chg = purrr::map_dbl(split(t, as.character(t[[s$color]])), function(d) { y = d[order(d[[s$x]]), ][[v]]; y[length(y)] - y[1] })
+    out = c(out, sum(chg > 0), sum(chg < 0))
   } else if (identical(fam, "slope")) {
     lv = levels(t[[s$x]])
     a = t[t[[s$x]] == lv[1], ]; b = t[t[[s$x]] == lv[2], ]
@@ -1597,6 +1600,7 @@ b5_pool <- function(s, t, p, data) {
     out = c(length(x), range(x), stats::quantile(x, c(0.25, 0.5, 0.75)), mean(x), top$xmin, top$xmax, top$count)
   } else if (identical(fam, "box")) {
     out = unlist(purrr::map(split(t[[s$y]], as.character(t[[s$x]])), function(y) c(length(y), stats::quantile(y, c(0, 0.25, 0.5, 0.75, 1)))))
+    out = c(out, stats::median(purrr::map_dbl(split(t[[s$y]], as.character(t[[s$x]])), stats::IQR)) / 1.35)   # night task 03: the typical spread
   } else if (identical(fam, "heatmap")) {
     dd = data[stats::complete.cases(data[, c(s$x, s$y, s$color)]), ]
     by_rows = function(f) c(tapply(dd[[s$color %||% s$x]], as.character(dd[[s$x]]), f), tapply(dd[[s$color %||% s$x]], as.character(dd[[s$y]]), f))
@@ -10935,11 +10939,11 @@ h13_numbers <- function(h) {
   named <- unique(trimws(sub(":.*$", "", sub("^- ", "", trimws(strsplit(h$facts$text, "\n", fixed = TRUE)[[1]])))))
   sum(purrr::map_lgl(text_numbers(h$text), function(n) !(n$text %in% named) && !(n$value == round(n$value) && n$value >= 1000 && n$value < 3000 && n$value %in% years)))
 }
-h13_ok <- function(h) identical(h$source, "r") && hl_words(h$text) <= HEADLINE_MAX_WORDS && h13_numbers(h) <= 1L &&
+h13_ok <- function(h) identical(h$source, "r") && hl_words(h$text) <= HEADLINE_MAX_WORDS && h13_numbers(h) <= HEADLINE_MAX_NUMBERS &&
   summary_ok(summary_problems(names_out(h$text, h$facts$names), NULL, h$facts$text, list(), names(h$facts$names)))
 cat("      13 headlines: ", sum(purrr::map_lgl(h13_heads, h13_ok)), " of ", length(h13_heads), " gold specs and ", sum(purrr::map_lgl(h13_messy %||% list(), h13_ok)), " of ",
     length(h13_messy), " charts of the messy file written by R and passed; longest ", max(purrr::map_int(c(h13_heads, h13_messy), function(h) hl_words(h$text))), " words\n", sep = "")
-check("13A-1: R writes a headline for every chart from its facts, with no model call: for every gold spec (all families and forms: small multiples, an index, a share, top n, two periods) and four charts of the messy file the headline is R's (not the fallback), passes the number check and the word check (as a model's would, its names as tokens), has at most 12 words and at most one number (a year the facts hold is a time)",
+check("13A-1: R writes a headline for every chart from its facts, with no model call: for every gold spec (all families and forms: small multiples, an index, a share, top n, two periods) and four charts of the messy file the headline is R's (not the fallback), passes the number check and the word check (as a model's would, its names as tokens), has at most 12 words and at most two numbers (the manager's ruling; a year the facts hold is a time)",
       length(h13_heads) >= 30L && all(purrr::map_lgl(h13_heads, h13_ok)) && (is.null(h13_messy) || (length(h13_messy) == 4L && all(purrr::map_lgl(h13_messy, h13_ok)))))
 # the thresholds, each side: three groups at 100, 106 and 109 (1.09 times: similar) and at 100, 106 and 111 (1.11: not), five rows each; correlations of 0.19,
 #   0.21, -0.19 and -0.21
@@ -10952,15 +10956,15 @@ h13_xy <- function(r) {
   h13_head(list(family = "scatter", x = "x", y = "y", title = "Y against x", fit = "none"), h13_tiny(data.frame(x = x, y = r * x + sqrt(1 - r^2) * e)))
 }
 h13_thr <- list(b109 = h13_bars(109), b111 = h13_bars(111), r19 = h13_xy(0.19), r21 = h13_xy(0.21), rm19 = h13_xy(-0.19), rm21 = h13_xy(-0.21))
-check("13A-2: the manager's two thresholds, each a constant and each side tested: groups are similar when the highest is less than HEADLINE_SIMILAR (1.1) times the lowest (100, 106 and 109: 'similar', highest 109; 100, 106 and 111: C has the highest, 111); a relationship is 'no clear relation' when the correlation is between -HEADLINE_NO_RELATION and HEADLINE_NO_RELATION (0.2): 0.19 and -0.19 say so with the correlation, 0.21 rises together, -0.21 moves in opposite directions",
+check("13A-2: the manager's two thresholds, each a constant and each side tested: totals are similar when the highest is less than HEADLINE_SIMILAR (1.1) times the lowest (100, 106 and 109: 'similar', highest 109; 100, 106 and 111: C has the highest, 111; night task 03 keeps the ratio for counts, sums and shares); a relationship is 'no straight-line relation' (night task 03) when the correlation is between -HEADLINE_NO_RELATION and HEADLINE_NO_RELATION (0.2): 0.19 and -0.19 say so with the correlation, 0.21 rises together, -0.21 moves in opposite directions",
       HEADLINE_SIMILAR == 1.1 && HEADLINE_NO_RELATION == 0.2 &&
-        grepl("is similar", h13_thr$b109$text, fixed = TRUE) && grepl("109", h13_thr$b109$text, fixed = TRUE) && !grepl("similar", h13_thr$b111$text, fixed = TRUE) && startsWith(h13_thr$b111$text, "C has the highest") && grepl("111", h13_thr$b111$text, fixed = TRUE) &&
-        startsWith(h13_thr$r19$text, "No clear relation") && grepl("0.19", h13_thr$r19$text, fixed = TRUE) && startsWith(h13_thr$rm19$text, "No clear relation") && grepl("-0.19", h13_thr$rm19$text, fixed = TRUE) &&
-        grepl("rise together, correlation 0.21", h13_thr$r21$text, fixed = TRUE) && grepl("move in opposite directions, correlation -0.21", h13_thr$rm21$text, fixed = TRUE) &&
+        grepl("has a similar", h13_thr$b109$text, fixed = TRUE) && grepl("109", h13_thr$b109$text, fixed = TRUE) && !grepl("similar", h13_thr$b111$text, fixed = TRUE) && startsWith(h13_thr$b111$text, "g C has the highest") && grepl("111", h13_thr$b111$text, fixed = TRUE) &&
+        startsWith(h13_thr$r19$text, "No straight-line relation") && grepl("0.19", h13_thr$r19$text, fixed = TRUE) && startsWith(h13_thr$rm19$text, "No straight-line relation") && grepl("-0.19", h13_thr$rm19$text, fixed = TRUE) &&
+        grepl("goes with higher y, correlation 0.21", h13_thr$r21$text, fixed = TRUE) && grepl("goes with lower y, correlation -0.21", h13_thr$rm21$text, fixed = TRUE) &&
         all(purrr::map_lgl(h13_thr, function(h) identical(h$source, "r"))))
 # a headline that fails its checks is a bug: the chart shows "What is plotted: " and its description (a stand-in facts_headline() writes a number the facts lack)
 h13_real_fh <- facts_headline
-assign("facts_headline", function(s, cb, text, seen = NULL) "West has the highest total revenue, 12,345", envir = globalenv())
+assign("facts_headline", function(...) "West has the highest total revenue, 12,345", envir = globalenv())
 h13_fb <- tryCatch(r_headline(new_chart("c1", h13_bar), h13_cb, h13_o$read$data), error = function(e) NULL)
 h13_fbp <- tryCatch(ggplot2::get_labs(spec_plot(h13_bar, h13_o$read$data, h13_cb)), error = function(e) NULL)
 assign("facts_headline", h13_real_fh, envir = globalenv())
@@ -11197,6 +11201,112 @@ check("N2-3: a model's headline that names groups whose names hold digits ('CUST
         identical(headline_shown(n2_st, n2_r, "chart")$by, "model"))
 }
 # <<< night02 end
+
+# >>> night03 begin
+# No model call. Night task 03: R's headlines after the manager read all 39 (tests/review/headlines.md). A check for each rule: 1 "similar" for means and
+#   medians from the spread within the groups; 2 every value the same; 3 "no straight-line relation"; 4 a log-scale correlation says so; 5 a column's name
+#   exactly as in the file, never capitalised; 6 a group named by a number or a short code has its column's label before it; 7 lines: the largest change,
+#   all alike, an index as a multiple, one series from end to end; 8 no full stop at the end. Self-contained, so tests/mutate_night03.R can run it alone.
+if (run_fast) {   # the fast run only (N3-1 to N3-8)
+n3_tiny <- function(d, row_is = "one row") { cb <- new_codebook(profile_data(d), "t.csv", nrow(d), character(0), "UTF-8"); cb$row_is <- row_is; list(data = d, cb = cb) }
+n3_head <- function(spec, g) tryCatch(r_headline(new_chart("c1", spec), g$cb, g$data), error = function(e) list(text = conditionMessage(e), source = "error", facts = NULL))
+n3_o <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+n3_og <- list(data = n3_o$read$data, cb = utils::modifyList(n3_o$codebook, list(row_is = "one order")))
+if (!exists("gold_entries")) source(file.path("tests", "gallery.R"))
+n3_wd <- file.path(tempdir(), "n3_gold")
+dir.create(n3_wd, showWarnings = FALSE)
+n3_gold <- function(name) { en <- purrr::detect(gold_entries(), function(e) identical(e$name, name)); g <- if (!is.null(en)) gold_load(en, n3_wd); if (!is.null(g)) n3_head(en$spec, g) }
+
+# 1. three groups of ten rows, each group's standard deviation 10 (so the pooled one is 10 and 0.2 of it is 2): means 50, 50.95 and 51.9 (a gap of 1.9:
+#   similar) or 52.1 (2.1: not); the same for medians, each group's interquartile range 13.5 (13.5 / 1.35 = 10)
+n3_a <- 10 / sqrt(10 / 9)
+n3_means <- function(top) n3_head(list(family = "dot", x = "g", y = "v", fn = "mean", title = "Mean v by g"),
+                                  n3_tiny(data.frame(g = rep(c("Alpha", "Beta", "Gamma"), each = 10), v = c(50, 50.95, top)[rep(1:3, each = 10)] + rep(c(-n3_a, n3_a), 15))))
+n3_meds <- function(top) n3_head(list(family = "box", x = "g", y = "v", title = "V by g"),
+                                 n3_tiny(data.frame(g = rep(c("Alpha", "Beta", "Gamma"), each = 10), v = c(50, 50.95, top)[rep(1:3, each = 10)] + rep(seq(-13.5, 13.5, length.out = 10), 3))))
+n3_r1 <- list(m19 = n3_means(51.9), m21 = n3_means(52.1), d19 = n3_meds(51.9), d21 = n3_meds(52.1),
+              height_dot = n3_gold("football, mean height by position (dot)"), height_box = n3_gold("football, height by position (box)"),
+              price = n3_head(list(family = "box", x = "channel", y = "unit_price", shape = "violin", title = "Unit price by channel"), n3_og))
+check("N3-1: rule 1, 'similar' for means and medians: a mean is similar when the highest less the lowest is under HEADLINE_SMALL_DIFF (0.2) times the pooled within-group standard deviation, which FACTS gives (means 50 to 51.9 with an SD of 10: similar; to 52.1: Gamma has the highest); a median when the gap is under 0.2 times the typical spread, the median interquartile range over 1.35, which FACTS gives (the same on each side); height by position (dot and box) is no longer similar, unit price by channel still is; counts, sums and shares keep the ratio",
+      HEADLINE_SMALL_DIFF == 0.2 && HEADLINE_IQR_SD == 1.35 && HEADLINE_SIMILAR == 1.1 &&
+        grepl(paste0("\n", FACTS_POOLED_SD, ": 10\n"), paste0(n3_r1$m19$facts$text, "\n"), fixed = TRUE) && grepl(paste0("\n", FACTS_SPREAD, ": 10"), n3_r1$d19$facts$text, fixed = TRUE) &&
+        identical(n3_r1$m19$text, "Every g has a similar mean v, highest 51.9") && identical(n3_r1$m21$text, "Gamma has the highest mean v, 52.1") &&
+        identical(n3_r1$d19$text, "Every g has a similar median v, highest 51.9") && startsWith(n3_r1$d21$text, "Gamma has the highest median v, 52.1") &&
+        (is.null(n3_r1$height_dot) || identical(n3_r1$height_dot$text, "Goalkeeper has the highest mean Height, 189")) &&
+        (is.null(n3_r1$height_box) || startsWith(n3_r1$height_box$text, "Goalkeeper has the highest median Height, 189")) &&
+        startsWith(n3_r1$price$text, "Every channel has a similar median unit_price") &&
+        all(purrr::map_lgl(purrr::compact(n3_r1), function(h) identical(h$source, "r"))))
+# 2. every value the same
+n3_same <- n3_head(list(family = "bar", x = "team", y = "score", fn = "none", title = "Score by team"), n3_tiny(data.frame(team = c("Alpha", "Beta", "Gamma"), score = 7)))
+n3_fh <- n3_gold("FH, top 10 political rights 2014 (bar)")
+check("N3-2: rule 2, every value the same is said and nothing else: three teams scoring 7 give 'All 3 teams have the same score, 7' (no 'similar', no 'highest'); the eleven countries tied at the top for political rights, 'All 11 Countries shown have the same pr_2014, 40'",
+      identical(n3_same$text, "All 3 teams have the same score, 7") && !grepl("similar|highest", n3_same$text) &&
+        (is.null(n3_fh) || identical(n3_fh$text, "All 11 Countries shown have the same pr_2014, 40")))
+# 3 and 4. a near-zero correlation, and one on a log scale
+n3_xy <- function(r) {
+  x <- seq_len(200); x <- (x - mean(x)) / stats::sd(x)
+  e <- stats::residuals(stats::lm(sin(seq_len(200) * 1.7) ~ x)); e <- e / stats::sd(e)
+  n3_head(list(family = "scatter", x = "x", y = "y", title = "Y against x", fit = "none"), n3_tiny(data.frame(x = x, y = r * x + sqrt(1 - r^2) * e)))
+}
+n3_r3 <- list(r19 = n3_xy(0.19), rm19 = n3_xy(-0.19))
+check("N3-3: rule 3, a correlation between -0.2 and 0.2 is 'No straight-line relation between y and x', with the correlation (a curved or clustered pattern can have one near zero); never 'no clear relation'",
+      identical(n3_r3$r19$text, "No straight-line relation between y and x, correlation 0.19") && identical(n3_r3$rm19$text, "No straight-line relation between y and x, correlation -0.19"))
+n3_log <- n3_head(list(family = "scatter", x = "units", y = "unit_price", log_x = TRUE, log_y = TRUE, density = "off", title = "Price against units"), n3_og)
+check("N3-4: rule 4, when FACTS gives the correlation on the log scale shown the headline says 'log-scale correlation': unit price against units on two log axes, 'log-scale correlation -0.82'",
+      grepl("\nPearson correlation on the log scale shown: -0.82", n3_log$facts$text, fixed = TRUE) && grepl("log-scale correlation -0.82", n3_log$text, fixed = TRUE) &&
+        !grepl("log-scale", n3_r3$r19$text, fixed = TRUE))
+# 5. names as in the file
+set.seed(903)
+n3_pr <- n3_head(list(family = "scatter", x = "pr_2014", y = "cl_2014", title = "Civil against political"), n3_tiny(data.frame(pr_2014 = rep(1:20, 2), cl_2014 = rep(1:20, 2) + stats::rnorm(40))))
+n3_ht <- n3_head(list(family = "dot", x = "Position", y = "Height", fn = "mean", title = "Height by position"),
+                 n3_tiny(data.frame(Position = rep(c("Keeper", "Defender"), each = 20), Height = c(rep(c(186, 192), 10), rep(c(178, 184), 10)))))
+check("N3-5: rule 5, a column with no label is named exactly as in the file, never split and never capitalised ('pr_2014', 'Height', 'unit_price'); a sentence that would begin with a lower-case name begins otherwise ('Higher pr_2014 goes with higher cl_2014'); a label is used as it reads",
+      identical(hl_label(n3_og$cb, "unit_price"), "unit_price") && identical(hl_label(n3_tiny(data.frame(pr_2014 = 1))$cb, "pr_2014"), "pr_2014") &&
+        startsWith(n3_pr$text, "Higher pr_2014 goes with higher cl_2014, correlation ") && identical(n3_ht$text, "Keeper has the highest mean Height, 189") &&
+        grepl("unit_price", n3_log$text, fixed = TRUE) && !grepl("unit price", n3_log$text, fixed = TRUE) && !grepl("^(Pr|Cl|Unit_price)", n3_pr$text))
+# 6. groups named by a number or a short code
+n3_rate <- n3_head(list(family = "bar", x = "rating", fn = "count", title = "Rows by rating"), n3_tiny(data.frame(rating = rep(1:5, c(3, 5, 9, 4, 2)))))
+n3_foot <- n3_head(list(family = "heatmap", x = "Position", y = "Foot", title = "Position by foot"),
+                   n3_tiny(data.frame(Foot = rep(c("R", "L"), c(30, 10)), Position = c(rep("Midfielder", 20), rep("Defender", 10), rep("Midfielder", 4), rep("Defender", 6)))))
+n3_rbox <- n3_head(list(family = "box", x = "rating", y = "v", title = "V by rating"), n3_tiny(data.frame(rating = rep(1:3, each = 10), v = c(rep(1:10, 1), rep(11:20, 1), rep(31:40, 1)))))
+check("N3-6: rule 6, a group whose name is a number, or shorter than three characters, has its grouping column's label before it and keeps its own name as FACTS writes it: 'rating 3 has the most rows, 9', 'Foot R, Midfielder has the most rows, 20', 'rating 3 has the highest median v, 35.5; rating 1 the lowest'",
+      identical(n3_rate$text, "rating 3 has the most rows, 9") && identical(n3_foot$text, "Foot R, Midfielder has the most rows, 20") &&
+        identical(n3_rbox$text, "rating 3 has the highest median v, 35.5; rating 1 the lowest"))
+# 7. lines
+n3_lines <- function(ch) n3_head(list(family = "line", x = "year", y = "v", color = "region", fn = "sum", title = "V by year"),
+                                 n3_tiny(data.frame(region = rep(c("North", "South", "East"), each = 3), year = rep(2015:2017, 3),
+                                                    v = c(100, 104, 100 + ch[1], 200, 203, 200 + ch[2], 300, 306, 300 + ch[3]))))
+n3_r7 <- list(stands = n3_lines(c(10, 10.5, 20)), alike = n3_lines(c(10, 10.5, 10.8)),
+              index = n3_head(list(family = "line", x = "order_month", y = "revenue", color = "region", fn = "sum", index = "first", title = "Revenue indexed"), n3_og),
+              one = n3_head(list(family = "line", x = "order_month", y = "revenue", fn = "sum", title = "Monthly revenue"), n3_og))
+check("N3-7: rule 7, lines: several series state the largest change ('East rose most from 2015 to 2017, by 20'), or, all of one direction with none standing out by rule 1's ratio, 'All 3 regions end higher than they started'; an index is a multiple, which FACTS now gives ('West grew most, to 9.3 times its Jan 2022 value'; never 'index 933'); one series runs from end to end, its first time dropped when the whole is over 12 words ('Total revenue rose from 39,000 to 142,000 in Dec 2024')",
+      identical(n3_r7$stands$text, "East rose most from 2015 to 2017, by 20") && identical(n3_r7$alike$text, "All 3 regions end higher than they started") &&
+        grepl("\nLines that rose: 3; lines that fell: 0", n3_r7$alike$facts$text, fixed = TRUE) &&
+        identical(n3_r7$index$text, "West grew most, to 9.3 times its Jan 2022 value") && grepl("end is 9.3 times start", n3_r7$index$facts$text, fixed = TRUE) &&
+        !grepl("index", n3_r7$index$text, fixed = TRUE) && identical(n3_r7$one$text, "Total revenue rose from 39,000 to 142,000 in Dec 2024") &&
+        all(purrr::map_lgl(n3_r7, function(h) identical(h$source, "r"))))
+# 8. no full stop at the end, whoever wrote it
+n3_bar <- list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "Revenue by region")
+n3_rh <- r_headline(new_chart("c1", n3_bar), n3_og$cb, n3_og$data)
+n3_story <- function(h, by) list(headline = h, summary = NULL, facts = names_back(n3_rh$facts$text, n3_rh$facts$names), spec = n3_bar, problems = character(0), headline_by = by)
+n3_ask <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL) {
+  raw <- as.character(jsonlite::toJSON(list(charts = list(list(id = "c1", headline = "West has the highest total revenue, 940,000.", summary = "West leads the regions."))), auto_unbox = TRUE))
+  obj <- parse_json_block(raw); if (!is.null(validate)) validate(obj)
+  list(obj = obj, raw = raw, finish = "success", tokens = c(100, 20, 0), seconds = 0.1)
+}
+n3_sum <- summarize_charts(list(new_chart("c1", n3_bar)), n3_og$cb, n3_og$data, ask = n3_ask)$charts[[1]]
+check("N3-8: rule 8, no full stop at the end of a headline, whoever wrote it: a model's is stored and shown without it, an analyst's is shown without it, and a final point after a capital ('U.S.') stays; R's never had one",
+      identical(hl_strip("West leads."), "West leads") && identical(hl_strip("Made in the U.S."), "Made in the U.S.") &&
+        identical(n3_sum$headline, "West has the highest total revenue, 940,000") &&
+        identical(headline_shown(n3_story("West has the highest total revenue, 940,000.", NULL), n3_rh)$text, "West has the highest total revenue, 940,000") &&
+        identical(headline_shown(n3_story("My own words.", "analyst"), n3_rh)$text, "My own words") && !grepl("[.]$", n3_rh$text))
+check("N3-9: a longer headline must not move the cards as the page loads (12c-2 found one on one line in the fallback face and two in Inter): a page with animated cards gives its faces font-display optional and its head script, which comes after the style, starts loading every face at once; a page with no script keeps the default display",
+      startsWith(MOTION_HEAD_JS, DASH_FONTS_JS) && grepl("f.load()", DASH_FONTS_JS, fixed = TRUE) &&
+        grepl("font-display:optional;", dash_font_css("clean", "optional"), fixed = TRUE) && !grepl("font-display", dash_font_css("clean"), fixed = TRUE) &&
+        (function(src) { a <- regexpr("dash_font_css(style, if (moving) \"optional\")", src, fixed = TRUE)
+          b <- regexpr("if (moving) tags$script(HTML(MOTION_HEAD_JS))", src, fixed = TRUE); a > 0 && b > a })(gsub("[[:space:]]+", " ", paste(deparse(body(dash_page)), collapse = " "))))
+}
+# <<< night03 end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------

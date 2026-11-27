@@ -2849,15 +2849,30 @@ facts_extremes <- function(s, vals, labs, fmt) {
     })
 }
 
-facts_bars <- function(s, cb, t, nm, fmt) {
+facts_bars <- function(s, cb, t, nm, fmt, rows = NULL) {
   v = value_name(s)
   xs = nm(s$x, t[[s$x]])
   if (is.null(s$color))
-    return(c("Values:", paste0("- ", xs, ": ", fmt(t[[v]])), facts_extremes(s, t[[v]], xs, fmt)))
+    return(c("Values:", paste0("- ", xs, ": ", fmt(t[[v]])), facts_extremes(s, t[[v]], xs, fmt), facts_spread(s, rows, t)))
   cs = nm(s$color, t[[s$color]])
   within = purrr::imap(fact_split(t, s$x), function(d, k)
     c(paste0("Within ", nm(s$x, k), ":"), paste0("  ", facts_extremes(s, d[[v]], nm(s$color, d[[s$color]]), fmt))))
   c("Values:", paste0("- ", xs, ", ", cs, ": ", fmt(t[[v]])), facts_extremes(s, t[[v]], paste0(xs, ", ", cs), fmt), unlist(within))
+}
+
+# Night task 03: the spread within the groups shown, from the rows behind a bar or dot of means (FACTS_POOLED_SD: the pooled standard deviation, each
+#   group's variance weighted by its rows less one) or of medians (FACTS_SPREAD: the median of the groups' interquartile ranges over HEADLINE_IQR_SD), for
+#   the headline's "similar" (rule 1). None without the rows, or with fewer than two groups of two rows.
+facts_spread <- function(s, rows, t) {
+  fn = s$fn %||% "none"
+  if (is.null(rows) || !fn %in% c("mean", "median") || is.null(s$y) || !s$y %in% names(rows)) return(NULL)
+  rows = rows[as.character(rows[[s$x]]) %in% as.character(t[[s$x]]), , drop = FALSE]
+  ys = purrr::keep(purrr::map(split(rows[[s$y]], as.character(rows[[s$x]])), function(y) y[is.finite(y)]), function(y) length(y) >= 2L)
+  if (length(ys) < 2L) return(NULL)
+  if (identical(fn, "mean")) {
+    n = purrr::map_int(ys, length)
+    paste0(FACTS_POOLED_SD, ": ", fact_num(sqrt(sum((n - 1L) * purrr::map_dbl(ys, stats::var)) / (sum(n) - length(n))), FALSE))
+  } else paste0(FACTS_SPREAD, ": ", fact_num(stats::median(purrr::map_dbl(ys, stats::IQR)) / HEADLINE_IQR_SD, FALSE))
 }
 
 # The step between a series' dates when the series is monthly or quarterly ("month", "quarter"),
@@ -2896,7 +2911,8 @@ facts_lines <- function(s, cb, t, nm, fmt) {
     extremes = if (n >= SPEC_FACTS_LINE_POINTS) paste0(", highest ", fmt(y[i_hi]), " (", tm[i_hi], "), lowest ", fmt(y[i_lo]), " (", tm[i_lo], ")")
       else paste0(", only ", fact_count(n), if (n == 1L) " point" else " points", ", so no highest or lowest is given")
     # An indexed line: its index at the end and at its peak (every line starts at 100); the amounts are not in the chart.
-    text = if (index_first(s)) paste0(who, ": index ", fmt(y[1]), " at the start (", tm[1], "), ", fmt(y[n]), " at the end (", tm[n], "), ", fmt(y[i_hi]), " at its peak (", tm[i_hi], ")")
+    text = if (index_first(s)) paste0(who, ": index ", fmt(y[1]), " at the start (", tm[1], "), ", fmt(y[n]), " at the end (", tm[n], "), ", fmt(y[i_hi]), " at its peak (", tm[i_hi], ")",
+                                      if (y[1] > 0 && y[n] > 0) paste0(", end is ", fact_times(y[n] / y[1]), " times start"))
       else paste0(who, ": first ", fmt(y[1]), " (", tm[1], "), last ", fmt(y[n]), " (", tm[n], "), change ",
                   fmt(y[n] - y[1]), if (y[1] > 0) paste0(" (", fact_pct(100 * (y[n] - y[1]) / y[1]), ")"),
                   if (y[1] > 0 && y[n] > 0) paste0(", end is ", fact_times(y[n] / y[1]), " times start"),
@@ -2920,7 +2936,9 @@ facts_lines <- function(s, cb, t, nm, fmt) {
     } else c(
       if (length(one) > 1L) paste0("Highest at the end: ", one[[which.max(ends)]]$name, " (", fmt(max(ends)), ")"),
       if (length(one) > 1L && max(chg) > 0) paste0("Rose most: ", one[[which.max(chg)]]$name, " (", fmt(max(chg)), ")"),
-      if (length(one) > 1L && min(chg) < 0) paste0("Fell most: ", one[[which.min(chg)]]$name, " (", fmt(min(chg)), ")")),
+      if (length(one) > 1L && min(chg) < 0) paste0("Fell most: ", one[[which.min(chg)]]$name, " (", fmt(min(chg)), ")"),
+      if (length(one) > 1L) paste0("Lines that rose: ", sum(chg > 0), "; lines that fell: ", sum(chg < 0)),
+      if (length(one) > 1L && (all(chg > 0) || all(chg < 0))) paste0("Smallest change: ", one[[which.min(abs(chg))]]$name, " (", fmt(chg[which.min(abs(chg))]), ")")),
     unname(purrr::map_chr(purrr::compact(purrr::map(one[keep], "ma")), identity)))
 }
 
@@ -3068,7 +3086,8 @@ facts_box <- function(s, cb, t, nm) {
              ", minimum ", num(min(y)), ", maximum ", num(max(y)))
     })),
     paste0("Highest median: ", paste(shown[fact_same(med, max(med))], collapse = ", "), " (", num(max(med)), ")"),
-    paste0("Lowest median: ", paste(shown[fact_same(med, min(med))], collapse = ", "), " (", num(min(med)), ")"))
+    paste0("Lowest median: ", paste(shown[fact_same(med, min(med))], collapse = ", "), " (", num(min(med)), ")"),
+    if (length(groups) > 1L) paste0(FACTS_SPREAD, ": ", num(stats::median(purrr::map_dbl(groups, function(d) stats::IQR(d[[s$y]]))) / HEADLINE_IQR_SD)))
 }
 
 # `rows` are the rows of the data behind the chart (after the filter and the rows left out for
@@ -3115,9 +3134,10 @@ spec_facts <- function(spec, table, cb, exploratory = FALSE, data = NULL) {
   nm = namer$name
   fmt = fact_value_fmt(s)
   head = facts_head(s, cb, table, nm, exploratory)
-  base = if (!is.null(data) && identical(s$family, "heatmap")) run_steps(data, table_steps(s, cb)$base)
+  base = if (!is.null(data) && (identical(s$family, "heatmap") || (s$family %in% c("bar", "dot") && (s$fn %||% "none") %in% c("mean", "median"))))
+    run_steps(data, table_steps(s, cb)$base)
   body_of = function(t, rows = base) switch(s$family,
-    bar = , dot = facts_bars(s, cb, t, nm, fmt),
+    bar = , dot = facts_bars(s, cb, t, nm, fmt, rows),
     line = facts_lines(s, cb, t, nm, fmt),
     slope = facts_slope(s, cb, t, nm, fmt),
     dumbbell = facts_dumbbell(s, cb, t, nm, fmt),
@@ -3134,7 +3154,7 @@ spec_facts <- function(spec, table, cb, exploratory = FALSE, data = NULL) {
     else body_of(t)
   text = paste(c(head, body), collapse = "\n")
   seen = new.env()
-  heads = facts_headline(s, cb, text, seen)
+  heads = facts_headline(s, cb, text, seen, namer$map())
   list(text = text, names = namer$map(), headline = heads, from = seen$lines)
 }
 
@@ -3193,8 +3213,16 @@ facts_across <- function(s, cb, t, nm, fmt) {
 #   (check_numbers(), check_words(), the tokens: summary_problems()); one that fails is a bug, and the chart shows HEADLINE_FALLBACK and its
 #   description instead of a claim that was not checked. The two thresholds are the manager's choices, not a standard, and each is one constant.
 HEADLINE_MAX_WORDS <- 12L
-HEADLINE_SIMILAR <- 1.1          # groups are "similar" when the highest is less than this many times the lowest
-HEADLINE_NO_RELATION <- 0.2      # "no clear relation" when the correlation is strictly between -this and this
+HEADLINE_SIMILAR <- 1.1          # counts, sums, shares and plain values: groups are "similar" when the highest is less than this many times the lowest
+# Night task 03 (the manager's rule): means and medians are "similar" when the highest less the lowest is under HEADLINE_SMALL_DIFF times the spread within
+#   the groups: for means the pooled within-group standard deviation, for medians the typical within-group spread, the median of the groups' interquartile
+#   ranges divided by HEADLINE_IQR_SD (an interquartile range of a normal distribution is 1.35 standard deviations). 0.2 is the manager's choice, borrowed
+#   from the usual description of a small standardised difference; it describes the file and is not a test.
+HEADLINE_SMALL_DIFF <- 0.2
+HEADLINE_IQR_SD <- 1.35
+FACTS_POOLED_SD <- "Pooled standard deviation within groups"
+FACTS_SPREAD <- "Typical spread within groups (the median of their interquartile ranges, scaled to a standard deviation)"
+HEADLINE_NO_RELATION <- 0.2      # "no straight-line relation" when the correlation is strictly between -this and this
 HEADLINE_FALLBACK <- "What is plotted: "
 HEADLINE_TAIL_MIN_ROWS <- 30L    # the manager's ruling: a headline names a histogram's tail only when the chart has at least this many rows
 
@@ -3217,20 +3245,36 @@ hl_named <- function(x) {
 hl_num <- function(v) suppressWarnings(as.numeric(gsub("[,%]", "", sub("^−", "-", v %||% NA_character_))))
 hl_unsigned <- function(v) sub("^[-−]", "", v)
 hl_words <- function(x) length(strsplit(trimws(x), "\\s+")[[1]])
-# A column's name inside a headline: its dictionary label with its first letter in lower case when it reads as a word ("Unit price" as "unit price"; "GDP"
-#   stays); with no label, the column name as words in lower case ("unit_price" as "unit price", "Height" as "height"), except that a part that starts
-#   with a digit keeps its underscore ("pr_2014", "score_1"), as FACTS writes it: a digit standing alone would read as a number the facts lack.
-hl_label <- function(cb, col) {
+# A column's name inside a headline (night task 03, rule 5): its dictionary label, with its first letter in lower case when it reads as a word ("Unit price"
+#   as "unit price"; "GDP" stays), or as written at the start of a sentence (`start`); with no label, the column's name exactly as it is in the file, its case
+#   never changed and never split ("pr_2014", "Height", "unit_price").
+hl_label <- function(cb, col, start = FALSE) {
   l = cb_label(cb, col)
-  if (!identical(l, col)) return(hl_lower(l))
-  parts = strsplit(l, "_", fixed = TRUE)[[1]]
-  l = paste0(parts[1], paste0(ifelse(grepl("^[0-9]", parts[-1]), "_", " "), parts[-1], collapse = ""))
-  gsub("\\b([A-Z])([a-z]+)\\b", "\\L\\1\\2", l, perl = TRUE)
+  if (identical(l, col)) return(col)
+  if (start) l else hl_lower(l)
 }
+# Groups of a column, in the plural ("Country" as "Countries", "region" as "regions"); a name that is not plain words as "values of pr_2014".
+hl_plural <- function(x) {
+  if (!grepl("^[A-Za-z][A-Za-z ]*$", x)) return(paste0("values of ", x))
+  if (grepl("[^aeiouAEIOU]y$", x)) sub("y$", "ies", x) else if (grepl("(s|x|z|ch|sh)$", x)) paste0(x, "es") else paste0(x, "s")
+}
+# A group named in a headline (rule 6): a name that is a number, or shorter than three characters, has its grouping column's label before it ("rating 4",
+#   "Foot R"), the name itself letter for letter as FACTS writes it. `who` is as FACTS writes it (several names, or a heatmap's row and column, joined by
+#   ", "); `cols` the column of each part (recycled); `names` the facts' map of tokens to names (a token is looked up by its name).
+hl_group <- function(who, cols, cb, names = NULL) {
+  parts = strsplit(who, ", ", fixed = TRUE)[[1]]
+  cols = rep_len(cols, length(parts))
+  paste(purrr::map2_chr(parts, cols, function(p, col) {
+    v = if (p %in% names(names)) names[[p]] else p
+    if (grepl("^[-+]?[0-9][0-9.,]*$", v) || nchar(v) < 3L) paste(hl_label(cb, col), p) else p
+  }), collapse = ", ")
+}
+# A headline has no full stop at its end, whoever wrote it (rule 8); a final point after a capital letter ("U.S.") stays.
+hl_strip <- function(x) sub("(?<![A-Z])[.]\\s*$", "", trimws(x), perl = TRUE)
 
 # The headlines R can write for a chart from its FACTS (`text`, with tokens for names), the first the fullest: a later one is shorter, for names
 #   too long for the first. `s` is the settled spec spec_facts() used. Returns character(0) when FACTS lacks what the chart's purpose needs.
-facts_headline <- function(s, cb, text, seen = NULL) {
+facts_headline <- function(s, cb, text, seen = NULL, names = NULL) {
   lines = trimws(strsplit(text, "\n", fixed = TRUE)[[1]])
   # each line of FACTS the headline is made from is noted in `seen` (an environment, when given), for the manager's table (tests/headlines_13.R)
   note = function(l) { if (!is.null(seen) && length(l)) seen$lines = unique(c(seen$lines, l)); l }
@@ -3241,36 +3285,89 @@ facts_headline <- function(s, cb, text, seen = NULL) {
   vcol = if (identical(fam, "heatmap")) s$color %||% s$y else if (identical(fam, "dumbbell")) s$x else s$y %||% s$x
   measure = if (index_first(s)) "the index" else switch(s$fn %||% "none", count = hl_lower(row_word(cb)), share = paste("share of", hl_lower(row_word(cb))),
                    sum = paste("total", hl_label(cb, vcol)), mean = paste("mean", hl_label(cb, vcol)), median = paste("median", hl_label(cb, vcol)), hl_label(cb, vcol))
+  # the measure at the start of a sentence: a plain column as rule 5 writes it there, never capitalised by R; else its first word ("Total", "Mean")
+  measure_start = if (identical(s$fn %||% "none", "none") && !index_first(s)) hl_label(cb, vcol, start = TRUE) else hl_upper(measure)
   groups = hl_label(cb, if (identical(fam, "dumbbell")) s$y else s$x)
   most = switch(s$fn %||% "none", count = paste("the most", measure), share = paste("the largest", measure), paste("the highest", measure))
-  similar = function(hi, what) c(paste0(hl_upper(what), " is similar in every ", groups, ", highest ", hi), paste0(hl_upper(what), " is similar, highest ", hi))
+  shown = if (!is.null(hl_fact(lines, "Shown"))) " shown" else ""
+  similar = function(hi, what) c(paste0("Every ", groups, shown, " has a similar ", what, ", highest ", hi), paste0("Every ", groups, shown, " is similar, highest ", hi))
+  # rule 1: means and medians are near when their gap is small against the spread within the groups; anything else by the ratio
+  near = function(hi, lo, fn) {
+    gap = hl_num(hi) - hl_num(lo)
+    if (identical(fn, "mean")) isTRUE(gap < HEADLINE_SMALL_DIFF * hl_num(fact(FACTS_POOLED_SD)))
+    else if (identical(fn, "median")) isTRUE(gap < HEADLINE_SMALL_DIFF * hl_num(fact(FACTS_SPREAD)))
+    else isTRUE(hl_num(hi) / hl_num(lo) < HEADLINE_SIMILAR) && isTRUE(hl_num(lo) > 0)
+  }
   switch(fam,
     bar = , dot = , heatmap = {
       hi = hl_named(fact(if (identical(fam, "heatmap")) "Highest cell" else "Highest"))
       if (is.null(hi)) return(character(0))
-      mult = hl_num(fact("Highest as a multiple of the lowest"))
-      if (!identical(fam, "heatmap") && (!is.null(hl_fact(lines, "Every value shown")) || isTRUE(mult < HEADLINE_SIMILAR))) return(similar(hi$value, measure))
+      who = hl_group(hi$who, if (identical(fam, "heatmap")) c(s$y, s$x) else s$x, cb, names)
+      # rule 2: every value the same is said, and nothing else
+      every = if (!identical(fam, "heatmap")) hl_fact(lines, "Every value shown")
+      if (!is.null(every)) {
+        n = hl_fact(lines, "Groups shown")
+        return(c(paste0("All ", n, " ", hl_plural(groups), shown, " have the same ", measure, ", ", every), paste0("All ", n, " have the same ", measure, ", ", every)))
+      }
+      lo = hl_named(fact("Lowest"))
+      if (!identical(fam, "heatmap") && !is.null(lo) && near(hi$value, lo$value, s$fn %||% "none")) return(similar(hi$value, measure))
       ties = hl_num(hl_fact(lines, "Groups at the highest value"))
       verb = if (isTRUE(ties > 1)) "have" else "has"
-      c(paste0(hi$who, " ", verb, " ", most, ", ", hi$value), paste0(hi$who, " ", if (verb == "has") "is" else "are", " highest, ", hi$value))
+      c(paste0(who, " ", verb, " ", most, ", ", hi$value), paste0(who, " ", if (verb == "has") "is" else "are", " highest, ", hi$value))
     },
     line = {
-      what = if (index_first(s)) "the index" else measure
-      ends = hl_named(fact(if (index_first(s)) "Highest index at the end" else "Highest at the end"))
-      if (!is.null(ends))
-        return(c(paste0(ends$who, " ends with ", if (index_first(s)) "the highest index" else paste("the highest", measure), ", ", ends$value),
-                 paste0(ends$who, " ends highest, ", ends$value)))
-      one = purrr::detect(lines, function(l) grepl(if (index_first(s)) ": index .* at the start \\(.*\\), .* at the end \\(" else ": first .* \\(.*\\), last .* \\(.*\\), change ", l))
+      # rule 7. Small multiples keep the series that ends highest across the panels.
+      if (faceted) {
+        ends = hl_named(fact(if (index_first(s)) "Highest index at the end" else "Highest at the end"))
+        if (is.null(ends)) return(character(0))
+        who = hl_group(ends$who, s$color %||% s$facet, cb, names)
+        return(c(paste0(who, " ends with ", if (index_first(s)) "the highest index" else paste("the highest", measure), ", ", ends$value), paste0(who, " ends highest, ", ends$value)))
+      }
+      series_of = function(who) purrr::detect(lines, function(l) startsWith(l, paste0(who, ": ")))
+      # indexed: the growth of the series that ends highest, as a multiple of its start (never "index 933")
+      if (index_first(s)) {
+        top = hl_named(fact("Highest index at the end"))
+        one = if (!is.null(top)) series_of(top$who) else purrr::detect(lines, function(l) grepl(": index .* at the start \\(", l))
+        if (is.null(one)) return(character(0))
+        note(one)
+        m = regmatches(one, regexec("^(.*): index .* at the start \\(([^)]*)\\), .*, end is ([^ ]+) times start", one))[[1]]
+        if (length(m) != 4L) return(character(0))
+        verb = if (isTRUE(hl_num(m[[4]]) >= 1)) if (is.null(top)) "grew" else "grew most" else if (is.null(top)) "fell" else "fell least"
+        who = if (is.null(top)) hl_upper(measure) else hl_group(m[[2]], s$color, cb, names)
+        return(c(paste0(who, " ", verb, ", to ", m[[4]], " times its ", m[[3]], " value"), paste0(who, " ", verb, ", to ", m[[4]], " times its start")))
+      }
+      span = function(one) {
+        m = regmatches(one %||% "", regexec(": first .* \\((.*)\\), last .* \\(([^)]*)\\), change ", one %||% ""))[[1]]
+        if (length(m) == 3L) paste0(" from ", m[[2]], " to ", m[[3]]) else ""
+      }
+      # several series: the largest change; all of one direction with none standing out (rule 1's ratio on the changes): that they all did
+      if (!is.null(hl_fact(lines, "Highest at the end"))) {
+        up = hl_named(fact("Rose most")); down = hl_named(fact("Fell most"))
+        big = if (!is.null(up) && (is.null(down) || abs(hl_num(up$value)) >= abs(hl_num(down$value)))) list(g = up, dir = "rose") else if (!is.null(down)) list(g = down, dir = "fell")
+        if (is.null(big)) return(character(0))
+        counts = regmatches(hl_fact(lines, "Lines that rose") %||% "", regexec("^([0-9]+); lines that fell: ([0-9]+)$", hl_fact(lines, "Lines that rose") %||% ""))[[1]]
+        n = hl_num(hl_fact(lines, "Groups shown"))
+        small = hl_named(fact("Smallest change"))
+        one_way = length(counts) == 3L && isTRUE(hl_num(counts[[if (big$dir == "rose") 2L else 3L]]) == n)
+        if (one_way && !is.null(small) && isTRUE(abs(hl_num(big$g$value)) < HEADLINE_SIMILAR * abs(hl_num(small$value))))
+          return(paste0("All ", hl_fact(lines, "Groups shown"), " ", hl_plural(hl_label(cb, s$color)), " end ", if (big$dir == "rose") "higher" else "lower", " than they started"))
+        one = series_of(big$g$who)
+        if (!is.null(one)) note(one)
+        who = hl_group(big$g$who, s$color, cb, names)
+        return(c(paste0(who, " ", big$dir, " most", span(one), ", by ", hl_unsigned(big$g$value)), paste0(who, " ", big$dir, " most, by ", hl_unsigned(big$g$value))))
+      }
+      # one series: both ends, with their times; without the first time when that is too long
+      one = purrr::detect(lines, function(l) grepl(": first .* \\(.*\\), last .* \\(.*\\), change ", l))
       if (is.null(one)) return(character(0))
       note(one)
-      m = if (index_first(s)) regmatches(one, regexec(": index (.*) at the start \\((.*)\\), (.*) at the end \\(([^)]*)\\)", one))[[1]]
-          else regmatches(one, regexec(": first (.*) \\((.*)\\), last (.*) \\(([^)]*)\\), change ", one))[[1]]
+      m = regmatches(one, regexec(": first (.*) \\((.*)\\), last (.*) \\(([^)]*)\\), change ", one))[[1]]
       if (length(m) != 5L) return(character(0))
-      a = hl_num(m[[2]]); b = hl_num(m[[4]]); last = m[[4]]; when = m[[5]]
+      a = hl_num(m[[2]]); b = hl_num(m[[4]]); first = m[[2]]; t1 = m[[3]]; last = m[[4]]; t2 = m[[5]]
       if (is.na(a) || is.na(b)) return(character(0))
-      if (a == b) return(c(paste0(hl_upper(what), " was unchanged at ", last, " by ", when), paste0(hl_upper(what), " was unchanged at ", last)))
+      if (a == b) return(c(paste0(measure_start, " was unchanged at ", last, " from ", t1, " to ", t2), paste0(measure_start, " was unchanged at ", last)))
       dir = if (b > a) "rose" else "fell"
-      c(paste0(hl_upper(what), " ", dir, " to ", last, " by ", when), paste0(hl_upper(what), " ", dir, " to ", last))
+      c(paste0(measure_start, " ", dir, " from ", first, " in ", t1, " to ", last, " in ", t2), paste0(measure_start, " ", dir, " from ", first, " to ", last, " in ", t2),
+        paste0(measure_start, " ", dir, " to ", last, " in ", t2))
     },
     slope = , dumbbell = {
       ends = if (identical(fam, "slope")) regmatches(hl_fact(lines, "Start") %||% "", regexec("^(.*); end: (.*)$", hl_fact(lines, "Start") %||% ""))[[1]]
@@ -3281,16 +3378,21 @@ facts_headline <- function(s, cb, text, seen = NULL) {
              else if (!is.null(down) && isTRUE(hl_num(down$value) < 0)) list(g = down, dir = "fell")
       span = if (length(ends) == 3L) paste0(" from ", ends[[2]], " to ", ends[[3]]) else ""
       if (is.null(pick)) return(if (nzchar(span)) paste0("No group changed", span) else character(0))
-      c(paste0(pick$g$who, " ", pick$dir, " most", span, ", by ", hl_unsigned(pick$g$value)), paste0(pick$g$who, " ", pick$dir, " most, by ", hl_unsigned(pick$g$value)))
+      who = hl_group(pick$g$who, if (identical(fam, "slope")) s$color else s$y, cb, names)
+      c(paste0(who, " ", pick$dir, " most", span, ", by ", hl_unsigned(pick$g$value)), paste0(who, " ", pick$dir, " most, by ", hl_unsigned(pick$g$value)))
     },
     scatter = , bubble = {
-      r_text = hl_fact(lines, "Pearson correlation") %||% hl_fact(lines, "Pearson correlation on the log scale shown")
+      plain = hl_fact(lines, "Pearson correlation")
+      r_text = plain %||% hl_fact(lines, "Pearson correlation on the log scale shown")
       r = hl_num(r_text)
       if (is.na(r)) return(character(0))
-      y = hl_label(cb, s$y); x = hl_label(cb, s$x)
-      if (abs(r) < HEADLINE_NO_RELATION) c(paste0("No clear relation between ", y, " and ", x, ", correlation ", r_text), paste0("No clear relation, correlation ", r_text))
-      else if (r > 0) c(paste0(hl_upper(y), " and ", x, " rise together, correlation ", r_text), paste0(hl_upper(y), " and ", x, " rise together"))
-      else c(paste0(hl_upper(y), " and ", x, " move in opposite directions, correlation ", r_text), paste0(hl_upper(y), " and ", x, " move in opposite directions"))
+      corr = paste0(if (is.null(plain)) "log-scale correlation " else "correlation ", r_text)   # rule 4
+      y = hl_label(cb, s$y); x = hl_label(cb, s$x); y0 = hl_label(cb, s$y, start = TRUE)
+      low = grepl("^[a-z]", y0)   # rule 5: a sentence that would begin with a lower-case name is worded to begin otherwise
+      if (abs(r) < HEADLINE_NO_RELATION) c(paste0("No straight-line relation between ", y, " and ", x, ", ", corr), paste0("No straight-line relation, ", corr))
+      else if (low) c(paste0("Higher ", x, " goes with ", if (r > 0) "higher " else "lower ", y, ", ", corr), paste0("Higher ", x, " goes with ", if (r > 0) "higher " else "lower ", y))
+      else if (r > 0) c(paste0(y0, " and ", x, " rise together, ", corr), paste0(y0, " and ", x, " rise together"))
+      else c(paste0(y0, " and ", x, " move in opposite directions, ", corr), paste0(y0, " and ", x, " move in opposite directions"))
     },
     histogram = {
       pre = if (!is.null(s$facet)) FACTS_ALL else ""
@@ -3305,10 +3407,10 @@ facts_headline <- function(s, cb, text, seen = NULL) {
       hi = hl_named(fact("Highest median")); lo = hl_named(fact("Lowest median"))
       if (is.null(hi) || is.null(lo)) return(character(0))
       y = hl_label(cb, s$y)
-      ratio = hl_num(hi$value) / hl_num(lo$value)
-      if (isTRUE(ratio < HEADLINE_SIMILAR) && hl_num(lo$value) > 0) return(similar(hi$value, paste("median", y)))
-      c(paste0(hi$who, " has the highest median ", y, ", ", hi$value, "; ", lo$who, " the lowest"), paste0(hi$who, " has the highest median ", y, ", ", hi$value),
-        paste0(hi$who, " is highest, ", hi$value))
+      if (near(hi$value, lo$value, "median")) return(similar(hi$value, paste("median", y)))
+      who = hl_group(hi$who, s$x, cb, names); low = hl_group(lo$who, s$x, cb, names)
+      c(paste0(who, " has the highest median ", y, ", ", hi$value, "; ", low, " the lowest"), paste0(who, " has the highest median ", y, ", ", hi$value),
+        paste0(who, " is highest, ", hi$value))
     },
     character(0))
 }

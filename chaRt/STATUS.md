@@ -1,8 +1,11 @@
 # chaRt: status
 
-## Current state (2026-11-27, after night task 02: a rehearsal on three new files)
+## Current state (2026-11-27, after night task 03: R's headline rules)
 
 Branch `chart`, not pushed. Everything below was built and tested at home on R 4.6.1. No test makes a model call unless it says so. The phase-by-phase record is under History; the Phase 10 report is `manager/done-10.md`, the Phase 10b report `manager/done-10b.md`, the Phase 11 report `manager/done-11.md`, the Phase 12 report `manager/done-12.md`.
+
+**Night task 03, done** (2026-11-27; `manager/task-03.done.md`; no model call). R's headlines after the manager read all 39: 'similar' for means and medians from the spread within the groups (0.2 of the pooled SD, or of the median IQR over 1.35; FACTS gives both), every value the same said as such, 'no straight-line relation', 'log-scale correlation', column names exactly as in the file, a numeric or short group name after its column's label, lines by their largest change (all alike said, an index as a multiple, one series from end to end), no full stop at the end. A page with animated cards loads its faces at once (font-display optional and a head script), so a heading that wraps differently in the fallback face no longer moves the cards (12c-2).
+- **Smoke on the final code:** fast 665 of 665, heavy 35 of 35 (N3-1 to N3-9 new). Mutations: `tests/mutate_night03.R` 15 of 15, `tests/mutate_night02.R` 6 of 6, `tests/mutate_13.R` 15 of 15.
 
 **Night task 02, done** (2026-11-27; `manager/task-02.done.md`; 28 live calls, Sonnet). A rehearsal on three files of invented data the app had never seen (`tests/make_rehearsal.R`: a survey, a wide Excel file, support tickets), through the server's own functions (`tests/rehearsal.R`; replay with `REHEARSAL_REPLAY=1`).
 - **Fixed:** 98 and 97 are taken as codes for missing too (they were counted as numbers in a mean, a histogram and a model's summary); the dictionary notes a column with codes, a survey weight and a design column, and the chat says when a file is read that codes count as numbers until entered and that chaRt applies no weights; a model's headline whose names hold digits ("CUST-46909") is checked again with its names as tokens and is shown.

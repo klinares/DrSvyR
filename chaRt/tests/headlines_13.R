@@ -59,11 +59,27 @@ sk_md <- c("| Gold histogram | Description | Rows | g1 | Tail in FACTS (beyond 1
 cat("\n", sk_md, sep = "\n")
 
 dir.create(file.path("tests", "review"), showWarnings = FALSE)
+# Night task 03: R's headline before the change, from tests/review/headlines_before.md (the table as it was, kept by hand) when it is there, row by row
+#   (the same order: the gold specs, then the messy file), matched on the description.
+before_file <- file.path("tests", "review", "headlines_before.md")
+before <- if (file.exists(before_file)) {
+  bl <- readLines(before_file, encoding = "UTF-8")
+  start <- which(startsWith(bl, "| Family |"))[1]
+  body <- if (!is.na(start)) bl[(start + 2L):length(bl)] else character(0)
+  body <- body[seq_len(match(TRUE, !startsWith(body, "| "), nomatch = length(body) + 1L) - 1L)]
+  cells <- purrr::map(body, function(l) strsplit(sub("^[|] ", "", sub(" [|]$", "", l)), " | ", fixed = TRUE)[[1]])
+  if (length(cells) == nrow(rows) && all(purrr::map_chr(cells, 2L) == esc(rows$description))) purrr::map_chr(cells, 3L)
+}
 writeLines(c("# R's headline for every gold spec and four charts of the messy file", "",
              paste0("Written by tests/headlines_13.R on ", format(Sys.time(), "%Y-%m-%d %H:%M"), ", no model call. ", sum(rows$source == "r"), " of ", nrow(rows),
                     " written by R and passed their checks. The last four rows are the messy file (tests/smoke.R, make_messy())."), "",
-             "| Family | Description | R's headline | FACTS lines the headline was made from |", "|---|---|---|---|",
-             sprintf("| %s | %s | %s | %s |", esc(rows$family), esc(rows$description), esc(ifelse(rows$source == "r", rows$headline, paste0(rows$headline, " (", rows$source, ")"))),
+             if (!is.null(before)) "The column \"Before\" is R's headline before night task 03 (the manager's rules after reading all 39); \"=\" when it did not change.",
+             if (!is.null(before)) "",
+             if (is.null(before)) "| Family | Description | R's headline | FACTS lines the headline was made from |" else "| Family | Description | Before | R's headline | FACTS lines the headline was made from |",
+             if (is.null(before)) "|---|---|---|---|" else "|---|---|---|---|---|",
+             sprintf(if (is.null(before)) "| %s | %s | %s%s | %s |" else "| %s | %s | %s | %s | %s |", esc(rows$family), esc(rows$description),
+                     if (is.null(before)) esc(ifelse(rows$source == "r", rows$headline, paste0(rows$headline, " (", rows$source, ")"))) else ifelse(before == esc(rows$headline), "=", before),
+                     if (is.null(before)) "" else esc(ifelse(rows$source == "r", rows$headline, paste0(rows$headline, " (", rows$source, ")"))),
                      ifelse(nzchar(rows$from), esc(rows$from), "(none)")),
              "", "## The skewness of each gold histogram", "",
              paste0("The measure is the moment coefficient g1 = m3 / m2^(3/2), m2 and m3 the second and third moments about the mean, each divided by n ",

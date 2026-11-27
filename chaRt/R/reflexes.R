@@ -893,7 +893,7 @@ summarize_batch <- function(batch, system_txt, ask, m) {
     if (is.null(j)) return(list(id = x$id, headline = NULL, summary = NULL, checked = FALSE, problems = character(0), hash = x$hash,
                                 text = text, detail = detail, repaired = repaired))
     nm = x$facts$names
-    list(id = x$id, headline = names_back(trimws(j$entry$headline), nm), summary = names_back(trimws(j$entry$summary), nm),
+    list(id = x$id, headline = hl_strip(names_back(trimws(j$entry$headline), nm)), summary = names_back(trimws(j$entry$summary), nm),
          checked = summary_ok(j$problems), problems = names_back(problem_sentences(j$problems), nm), hash = x$hash,
          text = NULL, detail = NULL, repaired = repaired, facts = names_back(x$facts$text, nm), spec = x$spec)
   }

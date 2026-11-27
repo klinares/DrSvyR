@@ -922,7 +922,7 @@ SETUP_NEED_ROW <- paste("The data dictionary does not say what one row represent
 headline_shown <- function(st, r_head, stale = NA_character_) {
   r = list(text = r_head$text, by = if (identical(r_head$source, "r")) "r" else "fallback", note = NULL)
   if (is.null(st) || !is_text1(st$headline) || !nzchar(trimws(st$headline))) return(r)
-  if (identical(st$headline_by, "analyst")) return(list(text = trimws(st$headline), by = "analyst", note = NULL))
+  if (identical(st$headline_by, "analyst")) return(list(text = hl_strip(st$headline), by = "analyst", note = NULL))
   # checked as when it was written, its names as tokens (night task 02: "CUST-46909" is a name, not a number), against the chart's facts
   #   now (r_head$facts) when R has them and the story was written from facts, or the chart has changed (the manager's ruling); else against the
   #   facts it was written from; a story kept without them stands on the problems found then. A changed chart with no facts now shows R's.
@@ -931,7 +931,7 @@ headline_shown <- function(st, r_head, stale = NA_character_) {
   as_written = function(f) summary_ok(summary_problems(names_out(trimws(st$headline), f$names), NULL, f$text, r_head$spec %||% st$spec, names(f$names)))
   passed = if (!is.null(now) && (had || !is.na(stale))) as_written(now) else if (had) summary_ok(summary_problems(st$headline, NULL, st$facts, st$spec)) else !length(st$problems)
   if (!is.na(stale) && (!passed || is.null(now))) { r$note = HEADLINE_MODEL_CHANGED; return(r) }
-  if (passed) return(list(text = trimws(st$headline), by = "model", note = NULL))
+  if (passed) return(list(text = hl_strip(st$headline), by = "model", note = NULL))
   r$note = HEADLINE_MODEL_FAILED
   r
 }
@@ -3141,7 +3141,9 @@ MOTION_JS <- paste0("(function () {
 # The first script of a page that holds an animated chart, in its <head>: it marks <html> with motion-js before any card is drawn, so the style sheet hides
 #   the finished pictures of the cards that are going to play (not under reduced motion). If the player has not run by the time the page has loaded (a browser
 #   that cannot run it), the mark is taken away and every card shows its finished chart.
-MOTION_HEAD_JS <- paste0("(function () { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; var h = document.documentElement; h.classList.add('motion-js'); ",
+# Night task 03: every face of the page's @font-face rules loaded at once, from the head, before the cards are laid out (see dash_font_css()).
+DASH_FONTS_JS <- "if (document.fonts && document.fonts.forEach) document.fonts.forEach(function (f) { f.load(); });"
+MOTION_HEAD_JS <- paste0(DASH_FONTS_JS, " (function () { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; var h = document.documentElement; h.classList.add('motion-js'); ",
                          "window.addEventListener('load', function () { if (!window.chartMotion) h.classList.remove('motion-js'); }); })();")
 
 # The box of an animated chart: as wide as its frames were drawn for (set on the box), never wider. The canvas lies over the finished picture while it plays;
@@ -3423,14 +3425,18 @@ dash_read_text <- function(file) {
 }
 
 # The bundled typefaces the style uses (its title, subtitle and body families: regular and bold, and the semibold face when the
-#   style's title is semibold) as @font-face rules with the font files in the rule itself, so the page needs no file beside it.
-dash_font_css <- function(style) {
+#   style's title is semibold) as @font-face rules with the font files in the rule itself, so the page needs no file beside it. `display` is the rules'
+#   font-display: a page with animated cards gives "optional" (night task 03) and its head script starts loading every face at once
+#   (DASH_FONTS_JS), so the faces are ready for the first paint and never swapped in later: a heading that wrapped differently in the fallback face
+#   would move every card under it (12c-2 found a headline on one line in the fallback face and two in Inter). A page with no script keeps the default.
+dash_font_css <- function(style, display = NULL) {
   st = chart_style(style)
   roles = unique(c("sans", st$title_font, st$subtitle_font))
   face = function(family, weight, file) {
     path = file.path(CHART_FONT_DIR, file)
     if (file.exists(path))
-      paste0("@font-face{font-family:'", family, "';font-weight:", weight, ";font-style:normal;src:url('data:font/ttf;base64,", dash_b64(path),
+      paste0("@font-face{font-family:'", family, "';font-weight:", weight, ";font-style:normal;", if (!is.null(display)) paste0("font-display:", display, ";"),
+             "src:url('data:font/ttf;base64,", dash_b64(path),
              "') format('truetype');}")
   }
   paste(unlist(purrr::map(roles, function(r) {
@@ -3832,9 +3838,10 @@ dash_page <- function(items, settings, cb, data, palette, model, full = rep(FALS
   deps = htmltools::resolveDependencies(unlist(purrr::map(items, function(it) it$deps), recursive = FALSE) %||% list())
   title = if (nzchar(trimws(settings$title %||% ""))) trimws(settings$title) else paste("Dashboard:", cb$file %||% "the data file")
   author = trimws(settings$author %||% "")
+  moving = any(purrr::map_chr(items, "mode") == "video")   # a page with animated cards: its head script, after the style (it loads the faces)
   head = tagList(tags$meta(charset = "utf-8"), tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"), tags$title(title),
-                   if (any(purrr::map_chr(items, "mode") == "video")) tags$script(HTML(MOTION_HEAD_JS)),
-                   tags$style(HTML(paste(dash_font_css(style), dash_css(style, accent), sep = "\n"))), dash_inline_dependencies(deps))
+                   tags$style(HTML(paste(dash_font_css(style, if (moving) "optional"), dash_css(style, accent), sep = "\n"))),
+                   if (moving) tags$script(HTML(MOTION_HEAD_JS)), dash_inline_dependencies(deps))
   body = tags$body(class = if (nchar(mark) > 55L) "long", dash_band(mark, "top"), tags$div(class = "page",
     tags$header(class = "masthead", tags$h1(dash_heading_text(title, style)),
                 if (nzchar(trimws(settings$subtitle %||% ""))) tags$p(class = "subtitle", trimws(settings$subtitle)),

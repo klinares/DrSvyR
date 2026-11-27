@@ -49,7 +49,7 @@ mutations <- list(
   mut("M08", "a picture in charts/ is drawn without its headline", "ui.R", "  chart$spec$.headline = shown$text
 ", "  chart$spec$.untitled = TRUE
 "),
-  mut("M09", "a model's headline that fails is shown", "ui.R", "  if (passed) return(list(text = trimws(st$headline), by = \"model\", note = NULL))", "  if (TRUE) return(list(text = trimws(st$headline), by = \"model\", note = NULL))"),
+  mut("M09", "a model's headline that fails is shown", "ui.R", "  if (passed) return(list(text = hl_strip(st$headline), by = \"model\", note = NULL))", "  if (TRUE) return(list(text = hl_strip(st$headline), by = \"model\", note = NULL))"),
   mut("M10", "the About block does not say who wrote each headline", "ui.R", "      if (length(charts)) entry(\"The headlines\",", "      if (FALSE) entry(\"The headlines\","),
   mut("M11", "a tail is named past a skewness of 0.5 again", "spec.R", "SPEC_FACTS_SKEW <- 1 ", "SPEC_FACTS_SKEW <- 0.5 "),
   mut("M12", "a headline names a tail whatever the rows", "spec.R", "      if (!isTRUE(hl_num(hl_fact(lines, \"Rows used\")) >= HEADLINE_TAIL_MIN_ROWS)) tail = NULL", "      if (FALSE) tail = NULL"),
