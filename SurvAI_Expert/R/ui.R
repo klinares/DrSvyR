@@ -101,7 +101,7 @@ store_counts <- function(con) dbGetQuery(con, paste(
   "SELECT d.source, count(DISTINCT d.id) AS Documents,",
   "(SELECT count(*) FROM passages p WHERE p.source = d.source) AS Passages,",
   "(SELECT count(*) FROM formulas f WHERE f.source = d.source) AS Formulas,",
-  "(SELECT count(*) FROM code c WHERE c.source = d.source AND NOT c.is_output) AS \"Code examples\"",
+  "(SELECT count(*) FROM code c WHERE c.source = d.source AND c.usable) AS \"Code examples\"",
   "FROM docs d GROUP BY d.source")) |>
   mutate(` ` = coalesce(unname(SOURCE_LABELS[source]), source)) |>
   group_by(` `) |> summarise(across(c(Documents, Passages, Formulas, `Code examples`), sum)) |>
@@ -246,9 +246,19 @@ mod_key_server <- function(id, state) {
 
 STREAM_EVERY_S <- 0.3   # how often the streaming answer is redrawn
 
+MY_SURVEY_HELP <- paste(
+  "Optional. Describe the survey once and every answer will take it into account. Fill in only what you know.",
+  "Nothing here is uploaded as data: it is a description in your own words.")
+
+MODE_CHOICES <- c("Let the tool decide" = "auto", "Quick answer" = "lookup", "Advise me" = "advice")
+MODE_HELP <- paste("Quick answer: a fact, a formula or code from the library.",
+                   "Advise me: your options, their trade-offs and a recommendation for your situation.")
+MODE_LINE <- c(lookup = "Quick answer, written from the library.",
+               advice = "Advice. Sentences beginning \"My assessment\" are the tool's own judgment; you decide.")
+
 MY_DATA_HELP <- paste(
-  "Optional. Tell the tool what the columns in your data file are called, and its example code will use your names,",
-  "so you can copy it with fewer changes. Fill in only what you have. Nothing here is uploaded: these are only names.",
+  "Tell the tool what the columns in your data file are called, and its example code will use your names,",
+  "so you can copy it with fewer changes. These are only names.",
   "Weight: the column that says how many people each row stands for. Strata: the groups the sample was drawn within.",
   "Cluster: the unit that was sampled first, such as a school or an area. Population size: only if you know how many",
   "units exist in each group. Outcome: the column you want to estimate.")
@@ -256,8 +266,18 @@ MY_DATA_HELP <- paste(
 ask_ui <- function(id) {
   ns = NS(id)
   field = function(name, label, eg) textInput(ns(name), label, placeholder = eg)
+  wide = function(name, label, eg) textInput(ns(name), label, placeholder = eg, width = "100%")
   my_data = bslib::accordion(open = FALSE, bslib::accordion_panel(
-    "My data (optional)",
+    "My survey (optional)",
+    tags$p(class = "small text-muted", MY_SURVEY_HELP),
+    bslib::layout_columns(col_widths = c(6, 6),
+      wide("population", "Who the survey is about", "e.g. adults living in the country"),
+      wide("selection", "How people were chosen", "e.g. random sample of addresses from the postal list"),
+      wide("collection", "How they answered", "e.g. web, with a phone follow-up"),
+      wide("counts", "How many were selected and how many answered", "e.g. 5,000 selected, 1,400 answered"),
+      wide("estimates", "What you need to estimate, and for which groups", "e.g. share employed, by region and sex"),
+      wide("limits", "Limits", "e.g. fieldwork is finished; no budget for more interviews")),
+    tags$p(tags$strong("Columns in my data file")),
     tags$p(class = "small text-muted", MY_DATA_HELP),
     bslib::layout_columns(col_widths = c(4, 4, 4),
       field("weight", "Weight", "e.g. finalwt"), field("strata", "Strata", "e.g. stratum"), field("cluster", "Cluster", "e.g. school_id"),
@@ -266,7 +286,9 @@ ask_ui <- function(id) {
     textInput(ns("design"), "About the design", width = "100%",
               placeholder = "e.g. two-stage sample of schools then students, 40 strata")))
   tags$div(style = "max-width: 900px;",
-    textAreaInput(ns("question"), "Your question", width = "100%", rows = 3),
+    textAreaInput(ns("question"), "Your question, or the situation you want advice on", width = "100%", rows = 4),
+    radioButtons(ns("answer_mode"), NULL, choices = MODE_CHOICES, selected = "auto", inline = TRUE),
+    tags$p(class = "small text-muted", style = "margin-top: -8px;", MODE_HELP),
     my_data,
     tags$div(style = "margin: 8px 0;", bslib::input_task_button(ns("ask"), "Ask", label_busy = "Working..."),
              actionButton(ns("new_topic"), "New topic"), textOutput(ns("topic"), inline = TRUE)),
@@ -305,10 +327,10 @@ ask_server <- function(id, state, con, asker = ask_async) {
     result = reactiveVal(NULL)
     shown = reactiveVal(NULL)
     send = function(el, html) session$sendCustomMessage("survai-html", list(id = ns(el), html = as.character(html)))
-    task = ExtendedTask$new(function(question, key, ctx, my_data) {
+    task = ExtendedTask$new(function(question, key, ctx, my_data, mode) {
       last = new.env()
       last$t = Sys.time() - 10
-      asker(question, MODEL_PROFILE, key, con, ctx, my_data, open_input = ns("open"),
+      asker(question, MODEL_PROFILE, key, con, ctx, my_data, open_input = ns("open"), mode = mode,
             on_stage = function(s) send("progress", c(plan = "Planning the search...", search = "Searching the library...",
                                                       answer = "Writing the answer...")[[s]]),
             on_text = function(txt) if (as.numeric(difftime(Sys.time(), last$t, units = "secs")) > STREAM_EVERY_S) {
@@ -330,14 +352,15 @@ ask_server <- function(id, state, con, asker = ask_async) {
       state$calls = state$calls + 1L
       result(NULL)
       send("live", "")
-      task$invoke(q, key, context(), map(set_names(names(DATA_FIELDS)), function(f) input[[f]] %||% ""))
+      task$invoke(q, key, context(), map(set_names(names(DATA_FIELDS)), function(f) input[[f]] %||% ""),
+                  if (isTRUE(input$answer_mode %in% MODES)) input$answer_mode else NULL)
     })
 
     observeEvent(task$status(), {
       if (task$status() == "success") {
         r = task$result()
         result(r)
-        context(list(question = r$question, answer = r$answer))
+        context(add_turn(context(), r$question, r$answer))
         send("live", "")
         send("progress", sprintf("Planned in %.0f s, searched in %.1f s, answered in %.0f s.", r$sec[["plan"]], r$sec[["search"]], r$sec[["answer"]]))
       } else if (task$status() == "error") {
@@ -348,7 +371,7 @@ ask_server <- function(id, state, con, asker = ask_async) {
     })
 
     observeEvent(input$new_topic, { context(NULL); result(NULL); shown(NULL); send("progress", ""); updateTextAreaInput(session, "question", value = "") })
-    output$topic = renderText(if (is.null(context())) "" else "Follow-up: the last question and answer are kept.")
+    output$topic = renderText(if (is.null(context())) "" else "Follow-up: the last questions and answers are kept.")
 
     output$answer = renderUI({
       r = result()
@@ -356,6 +379,7 @@ ask_server <- function(id, state, con, asker = ask_async) {
       if (!is.null(r$error)) return(warn_box(tags$strong("The question could not be answered. "), r$error))
       notes = flag_notes(r$checks)
       tagList(HTML(r$html), if (length(notes)) tags$div(class = "survai-flags", map(notes, tags$div)),
+              tags$div(class = "small text-muted", style = "margin-top: 0.75em;", MODE_LINE[[r$mode %||% "lookup"]]),
               if (SHOW_SOURCES && nrow(r$cited)) source_lines(r$cited, ns("open")))
     })
 
