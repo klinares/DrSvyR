@@ -13,7 +13,7 @@ pasted on the Start here tab and held for the session only.
 | Tab | What it does | Model calls |
 | --- | --- | --- |
 | Start here | What the tool is for, two figures, the key box and the call count. | none |
-| Ask | A question (up to four parts), with optional details of the person's data ("My data"). | 2 per question |
+| Ask | A question (up to four parts), or a situation to get advice on (options, trade-offs by source of error, a recommendation), with optional details of the person's survey and data ("My survey"). | 2 per question |
 | Formulas | Searches the stored formulas; each shows its symbols, up to 3 R examples from the library and a "Show me how in R" button (which asks about that formula with the Ask tab's My data). | none; 2 for the button |
 | Report reader | Reads a survey's technical report (PDF or Word) into an analyst's checklist. | 1; a long report, one per part plus 1 |
 | Methodology | The sources of error, what is in the library (counts from the store), how answers are produced and checked, how it was tested, limits. | none |
@@ -37,7 +37,7 @@ pasted on the Start here tab and held for the session only.
 | --- | --- |
 | `www/start_here.md` | The Start here text. The lines `[TSE figure]` and `[What it does figure]` place the two figures. |
 | `www/methodology.md` | The Methodology text. `{{LIBRARY_TABLE}}` places the table of library counts. |
-| `www/reflexes/` | What the model is told: `plan.md` (the search plan), `answer.md` (how answers are written), `report.md` (the report reader). |
+| `www/reflexes/` | What the model is told: `plan.md` (the search plan, and whether a message is a lookup or a request for advice), `answer.md` (how a lookup is answered), `advise.md` (how advice is given), `report.md` (the report reader). |
 
 The two figures are `www/fw_tse.svg` (the Total Survey Error framework) and `www/what_it_does.svg`
 (what you can do with the tool). Each is shown full width up to 900px, with the `<title>` inside
@@ -55,14 +55,15 @@ the app: `setwd("SurvAI_Expert"); source("app.R"); ask("your question")`, with t
 
 ## Getting it running at work (throwaway: delete this section once it is live)
 
-Nothing here needs the home machine. Building the store and the first two tests make no model
-calls; only steps 6 and 7 count against the limit of 300 calls per 4 hours.
+Everything needed is text in git. Nothing binary travels: the store is built at work from the
+text files, with no model calls and no network. Only steps 6 to 8 use model calls (2, about 36
+and about 180), so they fit one 4-hour window of 300 if the app is not used meanwhile.
 
-**1. Get the files.** Pull the repository (the branch with `SurvAI_Expert/`). Everything needed
-is in git except the store, which step 3 builds, and the textbook, which is optional:
+**1. Get the files.** Pull the repository. The textbook is the one source kept out of the public
+repository:
 
-- With the textbook: copy `data/markdown/practools/` and `data/catalog/practools/` from the home
-  machine into the same places.
+- With the textbook: clone the private repository `klinares/survai-practools` and copy its
+  `data/` folder over `SurvAI_Expert/data/`, then build the store (step 3).
 - Without it: carry on. The app works; it has about 1,100 fewer passages and 550 fewer formulas.
 
 **2. Check the packages.** In R:
@@ -76,72 +77,90 @@ packageVersion("ellmer")                        # 0.4.2 or later
 packageVersion("duckdb")                        # home build used 1.5.5
 ```
 
-**3. Build the store** (no model, no network, about 20 seconds). From inside `SurvAI_Expert/`:
+**3. Build the store** (about 20 seconds). From inside `SurvAI_Expert/`:
 
 ```
 Rscript --no-init-file build/03_store.R
 ```
 
-It ends with the receipt check. Expect "identical" for every source that is present. Without the
-textbook, `practools` shows as missing and five word-count tables have fewer rows; that is
-expected. If every table differs, the DuckDB version is the likely cause: compare the row
-counts, which should still match.
+It ends with the receipt check, one line per table that differs from the build recorded in
+`data/catalog/receipt.csv`. "Receipt: identical" means the store matches. Without the textbook,
+`practools` rows are missing and the word-count tables are smaller; that is expected. If every
+table differs, the DuckDB version is the likely cause: the row counts should still match.
 
-**4. Fill the settings at the top of `app.R`.**
+**4. Fill the `work` profile at the top of `app.R`.** It is set up for an OpenAI-compatible
+endpoint and starts with the settings every such endpoint accepts.
 
-- `MODEL_PROFILES$work`: `api` (`"anthropic"` or `"openai"`), `base_url`, and `id` (what the work
-  endpoint calls Opus 5). Set `json` to `"output_config"` for an Anthropic endpoint, or
-  `"response_format"` for an OpenAI-style one; use `"prompt"` if neither is accepted.
+- `base_url`: the endpoint, ending before `/chat/completions`. `id`: what it calls Opus 5.
+- Leave `json = "prompt"`, `stream = FALSE` and `effort = NULL` until step 6 works. Then try,
+  one at a time: `stream = TRUE` (answers appear as they are written), `json =
+  "response_format"` (stricter replies). If a call is refused, the error names the setting to
+  change back.
 - `CALLS_PER_WINDOW <- 300`.
-- `KEY_ENV`: the name of the environment variable that holds the work key (tests and console
-  only; in the app the key is pasted on Start here).
+- `KEY_ENV`: the name of the environment variable holding the work key (tests and console only;
+  in the app the key is pasted on Start here).
 - `APP_CLASSIFICATION`, `APP_OFFICE`, and a logo file in `www/logo/` named as in `APP_LOGO`.
-- `APP_SOURCE_URL`: only matters if `SHOW_SOURCES` is turned on.
 
-Then tell R to use the work profile, for example in `.Renviron`: `SURVAI_PROFILE=work`.
+Then set `SURVAI_PROFILE=work`, for example in `.Renviron`.
 
 **5. Test without spending calls.** From inside `SurvAI_Expert/`:
 
 ```
-Rscript --no-init-file tests/smoke.R      # expect 39 of 39
-Rscript --no-init-file tests/eval.R       # search test; home: 0.79 / 0.90, or 0.76 / 0.87 without the textbook
+Rscript --no-init-file tests/smoke.R      # every line "ok"
+Rscript --no-init-file tests/eval.R       # search test; home figures are in tests/eval_report_home.md
 ```
 
-**6. Ask one question from the console (2 calls)** to confirm the profile and key work before
-the long test:
+**6. Ask one question and one request for advice from the console (4 calls).**
 
 ```r
 setwd("SurvAI_Expert"); source("app.R")
-ask("What is the design effect from unequal weighting?")
+ask("What is the design effect from unequal weighting?")$answer
+ask("After raking, my weights run from 0.1 to 25. Should I trim them?")$answer
 ```
 
-A formula, an R example and no error means the model connection is right. An error about JSON or
-structured output means the `json` setting in step 4 needs the other value.
+The first should give a formula and an R example; the second should have the headings "What I
+understand", "Options", "What I would do" and "What to check".
 
-**7. Run the accuracy test (about 180 calls, 25 minutes).** Start it at the beginning of a
-4-hour window and do not use the app until it finishes.
+**7. Run the advice test (about 36 calls).**
+
+```
+Rscript --no-init-file tests/eval.R advice
+```
+
+Read `tests/advice_report.md`: how many of the 12 situations passed, and which points were
+missed.
+
+**8. Run the accuracy test (about 180 calls, 25 minutes).**
 
 ```
 Rscript --no-init-file tests/eval.R answers
 ```
 
-Compare `tests/eval_report.md` with the home run in `tests/eval_report_home.md`. Home, with
-Sonnet 5.5: 38 of 40 answers judged correct, none incorrect. The top of the report is written
-for reporting upward.
+Compare `tests/eval_report.md` with the home run in `tests/eval_report_home.md`. The top of
+each report is written for reporting upward.
 
-**8. Open the app and try it.** `shiny::runApp("SurvAI_Expert")`, paste the key on Start here,
-ask a question, look up a formula, and upload one real technical report to the Report reader.
+**9. Open the app and try it.** `shiny::runApp("SurvAI_Expert")`, paste the key on Start here,
+ask a question, ask for advice with "My survey" filled in, look up a formula, and upload one
+real technical report to the Report reader.
 
-**9. Deploy.**
+**10. Deploy.**
 
 ```r
 rsconnect::deployApp("SurvAI_Expert", appName = "SurvAI_Expert")
 ```
 
 `.rscignore` leaves out `build/`, `tests/` and `data/build/`. The store, `data/markdown/` and
-`data/catalog/` go with the app (about 80 MB with the textbook).
+`data/catalog/` go with the app.
 
-**10. Delete this section** and commit.
+**11. Delete this section** and commit.
+
+## Keeping it up to date
+
+There is one thing to maintain: the text files under `data/markdown/` and `data/catalog/`. The
+store is always rebuilt from them with `build/03_store.R`. New material is converted and
+catalogued at home (`build/01_convert.R`, `build/02_catalog.R`), committed as text, and pulled
+at work, where step 3 is run again. What the model is told lives in `www/reflexes/` and what the
+pages say in `www/start_here.md` and `www/methodology.md`; all are plain text.
 
 ## The scripts
 
@@ -149,7 +168,7 @@ rsconnect::deployApp("SurvAI_Expert", appName = "SurvAI_Expert")
 | --- | --- |
 | `build/01_convert.R` | Converted the course files to markdown (home only; uses a model). |
 | `build/02_catalog.R` | Split the markdown into passages, formulas and code, and labelled them (home only; uses a model). |
-| `build/03_store.R` | Builds the DuckDB store from `data/markdown/` and `data/catalog/`; no model, no network. |
+| `build/03_store.R` | Builds the DuckDB store from `data/markdown/` and `data/catalog/`; no model, no network. Repairs R code by rule (console prompts, printed output, LaTeX escapes, blocks cut by a page break); only code that parses is searched or shown. |
 | `app.R` | Settings, layout and server. |
 | `R/retrieve.R` | Keyword search (BM25 in SQL), formulas, code, R examples for a formula, source cards. |
 | `R/llm.R` | Plan, gather, answer, and the app's streaming versions of the calls. |
@@ -157,7 +176,7 @@ rsconnect::deployApp("SurvAI_Expert", appName = "SurvAI_Expert")
 | `R/report.R` | The report reader: text from PDF or Word, split when long. |
 | `R/ui.R` | The five tabs, the source window, the session key and call count. |
 | `tests/smoke.R` | Loads the app and runs each tab's server with the model stubbed, under both `SHOW_SOURCES` settings. |
-| `tests/eval.R` | Part 1: retrieval test (no model). `tests/eval.R answers`: part 2, the answer test with a judge. |
+| `tests/eval.R` | Part 1: retrieval test (no model). `tests/eval.R answers`: part 2, the answer test with a judge. `tests/eval.R advice`: part 3, 12 situations from `tests/advice.csv` graded against the points a methodologist should raise. |
 
 ## Tests
 
