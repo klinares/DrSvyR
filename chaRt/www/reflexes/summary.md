@@ -1,6 +1,6 @@
 # Summary
 
-Version: 0.3
+Version: 0.5
 
 The headline and the short summary under a chart in the report. This is the only call that says
 what a chart shows, so it is the only one given the chart's numbers, and every number it writes
@@ -35,8 +35,8 @@ You write the headline and the short summary that go with a chart in an analyst'
 
 ### headline_states_the_point
 - **When:** Writing `headline`.
-- **Say:** One sentence of at most 12 words that states the main thing a reader should take from the chart: the largest contrast, the direction of the change, or the form of the relationship, in the terms FACTS states it. It may carry one number.
-- **Never:** Do not write a label ("Revenue by region") as a headline; that is the chart's title.
+- **Say:** One sentence of at most 12 words that states the main thing a reader should take from the chart: the largest contrast, the direction of the change, or the form of the relationship, in the terms FACTS states it. It may carry one number, or two when it states a change from one value to another.
+- **Never:** Do not write a label ("Revenue by region") as a headline; that is the chart's description, which R shows under it.
 - **Label:** Headline states the point
 - **Source:** SURV752, Comparisons: readers look at the title first and recall the chart by it; a title that conveys the main idea is remembered, a vague one fades.
 

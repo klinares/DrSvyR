@@ -51,6 +51,8 @@ HEAVY_CHECKS <- c(
   "12c-2: no card moves or grows on the screen",                               # reads that run
   "12c-3: a card with a row to itself has its chart across the row",           # the page laid out at 1400 and 390 pixels
   "12c-4: a chart inside the page carries no classification band",              # every picture and frame of that page read
+  "13B-1: no picture that leaves the page has the description as its top line", # Phase 13: every gold spec drawn in every style
+  "13B-4: the manager's ruling in an exported dashboard",                     # a dashboard built and its page, charts/ and charts.R read
   "10A-14: printed by Chrome",                                                     # the dashboard and the codebook printed to PDF in the Dark style with a long marking
   "10B-9: in Chrome the export with ten interactive charts",                    # ten interactive charts laid out and hovered in Chrome at 1280 and 500 pixels
   "10D-10: the five-chart dashboard in Briefing",                                  # reads the seven pages built by 9A-8
@@ -748,7 +750,7 @@ if (!is.null(lat)) check("2b-15: the Latin-1 gold bar draws with those names, an
                          all(c("Côte d'Ivoire", "São Tomé") %in% as.character(attr(lat$plot, "table")$country)) &&
                            code_has(lat$code, "locale = locale(encoding = \"windows-1252\")"))
 if (!is.null(fh_bar) && !is.null(ball_g)) {
-  cap = spec_widget(spec_plot(list(family = "bar", x = "Position", title = "A title", subtitle = "A subtitle", caption = "A caption"),
+  cap = spec_widget(spec_plot(list(family = "bar", x = "Position", .headline = "A title", subtitle = "A subtitle", caption = "A caption"),
                               ball_g$data, ball_g$cb))
   check("2b-16: the widget's SVG has the title, the subtitle and the caption, in the picture's own words",
         any(grepl("Top 11 of 195", svg_texts(fh_bar$widget), fixed = TRUE)) &&
@@ -975,14 +977,14 @@ if (!inherits(messy, "error")) {
 #   Claude project and copied in is noticed. Update it here when a file changes on purpose.
 REFLEX_SHA <- c(
   "codebook.md" = "c7f66548e3d4cb3448f8dc4a1942a2649d0b733d612b1ec78c39d92562ee9709",
-  "core.md" = "6b62ea4b3cc6dfc60f6ac66e2cab06a72bb4c4dc83f85dbb1af375e467f5d23b",
+  "core.md" = "8ea30245e59645c18dc5ab107212ff72935d954286ae9b8b9c89b47cc76d6b14",   # Phase 13: version 0.3, title_describes
   "comparison.md" = "c236bee0a7f8a5617de8b0064c72beb47de597ac8b513f1728f0b2b50f1e08b0",
   "relationship.md" = "eea692ec090fde8615a33b83cd7941d5ceb5022c70b16279adf3f3eeb5a23201",
   "distribution.md" = "4bdb04443367d28cc8e278d2b55c7ce634deb47f11e60ebfc76f2377f7388262",
   "time.md" = "191943b1415ffb62aa51efd1f275e0d82294619a9bc96ba304d20383df3fc89c",
   "suggest.md" = "510448474300239e9f90e7cc3ed540e57e5e48fbe4e4fa3e6ec3c22d964efb29",
   "refine.md" = "04a081673a2365eb09695bdcab36a052a10e4812cdf9583314bf27969d03add5",
-  "summary.md" = "976d0b9126c6cf016714251ae20a92dde61a926d826c6bf8f53fbcd6391741be",
+  "summary.md" = "b6ed15f6dedb7d62a4b4c19118642483954b2c3397d91012aa13461c93b8a4dd",   # Phase 13: version 0.5, headline_states_the_point (and the manager's ruling on numbers)
   "chat.md" = "e978258b6d2d463003bfd8926ac34a151447157bb4b7ef1f5c9917b40a0295a3",
   "design.md" = "71094f87d90516f907208179414cf4c466d130d0dc1aa13fc3f15f03c461d6a5")   # the manager's (11-0 below holds the same sum); the design call's file
 
@@ -3355,7 +3357,7 @@ if (!is.null(pan_g) && requireNamespace("colorspace", quietly = TRUE)) {
 
   # 6. the interactive version and the written code follow the style
   b7_has <- function(x, pat) grepl(pat, x, fixed = TRUE)
-  b7_wspec <- list(family = "bar", x = "region", y = "revenue", fn = "sum", title = "A title", subtitle = "A subtitle", caption = "A caption", labels = "off")
+  b7_wspec <- list(family = "bar", x = "region", y = "revenue", fn = "sum", .headline = "A title", subtitle = "A subtitle", caption = "A caption", labels = "off")   # Phase 13: the drawn title is a headline
   b7_widgets <- purrr::map(stats::setNames(b7_styles, b7_styles), function(s) spec_widget(spec_plot(b7_wspec, pan_g$data, pan_g$cb, b7_pal(s))))
   b7_face <- function(font, weight) paste0(switch(font, serif = "Source Serif 4", display = "Barlow Condensed", "Inter"), if (identical(weight, "semibold")) " SemiBold")
   check("7B-6: spec_widget() follows the style: in the SVG the title's colour and typeface (Source Serif 4 for Newspaper's title and subtitle, a semibold face where the style asks for one), the subtitle's colour and typeface and the caption's colour are the style's, and the ground is the style's background",
@@ -4983,6 +4985,9 @@ p8c_hh <- p8c_html(p8c_dir(p8c_zh$zip))
 p8c_about_at <- regexpr("About this dashboard", p8c_h3, fixed = TRUE)
 p8c_about <- substr(p8c_h3, p8c_about_at, nchar(p8c_h3))
 p8c_h2s <- regmatches(p8c_h3, gregexpr("<h2[^>]*>[^<]*</h2>", p8c_h3))[[1]]
+# Phase 13: the third chart has no story, so its card shows the headline R writes from its facts, with its title under it
+p8c_rh3 <- r_headline(new_chart("c3", c6_hist), p8c_cb, p8c_data)$text
+p8c_text3 <- gsub("<[^>]+>", "", p8c_h3)
 p8c_methodology_para <- dash_describes()
 p8c_para_expected <- local({
   ml <- readLines(METHODOLOGY_FILE, encoding = "UTF-8", warn = FALSE)
@@ -4990,7 +4995,7 @@ p8c_para_expected <- local({
   end <- at + which(!nzchar(trimws(ml[at:length(ml)])))[1] - 2L
   gsub("[[:space:]]+", " ", trimws(gsub("*", "", paste(ml[at:end], collapse = " "), fixed = TRUE)))
 })
-check("8C-3: dashboard.html has the title, subtitle, author, the date as written out (21 November 2026) and the introduction as paragraphs of plain text (a tag or an ampersand in them is shown as text, never run), the three value boxes (rows, columns, the period) or only those chosen, and one card for each chart in order: the headline (the chart's title for a chart with none), the chart as a base64 PNG with alt text, the summary and the source line; then the About card",
+check("8C-3: dashboard.html has the title, subtitle, author, the date as written out (21 November 2026) and the introduction as paragraphs of plain text (a tag or an ampersand in them is shown as text, never run), the three value boxes (rows, columns, the period) or only those chosen, and one card for each chart in order: the headline (for a chart with none, the headline R writes from its facts, its title under it: Phase 13), the chart as a base64 PNG with alt text, the summary and the source line; then the About card",
       grepl("<h1>Sales dashboard</h1>", p8c_h3, fixed = TRUE) && grepl("Orders in the file", p8c_h3, fixed = TRUE) && grepl("21 November 2026", p8c_h3, fixed = TRUE) &&
         grepl("A. Analyst", p8c_h3, fixed = TRUE) && grepl("<p>First paragraph of the introduction.</p>", p8c_h3, fixed = TRUE) && grepl("<p>Second paragraph.</p>", p8c_h3, fixed = TRUE) &&
         grepl("<title>Sales dashboard</title>", p8c_h3, fixed = TRUE) &&
@@ -4998,11 +5003,12 @@ check("8C-3: dashboard.html has the title, subtitle, author, the date as written
         grepl("&lt;b&gt;Me&lt;/b&gt;", p8c_hh, fixed = TRUE) && grepl("A &lt;i&gt;plain&lt;/i&gt; text &amp; more.", p8c_hh, fixed = TRUE) &&
         grepl(">240<", p8c_hh, fixed = TRUE) && grepl(">Rows<", p8c_hh, fixed = TRUE) && !grepl(">Columns<", p8c_hh, fixed = TRUE) && !grepl("class=\"key-value long chart-box-period\"", p8c_hh, fixed = TRUE) &&
         grepl(">240<", p8c_h3, fixed = TRUE) && grepl(">5<", p8c_h3, fixed = TRUE) && grepl(">Columns<", p8c_h3, fixed = TRUE) && grepl("2019 to 2024", p8c_h3, fixed = TRUE) &&
-        identical(p8c_h2s, c("<h2>Headline of chart 1</h2>", "<h2>Headline of chart 2</h2>", "<h2>Price of an order</h2>", "<h2 id=\"about-heading\">About this dashboard</h2>")) &&
+        identical(p8c_h2s[c(1L, 2L, length(p8c_h2s))], c("<h2>Headline of chart 1</h2>", "<h2>Headline of chart 2</h2>", "<h2 id=\"about-heading\">About this dashboard</h2>")) &&
+        grepl(p8c_rh3, p8c_text3, fixed = TRUE) && grepl("<p class=\"card-sub\">Price of an order</p>", p8c_h3, fixed = TRUE) &&
         lengths(gregexpr("<img src=\"data:image/png;base64,", p8c_h3, fixed = TRUE)) == 3L && grepl("alt=\"Orders by region. Headline of chart 1\"", p8c_h3, fixed = TRUE) &&
-        grepl("alt=\"Price of an order\"", p8c_h3, fixed = TRUE) && lengths(gregexpr("class=\"source\">Source: sales.csv", p8c_h3, fixed = TRUE)) == 3L &&
+        grepl("alt=\"Price of an order. ", p8c_h3, fixed = TRUE) && lengths(gregexpr("class=\"source\">Source: sales.csv", p8c_h3, fixed = TRUE)) == 3L &&
         lengths(gregexpr("class=\"summary\"", p8c_h3, fixed = TRUE)) == 2L && regexpr("Headline of chart 1", p8c_h3, fixed = TRUE) < regexpr("Headline of chart 2", p8c_h3, fixed = TRUE) &&
-        regexpr("Headline of chart 2", p8c_h3, fixed = TRUE) < regexpr("Price of an order</h2>", p8c_h3, fixed = TRUE))
+        regexpr("Headline of chart 2", p8c_h3, fixed = TRUE) < regexpr("<p class=\"card-sub\">Price of an order</p>", p8c_h3, fixed = TRUE))
 check("8C-4: the About card has the file name, its rows and columns, what one row is, the date and author, the model that wrote the text (and that the author's own title and introduction are not checked), which texts passed the checks and which chart has none, how many charts are pictures, a link to the codebook, and the paragraph of www/methodology.md that says a chart describes the file",
       grepl("sales.csv: 240 rows and 5 columns.", p8c_about, fixed = TRUE) && grepl("One row is one order.", p8c_about, fixed = TRUE) &&
         grepl("21 November 2026, by A. Analyst.", p8c_about, fixed = TRUE) && grepl("written by the model test-model", p8c_about, fixed = TRUE) &&
@@ -5259,8 +5265,8 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8c_st2, ask 
     lengths(gregexpr("id=\"proxy1-dash_in_c[0-9]\"", m)) == 4L && !grepl("id=\"proxy1-dash_in_c2\"[^>]*checked", m) &&   # picture, interactive or video (Phase 9 Part B: was two)
     grepl("Orders are spread across four regions", m, fixed = TRUE) && grepl("Move up and Move down", m, fixed = TRUE) &&
     lengths(gregexpr("name=\"proxy1-dash_mode_[a-z0-9]+\" value=\"picture\" checked", m)) == 4L
-  p8c_d$warn <- grepl("No headline yet: Price of an order. The page shows the chart's title in its place.", mw, fixed = TRUE) &&
-    grepl("Marked as changed since it was written: Price by region.", mw, fixed = TRUE) && !grepl(PALETTE_CVD_WARNING, mw, fixed = TRUE) && !grepl("No headline yet: [^.]*Orders by region", mw)
+  p8c_d$warn <- !grepl("No headline yet", mw, fixed = TRUE) &&   # Phase 13: R writes a headline for every chart
+    grepl("Marked as changed since it was written: Price by region.", mw, fixed = TRUE) && !grepl(PALETTE_CVD_WARNING, mw, fixed = TRUE)
   # a chosen palette that fails the colour-vision mark is warned of, in the dialog
   session$setInputs(pal_sequential = "ylgnbu")
   session$setInputs(export = 2)
@@ -5290,13 +5296,11 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = p8c_st2, ask 
 , error = function(e) message("note  a Part C screen scenario stopped: ", conditionMessage(e)), finally = rm("showModal", envir = globalenv()))
 check("8C-18: Export dashboard opens a dialog with the title (filled with the file's name), subtitle, author, the date (today), an introduction that says it is not checked by the number check, the three value boxes all chosen, and the chosen charts in the order of the canvas (not the one switched off), each with a small picture and a picture, interactive or video choice (three radios since Phase 9 Part B) that starts on picture",
       isTRUE(p8c_d$fields) && isTRUE(p8c_d$charts))
-check("8C-19: the dialog warns, before anything is built: a chosen chart with no headline, a chart whose text is marked as changed, and (only when one is chosen) a palette that fails the colour-vision mark; no model call and no chat message comes of opening it",
+check("8C-19: the dialog warns, before anything is built (Phase 13: of no chart without a headline, as R writes one for every chart): a chart whose text is marked as changed, and (only when one is chosen) a palette that fails the colour-vision mark; no model call and no chat message comes of opening it",
       isTRUE(p8c_d$warn) && isTRUE(p8c_d$palette) && isTRUE(p8c_d$no_model) &&
-        identical(dashboard_warnings(c("A", "B", "C"), c(TRUE, FALSE, TRUE), c(NA, NA, "data"), p8c_pal), list(
-          headline = "No headline yet: B. The page shows the chart's title in its place.",
-          changed = dashboard_warnings(c("A", "B", "C"), c(TRUE, TRUE, TRUE), c(NA, NA, "data"), p8c_pal)$changed)) &&
-        length(dashboard_warnings("A", TRUE, NA_character_, p8c_pal)) == 0L &&
-        names(dashboard_warnings("A", TRUE, NA_character_, utils::modifyList(p8c_pal, list(diverging = "ylgnbu")))) == "palette")
+        identical(names(dashboard_warnings(c("A", "B", "C"), c(NA, NA, "data"), p8c_pal)), "changed") && is.null(formals(dashboard_warnings)$has_headline) &&
+        length(dashboard_warnings("A", NA_character_, p8c_pal)) == 0L &&
+        names(dashboard_warnings("A", NA_character_, utils::modifyList(p8c_pal, list(diverging = "ylgnbu")))) == "palette")
 check("8C-20: beside a chart set to interactive that is drawn from rows (here a box chart) the dialog says in one sentence that the values of every plotted row go into the file and a picture holds none; beside a picture, an interactive bar of counts and a chart of other kinds it says nothing; the default is a picture for charts drawn from rows even when the card shows the interactive view, and the card's view for the others",
       isTRUE(p8c_d$disclosure) && isTRUE(p8c_d$defaults))
 
@@ -5346,14 +5350,14 @@ p8c_r <- p8c_b$res
 p8c_bd <- p8c_b$dir
 p8c_bh <- if (!is.null(p8c_bd)) p8c_html(p8c_bd)
 p8c_pos <- function(h, x) regexpr(x, h, fixed = TRUE)[[1]]
-check("8C-21: the switch and the order reach the export: with one chart switched off and another moved up, the zip holds exactly the three chosen charts numbered in the canvas's order (charts/01_price_by_region, 02_orders_by_region, 03_price_of_an_order), the page shows their headlines (the stale one as it is now, the chart's title where there is none) in that order, and the unchosen scatter ('Units against price') is in no file of the zip, nor its file name",
+check("8C-21: the switch and the order reach the export: with one chart switched off and another moved up, the zip holds exactly the three chosen charts numbered in the canvas's order (charts/01_price_by_region, 02_orders_by_region, 03_price_of_an_order), the page shows their headlines (the stale one as it is now; where there is none, the headline R writes, the chart's title under it: Phase 13) in that order, and the unchosen scatter ('Units against price') is in no file of the zip, nor its file name",
       isTRUE(p8c_r$ok) && identical(p8c_r$name, "unclassified_dashboard_2026-11-21.zip") && identical(basename(p8c_r$zip), "unclassified_dashboard_2026-11-21.zip") && dir.exists(p8c_bd) &&
         setequal(names(p8c_r$files), c("dashboard.html", "codebook.html", "data_dictionary.yaml", "charts.R",
                                        paste0("charts/", c("01_price_by_region", "02_orders_by_region", "03_price_of_an_order"), ".png"),
                                        if (p8c_svg) paste0("charts/", c("01_price_by_region", "02_orders_by_region", "03_price_of_an_order"), ".svg"))) &&
         identical(p8c_r$modes, rep("picture", 3L)) &&
         p8c_pos(p8c_bh, "A headline written earlier") > 0L && p8c_pos(p8c_bh, "A headline written earlier") < p8c_pos(p8c_bh, "Orders are spread across four regions") &&
-        p8c_pos(p8c_bh, "Orders are spread across four regions") < p8c_pos(p8c_bh, "<h2>Price of an order</h2>") &&
+        p8c_pos(p8c_bh, "Orders are spread across four regions") < p8c_pos(p8c_bh, "<p class=\"card-sub\">Price of an order</p>") &&
         !p8c_has(p8c_bd, "Units against price") && !p8c_has(p8c_bd, "units_against_price") && p8c_has(p8c_bd, "Price by region"))
 check("8C-22: what the dialog asked for reaches the page: the title, subtitle, author, the date, the introduction, only the value boxes chosen (Rows and the period, not Columns), and the About card names the model of the profile; the build adds nothing to the chat and makes no model call",
       grepl("<h1>Sales review</h1>", p8c_bh, fixed = TRUE) && grepl("The fourth quarter", p8c_bh, fixed = TRUE) && grepl("Kim Analyst", p8c_bh, fixed = TRUE) && grepl("21 November 2026", p8c_bh, fixed = TRUE) &&
@@ -5575,13 +5579,13 @@ check("9A-4: the pictures drawn for the page have no title, subtitle or source l
 p9_h2 <- unlist(regmatches(p9_h, gregexpr("(?<=<h2>)[^<]*", p9_h, perl = TRUE)))
 p9_zn <- p9_build(list(p8c_item(1, p9_s$bar, headline = NULL), p8c_item(2, list(family = "bar", x = "region", y = "revenue", fn = "sum", top_n = 3, title = "Top regions"), headline = "The top three")))
 p9_hn <- p9_zn$html
-check("9A-5: in a card the headline is the heading and the chart's title is the subtitle (Headline of chart 1 over Revenue by region, and so on); a chart with no headline has its title as the heading and no subtitle (nothing is said twice); a chart's own subtitle (here 'Top 3 of 6') is shown under the title in the card's HTML, and is in no picture",
+check("9A-5: in a card the headline is the heading and the chart's title is the subtitle (Headline of chart 1 over Revenue by region, and so on); a chart with no story shows the headline R writes from its facts, its title under it (Phase 13; nothing is said twice); a chart's own subtitle (here 'Top 3 of 6') is shown under the title in the card's HTML, and is in no picture of a card (in the picture that leaves the page it follows the description under the headline: Phase 13)",
       identical(p9_h2[1:5], paste("Headline of chart", 1:5)) &&
         grepl("<h2>Headline of chart 1</h2><p class=\"card-sub\">Revenue by region</p>", p8c_sq(p9_h), fixed = TRUE) &&
-        grepl("<h2>Revenue by region</h2><div class=\"slot\"><picture>", p8c_sq(p9_hn), fixed = TRUE) && lengths(gregexpr("class=\"card-sub\"", p9_hn, fixed = TRUE)) == 1L &&
+        grepl("<p class=\"card-sub\">Revenue by region</p><div class=\"slot\"><picture>", p8c_sq(p9_hn), fixed = TRUE) && lengths(gregexpr("class=\"card-sub\"", p9_hn, fixed = TRUE)) == 2L &&
         grepl("<h2>The top three</h2><p class=\"card-sub\">Top regions</p><p class=\"card-note\">Top 3 of 6</p><div class=\"slot\"><picture>", p8c_sq(p9_hn), fixed = TRUE) &&
         is.null(ggplot2::get_labs(spec_plot(list(family = "bar", x = "region", y = "revenue", fn = "sum", top_n = 3, title = "Top regions"), p9_data, p9_cb, web = dash_web("desk")))$subtitle) &&
-        identical(ggplot2::get_labs(spec_plot(list(family = "bar", x = "region", y = "revenue", fn = "sum", top_n = 3, title = "Top regions"), p9_data, p9_cb))$subtitle, "Top 3 of 6"))
+        identical(ggplot2::get_labs(spec_plot(list(family = "bar", x = "region", y = "revenue", fn = "sum", top_n = 3, title = "Top regions"), p9_data, p9_cb))$subtitle, "Top regions. Top 3 of 6"))
 
 # 6. a time axis is written by its span: years, "Jan 2022" or "3 Jan", in the app (spec_plot) and in the export (the web drawings); never "2022-01-01"
 p9_xlabs <- function(p) ggplot2::ggplot_build(p)$layout$panel_params[[1]]$x$get_labels()
@@ -5759,7 +5763,8 @@ p9_print <- function(html, name) {
 p9_pp <- if (p9_has_chrome) list(dark = p9_print(file.path(p9_six$dark$dir, "dashboard.html"), "p9_dark"), clean = p9_print(file.path(p9_six$clean$dir, "dashboard.html"), "p9_clean"),
                                  dark_cb = p9_print(file.path(p9_six$dark$dir, "codebook.html"), "p9_dark_cb"))
 p9_dark_layout <- if (p9_has_chrome) p9_dom(file.path(p9_six$dark$dir, "dashboard.html"), 1400, p9_measure_js)
-p9_same_page <- function(pp, a, b) { pa <- which(grepl(a, pp$text, fixed = TRUE)); pb <- which(grepl(b, pp$text, fixed = TRUE)); length(pa) == 1L && identical(pa, pb) }
+# the first page each text is on (Phase 13: the About block names each headline again, further down)
+p9_same_page <- function(pp, a, b) { pa <- utils::head(which(grepl(a, pp$text, fixed = TRUE)), 1L); pb <- utils::head(which(grepl(b, pp$text, fixed = TRUE)), 1L); length(pa) == 1L && identical(pa, pb) }
 check("9A-10: print: every style's page prints on a light ground (@media print sets the custom properties to white and near-black, print-color-adjust exact, a card, a codebook section, a box and the foot are never split, the grid is one column); a dark page also holds, for each picture, a light drawing in the Clean style that is shown only for print (the screen picture is dark in its corner, the print one light, and in Chrome only the screen picture is shown on screen) and the codebook's pictures the same; a card that has its row has the half-width drawing for print; printed to a PDF by Chrome the dark and the clean dashboard have every card whole on one page (headline, summary and source line together) and every page light, and the dark codebook has no section split and light pages",
       all(purrr::map_lgl(p9_styles, function(st) grepl("@media print{:root{--bg:#FFFFFF;--text:#111111;--text2:#333333;--caption:#555555;--grid:#BBBBBB;--box:#F2F2F2;--rule:#111111;}", p9_six[[st]]$html, fixed = TRUE) &&
                             grepl("print-color-adjust:exact;background:#FFFFFF", p9_six[[st]]$html, fixed = TRUE) && grepl(".grid{display:block;}.card,.col-section,.key,.foot{break-inside:avoid;page-break-inside:avoid;}", p9_six[[st]]$html, fixed = TRUE) &&
@@ -6306,8 +6311,8 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = p9d_xs, ask =
 }), error = function(e) message("note  a Part D export scenario stopped: ", conditionMessage(e)), finally = rm("showModal", envir = globalenv()))
 check("9D-16: the export dialog lists each chosen table (its title, the columns and the group it takes, 'goes in the page as a table and in charts/ as a CSV', no picture and no choice of picture or interactive), warns once that a table shows statistics for groups of fewer than 5 rows, which can describe individuals, naming the tables that do (and not a table with no such group, nor when no table has one); nothing is hidden; building with tables writes the zip (the tables as CSV in charts/, the result says '3 summary tables'); removing a table takes it out of the dashboard; with every card switched off the dialog says no chart is in it",
       isTRUE(p9d_xe$measures) && isTRUE(p9d_xe$cards) && isTRUE(p9d_xe$modal) && isTRUE(p9d_xe$warn) && isTRUE(p9d_xe$build) && isTRUE(p9d_xe$no_warn) && isTRUE(p9d_xe$none) &&
-        identical(dashboard_warnings("a", TRUE, NA_character_, chart_palette_default(), small = c("A", "B"))$small_groups, paste0(SUMMARY_SMALL_WARNING, " Marked in: A; B.")) &&
-        is.null(dashboard_warnings("a", TRUE, NA_character_, chart_palette_default())$small_groups) && grepl("fewer than 5 rows, which can describe individuals", SUMMARY_SMALL_WARNING, fixed = TRUE))
+        identical(dashboard_warnings("a", NA_character_, chart_palette_default(), small = c("A", "B"))$small_groups, paste0(SUMMARY_SMALL_WARNING, " Marked in: A; B.")) &&
+        is.null(dashboard_warnings("a", NA_character_, chart_palette_default())$small_groups) && grepl("fewer than 5 rows, which can describe individuals", SUMMARY_SMALL_WARNING, fixed = TRUE))
 
 # no model, no loop, no device but chart_device(): the code of the summary tables
 p9d_fns <- c("summary_kind", "summary_scale", "summary_t_ci", "summary_wilson", "summary_rows", "summary_levels", "summary_table", "summary_has_interval", "summary_notes", "summary_num", "summary_cnt",
@@ -6532,7 +6537,8 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = p9b_st, ask =
   session$setInputs(chat_user_input = "animate")
   v1 <- made$video[["c1"]]()
   p9b_e$first <- !is.null(v1) && length(p9b_made$calls) == 1L && identical(p9b_made$calls[[1]]$width, 1080) && !dir.exists(p9b_made$calls[[1]]$dir) &&
-    identical(p9b_made$calls[[1]]$spec, chart_of("c1")$spec) && length(p9b_si$sent) == sent0 && isTRUE(made$showv[["c1"]]()) && grepl("Animated Orders by region", last_say(), fixed = TRUE) && length(made$log) == log0 + 1L
+    identical(spec_public(p9b_made$calls[[1]]$spec), spec_public(chart_of("c1")$spec)) && isTRUE(p9b_made$calls[[1]]$spec$.untitled) && length(p9b_si$sent) == sent0 && isTRUE(made$showv[["c1"]]()) &&
+      grepl("Animated ", last_say(), fixed = TRUE) && grepl(md_text("(Orders by region)"), last_say(), fixed = TRUE) && length(made$log) == log0 + 1L
   view <- html("c1_view")
   b64 <- function(x) jsonlite::base64_enc(charToRaw(x))
   js <- regmatches(view, regexpr("(?s)<script type=\"application/json\" class=\"motion-frames\">.*?</script>", view, perl = TRUE))
@@ -7648,7 +7654,7 @@ check("10C-7: the index and the moving average as drawn: the y title is 'Index (
         any(grepl("first month (Jan 2023)", c10_pi$notes, fixed = TRUE)) && any(grepl("the picture depends on the starting period", c10_pi$notes, fixed = TRUE)) &&
         identical(c10_pi$spec$.index_unit, "month") && all(c("S1  160", "S2  300") %in% ggplot2::ggplot_build(c10_pi$plot)$data[[which(c10_pi$geoms == "GeomText")[1]]]$label) &&
         identical(c10_ps$geoms[1:2], c("GeomLine", "GeomLine")) && identical(c10_bs[[1]]$colour[1], CHART_STYLES$clean$grey) && !identical(c10_bs[[2]]$colour[1], CHART_STYLES$clean$grey) &&
-        identical(ggplot2::get_labs(c10_ps$plot)$subtitle, "3-period moving average; raw values in grey") && identical(ggplot2::get_labs(c10_ps2$plot)$subtitle, "Mine") &&
+        identical(ggplot2::get_labs(c10_ps$plot)$subtitle, "t. 3-period moving average; raw values in grey") && identical(ggplot2::get_labs(c10_ps2$plot)$subtitle, "t. Mine") &&   # Phase 13: after the description
         any(grepl("moving average over 3 periods", c10_ps$notes, fixed = TRUE)) &&
         "S2  45.3" %in% ggplot2::ggplot_build(c10_ps$plot)$data[[which(c10_ps$geoms == "GeomText")[1]]]$label &&
         "125" %in% ggplot2::ggplot_build(c10_ps1$plot)$data[[which(c10_ps1$geoms == "GeomText")[1]]]$label)
@@ -7877,13 +7883,14 @@ check("10D-2: the upper-case rule of the Briefing style: every word is upper-cas
         identical(chart_case_tokens("a kg 2")$keep, c(FALSE, TRUE, TRUE, TRUE, TRUE)))
 
 # 10D-3: drawn: the title of the picture, of the interactive chart's SVG and of the written code is the upper-cased text in Briefing and as written in Clean
-d10_pb <- d10_plot(d10_bar, "briefing")
-d10_pc <- d10_plot(d10_bar, "clean")
+d10_hd <- utils::modifyList(d10_bar, list(.headline = d10_bar$title, title = NULL))   # Phase 13: the drawn title is the headline; this one is the old title
+d10_pb <- d10_plot(d10_hd, "briefing")
+d10_pc <- d10_plot(d10_hd, "clean")
 d10_wb <- spec_widget(d10_pb)
 d10_code_b <- spec_code(attr(d10_pb, "spec"), d10_cb, file.path("tests", "data", "orders.csv"), d10_pal("briefing"))
 check("10D-3: a title is drawn in upper case in Briefing (the picture's title, the interactive chart's SVG text, the printed code's labs()) and as written in every other style; the numbers and the unit keep their case ('2024', 'kg'); the SVG's title is in Barlow Condensed",
       identical(d10_pb$labels$title, "WEST DRIVES 34% OF REVENUE IN 2024, IN kg") && identical(d10_pc$labels$title, d10_bar$title) &&
-        identical(attr(d10_pc, "spec")$title, d10_bar$title) &&
+        identical(attr(d10_pc, "spec")$.headline, d10_bar$title) &&
         grepl("WEST DRIVES 34% OF REVENUE IN 2024, IN kg", paste(as.character(d10_wb$x$html), collapse = ""), fixed = TRUE) &&
         identical(svg_text_attr(d10_wb, "WEST DRIVES 34% OF REVENUE IN 2024, IN kg", "font-family"), "Barlow Condensed") &&
         grepl("title = \"WEST DRIVES 34% OF REVENUE IN 2024, IN kg\"", d10_code_b, fixed = TRUE) && grepl("chart_display <- if (has_font(\"Barlow Condensed\")) \"Barlow Condensed\" else \"sans\"", d10_code_b, fixed = TRUE) &&
@@ -8120,7 +8127,7 @@ b10b_hs <- c("Revenue rose." = "Revenue rose", "Revenue rose..." = "Revenue rose
              "Costs fell, etc." = "Costs fell, etc.", "Made in the U.S." = "Made in the U.S.", "Done. " = "Done", "Plain" = "Plain", "Two. Sentences." = "Two. Sentences")
 b10b_card <- as.character(dash_card(list(mode = "picture", title = "Chart title", headline = "Revenue rose 34% in 2024.", summary = "A summary.", notes = NULL, source = "Source: x.", chart_subtitle = NULL,
                                          pictures = list(desk = list(uri = "data:image/png;base64,AA==", pixels = c(540, 345)), phone = list(uri = "data:image/png;base64,AA==", pixels = c(340, 272)))), full = FALSE, style = "briefing"))
-b10b_sp <- b10b_spec; b10b_sp$title <- "Units ordered against unit price."
+b10b_sp <- b10b_spec; b10b_sp$title <- "Units ordered against unit price."; b10b_sp$.headline <- b10b_sp$title   # Phase 13: drawn as the headline
 check("10b-7: a heading drops one trailing full stop where it is shown as a heading (the page's card heading, the masthead, a table card, the canvas heading, the title drawn on the chart in every style), and the stored text is unchanged; not an ellipsis, not 'e.g.' or 'etc.' or 'U.S.', a decimal number has none to lose, only one stop goes",
       all(purrr::map_lgl(seq_along(b10b_hs), function(i) identical(chart_heading_text(names(b10b_hs)[i]), unname(b10b_hs[i])))) && is.null(chart_heading_text(NULL)) && identical(chart_heading_text(NA_character_), NA_character_) &&
         grepl("<h2> ?Revenue rose <span class=\"keep\">34%</span> in <span class=\"keep\">2024</span> ?</h2>", gsub("\\s+", " ", b10b_card)) && identical(dash_heading_text("Revenue rose.", "clean"), "Revenue rose") &&
@@ -9229,7 +9236,7 @@ check("11B-8: the message has the sections SKILL, TOOLKIT, SPEC, TABLE, FACTS, T
       identical(unname(b11_at), sort(unname(b11_at))) && all(b11_at > 0L) && endsWith(b11_msg, paste0("REPLY FORMAT\n", read_reflex_file("design.md")$output_format, collapse = "")) &&
         grepl("region | category | 6 | 6 levels: West, East, North, Québec, South, Central", b11_msg, fixed = TRUE) && grepl("revenue | number | 6 | 206461 to 939502", b11_msg, fixed = TRUE) &&
         grepl("West | 939502", b11_block(b11_msg, "TABLE"), fixed = TRUE) && grepl("ggplot2: ggplot aes", b11_block(b11_msg, "TOOLKIT"), fixed = TRUE) &&
-        identical(b11_block(b11_msg, "SKILL"), b11_ed$text) && grepl("tok$accent = \"#0A4580\"", b11_msg, fixed = TRUE) && grepl("txt$title = \"Revenue by region\"", b11_msg, fixed = TRUE) &&
+        identical(b11_block(b11_msg, "SKILL"), b11_ed$text) && grepl("tok$accent = \"#0A4580\"", b11_msg, fixed = TRUE) && grepl("txt$title = \"West has the highest total revenue, 940,000\"", b11_msg, fixed = TRUE) && grepl("txt$subtitle = \"Revenue by region", b11_msg, fixed = TRUE) &&
         grepl("facts$highest: Highest: West (940,000)", b11_msg, fixed = TRUE) && grepl("\"fn\":\"sum\"", b11_msg, fixed = TRUE) &&
         startsWith(b11_sys, read_reflex_file("design.md")$persona) && grepl("REFLEXES: Design: drawing code for one chart (v0.1)", b11_sys, fixed = TRUE) && !grepl("SPEC REFERENCE|Source:|Label:", b11_sys) &&
         grepl("Rows: not sent (this chart's marks are rows of the file)", b11_block(b11_scatter_msg, "TABLE"), fixed = TRUE) && grepl("units | number | 3000 |", b11_block(b11_scatter_msg, "TABLE"), fixed = TRUE) &&
@@ -9378,7 +9385,7 @@ shiny::testServer(mod_explore_server, args = list(state = b11_state(), ask = b11
   session$setInputs(chat_user_input = "redesign this")
   session$setInputs(chat_user_input = "design this")
   session$setInputs(chat_user_input = "which is biggest?")
-  b11_ui$chat <- after_phrase$chat == chat_before && after_phrase$design == 2L && after_phrase$review == 2L && grepl("Designed Revenue by region with Editorial", after_phrase$said, fixed = TRUE) &&
+  b11_ui$chat <- after_phrase$chat == chat_before && after_phrase$design == 2L && after_phrase$review == 2L && grepl("Designed ", after_phrase$said, fixed = TRUE) && grepl(paste0(md_text("(Revenue by region)"), " with Editorial"), after_phrase$said, fixed = TRUE) &&
     grepl("No chat call was made", after_phrase$said, fixed = TRUE) && after_wish$chat == chat_before && after_wish$design == 3L && grepl("<WISH>", wish_msg, fixed = TRUE) &&
     grepl("put the legend inside and use a darker background", b11_block(wish_msg, "WISH"), fixed = TRUE) && grepl("with your wish", after_wish$said, fixed = TRUE) &&
     n_kind("design") == 5L && n_kind("chat") == chat_before + 1L && identical(isolate(made$design$c1())$wish, NULL) &&
@@ -10336,7 +10343,8 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = e11_st2, ask 
   session$setInputs(c1_ed = list(field = "colour", value = "red", t = 9))
   session$setInputs(c1_ed = "West leads on its own")
   session$setInputs(c3_ed = list(field = "headline", value = "A headline for a chart with none", t = 10))
-  e11_edit$kept <- identical(after_blank, hl) && identical(isolate(state$stories$c1), hl) && is.null(isolate(state$stories$c3)) && identical(calls_before, length(e11_si$sent))
+  e11_edit$kept <- identical(after_blank, hl) && identical(isolate(state$stories$c1), hl) && identical(isolate(state$stories$c3)$headline, "A headline for a chart with none") &&
+    identical(isolate(state$stories$c3)$headline_by, "analyst") && identical(calls_before, length(e11_si$sent))   # Phase 13: a typed headline replaces R's, marked as the analyst's own
   # a title edited in place is the chart's title (Undo undoes it) and is checked when it is drawn: a number the chart does not have is marked
   title0 <- isolate(state$charts$c2$spec$title)
   session$setInputs(c2_ed = list(field = "title", value = "Revenue by channel in 99999 places", t = 11))
@@ -10354,7 +10362,7 @@ tryCatch(shiny::testServer(mod_explore_server, args = list(state = e11_st2, ask 
   card_two <- html("c1_card")
   e11_edit$two_targets <- lengths(gregexpr("data-field=\"headline\"", card_two, fixed = TRUE)) == 1L && lengths(gregexpr("data-field=\"title\"", card_two, fixed = TRUE)) == 1L &&
     lengths(gregexpr("data-field=\"summary\"", card_two, fixed = TRUE)) == 1L && grepl("data-multiline=\"1\"", card_two, fixed = TRUE) && grepl("data-label=\"title\"", card_two, fixed = TRUE) && !grepl("data-value", card_two, fixed = TRUE) &&
-    lengths(gregexpr("data-field=\"title\"", html("c3_card"), fixed = TRUE)) == 1L && !grepl("data-field=\"headline\"", html("c3_card"), fixed = TRUE)
+    lengths(gregexpr("data-field=\"title\"", html("c3_card"), fixed = TRUE)) == 1L && lengths(gregexpr("data-field=\"headline\"", html("c3_card"), fixed = TRUE)) == 1L   # Phase 13: every card has its headline
   # a table's title, edited where it stands (blank is the title R writes from the columns)
   add_table(list(title = "Totals", measures = "revenue", by = "", ci = TRUE))
   session$setInputs(t1_ed = list(field = "title", value = "Revenue, in total", t = 14))
@@ -10895,6 +10903,237 @@ check("12c-4: a chart inside the page carries no classification band of its own 
         grepl(paste0("<div class=\"mark bottom\" role=\"note\" aria-label=\"Classification marking\">", APP_CLASSIFICATION, "</div>"), c12_html, fixed = TRUE))
 }
 # <<< 12c end
+
+# >>> 13 begin
+# No model call. Phase 13: every title states the finding. R writes a headline from each chart's FACTS (facts_headline(), spec_headline(), r_headline()),
+#   checked as a model's is; it is the top line wherever a reader meets the chart, the description (the spec's title) under it. The manager's ruling: once
+#   per card (a card's HTML heading carries it, its picture and frames have no title block); a picture that leaves the page (charts/, charts.R) carries it.
+#   Self-contained (its own fixtures), so a changed copy of R/spec.R or R/ui.R can be run against it alone (tests/mutate_13.R).
+source(file.path("tests", "gallery.R"))
+h13_wd <- file.path(tempdir(), "h13_gold")
+dir.create(h13_wd, showWarnings = FALSE)
+h13_gold <- purrr::compact(purrr::map(gold_entries(), function(en) { g <- gold_load(en, h13_wd); if (!is.null(g)) list(entry = en, g = g) }))
+h13_o <- reread_data(file.path("tests", "data", "orders.csv"), "orders.csv", "-99")
+h13_cb <- utils::modifyList(h13_o$codebook, list(row_is = "one order"))
+h13_bar <- list(family = "bar", x = "region", y = "revenue", fn = "sum", sort = "value_desc", title = "Revenue by region")
+h13_head <- function(spec, g) tryCatch(r_headline(new_chart("c1", spec), g$cb, g$data), error = function(e) list(text = conditionMessage(e), source = "error", problems = character(0)))
+if (run_fast) {   # the fast run only (13A-1 to 13A-5, 13B-2, 13B-3, 13C-1 to 13C-4); not indented, to keep the diff small
+h13_heads <- purrr::map(h13_gold, function(x) h13_head(x$entry$spec, x$g))
+# the messy file of Phase 1 (a code 1 to 5, numbers with words and a missing-value code, dates): four charts of it
+h13_messy <- if (exists("make_messy")) local({
+  p <- make_messy(file.path(h13_wd, "messy.csv")); r <- read_data(p, "messy.csv", "-99")
+  cb <- new_codebook(profile_data(r$data), "messy.csv", nrow(r$data), "-99", r$encoding); cb$row_is <- "one record"
+  g <- list(data = r$data, cb = cb)
+  purrr::map(list(list(family = "bar", x = "rating", fn = "count", title = "Records by rating"), list(family = "histogram", x = "score_1", title = "Score two"),
+                  list(family = "scatter", x = "score", y = "score_1", title = "Score against score two"), list(family = "box", x = "rating", y = "score_1", title = "Score two by rating")),
+             function(sp) h13_head(sp, g))
+})
+# at most one number in a headline: a year the facts hold is a time, not a number ("by Dec 2024"), and a group's name is a name (a rating of 4 is the group "4"),
+#   as FACTS names it before a colon ("- 4: 29")
+h13_numbers <- function(h) {
+  years <- as.numeric(regmatches(h$facts$text, gregexpr("(?<![0-9])[12][0-9]{3}(?![0-9])", h$facts$text, perl = TRUE))[[1]])
+  named <- unique(trimws(sub(":.*$", "", sub("^- ", "", trimws(strsplit(h$facts$text, "\n", fixed = TRUE)[[1]])))))
+  sum(purrr::map_lgl(text_numbers(h$text), function(n) !(n$text %in% named) && !(n$value == round(n$value) && n$value >= 1000 && n$value < 3000 && n$value %in% years)))
+}
+h13_ok <- function(h) identical(h$source, "r") && hl_words(h$text) <= HEADLINE_MAX_WORDS && h13_numbers(h) <= 1L &&
+  summary_ok(summary_problems(names_out(h$text, h$facts$names), NULL, h$facts$text, list(), names(h$facts$names)))
+cat("      13 headlines: ", sum(purrr::map_lgl(h13_heads, h13_ok)), " of ", length(h13_heads), " gold specs and ", sum(purrr::map_lgl(h13_messy %||% list(), h13_ok)), " of ",
+    length(h13_messy), " charts of the messy file written by R and passed; longest ", max(purrr::map_int(c(h13_heads, h13_messy), function(h) hl_words(h$text))), " words\n", sep = "")
+check("13A-1: R writes a headline for every chart from its facts, with no model call: for every gold spec (all families and forms: small multiples, an index, a share, top n, two periods) and four charts of the messy file the headline is R's (not the fallback), passes the number check and the word check (as a model's would, its names as tokens), has at most 12 words and at most one number (a year the facts hold is a time)",
+      length(h13_heads) >= 30L && all(purrr::map_lgl(h13_heads, h13_ok)) && (is.null(h13_messy) || (length(h13_messy) == 4L && all(purrr::map_lgl(h13_messy, h13_ok)))))
+# the thresholds, each side: three groups at 100, 106 and 109 (1.09 times: similar) and at 100, 106 and 111 (1.11: not), five rows each; correlations of 0.19,
+#   0.21, -0.19 and -0.21
+h13_tiny <- function(d) { cb <- new_codebook(profile_data(d), "t.csv", nrow(d), character(0), "UTF-8"); cb$row_is <- "one row"; list(data = d, cb = cb) }
+h13_bars <- function(hi) h13_head(list(family = "bar", x = "g", y = "v", fn = "sum", title = "V by g"),
+                                   h13_tiny(data.frame(g = rep(c("A", "B", "C"), each = 5), v = c(18:22, 19.2 + 0:4, hi / 5 + (-2:2) * 0.5))))
+h13_xy <- function(r) {
+  x <- seq_len(200); x <- (x - mean(x)) / stats::sd(x)
+  e <- stats::residuals(stats::lm(sin(seq_len(200) * 1.7) ~ x)); e <- e / stats::sd(e)
+  h13_head(list(family = "scatter", x = "x", y = "y", title = "Y against x", fit = "none"), h13_tiny(data.frame(x = x, y = r * x + sqrt(1 - r^2) * e)))
+}
+h13_thr <- list(b109 = h13_bars(109), b111 = h13_bars(111), r19 = h13_xy(0.19), r21 = h13_xy(0.21), rm19 = h13_xy(-0.19), rm21 = h13_xy(-0.21))
+check("13A-2: the manager's two thresholds, each a constant and each side tested: groups are similar when the highest is less than HEADLINE_SIMILAR (1.1) times the lowest (100, 106 and 109: 'similar', highest 109; 100, 106 and 111: C has the highest, 111); a relationship is 'no clear relation' when the correlation is between -HEADLINE_NO_RELATION and HEADLINE_NO_RELATION (0.2): 0.19 and -0.19 say so with the correlation, 0.21 rises together, -0.21 moves in opposite directions",
+      HEADLINE_SIMILAR == 1.1 && HEADLINE_NO_RELATION == 0.2 &&
+        grepl("is similar", h13_thr$b109$text, fixed = TRUE) && grepl("109", h13_thr$b109$text, fixed = TRUE) && !grepl("similar", h13_thr$b111$text, fixed = TRUE) && startsWith(h13_thr$b111$text, "C has the highest") && grepl("111", h13_thr$b111$text, fixed = TRUE) &&
+        startsWith(h13_thr$r19$text, "No clear relation") && grepl("0.19", h13_thr$r19$text, fixed = TRUE) && startsWith(h13_thr$rm19$text, "No clear relation") && grepl("-0.19", h13_thr$rm19$text, fixed = TRUE) &&
+        grepl("rise together, correlation 0.21", h13_thr$r21$text, fixed = TRUE) && grepl("move in opposite directions, correlation -0.21", h13_thr$rm21$text, fixed = TRUE) &&
+        all(purrr::map_lgl(h13_thr, function(h) identical(h$source, "r"))))
+# a headline that fails its checks is a bug: the chart shows "What is plotted: " and its description (a stand-in facts_headline() writes a number the facts lack)
+h13_real_fh <- facts_headline
+assign("facts_headline", function(s, cb, text) "West has the highest total revenue, 12,345", envir = globalenv())
+h13_fb <- tryCatch(r_headline(new_chart("c1", h13_bar), h13_cb, h13_o$read$data), error = function(e) NULL)
+h13_fbp <- tryCatch(ggplot2::get_labs(spec_plot(h13_bar, h13_o$read$data, h13_cb)), error = function(e) NULL)
+assign("facts_headline", h13_real_fh, envir = globalenv())
+check("13A-3: a headline R writes that fails its checks is not shown: with a stand-in that writes a number the facts lack (12,345), r_headline() falls back (source 'fallback', the problem named) and the drawn title is 'What is plotted: ' and the description",
+      !is.null(h13_fb) && identical(h13_fb$source, "fallback") && identical(h13_fb$text, "What is plotted: Revenue by region") && any(grepl("12,345 is not a number", h13_fb$problems, fixed = TRUE)) &&
+        !is.null(h13_fbp) && identical(h13_fbp$title, "What is plotted: Revenue by region"))
+h13_fact <- function(name) h13_heads[[which(purrr::map_chr(h13_gold, function(x) x$entry$name) == name)]]$facts$text
+h13_hist <- h13_head(list(family = "histogram", x = "revenue", title = "Revenue of an order"), list(data = h13_o$read$data, cb = h13_cb))
+h13_panels <- h13_head(list(family = "line", x = "year", y = "revenue", fn = "sum", facet = "product_category", title = "Revenue by year in each category"), list(data = h13_o$read$data, cb = h13_cb))
+check("13A-4: what was added to FACTS for the headline: a line chart of several series says which ends highest ('Highest at the end'), small multiples compare every panel ('Across the panels, ...'), a heatmap names its highest cell ('Highest cell'), a skewed histogram says which way its tail runs ('Tail: longer to the right') and a faceted one gives all its rows' median ('All panels, median')",
+      grepl("\nHighest at the end: ", h13_fact("panel, revenue by year and region (line, 8 lines)"), fixed = TRUE) &&
+        grepl("\nAcross the panels, highest at the end: ", h13_panels$facts$text, fixed = TRUE) && identical(h13_panels$source, "r") &&
+        grepl("\nHighest cell: ", h13_fact("panel, mean price by region and year (heatmap)"), fixed = TRUE) &&
+        grepl("\nAll panels, median: ", h13_fact("football, age by league (histogram, faceted)"), fixed = TRUE) &&
+        grepl("\nTail: longer to the right", h13_hist$facts$text, fixed = TRUE) && grepl("with a longer tail to the right", h13_hist$text, fixed = TRUE))
+# who wins the title: the analyst's own, else the model's when it passed, else R's
+h13_r <- list(text = "R's headline", source = "r")
+h13_facts <- r_headline(new_chart("c1", h13_bar), h13_cb, h13_o$read$data)$facts
+h13_ftext <- names_back(h13_facts$text, h13_facts$names)
+h13_st <- function(h, by = NULL) list(headline = h, summary = "A summary.", facts = h13_ftext, spec = h13_bar, problems = character(0), headline_by = by)
+h13_sh <- list(none = headline_shown(NULL, h13_r), model_ok = headline_shown(h13_st("West has the highest total revenue, 940,000"), h13_r),
+               model_bad = headline_shown(h13_st("West has the highest total revenue, 12,345"), h13_r),
+               analyst = headline_shown(h13_st("My own words, 12,345", "analyst"), h13_r),
+               fallback = headline_shown(NULL, list(text = "What is plotted: x", source = "fallback")))
+check("13C-1: the model's headline replaces R's only when it passes: with no story R's is shown; a model's headline that passes the checks is shown as the model's; one that fails leaves R's in place and says so; the analyst's own is shown as written whatever it holds; R's fallback is named as such",
+      identical(h13_sh$none[c("text", "by")], list(text = "R's headline", by = "r")) &&
+        identical(h13_sh$model_ok[c("text", "by")], list(text = "West has the highest total revenue, 940,000", by = "model")) && is.null(h13_sh$model_ok$note) &&
+        identical(h13_sh$model_bad[c("text", "by")], list(text = "R's headline", by = "r")) && identical(h13_sh$model_bad$note, HEADLINE_MODEL_FAILED) &&
+        identical(h13_sh$analyst[c("text", "by")], list(text = "My own words, 12,345", by = "analyst")) && identical(h13_sh$fallback$by, "fallback"))
+# the About block names the writer of each headline
+h13_item <- function(id, title, headline, by) list(id = id, title = title, headline = headline, headline_by = by, mode = "picture", summary = NULL, story = NULL, notes = character(0), source = "Source: x.",
+                                                  pictures = list(desk = list(uri = "data:image/png;base64,AA==", pixels = c(540, 345)), phone = list(uri = "data:image/png;base64,AA==", pixels = c(340, 272))))
+h13_about <- as.character(dash_about(list(h13_item("c1", "Revenue by region", "West leads", "r"), h13_item("c2", "Units", "Units rose", "model"), h13_item("c3", "Price", "Mine", "analyst")),
+                                     list(date = as.Date("2026-11-26"), author = ""), h13_cb, h13_o$read$data, "test-model"))
+check("13C-2: 'About this dashboard' says for each chart who wrote its headline: R from the numbers it worked out from the file, the model and checked against those numbers, or the author and not checked",
+      grepl("The headlines", h13_about, fixed = TRUE) && grepl(paste0("West leads (Revenue by region): ", DASH_HEADLINE_BY[["r"]]), h13_about, fixed = TRUE) &&
+        grepl(paste0("Units rose (Units): ", DASH_HEADLINE_BY[["model"]]), h13_about, fixed = TRUE) && grepl(paste0("Mine (Price): ", DASH_HEADLINE_BY[["analyst"]]), h13_about, fixed = TRUE))
+# a 12-word headline in every style breaks into lines that each fit the drawing (7 inches less its margins), at the style's title size
+h13_long <- "Northern coastal regions recorded steadier quarterly revenue growth than southern inland regions"
+h13_fit <- purrr::map_lgl(names(CHART_STYLES), function(st) {
+  s <- list(.headline = h13_long, .description = "Revenue by region", family = "bar")
+  hd <- labs_heads(s, st)
+  th <- chart_theme(st); e <- ggplot2::calc_element("plot.title", th); m <- ggplot2::calc_element("plot.margin", th)
+  room <- SPEC_SIZE[["width"]] * 72 - sum(as.numeric(m[c(2, 4)]))
+  lines <- strsplit(hd$title, "\n", fixed = TRUE)[[1]]
+  w <- systemfonts::string_width(lines, family = e$family %||% "", weight = if (identical(e$face, "bold")) "bold" else "normal", size = e$size, res = 72)
+  length(lines) >= 2L && all(w <= room) && identical(gsub("\n", " ", hd$title), chart_title_case(h13_long, st))
+})
+check("13B-2: a headline of 12 words is broken into lines, never shrunk and never cut: in every style the drawn title's lines each fit the drawing's width less its margins at the style's own title size, and together are the whole headline",
+      hl_words(h13_long) == 12L && length(h13_fit) == length(CHART_STYLES) && all(h13_fit))
+# the manager's ruling, on the app's card: the headline once (in its heading), the description under it, a picture and frames with no title block
+h13_state <- function() shiny::reactiveValues(key_version = 0L, data = h13_o$read$data, problems = h13_o$read$problems, profile = h13_o$profile, codebook = h13_cb,
+                                              path = file.path("tests", "data", "orders.csv"), calls = NULL, charts = list(), canvas = character(0), stories = list(), palette = chart_palette_default())
+h13_ui <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = h13_state()), {
+  session$flushReact()
+  add_charts(list(list(spec = h13_bar)))
+  session$flushReact()
+  html <- function(name) paste(as.character(output[[name]]$html), collapse = "")
+  text_of <- function(h) gsub("&#39;", "'", gsub("<[^>]+>", " ", h), fixed = TRUE)
+  rh <- isolate(made$shown$c1())
+  h13_ui$r <- rh
+  h13_ui$card <- html("c1_card")
+  h13_ui$labs <- ggplot2::get_labs(isolate(made$drawn$c1()))
+  # a model's headline that passes, then one that fails, then the analyst's own
+  set_one <- function(h, by = "model") { st <- list(headline = h, summary = "Some text.", hash = spec_hash(h13_bar), data = isolate(data_key()), facts = h13_ftext, spec = h13_bar,
+                                                    problems = character(0), headline_by = by); state$stories <- list(c1 = st); made$story$c1(st); session$flushReact(); html("c1_card") }
+  h13_ui$model <- set_one("West has the highest total revenue, 940,000")
+  h13_ui$bad <- set_one("West has the highest total revenue, 12,345")
+  h13_ui$count <- function(h, what) lengths(regmatches(text_of(h), gregexpr(what, text_of(h), fixed = TRUE)))
+})
+check("13B-3: the manager's ruling on the app's card: its heading is the headline it shows (R's, written by R from the chart's facts) once, the description under it, and its picture has no title block (no title, no subtitle); a model's headline that passes is the heading, named as the model's; one that fails leaves R's and the card says so",
+      identical(h13_ui$r$by, "r") && h13_ui$count(h13_ui$card, h13_ui$r$text) == 1L && grepl("Revenue by region", h13_ui$card, fixed = TRUE) && grepl(HEADLINE_BY_TEXT[["r"]], h13_ui$card, fixed = TRUE) &&
+        is.null(h13_ui$labs$title) && is.null(h13_ui$labs$subtitle) &&
+        h13_ui$count(h13_ui$model, "West has the highest total revenue, 940,000") == 1L && grepl(HEADLINE_BY_TEXT[["model"]], h13_ui$model, fixed = TRUE) &&
+        !grepl("12,345", h13_ui$bad, fixed = TRUE) && h13_ui$count(h13_ui$bad, h13_ui$r$text) == 1L && grepl(HEADLINE_MODEL_FAILED, h13_ui$bad, fixed = TRUE))
+
+# The manager's rulings (Phase 13). 1: a tail is named past a skewness of SPEC_FACTS_SKEW (1), and only from HEADLINE_TAIL_MIN_ROWS (30) rows: exponential
+#   quantiles (skewness about 2) of 200 rows and of 20 rows, and gamma quantiles of shape 6 (about 0.82) of 200 rows
+h13_g1 <- function(x) { m <- mean(x); mean((x - m)^3) / mean((x - m)^2)^1.5 }
+h13_hx <- function(x) h13_head(list(family = "histogram", x = "x", title = "X"), h13_tiny(data.frame(x = round(x, 3))))
+h13_tails <- list(big = h13_hx(stats::qexp(stats::ppoints(200)) * 10), few = h13_hx(stats::qexp(stats::ppoints(20)) * 10), mid = h13_hx(stats::qgamma(stats::ppoints(200), shape = 6) * 10))
+check("13A-5: the manager's ruling on tails: the skewness is the moment coefficient g1 (the third moment about the mean over the second to the power 1.5, each divided by n); FACTS names a tail past SPEC_FACTS_SKEW (1) and a headline names it only with HEADLINE_TAIL_MIN_ROWS (30) rows or more: 200 exponential quantiles (g1 about 2) name it, 20 of them do not in the headline (FACTS still says it), 200 gamma quantiles of shape 6 (g1 about 0.82) name none",
+      SPEC_FACTS_SKEW == 1 && HEADLINE_TAIL_MIN_ROWS == 30L && h13_g1(stats::qgamma(stats::ppoints(200), shape = 6)) > 0.5 && h13_g1(stats::qgamma(stats::ppoints(200), shape = 6)) < 1 &&
+        grepl("with a longer tail to the right", h13_tails$big$text, fixed = TRUE) && grepl("\nTail: longer to the right", h13_tails$few$facts$text, fixed = TRUE) &&
+        !grepl("tail", h13_tails$few$text, fixed = TRUE) && !grepl("\nTail:", h13_tails$mid$facts$text, fixed = TRUE) && !grepl("tail", h13_tails$mid$text, fixed = TRUE) &&
+        all(purrr::map_lgl(h13_tails, function(h) identical(h$source, "r"))))
+# 2: when the chart has changed, a model's headline is checked again against the chart's facts now; the analyst's own always stays
+h13_now <- r_headline(new_chart("c1", h13_bar), h13_cb, h13_o$read$data)
+h13_old <- function(h, facts, by = NULL) list(headline = h, summary = "Some text.", facts = facts, spec = h13_bar, problems = character(0), headline_by = by)
+h13_chg <- list(holds = headline_shown(h13_old("West has the highest total revenue, 940,000", "Highest: West (940,000)"), h13_now, "chart"),
+                fails = headline_shown(h13_old("West has the highest total revenue, 500,000", "Highest: West (500,000)"), h13_now, "chart"),
+                analyst = headline_shown(h13_old("West, my own words, 500,000", "Highest: West (500,000)", "analyst"), h13_now, "chart"))
+check("13C-3: the manager's ruling when a chart changes: a model's headline is checked again against the chart's facts now; one that still passes stays (the model's), one that no longer does gives way to R's fresh headline and the card says so, and the analyst's own always stays, as theirs",
+      identical(h13_chg$holds[c("text", "by")], list(text = "West has the highest total revenue, 940,000", by = "model")) &&
+        identical(h13_chg$fails[c("text", "by")], list(text = h13_now$text, by = "r")) && identical(h13_chg$fails$note, HEADLINE_MODEL_CHANGED) &&
+        identical(h13_chg$analyst[c("text", "by")], list(text = "West, my own words, 500,000", by = "analyst")))
+# 3: at most two numbers and twelve words, whoever wrote the headline; a model's over either gets its one repair, then R's stays
+h13_f3 <- "Highest: West (940,000)\nLowest: Central (206,000)\nTotal: 2,740,000"
+h13_lim <- list(ok = summary_problems("West leads at 940,000, Central trails at 206,000", NULL, h13_f3, list())$limits,
+                three = summary_problems("West 940,000, Central 206,000, in all 2,740,000", NULL, h13_f3, list())$limits,
+                long = summary_problems("West has by a long way the highest total revenue of all six regions shown", NULL, h13_f3, list())$limits,
+                twelve = summary_problems("West has by a long way the highest revenue of all six regions", NULL, h13_f3, list())$limits)
+h13_ask <- function(first, second) { env <- new.env(); env$n <- 0L
+  env$ask <- function(user, m, system_prompt = NULL, max_tokens, validate = NULL) { env$n <- env$n + 1L
+    h <- if (env$n == 1L) first else second
+    raw <- as.character(jsonlite::toJSON(list(charts = list(list(id = "c1", headline = h, summary = "West leads the regions."))), auto_unbox = TRUE))
+    obj <- parse_json_block(raw); if (!is.null(validate)) validate(obj)
+    list(obj = obj, raw = raw, finish = "success", tokens = c(100, 20, 0), seconds = 0.1) }
+  env }
+h13_rep <- purrr::map(list(fixed = h13_ask("West 940,000, Central 206,000, in all 2,740,000", "West has the highest total revenue, 940,000"),
+                           still = h13_ask("West 940,000, Central 206,000, in all 2,740,000", "West 940,000 and Central 206,000 of 2,740,000")), function(a) {
+  out <- summarize_charts(list(new_chart("c1", h13_bar)), h13_cb, h13_o$read$data, ask = a$ask)
+  r <- out$charts[[1]]
+  list(calls = a$n, checked = r$checked, shown = headline_shown(list(headline = r$headline, summary = r$summary, facts = r$facts, spec = r$spec, problems = r$problems, headline_by = "model"), h13_now))
+})
+h13_own <- recheck_story(list(headline = "West, Central and all: 940,000, 206,000 and 2,740,000", summary = NULL, facts = h13_ftext, spec = h13_bar, problems = character(0), headline_by = "analyst"))
+check("13C-4: the manager's ruling on length: a headline carries at most two numbers (HEADLINE_MAX_NUMBERS) and twelve words, whoever wrote it, both in the headline checks (two numbers and twelve words pass; three numbers, or thirteen words, fail and say so); a model's headline over a limit gets its one repair: fixed, it is the model's; still over, R's stays and the card says why; the analyst's own over a limit stays, marked; summary.md says the model may carry one number, or two for a change",
+      HEADLINE_MAX_NUMBERS == 2L && HEADLINE_MAX_WORDS == 12L && !length(h13_lim$ok) && !length(h13_lim$twelve) &&
+        identical(h13_lim$three, "the headline carries 3 numbers; it may carry at most 2") && identical(h13_lim$long, "the headline has 14 words; it may have at most 12") &&
+        h13_rep$fixed$calls == 2L && isTRUE(h13_rep$fixed$checked) && identical(h13_rep$fixed$shown$by, "model") &&
+        h13_rep$still$calls == 2L && !isTRUE(h13_rep$still$checked) && identical(h13_rep$still$shown[c("text", "by")], list(text = h13_now$text, by = "r")) &&
+        identical(h13_rep$still$shown$note, HEADLINE_MODEL_FAILED) &&
+        identical(headline_shown(h13_own, h13_now)$by, "analyst") && any(grepl("3 numbers", h13_own$problems, fixed = TRUE)) &&
+        grepl("It may carry one number, or two when it states a change from one value to another.", paste(readLines(file.path("www", "reflexes", "summary.md"), warn = FALSE), collapse = "\n"), fixed = TRUE))
+}
+
+if (run_heavy) {   # the heavy run only (13B-1 and 13B-4): every gold spec in every style, and an exported dashboard
+# 13B-1: no picture that leaves the page has the description as its top line: every gold spec in every style is drawn with its headline as the title (wrapped as the
+#   style writes it) and the description at the start of the line under it; the frames of three charts, the interactive SVG and the code written for charts.R the same
+h13_top <- purrr::map(h13_gold, function(x) purrr::map_lgl(names(CHART_STYLES), function(st) {
+  p <- tryCatch(spec_plot(x$entry$spec, x$g$data, x$g$cb, utils::modifyList(chart_palette_default(), list(style = st))), error = function(e) NULL)
+  if (is.null(p)) return(FALSE)
+  l <- ggplot2::get_labs(p); s <- attr(p, "spec")
+  is_text1(s$.headline) && identical(gsub("\n", " ", l$title), chart_title_case(chart_heading_text(s$.headline), st)) &&
+    (!is_text1(x$entry$spec$title) || (startsWith(gsub("\n", " ", l$subtitle %||% ""), sub("[.]$", "", trimws(x$entry$spec$title))) && !identical(trimws(x$entry$spec$title), trimws(s$.headline))))
+}))
+h13_frames <- purrr::map_lgl(h13_gold[1:3], function(x) { vp <- video_plot(x$entry$spec, x$g$data, x$g$cb); identical(attr(vp, "spec")$.description, x$entry$spec$title) && is_text1(ggplot2::get_labs(vp)$title) &&
+  !identical(ggplot2::get_labs(vp)$title, x$entry$spec$title) })
+h13_code <- purrr::map_lgl(h13_gold[1:6], function(x) { p <- spec_plot(x$entry$spec, x$g$data, x$g$cb); code <- spec_code(attr(p, "spec"), x$g$cb, x$g$path)
+  grepl(paste0("title = \"", paste(utils::head(strsplit(ggplot2::get_labs(p)$title, "[ \n]")[[1]], 3L), collapse = " ")), code, fixed = TRUE) })
+check("13B-1: no picture that leaves the page has the description as its top line: every gold spec in every style is drawn with its headline as its title and its description first in the line under it; the frames of a chart drawn with a title, and the code written for charts.R, the same",
+      length(h13_top) >= 30L && all(unlist(h13_top)) && all(h13_frames) && all(h13_code))
+# 13B-4: an exported dashboard (three charts, one animated): each card shows its headline once, in its heading, over the description, and its picture has none; every PNG
+#   and SVG in charts/ has the headline in it once (the SVG's text read; a PNG is the same drawing), and charts.R draws it as the title
+h13_items <- purrr::imap(list(h13_bar, list(family = "line", x = "order_month", y = "revenue", fn = "sum", title = "Revenue by month"),
+                              list(family = "box", x = "channel", y = "unit_price", title = "Unit price by channel")),
+                         function(sp, i) { ch <- new_chart(paste0("c", i), sp); list(id = ch$id, chart = ch, story = NULL, mode = if (i == 2L) "video" else "picture", stale = NA_character_) })
+h13_zip <- file.path(tempfile("h13_zip_"), "d.zip"); dir.create(dirname(h13_zip))
+h13_built <- build_dashboard(h13_items, h13_o$read$data, h13_cb, chart_palette_default(),
+                             list(title = "Headlines", subtitle = "", author = "", date = as.Date("2026-11-26"), intro = "", boxes = character(0), keys = character(0)),
+                             file.path("tests", "data", "orders.csv"), h13_zip, model = "test-model")
+h13_dir <- tempfile("h13_unz_"); dir.create(h13_dir); zip::unzip(h13_built$zip, exdir = h13_dir)
+h13_page <- paste(readLines(file.path(h13_dir, "dashboard.html"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+h13_heads3 <- purrr::map_chr(h13_items, function(it) r_headline(it$chart, h13_cb, h13_o$read$data)$text)
+h13_cards <- regmatches(h13_page, gregexpr("(?s)<article class=\"card.*?</article>", h13_page, perl = TRUE))[[1]]
+h13_card_ok <- purrr::map2_lgl(h13_cards, seq_along(h13_cards), function(cd, i) {
+  vis <- gsub("<[^>]+>", " ", gsub("(?s)<script.*?</script>", " ", cd, perl = TRUE))
+  lengths(regmatches(vis, gregexpr(h13_heads3[[i]], vis, fixed = TRUE))) == 1L && grepl(paste0("<p class=\"card-sub\">", h13_items[[i]]$chart$spec$title, "</p>"), cd, fixed = TRUE)
+})
+h13_svgs <- list.files(file.path(h13_dir, "charts"), pattern = "[.]svg$", full.names = TRUE)
+h13_svg_once <- purrr::map2_lgl(h13_svgs, seq_along(h13_svgs), function(f, i) {
+  txt <- paste(regmatches(paste(readLines(f, warn = FALSE), collapse = " "), gregexpr("<text[^>]*>[^<]*</text>", paste(readLines(f, warn = FALSE), collapse = " ")))[[1]], collapse = " ")
+  words <- gsub("<[^>]+>", " ", txt)
+  first <- strsplit(h13_heads3[[i]], " ")[[1]][1:3]
+  lengths(regmatches(words, gregexpr(paste(first, collapse = " "), words, fixed = TRUE))) == 1L
+})
+h13_rcode <- paste(readLines(file.path(h13_dir, "charts.R"), warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+check("13B-4: the manager's ruling in an exported dashboard: each card shows its headline once (its heading) over the description, and its picture, frames included, carries no title block; every SVG in charts/ has the headline in its text once (and the PNG beside it is the same drawing), and charts.R draws each headline as its chart's title",
+      length(h13_cards) == 3L && all(h13_card_ok) && length(h13_svgs) %in% c(0L, 3L) && all(h13_svg_once) &&
+        all(purrr::map_lgl(h13_heads3, function(h) grepl(paste0("title = \"", paste(utils::head(strsplit(h, " ")[[1]], 3L), collapse = " ")), h13_rcode, fixed = TRUE))) && length(list.files(file.path(h13_dir, "charts"), pattern = "[.]png$")) == 3L)
+}
+# <<< 13 end
 
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------

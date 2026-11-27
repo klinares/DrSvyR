@@ -86,7 +86,9 @@ SPEC_LINT_FIELDS <- c(".flip", ".alpha", ".binned", ".jitter", ".negative", ".la
                       ".violin", ".plain_box", ".index_unit", ".index_start", ".name_room",
                       ".fit_range", ".bin_breaks", ".hex", ".label_series", ".n_colours", ".annotate", ".value_labels", ".names", ".label_rows", ".repel",
                       ".end_value", ".source", ".end_room", ".x_range", ".value_room", ".value_axis_bare", ".rug_floor",
-                      ".fig_width", ".fig_height", ".bare", ".few_breaks", ".facet_cols")
+                      ".fig_width", ".fig_height", ".bare", ".few_breaks", ".facet_cols",
+                      ".headline", ".description",   # Phase 13: the headline shown as the title (the caller's, else R's) and the description under it
+                      ".untitled")                   # ... and a drawing with no title block at all: a card whose HTML heading carries both
 
 
 # ---- small helpers ----------------------------------------------------------------------------
@@ -2242,6 +2244,40 @@ grid_of <- function(s) switch(s$family,
   heatmap = "none",
   "y")
 
+# The title and subtitle lines of a drawing (Phase 13): the headline (s$.headline; without one, the spec's title as before) as the style writes a title, broken
+#   into lines that each fit the drawing's width less its margins (HEAD_FIT of it), measured in the style's own face, weight and size (systemfonts): never a
+#   smaller size, never cut; the description (s$.description) and the spec's subtitle joined on one line when that fits the same way at the subtitle's size,
+#   else one under the other (each broken where it must be).
+HEAD_FIT <- 0.96
+labs_heads <- function(s, style = CHART_STYLE_DEFAULT) {
+  th = chart_theme(style)
+  room = function(element) {
+    m = ggplot2::calc_element("plot.margin", th)
+    HEAD_FIT * ((s$.fig_width %||% SPEC_SIZE[["width"]]) * 72 - sum(as.numeric(m[c(2, 4)])))   # every style gives its margins in points (no unit is converted: 8A-2)
+  }
+  fits = function(text, element) {
+    e = ggplot2::calc_element(element, th)
+    w = systemfonts::string_width(text, family = e$family %||% "", weight = if (identical(e$face, "bold")) "bold" else "normal", size = e$size, res = 72)
+    w <= room(element)
+  }
+  # greedy: each line takes the next word while it fits (a word too long for a line stands on its own)
+  wrap = function(text, element) {
+    words = strsplit(trimws(text), "\\s+")[[1]]
+    lines = purrr::reduce(words, function(acc, w) {
+      if (!length(acc)) return(w)
+      last = paste(acc[length(acc)], w)
+      if (fits(last, element)) c(utils::head(acc, -1L), last) else c(acc, w)
+    }, .init = character(0))
+    paste(lines, collapse = "\n")
+  }
+  head = s$.headline %||% s$title
+  title = if (is_text1(head)) wrap(chart_title_case(chart_heading_text(head), style), "plot.title")
+  under = purrr::keep(list(if (!is.null(s$.headline)) s$.description, s$subtitle), function(x) is_text1(x) && nzchar(trimws(x)))
+  one = paste(purrr::map_chr(under, function(x) sub("[.]$", "", trimws(x))), collapse = ". ")
+  subtitle = if (!length(under)) NULL else if (fits(one, "plot.subtitle")) one else paste(purrr::map_chr(under, function(x) wrap(x, "plot.subtitle")), collapse = "\n")
+  list(title = title, subtitle = subtitle)
+}
+
 labs_call <- function(s, cb, style = CHART_STYLE_DEFAULT) {
   flip = isTRUE(s$.flip)
   # Titles from the data dictionary's labels (col_title()), unless the model or analyst gave one.
@@ -2268,8 +2304,11 @@ labs_call <- function(s, cb, style = CHART_STYLE_DEFAULT) {
     if (is_text1(axes$y)) axes$y = wrap(axes$y, max(1.5, (s$.fig_height %||% SPEC_SIZE[["height"]]) - 1.2))
   }
   caption = if (isTRUE(s$.source)) paste(strwrap(s$caption, SPEC_CAPTION_WIDTH), collapse = "\n") else s$caption
-  # the title as the style draws it (without one trailing full stop, and in upper case in Briefing, where a number or a unit keeps its case); the spec keeps its own text
-  as.call(c(list(sym("labs")), purrr::compact(list(title = chart_title_case(chart_heading_text(s$title), style), subtitle = s$subtitle, caption = caption)), axes, legend))
+  # the title as the style draws it (without one trailing full stop, and in upper case in Briefing, where a number or a unit keeps its case); the spec keeps its own text.
+  #   Phase 13: the title is the headline (s$.headline, which spec_plot() sets), broken into lines over the drawing's width at the style's title size (never
+  #   smaller, never cut); the description (the spec's title) and the spec's subtitle stand under it, on one line when they fit, else on two.
+  heads = labs_heads(s, style)
+  as.call(c(list(sym("labs")), purrr::compact(list(title = heads$title, subtitle = heads$subtitle, caption = caption)), axes, legend))
 }
 
 facet_call <- function(s) {
@@ -2486,6 +2525,20 @@ spec_plot <- function(spec, data, cb, palette = chart_palette_default(), web = N
       ls$.source = NULL
     }
   }
+  # Phase 13: the title is the chart's headline, the finding: the caller's (`.headline` of the spec: the analyst's, or a model's that passed its checks),
+  #   else the one R writes from the drawn chart's facts (spec_headline(); its fallback, HEADLINE_FALLBACK and the description, when it cannot). The
+  #   spec's title, the description of what is plotted, is the line under it (labs_call()). A bare drawing (the page's cards) has neither: the page says them.
+  # The manager's ruling: the headline appears once per card. A card that has an HTML heading (the app's card, the page) carries the headline and the
+  #   description there, so its picture and frames are drawn with no title block (`.untitled`: no title, no subtitle; the source line stays).
+  if (isTRUE(spec$.untitled)) {
+    ls$title = NULL
+    ls$subtitle = NULL
+  } else if (!isTRUE(ls$.bare)) {
+    head = spec$.headline
+    if (!is_text1(head) || !nzchar(trimws(head))) head = spec_headline(spec_facts(ls, table, cb, FALSE, data), s)$text
+    ls$.description = s$title
+    ls$.headline = head
+  }
   env = do.call(spec_env, c(list(chart_table = table), pal$fonts))
   p = eval(plus_call(plot_calls(ls, cb, pal)), env)
   attr(p, "notes") = c(palette_note(ls, cb, palette), lint$notes)
@@ -2619,6 +2672,11 @@ SPEC_FACTS_CELLS <- 5L         # a heatmap with more than SPEC_HEAT_LABELS cells
 SPEC_FACTS_LINE_POINTS <- 3L   # a line with fewer points than this gets no highest or lowest
 SPEC_FACTS_GROUP_N <- 10L     # a correlation within a group of at least this many rows
 SPEC_FACTS_FIT_AT <- c(0.1, 0.3, 0.5, 0.7, 0.9) # the fitted y at these percentiles of x
+SPEC_FACTS_SKEW <- 1                            # Phase 13 (the manager's ruling): a histogram's tail is named when its skewness is beyond this either way. The measure
+                                                #   is the moment coefficient g1 = m3 / m2^(3/2), m2 and m3 the second and third moments about the mean, each divided by n (no
+                                                #   small-sample correction)
+FACTS_ACROSS <- "Across the panels, "            # Phase 13: the lines of small multiples' facts that compare every panel (facts_across())
+FACTS_ALL <- "All panels, "                      # ... and of a faceted histogram's, that describe all its rows together
 
 # How a number is written in the facts, always the same way for the same value: a measure to 3
 #   significant digits, with thousands separators when its axis shows them; a count whole, with
@@ -2860,6 +2918,7 @@ facts_lines <- function(s, cb, t, nm, fmt) {
         if (length(one) > 1L) paste0("Lowest index at the end: ", one[[which.min(ends)]]$name, " (", fmt(min(ends)), ")"),
         paste0("Lines above 100 at the end: ", sum(ends > 100), " of ", length(one)))
     } else c(
+      if (length(one) > 1L) paste0("Highest at the end: ", one[[which.max(ends)]]$name, " (", fmt(max(ends)), ")"),
       if (length(one) > 1L && max(chg) > 0) paste0("Rose most: ", one[[which.max(chg)]]$name, " (", fmt(max(chg)), ")"),
       if (length(one) > 1L && min(chg) < 0) paste0("Fell most: ", one[[which.min(chg)]]$name, " (", fmt(min(chg)), ")")),
     unname(purrr::map_chr(purrr::compact(purrr::map(one[keep], "ma")), identity)))
@@ -2982,15 +3041,20 @@ facts_histogram <- function(s, cb, t, nm) {
              head = paste0("Panel ", cb_label(cb, s$facet), " = ", nm(s$facet, k), ":"))
       })
     }
-  unlist(purrr::map(panels, function(pn) {
+  # Phase 13: which way the tail runs, when the skewness says so; and a faceted histogram's median and tail of all its rows together (FACTS_ALL)
+  tail_of = function(x) { sd1 = sqrt(mean((x - mean(x))^2)); g = if (sd1 > 0) mean((x - mean(x))^3) / sd1^3 else 0
+    if (g > SPEC_FACTS_SKEW) "longer to the right" else if (g < -SPEC_FACTS_SKEW) "longer to the left" }
+  all = if (!is.null(s$facet)) { x = t[[s$x]]; c(paste0(FACTS_ALL, "median: ", num(stats::median(x))), if (!is.null(tail_of(x))) paste0(FACTS_ALL, "tail: ", tail_of(x))) }
+  c(all, unlist(purrr::map(panels, function(pn) {
     x = pn$d[[s$x]]
     q = stats::quantile(x, c(0.25, 0.5, 0.75), names = FALSE)
     top = pn$b[which.max(pn$b$count), ]
     body = c(paste0("Rows: ", fact_count(length(x))), paste0("Minimum: ", num(min(x))), paste0("Lower quartile: ", num(q[1])),
              paste0("Median: ", num(q[2])), paste0("Upper quartile: ", num(q[3])), paste0("Maximum: ", num(max(x))), paste0("Mean: ", num(mean(x))),
-             paste0("Bin with the most rows: ", num(max(back(top$xmin), min(x))), " to ", num(min(back(top$xmax), max(x))), ", ", fact_count(top$count), " rows"))
+             paste0("Bin with the most rows: ", num(max(back(top$xmin), min(x))), " to ", num(min(back(top$xmax), max(x))), ", ", fact_count(top$count), " rows"),
+             if (!is.null(tail_of(x))) paste0("Tail: ", tail_of(x)))
     c(pn$head, if (is.null(pn$head)) body else paste0("  ", body))
-  }))
+  })))
 }
 
 facts_box <- function(s, cb, t, nm) {
@@ -3031,7 +3095,9 @@ facts_heatmap <- function(s, cb, t, nm, fmt, rows = NULL) {
     c(paste0(word, " (", lab(col), ") with the highest value: ", who(fact_same(a, max(a)))),
       paste0(word, " (", lab(col), ") with the lowest value: ", who(fact_same(a, min(a)))))
   }
-  c(cells, if (!is.null(rows)) c(by(s$y, "Row"), by(s$x, "Column")))
+  top = which(fact_same(t[[v]], max(t[[v]])))
+  c(paste0("Highest cell: ", paste(paste0(nm(s$y, t[[s$y]][top]), ", ", nm(s$x, t[[s$x]][top])), collapse = "; "), " (", fmt(max(t[[v]])), ")"),
+    cells, if (!is.null(rows)) c(by(s$y, "Row"), by(s$x, "Column")))
 }
 
 # The facts a headline and summary may use, computed by R from the plotted table (spec_table()) and
@@ -3061,12 +3127,205 @@ spec_facts <- function(spec, table, cb, exploratory = FALSE, data = NULL) {
   body = if (s$family %in% c("scatter", "bubble")) facts_scatter(s, cb, t, nm)
     else if (identical(s$family, "histogram")) facts_histogram(s, cb, t, nm)
     else if (!is.null(s$facet) && !identical(s$facet, s$color))
-      unlist(purrr::imap(utils::head(fact_split(t, s$facet), SPEC_FACET_MAX), function(d, k)
+      c(unlist(purrr::imap(utils::head(fact_split(t, s$facet), SPEC_FACET_MAX), function(d, k)
         c(paste0("Panel ", cb_label(cb, s$facet), " = ", nm(s$facet, k), ":"),
-          paste0("  ", body_of(d, if (!is.null(base)) base[as.character(base[[s$facet]]) == k, , drop = FALSE])))))
+          paste0("  ", body_of(d, if (!is.null(base)) base[as.character(base[[s$facet]]) == k, , drop = FALSE]))))),
+        facts_across(s, cb, as.data.frame(utils::head(fact_split(t, s$facet), SPEC_FACET_MAX) |> dplyr::bind_rows()), nm, fmt))
     else body_of(t)
-  list(text = paste(c(head, body), collapse = "\n"), names = namer$map())
+  text = paste(c(head, body), collapse = "\n")
+  seen = new.env()
+  heads = facts_headline(s, cb, text, seen)
+  list(text = text, names = namer$map(), headline = heads, from = seen$lines)
 }
+
+# Small multiples' facts across every panel (Phase 13; FACTS_ACROSS before each): what the headline compares. A bar or dot: the highest and the lowest
+#   value of any panel and the one as a multiple of the other; a line: the series that ends highest; a slope or dumbbell: the largest rise and fall
+#   (the largest and smallest difference, second less first); a box: the highest and the lowest median; a heatmap: the highest cell. Each named by its
+#   panel and its group, as the panels' own facts name them.
+facts_across <- function(s, cb, t, nm, fmt) {
+  v = value_name(s)
+  who = function(d, cols) do.call(paste, c(purrr::map(cols, function(col) nm(col, d[[col]])), sep = ", "))
+  line = function(label, names, value) paste0(FACTS_ACROSS, label, ": ", paste(unique(names), collapse = "; "), " (", fmt(value), ")")
+  ext = function(vals, names, hi_label, lo_label) c(line(hi_label, names[fact_same(vals, max(vals))], max(vals)), line(lo_label, names[fact_same(vals, min(vals))], min(vals)))
+  keys = c(s$facet, if (!is.null(s$color) && !identical(s$color, s$facet)) s$color)
+  switch(s$family,
+    bar = , dot = {
+      vals = t[[v]]; names = who(t, c(s$facet, s$x, if (!is.null(s$color)) s$color))
+      c(ext(vals, names, "highest", "lowest"), if (min(vals) > 0) paste0(FACTS_ACROSS, "highest as a multiple of the lowest: ", fact_num(max(vals) / min(vals), FALSE)))
+    },
+    line = {
+      ends = purrr::map(unname(split(t, lapply(keys, function(k) t[[k]]), drop = TRUE)), function(d) d[which.max(d[[s$x]]), , drop = FALSE])
+      e = dplyr::bind_rows(ends)
+      line(if (index_first(s)) "highest index at the end" else "highest at the end", who(e, keys)[fact_same(e[[v]], max(e[[v]]))], max(e[[v]]))
+    },
+    slope = , dumbbell = {
+      g = if (identical(s$family, "slope")) s$x else s$color
+      lv = intersect(levels(t[[g]]), as.character(t[[g]]))
+      by = c(s$facet, if (identical(s$family, "slope")) s$color else s$y)
+      parts = unname(split(t, lapply(by, function(k) t[[k]]), drop = TRUE))
+      ch = dplyr::bind_rows(purrr::map(parts, function(d) {
+        a = d[[v]][as.character(d[[g]]) == lv[1]]; b = d[[v]][as.character(d[[g]]) == lv[2]]
+        if (length(a) != 1L || length(b) != 1L) return(NULL)
+        out = d[1, by, drop = FALSE]; out$.chg = b - a; out
+      }))
+      if (!nrow(ch)) return(character(0))
+      names = who(ch, by)
+      if (identical(s$family, "slope")) c(if (max(ch$.chg) > 0) line("largest rise", names[which.max(ch$.chg)], max(ch$.chg)),
+                                         if (min(ch$.chg) < 0) line("largest fall", names[which.min(ch$.chg)], min(ch$.chg)))
+      else ext(ch$.chg, names, "largest difference (second less first)", "smallest difference (second less first)")
+    },
+    box = {
+      parts = unname(split(t, lapply(c(s$facet, s$x), function(k) t[[k]]), drop = TRUE))
+      med = purrr::map_dbl(parts, function(d) stats::median(d[[s$y]]))
+      names = purrr::map_chr(parts, function(d) who(d[1, , drop = FALSE], c(s$facet, s$x)))
+      num = function(x) fact_num(x, FALSE)
+      c(paste0(FACTS_ACROSS, "highest median: ", paste(names[fact_same(med, max(med))], collapse = "; "), " (", num(max(med)), ")"),
+        paste0(FACTS_ACROSS, "lowest median: ", paste(names[fact_same(med, min(med))], collapse = "; "), " (", num(min(med)), ")"))
+    },
+    heatmap = line("highest cell", who(t, c(s$facet, s$y, s$x))[fact_same(t[[v]], max(t[[v]]))], max(t[[v]])),
+    character(0))
+}
+
+# ---- the headline R writes (Phase 13) -------------------------------------------------------------------------------------------------
+# Kevin's ruling: a chart's title states its finding. R writes it from the chart's FACTS the moment the chart is drawn, with no model: one sentence
+#   of at most HEADLINE_MAX_WORDS words and at most one number, made only of what FACTS states (each name as FACTS writes it, a token while it is
+#   checked) and the chart's own labels. What it says follows what the chart is for (facts_headline()). It is checked as a model's headline is
+#   (check_numbers(), check_words(), the tokens: summary_problems()); one that fails is a bug, and the chart shows HEADLINE_FALLBACK and its
+#   description instead of a claim that was not checked. The two thresholds are the manager's choices, not a standard, and each is one constant.
+HEADLINE_MAX_WORDS <- 12L
+HEADLINE_SIMILAR <- 1.1          # groups are "similar" when the highest is less than this many times the lowest
+HEADLINE_NO_RELATION <- 0.2      # "no clear relation" when the correlation is strictly between -this and this
+HEADLINE_FALLBACK <- "What is plotted: "
+HEADLINE_TAIL_MIN_ROWS <- 30L    # the manager's ruling: a headline names a histogram's tail only when the chart has at least this many rows
+
+# A phrase with its first letter in lower case when it reads as a word ("Total revenue" as "total revenue"; "GDP" and "UK sales" stay).
+hl_lower <- function(x) if (grepl("^[A-Z][a-z]", x)) paste0(tolower(substring(x, 1, 1)), substring(x, 2)) else x
+hl_upper <- function(x) paste0(toupper(substring(x, 1, 1)), substring(x, 2))
+# The text after "label: " on the first line of `lines` that starts so, or NULL.
+hl_fact <- function(lines, label) {
+  key = paste0(label, ": ")
+  hit = lines[startsWith(lines, key)]
+  if (length(hit)) substring(hit[[1]], nchar(key) + 1L)
+}
+# "West (940,000)" as list(who = "West", value = "940,000"), or NULL.
+hl_named <- function(x) {
+  if (is.null(x)) return(NULL)
+  m = regmatches(x, regexec("^(.*) \\(([^()]*)\\)$", x))[[1]]
+  if (length(m) == 3L) list(who = m[[2]], value = m[[3]])
+}
+# A number as FACTS writes it ("940,000", "-1,200", "34.5%") as a number; the same with no sign, as text.
+hl_num <- function(v) suppressWarnings(as.numeric(gsub("[,%]", "", sub("^−", "-", v %||% NA_character_))))
+hl_unsigned <- function(v) sub("^[-−]", "", v)
+hl_words <- function(x) length(strsplit(trimws(x), "\\s+")[[1]])
+# A column's name inside a headline: its dictionary label with its first letter in lower case when it reads as a word ("Unit price" as "unit price"; "GDP"
+#   stays); with no label, the column name as words in lower case ("unit_price" as "unit price", "Height" as "height"), except that a part that starts
+#   with a digit keeps its underscore ("pr_2014", "score_1"), as FACTS writes it: a digit standing alone would read as a number the facts lack.
+hl_label <- function(cb, col) {
+  l = cb_label(cb, col)
+  if (!identical(l, col)) return(hl_lower(l))
+  parts = strsplit(l, "_", fixed = TRUE)[[1]]
+  l = paste0(parts[1], paste0(ifelse(grepl("^[0-9]", parts[-1]), "_", " "), parts[-1], collapse = ""))
+  gsub("\\b([A-Z])([a-z]+)\\b", "\\L\\1\\2", l, perl = TRUE)
+}
+
+# The headlines R can write for a chart from its FACTS (`text`, with tokens for names), the first the fullest: a later one is shorter, for names
+#   too long for the first. `s` is the settled spec spec_facts() used. Returns character(0) when FACTS lacks what the chart's purpose needs.
+facts_headline <- function(s, cb, text, seen = NULL) {
+  lines = trimws(strsplit(text, "\n", fixed = TRUE)[[1]])
+  # each line of FACTS the headline is made from is noted in `seen` (an environment, when given), for the manager's table (tests/headlines_13.R)
+  note = function(l) { if (!is.null(seen) && length(l)) seen$lines = unique(c(seen$lines, l)); l }
+  hl_fact = function(lines, label) { key = paste0(label, ": "); hit = lines[startsWith(lines, key)]; if (length(hit)) substring(note(hit[[1]]), nchar(key) + 1L) }
+  fam = s$family
+  faceted = !is.null(s$facet) && !identical(s$facet, s$color) && !fam %in% c("scatter", "bubble", "histogram")
+  fact = function(label) hl_fact(lines, if (faceted) paste0(FACTS_ACROSS, hl_lower(label)) else label)
+  vcol = if (identical(fam, "heatmap")) s$color %||% s$y else if (identical(fam, "dumbbell")) s$x else s$y %||% s$x
+  measure = if (index_first(s)) "the index" else switch(s$fn %||% "none", count = hl_lower(row_word(cb)), share = paste("share of", hl_lower(row_word(cb))),
+                   sum = paste("total", hl_label(cb, vcol)), mean = paste("mean", hl_label(cb, vcol)), median = paste("median", hl_label(cb, vcol)), hl_label(cb, vcol))
+  groups = hl_label(cb, if (identical(fam, "dumbbell")) s$y else s$x)
+  most = switch(s$fn %||% "none", count = paste("the most", measure), share = paste("the largest", measure), paste("the highest", measure))
+  similar = function(hi, what) c(paste0(hl_upper(what), " is similar in every ", groups, ", highest ", hi), paste0(hl_upper(what), " is similar, highest ", hi))
+  switch(fam,
+    bar = , dot = , heatmap = {
+      hi = hl_named(fact(if (identical(fam, "heatmap")) "Highest cell" else "Highest"))
+      if (is.null(hi)) return(character(0))
+      mult = hl_num(fact("Highest as a multiple of the lowest"))
+      if (!identical(fam, "heatmap") && (!is.null(hl_fact(lines, "Every value shown")) || isTRUE(mult < HEADLINE_SIMILAR))) return(similar(hi$value, measure))
+      ties = hl_num(hl_fact(lines, "Groups at the highest value"))
+      verb = if (isTRUE(ties > 1)) "have" else "has"
+      c(paste0(hi$who, " ", verb, " ", most, ", ", hi$value), paste0(hi$who, " ", if (verb == "has") "is" else "are", " highest, ", hi$value))
+    },
+    line = {
+      what = if (index_first(s)) "the index" else measure
+      ends = hl_named(fact(if (index_first(s)) "Highest index at the end" else "Highest at the end"))
+      if (!is.null(ends))
+        return(c(paste0(ends$who, " ends with ", if (index_first(s)) "the highest index" else paste("the highest", measure), ", ", ends$value),
+                 paste0(ends$who, " ends highest, ", ends$value)))
+      one = purrr::detect(lines, function(l) grepl(if (index_first(s)) ": index .* at the start \\(.*\\), .* at the end \\(" else ": first .* \\(.*\\), last .* \\(.*\\), change ", l))
+      if (is.null(one)) return(character(0))
+      note(one)
+      m = if (index_first(s)) regmatches(one, regexec(": index (.*) at the start \\((.*)\\), (.*) at the end \\(([^)]*)\\)", one))[[1]]
+          else regmatches(one, regexec(": first (.*) \\((.*)\\), last (.*) \\(([^)]*)\\), change ", one))[[1]]
+      if (length(m) != 5L) return(character(0))
+      a = hl_num(m[[2]]); b = hl_num(m[[4]]); last = m[[4]]; when = m[[5]]
+      if (is.na(a) || is.na(b)) return(character(0))
+      if (a == b) return(c(paste0(hl_upper(what), " was unchanged at ", last, " by ", when), paste0(hl_upper(what), " was unchanged at ", last)))
+      dir = if (b > a) "rose" else "fell"
+      c(paste0(hl_upper(what), " ", dir, " to ", last, " by ", when), paste0(hl_upper(what), " ", dir, " to ", last))
+    },
+    slope = , dumbbell = {
+      ends = if (identical(fam, "slope")) regmatches(hl_fact(lines, "Start") %||% "", regexec("^(.*); end: (.*)$", hl_fact(lines, "Start") %||% ""))[[1]]
+             else regmatches(hl_fact(lines, "First value") %||% "", regexec("^(.*); second value: (.*) \\(.*\\)$", hl_fact(lines, "First value") %||% ""))[[1]]
+      up = hl_named(fact(if (identical(fam, "slope")) "Largest rise" else "Largest difference (second less first)"))
+      down = hl_named(fact(if (identical(fam, "slope")) "Largest fall" else "Smallest difference (second less first)"))
+      pick = if (!is.null(up) && isTRUE(hl_num(up$value) > 0) && (is.null(down) || abs(hl_num(up$value)) >= abs(hl_num(down$value)))) list(g = up, dir = "rose")
+             else if (!is.null(down) && isTRUE(hl_num(down$value) < 0)) list(g = down, dir = "fell")
+      span = if (length(ends) == 3L) paste0(" from ", ends[[2]], " to ", ends[[3]]) else ""
+      if (is.null(pick)) return(if (nzchar(span)) paste0("No group changed", span) else character(0))
+      c(paste0(pick$g$who, " ", pick$dir, " most", span, ", by ", hl_unsigned(pick$g$value)), paste0(pick$g$who, " ", pick$dir, " most, by ", hl_unsigned(pick$g$value)))
+    },
+    scatter = , bubble = {
+      r_text = hl_fact(lines, "Pearson correlation") %||% hl_fact(lines, "Pearson correlation on the log scale shown")
+      r = hl_num(r_text)
+      if (is.na(r)) return(character(0))
+      y = hl_label(cb, s$y); x = hl_label(cb, s$x)
+      if (abs(r) < HEADLINE_NO_RELATION) c(paste0("No clear relation between ", y, " and ", x, ", correlation ", r_text), paste0("No clear relation, correlation ", r_text))
+      else if (r > 0) c(paste0(hl_upper(y), " and ", x, " rise together, correlation ", r_text), paste0(hl_upper(y), " and ", x, " rise together"))
+      else c(paste0(hl_upper(y), " and ", x, " move in opposite directions, correlation ", r_text), paste0(hl_upper(y), " and ", x, " move in opposite directions"))
+    },
+    histogram = {
+      pre = if (!is.null(s$facet)) FACTS_ALL else ""
+      med = hl_fact(lines, paste0(pre, if (nzchar(pre)) "median" else "Median"))
+      if (is.null(med)) return(character(0))
+      tail = hl_fact(lines, paste0(pre, if (nzchar(pre)) "tail" else "Tail"))
+      if (!isTRUE(hl_num(hl_fact(lines, "Rows used")) >= HEADLINE_TAIL_MIN_ROWS)) tail = NULL   # too few rows to speak of a tail
+      x = hl_label(cb, s$x)
+      c(if (!is.null(tail)) paste0("Median ", x, " is ", med, ", with a ", sub("^longer", "longer tail", tail)), paste0("Median ", x, " is ", med))
+    },
+    box = {
+      hi = hl_named(fact("Highest median")); lo = hl_named(fact("Lowest median"))
+      if (is.null(hi) || is.null(lo)) return(character(0))
+      y = hl_label(cb, s$y)
+      ratio = hl_num(hi$value) / hl_num(lo$value)
+      if (isTRUE(ratio < HEADLINE_SIMILAR) && hl_num(lo$value) > 0) return(similar(hi$value, paste("median", y)))
+      c(paste0(hi$who, " has the highest median ", y, ", ", hi$value, "; ", lo$who, " the lowest"), paste0(hi$who, " has the highest median ", y, ", ", hi$value),
+        paste0(hi$who, " is highest, ", hi$value))
+    },
+    character(0))
+}
+
+# The headline R shows for a chart, from its facts (spec_facts() of the drawn chart's table): the first of facts_headline()'s that has at most
+#   HEADLINE_MAX_WORDS words once its names are put back, checked as a model's headline is. Returns list(text, source, problems): source "r"
+#   when R's headline passed, "fallback" when none could be written or it failed its checks (problems says why; a failing one is a bug, the test
+#   fails on it), when the text is HEADLINE_FALLBACK and the spec's title.
+spec_headline <- function(facts, spec) {
+  fallback = function(why) list(text = paste0(HEADLINE_FALLBACK, spec$title %||% ""), source = "fallback", problems = why)
+  fits = purrr::keep(facts$headline %||% character(0), function(h) hl_words(names_back(h, facts$names)) <= HEADLINE_MAX_WORDS)
+  if (!length(fits)) return(fallback(if (length(facts$headline)) "every headline R could write is longer than the limit" else "the facts lack what the headline needs"))
+  p = summary_problems(fits[[1]], NULL, facts$text, spec, names(facts$names))
+  if (!summary_ok(p)) return(fallback(names_back(problem_sentences(p), facts$names)))
+  list(text = names_back(fits[[1]], facts$names), source = "r", problems = character(0))
+}
+
 
 
 # ---- the interactive version (ggiraph, Phase 10 Part B) and the figure size ----------------------------------------------

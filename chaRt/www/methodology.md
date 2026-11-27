@@ -1,6 +1,6 @@
 # How chaRt chooses and draws a chart
 
-Version: 0.3
+Version: 0.4
 
 chaRt does not let a model draw. The model reads a description of your columns (never the rows),
 picks a chart form by the written rules below, and hands R a short specification. R checks it,
@@ -41,6 +41,8 @@ be drawn in colour against grey when it is the point of the chart.
 **A chart describes the file, not the world.** Headlines and summaries state what these rows show.
 They do not claim a cause, and they do not generalise to a population: chaRt knows nothing about
 how the rows were collected.
+
+**The title states the finding.** Every chart's title is one sentence that says what the chart shows, written from the numbers R computed and checked against them. What is plotted (the measure, the grouping, the period) is the line under it. A title you write yourself is kept and marked as your own, because chaRt has not checked it.
 
 ## Which chart for which question
 

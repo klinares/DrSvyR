@@ -915,6 +915,31 @@ SETUP_NEED_DATA <- paste("Read a data file on the Data page first.", DATA_PAGE_L
 SETUP_NEED_ROW <- paste("The data dictionary does not say what one row represents yet, and charts are drawn only after it does.",
                         "Press \"Label the columns\" and then the row guess, or write it on the Data page.", DATA_PAGE_LINK)
 
+# The headline a chart shows (Phase 13), and who wrote it: the analyst's own (st$headline_by "analyst": typed on the card or in Edit text) as written;
+#   else the model's, when it passed the number and word checks and the limits (and, when the chart or its data has changed since it was written, `stale`,
+#   the manager's ruling: when it passes them again against the chart's facts now, r_head$facts); else R's (`r_head`, r_headline()), or R's fallback when
+#   it could not write one. `note` says why R's is shown in place of the model's. Returns list(text, by, note); by is "analyst", "model", "r" or "fallback".
+headline_shown <- function(st, r_head, stale = NA_character_) {
+  r = list(text = r_head$text, by = if (identical(r_head$source, "r")) "r" else "fallback", note = NULL)
+  if (is.null(st) || !is_text1(st$headline) || !nzchar(trimws(st$headline))) return(r)
+  if (identical(st$headline_by, "analyst")) return(list(text = trimws(st$headline), by = "analyst", note = NULL))
+  # checked against the facts it was written from; a story kept without them stands on the problems found when it was written
+  passed = if (is_text1(st$facts) && nzchar(st$facts)) summary_ok(summary_problems(st$headline, NULL, st$facts, st$spec)) else !length(st$problems)
+  if (passed && !is.na(stale)) {
+    now = r_head$facts
+    held = !is.null(now) && summary_ok(summary_problems(st$headline, NULL, names_back(now$text, now$names), r_head$spec %||% st$spec))
+    if (!held) { r$note = HEADLINE_MODEL_CHANGED; return(r) }
+  }
+  if (passed) return(list(text = trimws(st$headline), by = "model", note = NULL))
+  r$note = HEADLINE_MODEL_FAILED
+  r
+}
+HEADLINE_BY_TEXT <- c(r = "Headline written by R from the chart's facts.", model = "Headline written by the model and checked against the chart's facts.",
+                      analyst = "Your own headline: kept as you wrote it, and not checked by chaRt.",
+                      fallback = "R could not write a headline from this chart's facts, so the title says what is plotted.")
+HEADLINE_MODEL_FAILED <- "The model's headline did not pass its checks, so R's is shown."
+HEADLINE_MODEL_CHANGED <- "The chart has changed and the model's headline no longer passes its checks against it, so R's is shown."
+
 # A story: the headline and summary of a chart as last written or edited, with the hash of the spec
 #   they were written for, the facts (names as they are) and that spec, and the problems the checks
 #   found. Checked again on every edit, with no model call.
@@ -1388,6 +1413,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     made$section = new.env()           # per section: its definition (title, text, collapsed), a reactiveVal; a section's switch for the dashboard is in made$dash
     made$facts = new.env()             # per chart: its facts as the checks of the Edit text dialog and of the in-place edits read them (a reactive)
     made$edited = new.env()            # per chart: the title last edited in place (a reactiveVal: NULL or list(text)), so that a title which fails the checks is marked
+    made$rhead = new.env()             # per chart: the headline R writes from its facts (Phase 13; a reactive: r_headline())
+    made$shown = new.env()             # per chart: the headline the card shows and who wrote it (a reactive: headline_shown())
+    made$drawn = new.env()             # per chart: the card's drawing, with no title block (a reactive; the check of the manager's ruling reads it)
     dash_on = reactiveVal(0L)          # counts the switches flipped in the export dialog, so that its warnings are drawn again
     table_msg = reactiveVal(NULL)      # what the Add a summary table dialog says when it cannot add (no measure chosen)
     dash_result = reactiveVal(NULL)    # what the last build of the dashboard gave, or the error it met
@@ -1577,9 +1605,10 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       ch = chart_of(id)
       if (is.null(ch)) return(invisible())
       if (field %in% c("headline", "summary")) {
-        st = story_of(id)
+        st = story_of(id) %||% analyst_story(id)
         if (is.null(st) || !nzchar(value) || identical(st[[field]], value)) return(invisible())
         st[[field]] = value
+        if (identical(field, "headline")) st$headline_by = "analyst"
         return(invisible(set_story(id, recheck_story(st))))
       }
       if (!identical(field, "title")) return(invisible())
@@ -1588,6 +1617,23 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       made$edited[[id]](list(text = if (nzchar(value)) value))
       if (!identical(spec, ch$spec)) set_chart(chart_apply(ch, spec, notes_for(spec)))
       invisible()
+    }
+
+    # A story for a chart that has none, to hold a headline the analyst types (Phase 13): no summary, the chart's facts and spec as they are now.
+    analyst_story = function(id) {
+      ch = chart_of(id)
+      x = if (!is.null(ch)) tryCatch(summary_input(ch, isolate(state$codebook), isolate(state$data), isolate(palette())), error = function(e) NULL)
+      if (is.null(x) || !is.null(x$error)) return(NULL)
+      list(headline = NULL, summary = NULL, hash = spec_hash(ch$spec), data = isolate(data_key()), facts = names_back(x$facts$text, x$facts$names),
+           spec = ch$spec, problems = character(0), headline_by = "analyst")
+    }
+    # A chart named in a message to the analyst (Phase 13): the headline it shows, and the description in brackets.
+    chart_name = function(i, fallback = "the chart") {
+      ch = chart_of(i)
+      if (is.null(ch)) return(fallback)
+      h = if (!is.null(made$shown[[i]])) tryCatch(isolate(made$shown[[i]]())$text, error = function(e) NULL)
+      d = chart_title(ch, fallback)
+      if (is_text1(h) && nzchar(h) && !identical(h, d)) paste0(h, " (", d, ")") else d
     }
 
     # A card's switch in the export dialog is the card's own "In dashboard" switch: the two are kept the same.
@@ -1616,7 +1662,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       purrr::walk(out$charts, function(r) {
         if (is.null(r$headline)) { story_note[[r$id]] = r$text; return(invisible()) }
         set_story(r$id, list(headline = r$headline, summary = r$summary, hash = r$hash, data = isolate(data_key()), facts = r$facts,
-                             spec = r$spec, problems = r$problems))
+                             spec = r$spec, problems = r$problems, headline_by = "model"))
         story_note[[r$id]] = NULL
       })
       out
@@ -1624,7 +1670,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     story_line = function(out) {
       got = purrr::keep(out$charts, function(r) !is.null(r$headline))
       missed = purrr::keep(out$charts, function(r) is.null(r$headline))
-      title_of = function(i) chart_title(chart_of(i), i)
+      title_of = function(i) chart_name(i, i)
       paste(c(if (length(got)) paste0("Wrote the headline and summary for ", length(got), if (length(got) == 1L) " chart." else " charts."),
               purrr::map_chr(purrr::keep(got, function(r) length(r$problems) > 0L),
                              function(r) paste0("Check the text of ", md_text(title_of(r$id)), ": ", md_text(paste(r$problems, collapse = "; ")), ".")),
@@ -2018,7 +2064,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     canvas_entry = function(i) {
       if (!is.null(table_of(i))) list(id = i, table = table_of(i), mode = "table", stale = NA_character_)
       else list(id = i, chart = chart_of(i), story = story_of(i), mode = "picture", design = design_shown(i),
-                stale = story_stale(story_of(i), chart_of(i), isolate(data_key())))
+                stale = story_stale(story_of(i), chart_of(i), isolate(data_key())),
+                shown = if (!is.null(made$rhead[[i]])) tryCatch(headline_shown(story_of(i), isolate(made$rhead[[i]]()), story_stale(story_of(i), chart_of(i), isolate(data_key()))),
+                                                              error = function(e) NULL))
     }
     # What goes in: the charts and tables whose switch is on, and whose section's switch is on (a section that is off leaves out every card under it), in the
     #   order of the canvas, each with the section it stands under (id, title, text) for the page's headings.
@@ -2094,11 +2142,10 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         its = dash_items()
         if (!length(its)) return(NULL)
         titles = purrr::map_chr(its, item_title)
-        has_head = purrr::map_lgl(its, function(it) !is.null(it$table) || (!is.null(it$story) && is_text1(it$story$headline) && nzchar(trimws(it$story$headline))))
         # A table with a group that has fewer than SUMMARY_SMALL_ROWS rows is named once in one warning (nothing is hidden).
         small = purrr::map_chr(purrr::keep(its, function(it) !is.null(it$table) && is_text1(it$table$by) && nzchar(it$table$by)), function(it)
           if (isTRUE(tryCatch(any(summary_table(isolate(state$data), isolate(state$codebook), it$table$measures, it$table$by)$small), error = function(e) FALSE))) it$table$title else NA_character_)
-        warns = dashboard_warnings(titles, has_head, purrr::map_chr(its, "stale"), isolate(palette()), small = small[!is.na(small)])
+        warns = dashboard_warnings(titles, purrr::map_chr(its, "stale"), isolate(palette()), small = small[!is.na(small)])
         if (length(warns)) tags$div(class = "mb-3", purrr::map(unname(warns), function(w) tags$p(class = "small mb-1", style = warn_style, w)))
       })
       purrr::walk(chart_items, function(it)
@@ -2282,10 +2329,12 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         if (!is.null(x)) problem_sentences(summary_problems(ed$text, NULL, x$text, x$spec)) else character(0)
       } else character(0)
       title_tag = function(tag) editable_tag(tag, ed_id, "title", ch$spec$title %||% "", "title", bad = length(title_bad) > 0L)
-      head = if (!is.null(st) && is_text1(st$headline) && nzchar(st$headline))
-        tags$div(editable_tag(heading(st$headline), ed_id, "headline", st$headline, "headline", bad = bad_in(st$headline, NULL)),
-                 title_tag(tags$div(class = "small text-muted chart-card-sub", title)), if (length(title_bad)) check_line(title_bad, ok = NULL))
-      else tags$div(title_tag(heading(title)), if (length(title_bad)) check_line(title_bad, ok = NULL))
+      # Phase 13: the headline is the card's top line, always (the analyst's, the model's when it passed, else R's); the description under it; then who wrote it
+      shown = made$shown[[chart_id]]()
+      head = tags$div(editable_tag(heading(shown$text), ed_id, "headline", shown$text, "headline", bad = identical(shown$by, "analyst") && bad_in(shown$text, NULL)),
+                      title_tag(tags$div(class = "small text-muted chart-card-sub", title)),
+                      tags$div(class = "small text-muted chart-head-by", HEADLINE_BY_TEXT[[shown$by]], if (!is.null(shown$note)) paste0(" ", shown$note)),
+                      if (length(title_bad)) check_line(title_bad, ok = NULL))
       bslib::card(
         full_screen = TRUE, fill = FALSE, class = paste("chart-card", if (sel) "chart-selected"),
         `data-chart-id` = chart_id, `data-canvas-id` = chart_id, onclick = card_click_js(ns("card_click")),
@@ -2313,7 +2362,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
           uiOutput(ns(cid(chart_id, "notes"))),
           if (!is.null(dz)) tags$p(class = "small text-muted mb-1 chart-designed", dash_design_mark(dz)),
           if (!is.null(dnote)) tags$p(class = "small mb-1 chart-design-note", style = warn_style, dnote),
-          if (!is.null(st)) editable_tag(tags$p(class = "mb-1 chart-summary", st$summary), ed_id, "summary", st$summary, "summary", multiline = TRUE, bad = bad_in(NULL, st$summary)),
+          if (!is.null(st) && is_text1(st$summary)) editable_tag(tags$p(class = "mb-1 chart-summary", st$summary), ed_id, "summary", st$summary, "summary", multiline = TRUE, bad = bad_in(NULL, st$summary)),
           if (!is.na(stale)) tags$p(class = "small mb-1", style = warn_style, if (identical(stale, "chart")) SUMMARY_STALE else SUMMARY_STALE_DATA),
           if (!is.null(st) && length(st$problems)) check_line(st$problems, ok = NULL),
           if (!is.null(note)) tags$p(class = "small mb-1", style = warn_style, note),
@@ -2332,7 +2381,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
     }
     drop_design = function(chart_id, why = NULL) {
       dz = isolate(made$design[[chart_id]]())
-      if (!is.null(dz)) unlink(dz$file)
+      if (!is.null(dz)) unlink(c(dz$file, dz$card_file))
       made$design[[chart_id]](NULL)
       made$showd[[chart_id]](FALSE)
       if (!is.null(why)) made$dnote[[chart_id]](why)
@@ -2352,6 +2401,8 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       skill = skill_chosen()
       if (is.null(ch)) return(invisible(FALSE))
       if (is.null(skill)) { made$dnote[[chart_id]]("Not designed: no design skill is available."); return(invisible(FALSE)) }
+      shown = if (!is.null(made$shown[[chart_id]])) isolate(made$shown[[chart_id]]())
+      if (!is.null(shown) && shown$by %in% c("analyst", "model")) ch$spec$.headline = shown$text
       res = tryCatch(design_chart(ch, skill, isolate(state$data), isolate(state$codebook), isolate(palette()), ask = ask, wish = wish, images = design_images_setting(),
                                   stage = function(s) session$sendCustomMessage("chart-progress", list(words = paste0(prefix, "Designing: ", s)))),
                      error = function(e) list(ok = FALSE, reason = design_line(conditionMessage(dash_root_error(e)), 160L), calls = NULL))
@@ -2362,6 +2413,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       }
       drop_design(chart_id)
       dz = res$design
+      # the card shows the design with no title block (its heading carries the headline); the design's own drawing, with its title, is what leaves the page
+      card = tryCatch(design_card_picture(dz, ch, isolate(state$data), isolate(state$codebook), isolate(palette())), error = function(e) NULL)
+      if (!is.null(card)) { dz$card_file = card$file; dz$card_plot = card$plot }
       dz$key = isolate(design_key(chart_id))
       made$design[[chart_id]](dz)
       made$showd[[chart_id]](TRUE)
@@ -2375,7 +2429,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       n = length(ids)
       before = calls_made()
       done = purrr::imap_lgl(ids, function(i, k) isTRUE(design_now(i, prefix = if (n > 1L) paste0("Chart ", k, " of ", n, ": ") else "")))
-      say(design_many_text(skill_chosen()$title, purrr::map_chr(ids, function(i) chart_title(chart_of(i), i)), purrr::map_chr(ids, function(i) isolate(made$dnote[[i]]()) %||% ""), done,
+      say(design_many_text(skill_chosen()$title, purrr::map_chr(ids, function(i) chart_name(i, i)), purrr::map_chr(ids, function(i) isolate(made$dnote[[i]]()) %||% ""), done,
                            calls_made() - before))
       invisible(done)
     }
@@ -2387,7 +2441,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       before = calls_made()
       if (isTRUE(design_now(sel, wish))) {
         dz = isolate(made$design[[sel]]())
-        say(design_one_text(chart_title(chart_of(sel), "the chart"), dz$skill$title, dz$wish, calls_made() - before))
+        say(design_one_text(chart_name(sel), dz$skill$title, dz$wish, calls_made() - before))
       } else say(md_text(isolate(made$dnote[[sel]]()) %||% "The design was not used."))
     }
     observeEvent(input$design_all, with_busy({
@@ -2430,7 +2484,9 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       if (is.null(v) || !identical(v$key, key)) {
         drop_video(chart_id)
         words = WORKING_WORDS[["animate"]]
-        res = tryCatch(spec_video(ch$spec, isolate(state$data), isolate(state$codebook), isolate(palette()), width = SPEC_VIDEO_DASH_PX$desk[["width"]],
+        spec = ch$spec
+        spec$.untitled = TRUE   # the card's heading carries the headline: the frames have no title block
+        res = tryCatch(spec_video(spec, isolate(state$data), isolate(state$codebook), isolate(palette()), width = SPEC_VIDEO_DASH_PX$desk[["width"]],
                                   on_frame = function(i, n) session$sendCustomMessage("chart-progress", list(words = paste0(words, ", ", i, " of ", n, " frames")))),
                        error = function(e) e)
         if (inherits(res, "error")) {
@@ -2449,7 +2505,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       if (!is.null(why)) return(say(md_text(why)))
       sel = isolate(selected())
       if (is.null(sel) || is.null(chart_of(sel))) return(say(md_text(ANIMATE_NONE)))
-      if (isTRUE(animate_chart(sel))) say(paste0("Animated ", md_text(chart_title(chart_of(sel), "the chart")), ". It plays once on the card and stops on the finished chart: Replay plays it again and Picture goes back. No model was asked."))
+      if (isTRUE(animate_chart(sel))) say(paste0("Animated ", md_text(chart_name(sel)), ". It plays once on the card and stops on the finished chart: Replay plays it again and Picture goes back. No model was asked."))
     }
 
     # A chart's outputs and observers, made once, when it is added.
@@ -2470,9 +2526,19 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       made$dwidget[[chart_id]] = reactive({
         dz = made$design[[chart_id]]()
         if (is.null(dz)) return(NULL)
-        tryCatch(design_widget(dz$plot, dz$size, palette()), error = function(e) structure(list(), why = "the design could not be drawn with tooltips"))
+        tryCatch(design_widget(dz$card_plot %||% dz$plot, dz$size, palette()), error = function(e) structure(list(), why = "the design could not be drawn with tooltips"))
       })
-      drawn = reactive(tryCatch(spec_plot(made$chart[[chart_id]]()$spec, state$data, state$codebook, palette()), error = function(e) e))
+      # Phase 13: R's headline from the chart's facts, the one the card shows (headline_shown()), and the drawing with it as its title
+      made$rhead[[chart_id]] = reactive(tryCatch(r_headline(made$chart[[chart_id]](), state$codebook, state$data, palette()),
+                                                 error = function(e) list(text = paste0(HEADLINE_FALLBACK, made$chart[[chart_id]]()$spec$title %||% ""), source = "fallback")))
+      made$shown[[chart_id]] = reactive(headline_shown(made$story[[chart_id]](), made$rhead[[chart_id]](),
+                                                       story_stale(made$story[[chart_id]](), made$chart[[chart_id]](), data_key())))
+      # the manager's ruling: the card's HTML heading carries the headline and the description, so the drawing has no title block (`.untitled`)
+      drawn = reactive(tryCatch({
+        spec = made$chart[[chart_id]]()$spec
+        spec$.untitled = TRUE
+        spec_plot(spec, state$data, state$codebook, palette())
+      }, error = function(e) e))
       # The facts the checks in the Edit text dialog compare against, from the chart as it is now.
       facts = reactive({
         x = summary_input(made$chart[[chart_id]](), state$codebook, state$data, palette())
@@ -2480,6 +2546,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       })
 
       made$facts[[chart_id]] = facts
+      made$drawn[[chart_id]] = drawn
       output[[cid(chart_id, "card")]] = renderUI(card_ui(chart_id))
       # Drawn at SPEC_DPI pixels per inch and shown at its size in inches, so it is sharper, not larger.
       output[[cid(chart_id, "static")]] = renderImage({
@@ -2500,7 +2567,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
       output[[cid(chart_id, "dstatic")]] = renderImage({
         dz = design_current(chart_id)
         if (is.null(dz)) stop("The design is not there.", call. = FALSE)
-        list(src = dz$file, contentType = chart_device_type(), alt = paste("Designed drawing:", attr(drawn(), "spec")$title %||% "chart"),
+        list(src = dz$card_file %||% dz$file, contentType = chart_device_type(), alt = paste("Designed drawing:", made$shown[[chart_id]]()$text %||% "chart"),
              width = round(dz$size[["width"]] * CSS_PPI), height = round(dz$size[["height"]] * CSS_PPI), style = "max-width:100%; height:auto;")
       }, deleteFile = FALSE)
       output[[cid(chart_id, "dwidget")]] = ggiraph::renderGirafe({
@@ -2581,7 +2648,14 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
         if (is.null(ch)) return()
         # The chart as drawn: the spec as the lint left it (sideways bars, end labels, the legend's order, the source line), the
         #   palette and style chosen, so the code gives the card's chart.
-        p = drawn()
+        # the code draws the chart as charts.R does (the manager's ruling: a picture that leaves the card carries its headline and description), not the card's
+        #   drawing, which has no title block
+        p = tryCatch({
+          sp = ch$spec
+          sh = isolate(made$shown[[chart_id]]())
+          if (!is.null(sh) && sh$by %in% c("analyst", "model")) sp$.headline = sh$text
+          spec_plot(sp, isolate(state$data), isolate(state$codebook), isolate(palette()))
+        }, error = function(e) e)
         dz = design_shown(chart_id)
         code = if (!is.null(dz)) design_code_lines(dz)
                else if (inherits(p, "error")) conditionMessage(p)
@@ -2636,6 +2710,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
           v = input[[cid(chart_id, box)]]
           if (is.null(st) || identical(v, st[[field]])) return()
           st[[field]] = v
+          if (identical(field, "headline")) st$headline_by = "analyst"
           set_story(chart_id, recheck_story(st))
         }, ignoreInit = TRUE))
       observeEvent(input[[cid(chart_id, "apply")]], {
@@ -3257,15 +3332,13 @@ chart_from_rows <- function(spec) {
 dashboard_default_mode <- function(chart, interactive_now = FALSE)
   if (chart_from_rows(chart$spec) || !isTRUE(interactive_now)) "picture" else "interactive"
 
-# The warnings of the dialog, as sentences named by what they are about (headline, changed, palette). `titles`, `has_headline` and
-#   `stale` (NA, "chart" or "data", as story_stale() says) describe the chosen charts in order; the palette is the three chosen. `small` is
+# The warnings of the dialog, as sentences named by what they are about (changed, palette, small groups). `titles` and `stale` (NA, "chart"
+#   or "data", as story_stale() says) describe the chosen charts in order (Phase 13: no chart is without a headline now, R writes one, so the
+#   warning of one that had none is gone); the palette is the three chosen. `small` is
 #   the titles of the summary tables that show a group of fewer than SUMMARY_SMALL_ROWS rows: one warning for all of them (nothing is hidden).
-dashboard_warnings <- function(titles, has_headline, stale, palette, small = character(0)) {
+dashboard_warnings <- function(titles, stale, palette, small = character(0)) {
   bad = purrr::keep(names(EXPLORE_PALETTE_KINDS), function(k) !palette_passes(palette[[k]]))
-  c(if (any(!has_headline))
-      list(headline = paste0("No headline yet: ", paste(titles[!has_headline], collapse = "; "), ". The page shows the chart's title in its place."))
-    else NULL,
-    if (any(!is.na(stale)))
+  c(if (any(!is.na(stale)))
       list(changed = paste0("Marked as changed since it was written: ", paste(titles[!is.na(stale)], collapse = "; "),
                             ". The page shows the headline and summary as they are now, and each card in the page says nothing of this; write them again first if you want them to match."))
     else NULL,
@@ -3545,6 +3618,10 @@ dash_text_status <- function(it) {
   else "passed the number check and the word check"
 }
 
+# Who wrote a card's headline, for the About block (Phase 13).
+DASH_HEADLINE_BY <- c(r = "written by R from the numbers it worked out from the file", model = "written by the model and checked against those numbers",
+                      analyst = "written by the author and not checked", fallback = "R could not write one from those numbers, so it says what is plotted")
+
 # The About block of the foot: the file, when, the model that wrote the text, which texts passed the checks, what is interactive, the note.
 dash_about <- function(items, settings, cb, data, model) {
   texts = purrr::keep(items, function(it) !is.null(it$story) && is_text1(it$story$headline) && nzchar(trimws(it$story$headline)))
@@ -3564,6 +3641,8 @@ dash_about <- function(items, settings, cb, data, model) {
                                                    " from numbers that chaRt worked out from the file, and each was checked against those numbers when it was written",
                                                    " or edited. The title, subtitle, author and introduction above are the author's own and are not checked.")
                         else "No headline or summary in this dashboard was written by a model. The title, subtitle, author and introduction above are the author's own and are not checked."),
+      if (length(charts)) entry("The headlines", tags$ul(purrr::map(charts, function(it) tags$li(paste0(it$headline %||% it$title, " (", it$title, "): ",
+                                                                         DASH_HEADLINE_BY[[it$headline_by %||% "r"]], "."))))),
       if (length(charts)) entry("What the checks said", tags$ul(purrr::map(charts, function(it) tags$li(paste0(it$title, ": ", dash_text_status(it), "."))))),
       if (any(purrr::map_lgl(charts, function(it) isTRUE(it$designed))))
         entry("Designed charts", paste0(sum(purrr::map_lgl(charts, function(it) isTRUE(it$designed))), " chart(s) were drawn from code that a model wrote, following ",
@@ -3924,6 +4003,9 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, mark
   chart = it$chart
   title = chart_title(chart, "Untitled chart")
   what = paste0("drawing chart ", i, " (", title, ")")
+  # Phase 13: the headline the card shows (the app's, or worked out here as the app would) is the picture's title, the card's heading and the code's title
+  shown = it$shown %||% headline_shown(it$story, r_headline(chart, cb, data, palette), it$stale %||% NA_character_)
+  chart$spec$.headline = shown$text
   p = dash_step(what, spec_plot(chart$spec, data, cb, palette))
   s = attr(p, "spec")
   stem = file.path("charts", sprintf("%02d_%s", i, dash_slug(title)))
@@ -3945,7 +4027,7 @@ dash_chart <- function(it, i, stage, data, cb, palette, path, widget, kind, mark
   facts = tryCatch({ f = spec_facts(s, attr(p, "table"), cb, data = data); dash_fact_choices(f$text, f$names) }, error = function(e) list())
   st = it$story
   panels = if (!is.null(s$facet) && s$facet %in% names(attr(p, "table"))) length(unique(attr(p, "table")[[s$facet]])) else 1L
-  list(id = it$id, title = title, headline = if (!is.null(st)) st$headline, summary = if (!is.null(st)) st$summary, story = st, chart_subtitle = s$subtitle,
+  list(id = it$id, title = title, headline = shown$text, headline_by = shown$by, summary = if (!is.null(st)) st$summary, story = st, chart_subtitle = s$subtitle,
        mode = it$mode, fallback = if (is.character(designed)) designed, fallback_of = if (is.character(designed)) "designed drawing", facts = facts,
        designed = is.list(designed), design = if (is.list(designed)) it$design,
        # a chart drawn on a canvas wider than 8 inches (many sideways bars) is shown across the page, or its text would be too small to read
@@ -4197,6 +4279,16 @@ dash_design_files <- function(dz, chart, i, stem, stage, data, cb, palette, kind
 
 # The picture of a designed chart for the page: the design drawn without its title, subtitle and caption (the page says them), once, as wide as it was designed;
 #   the page scales it for the card and for a phone. A design has no phone drawing of its own. Stops with the sentence when it cannot be drawn.
+# The same for the app's card (the manager's ruling: its heading carries the headline): the design drawn with no title, subtitle or caption, kept in a file
+#   until the design is dropped. Returns list(file, plot, size).
+design_card_picture <- function(dz, chart, data, cb, palette) {
+  inp = design_input(chart, data, cb, palette)
+  bare = inp$txt[setdiff(names(inp$txt), c("title", "subtitle", "caption"))]
+  r = design_run(dz$code, inp$d, inp$facts, bare, inp$tok, inp$pal, size = inp$size, dpi = SPEC_DPI, keep = TRUE)
+  if (!r$ok) stop(r$reason, call. = FALSE)
+  list(file = r$file, plot = r$plot, size = inp$size)
+}
+
 dash_design_picture <- function(dz, chart, data, cb, palette, kind) {
   inp = design_input(chart, data, cb, palette)
   bare = inp$txt[setdiff(names(inp$txt), c("title", "subtitle", "caption"))]
@@ -4260,7 +4352,7 @@ dash_last_lines <- function(msg) paste(utils::tail(substr(strsplit(as.character(
 # One chart in the dialog's list: its small picture, its title and headline, the choice of picture or interactive, and the line
 #   that says what an interactive version of it carries. `mode_id` is the radio's input id and `note_id` its note's output id.
 dash_chart_row <- function(it, i, thumb, mode_id, note_id, mode, on_id = NULL, on = TRUE, in_section = NULL, why_off = NULL, design_id = NULL, design_on = FALSE) {
-  head = if (!is.null(it$story) && is_text1(it$story$headline) && nzchar(it$story$headline)) it$story$headline
+  head = if (!is.null(it$shown) && is_text1(it$shown$text)) it$shown$text else if (!is.null(it$story) && is_text1(it$story$headline) && nzchar(it$story$headline)) it$story$headline
   off = !isTRUE(on) || !is.null(why_off)   # the page's script keeps these classes true to the switches as they are flipped (EXPLORE_JS)
   tags$div(class = css_class("d-flex gap-3 align-items-start border-bottom py-2", if (!is.null(in_section)) "ms-4 ps-3 border-start", if (off) "dash-off", if (!is.null(why_off)) "dash-sec-off"),
            `data-dash-row` = it$id, `data-dash-in` = in_section,
@@ -4270,8 +4362,8 @@ dash_chart_row <- function(it, i, thumb, mode_id, note_id, mode, on_id = NULL, o
                                                   style = "width:9rem; height:auto; border:1px solid rgba(128,128,128,.5); flex:none;")
                     else tags$div(class = "small text-muted", style = "width:9rem; flex:none;", "No picture: this chart could not be drawn."),
                     tags$div(class = "flex-grow-1",
-                             tags$div(class = "fw-semibold", paste0(i, ". ", chart_title(it$chart, "Untitled chart"))),
-                             if (!is.null(head)) tags$div(class = "small text-muted", head),
+                             tags$div(class = "fw-semibold", paste0(i, ". ", head %||% chart_title(it$chart, "Untitled chart"))),
+                             if (!is.null(head)) tags$div(class = "small text-muted", chart_title(it$chart, "Untitled chart")),
                              tags$div(class = "small dash-why", DASH_WHY_OFF),
                              radioButtons(mode_id, NULL, choices = if (video_available()) DASH_MODES else DASH_MODES[DASH_MODES != "video"], selected = mode, inline = TRUE),
                              if (!is.null(design_id)) bslib::input_switch(design_id, "Designed drawing (off: the standard drawing)", value = design_on),

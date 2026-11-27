@@ -804,6 +804,14 @@ summary_input <- function(chart, cb, data, palette = chart_palette_default()) {
        facts = f, spec = chart$spec, hash = spec_hash(chart$spec))
 }
 
+# The headline R writes for a chart (Phase 13), from the facts of its drawn table as summary_input() makes them: list(text, source ("r", or
+#   "fallback" with the reason in problems), problems, facts). No model is asked. A table that cannot be made gives the fallback.
+r_headline <- function(chart, cb, data, palette = chart_palette_default()) {
+  x = summary_input(chart, cb, data, palette)
+  if (!is.null(x$error)) return(list(text = paste0(HEADLINE_FALLBACK, chart$spec$title %||% ""), source = "fallback", problems = x$error, facts = NULL))
+  c(spec_headline(x$facts, chart$spec), list(facts = x$facts, spec = chart$spec))
+}
+
 # The user message: the CHARTS block (each chart's id, title, what a row of its file is, and FACTS),
 #   then summary.md's reply format.
 assemble_summary <- function(inputs) {
@@ -832,13 +840,33 @@ summary_problems <- function(headline, summary, facts_text, spec, tokens = chara
   found = unlist(regmatches(fields, gregexpr("\\[\\[N[0-9]+\\]\\]", fields)))
   list(numbers = unique(unlist(purrr::map(fields, function(x) check_numbers(x, facts_text, spec)))),
        words = unique(unlist(purrr::map(fields, function(x) check_words(x, facts_text)))),
-       tokens = unique(setdiff(found, tokens)))
+       tokens = unique(setdiff(found, tokens)),
+       limits = headline_limits(headline, facts_text))
 }
-summary_ok <- function(p) !length(p$numbers) && !length(p$words) && !length(p$tokens)
+summary_ok <- function(p) !length(p$numbers) && !length(p$words) && !length(p$tokens) && !length(p$limits)
+
+# The manager's ruling (Phase 13): a headline carries at most HEADLINE_MAX_NUMBERS numbers and HEADLINE_MAX_WORDS words, whoever wrote it. A year the
+#   facts hold is a time, not a number ("by Dec 2024"), and a group's name is a name (a rating of 4, which FACTS names before a colon: "- 4: 29"). A
+#   placeholder ([[N1]]) is one word. Returns the sentences of what is over (none when nothing is).
+HEADLINE_MAX_NUMBERS <- 2L
+headline_numbers <- function(text, facts_text) {
+  if (!is_text1(text)) return(0L)
+  ft = paste(facts_text %||% "", collapse = "\n")
+  years = as.numeric(regmatches(ft, gregexpr("(?<![0-9])[12][0-9]{3}(?![0-9])", ft, perl = TRUE))[[1]])
+  named = unique(trimws(sub(":.*$", "", sub("^- ", "", trimws(strsplit(ft, "\n", fixed = TRUE)[[1]])))))
+  sum(purrr::map_lgl(text_numbers(text), function(n) !(n$text %in% named) && !(n$value == round(n$value) && n$value >= 1000 && n$value < 3000 && n$value %in% years)))
+}
+headline_limits <- function(headline, facts_text) {
+  if (!is_text1(headline) || !nzchar(trimws(headline))) return(character(0))
+  w = hl_words(headline); n = headline_numbers(headline, facts_text)
+  c(if (w > HEADLINE_MAX_WORDS) paste0("the headline has ", w, " words; it may have at most ", HEADLINE_MAX_WORDS),
+    if (n > HEADLINE_MAX_NUMBERS) paste0("the headline carries ", n, " numbers; it may carry at most ", HEADLINE_MAX_NUMBERS))
+}
 
 # The problems as the analyst reads them, one sentence each.
 problem_sentences <- function(p)
   c(if (length(p$numbers)) paste0(p$numbers, " is not a number in this chart's data"),
+    p$limits,
     purrr::map_chr(p$words, function(w)
       if (w %in% SUMMARY_CAUSE_WORDS) paste0("'", w, "' suggests a cause")
       else if (w %in% names(MULTIPLE_WORDS)) paste0("'", w, "' is a comparison the chart's facts do not state.")
@@ -850,7 +878,8 @@ problem_line <- function(id, p)
   paste0("Chart ", id, ": ", paste(c(
     if (length(p$numbers)) paste0("numbers that are not in its FACTS: ", paste(p$numbers, collapse = ", ")),
     if (length(p$words)) paste0("words that are not allowed: ", paste(p$words, collapse = ", ")),
-    if (length(p$tokens)) paste0("tokens that are not known: ", paste(p$tokens, collapse = ", "))), collapse = "; "), ".")
+    if (length(p$tokens)) paste0("tokens that are not known: ", paste(p$tokens, collapse = ", ")),
+    if (length(p$limits)) paste(p$limits, collapse = "; ")), collapse = "; "), ".")
 
 # One batch of at most SUMMARY_BATCH charts: one call, every reply checked, one repair call for the
 #   charts that failed, checked again. Returns list(results, records).
@@ -1202,6 +1231,13 @@ design_input <- function(chart, data, cb, palette = chart_palette_default()) {
   back = function(x) names_back(x, f$names)
   facts = purrr::map(facts_tok, function(e) list(text = back(e$text), label = back(e$label), number = e$number))
   txt = design_text(chart$spec, style, cb)
+  # Phase 13: the design is given the chart's headline as its title (the one the card shows: the spec's .headline, else R's, as spec_plot() settled it) and
+  #   the description, with the subtitle, as its subtitle
+  if (is_text1(ls$.headline)) {
+    txt$title = chart_title_case(chart_heading_text(ls$.headline), style)
+    under = purrr::keep(list(ls$.description, chart$spec$subtitle), function(x) is_text1(x) && nzchar(trimws(x)))
+    txt$subtitle = if (length(under)) paste(purrr::map_chr(under, function(x) sub("[.]$", "", trimws(x))), collapse = ". ")
+  }
   # the standard drawing writes the source line ("Source: orders.csv. 3,000 rows.") as its caption when the analyst wrote none; a design is given it as txt$caption
   #   so a designed chart keeps it
   if (is.null(txt$caption) && is_text1(ls$caption)) txt$caption = ls$caption

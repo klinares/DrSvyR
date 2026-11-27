@@ -1,4 +1,4 @@
-chaRt Phase 11 Part F: live comparison on tests/data/orders.csv, 2026-11-26 13:25 (REPLAY: the second attempt's designs handed back; no call)
+chaRt Phase 11 Part F: live comparison on tests/data/orders.csv, 2026-11-26 19:33 (REPLAY: the second attempt's designs handed back; no call)
 Model: claude-sonnet-5-5 at https://api.anthropic.com/v1; limit 45 calls (chat 13); skill editorial; tokens of the briefing style
 The column dictionary of the Phase 10 live run is reused: no label call.
 The canvas of the first attempt (2026-11-25 02:03) is reused: 8 charts; that attempt made 10 chat calls and 15 design calls.
@@ -8,13 +8,15 @@ The canvas of the first attempt (2026-11-25 02:03) is reused: 8 charts; that att
 ---- Designs: skill Editorial (version 0.1); 2 calls left for them
     [c8] asking the model for a design
     [c8] drawing it and checking the drawing
-    [c8] the first attempt's accepted code, checked again: passes
+    [c8] repairing the design the checks refused
+    [c8] drawing the repaired design and checking it
+    [c8] the first attempt's accepted code, checked again: REFUSED: the design was refused twice; the second time: The text 'MEDIAN REVENUE IS 756, WITH A LONGER TAI' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
 
-  c8 (Distribution of order revenue, histogram): DESIGNED; calls 0; 2 s
-    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and found nothing to change.
-    say: One accent colour for the bars, a single phrase from the facts beside the tallest bin and another at the end of the long tail, light value grid only, and a left-aligned title block with generous space above the plot.
-    motion: rise
-    design      0.0 s, 18,253 chars, tokens in: fresh      0, cached      0; out     0
+  c8 (Distribution of order revenue, histogram): FELL BACK: the design was refused twice; the second time: The text 'MEDIAN REVENUE IS 756, WITH A LONGER TAI' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().; calls 0; 3 s
+    refused: The text 'MEDIAN REVENUE IS 756, WITH A LONGER TAI' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    refused: The text 'MEDIAN REVENUE IS 756, WITH A LONGER TAI' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    design      0.0 s, 18,347 chars, tokens in: fresh      0, cached      0; out     0
+    design   (repair)    0.0 s, 20,888 chars, tokens in: fresh      0, cached      0; out     0
     [c7] asking the model for a design
     [c7] drawing it and checking the drawing
     [c7] the first attempt's accepted code, checked again: passes
@@ -23,69 +25,81 @@ The canvas of the first attempt (2026-11-25 02:03) is reused: 8 charts; that att
     review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and changed the design.
     say: The title ran to the very edge of the canvas and risked clipping, so I reduced its size to sit inside the margin; the heatmap itself is unchanged.
     motion: fade
-    design      0.0 s, 20,500 chars, tokens in: fresh      0, cached      0; out     0
+    design      0.0 s, 20,604 chars, tokens in: fresh      0, cached      0; out     0
     [c6] asking the model for a design
     [c6] drawing it and checking the drawing
-    [c6] the first attempt's accepted code, checked again: passes
+    [c6] repairing the design the checks refused
+    [c6] drawing the repaired design and checking it
+    [c6] the first attempt's accepted code, checked again: REFUSED: the design was refused twice; the second time: The text 'MEDIAN UNIT PRICE IS SIMILAR IN EVERY SA' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
 
-  c6 (Unit price by sales channel, box): DESIGNED; calls 0; 1 s
-    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and found nothing to change.
-    say: Same horizontal boxes in the single accent, but the two median notes now start at their medians and run rightward into empty panel space so nothing is cut off.
-    motion: fade
-    design      0.0 s, 18,506 chars, tokens in: fresh      0, cached      0; out     0
+  c6 (Unit price by sales channel, box): FELL BACK: the design was refused twice; the second time: The text 'MEDIAN UNIT PRICE IS SIMILAR IN EVERY SA' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().; calls 0; 2 s
+    refused: The text 'MEDIAN UNIT PRICE IS SIMILAR IN EVERY SA' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    refused: The text 'MEDIAN UNIT PRICE IS SIMILAR IN EVERY SA' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    design      0.0 s, 18,572 chars, tokens in: fresh      0, cached      0; out     0
+    design   (repair)    0.0 s, 21,260 chars, tokens in: fresh      0, cached      0; out     0
     [c5] asking the model for a design
     [c5] drawing it and checking the drawing
-    [c5] the first attempt's accepted code, checked again: passes
+    [c5] repairing the design the checks refused
+    [c5] drawing the repaired design and checking it
+    [c5] the first attempt's accepted code, checked again: REFUSED: the design was refused twice; the second time: The text 'Monthly revenue by product category, ind' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
 
-  c5 (Monthly revenue by product category, indexed, line): DESIGNED; calls 0; 1 s
-    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and found nothing to change.
-    say: One accent line for the category that ends highest, the other six in quiet slate with names and end values at their right ends instead of a legend, a dashed baseline at the start index, and only light horizontal grid lines.
-    motion: draw
-    design      0.0 s, 19,900 chars, tokens in: fresh      0, cached      0; out     0
+  c5 (Monthly revenue by product category, indexed, line): FELL BACK: the design was refused twice; the second time: The text 'Monthly revenue by product category, ind' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().; calls 0; 2 s
+    refused: The text 'Monthly revenue by product category, ind' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    refused: The text 'Monthly revenue by product category, ind' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    design      0.0 s, 19,940 chars, tokens in: fresh      0, cached      0; out     0
+    design   (repair)    0.0 s, 22,903 chars, tokens in: fresh      0, cached      0; out     0
     [c4] asking the model for a design
     [c4] drawing it and checking the drawing
-    [c4] the first attempt's accepted code, checked again: passes
+    [c4] repairing the design the checks refused
+    [c4] drawing the repaired design and checking it
+    [c4] the first attempt's accepted code, checked again: REFUSED: the design was refused twice; the second time: The text 'Total revenue by region, 2022 and 2024. ' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
 
-  c4 (Total revenue by region, 2022 and 2024, dumbbell): DESIGNED; calls 0; 1 s
-    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and found nothing to change.
-    say: Same dumbbell design, but the discrete axis now has extra room at the top and the value axis more room on the right, so the year names above the leading region and its value label sit inside the panel.
-    motion: fade
-    design      0.0 s, 19,778 chars, tokens in: fresh      0, cached      0; out     0
+  c4 (Total revenue by region, 2022 and 2024, dumbbell): FELL BACK: the design was refused twice; the second time: The text 'Total revenue by region, 2022 and 2024. ' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().; calls 0; 2 s
+    refused: The text 'Total revenue by region, 2022 and 2024. ' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    refused: The text 'Total revenue by region, 2022 and 2024. ' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    design      0.0 s, 19,824 chars, tokens in: fresh      0, cached      0; out     0
+    design   (repair)    0.0 s, 22,508 chars, tokens in: fresh      0, cached      0; out     0
     [c3] asking the model for a design
     [c3] drawing it and checking the drawing
-    [c3] the first attempt's accepted code, checked again: passes
+    [c3] repairing the design the checks refused
+    [c3] drawing the repaired design and checking it
+    [c3] the first attempt's accepted code, checked again: REFUSED: the design was refused twice; the second time: The text 'Units ordered against unit price, every ' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). ...
 
-  c3 (Units ordered against unit price, every order, scatter): DESIGNED; calls 0; 2 s
-    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and changed the design.
-    say: The curve label was struck through by the line and sat on dense points, so I moved it into the empty space above the curve at the right, keeping the accent colour so it still reads as the line's name.
-    motion: fade
-    design      0.0 s, 18,689 chars, tokens in: fresh      0, cached      0; out     0
+  c3 (Units ordered against unit price, every order, scatter): FELL BACK: the design was refused twice; the second time: The text 'Units ordered against unit price, every ' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). ...; calls 0; 3 s
+    refused: The text 'Units ordered against unit price, every ' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). The text 'UNITS ORDERED AND UNIT PRICE MOVE IN OPP' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    refused: The text 'Units ordered against unit price, every ' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). The text 'UNITS ORDERED AND UNIT PRICE MOVE IN OPP' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    design      0.0 s, 18,766 chars, tokens in: fresh      0, cached      0; out     0
+    design   (repair)    0.0 s, 21,752 chars, tokens in: fresh      0, cached      0; out     0
     [c2] asking the model for a design
     [c2] drawing it and checking the drawing
-    [c2] the first attempt's accepted code, checked again: passes
+    [c2] repairing the design the checks refused
+    [c2] drawing the repaired design and checking it
+    [c2] the first attempt's accepted code, checked again: REFUSED: the design was refused twice; the second time: The text 'Total revenue by month and channel. Mont' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). ...
 
-  c2 (Total revenue by month and channel, line): DESIGNED; calls 0; 1 s
-    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and wanted to change the design; the change was refused (The text of layer 2 (geom_text_repel) is drawn in #E69F00, a contrast of 2.1 to 1 against #F7F6F2 behind it; a series name in its series'...), so the design before it stands.
-    say: Same three-line chart with names at the line ends, now set in the dark text colour so they read clearly against the ground while the lines keep their palette colours.
-    motion: draw
-    design      0.0 s, 19,351 chars, tokens in: fresh      0, cached      0; out     0
+  c2 (Total revenue by month and channel, line): FELL BACK: the design was refused twice; the second time: The text 'Total revenue by month and channel. Mont' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). ...; calls 0; 2 s
+    refused: The text 'Total revenue by month and channel. Mont' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). The text 'ONLINE ENDS WITH THE HIGHEST TOTAL REVEN' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    refused: The text 'Total revenue by month and channel. Mont' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). The text 'ONLINE ENDS WITH THE HIGHEST TOTAL REVEN' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    design      0.0 s, 19,483 chars, tokens in: fresh      0, cached      0; out     0
+    design   (repair)    0.0 s, 22,006 chars, tokens in: fresh      0, cached      0; out     0
     [c1] asking the model for a design
     [c1] drawing it and checking the drawing
-    [c1] the first attempt's accepted code, checked again: passes
+    [c1] repairing the design the checks refused
+    [c1] drawing the repaired design and checking it
+    [c1] the first attempt's accepted code, checked again: REFUSED: the design was refused twice; the second time: The text 'Total revenue by region. All orders, 202' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). ...
 
-  c1 (Total revenue by region, bar): DESIGNED; calls 0; 1 s
-    review: The first attempt's accepted code, checked again under the new rules (no new call). Then: Reviewed by looking: the model looked at the picture and found nothing to change.
-    say: The ranked horizontal bars keep the single accent colour with values at the bar ends, and the value axis now has enough room on the right so the longest label sits fully inside the panel.
-    motion: rise
-    design      0.0 s, 18,860 chars, tokens in: fresh      0, cached      0; out     0
+  c1 (Total revenue by region, bar): FELL BACK: the design was refused twice; the second time: The text 'Total revenue by region. All orders, 202' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). ...; calls 0; 1 s
+    refused: The text 'Total revenue by region. All orders, 202' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). The text 'WEST HAS THE HIGHEST TOTAL REVENUE, 940,' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    refused: The text 'Total revenue by region. All orders, 202' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion(). The text 'WEST HAS THE HIGHEST TOTAL REVENUE, 940,' runs past the device and would be cut off; shorten it, move it, or give the scale room with expansion().
+    design      0.0 s, 18,905 chars, tokens in: fresh      0, cached      0; out     0
+    design   (repair)    0.0 s, 21,075 chars, tokens in: fresh      0, cached      0; out     0
 
----- 8 of 8 designs accepted; design calls 0 of 2
+---- 1 of 8 designs accepted; design calls 0 of 2
 
-  wrote tests/designed.html (1.55 MB)
+  wrote tests/designed.html (0.89 MB)
 
----- Export: the designed charts, briefing style (2 of them as video, made from their designs: c5, c1; the rest pictures)
-  built in 59.5 s: 7.60 MB; modes: picture, picture, picture, video, picture, picture, picture, video; device ragg
-  videos: 2
+---- Export: the designed charts, briefing style (1 of them as video, made from their designs: c7; the rest pictures)
+  built in 82.3 s: 4.50 MB; modes: picture, video, picture, picture, picture, picture, picture, picture; device ragg
+  videos: 1
   unpacked into tests/dashboard_designed/
 
 Done. Calls made: 43 of 45 allowed (chat 10, designs 33: 33 in the two attempts, none in this replay).

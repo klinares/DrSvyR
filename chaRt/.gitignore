@@ -25,3 +25,4 @@ tests/final_*.png
 # Phase 11 Part F: the live comparison page of standard and designed charts (pictures inside, a few MB) and its dry run, for the manager to open.
 tests/designed.html
 tests/*_dry.html
+tests/review/
