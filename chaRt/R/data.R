@@ -85,8 +85,8 @@ mostly_numbers_words <- function(x) {
 # A numeric code for missing, such as -99 or 999 written in a column of numbers, is read as a number and so is not a
 #   word among the numbers. It is offered, never applied, when all of this holds for a value of a numeric column:
 #   - it is repeated: at least NUMERIC_CODE_ROWS rows, or NUMERIC_CODE_SHARE of the rows, and never a single row;
-#   - it is one of the usual forms: negative while the rest of the column is not, or all nines (99, 999, 9999, ...),
-#     with or without a minus sign;
+#   - it is one of the usual forms: negative while the rest of the column is not, or all nines (99, 999, 9999, ...), or nines
+#     ending in 7 or 8 (97, 98, 997, 998: the usual codes for "refused" and "don't know"; night task 02), with or without a minus sign;
 #   - it lies outside the rest of the column (the column without that value) by more than NUMERIC_CODE_IQR times the
 #     interquartile range, beyond the quartile on its side. A real maximum of 999 that occurs once, or amid values of
 #     that size, fails one of these.
@@ -94,6 +94,7 @@ mostly_numbers_words <- function(x) {
 NUMERIC_CODE_ROWS <- 5L
 NUMERIC_CODE_SHARE <- 0.01
 NUMERIC_CODE_IQR <- 3
+NUMERIC_CODE_FORM <- "^9{2,}$|^9+[78]$"
 numeric_code_words <- function(x) {
   if (!is.numeric(x)) return(character(0))
   obs = sort(x[is.finite(x)])
@@ -101,7 +102,7 @@ numeric_code_words <- function(x) {
   repeated = runs$lengths >= 2L & (runs$lengths >= NUMERIC_CODE_ROWS | runs$lengths >= NUMERIC_CODE_SHARE * length(obs))
   as_code = function(v) format(v, scientific = FALSE, trim = TRUE)
   usual = function(v, rest)
-    (v < 0 && min(rest) >= 0) || (v == round(v) && grepl("^9{2,}$", as_code(abs(v))))
+    (v < 0 && min(rest) >= 0) || (v == round(v) && grepl(NUMERIC_CODE_FORM, as_code(abs(v))))
   outside = function(v, rest) {
     q = stats::quantile(rest, c(0.25, 0.75), names = FALSE)
     v > q[[2]] + NUMERIC_CODE_IQR * (q[[2]] - q[[1]]) || v < q[[1]] - NUMERIC_CODE_IQR * (q[[2]] - q[[1]])
@@ -537,28 +538,71 @@ date_facts <- function(obs) {
   c(list(min = date_text(min(obs)), max = date_text(max(obs))), if (!is.null(gap)) list(gap = gap_text(gap)))
 }
 
-profile_column <- function(x, name) {
+profile_column <- function(x, name, weight = FALSE, design = FALSE) {
   if (is.factor(x)) x = as.character(x)
   if (!is.numeric(x) && !is.logical(x) && !is.character(x) && !inherits(x, c("Date", "POSIXt"))) x = as.character(x)
   rows = length(x)
   obs = x[!is.na(x)]
   distinct = length(unique(obs))
   type = detect_type(x, obs, distinct, rows, name)
-  notes = if (identical(type, "integer"))
-    c(if (distinct <= CODED_MAX_DISTINCT) CODED_NOTE, if (all_distinct(obs, distinct, rows)) DISTINCT_NOTE)
+  codes = if (type %in% c("integer", "number")) numeric_code_words(obs) else character(0)
+  notes = c(if (identical(type, "integer")) c(if (distinct <= CODED_MAX_DISTINCT) CODED_NOTE, if (all_distinct(obs, distinct, rows)) DISTINCT_NOTE),
+            if (length(codes)) codes_note(codes), if (weight) WEIGHT_NOTE, if (design) DESIGN_NOTE)
   detail = switch(type,
     date = date_facts(obs),
     flag = if (distinct) level_counts(obs),
     integer = c(number_facts(obs), if (distinct <= CODEBOOK_MAX_LEVELS) level_counts(obs),
                 if (length(notes)) list(note = paste(notes, collapse = "; "))),
-    number = number_facts(obs),
+    number = c(number_facts(obs), if (length(notes)) list(note = paste(notes, collapse = "; "))),
     id = if (is_whole(obs)) number_facts(obs),
     category = level_counts(obs),
     NULL)
   c(list(name = name, type = type, missing = if (rows) round(mean(is.na(x)), 2) else 0, distinct = distinct), detail)
 }
 
-profile_data <- function(data) unname(purrr::imap(as.list(data), profile_column))
+profile_data <- function(data) {
+  sv = survey_columns(data)
+  unname(purrr::imap(as.list(data), function(x, name) profile_column(x, name, weight = name %in% sv$weights, design = name %in% sv$design)))
+}
+
+# Night task 02: what the dictionary and the read message say of numeric codes for missing and of a survey's weight and design. chaRt applies
+#   neither a code the analyst has not entered nor a weight: the codes count as numbers and every row counts once, and it says so. The texts
+#   are drafts for the manager to approve (manager/task-02.done.md).
+# A column of numbers that holds codes (numeric_code_words()), as the dictionary notes it.
+codes_note <- function(words) paste0("holds ", paste(words, collapse = ", "), ", which look like codes for missing; they count as numbers until entered under 'Values that mean missing'")
+# A survey weight: positive, and named as one ("wt", "pweight", "final_weight" ...); a column called just "weight" (or "weights") is one only
+#   beside a design column or when its mean is within SURVEY_WEIGHT_NEAR of 1 (a weight scaled to the sample), so that a body weight in kg is not.
+#   A design column: numeric, named as a stratum or a cluster ("stratum", "psu", "cluster", NHANES' "sdmvstra" ...).
+SURVEY_WEIGHT_NAME <- "(^|_)(wt|wgt|wts|pwt|pweight|finalwt|fwt|perwt|wtfinal)($|_)|(survey|sampling|design|final)_?weights?"
+SURVEY_WEIGHT_PLAIN <- "^weights?$"
+SURVEY_WEIGHT_NEAR <- 0.5
+SURVEY_DESIGN_NAME <- "(^|_)(stratum|strata|strat|psu|psus|cluster|varstrat|varunit|sdmvstra|sdmvpsu)($|_)"
+WEIGHT_NOTE <- "looks like a survey weight; chaRt does not apply weights, so every row counts once"
+DESIGN_NOTE <- "looks like a column of the survey's design (a stratum or a cluster); chaRt does not use it"
+survey_columns <- function(data) {
+  nm = names(data)
+  low = tolower(nm)
+  obs = purrr::map(as.list(data), function(x) if (is.numeric(x)) x[is.finite(x)] else numeric(0))
+  design = nm[purrr::map_lgl(obs, function(o) length(o) > 0L) & grepl(SURVEY_DESIGN_NAME, low)]
+  positive = purrr::map_lgl(obs, function(o) length(o) > 0L && all(o > 0))
+  near_one = purrr::map_lgl(obs, function(o) length(o) > 0L && abs(mean(o) - 1) < SURVEY_WEIGHT_NEAR)
+  weights = nm[positive & (grepl(SURVEY_WEIGHT_NAME, low) | (grepl(SURVEY_WEIGHT_PLAIN, low) & (length(design) > 0L | near_one)))]
+  list(weights = weights, design = setdiff(design, weights))
+}
+# The read message's sentences on both (the chat says them when a file is read), or none.
+MISSING_CODES_SAY <- "These columns of numbers hold values that look like codes for missing: "
+MISSING_CODES_THEN <- "chaRt counts them as numbers, in every mean, share, histogram and headline, until you enter them under 'Values that mean missing'."
+WEIGHTS_THEN <- "chaRt does not apply survey weights or the survey's design: every row counts once, so a chart describes the rows of this file, not a population."
+read_cautions <- function(data) {
+  codes = unlist(purrr::imap(as.list(data), function(x, nm) { w = numeric_code_words(x); if (length(w)) paste0(nm, " (", paste(w, collapse = ", "), ")") }))
+  sv = survey_columns(data)
+  named = function(cols, one, many) paste0(if (length(cols) == 1L) one else many, paste(cols, collapse = ", "))
+  c(if (length(codes)) paste0(MISSING_CODES_SAY, paste(codes, collapse = "; "), ". ", MISSING_CODES_THEN),
+    if (length(sv$weights) || length(sv$design))
+      paste0(paste(c(if (length(sv$weights)) paste0(named(sv$weights, "Column ", "Columns "), if (length(sv$weights) == 1L) " looks like a survey weight" else " look like survey weights"),
+                     if (length(sv$design)) paste0(named(sv$design, if (length(sv$weights)) "column " else "Column ", if (length(sv$weights)) "columns " else "Columns "),
+                                                   " like the survey's design")), collapse = ", and "), ". ", WEIGHTS_THEN))
+}
 
 # The roles a column's current type allows.
 role_choices <- function(entry) ROLE_CHOICES[[entry$type %||% ""]] %||% "ignore"

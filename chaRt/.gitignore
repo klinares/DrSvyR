@@ -26,3 +26,8 @@ tests/final_*.png
 tests/designed.html
 tests/*_dry.html
 tests/review/
+tests/rehearsal_*/
+tests/rehearsal_replies.rds
+tests/data/survey.csv
+tests/data/indicators_wide.xlsx
+tests/data/tickets.csv

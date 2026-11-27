@@ -11135,6 +11135,69 @@ check("13B-4: the manager's ruling in an exported dashboard: each card shows its
 }
 # <<< 13 end
 
+# >>> night02 begin
+# No model call. Night task 02, a rehearsal on three files the app had never seen (tests/make_rehearsal.R, tests/rehearsal.R): the bugs it found, fixed.
+#   1. Codes for missing written as numbers (98 "don't know", 99 "refused", -9 "not asked") were counted as numbers in a mean, a histogram and a model's
+#      summary ("the mean is 11.1"), and 98 was not even offered as a code. 2. A survey's weight, stratum and psu were taken as measures without a word.
+#   3. A model's headline that passed its checks was not shown when a name in it held digits ("CUST-46909"): shown, it was checked again with the
+#      names written out, and their digits counted as numbers. Self-contained, so tests/mutate_night02.R can run it alone.
+if (run_fast) {   # the fast run only (N2-1 to N2-3)
+n2_wd <- file.path(tempdir(), "n2")
+dir.create(n2_wd, showWarnings = FALSE)
+set.seed(902)
+n2_n <- 400L
+n2_item <- function(codes) { x <- sample(1:5, n2_n, replace = TRUE); x[sample(n2_n, length(codes))] <- codes; x }
+n2_survey <- data.frame(region = sample(c("North", "South", "East"), n2_n, replace = TRUE),
+                        q1 = n2_item(c(rep(98L, 20), rep(99L, 8), rep(-9L, 6))), q2 = sample(1:5, n2_n, replace = TRUE), q3 = n2_item(rep(97L, 10)),
+                        weight = round(stats::rlnorm(n2_n, 0, 0.5) / exp(0.125), 3), stratum = sample(1:4, n2_n, replace = TRUE),
+                        psu = sample(1:20, n2_n, replace = TRUE), height = round(stats::rnorm(n2_n, 175, 8)))
+n2_players <- data.frame(height = round(stats::rnorm(n2_n, 182, 7)), weight = round(stats::rnorm(n2_n, 76, 7)))      # a body weight in kg: not a survey weight
+n2_note <- function(df, col) { p <- purrr::detect(profile_data(df), function(e) identical(e$name, col)); p$note %||% "" }
+check("N2-1: the dictionary flags codes for missing and a survey's weight and design: in a 1 to 5 item, 98 (20 rows), 99 and -9 are offered as codes and noted on the column ('holds 98, 99, -9, which look like codes for missing'), and 97 in another; a plain item has none; a column called weight with a mean of about 1 beside stratum and psu is noted as a survey weight and they as the design; a weight in kg (mean 76, no design column) is not, a lone 'weight' with a mean of 1 is, and 'final_weight' is whatever its mean",
+      identical(numeric_code_words(n2_survey$q1), c("98", "99", "-9")) && identical(numeric_code_words(n2_survey$q3), "97") && !length(numeric_code_words(n2_survey$q2)) &&
+        grepl(codes_note(c("98", "99", "-9")), n2_note(n2_survey, "q1"), fixed = TRUE) && grepl("holds 97, which look like codes for missing", n2_note(n2_survey, "q3"), fixed = TRUE) &&
+        !grepl("codes for missing", n2_note(n2_survey, "q2"), fixed = TRUE) &&
+        grepl(WEIGHT_NOTE, n2_note(n2_survey, "weight"), fixed = TRUE) && grepl(DESIGN_NOTE, n2_note(n2_survey, "stratum"), fixed = TRUE) &&
+        grepl(DESIGN_NOTE, n2_note(n2_survey, "psu"), fixed = TRUE) && !grepl(WEIGHT_NOTE, n2_note(n2_survey, "height"), fixed = TRUE) &&
+        identical(survey_columns(n2_players), list(weights = character(0), design = character(0))) &&
+        identical(survey_columns(data.frame(weight = c(0.5, 1, 1.5, 1)))$weights, "weight") &&
+        identical(survey_columns(data.frame(final_weight = c(900, 1200, 1500)))$weights, "final_weight"))
+# the read message, in a server session: the chat says both, in a sentence each, before any model call
+n2_path <- file.path(n2_wd, "survey.csv")
+readr::write_csv(n2_survey, n2_path)
+n2_read <- reread_data(n2_path, "survey.csv", character())
+n2_asked <- new.env()
+n2_ask <- function(...) { n2_asked$n <- (n2_asked$n %||% 0L) + 1L; stop("no model call is made when a file is read", call. = FALSE) }
+n2_state <- shiny::reactiveValues(key_version = 0L, data = n2_read$read$data, problems = n2_read$read$problems, profile = n2_read$profile, codebook = n2_read$codebook,
+                                  path = n2_path, calls = NULL, charts = list(), canvas = character(0), stories = list(), palette = chart_palette_default())
+n2_out <- new.env()
+shiny::testServer(mod_explore_server, args = list(state = n2_state, ask = n2_ask), {
+  session$flushReact()
+  n2_out$m1 <- made$log[[1]]$content
+})
+check("N2-2: when a file is read the chat says, in a sentence each, which columns of numbers hold values that look like codes for missing and that chaRt counts them as numbers until they are entered as missing, and that chaRt applies no survey weight or design, every row counting once; no model is called; a file with neither (a weight in kg) gets neither sentence",
+      is.character(n2_out$m1) && grepl(md_text(paste0(MISSING_CODES_SAY, "q1 (98, 99, -9); q3 (97). ", MISSING_CODES_THEN)), n2_out$m1, fixed = TRUE) &&
+        grepl(md_text(paste0("Column weight looks like a survey weight, and columns stratum, psu like the survey's design. ", WEIGHTS_THEN)), n2_out$m1, fixed = TRUE) &&
+        is.null(n2_asked$n) && !length(read_cautions(n2_players)) && length(read_cautions(n2_survey)) == 2L)
+# a model's headline whose names hold digits: checked as when it was written (names as tokens), it passes and is shown, now and after the chart changes
+n2_tickets <- data.frame(customer_id = c(rep(c("CUST-46909", "CUST-48618", "CUST-74834"), each = 10), rep(c("CUST-11308", "CUST-12870"), each = 8),
+                                         sprintf("CUST-%05d", 20001:20040)), stringsAsFactors = FALSE)
+n2_tpath <- file.path(n2_wd, "tickets.csv")
+readr::write_csv(n2_tickets, n2_tpath)
+n2_tread <- reread_data(n2_tpath, "tickets.csv", character())
+n2_tcb <- utils::modifyList(n2_tread$codebook, list(row_is = "one ticket"))
+n2_spec <- list(family = "bar", x = "customer_id", fn = "count", top_n = 5, title = "Tickets by customer")
+n2_r <- r_headline(new_chart("c1", n2_spec), n2_tcb, n2_tread$read$data)
+n2_st <- list(headline = "CUST-46909, CUST-48618 and CUST-74834 have the most tickets, 10 each", summary = NULL, facts = names_back(n2_r$facts$text, n2_r$facts$names),
+              spec = n2_spec, problems = character(0), headline_by = "model")
+check("N2-3: a model's headline that names groups whose names hold digits ('CUST-46909, CUST-48618 and CUST-74834 have the most tickets, 10 each') passes its checks with the names as tokens, as when it was written, and is shown as the model's, and still after the chart changes; checked with the names written out it would carry 4 numbers",
+      identical(n2_r$source, "r") && summary_ok(summary_problems(names_out(n2_st$headline, n2_r$facts$names), NULL, n2_r$facts$text, n2_spec, names(n2_r$facts$names))) &&
+        length(summary_problems(n2_st$headline, NULL, n2_st$facts, n2_spec)$limits) == 1L &&
+        identical(headline_shown(n2_st, n2_r)[c("text", "by")], list(text = n2_st$headline, by = "model")) &&
+        identical(headline_shown(n2_st, n2_r, "chart")$by, "model"))
+}
+# <<< night02 end
+
 
 # ---- the split: the two runs together hold every check ---------------------------------------------------------------------
 #

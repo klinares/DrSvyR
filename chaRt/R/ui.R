@@ -923,13 +923,14 @@ headline_shown <- function(st, r_head, stale = NA_character_) {
   r = list(text = r_head$text, by = if (identical(r_head$source, "r")) "r" else "fallback", note = NULL)
   if (is.null(st) || !is_text1(st$headline) || !nzchar(trimws(st$headline))) return(r)
   if (identical(st$headline_by, "analyst")) return(list(text = trimws(st$headline), by = "analyst", note = NULL))
-  # checked against the facts it was written from; a story kept without them stands on the problems found when it was written
-  passed = if (is_text1(st$facts) && nzchar(st$facts)) summary_ok(summary_problems(st$headline, NULL, st$facts, st$spec)) else !length(st$problems)
-  if (passed && !is.na(stale)) {
-    now = r_head$facts
-    held = !is.null(now) && summary_ok(summary_problems(st$headline, NULL, names_back(now$text, now$names), r_head$spec %||% st$spec))
-    if (!held) { r$note = HEADLINE_MODEL_CHANGED; return(r) }
-  }
+  # checked as when it was written, its names as tokens (night task 02: "CUST-46909" is a name, not a number), against the chart's facts
+  #   now (r_head$facts) when R has them and the story was written from facts, or the chart has changed (the manager's ruling); else against the
+  #   facts it was written from; a story kept without them stands on the problems found then. A changed chart with no facts now shows R's.
+  now = r_head$facts
+  had = is_text1(st$facts) && nzchar(st$facts)
+  as_written = function(f) summary_ok(summary_problems(names_out(trimws(st$headline), f$names), NULL, f$text, r_head$spec %||% st$spec, names(f$names)))
+  passed = if (!is.null(now) && (had || !is.na(stale))) as_written(now) else if (had) summary_ok(summary_problems(st$headline, NULL, st$facts, st$spec)) else !length(st$problems)
+  if (!is.na(stale) && (!passed || is.null(now))) { r$note = HEADLINE_MODEL_CHANGED; return(r) }
   if (passed) return(list(text = trimws(st$headline), by = "model", note = NULL))
   r$note = HEADLINE_MODEL_FAILED
   r
@@ -1859,6 +1860,7 @@ mod_explore_server <- function(id, state, ask = llm_json, build = build_dashboar
                    if (length(again_numbers)) paste0(" again with ", paste0("'", md_text(again_numbers), "'", collapse = ", "), " read as numbers"),
                    ": ", format_num(nrow(data)), " rows, ", format_num(ncol(data)), " columns."),
             if (length(problems)) paste0("- ", md_text(problems), collapse = "\n") else "No problems found.",
+            md_text(read_cautions(data)),
             if (length(made$notes)) paste0("- ", md_text(made$notes), collapse = "\n"),
             if (changed && length(chart_ids()))
               paste0("The data changed, so the ", length(chart_ids()), if (length(chart_ids()) == 1L) " chart on the canvas was" else " charts on the canvas were",

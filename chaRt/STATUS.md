@@ -1,8 +1,13 @@
 # chaRt: status
 
-## Current state (2026-11-26, after Phase 13: every title states the finding)
+## Current state (2026-11-27, after night task 02: a rehearsal on three new files)
 
 Branch `chart`, not pushed. Everything below was built and tested at home on R 4.6.1. No test makes a model call unless it says so. The phase-by-phase record is under History; the Phase 10 report is `manager/done-10.md`, the Phase 10b report `manager/done-10b.md`, the Phase 11 report `manager/done-11.md`, the Phase 12 report `manager/done-12.md`.
+
+**Night task 02, done** (2026-11-27; `manager/task-02.done.md`; 28 live calls, Sonnet). A rehearsal on three files of invented data the app had never seen (`tests/make_rehearsal.R`: a survey, a wide Excel file, support tickets), through the server's own functions (`tests/rehearsal.R`; replay with `REHEARSAL_REPLAY=1`).
+- **Fixed:** 98 and 97 are taken as codes for missing too (they were counted as numbers in a mean, a histogram and a model's summary); the dictionary notes a column with codes, a survey weight and a design column, and the chat says when a file is read that codes count as numbers until entered and that chaRt applies no weights; a model's headline whose names hold digits ("CUST-46909") is checked again with its names as tokens and is shown.
+- **Gaps found, not built:** no order guessed for ordered categories (age bands, education, priority), no binning or duration of timestamps, money written as text not offered for conversion in a CSV, no reshape of a wide file.
+- **Smoke on the final code:** fast 656 of 656, heavy 35 of 35 (N2-1 to N2-3 new). Mutations: `tests/mutate_night02.R` 6 of 6, `tests/mutate_13.R` 15 of 15.
 
 **Phase 13, done** (2026-11-26; `manager/done-13.md`; 2 live calls, Sonnet, for the look at the model's headlines).
 - **R writes a headline for every chart** from its FACTS (`facts_headline()`, `spec_headline()`, `r_headline()`), checked as a model's is; all 35 gold specs and four charts of the messy file pass, at most 11 words (`tests/headlines_13.R`, which also writes `tests/review/headlines.md`).

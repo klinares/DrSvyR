@@ -53,7 +53,7 @@ mutations <- list(
   mut("M10", "the About block does not say who wrote each headline", "ui.R", "      if (length(charts)) entry(\"The headlines\",", "      if (FALSE) entry(\"The headlines\","),
   mut("M11", "a tail is named past a skewness of 0.5 again", "spec.R", "SPEC_FACTS_SKEW <- 1 ", "SPEC_FACTS_SKEW <- 0.5 "),
   mut("M12", "a headline names a tail whatever the rows", "spec.R", "      if (!isTRUE(hl_num(hl_fact(lines, \"Rows used\")) >= HEADLINE_TAIL_MIN_ROWS)) tail = NULL", "      if (FALSE) tail = NULL"),
-  mut("M13", "a model's headline is not checked again when the chart changes", "ui.R", "  if (passed && !is.na(stale)) {", "  if (FALSE) {"),
+  mut("M13", "a model's headline is not checked again when the chart changes", "ui.R", "  passed = if (!is.null(now) && (had || !is.na(stale))) as_written(now) else", "  passed = if (!is.null(now) && had && is.na(stale)) as_written(now) else"),
   mut("M14", "no limit on numbers", "reflexes.R", "HEADLINE_MAX_NUMBERS <- 2L", "HEADLINE_MAX_NUMBERS <- 99L"),
   mut("M15", "no limit on words in the headline checks", "reflexes.R", "  c(if (w > HEADLINE_MAX_WORDS) paste0(", "  c(if (FALSE) paste0("))
 wanted <- commandArgs(trailingOnly = TRUE)
