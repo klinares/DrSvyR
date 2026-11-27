@@ -18,6 +18,7 @@ app computes is presented as a decision the analyst did not make.
 | [`QuestionR`](QuestionR/) | Helps a public opinion analyst draft survey items and review a questionnaire. Every model call is steered by text files grounded in survey methodology, and every output is labelled a first draft or an expert-review appraisal, not a pretest. In development (see its `STATUS.md`). |
 | [`inteRn`](inteRn/) | Not an app: an AI coding assistant for RStudio, built by a survey methodologist for survey methodologists. It sees the names, types and labels of the objects in your R session, never their values, and asks before it runs code or writes a file. |
 | [`chaRt`](chaRt/) | Turns a data file into publishable charts that follow written visualization rules, refined by chat, with an HTML report. In development (see its `STATUS.md`). |
+| [`SurvAI_Expert`](SurvAI_Expert/) | Answers survey methodology questions from a library of course materials, with the passages it used, formulas shown as stored and R examples. It also advises on a described situation: the options, their trade-offs by source of error, and a recommendation. |
 
 ## Running an app
 
