@@ -10,7 +10,8 @@
 #   3. the same request in the OpenAI style, through ellmer::chat_openai_compatible() against
 #      OpenRouter, standing in for the work endpoint;
 #   7. Phase 5: headlines and summaries for ten hand-written charts on three files (LIVE_SUMMARY),
-#      through summarize_inputs(): two calls and any repairs; saved to tests/live_replies.rds and
+#      through summarize_inputs(): two calls and any repairs; saved to tests/live_replies.rds (made by the first
+#      such run if it is not there; git-ignored) and
 #      shown on tests/live_gallery.html under "Phase 5" (tests/live_gallery.R);
 #   8. Phase 6: tests/data/orders.csv read with -99 and N/A as missing, label_columns(), one row is "one
 #      order", then twelve turns through chat_turn() (LIVE_TURNS, selecting as the plan says) and a headline

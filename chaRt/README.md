@@ -213,7 +213,8 @@ $env:CHART_SMOKE = "heavy"; Rscript --no-init-file tests/smoke.R; Remove-Item En
 
 The first is the fast run and the second the heavy run (see `STATUS.md` for what is in each and how
 long they take). `tests/llm_check.R` makes live model calls and needs `ANTHROPIC_API_KEY` in the
-environment; its saved replies (`tests/live_replies.rds`, git-ignored) are read by the fast run when present.
+environment; it saves the replies to `tests/live_replies.rds` (git-ignored, made by the first live run), which
+the tests do not need. Check 7b-11 reads one invented-data reply from `tests/reply_7b11.rds`, which is committed.
 
 ## What is in this folder
 

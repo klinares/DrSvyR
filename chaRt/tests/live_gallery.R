@@ -4,7 +4,9 @@
 #   live_summary() is Phase 5's ten headlines and summaries (LIVE_SUMMARY), saved as `phase5`; live_chat() is Phase 6's
 #   twelve chat turns on tests/data/orders.csv (LIVE_TURNS) and then a headline and summary for every chart on the canvas,
 #   saved as `phase6`. Both go through llm_json() with the key (Sonnet only, the key passed in and never printed), print what
-#   each call cost and returned, and save everything, the raw replies included, to tests/live_replies.rds (git-ignored).
+#   each call cost and returned, and save everything, the raw replies included, to tests/live_replies.rds. That file is git-ignored
+#   (it holds replies about the course files) and need not exist: the first live run makes it. tests/smoke.R does not read it;
+#   check 7b-11 reads tests/reply_7b11.rds, one reply taken from it.
 #   live_page() writes tests/live_gallery.html (git-ignored) from that file, one section for each run it holds: Phase 5 (each
 #   chart with its headline above it, its summary and checks, its facts) and Phase 6 (the canvas as it ended).
 #   The Phase 3 and Phase 4 runs (live_run(), live_refine()) went with the suggest and refine calls they tested.
@@ -17,7 +19,10 @@ LIVE_DPI <- 96
 
 # The labelled codebook and row guess of each file in a saved run, by file name (the Phase 3 run, which Phase 5 still uses).
 live_labelled <- function(rds = LIVE_RDS) {
-  if (!file.exists(rds)) return(NULL)
+  if (!file.exists(rds)) {
+    cat("No ", rds, ": no saved labels from an earlier run, so each file's codebook is used as read.\n", sep = "")
+    return(NULL)
+  }
   run = readRDS(rds)
   purrr::set_names(purrr::map(run$files, function(f) list(codebook = f$label$codebook, row_is_guess = f$label$row_is_guess)),
                    purrr::map_chr(run$files, "file"))
@@ -418,6 +423,11 @@ png_of <- function(p) {
 }
 
 live_page <- function(rds = LIVE_RDS, out = LIVE_OUT) {
+  if (!file.exists(rds)) {
+    cat("No page written: ", rds, " is not there. It is made by a live run: Rscript --no-init-file tests/llm_check.R with ",
+        "CHART_LIVE_STEPS set to 7, 8 or 9 and ANTHROPIC_API_KEY in the environment.\n", sep = "")
+    return(invisible(NULL))
+  }
   run = readRDS(rds)
   work = tempfile("live_page_")
   dir.create(work)

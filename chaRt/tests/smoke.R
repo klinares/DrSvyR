@@ -4285,8 +4285,9 @@ check("7b-10: the Period box says 'Jan 2023 to Dec 2024' (month and year past 60
         grepl("minmax(min(100%, 10.5rem), 1fr)", EXPLORE_CSS, fixed = TRUE))
 
 
-# 11. the chat text of a charts reply, from a real saved reply
-e7_rds <- file.path("tests", "live_replies.rds")
+# 11. the chat text of a charts reply, from a real saved reply: tests/reply_7b11.rds (committed) holds the first reply of the Phase 7 live run on
+#   tests/data/orders.csv and nothing else, taken from the git-ignored tests/live_replies.rds, which also holds replies about the course files
+e7_rds <- file.path("tests", "reply_7b11.rds")
 e7_rr <- if (file.exists(e7_rds)) tryCatch(readRDS(e7_rds)$phase7, error = function(e) NULL)
 if (!is.null(e7_rr) && identical(e7_rr$turns[[1]]$kind, "charts")) {
   e7_orders <- read_data(file.path("tests", "data", "orders.csv"), "orders.csv", e7_rr$missing)$data
@@ -4294,10 +4295,11 @@ if (!is.null(e7_rr) && identical(e7_rr$turns[[1]]$kind, "charts")) {
   e7_r1 <- chat_turn(e7_rr$turns[[1]]$message, list(), NULL, e7_rr$cb, e7_orders, ask = stand_by(function(user, i) e7_raw)$ask)
   e7_say <- parse_json_block(e7_raw)$charts[[1]]$say
   e7_txt <- chat_reply_text(e7_r1)
-  check("7b-11: for a charts reply (the Phase 7 live run's first, from tests/live_replies.rds) the chat shows the chart's say once, escaped, then 'Added to the canvas.'; the stored spec has no say; the live run's printout now prints it too",
+  check("7b-11: for a charts reply (the Phase 7 live run's first, from tests/reply_7b11.rds) the chat shows the chart's say once, escaped, then 'Added to the canvas.'; the stored spec has no say; the live run's printout now prints it too",
         is_text1(e7_say) && lengths(regmatches(e7_txt, gregexpr(md_text(e7_say), e7_txt, fixed = TRUE))) == 1L && grepl("Added to the canvas.", e7_txt, fixed = TRUE) &&
           is.null(e7_r1$charts[[1]]$spec$say) && identical(live_reply_text(e7_r1), e7_say))
-} else cat("skip  7b-11: tests/live_replies.rds has no Phase 7 run\n")
+} else cat("SKIP  7b-11 NOT RUN: ", e7_rds, if (file.exists(e7_rds)) " cannot be read as a Phase 7 charts reply" else " is missing; it is committed, so restore it with git checkout",
+           " (this check is left out of the count line)\n", sep = "")
 
 # 12. a row typed on the Data page after a second file reaches Explore
 e7_file1 <- profile_data(data.frame(region = c("a", "b"), revenue = c(1, 2)))

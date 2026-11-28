@@ -25,8 +25,11 @@ carries its count on its axis label.
 
 - On the final code before the folder was cleaned (commit 6e0122e): `[fast] 678 of 678 checks passed.`
   `[heavy] 35 of 35 checks passed.`
-- On the cleaned folder (this commit): `[fast] 678 of 678 checks passed.`
+- On the cleaned folder (commit dd9d277): `[fast] 678 of 678 checks passed.`
   `[heavy] 35 of 35 checks passed.` The app loads with `shiny::runApp()` (Start here, no script errors).
+- From a fresh clone at the tag `chart-v1.0`, with no git-ignored file: the count lines are in the
+  tag's message (`git tag -n20 chart-v1.0`). Check 7b-11 reads one saved model reply on the invented
+  orders from `tests/reply_7b11.rds`, which is committed; the full live-run file stays git-ignored.
 - Each mutation script run once on 6e0122e. The scripts were then removed with the folder's other
   working files; they are in the history at that commit. Every mutation that applied made a check fail:
 

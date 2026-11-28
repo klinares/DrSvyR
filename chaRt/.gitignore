@@ -6,5 +6,7 @@ tests/*.out
 tests/gallery.html
 tests/style_sheet.html
 tests/live_gallery.html
-# The saved replies of tests/llm_check.R's live calls; the fast run reads them when present.
+# The saved replies of tests/llm_check.R's live calls (replies about the course files too); no test needs them.
 tests/live_replies.rds
+# The one invented-data reply check 7b-11 reads: committed, though the root .gitignore ignores *.rds.
+!tests/reply_7b11.rds
